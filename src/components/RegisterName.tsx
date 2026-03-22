@@ -224,7 +224,10 @@ const RegisterName = () => {
             <TextField
               autoComplete="off"
               autoFocus
-              onChange={(e) => setNameValue(e.target.value)}
+              // Keeps from starting with white space
+              onChange={(e) => setNameValue(e.target.value.trimStart())}
+              // Trims trailing white space when focus changes away from the field, leading is already handled
+              onBlur={(e) => setNameValue(e.target.value.trim())}
               value={nameValue}
               placeholder={t('core:new_name.choose_name', {
                 postProcess: 'capitalizeFirstChar',
