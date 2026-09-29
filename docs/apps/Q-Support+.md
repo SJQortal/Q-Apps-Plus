@@ -17,6 +17,7 @@ Support and issue board for Qortal, with bounties paid in QORT and other coins.
 ## Notes
 
 - **Platform upgrade first** (docs/PLATFORM.md): React 18 → 19.3, MUI 5 → 9.4, Redux Toolkit 2 + react-redux 9, react-router-dom 7. This is the biggest jump in the repo, so run the codemods in docs/MIGRATION-NOTES.md in order and commit the upgrade on its own.
+- **`react-quill` 2 crashes on React 19** (it calls `findDOMNode`). Switch to `react-quill-new` (Quill 2) and check that content written by the + app still displays correctly in the original app, and the other way round (docs/MIGRATION-NOTES.md, Q-Apps+ specifics).
 - **The upstream build was broken:** `.gitignore` has excluded `src/assets/icons/*` since Q-Support 1.0, so the icons the code imports were never pushed. The import commit fixed it:
   - It copied the 7 coin PNGs from Q-Trade+ and the Q-Fund logo (`QFundDarkLogo.png`) from Q-Fund+.
   - It added **labelled placeholders** for the 10 category and status icons (`Bug-Report-Icon.webp`, `Feature-Request-Icon.webp`, `Tech-Support-Icon.webp`, `Q-App-Icon.webp`, `Qortal-Core-Icon.webp`, `Qortal-UI-Icon.webp`, `Open-Icon.webp`, `In-Progress-Icon.webp`, `Complete-Icon.webp`, `Closed-Icon.webp`). Those exist nowhere in git.

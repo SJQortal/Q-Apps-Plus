@@ -10,11 +10,13 @@
 | `@mui/material`, `@mui/icons-material` (+ `@mui/system` if used) | **9.4.0** | MUI jumped 7 → 9; there is no 8 |
 | `@emotion/react` / `@emotion/styled` | 11.14.x | unchanged |
 | `qapp-core` (Q-Tube+, Q-Trade+, Names+, Q-Node+) | keep each app's version | needs the two workarounds below |
-| `@reduxjs/toolkit` + `react-redux` (Q-Mail+, Q-Shop+, Q-Share+, Q-Support+, Q-Fund+) | 2.x + **9.x** | react-redux 8 does not accept React 19 |
-| `react-router-dom` | **7.x** for apps on 6 | v8 (`react-router`) is a later, separate step |
+| `@reduxjs/toolkit` + `react-redux` (Q-Mail+, Q-Shop+, Q-Share+, Q-Support+, Q-Fund+) | 2.x + **9.2+** | react-redux 8 (and 9.0/9.1) do not accept React 19 |
+| `react-router-dom` | stay on **6.30.x** (accepts React 19) with the `v7_*` future flags on; v7 is optional | v8 needs React ≥ 19.2.7 and removes `react-router-dom`, so it's a later step |
 | `vite` + `@vitejs/plugin-react` | 8.x + 6.x | needs Node ≥ 20.19 / 22.12; if a plugin blocks v8, stay on 7 and note it in the brief |
 | `typescript` | 5.9.x | TypeScript 7 (the native compiler) is a later step, once typescript-eslint supports it |
-| `vitest` | 5.x (+ `jsdom`, `@testing-library/react`) | for the test harness each app gets |
+| `vitest` | 5.x (+ `jsdom`, `@testing-library/react` ≥ 16.1) | for the test harness each app gets |
+| `react-quill` (Q-Mail+, Q-Share+, Q-Support+, Q-Fund+) | **replace with `react-quill-new` 3.8.x** | react-quill 2 calls `findDOMNode` and crashes on React 19. Quill 2 output must stay readable in the original apps (see MIGRATION-NOTES) |
+| `@mui/x-date-pickers` (Q-Fund+) | **9.x** | MUI 9 needs MUI X 9 |
 
 ## Will it run in Hub and GO? Yes
 
@@ -73,11 +75,11 @@ The proper fix is a small upstream PR to `Qortal/qapp-core`: widen the peer rang
 |---|---|
 | `Cannot find module '@mui/icons-material/XxxOutline'` (e.g. `ErrorOutline`, `PlayCircleOutline`, `DeleteOutline`) | MUI 9 removed the legacy `…Outline` names. Import `…OutlineOutlined` (same glyph). `scripts/check-mui-icons.sh <App+>` lists every missing icon import. |
 | `Property 'position' / 'bgcolor' / 'fontWeight' … does not exist` on `Box`, `Typography`, `Stack`, `Grid` | MUI 9 removed system props. Move them into `sx={{ … }}`. |
-| `inputProps` on `Radio`/`Checkbox`/`Switch`/`TextField`, `InputProps`, `PaperProps`, `MenuListProps`, `TransitionComponent` … | Use `slotProps={{ input: … }}`, `slotProps={{ paper: … }}`, `slots={{ transition: … }}`, etc. |
+| `inputProps` on `Radio`/`Checkbox`/`Switch`; TextField `InputProps` / `inputProps`; `PaperProps`, `MenuListProps`, `TransitionComponent` … | Checkbox/Radio/Switch → `slotProps.input`; TextField `InputProps` → `slotProps.input` and `inputProps` → `slotProps.htmlInput`; `slotProps.paper`, `slotProps.list`, `slots.transition` … The codemod `deprecations/all` does most of it. |
 | Theme `styleOverrides` keys like `containedPrimary` rejected | Use a style callback on `ownerState` (as the theme kit does) or `variants`. |
 | Stricter ref types (`useRef<T>(null)` vs `RefObject<T \| null>`), `JSX` namespace | React 19 type changes; fix the types, don't cast them away. |
 
-`docs/MIGRATION-NOTES.md` has the full React 18 → 19.3 and MUI 5 → 6 → 7 → 9 checklist, with codemods.
+`docs/MIGRATION-NOTES.md` has the full React 18 → 19.3 and MUI 5 → 6 → 7 → 9 checklist with codemods, the companion-library changes, and a verification checklist (§5.3). Its first section lists the problems specific to these apps (react-quill, MUI X in Q-Fund+, Grid).
 
 ## How each app upgrades
 
@@ -85,16 +87,23 @@ This is the **first step of every app's pass**, before the theme kit and the red
 
 1. **Record the baseline:** `npm ci && npm run build`, and `npx tsc --noEmit` if the build doesn't already typecheck. Note the error count, dist size and biggest chunk in the brief.
 2. **Bump the dependencies** per the target table. qapp-core apps also get the `overrides` and the icon alias above.
-3. **Run the codemods** listed in `docs/MIGRATION-NOTES.md` (React 19 recipe; MUI v6 → v7 → v9 steps, back to back).
+3. **Run the codemods** listed in `docs/MIGRATION-NOTES.md` in its order (§2.4 for MUI, §1.2 for React). For the old Redux apps, follow the step order at the end of this file.
 4. **Fix icon imports** until `scripts/check-mui-icons.sh <App+>` is clean.
 5. **Fix types** until `npx tsc --noEmit` has no *new* errors versus the baseline. Fix old ones you touch.
 6. **Verify:**
    - `npm run build`, plus tests and lint if present.
    - `npx vite preview` and a look in a browser: every page renders, and there are no new console errors compared with the baseline.
-7. **Commit** as `<App+>: upgrade to React 19.3 and MUI 9.4`, alone, so it can be reviewed and reverted on its own.
+7. **Commit** the upgrade separately from the redesign (one or more commits starting `<App+>: upgrade …`), so it can be reviewed and reverted on its own.
 8. **Test in Hub Dev Mode** when a local session with Hub is available (`docs/HUB-TESTING.md`).
 
-For the old Redux apps, also:
-- replace `ReactDOM.render` with `createRoot`;
-- update RTK 2 (`createSlice` `extraReducers` must use the builder callback, the object form is gone);
-- move react-router 6 → 7 (turn on the v7 future flags first, then bump).
+**The old Redux apps must go in this order.** MUI 5.11 does not accept React 19, which only arrived in MUI 5.16.8. Commit after each step and keep the build green:
+1. Toolchain: TypeScript 5.9 and Vite 8 + plugin-react 6, still on React 18.
+2. React 18.2 → **18.3.1** (warns about everything 19 removes), then `npx codemod@latest react/19/migration-recipe`.
+3. RTK 2 + react-redux 9.3 (`npx @reduxjs/rtk-codemods createSliceBuilder ./src`; `middleware` must be a callback).
+4. React Router 6.30.x with all `v7_*` future flags on.
+5. **react-quill → react-quill-new**, and check the Quill 2 output against the original app.
+6. MUI 5.11 → **5.18.x**.
+7. React 18.3 → **19.3**, plus `npx types-react-codemod@latest preset-19 ./src`, Emotion 11.14 and @testing-library/react ≥ 16.1.
+8. MUI 5.18 → 9.4 (and MUI X → 9 in Q-Fund+). Run the codemods in the order given in MIGRATION-NOTES §2.4 using `@mui/codemod@latest` (≥ 9.3.1), then the manual v9 items and `scripts/check-mui-icons.sh`.
+
+These can be separate commits within one "upgrade" PR. The React 19 apps (qapp-core ones) follow MIGRATION-NOTES §5.2 instead.
