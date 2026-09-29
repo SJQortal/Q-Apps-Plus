@@ -153,15 +153,21 @@ const NavBar: React.FC<Props> = ({
             onPointerLeave={handleSidebarAnchorPointerLeave}
             aria-label={isMobile ? 'Open mailboxes' : 'Toggle sidebar mode'}
             disableRipple
-            sx={{
+            sx={[{
               borderRadius: '14px',
-              padding: isMobile ? '6px 10px' : '4px',
               margin: '-4px',
-              gap: isMobile ? '10px' : 0,
               '&:hover': {
                 background: 'var(--qmail-shell-hover)'
               }
-            }}
+            }, isMobile ? {
+              padding: '6px 10px'
+            } : {
+              padding: '4px'
+            }, isMobile ? {
+              gap: '10px'
+            } : {
+              gap: 0
+            }]}
           >
             <QblogLogoContainer
               style={{
@@ -209,13 +215,16 @@ const NavBar: React.FC<Props> = ({
             )}
           </IconButton>
           <Typography
-            sx={{
-              display: isMobile ? 'none' : 'block',
+            sx={[{
               fontSize: '1rem',
               fontWeight: 500,
               whiteSpace: 'nowrap',
               color: 'var(--qmail-thread-text)'
-            }}
+            }, isMobile ? {
+              display: 'none'
+            } : {
+              display: 'block'
+            }]}
           >
             v{appVersion}
           </Typography>
@@ -243,11 +252,14 @@ const NavBar: React.FC<Props> = ({
         </Box>
 
         <Box
-          sx={{
+          sx={[{
             display: 'flex',
-            alignItems: 'center',
-            gap: isMobile ? '6px' : 0
-          }}
+            alignItems: 'center'
+          }, isMobile ? {
+            gap: '6px'
+          } : {
+            gap: 0
+          }]}
         >
           <IconButton
             className='qapp-shell-icon-button qapp-shell-menu-button'
@@ -263,17 +275,19 @@ const NavBar: React.FC<Props> = ({
             open={open}
             anchorEl={anchorEl}
             onClose={handleCloseUserDropdown}
-            PaperProps={{
-              sx: {
-                minWidth: '280px',
-                backgroundColor: 'var(--qmail-shell-popover-bg)',
-                border: '1px solid var(--qmail-shell-border)',
-                color: 'var(--qmail-thread-text)'
-              }
-            }}
             anchorOrigin={{
               vertical: 'bottom',
               horizontal: 'left'
+            }}
+            slotProps={{
+              paper: {
+                sx: {
+                  minWidth: '280px',
+                  backgroundColor: 'var(--qmail-shell-popover-bg)',
+                  border: '1px solid var(--qmail-shell-border)',
+                  color: 'var(--qmail-thread-text)'
+                }
+              }
             }}
           >
             <Box className='qmail-user-menu-content'>
@@ -331,9 +345,9 @@ const NavBar: React.FC<Props> = ({
               )}
               {isAuthenticated && (
                 <Box
-                  sx={{
+                  sx={theme => ({
                     borderTop: `1px solid ${theme.palette.divider}`
-                  }}
+                  })}
                 >
                   <DropdownContainer
                     onClick={() => {
@@ -358,7 +372,7 @@ const NavBar: React.FC<Props> = ({
         </Box>
       </CustomToolbar>
     </CustomAppBar>
-  )
+  );
 }
 
 export default NavBar

@@ -1,33 +1,39 @@
 import { styled } from "@mui/system";
 import { Card, Box, Typography } from "@mui/material";
 
-export const StyledCard = styled(Card)(({ theme }) => ({ 
-  backgroundColor: theme.palette.mode === "light" ? theme.palette.primary.main : theme.palette.primary.dark,
+export const StyledCard = styled(Card)(({ theme }) => ({
+  backgroundColor: theme.palette.primary.dark,
   maxWidth: "600px",
   width: "100%",
   margin: "10px 0px",
   cursor: "pointer",
   "@media (max-width: 450px)": {
     width: "100%;"
-  }
+  },
+  ...theme.applyStyles("light", {
+    backgroundColor: theme.palette.primary.main
+  })
 }));
 
-export const CardContentContainer = styled(Box)(({ theme }) => ({ 
-  backgroundColor: theme.palette.mode === "light" ? theme.palette.primary.dark : theme.palette.primary.light,
+export const CardContentContainer = styled(Box)(({ theme }) => ({
+  backgroundColor: theme.palette.primary.light,
   margin: "5px 10px",
   borderRadius: "15px",
+  ...theme.applyStyles("light", {
+    backgroundColor: theme.palette.primary.dark
+  })
 }));
 export const CardContentContainerComment = styled(Box)(({ theme }) => ({
   backgroundColor:
-    theme.palette.mode === 'light'
-      ? theme.palette.primary.dark
-      : theme.palette.primary.light,
+    theme.palette.primary.light,
   margin: '0px',
   borderRadius: '15px',
   width: '100%',
-
   display: 'flex',
-  flexDirection: 'column'
+  flexDirection: 'column',
+  ...theme.applyStyles("light", {
+    backgroundColor: theme.palette.primary.dark
+  })
 }))
 
 export const StyledCardHeader = styled(Box)({

@@ -338,14 +338,12 @@ export const LeftSidebar = ({
         data-qapp-lib='left-sidebar'
         onPointerEnter={hoverPreviewBindings?.onSidebarPointerEnter}
         onPointerLeave={hoverPreviewBindings?.onSidebarPointerLeave}
-        sx={{
-          position: state.mode === 'mobile' ? 'absolute' : 'relative',
+        sx={[{
           top: 0,
           left: 0,
           bottom: 0,
           zIndex: 6,
           width: sidebarWidth,
-          minWidth: state.mode === 'mobile' ? 0 : sidebarWidth,
           maxWidth: '100%',
           borderRight: '1px solid var(--qmail-shell-border, rgba(255,255,255,0.12))',
           background:
@@ -358,8 +356,16 @@ export const LeftSidebar = ({
           boxShadow:
             state.mode === 'mobile' || state.overlayPreview
               ? '0 16px 40px rgba(0, 0, 0, 0.28)'
-              : 'none',
-        }}
+              : 'none'
+        }, state.mode === 'mobile' ? {
+          position: 'absolute'
+        } : {
+          position: 'relative'
+        }, state.mode === 'mobile' ? {
+          minWidth: 0
+        } : {
+          minWidth: sidebarWidth
+        }]}
       >
         <Box
           sx={{
@@ -386,80 +392,110 @@ export const LeftSidebar = ({
                   controller?.setActiveItem(item.id)
                   onSelectItem?.(item.id)
                 }}
-                sx={{
+                sx={[{
                   width: '100%',
                   justifyContent: 'flex-start',
                   minWidth: 0,
-                  borderRadius: isComposeItem ? '1rem' : '0.875rem',
-                  px: isComposeItem ? '1rem' : '0.75rem',
-                  py: isComposeItem ? '0.95rem' : '0.75rem',
                   textAlign: 'left',
-                  gap: isComposeItem ? '0.85rem' : '0.75rem',
-                  pl: isComposeItem
-                    ? '1rem'
-                    : isNested
+                  outlineOffset: '-1px',
+                  color: 'var(--qmail-thread-text, inherit)',
+                  opacity: item.disabled ? 0.5 : 1
+                }, isComposeItem ? {
+                  borderRadius: '1rem'
+                } : {
+                  borderRadius: '0.875rem'
+                }, isComposeItem ? {
+                  px: '1rem'
+                } : {
+                  px: '0.75rem'
+                }, isComposeItem ? {
+                  py: '0.95rem'
+                } : {
+                  py: '0.75rem'
+                }, isComposeItem ? {
+                  gap: '0.85rem'
+                } : {
+                  gap: '0.75rem'
+                }, isComposeItem ? {
+                  pl: '1rem'
+                } : {
+                  pl: isNested
                       ? '1.5rem'
-                      : '0.75rem',
-                  backgroundColor: isActive
-                    ? 'var(--qmail-shell-selected-bg, rgba(255,255,255,0.1))'
-                    : isComposeItem
+                      : '0.75rem'
+                }, isActive ? {
+                  backgroundColor: 'var(--qmail-shell-selected-bg, rgba(255,255,255,0.1))'
+                } : {
+                  backgroundColor: isComposeItem
                       ? 'var(--qmail-compose-button-bg, rgba(255,255,255,0.08))'
                       : hasWarningState
                         ? 'var(--qmail-warning-bg, rgba(255, 153, 0, 0.18))'
-                        : 'transparent',
-                  border: isActive
-                    ? '1px solid var(--qmail-brand-strong, rgba(103,195,255,0.85))'
-                    : isComposeItem
+                        : 'transparent'
+                }, isActive ? {
+                  border: '1px solid var(--qmail-brand-strong, rgba(103,195,255,0.85))'
+                } : {
+                  border: isComposeItem
                       ? '1px solid var(--qmail-compose-button-border, rgba(255,255,255,0.16))'
                       : hasWarningState
                         ? '1px solid var(--qmail-warning-border, rgba(255, 171, 64, 0.95))'
-                        : '1px solid transparent',
-                  outline: isActive
-                    ? '2px solid var(--qmail-brand-strong, #67c3ff)'
-                    : hasWarningState
+                        : '1px solid transparent'
+                }, isActive ? {
+                  outline: '2px solid var(--qmail-brand-strong, #67c3ff)'
+                } : {
+                  outline: hasWarningState
                       ? '2px solid var(--qmail-warning-border, rgba(255, 171, 64, 0.95))'
-                      : '2px solid transparent',
-                  outlineOffset: '-1px',
-                  boxShadow: isActive
-                    ? '0 0 0 0.1rem var(--qmail-brand-soft, rgba(57,175,255,0.2))'
-                    : 'none',
-                  color: 'var(--qmail-thread-text, inherit)',
-                  opacity: item.disabled ? 0.5 : 1,
+                      : '2px solid transparent'
+                }, isActive ? {
+                  boxShadow: '0 0 0 0.1rem var(--qmail-brand-soft, rgba(57,175,255,0.2))'
+                } : {
+                  boxShadow: 'none'
+                }, isComposeItem ? {
                   '&:hover': {
-                    backgroundColor: isComposeItem
-                      ? 'var(--qmail-compose-button-hover-bg, rgba(255,255,255,0.12))'
-                      : hasWarningState
+                    backgroundColor: 'var(--qmail-compose-button-hover-bg, rgba(255,255,255,0.12))'
+                  }
+                } : {
+                  '&:hover': {
+                    backgroundColor: hasWarningState
                         ? 'var(--qmail-warning-hover-bg, rgba(255, 153, 0, 0.24))'
-                        : 'var(--qmail-shell-hover, rgba(255,255,255,0.06))',
-                  },
-                }}
+                        : 'var(--qmail-shell-hover, rgba(255,255,255,0.06))'
+                  }
+                }]}
               >
                 <Box
-                  sx={{
-                    width: isComposeItem ? '1.75rem' : '1.25rem',
-                    minWidth: isComposeItem ? '1.75rem' : '1.25rem',
+                  sx={[{
                     display: 'flex',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    flexShrink: 0,
-                  }}
+                    flexShrink: 0
+                  }, isComposeItem ? {
+                    width: '1.75rem'
+                  } : {
+                    width: '1.25rem'
+                  }, isComposeItem ? {
+                    minWidth: '1.75rem'
+                  } : {
+                    minWidth: '1.25rem'
+                  }]}
                 >
                   {renderItemIcon?.(item) || null}
                 </Box>
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Typography
                     variant='body2'
-                    sx={{
-                      fontWeight: isComposeItem ? 700 : isNested ? 400 : 650,
-                      fontSize: isComposeItem
-                        ? '1rem'
-                        : isSectionItem
-                          ? '1.02rem'
-                          : '0.92rem',
+                    sx={[{
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
+                      textOverflow: 'ellipsis'
+                    }, isComposeItem ? {
+                      fontWeight: 700
+                    } : {
+                      fontWeight: isNested ? 400 : 650
+                    }, isComposeItem ? {
+                      fontSize: '1rem'
+                    } : {
+                      fontSize: isSectionItem
+                          ? '1.02rem'
+                          : '0.92rem'
+                    }]}
                   >
                     {item.label}
                   </Typography>
@@ -485,24 +521,31 @@ export const LeftSidebar = ({
                 {item.badgeText ? (
                   <Typography
                     variant='caption'
-                    sx={{
+                    sx={[{
                       opacity: 1,
-                      flexShrink: 0,
-                      fontSize: isComposeItem ? '0.8rem' : '0.7rem',
-                      color: hasWarningState
-                        ? 'var(--qmail-warning-border, rgba(255, 171, 64, 0.95))'
-                        : 'inherit',
-                      fontWeight: hasWarningState ? 800 : 500,
-                    }}
+                      flexShrink: 0
+                    }, isComposeItem ? {
+                      fontSize: '0.8rem'
+                    } : {
+                      fontSize: '0.7rem'
+                    }, hasWarningState ? {
+                      color: 'var(--qmail-warning-border, rgba(255, 171, 64, 0.95))'
+                    } : {
+                      color: 'inherit'
+                    }, hasWarningState ? {
+                      fontWeight: 800
+                    } : {
+                      fontWeight: 500
+                    }]}
                   >
                     {item.badgeText}
                   </Typography>
                 ) : null}
               </ButtonBase>
-            )
+            );
           })}
         </Box>
       </Box>
     </>
-  )
+  );
 }

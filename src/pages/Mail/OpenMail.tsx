@@ -218,36 +218,32 @@ const [isValid, setIsValid] = React.useState<boolean>(true)
             {}
             {!resourceStatus.status && (isValid && !unableToDecrypt) && (
                   <Box
-              
-                  display="flex"
-                  justifyContent="center"
-                  alignItems="center"
-                  sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
-                    padding: "8px",
-                    borderRadius: "10px",
-                  }}
-                >
+                    sx={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
+                      padding: "8px",
+                      borderRadius: "10px"
+                    }}>
                 <CircularProgress color="secondary" />
                 <>Downloading Message</>
                 </Box>
             )}
         {((resourceStatus.status && resourceStatus?.status !== "READY") && (isValid && !unableToDecrypt)) && (
             <Box
-              
-              display="flex"
-              justifyContent="center"
-              alignItems="center"
               sx={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
                 display: "flex",
                 flexDirection: "column",
                 gap: "10px",
                 padding: "8px",
-                borderRadius: "10px",
-              }}
-            >
+                borderRadius: "10px"
+              }}>
             <CircularProgress color="secondary" />
               {resourceStatus && (
                 <Typography

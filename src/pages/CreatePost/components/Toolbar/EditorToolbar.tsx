@@ -20,9 +20,10 @@ const CustomToolbar = styled(Toolbar)({
 
 const CustomAppBar = styled(AppBar)(({ theme }) => ({
   backgroundColor:
-    theme.palette.mode === 'light'
-      ? theme.palette.background.default
-      : '#19191b'
+    '#19191b',
+  ...theme.applyStyles("light", {
+    backgroundColor: theme.palette.background.default
+  })
 }))
 
 interface IEditorToolbar {

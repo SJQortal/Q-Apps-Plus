@@ -10,7 +10,6 @@ const CustomSvgIcon: React.FC<any> = styled(SvgIcon)(({ theme }) => ({
     transform: 'scale(1.1)'
   }
 })) as unknown as React.FC<any>
-
 export const CustomIcon: React.FC<any> = (props) => {
   return <CustomSvgIcon {...props} />
 }

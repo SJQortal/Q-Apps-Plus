@@ -207,10 +207,10 @@ export const CommentSection = ({ postId }: CommentSectionProps) => {
         </CommentIcon>
         {listComments?.length > 0 && (
           <Box
-            sx={{
+            sx={theme => ({
               fontSize: '0.75rem',
-              background: theme.palette.mode === 'dark' ? 'white' : 'black',
-              color: theme.palette.mode === 'dark' ? 'black' : 'white',
+              background: 'black',
+              color: 'white',
               borderRadius: '50%',
               position: 'absolute',
               top: '-15px',
@@ -219,8 +219,12 @@ export const CommentSection = ({ postId }: CommentSectionProps) => {
               height: '20px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
-            }}
+              justifyContent: 'center',
+              ...theme.applyStyles("dark", {
+                background: 'white',
+                color: 'black'
+              })
+            })}
           >
             {listComments.length < 10 ? listComments.length : '9+'}
           </Box>
@@ -323,5 +327,5 @@ export const CommentSection = ({ postId }: CommentSectionProps) => {
         </Panel>
       </Drawer>
     </>
-  )
+  );
 }

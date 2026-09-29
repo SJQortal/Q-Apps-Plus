@@ -36,16 +36,24 @@ export const VideoContent: React.FC<VideoProps> = ({ title, description }) => {
           alignItems: 'flex-start'
         }}
       >
-        <Box display="flex" alignItems="center">
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center"
+          }}>
           <MovieIcon />
           <Title variant="h4">{title}</Title>
         </Box>
 
-        <Box display="flex" alignItems="center">
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center"
+          }}>
           <DescriptionIcon />
           <Typography variant="body1">{description}</Typography>
         </Box>
       </Box>
     </StyledBox>
-  )
+  );
 }

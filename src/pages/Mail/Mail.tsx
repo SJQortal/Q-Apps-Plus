@@ -3070,12 +3070,13 @@ export const Mail = ({ isFromTo }: MailProps) => {
         const hasPendingChanges = item.badgeText === "!";
         return (
           <PublishIcon
-            sx={{
-              fontSize: "1rem",
-              color: hasPendingChanges
-                ? "var(--qmail-warning-border, rgba(255, 171, 64, 0.95))"
-                : "inherit",
-            }}
+            sx={[{
+              fontSize: "1rem"
+            }, hasPendingChanges ? {
+              color: "var(--qmail-warning-border, rgba(255, 171, 64, 0.95))"
+            } : {
+              color: "inherit"
+            }]}
           />
         );
       }
@@ -3936,11 +3937,13 @@ export const Mail = ({ isFromTo }: MailProps) => {
                   ) : (
                     <>
                       <MailBodyInnerScroll
-                        sx={{
-                          direction:
-                            activeMailboxItem === "sent" ? "rtl" : "ltr",
-                          height: "100%",
-                        }}
+                        sx={[{
+                          height: "100%"
+                        }, activeMailboxItem === "sent" ? {
+                          direction: "rtl"
+                        } : {
+                          direction: "ltr"
+                        }]}
                       >
                         <Box
                           className="step-1"

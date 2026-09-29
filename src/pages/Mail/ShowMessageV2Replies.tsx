@@ -68,199 +68,202 @@ export const ShowMessageV2Replies = ({
     }}
     className={isUser ? "" : "reply-other"}
     >
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        width: "100%",
-        borderRadius: "4px",
-        background: !isUser ? "var(--qmail-reply-other-bg)" : "unset",
-        color: !isUser ? "var(--qmail-reply-other-text)" : "inherit",
-        padding: "7px",
-      }}
-    >
       <Box
         sx={{
           display: "flex",
-          alignItems: "center",
           flexDirection: "column",
-          gap: 1,
-          flexGrow: 1,
-          overflow: "auto",
           width: "100%",
-          padding: "0 15px",
+          borderRadius: "4px",
+          background: !isUser ? "var(--qmail-reply-other-bg)" : "unset",
+          color: !isUser ? "var(--qmail-reply-other-text)" : "inherit",
+          padding: "7px",
         }}
       >
         <Box
-        onClick={()=> {
-          setIsExpanded((prev)=> !prev)
-        }}
           sx={{
-            cursor: 'pointer',
             display: "flex",
-            gap: '20px',
-            justifyContent: "flex-start",
-            alignItems: "flex-start",
+            alignItems: "center",
+            flexDirection: "column",
+            gap: 1,
+            flexGrow: 1,
+            overflow: "auto",
             width: "100%",
-            flexDirection: !isUser ? 'row-reverse' : 'unset'
+            padding: "0 15px",
           }}
         >
           <Box
-            sx={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: "6px"
-            }}
-          >
-            <AvatarWrapper height="40px" user={message?.user} />
-            <Box sx={{
-            display: "flex",
-            flexDirection: 'column',
-            gap: '1px',
-            justifyContent: "flex-start",
-            maxWidth: '160px',
-            minWidth: '120px'
-
-          }}>
-            <ShowMessageNameP
-          sx={{
-            color: !isUser ? "var(--qmail-reply-other-text)" : "unset"
+          onClick={()=> {
+            setIsExpanded((prev)=> !prev)
           }}
-            >
-              {message?.user}
-            </ShowMessageNameP>
-            <ShowMessageTimeP
             sx={{
-              color: !isUser ? "var(--qmail-reply-other-text)" : "unset"
-            }}
-            >
-              {formatFullTimestamp(message?.createdAt)}
-            </ShowMessageTimeP>
-            
-            </Box>
-            
-          </Box>
-          <Box
-            sx={{
+              cursor: 'pointer',
               display: "flex",
+              gap: '20px',
+              justifyContent: "flex-start",
               alignItems: "flex-start",
-              gap: "10px",
+              width: "100%",
+              flexDirection: !isUser ? 'row-reverse' : 'unset'
             }}
           >
-            <ShowMessageSubjectP
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "6px"
+              }}
+            >
+              <AvatarWrapper height="40px" user={message?.user} />
+              <Box sx={{
+              display: "flex",
+              flexDirection: 'column',
+              gap: '1px',
+              justifyContent: "flex-start",
+              maxWidth: '160px',
+              minWidth: '120px'
+            }}>
+              <ShowMessageNameP
             sx={{
               color: !isUser ? "var(--qmail-reply-other-text)" : "unset"
             }}
+              >
+                {message?.user}
+              </ShowMessageNameP>
+              <ShowMessageTimeP
+              sx={{
+                color: !isUser ? "var(--qmail-reply-other-text)" : "unset"
+              }}
+              >
+                {formatFullTimestamp(message?.createdAt)}
+              </ShowMessageTimeP>
+              
+              </Box>
+              
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "10px",
+              }}
             >
-              {message?.subject}
-            </ShowMessageSubjectP>
-           
+              <ShowMessageSubjectP
+              sx={{
+                color: !isUser ? "var(--qmail-reply-other-text)" : "unset"
+              }}
+              >
+                {message?.subject}
+              </ShowMessageSubjectP>
+             
+            </Box>
           </Box>
-        </Box>
-        {isExpanded && (
-          <>
-            {message?.attachments?.length > 0 && (
-          <Box
-            sx={{
-              width: "100%",
-              marginTop: "10px",
-            }}
-          >
-           {message?.attachments?.length > 0 && (
-          <Box
-            sx={{
-              width: "100%",
-              marginTop: "10px",
-            }}
-          >
-            {message?.attachments
-              .map((file: any, index: number) => {
-                const isFirst = index === 0
-                return (
-                  <Box
-                    sx={{
-                      display: expandAttachments ? "flex" : !expandAttachments && isFirst ? 'flex' : 'none',
-                      alignItems: "center",
-                      justifyContent: "flex-start",
-                      width: "100%",
-                    }}
-                  >
+          {isExpanded && (
+            <>
+              {message?.attachments?.length > 0 && (
+            <Box
+              sx={{
+                width: "100%",
+                marginTop: "10px",
+              }}
+            >
+             {message?.attachments?.length > 0 && (
+            <Box
+              sx={{
+                width: "100%",
+                marginTop: "10px",
+              }}
+            >
+              {message?.attachments
+                .map((file: any, index: number) => {
+                  const isFirst = index === 0
+                  return (
                     <Box
-                      sx={{
-                        display: "flex",
+                      sx={[{
                         alignItems: "center",
-                        gap: "5px",
-                        cursor: "pointer",
-                        width: "auto",
-                      }}
+                        justifyContent: "flex-start",
+                        width: "100%"
+                      }, expandAttachments ? {
+                        display: "flex"
+                      } : {
+                        display: !expandAttachments && isFirst ? 'flex' : 'none'
+                      }]}
                     >
-                      <FileElement
-                        fileInfo={{ ...file, mimeTypeSaved: file?.type }}
-                        title={file?.filename}
-                        mode="mail"
-                        otherUser={message?.user}
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          cursor: "pointer",
+                          width: "auto",
+                        }}
                       >
-                        <MailAttachmentImg src={AttachmentMailSVG} />
+                        <FileElement
+                          fileInfo={{ ...file, mimeTypeSaved: file?.type }}
+                          title={file?.filename}
+                          mode="mail"
+                          otherUser={message?.user}
+                        >
+                          <MailAttachmentImg src={AttachmentMailSVG} />
 
-                        <Typography
-                          sx={{
-                            fontSize: "1rem",
-                          }}
-                        >
-                          {file?.originalFilename || file?.filename}
-                        </Typography>
-                      </FileElement>
-                      {message?.attachments?.length > 1 && isFirst && (
-                        <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "5px",
-                          }}
-                          onClick={() => {
-                            setExpandAttachments(prev => !prev);
-                          }}
-                        >
-                          <MoreImg
+                          <Typography
                             sx={{
-                              marginLeft: "5px",
-                              transform: expandAttachments
-                                ? "rotate(180deg)"
-                                : "unset",
+                              fontSize: "1rem",
                             }}
-                            src={MoreSVG}
-                          />
-                          <MoreP>
-                            ({message?.attachments?.length - 1} more)
-                          </MoreP>
-                        </Box>
-                      )}
+                          >
+                            {file?.originalFilename || file?.filename}
+                          </Typography>
+                        </FileElement>
+                        {message?.attachments?.length > 1 && isFirst && (
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "5px",
+                            }}
+                            onClick={() => {
+                              setExpandAttachments(prev => !prev);
+                            }}
+                          >
+                            <MoreImg
+                              sx={[{
+                                marginLeft: "5px"
+                              }, expandAttachments ? {
+                                transform: "rotate(180deg)"
+                              } : {
+                                transform: "unset"
+                              }]}
+                              src={MoreSVG}
+                            />
+                            <MoreP>
+                              ({message?.attachments?.length - 1} more)
+                            </MoreP>
+                          </Box>
+                        )}
+                      </Box>
                     </Box>
-                  </Box>
-                );
-              })
+                  );
+                })
+                }
+            </Box>
+          )}
+            </Box>
+          )}
+          <Spacer height="7px" />
+          {message?.textContentV2 && (
+            <DisplayHtml
+              html={message?.textContentV2}
+              textColor={
+                !isUser
+                  ? "var(--qmail-reply-other-text)"
+                  : "var(--qmail-thread-text)"
               }
-          </Box>
-        )}
-          </Box>
-        )}
-        <Spacer height="7px" />
-        {message?.textContentV2 && (
-          <DisplayHtml
-            html={message?.textContentV2}
-            textColor={
-              !isUser
-                ? "var(--qmail-reply-other-text)"
-                : "var(--qmail-thread-text)"
-            }
-          />
-        )}
-          </>
-        )}
+            />
+          )}
+            </>
+          )}
+        
+        </Box>
       
       </Box>
-    
-    </Box>
     </Box>
   );
 };

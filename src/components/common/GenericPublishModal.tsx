@@ -242,8 +242,10 @@ export const GenericModal: React.FC<GenericModalProps> = ({
           fullWidth
           value={title}
           onChange={handleTitleChange}
-          inputProps={{ maxLength: 40 }}
           sx={{ marginBottom: 2 }}
+          slotProps={{
+            htmlInput: { maxLength: 40 }
+          }}
         />
         <TextField
           label="Description"
@@ -253,8 +255,10 @@ export const GenericModal: React.FC<GenericModalProps> = ({
           rows={4}
           value={description}
           onChange={handleDescriptionChange}
-          inputProps={{ maxLength: 180 }}
           sx={{ marginBottom: 2 }}
+          slotProps={{
+            htmlInput: { maxLength: 180 }
+          }}
         />
         {options.length > 0 && (
           <FormControl fullWidth sx={{ marginBottom: 2 }}>
@@ -304,5 +308,5 @@ export const GenericModal: React.FC<GenericModalProps> = ({
         </Button>
       </ModalContent>
     </StyledModal>
-  )
+  );
 }
