@@ -33,7 +33,9 @@
       "success": "successfully registered the name",
       "error": "unable to register name",
       "loading": "registering name... please wait"
-    }
+    },
+    "name_too_short": "names need at least {{min}} characters",
+    "name_too_long": "names can have at most {{max}} characters"
   },
   "tables": {
     "name": "name",
@@ -43,7 +45,8 @@
     "responses": {
       "loading": "updating name... please wait",
       "success": "successfully updated name",
-      "error": "unable to update name"
+      "error": "unable to update name",
+      "error_primary": "cannot update primary name while having other names"
     },
     "title": "caution when updating your name",
     "choose_name": "choose new name",

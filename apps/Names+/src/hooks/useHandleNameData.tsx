@@ -32,7 +32,7 @@ export const useHandleNameData = () => {
         reverse: false,
       });
       clearPendingTxs(
-        'REGISTER_NAMES',
+        'REGISTER_NAME',
         'name',
         res?.map((item: Names) => item.name)
       );

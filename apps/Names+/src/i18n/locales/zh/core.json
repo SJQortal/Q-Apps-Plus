@@ -33,7 +33,9 @@
       "success": "名称注册成功",
       "error": "无法注册名称",
       "loading": "正在注册名称...请稍候"
-    }
+    },
+    "name_too_short": "名称至少需要 {{min}} 个字符",
+    "name_too_long": "名称最多只能有 {{max}} 个字符"
   },
   "tables": {
     "name": "名称",
@@ -43,7 +45,8 @@
     "responses": {
       "loading": "正在更新名称...请稍候",
       "success": "名称更新成功",
-      "error": "无法更新名称"
+      "error": "无法更新名称",
+      "error_primary": "拥有其他名称时无法更新主名称"
     },
     "title": "更新名称时请注意",
     "choose_name": "选择新名称",

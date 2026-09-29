@@ -87,7 +87,11 @@ function fixedHeaderContent(
           {renderSortIcon('salePrice')}
         </span>
       </TableCell>
-      <TableCell>Actions</TableCell>
+      <TableCell>
+        {t('core:tables.actions', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </TableCell>
     </TableRow>
   );
 }

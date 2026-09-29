@@ -5,7 +5,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  styled,
   TextField,
   Typography,
   useTheme,
@@ -32,14 +31,10 @@ import {
 } from '../state/global/names';
 import { Availability } from '../interfaces';
 import { useTranslation } from 'react-i18next';
-
-const Label = styled('label')`
-  display: block;
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-size: 14px;
-  font-weight: 400;
-  margin-bottom: 4px;
-`;
+import {
+  nameLengthMessage,
+  useNameAvailability,
+} from '../hooks/useNameAvailability';
 
 const RegisterName = () => {
   const { t } = useTranslation(['core']);
@@ -52,9 +47,7 @@ const RegisterName = () => {
   const [pendingTxs] = useAtom(pendingTxsAtom);
   const address = useGlobal().auth.address;
   const [nameValue, setNameValue] = useState('');
-  const [isNameAvailable, setIsNameAvailable] = useState<Availability>(
-    Availability.NULL
-  );
+  const isNameAvailable = useNameAvailability(nameValue);
   const setPendingTxs = useSetAtom(pendingTxsAtom);
 
   const [isLoadingRegisterName, setIsLoadingRegisterName] = useState(false);
@@ -136,38 +129,6 @@ const RegisterName = () => {
     }
   };
 
-  const checkIfNameExisits = async (name: string) => {
-    if (!name?.trim()) {
-      setIsNameAvailable(Availability.NULL);
-
-      return;
-    }
-    setIsNameAvailable(Availability.LOADING);
-    try {
-      const res = await fetch(`/names/` + name);
-      const data = await res.json();
-      if (data?.message === 'name unknown' || data?.error) {
-        setIsNameAvailable(Availability.AVAILABLE);
-      } else {
-        setIsNameAvailable(Availability.NOT_AVAILABLE);
-      }
-    } catch (error) {
-      setIsNameAvailable(Availability.AVAILABLE);
-      console.error(error);
-    }
-  };
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      checkIfNameExisits(nameValue);
-    }, 500);
-
-    // Cleanup timeout if searchValue changes before the timeout completes
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [nameValue]);
-
   useEffect(() => {
     const nameRegistrationFee = async () => {
       try {
@@ -220,7 +181,6 @@ const RegisterName = () => {
               padding: '10px',
             }}
           >
-            <Label></Label>
             <TextField
               autoComplete="off"
               autoFocus
@@ -249,7 +209,7 @@ const RegisterName = () => {
                     }}
                   />
                   <Typography>
-                    {t('balance_message', {
+                    {t('core:new_name.balance_message', {
                       balance: balance ?? 0,
                       nameFee,
                       postProcess: 'capitalizeFirstChar',
@@ -294,6 +254,22 @@ const RegisterName = () => {
                 <Typography>
                   {t('core:new_name.name_unavailable', { name: nameValue })}
                 </Typography>
+              </Box>
+            )}
+            {isNameAvailable === Availability.INVALID && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  gap: '5px',
+                  alignItems: 'center',
+                }}
+              >
+                <ErrorIcon
+                  sx={{
+                    color: theme.palette.text.primary,
+                  }}
+                />
+                <Typography>{nameLengthMessage(t, nameValue)}</Typography>
               </Box>
             )}
             {isNameAvailable === Availability.LOADING && (

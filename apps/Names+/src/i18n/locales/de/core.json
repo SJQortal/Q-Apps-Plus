@@ -33,7 +33,9 @@
       "success": "Name erfolgreich registriert",
       "error": "Name konnte nicht registriert werden",
       "loading": "Name wird registriert... bitte warten"
-    }
+    },
+    "name_too_short": "Namen brauchen mindestens {{min}} Zeichen",
+    "name_too_long": "Namen dürfen höchstens {{max}} Zeichen haben"
   },
   "tables": {
     "name": "Name",
@@ -43,7 +45,8 @@
     "responses": {
       "loading": "Name wird aktualisiert... bitte warten",
       "success": "Name erfolgreich aktualisiert",
-      "error": "Name konnte nicht aktualisiert werden"
+      "error": "Name konnte nicht aktualisiert werden",
+      "error_primary": "der primäre Name kann nicht geändert werden, solange du weitere Namen besitzt"
     },
     "title": "Vorsicht beim Aktualisieren deines Namens",
     "choose_name": "neuen Namen wählen",

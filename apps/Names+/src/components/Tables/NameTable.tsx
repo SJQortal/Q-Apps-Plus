@@ -61,6 +61,10 @@ import { Availability } from '../../interfaces';
 import { SetStateAction } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { TFunction } from 'i18next';
+import {
+  nameLengthMessage,
+  useNameAvailability,
+} from '../../hooks/useNameAvailability';
 interface NameData {
   name: string;
   isSelling?: boolean;
@@ -133,7 +137,7 @@ const ManageAvatar = ({
           return;
         }
         const identifier = `qortal_avatar`;
-        const url = `/arbitrary/resources/searchsimple?mode=ALL&service=THUMBNAIL&identifier=${identifier}&limit=1&name=${name}&includemetadata=false&prefix=true`;
+        const url = `/arbitrary/resources/searchsimple?mode=ALL&service=THUMBNAIL&identifier=${identifier}&limit=1&name=${encodeURIComponent(name)}&includemetadata=false&prefix=true`;
         const response = await getNameQueue.enqueue(() =>
           fetch(url, {
             method: 'GET',
@@ -208,7 +212,7 @@ function rowContent(
   const handleUpdate = async (name: string) => {
     if (name === primaryName && numberOfNames > 1) {
       showError(
-        t('core:actions.set_avatar', {
+        t('core:update_name.responses.error_primary', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -231,7 +235,7 @@ function rowContent(
         oldName: name,
       });
       showSuccess(
-        t('core:update_name.responses.loading', {
+        t('core:update_name.responses.success', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -428,7 +432,7 @@ function rowContent(
               width: '30px',
               objectFit: 'contain',
             }}
-            src={`/arbitrary/THUMBNAIL/${row.name}/qortal_avatar?forceUpdateState=${row?.forceUpdateState}`}
+            src={`/arbitrary/THUMBNAIL/${encodeURIComponent(row.name)}/qortal_avatar?forceUpdateState=${row?.forceUpdateState}`}
             alt={row.name}
           >
             {row.name?.charAt(0)}
@@ -440,7 +444,6 @@ function rowContent(
               })}
               placement="left"
               arrow
-              sx={{ fontSize: '24' }}
             >
               <PersonIcon color="success" />
             </Tooltip>
@@ -511,9 +514,11 @@ function rowContent(
 
 interface NameTableProps {
   names: Names[];
+  /** How many names the account owns in total, whatever the filter shows. */
+  totalNames: number;
   primaryName: string;
 }
-export const NameTable = ({ names, primaryName }: NameTableProps) => {
+export const NameTable = ({ names, totalNames, primaryName }: NameTableProps) => {
   const setNames = useSetAtom(namesAtom);
   const { auth } = useGlobal();
   const [namesForSale, setNamesForSale] = useAtom(forSaleAtom);
@@ -567,7 +572,7 @@ export const NameTable = ({ names, primaryName }: NameTableProps) => {
             primaryName,
             auth?.address || '',
             fetchPrimaryName,
-            names?.length,
+            totalNames,
             modalFunctions,
             modalFunctionsUpdateName,
             modalFunctionsAvatar,
@@ -699,7 +704,7 @@ const AvatarModal = ({
         return;
       }
       showError(
-        t('core:avatar.responses.loading', {
+        t('core:avatar.responses.error2', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -741,7 +746,7 @@ const AvatarModal = ({
                 height: '138px',
                 width: '138px',
               }}
-              src={`/arbitrary/THUMBNAIL/${modalFunctionsAvatar.data.name}/qortal_avatar?forceUpdateState=${forceUpdateState}`}
+              src={`/arbitrary/THUMBNAIL/${encodeURIComponent(modalFunctionsAvatar.data.name)}/qortal_avatar?forceUpdateState=${forceUpdateState}`}
               alt={modalFunctionsAvatar.data.name}
             >
               {modalFunctionsAvatar?.data?.name?.charAt(0)}
@@ -814,46 +819,12 @@ const UpdateNameModal = ({
 }: UpdateNameModalProps) => {
   const [step, setStep] = useState(1);
   const [newName, setNewName] = useState('');
-  const [isNameAvailable, setIsNameAvailable] = useState<Availability>(
-    Availability.NULL
-  );
+  const isNameAvailable = useNameAvailability(newName);
   const { t } = useTranslation();
   const [nameFee, setNameFee] = useState<null | number>(null);
   const { value: balance } = useQortBalance();
 
   const theme = useTheme();
-
-  const checkIfNameExisits = async (name: string) => {
-    if (!name?.trim()) {
-      setIsNameAvailable(Availability.NULL);
-
-      return;
-    }
-    setIsNameAvailable(Availability.LOADING);
-    try {
-      const res = await fetch(`/names/` + name);
-      const data = await res.json();
-      if (data?.message === 'name unknown' || data?.error) {
-        setIsNameAvailable(Availability.AVAILABLE);
-      } else {
-        setIsNameAvailable(Availability.NOT_AVAILABLE);
-      }
-    } catch (error) {
-      setIsNameAvailable(Availability.AVAILABLE);
-      console.error(error);
-    }
-  };
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      checkIfNameExisits(newName);
-    }, 500);
-
-    // Cleanup timeout if searchValue changes before the timeout completes
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [newName]);
 
   useEffect(() => {
     const nameRegistrationFee = async () => {
@@ -956,7 +927,7 @@ const UpdateNameModal = ({
                     }}
                   />
                   <Typography>
-                    {t('core:update_name.balanceInfo', {
+                    {t('core:update_name.balance_info', {
                       postProcess: 'capitalizeFirstChar',
                       nameFee: nameFee,
                       balance: balance ?? 0,
@@ -1008,6 +979,22 @@ const UpdateNameModal = ({
                 </Typography>
               </Box>
             )}
+            {isNameAvailable === Availability.INVALID && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  gap: '5px',
+                  alignItems: 'center',
+                }}
+              >
+                <ErrorIcon
+                  sx={{
+                    color: theme.palette.text.primary,
+                  }}
+                />
+                <Typography>{nameLengthMessage(t, newName)}</Typography>
+              </Box>
+            )}
             {isNameAvailable === Availability.LOADING && (
               <Box
                 sx={{
@@ -1018,7 +1005,7 @@ const UpdateNameModal = ({
               >
                 <BarSpinner width="16px" color={theme.palette.text.primary} />
                 <Typography>
-                  {t('core:new_name.checking', {
+                  {t('core:new_name.checking_name', {
                     postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>

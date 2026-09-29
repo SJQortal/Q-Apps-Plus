@@ -33,7 +33,9 @@
       "success": "nom enregistré avec succès",
       "error": "impossible d'enregistrer le nom",
       "loading": "enregistrement du nom... veuillez patienter"
-    }
+    },
+    "name_too_short": "les noms doivent comporter au moins {{min}} caractères",
+    "name_too_long": "les noms peuvent comporter au plus {{max}} caractères"
   },
   "tables": {
     "name": "nom",
@@ -43,7 +45,8 @@
     "responses": {
       "loading": "mise à jour du nom... veuillez patienter",
       "success": "nom mis à jour avec succès",
-      "error": "impossible de mettre à jour le nom"
+      "error": "impossible de mettre à jour le nom",
+      "error_primary": "impossible de modifier le nom principal tant que vous possédez d'autres noms"
     },
     "title": "attention lors de la mise à jour de votre nom",
     "choose_name": "choisir un nouveau nom",

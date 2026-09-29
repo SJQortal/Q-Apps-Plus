@@ -33,7 +33,9 @@
       "success": "nome registrato con successo",
       "error": "impossibile registrare il nome",
       "loading": "registrazione del nome... attendere"
-    }
+    },
+    "name_too_short": "i nomi devono avere almeno {{min}} caratteri",
+    "name_too_long": "i nomi possono avere al massimo {{max}} caratteri"
   },
   "tables": {
     "name": "nome",
@@ -43,7 +45,8 @@
     "responses": {
       "loading": "aggiornamento del nome... attendere",
       "success": "nome aggiornato con successo",
-      "error": "impossibile aggiornare il nome"
+      "error": "impossibile aggiornare il nome",
+      "error_primary": "impossibile aggiornare il nome principale finché possiedi altri nomi"
     },
     "title": "attenzione durante l'aggiornamento del nome",
     "choose_name": "scegli un nuovo nome",

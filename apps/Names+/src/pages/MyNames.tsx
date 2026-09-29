@@ -57,7 +57,11 @@ export const MyNames = () => {
         />
       </PageHeader>
       <PendingTxsTable />
-      <NameTable names={filteredNames} primaryName={primaryName} />
+      <NameTable
+        names={filteredNames}
+        totalNames={names.length}
+        primaryName={primaryName}
+      />
     </>
   );
 };

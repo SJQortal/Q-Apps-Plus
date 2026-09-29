@@ -1,6 +1,7 @@
 export enum Availability {
   NULL = 'null',
   LOADING = 'loading',
+  INVALID = 'invalid',
   AVAILABLE = 'available',
   NOT_AVAILABLE = 'not-available',
 }
