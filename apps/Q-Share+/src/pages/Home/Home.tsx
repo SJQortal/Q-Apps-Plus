@@ -207,7 +207,7 @@ export const Home = ({ mode }: HomeProps) => {
 
   return (
     <Grid container sx={{ width: "100%" }}>
-      <FiltersCol item xs={12} md={2} sm={3}>
+      <FiltersCol size={{ xs: 12, sm: 3, md: 2 }}>
         <FiltersContainer>
           <StatsData />
           <Input
@@ -293,7 +293,12 @@ export const Home = ({ mode }: HomeProps) => {
           </Button>
         </FiltersContainer>
       </FiltersCol>
-      <Grid item xs={12} md={10} sm={9}>
+      <Grid
+        size={{
+          xs: 12,
+          md: 10,
+          sm: 9
+        }}>
         <Box
           sx={{
             width: "100%",

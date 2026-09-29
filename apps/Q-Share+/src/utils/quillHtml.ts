@@ -105,10 +105,8 @@ export function normalizeQuillHtml(html: string | null | undefined): string {
 export function isQuillHtmlEmpty(html: string | null | undefined): boolean {
   if (!html) return true;
   if (/<(img|video|audio|iframe)\b/i.test(html)) return false;
-  return (
-    html
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .trim() === ''
-  );
+  return (html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .trim() === '');
 }

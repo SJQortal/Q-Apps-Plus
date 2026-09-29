@@ -13,7 +13,6 @@ export const StatsData = () => {
     padding: "20px 0px",
     backgroundColor: theme.palette.background.default,
   }));
-
   const {
     getFiles,
     checkAndUpdateFile,
@@ -24,7 +23,6 @@ export const StatsData = () => {
     getFilesFiltered,
     getFilesCount,
   } = useFetchFiles();
-
   const totalVideosPublished = useSelector(
     (state: RootState) => state.global.totalFilesPublished
   );
@@ -34,7 +32,6 @@ export const StatsData = () => {
   const videosPerNamePublished = useSelector(
     (state: RootState) => state.global.filesPerNamePublished
   );
-
   useEffect(() => {
     getFilesCount();
   }, [getFilesCount]);

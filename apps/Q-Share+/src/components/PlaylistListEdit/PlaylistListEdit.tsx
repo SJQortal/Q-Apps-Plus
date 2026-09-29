@@ -6,7 +6,7 @@ import {
 } from "../PublishFile/Upload-styles.tsx";
 import { Box, Button, Input, Typography, useTheme } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import { removeFile } from "../../state/features/fileSlice.ts";
 import AddIcon from "@mui/icons-material/Add";
 import { QSHARE_FILE_BASE } from "../../constants/Identifiers.ts";
@@ -44,7 +44,6 @@ export const PlaylistListEdit = ({ playlistData, removeVideo, addVideo }) => {
         sx={{
           display: "flex",
           flexDirection: "column",
-
           maxWidth: "300px",
           width: "100%",
         }}
@@ -105,7 +104,6 @@ export const PlaylistListEdit = ({ playlistData, removeVideo, addVideo }) => {
         sx={{
           display: "flex",
           flexDirection: "column",
-
           maxWidth: "300px",
           width: "100%",
         }}

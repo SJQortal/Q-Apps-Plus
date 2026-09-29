@@ -83,10 +83,13 @@ export const FileList = ({ files }: FileListProps) => {
             {hasHash ? (
               <>
                 <IconsBox
-                  sx={{
-                    opacity: showIcons === fileObj.id ? 1 : 0,
-                    zIndex: 2,
-                  }}
+                  sx={[{
+                    zIndex: 2
+                  }, showIcons === fileObj.id ? {
+                    opacity: 1
+                  } : {
+                    opacity: 0
+                  }]}
                 >
                   {fileObj?.user === username && (
                     <Tooltip title="Edit video properties" placement="top">

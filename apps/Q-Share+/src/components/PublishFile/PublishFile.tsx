@@ -378,7 +378,7 @@ export const PublishFile = ({ editId, editContent }: NewCrowdfundProps) => {
                       const formattedValue = value.replace(titleFormatter, "");
                       setTitle(formattedValue);
                     }}
-                    inputProps={{ maxLength: 180 }}
+                    slotProps={{ htmlInput: { maxLength: 180 } }}
                     required
                   />
                   <Typography

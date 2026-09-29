@@ -45,20 +45,21 @@ export const VideoCard = styled(Grid)(({ theme }) => ({
   gap: "20px",
   cursor: "pointer",
   border:
-    theme.palette.mode === "dark"
-      ? "none"
-      : `1px solid ${theme.palette.primary.light}`,
+    `1px solid ${theme.palette.primary.light}`,
   boxShadow:
-    theme.palette.mode === "dark"
-      ? "0px 4px 5px 0px hsla(0,0%,0%,0.14),  0px 1px 10px 0px hsla(0,0%,0%,0.12),  0px 2px 4px -1px hsla(0,0%,0%,0.2)"
-      : "rgba(99, 99, 99, 0.2) 0px 2px 8px 0px",
+    "rgba(99, 99, 99, 0.2) 0px 2px 8px 0px",
   transition: "all 0.3s ease-in-out",
   "&:hover": {
     boxShadow:
-      theme.palette.mode === "dark"
-        ? "0px 8px 10px 1px hsla(0,0%,0%,0.14), 0px 3px 14px 2px hsla(0,0%,0%,0.12), 0px 5px 5px -3px hsla(0,0%,0%,0.2)"
-        : "rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;",
+      "rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;",
+    ...theme.applyStyles("dark", {
+      boxShadow: "0px 8px 10px 1px hsla(0,0%,0%,0.14), 0px 3px 14px 2px hsla(0,0%,0%,0.12), 0px 5px 5px -3px hsla(0,0%,0%,0.2)"
+    })
   },
+  ...theme.applyStyles("dark", {
+    border: "none",
+    boxShadow: "0px 4px 5px 0px hsla(0,0%,0%,0.14),  0px 1px 10px 0px hsla(0,0%,0%,0.12),  0px 2px 4px -1px hsla(0,0%,0%,0.2)"
+  })
 }));
 
 export const StoreCardInfo = styled(Grid)(({ theme }) => ({
@@ -70,7 +71,6 @@ export const StoreCardInfo = styled(Grid)(({ theme }) => ({
 }));
 
 export const VideoImageContainer = styled(Grid)(({ theme }) => ({}));
-
 export const VideoCardImage = styled("img")(({ theme }) => ({
   maxWidth: "300px",
   minWidth: "150px",
@@ -86,7 +86,6 @@ const DoubleLine = styled(Typography)`
   -webkit-line-clamp: 2;
   overflow: hidden;
 `;
-
 export const VideoCardTitle = styled(DoubleLine)(({ theme }) => ({
   fontFamily: "Cairo",
   fontSize: "16px",

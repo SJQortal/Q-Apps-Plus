@@ -249,13 +249,12 @@ export default function FileElement({
   return (
     <Box
       onClick={handlePlay}
-      sx={{
+      sx={[{
         width: "100%",
         overflow: "hidden",
         position: "relative",
-        cursor: "pointer",
-        ...(customStyles || {}),
-      }}
+        cursor: "pointer"
+      }, customStyles || {}]}
     >
       {children && (
         <Box
@@ -305,9 +304,10 @@ export default function FileElement({
             <Box sx={{ ml: 1.5, minWidth: 0 }}>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                fontWeight={500}
-              >
+                sx={{
+                  color: "text.secondary",
+                  fontWeight: 500
+                }}>
                 {author}
               </Typography>
               <Typography
@@ -320,21 +320,19 @@ export default function FileElement({
               </Typography>
               <Typography
                 noWrap
-                letterSpacing={-0.25}
                 sx={{
-                  fontSize: "14px",
-                }}
-              >
+                  letterSpacing: -0.25,
+                  fontSize: "14px"
+                }}>
                 {description}
               </Typography>
               {mimeType && (
                 <Typography
                   noWrap
-                  letterSpacing={-0.25}
                   sx={{
-                    fontSize: "12px",
-                  }}
-                >
+                    letterSpacing: -0.25,
+                    fontSize: "12px"
+                  }}>
                   {mimeType}
                 </Typography>
               )}
@@ -343,24 +341,22 @@ export default function FileElement({
           {((resourceStatus.status && resourceStatus?.status !== "READY") ||
             isLoading) && startedDownload && (
             <Box
-              position="absolute"
-              top={0}
-              left={0}
-              right={0}
-              bottom={0}
-              display="flex"
-              justifyContent="center"
-              alignItems="center"
-              zIndex={4999}
-              bgcolor="rgba(0, 0, 0, 0.6)"
               sx={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                justifyContent: "center",
+                alignItems: "center",
+                zIndex: 4999,
+                bgcolor: "rgba(0, 0, 0, 0.6)",
                 display: "flex",
                 flexDirection: "column",
                 gap: "10px",
                 padding: "8px",
-                borderRadius: "10px",
-              }}
-            >
+                borderRadius: "10px"
+              }}>
               <CircularProgress color="secondary" />
               {resourceStatus && (
                 <Typography
@@ -406,24 +402,22 @@ export default function FileElement({
             download?.url &&
             download?.properties?.filename && (
               <Box
-                position="absolute"
-                top={0}
-                left={0}
-                right={0}
-                bottom={0}
-                display="flex"
-                justifyContent="center"
-                alignItems="center"
-                zIndex={4999}
-                bgcolor="rgba(0, 0, 0, 0.6)"
                 sx={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  zIndex: 4999,
+                  bgcolor: "rgba(0, 0, 0, 0.6)",
                   display: "flex",
                   flexDirection: "row",
                   gap: "10px",
                   padding: "8px",
-                  borderRadius: "10px",
-                }}
-              >
+                  borderRadius: "10px"
+                }}>
                 <Typography
                   variant="subtitle2"
                   component="div"
