@@ -1,0 +1,96 @@
+{
+  "header": {
+    "my_names": "i miei nomi",
+    "market": "nomi in vendita"
+  },
+  "inputs": {
+    "filter_names": "filtra nomi"
+  },
+  "actions": {
+    "new_name": "nuovo nome",
+    "register_name": "registrare nome",
+    "close": "chiudi",
+    "update_avatar": "aggiorna avatar",
+    "set_avatar": "imposta avatar",
+    "update": "aggiorna",
+    "sell": "vendi",
+    "cancel_sell": "annulla vendita",
+    "cancel": "annulla",
+    "continue": "continua",
+    "publish": "pubblica",
+    "buy": "acquista",
+    "choose_image": "scegli immagine"
+  },
+  "new_name": {
+    "choose_name": "scegli un nome",
+    "balance_message": "Il tuo saldo è {{balance}} QORT. La registrazione di un nome richiede una commissione di {{nameFee}} QORT.",
+    "name_available": "{{name}} è disponibile",
+    "name_unavailable": "{{name}} non è disponibile",
+    "checking_name": "verifica se il nome esiste già",
+    "responses": {
+      "success": "nome registrato con successo",
+      "error": "impossibile registrare il nome",
+      "loading": "registrazione del nome... attendere"
+    }
+  },
+  "tables": {
+    "name": "nome",
+    "actions": "azioni"
+  },
+  "update_name": {
+    "responses": {
+      "loading": "aggiornamento del nome... attendere",
+      "success": "nome aggiornato con successo",
+      "error": "impossibile aggiornare il nome"
+    },
+    "title": "attenzione durante l'aggiornamento del nome",
+    "choose_name": "scegli un nuovo nome",
+    "balance_info": "Il tuo saldo è {{balance}} QORT. La registrazione di un nome richiede una commissione di {{nameFee}} QORT.",
+    "name_available": "{{name}} è disponibile",
+    "name_unavailable": "{{name}} non è disponibile"
+  },
+  "sell_name": {
+    "responses": {
+      "loading": "messa in vendita del nome... attendere",
+      "success": "nome messo in vendita",
+      "error1": "non puoi vendere il nome principale se hai altri nomi",
+      "error2": "impossibile mettere il nome in vendita",
+      "error3": "prezzo non valido"
+    },
+    "title": "vendere nome",
+    "choose_price": "scegli il prezzo di vendita"
+  },
+  "cancel_name": {
+    "responses": {
+      "loading": "rimozione del nome dal mercato... attendere",
+      "success": "nome rimosso dal mercato",
+      "error": "impossibile rimuovere il nome dal mercato"
+    }
+  },
+  "tooltips": {
+    "primary_name": "questo è il tuo nome principale (identità)"
+  },
+  "warnings": {
+    "warning": "avviso",
+    "primary_name_sell_caution": "attenzione alla vendita del nome principale",
+    "primary_name_sell": "{{name}} è il tuo nome principale. Se sei amministratore di un gruppo privato, la vendita di questo nome rimuoverà le chiavi del gruppo. Assicurati che un altro amministratore re-critti le chiavi più recenti prima di vendere. Procedi con cautela!",
+    "update_name1": "se aggiorni il tuo nome, perderai le risorse associate al nome originale. In altre parole, perderai la proprietà dei contenuti collegati al nome originale su QDN. Procedi con cautela!"
+  },
+  "avatar": {
+    "responses": {
+      "loading": "pubblicazione dell'avatar... attendere",
+      "success": "avatar pubblicato con successo",
+      "error1": "dati mancanti",
+      "error2": "impossibile pubblicare l'avatar"
+    },
+    "title": "pubblica avatar"
+  },
+  "market": {
+    "sale_price": "prezzo di vendita",
+    "responses": {
+      "loading": "tentativo di acquisto del nome... attendere",
+      "success": "nome acquistato con successo",
+      "error": "impossibile acquistare il nome"
+    }
+  }
+}

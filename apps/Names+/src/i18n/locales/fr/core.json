@@ -1,0 +1,96 @@
+{
+  "header": {
+    "my_names": "mes noms",
+    "market": "noms en vente"
+  },
+  "inputs": {
+    "filter_names": "filtrer les noms"
+  },
+  "actions": {
+    "new_name": "nouveau nom",
+    "register_name": "enregistrer le nom",
+    "close": "fermer",
+    "update_avatar": "mettre à jour l'avatar",
+    "set_avatar": "définir l'avatar",
+    "update": "mettre à jour",
+    "sell": "vendre",
+    "cancel_sell": "annuler la vente",
+    "cancel": "annuler",
+    "continue": "continuer",
+    "publish": "publier",
+    "buy": "acheter",
+    "choose_image": "choisir une image"
+  },
+  "new_name": {
+    "choose_name": "choisissez un nom",
+    "balance_message": "Votre solde est de {{balance}} QORT. L’enregistrement d’un nom nécessite des frais de {{nameFee}} QORT.",
+    "name_available": "{{name}} est disponible",
+    "name_unavailable": "{{name}} n’est pas disponible",
+    "checking_name": "vérification de l’existence du nom",
+    "responses": {
+      "success": "nom enregistré avec succès",
+      "error": "impossible d'enregistrer le nom",
+      "loading": "enregistrement du nom... veuillez patienter"
+    }
+  },
+  "tables": {
+    "name": "nom",
+    "actions": "actions"
+  },
+  "update_name": {
+    "responses": {
+      "loading": "mise à jour du nom... veuillez patienter",
+      "success": "nom mis à jour avec succès",
+      "error": "impossible de mettre à jour le nom"
+    },
+    "title": "attention lors de la mise à jour de votre nom",
+    "choose_name": "choisir un nouveau nom",
+    "balance_info": "Votre solde est de {{balance}} QORT. L’enregistrement d’un nom nécessite des frais de {{nameFee}} QORT.",
+    "name_available": "{{name}} est disponible",
+    "name_unavailable": "{{name}} n’est pas disponible"
+  },
+  "sell_name": {
+    "responses": {
+      "loading": "mise en vente du nom... veuillez patienter",
+      "success": "nom mis en vente",
+      "error1": "impossible de vendre le nom principal si d'autres noms existent",
+      "error2": "impossible de mettre le nom en vente",
+      "error3": "prix invalide"
+    },
+    "title": "vendre un nom",
+    "choose_price": "choisissez un prix de vente"
+  },
+  "cancel_name": {
+    "responses": {
+      "loading": "retrait du nom du marché... veuillez patienter",
+      "success": "nom retiré du marché",
+      "error": "impossible de retirer le nom du marché"
+    }
+  },
+  "tooltips": {
+    "primary_name": "il s'agit de votre nom principal (identité)"
+  },
+  "warnings": {
+    "warning": "avertissement",
+    "primary_name_sell_caution": "prudence lors de la vente de votre nom principal",
+    "primary_name_sell": "{{name}} est votre nom principal. Si vous êtes administrateur d’un groupe privé, la vente de ce nom supprimera vos clés de groupe. Assurez-vous qu’un autre administrateur chiffre à nouveau les dernières clés avant de vendre. Procédez avec prudence !",
+    "update_name1": "si vous mettez à jour votre nom, vous perdrez les ressources associées au nom d’origine. En d'autres termes, vous perdrez la propriété du contenu lié à l'ancien nom sur QDN. Procédez avec prudence !"
+  },
+  "avatar": {
+    "responses": {
+      "loading": "publication de l'avatar... veuillez patienter",
+      "success": "avatar publié avec succès",
+      "error1": "données manquantes",
+      "error2": "impossible de publier l'avatar"
+    },
+    "title": "publier l'avatar"
+  },
+  "market": {
+    "sale_price": "prix de vente",
+    "responses": {
+      "loading": "tentative d'achat du nom... veuillez patienter",
+      "success": "nom acheté avec succès",
+      "error": "impossible d’acheter le nom"
+    }
+  }
+}

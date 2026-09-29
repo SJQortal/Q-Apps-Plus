@@ -1,0 +1,96 @@
+{
+  "header": {
+    "my_names": "我的名称",
+    "market": "待售名称"
+  },
+  "inputs": {
+    "filter_names": "筛选名称"
+  },
+  "actions": {
+    "new_name": "新名称",
+    "register_name": "注册名称",
+    "close": "关闭",
+    "update_avatar": "更新头像",
+    "set_avatar": "设置头像",
+    "update": "更新",
+    "sell": "出售",
+    "cancel_sell": "取消出售",
+    "cancel": "取消",
+    "continue": "继续",
+    "publish": "发布",
+    "buy": "购买",
+    "choose_image": "选择图片"
+  },
+  "new_name": {
+    "choose_name": "选择一个名称",
+    "balance_message": "你的余额为 {{balance}} QORT。注册名称需要支付 {{nameFee}} QORT。",
+    "name_available": "{{name}} 可用",
+    "name_unavailable": "{{name}} 不可用",
+    "checking_name": "正在检查名称是否已存在",
+    "responses": {
+      "success": "名称注册成功",
+      "error": "无法注册名称",
+      "loading": "正在注册名称...请稍候"
+    }
+  },
+  "tables": {
+    "name": "名称",
+    "actions": "操作"
+  },
+  "update_name": {
+    "responses": {
+      "loading": "正在更新名称...请稍候",
+      "success": "名称更新成功",
+      "error": "无法更新名称"
+    },
+    "title": "更新名称时请注意",
+    "choose_name": "选择新名称",
+    "balance_info": "你的余额为 {{balance}} QORT。注册名称需要支付 {{nameFee}} QORT。",
+    "name_available": "{{name}} 可用",
+    "name_unavailable": "{{name}} 不可用"
+  },
+  "sell_name": {
+    "responses": {
+      "loading": "正在上架名称出售...请稍候",
+      "success": "名称已上架出售",
+      "error1": "拥有其他名称时无法出售主名称",
+      "error2": "无法上架名称出售",
+      "error3": "无效的价格"
+    },
+    "title": "出售名称",
+    "choose_price": "设定出售价格"
+  },
+  "cancel_name": {
+    "responses": {
+      "loading": "正在从市场移除名称...请稍候",
+      "success": "名称已从市场移除",
+      "error": "无法从市场移除名称"
+    }
+  },
+  "tooltips": {
+    "primary_name": "这是你的主名称（身份）"
+  },
+  "warnings": {
+    "warning": "警告",
+    "primary_name_sell_caution": "出售主名称时请谨慎",
+    "primary_name_sell": "{{name}} 是你的主名称。如果你是某个私密群组的管理员，出售该名称将移除你在该群组的密钥。请确保其他管理员在出售前重新加密最新密钥。请谨慎操作！",
+    "update_name1": "如果你更新了名称，你将失去与原名称关联的资源。换句话说，你将失去 QDN 上该名称下内容的所有权。请谨慎操作！"
+  },
+  "avatar": {
+    "responses": {
+      "loading": "正在发布头像...请稍候",
+      "success": "头像发布成功",
+      "error1": "缺少数据",
+      "error2": "无法发布头像"
+    },
+    "title": "发布头像"
+  },
+  "market": {
+    "sale_price": "售价",
+    "responses": {
+      "loading": "正在尝试购买名称...请稍候",
+      "success": "名称购买成功",
+      "error": "无法购买名称"
+    }
+  }
+}

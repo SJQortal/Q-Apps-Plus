@@ -1,0 +1,96 @@
+{
+  "header": {
+    "my_names": "my names",
+    "market": "names for sale"
+  },
+  "inputs": {
+    "filter_names": "filter names"
+  },
+  "actions": {
+    "new_name": "new name",
+    "register_name": "register name",
+    "close": "close",
+    "update_avatar": "update avatar",
+    "set_avatar": "set avatar",
+    "update": "update",
+    "sell": "sell",
+    "cancel_sell": "cancel sell",
+    "cancel": "cancel",
+    "continue": "continue",
+    "publish": "publish",
+    "buy": "buy",
+    "choose_image": "choose Image"
+  },
+  "new_name": {
+    "choose_name": "choose a name",
+    "balance_message": "Your balance is {{balance}} QORT. A name registration requires a {{nameFee}} QORT fee.",
+    "name_available": "{{name}} is available",
+    "name_unavailable": "{{name}} is unavailable",
+    "checking_name": "checking if name already exists",
+    "responses": {
+      "success": "successfully registered the name",
+      "error": "unable to register name",
+      "loading": "registering name... please wait"
+    }
+  },
+  "tables": {
+    "name": "name",
+    "actions": "actions"
+  },
+  "update_name": {
+    "responses": {
+      "loading": "updating name... please wait",
+      "success": "successfully updated name",
+      "error": "unable to update name"
+    },
+    "title": "caution when updating your name",
+    "choose_name": "choose new name",
+    "balance_info": "Your balance is {{balance}} QORT. A name registration requires a {{nameFee}} QORT fee.",
+    "name_available": "{{name}} is available",
+    "name_unavailable": "{{name}} is unavailable"
+  },
+  "sell_name": {
+    "responses": {
+      "loading": "placing name for sale... please wait",
+      "success": "placed name for sale",
+      "error1": "cannot sell primary name while having other names",
+      "error2": "unable to place name for sale",
+      "error3": "invalid price"
+    },
+    "title": "selling name",
+    "choose_price": "choose selling price"
+  },
+  "cancel_name": {
+    "responses": {
+      "loading": "removing name from market... please wait",
+      "success": "removed name from market",
+      "error": "unable to remove name from market"
+    }
+  },
+  "tooltips": {
+    "primary_name": "this is your primary name (identity)"
+  },
+  "warnings": {
+    "warning": "warning",
+    "primary_name_sell_caution": "caution when selling your primary name",
+    "primary_name_sell": "{{name}} is your primary name. If you are an admin of a private group, selling this name will remove your group keys for the group. Make sure another admin re-encrypts the latest keys before selling. Proceed with caution!",
+    "update_name1": "if you update your Name, you will forfeit the resources associated with the original Name. In other words, you will lose ownership of the content under the original Name on QDN. Proceed with caution!"
+  },
+  "avatar": {
+    "responses": {
+      "loading": "publishing avatar... please wait",
+      "success": "successfully published avatar",
+      "error1": "missing data",
+      "error2": "Unable to publish avatar"
+    },
+    "title": "publish avatar"
+  },
+  "market": {
+    "sale_price": "sale price",
+    "responses": {
+      "loading": "attempting to purchase name... please wait",
+      "success": "purchased name",
+      "error": "unable to purchase name"
+    }
+  }
+}
