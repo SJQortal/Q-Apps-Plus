@@ -137,6 +137,16 @@ Pass 1, in commit order:
 
 Deferred: removing the dead Q-Tube player/playlist code (kept, unreachable), trimming the unused TTF fonts (Classic theme fidelity vs 1.2 MB), upload progress per file, collections, moving to qapp-core.
 
+### Pass 2 plan (2026-09-30)
+
+Areas run in parallel by separate agents on disjoint files; the lead integrates:
+
+1. **Publish flow** (PublishFile, EditFile, MultiplePublish, CategoryList, TextEditor, new `utils/publishPayload.ts`): pure payload builder pinned by tests to the original format; drag-and-drop list with type icons, sizes, total, remove; a publishing modal with step progress (n of N resources), retry of failures, dispatch `markSharesChanged` on success.
+2. **Share page** (FileContent, FileElement, FilePreview, DownloadTaskManager, DownloadWrapper, Comments, FollowButton, CopyLinkButton): PDF and text previews on click, image lightbox, Download all, file rows with kind icons and status, comment states, hidden-names filter, a11y.
+3. **Collections** (new `qshare_collection_` DOCUMENT, additive): `utils/collections.ts` with tests, Redux slice, Collections page, collection page, `SaveToCollectionButton` for rows and share pages, create/edit dialogs.
+4. **Shell** (layout, GlobalWrapper, Notification, ConsentModal, PageLoader, BlockedNamesModal, index.css, App/main, package.json): phone bottom nav, header that hides on scroll, dead Q-Tube player/playlist code and react-rnd removed, toast fix, consent fix, route wiring for collections.
+5. **Lead**: settings store, Following feed, hidden names, lazy avatars (done); wiring collections into rows; first-load search counts; review workflow on the diff; lint pass; version 1.0.0-plus.2; brief and PR.
+
 ## Done
 
 Pass 1 on branch `q-share-plus/pass-1`, PR #7 (2026-09-29/30). Every commit builds; 26 tests; `scripts/build-zip.sh Q-Share+` produces the zip.
