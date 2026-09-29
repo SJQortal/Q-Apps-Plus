@@ -855,7 +855,7 @@ const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
             <DownloadNowButton
               onClick={() => {
                 const userOS = parser.getOS().name;
-                if (userOS?.includes("Android" || "iOS")) {
+                if (userOS?.includes("Android") || userOS?.includes("iOS")) {
                   dispatch(
                     setNotification({
                       msg: "Qortal is not available on mobile devices yet. Please download on a desktop or laptop.",
