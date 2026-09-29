@@ -64,7 +64,7 @@ This pass always includes:
 1. A test harness (`vitest` + `jsdom`) with a `qortalRequest` mock, if the app has none (see docs/QORTAL.md).
 2. The theme kit, a Settings page and the four themes (DESIGN.md checklist).
 3. The top efficiency fixes (every `limit: 0`, request dedupe and cache, lazy media, code-splitting).
-4. A UX redesign of the main screens to the Hub 3.0 layout, including phone.
+4. A UX redesign of the main screens to the Hub 3.0 layout, **mobile-first**, meeting every point in docs/DESIGN.md → Mobile (GO and phones).
 5. 2–4 of the most obvious missing features.
 
 Defer anything risky, such as major dependency upgrades or rewriting money or encryption code, to "Follow-ups" with a reason. Don't stop to ask for approval. The plan exists so Simon can review it later.
