@@ -1,209 +1,135 @@
-import { Avatar, Box, Skeleton, Tooltip } from "@mui/material";
-import {
-  BlockIconContainer,
-  BottomParent,
-  IconsBox,
-  NameContainer,
-  VideoCard,
-  VideoCardName,
-  VideoCardTitle,
-  FileContainer,
-  VideoUploadDate,
-} from "./FileList-styles.tsx";
-import EditIcon from "@mui/icons-material/Edit";
-import BlockIcon from "@mui/icons-material/Block";
-
-import {
-  blockUser,
-  setEditFile,
-  Video,
-} from "../../state/features/fileSlice.ts";
+import { Avatar, IconButton, Skeleton, Tooltip } from "@mui/material";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import BlockOutlinedIcon from "@mui/icons-material/BlockOutlined";
+import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
-import { formatBytes } from "../FileContent/FileContent.tsx";
-import { formatDate } from "../../utils/time.ts";
-import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "../../state/store.ts";
 import { useNavigate } from "react-router-dom";
+import {
+  FileContainer,
+  FileRow,
+  NameLink,
+  RowActions,
+  RowIcon,
+  RowMain,
+  RowMeta,
+  VideoCardTitle,
+} from "./FileList-styles.tsx";
+import { blockUser, setEditFile, Video } from "../../state/features/fileSlice.ts";
+import { setNotification } from "../../state/features/notificationsSlice.ts";
+import { formatBytes } from "../../utils/formatBytes.ts";
+import { formatDate } from "../../utils/time.ts";
+import { RootState } from "../../state/store.ts";
 import { getIconsFromObject } from "../../constants/Categories/CategoryFunctions.ts";
+import { avatarUrl, profilePath, shareLink, sharePath } from "../../utils/qortalLinks.ts";
 
 interface FileListProps {
   files: Video[];
+  /** Hide the publisher (on a profile page every row has the same one). */
+  showPublisher?: boolean;
 }
-export const FileList = ({ files }: FileListProps) => {
-  const hashMapFiles = useSelector(
-    (state: RootState) => state.file.hashMapFiles
-  );
 
-  const [showIcons, setShowIcons] = useState(null);
+export const FileList = ({ files, showPublisher = true }: FileListProps) => {
+  const hashMapFiles = useSelector((state: RootState) => state.file.hashMapFiles);
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
   const blockUserFunc = async (user: string) => {
     if (user === "Q-Share") return;
-
     try {
       const response = await qortalRequest({
         action: "ADD_LIST_ITEMS",
         list_name: "blockedNames",
         items: [user],
       });
-
       if (response === true) {
         dispatch(blockUser(user));
+        dispatch(setNotification({ msg: `${user} is now blocked`, alertType: "success" }));
       }
-    } catch (error) {}
+    } catch (error) {
+      dispatch(setNotification({ msg: `Could not block ${user}`, alertType: "error" }));
+    }
+  };
+
+  const copyLink = async (file: Video) => {
+    try {
+      await navigator.clipboard.writeText(shareLink(file.user, file.id));
+      dispatch(setNotification({ msg: "Link copied", alertType: "success" }));
+    } catch {
+      dispatch(setNotification({ msg: "Could not copy the link", alertType: "error" }));
+    }
   };
 
   return (
     <FileContainer>
-      {files.map((file: any, index: number) => {
+      {files.map((file) => {
         const existingFile = hashMapFiles[file?.id];
-        let hasHash = false;
-        let fileObj = file;
-        if (existingFile) {
-          fileObj = existingFile;
-          hasHash = true;
-        }
+        const fileObj: any = existingFile ?? file;
+        const hasHash = Boolean(existingFile);
         const icon = getIconsFromObject(fileObj);
+        const totalSize = fileObj?.files?.reduce((acc: number, cur: any) => acc + (cur?.size || 0), 0) ?? 0;
+        const fileCount = fileObj?.files?.length ?? 0;
         return (
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              width: "100%",
-              height: "75px",
-              position: "relative",
-            }}
-            key={fileObj.id}
-            onMouseEnter={() => setShowIcons(fileObj.id)}
-            onMouseLeave={() => setShowIcons(null)}
-          >
+          <FileRow key={fileObj.id}>
             {hasHash ? (
               <>
-                <IconsBox
-                  sx={[{
-                    zIndex: 2
-                  }, showIcons === fileObj.id ? {
-                    opacity: 1
-                  } : {
-                    opacity: 0
-                  }]}
+                <RowMain
+                  onClick={() => navigate(sharePath(fileObj.user, fileObj.id))}
+                  aria-label={`Open ${fileObj.title}`}
                 >
-                  {fileObj?.user === username && (
-                    <Tooltip title="Edit video properties" placement="top">
-                      <BlockIconContainer>
-                        <EditIcon
-                          onClick={() => {
-                            dispatch(setEditFile(fileObj));
-                          }}
-                        />
-                      </BlockIconContainer>
-                    </Tooltip>
-                  )}
-
-                  <Tooltip title="Block user content" placement="top">
-                    <BlockIconContainer>
-                      <BlockIcon
-                        onClick={() => {
-                          blockUserFunc(fileObj?.user);
-                        }}
-                      />
-                    </BlockIconContainer>
-                  </Tooltip>
-                </IconsBox>
-                <VideoCard
-                  onClick={() => {
-                    navigate(`/share/${fileObj?.user}/${fileObj?.id}`);
-                  }}
-                  sx={{
-                    height: "100%",
-                    width: "100%",
-                    display: "flex",
-                    gap: "25px",
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: "25px",
-                      alignItems: "center",
-                    }}
-                  >
-                    {icon ? (
-                      <img
-                        src={icon}
-                        width="50px"
-                        style={{
-                          borderRadius: "5px",
-                        }}
-                      />
-                    ) : (
-                      <AttachFileIcon />
-                    )}
-
-                    <VideoCardTitle
-                      sx={{
-                        width: "100px",
-                      }}
-                    >
-                      {formatBytes(
-                        fileObj?.files?.reduce(
-                          (acc, cur) => acc + (cur?.size || 0),
-                          0
-                        )
-                      )}
-                    </VideoCardTitle>
+                  {icon ? <RowIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon />}
+                  <div style={{ minWidth: 0, flex: 1 }}>
                     <VideoCardTitle>{fileObj.title}</VideoCardTitle>
-                  </Box>
-                  <BottomParent>
-                    <NameContainer
-                      onClick={e => {
-                        e.stopPropagation();
-                        navigate(`/channel/${fileObj?.user}`);
-                      }}
-                    >
-                      <Avatar
-                        sx={{ height: 24, width: 24 }}
-                        src={`/arbitrary/THUMBNAIL/${fileObj?.user}/qortal_avatar`}
-                        alt={`${fileObj?.user}'s avatar`}
-                      />
-                      <VideoCardName
-                        sx={{
-                          ":hover": {
-                            textDecoration: "underline",
-                          },
-                        }}
-                      >
-                        {fileObj?.user}
-                      </VideoCardName>
-                    </NameContainer>
-
-                    {fileObj?.created && (
-                      <VideoUploadDate>
-                        {formatDate(fileObj.created)}
-                      </VideoUploadDate>
-                    )}
-                  </BottomParent>
-                </VideoCard>
+                    <RowMeta>
+                      <span>
+                        {fileCount} {fileCount === 1 ? "file" : "files"} · {formatBytes(totalSize)}
+                      </span>
+                      {fileObj?.created && <span>· {formatDate(fileObj.created)}</span>}
+                    </RowMeta>
+                  </div>
+                </RowMain>
+                {showPublisher && (
+                  <NameLink
+                    onClick={() => navigate(profilePath(fileObj.user))}
+                    aria-label={`Shares by ${fileObj.user}`}
+                  >
+                    <Avatar sx={{ width: 22, height: 22 }} src={avatarUrl(fileObj.user)} alt="" />
+                    <span>{fileObj.user}</span>
+                  </NameLink>
+                )}
+                <RowActions className="row-actions">
+                  <Tooltip title="Copy link">
+                    <IconButton size="small" aria-label="Copy link" onClick={() => copyLink(fileObj)}>
+                      <LinkOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  {fileObj?.user === username ? (
+                    <Tooltip title="Edit share">
+                      <IconButton size="small" aria-label="Edit share" onClick={() => dispatch(setEditFile(fileObj))}>
+                        <EditOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  ) : (
+                    username && (
+                      <Tooltip title={`Block ${fileObj.user}`}>
+                        <IconButton
+                          size="small"
+                          aria-label={`Block ${fileObj.user}`}
+                          onClick={() => blockUserFunc(fileObj.user)}
+                          sx={{ color: "error.main" }}
+                        >
+                          <BlockOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )
+                  )}
+                </RowActions>
               </>
             ) : (
-              <Skeleton
-                variant="rectangular"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  paddingBottom: "10px",
-                  objectFit: "contain",
-                  visibility: "visible",
-                  borderRadius: "8px",
-                }}
-              />
+              <Skeleton variant="rounded" sx={{ width: "100%", height: 44 }} />
             )}
-          </Box>
+          </FileRow>
         );
       })}
     </FileContainer>

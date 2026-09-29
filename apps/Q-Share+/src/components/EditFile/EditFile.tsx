@@ -101,7 +101,7 @@ export const EditFile = () => {
       rejectedFiles.forEach(({ file, errors }) => {
         errors.forEach(error => {
           if (error.code === "file-too-large") {
-            errorString = "File must be under 400mb";
+            errorString = "File must be under 2GB";
           }
           console.log(`Error with file ${file.name}: ${error.message}`);
         });
@@ -309,6 +309,7 @@ export const EditFile = () => {
     <>
       <Modal
         open={!!editFileProperties}
+        onClose={onClose}
         aria-labelledby="modal-title"
         aria-describedby="modal-description"
       >
@@ -326,7 +327,9 @@ export const EditFile = () => {
             <Box
               {...getRootProps()}
               sx={{
-                border: "1px dashed gray",
+                border: "1px dashed",
+                borderColor: "divider",
+                borderRadius: 2,
                 padding: 2,
                 textAlign: "center",
                 marginBottom: 2,

@@ -10,8 +10,8 @@ export const FilePlayerContainer = styled(Box)(({ theme }) => ({
 }));
 
 export const FileTitle = styled(Typography)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "20px",
+  fontWeight: 700,
   color: theme.palette.text.primary,
   wordBreak: "break-word",
 }));
@@ -68,17 +68,19 @@ export const AuthorTextComment = styled(Typography)({
 export const FileAttachmentContainer = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
-  gap: "20px",
-  padding: "5px 10px",
-  border: `1px solid ${theme.palette.text.primary}`,
+  flexWrap: "wrap",
+  gap: "12px 20px",
+  padding: "10px 12px",
+  border: `1px solid ${theme.palette.divider}`,
+  borderRadius: theme.shape.borderRadius,
+  backgroundColor: theme.palette.background.paper,
 }));
 
 export const FileAttachmentFont = styled(Typography)(({ theme }) => ({
-  fontFamily: "Mulish",
   color: theme.palette.text.primary,
-  fontSize: "16px",
+  fontSize: "15px",
   letterSpacing: 0,
   fontWeight: 400,
-  userSelect: "none",
-  whiteSpace: "nowrap",
+  wordBreak: "break-word",
+  minWidth: 0,
 }));

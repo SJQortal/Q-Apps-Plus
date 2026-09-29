@@ -1,232 +1,93 @@
-import React, { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { useSelector } from "react-redux";
-import { RootState } from "../../state/store";
-import AttachFileIcon from "@mui/icons-material/AttachFile";
-
-import { Avatar, Box, Skeleton, useTheme } from "@mui/material";
-import { useFetchFiles } from "../../hooks/useFetchFiles.tsx";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
+import { Box, Skeleton } from "@mui/material";
+import { useFetchFiles, summaryToVideo } from "../../hooks/useFetchFiles.tsx";
 import LazyLoad from "../../components/common/LazyLoad";
-import {
-  BottomParent,
-  FileContainer,
-  NameContainer,
-  VideoCard,
-  VideoCardName,
-  VideoCardTitle,
-  VideoUploadDate,
-} from "./FileList-styles.tsx";
-import { formatDate } from "../../utils/time";
 import { Video } from "../../state/features/fileSlice.ts";
 import { queue } from "../../wrappers/GlobalWrapper";
 import { QSHARE_FILE_BASE } from "../../constants/Identifiers.ts";
 import { QDN_PAGE, searchQdn } from "../../utils/qdnSearch";
-import { summaryToVideo } from "../../hooks/useFetchFiles.tsx";
-import { formatBytes } from "../FileContent/FileContent.tsx";
-import { getIconsFromObject } from "../../constants/Categories/CategoryFunctions.ts";
+import { FileList } from "./FileList.tsx";
+import { EmptyState } from "../../components/common/EmptyState.tsx";
 
-interface VideoListProps {
-  mode?: string;
-}
-export const FileListComponentLevel = ({ mode }: VideoListProps) => {
+/** The shares of one publisher, on the profile page. */
+export const FileListComponentLevel = () => {
   const { name: paramName } = useParams();
-  const theme = useTheme();
   const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  const firstFetch = useRef(false);
-  const afterFetch = useRef(false);
-  const hashMapVideos = useSelector(
-    (state: RootState) => state.file.hashMapFiles
-  );
-
+  const [error, setError] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [videos, setVideos] = React.useState<Video[]>([]);
-
-  const navigate = useNavigate();
+  const isFetching = useRef(false);
   const { getFile, checkAndUpdateFile } = useFetchFiles();
 
-  const getVideos = React.useCallback(async () => {
-    try {
-      const offset = videos.length;
-      const responseData = await searchQdn({
-        service: "DOCUMENT",
-        query: QSHARE_FILE_BASE,
-        name: paramName,
-        limit: QDN_PAGE,
-        offset,
-      });
-      const structureData = responseData.map(summaryToVideo);
-
-      const copiedVideos: Video[] = [...videos];
-      structureData.forEach((video: Video) => {
-        const index = videos.findIndex(p => p.id === video.id);
-        if (index !== -1) {
-          copiedVideos[index] = video;
-        } else {
-          copiedVideos.push(video);
-        }
-      });
-      setVideos(copiedVideos);
-
-      for (const content of structureData) {
-        if (content.user && content.id) {
-          const res = checkAndUpdateFile(content);
-          if (res) {
+  const getVideos = useCallback(
+    async (reset = false) => {
+      if (!paramName || isFetching.current) return;
+      if (!reset && !hasMore) return;
+      isFetching.current = true;
+      setIsLoading(true);
+      setError(false);
+      try {
+        const offset = reset ? 0 : videos.length;
+        const rows = await searchQdn({
+          service: "DOCUMENT",
+          query: QSHARE_FILE_BASE,
+          name: paramName,
+          limit: QDN_PAGE,
+          offset,
+        });
+        const structureData = rows.map(summaryToVideo);
+        setVideos((prev) => {
+          const next = reset ? [] : [...prev];
+          for (const video of structureData) {
+            const index = next.findIndex((p) => p.id === video.id);
+            if (index !== -1) next[index] = video;
+            else next.push(video);
+          }
+          return next;
+        });
+        setHasMore(structureData.length >= QDN_PAGE);
+        for (const content of structureData) {
+          if (content.user && content.id && checkAndUpdateFile(content)) {
             queue.push(() => getFile(content.user, content.id, content));
           }
         }
+      } catch {
+        setError(true);
+      } finally {
+        isFetching.current = false;
+        setIsLoading(false);
       }
-    } catch (error) {
-    } finally {
-    }
-  }, [videos, hashMapVideos]);
-
-  const getVideosHandler = React.useCallback(async () => {
-    if (!firstFetch.current || !afterFetch.current) return;
-    await getVideos();
-  }, [getVideos]);
-
-  const getVideosHandlerMount = React.useCallback(async () => {
-    if (firstFetch.current) return;
-    firstFetch.current = true;
-    await getVideos();
-    afterFetch.current = true;
-    setIsLoading(false);
-  }, [getVideos]);
+    },
+    [paramName, videos, hasMore, checkAndUpdateFile]
+  );
 
   useEffect(() => {
-    if (!firstFetch.current) {
-      getVideosHandlerMount();
-    }
-  }, [getVideosHandlerMount]);
+    setVideos([]);
+    setHasMore(true);
+    isFetching.current = false;
+    getVideos(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramName]);
 
   return (
-    <Box
-      sx={{
-        width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-      }}
-    >
-      <FileContainer>
-        {videos.map((file: any, index: number) => {
-          const existingFile = hashMapVideos[file?.id];
-          let hasHash = false;
-          let fileObj = file;
-          if (existingFile) {
-            fileObj = existingFile;
-            hasHash = true;
-          }
-
-          const icon = getIconsFromObject(fileObj);
-
-          return (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                width: "100%",
-                height: "75px",
-                position: "relative",
-              }}
-              key={fileObj.id}
-            >
-              {hasHash ? (
-                <>
-                  <VideoCard
-                    onClick={() => {
-                      navigate(`/share/${fileObj?.user}/${fileObj?.id}`);
-                    }}
-                    sx={{
-                      height: "100%",
-                      width: "100%",
-                      display: "flex",
-                      gap: "25px",
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        display: "flex",
-                        gap: "25px",
-                        alignItems: "center",
-                      }}
-                    >
-                      {icon ? (
-                        <img
-                          src={icon}
-                          width="50px"
-                          style={{
-                            borderRadius: "5px",
-                          }}
-                        />
-                      ) : (
-                        <AttachFileIcon />
-                      )}
-                      <VideoCardTitle
-                        sx={{
-                          width: "100px",
-                        }}
-                      >
-                        {formatBytes(
-                          fileObj?.files.reduce(
-                            (acc, cur) => acc + (cur?.size || 0),
-                            0
-                          )
-                        )}
-                      </VideoCardTitle>
-                      <VideoCardTitle>{fileObj.title}</VideoCardTitle>
-                    </Box>
-                    <BottomParent>
-                      <NameContainer
-                        onClick={e => {
-                          e.stopPropagation();
-                          navigate(`/channel/${fileObj?.user}`);
-                        }}
-                      >
-                        <Avatar
-                          sx={{ height: 24, width: 24 }}
-                          src={`/arbitrary/THUMBNAIL/${fileObj?.user}/qortal_avatar`}
-                          alt={`${fileObj?.user}'s avatar`}
-                        />
-                        <VideoCardName
-                          sx={{
-                            ":hover": {
-                              textDecoration: "underline",
-                            },
-                          }}
-                        >
-                          {fileObj?.user}
-                        </VideoCardName>
-                      </NameContainer>
-
-                      {fileObj?.created && (
-                        <VideoUploadDate>
-                          {formatDate(fileObj.created)}
-                        </VideoUploadDate>
-                      )}
-                    </BottomParent>
-                  </VideoCard>
-                </>
-              ) : (
-                <Skeleton
-                  variant="rectangular"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    paddingBottom: "10px",
-                    objectFit: "contain",
-                    visibility: "visible",
-                    borderRadius: "8px",
-                  }}
-                />
-              )}
-            </Box>
-          );
-        })}
-      </FileContainer>
-      <LazyLoad onLoadMore={getVideosHandler} isLoading={isLoading}></LazyLoad>
+    <Box sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 1.5 }}>
+      {error && videos.length === 0 ? (
+        <EmptyState title="Could not load this publisher's shares" actionLabel="Retry" onAction={() => getVideos(true)} />
+      ) : videos.length === 0 && isLoading ? (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          {Array.from({ length: 4 }, (_, i) => (
+            <Skeleton key={i} variant="rounded" height={64} />
+          ))}
+        </Box>
+      ) : videos.length === 0 ? (
+        <EmptyState title="No shares from this name yet" />
+      ) : (
+        <>
+          <FileList files={videos} showPublisher={false} />
+          <LazyLoad onLoadMore={() => getVideos(false)} isLoading={isLoading} />
+        </>
+      )}
     </Box>
   );
 };

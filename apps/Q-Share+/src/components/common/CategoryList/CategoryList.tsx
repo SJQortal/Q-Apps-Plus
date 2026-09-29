@@ -34,6 +34,8 @@ interface CategoryListProps {
   categoryData: CategoryData;
   initialCategories?: string[];
   columns?: number;
+  /** Small inputs and tight spacing, for the filter rail. */
+  dense?: boolean;
 }
 
 export type CategoryListRef = {
@@ -49,7 +51,7 @@ export const CategoryList = React.forwardRef<
   CategoryListProps
 >(
   (
-    { sx, categoryData, initialCategories, columns = 1 }: CategoryListProps,
+    { sx, categoryData, initialCategories, columns = 1, dense = false }: CategoryListProps,
     ref
   ) => {
     const categoriesLength = categoryData.subCategories.length + 1;
@@ -68,7 +70,6 @@ export const CategoryList = React.forwardRef<
         else if (index === 1) categoriesObject["subcategory"] = category;
         else categoriesObject[`subcategory${index}`] = category;
       });
-      console.log("categoriesObject is: ", categoriesObject);
       return categoriesObject;
     };
 
@@ -81,7 +82,6 @@ export const CategoryList = React.forwardRef<
         return selectedCategories;
       },
       setSelectedCategories: categories => {
-        console.log("setSelectedCategories: ", categories);
         //categories.map((category, index) => selectCategory(category, index));
         setSelectedCategories(categories);
       },
@@ -136,15 +136,6 @@ export const CategoryList = React.forwardRef<
 
     const fillMenu = (category: Categories, index: number) => {
       const subCategoryIndex = selectedCategories[index];
-      console.log("selected categories: ", selectedCategories);
-      console.log("index is: ", index);
-      console.log("subCategoryIndex is: ", subCategoryIndex);
-      console.log("category is: ", category);
-      console.log(
-        "subCategoryIndex within category: ",
-        selectedCategories[subCategoryIndex]
-      );
-      console.log("categoryData: ", categoryData);
 
       const menuToFill = category[subCategoryIndex];
       if (menuToFill)
@@ -167,14 +158,14 @@ export const CategoryList = React.forwardRef<
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: "repeat(" + columns + ", 1fr)",
+              gridTemplateColumns: columns > 1 ? "repeat(auto-fit, minmax(180px, 1fr))" : "1fr",
               width: "100%",
-              gap: "20px",
+              gap: dense ? "12px" : "20px",
               alignItems: "center",
-              marginTop: "30px",
+              marginTop: dense ? 0 : "30px",
             }}
           >
-            <FormControl fullWidth sx={{ marginBottom: 1 }}>
+            <FormControl fullWidth size={dense ? "small" : "medium"} sx={{ marginBottom: dense ? 0 : 1 }}>
               <InputLabel
                 sx={{
                   fontSize: "16px",
@@ -205,8 +196,9 @@ export const CategoryList = React.forwardRef<
                 hasSubCategory(category, index) && (
                   <FormControl
                     fullWidth
+                    size={dense ? "small" : "medium"}
                     sx={{
-                      marginBottom: 1,
+                      marginBottom: dense ? 0 : 1,
                     }}
                     key={selectedCategories[index] + index}
                   >
@@ -265,7 +257,6 @@ export const getCategoriesFetchString = (categories: string[]) => {
       else fetchString += `;sub${index}:${category}`;
     }
   });
-  console.log("categoriesAsDescription: ", fetchString);
   return fetchString;
 };
 

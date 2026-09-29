@@ -25,7 +25,9 @@ import { formatDate } from "../../utils/time";
 import { CommentSection } from "../../components/common/Comments/CommentSection";
 import { QSHARE_FILE_BASE } from "../../constants/Identifiers.ts";
 import { searchQdn } from "../../utils/qdnSearch";
-import { shareLink } from "../../utils/qortalLinks";
+import { profilePath, shareLink } from "../../utils/qortalLinks";
+import { formatBytes } from "../../utils/formatBytes";
+import { FilePreview } from "../../components/common/FilePreview";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
 import FileElement from "../../components/common/FileElement";
 import {
@@ -43,18 +45,7 @@ import {
   getIconsFromObject,
 } from "../../constants/Categories/CategoryFunctions.ts";
 
-export const formatBytes = (bytes: number | string, decimals = 2) => {
-  bytes = Number(bytes);
-  if (bytes === 0) return "0 Bytes";
-
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
-};
+export { formatBytes };
 
 export const FileContent = () => {
   const { name, id } = useParams();
@@ -379,7 +370,7 @@ export const FileContent = () => {
             cursor: "pointer",
           }}
           onClick={() => {
-            navigate(`/channel/${name}`);
+            navigate(profilePath(name ?? ""));
           }}
         >
           <StyledCardHeaderComment
@@ -399,11 +390,7 @@ export const FileContent = () => {
             </Box>
             <StyledCardColComment>
               <AuthorTextComment
-                color={
-                  theme.palette.mode === "light"
-                    ? theme.palette.text.secondary
-                    : "#d6e8ff"
-                }
+                color="text.secondary"
               >
                 {name}
               </AuthorTextComment>
@@ -434,9 +421,10 @@ export const FileContent = () => {
         <Spacer height="15px" />
         <Box
           sx={{
-            background: "#333333",
-            borderRadius: "5px",
-            padding: "5px",
+            background: theme.palette.background.paper,
+            border: `1px solid ${theme.palette.divider}`,
+            borderRadius: "8px",
+            padding: "12px",
             width: "100%",
             cursor: !descriptionHeight
               ? "default"
@@ -538,6 +526,7 @@ export const FileContent = () => {
                   <FileAttachmentFont>
                     {formatBytes(file?.size || 0)}
                   </FileAttachmentFont>
+                  <FilePreview file={file} />
                   <FileElement
                     fileInfo={{
                       ...file,

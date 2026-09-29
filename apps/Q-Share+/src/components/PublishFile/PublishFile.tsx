@@ -277,9 +277,9 @@ export const PublishFile = ({ editId, editContent }: NewCrowdfundProps) => {
               startIcon={
                 <AddBoxIcon
                   sx={{
-                    color: "#66C3FE",
-                    width: "40px",
-                    height: "40px",
+                    color: "primary.main",
+                    width: "32px",
+                    height: "32px",
                   }}
                 />
               }
@@ -295,6 +295,7 @@ export const PublishFile = ({ editId, editContent }: NewCrowdfundProps) => {
 
       <Modal
         open={isOpen}
+        onClose={onClose}
         aria-labelledby="modal-title"
         aria-describedby="modal-description"
       >
@@ -314,7 +315,9 @@ export const PublishFile = ({ editId, editContent }: NewCrowdfundProps) => {
               <Box
                 {...getRootProps()}
                 sx={{
-                  border: "1px dashed gray",
+                  border: "1px dashed",
+                borderColor: "divider",
+                borderRadius: 2,
                   padding: 2,
                   textAlign: "center",
                   marginBottom: 2,
@@ -323,7 +326,7 @@ export const PublishFile = ({ editId, editContent }: NewCrowdfundProps) => {
               >
                 <input {...getInputProps()} />
                 <Typography>
-                  Drag and drop files here or click to select files
+                  Drag and drop files here or click to select files (up to 10, 2 GB each)
                 </Typography>
               </Box>
               {files.map((file, index) => {

@@ -1,7 +1,6 @@
-import { AppBar, Button, Typography, Box } from "@mui/material";
-import { styled } from "@mui/system";
-import { LightModeSVG } from "../../../assets/svgs/LightModeSVG";
-import { DarkModeSVG } from "../../../assets/svgs/DarkModeSVG";
+import { AppBar, Typography, Box } from "@mui/material";
+import { styled } from "@mui/material/styles";
+import { headerFill } from "../../../hub-theme";
 
 export const CustomAppBar = styled(AppBar)(({ theme }) => ({
   display: "flex",
@@ -9,122 +8,100 @@ export const CustomAppBar = styled(AppBar)(({ theme }) => ({
   justifyContent: "space-between",
   alignItems: "center",
   width: "100%",
-  padding: "5px 16px",
+  padding: "0 12px",
+  gap: theme.spacing(1),
+  minHeight: 56,
   backgroundImage: "none",
-  borderBottom: `1px solid ${theme.palette.primary.light}`,
-  backgroundColor: theme.palette.background.default,
-  [theme.breakpoints.only("xs")]: {
-    gap: "15px"
-  },
-  height: '55px'
-}));
-export const LogoContainer = styled("div")({
-  cursor: 'pointer',
-  height: '100%',
-  display: 'flex',
-  alignItems: 'center'
-});
-
-
-
-
-export const CustomTitle = styled(Typography)({
-  fontWeight: 600,
-  color: "#000000"
-});
-
-
-export const AuthenticateButton = styled(Button)(({ theme }) => ({
-  display: "flex",
-  flexDirection: "row",
-  alignItems: "center",
-  padding: "8px 15px",
-  borderRadius: "40px",
-  gap: "4px",
-  backgroundColor: theme.palette.secondary.main,
-  color: "#fff",
-  fontFamily: "Raleway",
-  transition: "all 0.3s ease-in-out",
+  backgroundColor: headerFill(theme),
+  backdropFilter: "blur(20px) saturate(180%)",
+  WebkitBackdropFilter: "blur(20px) saturate(180%)",
+  borderBottom: `1px solid ${theme.palette.divider}`,
+  color: theme.palette.text.primary,
   boxShadow: "none",
-  "&:hover": {
-    cursor: "pointer",
-    boxShadow: "rgba(0, 0, 0, 0.15) 1.95px 1.95px 2.6px;",
-    backgroundColor: theme.palette.secondary.dark,
-    filter: "brightness(1.1)"
-  }
+  paddingTop: "env(safe-area-inset-top, 0px)",
 }));
 
-export const AvatarContainer = styled(Box)({
+export const LogoContainer = styled("button")(({ theme }) => ({
+  appearance: "none",
+  border: 0,
+  background: "transparent",
+  cursor: "pointer",
   display: "flex",
   alignItems: "center",
-  "&:hover": {
-    cursor: "pointer",
-    "& #expand-icon": {
-      transition: "all 0.3s ease-in-out",
-      filter: "brightness(0.7)"
-    }
-  }
-});
+  gap: theme.spacing(1),
+  padding: theme.spacing(0.5),
+  borderRadius: theme.shape.borderRadius,
+  color: "inherit",
+  font: "inherit",
+  minWidth: 0,
+  "&:focus-visible": {
+    outline: `2px solid ${theme.palette.primary.main}`,
+    outlineOffset: 2,
+  },
+}));
+
+export const AppTitle = styled(Typography)(({ theme }) => ({
+  fontWeight: 700,
+  fontSize: 18,
+  whiteSpace: "nowrap",
+  color: theme.palette.text.primary,
+}));
+
+export const AppTagline = styled(Typography)(({ theme }) => ({
+  fontSize: 13,
+  whiteSpace: "nowrap",
+  color: theme.palette.text.secondary,
+  [theme.breakpoints.down("md")]: {
+    display: "none",
+  },
+}));
+
+export const AvatarContainer = styled("button")(({ theme }) => ({
+  appearance: "none",
+  border: `1px solid ${theme.palette.divider}`,
+  background: "transparent",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: theme.spacing(1),
+  padding: theme.spacing(0.5, 1, 0.5, 0.5),
+  borderRadius: 999,
+  color: theme.palette.text.primary,
+  font: "inherit",
+  minWidth: 0,
+  transition: "background-color 150ms ease",
+  "&:hover": { backgroundColor: theme.palette.action.hover },
+  "&:focus-visible": {
+    outline: `2px solid ${theme.palette.primary.main}`,
+    outlineOffset: 2,
+  },
+}));
 
 export const DropdownContainer = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
-  gap: "5px",
-  backgroundColor: theme.palette.background.paper,
-  padding: "10px 15px",
-  transition: "all 0.4s ease-in-out",
-  "&:hover": {
-    cursor: "pointer",
-    filter:
-      "brightness(1.1)",
-    ...theme.applyStyles("light", {
-      filter: "brightness(0.95)"
-    })
-  }
+  gap: theme.spacing(1),
+  padding: theme.spacing(1.25, 2),
+  cursor: "pointer",
+  transition: "background-color 150ms ease",
+  "&:hover": { backgroundColor: theme.palette.action.hover },
 }));
 
 export const DropdownText = styled(Typography)(({ theme }) => ({
-  fontFamily: "Raleway",
-  fontSize: "16px",
+  fontSize: 15,
   color: theme.palette.text.primary,
-  userSelect: "none"
+  userSelect: "none",
 }));
 
 export const NavbarName = styled(Typography)(({ theme }) => ({
-  fontFamily: "Raleway",
-  fontSize: "18px",
+  fontSize: 15,
+  fontWeight: 600,
   color: theme.palette.text.primary,
-  margin: "0 10px"
-}));
-
-export const ThemeSelectRow = styled(Box)({
-  display: "flex",
-  alignItems: "center",
-  gap: "5px",
-  flexBasis: 0,
-  height: '100%'
-});
-
-export const LightModeIcon = styled(LightModeSVG)(({ theme }) => ({
-  transition: "all 0.1s ease-in-out",
-  "&:hover": {
-    cursor: "pointer",
-    filter:
-      "drop-shadow(0px 4px 6px rgba(99, 88, 88, 0.1))",
-    ...theme.applyStyles("dark", {
-      filter: "drop-shadow(0px 4px 6px rgba(255, 255, 255, 0.6))"
-    })
-  }
-}));
-
-export const DarkModeIcon = styled(DarkModeSVG)(({ theme }) => ({
-  transition: "all 0.1s ease-in-out",
-  "&:hover": {
-    cursor: "pointer",
-    filter:
-      "drop-shadow(0px 4px 6px rgba(99, 88, 88, 0.1))",
-    ...theme.applyStyles("dark", {
-      filter: "drop-shadow(0px 4px 6px rgba(255, 255, 255, 0.6))"
-    })
-  }
+  maxWidth: 160,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  [theme.breakpoints.down("sm")]: {
+    display: "none",
+  },
 }));

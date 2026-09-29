@@ -186,13 +186,12 @@ export const MultiplePublish = ({
 export const ModalBody = styled(Box)(({ theme }) => ({
   position: "absolute",
   backgroundColor: theme.palette.background.default,
-  borderRadius: "4px",
+  borderRadius: "12px",
   top: "50%",
   left: "50%",
   transform: "translate(-50%, -50%)",
-  width: "75%",
-  maxWidth: "900px",
-  padding: "15px 35px",
+  width: "min(900px, calc(100% - 24px))",
+  padding: "16px 20px",
   display: "flex",
   flexDirection: "column",
   gap: "17px",
@@ -209,24 +208,24 @@ export const ModalBody = styled(Box)(({ theme }) => ({
   "&::-webkit-scrollbar": {
     width: "16px",
     height: "10px",
-    backgroundColor: "#292d3e",
+    backgroundColor: theme.palette.background.paper,
     ...theme.applyStyles("light", {
-      backgroundColor: "#f6f8fa"
+      backgroundColor: theme.palette.background.paper
     })
   },
   "&::-webkit-scrollbar-thumb": {
-    backgroundColor: "#575757",
+    backgroundColor: theme.palette.divider,
     borderRadius: "8px",
     backgroundClip: "content-box",
     border: "4px solid transparent",
     ...theme.applyStyles("light", {
-      backgroundColor: "#d3d9e1"
+      backgroundColor: theme.palette.divider
     })
   },
   "&::-webkit-scrollbar-thumb:hover": {
-    backgroundColor: "#474646",
+    backgroundColor: theme.palette.text.secondary,
     ...theme.applyStyles("light", {
-      backgroundColor: "#b7bcc4"
+      backgroundColor: theme.palette.text.secondary
     })
   },
   ...theme.applyStyles("dark", {

@@ -41,12 +41,12 @@ const Panel = styled("div")`
   }
 
   &::-webkit-scrollbar-thumb {
-    background-color: #888;
+    background-color: var(--qp-divider);
     border-radius: 4px;
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background-color: #555;
+    background-color: var(--qp-text-secondary);
   }
 `;
 export const CommentSection = ({ postId, postName }: CommentSectionProps) => {

@@ -1,51 +1,25 @@
-import React, { useState, useRef } from "react";
-import {
-  Box,
-  Button,
-  Input,
-  Popover,
-  Typography,
-  useTheme,
-} from "@mui/material";
-import ExitToAppIcon from "@mui/icons-material/ExitToApp";
+import React, { useState } from "react";
+import { Avatar, Box, IconButton, Popover, Tooltip } from "@mui/material";
 import { BlockedNamesModal } from "../../common/BlockedNamesModal/BlockedNamesModal";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-
 import {
+  AppTagline,
+  AppTitle,
   AvatarContainer,
   CustomAppBar,
   DropdownContainer,
   DropdownText,
-  AuthenticateButton,
-  NavbarName,
-  LightModeIcon,
-  DarkModeIcon,
-  ThemeSelectRow,
   LogoContainer,
+  NavbarName,
 } from "./Navbar-styles";
-import { AccountCircleSVG } from "../../../assets/svgs/AccountCircleSVG";
-import BackspaceIcon from "@mui/icons-material/Backspace";
-
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PersonOffIcon from "@mui/icons-material/PersonOff";
-import { useNavigate } from "react-router-dom";
-import SearchIcon from "@mui/icons-material/Search";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
-import { IconButton } from "@mui/material";
-
+import { useNavigate } from "react-router-dom";
 import { DownloadTaskManager } from "../../common/DownloadTaskManager";
 import QShareLogo from "../../../assets/img/q-share-icon.webp";
-import { useDispatch, useSelector } from "react-redux";
-import {
-  addFilteredFiles,
-  setEditPlaylist,
-  setFilterValue,
-  setIsFiltering,
-} from "../../../state/features/fileSlice.ts";
-import { RootState } from "../../../state/store";
-import { useWindowSize } from "../../../hooks/useWindowSize";
 import { PublishFile } from "../../PublishFile/PublishFile.tsx";
-import { StyledButton } from "../../PublishFile/Upload-styles.tsx";
+import { avatarUrl } from "../../../utils/qortalLinks";
+
 interface Props {
   isAuthenticated: boolean;
   userName: string | null;
@@ -59,392 +33,63 @@ const NavBar: React.FC<Props> = ({
   isAuthenticated,
   userName,
   userAvatar,
-  authenticate,
   accountNames,
   setActiveName,
 }) => {
-  const windowSize = useWindowSize();
-  const searchValRef = useRef("");
-  const inputRef = useRef<HTMLInputElement>(null);
-  const theme = useTheme();
-  const dispatch = useDispatch();
   const navigate = useNavigate();
-  const [anchorEl, setAnchorEl] = React.useState<HTMLButtonElement | null>(
-    null
-  );
-  const [openUserDropdown, setOpenUserDropdown] = useState<boolean>(false);
-  const [isOpenBlockedNamesModal, setIsOpenBlockedNamesModal] =
-    useState<boolean>(false);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [isOpenBlockedNamesModal, setIsOpenBlockedNamesModal] = useState<boolean>(false);
 
-  const [anchorElNotification, setAnchorElNotification] =
-    React.useState<HTMLButtonElement | null>(null);
-  const filterValue = useSelector((state: RootState) => state.file.filterValue);
-
-  const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    const target = event.currentTarget as unknown as HTMLButtonElement | null;
-    setAnchorEl(target);
-  };
-  const openNotificationPopover = (event: any) => {
-    const target = event.currentTarget as unknown as HTMLButtonElement | null;
-    setAnchorElNotification(target);
-  };
-  const closeNotificationPopover = () => {
-    setAnchorElNotification(null);
-  };
-
-  const openPopover = Boolean(anchorElNotification);
-  const idNotification = openPopover
-    ? "simple-popover-notification"
-    : undefined;
-
-  const handleCloseUserDropdown = () => {
-    setAnchorEl(null);
-    setOpenUserDropdown(false);
-  };
-
-  const onCloseBlockedNames = () => {
-    setIsOpenBlockedNamesModal(false);
-  };
+  const closeMenu = () => setAnchorEl(null);
 
   return (
-    <CustomAppBar position="sticky" elevation={2}>
-      <ThemeSelectRow>
-        <Box
-          sx={{
-            display: "flex",
-            height: "100%",
-            alignItems: "center",
-            gap: "20px",
-          }}
-        >
-          <LogoContainer
-            onClick={() => {
-              navigate("/");
-              dispatch(setIsFiltering(false));
-              dispatch(setFilterValue(""));
-              dispatch(addFilteredFiles([]));
-              searchValRef.current = "";
-              if (!inputRef.current) return;
-              inputRef.current.value = "";
-            }}
-          >
-            <img
-              src={QShareLogo}
-              style={{
-                width: "auto",
-                height: "55px",
-                padding: "2px",
-              }}
-            />
-          </LogoContainer>
-          <Typography
-            sx={{
-              fontSize: "16px",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Q-Share - Global Public File Sharing
-          </Typography>
+    <CustomAppBar position="sticky" elevation={0}>
+      <LogoContainer onClick={() => navigate("/")} aria-label="Q-Share+ home">
+        <img src={QShareLogo} alt="" style={{ width: "auto", height: 36 }} />
+        <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <AppTitle>Q-Share+</AppTitle>
+          <AppTagline>Public file sharing on Qortal</AppTagline>
         </Box>
-      </ThemeSelectRow>
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-        }}
-      >
-        {/* {windowSize.width <= 600 ? (
-           <Box
-           sx={{
-             display: 'flex',
-             alignItems: 'center',
-             gap: 1
-           }}
-           className="myClassOver600"
-          
-         
-         >
-         <Box  onClick={openNotificationPopover}>
-         <SearchIcon
-             sx={{
-               cursor: 'pointer',
-               display: 'flex'
-             }}
-             
-           />
-         </Box>
-          {filterValue && (
-             <BackspaceIcon
-             sx={{
-               cursor: 'pointer'
-             }}
-             onClick={() => {
-               dispatch(setIsFiltering(false))
-               dispatch(setFilterValue(''))
-               dispatch(addFilteredVideos([]))
-               searchValRef.current = ''
-               if (!inputRef.current) return
-               inputRef.current.value = ''
-             }}
-           />
-          )}
-         
-         </Box>
-        ): (
-          <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1
-          }}
-          className="myClassUnder600"
-        >
-          <Input
-            id="standard-adornment-name"
-            inputRef={inputRef}
-            onChange={(e) => {
-              searchValRef.current = e.target.value
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.keyCode === 13) {
-                if (!searchValRef.current) {
-                  dispatch(setIsFiltering(false))
-                  dispatch(setFilterValue(''))
-                  dispatch(addFilteredVideos([]))
-                  searchValRef.current = ''
-                  if (!inputRef.current) return
-                  inputRef.current.value = ''
-                  return
-                }
-                navigate('/')
-                dispatch(setIsFiltering(true))
-                dispatch(addFilteredVideos([]))
-                dispatch(setFilterValue(searchValRef.current))
-              }
-            }}
-            placeholder="Search"
-            sx={{
-              '&&:before': {
-                borderBottom: 'none'
-              },
-              '&&:after': {
-                borderBottom: 'none'
-              },
-              '&&:hover:before': {
-                borderBottom: 'none'
-              },
-              '&&.Mui-focused:before': {
-                borderBottom: 'none'
-              },
-              '&&.Mui-focused': {
-                outline: 'none'
-              },
-              fontSize: '18px'
-            }}
-          />
+      </LogoContainer>
 
-          <SearchIcon
-            sx={{
-              cursor: 'pointer'
-            }}
-            onClick={() => {
-              if (!searchValRef.current) {
-                dispatch(setIsFiltering(false))
-                dispatch(setFilterValue(''))
-                dispatch(addFilteredVideos([]))
-                searchValRef.current = ''
-                if (!inputRef.current) return
-                inputRef.current.value = ''
-                return
-              }
-              navigate('/')
-              dispatch(setIsFiltering(true))
-              dispatch(addFilteredVideos([]))
-              dispatch(setFilterValue(searchValRef.current))
-            }}
-          />
-          {filterValue && (
-             <BackspaceIcon
-             sx={{
-               cursor: 'pointer'
-             }}
-             onClick={() => {
-               dispatch(setIsFiltering(false))
-               dispatch(setFilterValue(''))
-               dispatch(addFilteredVideos([]))
-               searchValRef.current = ''
-               if (!inputRef.current) return
-               inputRef.current.value = ''
-             }}
-           />
-          )}
-         
-        </Box>
-        )} */}
-
-        <Popover
-          id={idNotification}
-          open={openPopover}
-          anchorEl={anchorElNotification}
-          onClose={closeNotificationPopover}
-          anchorOrigin={{
-            vertical: "bottom",
-            horizontal: "left",
-          }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-              padding: "5px",
-            }}
-          >
-            <Input
-              id="standard-adornment-name"
-              inputRef={inputRef}
-              onChange={e => {
-                searchValRef.current = e.target.value;
-              }}
-              onKeyDown={event => {
-                if (event.key === "Enter" || event.keyCode === 13) {
-                  if (!searchValRef.current) {
-                    dispatch(setIsFiltering(false));
-                    dispatch(setFilterValue(""));
-                    dispatch(addFilteredFiles([]));
-                    searchValRef.current = "";
-                    if (!inputRef.current) return;
-                    inputRef.current.value = "";
-                    return;
-                  }
-                  navigate("/");
-                  dispatch(setIsFiltering(true));
-                  dispatch(addFilteredFiles([]));
-                  dispatch(setFilterValue(searchValRef.current));
-                }
-              }}
-              placeholder="Search"
-              sx={{
-                "&&:before": {
-                  borderBottom: "none",
-                },
-                "&&:after": {
-                  borderBottom: "none",
-                },
-                "&&:hover:before": {
-                  borderBottom: "none",
-                },
-                "&&.Mui-focused:before": {
-                  borderBottom: "none",
-                },
-                "&&.Mui-focused": {
-                  outline: "none",
-                },
-                fontSize: "18px",
-              }}
-            />
-
-            <SearchIcon
-              sx={{
-                cursor: "pointer",
-              }}
-              onClick={() => {
-                if (!searchValRef.current) {
-                  dispatch(setIsFiltering(false));
-                  dispatch(setFilterValue(""));
-                  dispatch(addFilteredFiles([]));
-                  searchValRef.current = "";
-                  if (!inputRef.current) return;
-                  inputRef.current.value = "";
-                  return;
-                }
-                navigate("/");
-                dispatch(setIsFiltering(true));
-                dispatch(addFilteredFiles([]));
-                dispatch(setFilterValue(searchValRef.current));
-              }}
-            />
-            <BackspaceIcon
-              sx={{
-                cursor: "pointer",
-              }}
-              onClick={() => {
-                dispatch(setIsFiltering(false));
-                dispatch(setFilterValue(""));
-                dispatch(addFilteredFiles([]));
-                searchValRef.current = "";
-                if (!inputRef.current) return;
-                inputRef.current.value = "";
-              }}
-            />
-          </Box>
-        </Popover>
-
+      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
         <DownloadTaskManager />
-        <IconButton
-          aria-label="Settings"
-          onClick={() => navigate("/settings")}
-          sx={{ color: "text.primary" }}
-        >
-          <SettingsOutlinedIcon />
-        </IconButton>
+        {isAuthenticated && userName && <PublishFile />}
+        <Tooltip title="Settings">
+          <IconButton aria-label="Settings" onClick={() => navigate("/settings")} sx={{ color: "text.primary" }}>
+            <SettingsOutlinedIcon />
+          </IconButton>
+        </Tooltip>
         {isAuthenticated && userName && (
-          <>
-            <AvatarContainer
-              onClick={(e: any) => {
-                handleClick(e);
-                setOpenUserDropdown(true);
-              }}
-            >
-              <NavbarName>{userName}</NavbarName>
-              {!userAvatar ? (
-                <AccountCircleSVG
-                  color={theme.palette.text.primary}
-                  width="32"
-                  height="32"
-                />
-              ) : (
-                <img
-                  src={userAvatar}
-                  alt="User Avatar"
-                  width="32"
-                  height="32"
-                  style={{
-                    borderRadius: "50%",
-                  }}
-                />
-              )}
-              <ExpandMoreIcon id="expand-icon" sx={{ color: "#ACB6BF" }} />
-            </AvatarContainer>
-          </>
+          <AvatarContainer
+            aria-label={`Account menu for ${userName}`}
+            aria-haspopup="menu"
+            aria-expanded={Boolean(anchorEl)}
+            onClick={(e) => setAnchorEl(e.currentTarget)}
+          >
+            <Avatar src={userAvatar || avatarUrl(userName)} alt="" sx={{ width: 28, height: 28 }} />
+            <NavbarName>{userName}</NavbarName>
+            <ExpandMoreIcon fontSize="small" sx={{ color: "text.secondary" }} />
+          </AvatarContainer>
         )}
-        <AvatarContainer>
-          {isAuthenticated && userName && (
-            <>
-              <PublishFile />
-            </>
-          )}
-        </AvatarContainer>
 
         <Popover
-          id={"user-popover"}
-          open={openUserDropdown}
+          id="user-popover"
+          open={Boolean(anchorEl)}
           anchorEl={anchorEl}
-          onClose={handleCloseUserDropdown}
-          anchorOrigin={{
-            vertical: "bottom",
-            horizontal: "left",
-          }}
+          onClose={closeMenu}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+          transformOrigin={{ vertical: "top", horizontal: "right" }}
         >
           {accountNames
-            .filter(n => n.name)
-            .map(n => (
+            .filter((n) => n.name)
+            .map((n) => (
               <DropdownContainer
                 key={n.name}
+                role="menuitem"
                 onClick={() => {
                   setActiveName(n.name);
-                  handleCloseUserDropdown();
+                  closeMenu();
                 }}
               >
                 <DropdownText>
@@ -454,24 +99,18 @@ const NavBar: React.FC<Props> = ({
               </DropdownContainer>
             ))}
           <DropdownContainer
+            role="menuitem"
             onClick={() => {
               setIsOpenBlockedNamesModal(true);
-              handleCloseUserDropdown();
+              closeMenu();
             }}
           >
-            <PersonOffIcon
-              sx={{
-                color: "#e35050",
-              }}
-            />
-            <DropdownText>Blocked Names</DropdownText>
+            <PersonOffIcon fontSize="small" sx={{ color: "error.main" }} />
+            <DropdownText>Blocked names</DropdownText>
           </DropdownContainer>
         </Popover>
         {isOpenBlockedNamesModal && (
-          <BlockedNamesModal
-            open={isOpenBlockedNamesModal}
-            onClose={onCloseBlockedNames}
-          />
+          <BlockedNamesModal open={isOpenBlockedNamesModal} onClose={() => setIsOpenBlockedNamesModal(false)} />
         )}
       </Box>
     </CustomAppBar>

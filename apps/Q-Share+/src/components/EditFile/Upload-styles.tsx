@@ -53,13 +53,12 @@ export const CreateContainer = styled(Box)(({ theme }) => ({
 export const ModalBody = styled(Box)(({ theme }) => ({
   position: "absolute",
   backgroundColor: theme.palette.background.default,
-  borderRadius: "4px",
+  borderRadius: "12px",
   top: "50%",
   left: "50%",
   transform: "translate(-50%, -50%)",
-  width: "75%",
-  maxWidth: "900px",
-  padding: "15px 35px",
+  width: "min(900px, calc(100% - 24px))",
+  padding: "16px 20px",
   display: "flex",
   flexDirection: "column",
   gap: "17px",
@@ -76,24 +75,24 @@ export const ModalBody = styled(Box)(({ theme }) => ({
   "&::-webkit-scrollbar": {
     width: "16px",
     height: "10px",
-    backgroundColor: "#292d3e",
+    backgroundColor: theme.palette.background.paper,
     ...theme.applyStyles("light", {
-      backgroundColor: "#f6f8fa"
+      backgroundColor: theme.palette.background.paper
     })
   },
   "&::-webkit-scrollbar-thumb": {
-    backgroundColor: "#575757",
+    backgroundColor: theme.palette.divider,
     borderRadius: "8px",
     backgroundClip: "content-box",
     border: "4px solid transparent",
     ...theme.applyStyles("light", {
-      backgroundColor: "#d3d9e1"
+      backgroundColor: theme.palette.divider
     })
   },
   "&::-webkit-scrollbar-thumb:hover": {
-    backgroundColor: "#474646",
+    backgroundColor: theme.palette.text.secondary,
     ...theme.applyStyles("light", {
-      backgroundColor: "#b7bcc4"
+      backgroundColor: theme.palette.text.secondary
     })
   },
   ...theme.applyStyles("dark", {
@@ -103,19 +102,16 @@ export const ModalBody = styled(Box)(({ theme }) => ({
 
 export const NewCrowdfundTitle = styled(Typography)(({ theme }) => ({
   fontWeight: 400,
-  fontFamily: "Raleway",
   fontSize: "25px",
   userSelect: "none",
 }));
 export const NewCrowdFundFont = styled(Typography)(({ theme }) => ({
   fontWeight: 400,
-  fontFamily: "Raleway",
   fontSize: "18px",
   userSelect: "none",
 }));
 export const NewCrowdfundTimeDescription = styled(Typography)(({ theme }) => ({
   fontWeight: 400,
-  fontFamily: "Raleway",
   fontSize: "18px",
   userSelect: "none",
   fontStyle: "italic",
@@ -123,7 +119,6 @@ export const NewCrowdfundTimeDescription = styled(Typography)(({ theme }) => ({
 }));
 
 export const CustomInputField = styled(TextField)(({ theme }) => ({
-  fontFamily: "Mulish",
   fontSize: "19px",
   letterSpacing: "0px",
   fontWeight: 400,
@@ -131,40 +126,38 @@ export const CustomInputField = styled(TextField)(({ theme }) => ({
   backgroundColor: theme.palette.background.default,
   borderColor: theme.palette.background.paper,
   "& label": {
-    color: "#edeef0",
-    fontFamily: "Mulish",
+    color: theme.palette.text.secondary,
     fontSize: "19px",
     letterSpacing: "0px",
     fontWeight: 400,
     ...theme.applyStyles("light", {
-      color: "#808183"
+      color: theme.palette.text.secondary
     })
   },
   "& label.Mui-focused": {
-    color: "#d7d8da",
+    color: theme.palette.primary.main,
     ...theme.applyStyles("light", {
-      color: "#A0AAB4"
+      color: theme.palette.primary.main
     })
   },
   "& .MuiInput-underline:after": {
-    borderBottomColor: "#c9cccf",
+    borderBottomColor: theme.palette.divider,
     ...theme.applyStyles("light", {
-      borderBottomColor: "#B2BAC2"
+      borderBottomColor: theme.palette.divider
     })
   },
   "& .MuiOutlinedInput-root": {
     "& fieldset": {
-      borderColor: "#E0E3E7",
+      borderColor: theme.palette.divider,
     },
     "&:hover fieldset": {
-      borderColor: "#B2BAC2",
+      borderColor: theme.palette.divider,
     },
     "&.Mui-focused fieldset": {
-      borderColor: "#6F7E8C",
+      borderColor: theme.palette.primary.main,
     },
   },
   "& .MuiInputBase-root": {
-    fontFamily: "Mulish",
     fontSize: "19px",
     letterSpacing: "0px",
     fontWeight: 400,
@@ -180,7 +173,6 @@ export const CustomInputField = styled(TextField)(({ theme }) => ({
 
 
 export const CrowdfundTitle = styled(Typography)(({ theme }) => ({
-  fontFamily: "Copse",
   letterSpacing: "1px",
   fontWeight: 400,
   fontSize: "20px",
@@ -198,7 +190,6 @@ export const CrowdfundSubTitleRow = styled(Box)({
 });
 
 export const CrowdfundSubTitle = styled(Typography)(({ theme }) => ({
-  fontFamily: "Copse",
   letterSpacing: "1px",
   fontWeight: 400,
   fontSize: "17px",
@@ -212,7 +203,6 @@ export const CrowdfundSubTitle = styled(Typography)(({ theme }) => ({
 }));
 
 export const CrowdfundDescription = styled(Typography)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "16px",
   color: theme.palette.text.primary,
   userSelect: "none",
@@ -261,7 +251,7 @@ export const AuthorTextComment = styled(Typography)({
 });
 
 export const AddLogoIcon = styled(AddPhotoAlternateIcon)(({ theme }) => ({
-  color: "#fff",
+  color: theme.palette.primary.contrastText,
   height: "25px",
   width: "auto",
 }));
@@ -293,7 +283,6 @@ export const TimesIcon = styled(TimesSVG)(({ theme }) => ({
 }));
 
 export const CrowdfundCardTitle = styled(DoubleLine)(({ theme }) => ({
-  fontFamily: "Montserrat",
   fontSize: "24px",
   letterSpacing: "-0.3px",
   userSelect: "none",
@@ -305,7 +294,6 @@ export const CrowdfundCardTitle = styled(DoubleLine)(({ theme }) => ({
 }));
 
 export const CrowdfundUploadDate = styled(Typography)(({ theme }) => ({
-  fontFamily: "Montserrat",
   fontSize: "12px",
   letterSpacing: "0.2px",
   color: theme.palette.text.primary,
@@ -330,16 +318,16 @@ export const AddCrowdFundButton = styled(Button)(({ theme }) => ({
   padding: "10px 25px",
   fontSize: "15px",
   gap: "8px",
-  color: "#ffffff",
+  color: theme.palette.primary.contrastText,
   backgroundColor:
-    "#2a9a86",
+    theme.palette.success.main,
   border: "none",
   borderRadius: "5px",
   transition: "all 0.3s ease-in-out",
   "&:hover": {
     cursor: "pointer",
     backgroundColor:
-      "#217e6d",
+      theme.palette.success.dark,
     ...theme.applyStyles("dark", {
       backgroundColor: theme.palette.primary.dark
     })
@@ -355,16 +343,16 @@ export const EditCrowdFundButton = styled(Button)(({ theme }) => ({
   textTransform: "none",
   padding: "5px 12px",
   gap: "8px",
-  color: "#ffffff",
+  color: theme.palette.primary.contrastText,
   backgroundColor:
-    "#2a9a86",
+    theme.palette.success.main,
   border: "none",
   borderRadius: "5px",
   transition: "all 0.3s ease-in-out",
   "&:hover": {
     cursor: "pointer",
     backgroundColor:
-      "#217e6d",
+      theme.palette.success.dark,
     ...theme.applyStyles("dark", {
       backgroundColor: theme.palette.primary.dark
     })
@@ -392,7 +380,6 @@ export const CrowdfundTitleRow = styled(Box)(({ theme }) => ({
 }));
 
 export const CrowdfundPageTitle = styled(Typography)(({ theme }) => ({
-  fontFamily: "Copse",
   fontSize: "35px",
   fontWeight: 400,
   letterSpacing: "1px",
@@ -404,7 +391,6 @@ export const CrowdfundStatusRow = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontFamily: "Mulish",
   fontSize: "21px",
   fontWeight: 400,
   letterSpacing: 0,
@@ -419,14 +405,12 @@ export const CrowdfundDescriptionRow = styled(Box)({
   alignItems: "center",
   justifyContent: "center",
   width: "100%",
-  fontFamily: "Montserrat",
   fontSize: "18px",
   fontWeight: 400,
   letterSpacing: 0,
 });
 
 export const AboutMyCrowdfund = styled(Typography)(({ theme }) => ({
-  fontFamily: "Copse",
   fontSize: "23px",
   fontWeight: 400,
   letterSpacing: "1px",
@@ -443,7 +427,6 @@ export const CrowdfundInlineContentRow = styled(Box)({
 
 export const CrowdfundInlineContent = styled(Box)(({ theme }) => ({
   display: "flex",
-  fontFamily: "Mulish",
   fontSize: "19px",
   fontWeight: 400,
   letterSpacing: 0,
@@ -466,7 +449,6 @@ export const CrowdfundAccordionSummary = styled(AccordionSummary)({
 });
 
 export const CrowdfundAccordionFont = styled(Typography)(({ theme }) => ({
-  fontFamily: "Mulish",
   fontSize: "20px",
   fontWeight: 400,
   letterSpacing: "0px",
@@ -481,11 +463,10 @@ export const CrowdfundAccordionDetails = styled(AccordionDetails)({
 export const AddCoverImageButton = styled(Button)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
-  fontFamily: "Montserrat",
   fontSize: "16px",
   fontWeight: 400,
   letterSpacing: "0.2px",
-  color: "white",
+  color: theme.palette.primary.contrastText,
   gap: "5px",
 }));
 
@@ -506,11 +487,10 @@ export const CrowdfundActionButtonRow = styled(Box)({
 export const CrowdfundActionButton = styled(Button)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
-  fontFamily: "Montserrat",
   fontSize: "16px",
   fontWeight: 400,
   letterSpacing: "0.2px",
-  color: "white",
+  color: theme.palette.primary.contrastText,
   gap: "5px",
 }));
 
@@ -520,11 +500,10 @@ export const BackToHomeButton = styled(Button)(({ theme }) => ({
   left: "20px",
   display: "flex",
   alignItems: "center",
-  fontFamily: "Montserrat",
   fontSize: "13px",
   fontWeight: 400,
   letterSpacing: "0.2px",
-  color: "white",
+  color: theme.palette.primary.contrastText,
   gap: "5px",
   padding: "5px 10px",
   backgroundColor: theme.palette.secondary.main,
@@ -543,7 +522,7 @@ export const CrowdfundLoaderRow = styled(Box)({
   padding: "10px",
 });
 
-export const RatingContainer = styled(Box)({
+export const RatingContainer = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   padding: "1px 5px",
@@ -552,16 +531,15 @@ export const RatingContainer = styled(Box)({
   transition: "all 0.3s ease-in-out",
   "&:hover": {
     cursor: "pointer",
-    backgroundColor: "#e4ddddac",
+    backgroundColor: theme.palette.action.hover,
   },
-});
+}));
 
 export const StyledRating = styled(Rating)({
   fontSize: "28px",
 });
 
 export const NoReviewsFont = styled(Typography)(({ theme }) => ({
-  fontFamily: "Mulish",
   fontWeight: 400,
   letterSpacing: 0,
   color: theme.palette.text.primary,
@@ -573,7 +551,6 @@ export const StyledButton = styled(Button)(({ theme }) => ({
 }))
 
 export const CustomSelect = styled(Select)(({ theme }) => ({
-  fontFamily: "Mulish",
   fontSize: "19px",
   letterSpacing: "0px",
   fontWeight: 400,
@@ -581,7 +558,6 @@ export const CustomSelect = styled(Select)(({ theme }) => ({
   backgroundColor: theme.palette.background.default,
   '& .MuiSelect-select': {
     padding: '12px',
-    fontFamily: "Mulish",
     fontSize: "19px",
     letterSpacing: "0px",
     fontWeight: 400,
@@ -589,9 +565,9 @@ export const CustomSelect = styled(Select)(({ theme }) => ({
   },
   '&:before': {
     // Underline style
-    borderBottomColor: "#c9cccf",
+    borderBottomColor: theme.palette.divider,
     ...theme.applyStyles("light", {
-      borderBottomColor: "#B2BAC2"
+      borderBottomColor: theme.palette.divider
     })
   },
   '&:after': {
@@ -600,17 +576,16 @@ export const CustomSelect = styled(Select)(({ theme }) => ({
   },
   '& .MuiOutlinedInput-root': {
     '& fieldset': {
-      borderColor: "#E0E3E7",
+      borderColor: theme.palette.divider,
     },
     '&:hover fieldset': {
-      borderColor: "#B2BAC2",
+      borderColor: theme.palette.divider,
     },
     '&.Mui-focused fieldset': {
-      borderColor: "#6F7E8C",
+      borderColor: theme.palette.primary.main,
     },
   },
   '& .MuiInputBase-root': {
-    fontFamily: "Mulish",
     fontSize: "19px",
     letterSpacing: "0px",
     fontWeight: 400,
