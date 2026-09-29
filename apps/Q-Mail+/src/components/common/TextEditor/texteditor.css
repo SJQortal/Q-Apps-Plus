@@ -1,0 +1,153 @@
+.ql-editor {
+    min-height: 12rem;
+    height: 100%;
+    width: 100%;
+    color: var(--qmail-compose-text);
+    font-size: 1rem;
+    font-family: var(--qapp-font-sans, 'Lexend', sans-serif);
+    max-height: none;
+    overflow-y: auto;
+    padding: 1rem !important;
+  }
+
+ .ql-editor::-webkit-scrollbar-track {
+    background-color: transparent;
+    cursor: default;
+  }
+ .ql-editor::-webkit-scrollbar-track:hover {
+    background-color: transparent;
+  }
+  
+ .ql-editor::-webkit-scrollbar {
+    width: 16px;
+    height: 10px;
+    background-color: var(--qmail-compose-scroll-track);
+  }
+  
+ .ql-editor::-webkit-scrollbar-thumb {
+    background-color: var(--qmail-compose-scroll-thumb);
+    border-radius: 8px;
+    background-clip: content-box;
+    border: 4px solid transparent;
+  }
+  
+  
+  .ql-editor img {
+    cursor: default;
+  }
+  
+.ql-editor-display {
+    min-height: 20px;
+    width: 100%;
+    color: var(--qmail-compose-text);
+    font-size: 1rem;
+    font-family: var(--qapp-font-sans, 'Lexend', sans-serif);
+    padding: 0px !important;
+  }
+  
+  .ql-editor-display img {
+    cursor: default;
+  }
+  
+  .ql-container {
+    font-size: 1rem;
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .ql-toolbar.ql-snow,
+  .ql-container.ql-snow {
+    border-color: var(--qmail-compose-divider) !important;
+  }
+
+  .ql-toolbar.ql-snow {
+    background: transparent;
+  }
+
+  .ql-toolbar.ql-snow button,
+  .ql-toolbar.ql-snow .ql-picker-label {
+    border-radius: 8px;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .ql-toolbar.ql-snow button:hover,
+  .ql-toolbar.ql-snow .ql-picker-label:hover {
+    background: var(--qmail-shell-hover);
+  }
+
+  .ql-toolbar.ql-snow button.ql-active,
+  .ql-toolbar.ql-snow .ql-picker-label.ql-active {
+    background: var(--qmail-sidebar-active-bg, rgba(67, 147, 255, 0.2));
+    color: var(--qmail-sidebar-active-text, var(--qmail-compose-text));
+  }
+
+  .ql-toolbar.ql-snow button.ql-active .ql-stroke,
+  .ql-toolbar.ql-snow .ql-picker-label.ql-active .ql-stroke,
+  .ql-toolbar.ql-snow button.ql-active .ql-picker-label .ql-stroke {
+    stroke: var(--qmail-sidebar-active-text, var(--qmail-compose-text)) !important;
+  }
+
+  .ql-toolbar.ql-snow button.ql-active .ql-fill,
+  .ql-toolbar.ql-snow .ql-picker-label.ql-active .ql-fill,
+  .ql-toolbar.ql-snow button.ql-active .ql-picker-label .ql-fill {
+    fill: var(--qmail-sidebar-active-text, var(--qmail-compose-text)) !important;
+  }
+
+  .ql-toolbar.ql-snow button:focus-visible,
+  .ql-toolbar.ql-snow .ql-picker-label:focus-visible {
+    outline: 1px solid var(--qmail-shell-border);
+    outline-offset: 1px;
+  }
+
+  .ql-toolbar .ql-stroke {
+    fill: none !important;
+    stroke: var(--qmail-compose-text) !important;
+}
+
+.ql-toolbar .ql-fill {
+    fill: var(--qmail-compose-text) !important;
+    stroke: none !important;
+}
+
+.ql-toolbar .ql-picker {
+    color: var(--qmail-compose-text) !important;
+}
+
+  .ql-toolbar .ql-picker-options {
+    background-color: var(--qmail-compose-surface) !important;
+    border: 1px solid var(--qmail-compose-divider) !important;
+}
+
+.qmail-compose-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.qmail-compose-editor .ql-toolbar.ql-snow,
+.qmail-compose-editor .ql-container.ql-snow {
+  border-color: var(--qmail-compose-divider) !important;
+}
+
+.qmail-compose-editor .ql-toolbar.ql-snow {
+  flex-shrink: 0;
+  border-top-left-radius: 1rem;
+  border-top-right-radius: 1rem;
+  background: var(--qmail-compose-surface);
+}
+
+.qmail-compose-editor .ql-container.ql-snow {
+  flex: 1 1 auto;
+  min-height: 0;
+  border-bottom-left-radius: 1rem;
+  border-bottom-right-radius: 1rem;
+  background: var(--qmail-compose-surface);
+}
+
+.qmail-compose-editor .ql-editor.ql-blank::before {
+  color: var(--qmail-compose-placeholder);
+  font-style: normal;
+}

@@ -1,0 +1,686 @@
+:root {
+  padding: 0px;
+  margin: 0px;
+  box-sizing: border-box;
+  color-scheme: dark;
+  font-family: var(--qapp-font-sans, 'Lexend', sans-serif);
+  font-size: calc(16px * var(--qapp-text-scale, 1));
+
+  --qmail-app-bg: #0b1220;
+  --qmail-app-bg-accent: rgba(57, 175, 255, 0.2);
+  --qmail-app-bg-accent-soft: rgba(51, 94, 166, 0.18);
+
+  --qmail-brand: #39afff;
+  --qmail-brand-strong: #67c3ff;
+  --qmail-brand-soft: rgba(57, 175, 255, 0.2);
+  --qmail-link: #7fd0ff;
+  --qmail-link-reply: #a7ddff;
+
+  --qmail-shell-top-bg: #0f1728;
+  --qmail-shell-subbar-bg: #131f35;
+  --qmail-shell-sidebar-bg: rgba(15, 23, 40, 0.88);
+  --qmail-shell-popover-bg: #15233b;
+  --qmail-shell-border: rgba(149, 180, 223, 0.22);
+  --qmail-shell-hover: rgba(57, 175, 255, 0.14);
+  --qmail-shell-hover-strong: rgba(57, 175, 255, 0.22);
+  --qmail-shell-active: rgba(57, 175, 255, 0.22);
+  --qmail-shell-active-strong: rgba(57, 175, 255, 0.36);
+  --qmail-shell-muted: rgba(207, 222, 244, 0.72);
+  --qmail-shell-icon-filter: none;
+  --qmail-shell-mobile-toggle-border: rgba(207, 222, 244, 0.68);
+  --qmail-shell-overlay-bg: #0f1a31;
+  --qmail-global-scrollbar-bg: transparent;
+  --qmail-global-scrollbar-thumb: rgba(103, 195, 255, 0.34);
+  --qmail-global-scrollbar-thumb-hover: rgba(103, 195, 255, 0.5);
+
+  --color-instance: var(--qmail-shell-subbar-bg);
+  --color-instance-popover-bg: var(--qmail-shell-popover-bg);
+  --Mail-Background: var(--qmail-shell-overlay-bg);
+  --qmail-compose-surface: var(--Mail-Background);
+  --qmail-compose-footer-surface: #13213a;
+  --qmail-compose-text: rgba(233, 241, 255, 0.95);
+  --qmail-compose-muted: rgba(193, 210, 235, 0.8);
+  --qmail-compose-placeholder: rgba(193, 210, 235, 0.58);
+  --qmail-compose-divider: rgba(149, 180, 223, 0.26);
+  --qmail-compose-attach-border: rgba(149, 180, 223, 0.4);
+  --qmail-compose-button-text: rgba(233, 241, 255, 0.96);
+  --qmail-compose-button-border: rgba(149, 180, 223, 0.52);
+  --qmail-compose-button-bg: rgba(20, 33, 55, 0.72);
+  --qmail-compose-button-hover-bg: rgba(57, 175, 255, 0.2);
+  --qmail-compose-scroll-track: rgba(126, 167, 222, 0.16);
+  --qmail-compose-scroll-thumb: rgba(126, 167, 222, 0.34);
+  --qmail-compose-icon-filter: brightness(0) saturate(100%) invert(100%)
+    opacity(0.72);
+  --qmail-thread-summary-bg: rgba(57, 175, 255, 0.08);
+  --qmail-thread-divider: rgba(149, 180, 223, 0.24);
+  --qmail-chat-bg: #101c34;
+  --qmail-reply-other-bg: rgba(30, 49, 78, 0.86);
+  --qmail-reply-other-text: rgba(233, 241, 255, 0.95);
+  --qmail-scroll-track-hover: rgba(126, 167, 222, 0.16);
+  --qmail-scroll-thumb-hover: rgba(126, 167, 222, 0.34);
+  --qmail-message-meta: rgba(193, 210, 235, 0.72);
+  --qmail-message-button-text: rgba(233, 241, 255, 0.96);
+  --qmail-message-button-bg: rgba(24, 38, 62, 0.95);
+  --qmail-message-button-border: rgba(143, 178, 230, 0.52);
+  --qmail-message-button-hover: rgba(57, 175, 255, 0.22);
+  --qmail-message-icon-filter: none;
+  --qmail-thread-card-bg: rgba(29, 46, 74, 0.96);
+  --qmail-thread-card-hover: rgba(57, 175, 255, 0.26);
+  --qmail-thread-text: rgba(233, 241, 255, 0.96);
+  --qmail-thread-muted: rgba(193, 210, 235, 0.84);
+  --qmail-thread-link-hover: var(--qmail-link-reply);
+  --qmail-instance-input-bg: rgba(15, 27, 46, 1);
+  --qmail-instance-input-placeholder: rgba(186, 205, 233, 0.56);
+  --qmail-action-primary-bg: #39afff;
+  --qmail-action-primary-text: #071427;
+  --qmail-action-primary-border: rgba(167, 220, 255, 0.5);
+  --qmail-action-primary-hover: #67c3ff;
+  --qmail-danger-text: rgba(255, 122, 122, 0.98);
+  --qmail-danger-hover: rgba(204, 61, 61, 0.34);
+  --new-message-text: var(--qmail-compose-text);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --qmail-app-bg: #f2f7ff;
+  --qmail-app-bg-accent: rgba(30, 127, 209, 0.14);
+  --qmail-app-bg-accent-soft: rgba(63, 116, 191, 0.12);
+
+  --qmail-brand: #1e7fd1;
+  --qmail-brand-strong: #1468b0;
+  --qmail-brand-soft: rgba(30, 127, 209, 0.18);
+  --qmail-link: #0f6ebf;
+  --qmail-link-reply: #0b5b9c;
+
+  --qmail-shell-top-bg: #e8f1ff;
+  --qmail-shell-subbar-bg: #dce9ff;
+  --qmail-shell-sidebar-bg: rgba(231, 241, 255, 0.98);
+  --qmail-shell-popover-bg: #f5f9ff;
+  --qmail-shell-border: rgba(24, 51, 87, 0.22);
+  --qmail-shell-hover: rgba(30, 127, 209, 0.13);
+  --qmail-shell-hover-strong: rgba(30, 127, 209, 0.22);
+  --qmail-shell-active: rgba(30, 127, 209, 0.2);
+  --qmail-shell-active-strong: rgba(30, 127, 209, 0.34);
+  --qmail-shell-muted: rgba(24, 51, 87, 0.7);
+  --qmail-shell-icon-filter: brightness(0) saturate(100%) invert(13%) sepia(10%)
+    saturate(1135%) hue-rotate(183deg) brightness(93%) contrast(91%);
+  --qmail-shell-mobile-toggle-border: rgba(24, 51, 87, 0.38);
+  --qmail-shell-overlay-bg: #e7f0ff;
+  --qmail-global-scrollbar-bg: transparent;
+  --qmail-global-scrollbar-thumb: rgba(22, 104, 176, 0.28);
+  --qmail-global-scrollbar-thumb-hover: rgba(22, 104, 176, 0.42);
+  --qmail-compose-surface: #f1f7ff;
+  --qmail-compose-footer-surface: #e4eeff;
+  --qmail-compose-text: rgba(19, 39, 68, 0.96);
+  --qmail-compose-muted: rgba(24, 51, 87, 0.8);
+  --qmail-compose-placeholder: rgba(24, 51, 87, 0.68);
+  --qmail-compose-divider: rgba(24, 51, 87, 0.2);
+  --qmail-compose-attach-border: rgba(24, 51, 87, 0.38);
+  --qmail-compose-button-text: rgba(19, 39, 68, 0.96);
+  --qmail-compose-button-border: rgba(24, 51, 87, 0.5);
+  --qmail-compose-button-bg: rgba(234, 243, 255, 0.95);
+  --qmail-compose-button-hover-bg: rgba(30, 127, 209, 0.16);
+  --qmail-compose-scroll-track: rgba(24, 51, 87, 0.08);
+  --qmail-compose-scroll-thumb: rgba(24, 51, 87, 0.24);
+  --qmail-compose-icon-filter: none;
+  --qmail-thread-summary-bg: rgba(30, 127, 209, 0.06);
+  --qmail-thread-divider: rgba(24, 51, 87, 0.16);
+  --qmail-chat-bg: #e4efff;
+  --qmail-reply-other-bg: rgba(30, 127, 209, 0.08);
+  --qmail-reply-other-text: rgba(19, 39, 68, 0.95);
+  --qmail-scroll-track-hover: rgba(24, 51, 87, 0.08);
+  --qmail-scroll-thumb-hover: rgba(24, 51, 87, 0.26);
+  --qmail-message-meta: rgba(24, 51, 87, 0.7);
+  --qmail-message-button-text: rgba(19, 39, 68, 0.96);
+  --qmail-message-button-bg: rgba(233, 243, 255, 0.96);
+  --qmail-message-button-border: rgba(24, 51, 87, 0.4);
+  --qmail-message-button-hover: rgba(30, 127, 209, 0.18);
+  --qmail-message-icon-filter: var(--qmail-shell-icon-filter);
+  --qmail-thread-card-bg: rgba(30, 127, 209, 0.13);
+  --qmail-thread-card-hover: rgba(30, 127, 209, 0.24);
+  --qmail-thread-text: rgba(19, 39, 68, 0.96);
+  --qmail-thread-muted: rgba(24, 51, 87, 0.8);
+  --qmail-thread-link-hover: var(--qmail-link);
+  --qmail-instance-input-bg: #f4f8ff;
+  --qmail-instance-input-placeholder: rgba(24, 51, 87, 0.68);
+  --qmail-action-primary-bg: #1b74c2;
+  --qmail-action-primary-text: #f7fbff;
+  --qmail-action-primary-border: rgba(11, 68, 120, 0.42);
+  --qmail-action-primary-hover: #1468b0;
+  --qmail-danger-text: rgba(167, 36, 36, 0.95);
+  --qmail-danger-hover: rgba(201, 63, 63, 0.24);
+  --new-message-text: var(--qmail-compose-text);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
+body {
+  margin: 0;
+  font-family: inherit;
+  background:
+    radial-gradient(1100px 680px at 18% -12%, var(--qmail-app-bg-accent), transparent 62%),
+    radial-gradient(
+      900px 620px at 120% 112%,
+      var(--qmail-app-bg-accent-soft),
+      transparent 60%
+    ),
+    var(--qmail-app-bg);
+  color: var(--qmail-thread-text);
+}
+
+button,
+input,
+optgroup,
+select,
+textarea,
+option {
+  font: inherit;
+  color: inherit;
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--qapp-font-mono, 'Illinois Mono', monospace);
+}
+
+p {
+  margin-block-start: 0px;
+  margin-block-end: 0px;
+  line-height: 1.2;
+}
+
+.line-clamp {
+  height: 100px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 5; /* number of lines to show */
+  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
+}
+
+.edit-btn:hover {
+  opacity: 0.75;
+  transition: 0.2s all;
+}
+
+.post-image {
+  max-width: 100%;
+  border-radius: 5px;
+  width: 100%;
+  height: 100%;
+}
+
+.grid-item {
+  /* Other styles */
+  /* overflow: auto; */
+}
+
+.grid-item-view {
+  /* Other styles */
+  /* overflow: auto; */
+}
+
+.test-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  min-height: 25px;
+}
+
+.test-grid-item {
+  border: 1px solid powderblue;
+}
+
+body::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+body::-webkit-scrollbar-track:hover {
+  background-color: transparent;
+}
+
+body::-webkit-scrollbar {
+  width: 16px;
+  height: 10px;
+  background-color: var(--qmail-global-scrollbar-bg);
+}
+
+body::-webkit-scrollbar-thumb {
+  background-color: var(--qmail-global-scrollbar-thumb);
+  border-radius: 8px;
+  background-clip: content-box;
+  border: 4px solid transparent;
+}
+
+body::-webkit-scrollbar-thumb:hover {
+  background-color: var(--qmail-global-scrollbar-thumb-hover);
+}
+
+.MuiList-root::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+.MuiList-root::-webkit-scrollbar-track:hover {
+  background-color: transparent;
+}
+
+.MuiList-root::-webkit-scrollbar {
+  width: 14px;
+  height: 10px;
+  background-color: var(--qmail-global-scrollbar-bg);
+}
+
+.MuiList-root::-webkit-scrollbar-thumb {
+  background-color: var(--qmail-global-scrollbar-thumb);
+  border-radius: 8px;
+  background-clip: content-box;
+  border: 4px solid transparent;
+}
+
+.MuiList-root::-webkit-scrollbar-thumb:hover {
+  background-color: var(--qmail-global-scrollbar-thumb-hover);
+}
+
+.my-masonry-grid {
+  display: -webkit-box; /* Not needed if autoprefixing */
+  display: -ms-flexbox; /* Not needed if autoprefixing */
+  display: flex;
+  margin-left: -20px; /* gutter size offset */
+  width: auto;
+  padding: 15px 20px;
+}
+
+.my-masonry-grid_column {
+  padding-left: 20px; /* gutter size */
+  background-clip: padding-box;
+}
+
+/* Style your items */
+.my-masonry-grid_column > li {
+  /* change div to reference your elements you put in <Masonry> */
+  margin-bottom: 30px;
+}
+
+.my-svg path {
+  fill: var(--qmail-danger-text);
+}
+
+.threadScroller::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+.threadScroller::-webkit-scrollbar-track:hover {
+  background-color: transparent;
+}
+
+.threadScroller::-webkit-scrollbar {
+  width: 16px;
+  height: 10px;
+  background-color: var(--qmail-global-scrollbar-bg);
+}
+
+.threadScroller::-webkit-scrollbar-thumb {
+  background-color: var(--qmail-global-scrollbar-thumb);
+  border-radius: 8px;
+  background-clip: content-box;
+  border: 4px solid transparent;
+}
+
+
+.qortal-link {
+  color: var(--qmail-link);
+}
+
+.reply-other .qortal-link {
+  color: var(--qmail-link-reply);
+}
+
+.qmail-user-menu-content .qapp-lib-menu {
+  display: block;
+  position: static;
+  top: auto;
+  right: auto;
+  width: 100%;
+  min-width: 280px;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-family: var(--qapp-font-sans, 'Lexend', sans-serif);
+}
+
+.qmail-user-menu-content .qapp-lib-menu-section {
+  padding: 10px 15px;
+}
+
+.qmail-user-menu-content .qapp-lib-menu-section h4 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--qmail-shell-muted);
+  letter-spacing: 0.01em;
+}
+
+.qmail-user-menu-content .qapp-lib-menu-section label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--qmail-compose-text);
+}
+
+.qmail-user-menu-content .qapp-lib-menu-section label:last-child {
+  margin-bottom: 0;
+}
+
+.qmail-user-menu-content .qapp-lib-menu-section select {
+  min-width: 110px;
+  font-size: 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--qmail-compose-button-border);
+  background: var(--qmail-compose-button-bg);
+  color: var(--qmail-compose-button-text);
+}
+
+.qmail-user-menu-content .qapp-shell-auth-button {
+  width: 100%;
+  border: 1px solid var(--qmail-action-primary-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  background: var(--qmail-action-primary-bg);
+  color: var(--qmail-action-primary-text);
+}
+
+.qmail-user-menu-content .qapp-shell-auth-button:hover {
+  background: var(--qmail-action-primary-hover);
+}
+
+.qmail-user-menu-content .qapp-shell-auth-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--qmail-compose-text);
+}
+
+.qmail-user-menu-content .qapp-shell-auth-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--qmail-shell-border);
+}
+
+.qmail-user-menu-content .qapp-shell-auth-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.qmail-mail-page [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar {
+  align-self: stretch;
+  display: block;
+  flex: 0 0 auto;
+  width: 170px;
+  max-width: 170px;
+  min-width: 170px;
+  min-height: 0;
+  height: 100%;
+  font-family: var(--qapp-font-sans, 'Lexend', sans-serif);
+}
+
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar:not(.qapp-lib-left-sidebar-open):not(
+    .qapp-lib-left-sidebar-closing
+  ) {
+  width: 0;
+  max-width: 0;
+  min-width: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.qmail-mail-page [data-qapp-lib='left-sidebar'] .qapp-lib-left-sidebar-items,
+.qmail-mail-page [data-qapp-lib='left-sidebar'] .qapp-lib-left-sidebar-panel {
+  list-style: none;
+  margin: 0;
+  width: 170px;
+  max-width: 170px;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-right: 1px solid var(--qmail-shell-border);
+  background: var(--qmail-shell-sidebar-bg);
+  box-shadow: none;
+  transition: transform 180ms ease, opacity 140ms ease;
+}
+
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-closing
+  .qapp-lib-left-sidebar-items,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-closing
+  .qapp-lib-left-sidebar-panel {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-overlay-preview,
+.qmail-mail-page [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-mobile,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-open:not(.qapp-lib-left-sidebar-pinned),
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-closing:not(.qapp-lib-left-sidebar-pinned) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 30;
+}
+
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-overlay-preview
+  .qapp-lib-left-sidebar-items,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-mobile
+  .qapp-lib-left-sidebar-items,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-open:not(.qapp-lib-left-sidebar-pinned)
+  .qapp-lib-left-sidebar-items,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-closing:not(.qapp-lib-left-sidebar-pinned)
+  .qapp-lib-left-sidebar-items,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-overlay-preview
+  .qapp-lib-left-sidebar-panel,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-mobile
+  .qapp-lib-left-sidebar-panel,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-open:not(.qapp-lib-left-sidebar-pinned)
+  .qapp-lib-left-sidebar-panel,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-closing:not(.qapp-lib-left-sidebar-pinned)
+  .qapp-lib-left-sidebar-panel {
+  box-shadow: 0 18px 42px rgba(4, 10, 18, 0.36);
+}
+
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-overlay-preview
+  .qapp-lib-left-sidebar-items,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-mobile
+  .qapp-lib-left-sidebar-items,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-open:not(.qapp-lib-left-sidebar-pinned)
+  .qapp-lib-left-sidebar-items,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-closing:not(.qapp-lib-left-sidebar-pinned)
+  .qapp-lib-left-sidebar-items,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-overlay-preview
+  .qapp-lib-left-sidebar-panel,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-mobile
+  .qapp-lib-left-sidebar-panel,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-open:not(.qapp-lib-left-sidebar-pinned)
+  .qapp-lib-left-sidebar-panel,
+.qmail-mail-page
+  [data-qapp-lib='left-sidebar'].qapp-lib-left-sidebar-closing:not(.qapp-lib-left-sidebar-pinned)
+  .qapp-lib-left-sidebar-panel {
+  background: var(--qmail-shell-popover-bg);
+}
+
+.qmail-mail-page .qapp-lib-left-sidebar-item {
+  margin: 0;
+  padding: 0;
+}
+
+.qmail-mail-page .qapp-lib-left-sidebar-item-button {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--qmail-thread-text);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.qmail-mail-page .qapp-lib-left-sidebar-item-button:hover {
+  background: var(--qmail-shell-hover);
+  border-color: var(--qmail-shell-border);
+}
+
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-active='true'] {
+  background: var(--qmail-shell-active);
+  border-color: var(--qmail-shell-active-strong);
+  color: var(--qmail-brand-strong);
+}
+
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item.qapp-lib-left-sidebar-item-active
+  .qapp-lib-left-sidebar-item-button {
+  background: var(--qmail-shell-active);
+  border-color: var(--qmail-shell-active-strong);
+  color: var(--qmail-brand-strong);
+}
+
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='inbox-instance:'],
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='aliases-instance:'],
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='sent-instance:'],
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='threads-group:'] {
+  padding-left: 20px;
+  gap: 7px;
+}
+
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='inbox-instance:']
+  .qmail-sidebar-subitem-avatar-icon,
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='aliases-instance:']
+  .qmail-sidebar-subitem-avatar-icon,
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='sent-instance:']
+  .qmail-sidebar-subitem-avatar-icon,
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='threads-group:']
+  .qmail-sidebar-subitem-avatar-icon {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qmail-mail-page .qmail-sidebar-subitem-avatar {
+  width: 100%;
+  height: 100%;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--qmail-shell-hover-strong);
+  color: var(--qmail-thread-text);
+  border: 1px solid var(--qmail-shell-border);
+}
+
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='inbox-instance:'][data-qapp-lib-sidebar-active='true']
+  .qmail-sidebar-subitem-avatar,
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='aliases-instance:'][data-qapp-lib-sidebar-active='true']
+  .qmail-sidebar-subitem-avatar,
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='sent-instance:'][data-qapp-lib-sidebar-active='true']
+  .qmail-sidebar-subitem-avatar,
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='threads-group:'][data-qapp-lib-sidebar-active='true']
+  .qmail-sidebar-subitem-avatar {
+  border-color: var(--qmail-shell-active-strong);
+}
+
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='inbox-instance:']
+  .qapp-lib-left-sidebar-item-label,
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='aliases-instance:']
+  .qapp-lib-left-sidebar-item-label,
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='sent-instance:']
+  .qapp-lib-left-sidebar-item-label,
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='threads-group:']
+  .qapp-lib-left-sidebar-item-label {
+  font-size: 0.82rem;
+  font-weight: 560;
+}
+
+.qmail-mail-page .qapp-lib-left-sidebar-item-label {
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.qmail-mail-page
+  .qapp-lib-left-sidebar-item-button[data-qapp-lib-sidebar-item^='aliases-instance:']
+  .qapp-lib-left-sidebar-item-secondary-label {
+  color: var(--qmail-link-reply);
+}
+
+.qapp-shell-icon-button.qapp-shell-menu-button {
+  border-radius: 8px;
+  border: 1px solid var(--qmail-compose-button-border);
+  background: var(--qmail-compose-button-bg);
+  color: var(--qmail-compose-button-text);
+}
+
+.qapp-shell-icon-button.qapp-shell-menu-button:hover {
+  background: var(--qmail-compose-button-hover-bg);
+  border-color: var(--qmail-shell-border);
+}
