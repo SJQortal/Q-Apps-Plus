@@ -35,7 +35,7 @@ Each Q-App ships its own React and MUI inside its zip and runs in its own iframe
 - **Typecheck:** Names+ has 0 errors. Q-Tube+ went from 6 to 37 errors; the 31 new ones are all mechanical (list below).
 - **Build:** both apps build once the removed icon names are fixed. The bundle size is unchanged (Q-Tube 3.39 → 3.43 MB).
 - **Runtime:** both render and navigate in Chromium, and show exactly the same console errors as the MUI 7 baseline. The errors all come from running outside Hub: no `qortalRequest`, and no node behind `vite preview`.
-- **Still to do:** a live test inside Hub Dev Mode with a logged-in account (see `docs/HUB-TESTING.md`).
+- **Inside Hub:** ✅ verified 2026-09-29. Names+ (React 19.3 + MUI 9.4 + qapp-core) ran in Hub Dev Mode on the local node with the Tester GO account: real names, avatar and marketplace data through `qortalRequest`, and no new console errors (docs/HUB-TESTING.md). GO on a phone is still to check.
 
 ## qapp-core and MUI 9
 

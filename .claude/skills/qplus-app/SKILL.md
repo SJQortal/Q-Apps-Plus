@@ -80,7 +80,7 @@ Guard rails:
 - The build, tests and lint pass, and `scripts/sync-theme.sh --check` passes.
 - `scripts/build-zip.sh <App+>` produces a zip with `index.html` at the root (`unzip -l release/<App+>.zip | head`).
 - If a browser tool is available, run `npm run dev` or `npx vite preview` and check all four themes at 1280, 700 and 375 px, and that the console shows no errors beyond the ones expected outside Hub (no `qortalRequest`).
-- In a **local** session with Computer use and Hub available, also test inside Hub Dev Mode (`docs/HUB-TESTING.md`). Ask Simon before any action that publishes or spends QORT. Without a node, Qortal calls fail, so use the test mocks or a dev-only mock of `qortalRequest`, and never commit a mock into production code paths.
+- In a **local** session with Hub available, also test inside Hub Dev Mode through its debug port (`docs/HUB-TESTING.md`, `scripts/hub-cdp.mjs`). Ask Simon before any action that publishes or spends QORT. Without a node, Qortal calls fail, so use the test mocks or a dev-only mock of `qortalRequest`, and never commit a mock into production code paths.
 
 ## 6. Hand off
 

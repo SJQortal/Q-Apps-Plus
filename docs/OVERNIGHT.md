@@ -5,13 +5,10 @@ This is how to hand the apps to Fable in Claude Code on the web (claude.ai/code)
 ## One-time setup (Simon)
 
 1. **The repo is on GitHub** at [SJQortal/Q-Apps-Plus](https://github.com/SJQortal/Q-Apps-Plus). Done.
-2. **Connect GitHub to Claude Code on the web.** At [claude.ai/code](https://claude.ai/code), connect GitHub and install the **Claude GitHub App** on `SJQortal/Q-Apps-Plus`. Or, in a terminal Claude Code session in this folder, run `/web-setup`: it reuses your `gh` login.
-3. **Create a cloud environment:**
-   - **Network access:** leave it on *Trusted* (the default). That lets sessions reach the npm registry and GitHub, which is all they need.
-   - **Environment variables:** none needed.
-   - **Setup script:** leave it empty. Each session installs the apps it works on.
+2. **GitHub is connected to Claude Code on the web.** Done: `Q-Apps-Plus` shows in the repo picker at [claude.ai/code](https://claude.ai/code).
+3. **Cloud environment: "Qortal Programmer".** Done. Network access is *Full* (Trusted would also do), with no environment variables and no setup script. Each session installs the apps it works on.
 4. **Model:** pick **Fable** when you start each session, or type `/model fable` as the first message.
-5. **For Hub testing (local only):** turn on Computer use in the Claude desktop app (Settings → Desktop app → Computer use). Log in to Hub with the Tester GO account yourself and turn on Dev Mode (docs/HUB-TESTING.md).
+5. **For Hub testing (local only):** Claude restarts Hub with its debug port, and you log in to the Tester GO account yourself with Dev Mode on (docs/HUB-TESTING.md). Computer use isn't needed, and the Linux app doesn't have it.
 
 Cloud sessions load this repo's `CLAUDE.md`, the `qplus-app` skill and `.claude/settings.json`. They keep working after you close the browser. A session only stops early if it waits on a question, which is why the prompts below tell it not to ask.
 
@@ -21,7 +18,7 @@ Cloud sessions load this repo's `CLAUDE.md`, the `qplus-app` skill and `.claude/
 
 > Use the qplus-app skill to do a full pass on **Names+**: platform upgrade to React 19.3 + MUI 9.4 first, then the redesign. Work only in `apps/Names+/`, `docs/apps/Names+.md`, and `shared/` if the kit or docs need a fix. Don't stop to ask questions. Make sensible calls and list open questions in the brief's Follow-ups. When done, push and open a PR titled "Names+: React 19.3 / MUI 9.4 + redesign pass 1".
 
-Then test it in Hub (a **local** session with Computer use, following docs/HUB-TESTING.md), fix anything that turns up, and merge. Any kit or doc fixes land on `main` before the fan-out.
+Then test it in Hub (a **local** session, following docs/HUB-TESTING.md), fix anything that turns up, and merge. Any kit or doc fixes land on `main` before the fan-out.
 
 ### Night: one cloud session per app, all in parallel
 
@@ -50,7 +47,7 @@ Continue with one session per phase (write flows → admin side → redesign), e
 1. **Check the PRs:**
    - Read each PR's summary and the brief's **Follow-ups**, which hold questions for you.
    - Check the before/after numbers in **Done**.
-2. **Test in Hub.** In a local session with Computer use:
+2. **Test in Hub.** In a local session:
 
    > Test PR #N (Q-Mail+) in Hub Dev Mode following docs/HUB-TESTING.md.
 

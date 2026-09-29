@@ -18,7 +18,7 @@ Torq is Simon's Quitter fork and the model to follow. Selected Torq files are in
 3. `docs/PLATFORM.md`: the target stack (**React 19.3 + MUI 9.4** for every app), why it's safe in Hub/GO, the qapp-core workaround, and how each app upgrades.
 4. `docs/apps/<App+>.md`: the brief for that app. Baseline facts are there already; the audit, plan and status sections are yours to fill.
 5. `shared/hub-theme/README.md`: how to install the theme kit.
-6. `docs/HUB-TESTING.md`: how to test inside Qortal Hub Dev Mode (local sessions only).
+6. `docs/HUB-TESTING.md`: how to test inside Qortal Hub Dev Mode (local sessions only, via Hub's debug port and `scripts/hub-cdp.mjs`).
 
 For a full redesign pass on an app, use the `qplus-app` skill in `.claude/skills/qplus-app/`.
 
