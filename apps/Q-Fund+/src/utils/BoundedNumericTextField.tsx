@@ -13,7 +13,7 @@ import {
   setNumberWithinBounds,
   sigDigitsExceeded,
   stringIsEmpty,
-} from "qortal-app-utils";
+} from "./qortalAppUtils";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 

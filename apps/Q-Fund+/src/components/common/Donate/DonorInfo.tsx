@@ -5,7 +5,7 @@ import {
   getAccountNames,
   removeTrailingZeros,
   SearchTransactionResponse,
-} from "qortal-app-utils";
+} from "../../../utils/qortalAppUtils";
 import React, { useEffect, useState } from "react";
 import DonorModal from "./DonorModal";
 

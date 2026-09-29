@@ -63,7 +63,7 @@ import DonorInfo from "../../components/common/Donate/DonorInfo";
 import {
   SearchTransactionResponse,
   searchTransactions,
-} from "qortal-app-utils";
+} from "../../utils/qortalAppUtils";
 
 export const Crowdfund = () => {
   const theme = useTheme();

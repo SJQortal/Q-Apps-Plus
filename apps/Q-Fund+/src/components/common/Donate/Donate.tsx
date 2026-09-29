@@ -20,7 +20,7 @@ import {
 } from "./Donate-styles";
 import { QortalSVG } from "../../../assets/svgs/QortalSVG";
 import BoundedNumericTextField from "../../../utils/BoundedNumericTextField";
-import { getUserBalance, truncateNumber } from "qortal-app-utils";
+import { getUserBalance, truncateNumber } from "../../../utils/qortalAppUtils";
 
 interface DonateProps {
   atAddress: string;
