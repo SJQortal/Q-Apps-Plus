@@ -1,0 +1,26 @@
+{
+    "name": "My React App",
+    "short_name": "ReactApp",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "description": "My awesome React app!",
+    "theme_color": "#ffffff",
+    "icons": [
+        {
+            "src": "/apple-touch-icon.png",
+            "sizes": "144x144",
+            "type": "image/png"
+          },
+      {
+        "src": "/icon-192x192.png",
+        "sizes": "192x192",
+        "type": "image/png"
+      },
+      {
+        "src": "/icon-512x512.png",
+        "sizes": "512x512",
+        "type": "image/png"
+      }
+    ]
+  }

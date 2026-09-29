@@ -1,0 +1,49 @@
+
+@font-face {
+  font-family: "Fredoka One";
+  src: url("./assets/fonts/Fredoka One.ttf") format("truetype");
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Sans";
+  src: url("./assets/fonts/Fira Sans.ttf") format("truetype");
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("./assets/fonts/Inter.ttf") format("truetype");
+  font-display: swap;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  word-break: break-word;
+}
+
+body {
+  margin: 0;
+  font-family: "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans",
+    "Droid Sans", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #27282c;
+}
+
+
+#root {
+  width: 100%;
+  height: auto;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
+    monospace;
+}
