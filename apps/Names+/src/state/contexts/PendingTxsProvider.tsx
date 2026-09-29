@@ -64,7 +64,7 @@ export const PendingTxsProvider = ({ children }: { children: ReactNode }) => {
 
         const filtered = Object.fromEntries(
           Object.entries(categoryTxs).filter(
-            ([_, tx]) => !values.includes(tx[fieldName as 'name'])
+            ([, tx]) => !values.includes(tx[fieldName as 'name'])
           )
         );
 

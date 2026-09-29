@@ -70,6 +70,6 @@ export const useIframe = () => {
     return () => {
       window.removeEventListener('message', handleNavigation);
     };
-  }, [navigate, setTheme]);
+  }, [navigate, setTheme, i18n]);
   return { navigate };
 };
