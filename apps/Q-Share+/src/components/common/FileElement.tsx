@@ -199,21 +199,29 @@ export default function FileElement({
    
   }, [fileInfo])
 
-  const refetchInInterval = ()=> {
-    try {
-      const interval = setInterval(()=> {
-          if(status?.current === 'DOWNLOADED'){
-            refetch()
-          }
-          if(status?.current === 'READY'){
-            clearInterval(interval);
-          }
-         
-        }, 7500)
-    } catch (error) {
-      
-    }
+  const refetchTimer = React.useRef<ReturnType<typeof setInterval> | null>(null)
+  const stopRefetch = React.useCallback(() => {
+    if (refetchTimer.current) clearInterval(refetchTimer.current)
+    refetchTimer.current = null
+  }, [])
+
+  // After the chunks arrive the node still has to build the file; nudge it
+  // every 7.5 s while the tab is visible, and stop once it is READY.
+  const refetchInInterval = () => {
+    stopRefetch()
+    refetchTimer.current = setInterval(() => {
+      if (status?.current === 'READY') {
+        stopRefetch()
+        return
+      }
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      if (status?.current === 'DOWNLOADED' && !isFetchingProperties.current) {
+        refetch()
+      }
+    }, 7500)
   }
+
+  React.useEffect(() => stopRefetch, [stopRefetch])
 
   React.useEffect(() => {
     if(resourceStatus?.status){

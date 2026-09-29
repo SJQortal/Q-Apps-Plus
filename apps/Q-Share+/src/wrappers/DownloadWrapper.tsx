@@ -91,86 +91,67 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
     let isCalling = false
     let percentLoaded = 0
     let timer = 24
+    let failures = 0
+    const stop = () => clearInterval(intervalId)
+    // Poll the download status every 5 s while the tab is visible, and stop
+    // for good once the file is ready, missing, or the node keeps failing.
     const intervalId = setInterval(async () => {
       if (isCalling) return
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
       isCalling = true
-      const res = await qortalRequest({
-        action: 'GET_QDN_RESOURCE_STATUS',
-        name: name,
-        service: service,
-        identifier: identifier
-      })
-      if(res?.status === 'NOT_PUBLISHED'){
-        dispatch(
-          updateDownloads({
-            name,
-            service,
-            identifier,
-            status: res
-          })
-        )
-        clearInterval(intervalId)
-      }
-      isCalling = false
-      if (res.localChunkCount) {
-        if (res.percentLoaded) {
-          if (
-            res.percentLoaded === percentLoaded &&
-            res.percentLoaded !== 100
-          ) {
-            timer = timer - 5
-          } else {
-            timer = 24
-          }
-          if (timer < 0) {
-            timer = 24
-            isCalling = true
-            dispatch(
-              updateDownloads({
-                name,
-                service,
-                identifier,
-                status: {
-                  ...res,
-                  status: 'REFETCHING'
-                }
-              })
-            )
-            setTimeout(() => {
-              isCalling = false
-              fetchResource({
-                name,
-                service,
-                identifier
-              })
-            }, 25000)
-            return
-          }
-          percentLoaded = res.percentLoaded
+      try {
+        const res = await qortalRequest({
+          action: 'GET_QDN_RESOURCE_STATUS',
+          name: name,
+          service: service,
+          identifier: identifier
+        })
+        if (!res) return
+        failures = 0
+        if (res?.status === 'NOT_PUBLISHED') {
+          dispatch(updateDownloads({ name, service, identifier, status: res }))
+          stop()
+          return
         }
-        dispatch(
-          updateDownloads({
-            name,
-            service,
-            identifier,
-            status: res
-          })
-        )
+        if (res.localChunkCount) {
+          if (res.percentLoaded) {
+            if (res.percentLoaded === percentLoaded && res.percentLoaded !== 100) {
+              timer = timer - 5
+            } else {
+              timer = 24
+            }
+            if (timer < 0) {
+              timer = 24
+              isCalling = true
+              dispatch(
+                updateDownloads({
+                  name,
+                  service,
+                  identifier,
+                  status: { ...res, status: 'REFETCHING' }
+                })
+              )
+              setTimeout(() => {
+                isCalling = false
+                fetchResource({ name, service, identifier })
+              }, 25000)
+              return
+            }
+            percentLoaded = res.percentLoaded
+          }
+          dispatch(updateDownloads({ name, service, identifier, status: res }))
+        }
+        if (res?.status === 'READY') {
+          stop()
+          dispatch(updateDownloads({ name, service, identifier, status: res }))
+        }
+      } catch (error) {
+        failures += 1
+        if (failures >= 6) stop()
+      } finally {
+        if (timer >= 0) isCalling = false
       }
-
-      // check if progress is 100% and clear interval if true
-      if (res?.status === 'READY') {
-        clearInterval(intervalId)
-        dispatch(
-          updateDownloads({
-            name,
-            service,
-            identifier,
-            status: res
-          })
-        )
-      }
-    }, 5000) // 1 second interval
+    }, 5000)
 
     fetchVideoUrl({
       name,
