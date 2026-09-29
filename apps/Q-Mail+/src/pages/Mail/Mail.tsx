@@ -1546,7 +1546,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   );
 
   const firstMount = useRef(false);
-  const prevName = useRef<string>();
+  const prevName = useRef<string>(undefined);
   useEffect(() => {
     if (!user?.name) {
       setInboxSearchQuery("");
