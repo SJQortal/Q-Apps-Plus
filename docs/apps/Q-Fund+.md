@@ -30,6 +30,25 @@ Crowdfunding campaigns funded in QORT, with updates and comments.
 - filter by active, ending soon or funded
 - share link
 
+## Status (pass 1, branch `q-fund-plus/pass-1`)
+
+**Checkpoint reached 2026-09-30:** platform upgrade, test harness, theme kit and Settings page are in, the build is green and `scripts/build-zip.sh Q-Fund+` produces the zip. The audit, efficiency and redesign work below is what remains.
+
+### Platform upgrade (done, one commit per rung)
+
+| Step | Result |
+|---|---|
+| Baseline (React 18.2, MUI 5.11, Vite 4) | build ✅, tsc 0 errors, **lint already failing** (18 errors, 279 warnings, mostly `any` and hook deps). dist 2.3 MB, biggest chunk 1.21 MB |
+| Toolchain: TS 5.9, Vite 8, plugin-react 6 | ✅. **Blocker found:** `qortal-app-utils` depends on an npm package literally named `node` (20.7.0) whose binary lands in `node_modules/.bin` and shadows Node 22 inside npm scripts, so Vite 8 could not start. Its `main` also points at TypeScript source that pulled a second MUI 5 and react-quill into the bundle. The dozen helpers this app uses are vendored verbatim in `src/utils/qortalAppUtils.ts` and the package is gone |
+| React 18.3.1, RTK 2, react-redux 9.3, RRD 6.30 + `v7_relativeSplatPath`/`v7_startTransition` | ✅, nothing to codemod |
+| react-quill → react-quill-new 3.8 | ✅. Quill 2 hands `onChange` its *semantic* HTML (`<ul><li>`, nested `<ol>`), the same markup Quill 1 stored, so no conversion layer is needed (checked with a jsdom probe). Only the Resize/DisplaySize parts of the image-resize module are enabled, as upstream Q-Tube does. Quill 2's CSS hides markers on plain `<li>`, so `index.css` restores them for displayed content |
+| MUI 5.18 + MUI X 7 | ✅ |
+| React 19.3 | ✅, `types-react-codemod preset-19` changed nothing; react-rnd, react-intersection-observer and react-dropzone bumped so `npm install` resolves without `--legacy-peer-deps` |
+| MUI 9.4 + MUI X 9 | ✅. Codemods in the documented order, then 16 manual fixes (styled TextField `inputProps`, Menu `PaperProps`, two Grid items, two `…Outline` icons, duplicate keys the system-props codemod produced). tsc 0 errors after; biggest chunk 1.36 MB |
+| Theme kit + Settings | ✅. Biggest chunk 1.38 MB (Inter fonts are separate files). Verified in Chromium at 1280/375 px: four themes switch live and persist; console shows only the expected outside-Hub errors |
+
+Stored date values are unchanged: `NewCrowdfund` still converts the picker's dayjs value to a block count (`diffInMins`) before publishing; MUI X 9's `DesktopDateTimePicker` typechecked without changes.
+
 ## Audit
 
 _To fill in: architecture map, full list of QDN services and identifiers, every Qortal call and when it fires, performance hotspots, UX problems, bugs found. Rank each by impact._
@@ -44,4 +63,9 @@ _To fill in: what changed, with before/after numbers (searches on first load, bi
 
 ## Follow-ups
 
-_To fill in: open questions for Simon, and ideas for the next pass._
+- **Lint was red at the baseline** (18 errors, 279 warnings from upstream code). Not hidden; not fixed in this pass.
+- **`qortal-app-utils` upstream:** its `node` dependency and source `main` break any modern toolchain. The vendored copy in `src/utils/qortalAppUtils.ts` should be kept in sync if Qortal ever fixes the package. The same trap will hit Q-Shop+/Q-Support+ if they use it.
+- **Image resize in the editor:** the Toolbar part of `quill-image-resize-module-react` is off because it needs Parchment 2. Users can still drag-resize images; alignment buttons are gone. A Quill 2 native resize module would restore them.
+- **Version:** upstream never set one (0.0.0), so the + series starts at `1.0.0-plus.1`. Simon may prefer another base.
+- **Home hero** still uses upstream's hard-coded green gradient and Raleway/Mulish fonts in every theme; the redesign pass replaces it with the Hub 3.0 layout.
+- Hub Dev Mode test of the upgraded app (Hub-only): check the date picker, the editor, and a real donation flow.
