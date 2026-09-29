@@ -1,0 +1,26 @@
+import { useAtom } from 'jotai';
+import { FollowButton } from '../../../components/common/ContentButtons/FollowButton.tsx';
+import { SubscribeButton } from '../../../components/common/ContentButtons/SubscribeButton.tsx';
+import { namesAtom } from '../../../state/global/names';
+import { ChannelParams } from './ChannelName.tsx';
+import { StyledCardColComment } from './VideoContent-styles.tsx';
+
+export const ChannelButtons = ({ channelName, sx }: ChannelParams) => {
+  const [names] = useAtom(namesAtom);
+  const isInNames = names.map((name) => name.name).includes(channelName);
+
+  // We need to put a change in here to get the currentUser name, not from the Redux state
+  return (
+    <StyledCardColComment sx={{ alignItems: 'center', ...sx }}>
+      {!isInNames && (
+        <>
+          <SubscribeButton subscriberName={channelName} />
+          <FollowButton
+            followerName={channelName}
+            sx={{ marginLeft: '20px' }}
+          />
+        </>
+      )}
+    </StyledCardColComment>
+  );
+};

@@ -1,0 +1,656 @@
+import {
+  Box,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Modal,
+  OutlinedInput,
+  Select,
+  SelectChangeEvent,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import { useAtom, useSetAtom } from 'jotai';
+import { useAuth, useGlobal } from 'qapp-core';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import ShortUniqueId from 'short-unique-id';
+import { categories, subCategories } from '../../../constants/Categories.ts';
+import {
+  QTUBE_PLAYLIST_BASE,
+  QTUBE_VIDEO_BASE,
+} from '../../../constants/Identifiers.ts';
+import {
+  AltertObject,
+  setNotificationAtom,
+} from '../../../state/global/notifications.ts';
+import { editPlaylistAtom } from '../../../state/publish/playlist.ts';
+
+import { objectToBase64 } from '../../../utils/PublishFormatter.ts';
+import ImageUploader from '../../common/ImageUploader.tsx';
+import { TextEditor } from '../../common/TextEditor/TextEditor.tsx';
+import { extractTextFromHTML } from '../../common/TextEditor/utils.ts';
+import { PlaylistListEdit } from '../PlaylistListEdit/PlaylistListEdit.tsx';
+import {
+  AddCoverImageButton,
+  AddLogoIcon,
+  CoverImagePreview,
+  CrowdfundActionButton,
+  CrowdfundActionButtonRow,
+  CustomInputField,
+  LogoPreviewRow,
+  ModalBody,
+  NewCrowdfundTitle,
+  TimesIcon,
+} from './Upload-styles.tsx';
+
+const uid = new ShortUniqueId();
+const shortuid = new ShortUniqueId({ length: 5 });
+
+export const PublishAndEditPlaylist = () => {
+  const { t } = useTranslation(['core', 'category']);
+
+  const theme = useTheme();
+  const { name: username, address: userAddress } = useAuth();
+  const setNotification = useSetAtom(setNotificationAtom);
+  const { lists } = useGlobal();
+  const [editVideoProperties] = useAtom(editPlaylistAtom);
+  const setEditPlaylist = useSetAtom(editPlaylistAtom);
+
+  const [playlistData, setPlaylistData] = useState<any>(null);
+  const [title, setTitle] = useState<string>('');
+  const [description, setDescription] = useState<string>('');
+  const [coverImage, setCoverImage] = useState<string>('');
+  const [videos, setVideos] = useState([]);
+  const [selectedCategoryVideos, setSelectedCategoryVideos] =
+    useState<any>(null);
+  const [selectedSubCategoryVideos, setSelectedSubCategoryVideos] =
+    useState<any>(null);
+  const [hasCharacterRemovalError, setHasCharacterRemovalError] =
+    useState(false);
+  
+  // Refs for cleanup
+  const checkforPlaylistAbortControllerRef = useRef<AbortController | null>(null);
+  const addVideoAbortControllerRef = useRef<AbortController | null>(null);
+
+  const isNew = useMemo(() => {
+    return editVideoProperties?.mode === 'new';
+  }, [editVideoProperties]);
+
+  useEffect(() => {
+    if (isNew) {
+      setPlaylistData({
+        videos: [],
+      });
+    }
+  }, [isNew]);
+
+  const checkforPlaylist = React.useCallback(async (videoList, signal?: AbortSignal) => {
+    try {
+      const combinedData: any = {};
+      const videos: any[] = [];
+      if (videoList) {
+        for (const vid of videoList) {
+          // Check if request was aborted
+          if (signal?.aborted) return;
+          
+          const url = `/arbitrary/resources/search?mode=ALL&service=DOCUMENT&identifier=${vid.identifier}&limit=1&includemetadata=true&reverse=true&name=${vid.name}&exactmatchnames=true&offset=0`;
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            signal,
+          });
+          const responseDataSearchVid = await response.json();
+
+          if (responseDataSearchVid?.length > 0) {
+            const resourceData2 = responseDataSearchVid[0];
+            if (resourceData2) {
+              // Preserve playlistTitle if it exists in the original video data
+              if (vid.playlistTitle) {
+                resourceData2.playlistTitle = vid.playlistTitle;
+              }
+              videos.push(resourceData2);
+            }
+          }
+        }
+      }
+      combinedData.videos = videos;
+      setPlaylistData(combinedData);
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.error(error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (editVideoProperties) {
+      setTitle(editVideoProperties?.title || '');
+
+      if (editVideoProperties?.htmlDescription) {
+        setDescription(editVideoProperties?.htmlDescription);
+      } else if (editVideoProperties?.description) {
+        const paragraph = `<p>${editVideoProperties?.description}</p>`;
+        setDescription(paragraph);
+      }
+      setCoverImage(editVideoProperties?.image || '');
+      setVideos(editVideoProperties?.videos || []);
+
+      if (editVideoProperties?.category) {
+        const selectedOption = categories.find(
+          (option) => option.id === +editVideoProperties.category
+        );
+        setSelectedCategoryVideos(selectedOption || null);
+      }
+
+      if (
+        editVideoProperties?.category &&
+        editVideoProperties?.subcategory &&
+        subCategories[+editVideoProperties?.category]
+      ) {
+        const selectedOption = subCategories[
+          +editVideoProperties?.category
+        ]?.find((option) => option.id === +editVideoProperties.subcategory);
+        setSelectedSubCategoryVideos(selectedOption || null);
+      }
+
+      if (editVideoProperties?.videos) {
+        const abortController = new AbortController();
+        checkforPlaylistAbortControllerRef.current = abortController;
+        checkforPlaylist(editVideoProperties?.videos, abortController.signal);
+      }
+    }
+
+    // Cleanup function to abort pending requests
+    return () => {
+      if (checkforPlaylistAbortControllerRef.current) {
+        checkforPlaylistAbortControllerRef.current.abort();
+      }
+    };
+  }, [editVideoProperties, checkforPlaylist]);
+
+  const onClose = () => {
+    // Abort any pending requests
+    if (checkforPlaylistAbortControllerRef.current) {
+      checkforPlaylistAbortControllerRef.current.abort();
+    }
+    if (addVideoAbortControllerRef.current) {
+      addVideoAbortControllerRef.current.abort();
+    }
+    
+    // Clear all state
+    setTitle('');
+    setDescription('');
+    setVideos([]);
+    setPlaylistData(null);
+    setSelectedCategoryVideos(null);
+    setSelectedSubCategoryVideos(null);
+    setCoverImage('');
+    setEditPlaylist(null);
+  };
+
+  async function publishQDNResource() {
+    try {
+      if (!title) throw new Error('Please enter a title');
+      if (!description) throw new Error('Please enter a description');
+      if (!coverImage) throw new Error('Please select cover image');
+      if (!selectedCategoryVideos) throw new Error('Please select a category');
+
+      if (!editVideoProperties) return;
+      if (!userAddress) throw new Error('Unable to locate user address');
+      let errorMsg = '';
+      let name = '';
+      if (username) {
+        name = username;
+      }
+      if (!name) {
+        errorMsg =
+          'Cannot publish without access to your name. Please authenticate.';
+      }
+
+      if (!isNew && editVideoProperties?.name !== username) {
+        errorMsg = "Cannot publish another user's resource";
+      }
+
+      if (errorMsg) {
+        const notificationObj: AltertObject = {
+          msg: errorMsg,
+          alertType: 'error',
+        };
+        setNotification(notificationObj);
+        return;
+      }
+      const category = selectedCategoryVideos.id;
+      const subcategory = selectedSubCategoryVideos?.id || '';
+
+      const videoStructured = playlistData.videos.map((item) => {
+        const descriptionVid = item?.metadata?.description;
+        if (!descriptionVid) throw new Error('cannot find video code');
+
+        // Split the string by ';'
+        const parts = descriptionVid.split(';');
+
+        // Initialize a variable to hold the code value
+        let codeValue = '';
+
+        // Loop through the parts to find the one that starts with 'code:'
+        for (const part of parts) {
+          if (part.startsWith('code:')) {
+            codeValue = part.split(':')[1];
+            break;
+          }
+        }
+        if (!codeValue) throw new Error('cannot find video code');
+
+        return {
+          identifier: item.identifier,
+          name: item.name,
+          service: item.service,
+          code: codeValue,
+          playlistTitle: item.playlistTitle || item?.metadata?.title || '', // Use playlistTitle first, then fallback to metadata title
+        };
+      });
+      const id = uid.rnd();
+
+      let commentsId = editVideoProperties?.identifier;
+      if (isNew) {
+        commentsId = `${QTUBE_PLAYLIST_BASE}_cm_${id}`;
+      }
+      const stringDescription = extractTextFromHTML(description);
+
+      const playlistObject: any = {
+        title,
+        version: 1,
+        description: stringDescription,
+        htmlDescription: description,
+        image: coverImage,
+        videos: videoStructured,
+        commentsId: commentsId,
+        category,
+        subcategory,
+      };
+
+      const codes = videoStructured
+        .map((item) => `c:${item.code};`)
+        .slice(0, 10)
+        .join('');
+      const metadescription =
+        `**category:${category};subcategory:${subcategory};${codes}**` +
+        stringDescription.slice(0, 120);
+
+      // Description is obtained from raw data
+
+      let identifier = editVideoProperties?.identifier;
+      const sanitizeTitle = title
+        .replace(/[^a-zA-Z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .trim()
+        .toLowerCase();
+      if (isNew) {
+        identifier = `${QTUBE_PLAYLIST_BASE}${sanitizeTitle.slice(
+          0,
+          30
+        )}_${id}`;
+      }
+
+      console.log('Publishing Playlist Data: ', playlistObject);
+      const requestBodyJson: any = {
+        action: 'PUBLISH_QDN_RESOURCE',
+        name: username,
+        service: 'PLAYLIST',
+        data64: await objectToBase64(playlistObject),
+        title: title.slice(0, 50),
+        description: metadescription,
+        identifier: identifier,
+        tag1: QTUBE_VIDEO_BASE,
+      };
+
+      await qortalRequest(requestBodyJson);
+      if (isNew) {
+        const objectToStore = {
+          title: title.slice(0, 50),
+          description: metadescription,
+          id: identifier,
+          service: 'PLAYLIST',
+          user: username,
+          ...playlistObject,
+        };
+      } else {
+        lists.updateNewResources([
+          {
+            data: playlistObject,
+            qortalMetadata: {
+              identifier: identifier,
+              service: 'PLAYLIST',
+              name: username || '',
+              size: 100,
+              updated: Date.now(),
+              metadata: {
+                title: title.slice(0, 50),
+                description: metadescription,
+                tags: [QTUBE_VIDEO_BASE],
+              },
+              created: editVideoProperties?.created,
+            },
+          },
+        ]);
+      }
+      const notificationObj: AltertObject = {
+        msg: 'Playlist published',
+        alertType: 'success',
+      };
+      setNotification(notificationObj);
+
+      onClose();
+    } catch (error: any) {
+      const isError = error instanceof Error;
+      const message = isError ? error?.message : 'Failed to publish update';
+      const notificationObj: AltertObject = {
+        msg: message,
+        alertType: 'error',
+      };
+      setNotification(notificationObj);
+
+      throw new Error('Failed to publish update');
+    }
+  }
+
+  const handleOptionCategoryChangeVideos = (
+    event: SelectChangeEvent<string>
+  ) => {
+    const optionId = event.target.value;
+    const selectedOption = categories.find((option) => option.id === +optionId);
+    setSelectedCategoryVideos(selectedOption || null);
+  };
+  const handleOptionSubCategoryChangeVideos = (
+    event: SelectChangeEvent<string>,
+    subcategories: any[]
+  ) => {
+    const optionId = event.target.value;
+    const selectedOption = subcategories.find(
+      (option) => option.id === +optionId
+    );
+    setSelectedSubCategoryVideos(selectedOption || null);
+  };
+
+  const removeVideo = (index) => {
+    const copyData = structuredClone(playlistData);
+    copyData.videos.splice(index, 1);
+    setPlaylistData(copyData);
+  };
+
+  const addVideo = useCallback(async (data) => {
+    // Fetch the full title for the new video
+    try {
+      const abortController = new AbortController();
+      addVideoAbortControllerRef.current = abortController;
+      
+      const response = await qortalRequest({
+        action: 'FETCH_QDN_RESOURCE',
+        name: data.name,
+        service: data.service,
+        identifier: data.identifier,
+      });
+
+      if (abortController.signal.aborted) return;
+
+      if (response && !response.error && response.title) {
+        // Add the video with the fetched full title as playlistTitle
+        const copyData = structuredClone(playlistData);
+        copyData.videos = [
+          ...copyData.videos,
+          {
+            ...data,
+            playlistTitle: response.title,
+          },
+        ];
+        setPlaylistData(copyData);
+      } else {
+        // Fallback to original behavior if fetch fails
+        const copyData = structuredClone(playlistData);
+        copyData.videos = [...copyData.videos, { ...data }];
+        setPlaylistData(copyData);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError') {
+        // Fallback to original behavior if fetch fails
+        const copyData = structuredClone(playlistData);
+        copyData.videos = [...copyData.videos, { ...data }];
+        setPlaylistData(copyData);
+      }
+    }
+  }, [playlistData]);
+
+  const updateVideoList = (list) => {
+    const copyData = structuredClone(playlistData);
+    copyData.videos = [...list];
+    setPlaylistData(copyData);
+  };
+
+  const handleCharacterRemovalError = (hasError) => {
+    setHasCharacterRemovalError(hasError);
+  };
+
+  return (
+    <>
+      <Modal
+        open={!!editVideoProperties}
+        aria-labelledby="modal-title"
+        aria-describedby="modal-description"
+      >
+        <ModalBody
+          sx={{
+            width: '100%',
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            {isNew ? (
+              <NewCrowdfundTitle>
+                {t('core:publish.create_new_playlist', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </NewCrowdfundTitle>
+            ) : (
+              <NewCrowdfundTitle>
+                {t('core:publish.update_playlist_properties', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </NewCrowdfundTitle>
+            )}
+          </Box>
+          <>
+            <Box
+              sx={{
+                display: 'flex',
+                gap: '20px',
+                alignItems: 'center',
+              }}
+            >
+              <FormControl fullWidth sx={{ marginBottom: 2 }}>
+                <InputLabel id="Category">
+                  {t('core:publish.select_category', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </InputLabel>
+                <Select
+                  labelId="Category"
+                  input={
+                    <OutlinedInput
+                      label={t('core:publish.select_category', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    />
+                  }
+                  value={selectedCategoryVideos?.id || ''}
+                  onChange={handleOptionCategoryChangeVideos}
+                >
+                  {categories.map((option) => (
+                    <MenuItem key={option.id} value={option.id}>
+                      {t(`category:categories.${option.id}`)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {selectedCategoryVideos &&
+                subCategories[selectedCategoryVideos?.id] && (
+                  <FormControl fullWidth sx={{ marginBottom: 2 }}>
+                    <InputLabel id="Category">
+                      {t('core:publish.select_subcategory', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </InputLabel>
+                    <Select
+                      labelId="Sub-Category"
+                      input={
+                        <OutlinedInput
+                          label={t('core:publish.select_subcategory', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        />
+                      }
+                      value={selectedSubCategoryVideos?.id || ''}
+                      onChange={(e) =>
+                        handleOptionSubCategoryChangeVideos(
+                          e,
+                          subCategories[selectedCategoryVideos?.id]
+                        )
+                      }
+                    >
+                      {subCategories[selectedCategoryVideos.id].map(
+                        (option) => (
+                          <MenuItem key={option.id} value={option.id}>
+                            {t(`category:subcategories.${option.id}`)}
+                          </MenuItem>
+                        )
+                      )}
+                    </Select>
+                  </FormControl>
+                )}
+            </Box>
+            <React.Fragment>
+              {!coverImage ? (
+                <ImageUploader onPick={(img: string) => setCoverImage(img)}>
+                  <AddCoverImageButton variant="contained">
+                    {t('core:publish.add_cover_image', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                    <AddLogoIcon
+                      sx={{
+                        height: '25px',
+                        width: 'auto',
+                      }}
+                    ></AddLogoIcon>
+                  </AddCoverImageButton>
+                </ImageUploader>
+              ) : (
+                <LogoPreviewRow>
+                  <CoverImagePreview src={coverImage} alt="logo" />
+                  <TimesIcon
+                    color={theme.palette.text.primary}
+                    onClickFunc={() => setCoverImage('')}
+                    height={'32'}
+                    width={'32'}
+                  ></TimesIcon>
+                </LogoPreviewRow>
+              )}
+              <CustomInputField
+                name="title"
+                label={t('core:publish.title_playlist', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+                variant="filled"
+                value={title}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const formattedValue = value.replace(
+                    /[^a-zA-Z0-9\s-_!?]/g,
+                    ''
+                  );
+                  setTitle(formattedValue);
+                }}
+                inputProps={{ maxLength: 180 }}
+                required
+              />
+              {/* <CustomInputField
+                name="description"
+                label="Describe your playlist in a few words"
+                variant="filled"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                inputProps={{ maxLength: 10000 }}
+                multiline
+                maxRows={3}
+                required
+              /> */}
+              <Typography
+                sx={{
+                  fontSize: '18px',
+                }}
+              >
+                {t('core:publish.description_playlist', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
+              <TextEditor
+                inlineContent={description}
+                setInlineContent={(value) => {
+                  setDescription(value);
+                }}
+              />
+            </React.Fragment>
+
+            <PlaylistListEdit
+              playlistData={playlistData}
+              updateVideoList={updateVideoList}
+              removeVideo={removeVideo}
+              addVideo={addVideo}
+              onCharacterRemovalError={handleCharacterRemovalError}
+            />
+          </>
+
+          <CrowdfundActionButtonRow>
+            <CrowdfundActionButton
+              onClick={() => {
+                onClose();
+              }}
+              variant="contained"
+              color="error"
+            >
+              {t('core:action.cancel', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </CrowdfundActionButton>
+            <Box
+              sx={{
+                display: 'flex',
+                gap: '20px',
+                alignItems: 'center',
+              }}
+            >
+              <CrowdfundActionButton
+                variant="contained"
+                onClick={() => {
+                  publishQDNResource();
+                }}
+                disabled={hasCharacterRemovalError}
+              >
+                {t('core:publish.publish_action', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </CrowdfundActionButton>
+            </Box>
+          </CrowdfundActionButtonRow>
+        </ModalBody>
+      </Modal>
+    </>
+  );
+};

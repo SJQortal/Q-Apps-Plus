@@ -1,0 +1,376 @@
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import BookmarksIcon from '@mui/icons-material/Bookmarks';
+import HomeIcon from '@mui/icons-material/Home';
+import StarIcon from '@mui/icons-material/Star';
+import {
+  Box,
+  ClickAwayListener,
+  Divider,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Typography,
+} from '@mui/material';
+import { useAtom } from 'jotai';
+import { Spacer, useAuth } from 'qapp-core';
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useIsSmall } from '../../../hooks/useIsSmall';
+import { isSideBarExpandedAtom } from '../../../state/global/navbar';
+import { jotaiIndexedDBStorage } from '../../../state/persist/indexedDBSelectors';
+import { DownloadTaskManager } from '../../common/DownloadTaskManager';
+import { UserMenu } from '../Navbar/Components/UserMenu';
+import { AvatarIcon } from './AvatarIcon';
+
+const DRAWER_WIDTH = 240;
+export const COLLAPSED_WIDTH = 68;
+
+export const Sidenav = ({ allNames }) => {
+  const { t } = useTranslation(['core']);
+
+  const isSmall = useIsSmall();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { name, avatarUrl, address: authAddress } = useAuth();
+  const [isSideBarExpanded, setIsSideBarExpanded] = useAtom(
+    isSideBarExpandedAtom
+  );
+  const [channelTab, setChannelTab] = useState<number>(0);
+
+  const isSecure = !!name;
+  const address = authAddress || 'anonymous';
+
+  const handleChannelClick = async () => {
+    const scopedKey = `${address}/channelTab`;
+    const persistedTab = await jotaiIndexedDBStorage.getItem<number>(scopedKey);
+    const tab = persistedTab ?? 0; // default to videos
+    const path = tab === 0 ? `/channel/${name}/videos` : `/channel/${name}/playlists`;
+    navigate(path);
+    if (isSideBarExpanded) {
+      setIsSideBarExpanded(false);
+    }
+  };
+
+  const drawerItems = useMemo(() => {
+    return [
+      {
+        name: t('core:sidenav.home', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        icon: HomeIcon,
+        path: '/',
+      },
+      {
+        name: t('core:sidenav.subscriptions', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        icon: StarIcon,
+        path: '/subscriptions',
+      },
+      {
+        name: t('core:sidenav.watched_videos', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        icon: AccessTimeIcon,
+        path: '/history',
+      },
+      {
+        name: t('core:sidenav.bookmarks', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        icon: BookmarksIcon,
+        path: '/bookmarks',
+      },
+      {
+        name: t('core:sidenav.your_channel', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        icon: AvatarIcon,
+        path: `/channel/${name}`,
+        disabled: !name,
+        isChannelButton: true,
+      },
+    ];
+  }, [name, t]);
+
+  return (
+    <>
+      <Drawer
+        elevation={1}
+        variant="permanent"
+        sx={{
+          flexShrink: 0,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          '& .MuiDrawer-paper': {
+            width: COLLAPSED_WIDTH,
+            position: 'relative', // key change
+            zIndex: 1200,
+            top: '0px',
+            bottom: 0,
+            overflow: 'hidden',
+            bgcolor: 'background.default',
+            borderRight: 'none',
+            ...(isSmall && {
+              display: 'none',
+            }),
+          },
+        }}
+        open
+      >
+        <List
+          sx={{
+            overflow: 'hidden',
+          }}
+        >
+          {drawerItems.map((item, index) => {
+            const isSelected = location.pathname === item.path;
+            return (
+              <ListItem
+                key={item.name}
+                disablePadding
+                sx={{ display: 'block', padding: '5px', overflow: 'hidden' }}
+              >
+                <ListItemButton
+                  disabled={item.disabled}
+                  selected={isSelected}
+                  onClick={() => {
+                    if (item.isChannelButton) {
+                      handleChannelClick();
+                    } else {
+                      navigate(item.path);
+                    }
+                  }}
+                  sx={{
+                    minHeight: 48,
+                    padding: '12px 16px',
+                    borderRadius: '4px',
+                    justifyContent: 'center',
+                    '&.Mui-selected': {
+                      backgroundColor: 'action.selected',
+                    },
+                    '&.Mui-selected:hover': {
+                      backgroundColor: 'action.selected',
+                    },
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 0,
+                      mr: 'auto',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {item.isChannelButton ? (
+                      <item.icon />
+                    ) : (
+                      <item.icon
+                        sx={{
+                          color: isSelected ? 'text.primary' : 'action.active',
+                        }}
+                      />
+                    )}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={item.name}
+                    sx={{
+                      opacity: 0,
+                    }}
+                  />
+                </ListItemButton>
+              </ListItem>
+            );
+          })}
+        </List>
+      </Drawer>
+      <Box
+        sx={{
+          position: 'fixed',
+          zIndex: 5,
+          top: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '100vh',
+          width: '100vw',
+          display: isSideBarExpanded ? 'block' : 'none',
+          overflow: 'hidden',
+        }}
+        onClick={() => {
+          if (isSideBarExpanded) {
+            setIsSideBarExpanded(false); // collapse the sidebar
+          }
+        }}
+      />
+      <ClickAwayListener
+        onClickAway={() => {
+          if (isSideBarExpanded) {
+            setIsSideBarExpanded(false); // collapse the sidebar
+          }
+        }}
+      >
+        <Box>
+          <Drawer
+            elevation={1}
+            variant="permanent"
+            sx={{
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              transition: 'opacity 0.3s',
+              '& .MuiDrawer-paper': {
+                width: DRAWER_WIDTH,
+                left: isSideBarExpanded ? 0 : -100000,
+                transition: 'opacity 0.3s',
+                opacity: isSideBarExpanded ? 1 : 0,
+                position: 'fixed', // key change
+                zIndex: 1200,
+                top: '60px',
+                bottom: 0,
+                bgcolor: 'background.default',
+                borderRight: 'none',
+                overFlow: 'hidden',
+              },
+            }}
+            open
+          >
+            <List
+              sx={{
+                overflow: 'hidden',
+              }}
+            >
+              {isSmall && (
+                <>
+                  <ListItem
+                    disablePadding
+                    sx={{ display: 'block', padding: '5px', gap: '5px' }}
+                  >
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        width: '100%',
+                      }}
+                    >
+                      <UserMenu
+                        isShowMenu={isSecure}
+                        userAvatar={avatarUrl}
+                        userName={name}
+                        allNames={allNames}
+                      />
+                      <Typography
+                        sx={{
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {name}
+                      </Typography>
+                    </Box>
+                  </ListItem>
+                  <Spacer height="10px" />
+                  <ListItem
+                    disablePadding
+                    sx={{ display: 'block', padding: '5px' }}
+                  >
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        width: '100%',
+                        gap: '25px',
+                      }}
+                    >
+                      <DownloadTaskManager />
+                      <Typography>
+                        {t('core:publish.downloads', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                    </Box>
+                  </ListItem>
+                  <Divider />
+                </>
+              )}
+
+              {drawerItems.map((item, index) => {
+                const isSelected = location.pathname === item.path;
+                return (
+                  <ListItem
+                    key={item.name}
+                    disablePadding
+                    sx={{
+                      display: 'block',
+                      padding: '5px',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <ListItemButton
+                      onClick={() => {
+                        if (item.isChannelButton) {
+                          handleChannelClick();
+                        } else {
+                          setIsSideBarExpanded(false);
+                          navigate(item.path);
+                        }
+                      }}
+                      selected={isSelected}
+                      sx={{
+                        minHeight: 48,
+                        padding: '12px 16px',
+                        borderRadius: '4px',
+                        justifyContent: isSideBarExpanded
+                          ? 'initial'
+                          : 'center',
+                        '&.Mui-selected': {
+                          backgroundColor: 'action.selected',
+                        },
+                        '&.Mui-selected:hover': {
+                          backgroundColor: 'action.selected',
+                        },
+                      }}
+                    >
+                      <ListItemIcon
+                        sx={{
+                          minWidth: 0,
+                          mr: isSideBarExpanded ? 3 : 'auto',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {item.isChannelButton ? (
+                          <item.icon />
+                        ) : (
+                          <item.icon
+                            sx={{
+                              color: isSelected
+                                ? 'text.primary'
+                                : 'action.active',
+                            }}
+                          />
+                        )}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={item.name}
+                        sx={{
+                          opacity: isSideBarExpanded ? 1 : 0,
+                          whiteSpace: 'normal',
+                          wordBreak: 'break-word',
+                          overflow: 'hidden',
+                        }}
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                );
+              })}
+            </List>
+          </Drawer>
+        </Box>
+      </ClickAwayListener>
+    </>
+  );
+};

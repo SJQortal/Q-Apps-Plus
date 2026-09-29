@@ -1,0 +1,214 @@
+import { Button, ButtonProps, CircularProgress } from '@mui/material';
+import { darken } from '@mui/material/styles';
+import Tooltip from '@mui/material/Tooltip';
+import { MouseEvent, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { CustomTooltip, TooltipLine } from './CustomTooltip.tsx';
+
+interface FollowButtonProps extends ButtonProps {
+  followerName: string;
+}
+
+export type FollowData = {
+  userName: string;
+  followerName: string;
+};
+
+export const FollowButton = ({ followerName, ...props }: FollowButtonProps) => {
+  const { t } = useTranslation(['core']);
+
+  const [followingList, setFollowingList] = useState<string[]>([]);
+
+  const [followingSize, setFollowingSize] = useState<string>('');
+  const [followingItemCount, setFollowingItemCount] = useState<string>('');
+
+  const [timer, setTimer] = useState<NodeJS.Timeout | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const isFollowingName = () => {
+    return followingList.includes(followerName);
+  };
+
+  const handleMouseEnter = () => {
+    setTimer(
+      setTimeout(() => {
+        setIsLoading(true);
+        getFollowData();
+      }, 500)
+    );
+  };
+
+  const handleMouseLeave = () => {
+    setIsLoading(false);
+    clearTimeout(timer);
+  };
+
+  useEffect(() => {
+    return () => clearTimeout(timer); // Cleanup timer on unmount
+  }, [timer]);
+
+  const getFollowData = () => {
+    if (followingList.length > 0) return;
+    qortalRequest({
+      action: 'GET_LIST_ITEMS',
+      list_name: 'followedNames',
+    })
+      .then((followList) => {
+        setFollowingList(followList);
+        setIsLoading(false);
+      })
+      .catch((e) => {
+        console.log(e);
+      });
+    getFollowSize();
+  };
+
+  const followName = () => {
+    if (followingList.includes(followerName) === false) {
+      qortalRequest({
+        action: 'ADD_LIST_ITEMS',
+        list_name: 'followedNames',
+        items: [followerName],
+      }).then((response) => {
+        if (response === false) console.error('followName failed');
+        else {
+          setFollowingList([...followingList, followerName]);
+        }
+      });
+    }
+  };
+
+  const unfollowName = () => {
+    if (followingList.includes(followerName)) {
+      qortalRequest({
+        action: 'DELETE_LIST_ITEM',
+        list_name: 'followedNames',
+        items: [followerName],
+      }).then((response) => {
+        if (response === false) console.error('unfollowName failed');
+        else {
+          const listWithoutName = followingList.filter(
+            (item) => followerName !== item
+          );
+          setFollowingList(listWithoutName);
+        }
+      });
+    }
+  };
+
+  const manageFollow = (e: MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    isFollowingName() ? unfollowName() : followName();
+  };
+
+  const verticalPadding = '3px';
+  const horizontalPadding = '8px';
+  const buttonStyle = {
+    fontSize: '15px',
+    fontWeight: '700',
+    paddingTop: verticalPadding,
+    paddingBottom: verticalPadding,
+    paddingLeft: horizontalPadding,
+    paddingRight: horizontalPadding,
+    borderRadius: 28,
+    color: 'white',
+    width: '96px',
+    height: '45px',
+    ...props.sx,
+  };
+
+  const getFollowSize = () => {
+    qortalRequest({
+      action: 'LIST_QDN_RESOURCES',
+      name: followerName,
+      limit: 0,
+      includeMetadata: false,
+    }).then((publishesList) => {
+      let totalSize = 0;
+      let itemsCount = 0;
+      publishesList.map((publish) => {
+        totalSize += +publish.size;
+        itemsCount++;
+      });
+      setFollowingSize(formatBytes(totalSize));
+      setFollowingItemCount(itemsCount.toString());
+    });
+  };
+
+  function formatBytes(bytes: number, decimals = 2) {
+    if (!+bytes) return '0 Bytes';
+
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+  }
+
+  const tooltipTitle = followingSize && (
+    <>
+      <TooltipLine>
+        {t('core:video.follow_description', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </TooltipLine>
+      <br />
+      <TooltipLine>
+        {t('core:video.currentSize', {
+          followerName,
+          followingSize,
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </TooltipLine>
+      <TooltipLine>
+        {t('core:video.itemCount', {
+          followingItemCount,
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </TooltipLine>
+    </>
+  );
+
+  const followButton = (
+    <Button
+      {...props}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      variant={'outlined'}
+      color="info"
+      // sx={buttonStyle}
+      onClick={(e) => manageFollow(e)}
+      sx={(theme) => {
+        const baseColor = theme.palette.info.main;
+        return {
+          minWidth: '125px',
+          color: isFollowingName() ? darken(baseColor, 0.7) : baseColor,
+        };
+      }}
+    >
+      {isFollowingName()
+        ? t('core:action.unfollow', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        : t('core:action.follow', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+    </Button>
+  );
+
+  return (
+    <>
+      {tooltipTitle ? (
+        <CustomTooltip title={tooltipTitle} placement={'top'} arrow>
+          {followButton}
+        </CustomTooltip>
+      ) : (
+        <Tooltip title={<CircularProgress size={24} />} placement={'top'} arrow>
+          {followButton}
+        </Tooltip>
+      )}
+    </>
+  );
+};

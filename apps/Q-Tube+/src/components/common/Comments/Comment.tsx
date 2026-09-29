@@ -1,0 +1,362 @@
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import {
+  Avatar,
+  Box,
+  Button,
+  ButtonBase,
+  Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import { createAvatarLink, Spacer, useAuth } from 'qapp-core';
+import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useIsSmall } from '../../../hooks/useIsSmall';
+import { formatDate } from '../../../utils/time';
+
+import Portal from '../Portal';
+
+import { CopyLinkButton } from '../ContentButtons/CopyLinkButton';
+import { CommentEditor } from './CommentEditor';
+import {
+  AuthorTextComment,
+  CardContentContainerComment,
+  CommentActionButtonRow,
+  CreatedTextComment,
+  StyledCardColComment,
+  StyledCardComment,
+  StyledCardContentComment,
+  StyledCardHeaderComment,
+} from './Comments-styles';
+
+interface CommentProps {
+  comment: any;
+  postId: string;
+  postName: string;
+  onSubmit: (obj?: any, isEdit?: boolean) => void;
+  commentID?: string;
+}
+export const Comment = ({
+  comment,
+  postId,
+  postName,
+  onSubmit,
+  commentID,
+}: CommentProps) => {
+  const { t } = useTranslation(['core']);
+
+  const isSmall = useIsSmall();
+  const [isReplying, setIsReplying] = useState<boolean>(false);
+  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const { name } = useAuth();
+  const [currentEdit, setCurrentEdit] = useState<any>(null);
+  const theme = useTheme();
+  const [isOpenReplies, setIsOpenReplies] = useState(false);
+  const handleSubmit = useCallback((comment: any, isEdit?: boolean) => {
+    onSubmit(comment, isEdit);
+    setCurrentEdit(null);
+    setIsReplying(false);
+  }, []);
+
+  return (
+    <Box
+      id={comment?.identifier}
+      sx={{
+        display: 'flex',
+        width: '100%',
+        flexDirection: 'column',
+      }}
+    >
+      {currentEdit && (
+        <Portal>
+          <Dialog
+            open={!!currentEdit}
+            onClose={() => setCurrentEdit(null)}
+            aria-labelledby="alert-dialog-title"
+            aria-describedby="alert-dialog-description"
+          >
+            <DialogTitle id="alert-dialog-title"></DialogTitle>
+            <DialogContent>
+              <Box
+                sx={{
+                  width: '300px',
+                  display: 'flex',
+                  justifyContent: 'center',
+                }}
+              >
+                <CommentEditor
+                  onSubmit={(obj) => handleSubmit(obj, true)}
+                  postId={postId}
+                  postName={postName}
+                  isEdit
+                  commentId={currentEdit?.identifier}
+                  commentMessage={currentEdit?.message}
+                />
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button variant="contained" onClick={() => setCurrentEdit(null)}>
+                {t('core:action.close', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </Portal>
+      )}
+
+      <CommentCard
+        name={comment?.name}
+        message={comment?.message}
+        replies={comment?.replies || []}
+        setCurrentEdit={setCurrentEdit}
+        created={comment?.created}
+        isOpenReplies={isOpenReplies}
+        commentIdentifier={comment?.identifier}
+        commentID={commentID}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            width: '100%',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+          }}
+        >
+          {isReplying && (
+            <CommentEditor
+              onSubmit={handleSubmit}
+              postId={postId}
+              postName={postName}
+              isReply
+              commentId={comment.identifier}
+              onCloseReply={() => {
+                setIsReplying(false);
+                setIsEditing(false);
+              }}
+            />
+          )}
+        </Box>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            marginTop: '20px',
+            justifyContent: 'space-between',
+          }}
+        >
+          <CommentActionButtonRow
+            sx={{
+              gap: '20px',
+            }}
+          >
+            {!isReplying && (
+              <ButtonBase onClick={() => setIsReplying(true)}>
+                <Typography>
+                  {' '}
+                  {t('core:action.reply', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
+              </ButtonBase>
+            )}
+
+            {/* {name === comment?.name && (
+              <ButtonBase onClick={() => setCurrentEdit(comment)}>
+                <Typography>Edit</Typography>
+              </ButtonBase>
+            )} */}
+            {/* {isReplying && (
+              <CommentActionButton
+                size="small"
+                variant="contained"
+                onClick={() => {
+                  setIsReplying(false);
+                  setIsEditing(false);
+                }}
+              >
+                close
+              </CommentActionButton>
+            )} */}
+            {comment?.replies && comment?.replies?.length > 0 && (
+              <ButtonBase onClick={() => setIsOpenReplies((prev) => !prev)}>
+                {isOpenReplies ? (
+                  <ExpandLessIcon
+                    sx={{
+                      color: 'primary.dark',
+                    }}
+                  />
+                ) : (
+                  <ExpandMoreIcon
+                    sx={{
+                      color: 'primary.dark',
+                    }}
+                  />
+                )}
+
+                <Typography
+                  color="primary.dark"
+                  sx={{
+                    fontSize: isSmall ? '14px' : 'unset',
+                  }}
+                >
+                  {isOpenReplies
+                    ? ` ${t('core:comments.hide_replies', {
+                        postProcess: 'capitalizeFirstChar',
+                      })} (${comment?.replies?.length})`
+                    : ` ${t('core:comments.view_replies', {
+                        postProcess: 'capitalizeFirstChar',
+                      })} (${comment?.replies?.length})`}
+                </Typography>
+              </ButtonBase>
+            )}
+          </CommentActionButtonRow>
+        </Box>
+      </CommentCard>
+    </Box>
+  );
+};
+
+const CommentCard = ({
+  message,
+  created,
+  name,
+  replies,
+  children,
+  setCurrentEdit,
+  isOpenReplies,
+  isReply,
+  commentIdentifier,
+  commentID,
+}: any) => {
+  const { i18n } = useTranslation(['core']);
+
+  const isSmall = useIsSmall();
+  const { name: username } = useAuth();
+  const avatarUrl = createAvatarLink(name);
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Generate the comment link
+  const commentLink = (() => {
+    if (!commentIdentifier) return '';
+    const pathParts = location.pathname.split('/');
+    // Current path should be video/:name/:id or video/:name/:id/:commentID
+    // We want to construct qortal://APP/Q-Tube/video/:name/:id/:commentIdentifier
+    if (pathParts.length >= 3) {
+      const basePath = pathParts.slice(0, 4).join('/');
+      return `qortal://APP/Q-Tube${basePath}/${commentIdentifier}`;
+    }
+    return '';
+  })();
+
+  return (
+    <CardContentContainerComment>
+      <StyledCardHeaderComment
+        sx={{
+          '& .MuiCardHeader-content': {
+            overflow: 'hidden',
+          },
+        }}
+      >
+        <Box>
+          <Avatar
+            src={avatarUrl}
+            alt={`${name}'s avatar`}
+            sx={{
+              width: isReply && !isSmall ? '30px' : '40px',
+              height: isReply && !isSmall ? '30px' : '40px',
+              marginRight: '5px',
+            }}
+          />
+        </Box>
+        <Box
+          sx={{
+            width: '100%',
+          }}
+        >
+          <StyledCardColComment
+            sx={{
+              flexDirection: 'row',
+              gap: '10px',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <Box sx={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <AuthorTextComment>{name}</AuthorTextComment>
+              <CreatedTextComment>
+                {formatDate(+created, i18n.language)}
+              </CreatedTextComment>
+            </Box>
+            {commentLink && (
+              <CopyLinkButton
+                link={commentLink}
+                tooltipTitle="Copy link to comment"
+              />
+            )}
+          </StyledCardColComment>
+          <Spacer height="10px" />
+          <StyledCardContentComment>
+            <StyledCardComment>{message}</StyledCardComment>
+          </StyledCardContentComment>
+          {children}
+        </Box>
+      </StyledCardHeaderComment>
+      <Collapse in={isOpenReplies} timeout="auto" unmountOnExit>
+        <Box
+          sx={{
+            paddingLeft: isSmall ? '2px' : '50px',
+            paddingTop: '10px',
+            display: 'flex',
+            flexDirection: 'column',
+            width: '100%',
+            border: isSmall ? '1px solid grey' : 'unset',
+            paddingRight: isSmall ? '2px' : 'unset',
+          }}
+        >
+          {replies?.map((reply: any) => {
+            return (
+              <Box
+                key={reply?.identifier}
+                id={reply?.identifier}
+                sx={{
+                  display: 'flex',
+                  borderRadius: '10px',
+                  marginTop: '8px',
+                  width: '100%',
+                }}
+              >
+                <CommentCard
+                  name={reply?.name}
+                  message={reply?.message}
+                  setCurrentEdit={setCurrentEdit}
+                  created={reply?.created}
+                  isReply
+                  commentIdentifier={reply?.identifier}
+                  commentID={commentID}
+                >
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      justifyContent: 'space-between',
+                    }}
+                  ></Box>
+                </CommentCard>
+              </Box>
+            );
+          })}
+        </Box>
+      </Collapse>
+    </CardContentContainerComment>
+  );
+};

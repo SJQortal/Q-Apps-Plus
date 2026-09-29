@@ -1,0 +1,676 @@
+import {
+  Box,
+  CircularProgress,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Modal,
+  OutlinedInput,
+  Select,
+  SelectChangeEvent,
+  Tooltip,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import Compressor from 'compressorjs';
+import { useAtom, useSetAtom } from 'jotai';
+import { showError, useAuth, useGlobal, usePublish } from 'qapp-core';
+import React, { useEffect, useState } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { categories, subCategories } from '../../../constants/Categories.ts';
+import { QTUBE_VIDEO_BASE } from '../../../constants/Identifiers.ts';
+import {
+  fontSizeMedium,
+  maxSize,
+  titleFormatter,
+  videoMaxSize,
+} from '../../../constants/Misc.ts';
+import { useMediaInfo } from '../../../hooks/useMediaInfo.tsx';
+import {
+  AltertObject,
+  setNotificationAtom,
+} from '../../../state/global/notifications.ts';
+import { editVideoAtom } from '../../../state/publish/video.ts';
+import { objectToBase64 } from '../../../utils/PublishFormatter.ts';
+import {
+  getFileExtension,
+  getFileName,
+  processFilename,
+} from '../../../utils/stringFunctions.ts';
+import { FrameExtractor } from '../../common/FrameExtractor/FrameExtractor.tsx';
+import ImageUploader from '../../common/ImageUploader.tsx';
+import { TextEditor } from '../../common/TextEditor/TextEditor.tsx';
+import { extractTextFromHTML } from '../../common/TextEditor/utils.ts';
+
+import { toBase64 } from '../PublishVideo/useVideoPublishingWorkflow.tsx';
+import {
+  VideoFilenameDisplay,
+  VideoDurationDisplay,
+} from '../PublishVideo/components/VideoFormElements.tsx';
+
+import {
+  AddCoverImageButton,
+  AddLogoIcon,
+  CoverImagePreview,
+  CrowdfundActionButton,
+  CrowdfundActionButtonRow,
+  CustomInputField,
+  LogoPreviewRow,
+  ModalBody,
+  NewCrowdfundTitle,
+  TimesIcon,
+} from './EditVideo-styles.tsx';
+
+export const EditVideo = () => {
+  const theme = useTheme();
+  const setNotification = useSetAtom(setNotificationAtom);
+  const setEditVideo = useSetAtom(editVideoAtom);
+  const { name: username, address: userAddress } = useAuth();
+  const { lists } = useGlobal();
+  const [editVideoProperties] = useAtom(editVideoAtom);
+
+  const publishFromLibrary = usePublish();
+
+  const [title, setTitle] = useState<string>('');
+  const [description, setDescription] = useState<string>('');
+  const [coverImage, setCoverImage] = useState<string>('');
+  const [file, setFile] = useState<null | File>(null);
+  const [selectedCategoryVideos, setSelectedCategoryVideos] =
+    useState<any>(null);
+  const [selectedSubCategoryVideos, setSelectedSubCategoryVideos] =
+    useState<any>(null);
+  const [imageExtracts, setImageExtracts] = useState<any>([]);
+  const [videoProcessingProgress, setVideoProcessingProgress] =
+    useState<number>(0);
+  const [framesExtractedCount, setFramesExtractedCount] = useState<number[]>([
+    0, 0, 0, 0,
+  ]);
+  const [videoDurations, setVideoDurations] = useState<number[]>([
+    editVideoProperties?.duration || 0,
+  ]);
+  const { isHEVC } = useMediaInfo();
+
+  useEffect(() => {
+    // Handle undefined duration by displaying as 0
+    const duration =
+      editVideoProperties?.duration !== undefined
+        ? editVideoProperties.duration
+        : 0;
+    setVideoDurations([Math.floor(duration)]);
+  }, [editVideoProperties?.duration]);
+
+  // Calculate video processing progress
+  useEffect(() => {
+    if (!file && !editVideoProperties?.videoReference) {
+      setVideoProcessingProgress(0);
+      return;
+    }
+
+    const totalPoints = 5; // 4 frames + 1 duration
+    let completedPoints = 0;
+
+    // Count successful frame extractions (non-empty strings)
+    const successfulFrames = imageExtracts.filter(
+      (extract) => extract && extract.length > 0
+    ).length;
+    completedPoints += successfulFrames;
+
+    // Add duration point if duration is available
+    if (videoDurations[0] > 0) {
+      completedPoints += 1;
+    }
+
+    const progress = Math.floor((completedPoints / totalPoints) * 100);
+    setVideoProcessingProgress(progress);
+  }, [
+    imageExtracts,
+    videoDurations,
+    file,
+    editVideoProperties?.videoReference,
+  ]);
+
+  const { getRootProps, getInputProps } = useDropzone({
+    accept: {
+      'video/*': [],
+    },
+    maxFiles: 1,
+    maxSize,
+    onDrop: async (acceptedFiles, rejectedFiles) => {
+      const firstFile = acceptedFiles[0];
+
+      const notSupportedCodec = await isHEVC(firstFile);
+
+      const isMKV = getFileExtension(firstFile) === 'mkv';
+      const isUnsupportedFile = notSupportedCodec || isMKV;
+
+      if (isUnsupportedFile) {
+        if (notSupportedCodec)
+          showError(`${firstFile.name} uses the unsupported encoding: HEVC`);
+        if (isMKV)
+          showError(
+            `${firstFile.name} uses the unsupported file container: MKV`
+          );
+      } else {
+        setFile(firstFile);
+        // Reset progress when a new file is selected
+        setVideoProcessingProgress(0);
+        setFramesExtractedCount([0, 0, 0, 0]);
+        setImageExtracts([]);
+        // Update title based on filename (same as PublishVideo)
+        const fileName = getFileName(firstFile?.name || '');
+        const filteredTitle = fileName.replace(titleFormatter, '');
+        setTitle(filteredTitle || '');
+        // Auto-refresh duration when a new file is selected
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.onloadedmetadata = () => {
+          setVideoDurations([Math.floor(video.duration)]);
+          URL.revokeObjectURL(video.src);
+        };
+        video.src = URL.createObjectURL(firstFile);
+      }
+
+      let errorString: null | string = null;
+
+      rejectedFiles.forEach(({ file, errors }) => {
+        errors.forEach((error) => {
+          if (error.code === 'file-too-large') {
+            errorString = `File must be under ${videoMaxSize}MB`;
+          }
+          console.error(`Error with file ${file.name}: ${error.message}`);
+        });
+      });
+      if (errorString) {
+        const notificationObj: AltertObject = {
+          msg: errorString,
+          alertType: 'error',
+        };
+        setNotification(notificationObj);
+      }
+    },
+  });
+
+  useEffect(() => {
+    if (editVideoProperties) {
+      setTitle(editVideoProperties?.title || '');
+      if (editVideoProperties?.htmlDescription) {
+        setDescription(editVideoProperties?.htmlDescription);
+      } else if (editVideoProperties?.fullDescription) {
+        const paragraph = `<p>${editVideoProperties?.fullDescription}</p>`;
+        setDescription(paragraph);
+      }
+      setCoverImage(editVideoProperties?.videoImage || '');
+
+      if (editVideoProperties?.category) {
+        const selectedOption = categories.find(
+          (option) => option.id === +editVideoProperties.category
+        );
+        setSelectedCategoryVideos(selectedOption || null);
+      }
+
+      if (
+        editVideoProperties?.category &&
+        editVideoProperties?.subcategory &&
+        subCategories[+editVideoProperties?.category]
+      ) {
+        const selectedOption = subCategories[
+          +editVideoProperties?.category
+        ]?.find((option) => option.id === +editVideoProperties.subcategory);
+        setSelectedSubCategoryVideos(selectedOption || null);
+      }
+    }
+  }, [editVideoProperties]);
+
+  const onClose = () => {
+    setEditVideo(null);
+    setFile(null);
+    setTitle('');
+    setImageExtracts([]);
+    setDescription('');
+    setCoverImage('');
+    setVideoProcessingProgress(0);
+    setFramesExtractedCount([0, 0, 0, 0]);
+    setVideoDurations([0]);
+    setSelectedCategoryVideos(null);
+    setSelectedSubCategoryVideos(null);
+  };
+
+  async function publishQDNResource() {
+    try {
+      if (!username) throw new Error('A name is required to publish');
+      if (!title) throw new Error('Please enter a title');
+      if (!description) throw new Error('Please enter a description');
+      if (!coverImage) throw new Error('Please select cover image');
+      if (!selectedCategoryVideos) throw new Error('Please select a category');
+      if (!editVideoProperties) return;
+      if (!userAddress) throw new Error('Unable to locate user address');
+
+      // Check if video duration is still loading
+      if (videoDurations[0] === 0) {
+        showError('Video duration is still loading');
+        return;
+      }
+      let errorMsg = '';
+      let name = '';
+      if (username) {
+        name = username;
+      }
+      if (!name) {
+        errorMsg =
+          'Cannot publish without access to your name. Please authenticate.';
+      }
+
+      if (editVideoProperties?.user !== username) {
+        errorMsg = "Cannot publish another user's resource";
+      }
+
+      if (errorMsg) {
+        const notificationObj: AltertObject = {
+          msg: errorMsg,
+          alertType: 'error',
+        };
+        setNotification(notificationObj);
+        return;
+      }
+      const listOfPublishes: any[] = [];
+      const category = selectedCategoryVideos.id;
+      const subcategory = selectedSubCategoryVideos?.id || '';
+
+      const fullDescription = extractTextFromHTML(description);
+      let fileExtension = 'mp4';
+      const fileExtensionSplit = file?.name?.split('.');
+      if (fileExtensionSplit && fileExtensionSplit?.length > 1) {
+        fileExtension = fileExtensionSplit?.pop() || 'mp4';
+      }
+
+      const filename = title;
+      const alphanumericString = processFilename(filename);
+
+      const videoObject: any = {
+        title,
+        version: editVideoProperties.version,
+        htmlDescription: description,
+        fullDescription,
+        videoImage: coverImage,
+        videoReference: editVideoProperties.videoReference,
+        extracts: file ? imageExtracts : editVideoProperties?.extracts,
+        commentsId: editVideoProperties.commentsId,
+        category,
+        subcategory,
+        code: editVideoProperties.code,
+        videoType: file?.type || editVideoProperties?.videoType || 'video/mp4',
+        filename: `${alphanumericString.trim()}.${fileExtension}`,
+        fileSize: file?.size || editVideoProperties?.fileSize || 0,
+        duration: videoDurations[0] || editVideoProperties?.duration || 0,
+      };
+      console.log('Edited Video Metadata: ', videoObject);
+      const metadescription =
+        `**category:${category};subcategory:${subcategory};code:${editVideoProperties.code}**` +
+        description.slice(0, 150);
+
+      // Description is obtained from raw data
+      const requestBodyJson: any = {
+        action: 'PUBLISH_QDN_RESOURCE',
+        name: username,
+        service: 'DOCUMENT',
+        data64: await objectToBase64(videoObject),
+        title: title.slice(0, 50),
+        description: metadescription,
+        identifier: editVideoProperties.id,
+        tag1: QTUBE_VIDEO_BASE,
+        filename: `video_metadata.json`,
+      };
+      listOfPublishes.push(requestBodyJson);
+
+      if (file && editVideoProperties.videoReference?.identifier) {
+        const requestBodyVideo: any = {
+          action: 'PUBLISH_QDN_RESOURCE',
+          name: username,
+          service: 'VIDEO',
+          file,
+          title: title.slice(0, 50),
+          description: metadescription,
+          identifier: editVideoProperties.videoReference?.identifier,
+          tag1: QTUBE_VIDEO_BASE,
+          filename: file.name,
+        };
+        listOfPublishes.push(requestBodyVideo);
+      }
+
+      await publishFromLibrary.publishMultipleResources(listOfPublishes);
+
+      lists.updateNewResources([
+        {
+          data: videoObject,
+          qortalMetadata: {
+            identifier: editVideoProperties.id,
+            service: 'DOCUMENT',
+            name: username,
+            size: 100,
+            updated: Date.now(),
+            metadata: {
+              title: title.slice(0, 50),
+              description: metadescription,
+              tags: [QTUBE_VIDEO_BASE],
+            },
+            created: editVideoProperties?.created,
+          },
+        },
+      ]);
+      const notificationObj: AltertObject = {
+        msg: 'Video updated',
+        alertType: 'success',
+      };
+      setNotification(notificationObj);
+
+      onClose();
+    } catch (error: any) {
+      const isError = error instanceof Error;
+      const message = isError ? error?.message : 'Failed to publish update';
+      const notificationObj: AltertObject = {
+        msg: message,
+        alertType: 'error',
+      };
+      setNotification(notificationObj);
+      throw new Error('Failed to publish update');
+    }
+  }
+
+  const handleOptionCategoryChangeVideos = (
+    event: SelectChangeEvent<string>
+  ) => {
+    const optionId = event.target.value;
+    const selectedOption = categories.find((option) => option.id === +optionId);
+    setSelectedCategoryVideos(selectedOption || null);
+  };
+  const handleOptionSubCategoryChangeVideos = (
+    event: SelectChangeEvent<string>,
+    subcategories: any[]
+  ) => {
+    const optionId = event.target.value;
+    const selectedOption = subcategories.find(
+      (option) => option.id === +optionId
+    );
+    setSelectedSubCategoryVideos(selectedOption || null);
+  };
+
+  const onFramesExtracted = async (imgs) => {
+    try {
+      const imagesExtracts: string[] = [];
+
+      for (const img of imgs) {
+        try {
+          let compressedFile;
+          const image = img;
+          await new Promise<void>((resolve) => {
+            new Compressor(image, {
+              quality: 0.8,
+              maxWidth: 750,
+              mimeType: 'image/webp',
+              success(result) {
+                const file = new File([result], 'name', {
+                  type: 'image/webp',
+                });
+                compressedFile = file;
+                resolve();
+              },
+              error(error) {
+                console.error(error);
+              },
+            });
+          });
+          if (!compressedFile) continue;
+          const result = await toBase64(compressedFile);
+
+          if (result && typeof result === 'string') {
+            imagesExtracts.push(result);
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      setImageExtracts(imagesExtracts);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+  return (
+    <>
+      <Modal
+        open={!!editVideoProperties}
+        aria-labelledby="modal-title"
+        aria-describedby="modal-description"
+      >
+        <ModalBody
+          sx={{ maxHeight: '98vh', backgroundColor: 'background.paper' }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <NewCrowdfundTitle>Update Video properties</NewCrowdfundTitle>
+          </Box>
+          <>
+            <Tooltip
+              title="Cannot add files while videos are processing"
+              arrow
+              disableHoverListener={
+                videoProcessingProgress <= 0 || videoProcessingProgress >= 100
+              }
+              slotProps={{
+                tooltip: {
+                  sx: {
+                    fontSize: fontSizeMedium,
+                  },
+                },
+              }}
+            >
+              <Box
+                {...getRootProps()}
+                sx={{
+                  border: '1px dashed gray',
+                  padding: 2,
+                  textAlign: 'center',
+                  marginBottom: 2,
+                  cursor: 'pointer',
+                  opacity:
+                    videoProcessingProgress > 0 && videoProcessingProgress < 100
+                      ? 0.5
+                      : 1,
+                }}
+              >
+                <input
+                  {...getInputProps()}
+                  disabled={
+                    videoProcessingProgress > 0 && videoProcessingProgress < 100
+                  }
+                />
+                <Typography>Click to update video file - optional</Typography>
+              </Box>
+            </Tooltip>
+            <Box
+              sx={{
+                display: 'flex',
+                gap: '20px',
+                alignItems: 'center',
+              }}
+            >
+              <FormControl fullWidth sx={{ marginBottom: 2 }}>
+                <InputLabel id="Category">Select a Category</InputLabel>
+                <Select
+                  labelId="Category"
+                  input={<OutlinedInput label="Select a Category" />}
+                  value={selectedCategoryVideos?.id || ''}
+                  onChange={handleOptionCategoryChangeVideos}
+                >
+                  {categories.map((option) => (
+                    <MenuItem key={option.id} value={option.id}>
+                      {option.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {selectedCategoryVideos &&
+                subCategories[selectedCategoryVideos?.id] && (
+                  <FormControl fullWidth sx={{ marginBottom: 2 }}>
+                    <InputLabel id="Category">Select a Sub-Category</InputLabel>
+                    <Select
+                      labelId="Sub-Category"
+                      input={<OutlinedInput label="Select a Sub-Category" />}
+                      value={selectedSubCategoryVideos?.id || ''}
+                      onChange={(e) =>
+                        handleOptionSubCategoryChangeVideos(
+                          e,
+                          subCategories[selectedCategoryVideos?.id]
+                        )
+                      }
+                    >
+                      {subCategories[selectedCategoryVideos.id].map(
+                        (option) => (
+                          <MenuItem key={option.id} value={option.id}>
+                            {option.name}
+                          </MenuItem>
+                        )
+                      )}
+                    </Select>
+                  </FormControl>
+                )}
+            </Box>
+            {(file || editVideoProperties?.videoReference) && (
+              <FrameExtractor
+                videoFile={file || undefined}
+                fileReference={
+                  file
+                    ? undefined
+                    : {
+                        name: editVideoProperties?.videoReference?.name,
+                        service: editVideoProperties?.videoReference?.service,
+                        identifier:
+                          editVideoProperties?.videoReference?.identifier,
+                      }
+                }
+                onFramesExtracted={(imgs) => onFramesExtracted(imgs)}
+                onFrameProgress={(frameIndex, frameCount) => {
+                  setFramesExtractedCount((prev) => {
+                    const newCount = [...prev];
+                    newCount[frameIndex] = frameCount;
+                    return newCount;
+                  });
+                }}
+                videoDurations={videoDurations}
+                setVideoDurations={setVideoDurations}
+                index={0}
+                shouldProcess={true}
+              />
+            )}
+            <React.Fragment>
+              {!coverImage ? (
+                <ImageUploader onPick={(img: string) => setCoverImage(img)}>
+                  <AddCoverImageButton variant="contained">
+                    Add Cover Image
+                    <AddLogoIcon
+                      sx={{
+                        height: '25px',
+                        width: 'auto',
+                      }}
+                    ></AddLogoIcon>
+                  </AddCoverImageButton>
+                </ImageUploader>
+              ) : (
+                <LogoPreviewRow>
+                  <CoverImagePreview src={coverImage} alt="logo" />
+                  <TimesIcon
+                    color={theme.palette.text.primary}
+                    onClickFunc={() => setCoverImage('')}
+                    height={'32'}
+                    width={'32'}
+                  ></TimesIcon>
+                </LogoPreviewRow>
+              )}
+              <CustomInputField
+                name="title"
+                label="Title of video"
+                variant="filled"
+                value={title}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const formattedValue = value.replace(titleFormatter, '');
+                  setTitle(formattedValue);
+                }}
+                inputProps={{ maxLength: 180 }}
+                required
+              />
+              {/* Show filename when EditVideo opens or when file is updated */}
+              <VideoFilenameDisplay
+                filename={
+                  file
+                    ? file.name
+                    : editVideoProperties?.filename || 'No file selected'
+                }
+                fileExtension={
+                  file
+                    ? file.name.includes('.')
+                      ? ''
+                      : `.${file.type.split('/')[1]}`
+                    : ''
+                }
+              />
+              {/* Show duration display when EditVideo opens or when file is updated */}
+              <VideoDurationDisplay duration={videoDurations[0]} />
+              <Typography
+                sx={{
+                  fontSize: '18px',
+                }}
+              >
+                Description of video
+              </Typography>
+              <TextEditor
+                inlineContent={description}
+                setInlineContent={(value) => {
+                  setDescription(value);
+                }}
+              />
+            </React.Fragment>
+          </>
+
+          <CrowdfundActionButtonRow>
+            <CrowdfundActionButton
+              onClick={() => {
+                onClose();
+              }}
+              variant="contained"
+              color="error"
+            >
+              Cancel
+            </CrowdfundActionButton>
+            <Box
+              sx={{
+                display: 'flex',
+                gap: '20px',
+                alignItems: 'center',
+              }}
+            >
+              <CrowdfundActionButton
+                variant="contained"
+                onClick={() => {
+                  publishQDNResource();
+                }}
+                disabled={!!file && videoProcessingProgress < 100}
+              >
+                {!!file &&
+                videoProcessingProgress > 0 &&
+                videoProcessingProgress < 100
+                  ? `Video Processing ${videoProcessingProgress}%`
+                  : 'Publish'}
+              </CrowdfundActionButton>
+            </Box>
+          </CrowdfundActionButtonRow>
+        </ModalBody>
+      </Modal>
+    </>
+  );
+};
