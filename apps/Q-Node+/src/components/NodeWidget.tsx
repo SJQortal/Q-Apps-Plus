@@ -1,11 +1,11 @@
-import { FC, createElement } from 'react';
+import { createElement, type ElementType, type ReactNode } from 'react';
 import { Card, Box, Typography, Divider } from '@mui/material';
 
 interface Props {
-  icon: FC<any>;
+  icon: ElementType;
   title?: string;
-  subtitle?: React.ReactNode;
-  children?: React.ReactNode;
+  subtitle?: ReactNode;
+  children?: ReactNode;
 }
 
 const NodeWidget = ({ icon, title, subtitle, children }: Props) => (

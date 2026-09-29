@@ -7,9 +7,10 @@ import {
 } from './processors';
 
 // Load all locale JSON files
+type LocaleModule = { default: Record<string, unknown> };
 const modules = import.meta.glob('./locales/**/*.json', {
   eager: true,
-}) as Record<string, any>;
+}) as Record<string, LocaleModule>;
 
 // Dynamically detect unique language codes
 export const supportedLanguages: string[] = Array.from(
@@ -24,7 +25,7 @@ export const supportedLanguages: string[] = Array.from(
 );
 
 // Construct i18n resources object
-const resources: Record<string, Record<string, any>> = {};
+const resources: Record<string, Record<string, Record<string, unknown>>> = {};
 
 for (const path in modules) {
   // Path format: './locales/en/core.json'
@@ -38,9 +39,9 @@ for (const path in modules) {
 
 i18n
   .use(initReactI18next)
-  .use(capitalizeAll as any)
-  .use(capitalizeFirstChar as any)
-  .use(capitalizeFirstWord as any)
+  .use(capitalizeAll)
+  .use(capitalizeFirstChar)
+  .use(capitalizeFirstWord)
   .init({
     resources,
     fallbackLng: 'en',

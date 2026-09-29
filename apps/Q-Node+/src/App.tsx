@@ -75,6 +75,13 @@ import {
   TIME_SECONDS_6_IN_MILLISECONDS,
 } from './common/constants';
 import { useAuth } from 'qapp-core';
+import type {
+  DataPeer,
+  MintingAccount,
+  MintingAccountRaw,
+  NodeData,
+  Peer,
+} from './api/types';
 
 const peersRowsPerPageAtom = atomWithStorage<number>(
   'q-node-peers-rows-per-page',
@@ -145,9 +152,9 @@ function App() {
   const theme = useTheme();
   const { address } = useAuth();
   const [isUsingGateway, setIsUsingGateway] = useState(true);
-  const [nodeData, setNodeData] = useState<any>(null);
-  const [mintingAccounts, setMintingAccounts] = useState<any>([]);
-  const [connectedPeers, setConnectedPeers] = useState<any>([]);
+  const [nodeData, setNodeData] = useState<NodeData | null>(null);
+  const [mintingAccounts, setMintingAccounts] = useState<MintingAccount[]>([]);
+  const [connectedPeers, setConnectedPeers] = useState<Peer[]>([]);
   const [errorMessage, setErrorMessage] = useState(EMPTY_STRING);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [errorSnackbar, setErrorSnackbar] = useState(false);
@@ -163,7 +170,7 @@ function App() {
   const [mintingAccountKey, setMintingAccountKey] = useState(EMPTY_STRING);
   const [openPeerDialog, setOpenPeerDialog] = useState(false);
   const [newPeerAddress, setNewPeerAddress] = useState(EMPTY_STRING);
-  const [connectedDataPeers, setConnectedDataPeers] = useState<any>([]);
+  const [connectedDataPeers, setConnectedDataPeers] = useState<DataPeer[]>([]);
   const [openDataPeerDialog, setOpenDataPeerDialog] = useState(false);
   const [newDataPeerAddress, setNewDataPeerAddress] = useState(EMPTY_STRING);
   const [dataPeerPage, setDataPeerPage] = useState(0);
@@ -610,7 +617,7 @@ function App() {
       });
       // Enrich in parallel and WAIT for them
       const enriched = await Promise.all(
-        list.map(async (item) => {
+        (list as MintingAccountRaw[]).map(async (item) => {
           const nameRes = await getNameInfo(item.mintingAccount);
           return {
             publicKey: item.publicKey,

@@ -15,7 +15,7 @@ interface QortalRequestOptions {
   limit?: number;
   offset?: number;
   reverse?: boolean;
-  resources?: any[];
+  resources?: unknown[];
   filename?: string;
   list_name?: string;
   item?: string;
@@ -27,9 +27,9 @@ interface QortalRequestOptions {
   tag5?: string;
   coin?: string;
   destinationAddress?: string;
-  amount?: number | Number;
+  amount?: number | number;
   recipient?: string;
-  fee?: number | any;
+  fee?: number | string;
   blob?: Blob;
   mimeType?: string;
   file?: File;
@@ -48,21 +48,22 @@ interface QortalRequestOptions {
   blockLimit?: number;
   txGroupId?: number;
   memo?: string;
-  value?: string | any;
-};
+  value?: string | number | boolean;
+}
 
-declare function qortalRequest(
-  options: QortalRequestOptions
-): Promise<any>;
+// Hub's API is untyped; each caller narrows the result it needs.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare function qortalRequest(options: QortalRequestOptions): Promise<any>;
 
 declare function qortalRequestWithTimeout(
   options: QortalRequestOptions,
   time: number
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any>;
 
 declare global {
   interface Window {
-    _qdnBase: any;
+    _qdnBase: string;
     _qdnTheme: string;
   }
-};
+}
