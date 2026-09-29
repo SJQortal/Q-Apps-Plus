@@ -7,7 +7,7 @@ import { NavRail } from '../components/layout/NavRail';
 import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/layout/BottomNav';
 
 const Layout = () => {
-  useHandleNameData();
+  const nameData = useHandleNameData();
   useIframe();
   const phone = usePhoneLayout();
 
@@ -26,7 +26,7 @@ const Layout = () => {
           pb: phone ? `calc(${BOTTOM_NAV_HEIGHT}px + var(--qp-safe-bottom))` : 0,
         }}
       >
-        <Outlet />
+        <Outlet context={nameData} />
       </Box>
       {phone ? <BottomNav /> : null}
     </Box>

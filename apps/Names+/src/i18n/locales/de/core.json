@@ -21,7 +21,9 @@
     "continue": "fortfahren",
     "publish": "veröffentlichen",
     "buy": "kaufen",
-    "choose_image": "Bild auswählen"
+    "choose_image": "Bild auswählen",
+    "retry": "erneut versuchen",
+    "confirm_buy": "für {{price}} QORT kaufen"
   },
   "new_name": {
     "choose_name": "wähle einen Namen",
@@ -63,7 +65,9 @@
       "error3": "ungültiger Preis"
     },
     "title": "Name verkaufen",
-    "choose_price": "Verkaufspreis festlegen"
+    "choose_price": "Verkaufspreis festlegen",
+    "fee": "Gebühr für das Angebot: {{fee}} QORT",
+    "price_hint": "der Käufer zahlt diesen Betrag in QORT"
   },
   "cancel_name": {
     "responses": {
@@ -96,7 +100,26 @@
       "loading": "versuche, Namen zu kaufen... bitte warten",
       "success": "Name erfolgreich gekauft",
       "error": "Name konnte nicht gekauft werden"
-    }
+    },
+    "sort": {
+      "name": "Name",
+      "price": "Preis",
+      "length": "Länge",
+      "newest": "neueste"
+    },
+    "sort_by": "sortieren nach",
+    "empty": "derzeit stehen keine Namen zum Verkauf",
+    "empty_filter": "keine Namen zum Verkauf passen zu „{{filter}}“",
+    "error": "die Namen zum Verkauf konnten nicht geladen werden",
+    "buy_title": "{{name}} kaufen",
+    "price": "Preis",
+    "fee": "Transaktionsgebühr",
+    "total": "gesamt",
+    "balance": "dein Guthaben",
+    "insufficient": "nicht genug QORT für diesen Kauf",
+    "buy_confirm": "Qortal bittet dich, die Zahlung zu bestätigen",
+    "count_one": "{{count}} Name zu verkaufen",
+    "count_other": "{{count}} Namen zu verkaufen"
   },
   "settings": {
     "account": "account",
@@ -113,5 +136,25 @@
     "upstream": "original app: Qortal/names",
     "source": "source code: SJQortal/Q-Apps-Plus",
     "about_blurb": "Names+ is Simon's version of the official Qortal Names app. It reads and writes the same names, sales and avatars, so anything you do here shows up in the original app too."
+  },
+  "names": {
+    "primary": "primär",
+    "for_sale": "zu verkaufen",
+    "pending": "ausstehend",
+    "empty_title": "noch keine Namen",
+    "empty_hint": "registriere einen Namen, um auf QDN zu veröffentlichen und ihn in allen Q-Apps zu nutzen",
+    "empty_filter": "keine Namen passen zu „{{filter}}“",
+    "error": "deine Namen konnten nicht geladen werden",
+    "more_actions": "weitere Aktionen",
+    "sign_in": "melde dich bei Qortal an, um deine Namen zu sehen"
+  },
+  "pending": {
+    "title": "ausstehende Transaktionen",
+    "REGISTER_NAME": "{{name}} wird registriert",
+    "UPDATE_NAME": "{{name}} wird in {{newName}} umbenannt",
+    "SELL_NAME": "{{name}} wird zum Verkauf angeboten",
+    "CANCEL_SELL_NAME": "{{name}} wird vom Markt genommen",
+    "BUY_NAME": "{{name}} wird gekauft",
+    "hint": "bestätigt mit dem nächsten Block, meist innerhalb von ein bis zwei Minuten"
   }
 }

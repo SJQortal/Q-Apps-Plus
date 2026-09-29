@@ -1,41 +1,47 @@
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Button,
+  Avatar,
   Box,
-  Tooltip,
+  Button,
+  Chip,
+  CircularProgress,
   Dialog,
-  DialogTitle,
+  DialogActions,
   DialogContent,
   DialogContentText,
-  DialogActions,
+  DialogTitle,
+  IconButton,
+  InputAdornment,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   TextField,
-  useTheme,
+  Tooltip,
   Typography,
-  CircularProgress,
-  Avatar,
+  useTheme,
 } from '@mui/material';
 import { useAtom, useSetAtom } from 'jotai';
-import { forwardRef, useCallback, useMemo, useState } from 'react';
-import { TableVirtuoso, TableComponents } from 'react-virtuoso';
+import { useCallback, useMemo, useState, type MouseEvent } from 'react';
+import { Virtuoso } from 'react-virtuoso';
+import PersonIcon from '@mui/icons-material/Person';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import SellOutlinedIcon from '@mui/icons-material/SellOutlined';
+import RemoveShoppingCartOutlinedIcon from '@mui/icons-material/RemoveShoppingCartOutlined';
+import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
+import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
+import CheckIcon from '@mui/icons-material/Check';
+import ErrorIcon from '@mui/icons-material/Error';
 import {
   forceRefreshAtom,
   forSaleAtom,
   isNamePendingTx,
+  ListStatus,
   Names,
   namesAtom,
-  NamesForSale,
   pendingTxsAtom,
-  PendingTxsState,
 } from '../../state/global/names';
-import PersonIcon from '@mui/icons-material/Person';
 import {
-  ModalFunctions,
   ModalFunctionsAvatar,
   ModalFunctionsSellName,
   useModal,
@@ -50,145 +56,109 @@ import {
   useGlobal,
   useQortBalance,
 } from 'qapp-core';
-import CheckIcon from '@mui/icons-material/Check';
-import ErrorIcon from '@mui/icons-material/Error';
 import { BarSpinner } from '../../common/Spinners/BarSpinner/BarSpinner';
 import { usePendingTxs } from '../../hooks/useHandlePendingTxs';
-import { FetchPrimaryNameType, useFetchNames } from '../../hooks/useFetchNames';
+import { useFetchNames } from '../../hooks/useFetchNames';
 import { Availability } from '../../interfaces';
-import { SetStateAction } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import { TFunction } from 'i18next';
 import {
   nameLengthMessage,
   useNameAvailability,
 } from '../../hooks/useNameAvailability';
 import { useAvatarStatuses, useUnitFee } from '../../hooks/useNamesApi';
-interface NameData {
+import { usePhoneLayout } from '../../hooks/usePhoneLayout';
+import { formatQort } from '../../utils/format';
+import {
+  EmptyState,
+  ErrorState,
+  ListCard,
+  Row,
+  RowActions,
+  RowMain,
+  RowMeta,
+  RowSkeletons,
+  RowTitle,
+} from '../names/ListStates';
+
+interface NameRow {
   name: string;
-  isSelling?: boolean;
-  forceUpdateState?: number;
-}
-
-const VirtuosoTableComponents: TableComponents<NameData> = {
-  Scroller: forwardRef<HTMLDivElement>((props, ref) => (
-    <TableContainer component={Paper} {...props} ref={ref} />
-  )),
-  Table: (props) => (
-    <Table
-      {...props}
-      sx={{ borderCollapse: 'separate', tableLayout: 'fixed' }}
-    />
-  ),
-  TableHead: forwardRef<HTMLTableSectionElement>((props, ref) => (
-    <TableHead {...props} ref={ref} />
-  )),
-  TableRow,
-  TableBody: forwardRef<HTMLTableSectionElement>((props, ref) => (
-    <TableBody {...props} ref={ref} />
-  )),
-};
-
-function fixedHeaderContent(t: TFunction) {
-  return (
-    <TableRow
-      sx={{
-        backgroundColor: 'background.paper',
-      }}
-    >
-      <TableCell>
-        {t('core:tables.name', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-      </TableCell>
-      <TableCell>
-        {t('core:tables.actions', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-      </TableCell>
-    </TableRow>
-  );
-}
-
-interface ManageAvatarProps {
-  name: string;
-  /** undefined while the batched avatar check is still running. */
+  isPrimary: boolean;
+  isSelling: boolean;
+  salePrice?: number;
+  /** A transaction for this name is waiting for a block. */
+  pending: boolean;
   hasAvatar: boolean | undefined;
-  modalFunctionsAvatar: ModalFunctionsAvatar;
-  isNameCurrentlyDoingATx?: boolean;
 }
 
-const ManageAvatar = ({
-  name,
-  hasAvatar,
-  modalFunctionsAvatar,
-  isNameCurrentlyDoingATx,
-}: ManageAvatarProps) => {
-  const { t } = useTranslation();
-  return (
-    <Button
-      variant="outlined"
-      size="small"
-      disabled={hasAvatar === undefined || isNameCurrentlyDoingATx}
-      onClick={() =>
-        modalFunctionsAvatar.show({ name, hasAvatar: Boolean(hasAvatar) })
-      }
-    >
-      {hasAvatar === undefined ? (
-        <CircularProgress size={10} />
-      ) : hasAvatar ? (
-        t('core:actions.update_avatar', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      ) : (
-        t('core:actions.set_avatar', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      )}
-    </Button>
-  );
-};
+interface NameTableProps {
+  names: Names[];
+  /** How many names the account owns in total, whatever the filter shows. */
+  totalNames: number;
+  primaryName: string;
+  status: ListStatus;
+  filter: string;
+  signedIn: boolean;
+  onRetry: () => void;
+  registerAction?: React.ReactNode;
+}
 
-type SetPendingTxs = (update: SetStateAction<PendingTxsState>) => void;
-type SetNames = (update: SetStateAction<Names[]>) => void;
+export const NameTable = ({
+  names,
+  totalNames,
+  primaryName,
+  status,
+  filter,
+  signedIn,
+  onRetry,
+  registerAction,
+}: NameTableProps) => {
+  const setNames = useSetAtom(namesAtom);
+  const { auth } = useGlobal();
+  const address = auth?.address || '';
+  const [namesForSale, setNamesForSale] = useAtom(forSaleAtom);
+  const [pendingTxs, setPendingTxs] = useAtom(pendingTxsAtom);
+  const { t } = useTranslation(['core']);
+  const cap = { postProcess: 'capitalizeFirstChar' as const };
+  const phone = usePhoneLayout();
+  const [forceUpdateState, forceUpdate] = useState(0);
+  const [menu, setMenu] = useState<{ anchor: HTMLElement; row: NameRow } | null>(null);
 
-type SetNamesForSale = (update: SetStateAction<NamesForSale[]>) => void;
-function rowContent(
-  _index: number,
-  row: NameData,
-  primaryName: string,
-  address: string,
-  fetchPrimaryName: FetchPrimaryNameType,
-  numberOfNames: number,
-  modalFunctions: ModalFunctions,
-  modalFunctionsUpdateName: ReturnType<typeof useModal>,
-  modalFunctionsAvatar: ModalFunctionsAvatar,
-  modalFunctionsSellName: ReturnType<typeof useModal>,
-  setPendingTxs: SetPendingTxs,
-  setNames: SetNames,
-  setNamesForSale: SetNamesForSale,
-  isNameCurrentlyDoingATx: boolean,
-  hasAvatar: boolean | undefined,
-  t: TFunction
-) {
+  const modalFunctions = useModal<{ name: string }>();
+  const modalFunctionsUpdateName = useModal();
+  const modalFunctionsAvatar = useModal<{ name: string; hasAvatar: boolean }>();
+  const modalFunctionsSellName = useModal();
+  const { fetchPrimaryName } = useFetchNames();
+  const nameStrings = useMemo(() => names.map((item) => item.name), [names]);
+  const avatarStatuses = useAvatarStatuses(nameStrings);
+
+  const triggerRerender = useCallback(() => {
+    forceUpdate((n) => n + 1);
+  }, []);
+
+  const rows = useMemo<NameRow[]>(() => {
+    const priceByName = new Map(namesForSale.map((item) => [item.name, item.salePrice]));
+    return names.map((item) => ({
+      name: item.name,
+      isPrimary: item.name === primaryName,
+      isSelling: priceByName.has(item.name),
+      salePrice: priceByName.get(item.name),
+      pending: isNamePendingTx(item.name, pendingTxs),
+      hasAvatar: avatarStatuses[item.name],
+    }));
+  }, [names, namesForSale, primaryName, pendingTxs, avatarStatuses]);
+
+  // The three flows below are the original app's, moved out of the table row
+  // so the same code serves the inline buttons and the phone menu.
   const handleUpdate = async (name: string) => {
-    if (name === primaryName && numberOfNames > 1) {
-      showError(
-        t('core:update_name.responses.error_primary', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
+    if (name === primaryName && totalNames > 1) {
+      showError(t('core:update_name.responses.error_primary', cap));
       return;
     }
     let loadId = null;
 
     try {
       const response = await modalFunctionsUpdateName.show(undefined);
-      loadId = showLoading(
-        t('core:update_name.responses.loading', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
+      loadId = showLoading(t('core:update_name.responses.loading', cap));
       if (typeof response !== 'string') throw new Error('Invalid name');
 
       const res = await qortalRequest({
@@ -196,25 +166,19 @@ function rowContent(
         newName: response,
         oldName: name,
       });
-      showSuccess(
-        t('core:update_name.responses.success', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
+      showSuccess(t('core:update_name.responses.success', cap));
       setPendingTxs((prev) => {
         return {
-          ...prev, // preserve existing categories
+          ...prev,
           ['UPDATE_NAME']: {
-            ...(prev['UPDATE_NAME'] || {}), // preserve existing transactions in this category
+            ...(prev['UPDATE_NAME'] || {}),
             [res.signature]: {
               ...res,
               status: 'PENDING',
               callback: () => {
                 setNames((prev) => {
                   const copyArray = [...prev];
-                  const findIndex = copyArray.findIndex(
-                    (item) => item.name === res.name
-                  );
+                  const findIndex = copyArray.findIndex((item) => item.name === res.name);
                   if (findIndex === -1) return copyArray;
                   copyArray[findIndex] = {
                     name: res.newName,
@@ -224,7 +188,7 @@ function rowContent(
                 });
                 fetchPrimaryName(address);
               },
-            }, // add or overwrite this transaction
+            },
           },
         };
       });
@@ -233,28 +197,18 @@ function rowContent(
         showError(error?.message);
         return;
       }
-      showError(
-        t('core:update_name.responses.error', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
+      showError(t('core:update_name.responses.error', cap));
       console.log('error', error);
     } finally {
       if (loadId) {
         dismissToast(loadId);
       }
     }
-
-    // Your logic here
   };
 
   const handleSell = async (name: string) => {
-    if (name === primaryName && numberOfNames > 1) {
-      showError(
-        t('core:sell_name.responses.error1', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
+    if (name === primaryName && totalNames > 1) {
+      showError(t('core:sell_name.responses.error1', cap));
       return;
     }
     let loadId = null;
@@ -263,32 +217,20 @@ function rowContent(
         await modalFunctions.show({ name });
       }
       const price = await modalFunctionsSellName.show(name);
-      loadId = showLoading(
-        t('core:sell_name.responses.loading', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
+      loadId = showLoading(t('core:sell_name.responses.loading', cap));
       if (typeof price !== 'string' && typeof price !== 'number')
-        throw new Error(
-          t('core:sell_name.responses.error3', {
-            postProcess: 'capitalizeFirstChar',
-          })
-        );
+        throw new Error(t('core:sell_name.responses.error3', cap));
       const res = await qortalRequest({
         action: 'SELL_NAME',
         nameForSale: name,
         salePrice: +price,
       });
-      showSuccess(
-        t('core:sell_name.responses.success', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
+      showSuccess(t('core:sell_name.responses.success', cap));
       setPendingTxs((prev) => {
         return {
-          ...prev, // preserve existing categories
+          ...prev,
           ['SELL_NAME']: {
-            ...(prev['SELL_NAME'] || {}), // preserve existing transactions in this category
+            ...(prev['SELL_NAME'] || {}),
             [res.signature]: {
               ...res,
               status: 'PENDING',
@@ -303,7 +245,7 @@ function rowContent(
                   ];
                 });
               },
-            }, // add or overwrite this transaction
+            },
           },
         };
       });
@@ -313,11 +255,7 @@ function rowContent(
 
         return;
       }
-      showError(
-        t('core:sell_name.responses.error2', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
+      showError(t('core:sell_name.responses.error2', cap));
       console.log('error', error);
     } finally {
       if (loadId) {
@@ -327,11 +265,7 @@ function rowContent(
   };
 
   const handleCancel = async (name: string) => {
-    const loadId = showLoading(
-      t('core:cancel_name.responses.loading', {
-        postProcess: 'capitalizeFirstChar',
-      })
-    );
+    const loadId = showLoading(t('core:cancel_name.responses.loading', cap));
 
     try {
       const res = await qortalRequest({
@@ -340,36 +274,26 @@ function rowContent(
       });
       setPendingTxs((prev) => {
         return {
-          ...prev, // preserve existing categories
+          ...prev,
           ['CANCEL_SELL_NAME']: {
-            ...(prev['CANCEL_SELL_NAME'] || {}), // preserve existing transactions in this category
+            ...(prev['CANCEL_SELL_NAME'] || {}),
             [res.signature]: {
               ...res,
               status: 'PENDING',
               callback: () => {
-                setNamesForSale((prev) =>
-                  prev.filter((item) => item?.name !== res.name)
-                );
+                setNamesForSale((prev) => prev.filter((item) => item?.name !== res.name));
               },
             },
           },
         };
       });
-      showSuccess(
-        t('core:cancel_name.responses.success', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
+      showSuccess(t('core:cancel_name.responses.success', cap));
     } catch (error) {
       if (error instanceof Error) {
         showError(error?.message);
         return;
       }
-      showError(
-        t('core:cancel_name.responses.error', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
+      showError(t('core:cancel_name.responses.error', cap));
     } finally {
       if (loadId) {
         dismissToast(loadId);
@@ -377,78 +301,87 @@ function rowContent(
     }
   };
 
-  return (
-    <>
-      <TableCell>
-        <Box
-          sx={{
-            display: 'flex',
-            gap: '5px',
-            alignItems: 'center',
-            wordBreak: 'break-word',
-          }}
-        >
-          <Avatar
-            sx={{
-              height: '30px',
-              width: '30px',
-              objectFit: 'contain',
-            }}
-            src={`/arbitrary/THUMBNAIL/${encodeURIComponent(row.name)}/qortal_avatar?forceUpdateState=${row?.forceUpdateState}`}
-            alt={row.name}
-          >
-            {row.name?.charAt(0)}
-          </Avatar>
-          {primaryName === row.name && (
-            <Tooltip
-              title={t('core:tooltips.primary_name', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-              placement="left"
-              arrow
-            >
-              <PersonIcon color="success" />
+  const openAvatar = (row: NameRow) =>
+    modalFunctionsAvatar.show({ name: row.name, hasAvatar: Boolean(row.hasAvatar) });
+
+  // Same rules as the original: the primary name is locked while other names exist.
+  const primaryLocked = (row: NameRow) => row.isPrimary && totalNames > 1;
+  const canUpdate = (row: NameRow) => !primaryLocked(row) && !row.pending;
+  const canSell = (row: NameRow) => !row.isSelling && !primaryLocked(row) && !row.pending;
+  const canCancel = (row: NameRow) => row.isSelling && !row.pending;
+  const canAvatar = (row: NameRow) => row.hasAvatar !== undefined && !row.pending;
+  const avatarLabel = (row: NameRow) =>
+    row.hasAvatar === undefined ? (
+      <CircularProgress size={12} />
+    ) : row.hasAvatar ? (
+      t('core:actions.update_avatar', cap)
+    ) : (
+      t('core:actions.set_avatar', cap)
+    );
+
+  const renderRow = (row: NameRow) => (
+    <Row>
+      <Avatar
+        sx={{ width: 40, height: 40 }}
+        src={`/arbitrary/THUMBNAIL/${encodeURIComponent(row.name)}/qortal_avatar?forceUpdateState=${forceUpdateState}`}
+        alt=""
+        slotProps={{ img: { loading: 'lazy' } }}
+      >
+        {row.name.charAt(0)}
+      </Avatar>
+      <RowMain>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+          <RowTitle>{row.name}</RowTitle>
+          {row.isPrimary ? (
+            <Tooltip title={t('core:tooltips.primary_name', cap)} arrow>
+              <Chip
+                size="small"
+                color="success"
+                variant="outlined"
+                icon={<PersonIcon />}
+                label={t('core:names.primary', cap)}
+              />
             </Tooltip>
-          )}
-          {row.name}
+          ) : null}
         </Box>
-      </TableCell>
-      <TableCell>
-        <Box
-          sx={{
-            display: 'flex',
-            gap: '5px',
-            flexWrap: 'wrap',
-          }}
+        {row.isSelling ? (
+          <RowMeta>
+            {t('core:names.for_sale', cap)}
+            {row.salePrice !== undefined ? ` · ${formatQort(row.salePrice)} QORT` : ''}
+          </RowMeta>
+        ) : null}
+        {row.pending ? <RowMeta>{t('core:names.pending', cap)}…</RowMeta> : null}
+      </RowMain>
+      {phone ? (
+        <IconButton
+          aria-label={t('core:names.more_actions', cap)}
+          aria-haspopup="menu"
+          onClick={(event: MouseEvent<HTMLElement>) =>
+            setMenu({ anchor: event.currentTarget, row })
+          }
         >
+          <MoreVertIcon />
+        </IconButton>
+      ) : (
+        <RowActions>
           <Button
-            color={primaryName === row.name ? 'warning' : 'primary'}
+            color={row.isPrimary ? 'warning' : 'primary'}
             variant="outlined"
             size="small"
-            disabled={
-              (row?.name === primaryName && numberOfNames > 1) ||
-              isNameCurrentlyDoingATx
-            }
+            disabled={!canUpdate(row)}
             onClick={() => handleUpdate(row.name)}
           >
-            {t('core:actions.update', {
-              postProcess: 'capitalizeFirstChar',
-            })}
+            {t('core:actions.update', cap)}
           </Button>
           {!row.isSelling ? (
             <Button
-              color={primaryName === row.name ? 'warning' : 'primary'}
+              color={row.isPrimary ? 'warning' : 'primary'}
               size="small"
               variant="outlined"
               onClick={() => handleSell(row.name)}
-              disabled={
-                (row?.name === primaryName && numberOfNames > 1) ||
-                isNameCurrentlyDoingATx
-              }
+              disabled={!canSell(row)}
             >
-              {t('core:actions.sell', {
-                postProcess: 'capitalizeFirstChar',
-              })}
+              {t('core:actions.sell', cap)}
             </Button>
           ) : (
             <Button
@@ -456,117 +389,134 @@ function rowContent(
               size="small"
               onClick={() => handleCancel(row.name)}
               variant="contained"
-              disabled={isNameCurrentlyDoingATx}
+              disabled={!canCancel(row)}
             >
-              {t('core:actions.cancel_sell', {
-                postProcess: 'capitalizeFirstChar',
-              })}
+              {t('core:actions.cancel_sell', cap)}
             </Button>
           )}
-          <ManageAvatar
-            name={row.name}
-            hasAvatar={hasAvatar}
-            modalFunctionsAvatar={modalFunctionsAvatar}
-            isNameCurrentlyDoingATx={isNameCurrentlyDoingATx}
-          />
-        </Box>
-      </TableCell>
-    </>
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={!canAvatar(row)}
+            onClick={() => openAvatar(row)}
+          >
+            {avatarLabel(row)}
+          </Button>
+        </RowActions>
+      )}
+    </Row>
   );
-}
 
-interface NameTableProps {
-  names: Names[];
-  /** How many names the account owns in total, whatever the filter shows. */
-  totalNames: number;
-  primaryName: string;
-}
-export const NameTable = ({ names, totalNames, primaryName }: NameTableProps) => {
-  const setNames = useSetAtom(namesAtom);
-  const { auth } = useGlobal();
-  const [namesForSale, setNamesForSale] = useAtom(forSaleAtom);
-  const [pendingTxs] = useAtom(pendingTxsAtom);
-  const { t } = useTranslation(['core']);
-  const [forceUpdateState, forceUpdate] = useState(0);
-
-  const modalFunctions = useModal<{ name: string }>();
-  const modalFunctionsUpdateName = useModal();
-  const modalFunctionsAvatar = useModal<{ name: string; hasAvatar: boolean }>();
-  const modalFunctionsSellName = useModal();
-  const { fetchPrimaryName } = useFetchNames();
-
-  const setPendingTxs = useSetAtom(pendingTxsAtom);
-  const nameStrings = useMemo(() => names.map((item) => item.name), [names]);
-  const avatarStatuses = useAvatarStatuses(nameStrings);
-
-  const triggerRerender = useCallback(() => {
-    forceUpdate((n) => n + 1);
-  }, []);
-
-  const namesToDisplay = useMemo(() => {
-    const namesForSaleString = namesForSale.map((item) => item.name);
-    return names.map((name) => {
-      return {
-        name: name.name,
-        isSelling: namesForSaleString.includes(name.name),
-        forceUpdateState,
-      };
-    });
-  }, [names, namesForSale, forceUpdateState]);
-
-  return (
-    <Paper
-      sx={{
-        flex: 1,
-        minHeight: 320,
-        width: '100%',
-      }}
-    >
-      <TableVirtuoso
-        data={namesToDisplay}
-        components={VirtuosoTableComponents}
-        fixedHeaderContent={() => fixedHeaderContent(t)}
-        itemContent={(index, row) => {
-          const isNameCurrentlyDoingATx = isNamePendingTx(
-            row?.name,
-            pendingTxs
-          );
-          return rowContent(
-            index,
-            row,
-            primaryName,
-            auth?.address || '',
-            fetchPrimaryName,
-            totalNames,
-            modalFunctions,
-            modalFunctionsUpdateName,
-            modalFunctionsAvatar,
-            modalFunctionsSellName,
-            setPendingTxs,
-            setNames,
-            setNamesForSale,
-            isNameCurrentlyDoingATx,
-            avatarStatuses[row.name],
-            t
-          );
-        }}
+  let body;
+  if (!signedIn) {
+    body = <EmptyState icon={<BadgeOutlinedIcon />} title={t('core:names.sign_in', cap)} />;
+  } else if (status === 'loading' && rows.length === 0) {
+    body = <RowSkeletons rows={3} />;
+  } else if (status === 'error' && rows.length === 0) {
+    body = (
+      <ErrorState
+        message={t('core:names.error', cap)}
+        retryLabel={t('core:actions.retry', cap)}
+        onRetry={onRetry}
       />
+    );
+  } else if (rows.length === 0) {
+    body = filter.trim() ? (
+      <EmptyState
+        icon={<BadgeOutlinedIcon />}
+        title={t('core:names.empty_filter', { filter: filter.trim(), ...cap })}
+      />
+    ) : (
+      <EmptyState
+        icon={<BadgeOutlinedIcon />}
+        title={t('core:names.empty_title', cap)}
+        hint={t('core:names.empty_hint', cap)}
+        action={registerAction}
+      />
+    );
+  } else {
+    body = (
+      <Virtuoso
+        data={rows}
+        style={{ flex: 1 }}
+        computeItemKey={(_index, row) => row.name}
+        itemContent={(_index, row) => renderRow(row)}
+      />
+    );
+  }
+
+  const menuRow = menu?.row;
+  return (
+    <>
+      <ListCard>{body}</ListCard>
+      <Menu
+        open={Boolean(menu)}
+        anchorEl={menu?.anchor}
+        onClose={() => setMenu(null)}
+        onClick={() => setMenu(null)}
+      >
+        {menuRow ? (
+          [
+            <MenuItem
+              key="update"
+              disabled={!canUpdate(menuRow)}
+              onClick={() => handleUpdate(menuRow.name)}
+            >
+              <ListItemIcon>
+                <EditOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>{t('core:actions.update', cap)}</ListItemText>
+            </MenuItem>,
+            menuRow.isSelling ? (
+              <MenuItem
+                key="cancel"
+                disabled={!canCancel(menuRow)}
+                onClick={() => handleCancel(menuRow.name)}
+              >
+                <ListItemIcon>
+                  <RemoveShoppingCartOutlinedIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>{t('core:actions.cancel_sell', cap)}</ListItemText>
+              </MenuItem>
+            ) : (
+              <MenuItem
+                key="sell"
+                disabled={!canSell(menuRow)}
+                onClick={() => handleSell(menuRow.name)}
+              >
+                <ListItemIcon>
+                  <SellOutlinedIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>{t('core:actions.sell', cap)}</ListItemText>
+              </MenuItem>
+            ),
+            <MenuItem
+              key="avatar"
+              disabled={!canAvatar(menuRow)}
+              onClick={() => openAvatar(menuRow)}
+            >
+              <ListItemIcon>
+                <AccountCircleOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>
+                {menuRow.hasAvatar
+                  ? t('core:actions.update_avatar', cap)
+                  : t('core:actions.set_avatar', cap)}
+              </ListItemText>
+            </MenuItem>,
+          ]
+        ) : null}
+      </Menu>
       {modalFunctions?.isShow && (
         <Dialog
           open={modalFunctions?.isShow}
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
         >
-          <DialogTitle id="alert-dialog-title">
-            {t('core:warnings.warning', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </DialogTitle>
+          <DialogTitle id="alert-dialog-title">{t('core:warnings.warning', cap)}</DialogTitle>
           <DialogContent>
             <DialogContentText id="alert-dialog-description">
-              {t('core:warnings.primary_name_sell_caution', {
-                postProcess: 'capitalizeFirstChar',
-              })}
+              {t('core:warnings.primary_name_sell_caution', cap)}
             </DialogContentText>
             <Spacer height="20px" />
             <DialogContentText id="alert-dialog-description2">
@@ -576,20 +526,16 @@ export const NameTable = ({ names, totalNames, primaryName }: NameTableProps) =>
             </DialogContentText>
           </DialogContent>
           <DialogActions>
+            <Button variant="contained" onClick={modalFunctions.onCancel}>
+              {t('core:actions.cancel', cap)}
+            </Button>
             <Button
               color="warning"
               variant="contained"
               onClick={() => modalFunctions.onOk(undefined)}
               autoFocus
             >
-              {t('core:actions.continue', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </Button>
-            <Button variant="contained" onClick={modalFunctions.onCancel}>
-              {t('core:actions.cancel', {
-                postProcess: 'capitalizeFirstChar',
-              })}
+              {t('core:actions.continue', cap)}
             </Button>
           </DialogActions>
         </Dialog>
@@ -607,7 +553,7 @@ export const NameTable = ({ names, totalNames, primaryName }: NameTableProps) =>
       {modalFunctionsSellName?.isShow && (
         <SellNameModal modalFunctionsSellName={modalFunctionsSellName} />
       )}
-    </Paper>
+    </>
   );
 };
 
@@ -1003,71 +949,56 @@ interface SellNameModalProps {
 
 const SellNameModal = ({ modalFunctionsSellName }: SellNameModalProps) => {
   const { t } = useTranslation();
-  const [price, setPrice] = useState<number | string>(0);
+  const cap = { postProcess: 'capitalizeFirstChar' as const };
+  const [price, setPrice] = useState('');
+  const fee = useUnitFee('SELL_NAME');
+  const numeric = Number(price);
+  const valid = price.trim() !== '' && Number.isFinite(numeric) && numeric > 0;
 
   return (
     <Dialog
       open={modalFunctionsSellName?.isShow}
-      aria-labelledby="alert-dialog-title"
-      aria-describedby="alert-dialog-description"
+      onClose={modalFunctionsSellName.onCancel}
+      fullWidth
+      maxWidth="xs"
+      aria-labelledby="sell-name-title"
     >
-      <DialogTitle id="alert-dialog-title">
-        {t('core:sell_name.title', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-      </DialogTitle>
+      <DialogTitle id="sell-name-title">{t('core:sell_name.title', cap)}</DialogTitle>
       <DialogContent>
-        <DialogContentText id="alert-dialog-description">
-          {t('core:sell_name.choose_price', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </DialogContentText>
-        <Spacer height="20px" />
+        <DialogContentText>{t('core:sell_name.choose_price', cap)}</DialogContentText>
+        <Spacer height="16px" />
         <TextField
           autoComplete="off"
           autoFocus
-          onChange={(e) => {
-            const raw = e.target.value;
-
-            // Allow empty input
-            if (raw === '') {
-              setPrice('');
-              return;
-            }
-
-            // Remove leading zeros and convert to number
-            const numericValue = +raw;
-            if (!isNaN(numericValue)) {
-              setPrice(numericValue);
-            }
-          }}
-          value={price}
+          fullWidth
           type="number"
-          placeholder={t('core:sell_name.choose_price', {
-            postProcess: 'capitalizeFirstChar',
-          })}
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          placeholder="0"
+          slotProps={{
+            htmlInput: { min: 0, step: 'any', inputMode: 'decimal' },
+            input: { endAdornment: <InputAdornment position="end">QORT</InputAdornment> },
+          }}
         />
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+          {t('core:sell_name.price_hint', cap)}
+        </Typography>
+        {fee !== null ? (
+          <Typography variant="body2" color="text.secondary">
+            {t('core:sell_name.fee', { fee: formatQort(fee), ...cap })}
+          </Typography>
+        ) : null}
       </DialogContent>
       <DialogActions>
+        <Button onClick={modalFunctionsSellName.onCancel}>{t('core:actions.cancel', cap)}</Button>
         <Button
           color="primary"
           variant="contained"
-          disabled={!price}
-          onClick={() => modalFunctionsSellName.onOk(price)}
+          disabled={!valid}
+          onClick={() => modalFunctionsSellName.onOk(numeric)}
           autoFocus
         >
-          {t('core:actions.continue', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </Button>
-        <Button
-          color="secondary"
-          variant="contained"
-          onClick={modalFunctionsSellName.onCancel}
-        >
-          {t('core:actions.cancel', {
-            postProcess: 'capitalizeFirstChar',
-          })}
+          {t('core:actions.continue', cap)}
         </Button>
       </DialogActions>
     </Dialog>

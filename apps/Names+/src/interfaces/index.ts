@@ -7,4 +7,4 @@ export enum Availability {
 }
 
 export type SortDirection = 'asc' | 'desc';
-export type SortBy = 'name' | 'salePrice';
+export type SortBy = 'name' | 'salePrice' | 'length' | 'registered';

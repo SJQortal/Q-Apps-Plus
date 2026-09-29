@@ -21,7 +21,9 @@
     "continue": "продолжить",
     "publish": "опубликовать",
     "buy": "купить",
-    "choose_image": "выбрать изображение"
+    "choose_image": "выбрать изображение",
+    "retry": "повторить",
+    "confirm_buy": "купить за {{price}} QORT"
   },
   "new_name": {
     "choose_name": "выберите имя",
@@ -63,7 +65,9 @@
       "error3": "некорректная цена"
     },
     "title": "продажа имени",
-    "choose_price": "укажите цену продажи"
+    "choose_price": "укажите цену продажи",
+    "fee": "комиссия за размещение: {{fee}} QORT",
+    "price_hint": "покупатель платит эту сумму в QORT"
   },
   "cancel_name": {
     "responses": {
@@ -96,7 +100,28 @@
       "loading": "попытка покупки имени... пожалуйста, подождите",
       "success": "имя успешно куплено",
       "error": "не удалось купить имя"
-    }
+    },
+    "sort": {
+      "name": "имя",
+      "price": "цена",
+      "length": "длина",
+      "newest": "новые"
+    },
+    "sort_by": "сортировать по",
+    "empty": "сейчас нет имён на продажу",
+    "empty_filter": "нет имён на продажу, соответствующих «{{filter}}»",
+    "error": "не удалось загрузить имена на продажу",
+    "buy_title": "купить {{name}}",
+    "price": "цена",
+    "fee": "комиссия за транзакцию",
+    "total": "итого",
+    "balance": "ваш баланс",
+    "insufficient": "недостаточно QORT для этой покупки",
+    "buy_confirm": "Qortal попросит вас подтвердить платёж",
+    "count_one": "{{count}} имя на продажу",
+    "count_other": "{{count}} имён на продажу",
+    "count_few": "{{count}} имени на продажу",
+    "count_many": "{{count}} имён на продажу"
   },
   "settings": {
     "account": "account",
@@ -113,5 +138,25 @@
     "upstream": "original app: Qortal/names",
     "source": "source code: SJQortal/Q-Apps-Plus",
     "about_blurb": "Names+ is Simon's version of the official Qortal Names app. It reads and writes the same names, sales and avatars, so anything you do here shows up in the original app too."
+  },
+  "names": {
+    "primary": "основное",
+    "for_sale": "продаётся",
+    "pending": "ожидает",
+    "empty_title": "имён пока нет",
+    "empty_hint": "зарегистрируйте имя, чтобы публиковать в QDN и использовать его во всех Q-Apps",
+    "empty_filter": "нет имён, соответствующих «{{filter}}»",
+    "error": "не удалось загрузить ваши имена",
+    "more_actions": "другие действия",
+    "sign_in": "войдите в Qortal, чтобы увидеть свои имена"
+  },
+  "pending": {
+    "title": "ожидающие транзакции",
+    "REGISTER_NAME": "регистрация {{name}}",
+    "UPDATE_NAME": "переименование {{name}} в {{newName}}",
+    "SELL_NAME": "выставление {{name}} на продажу",
+    "CANCEL_SELL_NAME": "снятие {{name}} с продажи",
+    "BUY_NAME": "покупка {{name}}",
+    "hint": "подтверждается следующим блоком, обычно в течение одной-двух минут"
   }
 }

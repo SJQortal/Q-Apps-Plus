@@ -21,7 +21,9 @@
     "continue": "继续",
     "publish": "发布",
     "buy": "购买",
-    "choose_image": "选择图片"
+    "choose_image": "选择图片",
+    "retry": "重试",
+    "confirm_buy": "以 {{price}} QORT 购买"
   },
   "new_name": {
     "choose_name": "选择一个名称",
@@ -63,7 +65,9 @@
       "error3": "无效的价格"
     },
     "title": "出售名称",
-    "choose_price": "设定出售价格"
+    "choose_price": "设定出售价格",
+    "fee": "挂牌费用：{{fee}} QORT",
+    "price_hint": "买家将支付此金额（QORT）"
   },
   "cancel_name": {
     "responses": {
@@ -96,7 +100,26 @@
       "loading": "正在尝试购买名称...请稍候",
       "success": "名称购买成功",
       "error": "无法购买名称"
-    }
+    },
+    "sort": {
+      "name": "名称",
+      "price": "价格",
+      "length": "长度",
+      "newest": "最新"
+    },
+    "sort_by": "排序方式",
+    "empty": "目前没有名称在出售",
+    "empty_filter": "没有与“{{filter}}”匹配的在售名称",
+    "error": "无法加载在售名称",
+    "buy_title": "购买 {{name}}",
+    "price": "价格",
+    "fee": "交易手续费",
+    "total": "合计",
+    "balance": "您的余额",
+    "insufficient": "QORT 不足，无法完成此次购买",
+    "buy_confirm": "Qortal 会请您确认付款",
+    "count_one": "{{count}} 个名称在售",
+    "count_other": "{{count}} 个名称在售"
   },
   "settings": {
     "account": "account",
@@ -113,5 +136,25 @@
     "upstream": "original app: Qortal/names",
     "source": "source code: SJQortal/Q-Apps-Plus",
     "about_blurb": "Names+ is Simon's version of the official Qortal Names app. It reads and writes the same names, sales and avatars, so anything you do here shows up in the original app too."
+  },
+  "names": {
+    "primary": "主名称",
+    "for_sale": "出售中",
+    "pending": "待确认",
+    "empty_title": "还没有名称",
+    "empty_hint": "注册一个名称即可在 QDN 上发布并在所有 Q-App 中使用",
+    "empty_filter": "没有与“{{filter}}”匹配的名称",
+    "error": "无法加载您的名称",
+    "more_actions": "更多操作",
+    "sign_in": "登录 Qortal 以查看您的名称"
+  },
+  "pending": {
+    "title": "待确认的交易",
+    "REGISTER_NAME": "正在注册 {{name}}",
+    "UPDATE_NAME": "正在将 {{name}} 改名为 {{newName}}",
+    "SELL_NAME": "正在挂牌出售 {{name}}",
+    "CANCEL_SELL_NAME": "正在取消出售 {{name}}",
+    "BUY_NAME": "正在购买 {{name}}",
+    "hint": "将在下一个区块确认，通常需要一到两分钟"
   }
 }
