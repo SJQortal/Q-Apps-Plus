@@ -46,9 +46,9 @@ const NodeWidget = ({ icon, title, subtitle, children }: Props) => (
       }}
     >
       <Box
-        width="5em"
         className="icon"
         sx={{
+          width: '5em',
           alignItems: 'center',
           display: 'flex',
           justifyContent: 'center',
@@ -59,8 +59,14 @@ const NodeWidget = ({ icon, title, subtitle, children }: Props) => (
         {createElement(icon)}
       </Box>
 
-      <Box textAlign="right">
-        <Typography color="textSecondary" variant='h6'>{title}</Typography>
+      <Box
+        sx={{
+          textAlign: 'right',
+        }}
+      >
+        <Typography color="textSecondary" variant="h6">
+          {title}
+        </Typography>
         <Typography variant="h4" component="h2">
           {subtitle || ' '}
         </Typography>

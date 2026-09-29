@@ -34,15 +34,11 @@ import {
   AltRoute,
   Dangerous,
   Engineering,
-  FirstPage,
   GridView,
   HistoryToggleOff,
   Hub,
-  KeyboardArrowLeft,
-  KeyboardArrowRight,
-  LastPage,
   Refresh,
-  RemoveCircleOutline,
+  RemoveCircleOutlined,
   RestartAlt,
   Storage,
   Sync,
@@ -107,78 +103,6 @@ function secondsToDhms(seconds: number) {
 
 function SlideTransition(props: SlideProps) {
   return <Slide {...props} direction="up" />;
-}
-
-interface TablePaginationActionsProps {
-  count: number;
-  page: number;
-  rowsPerPage: number;
-  onPageChange: (event: MouseEvent<HTMLButtonElement>, newPage: number) => void;
-}
-
-function TablePaginationActions(props: TablePaginationActionsProps) {
-  const theme = useTheme();
-  const { count, page, rowsPerPage, onPageChange } = props;
-
-  const handleFirstPageButtonClick = (event: MouseEvent<HTMLButtonElement>) => {
-    onPageChange(event, 0);
-  };
-
-  const handleBackButtonClick = (event: MouseEvent<HTMLButtonElement>) => {
-    onPageChange(event, page - 1);
-  };
-
-  const handleNextButtonClick = (event: MouseEvent<HTMLButtonElement>) => {
-    onPageChange(event, page + 1);
-  };
-
-  const handleLastPageButtonClick = (event: MouseEvent<HTMLButtonElement>) => {
-    onPageChange(event, Math.max(0, Math.ceil(count / rowsPerPage) - 1));
-  };
-
-  return (
-    <Box sx={{ flexShrink: 0, ml: 2.5 }}>
-      <IconButton
-        onClick={handleFirstPageButtonClick}
-        disabled={page === 0}
-        aria-label="first page"
-      >
-        {theme.direction === 'rtl' ? <LastPage /> : <FirstPage />}
-      </IconButton>
-
-      <IconButton
-        onClick={handleBackButtonClick}
-        disabled={page === 0}
-        aria-label="previous page"
-      >
-        {theme.direction === 'rtl' ? (
-          <KeyboardArrowRight />
-        ) : (
-          <KeyboardArrowLeft />
-        )}
-      </IconButton>
-
-      <IconButton
-        onClick={handleNextButtonClick}
-        disabled={page >= Math.ceil(count / rowsPerPage) - 1}
-        aria-label="next page"
-      >
-        {theme.direction === 'rtl' ? (
-          <KeyboardArrowLeft />
-        ) : (
-          <KeyboardArrowRight />
-        )}
-      </IconButton>
-
-      <IconButton
-        onClick={handleLastPageButtonClick}
-        disabled={page >= Math.ceil(count / rowsPerPage) - 1}
-        aria-label="last page"
-      >
-        {theme.direction === 'rtl' ? <FirstPage /> : <LastPage />}
-      </IconButton>
-    </Box>
-  );
 }
 
 const StyledTableCell = styled(TableCell)(({ theme }) => ({
@@ -1009,7 +933,7 @@ function App() {
                         disabled={isUsingGateway}
                         size="small"
                         color="error"
-                        startIcon={<RemoveCircleOutline />}
+                        startIcon={<RemoveCircleOutlined />}
                         onClick={() => {
                           handleRemoveMintingAccount(row?.publicKey);
                         }}
@@ -1156,7 +1080,7 @@ function App() {
                         disabled={isUsingGateway}
                         size="small"
                         color="error"
-                        startIcon={<RemoveCircleOutline />}
+                        startIcon={<RemoveCircleOutlined />}
                         onClick={() => {
                           handleRemovePeer(row?.address);
                         }}
@@ -1221,7 +1145,8 @@ function App() {
                   }}
                   onPageChange={handleChangePage}
                   onRowsPerPageChange={handleChangeRowsPerPage}
-                  ActionsComponent={TablePaginationActions}
+                  showFirstButton
+                  showLastButton
                 />
               </TableRow>
             </TableFooter>
@@ -1340,7 +1265,7 @@ function App() {
                         disabled={isUsingGateway}
                         size="small"
                         color="error"
-                        startIcon={<RemoveCircleOutline />}
+                        startIcon={<RemoveCircleOutlined />}
                         onClick={() => {
                           handleRemoveDataPeer(row?.address ?? '');
                         }}
@@ -1393,7 +1318,8 @@ function App() {
                   }}
                   onPageChange={handleChangeDataPeerPage}
                   onRowsPerPageChange={handleChangeDataRowsPerPage}
-                  ActionsComponent={TablePaginationActions}
+                  showFirstButton
+                  showLastButton
                 />
               </TableRow>
             </TableFooter>
@@ -1682,7 +1608,9 @@ function App() {
               textDecoration: 'none',
             }}
           >
-            <Box sx={{ display: 'inline-flex', alignItems: 'baseline', gap: 1 }}>
+            <Box
+              sx={{ display: 'inline-flex', alignItems: 'baseline', gap: 1 }}
+            >
               <span>
                 <span style={{ color: '#05a2e4' }}>Qortal </span>Node
               </span>
@@ -1690,7 +1618,11 @@ function App() {
                 component="button"
                 variant="caption"
                 onClick={() => setChangelogOpen(true)}
-                sx={{ fontSize: 10, cursor: 'pointer', color: 'text.secondary' }}
+                sx={{
+                  fontSize: 10,
+                  cursor: 'pointer',
+                  color: 'text.secondary',
+                }}
               >
                 v{packageJson.version}
               </Link>
@@ -1716,7 +1648,9 @@ function App() {
               textDecoration: 'none',
             }}
           >
-            <Box sx={{ display: 'inline-flex', alignItems: 'baseline', gap: 1 }}>
+            <Box
+              sx={{ display: 'inline-flex', alignItems: 'baseline', gap: 1 }}
+            >
               <span>
                 <span style={{ color: '#05a2e4' }}>Q</span>NC
               </span>
@@ -1724,7 +1658,11 @@ function App() {
                 component="button"
                 variant="caption"
                 onClick={() => setChangelogOpen(true)}
-                sx={{ fontSize: 10, cursor: 'pointer', color: 'text.secondary' }}
+                sx={{
+                  fontSize: 10,
+                  cursor: 'pointer',
+                  color: 'text.secondary',
+                }}
               >
                 v{packageJson.version}
               </Link>
@@ -1845,35 +1783,65 @@ function App() {
         </Box>
       </Grid>
 
-      <Box maxWidth="xl" marginTop={3}>
+      <Box
+        sx={{
+          maxWidth: 'xl',
+          marginTop: 3,
+        }}
+      >
         {mintingAccountsHeader()}
       </Box>
 
       <Divider sx={{ marginTop: '5px' }} />
 
-      <Box maxWidth="xl" marginTop={2}>
+      <Box
+        sx={{
+          maxWidth: 'xl',
+          marginTop: 2,
+        }}
+      >
         {loadingMintingAccountsTable
           ? tableLoaderMintingAccounts()
           : tableMintingAccounts()}
       </Box>
 
-      <Box maxWidth="xl" marginTop={4}>
+      <Box
+        sx={{
+          maxWidth: 'xl',
+          marginTop: 4,
+        }}
+      >
         {connectedPeersHeader()}
       </Box>
 
       <Divider sx={{ marginTop: '5px' }} />
 
-      <Box maxWidth="xl" marginTop={2}>
+      <Box
+        sx={{
+          maxWidth: 'xl',
+          marginTop: 2,
+        }}
+      >
         {tableConnectedPeers()}
       </Box>
 
-      <Box maxWidth="xl" marginTop={4}>
+      <Box
+        sx={{
+          maxWidth: 'xl',
+          marginTop: 4,
+        }}
+      >
         {dataPeersHeader()}
       </Box>
 
       <Divider sx={{ marginTop: '5px' }} />
 
-      <Box maxWidth="xl" marginTop={2}>
+      <Box
+        sx={{
+          maxWidth: 'xl',
+          marginTop: 2,
+        }}
+      >
         {tableDataPeers()}
       </Box>
       <Dialog
