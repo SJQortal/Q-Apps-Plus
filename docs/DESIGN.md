@@ -22,7 +22,7 @@ Every app ships these four themes, picked on the Settings page and saved per app
 Follow Torq's structure, adjusted to the app's content:
 
 - **Desktop (≥ 900 px):** a left navigation rail with icon and label, the main column centred with a comfortable max width (~600–760 px for feeds and lists, wider for grids such as Q-Tube and Q-Shop), and an optional right rail for context such as filters, trending or wallet balance. Rails use `headerFill(theme)` or `var(--qp-chrome)`, not solid paper.
-- **Phone / GO (< 600 px):** a bottom navigation bar with at most 5 items, a sticky header that hides when you scroll down and returns when you scroll up, and full-width content. Tap targets are at least 40 px. Respect `env(safe-area-inset-*)`.
+- **Phone / GO (< 600 px):** a bottom navigation bar with at most 5 items, a sticky header that hides when you scroll down and returns when you scroll up, and full-width content. Tap targets are at least 44 px (see Mobile below). Respect `env(safe-area-inset-*)`.
 - **Small Hub windows:** Hub often runs apps in a narrow pane. Use the phone layout below 600 px wide, whatever the device.
 - **Headers:** sticky and translucent (`headerFill`), with a 1 px `divider` bottom border, the title on the left and actions on the right.
 - **Cards and lists:** `background.paper`, 8 px radius (the kit sets this per theme), `divider` borders, and a hover of `action.hover`.
@@ -101,6 +101,6 @@ Settings is a full page reached from the nav, not a small modal. Sections run in
 - [ ] Hub 2.0 looks like the original app.
 - [ ] Nothing is hard-coded to one theme: `grep -rE "#[0-9a-fA-F]{3,6}\b" src` outside the theme files finds only intentional brand art.
 - [ ] The Settings page has the sections above, and the version opens the changelog.
-- [ ] Mobile is first-class (see \"Mobile\" above): bottom navigation, full-screen or bottom-sheet dialogs, 44 px tap targets, and inputs that stay visible above the keyboard. Checked at 360, 390, landscape, 700 and 1280 px.
+- [ ] Mobile is first-class (see "Mobile" above): bottom navigation, full-screen or bottom-sheet dialogs, 44 px tap targets, and inputs that stay visible above the keyboard. Checked at 360, 390, landscape, 700 and 1280 px.
 - [ ] Every screen has loading, empty and error states.
 - [ ] The Inter font comes from the kit (`fonts.css`), not the web.
