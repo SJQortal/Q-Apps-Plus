@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 // https://vitejs.dev/config/
@@ -16,5 +16,11 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['@mui/material', '@mui/styled-engine', '@mui/system'],
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
+    css: false,
   },
 });
