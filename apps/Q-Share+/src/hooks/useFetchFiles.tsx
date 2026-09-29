@@ -12,7 +12,7 @@ import {
 import { setIsLoadingGlobal, setUserAvatarHash } from "../state/features/globalSlice";
 import { RootState } from "../state/store";
 import { fetchAndEvaluateVideos } from "../utils/fetchVideos";
-import { QSHARE_PLAYLIST_BASE, QSHARE_FILE_BASE } from "../constants/Identifiers.ts";
+import { QSHARE_FILE_BASE } from "../constants/Identifiers.ts";
 import { queue } from "../wrappers/GlobalWrapper";
 import { getCategoriesFetchString } from "../components/common/CategoryList/CategoryList.tsx";
 import { QDN_PAGE, QdnResourceSummary, searchQdn } from "../utils/qdnSearch";
@@ -123,13 +123,12 @@ export const useFetchFiles = () => {
 
   const getFiles = React.useCallback(
     async (filters = {}, reset?: boolean, resetFilers?: boolean, limit?: number) => {
-      const { name = "", categories = [], keywords = "", type = "", sort = "newest", following = false }: any = resetFilers ? {} : filters;
+      const { name = "", categories = [], keywords = "", sort = "newest", following = false }: any = resetFilers ? {} : filters;
       const offset = reset ? 0 : videos.length;
-      const isPlaylists = type === "playlists";
       const responseData = await searchQdn(
         {
-          service: isPlaylists ? "PLAYLIST" : "DOCUMENT",
-          identifier: isPlaylists ? QSHARE_PLAYLIST_BASE : QSHARE_FILE_BASE,
+          service: "DOCUMENT",
+          identifier: QSHARE_FILE_BASE,
           name: name || undefined,
           description: categories.length > 0 ? getCategoriesFetchString(categories) : undefined,
           query: keywords || undefined,
