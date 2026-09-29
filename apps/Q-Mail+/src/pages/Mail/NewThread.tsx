@@ -2,9 +2,8 @@ import React, { Dispatch, useCallback, useEffect, useState } from "react";
 import { ReusableModal } from "../../components/modals/ReusableModal";
 import { Box, Button, Input, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { BuilderButton } from "../CreatePost/CreatePost-styles";
-import BlogEditor from "../../components/editor/BlogEditor";
 import EmailIcon from "@mui/icons-material/Email";
-import { Descendant } from "slate";
+import type { SlateNode as Descendant } from '../../components/editor/ReadOnlySlate'
 import ShortUniqueId from "short-unique-id";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
