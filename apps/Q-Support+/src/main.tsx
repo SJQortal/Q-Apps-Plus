@@ -10,7 +10,10 @@ const customWindow = window as unknown as CustomWindow
 
 const baseUrl = customWindow?._qdnBase || ''
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <BrowserRouter basename={baseUrl}>
+  <BrowserRouter
+    basename={baseUrl}
+    future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+  >
     <App />
     <div id="modal-root" />
   </BrowserRouter>
