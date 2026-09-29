@@ -31,6 +31,7 @@ function App() {
                 <Route path="/share/:name/:id" element={<FileContent />} />
                 <Route path="/channel/:name" element={<IndividualProfile />} />
                 <Route path="/settings" element={<Settings />} />
+                {/* collections routes: added by the lead */}
               </Routes>
             </Suspense>
           </GlobalWrapper>

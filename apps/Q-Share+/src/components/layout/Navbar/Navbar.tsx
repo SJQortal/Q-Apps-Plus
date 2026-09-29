@@ -1,24 +1,30 @@
 import React, { useState } from "react";
-import { Avatar, Box, IconButton, Popover, Tooltip } from "@mui/material";
-import { BlockedNamesModal } from "../../common/BlockedNamesModal/BlockedNamesModal";
 import {
-  AppTagline,
-  AppTitle,
-  AvatarContainer,
-  CustomAppBar,
-  DropdownContainer,
-  DropdownText,
-  LogoContainer,
-  NavbarName,
-} from "./Navbar-styles";
+  Avatar,
+  Box,
+  IconButton,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Popover,
+  Tooltip,
+} from "@mui/material";
+import CheckIcon from "@mui/icons-material/Check";
+import CollectionsBookmarkOutlinedIcon from "@mui/icons-material/CollectionsBookmarkOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import PersonOffIcon from "@mui/icons-material/PersonOff";
+import PersonOffOutlinedIcon from "@mui/icons-material/PersonOffOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { BlockedNamesModal } from "../../common/BlockedNamesModal/BlockedNamesModal";
+import { BottomSheet } from "../../common/mobile/BottomSheet";
 import { DownloadTaskManager } from "../../common/DownloadTaskManager";
-import QShareLogo from "../../../assets/img/q-share-icon.webp";
 import { PublishFile } from "../../PublishFile/PublishFile.tsx";
+import QShareLogoSrc from "../../../assets/img/q-share-icon.webp";
+import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { avatarUrl } from "../../../utils/qortalLinks";
+import { AppTagline, AppTitle, AvatarContainer, CustomAppBar, LogoContainer, NavbarName } from "./Navbar-styles";
+import { useHideOnScroll } from "./useHideOnScroll";
 
 interface Props {
   isAuthenticated: boolean;
@@ -29,23 +35,89 @@ interface Props {
   setActiveName: (name: string) => void;
 }
 
-const NavBar: React.FC<Props> = ({
-  isAuthenticated,
-  userName,
-  userAvatar,
-  accountNames,
-  setActiveName,
-}) => {
+const NAV_BUTTON_SX = { color: "text.primary", minWidth: 44, minHeight: 44 } as const;
+
+/**
+ * The sticky header. On phones it slides away when you scroll down and comes
+ * back when you scroll up; the rest of the navigation lives in BottomNav.
+ */
+const NavBar: React.FC<Props> = ({ isAuthenticated, userName, userAvatar, accountNames, setActiveName }) => {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const phone = usePhoneLayout();
+  const { hidden, reveal } = useHideOnScroll(phone);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [isOpenBlockedNamesModal, setIsOpenBlockedNamesModal] = useState<boolean>(false);
 
-  const closeMenu = () => setAnchorEl(null);
+  const menuOpen = phone ? sheetOpen : Boolean(anchorEl);
+  const closeMenu = () => {
+    setAnchorEl(null);
+    setSheetOpen(false);
+  };
+  const openMenu = (e: React.MouseEvent<HTMLElement>) => {
+    if (phone) setSheetOpen(true);
+    else setAnchorEl(e.currentTarget);
+  };
+
+  const names = accountNames.filter((n) => n.name);
+  const signedIn = isAuthenticated && !!userName;
+
+  const menuItems = (
+    <List disablePadding aria-label="Account menu" sx={{ minWidth: 220 }}>
+      {names.map((n) => {
+        const active = n.name === userName;
+        return (
+          <ListItemButton
+            key={n.name}
+            role="menuitemradio"
+            aria-checked={active}
+            selected={active}
+            onClick={() => {
+              setActiveName(n.name);
+              closeMenu();
+            }}
+            sx={{ minHeight: 44 }}
+          >
+            <ListItemIcon sx={{ minWidth: 32, color: "primary.main" }}>{active ? <CheckIcon fontSize="small" /> : null}</ListItemIcon>
+            <ListItemText primary={n.name} slotProps={{ primary: { noWrap: true } }} />
+          </ListItemButton>
+        );
+      })}
+      <ListItemButton
+        role="menuitem"
+        onClick={() => {
+          closeMenu();
+          setIsOpenBlockedNamesModal(true);
+        }}
+        sx={{ minHeight: 44, borderTop: names.length ? 1 : 0, borderColor: "divider" }}
+      >
+        <ListItemIcon sx={{ minWidth: 32 }}>
+          <PersonOffOutlinedIcon fontSize="small" />
+        </ListItemIcon>
+        <ListItemText primary="Blocked names" />
+      </ListItemButton>
+      <ListItemButton
+        role="menuitem"
+        selected={pathname.startsWith("/settings")}
+        onClick={() => {
+          closeMenu();
+          navigate("/settings");
+        }}
+        sx={{ minHeight: 44 }}
+      >
+        <ListItemIcon sx={{ minWidth: 32 }}>
+          <SettingsOutlinedIcon fontSize="small" />
+        </ListItemIcon>
+        <ListItemText primary="Settings" />
+      </ListItemButton>
+    </List>
+  );
 
   return (
-    <CustomAppBar position="sticky" elevation={0}>
-      <LogoContainer onClick={() => navigate("/")} aria-label="Q-Share+ home">
-        <img src={QShareLogo} alt="" style={{ width: "auto", height: 36 }} />
+    <CustomAppBar position="sticky" elevation={0} collapsed={hidden} onFocus={reveal}>
+      <LogoContainer type="button" onClick={() => navigate("/")} aria-label="Q-Share+ home">
+        <img src={QShareLogoSrc} alt="" width={36} height={36} style={{ width: "auto", height: 36 }} />
         <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
           <AppTitle>Q-Share+</AppTitle>
           <AppTagline>Public file sharing on Qortal</AppTagline>
@@ -53,62 +125,62 @@ const NavBar: React.FC<Props> = ({
       </LogoContainer>
 
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
+        {!phone && (
+          <Tooltip title="Collections">
+            <IconButton
+              aria-label="Collections"
+              aria-current={pathname.startsWith("/collections") ? "page" : undefined}
+              onClick={() => navigate("/collections")}
+              sx={{ ...NAV_BUTTON_SX, color: pathname.startsWith("/collections") ? "primary.main" : "text.primary" }}
+            >
+              <CollectionsBookmarkOutlinedIcon />
+            </IconButton>
+          </Tooltip>
+        )}
         <DownloadTaskManager />
-        {isAuthenticated && userName && <PublishFile />}
-        <Tooltip title="Settings">
-          <IconButton aria-label="Settings" onClick={() => navigate("/settings")} sx={{ color: "text.primary" }}>
-            <SettingsOutlinedIcon />
-          </IconButton>
-        </Tooltip>
-        {isAuthenticated && userName && (
+        {!phone && (
+          <Tooltip title="Settings">
+            <IconButton
+              aria-label="Settings"
+              aria-current={pathname.startsWith("/settings") ? "page" : undefined}
+              onClick={() => navigate("/settings")}
+              sx={{ ...NAV_BUTTON_SX, color: pathname.startsWith("/settings") ? "primary.main" : "text.primary" }}
+            >
+              <SettingsOutlinedIcon />
+            </IconButton>
+          </Tooltip>
+        )}
+        {signedIn && <PublishFile />}
+        {signedIn && (
           <AvatarContainer
+            type="button"
             aria-label={`Account menu for ${userName}`}
             aria-haspopup="menu"
-            aria-expanded={Boolean(anchorEl)}
-            onClick={(e) => setAnchorEl(e.currentTarget)}
+            aria-expanded={menuOpen}
+            onClick={openMenu}
           >
             <Avatar src={userAvatar || avatarUrl(userName)} alt="" sx={{ width: 28, height: 28 }} />
             <NavbarName>{userName}</NavbarName>
-            <ExpandMoreIcon fontSize="small" sx={{ color: "text.secondary" }} />
+            {!phone && <ExpandMoreIcon fontSize="small" sx={{ color: "text.secondary" }} />}
           </AvatarContainer>
         )}
 
-        <Popover
-          id="user-popover"
-          open={Boolean(anchorEl)}
-          anchorEl={anchorEl}
-          onClose={closeMenu}
-          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-          transformOrigin={{ vertical: "top", horizontal: "right" }}
-        >
-          {accountNames
-            .filter((n) => n.name)
-            .map((n) => (
-              <DropdownContainer
-                key={n.name}
-                role="menuitem"
-                onClick={() => {
-                  setActiveName(n.name);
-                  closeMenu();
-                }}
-              >
-                <DropdownText>
-                  {n.name === userName ? "✔︎ " : ""}
-                  {n.name}
-                </DropdownText>
-              </DropdownContainer>
-            ))}
-          <DropdownContainer
-            role="menuitem"
-            onClick={() => {
-              setIsOpenBlockedNamesModal(true);
-              closeMenu();
-            }}
+        {phone ? (
+          <BottomSheet open={sheetOpen} onClose={closeMenu} title={userName || "Account"}>
+            {menuItems}
+          </BottomSheet>
+        ) : (
+          <Popover
+            id="user-popover"
+            open={Boolean(anchorEl)}
+            anchorEl={anchorEl}
+            onClose={closeMenu}
+            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+            transformOrigin={{ vertical: "top", horizontal: "right" }}
           >
-            <PersonOffIcon fontSize="small" sx={{ color: "error.main" }} />
-            <DropdownText>Blocked names</DropdownText>
-          </DropdownContainer>
-        </Popover>
+            {menuItems}
+          </Popover>
+        )}
         {isOpenBlockedNamesModal && (
           <BlockedNamesModal open={isOpenBlockedNamesModal} onClose={() => setIsOpenBlockedNamesModal(false)} />
         )}

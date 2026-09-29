@@ -28,6 +28,11 @@
         document.addEventListener('DOMContentLoaded', function () {
           document.body.style.background = bg;
         });
+        /* Size the app to the Hub/GO iframe before React loads (src/utils/hubFrame.ts keeps it updated). */
+        var framed = true;
+        try { framed = window.parent !== window; } catch (e) {}
+        root.classList.toggle('qshare-framed', framed);
+        root.style.setProperty('--qshare-app-height', framed ? '100%' : '100dvh');
       })();
     </script>
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />

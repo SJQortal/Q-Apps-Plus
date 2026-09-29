@@ -1,24 +1,14 @@
-import React, {
-  useEffect,
-  useState,
-  useCallback,
-  useRef,
-  useMemo,
-} from "react";
+import React, { useEffect, useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import { addUser } from "../state/features/authSlice";
-import {
-  getAccountNames,
-  getPrimaryAccountName,
-  NameRecord,
-} from "../utils/qortalRequestFunctions";
+import { getAccountNames, getPrimaryAccountName } from "../utils/qortalRequestFunctions";
 import NavBar from "../components/layout/Navbar/Navbar";
+import { BottomNav, BottomNavSpacer } from "../components/layout/BottomNav/BottomNav";
 import PageLoader from "../components/common/PageLoader";
+import { ErrorBoundary } from "../components/common/ErrorBoundary";
 import { RootState } from "../state/store";
 import { setUserAvatarHash } from "../state/features/globalSlice";
-import { VideoPlayerGlobal } from "../components/common/VideoPlayerGlobal";
-import { Rnd } from "react-rnd";
 import { RequestQueue } from "../utils/queue";
 import { EditFile } from "../components/EditFile/EditFile.tsx";
 import ConsentModal from "../components/common/ConsentModal";
@@ -28,24 +18,23 @@ interface Props {
   children: React.ReactNode;
 }
 
-let timer: number | null = null;
-
 export const queue = new RequestQueue();
 
+/**
+ * The app shell: account lookup, the header, the phone bottom bar, the Edit
+ * dialog and the one-time consent dialog, with an error boundary around the
+ * page content.
+ */
 const GlobalWrapper: React.FC<Props> = ({ children }) => {
   useIframe();
   const dispatch = useDispatch();
-  const isDragging = useRef(false);
-  const [userAvatar, setUserAvatar] = useState<string>("");
   const user = useSelector((state: RootState) => state.auth.user);
-  const videoPlaying = useSelector(
-    (state: RootState) => state.global.videoPlaying
-  );
   const username = useMemo(() => {
     if (!user?.name) return "";
 
     return user.name;
   }, [user]);
+  const userAvatar = useSelector((state: RootState) => (username ? state.global.userAvatarHash[username] : "") || "");
   const getAvatar = React.useCallback(
     async (author: string) => {
       try {
@@ -56,7 +45,6 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
           identifier: "qortal_avatar",
         });
         if (url) {
-          setUserAvatar(url);
           dispatch(
             setUserAvatarHash({
               name: author,
@@ -86,20 +74,6 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
 
   const { isLoadingGlobal } = useSelector((state: RootState) => state.global);
 
-  async function getNameInfo(address: string) {
-    const response = await qortalRequest({
-      action: "GET_ACCOUNT_NAMES",
-      address: address,
-    });
-    const nameData = response;
-
-    if (nameData?.length > 0) {
-      return nameData[0].name;
-    } else {
-      return "";
-    }
-  }
-
   const askForAccountInformation = React.useCallback(async () => {
     try {
       const account = await qortalRequest({
@@ -118,27 +92,6 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
     askForAccountInformation();
   }, [askForAccountInformation]);
 
-  const onDragStart = () => {
-    timer = Date.now();
-    isDragging.current = true;
-  };
-
-  const handleStopDrag = async () => {
-    const time = Date.now();
-    if (timer && time - timer < 300) {
-      isDragging.current = false;
-    } else {
-      isDragging.current = true;
-    }
-  };
-  const onDragStop = () => {
-    handleStopDrag();
-  };
-
-  const checkIfDrag = useCallback(() => {
-    return isDragging.current;
-  }, []);
-
   return (
     <>
       {isLoadingGlobal && <PageLoader />}
@@ -154,32 +107,10 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
       />
       <EditFile />
 
-      <Rnd
-        onDragStart={onDragStart}
-        onDragStop={onDragStop}
-        style={{
-          display: videoPlaying ? "block" : "none",
-          position: "fixed",
-          height: "auto",
-          width: 350,
-          zIndex: 1000,
-          maxWidth: 800,
-        }}
-        default={{
-          x: 0,
-          y: 60,
-          width: 350,
-          height: "auto",
-        }}
-        // eslint-disable-next-line @typescript-eslint/no-empty-function
-        onDrag={() => {}}
-      >
-        {videoPlaying && (
-          <VideoPlayerGlobal checkIfDrag={checkIfDrag} element={videoPlaying} />
-        )}
-      </Rnd>
+      <ErrorBoundary>{children}</ErrorBoundary>
 
-      {children}
+      <BottomNavSpacer />
+      <BottomNav />
     </>
   );
 };

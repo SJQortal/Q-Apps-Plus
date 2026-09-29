@@ -1,15 +1,17 @@
-import { AppBar, Typography, Box } from "@mui/material";
+import { AppBar, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { headerFill } from "../../../hub-theme";
 
-export const CustomAppBar = styled(AppBar)(({ theme }) => ({
+export const CustomAppBar = styled(AppBar, {
+  shouldForwardProp: (prop) => prop !== "collapsed",
+})<{ collapsed?: boolean }>(({ theme, collapsed }) => ({
   display: "flex",
   flexDirection: "row",
   justifyContent: "space-between",
   alignItems: "center",
   width: "100%",
-  padding: "0 12px",
-  gap: theme.spacing(1),
+  padding: theme.spacing(0, 1),
+  gap: theme.spacing(0.5),
   minHeight: 56,
   backgroundImage: "none",
   backgroundColor: headerFill(theme),
@@ -19,6 +21,12 @@ export const CustomAppBar = styled(AppBar)(({ theme }) => ({
   color: theme.palette.text.primary,
   boxShadow: "none",
   paddingTop: "env(safe-area-inset-top, 0px)",
+  paddingLeft: `calc(${theme.spacing(1)} + env(safe-area-inset-left, 0px))`,
+  paddingRight: `calc(${theme.spacing(1)} + env(safe-area-inset-right, 0px))`,
+  transform: collapsed ? "translateY(-100%)" : "translateY(0)",
+  transition: "transform 180ms ease",
+  willChange: "transform",
+  "@media (prefers-reduced-motion: reduce)": { transition: "none" },
 }));
 
 export const LogoContainer = styled("button")(({ theme }) => ({
@@ -30,6 +38,7 @@ export const LogoContainer = styled("button")(({ theme }) => ({
   alignItems: "center",
   gap: theme.spacing(1),
   padding: theme.spacing(0.5),
+  minHeight: 44,
   borderRadius: theme.shape.borderRadius,
   color: "inherit",
   font: "inherit",
@@ -65,32 +74,22 @@ export const AvatarContainer = styled("button")(({ theme }) => ({
   alignItems: "center",
   gap: theme.spacing(1),
   padding: theme.spacing(0.5, 1, 0.5, 0.5),
+  minHeight: 44,
+  minWidth: 44,
+  justifyContent: "center",
   borderRadius: 999,
   color: theme.palette.text.primary,
   font: "inherit",
-  minWidth: 0,
   transition: "background-color 150ms ease",
   "&:hover": { backgroundColor: theme.palette.action.hover },
   "&:focus-visible": {
     outline: `2px solid ${theme.palette.primary.main}`,
     outlineOffset: 2,
   },
-}));
-
-export const DropdownContainer = styled(Box)(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  gap: theme.spacing(1),
-  padding: theme.spacing(1.25, 2),
-  cursor: "pointer",
-  transition: "background-color 150ms ease",
-  "&:hover": { backgroundColor: theme.palette.action.hover },
-}));
-
-export const DropdownText = styled(Typography)(({ theme }) => ({
-  fontSize: 15,
-  color: theme.palette.text.primary,
-  userSelect: "none",
+  [theme.breakpoints.down("sm")]: {
+    padding: theme.spacing(0.5),
+    border: 0,
+  },
 }));
 
 export const NavbarName = styled(Typography)(({ theme }) => ({

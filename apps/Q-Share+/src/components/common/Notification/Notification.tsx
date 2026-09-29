@@ -1,84 +1,67 @@
+import { useEffect, type CSSProperties } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { toast, ToastContainer, Zoom, Slide } from 'react-toastify'
-import { removeNotification } from '../../../state/features/notificationsSlice'
+import { toast, ToastContainer, Slide } from 'react-toastify'
+import { useTheme } from '@mui/material/styles'
 import 'react-toastify/dist/ReactToastify.css'
+import { removeNotification } from '../../../state/features/notificationsSlice'
 import { RootState } from '../../../state/store'
+import { useHubTheme } from '../../../hub-theme'
+import { usePhoneLayout } from '../../../hooks/usePhoneLayout'
 
+/** Height of the phone bottom bar plus a gap, so toasts sit above it. */
+const PHONE_BOTTOM_OFFSET = 'calc(80px + env(safe-area-inset-bottom, 0px))'
+
+/**
+ * Shows the app's notifications (Redux `notifications.alertTypes`) as toasts.
+ * Everything happens in an effect: nothing is dispatched during render.
+ */
 const Notification = () => {
   const dispatch = useDispatch()
-
+  const theme = useTheme()
+  const { mode } = useHubTheme()
+  const phone = usePhoneLayout()
   const { alertTypes } = useSelector((state: RootState) => state.notifications)
+  const { alertError, alertSuccess, alertInfo } = alertTypes
 
-  if (alertTypes.alertError) {
-    toast.error(`❌ ${alertTypes?.alertError}`, {
-      position: 'bottom-right',
-      autoClose: 4000,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-      progress: undefined,
-      icon: false
-    })
+  useEffect(() => {
+    if (!alertError && !alertSuccess && !alertInfo) return
+    if (alertError) toast.error(alertError, { autoClose: 5000 })
+    if (alertSuccess) toast.success(alertSuccess, { autoClose: 4000 })
+    if (alertInfo) toast.info(alertInfo, { autoClose: 2500 })
     dispatch(removeNotification())
-  }
-  if (alertTypes.alertSuccess) {
-    toast.success(`✔️ ${alertTypes?.alertSuccess}`, {
-      position: 'bottom-right',
-      autoClose: 4000,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-      progress: undefined,
-      icon: false
-    })
-    dispatch(removeNotification())
-  }
-  if (alertTypes.alertInfo) {
-    toast.info(`${alertTypes?.alertInfo}`, {
-      position: 'top-right',
-      autoClose: 1300,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-      progress: undefined,
-      theme: 'light'
-    })
-    dispatch(removeNotification())
-  }
+  }, [alertError, alertSuccess, alertInfo, dispatch])
 
-  if (alertTypes.alertInfo) {
-    return (
-      <ToastContainer
-        position="top-right"
-        autoClose={2000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="light"
-        toastStyle={{ fontSize: '16px' }}
-        transition={Slide}
-      />
-    )
-  }
+  // react-toastify paints with its own CSS variables; feed it the theme so all four looks match.
+  const containerStyle = {
+    '--toastify-color-light': theme.palette.background.paper,
+    '--toastify-color-dark': theme.palette.background.paper,
+    '--toastify-text-color-light': theme.palette.text.primary,
+    '--toastify-text-color-dark': theme.palette.text.primary,
+    '--toastify-color-info': theme.palette.primary.main,
+    '--toastify-color-success': theme.palette.success.main,
+    '--toastify-color-error': theme.palette.error.main,
+    '--toastify-color-progress-light': theme.palette.primary.main,
+    '--toastify-color-progress-dark': theme.palette.primary.main,
+    '--toastify-font-family': String(theme.typography.fontFamily),
+    '--toastify-toast-min-height': '48px',
+    ...(phone ? { bottom: PHONE_BOTTOM_OFFSET, left: 0, right: 0, width: '100%', padding: '0 12px' } : {}),
+  } as CSSProperties
 
   return (
     <ToastContainer
-      transition={Zoom}
-      position="bottom-right"
-      autoClose={false}
-      hideProgressBar={false}
-      newestOnTop={false}
+      position={phone ? 'bottom-center' : 'bottom-right'}
+      theme={mode === 'dark' ? 'dark' : 'light'}
+      transition={Slide}
+      limit={3}
+      role="status"
       closeOnClick
-      rtl={false}
-      draggable
       pauseOnHover
+      pauseOnFocusLoss
+      draggable
+      newestOnTop={false}
+      hideProgressBar={false}
+      style={containerStyle}
+      toastStyle={{ fontSize: 15, borderRadius: theme.shape.borderRadius }}
     />
   )
 }

@@ -1,11 +1,10 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 interface GlobalState {
   isLoadingGlobal: boolean;
   downloads: any;
   userAvatarHash: Record<string, string>;
   publishNames: string[] | null;
-  videoPlaying: any | null;
   totalFilesPublished: number;
   totalNamesPublished: number;
   filesPerNamePublished: number;
@@ -15,7 +14,6 @@ const initialState: GlobalState = {
   downloads: {},
   userAvatarHash: {},
   publishNames: null,
-  videoPlaying: null,
   totalFilesPublished: null,
   totalNamesPublished: null,
   filesPerNamePublished: null,
@@ -40,6 +38,18 @@ export const globalSlice = createSlice({
         ...download,
       };
     },
+    /** Drop one entry from the downloads list (it does not cancel a fetch). */
+    removeDownload: (state, action: PayloadAction<string>) => {
+      delete state.downloads[action.payload];
+    },
+    /** Drop every download whose status is READY. */
+    clearFinishedDownloads: (state) => {
+      for (const identifier of Object.keys(state.downloads)) {
+        if (state.downloads[identifier]?.status?.status === "READY") {
+          delete state.downloads[identifier];
+        }
+      }
+    },
     setUserAvatarHash: (state, action) => {
       const avatar = action.payload;
       if (avatar?.name && avatar?.url) {
@@ -48,9 +58,6 @@ export const globalSlice = createSlice({
     },
     addPublishNames: (state, action) => {
       state.publishNames = action.payload;
-    },
-    setVideoPlaying: (state, action) => {
-      state.videoPlaying = action.payload;
     },
     setTotalFilesPublished: (state, action) => {
       state.totalFilesPublished = action.payload;
@@ -68,9 +75,10 @@ export const {
   setIsLoadingGlobal,
   setAddToDownloads,
   updateDownloads,
+  removeDownload,
+  clearFinishedDownloads,
   setUserAvatarHash,
   addPublishNames,
-  setVideoPlaying,
   setTotalFilesPublished,
   setTotalNamesPublished,
   setFilesPerNamePublished,

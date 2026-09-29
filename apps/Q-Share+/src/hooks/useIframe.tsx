@@ -1,19 +1,23 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
+interface NavigateMessage {
+  action?: string;
+  path?: string;
+}
+
+/**
+ * Hub sends `NAVIGATE_TO_PATH` into the iframe for deep links and its back
+ * button; answer with `NAVIGATION_SUCCESS` once the router has moved.
+ */
 export const useIframe = () => {
   const navigate = useNavigate();
   useEffect(() => {
-    function handleNavigation(event) {
-      if (event.data?.action === "NAVIGATE_TO_PATH" && event.data.path) {
-        console.log("Navigating to path within React app:", event.data.path);
-        navigate(event.data.path); // Navigate directly to the specified path
-
-        // Send a response back to the parent window after navigation is handled
-        window.parent.postMessage(
-          { action: "NAVIGATION_SUCCESS", path: event.data.path },
-          "*"
-        );
+    function handleNavigation(event: MessageEvent<NavigateMessage>) {
+      const data = event.data;
+      if (data?.action === "NAVIGATE_TO_PATH" && typeof data.path === "string" && data.path) {
+        navigate(data.path);
+        window.parent.postMessage({ action: "NAVIGATION_SUCCESS", path: data.path }, "*");
       }
     }
 
