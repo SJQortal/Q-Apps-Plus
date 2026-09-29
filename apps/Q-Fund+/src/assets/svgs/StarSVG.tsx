@@ -1,0 +1,21 @@
+import { IconTypes } from "./IconTypes";
+
+export const StarSVG: React.FC<IconTypes> = ({
+  color,
+  height,
+  width,
+  className
+}) => {
+  return (
+    <svg
+      fill={color}
+      height={height}
+      width={width}
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 -960 960 960"
+    >
+      <path d="m233-80 65-281L80-550l288-25 112-265 112 265 288 25-218 189 65 281-247-149L233-80Z" />
+    </svg>
+  );
+};
