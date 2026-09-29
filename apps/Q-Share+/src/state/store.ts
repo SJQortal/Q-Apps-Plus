@@ -3,6 +3,7 @@ import notificationsReducer from "./features/notificationsSlice";
 import authReducer from "./features/authSlice";
 import globalReducer from "./features/globalSlice";
 import fileReducer from "./features/fileSlice.ts";
+import collectionsReducer from "./features/collectionsSlice";
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     auth: authReducer,
     global: globalReducer,
     file: fileReducer,
+    collections: collectionsReducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({
