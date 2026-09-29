@@ -68,6 +68,8 @@ scripts/sync-upstream.sh --check       # new commits in the Qortal repos since i
 
 ## Git
 
+- **`main` is protected: every change arrives as a pull request.** Start each piece of work on a branch named `<app-slug>/<topic>` (e.g. `names-plus/pass-1`, `q-mintership-plus/rewrite-phase-1`, `repo/theme-kit-fix`), push it with `git push -u origin <branch>`, and open the PR with `gh pr create --base main --title "…" --body "…"`. If `gh` can't open it, push anyway and end your report with the branch name so Simon can click "Create PR". PRs merge as merge commits (squash and rebase are switched off), so upgrade and redesign commits stay separate and `git subtree` history survives. Never force-push.
+- **Commit identity:** before your first commit, check `git config user.email`. If it's empty or not a `users.noreply.github.com` address, set the repo-local identity with `git config user.name "Simon James"` and `git config user.email "274929184+SJQortal@users.noreply.github.com"`, so commits link to Simon's GitHub account. Keep your Co-Authored-By trailer.
 - Prefix commit messages with the app, e.g. `Q-Mail+: add thread search`. Use `Repo:` for shared work.
 - One logical change per commit: test harness, theme kit, Settings page, each efficiency fix, each feature. That keeps review and revert easy.
 - Never commit `node_modules/`, `dist/`, zips, `.env` files or secrets.

@@ -37,6 +37,10 @@
       "Bash(git grep *)",
       "Bash(git stash *)",
       "Bash(git subtree *)",
+      "Bash(gh pr list *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr create *)",
+      "Bash(git push -u origin *)",
       "Bash(unzip -l *)"
     ]
   }
