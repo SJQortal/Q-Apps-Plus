@@ -94,7 +94,12 @@ export const FileList = ({ files, showPublisher = true }: FileListProps) => {
                     onClick={() => navigate(profilePath(fileObj.user))}
                     aria-label={`Shares by ${fileObj.user}`}
                   >
-                    <Avatar sx={{ width: 22, height: 22 }} src={avatarUrl(fileObj.user)} alt="" />
+                    <Avatar
+                      sx={{ width: 22, height: 22 }}
+                      src={avatarUrl(fileObj.user)}
+                      alt=""
+                      slotProps={{ img: { loading: "lazy" } }}
+                    />
                     <span>{fileObj.user}</span>
                   </NameLink>
                 )}

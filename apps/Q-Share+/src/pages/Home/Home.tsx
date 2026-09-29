@@ -24,8 +24,10 @@ import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
 import { CategoryList, CategoryListRef } from "../../components/common/CategoryList/CategoryList.tsx";
 import { EmptyState } from "../../components/common/EmptyState.tsx";
 import { QDN_PAGE } from "../../utils/qdnSearch.ts";
+import { isNameHidden, useAppSettings } from "../../utils/settings.ts";
 
-export type SortOrder = "newest" | "oldest";
+export type { SortOrder } from "../../utils/settings.ts";
+import type { SortOrder } from "../../utils/settings.ts";
 
 export const Home = () => {
   const theme = useTheme();
@@ -37,7 +39,9 @@ export const Home = () => {
   const filterName = useSelector((state: RootState) => state.file.filterName);
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const listVersion = useSelector((state: RootState) => state.file.listVersion);
-  const [sort, setSort] = useState<SortOrder>("newest");
+  const settings = useAppSettings();
+  const [sort, setSort] = useState<SortOrder>(settings.defaultSort);
+  const [following, setFollowing] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +52,7 @@ export const Home = () => {
   const { getFiles } = useFetchFiles();
 
   const runSearch = useCallback(
-    async (reset: boolean, overrides: { name?: string; sort?: SortOrder; clear?: boolean } = {}) => {
+    async (reset: boolean, overrides: { name?: string; sort?: SortOrder; clear?: boolean; following?: boolean } = {}) => {
       if (isFetching.current) return;
       if (!reset && !hasMore) return;
       isFetching.current = true;
@@ -61,6 +65,7 @@ export const Home = () => {
             categories: overrides.clear ? [] : categoryListRef.current?.getSelectedCategories() || [],
             keywords: overrides.clear ? "" : filterSearch,
             sort: overrides.sort ?? sort,
+            following: overrides.clear ? false : (overrides.following ?? following),
           },
           reset
         );
@@ -72,7 +77,7 @@ export const Home = () => {
         setIsLoading(false);
       }
     },
-    [getFiles, filterName, filterSearch, sort, hasMore]
+    [getFiles, filterName, filterSearch, sort, following, hasMore]
   );
 
   useEffect(() => {
@@ -95,8 +100,9 @@ export const Home = () => {
     dispatch(changefilterSearch(""));
     dispatch(changefilterName(""));
     categoryListRef.current?.clearCategories();
-    setSort("newest");
-    runSearch(true, { clear: true, sort: "newest" });
+    setSort(settings.defaultSort);
+    setFollowing(false);
+    runSearch(true, { clear: true, sort: settings.defaultSort, following: false });
   };
 
   const changeSort = (next: SortOrder | null) => {
@@ -110,6 +116,16 @@ export const Home = () => {
     dispatch(changefilterName(username));
     runSearch(true, { name: username });
   };
+
+  const toggleFollowing = () => {
+    const next = !following;
+    setFollowing(next);
+    runSearch(true, { following: next });
+  };
+
+  const visibleFiles = settings.hiddenNames.length
+    ? files.filter((f) => !isNameHidden(f.user, settings))
+    : files;
 
   const filterForm = (
     <Box
@@ -189,8 +205,18 @@ export const Home = () => {
       <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
           <Typography variant="h6" sx={{ fontWeight: 700, flex: 1, minWidth: 120 }}>
-            {filterName ? `Shares by ${filterName}` : "Latest shares"}
+            {filterName ? `Shares by ${filterName}` : following ? "From names you follow" : "Latest shares"}
           </Typography>
+          {username && settings.followingFeed && (
+            <Chip
+              label="Following"
+              variant={following ? "filled" : "outlined"}
+              color={following ? "primary" : "default"}
+              onClick={toggleFollowing}
+              clickable
+              aria-pressed={following}
+            />
+          )}
           {username && (
             <Chip
               label="My shares"
@@ -198,6 +224,7 @@ export const Home = () => {
               color={filterName === username ? "primary" : "default"}
               onClick={showMine}
               clickable
+              aria-pressed={filterName === username}
             />
           )}
           <ToggleButtonGroup
@@ -222,20 +249,22 @@ export const Home = () => {
           </Box>
         ) : files.length === 0 ? (
           <EmptyState
-            title={activeFilters ? "No shares match these filters" : "No shares yet"}
+            title={following ? "Nothing from the names you follow yet" : activeFilters ? "No shares match these filters" : "No shares yet"}
             description={
-              activeFilters
+              following
+                ? "Follow a publisher from their profile and their shares appear here."
+                : activeFilters
                 ? "Try fewer filters or a different spelling."
                 : username
                   ? "Be the first: use Share in the top bar to publish files."
                   : "Sign in to Hub with a Qortal name to share files."
             }
-            actionLabel={activeFilters ? "Reset filters" : undefined}
-            onAction={activeFilters ? resetFilters : undefined}
+            actionLabel={activeFilters || following ? "Reset filters" : undefined}
+            onAction={activeFilters || following ? resetFilters : undefined}
           />
         ) : (
           <>
-            <FileList files={files} />
+            <FileList files={visibleFiles} />
             <LazyLoad onLoadMore={() => runSearch(false)} isLoading={isLoading} />
             {!hasMore && files.length > 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 1 }}>

@@ -5,9 +5,12 @@ import {
   Avatar,
   Box,
   Button,
+  Chip,
   IconButton,
   MenuItem,
   Select,
+  Switch,
+  TextField,
   Typography,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
@@ -20,6 +23,7 @@ import { BlockedNamesModal } from "../../components/common/BlockedNamesModal/Blo
 import { ChangelogDialog } from "../../components/common/ChangelogDialog";
 import { APP_VERSION, PLUS_REPO, UPSTREAM_REPO } from "../../constants/changelog";
 import { ShareStats, loadShareStats, readCachedShareStats } from "../../utils/shareStats";
+import { useAppSettings, writeSettings } from "../../utils/settings";
 
 const Page = styled("div")(({ theme }) => ({
   width: "100%",
@@ -70,6 +74,13 @@ export const Settings = () => {
   const user = useSelector((state: RootState) => state.auth.user);
   const [blockedOpen, setBlockedOpen] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
+  const settings = useAppSettings();
+  const [hiddenInput, setHiddenInput] = useState("");
+  const addHidden = () => {
+    const names = hiddenInput.split(",").map((n) => n.trim()).filter(Boolean);
+    if (names.length) writeSettings({ hiddenNames: [...settings.hiddenNames, ...names] });
+    setHiddenInput("");
+  };
   const [stats, setStats] = useState<ShareStats | null>(() => readCachedShareStats());
   const [statsBusy, setStatsBusy] = useState(false);
   const [statsError, setStatsError] = useState(false);
@@ -150,6 +161,87 @@ export const Settings = () => {
 
       <Section>
         <SectionTitle>Content</SectionTitle>
+        <Row>
+          <Box>
+            <Typography sx={{ fontWeight: 700 }}>Preview images automatically</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Show image attachments up to 5 MB on a share page without a click. Off saves data on slow nodes.
+            </Typography>
+          </Box>
+          <Switch
+            checked={settings.autoPreviewImages}
+            onChange={(e) => writeSettings({ autoPreviewImages: e.target.checked })}
+            slotProps={{ input: { "aria-label": "Preview images automatically" } }}
+          />
+        </Row>
+        <Row>
+          <Box>
+            <Typography sx={{ fontWeight: 700 }}>Following feed</Typography>
+            <Typography variant="body2" color="text.secondary">
+              A Following chip on Home that lists shares from names you follow.
+            </Typography>
+          </Box>
+          <Switch
+            checked={settings.followingFeed}
+            onChange={(e) => writeSettings({ followingFeed: e.target.checked })}
+            slotProps={{ input: { "aria-label": "Following feed" } }}
+          />
+        </Row>
+        <Row>
+          <Box>
+            <Typography sx={{ fontWeight: 700 }}>Default sort</Typography>
+            <Typography variant="body2" color="text.secondary">How Home is sorted when it opens.</Typography>
+          </Box>
+          <Select
+            size="small"
+            value={settings.defaultSort}
+            onChange={(e) => writeSettings({ defaultSort: e.target.value as "newest" | "oldest" })}
+            inputProps={{ "aria-label": "Default sort" }}
+          >
+            <MenuItem value="newest">Newest first</MenuItem>
+            <MenuItem value="oldest">Oldest first</MenuItem>
+          </Select>
+        </Row>
+        <Box sx={{ py: 1 }}>
+          <Typography sx={{ fontWeight: 700 }}>Hidden names</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Hide these names' shares and comments in Q-Share+ only. This is not a Qortal block; use Blocked names for that.
+          </Typography>
+          <Box sx={{ display: "flex", gap: 1, mt: 1.5, flexWrap: "wrap" }}>
+            <TextField
+              size="small"
+              label="Add a name"
+              value={hiddenInput}
+              onChange={(e) => setHiddenInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addHidden();
+                }
+              }}
+              helperText="Separate several names with commas"
+              sx={{ flex: "1 1 220px" }}
+            />
+            <Button variant="outlined" onClick={addHidden} disabled={!hiddenInput.trim()} sx={{ alignSelf: "flex-start" }}>
+              Hide
+            </Button>
+          </Box>
+          {settings.hiddenNames.length > 0 ? (
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}>
+              {settings.hiddenNames.map((name) => (
+                <Chip
+                  key={name}
+                  label={name}
+                  onDelete={() => writeSettings({ hiddenNames: settings.hiddenNames.filter((n) => n !== name) })}
+                />
+              ))}
+            </Box>
+          ) : (
+            <Typography variant="caption" color="text.secondary">
+              No hidden names.
+            </Typography>
+          )}
+        </Box>
         <Row>
           <Box>
             <Typography sx={{ fontWeight: 700 }}>Blocked names</Typography>

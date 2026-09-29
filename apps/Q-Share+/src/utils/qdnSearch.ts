@@ -27,6 +27,8 @@ export interface QdnSearchParams {
   excludeblocked?: boolean;
   exactmatchnames?: boolean;
   prefix?: boolean;
+  /** Core: only resources published by names on the followedNames list. */
+  followedonly?: boolean;
 }
 
 export interface QdnResourceSummary {
@@ -68,6 +70,7 @@ export function buildSearchUrl(params: QdnSearchParams): string {
   p.set("excludeblocked", String(params.excludeblocked ?? true));
   if (params.exactmatchnames ?? true) p.set("exactmatchnames", "true");
   if (params.prefix) p.set("prefix", "true");
+  if (params.followedonly) p.set("followedonly", "true");
   return `/arbitrary/resources/search?${p.toString()}`;
 }
 

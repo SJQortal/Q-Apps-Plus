@@ -123,7 +123,7 @@ export const useFetchFiles = () => {
 
   const getFiles = React.useCallback(
     async (filters = {}, reset?: boolean, resetFilers?: boolean, limit?: number) => {
-      const { name = "", categories = [], keywords = "", type = "", sort = "newest" }: any = resetFilers ? {} : filters;
+      const { name = "", categories = [], keywords = "", type = "", sort = "newest", following = false }: any = resetFilers ? {} : filters;
       const offset = reset ? 0 : videos.length;
       const isPlaylists = type === "playlists";
       const responseData = await searchQdn(
@@ -136,6 +136,7 @@ export const useFetchFiles = () => {
           offset,
           limit: limit || QDN_PAGE,
           reverse: sort !== "oldest",
+          followedonly: Boolean(following),
         },
         { fresh: Boolean(reset) }
       );
