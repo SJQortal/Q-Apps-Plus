@@ -26,14 +26,13 @@ import { useIframe } from "../hooks/useIframe.tsx";
 
 interface Props {
   children: React.ReactNode;
-  setTheme: (val: string) => void;
 }
 
 let timer: number | null = null;
 
 export const queue = new RequestQueue();
 
-const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
+const GlobalWrapper: React.FC<Props> = ({ children }) => {
   useIframe();
   const dispatch = useDispatch();
   const isDragging = useRef(false);
@@ -146,7 +145,6 @@ const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
       <ConsentModal />
 
       <NavBar
-        setTheme={(val: string) => setTheme(val)}
         isAuthenticated={!!user?.name}
         userName={user?.name || ""}
         accountNames={user?.names || []}

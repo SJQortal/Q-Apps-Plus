@@ -1,6 +1,11 @@
-import { createTheme } from "@mui/material/styles";
+import type { ThemeOptions } from "@mui/material/styles";
 
-const commonThemeOptions = {
+/**
+ * The original Q-Share look. It is offered as the "Q-Share Classic" (Hub 2.0)
+ * theme by src/theme/qplus-theme.ts; the default look now comes from the
+ * theme kit in src/hub-theme.
+ */
+const commonThemeOptions: ThemeOptions = {
   typography: {
     fontFamily: [
       "Cambon Light",
@@ -85,7 +90,7 @@ const commonThemeOptions = {
   }
 };
 
-const lightTheme = createTheme({
+export const lightThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: "light",
@@ -108,6 +113,7 @@ const lightTheme = createTheme({
     }
   },
   components: {
+    ...commonThemeOptions.components,
     MuiCard: {
       styleOverrides: {
         root: {
@@ -131,9 +137,9 @@ const lightTheme = createTheme({
       }
     }
   }
-});
+};
 
-const darkTheme = createTheme({
+export const darkThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: "dark",
@@ -157,6 +163,7 @@ const darkTheme = createTheme({
     }
   },
   components: {
+    ...commonThemeOptions.components,
     MuiCard: {
       styleOverrides: {
         root: {
@@ -178,7 +185,4 @@ const darkTheme = createTheme({
       }
     }
   }
-});
-
-
-export { lightTheme, darkTheme };
+};

@@ -30,6 +30,8 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PersonOffIcon from "@mui/icons-material/PersonOff";
 import { useNavigate } from "react-router-dom";
 import SearchIcon from "@mui/icons-material/Search";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import { IconButton } from "@mui/material";
 
 import { DownloadTaskManager } from "../../common/DownloadTaskManager";
 import QShareLogo from "../../../assets/img/q-share-icon.webp";
@@ -49,7 +51,6 @@ interface Props {
   userName: string | null;
   userAvatar: string;
   authenticate: () => void;
-  setTheme: (val: string) => void;
   accountNames: { name: string }[];
   setActiveName: (name: string) => void;
 }
@@ -59,7 +60,6 @@ const NavBar: React.FC<Props> = ({
   userName,
   userAvatar,
   authenticate,
-  setTheme,
   accountNames,
   setActiveName,
 }) => {
@@ -382,6 +382,13 @@ const NavBar: React.FC<Props> = ({
         </Popover>
 
         <DownloadTaskManager />
+        <IconButton
+          aria-label="Settings"
+          onClick={() => navigate("/settings")}
+          sx={{ color: "text.primary" }}
+        >
+          <SettingsOutlinedIcon />
+        </IconButton>
         {isAuthenticated && userName && (
           <>
             <AvatarContainer
