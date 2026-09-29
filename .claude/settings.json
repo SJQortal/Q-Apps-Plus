@@ -43,5 +43,6 @@
       "Bash(git push -u origin *)",
       "Bash(unzip -l *)"
     ]
-  }
+  },
+  "effortLevel": "xhigh"
 }
