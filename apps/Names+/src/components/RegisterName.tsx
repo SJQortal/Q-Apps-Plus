@@ -18,7 +18,7 @@ import {
   useGlobal,
   useQortBalance,
 } from 'qapp-core';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { BarSpinner } from '../common/Spinners/BarSpinner/BarSpinner';
 import CheckIcon from '@mui/icons-material/Check';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -35,6 +35,7 @@ import {
   nameLengthMessage,
   useNameAvailability,
 } from '../hooks/useNameAvailability';
+import { useUnitFee } from '../hooks/useNamesApi';
 
 const RegisterName = () => {
   const { t } = useTranslation(['core']);
@@ -52,7 +53,7 @@ const RegisterName = () => {
 
   const [isLoadingRegisterName, setIsLoadingRegisterName] = useState(false);
   const theme = useTheme();
-  const [nameFee, setNameFee] = useState<number | null>(null);
+  const nameFee = useUnitFee('REGISTER_NAME');
   const isPrimaryNameForSale = useMemo(() => {
     if (!primaryName) return false;
     const findPendingNameSellTx = pendingTxs?.['SELL_NAME'];
@@ -128,20 +129,6 @@ const RegisterName = () => {
       dismissToast(loadId);
     }
   };
-
-  useEffect(() => {
-    const nameRegistrationFee = async () => {
-      try {
-        const data = await fetch(`/transactions/unitfee?txType=REGISTER_NAME`);
-        const fee = await data.text();
-
-        setNameFee(Number((Number(fee) / 1e8).toFixed(8)));
-      } catch (error) {
-        console.error(error);
-      }
-    };
-    nameRegistrationFee();
-  }, []);
 
   return (
     <>

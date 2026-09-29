@@ -21,7 +21,7 @@ import {
   Avatar,
 } from '@mui/material';
 import { useAtom, useSetAtom } from 'jotai';
-import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
+import { forwardRef, useCallback, useMemo, useState } from 'react';
 import { TableVirtuoso, TableComponents } from 'react-virtuoso';
 import {
   forceRefreshAtom,
@@ -32,7 +32,6 @@ import {
   NamesForSale,
   pendingTxsAtom,
   PendingTxsState,
-  refreshAtom,
 } from '../../state/global/names';
 import PersonIcon from '@mui/icons-material/Person';
 import {
@@ -44,7 +43,6 @@ import {
 import {
   dismissToast,
   ImagePicker,
-  RequestQueueWithPromise,
   showError,
   showLoading,
   showSuccess,
@@ -65,13 +63,12 @@ import {
   nameLengthMessage,
   useNameAvailability,
 } from '../../hooks/useNameAvailability';
+import { useAvatarStatuses, useUnitFee } from '../../hooks/useNamesApi';
 interface NameData {
   name: string;
   isSelling?: boolean;
   forceUpdateState?: number;
 }
-
-const getNameQueue = new RequestQueueWithPromise(2);
 
 const VirtuosoTableComponents: TableComponents<NameData> = {
   Scroller: forwardRef<HTMLDivElement>((props, ref) => (
@@ -115,67 +112,31 @@ function fixedHeaderContent(t: TFunction) {
 
 interface ManageAvatarProps {
   name: string;
+  /** undefined while the batched avatar check is still running. */
+  hasAvatar: boolean | undefined;
   modalFunctionsAvatar: ModalFunctionsAvatar;
   isNameCurrentlyDoingATx?: boolean;
 }
 
 const ManageAvatar = ({
   name,
+  hasAvatar,
   modalFunctionsAvatar,
   isNameCurrentlyDoingATx,
 }: ManageAvatarProps) => {
-  const { setHasAvatar, getHasAvatar } = usePendingTxs();
-  const [refresh] = useAtom(refreshAtom); // just to subscribe
-  const [hasAvatarState, setHasAvatarState] = useState<boolean | null>(null);
   const { t } = useTranslation();
-  const checkIfAvatarExists = useCallback(
-    async (name: string) => {
-      try {
-        const res = getHasAvatar(name);
-        if (res !== null) {
-          setHasAvatarState(res);
-          return;
-        }
-        const identifier = `qortal_avatar`;
-        const url = `/arbitrary/resources/searchsimple?mode=ALL&service=THUMBNAIL&identifier=${identifier}&limit=1&name=${encodeURIComponent(name)}&includemetadata=false&prefix=true`;
-        const response = await getNameQueue.enqueue(() =>
-          fetch(url, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          })
-        );
-
-        const responseData = await response.json();
-        if (responseData?.length > 0) {
-          setHasAvatarState(true);
-          setHasAvatar(name, true);
-        } else {
-          setHasAvatarState(false);
-        }
-      } catch (error) {
-        console.log(error);
-      }
-    },
-    [getHasAvatar, setHasAvatar]
-  );
-  useEffect(() => {
-    if (!name) return;
-    checkIfAvatarExists(name);
-  }, [name, checkIfAvatarExists, refresh]);
   return (
     <Button
       variant="outlined"
       size="small"
-      disabled={hasAvatarState === null || isNameCurrentlyDoingATx}
+      disabled={hasAvatar === undefined || isNameCurrentlyDoingATx}
       onClick={() =>
-        modalFunctionsAvatar.show({ name, hasAvatar: Boolean(hasAvatarState) })
+        modalFunctionsAvatar.show({ name, hasAvatar: Boolean(hasAvatar) })
       }
     >
-      {hasAvatarState === null ? (
+      {hasAvatar === undefined ? (
         <CircularProgress size={10} />
-      ) : hasAvatarState ? (
+      ) : hasAvatar ? (
         t('core:actions.update_avatar', {
           postProcess: 'capitalizeFirstChar',
         })
@@ -207,6 +168,7 @@ function rowContent(
   setNames: SetNames,
   setNamesForSale: SetNamesForSale,
   isNameCurrentlyDoingATx: boolean,
+  hasAvatar: boolean | undefined,
   t: TFunction
 ) {
   const handleUpdate = async (name: string) => {
@@ -503,6 +465,7 @@ function rowContent(
           )}
           <ManageAvatar
             name={row.name}
+            hasAvatar={hasAvatar}
             modalFunctionsAvatar={modalFunctionsAvatar}
             isNameCurrentlyDoingATx={isNameCurrentlyDoingATx}
           />
@@ -533,6 +496,8 @@ export const NameTable = ({ names, totalNames, primaryName }: NameTableProps) =>
   const { fetchPrimaryName } = useFetchNames();
 
   const setPendingTxs = useSetAtom(pendingTxsAtom);
+  const nameStrings = useMemo(() => names.map((item) => item.name), [names]);
+  const avatarStatuses = useAvatarStatuses(nameStrings);
 
   const triggerRerender = useCallback(() => {
     forceUpdate((n) => n + 1);
@@ -581,6 +546,7 @@ export const NameTable = ({ names, totalNames, primaryName }: NameTableProps) =>
             setNames,
             setNamesForSale,
             isNameCurrentlyDoingATx,
+            avatarStatuses[row.name],
             t
           );
         }}
@@ -821,24 +787,10 @@ const UpdateNameModal = ({
   const [newName, setNewName] = useState('');
   const isNameAvailable = useNameAvailability(newName);
   const { t } = useTranslation();
-  const [nameFee, setNameFee] = useState<null | number>(null);
+  const nameFee = useUnitFee('UPDATE_NAME');
   const { value: balance } = useQortBalance();
 
   const theme = useTheme();
-
-  useEffect(() => {
-    const nameRegistrationFee = async () => {
-      try {
-        const data = await fetch(`/transactions/unitfee?txType=REGISTER_NAME`);
-        const fee = await data.text();
-
-        setNameFee(+(Number(fee) / 1e8).toFixed(8));
-      } catch (error) {
-        console.error(error);
-      }
-    };
-    nameRegistrationFee();
-  }, []);
 
   return (
     <Dialog

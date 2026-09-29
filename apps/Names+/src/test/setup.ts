@@ -10,6 +10,8 @@ import { afterEach, beforeEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
 type QortalHandler = (request: Record<string, unknown>) => unknown;
+/** A fixed answer; a function answers per call (and keeps its parameter types). */
+type StaticAnswer = string | number | boolean | null | object;
 
 const qortalHandlers = new Map<string, QortalHandler>();
 
@@ -17,7 +19,7 @@ const qortalHandlers = new Map<string, QortalHandler>();
 export const qortalCalls: Array<Record<string, unknown>> = [];
 
 /** Answer a qortalRequest action. Unregistered actions reject like Hub does. */
-export function mockQortalRequest(action: string, handler: QortalHandler | unknown): void {
+export function mockQortalRequest(action: string, handler: QortalHandler | StaticAnswer): void {
   qortalHandlers.set(
     action,
     typeof handler === 'function' ? (handler as QortalHandler) : () => handler
@@ -58,7 +60,7 @@ export const fetchCalls: string[] = [];
  * or a RegExp. The handler's return value is served as JSON, or as text when
  * it is a string.
  */
-export function mockFetchRoute(match: string | RegExp, handler: FetchHandler | unknown): void {
+export function mockFetchRoute(match: string | RegExp, handler: FetchHandler | StaticAnswer): void {
   fetchRoutes.unshift({
     test: (path) => (typeof match === 'string' ? path.startsWith(match) : match.test(path)),
     handler: typeof handler === 'function' ? (handler as FetchHandler) : () => handler,

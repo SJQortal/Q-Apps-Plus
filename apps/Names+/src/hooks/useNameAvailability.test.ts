@@ -23,7 +23,7 @@ describe('name availability', () => {
   });
 
   it('URL-encodes the name and reads "name unknown" as available', async () => {
-    mockFetchRoute('/names/', (url: URL) =>
+    mockFetchRoute('/names/', (url) =>
       url.pathname.endsWith('/taken') ? { name: 'taken', owner: 'Q1' } : unknown
     );
     await expect(checkNameAvailability('taken')).resolves.toBe(Availability.NOT_AVAILABLE);
@@ -44,7 +44,7 @@ describe('name availability', () => {
     const resolvers = new Map<string, (value: unknown) => void>();
     mockFetchRoute(
       '/names/',
-      (url: URL) =>
+      (url) =>
         new Promise((resolve) => {
           resolvers.set(decodeURIComponent(url.pathname.slice('/names/'.length)), resolve);
         })
