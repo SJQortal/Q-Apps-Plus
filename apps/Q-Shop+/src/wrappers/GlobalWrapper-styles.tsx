@@ -3,7 +3,6 @@ import { Button, Stack, Typography } from "@mui/material";
 
 export const CustomModalTitle = styled(Typography)({
   textAlign: "center",
-  fontFamily: "Merriweather Sans",
   fontSize: "30px",
   fontWeight: 500,
   color: "#a01717",
@@ -12,7 +11,6 @@ export const CustomModalTitle = styled(Typography)({
 
 export const CustomModalButton = styled(Button)(({ theme }) => ({
   alignSelf: "center",
-  fontFamily: "Raleway",
   fontWeight: 400,
   width: "50%",
   backgroundColor: theme.palette.secondary.main,
@@ -43,7 +41,6 @@ export const QortalIcon = styled("img")({
 })
 
 export const DownloadQortalFont = styled(Typography)(({theme}) => ({
-  fontFamily: "Figtree",
   letterSpacing: "2.2px",
   lineHeight: '52px',
   fontSize: "50px",
@@ -52,7 +49,6 @@ export const DownloadQortalFont = styled(Typography)(({theme}) => ({
 }))
 
 export const DownloadQortalSubFont = styled(Typography)(({theme}) => ({
-  fontFamily: "Raleway",
   fontSize: "25px",
   lineHeight: "38px",
   fontWeight: 500,
@@ -61,7 +57,6 @@ export const DownloadQortalSubFont = styled(Typography)(({theme}) => ({
 }))
 
 export const DownloadNowButton = styled(Button)(({theme}) => ({
-  fontFamily: "Montserrat",
   fontSize: "22px",
   marginTop: "20px",
   fontWeight: 500,

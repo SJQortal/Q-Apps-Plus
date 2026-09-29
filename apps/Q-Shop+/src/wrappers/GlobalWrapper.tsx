@@ -53,7 +53,6 @@ import { MultiplePublish } from "../components/common/MultiplePublish/MultiplePu
 
 interface Props {
   children: React.ReactNode;
-  setTheme: (val: string) => void;
 }
 
 export interface ShortDataContainer {
@@ -63,7 +62,7 @@ export interface ShortDataContainer {
   products: Record<string, ProductDataContainer>;
 }
 
-const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
+const GlobalWrapper: React.FC<Props> = ({ children }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const theme = useTheme();
@@ -803,7 +802,7 @@ const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
             create a data container for your shop now which is obligatory.
           </Typography>
           <CustomModalButton
-            style={{ fontFamily: "Raleway" }}
+            style={{ }}
             variant="contained"
             color="primary"
             onClick={() => setRetryDataContainer(true)}
@@ -813,7 +812,6 @@ const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
         </Stack>
       </ReusableModal>
       <NavBar
-        setTheme={(val: string) => setTheme(val)}
         isAuthenticated={!!user?.name}
         userName={user?.name || ""}
         userAvatar={userAvatar}

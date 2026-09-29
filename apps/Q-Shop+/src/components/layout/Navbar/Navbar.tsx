@@ -18,8 +18,6 @@ import {
   DropdownText,
   AuthenticateButton,
   NavbarName,
-  LightModeIcon,
-  DarkModeIcon,
   ThemeSelectRow,
   QShopLogoContainer,
   StoreManagerIcon,
@@ -40,7 +38,6 @@ interface Props {
   userAvatar: string;
   authenticate: () => void;
   hasAttemptedToFetchShopInitial: boolean;
-  setTheme: (val: string) => void;
   displayDownloadGatewayModalFunc: () => void;
 }
 
@@ -50,7 +47,6 @@ const NavBar: React.FC<Props> = ({
   userAvatar,
   authenticate,
   hasAttemptedToFetchShopInitial,
-  setTheme,
   displayDownloadGatewayModalFunc
 }) => {
   const navigate = useNavigate();
@@ -96,21 +92,6 @@ const NavBar: React.FC<Props> = ({
   return (
     <CustomAppBar position="sticky" elevation={2}>
       <ThemeSelectRow>
-        {theme.palette.mode === "dark" ? (
-          <LightModeIcon
-            onClickFunc={() => setTheme("light")}
-            color="white"
-            height="22"
-            width="22"
-          />
-        ) : (
-          <DarkModeIcon
-            onClickFunc={() => setTheme("dark")}
-            color="black"
-            height="22"
-            width="22"
-          />
-        )}
         <QShopLogoContainer
           src={theme.palette.mode === "dark" ? QShopLogoLight : QShopLogo}
           alt="QShop Logo"

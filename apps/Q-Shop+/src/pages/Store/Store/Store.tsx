@@ -645,7 +645,6 @@ export const Store = () => {
       <Typography
         sx={{
           marginTop: "20px",
-          fontFamily: "Karla",
           fontSize: "25px",
           fontWeight: "500",
           textAlign: "center"
