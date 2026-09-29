@@ -1,45 +1,96 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { createEditor, Descendant, Editor } from 'slate';
-import { withReact, Slate, Editable, RenderElementProps, RenderLeafProps  } from 'slate-react';
-import { renderElement, renderLeaf } from './BlogEditor';
+/**
+ * Renders the legacy Slate document format (`textContent` in mail JSON
+ * written by Q-Mail before textContentV2 HTML) without slate-react, which
+ * uses findDOMNode and cannot run on React 19. The element and mark types
+ * are exactly the ones the old BlogEditor produced: paragraph, heading-2,
+ * heading-3, block-quote, code-block, code-line and link elements, and
+ * bold, italic, underline and link marks.
+ */
+import React from 'react'
+
+type SlateText = {
+  text: string
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  code?: boolean
+  link?: string
+}
+
+type SlateElement = {
+  type?: string
+  url?: string
+  textAlign?: React.CSSProperties['textAlign']
+  children?: SlateNode[]
+}
+
+export type SlateNode = SlateText | SlateElement
 
 interface ReadOnlySlateProps {
-  content: any
+  content: SlateNode[] | unknown
   mode?: string
 }
-const ReadOnlySlate: React.FC<ReadOnlySlateProps> = ({ content, mode }) => {
-  const [load, setLoad] = useState(false)
-  const editor = useMemo(() => withReact(createEditor()), [])
-  const value = useMemo(() => content, [content])
 
-  const performUpdate = useCallback(async()=> {
-    setLoad(true)
-    await new Promise<void>((res)=> {
-      setTimeout(() => {
-          res()
-      }, 250);
-    })
-    setLoad(false)
-  }, [])
-  useEffect(()=> {
+const isText = (node: SlateNode): node is SlateText =>
+  typeof (node as SlateText).text === 'string'
 
-  
-
-
-    performUpdate()
-  }, [value])
-
-  if(load) return null
-
-  return (
-    <Slate editor={editor} value={value} onChange={() => {}}>
-      <Editable
-        readOnly
-        renderElement={(props) => renderElement({ ...props, mode })}
-        renderLeaf={renderLeaf}
-      />
-    </Slate>
-  )
+const renderLeaf = (leaf: SlateText, key: React.Key) => {
+  let el: React.ReactNode = leaf.text
+  if (leaf.bold) el = <strong>{el}</strong>
+  if (leaf.italic) el = <em>{el}</em>
+  if (leaf.underline) el = <u>{el}</u>
+  if (leaf.code) el = <code>{el}</code>
+  if (leaf.link) el = <a href={leaf.link}>{el}</a>
+  return <span key={key}>{el}</span>
 }
 
-export default ReadOnlySlate;
+const renderNodes = (nodes: SlateNode[] | undefined, mode?: string): React.ReactNode =>
+  (Array.isArray(nodes) ? nodes : []).map((node, index) => {
+    if (!node || typeof node !== 'object') return null
+    if (isText(node)) return renderLeaf(node, index)
+    const children = renderNodes(node.children, mode)
+    const style = node.textAlign ? { textAlign: node.textAlign } : undefined
+    switch (node.type) {
+      case 'block-quote':
+        return <blockquote key={index}>{children}</blockquote>
+      case 'heading-2':
+        return (
+          <h2 key={index} className="h2" style={style}>
+            {children}
+          </h2>
+        )
+      case 'heading-3':
+        return (
+          <h3 key={index} className="h3" style={style}>
+            {children}
+          </h3>
+        )
+      case 'code-block':
+        return (
+          <pre key={index} className="code-block">
+            <code>{children}</code>
+          </pre>
+        )
+      case 'code-line':
+        return <div key={index}>{children}</div>
+      case 'link':
+        return (
+          <a key={index} href={node.url}>
+            {children}
+          </a>
+        )
+      default:
+        return (
+          <p key={index} className={`paragraph${mode ? `-${mode}` : ''}`} style={style}>
+            {children}
+          </p>
+        )
+    }
+  })
+
+const ReadOnlySlate = ({ content, mode }: ReadOnlySlateProps) => {
+  if (!Array.isArray(content)) return null
+  return <div className="slate-readonly">{renderNodes(content as SlateNode[], mode)}</div>
+}
+
+export default ReadOnlySlate

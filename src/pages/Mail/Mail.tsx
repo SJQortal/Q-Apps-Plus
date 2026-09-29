@@ -9,7 +9,7 @@ import React, {
 import { useNavigate, useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
-import Joyride, { ACTIONS, EVENTS, STATUS, Step } from "react-joyride";
+import { Joyride, ACTIONS, STATUS, Step } from "react-joyride";
 import SendIcon from "@mui/icons-material/Send";
 import ComposeIconSVG from "../../assets/svgs/ComposeIcon.svg";
 import MailSVG from "../../assets/svgs/mail.svg";
@@ -4021,11 +4021,10 @@ export const Mail = ({ isFromTo }: MailProps) => {
                               <Joyride
                                 steps={steps}
                                 run={run}
-                                callback={handleJoyrideCallback}
+                                onEvent={handleJoyrideCallback}
                                 continuous={true}
                                 scrollToFirstStep={true}
-                                showProgress={true}
-                                showSkipButton={true}
+                                options={{ showProgress: true }}
                               />
                             </>
                           ) : (
