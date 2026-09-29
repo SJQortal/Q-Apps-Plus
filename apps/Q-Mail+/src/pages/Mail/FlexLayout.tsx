@@ -41,7 +41,7 @@ let json: any = {
 
 export const FlexLayout = ({ currentThread, groupInfo, closeThread }: any) => {
   const [model, setModel] = useState(FlexLayoutReact.Model.fromJson(json))
-  const layoutRef = useRef<any>()
+  const layoutRef = useRef<any>(undefined)
   const factory = (node: any) => {
     var component = node.getComponent()
     if (component === 'thread') {
