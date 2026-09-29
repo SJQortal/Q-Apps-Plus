@@ -149,14 +149,14 @@ async function routeCore(page) {
 
 const SCREENS = [
   { key: "home", path: "/", after: async (page) => page.waitForSelector("li, [role=status]", { timeout: 8000 }).catch(() => {}) },
-  { key: "home-filters", path: "/", mobileOnly: true, after: async (page) => { await page.getByRole("button", { name: /^Filters/ }).first().click({ timeout: 4000 }); await page.waitForTimeout(400); } },
+  { key: "home-filters", path: "/", mobileOnly: true, after: async (page) => { await page.getByRole("button", { name: /^Filters/ }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
   { key: "share", path: `/share/${NAME}/${ID(1)}`, after: async (page) => page.waitForSelector("text=Share number 1", { timeout: 8000 }).catch(() => {}) },
   { key: "profile", path: `/channel/${encodeURIComponent("Alice Wonder")}`, after: async (page) => page.waitForSelector("li, [role=status]", { timeout: 8000 }).catch(() => {}) },
   { key: "settings", path: "/settings" },
   { key: "collections", path: "/collections", optional: true },
   { key: "collection", path: `/collection/${NAME}/qshare_collection_holiday-pack_ab12cd`, optional: true },
-  { key: "publish", path: "/", after: async (page) => { await page.getByRole("button", { name: /share files/i }).first().click({ timeout: 5000 }); await page.waitForTimeout(500); } },
-  { key: "account-menu", path: "/", after: async (page) => { await page.getByRole("button", { name: /account menu/i }).first().click({ timeout: 5000 }); await page.waitForTimeout(400); } },
+  { key: "publish", path: "/", after: async (page) => { await page.getByRole("button", { name: /share files/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(500); } },
+  { key: "account-menu", path: "/", after: async (page) => { await page.getByRole("button", { name: /account menu/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
 ];
 
 function startPreview() {
@@ -195,7 +195,7 @@ try {
         await routeCore(page);
         let ok = true;
         try {
-          await page.goto(`http://127.0.0.1:${PORT}${screen.path}?theme=dark`, { waitUntil: "networkidle", timeout: 15000 });
+          await page.goto(`http://127.0.0.1:${PORT}${screen.path}?theme=dark`, { waitUntil: "load", timeout: 12000 });
           if (screen.after) await screen.after(page);
           await page.waitForTimeout(300);
         } catch (e) {
