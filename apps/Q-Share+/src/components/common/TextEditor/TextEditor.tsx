@@ -27,9 +27,11 @@ interface TextEditorProps {
 }
 
 /**
- * The value handed back is Quill 2's semantic HTML as-is (the component
+ * The value handed back is the editor's raw innerHTML as-is (the component
  * compares it with the next `value` prop, so it must round-trip untouched).
- * Run it through `normalizeQuillHtml` before storing it on QDN.
+ * Quill 2.0.3's getSemanticHTML() loses the text of code blocks, so the
+ * semantic mode is switched off; `normalizeQuillHtml` turns the raw markup
+ * into the Quill 1 shape before it is stored on QDN.
  */
 export const TextEditor = ({ inlineContent, setInlineContent }: TextEditorProps) => {
   return (
@@ -37,6 +39,7 @@ export const TextEditor = ({ inlineContent, setInlineContent }: TextEditorProps)
       theme="snow"
       value={inlineContent}
       onChange={setInlineContent}
+      useSemanticHTML={false}
       modules={modules}
     />
   );
