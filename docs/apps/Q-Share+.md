@@ -139,8 +139,44 @@ Deferred: removing the dead Q-Tube player/playlist code (kept, unreachable), tri
 
 ## Done
 
-_Updated as commits land; see the PR description for the running list._
+Pass 1 on branch `q-share-plus/pass-1`, PR #7 (2026-09-29/30). Every commit builds; 26 tests; `scripts/build-zip.sh Q-Share+` produces the zip.
+
+| | Baseline | After pass 1 |
+|---|---|---|
+| Stack | React 18.2, MUI 5.11, RTK 1.9, react-redux 8, Vite 4, TS 5.0, react-quill 2 | React 19.3, MUI 9.4, RTK 2.13, react-redux 9.3, Router 6.30 (v7 flags), Vite 8, TS 5.9, react-quill-new 3.8 |
+| tsc errors | 0 | 0 (10 after MUI 9, fixed) |
+| Tests | 0 | 26 (Quill compat incl. real Quill 2 round trip, search helper, comment thread, Home first load, time) |
+| Searches on first load of Home | 2, one unlimited (`limit=0` over every share) | 1, paged (`limit=20`) |
+| FETCH_QDN_RESOURCE per Home page | 50 | 20 |
+| Comment thread with N comments, M replies | 1 + N searches (N unlimited) + N + M body fetches, sequential | 2 searches + N + M body fetches, 5 at a time, cached |
+| Hub hops for comment avatars | 1 per comment | 0 (URL) |
+| `limit: 0` / unlimited calls | 3 | 0 (stats and follow size page in chunks of 100, capped, on demand) |
+| Polling loops that never stop | 2 | 0 |
+| Biggest JS chunk | 1,123 kB (gzip 345 kB) | 415 kB (gzip 129 kB); Quill 206 kB and the share page 178 kB load on demand |
+| Fonts shipped | 1.4 MB TTF (8 families) | 0.8 MB TTF (Cambon, Raleway, Cairo for Classic) + 436 kB Inter woff2 |
+| Themes | light/dark switch that was never wired | Hub 3.0, Q-Share Classic, Black, White; boot snippet; Settings page |
+
+What changed, per commit: toolchain → React 18.3/RTK 2/Router → react-quill-new + `utils/quillHtml.ts` → React 19.3 + MUI 5.18 → MUI 9.4 → test harness → theme kit + Settings (checkpoint) → search helper + no unlimited searches → download polling → bundle (moment out, lazy Quill and routes) → Hub 3.0 layout, states, previews, colours.
+
+Bugs fixed on the way: `checkAndUpdateFile` boolean comparison, unfollow `item`, intervals never cleared, Load-more count including replies, names unencoded in paths and links, `className=` in generated HTML, Update dialog size message, dialogs that could not be closed, empty description accepted, the stats `styled()` inside render.
+
+Not done in this pass: a right rail (nothing to put in it yet), a bottom navigation bar (the app has two destinations; the sticky header covers it), i18n (upstream has none), lint (baseline 58 errors / 256 warnings on the old eslint 8 config; untouched).
 
 ## Follow-ups
 
-_Filled in at the end of the pass._
+Questions for Simon:
+
+1. **Deep link with `+`:** `shareLink()` now builds `qortal://APP/Q-Share%2B/share/<name>/<id>`. Check in Hub that this opens Q-Share+; if it does not, the fallback is to link to `Q-Share` again (docs/QORTAL.md asks for the exact failure to be recorded here).
+2. **Quill round trip in Hub:** publish a share from Q-Share+ with bullets, a numbered list and a code block, open it in the original Q-Share; then open an old share with formatting in Q-Share+. The jsdom round trip passes; this is the real check.
+3. **Classic theme fonts:** five TTFs that only sat in the fallback list were dropped (Merriweather Sans, Karla, Proxima Nova, Catamaran, Oxygen, plus the unused Livvic). Cambon Light, Raleway and Cairo stay (0.8 MB). Drop those too and let Classic use Inter, or keep them for fidelity?
+4. **Dead Q-Tube code** is still in the tree but unreachable: `VideoPlayer.tsx`, `VideoPlayerGlobal.tsx` and the `react-rnd` floating player, `Playlists.tsx`, `PlaylistListEdit.tsx`, the `PLAYLIST` branch in `getFiles`. Remove next pass?
+
+Next pass ideas:
+
+- Upload progress per file: `PUBLISH_MULTIPLE_QDN_RESOURCES` reports only done/failed per resource; per-file progress needs one publish per file and a resumable flow.
+- Collections (`qshare_collection_` DOCUMENT, additive) and PDF/text previews.
+- ESLint 9 flat config with typescript-eslint 8 and react-hooks 7, then make `npm run lint` part of the build gate.
+- Settings sync to QDN (Torq's `settingsQdn.ts` pattern) once there are more settings than the theme.
+- Hidden-word/hidden-user filters inside the app (the block list is Qortal-wide).
+- Consider qapp-core for lists and identifier hashing in a later pass.
+- Network statistics count up to 3,000 shares (30 pages of 100) and then show "3000+"; raise the cap if the network grows past that.

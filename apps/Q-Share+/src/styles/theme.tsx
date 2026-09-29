@@ -7,17 +7,7 @@ import type { ThemeOptions } from "@mui/material/styles";
  */
 const commonThemeOptions: ThemeOptions = {
   typography: {
-    fontFamily: [
-      "Cambon Light",
-      "Raleway, sans-serif",
-      "Karla",
-      "Merriweather Sans",
-      "Proxima Nova",
-      "Oxygen",
-      "Catamaran",
-      "Cairo",
-      "Arial"
-    ].join(","),
+    fontFamily: ["Cambon Light", "Raleway, sans-serif", "Cairo", "Arial"].join(","),
     h1: {
       fontSize: "2rem",
       fontWeight: 600
