@@ -35,7 +35,7 @@ const Page = styled("div")(({ theme }) => ({
 const PageHeader = styled("header")(({ theme }) => ({
   position: "sticky",
   top: 0,
-  zIndex: 10,
+  zIndex: theme.zIndex.appBar + 1,
   display: "flex",
   alignItems: "center",
   gap: theme.spacing(1),

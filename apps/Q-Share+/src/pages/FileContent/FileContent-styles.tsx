@@ -23,7 +23,7 @@ export const Page = styled(Box)(({ theme }) => ({
 export const SubHeader = styled("header")(({ theme }) => ({
   position: "sticky",
   top: 0,
-  zIndex: 2,
+  zIndex: theme.zIndex.appBar + 1,
   display: "flex",
   alignItems: "center",
   gap: theme.spacing(0.5),
