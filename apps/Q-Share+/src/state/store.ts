@@ -15,7 +15,6 @@ export const store = configureStore({
     getDefaultMiddleware({
       serializableCheck: false,
     }),
-  preloadedState: undefined, // optional, can be any valid state object
 });
 
 // Define the RootState type, which is the type of the entire Redux state tree.
