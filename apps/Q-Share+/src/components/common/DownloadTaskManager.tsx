@@ -1,204 +1,184 @@
-import React, { useState, useEffect } from 'react'
-import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
-  Box,
-  Button,
-  LinearProgress,
-  List,
-  ListItem,
-  ListItemIcon,
-  Popover,
-  Typography,
-  useTheme
-} from '@mui/material'
-import { Movie } from '@mui/icons-material'
-import {  useSelector } from 'react-redux'
-import { RootState } from '../../state/store'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { DownloadingLight } from '../../assets/svgs/DownloadingLight'
-import { DownloadedLight } from '../../assets/svgs/DownloadedLight'
-import AttachFileIcon from "@mui/icons-material/AttachFile";
+import React, { useEffect, useState } from "react";
+import { Badge, Box, Button, IconButton, LinearProgress, List, ListItem, ListItemButton, Popover, Tooltip, Typography } from "@mui/material";
+import DownloadingOutlinedIcon from "@mui/icons-material/DownloadingOutlined";
+import DownloadDoneOutlinedIcon from "@mui/icons-material/DownloadDoneOutlined";
+import CloseIcon from "@mui/icons-material/Close";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import { RootState } from "../../state/store";
+import { clearFinishedDownloads, removeDownload } from "../../state/features/globalSlice";
+import { OPEN_DOWNLOADS_EVENT } from "../layout/BottomNav/events";
+import { BottomSheet } from "./mobile/BottomSheet";
+import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { downloadPhase, downloadStatusText } from "../../wrappers/DownloadWrapper";
+import { sharePath } from "../../utils/qortalLinks";
+import { fileKind, fileKindIconElement } from "../../utils/fileKind";
 
+/**
+ * The downloads button in the top bar: a badge with how many files are still
+ * arriving, and a list (a bottom sheet on phones, a popover on desktop) that
+ * links each file back to its share. The phone bottom bar opens the same view
+ * through OPEN_DOWNLOADS_EVENT.
+ */
 export const DownloadTaskManager: React.FC = () => {
-  const { downloads } = useSelector((state: RootState) => state.global)
-  const location = useLocation()
-  const theme = useTheme()
-  const [visible, setVisible] = useState(false)
-  const [hidden, setHidden] = useState(true)
-  const navigate = useNavigate()
-  const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
+  const downloads = useSelector((state: RootState) => state.global.downloads);
+  const dispatch = useDispatch();
+  const phone = usePhoneLayout();
+  const navigate = useNavigate();
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [open, setOpen] = useState(false);
 
+  useEffect(() => {
+    const onOpenRequest = (e: Event) => {
+      e.preventDefault();
+      setOpen(true);
+    };
+    window.addEventListener(OPEN_DOWNLOADS_EVENT, onOpenRequest);
+    return () => window.removeEventListener(OPEN_DOWNLOADS_EVENT, onOpenRequest);
+  }, []);
 
-  const [openDownload, setOpenDownload] = useState<boolean>(false);
+  const entries: any[] = Object.values(downloads ?? {});
+  const inProgress = entries.filter((d) => {
+    const phase = downloadPhase(d?.status?.status, true);
+    return phase !== "ready" && phase !== "failed";
+  }).length;
+  const finished = entries.filter((d) => d?.status?.status === "READY").length;
+  const label = `Downloads, ${inProgress} in progress`;
 
-
-  const handleClick = (event?: React.MouseEvent<HTMLDivElement>) => {
-    const target = event?.currentTarget as unknown as HTMLButtonElement | null;
-    setAnchorEl(target);
-  };
-
-  const handleCloseDownload = () => {
+  const close = () => {
+    setOpen(false);
     setAnchorEl(null);
-    setOpenDownload(false);
   };
 
-  useEffect(() => {
-    // Simulate downloads for demo purposes
+  const list =
+    entries.length === 0 ? (
+      <Typography role="status" variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 3 }}>
+        No downloads yet
+      </Typography>
+    ) : (
+      <List disablePadding sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+        {entries.map((download) => {
+          const props = download?.properties ?? {};
+          const status: string | undefined = download?.status?.status;
+          const percent = Math.max(0, Math.min(100, Math.round(download?.status?.percentLoaded ?? 0)));
+          const phase = downloadPhase(status, true);
+          const filename: string = props.filename || download?.identifier;
+          const kind = fileKind(props.mimeType || props.mimetype, filename);
+          const shareId = props.jsonId;
+          const publisher = props.name || download?.name;
+          // Only rows without a running poller can be removed; a live poller would re-add the entry.
+          const removable = phase === "ready" || phase === "failed";
+          return (
+            <ListItem
+              key={download?.identifier}
+              disablePadding
+              sx={{ borderRadius: 2, border: 1, borderColor: "divider", alignItems: "stretch" }}
+              secondaryAction={
+                removable ? (
+                  <IconButton
+                    edge="end"
+                    aria-label={`Remove ${filename} from the list`}
+                    onClick={() => dispatch(removeDownload(download.identifier))}
+                    sx={{ minWidth: 44, minHeight: 44 }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                ) : undefined
+              }
+            >
+              <ListItemButton
+                onClick={() => {
+                  if (shareId && publisher) navigate(sharePath(publisher, shareId));
+                  close();
+                }}
+                aria-label={`${filename}: ${downloadStatusText(status, percent)}`}
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "stretch",
+                  gap: 0.75,
+                  minHeight: 56,
+                  borderRadius: 2,
+                  px: 1.5,
+                  py: 1,
+                  pr: removable ? 6 : 1.5,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+                  {fileKindIconElement(kind, { fontSize: "small", sx: { color: "text.secondary", flexShrink: 0 } })}
+                  <Typography sx={{ fontSize: 14, fontWeight: 600, minWidth: 0, overflowWrap: "anywhere" }}>{filename}</Typography>
+                </Box>
+                <LinearProgress
+                  variant={phase === "building" ? "indeterminate" : "determinate"}
+                  value={phase === "ready" ? 100 : percent}
+                  color={phase === "failed" ? "error" : "primary"}
+                  sx={{ borderRadius: 1, height: 5 }}
+                />
+                <Typography variant="caption" color={phase === "failed" ? "error" : "text.secondary"}>
+                  {downloadStatusText(status, percent)}
+                </Typography>
+              </ListItemButton>
+            </ListItem>
+          );
+        })}
+      </List>
+    );
 
-    if (visible) {
-      setTimeout(() => {
-        setHidden(true)
-        setVisible(false)
-      }, 3000)
-    }
-  }, [visible])
-
-
-  useEffect(() => {
-    if (Object.keys(downloads).length === 0) return
-    setVisible(true)
-    setHidden(false)
-  }, [downloads])
-
-
-  if (
-    !downloads ||
-    Object.keys(downloads).length === 0
-  )
-    return null
-
-
-  let downloadInProgress = false
-  if(Object.keys(downloads).find((key)=> (downloads[key]?.status?.status !== 'READY' && downloads[key]?.status?.status !== 'DOWNLOADED'))){
-    downloadInProgress = true
-  }
+  const clearButton =
+    finished > 0 ? (
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
+        <Button
+          variant="text"
+          size="small"
+          onClick={() => dispatch(clearFinishedDownloads())}
+          sx={{ minHeight: 44, width: phone ? "100%" : "auto" }}
+        >
+          Clear finished
+        </Button>
+      </Box>
+    ) : null;
 
   return (
-    <Box>
-              <Button  onClick={(e: any) => {
-                handleClick(e);
-                setOpenDownload(true);
-              }}>
-                {downloadInProgress ? (
-                   <DownloadingLight height='24px' width='24px' className='download-icon' />
-                ) : (
-                  <DownloadedLight height='24px' width='24px'  />
-                )}
-                
-              </Button>
-             
-              <Popover
-          id={"download-popover"}
-          open={openDownload}
-          anchorEl={anchorEl}
-          onClose={handleCloseDownload}
-          anchorOrigin={{
-            vertical: "bottom",
-            horizontal: "left"
+    <>
+      <Tooltip title="Downloads">
+        <IconButton
+          aria-label={label}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={(e) => {
+            setAnchorEl(e.currentTarget);
+            setOpen(true);
           }}
+          sx={{ color: "text.primary", minWidth: 44, minHeight: 44 }}
         >
-   <List
-            sx={{
-              maxHeight: '50vh',
-              overflow: 'auto',
-              width: '250px',
-              gap: '5px',
-              display: 'flex',
-              flexDirection: 'column',
-          
-            }}
-          >
-            {Object.keys(downloads)
-              .map((download: any) => {
-                const downloadObj = downloads[download]
-                const progress = downloads[download]?.status?.percentLoaded || 0
-                const status = downloads[download]?.status?.status
-                const service = downloads[download]?.service
-                return (
-                  <ListItem
-                    key={downloadObj?.identifier}
-                    sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      width: '100%',
-                      justifyContent: 'center',
-                      background: theme.palette.primary.main,
-                      color: theme.palette.text.primary,
-                      cursor: 'pointer',
-                      padding: '2px',
-                      
-                    }}
-                    onClick={() => {
-                      const id = downloadObj?.properties?.jsonId
-                      if (!id) return
-            
-                      navigate(
-                        `/share/${downloadObj?.properties?.name}/${id}`
-                      )
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        width: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                      }}
-                    >
-                      <ListItemIcon>
-                       
-                          <AttachFileIcon sx={{ color: theme.palette.text.primary }} />
-                       
-                      </ListItemIcon>
-
-                      <Box
-                        sx={{ width: '100px', marginLeft: 1, marginRight: 1 }}
-                      >
-                        <LinearProgress
-                          variant="determinate"
-                          value={progress}
-                          sx={{
-                            borderRadius: '5px',
-                            color: theme.palette.secondary.main
-                          }}
-                        />
-                      </Box>
-                      <Typography
-                        sx={{
-                          fontFamily: 'Arial',
-                          color: theme.palette.text.primary
-                        }}
-                        variant="caption"
-                      >
-                        {`${progress?.toFixed(0)}%`}{' '}
-                        {status && status === 'REFETCHING' && '- refetching'}
-                        {status && status === 'DOWNLOADED' && '- building'}
-                      </Typography>
-                    </Box>
-                    <Typography
-                      sx={{
-                        fontSize: '10px',
-                        width: '100%',
-                        textAlign: 'end',
-                        fontFamily: 'Arial',
-                        color: theme.palette.text.primary,
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {downloadObj?.identifier}
-                    </Typography>
-                  </ListItem>
-                )
-              })}
-          </List>
-          </Popover>
-           
-    </Box>
-     
-  )
-}
+          <Badge badgeContent={inProgress} color="primary" overlap="circular">
+            {inProgress > 0 ? <DownloadingOutlinedIcon className="download-icon" /> : <DownloadDoneOutlinedIcon />}
+          </Badge>
+        </IconButton>
+      </Tooltip>
+      {phone ? (
+        <BottomSheet open={open} onClose={close} title="Downloads">
+          {list}
+          {clearButton}
+        </BottomSheet>
+      ) : (
+        <Popover
+          id="download-popover"
+          open={open}
+          anchorEl={anchorEl}
+          onClose={close}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+          transformOrigin={{ vertical: "top", horizontal: "right" }}
+        >
+          <Box sx={{ width: 320, maxWidth: "calc(100vw - 32px)", maxHeight: "60vh", overflowY: "auto", p: 1.5 }}>
+            <Typography component="h2" sx={{ fontWeight: 700, fontSize: 15, mb: 1 }}>
+              Downloads
+            </Typography>
+            {list}
+            {clearButton}
+          </Box>
+        </Popover>
+      )}
+    </>
+  );
+};

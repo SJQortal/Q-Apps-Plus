@@ -1,17 +1,13 @@
-import { Box, Button, TextField } from "@mui/material";
-import React, { useEffect, useState } from "react";
+import { Box, Typography } from "@mui/material";
+import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../../state/store";
 import ShortUniqueId from "short-unique-id";
 import { setNotification } from "../../../state/features/notificationsSlice";
-import { toBase64 } from "../../../utils/toBase64";
 import localforage from "localforage";
-import {
-  CommentInput,
-  CommentInputContainer,
-  SubmitCommentButton,
-} from "./Comments-styles";
+import { CommentInput, CommentInputContainer, SubmitCommentButton } from "./Comments-styles";
 import { QSHARE_COMMENT_BASE } from "../../../constants/Identifiers.ts";
+
 const uid = new ShortUniqueId();
 
 const notification = localforage.createInstance({
@@ -19,6 +15,8 @@ const notification = localforage.createInstance({
 });
 
 const MAX_ITEMS = 10;
+/** Comments are short (the original app's limit). */
+export const MAX_COMMENT_LENGTH = 200;
 
 export interface Item {
   id: string;
@@ -28,53 +26,36 @@ export interface Item {
 }
 
 export async function addItem(item: Item): Promise<void> {
-  // Get all items
-  let notificationComments: Item[] =
-    (await notification.getItem("comments")) || [];
-
-  // Find the item with the same id, if it exists
-  let existingItemIndex = notificationComments.findIndex(i => i.id === item.id);
-
+  const notificationComments: Item[] = (await notification.getItem("comments")) || [];
+  const existingItemIndex = notificationComments.findIndex((i) => i.id === item.id);
   if (existingItemIndex !== -1) {
-    // If the item exists, update its date
     notificationComments[existingItemIndex].lastSeen = item.lastSeen;
   } else {
-    // If the item doesn't exist, add it
     notificationComments.push(item);
-
-    // If adding the item has caused us to exceed the max number of items, remove the oldest one
     if (notificationComments.length > MAX_ITEMS) {
-      notificationComments.sort((a, b) => b.lastSeen - a.lastSeen); // sort items by date, newest first
-      notificationComments.pop(); // remove the oldest item
+      notificationComments.sort((a, b) => b.lastSeen - a.lastSeen);
+      notificationComments.pop();
     }
   }
-
-  // Store the items back into localForage
   await notification.setItem("comments", notificationComments);
 }
-export async function updateItemDate(item: any): Promise<void> {
-  // Get all items
-  let notificationComments: Item[] =
-    (await notification.getItem("comments")) || [];
 
-  let notificationCreatorComment: any =
-    (await notification.getItem("post-comments")) || {};
+export async function updateItemDate(item: any): Promise<void> {
+  const notificationComments: Item[] = (await notification.getItem("comments")) || [];
+  const notificationCreatorComment: any = (await notification.getItem("post-comments")) || {};
   const findPostId = notificationCreatorComment[item.postId];
   if (findPostId) {
     notificationCreatorComment[item.postId].lastSeen = item.lastSeen;
   }
-
-  // Find the item with the same id, if it exists
   notificationComments.forEach((nc, index) => {
     if (nc.postId === item.postId) {
       notificationComments[index].lastSeen = item.lastSeen;
     }
   });
-
-  // Store the items back into localForage
   await notification.setItem("comments", notificationComments);
   await notification.setItem("post-comments", notificationCreatorComment);
 }
+
 interface CommentEditorProps {
   postId: string;
   postName: string;
@@ -86,65 +67,43 @@ interface CommentEditorProps {
 }
 
 function utf8ToBase64(inputString: string): string {
-  // Encode the string as UTF-8
-  const utf8String = encodeURIComponent(inputString).replace(
-    /%([0-9A-F]{2})/g,
-    (match, p1) => String.fromCharCode(Number("0x" + p1))
+  const utf8String = encodeURIComponent(inputString).replace(/%([0-9A-F]{2})/g, (_match, p1) =>
+    String.fromCharCode(Number("0x" + p1))
   );
-
-  // Convert the UTF-8 encoded string to base64
-  const base64String = btoa(utf8String);
-  return base64String;
+  return btoa(utf8String);
 }
 
-export const CommentEditor = ({
-  onSubmit,
-  postId,
-  postName,
-  isReply,
-  commentId,
-  isEdit,
-  commentMessage,
-}: CommentEditorProps) => {
-  const [value, setValue] = useState<string>("");
+function errorMessage(error: unknown, fallback: string): string {
+  if (typeof error === "string") return error || fallback;
+  const e = error as { error?: unknown; message?: unknown } | null;
+  if (typeof e?.error === "string") return e.error || fallback;
+  if (typeof e?.message === "string") return e.message || fallback;
+  return fallback;
+}
+
+/**
+ * Writes a BLOG_COMMENT with the original app's identifier scheme
+ * (`qcomment_v1_qshare_<last 12 of share id>_base_<uid>` or
+ * `…_reply_<last 6 of base id>_<uid>`), raw UTF-8 text, at most 200 characters.
+ */
+export const CommentEditor = ({ onSubmit, postId, postName, isReply, commentId, isEdit, commentMessage }: CommentEditorProps) => {
+  const [value, setValue] = useState<string>(() => (isEdit && commentMessage ? commentMessage : ""));
+  const [submitting, setSubmitting] = useState(false);
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
 
-  useEffect(() => {
-    if (isEdit && commentMessage) {
-      setValue(commentMessage);
-    }
-  }, [isEdit, commentMessage]);
+  const empty = value.trim().length === 0;
+  const over = value.length > MAX_COMMENT_LENGTH;
 
-  const publishComment = async (
-    identifier: string,
-    idForNotification?: string
-  ) => {
-    let address;
-    let name;
+  const publishComment = async (identifier: string, idForNotification?: string) => {
+    const address = user?.address;
+    const name = user?.name || "";
     let errorMsg = "";
-
-    address = user?.address;
-    name = user?.name || "";
-
-    if (!address) {
-      errorMsg = "Cannot post: your address isn't available";
-    }
-    if (!name) {
-      errorMsg = "Cannot post without a name";
-    }
-
-    if (value.length > 200) {
-      errorMsg = "Comment needs to be under 200 characters";
-    }
-
+    if (!address) errorMsg = "Cannot post: your address isn't available";
+    if (!name) errorMsg = "Cannot post without a name";
+    if (value.length > MAX_COMMENT_LENGTH) errorMsg = `Comment needs to be under ${MAX_COMMENT_LENGTH} characters`;
     if (errorMsg) {
-      dispatch(
-        setNotification({
-          msg: errorMsg,
-          alertType: "error",
-        })
-      );
+      dispatch(setNotification({ msg: errorMsg, alertType: "error" }));
       throw new Error(errorMsg);
     }
 
@@ -152,70 +111,37 @@ export const CommentEditor = ({
       const base64 = utf8ToBase64(value);
       const resourceResponse = await qortalRequest({
         action: "PUBLISH_QDN_RESOURCE",
-        name: name,
+        name,
         service: "BLOG_COMMENT",
         data64: base64,
-        identifier: identifier,
+        identifier,
       });
-      dispatch(
-        setNotification({
-          msg: "Comment successfully published",
-          alertType: "success",
-        })
-      );
+      dispatch(setNotification({ msg: "Comment published", alertType: "success" }));
       if (idForNotification) {
-        addItem({
-          id: idForNotification,
-          lastSeen: Date.now(),
-          postId,
-          postName: postName,
-        });
+        addItem({ id: idForNotification, lastSeen: Date.now(), postId, postName });
       }
-
       return resourceResponse;
-    } catch (error: any) {
-      let notificationObj: any = null;
-      if (typeof error === "string") {
-        notificationObj = {
-          msg: error || "Failed to publish comment",
-          alertType: "error",
-        };
-      } else if (typeof error?.error === "string") {
-        notificationObj = {
-          msg: error?.error || "Failed to publish comment",
-          alertType: "error",
-        };
-      } else {
-        notificationObj = {
-          msg: error?.message || "Failed to publish comment",
-          alertType: "error",
-        };
-      }
-      if (!notificationObj) throw new Error("Failed to publish comment");
-
-      dispatch(setNotification(notificationObj));
+    } catch (error) {
+      dispatch(setNotification({ msg: errorMessage(error, "Failed to publish comment"), alertType: "error" }));
       throw new Error("Failed to publish comment");
     }
   };
+
   const handleSubmit = async () => {
+    if (empty || over || submitting) return;
+    setSubmitting(true);
     try {
       const id = uid();
-
-      let identifier = `${QSHARE_COMMENT_BASE}${postId.slice(-12)}_base_${id}`;
+      const postKey = postId.slice(-12);
+      let identifier = `${QSHARE_COMMENT_BASE}${postKey}_base_${id}`;
       let idForNotification = identifier;
-
       if (isReply && commentId) {
-        const removeBaseCommentId = commentId;
-        removeBaseCommentId.replace("_base_", "");
-        identifier = `${QSHARE_COMMENT_BASE}${postId.slice(
-          -12
-        )}_reply_${removeBaseCommentId.slice(-6)}_${id}`;
+        identifier = `${QSHARE_COMMENT_BASE}${postKey}_reply_${commentId.slice(-6)}_${id}`;
         idForNotification = commentId;
       }
       if (isEdit && commentId) {
         identifier = commentId;
       }
-
       await publishComment(identifier, idForNotification);
       onSubmit({
         created: Date.now(),
@@ -225,30 +151,39 @@ export const CommentEditor = ({
         name: user?.name,
       });
       setValue("");
-    } catch (error) {
-      console.error(error);
+    } catch {
+      /* the toast above already said what failed */
+    } finally {
+      setSubmitting(false);
     }
   };
+
+  const inputLabel = isReply ? "Your reply" : isEdit ? "Edit your comment" : "Your comment";
+  const counterId = `comment-count-${isReply ? "reply" : isEdit ? "edit" : "new"}-${commentId || postId}`;
 
   return (
     <CommentInputContainer>
       <CommentInput
-        id="standard-multiline-flexible"
-        label="Your comment"
+        label={inputLabel}
         multiline
-        maxRows={4}
+        minRows={2}
+        maxRows={6}
         variant="filled"
         value={value}
+        error={over}
         slotProps={{
-          htmlInput: { maxLength: 200 },
-          inputLabel: { style: { fontSize: "18px" } },
+          htmlInput: { maxLength: MAX_COMMENT_LENGTH, "aria-describedby": counterId },
         }}
-        onChange={e => setValue(e.target.value)}
+        onChange={(e) => setValue(e.target.value)}
       />
-
-      <SubmitCommentButton variant="contained" onClick={handleSubmit}>
-        {isReply ? "Submit reply" : isEdit ? "Edit" : "Submit comment"}
-      </SubmitCommentButton>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, width: "100%", flexWrap: "wrap" }}>
+        <Typography id={counterId} variant="caption" aria-live="polite" color={over ? "error" : "text.secondary"}>
+          {value.length}/{MAX_COMMENT_LENGTH}
+        </Typography>
+        <SubmitCommentButton variant="contained" onClick={handleSubmit} disabled={empty || over || submitting}>
+          {submitting ? "Publishing…" : isReply ? "Submit reply" : isEdit ? "Save changes" : "Submit comment"}
+        </SubmitCommentButton>
+      </Box>
     </CommentInputContainer>
   );
 };

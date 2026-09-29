@@ -1,32 +1,28 @@
-import { Box, Button, ButtonProps } from "@mui/material";
+import { Button, ButtonProps } from "@mui/material";
 import Tooltip, { TooltipProps, tooltipClasses } from "@mui/material/Tooltip";
-
 import { MouseEvent, useEffect, useState } from "react";
 import { styled } from "@mui/material/styles";
+import { useSelector } from "react-redux";
+import { RootState } from "../../state/store";
+import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { formatBytes } from "../../utils/formatBytes";
 
 interface FollowButtonProps extends ButtonProps {
   followerName: string;
 }
 
-const TooltipLine = styled("div")(({ theme }) => ({
-  fontSize: "18px",
-}));
-
-const CustomWidthTooltipStyles = styled(
-  ({ className, ...props }: TooltipProps) => (
-    <Tooltip {...props} classes={{ popper: className }} />
-  )
-)({
-  [`& .${tooltipClasses.tooltip}`]: {
-    maxWidth: 600,
-  },
+const TooltipLine = styled("div")({
+  fontSize: 15,
+  lineHeight: 1.4,
 });
 
-const CustomTooltip = ({ title, ...props }: TooltipProps) => {
-  if (typeof title === "string") title = <TooltipLine>{title}</TooltipLine>;
-
-  return <CustomWidthTooltipStyles title={title} {...props} />;
-};
+const CustomWidthTooltipStyles = styled(({ className, ...props }: TooltipProps) => (
+  <Tooltip {...props} classes={{ popper: className }} />
+))({
+  [`& .${tooltipClasses.tooltip}`]: {
+    maxWidth: 420,
+  },
+});
 
 const SIZE_PAGE = 100;
 const SIZE_MAX_PAGES = 10;
@@ -84,11 +80,20 @@ export const resetFollowCaches = () => {
   followedNamesPromise = null;
 };
 
-export const FollowButton = ({ followerName, ...props }: FollowButtonProps) => {
+/**
+ * Follow / Unfollow a publisher (Qortal's followedNames list). Hidden when the
+ * name is the signed-in user's own. The tooltip explains what following does
+ * and loads the name's total size only when it opens.
+ */
+export const FollowButton = ({ followerName, sx, ...props }: FollowButtonProps) => {
+  const phone = usePhoneLayout();
+  const username = useSelector((state: RootState) => state.auth.user?.name);
   const [followingList, setFollowingList] = useState<string[]>([]);
   const [size, setSize] = useState<{ bytes: number; items: number; complete: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (!followerName) return;
     let active = true;
     readFollowedNames().then((list) => {
       if (active) setFollowingList(list);
@@ -98,17 +103,18 @@ export const FollowButton = ({ followerName, ...props }: FollowButtonProps) => {
     };
   }, [followerName]);
 
+  if (!followerName || followerName === username) return null;
+
   const loadSize = () => {
-    if (!followerName || size) return;
+    if (size) return;
     readPublishSize(followerName)
       .then(setSize)
       .catch(() => {});
   };
 
-  const isFollowingName = () => followingList.includes(followerName);
+  const following = followingList.includes(followerName);
 
   const followName = async () => {
-    if (isFollowingName()) return;
     const response: boolean = await qortalRequest({
       action: "ADD_LIST_ITEMS",
       list_name: "followedNames",
@@ -121,7 +127,6 @@ export const FollowButton = ({ followerName, ...props }: FollowButtonProps) => {
   };
 
   const unfollowName = async () => {
-    if (!isFollowingName()) return;
     const response: boolean = await qortalRequest({
       action: "DELETE_LIST_ITEM",
       list_name: "followedNames",
@@ -133,42 +138,26 @@ export const FollowButton = ({ followerName, ...props }: FollowButtonProps) => {
     followedNamesPromise = Promise.resolve(next);
   };
 
-  const manageFollow = (e: MouseEvent<HTMLButtonElement>) => {
+  const manageFollow = async (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    isFollowingName() ? unfollowName() : followName();
-  };
-
-  const verticalPadding = "3px";
-  const horizontalPadding = "8px";
-  const buttonStyle = {
-    fontSize: "15px",
-    fontWeight: "700",
-    paddingTop: verticalPadding,
-    paddingBottom: verticalPadding,
-    paddingLeft: horizontalPadding,
-    paddingRight: horizontalPadding,
-    borderRadius: 28,
-    width: "96px",
-    height: "45px",
-    ...props.sx,
-  };
-
-  const formatBytes = (bytes: number, decimals = 2) => {
-    if (!+bytes) return "0 Bytes";
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (following) await unfollowName();
+      else await followName();
+    } catch {
+      /* Hub shows its own error; the button keeps its state */
+    } finally {
+      setBusy(false);
+    }
   };
 
   const tooltipTitle = (
     <>
       <TooltipLine>
-        Following a name automatically downloads all of its content to your
-        node. The more followers a name has, the faster its content will
-        download for everyone.
+        Following a name downloads all of its content to your node. The more followers a name has, the faster its
+        content downloads for everyone.
       </TooltipLine>
       <br />
       {size ? (
@@ -183,16 +172,21 @@ export const FollowButton = ({ followerName, ...props }: FollowButtonProps) => {
   );
 
   return (
-    <CustomTooltip title={tooltipTitle} placement={"top"} arrow onOpen={loadSize}>
+    <CustomWidthTooltipStyles title={tooltipTitle} placement="top" arrow onOpen={loadSize}>
       <Button
         {...props}
-        variant={"contained"}
-        color="success"
-        sx={buttonStyle}
-        onClick={(e) => manageFollow(e)}
+        variant={following ? "outlined" : "contained"}
+        onClick={manageFollow}
+        disabled={busy || props.disabled}
+        aria-pressed={following}
+        aria-label={`${following ? "Unfollow" : "Follow"} ${followerName}`}
+        sx={[
+          { fontWeight: 700, minWidth: 96, minHeight: phone ? 44 : 36, px: 2 },
+          ...(Array.isArray(sx) ? sx : [sx]),
+        ]}
       >
-        {isFollowingName() ? "Unfollow" : "Follow"}
+        {following ? "Unfollow" : "Follow"}
       </Button>
-    </CustomTooltip>
+    </CustomWidthTooltipStyles>
   );
 };
