@@ -1,0 +1,1538 @@
+let minterGroupAddresses
+let minterAdminAddresses
+let isTest = false
+let isAddRemoveBoard = true
+let otherPublisher = false
+const addRemoveIdentifierPrefix = "QM-AR-card"
+const AR_TX_CACHE_TTL_MS = 30000
+let arTxCache = {
+  timestamp: 0,
+  data: null,
+}
+const adminDirectoryState = {
+  loaded: false,
+  activeCount: 0,
+  totalCount: 0,
+  loading: false,
+}
+
+const AR_CARD_THEMES = {
+  promotion: {
+    background: "rgba(11, 41, 44, 0.97)",
+    accent: "rgba(134, 218, 222, 0.96)",
+    stateAccent: "rgba(115, 208, 195, 0.72)",
+    border: "rgba(115, 208, 195, 0.24)",
+  },
+  demotion: {
+    background: "rgba(44, 12, 15, 0.97)",
+    accent: "rgba(255, 182, 184, 0.96)",
+    stateAccent: "rgba(215, 101, 101, 0.72)",
+    border: "rgba(215, 101, 101, 0.24)",
+  },
+  duplicate: {
+    background: "rgba(32, 34, 37, 0.97)",
+    accent: "rgba(190, 198, 203, 0.94)",
+    stateAccent: "rgba(174, 181, 187, 0.72)",
+    border: "rgba(174, 181, 187, 0.24)",
+  },
+}
+
+const getAllARTxDataCached = async (force = false) => {
+  const now = Date.now()
+  const isStale = now - arTxCache.timestamp > AR_TX_CACHE_TTL_MS
+  if (force || !arTxCache.data || isStale) {
+    arTxCache.data = await fetchAllARTxData()
+    arTxCache.timestamp = now
+  }
+  return arTxCache.data
+}
+
+const loadAddRemoveAdminPage = async () => {
+  // Kakashi Note: Clear other board scroll listeners before loading this board to prevent duplicate lazy-load callbacks.
+  if (typeof detachAdminBoardInfiniteScroll === "function") {
+    detachAdminBoardInfiniteScroll()
+  }
+  if (typeof detachMinterBoardInfiniteScroll === "function") {
+    detachMinterBoardInfiniteScroll()
+  }
+  qMintershipActiveBoard = "ar"
+
+  console.log("Loading Add/Remove Admin page...")
+  clearQMintershipBodyContent()
+
+  const mainContainer = document.createElement("div")
+  mainContainer.className = "add-remove-admin-main"
+  mainContainer.style = "padding: 20px; text-align: center;"
+  adminDirectoryState.loaded = false
+  adminDirectoryState.activeCount = 0
+  adminDirectoryState.totalCount = 0
+  adminDirectoryState.loading = false
+  mainContainer.innerHTML = `
+        <h1 style="color: lightblue;">Minter Admin Management</h1>
+        <p style="font-size:0.95rem; color: white;">
+            This page allows proposing the promotion of an existing minter to admin, 
+            or demotion of an existing admin back to a normal minter.
+        </p>
+    
+        <div id="admin-table-section" class="admin-table-section admin-directory-panel" style="margin-top: 2em;">
+            <div class="admin-directory-panel__header">
+                <div class="admin-directory-panel__copy">
+                    <h3 style="color:rgb(212, 212, 212); margin-bottom: 0.25rem;">Current Minter Admins</h3>
+                    <p id="admin-directory-summary" class="admin-directory-summary">Loading admin directory...</p>
+                </div>
+                <button id="toggle-admin-list-button" class="publish-card-button admin-directory-toggle-button" type="button">
+                    Show Current Minter Admins
+                </button>
+            </div>
+            <div id="admin-list-wrapper" class="admin-directory-body" hidden>
+                <div id="admin-list-container" style="margin: 1em auto; max-width: 900px;"></div>
+            </div>
+        </div>
+
+        <div id="promotion-section" class="promotion-section" style="margin-top: 3em;">
+            <button id="propose-promotion-button" style="padding: 10px; color: white; background:rgb(7, 73, 71) ; cursor: pointer; border-radius: 5px;">
+                Propose a Minter for Admin Position
+            </button>
+            <div id="promotion-form-container" class="publish-card-view" style="display: none; margin-top: 1em;">
+                <form id="publish-card-form" class="publish-card-form">
+                    <h3>Create or Update Promotion/Demotion Proposal Card</h3>
+                    <label for="minter-name-input">Input NAME (promotion):</label>
+                    <input type="text" id="minter-name-input" maxlength="100" placeholder="input NAME of MINTER for PROMOTION" required>
+                    <label for="card-header">Header:</label>
+                    <input type="text" id="card-header" maxlength="100" placeholder="Header / Headline info" required>
+                    <label for="card-content">Content:</label>
+                    <textarea id="card-content" placeholder="Enter detailed information about why you are making this proposal for promotion/demotion. You may utilize links to additional data as well." required></textarea>
+                    <label for="card-links">Links (qortal://...):</label>
+                    <div id="links-container">
+                        <input type="text" class="card-link" placeholder="Enter QDN link">
+                    </div>
+                    <button type="button" id="add-link-button">Add Another Link</button>
+                    <button type="submit" id="submit-publish-button">Publish Card</button>
+                    <button type="button" id="cancel-publish-button">Cancel</button>
+                </form>
+            </div>
+        </div>
+    
+        <div id="existing-proposals-section" class="proposals-section" style="margin-top: 3em; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+            <h3 style="color: #ddd;">Existing Promotion/Demotion Proposals</h3>
+            <button id="refresh-cards-button" class="refresh-cards-button" style="padding: 10px;">Refresh Proposal Cards</button>
+            <select id="time-range-select" style="margin-left: 10px; padding: 5px; font-size: 1.25rem; color: white; background-color: black;">
+              <option value="0">All Creation Dates</option>
+              <option value="1">Last 1 Day</option>
+              <option value="7">Last 7 Days</option>
+              <option value="30">...Within 30 Days</option>
+              <option value="45" selected>Published Within Last 45 Days</option>
+              <option value="60">...Within 60 Days</option>
+              <option value="90">...Within 90 Days</option>
+            </select>
+        </div>
+        <div id="cards-container" class="cards-container" style="margin-top: 1rem"">
+            <!-- We'll fill this with existing proposal cards -->
+        </div>
+        
+    `
+
+  document.body.appendChild(mainContainer)
+
+  document
+    .getElementById("propose-promotion-button")
+    .addEventListener("click", async () => {
+      try {
+        // Show the form
+        const publishCardView = document.getElementById(
+          "promotion-form-container"
+        )
+        publishCardView.style.display = "flex"
+        // publishCardView.style.display === "none" ? "flex" : "none"
+        // document.getElementById("existing-proposals-section").style.display = "none"
+        const proposeButton = document.getElementById(
+          "propose-promotion-button"
+        )
+        proposeButton.style.display = "none"
+        // proposeButton.style.display === 'flex' ? 'none' : 'flex'
+      } catch (error) {
+        console.error("Error opening propose form", error)
+        alert("Failed to open proposal form. Please try again.")
+      }
+    })
+
+  document
+    .getElementById("refresh-cards-button")
+    .addEventListener("click", async () => {
+      const cardsContainer = document.getElementById("cards-container")
+      cardsContainer.innerHTML = getBoardLoadingHTML("Refreshing cards...")
+      await initializeCachedGroups()
+      await getAllARTxDataCached(true)
+      await loadCards(addRemoveIdentifierPrefix, true)
+    })
+
+  document
+    .getElementById("cancel-publish-button")
+    .addEventListener("click", async () => {
+      // const cardsContainer = document.getElementById("existing-proposals-section")
+      // cardsContainer.style.display = "flex" // Restore visibility
+      const publishCardView = document.getElementById(
+        "promotion-form-container"
+      )
+      publishCardView.style.display = "none" // Hide the publish form
+      const proposeButton = document.getElementById("propose-promotion-button")
+      proposeButton.style.display = "flex"
+      // proposeButton.style.display === 'flex' ? 'none' : 'flex'
+    })
+
+  document
+    .getElementById("add-link-button")
+    .addEventListener("click", async () => {
+      const linksContainer = document.getElementById("links-container")
+      const newLinkInput = document.createElement("input")
+      newLinkInput.type = "text"
+      newLinkInput.className = "card-link"
+      newLinkInput.placeholder = "Enter QDN link"
+      linksContainer.appendChild(newLinkInput)
+    })
+
+  const toggleAdminListButton = document.getElementById("toggle-admin-list-button")
+  if (toggleAdminListButton) {
+    toggleAdminListButton.addEventListener("click", async () => {
+      await toggleAdminDirectoryVisibility()
+    })
+  }
+
+  const timeRangeSelectCheckbox = document.getElementById("time-range-select")
+  if (timeRangeSelectCheckbox) {
+    timeRangeSelectCheckbox.addEventListener("change", async (event) => {
+      await loadCards(addRemoveIdentifierPrefix)
+    })
+  }
+
+  document
+    .getElementById("publish-card-form")
+    .addEventListener("submit", async (event) => {
+      event.preventDefault()
+      await publishARCard(addRemoveIdentifierPrefix)
+    })
+  await featureTriggerCheck()
+  await getAllARTxDataCached(true)
+  await loadCards(addRemoveIdentifierPrefix)
+  void displayExistingMinterAdmins()
+}
+
+const toggleProposeButton = () => {
+  const proposeButton = document.getElementById("propose-promotion-button")
+  proposeButton.style.display =
+    proposeButton.style.display === "flex" ? "none" : "flex"
+}
+
+const fetchAllARTxData = async () => {
+  const addAdmTx = "ADD_GROUP_ADMIN"
+  const remAdmTx = "REMOVE_GROUP_ADMIN"
+
+  let allAddTxs = []
+  let allRemTxs = []
+
+  try {
+    allAddTxs = await searchTransactions({
+      txTypes: [addAdmTx],
+      confirmationStatus: "CONFIRMED",
+      limit: 0,
+      reverse: true,
+      offset: 0,
+      startBlock: 1990000,
+      blockLimit: 0,
+      txGroupId: 694,
+      silent: true,
+    })
+  } catch (error) {
+    console.warn("Unable to fetch add-admin transactions:", error)
+  }
+
+  try {
+    allRemTxs = await searchTransactions({
+      txTypes: [remAdmTx],
+      confirmationStatus: "CONFIRMED",
+      limit: 0,
+      reverse: true,
+      offset: 0,
+      startBlock: 1990000,
+      blockLimit: 0,
+      txGroupId: 694,
+      silent: true,
+    })
+  } catch (error) {
+    console.warn("Unable to fetch remove-admin transactions:", error)
+  }
+
+  const { finalAddTxs, pendingAddTxs, expiredAddTxs } =
+    partitionAddTransactions(Array.isArray(allAddTxs) ? allAddTxs : [])
+  const { finalRemTxs, pendingRemTxs, expiredRemTxs } =
+    partitionRemoveTransactions(Array.isArray(allRemTxs) ? allRemTxs : [])
+
+  // We are going to keep all transactions in order to filter more accurately for display purposes.
+  console.log("Final addAdminTxs:", finalAddTxs)
+  console.log("Pending addAdminTxs:", pendingAddTxs)
+  console.log("expired addAdminTxs", expiredAddTxs)
+  console.log("Final remAdminTxs:", finalRemTxs)
+  console.log("Pending remAdminTxs:", pendingRemTxs)
+  console.log("expired remAdminTxs", expiredRemTxs)
+
+  return {
+    finalAddTxs,
+    pendingAddTxs,
+    expiredAddTxs,
+    finalRemTxs,
+    pendingRemTxs,
+    expiredRemTxs,
+  }
+}
+
+const partitionAddTransactions = (rawTransactions) => {
+  const finalAddTxs = []
+  const pendingAddTxs = []
+  const expiredAddTxs = []
+
+  for (const tx of rawTransactions) {
+    if (tx.approvalStatus === "PENDING") {
+      pendingAddTxs.push(tx)
+    } else if (tx.approvalStatus === "EXPIRED") {
+      expiredAddTxs.push(tx)
+    } else {
+      finalAddTxs.push(tx)
+    }
+  }
+
+  return { finalAddTxs, pendingAddTxs, expiredAddTxs }
+}
+
+const partitionRemoveTransactions = (rawTransactions) => {
+  const finalRemTxs = []
+  const pendingRemTxs = []
+  const expiredRemTxs = []
+
+  for (const tx of rawTransactions) {
+    if (tx.approvalStatus === "PENDING") {
+      pendingRemTxs.push(tx)
+    } else if (tx.approvalStatus === "EXPIRED") {
+      expiredRemTxs.push(tx)
+    } else {
+      finalRemTxs.push(tx)
+    }
+  }
+
+  return { finalRemTxs, pendingRemTxs, expiredRemTxs }
+}
+
+const displayExistingMinterAdmins = async () => {
+  const adminListContainer = document.getElementById("admin-list-container")
+  const adminListWrapper = document.getElementById("admin-list-wrapper")
+  const adminSummary = document.getElementById("admin-directory-summary")
+  const toggleButton = document.getElementById("toggle-admin-list-button")
+  if (!adminListContainer) return
+
+  adminDirectoryState.loading = true
+  adminListContainer.innerHTML =
+    "<p style='color: #999; font-size: 1.1rem;'>Loading existing admins...</p>"
+  if (adminSummary) {
+    adminSummary.textContent = "Loading admin directory..."
+  }
+
+  try {
+    // 1) Fetch addresses
+    const admins = await fetchMinterGroupAdmins()
+    const adminEntries = Array.isArray(admins) ? admins : []
+    const activeAdmins = getEffectiveMinterAdminMembers(admins)
+    minterAdminAddresses = activeAdmins.map((m) => m.member)
+    adminDirectoryState.loaded = true
+    adminDirectoryState.activeCount = activeAdmins.length
+    adminDirectoryState.totalCount = adminEntries.length
+    let rowsHtml = ""
+    for (const adminAddr of adminEntries) {
+      if (adminAddr.member === nullAddress) {
+        // Display a "NULL ACCOUNT" row
+        rowsHtml += `
+                  <tr>
+                    <td style="border: 1px solid #ccc; padding: 4px; color: #aaa;">
+                      NULL ACCOUNT
+                    </td>
+                    <td style="border: 1px solid #ccc; padding: 4px; color: #aaa;">
+                      ${nullAddress}
+                    </td>
+                    <td style="border: 1px solid #ccc; padding: 4px; color: #aaa;">
+                      <!-- No button, or a dash. -->
+                      —
+                    </td>
+                  </tr>
+                `
+        continue
+      }
+      // Attempt to get name
+      let adminName
+      try {
+        adminName = await getNameFromAddress(adminAddr.member)
+      } catch (err) {
+        console.warn(`Error fetching name for ${adminAddr.member}:`, err)
+        adminName = null
+      }
+      const displayName =
+        adminName && adminName !== adminAddr.member ? adminName : "(No Name)"
+      rowsHtml += `
+                <tr>
+                <td style="border: 1px solid rgb(150, 199, 224); font-size: 1.5rem; padding: 4px; color:rgb(70, 156, 196)">${displayName}</td>
+                <td style="border: 1px solid rgb(106, 203, 179); font-size: 1rem; padding: 4px; color:rgb(120, 150, 163);">${adminAddr.member}</td>
+                <td style="border: 1px solid rgb(231, 112, 112); padding: 4px;">
+                <button 
+                style="padding: 5px; background: red; color: white; border-radius: 3px; cursor: pointer;"
+                onclick="handleProposeDemotionWrapper('${adminName}', '${adminAddr.member}')"
+                >
+                Propose Demotion
+                </button>
+                </td>
+                </tr>
+            `
+    }
+    // 3) Build the table
+    const tableHtml = `
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background:rgb(21, 36, 18); color:rgb(183, 208, 173); font-size: 1.5rem;">
+                        <th style="border: 1px solid rgb(34, 118, 129); padding: 4px;">Admin Name</th>
+                        <th style="border: 1px solid rgb(90, 122, 122); padding: 4px;">Admin Address</th>
+                        <th style="border: 1px solid rgb(138, 49, 49); padding: 4px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rowsHtml}
+                </tbody>
+            </table>
+        `
+    adminListContainer.innerHTML = tableHtml
+    if (adminSummary) {
+      adminSummary.textContent = `${activeAdmins.length} active admin${
+        activeAdmins.length === 1 ? "" : "s"
+      } found. Null account entries are excluded from the count.`
+    }
+    if (toggleButton) {
+      const isVisible = adminListWrapper ? !adminListWrapper.hidden : false
+      toggleButton.textContent = `${
+        isVisible ? "Hide" : "Show"
+      } Current Minter Admins (${activeAdmins.length})`
+    }
+  } catch (err) {
+    console.error("Error fetching minter admins:", err)
+    adminListContainer.innerHTML =
+      "<p style='color: red;'>Failed to load admins.</p>"
+    if (adminSummary) {
+      adminSummary.textContent =
+        "Failed to load admin directory right now. You can try again."
+    }
+  }
+  adminDirectoryState.loading = false
+}
+
+const toggleAdminDirectoryVisibility = async () => {
+  const adminListWrapper = document.getElementById("admin-list-wrapper")
+  const toggleButton = document.getElementById("toggle-admin-list-button")
+  if (!adminListWrapper || !toggleButton) return
+
+  const shouldShow = adminListWrapper.hidden
+  adminListWrapper.hidden = !shouldShow
+
+  if (shouldShow && !adminDirectoryState.loaded && !adminDirectoryState.loading) {
+    await displayExistingMinterAdmins()
+  }
+
+  toggleButton.textContent = `${shouldShow ? "Hide" : "Show"} Current Minter Admins${
+    adminDirectoryState.loaded ? ` (${adminDirectoryState.activeCount})` : ""
+  }`
+}
+
+const handleProposeDemotionWrapper = (adminName, adminAddress) => {
+  // Call the async function and handle any unhandled rejections
+  handleProposeDemotion(adminName, adminAddress).catch((error) => {
+    console.error(`Error in handleProposeDemotionWrapper:`, error)
+    alert("An unexpected error occurred. Please try again.")
+  })
+}
+
+const handleProposeDemotion = async (adminName, adminAddress) => {
+  console.log(`Proposing demotion for: ${adminName} (${adminAddress})`)
+  const proposeButton = document.getElementById("propose-promotion-button")
+  proposeButton.style.display = "none"
+  const fetchedCard = await fetchExistingARCard(
+    addRemoveIdentifierPrefix,
+    adminName
+  )
+
+  if (fetchedCard) {
+    alert(
+      "A card already exists. Publishing of multiple cards is not allowed. Please update your card."
+    )
+    isExistingCard = true
+    await loadCardIntoForm(fetchedCard)
+  }
+  // Populate the form with the admin's name
+  const nameInput = document.getElementById("minter-name-input")
+  nameInput.value = adminName
+
+  // Display the form if it's hidden
+  const formContainer = document.getElementById("promotion-form-container")
+  formContainer.style.display = "flex"
+
+  // Optionally hide other sections (e.g., the existing proposals section)
+  // const proposalsSection = document.getElementById("existing-proposals-section")
+  // proposalsSection.style.display = "none"
+
+  // Notify the user to fill out the rest
+  alert(
+    `Admin "${adminName}" has been selected for demotion. Please fill out the rest of the form.`
+  )
+}
+
+const fetchExistingARCard = async (cardIdentifierPrefix, minterName) => {
+  try {
+    const response = await searchSimple(
+      "BLOG_POST",
+      `${cardIdentifierPrefix}`,
+      "",
+      0,
+      0,
+      "",
+      false,
+      true
+    )
+
+    console.log(
+      `fetchExistingCard searchSimple response: ${JSON.stringify(
+        response,
+        null,
+        2
+      )}`
+    )
+
+    if (!response || !Array.isArray(response) || response.length === 0) {
+      console.log("No cards found.")
+      return null
+    }
+
+    const validatedCards = await Promise.all(
+      response.map(async (card) => {
+        const isValid = await validateCardStructure(card)
+
+        if (!isValid) return null
+        // Fetch full card data for validation
+        const cardDataResponse = await qortalRequest({
+          action: "FETCH_QDN_RESOURCE",
+          name: card.name,
+          service: "BLOG_POST",
+          identifier: card.identifier,
+        })
+
+        if (cardDataResponse.minterName === minterName) {
+          console.log(`Card with the same minterName found: ${minterName}`)
+          if (cardDataResponse.creator === userState.accountName) {
+            console.log(`The user is the publisher, adding card...`)
+            return {
+              card,
+              cardData: cardDataResponse,
+            }
+          } else {
+            console.warn(`Card found, but user is not the creator!`)
+            otherPublisher = true
+            return null
+          }
+        }
+        return null
+      })
+    )
+    // Filter out null results and check for duplicates
+    const matchingCards = validatedCards.filter((result) => result !== null)
+
+    if (matchingCards.length > 0) {
+      const { card, cardData } = matchingCards[0] // Use the first matching card, which should be the first published for the minterName
+      existingCardIdentifier = card.identifier
+      existingCardData = cardData
+      isExistingCard = true
+
+      return {
+        cardData,
+      }
+    }
+
+    console.log("No valid cards found or no matching minterName.")
+    return null
+  } catch (error) {
+    console.error("Error fetching existing AR card:", error)
+    return null
+  }
+}
+
+const publishARCard = async (cardIdentifierPrefix) => {
+  const minterNameInput = document
+    .getElementById("minter-name-input")
+    .value.trim()
+  const potentialNameInfo = await getNameInfo(minterNameInput)
+  let minterName
+  let address
+  let isPromotionCard
+
+  if (potentialNameInfo.owner) {
+    console.log(`MINTER NAME FOUND:`, minterNameInput)
+    minterName = minterNameInput
+    address = potentialNameInfo.owner
+  } else {
+    console.warn(`user input an address?...`, minterNameInput)
+    if (!address) {
+      const validAddress = await getAddressInfo(minterNameInput)
+      if (validAddress) {
+        address = minterNameInput
+      } else {
+        console.error(`input address by user INVALID`, minterNameInput)
+        alert(`You have input an invalid address! Please try again...`)
+        return
+      }
+    }
+    const checkForName = await getNameFromAddress(minterNameInput)
+
+    if (checkForName) {
+      minterName = checkForName
+    } else if (!checkForName && address) {
+      console.warn(`user input an address that has no name...`)
+      alert(
+        `you have input an address that has no name, the address will need to register a name prior to being able to be promoted`
+      )
+      return
+    } else {
+      console.warn(
+        `Input was either an invalid name, or incorrect address?`,
+        minterNameInput
+      )
+      alert(
+        `Your input could not be validated, check the name/address and try again!`
+      )
+      return
+    }
+  }
+  const exists = await fetchExistingARCard(cardIdentifierPrefix, minterName)
+
+  if (exists) {
+    alert(
+      `An existing card was found, you must update it, two cards for the samme name cannot be published! Loading card data...`
+    )
+    if (exists.creator != userState.accountName) {
+      alert(`You are not the original publisher of this card, exiting.`)
+      return
+    } else {
+      await loadCardIntoForm(existingCardData)
+      minterName = exists.minterName
+      const nameInfo = await getNameInfo(exists.minterName)
+      address = nameInfo.owner
+      isExistingCard = true
+    }
+  }
+
+  const minterGroupData = await fetchMinterGroupMembers()
+  minterGroupAddresses = minterGroupData.map((m) => m.member)
+
+  const minterAdminGroupData = await fetchMinterGroupAdmins()
+  minterAdminAddresses = minterAdminGroupData.map((m) => m.member)
+
+  if (minterAdminAddresses.includes(address)) {
+    isPromotionCard = false
+    console.warn(`this is a DEMOTION`, address)
+  } else if (minterGroupAddresses.includes(address)) {
+    isPromotionCard = true
+    console.warn(`address is a MINTER, this is a promotion card...`)
+  }
+
+  if (
+    !minterAdminAddresses.includes(address) &&
+    !minterGroupAddresses.includes(address)
+  ) {
+    console.error(
+      `you cannot publish a card here unless the user is a MINTER or an ADMIN!`
+    )
+    alert(
+      `Card cannot be published for an account that is neither a minter nor an admin! This board is for Promotions and Demotions of Admins ONLY!`
+    )
+    return
+  }
+
+  const header = document.getElementById("card-header").value.trim()
+  const content = document.getElementById("card-content").value.trim()
+  const links = Array.from(document.querySelectorAll(".card-link"))
+    .map((input) => input.value.trim())
+    .filter((link) => link.startsWith("qortal://"))
+
+  if (!header || !content) {
+    alert("Header and content are required!")
+    return
+  }
+
+  const cardIdentifier = isExistingCard
+    ? existingCardIdentifier
+    : `${cardIdentifierPrefix}-${await uid()}`
+  const pollName = `${cardIdentifier}-poll`
+  const pollDescription = `AR Board Card Proposed By: ${userState.accountName}`
+
+  const cardData = {
+    minterName,
+    minterAddress: address,
+    header,
+    content,
+    links,
+    creator: userState.accountName,
+    timestamp: Date.now(),
+    poll: pollName,
+    promotionCard: isPromotionCard,
+  }
+
+  try {
+    let base64CardData = await objectToBase64(cardData)
+    if (!base64CardData) {
+      console.log(
+        `initial base64 object creation with objectToBase64 failed, using btoa...`
+      )
+      base64CardData = btoa(JSON.stringify(cardData))
+    }
+
+    await qortalRequest({
+      action: "PUBLISH_QDN_RESOURCE",
+      name: userState.accountName,
+      service: "BLOG_POST",
+      identifier: cardIdentifier,
+      data64: base64CardData,
+    })
+
+    if (!isExistingCard) {
+      await qortalRequest({
+        action: "CREATE_POLL",
+        pollName,
+        pollDescription,
+        pollOptions: ["Yes, No"],
+        pollOwnerAddress: userState.accountAddress,
+      })
+      alert("Card and poll published successfully!")
+    }
+
+    if (isExistingCard) {
+      alert(
+        "Card Updated Successfully! (No poll updates are possible at this time...)"
+      )
+      isExistingCard = false
+    }
+
+    if (isPromotionCard) {
+      isPromotionCard = false
+    }
+
+    document.getElementById("publish-card-form").reset()
+    document.getElementById("promotion-form-container").style.display = "none"
+    //   document.getElementById("cards-container").style.display = "flex"
+
+    await loadCards(addRemoveIdentifierPrefix, true)
+  } catch (error) {
+    console.error("Error publishing card or poll:", error)
+    alert("Failed to publish card and poll.")
+  }
+}
+
+const checkAndDisplayActions = async (adminYes, name, cardIdentifier) => {
+  const latestBlockInfo = await getLatestBlockInfo()
+  const isBlockPassed =
+    latestBlockInfo.height >= GROUP_APPROVAL_FEATURE_TRIGGER_HEIGHT
+  let minAdminCount
+  const minterAdmins =
+    getEffectiveMinterAdminCount(cachedMinterAdmins) > 0
+      ? cachedMinterAdmins
+      : await fetchMinterGroupAdmins()
+  const effectiveMinterAdmins = getEffectiveMinterAdminMembers(minterAdmins)
+
+  if (effectiveMinterAdmins && effectiveMinterAdmins.length === 1) {
+    console.warn(
+      `simply a double-check that there is only one MINTER group admin, in which case the group hasn't been transferred to null...keeping default minAdminCount of: ${minAdminCount}`
+    )
+    minAdminCount = 9
+  } else if (effectiveMinterAdmins && effectiveMinterAdmins.length > 1 && isBlockPassed) {
+    const totalAdmins = effectiveMinterAdmins.length
+    const fortyPercent = totalAdmins * 0.4
+    minAdminCount = Math.ceil(fortyPercent)
+    console.warn(
+      `this is another check to ensure minterAdmin group has more than 1 admin. IF so we will calculate the 40% needed for GROUP_APPROVAL, that number is: ${minAdminCount}`
+    )
+  }
+  const addressInfo = await getNameInfo(name).catch(() => null)
+  const address = addressInfo?.owner || ""
+
+  if (!address) {
+    console.warn(`Unable to resolve address for ${name}, skipping admin actions`)
+    return null
+  }
+
+  if (isBlockPassed) {
+    console.warn(
+      `feature trigger has passed, checking for approval requirements`
+    )
+    const addAdminApprovalHtml = await checkGroupApprovalAndCreateButton(
+      address,
+      cardIdentifier,
+      "ADD_GROUP_ADMIN"
+    )
+    const removeAdminApprovalHtml = await checkGroupApprovalAndCreateButton(
+      address,
+      cardIdentifier,
+      "REMOVE_GROUP_ADMIN"
+    )
+
+    if (addAdminApprovalHtml) {
+      return addAdminApprovalHtml
+    }
+
+    if (removeAdminApprovalHtml) {
+      return removeAdminApprovalHtml
+    }
+  }
+
+  if (!minterGroupAddresses) {
+    const minterGroupData = await fetchMinterGroupMembers()
+    minterGroupAddresses = minterGroupData.map((m) => m.member)
+  }
+
+  if (!minterAdminAddresses) {
+    const adminAddressData = await fetchMinterGroupAdmins()
+    minterAdminAddresses = adminAddressData.map((m) => m.member)
+  }
+
+  if (!minterGroupAddresses.includes(userState.accountAddress)) {
+    console.warn(`User is not in the MINTER group, no need for buttons`)
+    return null
+  }
+
+  if (adminYes >= minAdminCount && minterAdminAddresses.includes(address)) {
+    const removeAdminHtml = createRemoveAdminButton(
+      name,
+      cardIdentifier,
+      address
+    )
+    return removeAdminHtml
+  } else if (
+    adminYes >= minAdminCount &&
+    minterGroupAddresses.includes(address)
+  ) {
+    const addAdminHtml = createAddAdminButton(name, cardIdentifier, address)
+    return addAdminHtml
+  }
+}
+
+const createAddAdminButton = (name, cardIdentifier, address) => {
+  return `
+      <div id="add-button-container-${cardIdentifier}" style="margin-top: 1em;">
+        <button onclick="handleAddMinterGroupAdmin('${name}','${address}')"
+                style="padding: 10px; background: rgb(4, 119, 134); color: white; border: none; cursor: pointer; border-radius: 5px;"
+                onmouseover="this.style.backgroundColor='rgb(11, 47, 24) '"
+                    onmouseout="this.style.backgroundColor='rgb(4, 123, 134) '">
+          Create ADD_GROUP_ADMIN Tx
+        </button>
+      </div>
+    `
+}
+
+const createRemoveAdminButton = (name, cardIdentifier, address) => {
+  return `
+      <div id="add-button-container-${cardIdentifier}" style="margin-top: 1em;">
+        <button onclick="handleRemoveMinterGroupAdmin('${name}','${address}')"
+                style="padding: 10px; background: rgb(134, 4, 4); color: white; border: none; cursor: pointer; border-radius: 5px;"
+                onmouseover="this.style.backgroundColor='rgb(0, 0, 0) '"
+                    onmouseout="this.style.backgroundColor='rgb(134, 4, 4) '">
+          Create REMOVE_GROUP_ADMIN Tx
+        </button>
+      </div>
+    `
+}
+
+const handleAddMinterGroupAdmin = async (name, address) => {
+  try {
+    // Optional block check
+    let txGroupId = 0
+    let member = address
+    // const { height: currentHeight } = await getLatestBlockInfo()
+    const isBlockPassed = await featureTriggerCheck()
+    if (isBlockPassed) {
+      console.log(
+        `block height above featureTrigger Height, using group approval method...txGroupId 694`
+      )
+      txGroupId = 694
+    }
+
+    const ownerPublicKey = await getPublicKeyFromAddress(
+      userState.accountAddress
+    )
+    const fee = 0.01
+
+    const rawTx = await createAddGroupAdminTransaction(
+      ownerPublicKey,
+      694,
+      member,
+      txGroupId,
+      fee
+    )
+
+    const signedTx = await qortalRequest({
+      action: "SIGN_TRANSACTION",
+      unsignedBytes: rawTx,
+    })
+
+    if (!signedTx) {
+      console.warn(
+        `this only happens if the SIGN_TRANSACTION qortalRequest failed... are you using the legacy UI prior to this qortalRequest being added?`
+      )
+      alert(
+        `this only happens if the SIGN_TRANSACTION qortalRequest failed... are you using the legacy UI prior to this qortalRequest being added? Please talk to developers.`
+      )
+      return
+    }
+
+    let txToProcess = signedTx
+
+    const processTx = await processTransaction(txToProcess)
+
+    if (typeof processTx === "object") {
+      console.log("transaction success object:", processTx)
+      alert(
+        `${name} kick successfully issued! Wait for confirmation...Transaction Response: ${JSON.stringify(
+          processTx
+        )}`
+      )
+    } else {
+      console.log("transaction raw text response:", processTx)
+      alert(`TxResponse: ${JSON.stringify(processTx)}`)
+    }
+  } catch (error) {
+    console.error("Error removing minter:", error)
+    alert(`Error:${error}. Please try again.`)
+  }
+}
+
+const handleRemoveMinterGroupAdmin = async (name, address) => {
+  try {
+    // Optional block check
+    let txGroupId = 0
+    const admin = address
+    // const { height: currentHeight } = await getLatestBlockInfo()
+    const isBlockPassed = await featureTriggerCheck()
+    if (isBlockPassed) {
+      console.log(
+        `block height above featureTrigger Height, using group approval method...txGroupId 694`
+      )
+      txGroupId = 694
+    }
+
+    const ownerPublicKey = await getPublicKeyFromAddress(
+      userState.accountAddress
+    )
+    const fee = 0.01
+
+    const rawTx = await createRemoveGroupAdminTransaction(
+      ownerPublicKey,
+      694,
+      admin,
+      txGroupId,
+      fee
+    )
+
+    const signedTx = await qortalRequest({
+      action: "SIGN_TRANSACTION",
+      unsignedBytes: rawTx,
+    })
+    if (!signedTx) {
+      console.warn(
+        `this only happens if the SIGN_TRANSACTION qortalRequest failed... are you using the legacy UI prior to this qortalRequest being added?`
+      )
+      alert(
+        `this only happens if the SIGN_TRANSACTION qortalRequest failed... are you using the legacy UI prior to this qortalRequest being added? Please talk to developers.`
+      )
+      return
+    }
+
+    let txToProcess = signedTx
+
+    const processTx = await processTransaction(txToProcess)
+
+    if (typeof processTx === "object") {
+      console.log("transaction success object:", processTx)
+      alert(
+        `${name} kick successfully issued! Wait for confirmation...Transaction Response: ${JSON.stringify(
+          processTx
+        )}`
+      )
+    } else {
+      console.log("transaction raw text response:", processTx)
+      alert(`TxResponse: ${JSON.stringify(processTx)}`)
+    }
+  } catch (error) {
+    console.error("Error removing minter:", error)
+    alert(`Error:${error}. Please try again.`)
+  }
+}
+
+const fallbackMinterCheck = async (
+  minterName,
+  minterGroupMembers,
+  minterAdmins
+) => {
+  // Ensure we have addresses
+  if (!minterGroupMembers) {
+    console.warn("No minterGroupMembers array was passed in fallback check!")
+    return false
+  }
+  if (!minterAdmins) {
+    console.warn("No minterAdmins array was passed in fallback check!")
+    return false
+  }
+  const minterGroupAddresses = minterGroupMembers.map((m) => m.member)
+  const adminAddresses = minterAdmins.map((m) => m.member)
+  const minterAcctInfo = await getNameInfo(minterName)
+  if (!minterAcctInfo || !minterAcctInfo.owner) {
+    console.warn(`Name info not found or missing 'owner' for ${minterName}`)
+    return false
+  }
+  // If user is already in the group => we call it a "promotion card"
+  if (adminAddresses.includes(minterAcctInfo.owner)) {
+    console.warn(
+      `display check found minterAdminCard - NOT a promotion card...`
+    )
+    return false
+  } else {
+    return minterGroupAddresses.includes(minterAcctInfo.owner)
+  }
+}
+
+const createARCardHTML = async (
+  cardData,
+  pollResults,
+  cardIdentifier,
+  commentCount,
+  cardUpdatedTime,
+  bgColor,
+  cardPublisherAddress,
+  illegalDuplicate
+) => {
+  const {
+    minterName,
+    minterAddress = "",
+    header,
+    content,
+    links,
+    creator,
+    timestamp,
+    poll,
+    promotionCard,
+  } = cardData
+  const formattedDate = cardUpdatedTime
+    ? new Date(cardUpdatedTime).toLocaleString()
+    : new Date(timestamp).toLocaleString()
+  const linksArray = Array.isArray(links) ? links : []
+  // Kakashi Note: Render links with escaped data attributes and safe modal handlers for untrusted card content.
+  const linksHTML = linksArray
+    .map(
+      (link, index) => `
+      <button data-link="${qEscapeAttr(
+        link
+      )}" onclick="openLinkDisplayModalFromButton(this)">
+        ${qEscapeHtml(`Link ${index + 1} - ${link}`)}
+      </button>
+    `
+    )
+    .join("")
+  const safeMinterName = qEscapeHtml(minterName || "Unknown")
+  const safeHeader = qEscapeHtml(header || "")
+  const renderedContent = qRenderRichContentHtml(content || "")
+  const safeFormattedDate = qEscapeHtml(formattedDate)
+  // Keep the target address if it was published, otherwise resolve it from the name later.
+  let publishedMinterAddress = ""
+  if (minterAddress && minterAddress !== "priorToAddition") {
+    console.log(`minter address found in card info: ${minterAddress}`)
+    publishedMinterAddress = minterAddress
+  }
+
+  const minterGroupMembers =
+    cachedMinterGroup && cachedMinterGroup.length > 0
+      ? cachedMinterGroup
+      : await fetchMinterGroupMembers()
+  const minterAdmins =
+    getEffectiveMinterAdminCount(cachedMinterAdmins) > 0
+      ? cachedMinterAdmins
+      : await fetchMinterGroupAdmins()
+
+  let showPromotionCard = false
+  // showPromotionCard = await fallbackMinterCheck(minterName, minterGroupMembers, minterAdmins)
+
+  if (typeof promotionCard === "boolean") {
+    showPromotionCard = promotionCard
+  } else if (typeof promotionCard === "string") {
+    // Could be "true" or "false" or something else
+    const lower = promotionCard.trim().toLowerCase()
+    if (lower === "true") {
+      showPromotionCard = true
+    } else if (lower === "false") {
+      showPromotionCard = false
+    } else {
+      // Unexpected string => fallback
+      console.warn(`Unexpected string in promotionCard="${promotionCard}"`)
+      showPromotionCard = await fallbackMinterCheck(
+        minterName,
+        minterGroupMembers,
+        minterAdmins
+      )
+    }
+  } else if (promotionCard == null) {
+    // null or undefined => fallback check
+    console.warn(`No promotionCard field in card data, doing manual check...`)
+    showPromotionCard = await fallbackMinterCheck(
+      minterName,
+      minterGroupMembers,
+      minterAdmins
+    )
+  } else {
+    // If it’s an object or something else weird => fallback
+    console.warn(`promotionCard has unexpected type, fallback...`)
+    showPromotionCard = await fallbackMinterCheck(
+      minterName,
+      minterGroupMembers,
+      minterAdmins
+      )
+  }
+
+  // Kakashi Note: Keep ARBoard cards type-colored; the shared name-based pastel stays out of the main surface so promotion vs demotion is obvious at a glance.
+  const baseCardTheme = showPromotionCard
+    ? AR_CARD_THEMES.promotion
+    : AR_CARD_THEMES.demotion
+  let cardColorCode = baseCardTheme.background
+  let cardAccentColor = baseCardTheme.accent
+  let cardStateAccent = baseCardTheme.stateAccent
+  let cardBorderColor = baseCardTheme.border
+  let cardThemeClass = showPromotionCard
+    ? "ar-card--promotion"
+    : "ar-card--demotion"
+  const proposerName = creator || "Unknown"
+  const resolvedProposerAddress =
+    String(cardPublisherAddress || "").trim() ||
+    (proposerName
+      ? await fetchOwnerAddressFromNameCached(proposerName).catch(() => "")
+      : "")
+  const resolvedMinterAddress =
+    publishedMinterAddress ||
+    (minterName
+      ? await fetchOwnerAddressFromNameCached(minterName).catch(() => "")
+      : "")
+  const [proposerAvatar, proposedMinterAvatar, proposerAddressInfo, proposedMinterAddressInfo] =
+    await Promise.all([
+      getMinterAvatar(proposerName),
+      getMinterAvatar(minterName || ""),
+      resolvedProposerAddress
+        ? getAddressInfoCached(resolvedProposerAddress).catch(() => null)
+        : Promise.resolve(null),
+      resolvedMinterAddress
+        ? getAddressInfoCached(resolvedMinterAddress).catch(() => null)
+        : Promise.resolve(null),
+    ])
+  const proposerLevel = proposerAddressInfo?.level ?? null
+  const proposedMinterLevel = proposedMinterAddressInfo?.level ?? null
+  const proposalStatusLabel = showPromotionCard
+    ? "PROMOTION PROPOSAL"
+    : "DEMOTION PROPOSAL"
+  const identityBoxesHtml = `
+    <div class="card-identity-row">
+      ${buildIdentityBoxHtml(
+        "Proposer",
+        proposerName,
+        resolvedProposerAddress,
+        proposerLevel,
+        proposerAvatar
+      )}
+      ${buildIdentityBoxHtml(
+        "Proposed Minter Admin",
+        minterName || "Unknown",
+        resolvedMinterAddress,
+        proposedMinterLevel,
+        proposedMinterAvatar
+      )}
+    </div>
+  `
+  const {
+    adminYes = 0,
+    adminNo = 0,
+    minterYes = 0,
+    minterNo = 0,
+    totalYes = 0,
+    totalNo = 0,
+    totalYesWeight = 0,
+    totalNoWeight = 0,
+    detailsHtml,
+  } = await processPollData(
+    pollResults,
+    minterGroupMembers,
+    minterAdmins,
+    creator,
+    cardIdentifier
+  )
+
+  createModal("links")
+  createModal("poll-details")
+
+  let actionsHtml = ""
+  let altText = ""
+  const verifiedName = await validateMinterName(minterName)
+
+  if (verifiedName && !illegalDuplicate) {
+    const accountInfo = await getNameInfo(verifiedName).catch(() => null)
+    const accountAddress = accountInfo?.owner || ""
+    const minterGroupAddresses = minterGroupMembers.map((m) => m.member)
+    const adminAddresses = minterAdmins.map((m) => m.member)
+    const existingAdmin = adminAddresses.includes(accountAddress)
+    const existingMinter = minterGroupAddresses.includes(accountAddress)
+    console.log(
+      `name is validated, utilizing for removal features...${verifiedName}`
+    )
+    const actionsHtmlCheck = await checkAndDisplayActions(
+      adminYes,
+      verifiedName,
+      cardIdentifier
+    )
+    actionsHtml = actionsHtmlCheck
+
+    const {
+      finalAddTxs,
+      pendingAddTxs,
+      expiredAddTxs,
+      finalRemTxs,
+      pendingRemTxs,
+      expiredRemTxs,
+    } = await getAllARTxDataCached()
+
+    const userConfirmedAdd = finalAddTxs.some(
+      (tx) => tx.groupId === 694 && tx.member === accountAddress
+    )
+    const userPendingAdd = pendingAddTxs.some(
+      (tx) => tx.groupId === 694 && tx.member === accountAddress
+    )
+    const confirmedRemove = finalRemTxs.some(
+      (tx) => tx.groupId === 694 && tx.admin === accountAddress
+    )
+    const userPendingRemove = pendingRemTxs.some(
+      (tx) => tx.groupId === 694 && tx.admin === accountAddress
+    )
+    const userExpiredAdd = expiredAddTxs.some(
+      (tx) => tx.groupId === 694 && tx.member === accountAddress
+    )
+    const userExpiredRem = expiredRemTxs.some(
+      (tx) => tx.groupId === 694 && tx.admin === accountAddress
+    )
+
+    const noExpired = !userExpiredAdd && !userExpiredRem
+
+    // If user is definitely admin (finalAdd) and not pending removal
+    if (
+      userConfirmedAdd &&
+      !userPendingRemove &&
+      !userPendingAdd &&
+      noExpired &&
+      existingAdmin &&
+      promotionCard
+    ) {
+      console.warn(`account was already admin, final. no add/remove pending.`)
+      cardColorCode = "rgba(8, 34, 31, 0.98)"
+      cardAccentColor = "rgba(137, 225, 170, 0.96)"
+      cardStateAccent = "rgba(72, 183, 122, 0.82)"
+      cardBorderColor = "rgba(72, 183, 122, 0.28)"
+      cardThemeClass = "ar-card--promotion ar-card--status-promoted"
+      altText = `<h4 style="color:rgb(89, 191, 204); margin-bottom: 0.5em;">PROMOTED to ADMIN</h4>`
+      actionsHtml = ""
+    }
+
+    if (
+      userConfirmedAdd &&
+      !userPendingRemove &&
+      userExpiredRem &&
+      existingAdmin &&
+      promotionCard
+    ) {
+      console.warn(`Account has previously had a removal attempt expire`)
+      cardColorCode = "rgba(10, 38, 30, 0.98)"
+      cardAccentColor = "rgba(134, 218, 222, 0.96)"
+      cardStateAccent = "rgba(255, 182, 92, 0.82)"
+      cardBorderColor = "rgba(255, 182, 92, 0.28)"
+      cardThemeClass = "ar-card--promotion ar-card--status-history"
+      altText = `<h4 style="color:rgb(136, 114, 146); margin-bottom: 0.5em;">PROMOTED, (+Previous Failed Demotion).</h4>`
+      actionsHtml = ""
+    }
+
+    if (
+      userConfirmedAdd &&
+      !userPendingRemove &&
+      userExpiredAdd &&
+      existingAdmin &&
+      promotionCard
+    ) {
+      console.warn(`Account has previously had a removal attempt expire`)
+      cardColorCode = "rgba(8, 31, 37, 0.98)"
+      cardAccentColor = "rgba(134, 218, 222, 0.96)"
+      cardStateAccent = "rgba(126, 198, 255, 0.82)"
+      cardBorderColor = "rgba(126, 198, 255, 0.28)"
+      cardThemeClass = "ar-card--promotion ar-card--status-history"
+      altText = `<h4 style="color:rgb(114, 117, 146); margin-bottom: 0.5em;">PROMOTED, (+Previous Failed Promotion).</h4>`
+      actionsHtml = ""
+    }
+
+    if (
+      userConfirmedAdd &&
+      userPendingRemove &&
+      existingAdmin &&
+      noExpired &&
+      !promotionCard
+    ) {
+      console.warn(
+        `user is a previously approved an admin, but now has pending removals. Keeping html`
+      )
+      cardStateAccent = "rgba(255, 182, 92, 0.82)"
+      cardBorderColor = "rgba(255, 182, 92, 0.28)"
+      cardThemeClass = "ar-card--demotion ar-card--status-pending"
+      altText = `<h4 style="color:rgb(85, 34, 34); margin-bottom: 0.5em;">Pending REMOVAL in progress...</h4>`
+    }
+
+    if (
+      userConfirmedAdd &&
+      userPendingRemove &&
+      existingAdmin &&
+      userExpiredAdd &&
+      !promotionCard
+    ) {
+      console.warn(
+        `user is a previously approved an admin, but now has pending removals. Keeping html`
+      )
+      cardStateAccent = "rgba(255, 182, 92, 0.82)"
+      cardBorderColor = "rgba(255, 182, 92, 0.28)"
+      cardThemeClass = "ar-card--demotion ar-card--status-pending"
+      altText = `<h4 style="color:rgb(85, 74, 34); margin-bottom: 0.5em;">Pending REMOVAL in progress... (+Previous Failed Promotion)</h4>`
+    }
+
+    if (
+      userConfirmedAdd &&
+      userPendingRemove &&
+      existingAdmin &&
+      userExpiredRem &&
+      !promotionCard
+    ) {
+      console.warn(
+        `user is a previously approved an admin, but now has pending removals. Keeping html`
+      )
+      cardStateAccent = "rgba(215, 101, 101, 0.82)"
+      cardBorderColor = "rgba(215, 101, 101, 0.28)"
+      cardThemeClass = "ar-card--demotion ar-card--status-pending"
+      altText = `<h4 style="color:rgb(198, 26, 13); margin-bottom: 0.5em;">Pending REMOVAL in progress... (+Previous Failed Demotion)</h4>`
+    }
+
+    // If user has a final "remove" and no pending additions or removals and no expired transactions
+    if (
+      confirmedRemove &&
+      !userPendingAdd &&
+      existingMinter &&
+      !existingAdmin &&
+      noExpired &&
+      !promotionCard
+    ) {
+      console.warn(
+        `account was demoted, final. no add pending, existingMinter, no expired add/remove.`
+      )
+      cardColorCode = "rgba(38, 10, 13, 0.98)"
+      cardAccentColor = "rgba(255, 182, 184, 0.96)"
+      cardStateAccent = "rgba(215, 101, 101, 0.82)"
+      cardBorderColor = "rgba(215, 101, 101, 0.28)"
+      cardThemeClass = "ar-card--demotion ar-card--status-demoted"
+      altText = `<h4 style="color:rgb(73, 24, 24); margin-bottom: 0.5em;">DEMOTED from ADMIN</h4>`
+      actionsHtml = ""
+    }
+
+    if (
+      confirmedRemove &&
+      !userPendingAdd &&
+      existingMinter &&
+      !existingAdmin &&
+      userExpiredRem &&
+      !promotionCard
+    ) {
+      console.warn(
+        `account was demoted, final. no add pending, existingMinter, no expired add/remove.`
+      )
+      cardColorCode = "rgba(38, 10, 13, 0.98)"
+      cardAccentColor = "rgba(255, 182, 184, 0.96)"
+      cardStateAccent = "rgba(215, 101, 101, 0.82)"
+      cardBorderColor = "rgba(215, 101, 101, 0.28)"
+      cardThemeClass = "ar-card--demotion ar-card--status-demoted"
+      altText = `<h4 style="color:rgb(170, 32, 48); margin-bottom: 0.5em;">DEMOTED (+Previous Failed Demotion)</h4>`
+      actionsHtml = ""
+    }
+
+    if (
+      confirmedRemove &&
+      !userPendingAdd &&
+      existingMinter &&
+      !existingAdmin &&
+      userExpiredAdd &&
+      !promotionCard
+    ) {
+      console.warn(
+        `account was demoted, final. no add pending, existingMinter, no expired add/remove.`
+      )
+      cardColorCode = "rgba(35, 12, 14, 0.98)"
+      cardAccentColor = "rgba(255, 182, 184, 0.96)"
+      cardStateAccent = "rgba(255, 182, 92, 0.82)"
+      cardBorderColor = "rgba(255, 182, 92, 0.28)"
+      cardThemeClass = "ar-card--demotion ar-card--status-demoted"
+      altText = `<h4 style="color:rgb(119, 170, 32); margin-bottom: 0.5em;">DEMOTED (+Previous Failed Promotion)</h4>`
+      actionsHtml = ""
+    }
+
+    // If user has both final remove and pending add, do something else
+    if (
+      confirmedRemove &&
+      userPendingAdd &&
+      existingMinter &&
+      noExpired &&
+      promotionCard
+    ) {
+      console.warn(
+        `account was previously demoted, but also a pending re-add, allowing actions to show...`
+      )
+      cardStateAccent = "rgba(255, 182, 92, 0.82)"
+      cardBorderColor = "rgba(255, 182, 92, 0.28)"
+      cardThemeClass = "ar-card--promotion ar-card--status-history"
+      altText = `<h4 style="color:rgb(73, 68, 24); margin-bottom: 0.5em;">Previously DEMOTED from ADMIN, attempted re-add in progress...</h4>`
+    }
+
+    if (
+      confirmedRemove &&
+      userPendingAdd &&
+      existingMinter &&
+      userExpiredAdd &&
+      promotionCard
+    ) {
+      console.warn(
+        `account was previously demoted, but also a pending re-add, allowing actions to show...`
+      )
+      cardStateAccent = "rgba(255, 182, 92, 0.82)"
+      cardBorderColor = "rgba(255, 182, 92, 0.28)"
+      cardThemeClass = "ar-card--promotion ar-card--status-history"
+      altText = `<h4 style="color:rgb(73, 68, 24); margin-bottom: 0.5em;">Previously DEMOTED from ADMIN, attempted re-add in progress...(+Previous Failed Promotion)</h4>`
+    }
+
+    if (
+      confirmedRemove &&
+      userPendingAdd &&
+      existingMinter &&
+      userExpiredRem &&
+      promotionCard
+    ) {
+      console.warn(
+        `account was previously demoted, but also a pending re-add, allowing actions to show...`
+      )
+      cardStateAccent = "rgba(215, 101, 101, 0.82)"
+      cardBorderColor = "rgba(215, 101, 101, 0.28)"
+      cardThemeClass = "ar-card--promotion ar-card--status-history"
+      altText = `<h4 style="color:rgb(73, 68, 24); margin-bottom: 0.5em;">Previously DEMOTED from ADMIN, attempted re-add in progress...(+Previous Failed Demotion)</h4>`
+    }
+  } else if (verifiedName && illegalDuplicate) {
+    console.warn(
+      `illegalDuplicate detected (this card was somehow allowed to be published twice, keeping newest as active to prevent issues with old cards and updates, but displaying without actions...)`
+    )
+    cardColorCode = AR_CARD_THEMES.duplicate.background
+    cardAccentColor = AR_CARD_THEMES.duplicate.accent
+    cardStateAccent = AR_CARD_THEMES.duplicate.stateAccent
+    cardBorderColor = AR_CARD_THEMES.duplicate.border
+    cardThemeClass = "ar-card--duplicate"
+    // Kakashi Note: Typo fixed "DUPLICATE (diplayed for data only)"
+    altText = `<h4 style="color:rgb(21, 30, 39); margin-bottom: 0.5em;">DUPLICATE (displayed for data only)</h4>`
+    actionsHtml = ""
+  } else {
+    console.warn(`name could not be validated, not setting actionsHtml`)
+    actionsHtml = ""
+  }
+
+  return `
+    <div
+      id="card-shell-${qEscapeAttr(cardIdentifier)}"
+      class="admin-card ar-card ${cardThemeClass}"
+      style="--ar-card-background: ${cardColorCode}; --ar-card-accent: ${cardAccentColor}; --ar-card-state-accent: ${cardStateAccent}; --ar-card-border: ${cardBorderColor};"
+    >
+      <div class="admin-card-header minter-card-header">
+        <div class="support-header"><h5>${proposalStatusLabel}</h5></div>
+        ${identityBoxesHtml}
+        <div class="card-title-box">${safeHeader}</div>
+        ${altText}
+      </div>
+      <div class="support-header"><h5>PROPOSAL STATEMENT</h5></div>
+      <div class="info board-rich-content ql-editor">
+        ${renderedContent}
+      </div>
+      <div class="support-header"><h5>RELATED LINKS</h5></div>
+      <div class="info-links">
+        ${linksHTML}
+      </div>
+      <div class="results-header support-header"><h5>CURRENT RESULTS</h5></div>
+      <div class="minter-card-results">
+        <button onclick="togglePollDetails('${cardIdentifier}')">Display Poll Details</button>
+        <div
+          id="poll-details-${cardIdentifier}"
+          style="display: none;"
+          data-poll-name="${qEscapeAttr(poll || "")}"
+          data-nominee-name="${qEscapeAttr(creator || "")}"
+          data-card-identifier="${qEscapeAttr(cardIdentifier || "")}"
+          data-details-loaded="${detailsHtml ? "false" : "true"}"
+        >
+          ${detailsHtml}
+        </div>
+        ${actionsHtml}
+        <div class="admin-results vote-results vote-results--admin">
+          <span class="admin-yes">Admin Support: ${adminYes}</span>
+          <span class="admin-no">Admin Against: ${adminNo}</span>
+        </div>
+        <div class="minter-results vote-results vote-results--outlined">
+          <span class="minter-yes">Minter Yes: ${minterYes}</span>
+          <span class="minter-no">Minter No: ${minterNo}</span>
+        </div>
+        <div class="total-results vote-results vote-results--outlined vote-results--totals">
+          <div class="vote-total-group">
+            <span class="total-yes">Total Yes: ${totalYes}</span>
+            <span class="vote-total-weight">Weight: ${totalYesWeight}</span>
+          </div>
+          <div class="vote-total-group">
+            <span class="total-no">Total No: ${totalNo}</span>
+            <span class="vote-total-weight">Weight: ${totalNoWeight}</span>
+          </div>
+        </div>
+      </div>
+      <div class="support-header"><h5>ACTIONS FOR</h5><h5 style="color: #ffae42;">${safeMinterName}</h5>
+      <p style="color: #c7c7c7; font-size: .65rem; margin-top: 1vh">(click COMMENTS button to open/close card comments)</p>
+      </div>
+      <div class="actions">
+        <div class="actions-buttons">
+          <button class="yes" onclick="voteYesOnPoll('${poll}')">YES</button>
+          <button id="comment-button-${cardIdentifier}" data-comment-count="${commentCount}" class="comment" onclick="toggleComments('${cardIdentifier}')">COMMENTS (${commentCount})</button>
+          <button class="no" onclick="voteNoOnPoll('${poll}')">NO</button>
+        </div>
+      </div>
+      <div id="comments-section-${cardIdentifier}" class="comments-section" style="display: none; margin-top: 20px;">
+        <div id="comments-container-${cardIdentifier}" class="comments-container"></div>
+        ${
+          typeof getBoardCommentComposerHtml === "function"
+            ? getBoardCommentComposerHtml(cardIdentifier)
+            : `<textarea id="new-comment-${cardIdentifier}" placeholder="Write a comment..." style="width: 100%; margin-top: 10px;"></textarea>`
+        }
+        ${
+          typeof getBoardCommentActionBarHtml === "function"
+            ? getBoardCommentActionBarHtml(cardIdentifier, "postComment")
+            : `<button onclick="postComment('${cardIdentifier}')">Post Comment</button>`
+        }
+      </div>
+      <p class="card-published-date">Published ${safeFormattedDate}</p>
+    </div>
+    `
+}
