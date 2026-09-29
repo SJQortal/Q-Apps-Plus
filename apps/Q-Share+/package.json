@@ -21,7 +21,6 @@
     "compressorjs": "^1.2.1",
     "dompurify": "^3.0.6",
     "localforage": "^1.10.0",
-    "moment": "^2.29.4",
     "prettier": "^3.2.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
