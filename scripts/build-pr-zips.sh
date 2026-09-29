@@ -19,10 +19,11 @@ summary="$root/release/SUMMARY.md"
   echo "|---|---|---|---|---|"
 } > "$summary"
 
-# branch prefix (e.g. q-mail-plus) -> app folder (Q-Mail+)
+# branch prefix (e.g. q-mail-plus) -> app folder (Q-Mail+), looked up in the
+# branch's own checkout so apps that only exist on that branch (Q-Apps+) work
 app_for_branch() {
-  local prefix=${1%%/*} d slug
-  for d in apps/*/; do
+  local prefix=${1%%/*} dir=$2 d slug
+  for d in "$dir"/apps/*/; do
     d=$(basename "$d")
     slug=$(echo "$d" | tr '[:upper:]' '[:lower:]' | sed 's/+$/-plus/')
     [ "$slug" = "$prefix" ] && { echo "$d"; return; }
@@ -34,14 +35,15 @@ prs=${PR_LIST:-$(gh pr list --state open --json number,headRefName --jq '.[] | "
 [ -n "$prs" ] || { echo "No open PRs to build."; exit 0; }
 
 while read -r num branch; do
-  app=$(app_for_branch "$branch")
-  if [ -z "$app" ]; then
-    echo "PR #$num ($branch): not an app branch, skipped"
-    continue
-  fi
   wt="$root/.worktrees/$branch"
   rm -rf "$wt"; git worktree prune
-  git worktree add -q --detach "$wt" "origin/$branch" || { echo "| $app | #$num | $branch | checkout failed | – |" >> "$summary"; continue; }
+  git worktree add -q --detach "$wt" "origin/$branch" || { echo "| ? | #$num | $branch | checkout failed | – |" >> "$summary"; continue; }
+  app=$(app_for_branch "$branch" "$wt")
+  if [ -z "$app" ]; then
+    echo "PR #$num ($branch): not an app branch, skipped"
+    git worktree remove --force "$wt"
+    continue
+  fi
   sha=$(git -C "$wt" rev-parse --short HEAD)
   echo "== $app from PR #$num ($branch @ $sha)"
   if (cd "$wt" && scripts/build-zip.sh "$app") > "$root/release/$app.build.log" 2>&1; then
