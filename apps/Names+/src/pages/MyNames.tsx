@@ -63,7 +63,7 @@ export const MyNames = () => {
             onChange={(e) => setValue(e.target.value)}
             size="small"
             slotProps={{ htmlInput: { 'aria-label': t('core:inputs.filter_names', cap) } }}
-            sx={{ ml: 'auto', minWidth: 0, maxWidth: 260 }}
+            sx={{ ml: 'auto', minWidth: 0, maxWidth: { xs: 150, sm: 260 } }}
           />
         ) : null}
       </PageHeader>

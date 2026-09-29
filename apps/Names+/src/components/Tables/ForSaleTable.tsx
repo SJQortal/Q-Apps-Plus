@@ -22,6 +22,7 @@ import {
   pendingTxsAtom,
 } from '../../state/global/names';
 import { useUnitFee } from '../../hooks/useNamesApi';
+import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { formatDate, formatQort, shortAddress } from '../../utils/format';
 import {
   EmptyState,
@@ -67,6 +68,7 @@ export const ForSaleList = ({ rows, status, filter, isPrimaryNameForSale, onRetr
   const setNamesForSale = useSetAtom(forSaleAtom);
   const [pendingTxs, setPendingTxs] = useAtom(pendingTxsAtom);
   const [buying, setBuying] = useState<NamesForSale | null>(null);
+  const phone = usePhoneLayout();
   const cap = { postProcess: 'capitalizeFirstChar' as const };
 
   const ownedNames = new Set(names.map((item) => item.name));
@@ -149,7 +151,7 @@ export const ForSaleList = ({ rows, status, filter, isPrimaryNameForSale, onRetr
           const owned = ownedNames.has(row.name);
           const pending = pendingBuys.has(row.name);
           const meta = [
-            row.owner ? shortAddress(row.owner) : '',
+            row.owner && !phone ? shortAddress(row.owner) : '',
             row.registered ? formatDate(row.registered) : '',
           ]
             .filter(Boolean)
