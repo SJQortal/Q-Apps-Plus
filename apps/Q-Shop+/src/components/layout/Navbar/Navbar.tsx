@@ -1,7 +1,8 @@
 import React, { useRef, useState } from "react";
 import { RootState } from "../../../state/store";
 import { useSelector } from "react-redux";
-import { Box, Popover, useTheme } from "@mui/material";
+import { Box, IconButton, Popover, useTheme } from "@mui/material";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import { useNavigate } from "react-router-dom";
 import {
@@ -172,6 +173,13 @@ const NavBar: React.FC<Props> = ({
             </AvatarContainer>
           </>
         )}
+        <IconButton
+          aria-label="Settings"
+          onClick={() => navigate("/settings")}
+          sx={{ color: theme.palette.text.primary }}
+        >
+          <SettingsOutlinedIcon />
+        </IconButton>
         <Popover
           id={"store-manager-popover"}
           open={openStoreManagerDropdown}
@@ -227,6 +235,15 @@ const NavBar: React.FC<Props> = ({
           >
             <OrdersSVG color={"#f9ff34"} height={"22"} width={"22"} />
             <DropdownText>My Orders</DropdownText>
+          </DropdownContainer>
+          <DropdownContainer
+            onClick={() => {
+              handleCloseUserDropdown();
+              navigate("/settings");
+            }}
+          >
+            <SettingsOutlinedIcon sx={{ color: theme.palette.text.secondary }} />
+            <DropdownText>Settings</DropdownText>
           </DropdownContainer>
           <DropdownContainer
             onClick={() => {

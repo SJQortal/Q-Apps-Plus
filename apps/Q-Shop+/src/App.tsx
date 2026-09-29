@@ -8,6 +8,7 @@ import { MyOrders } from "./pages/MyOrders/MyOrders";
 import GlobalWrapper from "./wrappers/GlobalWrapper";
 import Notification from "./components/common/Notification/Notification";
 import { ProductManager } from "./pages/ProductManager/ProductManager";
+import { SettingsPage } from "./pages/Settings/SettingsPage";
 import { HubThemeProvider } from "./hub-theme";
 import { THEME_STORAGE_KEY, themeConfig } from "./theme/qplus-theme";
 
@@ -27,6 +28,7 @@ function App() {
               element={<ProductManager />}
             />
             <Route path="/my-orders" element={<MyOrders />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/:user/:store" element={<Store />} />
             <Route path="/" element={<StoreList />} />
           </Routes>
