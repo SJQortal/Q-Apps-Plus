@@ -217,14 +217,17 @@ const name = useMemo(()=> {
   if (compact) {
     return (
       <MailMessageRowContainer
-        sx={{
-          background: isOpen ? "var(--qmail-shell-hover-strong)" : "unset",
+        sx={[{
           alignItems: "center",
           borderRadius: "10px",
           padding: "8px 12px",
           outline: "1px solid var(--qmail-shell-border)",
-          marginTop: "0px",
-        }}
+          marginTop: "0px"
+        }, isOpen ? {
+          background: "var(--qmail-shell-hover-strong)"
+        } : {
+          background: "unset"
+        }]}
         onClick={() => {
           if (!identifier) return
           openMessage(
@@ -255,20 +258,25 @@ const name = useMemo(()=> {
           </MessageExtraDate>
           {subject ? (
             <MailMessageRowInfoStatusRead
-              sx={{
-                fontWeight: shouldBoldUnread ? 600 : 300,
+              sx={[{
                 textOverflow: "ellipsis",
                 overflow: "hidden",
-                whiteSpace: "nowrap",
-              }}
+                whiteSpace: "nowrap"
+              }, shouldBoldUnread ? {
+                fontWeight: 600
+              } : {
+                fontWeight: 300
+              }]}
             >
               {subject}
             </MailMessageRowInfoStatusRead>
           ) : isEncrypted ? (
             <MailMessageRowInfoStatusNotDecrypted
-              sx={{
-                fontWeight: shouldBoldUnread ? 900 : 300,
-              }}
+              sx={[shouldBoldUnread ? {
+                fontWeight: 900
+              } : {
+                fontWeight: 300
+              }]}
             >
               ACCESS TO DECRYPT
             </MailMessageRowInfoStatusNotDecrypted>
@@ -313,48 +321,73 @@ const name = useMemo(()=> {
           </Box>
         )}
       </MailMessageRowContainer>
-    )
+    );
   }
 
   return (
-    <MailMessageRowContainer sx={{
-      background: isOpen ? 'var(--qmail-shell-hover-strong)' : 'unset',
-      flexDirection: isMobile ? 'column': 'row',
-      alignItems: isMobile ? 'flex-start' : 'center',
-      borderRadius: isMobile ? '10px' : "56px 5px 10px 56px",
-      padding: isMobile ? '5px' : 'center',
-      outline: isMobile ? '1px solid var(--qmail-shell-border)' : 'none',
-      marginTop: isMobile ? '10px' : '0px'
-    }} onClick={()=> {
+    <MailMessageRowContainer sx={[isOpen ? {
+      background: 'var(--qmail-shell-hover-strong)'
+    } : {
+      background: 'unset'
+    }, isMobile ? {
+      flexDirection: 'column'
+    } : {
+      flexDirection: 'row'
+    }, isMobile ? {
+      alignItems: 'flex-start'
+    } : {
+      alignItems: 'center'
+    }, isMobile ? {
+      borderRadius: '10px'
+    } : {
+      borderRadius: "56px 5px 10px 56px"
+    }, isMobile ? {
+      padding: '5px'
+    } : {
+      padding: 'center'
+    }, isMobile ? {
+      outline: '1px solid var(--qmail-shell-border)'
+    } : {
+      outline: 'none'
+    }, isMobile ? {
+      marginTop: '10px'
+    } : {
+      marginTop: '0px'
+    }]} onClick={()=> {
         if(!identifier) return
         openMessage(messageData?.user, identifier, messageData, isFromSent ? (alias || name) : username)
     }}>
       <MailMessageRowProfile>
         <AvatarWrapper isAlias={!!alias} height="50px" user={name} fallback={alias || name}></AvatarWrapper>
         <MessageExtraInfo>
-          <MessageExtraName sx={{
-            fontWeight: shouldBoldUnread ? "900" : "300"
-          }}>{isFromSent ? "To: " : ""} {alias || name}</MessageExtraName>
+          <MessageExtraName sx={[shouldBoldUnread ? {
+            fontWeight: "900"
+          } : {
+            fontWeight: "300"
+          }]}>{isFromSent ? "To: " : ""} {alias || name}</MessageExtraName>
           <MessageExtraDate>{createdAtLabel}</MessageExtraDate>
         </MessageExtraInfo>
       </MailMessageRowProfile>
       <MailMessageRowInfo>
         {hasAttachments ?  <MailMessageRowInfoImg src={AttachmentSVG} /> : hasAttachments === false ? null : isEncrypted ?  <MailMessageRowInfoImg src={LockSVG} />   : null}
        
-
         {subject ? (
           <MailMessageRowInfoStatusRead
-            sx={{
-              fontWeight: shouldBoldUnread ? 600 : 300,
-            }}
+            sx={[shouldBoldUnread ? {
+              fontWeight: 600
+            } : {
+              fontWeight: 300
+            }]}
           >
             {subject}
           </MailMessageRowInfoStatusRead>
         )  : isEncrypted ? (
           <MailMessageRowInfoStatusNotDecrypted
-            sx={{
-              fontWeight: shouldBoldUnread ? 900 : 300,
-            }}
+            sx={[shouldBoldUnread ? {
+              fontWeight: 900
+            } : {
+              fontWeight: 300
+            }]}
           >
             ACCESS TO DECRYPT
           </MailMessageRowInfoStatusNotDecrypted>

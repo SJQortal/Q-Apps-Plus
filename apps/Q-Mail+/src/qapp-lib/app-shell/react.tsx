@@ -550,7 +550,9 @@ export const AppMenu = ({
                 void controller.submitRating(value)
               }}
             />
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               {state.rating.count > 0
                 ? `Average ${state.rating.average} from ${state.rating.count} rating${state.rating.count === 1 ? '' : 's'}`
                 : labels.ratingNoRatingsLabel || 'No ratings yet'}
@@ -576,5 +578,5 @@ export const AppMenu = ({
         </>
       )}
     </Box>
-  )
+  );
 }

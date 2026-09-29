@@ -16,11 +16,9 @@ const CrowdfundInlineContent = styled(Box)(({ theme }) => ({
     color: theme.palette.text.primary,
     width: '100%'
   }));
-
 export const DisplayHtml = ({ html, textColor }: any) => {
   const cleanContent = useMemo(() => {
     if (!html) return null;
-
     const sanitize: string = DOMPurify.sanitize(toQuill1Html(html), {
       USE_PROFILES: { html: true },
     });

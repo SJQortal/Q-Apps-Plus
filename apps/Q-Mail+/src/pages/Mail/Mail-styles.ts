@@ -64,28 +64,23 @@ export const MailBodyInnerScroll = styled(Box)`
     background-color: transparent; /* Initially transparent */
     transition: background-color 0.3s; /* Transition for background color */
   }
-
   &::-webkit-scrollbar-thumb {
     background-color: transparent; /* Initially transparent */
     border-radius: 3px; /* Scrollbar thumb radius */
     transition: background-color 0.3s; /* Transition for thumb color */
   }
-
   &:hover {
     &::-webkit-scrollbar {
       background-color: var(--qmail-scroll-track-hover); /* Scrollbar background color on hover */
     }
-
     &::-webkit-scrollbar-thumb {
       background-color: var(--qmail-scroll-thumb-hover); /* Scrollbar thumb color on hover */
     }
-
     &::-webkit-scrollbar-thumb:hover {
       background-color: var(--qmail-scroll-thumb-hover); /* Color when hovering over the thumb */
     }
   }
 `;
-
 export const ComposeContainer = styled(Box)(({ theme }) => ({
   display: "flex",
   width: "150px",
@@ -292,7 +287,6 @@ export const InstanceListContainer = styled(Box)`
   display: flex;
   flex-direction: column;
   flex-grow: 1;
-
   overflow: auto !important;
   transition: background-color 0.3s;
   &::-webkit-scrollbar {
@@ -301,22 +295,18 @@ export const InstanceListContainer = styled(Box)`
     background-color: transparent; /* Initially transparent */
     transition: background-color 0.3s; /* Transition for background color */
   }
-
   &::-webkit-scrollbar-thumb {
     background-color: transparent; /* Initially transparent */
     border-radius: 3px; /* Scrollbar thumb radius */
     transition: background-color 0.3s; /* Transition for thumb color */
   }
-
   &:hover {
     &::-webkit-scrollbar {
       background-color: var(--qmail-scroll-track-hover); /* Scrollbar background color on hover */
     }
-
     &::-webkit-scrollbar-thumb {
       background-color: var(--qmail-scroll-thumb-hover); /* Scrollbar thumb color on hover */
     }
-
     &::-webkit-scrollbar-thumb:hover {
       background-color: var(--qmail-scroll-thumb-hover); /* Color when hovering over the thumb */
     }
@@ -528,7 +518,6 @@ export const NewMessageSendButton = styled(Box)`
     border-radius: 12px;
   }
 `;
-
 export const NewMessageSendP = styled(Typography)`
   font-family: var(--qapp-font-sans, 'Lexend', sans-serif);
   font-size: 1rem;
@@ -537,7 +526,6 @@ export const NewMessageSendP = styled(Typography)`
   line-height: 120%; /* 19.2px */
   letter-spacing: -0.16px;
 `;
-
 export const ShowMessageNameP = styled(Typography)`
   font-family: var(--qapp-font-sans, 'Lexend', sans-serif);
   font-size: 1rem;
@@ -565,7 +553,6 @@ export const ShowMessageSubjectP = styled(Typography)`
   letter-spacing: 0.0075em;
   text-align: left;
 `;
-
 export const ShowMessageButton = styled(Box)`
 display: inline-flex;
 padding: 8px 16px 8px 16px;
@@ -581,7 +568,6 @@ gap: 8px;
 border-radius: 4px;
 border: 0.5px solid var(--qmail-message-button-border);
 font-family: var(--qapp-font-sans, 'Lexend', sans-serif);
-
 min-width: 120px;
 cursor: pointer;
 &:hover {
@@ -605,7 +591,6 @@ gap: 8px;
 border-radius: 4px;
 border: 0.5px solid var(--qmail-message-button-border);
 font-family: var(--qapp-font-sans, 'Lexend', sans-serif);
-
 min-width: 120px;
 cursor: pointer;
 &:hover {
@@ -614,7 +599,6 @@ border: 0.5px solid var(--qmail-message-button-border);
 background:  var(--qmail-message-button-hover);
 }
 `;
-
 export const ShowMessageButtonP = styled(Typography)`
   font-size: 1rem;
   font-style: normal;
@@ -623,7 +607,6 @@ export const ShowMessageButtonP = styled(Typography)`
   letter-spacing: -0.16px;
   color: var(--qmail-message-button-text);
 `;
-
 export const ShowMessageButtonImg = styled("img")({
   width: "auto",
   height: "auto",
@@ -661,7 +644,6 @@ export const MoreImg = styled("img")({
 
 export const MoreP = styled(Typography)`
   color: var(--qmail-message-meta);
-
   /* Attachments */
   font-family: var(--qapp-font-sans, 'Lexend', sans-serif);
   font-size: 1rem;
@@ -692,7 +674,6 @@ export const GroupNameP = styled(Typography)`
   line-height: 120%; /* 30px */
   letter-spacing: 0.188px;
 `;
-
 export const AllThreadP = styled(Typography)`
   color: var(--qmail-thread-text);
 font-size: 1.25rem;
@@ -701,7 +682,6 @@ font-weight: 400;
 line-height: 120%; /* 24px */
 letter-spacing: 0.15px;
 `;
-
 export const SingleThreadParent = styled(Box)`
 border-radius: 35px 4px 4px 35px;
 background: var(--qmail-thread-card-bg);
@@ -725,9 +705,7 @@ cursor: pointer;
 margin-bottom: 5px;
 height: 76px;
 align-items:center;
-
 `;
-
 export const ThreadInfoColumn = styled(Box)(({ theme }) => ({
   display: "flex",
   flexDirection: "column",
@@ -758,7 +736,6 @@ font-style: normal;
 font-weight: 500;
 line-height: normal;
 `;
-
 export const ThreadInfoColumnTime = styled(Typography)`
 color: var(--qmail-thread-muted);
 font-family: var(--qapp-font-sans, 'Lexend', sans-serif);
@@ -794,7 +771,6 @@ font-style: normal;
 font-weight: 400;
 line-height: normal;
 `;
-
 export const GroupContainer = styled(Box)`
 position: relative;
         overflow: auto;
@@ -805,26 +781,21 @@ position: relative;
 &::-webkit-scrollbar-track:hover {
   background-color: transparent;
 }
-
 &::-webkit-scrollbar {
   width: 16px;
   height: 10px;
   background-color: var(--qmail-scroll-track-hover);
 }
-
 &::-webkit-scrollbar-thumb {
   background-color: var(--qmail-scroll-thumb-hover);
   border-radius: 8px;
   background-clip: content-box;
   border: 4px solid transparent;
 }
-
 &::-webkit-scrollbar-thumb:hover {
   background-color: var(--qmail-scroll-thumb-hover);
 }
-
 `
-
 export const CloseContainer = styled(Box)(({ theme }) => ({
   display: "flex",
   width: "50px",

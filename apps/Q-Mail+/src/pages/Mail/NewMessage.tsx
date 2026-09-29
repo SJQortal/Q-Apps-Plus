@@ -1312,23 +1312,32 @@ export const NewMessage = ({
   const composerContent = (
     <>
       <InstanceListContainer
-        sx={{
+        sx={[{
           backgroundColor: "var(--qmail-compose-surface)",
-          padding: isMobile ? "0.75rem" : "1.25rem 2rem",
           flex: 1,
           minHeight: 0,
           display: "flex",
-          flexDirection: "column",
-          gap: isMobile ? "0.75rem" : "1rem",
-        }}
+          flexDirection: "column"
+        }, isMobile ? {
+          padding: "0.75rem"
+        } : {
+          padding: "1.25rem 2rem"
+        }, isMobile ? {
+          gap: "0.75rem"
+        } : {
+          gap: "1rem"
+        }]}
       >
         <Box
-          sx={{
+          sx={[{
             display: "flex",
             flexDirection: "column",
-            gap: isMobile ? "0.75rem" : "0.9rem",
-            flexShrink: 0,
-          }}
+            flexShrink: 0
+          }, isMobile ? {
+            gap: "0.75rem"
+          } : {
+            gap: "0.9rem"
+          }]}
         >
           <NewMessageInputRow>
             <NewMessageAliasContainer
@@ -1349,21 +1358,6 @@ export const NewMessage = ({
                 }}
                 variant="standard"
                 fullWidth
-                InputProps={{
-                  disableUnderline: true,
-                }}
-                SelectProps={{
-                  disableUnderline: true,
-                  MenuProps: {
-                    PaperProps: {
-                      sx: {
-                        backgroundColor: "var(--qmail-shell-popover-bg)",
-                        border: "1px solid var(--qmail-shell-border)",
-                        color: "var(--qmail-compose-text)",
-                      },
-                    },
-                  },
-                }}
                 sx={{
                   "& .MuiInputBase-root": {
                     color: "var(--new-message-text)",
@@ -1373,7 +1367,24 @@ export const NewMessage = ({
                     padding: 0,
                   },
                 }}
-              >
+                slotProps={{
+                  input: {
+                    disableUnderline: true,
+                  },
+
+                  select: {
+                    disableUnderline: true,
+                    MenuProps: {
+                      PaperProps: {
+                        sx: {
+                          backgroundColor: "var(--qmail-shell-popover-bg)",
+                          border: "1px solid var(--qmail-shell-border)",
+                          color: "var(--qmail-compose-text)",
+                        },
+                      },
+                    },
+                  }
+                }}>
                 {fromOptions.map(nameOption => {
                   return (
                     <MenuItem key={nameOption} value={nameOption}>
@@ -1457,10 +1468,6 @@ export const NewMessage = ({
                       {...params}
                       variant="standard"
                       placeholder="Type a name or joined group"
-                      InputProps={{
-                        ...params.InputProps,
-                        disableUnderline: true,
-                      }}
                       sx={{
                         width: "100%",
                         color: "var(--new-message-text)",
@@ -1472,6 +1479,14 @@ export const NewMessage = ({
                           fontSize: "1rem",
                           opacity: 1,
                         },
+                      }}
+                      slotProps={{
+                        ...params.slotProps,
+
+                        input: {
+                          ...params.slotProps.input,
+                          disableUnderline: true,
+                        }
                       }}
                     />
                   );
@@ -1711,16 +1726,19 @@ export const NewMessage = ({
         >
           {replyTo && (
             <Box
-              sx={{
+              sx={[{
                 border: "1px solid var(--qmail-shell-border)",
                 background: "var(--qmail-shell-hover)",
                 borderRadius: "0.9rem",
-                padding: isMobile ? "0.8rem" : "0.9rem 1rem",
                 display: "flex",
                 flexDirection: "column",
                 gap: "0.6rem",
-                minHeight: 0,
-              }}
+                minHeight: 0
+              }, isMobile ? {
+                padding: "0.8rem"
+              } : {
+                padding: "0.9rem 1rem"
+              }]}
             >
               <Box
                 sx={{
@@ -1754,18 +1772,18 @@ export const NewMessage = ({
                     variant={
                       replyPreviewMode === "preview" ? "contained" : "text"
                     }
-                    sx={{
+                    sx={[{
                       minWidth: "unset",
-                      textTransform: "none",
-                      color:
-                        replyPreviewMode === "preview"
-                          ? "var(--qmail-action-primary-text)"
-                          : "var(--qmail-compose-text)",
-                      backgroundColor:
-                        replyPreviewMode === "preview"
-                          ? "var(--qmail-action-primary-bg)"
-                          : "transparent",
-                    }}
+                      textTransform: "none"
+                    }, replyPreviewMode === "preview" ? {
+                      color: "var(--qmail-action-primary-text)"
+                    } : {
+                      color: "var(--qmail-compose-text)"
+                    }, replyPreviewMode === "preview" ? {
+                      backgroundColor: "var(--qmail-action-primary-bg)"
+                    } : {
+                      backgroundColor: "transparent"
+                    }]}
                   >
                     Preview
                   </Button>
@@ -1773,18 +1791,18 @@ export const NewMessage = ({
                     onClick={() => setReplyPreviewMode("full")}
                     size="small"
                     variant={replyPreviewMode === "full" ? "contained" : "text"}
-                    sx={{
+                    sx={[{
                       minWidth: "unset",
-                      textTransform: "none",
-                      color:
-                        replyPreviewMode === "full"
-                          ? "var(--qmail-action-primary-text)"
-                          : "var(--qmail-compose-text)",
-                      backgroundColor:
-                        replyPreviewMode === "full"
-                          ? "var(--qmail-action-primary-bg)"
-                          : "transparent",
-                    }}
+                      textTransform: "none"
+                    }, replyPreviewMode === "full" ? {
+                      color: "var(--qmail-action-primary-text)"
+                    } : {
+                      color: "var(--qmail-compose-text)"
+                    }, replyPreviewMode === "full" ? {
+                      backgroundColor: "var(--qmail-action-primary-bg)"
+                    } : {
+                      backgroundColor: "transparent"
+                    }]}
                   >
                     Full
                   </Button>
@@ -1822,11 +1840,14 @@ export const NewMessage = ({
               </Typography>
               {replyPreviewMode !== "hidden" && (
                 <Box
-                  sx={{
-                    maxHeight: replyPreviewMode === "full" ? "16rem" : "8rem",
+                  sx={[{
                     overflowY: "auto",
-                    pr: "0.25rem",
-                  }}
+                    pr: "0.25rem"
+                  }, replyPreviewMode === "full" ? {
+                    maxHeight: "16rem"
+                  } : {
+                    maxHeight: "8rem"
+                  }]}
                 >
                   <Typography
                     sx={{
@@ -1844,13 +1865,16 @@ export const NewMessage = ({
           )}
 
           <Box
-            sx={{
+            sx={[{
               flex: 1,
-              minHeight: isMobile ? "15rem" : "18rem",
               display: "flex",
               flexDirection: "column",
-              minWidth: 0,
-            }}
+              minWidth: 0
+            }, isMobile ? {
+              minHeight: "15rem"
+            } : {
+              minHeight: "18rem"
+            }]}
           >
             <TextEditor
               className="qmail-compose-editor"
@@ -1868,17 +1892,27 @@ export const NewMessage = ({
         </Box>
       </InstanceListContainer>
       <InstanceFooter
-        sx={{
+        sx={[{
           backgroundColor: "var(--qmail-compose-footer-surface)",
-          padding: isMobile
-            ? "0.85rem 0.9rem calc(env(safe-area-inset-bottom, 0px) + 0.85rem)"
-            : "1rem 2rem",
           alignItems: "stretch",
-          height: "auto",
-          position: isMobile ? "sticky" : "static",
-          bottom: isMobile ? 0 : "auto",
-          zIndex: isMobile ? 2 : "auto",
-        }}
+          height: "auto"
+        }, isMobile ? {
+          padding: "0.85rem 0.9rem calc(env(safe-area-inset-bottom, 0px) + 0.85rem)"
+        } : {
+          padding: "1rem 2rem"
+        }, isMobile ? {
+          position: "sticky"
+        } : {
+          position: "static"
+        }, isMobile ? {
+          bottom: 0
+        } : {
+          bottom: "auto"
+        }, isMobile ? {
+          zIndex: 2
+        } : {
+          zIndex: "auto"
+        }]}
       >
         <Box
           sx={{
@@ -1905,10 +1939,13 @@ export const NewMessage = ({
             Discard
           </Button>
           <NewMessageSendButton
-            sx={{
-              marginLeft: "auto",
-              padding: isMobile ? "10px 14px" : "8px 16px 8px 12px",
-            }}
+            sx={[{
+              marginLeft: "auto"
+            }, isMobile ? {
+              padding: "10px 14px"
+            } : {
+              padding: "8px 16px 8px 12px"
+            }]}
             onClick={sendMail}
           >
             <NewMessageSendP>{sendButtonLabel}</NewMessageSendP>
@@ -1935,12 +1972,15 @@ export const NewMessage = ({
 
   return (
     <Box
-      sx={{
+      sx={[{
         display: "flex",
-        flexDirection: inlineMode ? "column" : "row",
         height: "100%",
-        width: "100%",
-      }}
+        width: "100%"
+      }, inlineMode ? {
+        flexDirection: "column"
+      } : {
+        flexDirection: "row"
+      }]}
     >
       {!inlineMode && !hideButton && (
         <ComposeContainer

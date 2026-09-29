@@ -226,7 +226,11 @@ const BlogPostPreview: React.FC<BlogPostPreviewProps> = ({
         </CardContentContainer>
       </StyledCard>
       <IconsBox
-        sx={{ opacity: showIcons ? 1 : 0 }}
+        sx={[showIcons ? {
+          opacity: 1
+        } : {
+          opacity: 0
+        }]}
         onMouseEnter={() => setShowIcons(true)}
         onMouseLeave={() => setShowIcons(false)}
       >
@@ -298,7 +302,7 @@ const BlogPostPreview: React.FC<BlogPostPreviewProps> = ({
         </DialogActions>
       </Dialog>
     </>
-  )
+  );
 }
 
 export default BlogPostPreview

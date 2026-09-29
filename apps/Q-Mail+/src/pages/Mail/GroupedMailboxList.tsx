@@ -419,18 +419,18 @@ export const GroupedMailboxList = ({
                   }}
                 >
                   <Typography
-                    sx={{
+                    sx={[{
                       fontSize: "1rem",
-                      fontWeight:
-                        mailboxType === "sent"
-                          ? 300
-                          : groupHasUnread
-                          ? 700
-                          : 300,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
+                      whiteSpace: "nowrap"
+                    }, mailboxType === "sent" ? {
+                      fontWeight: 300
+                    } : {
+                      fontWeight: groupHasUnread
+                        ? 700
+                        : 300
+                    }]}
                   >
                     {mailboxType === "sent" ? "To: " : ""}
                     {group.label}
@@ -453,11 +453,14 @@ export const GroupedMailboxList = ({
               </Box>
               {isExpandableGroup && (
                 <ExpandMoreIcon
-                  sx={{
+                  sx={[{
                     color: "var(--qmail-thread-subtle-text)",
-                    transform: isExpanded ? "rotate(180deg)" : "rotate(90deg)",
-                    transition: "transform 0.2s ease",
-                  }}
+                    transition: "transform 0.2s ease"
+                  }, isExpanded ? {
+                    transform: "rotate(180deg)"
+                  } : {
+                    transform: "rotate(90deg)"
+                  }]}
                 />
               )}
             </Box>

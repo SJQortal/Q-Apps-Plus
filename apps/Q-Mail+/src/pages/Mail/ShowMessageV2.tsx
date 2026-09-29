@@ -288,10 +288,13 @@ export const ShowMessageV2 = ({
                         }}
                       >
                         <MoreImg
-                          sx={{
-                            marginLeft: "5px",
-                            transform: expandAttachments ? "rotate(180deg)" : "unset",
-                          }}
+                          sx={[{
+                            marginLeft: "5px"
+                          }, expandAttachments ? {
+                            transform: "rotate(180deg)"
+                          } : {
+                            transform: "unset"
+                          }]}
                           src={MoreSVG}
                         />
                         <MoreP>
