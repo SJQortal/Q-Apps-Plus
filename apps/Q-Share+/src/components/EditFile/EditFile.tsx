@@ -25,6 +25,7 @@ import { QSHARE_FILE_BASE } from "../../constants/Identifiers.ts";
 import { MultiplePublish } from "../common/MultiplePublish/MultiplePublishAll";
 import { TextEditor } from "../common/TextEditor/TextEditor";
 import { extractTextFromHTML } from "../common/TextEditor/utils";
+import { isQuillHtmlEmpty, normalizeQuillHtml } from "../../utils/quillHtml";
 import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
 import {
   maxSize,
@@ -141,7 +142,8 @@ export const EditFile = () => {
     try {
       const categoryList = categoryListRef.current?.getSelectedCategories();
       if (!title) throw new Error("Please enter a title");
-      if (!description) throw new Error("Please enter a description");
+      if (isQuillHtmlEmpty(description))
+        throw new Error("Please enter a description");
       if (!categoryList[0]) throw new Error("Please select a category");
       if (!editFileProperties) return;
       if (!userAddress) throw new Error("Unable to locate user address");
@@ -173,7 +175,8 @@ export const EditFile = () => {
       let fileReferences = [];
 
       let listOfPublishes = [];
-      const fullDescription = extractTextFromHTML(description);
+      const htmlDescription = normalizeQuillHtml(description);
+      const fullDescription = extractTextFromHTML(htmlDescription);
 
       const sanitizeTitle = title
         .replace(/[^a-zA-Z0-9\s-]/g, "")
@@ -224,7 +227,7 @@ export const EditFile = () => {
         title,
         version: editFileProperties.version,
         fullDescription,
-        htmlDescription: description,
+        htmlDescription,
         commentsId: editFileProperties.commentsId,
         ...categoryListRef.current?.categoriesToObject(),
         files: fileReferences,

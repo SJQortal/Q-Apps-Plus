@@ -1,15 +1,9 @@
-import React from "react";
-import ReactQuill, { Quill } from "react-quill";
-import "react-quill/dist/quill.snow.css";
-import ImageResize from "quill-image-resize-module-react";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 
-Quill.register("modules/imageResize", ImageResize);
-
+// Quill 2 has no maintained image-resize module; the toolbar never offered an
+// image button, so the old quill-image-resize-module-react is dropped.
 const modules = {
-  imageResize: {
-    parchment: Quill.import("parchment"),
-    modules: ["Resize", "DisplaySize"],
-  },
   toolbar: [
     ["bold", "italic", "underline", "strike"], // styled text
     ["blockquote", "code-block"], // blocks
@@ -26,7 +20,18 @@ const modules = {
     ["clean"], // remove formatting
   ],
 };
-export const TextEditor = ({ inlineContent, setInlineContent }) => {
+
+interface TextEditorProps {
+  inlineContent: string;
+  setInlineContent: (value: string) => void;
+}
+
+/**
+ * The value handed back is Quill 2's semantic HTML as-is (the component
+ * compares it with the next `value` prop, so it must round-trip untouched).
+ * Run it through `normalizeQuillHtml` before storing it on QDN.
+ */
+export const TextEditor = ({ inlineContent, setInlineContent }: TextEditorProps) => {
   return (
     <ReactQuill
       theme="snow"

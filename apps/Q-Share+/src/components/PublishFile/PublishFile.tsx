@@ -21,6 +21,7 @@ import { QSHARE_FILE_BASE } from "../../constants/Identifiers.ts";
 import { MultiplePublish } from "../common/MultiplePublish/MultiplePublishAll";
 import { TextEditor } from "../common/TextEditor/TextEditor";
 import { extractTextFromHTML } from "../common/TextEditor/utils";
+import { isQuillHtmlEmpty, normalizeQuillHtml } from "../../utils/quillHtml";
 import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
 import {
   maxSize,
@@ -128,7 +129,8 @@ export const PublishFile = ({ editId, editContent }: NewCrowdfundProps) => {
       if (!userAddress) throw new Error("Unable to locate user address");
 
       if (!title) throw new Error("Please enter a title");
-      if (!description) throw new Error("Please enter a description");
+      if (isQuillHtmlEmpty(description))
+        throw new Error("Please enter a description");
       if (!categoryListRef.current?.getSelectedCategories()[0])
         throw new Error("Please select a category");
       if (files.length === 0) throw new Error("Add at least one file");
@@ -160,7 +162,8 @@ export const PublishFile = ({ editId, editContent }: NewCrowdfundProps) => {
 
       let listOfPublishes = [];
 
-      const fullDescription = extractTextFromHTML(description);
+      const htmlDescription = normalizeQuillHtml(description);
+      const fullDescription = extractTextFromHTML(htmlDescription);
 
       const sanitizeTitle = title
         .replace(/[^a-zA-Z0-9\s-]/g, "")
@@ -209,7 +212,7 @@ export const PublishFile = ({ editId, editContent }: NewCrowdfundProps) => {
         title,
         version: 1,
         fullDescription,
-        htmlDescription: description,
+        htmlDescription,
         commentsId: `${QSHARE_FILE_BASE}_cm_${idMeta}`,
         ...categoryListRef.current?.categoriesToObject(),
         files: fileReferences,
