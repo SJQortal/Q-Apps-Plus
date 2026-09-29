@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@emotion/react": "11.14",
@@ -30,13 +33,17 @@
     "ua-parser-js": "^1.0.37"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "^19.3.0",
     "@types/react-copy-to-clipboard": "^5.0.4",
     "@types/react-dom": "^19.3.0",
     "@types/ua-parser-js": "^0.7.39",
     "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.1.1",
     "prettier": "^2.8.6",
     "typescript": "5.9",
-    "vite": "^8.3.1"
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
   }
 }
