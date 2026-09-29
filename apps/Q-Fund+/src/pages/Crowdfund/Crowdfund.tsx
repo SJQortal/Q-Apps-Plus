@@ -494,7 +494,7 @@ export const Crowdfund = () => {
             Back To Homepage
           </BackToHomeButton>
         </span>
-        <MainCol item xs={12} sm={12} md={6} gap={"15px"}>
+        <MainCol size={{ xs: 12, sm: 12, md: 6 }} sx={{ gap: "15px" }}>
           <CrowdfundTitleRow>
             {!ownerAvatar ? (
               <AccountCircleSVG
@@ -571,7 +571,7 @@ export const Crowdfund = () => {
             <DisplayHtml html={crowdfundData?.inlineContent} />
           </CrowdfundInlineContentRow>
         </MainCol>
-        <MainCol item xs={12} sm={12} md={6} gap={"17px"}>
+        <MainCol size={{ xs: 12, sm: 12, md: 6 }} sx={{ gap: "17px" }}>
           {/* Ensure the AT is still active and not being deployed to display the donate button */}
           {ATLoadingStatus ? (
             // Loader reusable component with status text
@@ -592,7 +592,9 @@ export const Crowdfund = () => {
                 blocksRemaining={blocksRemaining}
                 ATCompleted={ATCompleted}
               />
-              <Stack direction={"row"} gap={"25px"}>
+              <Stack direction={"row"} sx={{
+                gap: "25px"
+              }}>
                 <Donate
                   ATDonationPossible={ATDeployed && !ATCompleted}
                   atAddress={crowdfundData?.deployedAT?.aTAddress}

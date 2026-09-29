@@ -326,7 +326,7 @@ export const NewUpdate = ({
             variant="filled"
             value={title}
             onChange={e => setTitle(e.target.value)}
-            inputProps={{ maxLength: 180 }}
+            slotProps={{ htmlInput: { maxLength: 180 } }}
             multiline
             maxRows={3}
             required

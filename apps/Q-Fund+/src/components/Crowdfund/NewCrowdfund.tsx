@@ -490,7 +490,7 @@ export const NewCrowdfund = ({ editId, editContent }: NewCrowdfundProps) => {
             variant="filled"
             value={title}
             onChange={e => setTitle(e.target.value)}
-            inputProps={{ maxLength: 180 }}
+            slotProps={{ htmlInput: { maxLength: 180 } }}
             multiline
             maxRows={3}
             required
@@ -501,7 +501,7 @@ export const NewCrowdfund = ({ editId, editContent }: NewCrowdfundProps) => {
             variant="filled"
             value={description}
             onChange={e => setDescription(e.target.value)}
-            inputProps={{ maxLength: 180 }}
+            slotProps={{ htmlInput: { maxLength: 180 } }}
             multiline
             maxRows={3}
             required

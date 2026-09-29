@@ -167,12 +167,20 @@ export const QFundOwnerReviews: FC<QFundOwnerReviewsProps> = ({
         <Grid
           container
           direction={"row"}
-          flexWrap={"nowrap"}
-          rowGap={2}
           style={{ columnGap: "30px" }}
-        >
+          sx={{
+            flexWrap: "nowrap",
+            rowGap: 2
+          }}>
           {averageOwnerRating && (
-            <Grid item xs={12} sm={2} justifyContent={"center"}>
+            <Grid
+              size={{
+                xs: 12,
+                sm: 2
+              }}
+              sx={{
+                justifyContent: "center"
+              }}>
               <AverageReviewContainer>
                 <ReviewsFont>Average Review</ReviewsFont>
                 <AverageReviewNumber>
@@ -193,11 +201,11 @@ export const QFundOwnerReviews: FC<QFundOwnerReviewsProps> = ({
             </Grid>
           )}
           <Grid
-            item
-            xs={12}
-            sm={averageOwnerRating ? 10 : 12}
             style={{ position: "relative" }}
-          >
+            size={{
+              xs: 12,
+              sm: averageOwnerRating ? 10 : 12
+            }}>
             <OwnerReviewsContainer>
               {ownerReviews.length === 0 ? (
                 <ReviewsFont>No reviews yet</ReviewsFont>

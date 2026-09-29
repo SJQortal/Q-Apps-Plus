@@ -69,7 +69,10 @@ export const DropdownContainer = styled(Box)(({ theme }) => ({
   '&:hover': {
     cursor: 'pointer',
     filter:
-      theme.palette.mode === 'light' ? 'brightness(0.95)' : 'brightness(1.1)',
+      'brightness(1.1)',
+    ...theme.applyStyles("light", {
+      filter: 'brightness(0.95)'
+    })
   },
 }));
 
@@ -99,9 +102,10 @@ export const LightModeIcon = styled(LightModeSVG)(({ theme }) => ({
   '&:hover': {
     cursor: 'pointer',
     filter:
-      theme.palette.mode === 'dark'
-        ? 'drop-shadow(0px 4px 6px rgba(255, 255, 255, 0.6))'
-        : 'drop-shadow(0px 4px 6px rgba(99, 88, 88, 0.1))',
+      'drop-shadow(0px 4px 6px rgba(99, 88, 88, 0.1))',
+    ...theme.applyStyles("dark", {
+      filter: 'drop-shadow(0px 4px 6px rgba(255, 255, 255, 0.6))'
+    })
   },
 }));
 
@@ -110,8 +114,9 @@ export const DarkModeIcon = styled(DarkModeSVG)(({ theme }) => ({
   '&:hover': {
     cursor: 'pointer',
     filter:
-      theme.palette.mode === 'dark'
-        ? 'drop-shadow(0px 4px 6px rgba(255, 255, 255, 0.6))'
-        : 'drop-shadow(0px 4px 6px rgba(99, 88, 88, 0.1))',
+      'drop-shadow(0px 4px 6px rgba(99, 88, 88, 0.1))',
+    ...theme.applyStyles("dark", {
+      filter: 'drop-shadow(0px 4px 6px rgba(255, 255, 255, 0.6))'
+    })
   },
 }));

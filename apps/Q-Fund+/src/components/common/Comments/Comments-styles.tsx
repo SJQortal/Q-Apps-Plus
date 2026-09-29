@@ -3,9 +3,7 @@ import { Card, Box, Typography, Button, TextField } from "@mui/material";
 
 export const StyledCard = styled(Card)(({ theme }) => ({
   backgroundColor:
-    theme.palette.mode === "light"
-      ? theme.palette.primary.main
-      : theme.palette.primary.dark,
+    theme.palette.primary.dark,
   maxWidth: "600px",
   width: "100%",
   margin: "10px 0px",
@@ -13,19 +11,23 @@ export const StyledCard = styled(Card)(({ theme }) => ({
   "@media (max-width: 450px)": {
     width: "100%;",
   },
+  ...theme.applyStyles("light", {
+    backgroundColor: theme.palette.primary.main
+  })
 }));
 
 export const CardContentContainer = styled(Box)(({ theme }) => ({
   backgroundColor:
-    theme.palette.mode === "light"
-      ? theme.palette.primary.dark
-      : theme.palette.primary.light,
+    theme.palette.primary.light,
   margin: "5px 10px",
   borderRadius: "15px",
+  ...theme.applyStyles("light", {
+    backgroundColor: theme.palette.primary.dark
+  })
 }));
 
 export const CardContentContainerComment = styled(Box)(({ theme }) => ({
-  backgroundColor: theme.palette.mode === "light" ? "#a9d9d038" : "#c3abe414",
+  backgroundColor: "#c3abe414",
   border: `1px solid ${theme.palette.primary.main}`,
   margin: "0px",
   padding: "8px 15px",
@@ -33,6 +35,9 @@ export const CardContentContainerComment = styled(Box)(({ theme }) => ({
   width: "100%",
   display: "flex",
   flexDirection: "column",
+  ...theme.applyStyles("light", {
+    backgroundColor: "#a9d9d038"
+  })
 }));
 
 export const StyledCardHeader = styled(Box)({
@@ -242,7 +247,7 @@ export const CommentInputContainer = styled(Box)({
 });
 
 export const CommentInput = styled(TextField)(({ theme }) => ({
-  backgroundColor: theme.palette.mode === "light" ? "#a9d9d01d" : "#c3abe4a",
+  backgroundColor: "#c3abe4a",
   border: `1px solid ${theme.palette.primary.main}`,
   width: "100%",
   borderRadius: "8px",
@@ -267,6 +272,9 @@ export const CommentInput = styled(TextField)(({ theme }) => ({
       },
     },
   },
+  ...theme.applyStyles("light", {
+    backgroundColor: "#a9d9d01d"
+  })
 }));
 
 export const SubmitCommentButton = styled(Button)(({ theme }) => ({

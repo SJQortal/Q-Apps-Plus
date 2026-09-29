@@ -536,25 +536,23 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         padding: from === 'create' ? '8px' : 0
       }}
     >
-     
+
       {isLoading && (
         <Box
-          position="absolute"
-          top={0}
-          left={0}
-          right={0}
-          bottom={resourceStatus?.status === 'READY' ? '55px ' : 0}
-          display="flex"
-          justifyContent="center"
-          alignItems="center"
-          zIndex={25}
-          bgcolor="rgba(0, 0, 0, 0.6)"
           sx={{
-            display: 'flex',
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: resourceStatus?.status === 'READY' ? '55px ' : 0,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 25,
+            bgcolor: "rgba(0, 0, 0, 0.6)",
             flexDirection: 'column',
             gap: '10px'
-          }}
-        >
+          }}>
           <CircularProgress color="secondary" />
           {resourceStatus && (
             <Typography
@@ -590,25 +588,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       )}
       {((!src && !isLoading) || !startPlay) && (
         <Box
-          position="absolute"
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
-          display="flex"
-          justifyContent="center"
-          alignItems="center"
-          zIndex={500}
-          bgcolor="rgba(0, 0, 0, 0.6)"
           onClick={() => {
             if (from === 'create') return
             dispatch(setVideoPlaying(null))
             togglePlay()
           }}
           sx={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 500,
+            bgcolor: "rgba(0, 0, 0, 0.6)",
             cursor: 'pointer'
-          }}
-        >
+          }}>
           <PlayArrow
             sx={{
               width: '50px',
@@ -681,9 +678,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               keepMounted
               open={Boolean(anchorEl)}
               onClose={handleMenuClose}
-              PaperProps={{
-                style: {
-                  width: '250px'
+              slotProps={{
+                paper: {
+                  style: {
+                    width: '250px'
+                  }
                 }
               }}
             >
@@ -808,5 +807,5 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         ) : null}
       </ControlsContainer>
     </VideoContainer>
-  )
+  );
 }

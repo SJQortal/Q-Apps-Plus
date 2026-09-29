@@ -30,11 +30,14 @@ export const AddReviewDescription = styled(TextareaAutosize)(({ theme }) => ({
   background: theme.palette.background.default,
   resize: "none",
   "& placeholder": {
-    color: theme.palette.mode === "light" ? "#808183" : "#edeef0",
+    color: "#edeef0",
     fontFamily: "Mulish",
     fontWeight: 400,
     fontSize: "19px",
     letterSpacing: "0px",
+    ...theme.applyStyles("light", {
+      color: "#808183"
+    })
   },
   border: `1px solid ${theme.palette.background.paper}`,
   "&:hover": {

@@ -260,7 +260,7 @@ export const AddReview: FC<AddReviewProps> = ({
             variant="filled"
             value={reviewTitle}
             onChange={e => setReviewTitle(e.target.value as string)}
-            inputProps={{ maxLength: 180 }}
+            slotProps={{ htmlInput: { maxLength: 180 } }}
             required
             style={{ width: "100%" }}
           />

@@ -113,21 +113,6 @@ export const BoundedNumericTextField = ({
   return (
     <TextField
       {...noChangeProps}
-      InputProps={{
-        ...props?.InputProps,
-        endAdornment: addIconButtons ? (
-          <InputAdornment position="end">
-            <IconButton onClick={e => changeValueWithIncDecButton(e, 1)}>
-              <AddIcon />{" "}
-            </IconButton>
-            <IconButton onClick={e => changeValueWithIncDecButton(e, -1)}>
-              <RemoveIcon />{" "}
-            </IconButton>
-          </InputAdornment>
-        ) : (
-          <></>
-        ),
-      }}
       onChange={e => listeners(e as eventType)}
       onBlur={e => {
         formatValueOnBlur(e as eventType);
@@ -135,6 +120,24 @@ export const BoundedNumericTextField = ({
       autoComplete="off"
       value={textFieldValue}
       inputRef={ref}
+      slotProps={{
+        ...props?.slotProps,
+        input: {
+          ...(props?.slotProps?.input as object | undefined),
+          endAdornment: addIconButtons ? (
+            <InputAdornment position="end">
+              <IconButton onClick={e => changeValueWithIncDecButton(e, 1)}>
+                <AddIcon />{" "}
+              </IconButton>
+              <IconButton onClick={e => changeValueWithIncDecButton(e, -1)}>
+                <RemoveIcon />{" "}
+              </IconButton>
+            </InputAdornment>
+          ) : (
+            <></>
+          ),
+        }
+      }}
     />
   );
 };

@@ -12,10 +12,10 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
-    "@mui/icons-material": "^5.18.0",
-    "@mui/material": "^5.18.0",
-    "@mui/system": "^5.18.0",
-    "@mui/x-date-pickers": "^7.29.4",
+    "@mui/icons-material": "^9.4.0",
+    "@mui/material": "^9.4.0",
+    "@mui/system": "^9.4.0",
+    "@mui/x-date-pickers": "^9.14.0",
     "@reduxjs/toolkit": "^2.13.0",
     "bs58": "^5.0.0",
     "colorsys": "github:netbeast/colorsys",
@@ -38,7 +38,6 @@
     "ts-key-enum": "^2.0.12"
   },
   "devDependencies": {
-    "@mui/types": "^7.2.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@types/react": "^19.3.0",

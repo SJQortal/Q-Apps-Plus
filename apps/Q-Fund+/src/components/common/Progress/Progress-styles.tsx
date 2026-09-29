@@ -24,9 +24,10 @@ export const FundAmount = styled(Typography)(({ theme }) => ({
   letterSpacing: "0.2px",
   userSelect: "none",
   color:
-    theme.palette.mode === "light"
-      ? theme.palette.primary.dark
-      : theme.palette.primary.light,
+    theme.palette.primary.light,
+  ...theme.applyStyles("light", {
+    color: theme.palette.primary.dark
+  })
 }));
 
 export const FundAmountNumber = styled(Box)(({ theme }) => ({
@@ -64,11 +65,8 @@ export const ProgressRow = styled(Box)(({ theme }) => ({
 export const CustomCircularProgress = styled(CircularProgress)(({ theme }) => ({
   position: "relative",
   color:
-    theme.palette.mode === "light"
-      ? theme.palette.primary.dark
-      : theme.palette.primary.light,
+    theme.palette.primary.light,
   justifySelf: "center",
-
   "&::before": {
     content: '""',
     display: "block",
@@ -79,14 +77,17 @@ export const CustomCircularProgress = styled(CircularProgress)(({ theme }) => ({
     height: "calc(100% - 2px)",
     borderRadius: "50%",
     background:
-      theme.palette.mode === "dark"
-        ? `radial-gradient(circle at center, transparent 34%, #fffffff0 34%)`
-        : `radial-gradient(circle at center, transparent 34%, #e2e0e0ee 34%)`,
+      `radial-gradient(circle at center, transparent 34%, #e2e0e0ee 34%)`,
     transform: "translate(-50%, -50%)",
     zIndex: -1,
+    ...theme.applyStyles("dark", {
+      background: `radial-gradient(circle at center, transparent 34%, #fffffff0 34%)`
+    })
   },
-
   "& .MuiCircularProgress-circle": {
     zIndex: 1,
   },
+  ...theme.applyStyles("light", {
+    color: theme.palette.primary.dark
+  })
 }));

@@ -107,7 +107,15 @@ export const CrowdfundList = () => {
             avatarUrl = userAvatarHash[crowdfundObj?.user];
           }
           return (
-            <Grid item xs={12} sm={6} md={4} lg={3} xl={3} key={crowdfund.id}>
+            <Grid
+              key={crowdfund.id}
+              size={{
+                xs: 12,
+                sm: 6,
+                md: 4,
+                lg: 3,
+                xl: 3
+              }}>
               <CardContainer
                 onClick={() => {
                   navigate(

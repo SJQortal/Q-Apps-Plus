@@ -15,19 +15,25 @@ export const AddReviewButton = styled(Button)(({ theme }) => ({
   fontFamily: "Livvic",
   fontSize: "16px",
   width: "auto",
-  color: theme.palette.mode === "dark" ? "#000000" : "#ffffff",
-  backgroundColor: theme.palette.mode === "dark" ? "#ffffff" : "#000000",
+  color: "#ffffff",
+  backgroundColor: "#000000",
   border: "none",
   borderRadius: "5px",
   transition: "all 0.3s ease-in-out",
   "&:hover": {
     cursor: "pointer",
-    backgroundColor: theme.palette.mode === "dark" ? "#ffffff" : "#000000",
+    backgroundColor: "#000000",
     boxShadow:
-      theme.palette.mode === "dark"
-        ? "0px 8px 10px 1px hsla(0,0%,0%,0.14), 0px 3px 14px 2px hsla(0,0%,0%,0.12), 0px 5px 5px -3px hsla(0,0%,0%,0.2)"
-        : "rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;",
+      "rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;",
+    ...theme.applyStyles("dark", {
+      backgroundColor: "#ffffff",
+      boxShadow: "0px 8px 10px 1px hsla(0,0%,0%,0.14), 0px 3px 14px 2px hsla(0,0%,0%,0.12), 0px 5px 5px -3px hsla(0,0%,0%,0.2)"
+    })
   },
+  ...theme.applyStyles("dark", {
+    color: "#000000",
+    backgroundColor: "#ffffff"
+  })
 }));
 
 export const AverageReviewContainer = styled(Box)({
@@ -72,7 +78,9 @@ export const TotalReviewsFont = styled(Typography)(({ theme }) => ({
 }));
 
 export const ReviewContainer = styled(Box)<OwnerReviewsProps>(
-  ({ theme, showCompleteReview }) => ({
+  ({
+    theme
+  }) => ({
     display: "flex",
     flexDirection: "column",
     alignItems: "flex-start",
@@ -83,13 +91,34 @@ export const ReviewContainer = styled(Box)<OwnerReviewsProps>(
     width: "100%",
     transition: "all 0.3s ease-in-out",
     "&:hover": {
-      cursor: showCompleteReview ? "auto" : "pointer",
-      backgroundColor: showCompleteReview
-        ? "transparent"
-        : theme.palette.mode === "light"
+      cursor: "pointer",
+      backgroundColor: theme.palette.mode === "light"
         ? "#d3d3d3ac"
         : "#aeabab1e",
     },
+    variants: [{
+      props: (
+        {
+          showCompleteReview
+        }
+      ) => showCompleteReview,
+      style: {
+        "&:hover": {
+          cursor: "auto"
+        }
+      }
+    }, {
+      props: (
+        {
+          showCompleteReview
+        }
+      ) => showCompleteReview,
+      style: {
+        "&:hover": {
+          backgroundColor: "transparent"
+        }
+      }
+    }]
   })
 );
 
@@ -158,13 +187,19 @@ export const OwnerReviewsContainer = styled(Box)(({ theme }) => ({
     backgroundColor: "transparent",
   },
   "&::-webkit-scrollbar-thumb": {
-    backgroundColor: theme.palette.mode === "light" ? "#d3d9e1" : "#414763",
+    backgroundColor: "#414763",
     borderRadius: "8px",
     backgroundClip: "content-box",
     border: "4px solid transparent",
+    ...theme.applyStyles("light", {
+      backgroundColor: "#d3d9e1"
+    })
   },
   "&::-webkit-scrollbar-thumb:hover": {
-    backgroundColor: theme.palette.mode === "light" ? "#b7bcc4" : "#40455f",
+    backgroundColor: "#40455f",
+    ...theme.applyStyles("light", {
+      backgroundColor: "#b7bcc4"
+    })
   },
 }));
 
@@ -193,13 +228,19 @@ export const ReusableModalStyled = styled(ReusableModal)(({ theme }) => ({
       backgroundColor: "transparent",
     },
     "&::-webkit-scrollbar-thumb": {
-      backgroundColor: theme.palette.mode === "light" ? "#d3d9e1" : "#414763",
+      backgroundColor: "#414763",
       borderRadius: "8px",
       backgroundClip: "content-box",
       border: "4px solid transparent",
+      ...theme.applyStyles("light", {
+        backgroundColor: "#d3d9e1"
+      })
     },
     "&::-webkit-scrollbar-thumb:hover": {
-      backgroundColor: theme.palette.mode === "light" ? "#b7bcc4" : "#40455f",
+      backgroundColor: "#40455f",
+      ...theme.applyStyles("light", {
+        backgroundColor: "#b7bcc4"
+      })
     },
   },
 }));

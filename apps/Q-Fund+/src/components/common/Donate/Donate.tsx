@@ -188,16 +188,18 @@ export const Donate = ({
                   allowDecimals={false}
                   allowNegatives={false}
                   addIconButtons={true}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <QortalSVG
-                          height="20px"
-                          width="20px"
-                          color={theme.palette.text.primary}
-                        />
-                      </InputAdornment>
-                    ),
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <QortalSVG
+                            height="20px"
+                            width="20px"
+                            color={theme.palette.text.primary}
+                          />
+                        </InputAdornment>
+                      ),
+                    },
                   }}
                 />
               </DonateModalCol>
