@@ -4,16 +4,17 @@ import {
   Box,
   Button,
   Chip,
-  Collapse,
+  CircularProgress,
   Skeleton,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
-  useMediaQuery,
-  useTheme,
 } from "@mui/material";
 import FilterListIcon from "@mui/icons-material/FilterList";
+import { BottomSheet } from "../../components/common/mobile/BottomSheet";
+import { useNarrowLayout } from "../../hooks/usePhoneLayout";
+import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { RootState } from "../../state/store";
 import { FileList } from "./FileList.tsx";
 import { useFetchFiles } from "../../hooks/useFetchFiles.tsx";
@@ -30,8 +31,7 @@ export type { SortOrder } from "../../utils/settings.ts";
 import type { SortOrder } from "../../utils/settings.ts";
 
 export const Home = () => {
-  const theme = useTheme();
-  const phone = useMediaQuery(theme.breakpoints.down("md"));
+  const phone = useNarrowLayout();
   const dispatch = useDispatch();
   const categoryListRef = useRef<CategoryListRef>(null);
   const files = useSelector((state: RootState) => state.file.files);
@@ -43,6 +43,7 @@ export const Home = () => {
   const [sort, setSort] = useState<SortOrder>(settings.defaultSort);
   const [following, setFollowing] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const { pull, refreshing } = usePullToRefresh(() => runSearchRef.current(true), true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
@@ -79,6 +80,9 @@ export const Home = () => {
     },
     [getFiles, filterName, filterSearch, sort, following, hasMore]
   );
+
+  const runSearchRef = useRef(runSearch);
+  runSearchRef.current = runSearch;
 
   useEffect(() => {
     if (mounted.current) return;
@@ -127,6 +131,20 @@ export const Home = () => {
     ? files.filter((f) => !isNameHidden(f.user, settings))
     : files;
 
+  const sortToggle = (
+    <ToggleButtonGroup
+      size="small"
+      exclusive
+      value={sort}
+      onChange={(_e, v) => changeSort(v)}
+      aria-label="Sort order"
+      sx={{ "& .MuiToggleButton-root": { minHeight: 40, px: 2 } }}
+    >
+      <ToggleButton value="newest">Newest</ToggleButton>
+      <ToggleButton value="oldest">Oldest</ToggleButton>
+    </ToggleButtonGroup>
+  );
+
   const filterForm = (
     <Box
       component="form"
@@ -137,6 +155,12 @@ export const Home = () => {
       }}
       sx={{ display: "flex", flexDirection: "column", gap: 2 }}
     >
+      {phone && (
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+          <Typography sx={{ fontWeight: 600 }}>Sort</Typography>
+          {sortToggle}
+        </Box>
+      )}
       <TextField
         size="small"
         label="Search titles"
@@ -150,11 +174,19 @@ export const Home = () => {
         onChange={(e) => dispatch(changefilterName(e.target.value))}
       />
       <CategoryList categoryData={allCategoryData} ref={categoryListRef} dense />
-      <Box sx={{ display: "flex", gap: 1 }}>
+      <Box sx={{ display: "flex", gap: 1, "& .MuiButton-root": { minHeight: 44 } }}>
         <Button type="submit" variant="contained" fullWidth>
-          Search
+          {phone ? "Apply" : "Search"}
         </Button>
-        <Button type="button" variant="outlined" fullWidth onClick={resetFilters}>
+        <Button
+          type="button"
+          variant="outlined"
+          fullWidth
+          onClick={() => {
+            resetFilters();
+            if (phone) setFiltersOpen(false);
+          }}
+        >
           Reset
         </Button>
       </Box>
@@ -176,37 +208,57 @@ export const Home = () => {
         paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))",
       }}
     >
-      <FiltersRail>
-        {phone ? (
-          <>
-            <Button
-              variant={filtersOpen ? "contained" : "outlined"}
-              startIcon={<FilterListIcon />}
-              onClick={() => setFiltersOpen((v) => !v)}
-              aria-expanded={filtersOpen}
-              aria-controls="home-filters"
-            >
-              {filtersOpen ? "Hide filters" : activeFilters ? "Filters (on)" : "Filters"}
-            </Button>
-            <Collapse in={filtersOpen} id="home-filters">
-              {filterForm}
-            </Collapse>
-          </>
-        ) : (
-          <>
-            <Typography sx={{ fontWeight: 700, fontSize: 13, textTransform: "uppercase", color: "text.secondary" }}>
-              Filters
-            </Typography>
-            {filterForm}
-          </>
-        )}
-      </FiltersRail>
+      {(pull > 0 || refreshing) && (
+        <Box
+          role="status"
+          aria-live="polite"
+          aria-label={refreshing ? "Refreshing" : "Pull to refresh"}
+          sx={{
+            position: "fixed",
+            top: `calc(56px + env(safe-area-inset-top, 0px) + ${Math.round(pull * 0.5)}px)`,
+            left: 0,
+            right: 0,
+            display: "flex",
+            justifyContent: "center",
+            zIndex: 20,
+            pointerEvents: "none",
+            opacity: refreshing ? 1 : Math.min(1, pull / 72),
+            transition: "opacity 120ms ease",
+          }}
+        >
+          <CircularProgress size={28} variant={refreshing ? "indeterminate" : "determinate"} value={Math.min(100, (pull / 72) * 100)} />
+        </Box>
+      )}
+      {phone ? (
+        <BottomSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters and sort">
+          {filterForm}
+        </BottomSheet>
+      ) : (
+        <FiltersRail>
+          <Typography sx={{ fontWeight: 700, fontSize: 13, textTransform: "uppercase", color: "text.secondary" }}>
+            Filters
+          </Typography>
+          {filterForm}
+        </FiltersRail>
+      )}
 
       <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, flex: 1, minWidth: 120 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", "& .MuiChip-root": { minHeight: 36 } }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, flex: "1 1 160px", minWidth: 0, wordBreak: "break-word" }}>
             {filterName ? `Shares by ${filterName}` : following ? "From names you follow" : "Latest shares"}
           </Typography>
+          {phone && (
+            <Button
+              variant={activeFilters ? "contained" : "outlined"}
+              size="small"
+              startIcon={<FilterListIcon />}
+              onClick={() => setFiltersOpen(true)}
+              aria-haspopup="dialog"
+              sx={{ minHeight: 40 }}
+            >
+              {activeFilters ? "Filters on" : "Filters"}
+            </Button>
+          )}
           {username && settings.followingFeed && (
             <Chip
               label="Following"
@@ -227,16 +279,7 @@ export const Home = () => {
               aria-pressed={filterName === username}
             />
           )}
-          <ToggleButtonGroup
-            size="small"
-            exclusive
-            value={sort}
-            onChange={(_e, v) => changeSort(v)}
-            aria-label="Sort order"
-          >
-            <ToggleButton value="newest">Newest</ToggleButton>
-            <ToggleButton value="oldest">Oldest</ToggleButton>
-          </ToggleButtonGroup>
+          {!phone && sortToggle}
         </Box>
 
         {error ? (

@@ -1,5 +1,7 @@
-import { Avatar, Box, Typography } from "@mui/material";
-import { useParams } from "react-router-dom";
+import { Avatar, Box, IconButton, Typography } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { useNavigate, useParams } from "react-router-dom";
+import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { FileListComponentLevel } from "../Home/FileListComponentLevel.tsx";
 import { FollowButton } from "../../components/common/FollowButton.tsx";
 import { CopyLinkButton } from "../../components/common/CopyLinkButton.tsx";
@@ -8,6 +10,9 @@ import { avatarUrl, profileLink } from "../../utils/qortalLinks";
 export const IndividualProfile = () => {
   const { name: paramName } = useParams();
   const name = paramName ? decodeURIComponent(paramName) : "";
+  const phone = usePhoneLayout();
+  const navigate = useNavigate();
+  const goBack = () => (window.history.length > 1 ? navigate(-1) : navigate("/"));
 
   return (
     <Box
@@ -34,6 +39,11 @@ export const IndividualProfile = () => {
           bgcolor: "background.paper",
         }}
       >
+        {phone && (
+          <IconButton aria-label="Back" onClick={goBack} sx={{ minWidth: 44, minHeight: 44 }}>
+            <ArrowBackIcon />
+          </IconButton>
+        )}
         <Avatar src={avatarUrl(name)} alt="" sx={{ width: 56, height: 56 }} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h6" sx={{ fontWeight: 700, wordBreak: "break-word" }}>
@@ -43,7 +53,7 @@ export const IndividualProfile = () => {
             Shares published under this Qortal name
           </Typography>
         </Box>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, width: { xs: "100%", sm: "auto" }, "& .MuiButton-root": { minHeight: 44 } }}>
           <FollowButton followerName={name} />
           <CopyLinkButton link={profileLink(name)} tooltipTitle="Copy profile link" />
         </Box>

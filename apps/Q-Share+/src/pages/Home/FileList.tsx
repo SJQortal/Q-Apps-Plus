@@ -22,6 +22,7 @@ import { formatDate } from "../../utils/time.ts";
 import { RootState } from "../../state/store.ts";
 import { getIconsFromObject } from "../../constants/Categories/CategoryFunctions.ts";
 import { avatarUrl, profilePath, shareLink, sharePath } from "../../utils/qortalLinks.ts";
+import { usePhoneLayout } from "../../hooks/usePhoneLayout.ts";
 
 interface FileListProps {
   files: Video[];
@@ -34,6 +35,9 @@ export const FileList = ({ files, showPublisher = true }: FileListProps) => {
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const phone = usePhoneLayout();
+  const actionSize = phone ? "medium" : "small";
+  const actionSx = phone ? { minWidth: 44, minHeight: 44 } : undefined;
 
   const blockUserFunc = async (user: string) => {
     if (user === "Q-Share") return;
@@ -105,13 +109,13 @@ export const FileList = ({ files, showPublisher = true }: FileListProps) => {
                 )}
                 <RowActions className="row-actions">
                   <Tooltip title="Copy link">
-                    <IconButton size="small" aria-label="Copy link" onClick={() => copyLink(fileObj)}>
+                    <IconButton size={actionSize} sx={actionSx} aria-label="Copy link" onClick={() => copyLink(fileObj)}>
                       <LinkOutlinedIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                   {fileObj?.user === username ? (
                     <Tooltip title="Edit share">
-                      <IconButton size="small" aria-label="Edit share" onClick={() => dispatch(setEditFile(fileObj))}>
+                      <IconButton size={actionSize} sx={actionSx} aria-label="Edit share" onClick={() => dispatch(setEditFile(fileObj))}>
                         <EditOutlinedIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
@@ -119,10 +123,10 @@ export const FileList = ({ files, showPublisher = true }: FileListProps) => {
                     username && (
                       <Tooltip title={`Block ${fileObj.user}`}>
                         <IconButton
-                          size="small"
+                          size={actionSize}
                           aria-label={`Block ${fileObj.user}`}
                           onClick={() => blockUserFunc(fileObj.user)}
-                          sx={{ color: "error.main" }}
+                          sx={{ color: "error.main", ...actionSx }}
                         >
                           <BlockOutlinedIcon fontSize="small" />
                         </IconButton>

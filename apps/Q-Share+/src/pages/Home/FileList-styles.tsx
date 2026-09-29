@@ -15,10 +15,14 @@ export const FileRow = styled("li")(({ theme }) => ({
   position: "relative",
   display: "flex",
   alignItems: "center",
-  gap: theme.spacing(1.5),
+  flexWrap: "wrap",
+  gap: theme.spacing(1, 1.5),
   width: "100%",
   minHeight: 64,
   padding: theme.spacing(1, 1.5),
+  [theme.breakpoints.down("sm")]: {
+    padding: theme.spacing(1, 1),
+  },
   backgroundColor: theme.palette.background.paper,
   border: `1px solid ${theme.palette.divider}`,
   borderRadius: theme.shape.borderRadius,
@@ -47,8 +51,9 @@ export const RowMain = styled("button")(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   gap: theme.spacing(1.5),
-  flex: 1,
+  flex: "1 1 200px",
   minWidth: 0,
+  minHeight: 44,
   padding: 0,
   borderRadius: theme.shape.borderRadius,
   "&:focus-visible": {
@@ -92,7 +97,8 @@ export const NameLink = styled("button")(({ theme }) => ({
   appearance: "none",
   border: 0,
   background: "transparent",
-  padding: 0,
+  padding: theme.spacing(0.5, 0),
+  minHeight: 36,
   cursor: "pointer",
   display: "inline-flex",
   alignItems: "center",
@@ -115,7 +121,11 @@ export const RowActions = styled("div")(({ theme }) => ({
   alignItems: "center",
   gap: theme.spacing(0.25),
   flexShrink: 0,
+  marginLeft: "auto",
   transition: "opacity 150ms ease",
+  [theme.breakpoints.down("sm")]: {
+    gap: theme.spacing(0.5),
+  },
 }));
 
 export const FiltersRail = styled(Box)(({ theme }) => ({
