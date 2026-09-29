@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import DOMPurify from "dompurify";
-import "react-quill/dist/quill.snow.css";
-import "react-quill/dist/quill.core.css";
-import "react-quill/dist/quill.bubble.css";
+import "react-quill-new/dist/quill.snow.css";
+import "react-quill-new/dist/quill.core.css";
+import "react-quill-new/dist/quill.bubble.css";
 import { convertQortalLinks } from "./utils";
+import { toQuill1Html } from "./quillHtml";
 import { Box, styled } from "@mui/material";
 
 
@@ -20,7 +21,7 @@ export const DisplayHtml = ({ html, textColor }: any) => {
   const cleanContent = useMemo(() => {
     if (!html) return null;
 
-    const sanitize: string = DOMPurify.sanitize(html, {
+    const sanitize: string = DOMPurify.sanitize(toQuill1Html(html), {
       USE_PROFILES: { html: true },
     });
     const anchorQortal = convertQortalLinks(sanitize);
