@@ -12,8 +12,8 @@
   "dependencies": {
     "@emotion/react": "^11.10.6",
     "@emotion/styled": "^11.10.6",
-    "@mui/icons-material": "^5.11.11",
-    "@mui/material": "^5.11.13",
+    "@mui/icons-material": "^5.18.0",
+    "@mui/material": "^5.18.0",
     "@reduxjs/toolkit": "^2.13.0",
     "@tiptap/core": "^2.0.4",
     "@tiptap/extension-highlight": "^2.0.4",
