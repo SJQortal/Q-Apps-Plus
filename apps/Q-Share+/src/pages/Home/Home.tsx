@@ -36,6 +36,7 @@ export const Home = () => {
   const filterSearch = useSelector((state: RootState) => state.file.filterSearch);
   const filterName = useSelector((state: RootState) => state.file.filterName);
   const username = useSelector((state: RootState) => state.auth?.user?.name);
+  const listVersion = useSelector((state: RootState) => state.file.listVersion);
   const [sort, setSort] = useState<SortOrder>("newest");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -79,6 +80,16 @@ export const Home = () => {
     mounted.current = true;
     if (files.length === 0) runSearch(true);
   }, [files.length, runSearch]);
+
+  // A publish or update from this session: reload page one so the new share shows.
+  const seenVersion = useRef(listVersion);
+  useEffect(() => {
+    if (seenVersion.current === listVersion) return;
+    seenVersion.current = listVersion;
+    isFetching.current = false;
+    runSearch(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listVersion]);
 
   const resetFilters = () => {
     dispatch(changefilterSearch(""));

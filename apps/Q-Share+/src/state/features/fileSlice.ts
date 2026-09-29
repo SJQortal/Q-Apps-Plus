@@ -14,6 +14,8 @@ interface GlobalState {
   selectedCategoryFiles: any[];
   editFileProperties: any;
   editPlaylistProperties: any;
+  /** Bumped after a publish or update so lists know to refresh. */
+  listVersion: number;
 }
 const initialState: GlobalState = {
   files: [],
@@ -28,6 +30,7 @@ const initialState: GlobalState = {
   selectedCategoryFiles: [null, null, null, null],
   editFileProperties: null,
   editPlaylistProperties: null,
+  listVersion: 0,
 };
 
 export interface Video {
@@ -153,6 +156,9 @@ export const fileSlice = createSlice({
     setFilterValue: (state, action) => {
       state.filterValue = action.payload;
     },
+    markSharesChanged: state => {
+      state.listVersion += 1;
+    },
     blockUser: (state, action) => {
       const username = action.payload;
       state.files = state.files.filter(item => item.user !== username);
@@ -181,6 +187,7 @@ export const {
   changefilterSearch,
   changefilterName,
   blockUser,
+  markSharesChanged,
   setEditFile,
   setEditPlaylist,
 } = fileSlice.actions;
