@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      (function () {
+        // Hub and GO serve the app from /render/APP/<Name>/…, so relative
+        // assets and client routes need a <base>. Ported from Torq.
+        var match = location.pathname.match(/^\/render\/(?:APP|WEBSITE)\/[^/]+/i);
+        var base = (window._qdnBase || (match && match[0]) || '').replace(/\/$/, '');
+        if (base) {
+          var tag = document.createElement('base');
+          tag.href = base + '/';
+          document.head.insertBefore(tag, document.head.firstChild);
+        }
+
+        // Theme boot from shared/hub-theme/boot-inline.js: paint the saved
+        // theme's background before React mounts.
+        var STORAGE_KEY = 'qappsplus-ui-theme';
+        var HUB20 = { light: '#fafafa', dark: '#313338' };
+        var BOOT = {"hub30":{"light":"#EEE7DC","dark":"#0E0F14"},"black":{"light":"#000000","dark":"#000000"},"white":{"light":"#ffffff","dark":"#ffffff"}};
+        var params = new URLSearchParams(location.search);
+        var mode = window._qdnTheme || params.get('theme') || 'dark';
+        if (mode !== 'light' && mode !== 'dark') mode = 'dark';
+        var ui = 'hub30';
+        try {
+          var stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+          if (stored === 'hub20' || BOOT.hasOwnProperty(stored)) ui = stored;
+        } catch (e) {}
+        var shown = ui === 'black' ? 'dark' : ui === 'white' ? 'light' : mode;
+        var bg = ui === 'hub20' ? HUB20[mode] : BOOT[ui][mode];
+        var root = document.documentElement;
+        root.setAttribute('data-theme', shown);
+        root.setAttribute('data-ui-theme', ui);
+        root.style.colorScheme = shown;
+        root.style.background = bg;
+        document.addEventListener('DOMContentLoaded', function () {
+          document.body.style.background = bg;
+        });
+
+        // Hub appends ?theme=&lang=&identifier=&time= to the URL; keep the
+        // visible URL clean so client routes match.
+        try {
+          var keep = new URLSearchParams();
+          params.forEach(function (value, key) {
+            if (
+              key !== 'theme' &&
+              key !== 'lang' &&
+              key !== 'identifier' &&
+              key !== 'time' &&
+              key !== 'isManualNavigation'
+            ) {
+              keep.append(key, value);
+            }
+          });
+          var search = keep.toString();
+          var next = location.pathname + (search ? '?' + search : '') + location.hash;
+          if (next !== location.pathname + location.search + location.hash) {
+            history.replaceState(history.state, '', next);
+          }
+        } catch (e) {}
+
+        // Tell Hub which path is showing, so its back button and copy-link work.
+        try {
+          if (window.parent && window.parent !== window) {
+            var rawPath = location.pathname.replace(/^\/render\/(?:APP|WEBSITE)\/[^/]+/i, '');
+            if (!rawPath || rawPath === '/' || rawPath === '/index.html') rawPath = '';
+            else if (rawPath.charAt(0) !== '/') rawPath = '/' + rawPath;
+            var service = String(window._qdnService || 'APP').toUpperCase();
+            if (service !== 'WEBSITE') service = 'APP';
+            var nameParts = (match && match[0].split('/')) || [];
+            var name = window._qdnName || nameParts[nameParts.length - 1] || 'Q-Apps+';
+            window.parent.postMessage(
+              { requestedHandler: 'UI', action: 'QDN_RESOURCE_DISPLAYED', service: service, name: name, path: rawPath },
+              '*'
+            );
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Q-Apps+</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
