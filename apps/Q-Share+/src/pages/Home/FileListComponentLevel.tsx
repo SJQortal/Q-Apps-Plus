@@ -4,7 +4,7 @@ import { Box, Skeleton } from "@mui/material";
 import { useFetchFiles, summaryToVideo } from "../../hooks/useFetchFiles.tsx";
 import LazyLoad from "../../components/common/LazyLoad";
 import { Video } from "../../state/features/fileSlice.ts";
-import { queue } from "../../wrappers/GlobalWrapper";
+import { queue } from "../../utils/queue";
 import { QSHARE_FILE_BASE } from "../../constants/Identifiers.ts";
 import { QDN_PAGE, searchQdn } from "../../utils/qdnSearch";
 import { FileList } from "./FileList.tsx";

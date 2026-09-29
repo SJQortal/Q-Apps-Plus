@@ -13,7 +13,7 @@ import { setIsLoadingGlobal, setUserAvatarHash } from "../state/features/globalS
 import { RootState } from "../state/store";
 import { fetchAndEvaluateVideos } from "../utils/fetchVideos";
 import { QSHARE_FILE_BASE } from "../constants/Identifiers.ts";
-import { queue } from "../wrappers/GlobalWrapper";
+import { queue } from "../utils/queue";
 import { getCategoriesFetchString } from "../components/common/CategoryList/CategoryList.tsx";
 import { QDN_PAGE, QdnResourceSummary, searchQdn } from "../utils/qdnSearch";
 

@@ -9,7 +9,7 @@ import PageLoader from "../components/common/PageLoader";
 import { ErrorBoundary } from "../components/common/ErrorBoundary";
 import { RootState } from "../state/store";
 import { setUserAvatarHash } from "../state/features/globalSlice";
-import { RequestQueue } from "../utils/queue";
+import { queue } from "../utils/queue";
 import { EditFile } from "../components/EditFile/EditFile.tsx";
 import ConsentModal from "../components/common/ConsentModal";
 import { useIframe } from "../hooks/useIframe.tsx";
@@ -18,7 +18,8 @@ interface Props {
   children: React.ReactNode;
 }
 
-export const queue = new RequestQueue();
+// Kept for importers that still read the queue from here; the singleton lives in utils/queue.ts.
+export { queue };
 
 /**
  * The app shell: account lookup, the header, the phone bottom bar, the Edit
