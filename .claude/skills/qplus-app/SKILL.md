@@ -13,6 +13,8 @@ Read `CLAUDE.md`, `docs/PLATFORM.md`, `docs/MIGRATION-NOTES.md`, `docs/DESIGN.md
 
 ## 1. Baseline
 
+Create your branch first, e.g. `git switch -c names-plus/pass-1` (naming rules in CLAUDE.md → Git). `main` is protected, so work never goes there directly.
+
 ```bash
 cd "apps/<App+>" && npm ci && npm run build   # Q-Mintership+ has no build
 ```
@@ -85,5 +87,5 @@ Guard rails:
 ## 6. Hand off
 
 - Fill in the brief's "Done" section, with numbers, and its "Follow-ups" section, including questions for Simon.
-- Commit, push the branch, and open a PR titled `<App+>: redesign pass 1`. The PR body summarises the audit's top findings, what changed, before/after numbers, and anything Simon should test in Hub.
+- Commit, push the branch (`git push -u origin <branch>`) and open the PR: `gh pr create --base main --title "<App+>: React 19.3 / MUI 9.4 + redesign pass 1" --body-file <notes>`. The body summarises the audit's top findings, what changed, before/after numbers, and anything Simon should test in Hub. If `gh` fails, end your report with the branch name so Simon can click "Create PR".
 - Only update `docs/PROGRESS.md` if you are the only session working in the repo.
