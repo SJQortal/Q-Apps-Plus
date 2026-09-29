@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@emotion/react": "^11.10.6",
@@ -27,7 +28,6 @@
     "mime": "^4.0.1",
     "moment": "^2.29.4",
     "philliplm-react-modern-audio-player": "^1.4.6",
-    "quill-image-resize-module-react": "^3.0.0",
     "react": "^18.3.1",
     "react-copy-to-clipboard": "^5.1.0",
     "react-dnd": "^16.0.1",
@@ -38,7 +38,7 @@
     "react-intersection-observer": "^9.4.3",
     "react-joyride": "^2.5.4",
     "react-masonry-css": "^1.0.16",
-    "react-quill": "^2.0.0",
+    "react-quill-new": "^3.8.3",
     "react-redux": "^9.3.0",
     "react-resize-detector": "^8.0.4",
     "react-router-dom": "^6.30.6",
@@ -51,15 +51,19 @@
   },
   "devDependencies": {
     "@mui/types": "^7.2.3",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/dompurify": "^3.0.2",
     "@types/react": "^18.3.31",
     "@types/react-copy-to-clipboard": "^5.0.7",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^6.1.1",
     "core-js": "^3.30.2",
+    "jsdom": "^30.1.1",
     "prettier": "^2.8.6",
     "typescript": "^5.9.3",
     "vite": "^8.3.1",
+    "vitest": "^5.0.2",
     "worker-loader": "^3.0.8"
   }
 }
