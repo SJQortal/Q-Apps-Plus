@@ -1,6 +1,6 @@
 # hub-theme: the Q-Apps+ theme kit
 
-This kit gives every + app the same four themes (Hub 3.0, Hub 2.0, Black and White), a pre-load script that stops the wrong background flashing, and a Settings theme picker. It's ported from Torq and works with MUI 5 and MUI 7. `scripts/check-theme-kit.sh` tests both.
+This kit gives every + app the same four themes (Hub 3.0, Hub 2.0, Black and White), a pre-load script that stops the wrong background flashing, and a Settings theme picker. It's ported from Torq, targets MUI 9, and also works on MUI 5 and 7. `scripts/check-theme-kit.sh` tests any of them.
 
 | File | What it is |
 |---|---|

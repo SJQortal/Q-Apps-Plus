@@ -9,7 +9,7 @@ app=${1:?usage: scripts/check-theme-kit.sh <App+>}
 dir="$root/apps/$app"
 [ -d "$dir/node_modules" ] || { echo "Run npm ci in apps/$app first." >&2; exit 1; }
 
-tmp="$dir/.hub-theme-check"
+tmp="$dir/hub-theme-check.tmp"
 rm -rf "$tmp"; mkdir -p "$tmp"
 trap 'rm -rf "$tmp"' EXIT
 cp "$root"/shared/hub-theme/*.ts "$root"/shared/hub-theme/*.tsx "$root/shared/hub-theme/dev/smoke.tsx" "$tmp/"
@@ -20,7 +20,7 @@ cat > "$tmp/tsconfig.json" <<'JSON'
     "moduleResolution": "node", "jsx": "react-jsx", "strict": true, "noEmit": true,
     "skipLibCheck": true, "isolatedModules": true, "esModuleInterop": true
   },
-  "include": ["."]
+  "include": ["**/*"]
 }
 JSON
 cd "$dir"

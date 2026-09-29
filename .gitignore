@@ -22,5 +22,5 @@ release/
 .idea/
 .vscode/*
 !.vscode/extensions.json
-.hub-theme-check/
+hub-theme-check.tmp/
 .claude/settings.local.json

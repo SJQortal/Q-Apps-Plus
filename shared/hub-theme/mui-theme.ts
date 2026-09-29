@@ -1,5 +1,5 @@
 /**
- * MUI themes for the four Q-Apps+ looks. Works with MUI 5 and MUI 7.
+ * MUI themes for the four Q-Apps+ looks. Targets MUI 9; also works on MUI 5 and 7.
  * Ported from Torq's src/styles/theme/theme.ts.
  */
 import { alpha, createTheme, type Theme, type ThemeOptions } from '@mui/material/styles';
@@ -85,26 +85,30 @@ function componentOverrides(t: ThemeTokens): ThemeOptions['components'] {
       MuiButton: {
         defaultProps: { disableElevation: true },
         styleOverrides: {
-          root: {
+          // A callback on ownerState works on MUI 5, 7 and 9; the old
+          // containedPrimary key was removed in MUI 9.
+          root: ({ ownerState }) => ({
             borderRadius: s.button,
             textTransform: 'none',
             fontWeight: 650,
             padding: '8px 16px',
             transition:
               'background 180ms ease, box-shadow 180ms ease, border-color 180ms ease, color 180ms ease',
-          },
-          containedPrimary: {
-            background: `linear-gradient(180deg, ${HUB_BLUE.gradientTop} 0%, ${HUB_BLUE.gradientMid} 42%, ${HUB_BLUE.gradientBottom} 100%)`,
-            border: '1px solid rgba(143, 184, 243, 0.22)',
-            boxShadow:
-              '0 6px 18px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.03) inset, 0 0 18px rgba(132, 175, 240, 0.18)',
-            color: HUB_BLUE.contrast,
-            '&:hover': {
-              background: 'linear-gradient(180deg, #98BFF6 0%, #83B1F3 42%, #76A7F1 100%)',
-              boxShadow:
-                '0 8px 22px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.04) inset, 0 0 22px rgba(132, 175, 240, 0.22)',
-            },
-          },
+            ...(ownerState.variant === 'contained' && (ownerState.color ?? 'primary') === 'primary'
+              ? {
+                  background: `linear-gradient(180deg, ${HUB_BLUE.gradientTop} 0%, ${HUB_BLUE.gradientMid} 42%, ${HUB_BLUE.gradientBottom} 100%)`,
+                  border: '1px solid rgba(143, 184, 243, 0.22)',
+                  boxShadow:
+                    '0 6px 18px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.03) inset, 0 0 18px rgba(132, 175, 240, 0.18)',
+                  color: HUB_BLUE.contrast,
+                  '&:hover': {
+                    background: 'linear-gradient(180deg, #98BFF6 0%, #83B1F3 42%, #76A7F1 100%)',
+                    boxShadow:
+                      '0 8px 22px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.04) inset, 0 0 22px rgba(132, 175, 240, 0.22)',
+                  },
+                }
+              : {}),
+          }),
         },
       },
       MuiIconButton: { styleOverrides: { root: { transition: 'all 0.2s ease' } } },

@@ -31,7 +31,7 @@ scripts/                sync-upstream.sh, sync-theme.sh, build-zip.sh, check-the
 upstreams.tsv           folder → upstream GitHub repo and branch
 ```
 
-Folder names contain `+`, so always quote paths: `cd "apps/Q-Mail+"`.
+Folder names contain `+`, so always quote paths: `cd "apps/Q-Mail+"`. One known tooling trap: TypeScript mis-reads a tsconfig `"include": ["."]` when the path contains `+`, and silently finds almost no files. Use `"src"` or `"**/*"` instead. Vite, vitest, eslint and npm all handle `+` paths fine.
 
 ## Ground rules
 

@@ -71,7 +71,7 @@ export function ThemePicker() {
               ))}
             </Swatches>
             <div>
-              <Typography fontWeight={700} sx={{ fontSize: 14 }}>
+              <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
                 {option.name}
               </Typography>
               <Typography variant="caption" color="text.secondary">
