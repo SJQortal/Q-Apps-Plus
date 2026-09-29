@@ -70,5 +70,23 @@
     "minting_status": "マイニング状態",
     "node_uptime": "ノード稼働時間",
     "sync_status": "同期状態"
+  },
+  "header": {
+    "node": "ノード",
+    "settings": "設定",
+    "navigation": "ナビゲーション"
+  },
+  "settings": {
+    "account": "アカウント",
+    "appearance": "外観",
+    "about": "このアプリについて",
+    "copy_address": "アドレスをコピー",
+    "copied": "コピーしました",
+    "changelog": "新着情報",
+    "upstream": "オリジナルアプリ: Qortal/Q-Node",
+    "source": "ソースコード: SJQortal/Q-Apps-Plus",
+    "not_signed_in": "サインインしていません",
+    "no_name": "登録済みの名前がありません",
+    "about_blurb": "Q-Node+ は Qortal 公式 Q-Node アプリの Simon 版です。同じノード API を使うので、ここで変更した内容はオリジナルアプリでも同じように表示されます。"
   }
 }

@@ -11,7 +11,6 @@ interface Props {
 const NodeWidget = ({ icon, title, subtitle, children }: Props) => (
   <Card
     sx={{
-      borderRadius: '10px',
       display: 'flex',
       flex: '1',
       flexDirection: 'column',
@@ -20,7 +19,7 @@ const NodeWidget = ({ icon, title, subtitle, children }: Props) => (
     }}
   >
     <Box
-      sx={{
+      sx={(theme) => ({
         position: 'relative',
         overflow: 'hidden',
         padding: '16px',
@@ -28,11 +27,11 @@ const NodeWidget = ({ icon, title, subtitle, children }: Props) => (
         justifyContent: 'space-between',
         alignItems: 'center',
         '& .icon': {
-          color: '#05a2e4',
+          color: theme.palette.primary.main,
         },
         '&:before': {
           aspectRatio: '1',
-          backgroundColor: '#05a2e4',
+          backgroundColor: theme.palette.primary.main,
           borderRadius: '50%',
           content: `''`,
           display: 'block',
@@ -43,7 +42,7 @@ const NodeWidget = ({ icon, title, subtitle, children }: Props) => (
           top: '30%',
           transform: 'translate(-30%, -60%)',
         },
-      }}
+      })}
     >
       <Box
         className="icon"

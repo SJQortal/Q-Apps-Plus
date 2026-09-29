@@ -72,5 +72,23 @@
     "minting_status": "Mintimise staatus",
     "node_uptime": "Node’i tööaeg",
     "sync_status": "Sünkroonimise staatus"
+  },
+  "header": {
+    "node": "sõlm",
+    "settings": "seaded",
+    "navigation": "navigeerimine"
+  },
+  "settings": {
+    "account": "konto",
+    "appearance": "välimus",
+    "about": "teave",
+    "copy_address": "kopeeri aadress",
+    "copied": "kopeeritud",
+    "changelog": "mis on uut",
+    "upstream": "algne rakendus: Qortal/Q-Node",
+    "source": "lähtekood: SJQortal/Q-Apps-Plus",
+    "not_signed_in": "sisse logimata",
+    "no_name": "registreeritud nime pole",
+    "about_blurb": "Q-Node+ on Simoni versioon Qortali ametlikust rakendusest Q-Node. See kasutab sama sõlme API-t, nii et kõik, mida siin muudad, on näha ka algses rakenduses."
   }
 }

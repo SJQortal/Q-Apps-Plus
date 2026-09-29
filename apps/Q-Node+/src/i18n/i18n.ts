@@ -6,11 +6,13 @@ import {
   capitalizeFirstWord,
 } from './processors';
 
-// Load all locale JSON files
-type LocaleModule = { default: Record<string, unknown> };
+// Load all locale JSON files. `import: 'default'` asks the bundler for the
+// parsed JSON itself; the module namespace shape differs between dev and
+// production builds.
 const modules = import.meta.glob('./locales/**/*.json', {
   eager: true,
-}) as Record<string, LocaleModule>;
+  import: 'default',
+}) as Record<string, Record<string, unknown>>;
 
 // Dynamically detect unique language codes
 export const supportedLanguages: string[] = Array.from(
@@ -34,7 +36,7 @@ for (const path in modules) {
 
   const [, lang, ns] = match;
   resources[lang] = resources[lang] || {};
-  resources[lang][ns] = modules[path].default;
+  resources[lang][ns] = modules[path];
 }
 
 i18n

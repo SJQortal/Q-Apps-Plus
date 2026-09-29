@@ -1,6 +1,10 @@
-import { createTheme } from '@mui/material/styles';
+/**
+ * The original Q-Node theme, kept as the "Q-Node Classic" (Hub 2.0) option.
+ * Only the palette, type and shape live here; the layout is the + one.
+ */
+import type { ThemeOptions } from '@mui/material/styles';
 
-const commonThemeOptions = {
+const commonThemeOptions: ThemeOptions = {
   typography: {
     fontFamily: ['Inter'].join(','),
     h1: {
@@ -54,23 +58,25 @@ const commonThemeOptions = {
       xl: 1536,
     },
   },
-  MuiDialog: {
-    styleOverrides: {
-      paper: {
-        backgroundImage: 'none',
+  components: {
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: 'none',
+        },
       },
     },
-  },
-  MuiPopover: {
-    styleOverrides: {
-      paper: {
-        backgroundImage: 'none',
+    MuiPopover: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: 'none',
+        },
       },
     },
   },
 };
 
-const lightTheme = createTheme({
+export const lightThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: 'light',
@@ -91,9 +97,9 @@ const lightTheme = createTheme({
       secondary: 'rgba(0, 0, 0, 0.6)', // 60% black
     },
   },
-});
+};
 
-const darkTheme = createTheme({
+export const darkThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: 'dark',
@@ -114,6 +120,4 @@ const darkTheme = createTheme({
       secondary: 'rgb(179, 179, 179)',
     },
   },
-});
-
-export { lightTheme, darkTheme };
+};
