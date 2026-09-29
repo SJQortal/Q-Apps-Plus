@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useRef } from "react";
-import ReactQuill, { Quill } from "react-quill";
-import "react-quill/dist/quill.snow.css";
-import ImageResize from "quill-image-resize-module-react";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
 import './texteditor.css'
-Quill.register("modules/imageResize", ImageResize);
 
 interface TextEditorProps {
   inlineContent: string
@@ -26,10 +24,6 @@ export const TextEditor = ({
 
   const modules = useMemo(() => {
     return {
-      imageResize: {
-        parchment: Quill.import("parchment"),
-        modules: ["Resize", "DisplaySize"],
-      },
       keyboard: {
         bindings: {
           // When replying with quoted content, Enter should create a normal line
@@ -76,9 +70,9 @@ export const TextEditor = ({
 
   useEffect(() => {
     const editor = quillRef.current?.getEditor();
-    const toolbar = editor?.getModule("toolbar")?.container as
-      | HTMLElement
-      | undefined;
+    const toolbar = (
+      editor?.getModule("toolbar") as { container?: HTMLElement } | undefined
+    )?.container;
     if (!toolbar) return;
 
     const controlTitles: Array<[string, string]> = [

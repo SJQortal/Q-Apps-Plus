@@ -38,6 +38,7 @@ import {
   NameChip,
 } from "../../components/common/ChipInputComponent/ChipInputComponent";
 import { TextEditor } from "../../components/common/TextEditor/TextEditor";
+import { toQuill1Html } from "../../components/common/TextEditor/quillHtml";
 import {
   AliasLabelP,
   AttachmentContainer,
@@ -1088,7 +1089,7 @@ export const NewMessage = ({
         publishes: attachmentPublishes,
         references: attachmentReferences,
       } = await buildAttachmentPayloads(senderName);
-      const composedMessageBody = value;
+      const composedMessageBody = toQuill1Html(value);
 
       if (!target) return;
 
