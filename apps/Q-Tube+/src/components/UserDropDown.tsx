@@ -25,10 +25,12 @@ export const UserDropDown = ({
       <Avatar
         src={userAvatar}
         alt={`${userName}'s avatar`}
-        imgProps={{
-          onError: (e) => {
-            e.currentTarget.src = '';
-          },
+        slotProps={{
+          img: {
+            onError: (e) => {
+              e.currentTarget.src = '';
+            },
+          }
         }}
       >
         {userName?.charAt(0).toUpperCase()}

@@ -1,6 +1,6 @@
 import { Box } from '@mui/material';
 import Skeleton from '@mui/material/Skeleton';
-import React, { CSSProperties, useEffect, useState } from 'react';
+import React, { CSSProperties, Ref, useEffect, useState } from 'react';
 import DeletedVideo from '../assets/img/DeletedVideo.jpg';
 import { useIsMobile } from '../hooks/useIsMobile';
 
@@ -12,6 +12,8 @@ interface ResponsiveImageProps {
   className?: string;
   style?: CSSProperties;
   fill?: boolean;
+  /** The outer box, so a parent can fade this image in and out. */
+  ref?: Ref<HTMLDivElement>;
 }
 
 const ResponsiveImage: React.FC<ResponsiveImageProps> = ({
@@ -22,6 +24,7 @@ const ResponsiveImage: React.FC<ResponsiveImageProps> = ({
   className,
   style,
   fill,
+  ref,
 }) => {
   const isMobile = useIsMobile();
 
@@ -38,15 +41,14 @@ const ResponsiveImage: React.FC<ResponsiveImageProps> = ({
 
   return (
     <Box
+      ref={ref}
       sx={{
+        boxShadow: 2,
         padding: isMobile ? '0px' : '5px',
         height: '100%',
         backgroundColor: '#050507',
-
-        ...style,
-      }}
-      boxShadow={2}
-    >
+        ...style
+      }}>
       {loading && (
         <Skeleton
           variant="rectangular"
