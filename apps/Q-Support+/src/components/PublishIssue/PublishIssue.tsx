@@ -54,6 +54,7 @@ import {
 import { MultiplePublish } from "../common/MultiplePublish/MultiplePublishAll";
 import { TextEditor } from "../common/TextEditor/TextEditor";
 import { extractTextFromHTML } from "../common/TextEditor/utils";
+import { toQuill1Html } from "../common/TextEditor/quillCompat";
 import {
   ActionButton,
   ActionButtonRow,
@@ -306,7 +307,7 @@ export const PublishIssue = ({ editId, editContent }: NewCrowdfundProps) => {
         title,
         version: 1,
         fullDescription,
-        htmlDescription: description,
+        htmlDescription: toQuill1Html(description),
         commentsId: `${QSUPPORT_FILE_BASE}_cm_${idMeta}`,
         ...categoryListRef.current?.categoriesToObject(categoryList),
         files: fileReferences,

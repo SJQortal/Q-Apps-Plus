@@ -1,14 +1,13 @@
-import React from "react";
-import ReactQuill, { Quill } from "react-quill";
-import "react-quill/dist/quill.snow.css";
-import ImageResize from "quill-image-resize-module-react";
+import ReactQuill, { Quill } from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
+import QuillResizeImage from "quill-resize-image";
 
-Quill.register("modules/imageResize", ImageResize);
+// Quill 2 replacement for quill-image-resize-module-react (Quill 1 only).
+Quill.register("modules/resize", QuillResizeImage as unknown as typeof Quill);
 
 const modules = {
-  imageResize: {
-    parchment: Quill.import("parchment"),
-    modules: ["Resize", "DisplaySize"],
+  resize: {
+    locale: {},
   },
   toolbar: [
     ["bold", "italic", "underline", "strike"], // styled text
@@ -26,13 +25,24 @@ const modules = {
     ["clean"], // remove formatting
   ],
 };
-export const TextEditor = ({ inlineContent, setInlineContent }) => {
+
+interface TextEditorProps {
+  inlineContent: string;
+  setInlineContent: (html: string) => void;
+}
+
+/**
+ * The editor keeps Quill 2's own HTML in state (so typing never re-parses the
+ * document). Convert it with `toQuill1Html` from ./quillCompat when publishing.
+ */
+export const TextEditor = ({ inlineContent, setInlineContent }: TextEditorProps) => {
   return (
     <ReactQuill
       theme="snow"
       value={inlineContent}
       onChange={setInlineContent}
       modules={modules}
+      useSemanticHTML={false}
     />
   );
 };

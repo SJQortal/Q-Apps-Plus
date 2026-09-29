@@ -42,6 +42,7 @@ import {
 import { PlaylistListEdit } from "../PlaylistListEdit/PlaylistListEdit";
 import { TextEditor } from "../common/TextEditor/TextEditor";
 import { extractTextFromHTML } from "../common/TextEditor/utils";
+import { toQuill1Html } from "../common/TextEditor/quillCompat";
 import {
   issueLocation,
   thirdCategories,
@@ -302,7 +303,7 @@ export const EditPlaylist = () => {
         title,
         version: 1,
         description: stringDescription,
-        htmlDescription: description,
+        htmlDescription: toQuill1Html(description),
         image: coverImage,
         videos: videoStructured,
         commentsId: commentsId,

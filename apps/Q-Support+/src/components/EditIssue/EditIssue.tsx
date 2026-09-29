@@ -47,6 +47,7 @@ import {
 import { MultiplePublish } from "../common/MultiplePublish/MultiplePublishAll.js";
 import { TextEditor } from "../common/TextEditor/TextEditor.js";
 import { extractTextFromHTML } from "../common/TextEditor/utils.js";
+import { toQuill1Html } from "../common/TextEditor/quillCompat";
 import {
   ActionButton,
   CrowdfundActionButtonRow,
@@ -319,7 +320,7 @@ export const EditIssue = () => {
         title,
         version: editIssueProperties.version,
         fullDescription,
-        htmlDescription: description,
+        htmlDescription: toQuill1Html(description),
         commentsId: editIssueProperties.commentsId,
         ...categoryListRef.current?.categoriesToObject(),
         files: fileReferences,
