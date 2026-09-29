@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      (function () {
+        var match = location.pathname.match(/^\/render\/(?:APP|WEBSITE)\/[^/]+/i);
+        var base = (window._qdnBase || (match && match[0]) || '').replace(/\/$/, '');
+        if (base) {
+          var tag = document.createElement('base');
+          tag.href = base + '/';
+          document.head.insertBefore(tag, document.head.firstChild);
+        }
+        var params = new URLSearchParams(location.search);
+        var mode = window._qdnTheme || params.get('theme') || 'dark';
+        if (mode !== 'light' && mode !== 'dark') mode = 'dark';
+        var ui = 'hub30';
+        try {
+          var stored = localStorage.getItem('torq-ui-theme-v2');
+          if (stored) {
+            var parsed = JSON.parse(stored);
+            if (parsed === 'quitter' || parsed === 'hub30') ui = parsed;
+          }
+        } catch (e) {}
+        var bg =
+          mode === 'light'
+            ? ui === 'quitter'
+              ? '#f7f9fc'
+              : '#EEE7DC'
+            : ui === 'quitter'
+              ? '#15202b'
+              : '#0E0F14';
+        document.documentElement.setAttribute('data-theme', mode);
+        document.documentElement.setAttribute('data-ui-theme', ui);
+        document.documentElement.style.colorScheme = mode;
+        document.documentElement.style.background = bg;
+        var framed = false;
+        try {
+          framed = window.parent !== window;
+        } catch (e) {
+          framed = true;
+        }
+        if (framed) {
+          document.documentElement.classList.add('torq-framed');
+          document.documentElement.style.setProperty('--torq-app-height', '100%');
+          document.documentElement.style.height = '100%';
+        }
+        document.documentElement.style.minHeight = framed ? '100%' : '100dvh';
+        document.addEventListener('DOMContentLoaded', function () {
+          document.body.style.background = bg;
+        });
+        if (document.body) document.body.style.background = bg;
+        try {
+          var keep = new URLSearchParams();
+          params.forEach(function (value, key) {
+            if (
+              key !== 'theme' &&
+              key !== 'lang' &&
+              key !== 'identifier' &&
+              key !== 'time' &&
+              key !== 'isManualNavigation'
+            ) {
+              keep.append(key, value);
+            }
+          });
+          var search = keep.toString();
+          var next =
+            location.pathname + (search ? '?' + search : '') + location.hash;
+          if (next !== location.pathname + location.search + location.hash) {
+            history.replaceState(history.state, '', next);
+          }
+        } catch (e) {}
+        try {
+          if (window.parent && window.parent !== window) {
+            var rawPath = location.pathname.replace(
+              /^\/render\/(?:APP|WEBSITE)\/[^/]+/i,
+              ''
+            );
+            if (!rawPath || rawPath === '/') rawPath = '';
+            else if (rawPath.charAt(0) !== '/') rawPath = '/' + rawPath;
+            var service = String(window._qdnService || 'APP').toUpperCase();
+            if (service !== 'WEBSITE') service = 'APP';
+            var nameParts = (match && match[0].split('/')) || [];
+            var name = window._qdnName || nameParts[nameParts.length - 1] || 'Torq';
+            window.parent.postMessage(
+              {
+                requestedHandler: 'UI',
+                action: 'QDN_RESOURCE_DISPLAYED',
+                service: service,
+                name: name,
+                path: rawPath,
+              },
+              '*'
+            );
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>Qortal Q-App</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

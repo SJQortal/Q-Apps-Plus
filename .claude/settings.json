@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm ci *)",
+      "Bash(npm ci)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(npm test *)",
+      "Bash(npm test)",
+      "Bash(npx vite *)",
+      "Bash(npx tsc *)",
+      "Bash(npx vitest *)",
+      "Bash(npx eslint *)",
+      "Bash(npx prettier *)",
+      "Bash(npx esbuild *)",
+      "Bash(node *)",
+      "Bash(scripts/sync-theme.sh *)",
+      "Bash(scripts/sync-theme.sh)",
+      "Bash(scripts/build-zip.sh *)",
+      "Bash(scripts/check-theme-kit.sh *)",
+      "Bash(scripts/sync-upstream.sh --check)",
+      "Bash(git status *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git diff)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git switch *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(git fetch *)",
+      "Bash(git rev-parse *)",
+      "Bash(git ls-files *)",
+      "Bash(git grep *)",
+      "Bash(git stash *)",
+      "Bash(git subtree *)",
+      "Bash(unzip -l *)"
+    ]
+  }
+}
