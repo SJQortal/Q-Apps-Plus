@@ -27,6 +27,45 @@ Follow Torq's structure, adjusted to the app's content:
 - **Headers:** sticky and translucent (`headerFill`), with a 1 px `divider` bottom border, the title on the left and actions on the right.
 - **Cards and lists:** `background.paper`, 8 px radius (the kit sets this per theme), `divider` borders, and a hover of `action.hover`.
 
+## Mobile (GO and phones): a first-class target
+
+Every + app must feel like a native phone app in **GO** (Android WebView) and on narrow screens. Treat this as part of "done", not polish. Torq is the reference: `shared/reference/torq/src/components/MobileNavigation.tsx`, `src/styles/Layout.tsx` and `src/utils/hubBoot.ts` (embedded-frame height).
+
+- **Layout:**
+  - Design at **360–430 px** first, then scale up.
+  - Nothing scrolls sideways.
+  - Tables become cards or lists on phones.
+  - Content is one column.
+  - Text is at least 14 px.
+- **Navigation:**
+  - A bottom navigation bar with at most 5 items, using thumb-reachable actions.
+  - A floating main action where it makes sense (compose, upload, new).
+  - A sticky header that hides when you scroll down.
+  - A clear back button on sub-pages.
+- **Dialogs:**
+  - Dialogs open full-screen, or as a bottom sheet that can be dragged down to close.
+  - No small centred modals on phones.
+  - Menus open as sheets.
+- **Touch:**
+  - Tap targets are at least 44 px, with space between them.
+  - Nothing works on hover only: use visible buttons, or long-press with a visible alternative.
+  - Swipe and pull-to-refresh only where they feel natural.
+- **Keyboard:**
+  - The focused input and the send/publish button stay visible above the on-screen keyboard (use `visualViewport`, and don't pin things to the bottom with `100vh`).
+  - Use the right `inputMode` for numbers and amounts.
+- **Screen edges:**
+  - Respect `env(safe-area-inset-*)`.
+  - Size the app to the GO/Hub iframe height (Torq's `embeddedAppHeight`), not `100vh`, so nothing hides behind the browser bars.
+- **Media:**
+  - Images and video fit the screen width.
+  - Video can go fullscreen.
+  - Load thumbnails, not originals, on phones.
+- **Performance on mid-range Android:**
+  - Keep first load light: code-split, lazy-load heavy screens.
+  - Keep animations short and cheap.
+  - Honour `prefers-reduced-motion`.
+- **Check:** test every screen at **360×740**, **390×844** and phone landscape, plus 700 px (narrow Hub) and 1280 px, in all four themes. Record what you checked in the brief.
+
 ## Settings page
 
 Settings is a full page reached from the nav, not a small modal. Sections run in this order, each with a small uppercase `text.secondary` title:
@@ -62,6 +101,6 @@ Settings is a full page reached from the nav, not a small modal. Sections run in
 - [ ] Hub 2.0 looks like the original app.
 - [ ] Nothing is hard-coded to one theme: `grep -rE "#[0-9a-fA-F]{3,6}\b" src` outside the theme files finds only intentional brand art.
 - [ ] The Settings page has the sections above, and the version opens the changelog.
-- [ ] The desktop, small-window and phone layouts all work (check at 1280, 700 and 375 px).
+- [ ] Mobile is first-class (see \"Mobile\" above): bottom navigation, full-screen or bottom-sheet dialogs, 44 px tap targets, and inputs that stay visible above the keyboard. Checked at 360, 390, landscape, 700 and 1280 px.
 - [ ] Every screen has loading, empty and error states.
 - [ ] The Inter font comes from the kit (`fonts.css`), not the web.

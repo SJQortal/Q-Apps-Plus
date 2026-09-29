@@ -6,6 +6,7 @@ This monorepo holds Simon's "+" versions of the official Qortal Q-Apps. Each app
 - **easier to use**: clear flows, proper empty, loading and error states, and a phone layout that works in GO;
 - **more capable**: the obvious missing features;
 - **Hub 3.0 styled**: four themes and a real Settings page, the same way Torq does it.
+- **Great on phones**: every app must work like a native mobile app in GO and on narrow screens (docs/DESIGN.md → Mobile).
 
 They publish to QDN under the names Simon registered: Q-Mail+, Q-Shop+, Q-Share+, Q-Support+, Q-Tube+, Q-Trade+, Q-Fund+, Names+, Q-Node+, Q-Mintership+ and Q-Apps+. `apps/Q-Apps+/` is a new launcher app that presents all the others.
 
