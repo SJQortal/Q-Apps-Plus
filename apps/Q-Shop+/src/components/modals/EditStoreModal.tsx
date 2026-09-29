@@ -282,7 +282,7 @@ const MyModal: React.FC<MyModalProps> = ({ open, onClose, onPublish }) => {
           label="Title"
           value={title}
           onChange={e => setTitle(e.target.value)}
-          inputProps={{ maxLength: 50 }}
+          slotProps={{ htmlInput: { maxLength: 50 } }}
           fullWidth
           required
           variant="filled"
@@ -331,7 +331,7 @@ const MyModal: React.FC<MyModalProps> = ({ open, onClose, onPublish }) => {
             variant="filled"
           />
           <Tooltip
-            TransitionComponent={Zoom}
+            slots={{ transition: Zoom }}
             placement="top"
             arrow={true} const importAddress = async (coin: string)=> {
     try {
@@ -373,10 +373,12 @@ const MyModal: React.FC<MyModalProps> = ({ open, onClose, onPublish }) => {
             variant="filled"
           />
           <Tooltip
-            TransitionComponent={Zoom}
             placement="top"
             arrow={true}
             title="Import your ARRR Wallet Address from your current account"
+            slots={{
+              transition: Zoom
+            }}
           >
             <IconButton
               disableFocusRipple={true}
@@ -402,7 +404,7 @@ const MyModal: React.FC<MyModalProps> = ({ open, onClose, onPublish }) => {
             if (e.target.textContent === "QORT") return;
             handleChipSelect(value as string[]);
           }}
-          renderTags={(values: any) =>
+          renderValue={(values: any) =>
             values.map((value: string) => {
               return (
                 <FiltersChip

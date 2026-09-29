@@ -643,14 +643,14 @@ export const Store = () => {
   if (!currentViewedStore && username !== user?.name && !isLoadingGlobal)
     return (
       <Typography
-        marginTop={"20px"}
-        fontFamily={"Karla"}
-        fontSize={"25px"}
-        fontWeight={"500"}
-        textAlign={"center"}
-      >
-        Store Not Found!
-      </Typography>
+        sx={{
+          marginTop: "20px",
+          fontFamily: "Karla",
+          fontSize: "25px",
+          fontWeight: "500",
+          textAlign: "center"
+        }}>Store Not Found!
+              </Typography>
     );
 
   
@@ -661,7 +661,7 @@ export const Store = () => {
  
   return (
     <Grid container sx={{ width: "100%" }}>
-      <FiltersCol item xs={12} sm={3}>
+      <FiltersCol size={{ xs: 12, sm: 3 }}>
         <BackToStorefrontButton
           style={{ maxWidth: "70%", alignSelf: "center" }}
           onClick={() => {
@@ -694,7 +694,7 @@ export const Store = () => {
                 onChange={(e: any, value) =>
                   handleChipSelect(value as string[])
                 }
-                renderTags={(values: any) =>
+                renderValue={(values: any) =>
                   values.map((value: string) => {
                     return (
                       <FiltersChip
@@ -742,7 +742,7 @@ export const Store = () => {
                   setFilterPrice(PriceFilter.highest);
                   setFilterDate(null);
                 }}
-                inputProps={{ "aria-label": "controlled" }}
+                slotProps={{ input: { "aria-label": "controlled" } }}
               />
             </FiltersRow>
             <FiltersRow>
@@ -753,7 +753,7 @@ export const Store = () => {
                   setFilterPrice(PriceFilter.lowest);
                   setFilterDate(null);
                 }}
-                inputProps={{ "aria-label": "controlled" }}
+                slotProps={{ input: { "aria-label": "controlled" } }}
               />
             </FiltersRow>
           </FiltersSubContainer>
@@ -782,7 +782,7 @@ export const Store = () => {
                  
 
                 }}
-                inputProps={{ "aria-label": "controlled" }}
+                slotProps={{ input: { "aria-label": "controlled" } }}
               />
             </FiltersRow>
             {storeToUse?.foreignCoins?.ARRR && storeToUse?.supportedCoins?.includes('ARRR') && (
@@ -798,7 +798,7 @@ export const Store = () => {
                       dispatch(setPreferredCoin(CoinFilter.arrr))
                     } 
                 }}
-                inputProps={{ "aria-label": "controlled" }}
+                slotProps={{ input: { "aria-label": "controlled" } }}
               />
             </FiltersRow>
             )}
@@ -821,7 +821,7 @@ export const Store = () => {
                   setFilterDate(DateFilter.newest);
                   setFilterPrice(null);
                 }}
-                inputProps={{ "aria-label": "controlled" }}
+                slotProps={{ input: { "aria-label": "controlled" } }}
               />
             </FiltersRow>
             <FiltersRow>
@@ -832,7 +832,7 @@ export const Store = () => {
                   setFilterDate(DateFilter.oldest);
                   setFilterPrice(null);
                 }}
-                inputProps={{ "aria-label": "controlled" }}
+                slotProps={{ input: { "aria-label": "controlled" } }}
               />
             </FiltersRow>
           </FiltersSubContainer>
@@ -863,7 +863,11 @@ export const Store = () => {
           
         </FiltersContainer>
       </FiltersCol>
-      <Grid item xs={12} sm={9}>
+      <Grid
+        size={{
+          xs: 12,
+          sm: 9
+        }}>
         <ProductManagerRow>
           <StoreTitleCard>
             <StoreLogo
@@ -981,13 +985,7 @@ export const Store = () => {
               if (!hasHash) {
                 return (
                   <ProductCardCol
-                    xs={12}
-                    sm={6}
-                    md={4}
-                    lg={3}
-                    item
-                    key={product.id}
-                  >
+                    key={product.id} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
                     <Skeleton
                       variant="rectangular"
                       style={{
@@ -1004,13 +1002,7 @@ export const Store = () => {
               } else {
                 return (
                   <ProductCardCol
-                    xs={12}
-                    sm={6}
-                    md={4}
-                    lg={3}
-                    item
-                    key={productItem.id}
-                  >
+                    key={productItem.id} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
                     <ContextMenuResource
                       name={productItem.user}
                       service="PRODUCT"
