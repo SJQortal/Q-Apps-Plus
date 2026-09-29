@@ -132,10 +132,13 @@ export const IssueList = ({ issues, sortOption }: FileListProps) => {
             {hasHash ? (
               <>
                 <IconsBox
-                  sx={{
-                    opacity: showIcons === issueObj.id ? 1 : 0,
-                    zIndex: 2,
-                  }}
+                  sx={[{
+                    zIndex: 2
+                  }, showIcons === issueObj.id ? {
+                    opacity: 1
+                  } : {
+                    opacity: 0
+                  }]}
                 >
                   {issueObj?.user === username && (
                     <BlockIconContainer

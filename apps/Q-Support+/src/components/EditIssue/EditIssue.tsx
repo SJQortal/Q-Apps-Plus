@@ -519,7 +519,7 @@ export const EditIssue = () => {
               variant="filled"
               value={sourceCode}
               onChange={e => setSourceCode(e.target.value.trim())}
-              inputProps={{ maxLength: 200 }}
+              slotProps={{ htmlInput: { maxLength: 200 } }}
             />
             <CustomInputField
               name="q-fund-link"
@@ -533,7 +533,7 @@ export const EditIssue = () => {
                 setShowCoins(bountyIsNumber);
                 if (!bountyIsNumber) setCoin("QORT");
               }}
-              inputProps={{ maxLength: 200 }}
+              slotProps={{ htmlInput: { maxLength: 200 } }}
             />
             <TextField
               label={"Select Coin"}
@@ -541,10 +541,13 @@ export const EditIssue = () => {
               fullWidth
               value={coin}
               onChange={e => setCoin(e.target.value as CoinType)}
-              sx={{
-                display: showCoins ? "block" : "none",
-                width: "20%",
-              }}
+              sx={[{
+                width: "20%"
+              }, showCoins ? {
+                display: "block"
+              } : {
+                display: "none"
+              }]}
             >
               {supportedCoins.map((coin, index) => (
                 <MenuItem value={coin} key={coin + index}>
@@ -566,7 +569,7 @@ export const EditIssue = () => {
                 const formattedValue = value.replace(titleFormatter, "");
                 setTitle(formattedValue);
               }}
-              inputProps={{ maxLength: 180 }}
+              slotProps={{ htmlInput: { maxLength: 180 } }}
               required
             />
             <Typography

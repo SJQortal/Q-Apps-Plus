@@ -20,7 +20,6 @@ export const DoubleLine = styled(Typography)`
   -webkit-line-clamp: 3;
   overflow: hidden;
 `;
-
 export const MainContainer = styled(Grid)({
   width: "100%",
   display: "flex",
@@ -67,9 +66,7 @@ export const ModalBody = styled(Box)(({ theme }) => ({
   overflowY: "auto",
   maxHeight: "95vh",
   boxShadow:
-    theme.palette.mode === "dark"
-      ? "0px 4px 5px 0px hsla(0,0%,0%,0.14),  0px 1px 10px 0px hsla(0,0%,0%,0.12),  0px 2px 4px -1px hsla(0,0%,0%,0.2)"
-      : "rgba(99, 99, 99, 0.2) 0px 2px 8px 0px",
+    "rgba(99, 99, 99, 0.2) 0px 2px 8px 0px",
   "&::-webkit-scrollbar-track": {
     backgroundColor: theme.palette.background.paper,
   },
@@ -79,17 +76,29 @@ export const ModalBody = styled(Box)(({ theme }) => ({
   "&::-webkit-scrollbar": {
     width: "16px",
     height: "10px",
-    backgroundColor: theme.palette.mode === "light" ? "#f6f8fa" : "#292d3e",
+    backgroundColor: "#292d3e",
+    ...theme.applyStyles("light", {
+      backgroundColor: "#f6f8fa"
+    })
   },
   "&::-webkit-scrollbar-thumb": {
-    backgroundColor: theme.palette.mode === "light" ? "#d3d9e1" : "#575757",
+    backgroundColor: "#575757",
     borderRadius: "8px",
     backgroundClip: "content-box",
     border: "4px solid transparent",
+    ...theme.applyStyles("light", {
+      backgroundColor: "#d3d9e1"
+    })
   },
   "&::-webkit-scrollbar-thumb:hover": {
-    backgroundColor: theme.palette.mode === "light" ? "#b7bcc4" : "#474646",
+    backgroundColor: "#474646",
+    ...theme.applyStyles("light", {
+      backgroundColor: "#b7bcc4"
+    })
   },
+  ...theme.applyStyles("dark", {
+    boxShadow: "0px 4px 5px 0px hsla(0,0%,0%,0.14),  0px 1px 10px 0px hsla(0,0%,0%,0.12),  0px 2px 4px -1px hsla(0,0%,0%,0.2)"
+  })
 }));
 
 export const NewCrowdfundTitle = styled(Typography)(({ theme }) => ({
@@ -122,17 +131,26 @@ export const CustomInputField = styled(TextField)(({ theme }) => ({
   backgroundColor: theme.palette.background.default,
   borderColor: theme.palette.background.paper,
   "& label": {
-    color: theme.palette.mode === "light" ? "#808183" : "#edeef0",
+    color: "#edeef0",
     fontFamily: "Mulish",
     fontSize: "19px",
     letterSpacing: "0px",
     fontWeight: 400,
+    ...theme.applyStyles("light", {
+      color: "#808183"
+    })
   },
   "& label.Mui-focused": {
-    color: theme.palette.mode === "light" ? "#A0AAB4" : "#d7d8da",
+    color: "#d7d8da",
+    ...theme.applyStyles("light", {
+      color: "#A0AAB4"
+    })
   },
   "& .MuiInput-underline:after": {
-    borderBottomColor: theme.palette.mode === "light" ? "#B2BAC2" : "#c9cccf",
+    borderBottomColor: "#c9cccf",
+    ...theme.applyStyles("light", {
+      borderBottomColor: "#B2BAC2"
+    })
   },
   "& .MuiOutlinedInput-root": {
     "& fieldset": {
@@ -314,15 +332,21 @@ export const AddCrowdFundButton = styled(Button)(({ theme }) => ({
   gap: "8px",
   color: "#ffffff",
   backgroundColor:
-    theme.palette.mode === "dark" ? theme.palette.primary.main : "#2a9a86",
+    "#2a9a86",
   border: "none",
   borderRadius: "5px",
   transition: "all 0.3s ease-in-out",
   "&:hover": {
     cursor: "pointer",
     backgroundColor:
-      theme.palette.mode === "dark" ? theme.palette.primary.dark : "#217e6d",
+      "#217e6d",
+    ...theme.applyStyles("dark", {
+      backgroundColor: theme.palette.primary.dark
+    })
   },
+  ...theme.applyStyles("dark", {
+    backgroundColor: theme.palette.primary.main
+  })
 }));
 
 export const EditCrowdFundButton = styled(Button)(({ theme }) => ({
@@ -333,15 +357,21 @@ export const EditCrowdFundButton = styled(Button)(({ theme }) => ({
   gap: "8px",
   color: "#ffffff",
   backgroundColor:
-    theme.palette.mode === "dark" ? theme.palette.primary.main : "#2a9a86",
+    "#2a9a86",
   border: "none",
   borderRadius: "5px",
   transition: "all 0.3s ease-in-out",
   "&:hover": {
     cursor: "pointer",
     backgroundColor:
-      theme.palette.mode === "dark" ? theme.palette.primary.dark : "#217e6d",
+      "#217e6d",
+    ...theme.applyStyles("dark", {
+      backgroundColor: theme.palette.primary.dark
+    })
   },
+  ...theme.applyStyles("dark", {
+    backgroundColor: theme.palette.primary.main
+  })
 }));
 
 export const CrowdfundListWrapper = styled(Box)(({ theme }) => ({
@@ -559,7 +589,10 @@ export const CustomSelect = styled(Select)(({ theme }) => ({
   },
   '&:before': {
     // Underline style
-    borderBottomColor: theme.palette.mode === "light" ? "#B2BAC2" : "#c9cccf",
+    borderBottomColor: "#c9cccf",
+    ...theme.applyStyles("light", {
+      borderBottomColor: "#B2BAC2"
+    })
   },
   '&:after': {
     // Underline style when focused

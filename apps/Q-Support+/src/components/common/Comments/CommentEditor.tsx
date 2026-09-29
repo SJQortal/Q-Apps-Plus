@@ -249,10 +249,10 @@ export const CommentEditor = ({
         maxRows={10}
         variant="filled"
         value={value}
-        inputProps={{
-          maxLength: maxCommentLength,
+        slotProps={{
+          htmlInput: { maxLength: maxCommentLength },
+          inputLabel: { style: { fontSize: "18px" } },
         }}
-        InputLabelProps={{ style: { fontSize: "18px" } }}
         onChange={e => setValue(e.target.value)}
       />
 

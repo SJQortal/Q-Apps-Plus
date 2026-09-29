@@ -239,7 +239,7 @@ const CommentCard = ({
         </StyledCardColComment>
       </StyledCardHeaderComment>
       <StyledCardContentComment>
-        <StyledCardComment paragraph={false}>{message}</StyledCardComment>
+        <StyledCardComment>{message}</StyledCardComment>
       </StyledCardContentComment>
       <Box
         sx={{

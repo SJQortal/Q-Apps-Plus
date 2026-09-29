@@ -49,7 +49,6 @@ export const DataTable = ({ columnNames, data, sx }: DataTableProps) => {
             return (
               <TableRow key={tableRow.toString() + rowIndex}>
                 {<TableCell sx={boldSX}>{rowIndex + 1}</TableCell>}
-
                 {Object.values(tableRow).map((tableCell, cellIndex) => (
                   <TableCell sx={cellSX} key={tableCell + cellIndex}>
                     {formatCell(tableCell, cellIndex)}

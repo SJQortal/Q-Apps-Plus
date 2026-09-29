@@ -31,7 +31,9 @@ export const BoundedNumericTextField = ({
   maxSigDigits = 6,
   ...props
 }: BoundedNumericTextFieldProps) => {
-  const { onChange, onBlur, ...noChangeProps } = { ...props };
+  const { onChange, onBlur, slotProps, ...noChangeProps } = { ...props };
+  const inputSlotProps =
+    typeof slotProps?.input === "object" ? slotProps.input : {};
 
   const [textFieldValue, setTextFieldValue] = useState<string>(
     initialValue || ""
@@ -126,21 +128,6 @@ export const BoundedNumericTextField = ({
   return (
     <TextField
       {...noChangeProps}
-      InputProps={{
-        ...props?.InputProps,
-        endAdornment: addIconButtons ? (
-          <InputAdornment position="end">
-            <IconButton onClick={e => changeValueWithIncDecButton(e, 1)}>
-              <AddIcon />{" "}
-            </IconButton>
-            <IconButton onClick={e => changeValueWithIncDecButton(e, -1)}>
-              <RemoveIcon />{" "}
-            </IconButton>
-          </InputAdornment>
-        ) : (
-          <></>
-        ),
-      }}
       onChange={e => listeners(e as eventType)}
       onBlur={e => {
         formatValueOnBlur(e as eventType);
@@ -148,6 +135,24 @@ export const BoundedNumericTextField = ({
       autoComplete="off"
       value={textFieldValue}
       inputRef={ref}
+      slotProps={{
+        ...slotProps,
+        input: {
+          ...inputSlotProps,
+          endAdornment: addIconButtons ? (
+            <InputAdornment position="end">
+              <IconButton onClick={e => changeValueWithIncDecButton(e, 1)}>
+                <AddIcon />{" "}
+              </IconButton>
+              <IconButton onClick={e => changeValueWithIncDecButton(e, -1)}>
+                <RemoveIcon />{" "}
+              </IconButton>
+            </InputAdornment>
+          ) : (
+            <></>
+          ),
+        }
+      }}
     />
   );
 };

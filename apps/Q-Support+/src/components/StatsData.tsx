@@ -13,7 +13,6 @@ export const StatsData = () => {
     padding: "20px 0px",
     backgroundColor: theme.palette.background.default,
   }));
-
   const {
     getIssues,
     checkAndUpdateIssue,
@@ -24,7 +23,6 @@ export const StatsData = () => {
     getIssuesFiltered,
     getIssuesCount,
   } = useFetchIssues();
-
   const totalIssuesPublished = useSelector(
     (state: RootState) => state.global.totalFilesPublished
   );
@@ -34,7 +32,6 @@ export const StatsData = () => {
   const issuesPerNamePublished = useSelector(
     (state: RootState) => state.global.filesPerNamePublished
   );
-
   useEffect(() => {
     getIssuesCount();
   }, [getIssuesCount]);

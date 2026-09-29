@@ -199,7 +199,7 @@ export const Home = ({ mode }: HomeProps) => {
 
   return (
     <Grid container sx={{ width: "100%" }}>
-      <FiltersCol item xs={12} md={2} sm={3}>
+      <FiltersCol size={{ xs: 12, sm: 3, md: 2 }}>
         <FiltersContainer>
           <StatsData />
           <Input
@@ -210,7 +210,7 @@ export const Home = ({ mode }: HomeProps) => {
             onKeyDown={searchOnEnter}
             value={filterSearch}
             placeholder="Search"
-            sx={{
+            sx={theme => ({
               color: theme.palette.text.primary,
               borderBottom: `1px solid ${theme.palette.text.primary}`,
               "&&:before": {
@@ -228,8 +228,8 @@ export const Home = ({ mode }: HomeProps) => {
               "&&.Mui-focused": {
                 outline: "none",
               },
-              fontSize: "20px",
-            }}
+              fontSize: "20px"
+            })}
           />
           <Input
             id="standard-adornment-name"
@@ -239,7 +239,7 @@ export const Home = ({ mode }: HomeProps) => {
             onKeyDown={searchOnEnter}
             value={filterName}
             placeholder="User's Name (Exact)"
-            sx={{
+            sx={theme => ({
               marginTop: "20px",
               borderBottom: `1px solid ${theme.palette.text.primary}`,
               "&&:before": {
@@ -257,8 +257,8 @@ export const Home = ({ mode }: HomeProps) => {
               "&&.Mui-focused": {
                 outline: "none",
               },
-              fontSize: "20px",
-            }}
+              fontSize: "20px"
+            })}
           />
           {showCategoryList && (
             <CategoryList
@@ -337,7 +337,12 @@ export const Home = ({ mode }: HomeProps) => {
           </ThemeButton>
         </FiltersContainer>
       </FiltersCol>
-      <Grid item xs={12} md={10} sm={9}>
+      <Grid
+        size={{
+          xs: 12,
+          md: 10,
+          sm: 9
+        }}>
         <Box
           sx={{
             width: "100%",

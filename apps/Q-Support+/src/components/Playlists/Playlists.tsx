@@ -16,7 +16,6 @@ export const Playlists = ({ playlistData, currentVideoIdentifier }) => {
       sx={{
         display: "flex",
         flexDirection: "column",
-
         maxWidth: "400px",
         width: "100%",
       }}
@@ -38,7 +37,7 @@ export const Playlists = ({ playlistData, currentVideoIdentifier }) => {
           return (
             <Box
               key={vid?.identifier}
-              sx={{
+              sx={[{
                 display: "flex",
                 gap: "10px",
                 width: "100%",
@@ -46,9 +45,12 @@ export const Playlists = ({ playlistData, currentVideoIdentifier }) => {
                 alignItems: "center",
                 padding: "10px",
                 borderRadius: "5px",
-                cursor: isCurrentVidPlayling ? "default" : "pointer",
-                userSelect: "none",
-              }}
+                userSelect: "none"
+              }, isCurrentVidPlayling ? {
+                cursor: "default"
+              } : {
+                cursor: "pointer"
+              }]}
               onClick={() => {
                 if (isCurrentVidPlayling) return;
 

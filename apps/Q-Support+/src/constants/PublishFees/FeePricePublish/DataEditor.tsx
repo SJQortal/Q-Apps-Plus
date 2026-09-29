@@ -205,7 +205,6 @@ export const DataEditor = ({ columnNames, data, sx }: DataTableProps) => {
               return (
                 <TableRow key={tableRow.toString() + rowIndex}>
                   {<TableCell sx={boldSX}>{rowIndex + 1}</TableCell>}
-
                   {Object.values(tableRow).map((tableCell, cellIndex) => (
                     <TableCell sx={cellSX} key={rowIndex + cellIndex}>
                       {getCellForm(rowIndex, cellIndex)}

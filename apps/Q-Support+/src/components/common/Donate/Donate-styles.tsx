@@ -25,7 +25,6 @@ export const DonateModalCol = styled(Box)({
 });
 
 export const DonorDetailsButton = styled(ButtonStyle)(({ theme }) => ({}));
-
 export const DonateModalLabel = styled(InputLabel)(({ theme }) => ({
   fontFamily: "Copse",
   fontSize: "27px",

@@ -414,8 +414,8 @@ export const IssueContent = () => {
         </ImageContainer>
         <Spacer height="15px" />
         <Box
-          sx={{
-            background: theme.palette.mode === "dark" ? "#333333" : "#CCCCCC",
+          sx={theme => ({
+            background: "#CCCCCC",
             borderRadius: "5px",
             padding: "5px",
             width: "100%",
@@ -425,7 +425,10 @@ export const IssueContent = () => {
                 ? "default"
                 : "pointer",
             position: "relative",
-          }}
+            ...theme.applyStyles("dark", {
+              background: "#333333"
+            })
+          })}
           className={
             !descriptionHeight ? "" : isExpandedDescription ? "" : "hover-click"
           }

@@ -22,7 +22,9 @@ export const StateTextField = ({
   options,
   ...props
 }: StateTextFieldProps) => {
-  const { onChange, ...noChangeProps } = { ...props };
+  const { onChange, slotProps, ...noChangeProps } = { ...props };
+  const inputSlotProps =
+    typeof slotProps?.input === "object" ? slotProps.input : {};
 
   const [textFieldValue, setTextFieldValue] = useState<string>(
     initialValue || ""
@@ -42,13 +44,16 @@ export const StateTextField = ({
   return (
     <TextField
       {...noChangeProps}
-      InputProps={{
-        ...props?.InputProps,
-      }}
       onChange={e => listeners(e as eventType)}
       autoComplete="off"
       value={textFieldValue}
       inputRef={ref}
+      slotProps={{
+        ...slotProps,
+        input: {
+          ...inputSlotProps,
+        },
+      }}
     >
       {options &&
         props?.select &&

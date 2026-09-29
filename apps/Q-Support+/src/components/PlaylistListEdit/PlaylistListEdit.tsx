@@ -6,7 +6,7 @@ import {
 } from "../PublishIssue/PublishIssue-styles.tsx";
 import { Box, Button, Input, Typography, useTheme } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import AddIcon from "@mui/icons-material/Add";
 import { QSUPPORT_FILE_BASE } from "../../constants/Identifiers.ts";
 import { useSelector } from "react-redux";
@@ -44,7 +44,6 @@ export const PlaylistListEdit = ({ playlistData, removeVideo, addVideo }) => {
         sx={{
           display: "flex",
           flexDirection: "column",
-
           maxWidth: "300px",
           width: "100%",
         }}
@@ -88,7 +87,7 @@ export const PlaylistListEdit = ({ playlistData, removeVideo, addVideo }) => {
                 >
                   {vid?.metadata?.title}
                 </Typography>
-                <DeleteOutlineIcon
+                <DeleteOutlinedIcon
                   onClick={() => {
                     removeVideo(index);
                   }}
@@ -105,7 +104,6 @@ export const PlaylistListEdit = ({ playlistData, removeVideo, addVideo }) => {
         sx={{
           display: "flex",
           flexDirection: "column",
-
           maxWidth: "300px",
           width: "100%",
         }}

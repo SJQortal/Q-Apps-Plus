@@ -502,7 +502,7 @@ export const PublishIssue = ({ editId, editContent }: NewCrowdfundProps) => {
                   variant="filled"
                   value={sourceCode}
                   onChange={e => setSourceCode(e.target.value.trim())}
-                  inputProps={{ maxLength: 200 }}
+                  slotProps={{ htmlInput: { maxLength: 200 } }}
                 />
                 <CustomInputField
                   name="q-fund-link"
@@ -516,7 +516,7 @@ export const PublishIssue = ({ editId, editContent }: NewCrowdfundProps) => {
                     setShowCoins(bountyIsNumber);
                     if (!bountyIsNumber) setCoin("QORT");
                   }}
-                  inputProps={{ maxLength: 200 }}
+                  slotProps={{ htmlInput: { maxLength: 200 } }}
                 />
                 <TextField
                   label={"Select Coin"}
@@ -524,10 +524,13 @@ export const PublishIssue = ({ editId, editContent }: NewCrowdfundProps) => {
                   fullWidth
                   value={coin}
                   onChange={e => setCoin(e.target.value as CoinType)}
-                  sx={{
-                    display: showCoins ? "block" : "none",
-                    width: "20%",
-                  }}
+                  sx={[{
+                    width: "20%"
+                  }, showCoins ? {
+                    display: "block"
+                  } : {
+                    display: "none"
+                  }]}
                 >
                   {supportedCoins.map((coin, index) => (
                     <MenuItem value={coin} key={coin + index}>
@@ -546,7 +549,7 @@ export const PublishIssue = ({ editId, editContent }: NewCrowdfundProps) => {
                     const formattedValue = value.replace(titleFormatter, "");
                     setTitle(formattedValue);
                   }}
-                  inputProps={{ maxLength: 60 }}
+                  slotProps={{ htmlInput: { maxLength: 60 } }}
                   required
                 />
                 <Typography

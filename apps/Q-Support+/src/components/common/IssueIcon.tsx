@@ -22,7 +22,9 @@ export const IssueIcon = ({
     <>
       {iconSrc && (
         <Tooltip
-          title={<Typography fontSize={16}>{label}</Typography>}
+          title={<Typography sx={{
+            fontSize: 16
+          }}>{label}</Typography>}
           arrow
           disableHoverListener={!label}
           placement={"top"}

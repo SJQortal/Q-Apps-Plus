@@ -166,15 +166,20 @@ export const Donate = ({ crowdfundLink, onSubmit, onClose }: DonateProps) => {
   if (!crowdfundLink) return <></>;
   return (
     <Box
-      sx={{
+      sx={[{
         position: "relative",
-        display: ATDonationPossible ? "flex" : "none",
         alignItems: "center",
-        gap: 1,
-      }}
+        gap: 1
+      }, ATDonationPossible ? {
+        display: "flex"
+      } : {
+        display: "none"
+      }]}
     >
       <Tooltip
-        title={<Typography fontSize={16}>Support This Crowdfund</Typography>}
+        title={<Typography sx={{
+          fontSize: 16
+        }}>Support This Crowdfund</Typography>}
         arrow
         disableHoverListener={!ATDonationPossible}
         placement={"right-end"}
@@ -222,20 +227,22 @@ export const Donate = ({ crowdfundLink, onSubmit, onClose }: DonateProps) => {
                   allowDecimals={false}
                   allowNegatives={false}
                   addIconButtons={true}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <QortalSVG
-                          height="20px"
-                          width="20px"
-                          color={theme.palette.text.primary}
-                        />
-                      </InputAdornment>
-                    ),
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <QortalSVG
+                            height="20px"
+                            width="20px"
+                            color={theme.palette.text.primary}
+                          />
+                        </InputAdornment>
+                      ),
+                    },
+                    formHelperText: { sx: { fontSize: 20 } },
                   }}
                   error={disableDonation}
                   helperText={helperText}
-                  FormHelperTextProps={{ sx: { fontSize: 20 } }}
                 />
               </DonateModalCol>
               {currentBalance ? (

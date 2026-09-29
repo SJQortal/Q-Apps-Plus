@@ -517,9 +517,11 @@ export const VideoPlayerGlobal: React.FC<VideoPlayerProps> = ({
               keepMounted
               open={Boolean(anchorEl)}
               onClose={handleMenuClose}
-              PaperProps={{
-                style: {
-                  width: '250px'
+              slotProps={{
+                paper: {
+                  style: {
+                    width: '250px'
+                  }
                 }
               }}
             >

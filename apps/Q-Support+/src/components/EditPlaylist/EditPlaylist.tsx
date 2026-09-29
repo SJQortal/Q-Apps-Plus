@@ -556,7 +556,7 @@ export const EditPlaylist = () => {
                   );
                   setTitle(formattedValue);
                 }}
-                inputProps={{ maxLength: 180 }}
+                slotProps={{ htmlInput: { maxLength: 180 } }}
                 required
               />
               {/* <CustomInputField
@@ -565,7 +565,7 @@ export const EditPlaylist = () => {
                 variant="filled"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                inputProps={{ maxLength: 10000 }}
+                slotProps={{ htmlInput: { maxLength: 10000 } }}
                 multiline
                 maxRows={3}
                 required
