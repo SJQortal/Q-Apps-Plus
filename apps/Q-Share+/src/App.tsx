@@ -17,6 +17,12 @@ const IndividualProfile = lazy(() =>
   import("./pages/IndividualProfile/IndividualProfile").then((m) => ({ default: m.IndividualProfile }))
 );
 const Settings = lazy(() => import("./pages/Settings/Settings").then((m) => ({ default: m.Settings })));
+const CollectionsPage = lazy(() =>
+  import("./pages/Collections/CollectionsPage").then((m) => ({ default: m.CollectionsPage }))
+);
+const CollectionPage = lazy(() =>
+  import("./pages/Collections/CollectionPage").then((m) => ({ default: m.CollectionPage }))
+);
 
 function App() {
   return (
@@ -31,7 +37,8 @@ function App() {
                 <Route path="/share/:name/:id" element={<FileContent />} />
                 <Route path="/channel/:name" element={<IndividualProfile />} />
                 <Route path="/settings" element={<Settings />} />
-                {/* collections routes: added by the lead */}
+                <Route path="/collections" element={<CollectionsPage />} />
+                <Route path="/collection/:name/:id" element={<CollectionPage />} />
               </Routes>
             </Suspense>
           </GlobalWrapper>

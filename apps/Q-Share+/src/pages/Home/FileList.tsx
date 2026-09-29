@@ -23,6 +23,7 @@ import { RootState } from "../../state/store.ts";
 import { getIconsFromObject } from "../../constants/Categories/CategoryFunctions.ts";
 import { avatarUrl, profilePath, shareLink, sharePath } from "../../utils/qortalLinks.ts";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout.ts";
+import { SaveToCollectionButton } from "../../components/common/SaveToCollection/SaveToCollectionButton";
 
 interface FileListProps {
   files: Video[];
@@ -69,7 +70,8 @@ export const FileList = ({ files, showPublisher = true }: FileListProps) => {
     <FileContainer>
       {files.map((file) => {
         const existingFile = hashMapFiles[file?.id];
-        const fileObj: any = existingFile ?? file;
+        // A body fetched without a search (e.g. from a collection page) has no created stamp.
+        const fileObj: any = existingFile ? { ...existingFile, created: existingFile.created ?? file.created } : file;
         const hasHash = Boolean(existingFile);
         const icon = getIconsFromObject(fileObj);
         const totalSize = fileObj?.files?.reduce((acc: number, cur: any) => acc + (cur?.size || 0), 0) ?? 0;
@@ -113,6 +115,10 @@ export const FileList = ({ files, showPublisher = true }: FileListProps) => {
                       <LinkOutlinedIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
+                  <SaveToCollectionButton
+                    share={{ name: fileObj.user, identifier: fileObj.id, title: fileObj.title }}
+                    size={actionSize}
+                  />
                   {fileObj?.user === username ? (
                     <Tooltip title="Edit share">
                       <IconButton size={actionSize} sx={actionSx} aria-label="Edit share" onClick={() => dispatch(setEditFile(fileObj))}>
