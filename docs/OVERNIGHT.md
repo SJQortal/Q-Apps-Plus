@@ -45,24 +45,16 @@ Continue with one session per phase (write flows → admin side → redesign), e
 
 ## In the morning
 
-1. **Check the PRs:**
-   - Read each PR's summary and the brief's **Follow-ups**, which hold questions for you.
-   - Check the before/after numbers in **Done**.
-2. **Test in Hub.** In a local session:
+Type in the local Claude session, for example: **"build the zips"**. Claude then:
 
-   > Test PR #N (Q-Mail+) in Hub Dev Mode following docs/HUB-TESTING.md.
+1. Runs `scripts/build-pr-zips.sh`. It checks each open app PR out in `.worktrees/`, builds it, and writes `release/<App+>.zip` plus `release/SUMMARY.md` (PR, branch, commit, build result, zip size).
+2. Tests the apps in Hub Dev Mode through the debug port (docs/HUB-TESTING.md): the four themes, phone width and the main read-only flows. Anything that publishes or spends QORT, Claude asks you first.
+3. Reports what each PR changed, including the open questions from each brief's **Follow-ups**.
 
-   Claude runs the dev server, loads it in Hub, checks the four themes, phone width and the main read-only flows, and reports back. Anything that publishes or spends QORT, Claude asks you first.
-3. **Merge the good ones with the **Merge** button (it makes a merge commit; the branch deletes itself), then build the zips:**
+Then you:
 
-   ```bash
-   git pull
-   scripts/build-zip.sh all
-   ```
-
-4. **Before publishing:** preview each zip in Hub Dev Mode (**preview zip**). For a GO check, open it on your phone.
-5. **Publish** `release/<App+>.zip` from Hub as `APP` under the matching name. Don't publish Q-Mintership+ until its parity checklist is complete.
-6. **Update `docs/PROGRESS.md`,** or ask a session to do it.
+4. **Publish** `release/<App+>.zip` from Hub as `APP` under the matching name. Don't publish Q-Mintership+ until its parity checklist is complete.
+5. **Merge** the PRs you published with the **Merge** button. It makes a merge commit, and the branch deletes itself.
 
 ## If something goes wrong
 

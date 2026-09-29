@@ -60,6 +60,7 @@ cd "apps/Q-Mail+" && npm ci           # install one app (every app has a lockfil
 npm run dev                            # vite dev server; Qortal calls need Hub, so use mocks in tests
 npm run build                          # must pass before committing
 scripts/build-zip.sh Q-Mail+           # release/Q-Mail+.zip, ready for Simon to publish
+scripts/build-pr-zips.sh               # morning: zips for every open app PR + release/SUMMARY.md
 scripts/sync-theme.sh [--check]        # copy the theme kit into opted-in apps / verify no drift
 scripts/check-theme-kit.sh Q-Tube+     # typecheck + smoke-test the kit against an app's MUI
 scripts/check-mui-icons.sh Q-Tube+     # icon imports that MUI 9 removed (use the …Outlined names)
