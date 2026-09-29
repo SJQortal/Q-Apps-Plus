@@ -1,475 +1,157 @@
-import React, { useEffect, useRef, useState } from "react";
-import {
-  CrowdfundActionButton,
-  CrowdfundActionButtonRow,
-  CustomInputField,
-  ModalBody,
-  NewCrowdfundTitle,
-  StyledButton,
-} from "./Upload-styles";
-import { Box, Modal, Typography, useTheme } from "@mui/material";
-import RemoveIcon from "@mui/icons-material/Remove";
-import ShortUniqueId from "short-unique-id";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Button, IconButton, Tooltip } from "@mui/material";
+import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import { useDispatch, useSelector } from "react-redux";
-import AddBoxIcon from "@mui/icons-material/AddBox";
-import { useDropzone } from "react-dropzone";
-
+import { OPEN_PUBLISH_EVENT } from "../../constants/events";
+import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { markSharesChanged } from "../../state/features/fileSlice";
 import { setNotification } from "../../state/features/notificationsSlice";
-import { objectToBase64 } from "../../utils/toBase64";
-import { RootState } from "../../state/store";
-import { QSHARE_FILE_BASE } from "../../constants/Identifiers.ts";
-import { MultiplePublish } from "../common/MultiplePublish/MultiplePublishAll";
-import { TextEditor } from "../common/TextEditor/TextEditor";
-import { extractTextFromHTML } from "../common/TextEditor/utils";
-import { isQuillHtmlEmpty, normalizeQuillHtml } from "../../utils/quillHtml";
+import type { RootState } from "../../state/store";
+import { buildSharePublish, toMultiplePublish, type MultiplePublishRequest } from "../../utils/publishPayload";
 import { invalidateQdnSearches } from "../../utils/qdnSearch";
-import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
-import {
-  maxSize,
-  titleFormatter,
-  titleFormatterOnSave,
-} from "../../constants/Misc.ts";
-import {
-  CategoryList,
-  CategoryListRef,
-} from "../common/CategoryList/CategoryList.tsx";
+import type { CategoryListRef } from "../common/CategoryList/CategoryList";
+import { ResponsiveDialog } from "../common/mobile/ResponsiveDialog";
+import { MultiplePublish } from "../common/MultiplePublish/MultiplePublishAll";
+import { publishErrorMessage, toPublishInputs } from "./shareDraft";
+import { ShareForm } from "./ShareForm";
+import { useShareDraft } from "./useShareDraft";
 
-const uid = new ShortUniqueId();
-const shortuid = new ShortUniqueId({ length: 5 });
-
-interface NewCrowdfundProps {
-  editId?: string;
-  editContent?: null | {
-    title: string;
-    user: string;
-    coverImage: string | null;
-  };
-}
-
-interface VideoFile {
-  file: File;
-  title: string;
-  description: string;
-  coverImage?: string;
-}
-export const PublishFile = ({ editId, editContent }: NewCrowdfundProps) => {
-  const theme = useTheme();
+/**
+ * The "Share files" trigger and its dialog. The draft (files, title,
+ * description, categories) lives here, so closing the dialog with Escape or
+ * Back keeps it until the files are published. The shell can open the dialog
+ * by dispatching OPEN_PUBLISH_EVENT on window.
+ */
+export const PublishFile = () => {
   const dispatch = useDispatch();
-  const [isOpenMultiplePublish, setIsOpenMultiplePublish] = useState(false);
+  const phone = usePhoneLayout();
   const username = useSelector((state: RootState) => state.auth?.user?.name);
-  const userAddress = useSelector(
-    (state: RootState) => state.auth?.user?.address
-  );
-  const [files, setFiles] = useState<VideoFile[]>([]);
+  const userAddress = useSelector((state: RootState) => state.auth?.user?.address);
 
-  const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [title, setTitle] = useState<string>("");
-  const [description, setDescription] = useState<string>("");
-  const [step, setStep] = useState<string>("videos");
-  const [playlistCoverImage, setPlaylistCoverImage] = useState<null | string>(
-    null
-  );
-  const [selectExistingPlaylist, setSelectExistingPlaylist] =
-    useState<any>(null);
-  const [playlistTitle, setPlaylistTitle] = useState<string>("");
-  const [playlistDescription, setPlaylistDescription] = useState<string>("");
-  const [selectedCategory, setSelectedCategory] = useState<any>(null);
-  const [selectedSubCategory, setSelectedSubCategory] = useState<any>(null);
-
-  const [playlistSetting, setPlaylistSetting] = useState<null | string>(null);
-  const [publishes, setPublishes] = useState<any>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const draft = useShareDraft();
   const categoryListRef = useRef<CategoryListRef>(null);
-
-  const { getRootProps, getInputProps } = useDropzone({
-    maxFiles: 10,
-    maxSize,
-    onDrop: (acceptedFiles, rejectedFiles) => {
-      const formatArray = acceptedFiles.map(item => {
-        return {
-          file: item,
-          title: "",
-          description: "",
-          coverImage: "",
-        };
-      });
-
-      setFiles(prev => [...prev, ...formatArray]);
-
-      let errorString = null;
-      rejectedFiles.forEach(({ file, errors }) => {
-        errors.forEach(error => {
-          if (error.code === "file-too-large") {
-            errorString = "File must be under 2GB";
-          }
-          console.log(`Error with file ${file.name}: ${error.message}`);
-        });
-      });
-      if (errorString) {
-        const notificationObj = {
-          msg: errorString,
-          alertType: "error",
-        };
-
-        dispatch(setNotification(notificationObj));
-      }
-    },
-  });
+  // CategoryList keeps its own selection, so it is stashed here while the
+  // dialog is closed and handed back as initialCategories on reopen.
+  const [savedCategories, setSavedCategories] = useState<string[] | undefined>(undefined);
+  const [publishes, setPublishes] = useState<MultiplePublishRequest | null>(null);
 
   useEffect(() => {
-    if (editContent) {
-    }
-  }, [editContent]);
+    if (!username) return;
+    const openDialog = () => setIsOpen(true);
+    window.addEventListener(OPEN_PUBLISH_EVENT, openDialog);
+    return () => window.removeEventListener(OPEN_PUBLISH_EVENT, openDialog);
+  }, [username]);
 
-  const onClose = () => {
+  const close = useCallback(() => {
+    const selected = categoryListRef.current?.getSelectedCategories();
+    if (selected) setSavedCategories(selected);
     setIsOpen(false);
+  }, []);
+
+  const publish = async () => {
+    const categories = categoryListRef.current;
+    const selected = categories?.getSelectedCategories() ?? [];
+    const problems = draft.validate(Boolean(selected[0]));
+    if (problems.length > 0 || !categories) return;
+
+    if (!userAddress) {
+      dispatch(setNotification({ msg: "Unable to locate user address", alertType: "error" }));
+      return;
+    }
+    if (!username) {
+      dispatch(
+        setNotification({ msg: "Cannot publish without access to your name. Please authenticate.", alertType: "error" })
+      );
+      return;
+    }
+
+    try {
+      const { resources } = await buildSharePublish({
+        name: username,
+        title: draft.title,
+        descriptionHtml: draft.description,
+        categoryFetchString: categories.getCategoriesFetchString(),
+        categoriesObject: categories.categoriesToObject(),
+        files: toPublishInputs(draft.files),
+      });
+      setPublishes(toMultiplePublish(resources));
+    } catch (error) {
+      dispatch(setNotification({ msg: publishErrorMessage(error, "Failed to publish share"), alertType: "error" }));
+    }
   };
 
-  async function publishQDNResource() {
-    try {
-      if (!categoryListRef.current) throw new Error("No CategoryListRef found");
-      if (!userAddress) throw new Error("Unable to locate user address");
+  const onPublished = () => {
+    dispatch(markSharesChanged());
+    invalidateQdnSearches();
+    setPublishes(null);
+    setIsOpen(false);
+    draft.reset();
+    setSavedCategories(undefined);
+    categoryListRef.current?.clearCategories();
+    dispatch(setNotification({ msg: "Files published", alertType: "success" }));
+  };
 
-      if (!title) throw new Error("Please enter a title");
-      if (isQuillHtmlEmpty(description))
-        throw new Error("Please enter a description");
-      if (!categoryListRef.current?.getSelectedCategories()[0])
-        throw new Error("Please select a category");
-      if (files.length === 0) throw new Error("Add at least one file");
-      let errorMsg = "";
-      let name = "";
-      if (username) {
-        name = username;
-      }
-      if (!name) {
-        errorMsg =
-          "Cannot publish without access to your name. Please authenticate.";
-      }
-
-      if (editId && editContent?.user !== name) {
-        errorMsg = "Cannot publish another user's resource";
-      }
-
-      if (errorMsg) {
-        dispatch(
-          setNotification({
-            msg: errorMsg,
-            alertType: "error",
-          })
-        );
-        return;
-      }
-
-      let fileReferences = [];
-
-      let listOfPublishes = [];
-
-      const htmlDescription = normalizeQuillHtml(description);
-      const fullDescription = extractTextFromHTML(htmlDescription);
-
-      const sanitizeTitle = title
-        .replace(/[^a-zA-Z0-9\s-]/g, "")
-        .replace(/\s+/g, "-")
-        .replace(/-+/g, "-")
-        .trim()
-        .toLowerCase();
-
-      for (const publish of files) {
-        const file = publish.file;
-        const id = uid();
-
-        const identifier = `${QSHARE_FILE_BASE}${sanitizeTitle.slice(0, 30)}_${id}`;
-
-        const filename = file.name.replaceAll(titleFormatterOnSave, "");
-
-        let metadescription =
-          `**${categoryListRef.current?.getCategoriesFetchString()}**` +
-          fullDescription.slice(0, 150);
-
-        const requestBodyVideo: any = {
-          action: "PUBLISH_QDN_RESOURCE",
-          name: name,
-          service: "FILE",
-          file,
-          title: title.slice(0, 50),
-          description: metadescription,
-          identifier,
-          filename,
-          tag1: QSHARE_FILE_BASE,
-        };
-        listOfPublishes.push(requestBodyVideo);
-        fileReferences.push({
-          filename: file.name,
-          identifier,
-          name,
-          service: "FILE",
-          mimetype: file.type,
-          size: file.size,
-        });
-      }
-
-      const idMeta = uid();
-      const identifier = `${QSHARE_FILE_BASE}${sanitizeTitle.slice(0, 30)}_${idMeta}`;
-      const fileObject: any = {
-        title,
-        version: 1,
-        fullDescription,
-        htmlDescription,
-        commentsId: `${QSHARE_FILE_BASE}_cm_${idMeta}`,
-        ...categoryListRef.current?.categoriesToObject(),
-        files: fileReferences,
-      };
-
-      let metadescription =
-        `**${categoryListRef.current?.getCategoriesFetchString()}**` +
-        fullDescription.slice(0, 150);
-
-      const crowdfundObjectToBase64 = await objectToBase64(fileObject);
-      // Description is obtained from raw data
-      const requestBodyJson: any = {
-        action: "PUBLISH_QDN_RESOURCE",
-        name: name,
-        service: "DOCUMENT",
-        identifier: identifier + "_metadata",
-        data64: crowdfundObjectToBase64,
-        title: title.slice(0, 50),
-        description: metadescription,
-        tag1: QSHARE_FILE_BASE,
-        filename: `video_metadata.json`,
-      };
-      listOfPublishes.push(requestBodyJson);
-
-      const multiplePublish = {
-        action: "PUBLISH_MULTIPLE_QDN_RESOURCES",
-        resources: [...listOfPublishes],
-      };
-      setPublishes(multiplePublish);
-      setIsOpenMultiplePublish(true);
-    } catch (error: any) {
-      let notificationObj: any = null;
-      if (typeof error === "string") {
-        notificationObj = {
-          msg: error || "Failed to publish share",
-          alertType: "error",
-        };
-      } else if (typeof error?.error === "string") {
-        notificationObj = {
-          msg: error?.error || "Failed to publish share",
-          alertType: "error",
-        };
-      } else {
-        notificationObj = {
-          msg: error?.message || "Failed to publish share",
-          alertType: "error",
-        };
-      }
-      if (!notificationObj) return;
-      dispatch(setNotification(notificationObj));
-    }
-  }
+  if (!username) return null;
 
   return (
     <>
-      {username && (
-        <>
-          {editId ? null : (
-            <StyledButton
-              color="primary"
-              startIcon={
-                <AddBoxIcon
-                  sx={{
-                    color: "primary.main",
-                    width: "32px",
-                    height: "32px",
-                  }}
-                />
-              }
-              onClick={() => {
-                setIsOpen(true);
-              }}
-            >
-              share
-            </StyledButton>
-          )}
-        </>
+      {phone ? (
+        <Tooltip title="Share files">
+          <IconButton
+            aria-label="Share files"
+            color="primary"
+            onClick={() => setIsOpen(true)}
+            sx={{ minWidth: 44, minHeight: 44 }}
+          >
+            <UploadFileOutlinedIcon />
+          </IconButton>
+        </Tooltip>
+      ) : (
+        <Button
+          variant="outlined"
+          color="primary"
+          aria-label="Share files"
+          startIcon={<UploadFileOutlinedIcon />}
+          onClick={() => setIsOpen(true)}
+          sx={{ minHeight: 40, whiteSpace: "nowrap" }}
+        >
+          Share
+        </Button>
       )}
 
-      <Modal
+      <ResponsiveDialog
         open={isOpen}
-        onClose={onClose}
-        aria-labelledby="modal-title"
-        aria-describedby="modal-description"
-      >
-        <ModalBody>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <NewCrowdfundTitle>Share</NewCrowdfundTitle>
-          </Box>
-
-          {step === "videos" && (
-            <>
-              <Box
-                {...getRootProps()}
-                sx={{
-                  border: "1px dashed",
-                borderColor: "divider",
-                borderRadius: 2,
-                  padding: 2,
-                  textAlign: "center",
-                  marginBottom: 2,
-                  cursor: "pointer",
-                }}
-              >
-                <input {...getInputProps()} />
-                <Typography>
-                  Drag and drop files here or click to select files (up to 10, 2 GB each)
-                </Typography>
-              </Box>
-              {files.map((file, index) => {
-                return (
-                  <React.Fragment key={index}>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <Typography>{file?.file?.name}</Typography>
-                      <RemoveIcon
-                        onClick={() => {
-                          setFiles(prev => {
-                            const copyPrev = [...prev];
-                            copyPrev.splice(index, 1);
-                            return copyPrev;
-                          });
-                        }}
-                        sx={{
-                          cursor: "pointer",
-                        }}
-                      />
-                    </Box>
-                  </React.Fragment>
-                );
-              })}
-
-              {files?.length > 0 && (
-                <>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: "20px",
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <CategoryList
-                      categoryData={allCategoryData}
-                      ref={categoryListRef}
-                      columns={3}
-                    />
-                  </Box>
-                  <CustomInputField
-                    name="title"
-                    label="Title of share"
-                    variant="filled"
-                    value={title}
-                    onChange={e => {
-                      const value = e.target.value;
-                      const formattedValue = value.replace(titleFormatter, "");
-                      setTitle(formattedValue);
-                    }}
-                    slotProps={{ htmlInput: { maxLength: 180 } }}
-                    required
-                  />
-                  <Typography
-                    sx={{
-                      fontSize: "18px",
-                    }}
-                  >
-                    Description of share
-                  </Typography>
-                  <TextEditor
-                    inlineContent={description}
-                    setInlineContent={value => {
-                      setDescription(value);
-                    }}
-                  />
-                </>
-              )}
-            </>
-          )}
-          <CrowdfundActionButtonRow>
-            <CrowdfundActionButton
-              onClick={() => {
-                onClose();
-              }}
-              variant="contained"
-              color="error"
-            >
+        onClose={close}
+        title="Share files"
+        maxWidth="md"
+        actions={
+          <>
+            <Button onClick={close} color="inherit">
               Cancel
-            </CrowdfundActionButton>
-            <Box
-              sx={{
-                display: "flex",
-                gap: "20px",
-                alignItems: "center",
-              }}
-            >
-              <CrowdfundActionButton
-                variant="contained"
-                onClick={() => {
-                  publishQDNResource();
-                }}
-              >
-                Publish
-              </CrowdfundActionButton>
-            </Box>
-          </CrowdfundActionButtonRow>
-        </ModalBody>
-      </Modal>
+            </Button>
+            <Button variant="contained" onClick={publish}>
+              Publish
+            </Button>
+          </>
+        }
+      >
+        <ShareForm draft={draft} categoryListRef={categoryListRef} initialCategories={savedCategories} />
+      </ResponsiveDialog>
 
-      {isOpenMultiplePublish && (
+      {publishes && (
         <MultiplePublish
-          isOpen={isOpenMultiplePublish}
-          onError={messageNotification => {
-            setIsOpenMultiplePublish(false);
-            setPublishes(null);
-            if (messageNotification) {
-              dispatch(
-                setNotification({
-                  msg: messageNotification,
-                  alertType: "error",
-                })
-              );
-            }
-          }}
-          onSubmit={() => {
-            invalidateQdnSearches();
-            setIsOpenMultiplePublish(false);
-            setIsOpen(false);
-            setFiles([]);
-            setStep("videos");
-            setPlaylistCoverImage(null);
-            setPlaylistTitle("");
-            setPlaylistDescription("");
-            setSelectedCategory(null);
-            setSelectedSubCategory(null);
-            setPlaylistSetting(null);
-            categoryListRef.current?.clearCategories();
-            dispatch(
-              setNotification({
-                msg: "Files published",
-                alertType: "success",
-              })
-            );
-          }}
+          isOpen
           publishes={publishes}
+          onError={(message) => {
+            setPublishes(null);
+            if (message) dispatch(setNotification({ msg: message, alertType: "error" }));
+          }}
+          onSubmit={onPublished}
         />
       )}
     </>
   );
 };
+
+export default PublishFile;

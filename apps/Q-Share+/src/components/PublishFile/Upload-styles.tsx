@@ -29,7 +29,7 @@ export const MainContainer = styled(Grid)({
   margin: 0,
 });
 
-export const MainCol = styled(Grid)(({ theme }) => ({
+export const MainCol = styled(Grid)(() => ({
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -101,17 +101,17 @@ export const ModalBody = styled(Box)(({ theme }) => ({
   })
 }));
 
-export const NewCrowdfundTitle = styled(Typography)(({ theme }) => ({
+export const NewCrowdfundTitle = styled(Typography)(() => ({
   fontWeight: 400,
   fontSize: "25px",
   userSelect: "none",
 }));
-export const NewCrowdFundFont = styled(Typography)(({ theme }) => ({
+export const NewCrowdFundFont = styled(Typography)(() => ({
   fontWeight: 400,
   fontSize: "18px",
   userSelect: "none",
 }));
-export const NewCrowdfundTimeDescription = styled(Typography)(({ theme }) => ({
+export const NewCrowdfundTimeDescription = styled(Typography)(() => ({
   fontWeight: 400,
   fontSize: "18px",
   userSelect: "none",
@@ -255,7 +255,7 @@ export const AddLogoIcon = styled(AddPhotoAlternateIcon)(({ theme }) => ({
   width: "auto",
 }));
 
-export const CoverImagePreview = styled("img")(({ theme }) => ({
+export const CoverImagePreview = styled("img")(() => ({
   width: "100px",
   height: "100px",
   objectFit: "contain",
@@ -264,7 +264,7 @@ export const CoverImagePreview = styled("img")(({ theme }) => ({
   marginBottom: "10px",
 }));
 
-export const LogoPreviewRow = styled(Box)(({ theme }) => ({
+export const LogoPreviewRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "10px",
@@ -281,7 +281,7 @@ export const TimesIcon = styled(TimesSVG)(({ theme }) => ({
   },
 }));
 
-export const CrowdfundCardTitle = styled(DoubleLine)(({ theme }) => ({
+export const CrowdfundCardTitle = styled(DoubleLine)(() => ({
   fontSize: "24px",
   letterSpacing: "-0.3px",
   userSelect: "none",
@@ -299,7 +299,7 @@ export const CrowdfundUploadDate = styled(Typography)(({ theme }) => ({
   userSelect: "none",
 }));
 
-export const CATContainer = styled(Box)(({ theme }) => ({
+export const CATContainer = styled(Box)(() => ({
   position: "relative",
   display: "flex",
   padding: "15px",
@@ -370,7 +370,7 @@ export const CrowdfundListWrapper = styled(Box)(({ theme }) => ({
   background: theme.palette.background.default,
 }));
 
-export const CrowdfundTitleRow = styled(Box)(({ theme }) => ({
+export const CrowdfundTitleRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",

@@ -1,5 +1,7 @@
+import { Box } from "@mui/material";
 import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
+import type { TextEditorProps } from "./TextEditor";
 
 // Quill 2 has no maintained image-resize module; the toolbar never offered an
 // image button, so the old quill-image-resize-module-react is dropped.
@@ -21,26 +23,88 @@ const modules = {
   ],
 };
 
-interface TextEditorQuillProps {
-  inlineContent: string;
-  setInlineContent: (value: string) => void;
-}
-
 /**
  * The value handed back is the editor's raw innerHTML as-is (the component
  * compares it with the next `value` prop, so it must round-trip untouched).
  * Quill 2.0.3's getSemanticHTML() loses the text of code blocks, so the
  * semantic mode is switched off; `normalizeQuillHtml` turns the raw markup
  * into the Quill 1 shape before it is stored on QDN.
+ *
+ * The wrapper re-colours quill.snow.css (which hard-codes greys and black
+ * icons) from the theme, wraps the toolbar on narrow screens and gives the
+ * editor a usable minimum height.
  */
-export default function TextEditorQuill({ inlineContent, setInlineContent }: TextEditorQuillProps) {
+export default function TextEditorQuill({ inlineContent, setInlineContent, placeholder }: TextEditorProps) {
   return (
-    <ReactQuill
-      theme="snow"
-      value={inlineContent}
-      onChange={setInlineContent}
-      useSemanticHTML={false}
-      modules={modules}
-    />
+    <Box
+      sx={(theme) => ({
+        width: "100%",
+        "& .ql-toolbar.ql-snow": {
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: "4px 0",
+          padding: "6px 8px",
+          borderColor: theme.palette.divider,
+          borderTopLeftRadius: theme.shape.borderRadius,
+          borderTopRightRadius: theme.shape.borderRadius,
+          backgroundColor: theme.palette.background.paper,
+        },
+        "& .ql-toolbar.ql-snow .ql-formats": { marginRight: "10px" },
+        "& .ql-container.ql-snow": {
+          borderColor: theme.palette.divider,
+          borderBottomLeftRadius: theme.shape.borderRadius,
+          borderBottomRightRadius: theme.shape.borderRadius,
+          backgroundColor: theme.palette.background.paper,
+          fontFamily: theme.typography.fontFamily,
+        },
+        "& .ql-editor": {
+          minHeight: 140,
+          fontSize: 16,
+          lineHeight: 1.5,
+          color: theme.palette.text.primary,
+        },
+        "& .ql-editor.ql-blank::before": {
+          color: theme.palette.text.secondary,
+          fontStyle: "normal",
+        },
+        "& .ql-snow .ql-stroke": { stroke: theme.palette.text.primary },
+        "& .ql-snow .ql-fill, & .ql-snow .ql-stroke.ql-fill": { fill: theme.palette.text.primary },
+        "& .ql-snow .ql-picker": { color: theme.palette.text.primary },
+        "& .ql-snow .ql-picker-options": {
+          backgroundColor: theme.palette.background.paper,
+          borderColor: theme.palette.divider,
+        },
+        "& .ql-snow.ql-toolbar button:hover .ql-stroke, & .ql-snow.ql-toolbar button.ql-active .ql-stroke, & .ql-snow .ql-picker-label:hover .ql-stroke, & .ql-snow .ql-picker-item:hover .ql-stroke, & .ql-snow .ql-picker-label.ql-active .ql-stroke":
+          { stroke: theme.palette.primary.main },
+        "& .ql-snow.ql-toolbar button:hover .ql-fill, & .ql-snow.ql-toolbar button.ql-active .ql-fill, & .ql-snow .ql-picker-label:hover .ql-fill, & .ql-snow .ql-picker-label.ql-active .ql-fill":
+          { fill: theme.palette.primary.main },
+        "& .ql-snow.ql-toolbar button:hover, & .ql-snow.ql-toolbar button.ql-active, & .ql-snow .ql-picker-label:hover, & .ql-snow .ql-picker-label.ql-active, & .ql-snow .ql-picker-item:hover, & .ql-snow .ql-picker-item.ql-selected":
+          { color: theme.palette.primary.main },
+        "& .ql-snow.ql-toolbar button:focus-visible": {
+          outline: `2px solid ${theme.palette.primary.main}`,
+          outlineOffset: 1,
+        },
+        "& .ql-snow .ql-tooltip": {
+          backgroundColor: theme.palette.background.paper,
+          color: theme.palette.text.primary,
+          borderColor: theme.palette.divider,
+          boxShadow: theme.shadows[3],
+        },
+        "& .ql-snow .ql-editor pre.ql-syntax": {
+          backgroundColor: theme.palette.action.hover,
+          color: theme.palette.text.primary,
+        },
+      })}
+    >
+      <ReactQuill
+        theme="snow"
+        value={inlineContent}
+        onChange={setInlineContent}
+        useSemanticHTML={false}
+        modules={modules}
+        placeholder={placeholder}
+      />
+    </Box>
   );
 }

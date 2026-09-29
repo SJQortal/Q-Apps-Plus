@@ -1,234 +1,190 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
   CircularProgress,
-  Modal,
+  LinearProgress,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
   Typography,
-  useTheme,
 } from "@mui/material";
-import React, { useCallback, useEffect, useState, useRef } from "react";
-import { CircleSVG } from "../../../assets/svgs/CircleSVG";
-import { EmptyCircleSVG } from "../../../assets/svgs/EmptyCircleSVG";
-import { styled } from "@mui/system";
-
-interface Publish {
-  resources: any[];
-  action: string;
-}
+import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
+import { fileKind, fileKindIconElement } from "../../../utils/fileKind";
+import type { MultiplePublishRequest, PublishResource } from "../../../utils/publishPayload";
+import { publishErrorMessage } from "../../PublishFile/shareDraft";
+import { ResponsiveDialog } from "../mobile/ResponsiveDialog";
 
 interface MultiplePublishProps {
-  publishes: Publish;
+  publishes: MultiplePublishRequest;
   isOpen: boolean;
+  /** Everything is on QDN. */
   onSubmit: () => void;
+  /** The user declined, the request timed out, or they cancelled after a failure. */
   onError: (message?: string) => void;
 }
-export const MultiplePublish = ({
-  publishes,
-  isOpen,
-  onSubmit,
-  onError,
-}: MultiplePublishProps) => {
-  const theme = useTheme();
-  const listOfSuccessfulPublishesRef = useRef([]);
-  const [listOfSuccessfulPublishes, setListOfSuccessfulPublishes] = useState<
-    any[]
-  >([]);
-  const [listOfUnsuccessfulPublishes, setListOfUnSuccessfulPublishes] =
-    useState<any[]>([]);
-  const [currentlyInPublish, setCurrentlyInPublish] = useState(null);
-  const hasStarted = useRef(false);
-  const publish = useCallback(async (pub: any) => {
-    const lengthOfResources = pub?.resources?.length;
-    const lengthOfTimeout = lengthOfResources * 30000;
-    return await qortalRequestWithTimeout(pub, lengthOfTimeout);
-  }, []);
+
+type ResourceState = "waiting" | "done" | "failed";
+
+const SECONDS_PER_RESOURCE = 30;
+
+function resourceLabel(resource: PublishResource): string {
+  return resource.service === "DOCUMENT" ? "Share details" : resource.filename;
+}
+
+function ResourceIcon({ resource }: { resource: PublishResource }) {
+  if (resource.service === "DOCUMENT") return <DescriptionOutlinedIcon />;
+  return fileKindIconElement(fileKind(resource.file?.type, resource.filename));
+}
+
+function StateIcon({ state }: { state: ResourceState }) {
+  if (state === "done") return <CheckCircleOutlinedIcon sx={{ color: "success.main" }} titleAccess="Published" />;
+  if (state === "failed") return <ErrorOutlineOutlinedIcon sx={{ color: "error.main" }} titleAccess="Failed" />;
+  return <CircularProgress size={20} aria-label="Waiting" />;
+}
+
+/**
+ * Sends the share's resources to Hub in one PUBLISH_MULTIPLE_QDN_RESOURCES
+ * request and shows what landed. Hub confirms the whole batch once and only
+ * answers when it is finished, so there is no per-file progress: the bar is
+ * indeterminate until the request returns, then each resource is done or
+ * failed and the failed ones can be retried on their own.
+ */
+export const MultiplePublish = ({ publishes, isOpen, onSubmit, onError }: MultiplePublishProps) => {
   const [isPublishing, setIsPublishing] = useState(true);
+  const [done, setDone] = useState<Set<string>>(() => new Set());
+  const [failed, setFailed] = useState<Set<string>>(() => new Set());
+  const [errorText, setErrorText] = useState<string | null>(null);
+  const hasStarted = useRef(false);
 
-  const handlePublish = useCallback(
-    async (pub: any) => {
+  const run = useCallback(
+    async (request: MultiplePublishRequest) => {
+      const ids = request.resources.map((r) => r.identifier);
+      setIsPublishing(true);
+      setErrorText(null);
       try {
-        setCurrentlyInPublish(pub?.identifier);
-        setIsPublishing(true);
-        const res = await publish(pub);
-
+        await qortalRequestWithTimeout(request, request.resources.length * SECONDS_PER_RESOURCE * 1000);
+        setDone((prev) => new Set([...prev, ...ids]));
+        setFailed(new Set());
         onSubmit();
-        setListOfUnSuccessfulPublishes([]);
       } catch (error: any) {
-        const unsuccessfulPublishes = error?.error?.unsuccessfulPublishes || [];
         if (error?.error === "User declined request") {
           onError();
           return;
         }
-
         if (error?.error === "The request timed out") {
           onError("The request timed out");
-
           return;
         }
-
-        if (unsuccessfulPublishes?.length > 0) {
-          setListOfUnSuccessfulPublishes(unsuccessfulPublishes);
-        }
+        const unsuccessful: string[] = (error?.error?.unsuccessfulPublishes || [])
+          .map((item: { identifier?: string }) => item?.identifier)
+          .filter(Boolean);
+        // Without a list from Hub nothing in this batch is known to have landed.
+        const failedIds = unsuccessful.length > 0 ? unsuccessful : ids;
+        setFailed(new Set(failedIds));
+        setDone((prev) => new Set([...prev, ...ids.filter((id) => !failedIds.includes(id))]));
+        if (unsuccessful.length === 0) setErrorText(publishErrorMessage(error, "Publishing failed"));
       } finally {
         setIsPublishing(false);
       }
     },
-    [publish]
-  );
-
-  const retry = () => {
-    let newlistOfMultiplePublishes: any[] = [];
-    listOfUnsuccessfulPublishes?.forEach(item => {
-      const findPub = publishes?.resources.find(
-        (res: any) => res?.identifier === item.identifier
-      );
-      if (findPub) {
-        newlistOfMultiplePublishes.push(findPub);
-      }
-    });
-    const multiplePublish = {
-      ...publishes,
-      resources: newlistOfMultiplePublishes,
-    };
-    handlePublish(multiplePublish);
-  };
-
-  const startPublish = useCallback(
-    async (pubs: any) => {
-      await handlePublish(pubs);
-    },
-    [handlePublish, onSubmit, listOfSuccessfulPublishes, publishes]
+    [onSubmit, onError]
   );
 
   useEffect(() => {
     if (publishes && !hasStarted.current) {
       hasStarted.current = true;
-      startPublish(publishes);
+      run(publishes);
     }
-  }, [startPublish, publishes, listOfSuccessfulPublishes]);
+  }, [publishes, run]);
+
+  const retry = () => {
+    run({ ...publishes, resources: publishes.resources.filter((r) => failed.has(r.identifier)) });
+  };
+
+  const resources = publishes?.resources ?? [];
+  const total = resources.length;
+  const stateOf = (id: string): ResourceState => (failed.has(id) ? "failed" : done.has(id) ? "done" : "waiting");
+  const showRetry = !isPublishing && failed.size > 0;
 
   return (
-    <Modal
+    <ResponsiveDialog
       open={isOpen}
-      aria-labelledby="modal-title"
-      aria-describedby="modal-description"
-    >
-      <ModalBody
-        sx={{
-          minHeight: "50vh",
-        }}
-      >
-        {publishes?.resources?.map((publish: any) => {
-          const unpublished = listOfUnsuccessfulPublishes.map(
-            item => item?.identifier
-          );
-          return (
-            <Box
-              sx={{
-                display: "flex",
-                gap: "20px",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-              key={publish?.identifier}
-            >
-              <Typography>{publish?.identifier}</Typography>
-              {!isPublishing && hasStarted.current ? (
-                <>
-                  {!unpublished.includes(publish.identifier) ? (
-                    <CircleSVG
-                      color={theme.palette.text.primary}
-                      height="24px"
-                      width="24px"
-                    />
-                  ) : (
-                    <EmptyCircleSVG
-                      color={theme.palette.text.primary}
-                      height="24px"
-                      width="24px"
-                    />
-                  )}
-                </>
-              ) : (
-                <CircularProgress size={16} color="secondary" />
-              )}
-            </Box>
-          );
-        })}
-        {!isPublishing && listOfUnsuccessfulPublishes.length > 0 && (
+      onClose={() => {
+        if (!isPublishing) onError();
+      }}
+      title={isPublishing ? "Publishing" : "Publish incomplete"}
+      maxWidth="sm"
+      dismissible={false}
+      actions={
+        showRetry ? (
           <>
-            <Typography
-              sx={{
-                marginTop: "20px",
-                fontSize: "16px",
-              }}
-            >
-              Some files were not published. Please try again. It's important
-              that all the files get published. Maybe wait a couple minutes if
-              the error keeps occurring
-            </Typography>
-            <Button
-              variant="contained"
-              onClick={() => {
-                retry();
-              }}
-            >
-              Try again
+            <Button color="inherit" onClick={() => onError()}>
+              Cancel
+            </Button>
+            <Button variant="contained" onClick={retry}>
+              Retry failed
             </Button>
           </>
+        ) : undefined
+      }
+    >
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {isPublishing ? (
+          <Box>
+            <LinearProgress aria-label="Publishing" />
+            <Typography sx={{ mt: 1.5 }}>
+              Publishing {total} {total === 1 ? "resource" : "resources"}… Hub asks you to confirm once, then keep this
+              tab open
+            </Typography>
+          </Box>
+        ) : (
+          <Box>
+            <LinearProgress
+              variant="determinate"
+              value={total ? (done.size / total) * 100 : 0}
+              aria-label="Published"
+              color={failed.size > 0 ? "warning" : "success"}
+            />
+            <Typography sx={{ mt: 1.5, fontWeight: 600 }}>
+              {done.size} of {total} published
+            </Typography>
+          </Box>
         )}
-      </ModalBody>
-    </Modal>
+
+        {errorText && <Alert severity="error">{errorText}</Alert>}
+        {showRetry && (
+          <Alert severity="warning">
+            Some resources were not published. Retry sends only the failed ones; if it keeps failing, wait a minute
+            and try again.
+          </Alert>
+        )}
+
+        <List dense disablePadding aria-label="Resources">
+          {resources.map((resource) => {
+            const state = stateOf(resource.identifier);
+            return (
+              <ListItem key={resource.identifier} divider sx={{ minHeight: 48, px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 36, color: "text.secondary" }}>
+                  <ResourceIcon resource={resource} />
+                </ListItemIcon>
+                <ListItemText
+                  primary={resourceLabel(resource)}
+                  secondary={state === "waiting" ? "Waiting" : state === "done" ? "Published" : "Failed"}
+                  slotProps={{ primary: { noWrap: true, title: resourceLabel(resource) } }}
+                />
+                <Box sx={{ ml: 1, display: "flex", alignItems: "center" }}>
+                  <StateIcon state={state} />
+                </Box>
+              </ListItem>
+            );
+          })}
+        </List>
+      </Box>
+    </ResponsiveDialog>
   );
 };
-
-export const ModalBody = styled(Box)(({ theme }) => ({
-  position: "absolute",
-  backgroundColor: theme.palette.background.default,
-  borderRadius: "12px",
-  top: "50%",
-  left: "50%",
-  transform: "translate(-50%, -50%)",
-  width: "min(900px, calc(100% - 24px))",
-  padding: "16px 20px",
-  display: "flex",
-  flexDirection: "column",
-  gap: "17px",
-  overflowY: "auto",
-  maxHeight: "95vh",
-  boxShadow:
-    "rgba(99, 99, 99, 0.2) 0px 2px 8px 0px",
-  "&::-webkit-scrollbar-track": {
-    backgroundColor: theme.palette.background.paper,
-  },
-  "&::-webkit-scrollbar-track:hover": {
-    backgroundColor: theme.palette.background.paper,
-  },
-  "&::-webkit-scrollbar": {
-    width: "16px",
-    height: "10px",
-    backgroundColor: theme.palette.background.paper,
-    ...theme.applyStyles("light", {
-      backgroundColor: theme.palette.background.paper
-    })
-  },
-  "&::-webkit-scrollbar-thumb": {
-    backgroundColor: theme.palette.divider,
-    borderRadius: "8px",
-    backgroundClip: "content-box",
-    border: "4px solid transparent",
-    ...theme.applyStyles("light", {
-      backgroundColor: theme.palette.divider
-    })
-  },
-  "&::-webkit-scrollbar-thumb:hover": {
-    backgroundColor: theme.palette.text.secondary,
-    ...theme.applyStyles("light", {
-      backgroundColor: theme.palette.text.secondary
-    })
-  },
-  ...theme.applyStyles("dark", {
-    boxShadow: "0px 4px 5px 0px hsla(0,0%,0%,0.14),  0px 1px 10px 0px hsla(0,0%,0%,0.12),  0px 2px 4px -1px hsla(0,0%,0%,0.2)"
-  })
-}));
