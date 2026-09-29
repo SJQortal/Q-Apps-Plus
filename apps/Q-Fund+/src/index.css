@@ -271,3 +271,18 @@ a:focus {
 .ql-editor {
   min-height: 100px;
 }
+/* Quill 2 CSS hides list markers and relies on its own .ql-ui spans, which
+   are absent from stored (semantic) HTML written by either Quill 1 or 2.
+   Put the markers back for displayed content. */
+.ql-editor ul {
+  padding-left: 1.5em;
+}
+.ql-editor ul > li:not([data-list]) {
+  list-style-type: disc;
+}
+.ql-editor ol > li:not([data-list]) {
+  list-style-type: decimal;
+}
+.ql-editor ol > li:not([data-list]) ol > li:not([data-list]) {
+  list-style-type: lower-alpha;
+}

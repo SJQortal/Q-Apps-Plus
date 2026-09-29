@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import DOMPurify from "dompurify";
-import "react-quill/dist/quill.snow.css";
-import "react-quill/dist/quill.core.css";
-import "react-quill/dist/quill.bubble.css";
+import "react-quill-new/dist/quill.snow.css";
+import "react-quill-new/dist/quill.core.css";
+import "react-quill-new/dist/quill.bubble.css";
 import { convertQortalLinks } from "../../utils/convertQortalAnchor";
 import { CrowdfundInlineContent } from "../Crowdfund/Crowdfund-styles";
 

@@ -18,10 +18,10 @@ import {
   TimesIcon,
 } from "./Crowdfund-styles";
 import { Box, Modal, useTheme } from "@mui/material";
-import ReactQuill, { Quill } from "react-quill";
+import ReactQuill, { Quill } from "react-quill-new";
 import ImageResize from "quill-image-resize-module-react";
 import ShortUniqueId from "short-unique-id";
-import "react-quill/dist/quill.snow.css";
+import "react-quill-new/dist/quill.snow.css";
 import { FileAttachment } from "./FileAttachment";
 import { useDispatch, useSelector } from "react-redux";
 import { setNotification } from "../../state/features/notificationsSlice";
@@ -51,7 +51,9 @@ const uid = new ShortUniqueId();
 
 const modules = {
   imageResize: {
-    parchment: Quill.import("parchment"),
+    // Quill 2 ships Parchment 3, whose Attributor API the resize module's
+    // Toolbar sub-module does not understand, so only the two sub-modules
+    // that do not need Parchment are enabled (same as upstream Q-Tube).
     modules: ["Resize", "DisplaySize"],
   },
   toolbar: [
