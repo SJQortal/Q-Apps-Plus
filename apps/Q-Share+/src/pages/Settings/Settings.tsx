@@ -19,6 +19,7 @@ import { addUser } from "../../state/features/authSlice";
 import { BlockedNamesModal } from "../../components/common/BlockedNamesModal/BlockedNamesModal";
 import { ChangelogDialog } from "../../components/common/ChangelogDialog";
 import { APP_VERSION, PLUS_REPO, UPSTREAM_REPO } from "../../constants/changelog";
+import { ShareStats, loadShareStats, readCachedShareStats } from "../../utils/shareStats";
 
 const Page = styled("div")(({ theme }) => ({
   width: "100%",
@@ -69,6 +70,21 @@ export const Settings = () => {
   const user = useSelector((state: RootState) => state.auth.user);
   const [blockedOpen, setBlockedOpen] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
+  const [stats, setStats] = useState<ShareStats | null>(() => readCachedShareStats());
+  const [statsBusy, setStatsBusy] = useState(false);
+  const [statsError, setStatsError] = useState(false);
+
+  const refreshStats = async () => {
+    setStatsBusy(true);
+    setStatsError(false);
+    try {
+      setStats(await loadShareStats(true));
+    } catch {
+      setStatsError(true);
+    } finally {
+      setStatsBusy(false);
+    }
+  };
   const names = (user?.names ?? []).filter((n) => n.name);
 
   return (
@@ -148,6 +164,24 @@ export const Settings = () => {
             disabled={!user?.name}
           >
             Manage
+          </Button>
+        </Row>
+      </Section>
+
+      <Section>
+        <SectionTitle>Network</SectionTitle>
+        <Row>
+          <Box>
+            <Typography sx={{ fontWeight: 700 }}>Share statistics</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {stats
+                ? `${stats.shares}${stats.complete ? "" : "+"} shares by ${stats.publishers}${stats.complete ? "" : "+"} publishers, counted ${new Date(stats.at).toLocaleString()}`
+                : "Counts every share on QDN in pages, so it is loaded only when you ask."}
+              {statsError ? " The count failed; try again." : ""}
+            </Typography>
+          </Box>
+          <Button variant="outlined" onClick={refreshStats} disabled={statsBusy}>
+            {statsBusy ? "Counting…" : stats ? "Recount" : "Load stats"}
           </Button>
         </Row>
       </Section>

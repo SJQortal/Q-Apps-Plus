@@ -22,6 +22,7 @@ import { MultiplePublish } from "../common/MultiplePublish/MultiplePublishAll";
 import { TextEditor } from "../common/TextEditor/TextEditor";
 import { extractTextFromHTML } from "../common/TextEditor/utils";
 import { isQuillHtmlEmpty, normalizeQuillHtml } from "../../utils/quillHtml";
+import { invalidateQdnSearches } from "../../utils/qdnSearch";
 import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
 import {
   maxSize,
@@ -444,6 +445,7 @@ export const PublishFile = ({ editId, editContent }: NewCrowdfundProps) => {
             }
           }}
           onSubmit={() => {
+            invalidateQdnSearches();
             setIsOpenMultiplePublish(false);
             setIsOpen(false);
             setFiles([]);

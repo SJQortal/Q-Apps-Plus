@@ -24,6 +24,8 @@ import {
 import { formatDate } from "../../utils/time";
 import { CommentSection } from "../../components/common/Comments/CommentSection";
 import { QSHARE_FILE_BASE } from "../../constants/Identifiers.ts";
+import { searchQdn } from "../../utils/qdnSearch";
+import { shareLink } from "../../utils/qortalLinks";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
 import FileElement from "../../components/common/FileElement";
 import {
@@ -110,17 +112,17 @@ export const FileContent = () => {
       if (!name || !id) return;
       dispatch(setIsLoadingGlobal(true));
 
-      const url = `/arbitrary/resources/search?mode=ALL&service=DOCUMENT&query=${QSHARE_FILE_BASE}&limit=1&includemetadata=true&reverse=true&excludeblocked=true&name=${name}&exactmatchnames=true&offset=0&identifier=${id}`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const responseDataSearch = await searchQdn({
+        service: "DOCUMENT",
+        query: QSHARE_FILE_BASE,
+        identifier: id,
+        name,
+        limit: 1,
+        includemetadata: true,
       });
-      const responseDataSearch = await response.json();
 
       if (responseDataSearch?.length > 0) {
-        let resourceData = responseDataSearch[0];
+        let resourceData: any = responseDataSearch[0];
         resourceData = {
           title: resourceData?.metadata?.title,
           category: resourceData?.metadata?.category,
@@ -161,17 +163,16 @@ export const FileContent = () => {
     try {
       if (!name || !id || !code) return;
 
-      const url = `/arbitrary/resources/search?mode=ALL&service=PLAYLIST&description=c:${code}&limit=1&includemetadata=true&reverse=true&excludeblocked=true&name=${name}&exactmatchnames=true&offset=0`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const responseDataSearch = await searchQdn({
+        service: "PLAYLIST",
+        description: `c:${code}`,
+        name,
+        limit: 1,
+        includemetadata: true,
       });
-      const responseDataSearch = await response.json();
 
       if (responseDataSearch?.length > 0) {
-        let resourceData = responseDataSearch[0];
+        let resourceData: any = responseDataSearch[0];
         resourceData = {
           title: resourceData?.metadata?.title,
           category: resourceData?.metadata?.category,
@@ -201,14 +202,14 @@ export const FileContent = () => {
           const videos = [];
           if (combinedData?.videos) {
             for (const vid of combinedData.videos) {
-              const url = `/arbitrary/resources/search?mode=ALL&service=DOCUMENT&identifier=${vid.identifier}&limit=1&includemetadata=true&reverse=true&name=${vid.name}&exactmatchnames=true&offset=0`;
-              const response = await fetch(url, {
-                method: "GET",
-                headers: {
-                  "Content-Type": "application/json",
-                },
+              const responseDataSearchVid = await searchQdn({
+                service: "DOCUMENT",
+                identifier: vid.identifier,
+                name: vid.name,
+                limit: 1,
+                includemetadata: true,
+                excludeblocked: false,
               });
-              const responseDataSearchVid = await response.json();
 
               if (responseDataSearchVid?.length > 0) {
                 let resourceData2 = responseDataSearchVid[0];
@@ -412,7 +413,7 @@ export const FileContent = () => {
               followerName={fileData?.user}
             />
             <CopyLinkButton
-              link={`qortal://APP/Q-Share/share/${encodeURIComponent(fileData?.user)}/${encodeURIComponent(fileData?.id)}`}
+              link={shareLink(fileData?.user ?? "", fileData?.id ?? "")}
               tooltipTitle={`Copy page link`}
             />
           </StyledCardHeaderComment>

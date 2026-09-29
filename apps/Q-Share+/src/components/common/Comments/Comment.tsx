@@ -29,6 +29,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "../../../state/store";
 import Portal from "../Portal";
 import { formatDate } from "../../../utils/time";
+import { avatarUrl } from "../../../utils/qortalLinks";
 interface CommentProps {
   comment: any;
   postId: string;
@@ -187,29 +188,7 @@ const CommentCard = ({
   children,
   setCurrentEdit,
 }: any) => {
-  const [avatarUrl, setAvatarUrl] = React.useState<string>("");
   const { user } = useSelector((state: RootState) => state.auth);
-
-  const theme = useTheme();
-
-  const getAvatar = React.useCallback(async (author: string) => {
-    try {
-      const url = await qortalRequest({
-        action: "GET_QDN_RESOURCE_URL",
-        name: author,
-        service: "THUMBNAIL",
-        identifier: "qortal_avatar",
-      });
-
-      setAvatarUrl(url);
-    } catch (error) {
-      console.error(error);
-    }
-  }, []);
-
-  useEffect(() => {
-    getAvatar(name);
-  }, [name]);
 
   return (
     <CardContentContainerComment>
@@ -222,8 +201,8 @@ const CommentCard = ({
       >
         <Box>
           <Avatar
-            src={avatarUrl}
-            alt={`${name}'s avatar`}
+            src={name ? avatarUrl(name) : undefined}
+            alt=""
             sx={{ width: "35px", height: "35px" }}
           />
         </Box>

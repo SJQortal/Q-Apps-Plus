@@ -15,6 +15,9 @@ import {
   NoCommentsRow,
 } from "./Comments-styles";
 import { QSHARE_COMMENT_BASE } from "../../../constants/Identifiers.ts";
+import { fetchQdnText, mapWithConcurrency, searchQdn, searchQdnAll } from "../../../utils/qdnSearch";
+
+const COMMENT_PAGE = 20;
 import { CrowdfundSubTitle, CrowdfundSubTitleRow } from "../../PublishFile/Upload-styles.tsx";
 
 interface CommentSectionProps {
@@ -54,6 +57,8 @@ export const CommentSection = ({ postId, postName }: CommentSectionProps) => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [newMessages, setNewMessages] = useState(0);
   const [loadingComments, setLoadingComments] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<boolean>(false);
+  const [hasMore, setHasMore] = useState<boolean>(false);
 
   const onSubmit = (obj?: any, isEdit?: boolean) => {
     if (isEdit) {
@@ -100,96 +105,51 @@ export const CommentSection = ({ postId, postName }: CommentSectionProps) => {
     }
   }, [navigate, location, listComments]);
 
-  const getReplies = useCallback(
-    async (commentId, postId) => {
-      const offset = 0;
-
-      const removeBaseCommentId = commentId.replace("_base_", "");
-      const url = `/arbitrary/resources/search?mode=ALL&service=BLOG_COMMENT&query=${QSHARE_COMMENT_BASE}${postId.slice(
-        -12
-      )}_reply_${removeBaseCommentId.slice(
-        -6
-      )}&limit=0&includemetadata=false&offset=${offset}&reverse=false&excludeblocked=true`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const responseData = await response.json();
-      const comments: any[] = [];
-      for (const comment of responseData) {
-        if (comment.identifier && comment.name) {
-          const url = `/arbitrary/BLOG_COMMENT/${comment.name}/${comment.identifier}`;
-          const response = await fetch(url, {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          });
-
-          const responseData2 = await response.text();
-          if (responseData) {
-            comments.push({
-              message: responseData2,
-              ...comment,
-            });
-          }
-        }
-      }
-      return comments;
-    },
-    [postId]
-  );
-
+  /** Base comments come one page at a time; all replies of the share come from one prefix search. */
   const getComments = useCallback(
     async (isNewMessages?: boolean, numberOfComments?: number) => {
       try {
         setLoadingComments(true);
-        let offset = 0;
-        if (isNewMessages && numberOfComments) {
-          offset = numberOfComments;
-        }
-        const url = `/arbitrary/resources/search?mode=ALL&service=BLOG_COMMENT&query=${QSHARE_COMMENT_BASE}${postId.slice(
-          -12
-        )}_base_&limit=20&includemetadata=false&offset=${offset}&reverse=false&excludeblocked=true`;
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-        const responseData = await response.json();
-        let comments: any[] = [];
-        for (const comment of responseData) {
-          if (comment.identifier && comment.name) {
-            const url = `/arbitrary/BLOG_COMMENT/${comment.name}/${comment.identifier}`;
-            const response = await fetch(url, {
-              method: "GET",
-              headers: {
-                "Content-Type": "application/json",
-              },
-            });
-
-            const responseData2 = await response.text();
-            if (responseData) {
-              comments.push({
-                message: responseData2,
-                ...comment,
-              });
-            }
-            const res = await getReplies(comment.identifier, postId);
-            comments = [...comments, ...res];
-          }
-        }
+        setLoadError(false);
+        const offset = isNewMessages && numberOfComments ? numberOfComments : 0;
+        const postKey = postId.slice(-12);
+        const [baseRows, replies] = await Promise.all([
+          searchQdn({
+            service: "BLOG_COMMENT",
+            query: `${QSHARE_COMMENT_BASE}${postKey}_base_`,
+            limit: COMMENT_PAGE,
+            offset,
+            reverse: false,
+          }),
+          offset === 0
+            ? searchQdnAll(
+                {
+                  service: "BLOG_COMMENT",
+                  query: `${QSHARE_COMMENT_BASE}${postKey}_reply_`,
+                  reverse: false,
+                },
+                { pageSize: 100, maxPages: 5 }
+              ).then((r) => r.rows)
+            : Promise.resolve([]),
+        ]);
+        const rows = [...baseRows, ...replies].filter((c) => c.identifier && c.name);
+        const comments = await mapWithConcurrency(rows, 5, async (comment) => ({
+          ...comment,
+          message: await fetchQdnText("BLOG_COMMENT", comment.name, comment.identifier),
+        }));
+        setHasMore(baseRows.length === COMMENT_PAGE);
         if (isNewMessages) {
-          setListComments(prev => [...prev, ...comments]);
+          setListComments((prev) => {
+            const known = new Set(prev.map((c) => c.identifier));
+            return [...prev, ...comments.filter((c) => !known.has(c.identifier))];
+          });
           setNewMessages(0);
         } else {
           setListComments(comments);
         }
       } catch (error) {
         console.error(error);
+        setLoadError(true);
       } finally {
         setLoadingComments(false);
       }
@@ -228,6 +188,13 @@ export const CommentSection = ({ postId, postName }: CommentSectionProps) => {
             <NoCommentsRow>
               <CircularProgress />
             </NoCommentsRow>
+          ) : loadError ? (
+            <NoCommentsRow>
+              Comments could not be loaded.
+              <Button size="small" sx={{ ml: 1 }} onClick={() => getComments()}>
+                Retry
+              </Button>
+            </NoCommentsRow>
           ) : listComments.length === 0 ? (
             <NoCommentsRow>
               There are no comments yet. Be the first to comment!
@@ -247,7 +214,7 @@ export const CommentSection = ({ postId, postName }: CommentSectionProps) => {
               })}
             </CommentContainer>
           )}
-          {listComments.length > 20 && (
+          {hasMore && (
             <LoadMoreCommentsButtonRow>
               <LoadMoreCommentsButton
                 onClick={() => {

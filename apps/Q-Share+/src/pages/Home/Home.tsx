@@ -18,7 +18,6 @@ import {
   CategoryList,
   CategoryListRef,
 } from "../../components/common/CategoryList/CategoryList.tsx";
-import { StatsData } from "../../components/StatsData.tsx";
 
 interface HomeProps {
   mode?: string;
@@ -31,15 +30,6 @@ export const Home = ({ mode }: HomeProps) => {
   const filterValue = useSelector((state: RootState) => state.file.filterValue);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const filterType = useSelector((state: RootState) => state.file.filterType);
-  const totalFilesPublished = useSelector(
-    (state: RootState) => state.global.totalFilesPublished
-  );
-  const totalNamesPublished = useSelector(
-    (state: RootState) => state.global.totalNamesPublished
-  );
-  const filesPerNamePublished = useSelector(
-    (state: RootState) => state.global.filesPerNamePublished
-  );
   const setFilterType = payload => {
     dispatch(changeFilterType(payload));
   };
@@ -83,10 +73,7 @@ export const Home = ({ mode }: HomeProps) => {
     checkAndUpdateFile,
     getFile,
     hashMapFiles,
-    getNewFiles,
-    checkNewFiles,
     getFilesFiltered,
-    getFilesCount,
   } = useFetchFiles();
 
   const getFilesHandler = React.useCallback(
@@ -131,7 +118,7 @@ export const Home = ({ mode }: HomeProps) => {
       prevVal.current = filterValue;
       getFilesHandler();
     }
-  }, [filterValue, isFiltering, filteredFiles, getFilesCount]);
+  }, [filterValue, isFiltering, filteredFiles]);
 
   const getFilesHandlerMount = React.useCallback(async () => {
     if (firstFetch.current) return;
@@ -209,7 +196,6 @@ export const Home = ({ mode }: HomeProps) => {
     <Grid container sx={{ width: "100%" }}>
       <FiltersCol size={{ xs: 12, sm: 3, md: 2 }}>
         <FiltersContainer>
-          <StatsData />
           <Input
             id="standard-adornment-name"
             onChange={e => {

@@ -20,6 +20,8 @@ import { formatDate } from "../../utils/time";
 import { Video } from "../../state/features/fileSlice.ts";
 import { queue } from "../../wrappers/GlobalWrapper";
 import { QSHARE_FILE_BASE } from "../../constants/Identifiers.ts";
+import { QDN_PAGE, searchQdn } from "../../utils/qdnSearch";
+import { summaryToVideo } from "../../hooks/useFetchFiles.tsx";
 import { formatBytes } from "../FileContent/FileContent.tsx";
 import { getIconsFromObject } from "../../constants/Categories/CategoryFunctions.ts";
 
@@ -40,35 +42,19 @@ export const FileListComponentLevel = ({ mode }: VideoListProps) => {
   const [videos, setVideos] = React.useState<Video[]>([]);
 
   const navigate = useNavigate();
-  const { getFile, getNewFiles, checkNewFiles, checkAndUpdateFile } =
-    useFetchFiles();
+  const { getFile, checkAndUpdateFile } = useFetchFiles();
 
   const getVideos = React.useCallback(async () => {
     try {
       const offset = videos.length;
-      const url = `/arbitrary/resources/search?mode=ALL&service=DOCUMENT&query=${QSHARE_FILE_BASE}&limit=50&includemetadata=false&reverse=true&excludeblocked=true&name=${paramName}&exactmatchnames=true&offset=${offset}`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const responseData = await searchQdn({
+        service: "DOCUMENT",
+        query: QSHARE_FILE_BASE,
+        name: paramName,
+        limit: QDN_PAGE,
+        offset,
       });
-      const responseData = await response.json();
-
-      const structureData = responseData.map((video: any): Video => {
-        return {
-          title: video?.metadata?.title,
-          category: video?.metadata?.category,
-          categoryName: video?.metadata?.categoryName,
-          tags: video?.metadata?.tags || [],
-          description: video?.metadata?.description,
-          created: video?.created,
-          updated: video?.updated,
-          user: video.name,
-          videoImage: "",
-          id: video.identifier,
-        };
-      });
+      const structureData = responseData.map(summaryToVideo);
 
       const copiedVideos: Video[] = [...videos];
       structureData.forEach((video: Video) => {
