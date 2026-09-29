@@ -16,7 +16,7 @@ import {
 } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-alpine.css";
-import InfoOutlineIcon from "@mui/icons-material/InfoOutline";
+import InfoOutlineIcon from "@mui/icons-material/InfoOutlined";
 import {
   Alert,
   Box,
@@ -1182,11 +1182,13 @@ const columnDefs: ColDef[] = useMemo(() => {
           open={isShowTradesUnknownFee}
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
-          PaperProps={{
-            style: {
-              backgroundColor: "rgb(39, 40, 44)",
-              background: "rgb(39, 40, 44)",
-            },
+          slotProps={{
+            paper: {
+              style: {
+                backgroundColor: "rgb(39, 40, 44)",
+                background: "rgb(39, 40, 44)",
+              },
+            }
           }}
         >
           <DialogTitle sx={{
@@ -1277,70 +1279,74 @@ const columnDefs: ColDef[] = useMemo(() => {
         </Dialog>
       )}
 
-{isShowAskToUpdateFee && (
-        <Dialog
-          open={isShowAskToUpdateFee}
-          aria-labelledby="alert-dialog-title"
-          aria-describedby="alert-dialog-description"
-          PaperProps={{
-            style: {
-              backgroundColor: "rgb(39, 40, 44)",
-              background: "rgb(39, 40, 44)",
-            },
-          }}
-        >
-          <DialogTitle  sx={{
-            background: "rgb(39, 40, 44)",
-          }} id="alert-dialog-title">Suggestion</DialogTitle>
-          <DialogContent sx={{ borderColor: "#333" }}>
-            <DialogContentText
-              id="alert-dialog-description"
-              sx={{ color: "white" }}
-            >
-              Your current unlocking fee is higher than necessary. You can lower it to match the highest required fee and reduce costs.
-            </DialogContentText>
-            <Spacer height="20px" />
-     
+      {isShowAskToUpdateFee && (
+              <Dialog
+                open={isShowAskToUpdateFee}
+                aria-labelledby="alert-dialog-title"
+                aria-describedby="alert-dialog-description"
+                slotProps={{
+                  paper: {
+                    style: {
+                      backgroundColor: "rgb(39, 40, 44)",
+                      background: "rgb(39, 40, 44)",
+                    },
+                  }
+                }}
+              >
+                <DialogTitle  sx={{
+                  background: "rgb(39, 40, 44)",
+                }} id="alert-dialog-title">Suggestion</DialogTitle>
+                <DialogContent sx={{ borderColor: "#333" }}>
+                  <DialogContentText
+                    id="alert-dialog-description"
+                    sx={{ color: "white" }}
+                  >
+                    Your current unlocking fee is higher than necessary. You can lower it to match the highest required fee and reduce costs.
+                  </DialogContentText>
+                  <Spacer height="20px" />
+           
 
-            
-          </DialogContent>
-          <DialogActions   sx={{
-              background: "rgb(39, 40, 44)",
-            }}>
-            <Button
-              variant="outlined"
-              onClick={onOkAskToUpdateFee}
-              
-            >
-              Continue without updating
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={async (e)=> {
-                try {
-                  await updateFee(messageAskToUpdateFee.message)
-                } catch (error) {
-                  console.error(error)
-                }
-                onOkAskToUpdateFee(e)
-              }}
-              
-            >
-              Lower fee
-            </Button>
-          </DialogActions>
-        </Dialog>
-      )}
+                  
+                </DialogContent>
+                <DialogActions   sx={{
+                    background: "rgb(39, 40, 44)",
+                  }}>
+                  <Button
+                    variant="outlined"
+                    onClick={onOkAskToUpdateFee}
+                    
+                  >
+                    Continue without updating
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={async (e)=> {
+                      try {
+                        await updateFee(messageAskToUpdateFee.message)
+                      } catch (error) {
+                        console.error(error)
+                      }
+                      onOkAskToUpdateFee(e)
+                    }}
+                    
+                  >
+                    Lower fee
+                  </Button>
+                </DialogActions>
+              </Dialog>
+            )}
       {isShowBuyInProgress && (
         <Dialog
           open={isShowBuyInProgress}
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
-          PaperProps={{
-            style: {
-              backgroundColor: "rgb(39, 40, 44)",
-              background: "rgb(39, 40, 44)",
-            },
+          slotProps={{
+            paper: {
+              style: {
+                backgroundColor: "rgb(39, 40, 44)",
+                background: "rgb(39, 40, 44)",
+              },
+            }
           }}
         >
           <DialogContent
@@ -1466,11 +1472,13 @@ const columnDefs: ColDef[] = useMemo(() => {
         open={!!openShowOfferDetails}
         aria-labelledby="alert-dialog-title"
         aria-describedby="alert-dialog-description"
-        PaperProps={{
-          style: {
-            backgroundColor: "rgb(39, 40, 44)",
-            background: "rgb(39, 40, 44)",
-          },
+        slotProps={{
+          paper: {
+            style: {
+              backgroundColor: "rgb(39, 40, 44)",
+              background: "rgb(39, 40, 44)",
+            },
+          }
         }}
       >
         <DialogTitle
