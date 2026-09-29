@@ -1,11 +1,10 @@
 import React from "react";
-import { Box, useTheme } from "@mui/material";
+import { Box, IconButton, useTheme } from "@mui/material";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import {
   CustomAppBar,
   ThemeSelectRow,
   LogoContainer,
-  LightModeIcon,
-  DarkModeIcon,
   AuthenticateButton,
   NavbarName,
   AvatarContainer,
@@ -20,14 +19,12 @@ import { AccountCircleSVG } from "../../../assets/svgs/AccountCircleSVG";
 interface Props {
   isAuthenticated: boolean;
   authenticate: () => void;
-  setTheme: (val: string) => void;
   fixed?: boolean;
 }
 
 const NavBar: React.FC<Props> = ({
   isAuthenticated,
   authenticate,
-  setTheme,
   fixed,
 }) => {
   const theme = useTheme();
@@ -51,21 +48,13 @@ const NavBar: React.FC<Props> = ({
       }}
     >
       <ThemeSelectRow>
-        {theme.palette.mode === "dark" ? (
-          <LightModeIcon
-            onClickFunc={() => setTheme("light")}
-            color={!fixed ? "white" : theme.palette.text.primary}
-            height="22"
-            width="22"
-          />
-        ) : (
-          <DarkModeIcon
-            onClickFunc={() => setTheme("dark")}
-            color={!fixed ? "white" : theme.palette.text.primary}
-            height="22"
-            width="22"
-          />
-        )}
+        <IconButton
+          aria-label="Settings"
+          onClick={() => navigate("/settings")}
+          sx={{ color: !fixed ? "#ffffff" : theme.palette.text.primary }}
+        >
+          <SettingsOutlinedIcon />
+        </IconButton>
         <LogoContainer
           src={theme.palette.mode === "dark" ? QFundLogo : QFundLogoLight}
           alt="QFund Logo"

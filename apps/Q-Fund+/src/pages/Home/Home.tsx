@@ -22,11 +22,7 @@ import { ExploreSVG } from '../../assets/svgs/ExploreSVG';
 import { DonateSVG } from '../../assets/svgs/DonateSVG';
 import { TrackSVG } from '../../assets/svgs/TrackSVG';
 import QFundLogo from '../../assets/images/QFundDarkLogo.png';
-interface Props {
-  setTheme: (val: string) => void;
-}
-
-export const Home: React.FC<Props> = ({ setTheme }) => {
+export const Home: React.FC = () => {
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
 
@@ -67,7 +63,6 @@ export const Home: React.FC<Props> = ({ setTheme }) => {
       <HomePageContainer>
         <NavBar
           fixed={false}
-          setTheme={(val: string) => setTheme(val)}
           authenticate={askForAccountInformation}
           isAuthenticated={!!user?.name}
         />

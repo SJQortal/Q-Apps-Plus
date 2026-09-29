@@ -1,6 +1,6 @@
-import { createTheme } from "@mui/material/styles";
+import { createTheme, type ThemeOptions } from "@mui/material/styles";
 
-const commonThemeOptions = {
+const commonThemeOptions: ThemeOptions = {
   typography: {
     fontFamily: [
       "Mulish",
@@ -53,7 +53,6 @@ const commonThemeOptions = {
       lineHeight: 1.4,
       letterSpacing: "0.2px",
     },
-    margin: 0,
   },
   spacing: 8,
   shape: {
@@ -87,7 +86,7 @@ const commonThemeOptions = {
   },
 };
 
-const lightTheme = createTheme({
+export const lightThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: "light",
@@ -158,9 +157,9 @@ const lightTheme = createTheme({
       },
     },
   },
-});
+};
 
-const darkTheme = createTheme({
+export const darkThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: "dark",
@@ -231,6 +230,9 @@ const darkTheme = createTheme({
       },
     },
   },
-});
+};
+
+const lightTheme = createTheme(lightThemeOptions);
+const darkTheme = createTheme(darkThemeOptions);
 
 export { lightTheme, darkTheme };

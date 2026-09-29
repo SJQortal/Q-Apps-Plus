@@ -10,10 +10,9 @@ import ConsentModal from "../components/modals/ConsentModal";
 
 interface Props {
   children: React.ReactNode;
-  setTheme: (val: string) => void;
 }
 
-const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
+const GlobalWrapper: React.FC<Props> = ({ children }) => {
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
   const location = useLocation();
@@ -85,7 +84,6 @@ const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
       {/* Hide navbar on homepage for styling purposes */}
       {location.pathname !== "/" && (
         <NavBar
-          setTheme={(val: string) => setTheme(val)}
           isAuthenticated={!!user?.name}
           authenticate={askForAccountInformation}
           fixed={true}
