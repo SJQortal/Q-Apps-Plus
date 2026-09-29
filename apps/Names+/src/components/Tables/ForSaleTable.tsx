@@ -221,7 +221,8 @@ export const ForSaleTable = ({
   return (
     <Paper
       sx={{
-        height: 'calc(100vh - 64px - 60px)', // Header + footer height
+        flex: 1,
+        minHeight: 320,
         width: '100%',
       }}
     >

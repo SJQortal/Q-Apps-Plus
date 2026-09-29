@@ -1,4 +1,6 @@
-import { Box, TextField } from '@mui/material';
+import { TextField } from '@mui/material';
+import { PageHeader } from '../components/layout/PageHeader';
+import { PendingTxsTable } from '../components/Tables/PendingTxsTable';
 import { ForSaleTable } from '../components/Tables/ForSaleTable';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -97,16 +99,9 @@ export const Market = () => {
   );
 
   return (
-    <div>
-      <Box
-        sx={{
-          width: '100%',
-          height: '60px',
-          padding: '10px',
-          display: 'flex',
-          gap: '10px',
-          alignItems: 'center',
-        }}
+    <>
+      <PageHeader
+        title={t('core:header.market', { postProcess: 'capitalizeFirstChar' })}
       >
         <TextField
           placeholder={t('core:inputs.filter_names', {
@@ -115,8 +110,10 @@ export const Market = () => {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           size="small"
+          sx={{ ml: 'auto', minWidth: 0, maxWidth: 260 }}
         />
-      </Box>
+      </PageHeader>
+      <PendingTxsTable />
       <ForSaleTable
         namesForSale={namesForSaleFiltered}
         sortBy={sortBy}
@@ -124,6 +121,6 @@ export const Market = () => {
         handleSort={handleSort}
         isPrimaryNameForSale={isPrimaryNameForSale}
       />
-    </div>
+    </>
   );
 };

@@ -65,11 +65,13 @@ export const PendingTxsTable = () => {
   if (allTxs?.length === 0) return null;
   return (
     <>
-      <Spacer height="20px" />
-      <Typography variant="h3">Pending transactions</Typography>
+      <Spacer height="12px" />
+      <Typography variant="h6" sx={{ px: 2 }}>
+        Pending transactions
+      </Typography>
       <Paper
         sx={{
-          height: '250px', // Header + footer height
+          height: 180,
           width: '100%',
         }}
       >

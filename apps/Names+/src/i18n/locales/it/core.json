@@ -1,7 +1,9 @@
 {
   "header": {
     "my_names": "i miei nomi",
-    "market": "nomi in vendita"
+    "market": "nomi in vendita",
+    "settings": "settings",
+    "navigation": "navigation"
   },
   "inputs": {
     "filter_names": "filtra nomi"
@@ -92,5 +94,21 @@
       "success": "nome acquistato con successo",
       "error": "impossibile acquistare il nome"
     }
+  },
+  "settings": {
+    "account": "account",
+    "appearance": "appearance",
+    "about": "about",
+    "no_primary_name": "no primary name yet",
+    "not_signed_in": "not signed in",
+    "names_count_one": "{{count}} name",
+    "names_count_other": "{{count}} names",
+    "address": "address",
+    "copy_address": "copy address",
+    "copied": "copied",
+    "changelog": "what's new",
+    "upstream": "original app: Qortal/names",
+    "source": "source code: SJQortal/Q-Apps-Plus",
+    "about_blurb": "Names+ is Simon's version of the official Qortal Names app. It reads and writes the same names, sales and avatars, so anything you do here shows up in the original app too."
   }
 }

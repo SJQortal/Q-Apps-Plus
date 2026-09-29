@@ -2,9 +2,11 @@ import { useAtom } from 'jotai';
 import { useEffect, useMemo, useState } from 'react';
 import { namesAtom, primaryNameAtom } from '../state/global/names';
 import { NameTable } from '../components/Tables/NameTable';
-import { Box, TextField } from '@mui/material';
+import { TextField } from '@mui/material';
 import RegisterName from '../components/RegisterName';
 import { useTranslation } from 'react-i18next';
+import { PageHeader } from '../components/layout/PageHeader';
+import { PendingTxsTable } from '../components/Tables/PendingTxsTable';
 
 export const MyNames = () => {
   const { t } = useTranslation(['core']);
@@ -39,19 +41,11 @@ export const MyNames = () => {
   }, [names, filterValue, primaryName]);
 
   return (
-    <div>
-      <Box
-        sx={{
-          width: '100%',
-          height: '60px',
-          padding: '10px',
-          display: 'flex',
-          gap: '10px',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
+    <>
+      <PageHeader
+        title={t('core:header.my_names', { postProcess: 'capitalizeFirstChar' })}
+        actions={<RegisterName />}
       >
-        {' '}
         <TextField
           placeholder={t('core:inputs.filter_names', {
             postProcess: 'capitalizeFirstChar',
@@ -59,10 +53,11 @@ export const MyNames = () => {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           size="small"
+          sx={{ ml: 'auto', minWidth: 0, maxWidth: 260 }}
         />
-        <RegisterName />
-      </Box>
+      </PageHeader>
+      <PendingTxsTable />
       <NameTable names={filteredNames} primaryName={primaryName} />
-    </div>
+    </>
   );
 };
