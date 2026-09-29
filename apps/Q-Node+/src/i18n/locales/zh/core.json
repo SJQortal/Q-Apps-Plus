@@ -1,0 +1,76 @@
+{
+  "action": {
+    "add": "添加",
+    "add_data_peer": "添加数据节点",
+    "add_peer": "添加新节点",
+    "add_minting_account": "添加铸造账户",
+    "cancel": "取消",
+    "force_sync": "强制同步",
+    "refresh": "刷新",
+    "remove": "移除"
+  },
+  "message": {
+    "generic": {
+      "add_peer": "请指定一个节点，使用 hostname、[IPv4] 地址、[IPv6] 地址，以及可选的端口号（前面加上冒号）。",
+      "add_minting_account": "请输入要添加到该节点的铸造密钥。",
+      "all_rows": "全部",
+      "add_data_peer": "请指定一个数据节点，使用 hostname、[IPv4] 地址、[IPv6] 地址，以及可选的端口号（前面加上冒号）。",
+      "connected_data_peers": "QDN 数据节点 ({{ count }})",
+      "connected_peers": "连接到该节点的节点 ({{ count }})",
+      "loading_minting_accounts": "正在加载铸造账户，请稍候...",
+      "minting_account": "铸造账户",
+      "minting_key": "铸造密钥",
+      "minting_key_helper": "44 位字符的铸造密钥",
+      "no_minting_accounts": "未找到该节点的铸造账户",
+      "no_data_peers": "该节点没有数据节点",
+      "no_peers": "该节点没有已连接的节点",
+      "rows_per_page": "每页行数",
+      "starting_sync_peer": "开始与节点同步: {{ address }}",
+      "success": {
+        "bootstrap_request": "成功发送引导请求到该节点！这可能需要长达 10 分钟...",
+        "new_minting_account": "成功添加铸造账户",
+        "new_data_peer": "成功添加数据节点",
+        "new_peer": "成功添加新节点",
+        "remove_data_peer": "成功移除数据节点",
+        "remove_minting_account": "成功移除铸造账户",
+        "remove_peer": "成功移除节点",
+        "restart_request": "成功发送重启请求到该节点！这可能需要长达 5 分钟...",
+        "stop_request": "成功发送停止请求到该节点！请重新启动您的节点..."
+      }
+    }
+  },
+  "status": {
+    "minting": "铸造中",
+    "not_minting": "未铸造",
+    "no_status": "无状态",
+    "synchronized": "已同步",
+    "synchronizing": "同步中"
+  },
+  "table_headers": {
+    "peers": {
+      "actions": "操作",
+      "address": "地址",
+      "connected_since": "连接时间",
+      "core_version": "核心版本",
+      "direction": "方向",
+      "handshake_status": "握手状态",
+      "last_height": "最新高度"
+    },
+    "minting_accounts": {
+      "action": "操作",
+      "address": "地址",
+      "avatar": "头像",
+      "minting_key": "铸造密钥",
+      "name": "名称"
+    }
+  },
+  "widgets": {
+    "block_height": "区块高度",
+    "connected_data_peers": "已连接的QDN数据节点",
+    "connected_peers": "已连接节点",
+    "core_version": "核心版本",
+    "minting_status": "铸造状态",
+    "node_uptime": "节点运行时间",
+    "sync_status": "同步状态"
+  }
+}

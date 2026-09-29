@@ -1,0 +1,74 @@
+{
+  "action": {
+    "add": "Adicionar",
+    "add_data_peer": "Adicionar peer de dados",
+    "add_peer": "Adicionar novo peer",
+    "add_minting_account": "Adicionar conta de mineração",
+    "cancel": "Cancelar",
+    "force_sync": "Forçar sincronização",
+    "refresh": "Atualizar",
+    "remove": "Remover"
+  },
+  "message": {
+    "generic": {
+      "add_peer": "Especifique um peer usando hostname, endereço [IPv4], endereço [IPv6] e número de porta opcional precedido por dois pontos.",
+      "add_minting_account": "Por favor, insira a chave de mineração para adicioná-la a este nó.",
+      "all_rows": "todas",
+      "connected_peers": "Peers conectados a este nó ({{ count }})",
+      "loading_minting_accounts": "Carregando contas de mineração, por favor aguarde...",
+      "minting_account": "Conta(s) de mineração",
+      "minting_key": "Chave de mineração",
+      "minting_key_helper": "Chave de mineração com 44 caracteres",
+      "no_minting_accounts": "Nenhuma conta de mineração encontrada para este nó",
+      "no_data_peers": "O nó não possui peers de dados",
+      "no_peers": "O nó não possui peers conectados",
+      "rows_per_page": "Linhas por página",
+      "starting_sync_peer": "Iniciando sincronização com o peer: {{ address }}",
+      "success": {
+        "bootstrap_request": "Solicitação de bootstrap enviada com sucesso para este nó! Isso pode levar até 10 minutos...",
+        "new_minting_account": "Conta de mineração adicionada com sucesso",
+        "new_data_peer": "Peer de dados adicionado com sucesso",
+        "new_peer": "Novo peer adicionado com sucesso",
+        "remove_data_peer": "Peer de dados removido com sucesso",
+        "remove_minting_account": "Conta de mineração removida com sucesso",
+        "remove_peer": "Peer removido com sucesso",
+        "restart_request": "Solicitação de reinicialização enviada com sucesso para este nó! Isso pode levar até 5 minutos...",
+        "stop_request": "Solicitação de parada enviada com sucesso para este nó! Por favor, reinicie seu nó..."
+      }
+    }
+  },
+  "status": {
+    "minting": "Minerando",
+    "not_minting": "Não minerando",
+    "no_status": "Sem status",
+    "synchronized": "Sincronizado",
+    "synchronizing": "Sincronizando"
+  },
+  "table_headers": {
+    "peers": {
+      "actions": "Ações",
+      "address": "Endereço",
+      "connected_since": "Conectado desde",
+      "core_version": "Versão do núcleo",
+      "direction": "Direção",
+      "handshake_status": "Status do handshake",
+      "last_height": "Última altura"
+    },
+    "minting_accounts": {
+      "action": "Ação",
+      "address": "Endereço",
+      "avatar": "Avatar",
+      "minting_key": "Chave de mineração",
+      "name": "Nome"
+    }
+  },
+  "widgets": {
+    "block_height": "Altura do bloco",
+    "connected_data_peers": "peers de dados QDN conectados",
+    "connected_peers": "Peers conectados",
+    "core_version": "Versão do núcleo",
+    "minting_status": "Status da mineração",
+    "node_uptime": "Tempo de atividade do nó",
+    "sync_status": "Status da sincronização"
+  }
+}

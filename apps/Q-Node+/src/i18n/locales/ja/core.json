@@ -1,0 +1,74 @@
+{
+  "action": {
+    "add": "追加",
+    "add_data_peer": "データピアを追加",
+    "add_peer": "新しいピアを追加",
+    "add_minting_account": "マイニングアカウントを追加",
+    "cancel": "キャンセル",
+    "force_sync": "強制同期",
+    "refresh": "更新",
+    "remove": "削除"
+  },
+  "message": {
+    "generic": {
+      "add_peer": "ホスト名、[IPv4] アドレス、[IPv6] アドレス、そしてオプションでコロンの後にポート番号を指定してピアを指定してください。",
+      "add_minting_account": "このノードに追加するマイニングキーを入力してください。",
+      "all_rows": "すべて",
+      "connected_peers": "このノードに接続されているピア ({{ count }})",
+      "loading_minting_accounts": "マイニングアカウントを読み込み中です。しばらくお待ちください...",
+      "minting_account": "マイニングアカウント",
+      "minting_key": "マイニングキー",
+      "minting_key_helper": "44文字のマイニングキー",
+      "no_minting_accounts": "このノードにマイニングアカウントが見つかりません",
+      "no_data_peers": "このノードにはデータピアがありません",
+      "no_peers": "このノードには接続されているピアがありません",
+      "rows_per_page": "ページごとの行数",
+      "starting_sync_peer": "ピアとの同期を開始: {{ address }}",
+      "success": {
+        "bootstrap_request": "このノードへのブートストラップリクエストを正常に送信しました！最大10分かかる場合があります...",
+        "new_minting_account": "マイニングアカウントを正常に追加しました",
+        "new_data_peer": "データピアを正常に追加しました",
+        "new_peer": "新しいピアを正常に追加しました",
+        "remove_data_peer": "データピアを正常に削除しました",
+        "remove_minting_account": "マイニングアカウントを正常に削除しました",
+        "remove_peer": "ピアを正常に削除しました",
+        "restart_request": "このノードへの再起動リクエストを正常に送信しました！最大5分かかる場合があります...",
+        "stop_request": "このノードへの停止リクエストを正常に送信しました！再度ノードを起動してください..."
+      }
+    }
+  },
+  "status": {
+    "minting": "マイニング中",
+    "not_minting": "マイニングしていない",
+    "no_status": "ステータスなし",
+    "synchronized": "同期済み",
+    "synchronizing": "同期中"
+  },
+  "table_headers": {
+    "peers": {
+      "actions": "操作",
+      "address": "アドレス",
+      "connected_since": "接続開始時刻",
+      "core_version": "コアバージョン",
+      "direction": "方向",
+      "handshake_status": "ハンドシェイク状態",
+      "last_height": "最新の高さ"
+    },
+    "minting_accounts": {
+      "action": "操作",
+      "address": "アドレス",
+      "avatar": "アバター",
+      "minting_key": "マイニングキー",
+      "name": "名前"
+    }
+  },
+  "widgets": {
+    "block_height": "ブロック高",
+    "connected_data_peers": "接続中のQDNデータピア",
+    "connected_peers": "接続中のピア",
+    "core_version": "コアバージョン",
+    "minting_status": "マイニング状態",
+    "node_uptime": "ノード稼働時間",
+    "sync_status": "同期状態"
+  }
+}

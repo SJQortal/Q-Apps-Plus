@@ -1,0 +1,74 @@
+{
+  "action": {
+    "add": "Hinzufügen",
+    "add_data_peer": "Daten-Peer hinzufügen",
+    "add_peer": "Neuen Peer hinzufügen",
+    "add_minting_account": "Minting-Konto hinzufügen",
+    "cancel": "Abbrechen",
+    "force_sync": "Synchronisation erzwingen",
+    "refresh": "Aktualisieren",
+    "remove": "Entfernen"
+  },
+  "message": {
+    "generic": {
+      "add_peer": "Geben Sie einen Peer an mit hostname, [IPv4]-Adresse, [IPv6]-Adresse und optionaler Portnummer, vorangestellt durch einen Doppelpunkt.",
+      "add_minting_account": "Bitte geben Sie den Minting-Schlüssel ein, der zu diesem Node hinzugefügt werden soll.",
+      "all_rows": "alle",
+      "connected_peers": "Mit diesem Node verbundene Peers ({{ count }})",
+      "loading_minting_accounts": "Minting-Konten werden geladen, bitte warten...",
+      "minting_account": "Minting-Konto(s)",
+      "minting_key": "Minting-Schlüssel",
+      "minting_key_helper": "Minting-Schlüssel mit 44 Zeichen",
+      "no_minting_accounts": "Keine Minting-Konten für diesen Node gefunden",
+      "no_data_peers": "Dieser Node hat keine Daten-Peers",
+      "no_peers": "Dieser Node hat keine verbundenen Peers",
+      "rows_per_page": "Zeilen pro Seite",
+      "starting_sync_peer": "Starte Synchronisation mit Peer: {{ address }}",
+      "success": {
+        "bootstrap_request": "Bootstrap-Anfrage erfolgreich an diesen Node gesendet! Dies kann bis zu 10 Minuten dauern...",
+        "new_minting_account": "Minting-Konto erfolgreich hinzugefügt",
+        "new_data_peer": "Daten-Peer erfolgreich hinzugefügt",
+        "new_peer": "Neuer Peer erfolgreich hinzugefügt",
+        "remove_data_peer": "Daten-Peer erfolgreich entfernt",
+        "remove_minting_account": "Minting-Konto erfolgreich entfernt",
+        "remove_peer": "Peer erfolgreich entfernt",
+        "restart_request": "Neustart-Anfrage erfolgreich an diesen Node gesendet! Dies kann bis zu 5 Minuten dauern...",
+        "stop_request": "Stopp-Anfrage erfolgreich an diesen Node gesendet! Bitte starten Sie Ihren Node erneut..."
+      }
+    }
+  },
+  "status": {
+    "minting": "Minting",
+    "not_minting": "Kein Minting",
+    "no_status": "Kein Status",
+    "synchronized": "Synchronisiert",
+    "synchronizing": "Synchronisiere"
+  },
+  "table_headers": {
+    "peers": {
+      "actions": "Aktionen",
+      "address": "Adresse",
+      "connected_since": "Verbunden seit",
+      "core_version": "Core-Version",
+      "direction": "Richtung",
+      "handshake_status": "Handshake-Status",
+      "last_height": "Letzte Höhe"
+    },
+    "minting_accounts": {
+      "action": "Aktion",
+      "address": "Adresse",
+      "avatar": "Avatar",
+      "minting_key": "Minting-Schlüssel",
+      "name": "Name"
+    }
+  },
+  "widgets": {
+    "block_height": "Blockhöhe",
+    "connected_data_peers": "verbundene QDN-Daten-Peers",
+    "connected_peers": "Verbundene Peers",
+    "core_version": "Core-Version",
+    "minting_status": "Minting-Status",
+    "node_uptime": "Node-Laufzeit",
+    "sync_status": "Synchronisationsstatus"
+  }
+}

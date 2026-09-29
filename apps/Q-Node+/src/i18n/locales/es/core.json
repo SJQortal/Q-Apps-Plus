@@ -1,0 +1,75 @@
+{
+  "action": {
+    "add": "Añadir",
+    "add_data_peer": "Añadir peer de datos",
+    "add_peer": "Añadir nuevo peer",
+    "add_minting_account": "Añadir cuenta de minteo",
+    "cancel": "Cancelar",
+    "force_sync": "Forzar sincronización",
+    "refresh": "Actualizar",
+    "remove": "Eliminar"
+  },
+  "message": {
+    "generic": {
+      "add_peer": "Especifique un peer usando hostname, dirección [IPv4], dirección [IPv6] y número de puerto opcional precedido por dos puntos.",
+      "add_minting_account": "Por favor, introduzca la clave de minteo para añadirla a este nodo.",
+      "all_rows": "todas",
+      "add_data_peer": "Especifique un peer de datos usando hostname, dirección [IPv4], dirección [IPv6] y número de puerto opcional precedido por dos puntos.",
+      "connected_data_peers": "Peers de datos QDN ({{ count }})",
+      "connected_peers": "Peers conectados a este nodo ({{ count }})",
+      "loading_minting_accounts": "Cargando cuentas de minteo, por favor espere...",
+      "minting_account": "Cuenta(s) de minteo",
+      "minting_key": "Clave de minteo",
+      "minting_key_helper": "Clave de minteo de 44 caracteres",
+      "no_minting_accounts": "No se encontraron cuentas de minteo para este nodo",
+      "no_peers": "El nodo no tiene peers conectados",
+      "rows_per_page": "Filas por página",
+      "starting_sync_peer": "Iniciando sincronización con el peer: {{ address }}",
+      "success": {
+        "bootstrap_request": "¡Solicitud de arranque enviada con éxito a este nodo! Esto puede tardar hasta 10 minutos...",
+        "new_minting_account": "Cuenta de minteo añadida con éxito",
+        "new_data_peer": "Peer de datos añadido con éxito",
+        "new_peer": "Nuevo peer añadido con éxito",
+        "remove_data_peer": "Peer de datos eliminado con éxito",
+        "remove_minting_account": "Cuenta de minteo eliminada con éxito",
+        "remove_peer": "Peer eliminado con éxito",
+        "restart_request": "¡Solicitud de reinicio enviada con éxito a este nodo! Esto puede tardar hasta 5 minutos...",
+        "stop_request": "¡Solicitud de parada enviada con éxito a este nodo! Por favor, inicie nuevamente su nodo..."
+      }
+    }
+  },
+  "status": {
+    "minting": "Minteando",
+    "not_minting": "No minteando",
+    "no_status": "Sin estado",
+    "synchronized": "Sincronizado",
+    "synchronizing": "Sincronizando"
+  },
+  "table_headers": {
+    "peers": {
+      "actions": "Acciones",
+      "address": "Dirección",
+      "connected_since": "Conectado desde",
+      "core_version": "Versión del núcleo",
+      "direction": "Dirección",
+      "handshake_status": "Estado del handshake",
+      "last_height": "Última altura"
+    },
+    "minting_accounts": {
+      "action": "Acción",
+      "address": "Dirección",
+      "avatar": "Avatar",
+      "minting_key": "Clave de minteo",
+      "name": "Nombre"
+    }
+  },
+  "widgets": {
+    "block_height": "Altura del bloque",
+    "connected_data_peers": "peers de datos QDN conectados",
+    "connected_peers": "Peers conectados",
+    "core_version": "Versión del núcleo",
+    "minting_status": "Estado de minteo",
+    "node_uptime": "Tiempo de actividad del nodo",
+    "sync_status": "Estado de sincronización"
+  }
+}

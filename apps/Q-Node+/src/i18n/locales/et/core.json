@@ -1,0 +1,76 @@
+{
+  "action": {
+    "add": "Lisa",
+    "add_data_peer": "Lisa andmepeer",
+    "add_peer": "Lisa uus peer",
+    "add_minting_account": "Lisa mintimise konto",
+    "cancel": "Tühista",
+    "force_sync": "Sunni sünkroonimist",
+    "refresh": "Värskenda",
+    "remove": "Eemalda"
+  },
+  "message": {
+    "generic": {
+      "add_peer": "Määra peer kasutades hostname’i, [IPv4] aadressi, [IPv6] aadressi ja valikulist pordinumbrit, millele eelneb koolon.",
+      "add_minting_account": "Palun sisestage mintimise võti, et see lisada sellesse node’i.",
+      "add_data_peer": "Määra andmepeer kasutades hostname'i, [IPv4] aadressi, [IPv6] aadressi ja valikulist pordinumbrit, millele eelneb koolon.",
+      "all_rows": "kõik",
+      "connected_data_peers": "QDN andmepeerid ({{ count }})",
+      "connected_peers": "Selle node’iga ühendatud peerid ({{ count }})",
+      "loading_minting_accounts": "Mintimise kontode laadimine, palun oodake...",
+      "minting_account": "Mintimise konto(d)",
+      "minting_key": "Mintimise võti",
+      "minting_key_helper": "Mintimise võti on 44 märgi pikkune",
+      "no_data_peers": "Node'il ei ole andmepeere",
+      "no_minting_accounts": "Sellele node’ile ei leitud ühtegi mintimise kontot",
+      "no_peers": "Node’il ei ole ühendatud peere",
+      "rows_per_page": "Ridu lehe kohta",
+      "starting_sync_peer": "Alustan sünkroonimist peeriga: {{ address }}",
+      "success": {
+        "bootstrap_request": "Bootstrap-päring saadeti edukalt sellele node’ile! See võib võtta kuni 10 minutit...",
+        "new_minting_account": "Mintimise konto edukalt lisatud",
+        "new_data_peer": "Andmepeer edukalt lisatud",
+        "new_peer": "Uus peer edukalt lisatud",
+        "remove_data_peer": "Andmepeer edukalt eemaldatud",
+        "remove_minting_account": "Mintimise konto edukalt eemaldatud",
+        "remove_peer": "Peer edukalt eemaldatud",
+        "restart_request": "Taaskäivitamise päring edukalt saadetud sellele node’ile! See võib võtta kuni 5 minutit...",
+        "stop_request": "Peatamise päring edukalt saadetud sellele node’ile! Palun käivitage node uuesti..."
+      }
+    }
+  },
+  "status": {
+    "minting": "Mintimine",
+    "not_minting": "Ei minti",
+    "no_status": "Pole staatust",
+    "synchronized": "Sünkroonitud",
+    "synchronizing": "Sünkroonin"
+  },
+  "table_headers": {
+    "peers": {
+      "actions": "Tegevused",
+      "address": "Aadress",
+      "connected_since": "Ühendatud alates",
+      "core_version": "Tuumaversioon",
+      "direction": "Suund",
+      "handshake_status": "Kätluse staatus",
+      "last_height": "Viimane kõrgus"
+    },
+    "minting_accounts": {
+      "action": "Tegevus",
+      "address": "Aadress",
+      "avatar": "Avatar",
+      "minting_key": "Mintimise võti",
+      "name": "Nimi"
+    }
+  },
+  "widgets": {
+    "block_height": "Bloki kõrgus",
+    "connected_data_peers": "ühendatud QDN andmepeerid",
+    "connected_peers": "Ühendatud peerid",
+    "core_version": "Tuumaversioon",
+    "minting_status": "Mintimise staatus",
+    "node_uptime": "Node’i tööaeg",
+    "sync_status": "Sünkroonimise staatus"
+  }
+}

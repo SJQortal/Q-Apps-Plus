@@ -1,0 +1,76 @@
+{
+  "action": {
+    "add": "add",
+    "add_data_peer": "add data peer",
+    "add_peer": "add new peer",
+    "add_minting_account": "add minting account",
+    "cancel": "cancel",
+    "force_sync": "force sync",
+    "refresh": "refresh",
+    "remove": "remove"
+  },
+  "message": {
+    "generic": {
+      "add_peer": "specify a peer using hostname, IPv4 address, IPv6 address and optional port number preceeded with colon.",
+      "add_minting_account": "please enter the minting key to be added to this node.",
+      "all_rows": "all",
+      "add_data_peer": "specify a data peer using hostname, IPv4 address, IPv6 address and optional port number preceded with colon.",
+      "connected_data_peers": "QDN data peers ({{ count }})",
+      "connected_peers": "peers connected to this node ({{ count }})",
+      "loading_minting_accounts": "Loading Minting Accounts, please wait...",
+      "minting_account": "minting account(s)",
+      "minting_key": "minting key",
+      "minting_key_helper": "minting key 44 characters long",
+      "no_minting_accounts": "no minting accounts found for this node",
+      "no_data_peers": "node has no data peers",
+      "no_peers": "node has no connected peers",
+      "rows_per_page": "rows per page",
+      "starting_sync_peer": "starting sync with peer: {{ address }}",
+      "success": {
+        "bootstrap_request": "successfully sent bootstrap this node request! This can take up to 10 minutes...",
+        "new_minting_account": "successfully added minting account",
+        "new_data_peer": "successfully added data peer",
+        "new_peer": "successfully added new peer",
+        "remove_data_peer": "successfully removed data peer",
+        "remove_minting_account": "successfully removed minting account",
+        "remove_peer": "successfully removed peer",
+        "restart_request": "successfully sent restart this node request! This can take up to 5 minutes...",
+        "stop_request": "successfully sent stop this node request! Please start your node again..."
+      }
+    }
+  },
+  "status": {
+    "minting": "minting",
+    "not_minting": "not minting",
+    "no_status": "no status",
+    "synchronized": "synchronized",
+    "synchronizing": "synchronizing"
+  },
+  "table_headers": {
+    "peers": {
+      "actions": "actions",
+      "address": "address",
+      "connected_since": "connected since",
+      "core_version": "core version",
+      "direction": "direction",
+      "handshake_status": "handshake status",
+      "last_height": "last height"
+    },
+    "minting_accounts": {
+      "action": "action",
+      "address": "address",
+      "avatar": "avatar",
+      "minting_key": "minting key",
+      "name": "name"
+    }
+  },
+  "widgets": {
+    "block_height": "block height",
+    "connected_data_peers": "connected QDN peers",
+    "connected_peers": "connected peers",
+    "core_version": "core version",
+    "minting_status": "minting status",
+    "node_uptime": "node uptime",
+    "sync_status": "sync status"
+  }
+}

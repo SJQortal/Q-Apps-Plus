@@ -1,0 +1,76 @@
+{
+  "action": {
+    "add": "إضافة",
+    "add_data_peer": "إضافة نظير بيانات",
+    "add_peer": "إضافة نظير جديد",
+    "add_minting_account": "إضافة حساب تعدين",
+    "cancel": "إلغاء",
+    "force_sync": "مزامنة بالقوة",
+    "refresh": "تحديث",
+    "remove": "إزالة"
+  },
+  "message": {
+    "generic": {
+      "add_peer": "حدد نظيرًا باستخدام hostname أو [IPv4] أو [IPv6] ورقم منفذ اختياري مسبوق بنقطتين.",
+      "add_minting_account": "الرجاء إدخال مفتاح التعدين ليتم إضافته إلى هذه العقدة.",
+      "all_rows": "الكل",
+      "add_data_peer": "حدد نظير بيانات باستخدام hostname أو [IPv4] أو [IPv6] ورقم منفذ اختياري مسبوق بنقطتين.",
+      "connected_data_peers": "أقران بيانات QDN ({{ count }})",
+      "connected_peers": "({{ count }}) الأقران المتصلون بهذه العقدة",
+      "loading_minting_accounts": "جاري تحميل حسابات التعدين، يرجى الانتظار...",
+      "minting_account": "حساب(ات) التعدين",
+      "minting_key": "مفتاح التعدين",
+      "minting_key_helper": "مفتاح التعدين مكون من 44 حرفًا",
+      "no_minting_accounts": "لم يتم العثور على حسابات تعدين لهذه العقدة",
+      "no_data_peers": "العقدة ليس لديها أي أقران بيانات",
+      "no_peers": "العقدة ليس لديها أي أقران متصلين",
+      "rows_per_page": "عدد الصفوف في الصفحة",
+      "starting_sync_peer": "بدء المزامنة مع النظير: {{ address }}",
+      "success": {
+        "bootstrap_request": "تم إرسال طلب تهيئة هذه العقدة بنجاح! قد يستغرق ذلك حتى 10 دقائق...",
+        "new_minting_account": "تمت إضافة حساب تعدين بنجاح",
+        "new_data_peer": "تمت إضافة نظير بيانات بنجاح",
+        "new_peer": "تمت إضافة نظير جديد بنجاح",
+        "remove_data_peer": "تمت إزالة نظير البيانات بنجاح",
+        "remove_minting_account": "تمت إزالة حساب التعدين بنجاح",
+        "remove_peer": "تمت إزالة النظير بنجاح",
+        "restart_request": "تم إرسال طلب إعادة تشغيل هذه العقدة بنجاح! قد يستغرق ذلك حتى 5 دقائق...",
+        "stop_request": "تم إرسال طلب إيقاف هذه العقدة بنجاح! يرجى تشغيل العقدة مرة أخرى..."
+      }
+    }
+  },
+  "status": {
+    "minting": "تعدين",
+    "not_minting": "غير مُعدّن",
+    "no_status": "لا توجد حالة",
+    "synchronized": "متزامن",
+    "synchronizing": "جارٍ المزامنة"
+  },
+  "table_headers": {
+    "peers": {
+      "actions": "إجراءات",
+      "address": "العنوان",
+      "connected_since": "متصل منذ",
+      "core_version": "إصدار النواة",
+      "direction": "الاتجاه",
+      "handshake_status": "حالة المصافحة",
+      "last_height": "آخر ارتفاع"
+    },
+    "minting_accounts": {
+      "action": "إجراء",
+      "address": "العنوان",
+      "avatar": "الصورة الرمزية",
+      "minting_key": "مفتاح التعدين",
+      "name": "الاسم"
+    }
+  },
+  "widgets": {
+    "block_height": "ارتفاع الكتلة",
+    "connected_data_peers": "أقران بيانات QDN المتصلون",
+    "connected_peers": "الأقران المتصلون",
+    "core_version": "إصدار النواة",
+    "minting_status": "حالة التعدين",
+    "node_uptime": "مدة تشغيل العقدة",
+    "sync_status": "حالة المزامنة"
+  }
+}

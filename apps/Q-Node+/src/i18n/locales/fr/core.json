@@ -1,0 +1,76 @@
+{
+  "action": {
+    "add": "Ajouter",
+    "add_data_peer": "Ajouter un pair de données",
+    "add_peer": "Ajouter un nouveau pair",
+    "add_minting_account": "Ajouter un compte de minage",
+    "cancel": "Annuler",
+    "force_sync": "Forcer la synchronisation",
+    "refresh": "Actualiser",
+    "remove": "Supprimer"
+  },
+  "message": {
+    "generic": {
+      "add_peer": "Spécifiez un pair en utilisant hostname, une adresse [IPv4], une adresse [IPv6] et un numéro de port optionnel précédé de deux-points.",
+      "add_minting_account": "Veuillez entrer la clé de minage à ajouter à ce nœud.",
+      "all_rows": "toutes",
+      "add_data_peer": "Spécifiez un pair de données en utilisant hostname, une adresse [IPv4], une adresse [IPv6] et un numéro de port optionnel précédé de deux-points.",
+      "connected_data_peers": "Pairs de données QDN ({{ count }})",
+      "connected_peers": "Pairs connectés à ce nœud ({{ count }})",
+      "loading_minting_accounts": "Chargement des comptes de minage, veuillez patienter...",
+      "minting_account": "Compte(s) de minage",
+      "minting_key": "Clé de minage",
+      "minting_key_helper": "Clé de minage de 44 caractères",
+      "no_minting_accounts": "Aucun compte de minage trouvé pour ce nœud",
+      "no_data_peers": "Ce nœud n'a aucun pair de données",
+      "no_peers": "Ce nœud n’a aucun pair connecté",
+      "rows_per_page": "Lignes par page",
+      "starting_sync_peer": "Démarrage de la synchronisation avec le pair : {{ address }}",
+      "success": {
+        "bootstrap_request": "Requête de démarrage envoyée avec succès à ce nœud ! Cela peut prendre jusqu’à 10 minutes...",
+        "new_minting_account": "Compte de minage ajouté avec succès",
+        "new_data_peer": "Pair de données ajouté avec succès",
+        "new_peer": "Nouveau pair ajouté avec succès",
+        "remove_data_peer": "Pair de données supprimé avec succès",
+        "remove_minting_account": "Compte de minage supprimé avec succès",
+        "remove_peer": "Pair supprimé avec succès",
+        "restart_request": "Requête de redémarrage envoyée avec succès à ce nœud ! Cela peut prendre jusqu’à 5 minutes...",
+        "stop_request": "Requête d’arrêt envoyée avec succès à ce nœud ! Veuillez redémarrer votre nœud..."
+      }
+    }
+  },
+  "status": {
+    "minting": "Minage",
+    "not_minting": "Non miné",
+    "no_status": "Aucun statut",
+    "synchronized": "Synchronisé",
+    "synchronizing": "Synchronisation en cours"
+  },
+  "table_headers": {
+    "peers": {
+      "actions": "Actions",
+      "address": "Adresse",
+      "connected_since": "Connecté depuis",
+      "core_version": "Version du noyau",
+      "direction": "Direction",
+      "handshake_status": "Statut du handshake",
+      "last_height": "Dernière hauteur"
+    },
+    "minting_accounts": {
+      "action": "Action",
+      "address": "Adresse",
+      "avatar": "Avatar",
+      "minting_key": "Clé de minage",
+      "name": "Nom"
+    }
+  },
+  "widgets": {
+    "block_height": "Hauteur du bloc",
+    "connected_data_peers": "pairs de données QDN connectés",
+    "connected_peers": "Pairs connectés",
+    "core_version": "Version du noyau",
+    "minting_status": "Statut du minage",
+    "node_uptime": "Temps de fonctionnement du nœud",
+    "sync_status": "Statut de la synchronisation"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "action": {
+    "add": "aggiungi",
+    "add_data_peer": "aggiungi peer dati",
+    "add_peer": "aggiungi nuovo peer",
+    "add_minting_account": "aggiungi account di minting",
+    "cancel": "annulla",
+    "force_sync": "forza sincronizzazione",
+    "refresh": "aggiorna",
+    "remove": "rimuovi"
+  },
+  "message": {
+    "generic": {
+      "add_peer": "specifica un peer utilizzando hostname, indirizzo IPv4, indirizzo IPv6 e numero di porta opzionale preceduto da due punti.",
+      "add_minting_account": "inserisci la chiave di minting da aggiungere a questo nodo.",
+      "all_rows": "tutte",
+      "add_data_peer": "specifica un peer dati utilizzando hostname, indirizzo IPv4, indirizzo IPv6 e numero di porta opzionale preceduto da due punti.",
+      "connected_data_peers": "peer dati QDN ({{ count }})",
+      "connected_peers": "peer connessi a questo nodo ({{ count }})",
+      "loading_minting_accounts": "Caricamento degli account di minting, attendere...",
+      "minting_account": "account di minting",
+      "minting_key": "chiave di minting",
+      "minting_key_helper": "chiave di minting lunga 44 characters",
+      "no_minting_accounts": "nessun account di minting trovato per questo nodo",
+      "no_peers": "il nodo non ha peer connessi",
+      "rows_per_page": "righe per pagina",
+      "success": {
+        "bootstrap_request": "richiesta di bootstrap a questo nodo inviata con successo! Potrebbe richiedere fino a 10 minuti...",
+        "new_minting_account": "account di minting aggiunto con successo",
+        "new_data_peer": "peer dati aggiunto con successo",
+        "new_peer": "nuovo peer aggiunto con successo",
+        "remove_data_peer": "peer dati rimosso con successo",
+        "remove_minting_account": "account di minting rimosso con successo",
+        "remove_peer": "peer rimosso con successo",
+        "restart_request": "richiesta di riavvio di questo nodo inviata con successo! Potrebbe richiedere fino a 5 minuti...",
+        "stop_request": "richiesta di arresto di questo nodo inviata con successo! Avvia nuovamente il tuo nodo..."
+      }
+    }
+  },
+  "status": {
+    "minting": "in minting",
+    "not_minting": "non in minting",
+    "no_status": "nessuno stato",
+    "synchronized": "sincronizzato",
+    "synchronizing": "sincronizzazione in corso"
+  },
+  "table_headers": {
+    "peers": {
+      "actions": "azioni",
+      "address": "indirizzo",
+      "connected_since": "connesso da",
+      "core_version": "versione core",
+      "direction": "direzione",
+      "handshake_status": "stato handshake",
+      "last_height": "ultima altezza"
+    },
+    "minting_accounts": {
+      "action": "azione",
+      "address": "indirizzo",
+      "avatar": "avatar",
+      "minting_key": "chiave di minting",
+      "name": "nome"
+    }
+  },
+  "widgets": {
+    "block_height": "altezza del blocco",
+    "connected_data_peers": "peer dati QDN connessi",
+    "connected_peers": "peer connessi",
+    "core_version": "versione core",
+    "minting_status": "stato minting",
+    "node_uptime": "uptime del nodo",
+    "sync_status": "stato sincronizzazione"
+  }
+}
