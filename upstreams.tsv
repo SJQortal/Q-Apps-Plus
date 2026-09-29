@@ -1,0 +1,11 @@
+# folder	remote	github repo	branch
+Q-Mail+	up-q-mail	Qortal/q-mail	main
+Q-Shop+	up-q-shop	Qortal/q-shop	main
+Q-Share+	up-q-share	Qortal/q-share	main
+Q-Support+	up-q-support	Qortal/q-support	main
+Q-Tube+	up-q-tube	Qortal/q-tube	main
+Q-Trade+	up-q-trade	Qortal/q-trade	feature/fee-management
+Q-Fund+	up-q-fund	Qortal/q-fund-v2	master
+Names+	up-names	Qortal/names	main
+Q-Node+	up-q-node	Qortal/Q-Node	master
+Q-Mintership+	up-q-mintership	Qortal/Q-Mintership-Alpha	Nominations

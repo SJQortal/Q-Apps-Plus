@@ -1,0 +1,26 @@
+# Dependencies and build output (every app installs and builds on its own)
+node_modules/
+dist/
+dist-ssr/
+build/
+.vite/
+*.tsbuildinfo
+
+# Qortal publish zips; scripts/build-zip.sh writes them to release/
+release/
+*.zip
+# Q-Tube vendors its qapp-core build as a tarball, which npm ci needs
+!apps/Q-Tube+/qapp-core-*.tgz
+
+# Local noise
+.env
+.env.*
+!.env.example
+*.log
+*.pid
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.hub-theme-check/
+.claude/settings.local.json
