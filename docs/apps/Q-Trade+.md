@@ -16,6 +16,7 @@ Cross-chain trade portal: buy and sell QORT for LTC, BTC, DOGE, DGB, RVN and ARR
 
 ## Notes
 
+- **Platform upgrade first** (docs/PLATFORM.md): React 19 → 19.3, MUI 7 → 9.4. This app uses qapp-core, so add the `overrides` block and the `ErrorOutline` icon alias from PLATFORM.md.
 - This uses upstream branch **`feature/fee-management`**, not `master`. It is 24 commits ahead of `master` (lock fees, stuck sell orders, settings modal, trade-offer fetch without socket) and was the newest work at import.
 - **This is money code.** Buy, sell, cancel and fee logic must keep exactly the same behaviour and parameters. Redesign the UI around it, and add tests around any logic you touch. Never place orders or send coins from tests or scripts.
 - The biggest JS chunk is 2.5 MB.

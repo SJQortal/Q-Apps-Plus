@@ -16,6 +16,7 @@ Encrypted mail between Qortal names, with threads, attachments and group mail.
 
 ## Notes
 
+- **Platform upgrade first** (docs/PLATFORM.md): React 18 → 19.3, MUI 5 → 9.4, Redux Toolkit 2 + react-redux 9, react-router-dom 7. This is the biggest jump in the repo, so run the codemods in docs/MIGRATION-NOTES.md in order and commit the upgrade on its own.
 - This is the largest app (~36k lines). The biggest JS chunk is 1.6 MB, so code-splitting will pay off.
 - Mail is encrypted (`MAIL_PRIVATE` + `DECRYPT_DATA`). Do not touch the encryption or recipient format.
 - Upstream branch `feature/version-2` (2025-09, crowetic) has "changes from greenflame, multi-name support". It diverged from `main` (22 ahead / 13 behind). In the audit, check whether `main` already has multi-name support; if not, it is a candidate feature. Read that branch with `git log up-q-mail/feature/version-2` after running `scripts/sync-upstream.sh --check`.

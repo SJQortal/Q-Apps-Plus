@@ -1,6 +1,6 @@
 ---
 name: qplus-app
-description: Full redesign pass on one Q-Apps+ app — deep-dive audit, plan, Hub 3.0 theme kit and Settings page, Qortal efficiency fixes, UX redesign, obvious features, tests, and a publish zip. Use when asked to redesign, upgrade, audit or "do" an app in apps/ (e.g. "do Q-Mail+", "run the overnight pass on Names+").
+description: Full pass on one Q-Apps+ app — platform upgrade to React 19.3 + MUI 9.4, deep-dive audit, plan, Hub 3.0 theme kit and Settings page, Qortal efficiency fixes, UX redesign, obvious features, tests, and a publish zip. For Q-Mintership+ it drives the phased React rewrite. Use when asked to redesign, upgrade, audit or "do" an app in apps/ (e.g. "do Q-Mail+", "run the overnight pass on Names+").
 ---
 
 # Redesign pass on one + app
@@ -9,7 +9,7 @@ Work on exactly one app per pass, and follow the steps in order. Write findings 
 
 ## 0. Load context
 
-Read `CLAUDE.md`, `docs/DESIGN.md`, `docs/QORTAL.md`, `shared/hub-theme/README.md` and the app's brief. Skim the matching Torq files in `shared/reference/torq/` (theme, Settings page, QDN search cache, test setup).
+Read `CLAUDE.md`, `docs/PLATFORM.md`, `docs/MIGRATION-NOTES.md`, `docs/DESIGN.md`, `docs/QORTAL.md`, `shared/hub-theme/README.md` and the app's brief. Skim the matching Torq files in `shared/reference/torq/` (theme, Settings page, QDN search cache, test setup).
 
 ## 1. Baseline
 
@@ -18,6 +18,17 @@ cd "apps/<App+>" && npm ci && npm run build   # Q-Mintership+ has no build
 ```
 
 Record the result, the dist size and the biggest chunk if they differ from the brief. If the baseline fails, fix only what's needed to build, in its own commit, and note it.
+
+## 1b. Platform upgrade to React 19.3 + MUI 9.4
+
+Follow "How each app upgrades" in `docs/PLATFORM.md`:
+- bump the dependencies and add the qapp-core workaround where needed;
+- run the codemods, then `scripts/check-mui-icons.sh <App+>`;
+- clear the new type errors, then build and preview.
+
+Commit this on its own (`<App+>: upgrade to React 19.3 and MUI 9.4`) before anything else, so the redesign is done once on the final stack. Record the before/after type-error counts and bundle sizes in the brief.
+
+**Q-Mintership+ is different:** it isn't upgraded, it's rewritten. Follow the phased **Rewrite plan** in its brief instead of steps 1b and 4. One session does one phase and ends with a working app and a PR.
 
 ## 2. Deep-dive audit (write it into the brief's "Audit" section)
 
@@ -47,7 +58,7 @@ Defer anything risky, such as major dependency upgrades or rewriting money or en
 
 ## 4. Implement in small commits
 
-Order: harness → theme kit → Settings → efficiency → layout/UX → features. After each step:
+Order (after the platform upgrade in 1b): harness → theme kit → Settings → efficiency → layout/UX → features. After each step:
 
 ```bash
 npm run build && (npm test --if-present) && (npm run lint --if-present)
@@ -68,7 +79,8 @@ Guard rails:
 
 - The build, tests and lint pass, and `scripts/sync-theme.sh --check` passes.
 - `scripts/build-zip.sh <App+>` produces a zip with `index.html` at the root (`unzip -l release/<App+>.zip | head`).
-- If a browser tool is available, run `npm run dev` and check all four themes at 1280, 700 and 375 px. Without a node, Qortal calls fail, so use the test mocks or a dev-only mock of `qortalRequest`, and never commit a mock into production code paths.
+- If a browser tool is available, run `npm run dev` or `npx vite preview` and check all four themes at 1280, 700 and 375 px, and that the console shows no errors beyond the ones expected outside Hub (no `qortalRequest`).
+- In a **local** session with Computer use and Hub available, also test inside Hub Dev Mode (`docs/HUB-TESTING.md`). Ask Simon before any action that publishes or spends QORT. Without a node, Qortal calls fail, so use the test mocks or a dev-only mock of `qortalRequest`, and never commit a mock into production code paths.
 
 ## 6. Hand off
 

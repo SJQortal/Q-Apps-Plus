@@ -15,8 +15,10 @@ Torq is Simon's Quitter fork and the model to follow. Selected Torq files are in
 
 1. `docs/DESIGN.md`: the Hub 3.0 look, layout, the four themes and the Settings page contract.
 2. `docs/QORTAL.md`: how Q-Apps run in Hub/GO, QDN efficiency rules, and testing without a node.
-3. `docs/apps/<App+>.md`: the brief for that app. Baseline facts are there already; the audit, plan and status sections are yours to fill.
-4. `shared/hub-theme/README.md`: how to install the theme kit.
+3. `docs/PLATFORM.md`: the target stack (**React 19.3 + MUI 9.4** for every app), why it's safe in Hub/GO, the qapp-core workaround, and how each app upgrades.
+4. `docs/apps/<App+>.md`: the brief for that app. Baseline facts are there already; the audit, plan and status sections are yours to fill.
+5. `shared/hub-theme/README.md`: how to install the theme kit.
+6. `docs/HUB-TESTING.md`: how to test inside Qortal Hub Dev Mode (local sessions only).
 
 For a full redesign pass on an app, use the `qplus-app` skill in `.claude/skills/qplus-app/`.
 
@@ -26,8 +28,9 @@ For a full redesign pass on an app, use the `qplus-app` skill in `.claude/skills
 apps/<App+>/            one folder per app, each with its own package.json and lockfile
 shared/hub-theme/       the theme kit (source of truth); copied into apps by scripts/sync-theme.sh
 shared/reference/torq/  read-only Torq files: theme, Hub boot, QDN search cache, Settings, tests
-docs/                   DESIGN.md, QORTAL.md, PROGRESS.md, apps/<App+>.md briefs, OVERNIGHT.md
-scripts/                sync-upstream.sh, sync-theme.sh, build-zip.sh, check-theme-kit.sh
+docs/                   DESIGN.md, QORTAL.md, PLATFORM.md, MIGRATION-NOTES.md, HUB-TESTING.md,
+                        PROGRESS.md, OVERNIGHT.md, apps/<App+>.md briefs
+scripts/                sync-upstream.sh, sync-theme.sh, build-zip.sh, check-theme-kit.sh, check-mui-icons.sh
 upstreams.tsv           folder → upstream GitHub repo and branch
 ```
 
@@ -36,7 +39,7 @@ Folder names contain `+`, so always quote paths: `cd "apps/Q-Mail+"`. One known 
 ## Ground rules
 
 1. **Stay data-compatible with the original app.** A + app reads and writes the same QDN resources as the original: the same services, identifier schemes and prefixes, JSON shapes, encryption, and `publicSalt`/app identity where qapp-core is used. A user's existing mail, videos, shops and funds must show up in the + app, and anything published from the + app must still work in the original. New data is additive only: extra JSON fields, or new identifiers with their own prefix. List each app's identifiers in its brief before changing any data code.
-2. **Each app stands alone.** It installs and builds from its own folder, and nothing imports across `apps/`. The theme kit is copied in, not linked. Keep each app's own dependency versions unless the brief's plan says to upgrade, and do major upgrades as their own commit.
+2. **Each app stands alone.** It installs and builds from its own folder, and nothing imports across `apps/`. The theme kit is copied in, not linked. Every app moves to the target stack in docs/PLATFORM.md (React 19.3, MUI 9.4) as the **first** step of its pass, in its own commit, before any redesign work. Q-Mintership+ is being rewritten in React on that stack (see its brief).
 3. **Themes come from the kit.** Take every colour, radius and font from `shared/hub-theme`, `theme.palette` or `var(--qp-*)`. Never hard-code hex values in components. Hub 2.0 is the app's own original look, carried over from its old theme file. Edit the kit only in `shared/`, then run `scripts/sync-theme.sh`. Never edit an app's copy.
 4. **Qortal efficiency** (details in docs/QORTAL.md):
    - Never search with `limit: 0` or with no limit.
@@ -59,6 +62,7 @@ npm run build                          # must pass before committing
 scripts/build-zip.sh Q-Mail+           # release/Q-Mail+.zip, ready for Simon to publish
 scripts/sync-theme.sh [--check]        # copy the theme kit into opted-in apps / verify no drift
 scripts/check-theme-kit.sh Q-Tube+     # typecheck + smoke-test the kit against an app's MUI
+scripts/check-mui-icons.sh Q-Tube+     # icon imports that MUI 9 removed (use the …Outlined names)
 scripts/sync-upstream.sh --check       # new commits in the Qortal repos since import
 ```
 

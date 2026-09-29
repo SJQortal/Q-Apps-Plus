@@ -16,6 +16,12 @@ Video platform: upload, playlists, comments, super likes, subscriptions.
 
 ## Notes
 
+- **Platform upgrade first** (docs/PLATFORM.md): React 19 → 19.3, MUI 7 → 9.4. This app uses qapp-core, so add the `overrides` block and the `ErrorOutline` icon alias from PLATFORM.md.
+- **Spike result (2026-09-29):** Q-Tube builds and renders on React 19.3 + MUI 9.4 with no new console errors. Things to fix:
+  - two icon renames: `DeleteOutline` in `PlaylistListEdit.tsx` and `PlayCircleOutline` in `FilterOptions.tsx`;
+  - ~31 mechanical type errors (Box/Typography system props → `sx`, `inputProps` → `slotProps.input`, ref types).
+- **Keep the vendored `qapp-core-1.0.80.tgz`.** It isn't published and has video-player changes (`VideoSettings`) that aren't in qapp-core master, so don't swap it for an npm version.
+- **Existing bug, not caused by the upgrade:** `useMediaInfo.tsx` fails to load `MediaInfoModule.wasm` ("WebAssembly.instantiate(): Import #0 \"env\": module is not an object or function") on both MUI 7 and MUI 9 builds. Check in Hub whether video publishing metadata still works, and fix it if not.
 - This is the most active upstream (365 commits, last 2026-07-15), so expect to run `scripts/sync-upstream.sh` again later. Keep changes clean for easier merges.
 - qapp-core comes from the vendored `qapp-core-1.0.80.tgz`; keep that file.
 - The biggest JS chunk is 3.3 MB, the largest of all the apps. Splitting it is a priority.

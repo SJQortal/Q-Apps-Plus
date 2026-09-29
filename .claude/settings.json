@@ -19,6 +19,7 @@
       "Bash(scripts/build-zip.sh *)",
       "Bash(scripts/check-theme-kit.sh *)",
       "Bash(scripts/sync-upstream.sh --check)",
+      "Bash(scripts/check-mui-icons.sh *)",
       "Bash(git status *)",
       "Bash(git status)",
       "Bash(git diff *)",

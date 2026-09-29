@@ -5,7 +5,7 @@ New launcher that presents every + app in one user-friendly place.
 ## Baseline at import
 
 - **Upstream:** none (new app)
-- **Stack:** New. Use Torq's stack: React 19, MUI 7, qapp-core, jotai, Vite, TypeScript, vitest
+- **Stack:** New. React 19.3, MUI 9.4, jotai, Vite, TypeScript, vitest (docs/PLATFORM.md). qapp-core is optional (use the MUI 9 workaround if you add it)
 - **Original theme (becomes Hub 2.0):** shared/hub-theme (Hub 3.0 default)
 - **i18n:** start English-only, structured for i18n
 - **Tests:** none

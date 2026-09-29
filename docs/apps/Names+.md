@@ -16,6 +16,7 @@ Register, update, buy and sell Qortal names.
 
 ## Notes
 
+- **Platform upgrade first** (docs/PLATFORM.md): React 19 → 19.3, MUI 7 → 9.4. This app uses qapp-core, so add the `overrides` block and the `ErrorOutline` icon alias from PLATFORM.md.
 - Upstream committed build junk (`dist.zip`, `.qapp-tunnel.pid`, `.vite/`); the import cleanup removed it. `connect-qapp.sh` and `stop-qapp.sh` are the upstream dev tunnel scripts, kept.
 - This app is small (~3k lines) and on the same stack as Torq. **Good pilot for the theme kit**, so do it first.
 - Name purchases spend QORT, so keep the buy/sell flows exact.

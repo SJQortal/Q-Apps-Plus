@@ -1,61 +1,69 @@
 # Running the redesign overnight in the cloud
 
-This is how to hand the apps to Fable in Claude Code on the web (claude.ai/code), so the work runs on cloud credits while you sleep.
+This is how to hand the apps to Fable in Claude Code on the web (claude.ai/code), so the work runs on cloud credits while you sleep. Every app pass starts with the **React 19.3 + MUI 9.4 upgrade** (docs/PLATFORM.md), then the redesign. **Q-Mintership+** gets a phased React rewrite instead.
 
-## One-time setup
+## One-time setup (Simon)
 
-1. **Push this repo to GitHub.** It's already done if you're reading this on GitHub.
-2. **Connect GitHub to Claude Code on the web.** At [claude.ai/code](https://claude.ai/code), connect GitHub and install the Claude GitHub App on this repo. Or, in a terminal Claude Code session, run `/web-setup`: it reuses your `gh` login.
+1. **The repo is on GitHub** at [SJQortal/Q-Apps-Plus](https://github.com/SJQortal/Q-Apps-Plus). Done.
+2. **Connect GitHub to Claude Code on the web.** At [claude.ai/code](https://claude.ai/code), connect GitHub and install the **Claude GitHub App** on `SJQortal/Q-Apps-Plus`. Or, in a terminal Claude Code session in this folder, run `/web-setup`: it reuses your `gh` login.
 3. **Create a cloud environment:**
    - **Network access:** leave it on *Trusted* (the default). That lets sessions reach the npm registry and GitHub, which is all they need.
    - **Environment variables:** none needed.
-   - **Setup script:** leave it empty. Each session installs the apps it works on (`npm ci` takes about 10 s per app).
-4. **Model:** pick **Fable** in the model menu when you start each session, or type `/model fable` as the first message.
+   - **Setup script:** leave it empty. Each session installs the apps it works on.
+4. **Model:** pick **Fable** when you start each session, or type `/model fable` as the first message.
+5. **For Hub testing (local only):** turn on Computer use in the Claude desktop app (Settings → Desktop app → Computer use). Log in to Hub with the Tester GO account yourself and turn on Dev Mode (docs/HUB-TESTING.md).
 
 Cloud sessions load this repo's `CLAUDE.md`, the `qplus-app` skill and `.claude/settings.json`. They keep working after you close the browser. A session only stops early if it waits on a question, which is why the prompts below tell it not to ask.
 
-## Option A (recommended): pilot, then fan out
+## Recommended plan: pilot, then fan out
 
-**Evening: run the pilot, about an hour, while you're around.** Start one session:
+### Evening: pilot Names+ (about an hour, while you're around)
 
-> Use the qplus-app skill to do a full redesign pass on **Names+**. Work only in `apps/Names+/`, `docs/apps/Names+.md`, and `shared/hub-theme/` if the kit itself needs a fix. Don't stop to ask questions. Make sensible calls and list open questions in the brief's Follow-ups. When done, push and open a PR titled "Names+: redesign pass 1".
+> Use the qplus-app skill to do a full pass on **Names+**: platform upgrade to React 19.3 + MUI 9.4 first, then the redesign. Work only in `apps/Names+/`, `docs/apps/Names+.md`, and `shared/` if the kit or docs need a fix. Don't stop to ask questions. Make sensible calls and list open questions in the brief's Follow-ups. When done, push and open a PR titled "Names+: React 19.3 / MUI 9.4 + redesign pass 1".
 
-Look at the PR (and try the zip in Hub if you like). Merge it, and any kit fixes land on `main` for everyone else.
+Then test it in Hub (a **local** session with Computer use, following docs/HUB-TESTING.md), fix anything that turns up, and merge. Any kit or doc fixes land on `main` before the fan-out.
 
-**Night: one session per app, all in parallel.** Start a session for each remaining app with this prompt, changing the name each time:
+### Night: one cloud session per app, all in parallel
 
-> Use the qplus-app skill to do a full redesign pass on **Q-Mail+**. Work only in `apps/Q-Mail+/` and `docs/apps/Q-Mail+.md`. Do not edit `shared/`, `docs/PROGRESS.md` or other apps. If the theme kit needs a change, work around it inside the app's own theme config and describe the needed kit change in Follow-ups. Don't stop to ask questions. Make sensible calls and list open questions in Follow-ups. When done, push and open a PR titled "Q-Mail+: redesign pass 1".
+For **Q-Node+, Q-Tube+, Q-Trade+, Q-Mail+, Q-Share+, Q-Support+, Q-Fund+ and Q-Shop+** (8 sessions), change the name each time:
 
-Apps: Q-Node+, Q-Tube+, Q-Trade+, Q-Mail+, Q-Share+, Q-Support+, Q-Fund+, Q-Shop+ and Q-Mintership+. That's 9 sessions. Each works in its own folder on its own branch, so the PRs don't conflict.
+> Use the qplus-app skill to do a full pass on **Q-Mail+**: platform upgrade to React 19.3 + MUI 9.4 first (its own commit), then the redesign. Work only in `apps/Q-Mail+/` and `docs/apps/Q-Mail+.md`. Do not edit `shared/`, `docs/PROGRESS.md` or other apps. If the theme kit needs a change, work around it inside the app's own theme config and describe the needed kit change in Follow-ups. Don't stop to ask questions. Make sensible calls and list open questions in Follow-ups. When done, push and open a PR titled "Q-Mail+: React 19.3 / MUI 9.4 + redesign pass 1".
 
-**Q-Apps+ (the launcher):** start it after the others are merged, since it presents them:
+For **Q-Mintership+** (1 session):
 
-> Use the qplus-app skill to build **Q-Apps+** from scratch as described in `docs/apps/Q-Apps+.md`, using the Hub 3.0 kit. Read every other app's brief for names, taglines and what's new. Don't stop to ask questions. Push and open a PR titled "Q-Apps+: first version".
+> Use the qplus-app skill for **Q-Mintership+**. Follow the Rewrite plan in `docs/apps/Q-Mintership+.md`: do phase 1 (scaffold, data layer, data contract, parity checklist) and, if time allows, phase 2 (read-only boards). Work only in `apps/Q-Mintership+/` and `docs/apps/Q-Mintership+.md`. Don't stop to ask questions; list open questions in Follow-ups. Open one PR per phase, titled "Q-Mintership+: React rewrite phase N".
 
-## Option B: one long session
+Each session works in its own folder on its own branch, so the PRs don't conflict.
 
-This is cheaper to watch, but slower. Later apps benefit from lessons learned on earlier ones, but one session's context carries every app.
+### Later: Q-Apps+ (the launcher)
 
-> Work through `docs/PROGRESS.md` in order. For each app, use the qplus-app skill for a full redesign pass. Commit as you go (commit messages prefixed with the app name) and update `docs/PROGRESS.md` after each app. Push after each app. Don't stop to ask questions; list open questions in each brief's Follow-ups. Open one PR at the end titled "Redesign pass 1: all apps".
+Start this after the others are merged, since it presents them:
+
+> Use the qplus-app skill to build **Q-Apps+** from scratch as described in `docs/apps/Q-Apps+.md`, on React 19.3 + MUI 9.4 with the Hub 3.0 kit. Read every other app's brief for names, taglines and what's new. Don't stop to ask questions. Push and open a PR titled "Q-Apps+: first version".
+
+### Following nights: Q-Mintership+ phases 3–5
+
+Continue with one session per phase (write flows → admin side → redesign), each starting from the merged previous phase.
 
 ## In the morning
 
 1. **Check the PRs:**
-   - Read each PR's summary and the app brief's **Follow-ups**, which hold questions for you.
+   - Read each PR's summary and the brief's **Follow-ups**, which hold questions for you.
    - Check the before/after numbers in **Done**.
-2. **Merge the ones you like.**
-3. **Build the zips:**
+2. **Test in Hub.** In a local session with Computer use:
+
+   > Test PR #N (Q-Mail+) in Hub Dev Mode following docs/HUB-TESTING.md.
+
+   Claude runs the dev server, loads it in Hub, checks the four themes, phone width and the main read-only flows, and reports back. Anything that publishes or spends QORT, Claude asks you first.
+3. **Merge the good ones, then build the zips:**
 
    ```bash
    git pull
    scripts/build-zip.sh all
    ```
 
-4. **Test each zip in Hub before publishing:**
-   - all four themes;
-   - a phone-width window;
-   - the main flows, especially anything involving QORT (Q-Trade+, Q-Shop+, Q-Fund+, Names+, Q-Support+).
-5. **Publish** `release/<App+>.zip` from Hub as `APP` under the matching name.
+4. **Before publishing:** preview each zip in Hub Dev Mode (**preview zip**). For a GO check, open it on your phone.
+5. **Publish** `release/<App+>.zip` from Hub as `APP` under the matching name. Don't publish Q-Mintership+ until its parity checklist is complete.
 6. **Update `docs/PROGRESS.md`,** or ask a session to do it.
 
 ## If something goes wrong

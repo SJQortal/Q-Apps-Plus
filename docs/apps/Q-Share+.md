@@ -16,6 +16,7 @@ Share files and documents on QDN, with categories, comments and lists.
 
 ## Notes
 
+- **Platform upgrade first** (docs/PLATFORM.md): React 18 → 19.3, MUI 5 → 9.4, Redux Toolkit 2 + react-redux 9, react-router-dom 7. This is the biggest jump in the repo, so run the codemods in docs/MIGRATION-NOTES.md in order and commit the upgrade on its own.
 - Has 3 `limit: 0` searches.
 
 ## Feature ideas to weigh in the audit

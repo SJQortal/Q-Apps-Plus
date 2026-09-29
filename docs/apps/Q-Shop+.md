@@ -16,6 +16,7 @@ Decentralised shops: sellers publish a store and products; buyers order and pay 
 
 ## Notes
 
+- **Platform upgrade first** (docs/PLATFORM.md): React 18 → 19.3, MUI 5 → 9.4, Redux Toolkit 2 + react-redux 9, react-router-dom 7. This is the biggest jump in the repo, so run the codemods in docs/MIGRATION-NOTES.md in order and commit the upgrade on its own.
 - This has the oldest upstream code (last commit 2024-04-17). `package.json` is still named `q-blog`.
 - Payments go through `SEND_COIN`, and orders are encrypted (`DOCUMENT_PRIVATE`). Treat checkout and order code as money code: keep the flow identical unless the plan says otherwise, and test it.
 

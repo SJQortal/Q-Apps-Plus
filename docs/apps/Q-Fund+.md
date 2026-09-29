@@ -16,6 +16,7 @@ Crowdfunding campaigns funded in QORT, with updates and comments.
 
 ## Notes
 
+- **Platform upgrade first** (docs/PLATFORM.md): React 18 → 19.3, MUI 5 → 9.4, Redux Toolkit 2 + react-redux 9, react-router-dom 7. This is the biggest jump in the repo, so run the codemods in docs/MIGRATION-NOTES.md in order and commit the upgrade on its own.
 - This is old code (last upstream commit 2024-04-17, 5 commits in total).
 - Funding goes through `SEND_COIN` to an AT/address. Keep the donation flow and amounts exact.
 - Has 3 `limit: 0` searches.

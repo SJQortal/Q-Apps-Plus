@@ -16,6 +16,7 @@ Manage the local Qortal node: status, peers, minting accounts, admin actions.
 
 ## Notes
 
+- **Platform upgrade first** (docs/PLATFORM.md): React 19 → 19.3, MUI 7 → 9.4. This app uses qapp-core, so add the `overrides` block and the `ErrorOutline` icon alias from PLATFORM.md.
 - This is the smallest app (~2.5k lines), a second pilot after Names+.
 - `ADMIN_ACTION` only works against the user's own node. The UI must explain clearly when the user is on a public node.
 - The import removed the upstream `.claude/settings.json`: it only allowed reading another developer's local folder.
