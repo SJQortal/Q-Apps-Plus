@@ -279,13 +279,12 @@ export default function FileElement({
   return (
     <Box
       onClick={handlePlay}
-      sx={{
+      sx={[{
         width: "100%",
         overflow: "hidden",
         position: "relative",
-        cursor: "pointer",
-        ...(customStyles || {}),
-      }}
+        cursor: "pointer"
+      }, customStyles || {}]}
     >
       {children && (
         <Box

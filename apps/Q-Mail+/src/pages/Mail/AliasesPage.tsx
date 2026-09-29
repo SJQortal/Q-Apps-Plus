@@ -387,15 +387,16 @@ export const AliasesPage = ({
                   {hasMessages ? "Has messages" : "No messages detected yet"}
                 </Typography>
                 <Typography
-                  sx={{
-                    color: linkedReplyAlias
-                      ? "var(--qmail-shell-active-strong)"
-                      : "var(--qmail-thread-subtle-text)",
+                  sx={[{
                     fontSize: "0.78rem",
                     display: "flex",
                     alignItems: "center",
-                    gap: "6px",
-                  }}
+                    gap: "6px"
+                  }, linkedReplyAlias ? {
+                    color: "var(--qmail-shell-active-strong)"
+                  } : {
+                    color: "var(--qmail-thread-subtle-text)"
+                  }]}
                 >
                   <LinkIcon sx={{ fontSize: "0.9rem" }} />
                   {linkedReplyAlias
@@ -434,9 +435,10 @@ export const AliasesPage = ({
                 <Stack
                   direction="row"
                   spacing={1}
-                  flexWrap="wrap"
-                  justifyContent="flex-end"
-                >
+                  sx={{
+                    flexWrap: "wrap",
+                    justifyContent: "flex-end"
+                  }}>
                   <Button
                     size="small"
                     variant="outlined"

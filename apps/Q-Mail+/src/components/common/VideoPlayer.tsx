@@ -324,22 +324,21 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     >
       {isLoading && (
         <Box
-          position="absolute"
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
-          display="flex"
-          justifyContent="center"
-          alignItems="center"
-          zIndex={4999}
-          bgcolor="rgba(0, 0, 0, 0.6)"
           sx={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 4999,
+            bgcolor: "rgba(0, 0, 0, 0.6)",
             display: 'flex',
             flexDirection: 'column',
             gap: '10px'
-          }}
-        >
+          }}>
           <CircularProgress color="secondary" />
           {resourceStatus && (
             <Typography
@@ -383,25 +382,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       )}
       {((!src && !isLoading) || !startPlay) && (
         <Box
-          position="absolute"
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
-          display="flex"
-          justifyContent="center"
-          alignItems="center"
-          zIndex={500}
-          bgcolor="rgba(0, 0, 0, 0.6)"
           onClick={() => {
             if (from === 'create') return
 
             togglePlay()
           }}
           sx={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 500,
+            bgcolor: "rgba(0, 0, 0, 0.6)",
             cursor: 'pointer'
-          }}
-        >
+          }}>
           <PlayArrow
             sx={{
               width: '50px',
@@ -488,5 +486,5 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </IconButton>
       </ControlsContainer>
     </VideoContainer>
-  )
+  );
 }

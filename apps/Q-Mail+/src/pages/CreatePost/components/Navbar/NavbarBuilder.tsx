@@ -126,25 +126,27 @@ export const Navbar = ({ saveNav, removeNav, close }: INavbar) => {
               onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                 setNavTitle(e.target.value)
               }
-              inputProps={{ maxLength: 40 }}
-              sx={{
+              sx={theme => ({
                 marginBottom: 2,
                 backgroundColor: theme.palette.primary.light,
                 color: theme.palette.text.primary,
                 border: `1px solid ${theme.palette.text.primary}`
+              })}
+              slotProps={{
+                htmlInput: { maxLength: 40 }
               }}
             />
           </Box>
           <Box>
             <FormControl
               fullWidth
-              sx={{
+              sx={theme => ({
                 marginBottom: 2,
                 width: '150px',
                 backgroundColor: theme.palette.primary.light,
                 color: theme.palette.text.primary,
                 border: `1px solid ${theme.palette.text.primary}`
-              }}
+              })}
             >
               <InputLabel sx={{ color: theme.palette.text.primary }} id="Post">
                 Select a Post
@@ -175,11 +177,11 @@ export const Navbar = ({ saveNav, removeNav, close }: INavbar) => {
         </Box>
         <Box>
           <Button
-            sx={{
+            sx={theme => ({
               backgroundColor: theme.palette.primary.light,
               color: theme.palette.text.primary,
               border: `1px solid ${theme.palette.text.primary}`
-            }}
+            })}
             onClick={addToNav}
           >
             Add
@@ -257,5 +259,5 @@ export const Navbar = ({ saveNav, removeNav, close }: INavbar) => {
         Close
       </Button>
     </>
-  )
+  );
 }

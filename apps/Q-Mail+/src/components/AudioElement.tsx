@@ -137,15 +137,18 @@ export default function AudioElement({
           <Box sx={{ ml: 1.5, minWidth: 0 }}>
             <Typography
               variant="caption"
-              color="text.secondary"
-              fontWeight={500}
-            >
+              sx={{
+                color: "text.secondary",
+                fontWeight: 500
+              }}>
               {author}
             </Typography>
             <Typography noWrap>
               <b>{title}</b>
             </Typography>
-            <Typography noWrap letterSpacing={-0.25}>
+            <Typography noWrap sx={{
+              letterSpacing: -0.25
+            }}>
               {description}
             </Typography>
           </Box>
@@ -153,24 +156,23 @@ export default function AudioElement({
         {((resourceStatus.status && resourceStatus?.status !== 'READY') ||
           isLoading) && (
           <Box
-            position="absolute"
-            top={0}
-            left={0}
-            right={0}
-            bottom={0}
-            display="flex"
-            justifyContent="center"
-            alignItems="center"
-            zIndex={4999}
-            bgcolor="rgba(0, 0, 0, 0.6)"
             sx={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 4999,
+              bgcolor: "rgba(0, 0, 0, 0.6)",
               display: 'flex',
               flexDirection: 'column',
               gap: '10px',
               padding: '16px',
               borderRadius: '16px'
-            }}
-          >
+            }}>
             <CircularProgress color="secondary" />
             {resourceStatus && (
               <Typography
@@ -214,5 +216,5 @@ export default function AudioElement({
         )}
       </Widget>
     </Box>
-  )
+  );
 }

@@ -78,7 +78,6 @@ export const ShowMessage = ({ message }: any) => {
             display: "flex",
             alignItems: "flex-start",
             gap: "10px",
-
           }}
         >
           <AvatarWrapper
@@ -112,12 +111,15 @@ export const ShowMessage = ({ message }: any) => {
                 const isFirst = index === 0
                 return (
                   <Box
-                    sx={{
-                      display: expandAttachments ? "flex" : !expandAttachments && isFirst ? 'flex' : 'none',
+                    sx={[{
                       alignItems: "center",
                       justifyContent: "flex-start",
-                      width: "100%",
-                    }}
+                      width: "100%"
+                    }, expandAttachments ? {
+                      display: "flex"
+                    } : {
+                      display: !expandAttachments && isFirst ? 'flex' : 'none'
+                    }]}
                   >
                     <Box
                       sx={{
@@ -161,12 +163,13 @@ export const ShowMessage = ({ message }: any) => {
                           }}
                         >
                           <MoreImg
-                            sx={{
-                              marginLeft: "5px",
-                              transform: expandAttachments
-                                ? "rotate(180deg)"
-                                : "unset",
-                            }}
+                            sx={[{
+                              marginLeft: "5px"
+                            }, expandAttachments ? {
+                              transform: "rotate(180deg)"
+                            } : {
+                              transform: "unset"
+                            }]}
                             src={MoreSVG}
                           />
                           <MoreP>
@@ -198,8 +201,6 @@ export const ShowMessage = ({ message }: any) => {
         )}
       </Box>
 
-      
-     
     </SingleTheadMessageParent>
   );
 };

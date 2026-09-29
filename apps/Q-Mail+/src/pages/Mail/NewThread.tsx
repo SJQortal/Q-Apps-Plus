@@ -473,14 +473,17 @@ export const NewThread = ({
         }}
       >
         <InstanceListHeader
-          sx={{
+          sx={[{
             backgroundColor: "unset",
             height: "50px",
-            padding: isMobile ? '10px' : '20px 42px',
             flexDirection: "row",
             justifyContent: "space-between",
-            alignItems: "center",
-          }}
+            alignItems: "center"
+          }, isMobile ? {
+            padding: '10px'
+          } : {
+            padding: '20px 42px'
+          }]}
         >
           <NewMessageHeaderP>
             {isMessage ? "Post Message" : "New Thread"}
@@ -490,12 +493,15 @@ export const NewThread = ({
           </CloseContainer>
         </InstanceListHeader>
         <InstanceListContainer
-          sx={{
+          sx={[{
             backgroundColor: "var(--qmail-compose-surface)",
-            padding: isMobile ? '10px' : '20px 42px',
             height: "calc(100% - 150px)",
-            flexShrink: 0,
-          }}
+            flexShrink: 0
+          }, isMobile ? {
+            padding: '10px'
+          } : {
+            padding: '20px 42px'
+          }]}
         >
           {!isMessage && (
             <>
@@ -620,22 +626,34 @@ export const NewThread = ({
           </Box>
         </InstanceListContainer>
         <InstanceFooter
-          sx={{
+          sx={[{
             backgroundColor: "var(--qmail-compose-footer-surface)",
-            padding: isMobile
-              ? '10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px)'
-              : '20px 42px',
             alignItems: "center",
-            height: 'auto',
-            position: isMobile ? 'sticky' : 'static',
-            bottom: isMobile ? 0 : 'auto',
-            zIndex: isMobile ? 2 : 'auto'
-          }}
+            height: 'auto'
+          }, isMobile ? {
+            padding: '10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px)'
+          } : {
+            padding: '20px 42px'
+          }, isMobile ? {
+            position: 'sticky'
+          } : {
+            position: 'static'
+          }, isMobile ? {
+            bottom: 0
+          } : {
+            bottom: 'auto'
+          }, isMobile ? {
+            zIndex: 2
+          } : {
+            zIndex: 'auto'
+          }]}
         >
           <NewMessageSendButton
-            sx={{
-              padding: isMobile ? '10px 14px' : undefined
-            }}
+            sx={[isMobile ? {
+              padding: '10px 14px'
+            } : {
+              padding: null
+            }]}
             onClick={sendMail}
           >
             <NewMessageSendP>
