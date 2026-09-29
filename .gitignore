@@ -23,4 +23,6 @@ release/
 .vscode/*
 !.vscode/extensions.json
 hub-theme-check.tmp/
+# scripts/build-pr-zips.sh checks PR branches out here
+.worktrees/
 .claude/settings.local.json

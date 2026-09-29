@@ -7,6 +7,17 @@ description: Full pass on one Q-Apps+ app — platform upgrade to React 19.3 + M
 
 Work on exactly one app per pass, and follow the steps in order. Write findings into `docs/apps/<App+>.md` as you go, so the brief is always current and another session can pick up where you stopped.
 
+## Overnight mode (unattended cloud runs)
+
+When the prompt says **overnight mode**, the goal is a publishable app by morning, even if the session stops early. So change the order:
+
+1. **Checkpoint first:** branch → baseline (step 1) → platform upgrade (1b) → test harness → theme kit + Settings page with the four themes. `npm run build` must pass, and so must tests if present. `scripts/build-zip.sh <App+>` must produce a zip.
+2. **Open the PR now:** push the branch and open the PR (step 6 format) with "Checkpoint reached" in the body.
+3. **Then continue:** deep-dive audit (2), plan (3), efficiency fixes, UX redesign and features (4). **Push after every commit**, so the PR always holds your latest working state. Never leave the branch with a failing build. If something can't be finished, revert it rather than leave it half-done.
+4. **Finish:** fill in the brief's Done and Follow-ups, update the PR description, and bump the version and changelog.
+
+Data-code changes still need the data contract from the audit first (CLAUDE.md rule 1). The checkpoint steps don't touch data code.
+
 ## 0. Load context
 
 Read `CLAUDE.md`, `docs/PLATFORM.md`, `docs/MIGRATION-NOTES.md`, `docs/DESIGN.md`, `docs/QORTAL.md`, `shared/hub-theme/README.md` and the app's brief. Skim the matching Torq files in `shared/reference/torq/` (theme, Settings page, QDN search cache, test setup).
