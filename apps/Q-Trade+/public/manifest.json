@@ -1,26 +1,12 @@
 {
-    "name": "My React App",
-    "short_name": "ReactApp",
-    "start_url": "/",
-    "display": "standalone",
-    "background_color": "#ffffff",
-    "description": "My awesome React app!",
-    "theme_color": "#ffffff",
-    "icons": [
-        {
-            "src": "/apple-touch-icon.png",
-            "sizes": "144x144",
-            "type": "image/png"
-          },
-      {
-        "src": "/icon-192x192.png",
-        "sizes": "192x192",
-        "type": "image/png"
-      },
-      {
-        "src": "/icon-512x512.png",
-        "sizes": "512x512",
-        "type": "image/png"
-      }
-    ]
-  }
+  "name": "Q-Trade+",
+  "short_name": "Q-Trade+",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0E0F14",
+  "description": "Buy and sell QORT for LTC, BTC, DOGE, DGB, RVN and ARRR on Qortal.",
+  "theme_color": "#0E0F14",
+  "icons": [
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

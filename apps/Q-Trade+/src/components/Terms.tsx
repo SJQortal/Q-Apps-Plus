@@ -18,21 +18,23 @@ export const BootstrapDialog = styled(Dialog)(({ theme }) => ({
   },
 }));
 
-export const Terms =() => {
+export const Terms = () => {
   const [open, setOpen] = React.useState(false);
-
-  const handleClickOpen = () => {
-    setOpen(true);
-  };
-  const handleClose = () => {
-    setOpen(false);
-  };
-
   return (
     <React.Fragment>
-      <Button variant="outlined" onClick={handleClickOpen}>
+      <Button variant="outlined" onClick={() => setOpen(true)}>
         Terms and conditions
       </Button>
+      <TermsDialog open={open} onClose={() => setOpen(false)} />
+    </React.Fragment>
+  );
+};
+
+/** The upstream terms text, reachable from Settings → About. */
+export const TermsDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
+  const handleClose = onClose;
+  return (
+    <React.Fragment>
       <BootstrapDialog
         onClose={handleClose}
         aria-labelledby="customized-dialog-title"

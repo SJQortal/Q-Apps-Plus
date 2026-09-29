@@ -1,5 +1,8 @@
-import { Box, styled } from "@mui/system";
-import { Button, Typography } from "@mui/material";
+import { Box, Button, Typography } from "@mui/material";
+import { styled } from "@mui/material/styles";
+import { headerFill } from "../../hub-theme";
+import { RAIL_WIDTH, RAIL_WIDTH_COMPACT } from "../layout/NavRail";
+import { BOTTOM_NAV_HEIGHT } from "../layout/BottomNav";
 
 export const MainContainer = styled(Box)({
   display: "flex",
@@ -9,54 +12,66 @@ export const MainContainer = styled(Box)({
 });
 
 export const TextTableTitle = styled(Typography)(({ theme }) => ({
-  fontFamily: "Inter",
   color: theme.palette.text.primary,
-  fontWeight: 400,
+  fontWeight: 600,
   fontSize: "20px",
   lineHeight: "40px",
   userSelect: "none",
 }));
 
+/** The fixed action bar under a table (Buy on the order book, Cancel on my sell orders). */
 export const BuyContainer = styled(Box)(({ theme }) => ({
   position: "fixed",
-  width: "calc(100% - 14px)",
+  left: RAIL_WIDTH,
+  right: 0,
+  bottom: 0,
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  bottom: "0px",
   padding: "18px 14px 12px 14px",
-  background: "#323336",
-  zIndex: 3,
+  background: headerFill(theme, "chromeStrong"),
+  backdropFilter: "blur(12px)",
+  borderTop: `1px solid ${theme.palette.divider}`,
+  zIndex: theme.zIndex.appBar - 1,
+  [theme.breakpoints.down("md")]: {
+    left: RAIL_WIDTH_COMPACT,
+  },
   [theme.breakpoints.down("sm")]: {
-    width: "calc(100% - 2px)",
-  }
+    left: 0,
+    bottom: `calc(${BOTTOM_NAV_HEIGHT}px + var(--qp-safe-bottom))`,
+    padding: "12px 10px 10px 10px",
+  },
 }));
 
 export const BuyContainerDivider = styled(Box)(({ theme }) => ({
   position: "absolute",
   width: "60%",
   height: "1px",
-  background: "lightgray",
-  top: "10px",
+  background: theme.palette.divider,
+  top: "6px",
   left: "50%",
   transform: "translateX(-50%)",
   [theme.breakpoints.down("sm")]: {
-    top: "5px",
-  }
+    top: "3px",
+  },
 }));
 
 export const BuyOrderBtn = styled(Button)(({ theme }) => ({
   borderRadius: "8px",
   width: "80px",
   height: "45px",
-  background: "#2e7d32",
-  fontSize: '18px',
-  color: "white",
+  background: theme.palette.success.main,
+  fontSize: "18px",
+  color: theme.palette.success.contrastText,
   cursor: "pointer",
-  border: "1px solid #375232",
-  boxShadow: "0px 2.77px 2.21px 0px #00000005",
+  border: `1px solid ${theme.palette.success.dark}`,
   marginRight: "10px",
+  "&.Mui-disabled": {
+    background: theme.palette.action.disabledBackground,
+    color: theme.palette.action.disabled,
+    borderColor: "transparent",
+  },
   [theme.breakpoints.down("sm")]: {
     marginRight: "0px",
-  }
+  },
 }));

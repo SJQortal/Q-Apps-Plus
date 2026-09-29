@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { AppContainer } from "../../App-styles";
 import { Header } from "../../components/header/Header";
 import gameContext from "../../contexts/gameContext";
@@ -8,9 +9,16 @@ import { OngoingTrades } from "../../components/Grids/OngoingTrades";
 import { Box } from "@mui/material";
 import { TextTableTitle } from "../../components/Grids/Table-styles";
 import { Spacer } from "../../components/common/Spacer";
-import { Tab, TabDivider, TabsContainer, TabsRow } from "./Home-Styles";
+import { PageHeader } from "../../components/layout/PageHeader";
+import { PageBody } from "../../components/layout/PageBody";
 import { CreateSell } from "../../components/sell/CreateSell";
 import { History } from "../../components/history/History";
+
+const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
+  buy: { title: "Buy QORT", subtitle: "Open sell orders on the market" },
+  sell: { title: "Sell QORT", subtitle: "Your sell orders and trade bots" },
+  history: { title: "Trade history", subtitle: "Completed trades" },
+};
 
 export const HomePage = () => {
   const {
@@ -23,7 +31,12 @@ export const HomePage = () => {
     selectedCoin,
   } = useContext(gameContext);
   const { setNotification } = useContext(NotificationContext);
-  const [mode, setMode] = useState("buy");
+  const { pathname } = useLocation();
+  const mode = pathname.startsWith("/sell")
+    ? "sell"
+    : pathname.startsWith("/history")
+      ? "history"
+      : "buy";
   const [fee, setFee] = useState("");
 
   const filteredOngoingTrades = useMemo(() => {
@@ -49,6 +62,8 @@ export const HomePage = () => {
 
   return (
     <>
+      <PageHeader title={PAGE_TITLES[mode].title} subtitle={PAGE_TITLES[mode].subtitle} />
+      <PageBody $maxWidth={1200}>
       <Header
         qortBalance={qortBalance}
         foreignCoinBalance={foreignCoinBalance}
@@ -58,24 +73,6 @@ export const HomePage = () => {
       />
 
       <AppContainer>
-        <TabsContainer>
-          <TabsRow>
-            <Tab activeTab={mode === "buy"} onClick={() => setMode("buy")}>
-              QORT for sale
-            </Tab>
-            {/* <TabDivider activeTab={mode === "buy" || mode === "sell"} /> */}
-            <Tab activeTab={mode === "sell"} onClick={() => setMode("sell")}>
-              Sell QORT
-            </Tab>
-            {/* <TabDivider activeTab={mode === "sell" || mode === "history"} /> */}
-            <Tab
-              activeTab={mode === "history"}
-              onClick={() => setMode("history")}
-            >
-              Trade History
-            </Tab>
-          </TabsRow>
-        </TabsContainer>
         <div
           style={{
             width: "100%",
@@ -120,6 +117,7 @@ export const HomePage = () => {
         <CreateSell show={mode === "sell"} qortAddress={userInfo?.address} />
         <History show={mode === "history"} qortAddress={userInfo?.address} userPublicKey={userInfo?.publicKey} />
       </AppContainer>
+      </PageBody>
     </>
   );
 };

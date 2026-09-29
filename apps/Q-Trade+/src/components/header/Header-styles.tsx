@@ -10,10 +10,7 @@ export const HeaderNav = styled(Box)(({ theme }) => ({
   justifyContent: "space-between",
   alignItems: "center",
   width: "100%",
-  padding: "0 30px",
-  [theme.breakpoints.only("xs")]: {
-    padding: "0",
-  },
+  padding: 0,
 }));
 
 export const BubbleCardColored1 = styled(Box)({
@@ -180,7 +177,7 @@ export const CoinActionsRow = styled(Box)({
 
 export const CoinSendBtn = styled(Button)(({ theme }) => ({
   backgroundColor: theme.palette.primary.main,
-  color: "#000000",
+  color: theme.palette.primary.contrastText,
   border: `1px solid ${theme.palette.primary.main}`,
   fontFamily: "Inter, sans-serif",
   fontWeight: 500,
@@ -207,7 +204,7 @@ export const CoinReceiveBtn = styled(Button)(({ theme }) => ({
   borderRadius: "0px",
   transition: "all 0.3s ease-in-out",
   "&:hover": {
-    color: "#000000",
+    color: theme.palette.background.paper,
     backgroundColor: theme.palette.text.primary,
   },
 }));
@@ -324,7 +321,7 @@ export const CoinCancelBtn = styled(Button)({
 
 export const CoinConfirmSendBtn = styled(Button)(({ theme }) => ({
   backgroundColor: theme.palette.primary.main,
-  color: "#000000",
+  color: theme.palette.primary.contrastText,
   border: `1px solid ${theme.palette.primary.main}`,
   fontFamily: "Inter, sans-serif",
   fontWeight: 500,
@@ -337,7 +334,7 @@ export const CoinConfirmSendBtn = styled(Button)(({ theme }) => ({
   transition: "all 0.3s ease-in-out",
   "&:hover": {
     border: `1px solid ${theme.palette.text.primary}`,
-    color: "#000000",
+    color: theme.palette.background.paper,
     backgroundColor: theme.palette.text.primary,
   },
 }));

@@ -3,7 +3,6 @@ import {
   useEffect,
   useRef,
   useContext,
-  ChangeEvent,
   useMemo,
 } from "react";
 import {
@@ -38,7 +37,6 @@ import { AddressQRCode } from "./AddressQRCode";
 import { FallingLines } from "react-loader-spinner";
 import {
   Alert,
-  AppBar,
   Avatar,
   Box,
   Button,
@@ -51,17 +49,14 @@ import {
   DialogContentText,
   DialogTitle,
   FormControl,
-  FormControlLabel,
   MenuItem,
   Select,
   Snackbar,
   SnackbarCloseReason,
-  Switch,
   Typography,
   styled,
 } from "@mui/material";
 import { sendRequestToExtension } from "../../App";
-import { Terms } from "../Terms";
 import ltcIcon from "../../assets/img/ltc.png";
 import btcIcon from "../../assets/img/btc.png";
 import dogeIcon from "../../assets/img/doge.png";
@@ -74,7 +69,6 @@ import { NotificationContext } from "../../contexts/notificationContext";
 import UnsignedFees from "../sell/UnsignedFees";
 import { FeeManager } from "../sell/FeeManager";
 import { Info } from "../sell/Info";
-import { Settings } from "../sell/Settings";
 import { useSetAtom } from "jotai/react";
 import { stuckTradesAtom } from "../../global/state";
 
@@ -169,7 +163,6 @@ export const Header = ({
   const [openDropdown, setOpenDropdown] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLDivElement>(null);
-  const [checked, setChecked] = useState(false);
   const [open, setOpen] = useState(false);
   const [info, setInfo] = useState<any>(null);
   const [openCoinActionModal, setOpenCoinActionModal] =
@@ -183,50 +176,10 @@ export const Header = ({
     const setStuckTrades = useSetAtom(stuckTradesAtom)
   
 
-  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setChecked(false);
-    setOpen(true);
-    setInfo({
-      type: "error",
-      message: "Change the node you are using at the authentication page",
-    });
-  };
   const { userInfo, selectedCoin, setSelectedCoin, getCoinLabel } =
     useContext(gameContext);
   const { setNotification } = useContext(NotificationContext);
 
-  const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
-    padding: 8,
-    "& .MuiSwitch-track": {
-      borderRadius: 22 / 2,
-      "&::before, &::after": {
-        content: '""',
-        position: "absolute",
-        top: "50%",
-        transform: "translateY(-50%)",
-        width: 16,
-        height: 16,
-      },
-      "&::before": {
-        backgroundImage: `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 0 24 24"><path fill="${encodeURIComponent(
-          theme.palette.getContrastText(theme.palette.primary.main)
-        )}" d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"/></svg>')`,
-        left: 12,
-      },
-      "&::after": {
-        backgroundImage: `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 0 24 24"><path fill="${encodeURIComponent(
-          theme.palette.getContrastText(theme.palette.primary.main)
-        )}" d="M19,13H5V11H19V13Z" /></svg>')`,
-        right: 12,
-      },
-    },
-    "& .MuiSwitch-thumb": {
-      boxShadow: "none",
-      width: 16,
-      height: 16,
-      margin: 2,
-    },
-  }));
 
   const handleClose = (
     event?: React.SyntheticEvent | Event,
@@ -303,44 +256,6 @@ export const Header = ({
 
   return (
     <>
-      <AppBar
-        position="sticky"
-        sx={{
-          background: "rgba(39, 40, 44, 1)",
-        }}
-      >
-        <Box
-          sx={{
-            display: "flex",
-            gap: "20px",
-            alignItems: "center",
-            justifyContent: "space-between",
-            width: "100%",
-            padding: "10px",
-          }}
-        >
-          <LogoColumn>
-            <img
-              src={qtradeLogo}
-              style={{
-                height: "40px",
-              }}
-            />
-          </LogoColumn>
-          <FormControlLabel
-            sx={{
-              color: "white",
-            }}
-            control={
-              <LocalNodeSwitch
-                checked={isUsingGateway}
-                onChange={handleChange}
-              />
-            }
-            label="Is using Gateway"
-          />
-        </Box>
-      </AppBar>
       <HeaderNav
         sx={{
           flexDirection: "column",
@@ -379,16 +294,6 @@ export const Header = ({
               <Username>{cropAddress(userInfo?.address)}</Username>
             ) : null}
           </NameRow>
-          <Box sx={{
-            display: 'flex',
-            gap: '10px'
-          }}>
-             <Terms />
-             {!isUsingGateway && (
-               <Settings />
-             )}
-           
-          </Box>
          
         </Box>
 
@@ -400,7 +305,6 @@ export const Header = ({
           <Card
             variant="outlined"
             sx={{
-              backgroundColor: "#292929",
               "&.MuiCard-root": {
                 cursor: "default",
               },
@@ -466,7 +370,7 @@ export const Header = ({
                     }}
                   />
                   {foreignCoinBalance === null ? (
-                    <FallingLines color="white" width="30" visible={true} />
+                    <FallingLines color="currentColor" width="30" visible={true} />
                   ) : (
                     foreignCoinBalance
                   )}{" "}
@@ -809,7 +713,7 @@ const ReceiveCoin = ({
     >
       <Typography
         sx={{
-          color: "white",
+          color: "text.primary",
         }}
       >{`Send ${selectedCoin} to your address below`}</Typography>
       <Spacer height="20px" />
@@ -845,7 +749,7 @@ const ReceiveCoin = ({
           <Spacer height="20px" />
           <Typography
             sx={{
-              color: "white",
+              color: "text.primary",
             }}
           >
             {errorMsg}

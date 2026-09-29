@@ -223,15 +223,16 @@ export const FeeManager = ({ selectedCoin, setFee, fee }) => {
         }}
         sx={{
           minHeight: "42px",
-          border: "1px solid gray",
-          color: "white",
+          border: 1,
+          borderColor: "divider",
+          color: "text.primary",
           display: "flex",
           alignItems: "center",
           padding: "5px 5px",
           gap: "10px",
           borderRadius: "5px",
           "&:hover": {
-            border: "1px solid white", // Border color on hover
+            borderColor: "text.primary",
           },
         }}
       >
@@ -239,7 +240,7 @@ export const FeeManager = ({ selectedCoin, setFee, fee }) => {
 
         <ChangeCircleIcon
           sx={{
-            color: "white",
+            color: "text.primary",
           }}
         />
       </ButtonBase>
@@ -263,7 +264,7 @@ export const FeeManager = ({ selectedCoin, setFee, fee }) => {
                 <Typography
                   variant="h4"
                   sx={{
-                    color: "white",
+                    color: "text.primary",
                   }}
                 >
                   Update unlocking fee for {selectedCoin}
@@ -343,7 +344,7 @@ export const FeeManager = ({ selectedCoin, setFee, fee }) => {
                       >
                         <Typography
                           sx={{
-                            color: "white",
+                            color: "text.primary",
                             fontSize: "18px",
                           }}
                         >
@@ -372,13 +373,13 @@ export const FeeManager = ({ selectedCoin, setFee, fee }) => {
                       >
                         <QuestionMarkIcon
                           sx={{
-                            color: "white",
+                            color: "text.primary",
                           }}
                         />
 
                         <Typography
                           sx={{
-                            color: "white",
+                            color: "text.primary",
                           }}
                         >
                           This recommended fee is derived from{" "}
@@ -417,21 +418,22 @@ export const FeeManager = ({ selectedCoin, setFee, fee }) => {
               disabled={recommendedFee === "custom" && !editFee}
               sx={{
                 minHeight: "42px",
-                border: "1px solid gray",
-                color: "white",
+                border: 1,
+          borderColor: "divider",
+                color: "text.primary",
                 display: "flex",
                 alignItems: "center",
                 padding: "5px 20px",
                 gap: "10px",
                 borderRadius: "5px",
                 "&:hover": {
-                  border: "1px solid white", // Border color on hover
+                  borderColor: "text.primary",
                 },
               }}
             >
               <ChangeCircleIcon
                 sx={{
-                  color: "white",
+                  color: "text.primary",
                 }}
               />
               <Typography>Update fee</Typography>

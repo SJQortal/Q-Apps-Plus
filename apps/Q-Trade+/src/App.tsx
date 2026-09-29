@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import ReactGA from "react-ga4";
 import "./App.css";
 import GameContext, {
@@ -7,9 +7,11 @@ import GameContext, {
 } from "./contexts/gameContext";
 import { Route, Routes } from "react-router-dom";
 
-import { ThemeProvider } from "@mui/material";
-import { darkTheme } from "./styles/theme";
 import { HomePage } from "./pages/Home/Home";
+import { AppShell } from "./components/layout/AppShell";
+import { PageFallback } from "./components/layout/PageFallback";
+
+const SettingsPage = lazy(() => import("./pages/Settings"));
 import { UserContext, UserContextProps } from "./contexts/userContext";
 import {
   NotificationProps,
@@ -319,11 +321,19 @@ function App() {
           <UserContext.Provider value={userContextValue}>
             <GameContext.Provider value={gameContextValue}>
               <Notification />
-              <ThemeProvider theme={darkTheme}>
+              <AppShell>
                 <Routes>
-                  <Route path="/" element={<HomePage />} />
+                  <Route
+                    path="/settings"
+                    element={
+                      <Suspense fallback={<PageFallback />}>
+                        <SettingsPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route path="/*" element={<HomePage />} />
                 </Routes>
-              </ThemeProvider>
+              </AppShell>
             </GameContext.Provider>
           </UserContext.Provider>
         </LoadingContext.Provider>

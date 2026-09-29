@@ -45,7 +45,11 @@ import {
 } from "../../global/state";
 import { useRecommendedFees } from "../../hooks/useRecommendedFees";
 
-export const Settings = () => {
+export const Settings = ({
+  renderTrigger,
+}: {
+  renderTrigger?: (open: () => void) => React.ReactNode;
+} = {}) => {
   const saveDataLocal = useGlobal().persistentOperations.saveData;
   const getDataLocal = useGlobal().persistentOperations.getData;
   const [openModal, setOpenModal] = useState(false);
@@ -192,21 +196,20 @@ export const Settings = () => {
     }
   }, [hideRecommendations]);
 
+  const openSettings = () => {
+    setOpenModal(true);
+    setEditLockingFee(lockingFee);
+  };
+
   return (
     <>
-      <Button
-        variant="outlined"
-        onClick={() => {
-          setOpenModal(true);
-          setEditLockingFee(lockingFee);
-        }}
-      >
-        <SettingsIcon
-          sx={{
-            color: "white",
-          }}
-        />
-      </Button>
+      {renderTrigger ? (
+        renderTrigger(openSettings)
+      ) : (
+        <Button variant="outlined" onClick={openSettings} aria-label="Fee settings">
+          <SettingsIcon />
+        </Button>
+      )}
       {openModal && (
         <ReusableModal
           onClickClose={() => {
@@ -224,7 +227,8 @@ export const Settings = () => {
           {!isUsingGateway && (
                <CoinActionContainer
                sx={{
-                 border: "1px solid #3F3F3F",
+                 border: 1,
+                 borderColor: "divider",
                  borderRadius: "5px",
                  padding: "5px",
                }}
@@ -348,7 +352,7 @@ export const Settings = () => {
                              >
                                <Typography
                                  sx={{
-                                   color: "white",
+                                   color: "text.primary",
                                    fontSize: "18px",
                                  }}
                                >
@@ -397,21 +401,22 @@ export const Settings = () => {
                  disabled={recommendedFee === "custom" && !editLockingFee}
                  sx={{
                    minHeight: "42px",
-                   border: "1px solid gray",
-                   color: "white",
+                   border: 1,
+                   borderColor: "divider",
+                   color: "text.primary",
                    display: "flex",
                    alignItems: "center",
                    padding: "5px 20px",
                    gap: "10px",
                    borderRadius: "5px",
                    "&:hover": {
-                     border: "1px solid white", // Border color on hover
+                     borderColor: "text.primary",
                    },
                  }}
                >
                  <ChangeCircleIcon
                    sx={{
-                     color: "white",
+                     color: "text.primary",
                    }}
                  />
                  <Typography>Update locking fee</Typography>
@@ -421,7 +426,8 @@ export const Settings = () => {
           <Spacer height="20px" />
           <CoinActionContainer
             sx={{
-              border: "1px solid #3F3F3F",
+              border: 1,
+                 borderColor: "divider",
               borderRadius: "5px",
               padding: "5px",
             }}

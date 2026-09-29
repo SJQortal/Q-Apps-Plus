@@ -1,134 +1,65 @@
-.App {
-    text-align: center;
-  }
-  
-  .App-logo {
-    height: 40vmin;
-    pointer-events: none;
-  }
-  
-  @media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-      animation: App-logo-spin infinite 20s linear;
-    }
-  }
-  
-  .App-header {
-    background-color: #282c34;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
-  }
-  
-  .App-link {
-    color: #61dafb;
-  }
-  
-  @keyframes App-logo-spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-
-  .ag-theme-alpine-dark .ag-header-cell-label {
-    font-size: 12px;
-    font-family: 'Inter';
-    font-weight: 600;
-    line-height: 18px;
-  }
-  
-  /* Define the font for the regular data */
-  .ag-theme-alpine-dark .ag-cell {
-    font-size: 12px;
-    font-family: 'Inter';
-    font-weight: 500;
-    line-height: 18px;
-  }
-
-  .ag-theme-alpine-dark .ag-header {
-    background-color: #1A1D1E;
-  }
-
-  .ag-theme-alpine .ag-row {
-    background-color: #292929;
-
-  }
-  
-
-  /* Optional: Change the background color of the even rows to the same color */
-.ag-theme-alpine-dark .ag-row:nth-child(even) {
-  background-color: #292929; /* Same color as normal rows */
-}
-
-/* Optional: Change the background color of the odd rows to the same color */
-.ag-theme-alpine-dark .ag-row:nth-child(odd) {
-  background-color: #292929; /* Same color as normal rows */
-}
-
-/* Vertically center the text in the rows */
-.ag-theme-alpine-dark .ag-cell {
-  display: flex;
-  align-items: center;
-}
-
-/* Optional: Ensure the header text is also vertically centered */
-.ag-theme-alpine-dark .ag-header-cell-label {
-  display: flex;
-  align-items: center;
-}
-
-/* Ensure the full width of the rows has the correct background color */
-.ag-theme-alpine-dark .ag-row,
-.ag-theme-alpine-dark .ag-row-odd,
-.ag-theme-alpine-dark .ag-row-even {
-  width: 100%;
-  background-color: #292929; /* Replace with your desired color */
-}
-
+/* ag-grid follows the active theme through the kit's CSS variables. The
+   tables keep the alpine-dark class from upstream; these overrides make it
+   work in all four themes, light ones included. */
+.ag-theme-alpine,
 .ag-theme-alpine-dark {
   width: 100% !important;
-}
-.ag-theme-alpine-dark {
-  --ag-background-color: #292929 !important;
+  --ag-background-color: var(--qp-paper) !important;
+  --ag-odd-row-background-color: var(--qp-paper) !important;
+  --ag-header-background-color: var(--qp-surface) !important;
+  --ag-foreground-color: var(--qp-text) !important;
+  --ag-header-foreground-color: var(--qp-text-secondary) !important;
+  --ag-secondary-foreground-color: var(--qp-text-secondary) !important;
+  --ag-disabled-foreground-color: var(--qp-text-secondary) !important;
+  --ag-border-color: var(--qp-divider) !important;
+  --ag-row-border-color: var(--qp-divider) !important;
+  --ag-row-hover-color: var(--qp-hover) !important;
+  --ag-selected-row-background-color: var(--qp-selected) !important;
+  --ag-range-selection-border-color: var(--qp-primary) !important;
+  --ag-checkbox-checked-color: var(--qp-primary) !important;
+  --ag-checkbox-unchecked-color: var(--qp-text-secondary) !important;
+  --ag-checkbox-background-color: var(--qp-paper) !important;
+  --ag-icon-font-color: var(--qp-text-secondary) !important;
+  --ag-control-panel-background-color: var(--qp-surface) !important;
+  --ag-tooltip-background-color: var(--qp-elevated) !important;
+  --ag-input-focus-border-color: var(--qp-primary) !important;
+  --ag-font-family: var(--qp-font) !important;
+  --ag-font-size: 13px;
+  --ag-border-radius: var(--qp-radius);
+  --ag-card-radius: var(--qp-radius);
 }
 
-/* Remove any box-shadow or border from the grid cells */
-.ag-theme-alpine-dark .ag-cell,
-.ag-theme-alpine-dark .ag-header-cell,
-.ag-theme-alpine-dark .ag-header-cell-resize {
-  box-shadow: none;
-  border: none !important;
+.ag-theme-alpine .ag-root-wrapper,
+.ag-theme-alpine-dark .ag-root-wrapper {
+  border-radius: var(--qp-radius);
 }
 
-/* Remove vertical borders between cells */
+.ag-theme-alpine .ag-header-cell-label,
+.ag-theme-alpine-dark .ag-header-cell-label {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  display: flex;
+  align-items: center;
+}
+
+.ag-theme-alpine .ag-cell,
 .ag-theme-alpine-dark .ag-cell {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  display: flex;
+  align-items: center;
+  box-shadow: none;
   border-right: none !important;
 }
 
-@font-face {
-  font-family: 'Inter';
-  src: url('./assets/fonts/Inter-Medium.ttf') format('truetype');
-  font-weight: 500;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Inter';
-  src: url('./assets/fonts/Inter-SemiBold.ttf') format('truetype');
-  font-weight: 600;
-  font-display: swap;
+.ag-theme-alpine .ag-row,
+.ag-theme-alpine-dark .ag-row {
+  width: 100%;
 }
 
-::-webkit-scrollbar-track {
-  background-color: transparent;
-}
+::-webkit-scrollbar-track,
 ::-webkit-scrollbar-track:hover {
   background-color: transparent;
 }
@@ -139,9 +70,8 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #444444;
+  background-color: var(--qp-divider);
   border-radius: 8px;
   background-clip: content-box;
   border: 4px solid transparent;
 }
-
