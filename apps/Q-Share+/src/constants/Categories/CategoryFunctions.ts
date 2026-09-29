@@ -41,7 +41,7 @@ export const findAllCategoryData = (
   categories: string[],
   direction: Direction = "forward"
 ) => {
-  let foundIcons: Category[] = [];
+  const foundIcons: Category[] = [];
   if (direction === "backward") categories.reverse();
 
   categories.map(category => {

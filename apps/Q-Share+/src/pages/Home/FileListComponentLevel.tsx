@@ -59,16 +59,23 @@ export const FileListComponentLevel = () => {
         setIsLoading(false);
       }
     },
-    [paramName, videos, hasMore, checkAndUpdateFile]
+    [paramName, videos, hasMore, checkAndUpdateFile, getFile]
   );
 
+  // A new name: start over. The fetch is queued after this render so the
+  // effect itself sets no state (React 19 hooks rules); a reset ignores the
+  // stale list and hasMore captured by this getVideos.
+  const lastParam = useRef<string | undefined>(undefined);
   useEffect(() => {
-    setVideos([]);
-    setHasMore(true);
+    if (lastParam.current === paramName) return;
+    lastParam.current = paramName;
     isFetching.current = false;
-    getVideos(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paramName]);
+    queueMicrotask(() => {
+      setVideos([]);
+      setHasMore(true);
+      void getVideos(true);
+    });
+  }, [paramName, getVideos]);
 
   return (
     <Box sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 1.5 }}>

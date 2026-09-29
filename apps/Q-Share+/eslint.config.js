@@ -15,7 +15,9 @@ export default tseslint.config(
     },
     plugins: { 'react-refresh': reactRefresh },
     rules: {
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      // Helpers and styled parts live next to their components on purpose; Fast Refresh
+      // boundaries are a dev nicety and the warning was pure noise across the app.
+      'react-refresh/only-export-components': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' }],
     },

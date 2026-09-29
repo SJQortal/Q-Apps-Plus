@@ -34,6 +34,26 @@ export function summaryToVideo(video: QdnResourceSummary): Video {
   };
 }
 
+/** Fetch one share's JSON body into the hash map, with two more tries through the queue. */
+async function fetchShareBody(
+  dispatch: (action: unknown) => unknown,
+  user: string,
+  videoId: string,
+  content: any,
+  attempt = 0
+): Promise<void> {
+  try {
+    const res = await fetchAndEvaluateVideos({ user, videoId, content });
+    dispatch(addToHashMap(res));
+  } catch (error) {
+    if (attempt < 2) {
+      queue.push(() => fetchShareBody(dispatch, user, videoId, content, attempt + 1));
+    } else {
+      console.error("Failed to get share after 3 attempts", error);
+    }
+  }
+}
+
 export const useFetchFiles = () => {
   const dispatch = useDispatch();
   const hashMapFiles = useSelector((state: RootState) => state.file.hashMapFiles);
@@ -64,21 +84,12 @@ export const useFetchFiles = () => {
     } catch (error) {
       /* avatar is optional */
     }
-  }, []);
+  }, [dispatch]);
 
-  const getFile = async (user: string, videoId: string, content: any, retries: number = 0) => {
-    try {
-      const res = await fetchAndEvaluateVideos({ user, videoId, content });
-      dispatch(addToHashMap(res));
-    } catch (error) {
-      retries = retries + 1;
-      if (retries < 2) {
-        queue.push(() => getFile(user, videoId, content, retries + 1));
-      } else {
-        console.error("Failed to get share after 3 attempts", error);
-      }
-    }
-  };
+  const getFile = React.useCallback(
+    (user: string, videoId: string, content: any) => fetchShareBody(dispatch, user, videoId, content),
+    [dispatch]
+  );
 
   const queueBodies = React.useCallback(
     (rows: Video[]) => {
@@ -88,7 +99,7 @@ export const useFetchFiles = () => {
         }
       }
     },
-    [checkAndUpdateFile]
+    [checkAndUpdateFile, getFile]
   );
 
   const getNewFiles = React.useCallback(async () => {
@@ -119,7 +130,7 @@ export const useFetchFiles = () => {
     } finally {
       dispatch(setIsLoadingGlobal(false));
     }
-  }, [videos, hashMapFiles]);
+  }, [videos, dispatch, queueBodies]);
 
   const getFiles = React.useCallback(
     async (filters = {}, reset?: boolean, resetFilers?: boolean, limit?: number) => {
@@ -145,7 +156,7 @@ export const useFetchFiles = () => {
       queueBodies(structureData);
       return structureData.length;
     },
-    [videos, hashMapFiles]
+    [videos, dispatch, queueBodies]
   );
 
   const getFilesFiltered = React.useCallback(
@@ -167,7 +178,7 @@ export const useFetchFiles = () => {
         /* keep the current list */
       }
     },
-    [filteredVideos, hashMapFiles]
+    [filteredVideos, dispatch, queueBodies]
   );
 
   const checkNewFiles = React.useCallback(async () => {
@@ -187,7 +198,7 @@ export const useFetchFiles = () => {
     } catch (error) {
       /* ignore */
     }
-  }, [videos]);
+  }, [videos, dispatch]);
 
   return {
     getFiles,

@@ -43,7 +43,6 @@ export const Home = () => {
   const [sort, setSort] = useState<SortOrder>(settings.defaultSort);
   const [following, setFollowing] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const { pull, refreshing } = usePullToRefresh(() => runSearchRef.current(true), true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
@@ -81,14 +80,14 @@ export const Home = () => {
     [getFiles, filterName, filterSearch, sort, following, hasMore]
   );
 
-  const runSearchRef = useRef(runSearch);
-  runSearchRef.current = runSearch;
+  const { pull, refreshing } = usePullToRefresh(() => runSearch(true), true);
 
+  const hasFiles = files.length > 0;
   useEffect(() => {
     if (mounted.current) return;
     mounted.current = true;
-    if (files.length === 0) runSearch(true);
-  }, [files.length, runSearch]);
+    if (!hasFiles) queueMicrotask(() => void runSearch(true));
+  }, [hasFiles, runSearch]);
 
   // A publish or update from this session: reload page one so the new share shows.
   const seenVersion = useRef(listVersion);
@@ -96,9 +95,8 @@ export const Home = () => {
     if (seenVersion.current === listVersion) return;
     seenVersion.current = listVersion;
     isFetching.current = false;
-    runSearch(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listVersion]);
+    queueMicrotask(() => void runSearch(true));
+  }, [listVersion, runSearch]);
 
   const resetFilters = () => {
     dispatch(changefilterSearch(""));

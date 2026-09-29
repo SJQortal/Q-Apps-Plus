@@ -18,7 +18,9 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown> | void, enabl
   const [refreshing, setRefreshing] = useState(false);
   const startY = useRef<number | null>(null);
   const latest = useRef(onRefresh);
-  latest.current = onRefresh;
+  useEffect(() => {
+    latest.current = onRefresh;
+  });
 
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;
