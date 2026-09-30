@@ -1,13 +1,34 @@
 import { useEffect, useRef } from "react";
 import { Box } from "@mui/material";
-import ReactQuill from "react-quill-new";
+import ReactQuill, { Quill } from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
 import type { TextEditorProps } from "./TextEditor";
 import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 
 // Quill 2 has no maintained image-resize module; the toolbar never offered an
 // image button, so the old quill-image-resize-module-react is dropped.
+// Quill 2's uploader would turn an image file dropped or pasted into the
+// editor into a base64 image inside the description; it is switched off.
+// Pasted HTML loses its images and video too (see withoutPastedEmbeds), so
+// images come only with descriptions that already have them.
+const uploader = { handler: () => {} };
+
+/**
+ * Pasted HTML without its <img> and <iframe>. With image and video listed in
+ * `formats`, Quill keeps them from a paste as it does from a loaded
+ * description, so a copied web page would bring hotlinked images (loaded by
+ * every reader from outside Qortal) or data: URIs (a larger body for every
+ * row that fetches it). The whole document is kept, as Quill reads markers on
+ * it (Word, Google Docs).
+ */
+function withoutPastedEmbeds(html: string): string {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("img, iframe").forEach((element) => element.remove());
+  return doc.documentElement.outerHTML;
+}
+
 const modules = {
+  uploader,
   toolbar: [
     ["bold", "italic", "underline", "strike"], // styled text
     ["blockquote", "code-block"], // blocks
@@ -29,10 +50,14 @@ const modules = {
  * four themes, light and dark, so a fixed colour (often white text pasted
  * from a dark web page) turns unreadable in half of them; display strips
  * colours too. Leaving them out of `formats` also drops them on paste.
+ * Image and video stay, with no toolbar buttons: Quill drops any format not
+ * listed when it loads a description, so without them an update would strip
+ * the images a description from the original Q-Share has. Pastes still lose
+ * them (withoutPastedEmbeds).
  */
 const formats = [
   "bold", "italic", "underline", "strike", "code", "link", "script", "size", "font",
-  "blockquote", "code-block", "header", "list", "indent", "direction", "align",
+  "blockquote", "code-block", "header", "list", "indent", "direction", "align", "image", "video",
 ];
 
 /**
@@ -41,6 +66,7 @@ const formats = [
  * toolbar is one rotation away.
  */
 const phoneModules = {
+  uploader,
   toolbar: [
     ["bold", "italic", "underline", "strike"],
     [{ list: "ordered" }, { list: "bullet" }],
@@ -79,6 +105,29 @@ export default function TextEditorQuill({ inlineContent, setInlineContent, place
       if (key && label && !label.getAttribute("aria-label")) label.setAttribute("aria-label", names[key]);
     });
   }, [phone]);
+  // A paste whose HTML carries images or video is handed to Quill without
+  // them; this runs before Quill's own paste handler, which then stands
+  // aside. Loading a description is not a paste, so it keeps what it has.
+  useEffect(() => {
+    const root = wrapper.current;
+    if (!root) return;
+    const onPaste = (event: ClipboardEvent) => {
+      const html = event.clipboardData?.getData("text/html");
+      if (!html || !/<(img|iframe)\b/i.test(html)) return;
+      const container = root.querySelector(".ql-container");
+      const quill = container ? Quill.find(container) : null;
+      if (!(quill instanceof Quill) || !quill.isEnabled()) return;
+      // A paste into the link tooltip's field is that field's own.
+      if (!(event.target instanceof Node) || !quill.root.contains(event.target)) return;
+      event.preventDefault();
+      quill.clipboard.onPaste(quill.getSelection(true), {
+        html: withoutPastedEmbeds(html),
+        text: event.clipboardData?.getData("text/plain") ?? "",
+      });
+    };
+    root.addEventListener("paste", onPaste, true);
+    return () => root.removeEventListener("paste", onPaste, true);
+  }, []);
   return (
     <Box
       ref={wrapper}
