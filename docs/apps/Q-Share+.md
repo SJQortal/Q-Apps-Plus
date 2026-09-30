@@ -273,6 +273,16 @@ Version `1.0.0-plus.5`, same branch. Built by three agents in parallel worktrees
 - **Grid view:** a `listView` setting (list by default; in the Settings sync snapshot) with a List/Grid toggle on Home, profile Shares and collection pages and a Layout choice in Settings → Appearance (DESIGN.md puts grid/list there). Cards: category art, title (two lines), file count · size · age, publisher, and the row actions (visible on touch, on hover or focus on desktop); every row state kept (pending, unavailable, deleted in collections); two columns on phones, one below 350 px. No extra Qortal calls.
 - 463 tests, lint clean.
 
+### Name search for accounts with many names (2026-09-30)
+
+Version `1.0.0-plus.6`, same branch. Simon asked for a search in the name switcher once an account has more than 15 names, and for Settings to work the same way with avatars.
+
+- **One switcher** (`components/common/NameSwitcher.tsx`) serves the account menu and Settings → Account ("Switch name" opens it in a dialog on desktop, a bottom sheet on phones; it replaced a plain `Select`). Up to 15 names: the account's order, the active one scrolled into view. Above 15: a search field (autofocused on desktop only), the active name first and the rest A to Z; matching folds case and accents per character (so "jose" finds and highlights "José"), prefix matches first. ↓ enters the list, ↑ from the first row returns to the field, Enter picks the first match (not while an IME is composing), Escape clears then closes; a polite live region reads the match count. The order is fixed per open, so a pick doesn't reshuffle the list while it fades out.
+- **Avatars:** every row uses `NameAvatar` (moved out of Navbar): a plain `<img>` requested only when the row scrolls into view, with a per-session record of names that have none. The fallback letter is drawn by CSS from `data-letter`, so MenuList's type-to-jump sees only the name.
+- **Account menu:** ↑/↓ cross between the names and Blocked names/Settings, wrapping. List heights: at least two rows on desktop; in phone sheets the list leaves room in the 85dvh sheet for the title, field and the rows below.
+- **Hub check** with 25 simulated names (the app's own Redux store, real publisher names so avatars show; reloaded afterwards to restore Tester GO): desktop menu focused the field, 7 avatar requests for the visible rows only, "andi" found and highlighted "äNDi", arrow keys walked names → Blocked names → Settings and back; 12 names with the active one last opened scrolled to it; phone sheet at 390×844 has a 44 px field and 44 px rows with the footer on screen; 844×390 keeps two name rows and the sheet scrolls; Settings dialog and sheet match. No new console errors. Switching to a name the account doesn't really own was only checked with the simulation, which reads but never writes.
+- A review pass (11 confirmed findings) is applied in 88de770, cd74837 and bd4577d. 483 tests, lint clean.
+
 ## Follow-ups
 
 Questions for Simon (after pass 2):
