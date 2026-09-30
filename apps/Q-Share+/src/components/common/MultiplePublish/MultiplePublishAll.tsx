@@ -80,6 +80,7 @@ const STATE_TEXT: Record<ResourceState, string> = {
   missing: "Not on QDN yet",
   unknown: "Not confirmed",
 };
+const STILL_UPLOADING = "Hub is still uploading";
 
 function clock(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -96,13 +97,92 @@ function ResourceIcon({ resource }: { resource: PublishResource }) {
   return fileKindIconElement(fileKind(resource.file?.type, resource.filename));
 }
 
-function StateIcon({ state }: { state: ResourceState }) {
+/** How far Hub has got with one resource, from its PUBLISH_STATUS messages. */
+export interface PublishProgress {
+  chunks?: number;
+  totalChunks?: number;
+  processed?: boolean;
+  retry?: boolean;
+}
+
+export interface PublishStatus extends PublishProgress {
+  identifier: string;
+  service?: string;
+}
+
+/**
+ * Hub's PUBLISH_STATUS message, or null for anything else. While it
+ * publishes for this tab, Hub posts one when a file's upload starts
+ * (0 of n chunks), after each 5 MB chunk, with `retry` when it waits to try
+ * again, and with `processed` once the resource is signed and on its way to
+ * QDN (Qortal-Hub AppViewer.tsx:154-195, qdn/publish/publish.ts). Hub
+ * URI-encodes the identifier and name it reports.
+ */
+export function readPublishStatus(data: unknown): PublishStatus | null {
+  const d = data as {
+    action?: unknown;
+    publishLocation?: { identifier?: unknown; service?: unknown } | null;
+    chunks?: unknown;
+    totalChunks?: unknown;
+    processed?: unknown;
+    retry?: unknown;
+  } | null;
+  if (!d || typeof d !== "object" || d.action !== "PUBLISH_STATUS") return null;
+  const raw = d.publishLocation?.identifier;
+  if (typeof raw !== "string" || !raw) return null;
+  let identifier = raw;
+  try {
+    identifier = decodeURIComponent(raw);
+  } catch {
+    // Keep it as sent.
+  }
+  const service = d.publishLocation?.service;
+  return {
+    identifier,
+    service: typeof service === "string" ? service : undefined,
+    chunks: typeof d.chunks === "number" ? d.chunks : undefined,
+    totalChunks: typeof d.totalChunks === "number" ? d.totalChunks : undefined,
+    processed: d.processed === true,
+    retry: d.retry === true,
+  };
+}
+
+/** Hub posts from its own window, which is the frame's parent or, with Hub's nested frame, its top. */
+function fromHost(event: MessageEvent): boolean {
+  return event.source != null && (event.source === window.parent || event.source === window.top);
+}
+
+/** A row's line while Hub works on it, or null when Hub has said nothing yet. */
+function progressText(progress: PublishProgress | undefined): string | null {
+  if (!progress) return null;
+  if (progress.retry) return "Retrying…";
+  const { chunks, totalChunks } = progress;
+  if (typeof chunks !== "number" || !totalChunks) return null;
+  if (chunks >= totalChunks) return "Processing…";
+  return `Uploading ${chunks} of ${totalChunks} parts`;
+}
+
+function progressPercent(progress: PublishProgress | undefined): number | null {
+  if (!progress || progress.retry || !progress.totalChunks || typeof progress.chunks !== "number") return null;
+  if (progress.chunks >= progress.totalChunks) return null;
+  return Math.round((progress.chunks / progress.totalChunks) * 100);
+}
+
+function StateIcon({ state, busy }: { state: ResourceState; busy?: boolean }) {
+  if (busy) return <CircularProgress size={20} aria-label={STILL_UPLOADING} />;
   const title = STATE_TEXT[state];
   if (state === "done") return <CheckCircleOutlinedIcon sx={{ color: "success.main" }} titleAccess={title} />;
   if (state === "failed") return <ErrorOutlineOutlinedIcon sx={{ color: "error.main" }} titleAccess={title} />;
   if (state === "missing") return <ReportProblemOutlinedIcon sx={{ color: "warning.main" }} titleAccess={title} />;
   if (state === "unknown") return <HelpOutlineOutlinedIcon sx={{ color: "text.secondary" }} titleAccess={title} />;
   return <CircularProgress size={20} aria-label={title} />;
+}
+
+function without<T>(record: Record<string, T>, ids: string[]): Record<string, T> {
+  if (!ids.some((id) => id in record)) return record;
+  const next = { ...record };
+  for (const id of ids) delete next[id];
+  return next;
 }
 
 /**
@@ -170,18 +250,23 @@ export async function findOnQdn(
 /**
  * Sends the share's resources to Hub in one PUBLISH_MULTIPLE_QDN_RESOURCES
  * request and shows what landed. Hub confirms the whole batch once and
- * answers when it is finished. When it names the resources that failed,
- * only those can be retried; an error without that list comes from Hub's
- * checks before it publishes anything. When Hub does not answer in time, or
- * the user stops waiting, Hub may still publish some or all of the batch,
- * so the app asks QDN instead of guessing (a blind retry would charge the
- * fee twice), and a late answer from Hub still completes the batch.
+ * answers when it is finished; meanwhile its PUBLISH_STATUS messages give
+ * each row its upload progress, and mark it published once signed. When
+ * Hub names the resources that failed, only those can be retried; an error
+ * without that list comes from Hub's checks before it publishes anything.
+ * When Hub does not answer in time, or the user stops waiting, Hub may
+ * still publish some or all of the batch, so the app asks QDN instead of
+ * guessing (a blind retry would charge the fee twice) and keeps listening
+ * to Hub: a late answer or status message still completes the batch.
  */
 export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError }: MultiplePublishProps) => {
   const [phase, setPhase] = useState<Phase>("publishing");
   const [rows, setRows] = useState<Record<string, ResourceState>>({});
   // The async steps below read the latest row states without waiting for a render.
   const rowsRef = useRef(rows);
+  // Hub's latest status per row. Checking QDN for a row drops its entry, so
+  // an entry on a row that is not on QDN means Hub has been at it since.
+  const [progress, setProgress] = useState<Record<string, PublishProgress>>({});
   const [errorText, setErrorText] = useState<string | null>(null);
   const hasStarted = useRef(false);
   const alive = useRef(true);
@@ -195,7 +280,8 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
   // Rows a request may still publish, by request number: the app stopped
   // waiting for them and QDN has not confirmed them yet.
   const unsure = useRef(new Map<string, number>());
-  // Hub reports nothing while it works, so at least show that time is passing.
+  // Status messages stop between resources (and a small file sends only
+  // one), so also show that time is passing.
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     if (phase !== "publishing") return;
@@ -238,13 +324,49 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
     [publishes]
   );
 
-  // Hub's answer and the QDN check can each be the one that completes the
-  // batch; report it once, and never after close.
+  // Hub's answer, the QDN check and a late status message can each be the
+  // one that completes the batch; report it once, and never after close.
   const finish = useCallback(() => {
     if (finished.current || !alive.current) return;
     finished.current = true;
     onSubmit();
   }, [onSubmit]);
+
+  // Hub's progress for this publish. It keeps coming after a timeout, so the
+  // listener stays for as long as the dialog is open.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const status = readPublishStatus(event.data);
+      if (!status || !fromHost(event)) return;
+      const resource = publishes.resources.find(
+        (r) => r.identifier === status.identifier && (!status.service || r.service === status.service)
+      );
+      if (!resource) return;
+      const id = resource.identifier;
+      setProgress((prev) => {
+        const old = prev[id] ?? {};
+        return {
+          ...prev,
+          [id]: {
+            chunks: status.chunks ?? old.chunks,
+            totalChunks: status.totalChunks ?? old.totalChunks,
+            processed: status.processed || old.processed,
+            retry: status.retry,
+          },
+        };
+      });
+      // Signed and processed: it is on its way to QDN whatever Hub answers later.
+      if (status.processed) mark([id], "done");
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [publishes, mark]);
+
+  // Hub may finish after the app stopped waiting; its last status message
+  // then completes the batch.
+  useEffect(() => {
+    if (phase === "settled" && allDone()) finish();
+  }, [phase, rows, allDone, finish]);
 
   const verify = useCallback(
     async (resources: PublishResource[]) => {
@@ -252,9 +374,12 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
       setPhase("checking");
       mark(ids, "checking");
       for (const id of ids) unsure.current.set(id, sentBy.current.get(id) ?? 0);
+      // Progress from before the check is old news; what arrives from now
+      // on shows Hub is still at work on the row.
+      setProgress((prev) => without(prev, ids));
       const found = await findOnQdn(resources, replaces);
       if (!alive.current) return;
-      // Hub's answer may have settled a row meanwhile.
+      // Hub's answer or a status message may have settled a row meanwhile.
       const open = ids.filter((id) => rowsRef.current[id] === "checking");
       if (!found) {
         mark(open, "unknown");
@@ -284,6 +409,7 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
       waitingOn.current = current;
       for (const id of ids) sentBy.current.set(id, current);
       mark(ids, "waiting");
+      setProgress((prev) => without(prev, ids));
       setPhase("publishing");
       setErrorText(null);
       setElapsed(0);
@@ -354,12 +480,17 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
   const totalBytes = resources.reduce((sum, r) => sum + (r.service === "FILE" ? r.file.size : 0), 0);
   const stateOf = (id: string): ResourceState => rows[id] ?? "waiting";
   const count = (state: ResourceState) => resources.filter((r) => stateOf(r.identifier) === state).length;
+  // Not on QDN at the last check, but Hub has reported progress since.
+  const isBusy = (id: string) => ["missing", "unknown"].includes(stateOf(id)) && Boolean(progress[id]);
   const doneCount = count("done");
   const failedCount = count("failed");
   const missingCount = count("missing");
   const unknownCount = count("unknown");
   const settled = phase === "settled";
-  const retryable = resources.filter((r) => ["failed", "missing"].includes(stateOf(r.identifier)));
+  const retryable = resources.filter((r) => {
+    const state = stateOf(r.identifier);
+    return state === "failed" || (state === "missing" && !isBusy(r.identifier));
+  });
   const uncertain = resources.filter((r) => ["missing", "unknown"].includes(stateOf(r.identifier)));
   const detailsDone = resources.some((r) => r.service === "DOCUMENT" && stateOf(r.identifier) === "done");
   const filesLeft = resources.filter((r) => r.service === "FILE" && stateOf(r.identifier) !== "done").length;
@@ -372,7 +503,7 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
     setErrorText(null);
     verify(uncertain);
   };
-  // Hub carries on, and its answer still counts; only the app stops waiting.
+  // Hub carries on and is still listened to; only the app stops waiting.
   const stopWaiting = () => {
     waitingOn.current = 0;
     verify(resources.filter((r) => stateOf(r.identifier) !== "done"));
@@ -482,18 +613,39 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
         <List dense disablePadding aria-label="Resources">
           {resources.map((resource) => {
             const state = stateOf(resource.identifier);
+            const label = resourceLabel(resource);
+            const busy = isBusy(resource.identifier);
+            // Hub's progress matters while the row waits on Hub, or when Hub
+            // is still at work on a row the last check did not find.
+            const working = state === "waiting" || busy ? progress[resource.identifier] : undefined;
+            const percent = progressPercent(working);
+            const line = busy
+              ? [STILL_UPLOADING, progressText(working)].filter(Boolean).join(" · ")
+              : (progressText(working) ?? STATE_TEXT[state]);
             return (
               <ListItem key={resource.identifier} divider sx={{ minHeight: 48, px: 0 }}>
                 <ListItemIcon sx={{ minWidth: 36, color: "text.secondary" }}>
                   <ResourceIcon resource={resource} />
                 </ListItemIcon>
                 <ListItemText
-                  primary={resourceLabel(resource)}
-                  secondary={STATE_TEXT[state]}
-                  slotProps={{ primary: { noWrap: true, title: resourceLabel(resource) } }}
+                  primary={label}
+                  secondary={
+                    <>
+                      {line}
+                      {percent !== null && (
+                        <LinearProgress
+                          variant="determinate"
+                          value={percent}
+                          aria-label={`${label} upload`}
+                          sx={{ mt: 0.75, height: 4, borderRadius: 1 }}
+                        />
+                      )}
+                    </>
+                  }
+                  slotProps={{ primary: { noWrap: true, title: label } }}
                 />
                 <Box sx={{ ml: 1, display: "flex", alignItems: "center" }}>
-                  <StateIcon state={state} />
+                  <StateIcon state={state} busy={busy} />
                 </Box>
               </ListItem>
             );
