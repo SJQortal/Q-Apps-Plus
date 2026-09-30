@@ -11,7 +11,8 @@ export const Page = styled("div")(({ theme }) => ({
   flexDirection: "column",
   gap: theme.spacing(2),
   padding: theme.spacing(1.5, 2),
-  paddingBottom: `calc(${theme.spacing(11)} + env(safe-area-inset-bottom, 0px))`,
+  // The shared BottomNavSpacer clears the bar and the Share button on phones.
+  paddingBottom: theme.spacing(3),
   [theme.breakpoints.up("md")]: {
     padding: theme.spacing(2.5, 3),
     paddingBottom: theme.spacing(6),
