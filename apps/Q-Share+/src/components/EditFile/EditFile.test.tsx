@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { Route, Routes } from "react-router-dom";
 import { renderWithProviders } from "../../test/renderWithProviders";
-import { mockFetch, mockQortalAction } from "../../test/setup";
+import { mockFetch, mockQortalAction, qortalCallsFor } from "../../test/setup";
 import { store } from "../../state/store";
 import { addUser } from "../../state/features/authSlice";
-import { setEditFile } from "../../state/features/fileSlice";
+import { addToHashMap, setEditFile } from "../../state/features/fileSlice";
+import { FileListComponentLevel } from "../../pages/Home/FileListComponentLevel";
+import { resetQdnSearchCache } from "../../utils/qdnSearch";
 import { EditFile } from "./EditFile";
 
 // Quill works in jsdom but is slow to load; a textarea keeps the test quick.
@@ -46,6 +49,14 @@ const share = {
     },
   ],
 };
+
+/** The share's JSON as QDN holds it: no id or user, which come from the search. */
+function bodyOf(loaded: Record<string, unknown>): Record<string, unknown> {
+  const body = { ...loaded };
+  delete body.id;
+  delete body.user;
+  return body;
+}
 
 describe("EditFile", () => {
   it("finishes the update when the share details landed but a new file did not", async () => {
@@ -108,6 +119,100 @@ describe("EditFile", () => {
     await waitFor(() => expect(store.getState().file.editFileProperties).toBeNull());
     await waitFor(() => expect((store.getState().file.hashMapFiles[share.id] as any)?.updated).toBe(newest));
     expect((store.getState().file.hashMapFiles[share.id] as any)?.title).toBe("Report 3");
+  }, FLOW_TIMEOUT_MS);
+
+  it("asks before publishing again after an unconfirmed update, also once Edit was closed and reopened", async () => {
+    const guarded = { ...share, id: "qshare_file_report_guard1_metadata", updated: Date.now() - 60_000 };
+    store.dispatch(addUser({ address: "Qalice", publicKey: "pk", name: "alice" }));
+    store.dispatch(addToHashMap(guarded));
+    store.dispatch(setEditFile(guarded));
+    // Hub never answers, and QDN still has the version before this update.
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => new Promise(() => {}));
+    mockFetch("/arbitrary/resources/search", (url: URL) => [
+      { name: "alice", service: "DOCUMENT", identifier: url.searchParams.get("identifier"), updated: guarded.updated },
+    ]);
+    mockQortalAction("FETCH_QDN_RESOURCE", () => bodyOf(share));
+    const nodeAsked = () =>
+      qortalCallsFor("FETCH_QDN_RESOURCE").filter((call) => call.identifier === guarded.id).length;
+    const before = store.getState().file.listVersion;
+    renderWithProviders(<EditFile />);
+
+    fireEvent.change(await screen.findByRole("textbox", { name: /title/i }), { target: { value: "Report 4" } });
+    fireEvent.click(screen.getByRole("button", { name: "Publish update" }));
+    expect(await screen.findByText(/Publishing 1 resource/)).toBeInTheDocument();
+    // The publishing dialog's X stops waiting; its Close then leaves the outcome open.
+    fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
+    expect(await screen.findByText("0 of 1 published")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
+    await waitFor(() =>
+      expect(store.getState().notifications.alertTypes.alertInfo).toBe(
+        "Your update may still be publishing in Hub. Check the share before you publish it again."
+      )
+    );
+    // The node is asked for the share again (the copy stays until it answers), and lists refresh.
+    await waitFor(() => expect(nodeAsked()).toBe(1));
+    expect(store.getState().file.hashMapFiles[guarded.id]).toBeDefined();
+    expect(store.getState().file.listVersion).toBe(before + 1);
+
+    // The user closes Edit to check the share, then opens it again.
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Update share" })).not.toBeInTheDocument());
+    act(() => {
+      store.dispatch(setEditFile(guarded));
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Publish update" }));
+    expect(await screen.findByRole("dialog", { name: "Publish again?" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Publish again?" })).not.toBeInTheDocument());
+    expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish update" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Publish anyway" }));
+    await waitFor(() => expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(2));
+  }, FLOW_TIMEOUT_MS);
+
+  it("keeps a profile row's Edit after an unconfirmed update, and shows the share the node has", async () => {
+    resetQdnSearchCache();
+    const id = "qshare_file_report_prof01_metadata";
+    const created = Date.now() - 86_400_000;
+    let updated = Date.now() - 60_000;
+    store.dispatch(addUser({ address: "Qalice", publicKey: "pk", name: "alice" }));
+    store.dispatch(setEditFile(null));
+    // Hub never answers the update.
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => new Promise(() => {}));
+    let nodeTitle = "Report";
+    mockFetch("/arbitrary/resources/search", () => [
+      { name: "alice", service: "DOCUMENT", identifier: id, created, updated, metadata: { title: nodeTitle } },
+    ]);
+    mockQortalAction("FETCH_QDN_RESOURCE", () => ({ ...bodyOf(share), title: nodeTitle }));
+    const { container } = renderWithProviders(
+      <>
+        <Routes>
+          <Route path="/channel/:name" element={<FileListComponentLevel />} />
+        </Routes>
+        <EditFile />
+      </>,
+      { initialEntries: ["/channel/alice"] }
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit share" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: /title/i }), { target: { value: "Report 5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Publish update" }));
+    expect(await screen.findByText(/Publishing 1 resource/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
+    expect(await screen.findByText("0 of 1 published")).toBeInTheDocument();
+    // Hub finishes the update after that check; the user closes the dialogs.
+    nodeTitle = "Report 5";
+    updated += 5_000;
+    fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Update share" })).not.toBeInTheDocument());
+
+    // The row was never left without its body: it shows the node's version, with Edit.
+    expect(await screen.findByText("Report 5")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit share" })).toBeInTheDocument();
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(qortalCallsFor("FETCH_QDN_RESOURCE").length).toBe(2);
   }, FLOW_TIMEOUT_MS);
 
   it("after a timeout does not count the version it replaces, even one from a minute ago", async () => {

@@ -1,9 +1,16 @@
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@mui/material";
 import { useDispatch, useSelector, useStore } from "react-redux";
-import { markSharesChanged, setEditFile, updateFile, updateInHashMap } from "../../state/features/fileSlice";
+import {
+  addToHashMap,
+  markSharesChanged,
+  setEditFile,
+  updateFile,
+  updateInHashMap,
+} from "../../state/features/fileSlice";
 import { setNotification } from "../../state/features/notificationsSlice";
 import type { RootState } from "../../state/store";
+import { fetchAndEvaluateVideos } from "../../utils/fetchVideos";
 import {
   buildSharePublish,
   toMultiplePublish,
@@ -11,6 +18,7 @@ import {
   type MultiplePublishRequest,
 } from "../../utils/publishPayload";
 import { invalidateQdnSearches } from "../../utils/qdnSearch";
+import { queue } from "../../utils/queue";
 import { getCategoriesFromObject, type CategoryListRef } from "../common/CategoryList/CategoryList";
 import { ResponsiveDialog } from "../common/mobile/ResponsiveDialog";
 import {
@@ -24,6 +32,14 @@ import {
 import { draftFromRef, publishErrorMessage, toPublishInputs } from "../PublishFile/shareDraft";
 import { ShareForm } from "../PublishFile/ShareForm";
 import { useShareDraft } from "../PublishFile/useShareDraft";
+
+/**
+ * Shares whose last update was left unconfirmed: Hub may still finish it, so
+ * the next Publish update asks first, as it costs another fee. Kept outside
+ * the dialog, which closes (and forgets its own state) when the user goes to
+ * check the share.
+ */
+const unconfirmedUpdates = new Set<string>();
 
 /**
  * The "Update share" dialog. It opens when `file.editFileProperties` is set
@@ -63,9 +79,6 @@ function EditShareDialog({ share }: EditShareDialogProps) {
   // version's time is read from the node when Publish is pressed: the stored
   // copy may be older, and the device clock can be minutes off the node's.
   const [replaces, setReplaces] = useState<ReplacedVersions>({ [share.id]: undefined });
-  // The last update was left unconfirmed and Hub may still finish it, so the
-  // next one asks first: it costs another fee.
-  const [mayStillPublish, setMayStillPublish] = useState(false);
   const [confirmAgain, setConfirmAgain] = useState(false);
 
   const close = () => {
@@ -77,7 +90,7 @@ function EditShareDialog({ share }: EditShareDialogProps) {
     const selected = categories?.getSelectedCategories() ?? [];
     const problems = draft.validate(Boolean(selected[0]));
     if (problems.length > 0 || !categories) return;
-    if (mayStillPublish && !confirmed) {
+    if (unconfirmedUpdates.has(share.id) && !confirmed) {
       setConfirmAgain(true);
       return;
     }
@@ -116,7 +129,7 @@ function EditShareDialog({ share }: EditShareDialogProps) {
       }
       setReplaces({ [share.id]: before });
       setPendingUpdate({ ...share, ...fileObject });
-      setMayStillPublish(false);
+      unconfirmedUpdates.delete(share.id);
       setPublishes(toMultiplePublish(resources));
     } catch (error) {
       dispatch(setNotification({ msg: publishErrorMessage(error, "Failed to publish update"), alertType: "error" }));
@@ -171,7 +184,24 @@ function EditShareDialog({ share }: EditShareDialogProps) {
     }
     setPublishes(null);
     if (stopped?.uncertain) {
-      setMayStillPublish(true);
+      unconfirmedUpdates.add(share.id);
+      // The stored copy is the version this update may yet replace. Ask the
+      // node for the share's body again, through the body queue, so the share
+      // page and every row (Home, profile, collection) show what the node has.
+      // The copy stays until the answer lands: a row without one hides Edit,
+      // and not every list fetches a body again. A failed fetch, or a newer
+      // copy stored meanwhile (a later update, a list's fetch), keeps what is there.
+      const held = store.getState().file.hashMapFiles[share.id];
+      void queue.push(async () => {
+        try {
+          const body = await fetchAndEvaluateVideos({ user: share.user, videoId: share.id, content: held ?? share });
+          if (store.getState().file.hashMapFiles[share.id] === held) dispatch(addToHashMap(body));
+        } catch {
+          // The stored copy stays.
+        }
+      });
+      dispatch(markSharesChanged());
+      invalidateQdnSearches();
       dispatch(
         setNotification({
           msg: "Your update may still be publishing in Hub. Check the share before you publish it again.",
