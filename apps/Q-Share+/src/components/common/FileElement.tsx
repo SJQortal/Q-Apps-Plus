@@ -24,8 +24,6 @@ export interface FileInfo {
   size?: number;
 }
 
-const BUILD_NUDGE_MS = 7_500;
-
 export function resourceUrl({ service, name, identifier }: FileInfo): string {
   return `/arbitrary/${service}/${encodeURIComponent(name)}/${encodeURIComponent(identifier)}`;
 }
@@ -103,8 +101,6 @@ export function useFileDownload(fileInfo: FileInfo, jsonId: string) {
   const download = useSelector((state: RootState) => state.global?.downloads?.[fileInfo?.identifier]);
   const [saving, setSaving] = useState(false);
   const startedHere = useRef(false);
-  const nudging = useRef(false);
-  const nudgeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const status: string | undefined = download?.status?.status;
   const percent = Math.max(0, Math.min(100, Math.round(download?.status?.percentLoaded ?? 0)));
@@ -141,32 +137,6 @@ export function useFileDownload(fileInfo: FileInfo, jsonId: string) {
       setSaving(false);
     }
   }, [dispatch, download, fileInfo, phase, ref, saving]);
-
-  // Once every chunk is local the node still has to build the file; asking for
-  // its properties every few seconds (tab visible only) makes that happen sooner.
-  useEffect(() => {
-    const stopNudging = () => {
-      if (nudgeTimer.current) clearInterval(nudgeTimer.current);
-      nudgeTimer.current = null;
-    };
-    if (phase !== "building") {
-      stopNudging();
-      return;
-    }
-    nudgeTimer.current = setInterval(async () => {
-      if (nudging.current) return;
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      nudging.current = true;
-      try {
-        await qortalRequest({ action: "GET_QDN_RESOURCE_PROPERTIES", ...ref });
-      } catch {
-        /* the status poll reports the outcome */
-      } finally {
-        nudging.current = false;
-      }
-    }, BUILD_NUDGE_MS);
-    return stopNudging;
-  }, [phase, ref]);
 
   useEffect(() => {
     if (phase === "ready" && startedHere.current) {

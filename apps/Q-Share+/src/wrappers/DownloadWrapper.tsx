@@ -18,8 +18,9 @@ import { RootState } from "../state/store";
  *   REFETCHING           (app-side status) polling pauses REFETCH_PAUSE_MS, then a
  *     │                  GET_QDN_RESOURCE_PROPERTIES call nudges the node and polling resumes
  *     ▼
- *   DOWNLOADED / BUILDING  every chunk is local; the node assembles the file
- *     ▼
+ *   DOWNLOADED / BUILDING  every chunk is local; the node assembles the file. Core
+ *     │                  leaves it at DOWNLOADED until asked, so the poller asks with
+ *     ▼                  GET_QDN_RESOURCE_STATUS build:true, at most every BUILD_NUDGE_MS
  *   READY                polling stops; the row offers Save (SAVE_FILE)
  *
  * MISSING_DATA keeps polling (peers may still come online) and shows as stalled.
@@ -31,6 +32,14 @@ import { RootState } from "../state/store";
 export const POLL_MS = 5_000;
 export const STALL_MS = 25_000;
 export const REFETCH_PAUSE_MS = 25_000;
+export const BUILD_NUDGE_MS = 7_500;
+/**
+ * How long a build ask may take. Core builds synchronously and answers only
+ * when the file is built, and q-apps.js's default 30 s timeout would drop the
+ * ask while Core carries on, so the next DOWNLOADED poll would ask again. Its
+ * orphan sweep would also close the channel without freeing the request slot.
+ */
+export const BUILD_TIMEOUT_MS = 10 * 60_000;
 const MAX_FAILURES = 6;
 
 export const FAILED_STATUSES = new Set(["NOT_PUBLISHED", "BLOCKED", "UNSUPPORTED", "BUILD_FAILED"]);
@@ -139,10 +148,14 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
       let stalledFor = 0;
       let failures = 0;
       let pauseTimer: ReturnType<typeof setTimeout> | null = null;
+      let stopped = false;
+      let building = false;
+      let lastBuild = 0;
 
       const setStatus = (status: any) => dispatch(updateDownloads({ name, service, identifier, status }));
 
       const stop = () => {
+        stopped = true;
         clearInterval(intervalId);
         if (pauseTimer) clearTimeout(pauseTimer);
         pauseTimer = null;
@@ -157,13 +170,45 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
         fetchResource({ name, service, identifier });
       };
 
+      // Core leaves a file at DOWNLOADED until something asks for it, and nothing
+      // does once its share page is closed. build:true makes Core build it before
+      // answering, so one ask at a time (a second one would wait on the first),
+      // with a timeout long enough for a big build, and a READY answer ends
+      // polling early.
+      const build = () => {
+        if (building || Date.now() - lastBuild < BUILD_NUDGE_MS) return;
+        building = true;
+        lastBuild = Date.now();
+        const request: QortalRequestOptions & { build: boolean } = {
+          action: "GET_QDN_RESOURCE_STATUS",
+          name,
+          service,
+          identifier,
+          build: true,
+        };
+        qortalRequestWithTimeout(request, BUILD_TIMEOUT_MS)
+          .then((res) => {
+            if (!stopped && (res?.status === "READY" || isFailedStatus(res?.status))) {
+              setStatus(res);
+              stop();
+            }
+          })
+          .catch(() => {
+            /* the next poll reports the outcome */
+          })
+          .finally(() => {
+            building = false;
+          });
+      };
+
       const intervalId = setInterval(async () => {
         if (isCalling || paused) return;
         if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
         isCalling = true;
         try {
           const res = await qortalRequest({ action: "GET_QDN_RESOURCE_STATUS", name, service, identifier });
-          if (!res) return;
+          // A build answer may have finished the download while this poll was out.
+          if (!res || stopped) return;
           failures = 0;
           const status: string | undefined = res.status;
           if (status === "READY" || isFailedStatus(status)) {
@@ -171,6 +216,7 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
             stop();
             return;
           }
+          if (status === "DOWNLOADED") build();
           const percent = typeof res.percentLoaded === "number" ? res.percentLoaded : null;
           if (percent !== null && !BUILDING_STATUSES.has(status ?? "")) {
             if (percent === percentLoaded && percent < 100) stalledFor += POLL_MS;
