@@ -115,7 +115,7 @@ export const BlockedNamesModal: React.FC<PostModalProps> = ({ open, onClose }) =
       <EmptyState
         icon={<PersonOffOutlinedIcon />}
         title="No blocked names"
-        description="Names you block from a share's menu will show here."
+        description="Names you block with the block button on a share show here."
       />
     );
   } else {
