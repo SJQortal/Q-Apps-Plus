@@ -34,12 +34,16 @@ function asksForBlob(error: unknown): boolean {
   return /\bblob\b/i.test(errorMessage(error, ""));
 }
 
+/** GO (Hub on Android) rather than desktop Hub. */
+const isGo = (userAgent: string) => /Android/i.test(userAgent);
+
 /**
  * False when GO would save the file by `location` with no name. GO names that
  * file with Hub's normalizeFilename, which keeps only A-Z, a-z, 0-9, space, _
  * and - before the extension (accents stripped), so "Отчёт.pdf" or "规划.docx"
  * lands in Documents/Qortal Go as a hidden, nameless ".pdf". A blob save keeps
- * the name, so such files take that path until GO keeps Unicode names too.
+ * the name, so in GO such files take that path until GO keeps Unicode names
+ * too. Desktop Hub's Save As dialog keeps the name, so there it doesn't apply.
  */
 export function keepsNameByLocation(filename: string): boolean {
   const dot = filename.lastIndexOf(".");
@@ -58,7 +62,7 @@ const STREAM_FROM_BYTES = 100 * 1024 * 1024;
  * holding the file in this frame costs real memory, stream.
  */
 export function streamsByLocation(size: number | undefined, userAgent = navigator.userAgent): boolean {
-  if (/Android/i.test(userAgent)) return true;
+  if (isGo(userAgent)) return true;
   return !size || size >= STREAM_FROM_BYTES;
 }
 
@@ -67,9 +71,9 @@ export function streamsByLocation(size: number | undefined, userAgent = navigato
  * from the node by `location` (Electron writes it to disk in chunks, GO
  * downloads it natively), so the file never passes through this frame and the
  * prompt comes before any bytes move. Small files on desktop (see
- * streamsByLocation), Hubs that only take a blob, and names GO would strip to
- * nothing (see keepsNameByLocation) get one read here instead. The node's own
- * filename, type and size win over the stored ones.
+ * streamsByLocation), Hubs that only take a blob, and in GO names it would
+ * strip to nothing (see keepsNameByLocation) get one read here instead. The
+ * node's own filename, type and size win over the stored ones.
  */
 export async function saveFromNode(
   ref: FileInfo,
@@ -93,7 +97,8 @@ export async function saveFromNode(
     mimeType,
     location: { service: ref.service, name: ref.name, identifier: ref.identifier },
   };
-  if (keepsNameByLocation(filename) && streamsByLocation(size)) {
+  const userAgent = navigator.userAgent;
+  if (streamsByLocation(size, userAgent) && (!isGo(userAgent) || keepsNameByLocation(filename))) {
     try {
       await qortalRequest(byLocation);
       return;

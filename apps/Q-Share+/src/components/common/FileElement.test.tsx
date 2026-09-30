@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from "../../test/setup";
@@ -17,6 +17,10 @@ function markReady() {
 
 const errorToast = () => store.getState().notifications.alertTypes.alertError;
 
+const android = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/128.0 Mobile Safari/537.36";
+const desktop = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 qortal-hub/3.0.3 Chrome/128.0 Electron/32.3.1";
+const runIn = (userAgent: string) => vi.spyOn(navigator, "userAgent", "get").mockReturnValue(userAgent);
+
 describe("FileElement save", () => {
   beforeEach(() => {
     store.dispatch(removeDownload(file.identifier));
@@ -24,6 +28,10 @@ describe("FileElement save", () => {
     // Big enough to stream on desktop (see streamsByLocation).
     mockQortalAction("GET_QDN_RESOURCE_PROPERTIES", { filename: "notes.txt", mimeType: "text/plain", size: 200 * 1024 * 1024 });
     mockFetch("/arbitrary/FILE/alice/qshare_file_notes_1", "hello");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("lets Hub stream the file from the node instead of reading it here", async () => {
@@ -81,6 +89,7 @@ describe("FileElement save", () => {
   it("reads a file here when GO would save it by location with no name", async () => {
     // GO keeps only A-Z, a-z, 0-9, space, _ and - of a name it saves by location,
     // so "Отчёт.pdf" would become a hidden, nameless ".pdf". A blob keeps the name.
+    runIn(android);
     markReady();
     const report = { ...file, filename: "Отчёт.pdf", mimetype: "application/pdf" };
     mockQortalAction("GET_QDN_RESOURCE_PROPERTIES", { filename: "Отчёт.pdf", mimeType: "application/pdf", size: 5 });
@@ -97,6 +106,23 @@ describe("FileElement save", () => {
     expect(errorToast()).toBe("");
   });
 
+  it("lets desktop Hub stream a big file whose name has no Latin letters, as its Save As keeps the name", async () => {
+    runIn(desktop);
+    markReady();
+    const report = { ...file, filename: "Отчёт.mp4", mimetype: "video/mp4" };
+    mockQortalAction("GET_QDN_RESOURCE_PROPERTIES", { filename: "Отчёт.mp4", mimeType: "video/mp4", size: 200 * 1024 * 1024 });
+    mockQortalAction("SAVE_FILE", true);
+    store.dispatch(updateDownloads({ identifier: file.identifier, properties: report }));
+    renderWithProviders(<FileElement fileInfo={report} jsonId="qshare_file_notes" />);
+    fireEvent.click(screen.getByRole("button", { name: "Save Отчёт.mp4" }));
+    await waitFor(() => expect(qortalCallsFor("SAVE_FILE").length).toBe(1));
+    const [call] = qortalCallsFor("SAVE_FILE") as any[];
+    expect(call.filename).toBe("Отчёт.mp4");
+    expect(call.location).toEqual({ service: "FILE", name: "alice", identifier: "qshare_file_notes_1" });
+    expect(call.blob).toBeUndefined();
+    expect(fetchCallsMatching("/arbitrary/FILE/").length).toBe(0);
+  });
+
   it("hands a small file to desktop Hub as a blob, so it saves in one step", async () => {
     markReady();
     mockQortalAction("GET_QDN_RESOURCE_PROPERTIES", { filename: "notes.txt", mimeType: "text/plain", size: 5 });
@@ -110,8 +136,6 @@ describe("FileElement save", () => {
   });
 
   it("streams in GO whatever the size, and on desktop from 100 MB", () => {
-    const android = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/128.0 Mobile Safari/537.36";
-    const desktop = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 qortal-hub/3.0.3 Chrome/128.0 Electron/32.3.1";
     expect(streamsByLocation(5, android)).toBe(true);
     expect(streamsByLocation(5, desktop)).toBe(false);
     expect(streamsByLocation(100 * 1024 * 1024, desktop)).toBe(true);
