@@ -1,5 +1,6 @@
 import { Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
+import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
 import { headerFill } from "../../hub-theme";
 
 export const Page = styled("div")(({ theme }) => ({
@@ -126,6 +127,7 @@ export const PublisherLink = styled("button")(({ theme }) => ({
   background: "transparent",
   padding: theme.spacing(0.5, 0),
   minHeight: 36,
+  [`@media ${PHONE_MEDIA}`]: { minHeight: 44 },
   cursor: "pointer",
   display: "inline-flex",
   alignItems: "center",

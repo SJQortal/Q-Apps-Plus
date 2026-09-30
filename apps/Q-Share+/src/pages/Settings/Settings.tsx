@@ -101,7 +101,7 @@ export const Settings = () => {
   return (
     <Page>
       <PageHeader>
-        <IconButton aria-label="Back" onClick={() => navigate(-1)} size="small">
+        <IconButton aria-label="Back" onClick={() => navigate(-1)} sx={{ minWidth: 44, minHeight: 44 }}>
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h6" sx={{ fontWeight: 700 }}>

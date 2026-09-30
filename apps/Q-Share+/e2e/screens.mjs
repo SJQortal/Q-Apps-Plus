@@ -193,7 +193,8 @@ const SCREENS = [
 ];
 
 function startPreview() {
-  const child = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort", "--host", "127.0.0.1"], { cwd: app, stdio: ["ignore", "pipe", "pipe"] });
+  // Its own process group, so the real vite process dies with the npx wrapper.
+  const child = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort", "--host", "127.0.0.1"], { cwd: app, stdio: ["ignore", "pipe", "pipe"], detached: true });
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error("vite preview did not start")), 20000);
     child.stdout.on("data", (d) => { if (String(d).includes("http")) { clearTimeout(t); resolve(child); } });
@@ -295,7 +296,11 @@ try {
   }
 } finally {
   await browser.close();
-  preview.kill();
+  try {
+    process.kill(-preview.pid, "SIGTERM");
+  } catch {
+    preview.kill();
+  }
 }
 
 const bad = report.filter((r) => r.errors.length || r.overflowX || r.unlabeled);
@@ -307,3 +312,5 @@ for (const r of report.filter((r) => r.theme === themes[0])) {
 for (const r of bad) lines.push(`!! ${r.screen} ${r.viewport} ${r.theme}: ${r.errors.join(" | ")}${r.overflowX ? " OVERFLOW-X" : ""}${r.unlabeled ? " UNLABELED=" + r.unlabeled : ""}`);
 writeFileSync(path.join(shots, "report.json"), JSON.stringify(report, null, 1));
 console.log(lines.join("\n"));
+// The preview server's pipes would otherwise keep the process alive.
+process.exit(0);
