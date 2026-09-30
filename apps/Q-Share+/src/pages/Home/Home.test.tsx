@@ -1068,3 +1068,24 @@ describe('Home with hidden names', () => {
     expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(0);
   });
 });
+
+describe('Home search fields', () => {
+  it('the title search and the publisher filter show a clear button while they have text, and it empties them', async () => {
+    mockFetch('/arbitrary/resources/search', []);
+    mockFetch('/names/search', []);
+    renderHome();
+    const title = await screen.findByRole('textbox', { name: 'Search titles' });
+    expect(screen.queryByRole('button', { name: 'Clear the title search' })).toBeNull();
+    fireEvent.change(title, { target: { value: 'holiday' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear the title search' }));
+    expect(title).toHaveValue('');
+    expect(store.getState().file.filterSearch).toBe('');
+    expect(screen.queryByRole('button', { name: 'Clear the title search' })).toBeNull();
+
+    const publisher = screen.getByRole('combobox', { name: 'Publisher name (exact)' });
+    fireEvent.change(publisher, { target: { value: 'alice' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear the publisher filter' }));
+    expect(publisher).toHaveValue('');
+    expect(store.getState().file.filterName).toBe('');
+  });
+});

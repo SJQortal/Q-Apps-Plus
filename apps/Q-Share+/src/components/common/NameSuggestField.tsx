@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Avatar, Box, CircularProgress, Paper, Popper, TextField, Typography, type PopperProps } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import { ClearFieldButton } from "./ClearFieldButton";
 import {
   NAME_SEARCH_DEBOUNCE_MS,
   avatarKnownMissing,
@@ -127,6 +128,8 @@ export interface NameSuggestFieldProps {
   seenLabel?: string;
   /** The suggestion list's accessible name. */
   listLabel?: string;
+  /** Accessible name of the ✕ that empties the field. */
+  clearLabel?: string;
 }
 
 /**
@@ -145,6 +148,7 @@ export function NameSuggestField({
   seenNames = NO_NAMES,
   seenLabel = "In this list",
   listLabel = "Suggested names",
+  clearLabel = "Clear the name",
 }: NameSuggestFieldProps) {
   const theme = useTheme();
   const baseId = useId();
@@ -278,6 +282,18 @@ export function NameSuggestField({
             autoCapitalize: "none",
             spellCheck: false,
             enterKeyHint: "search",
+          },
+          input: {
+            endAdornment: value ? (
+              <ClearFieldButton
+                label={clearLabel}
+                onClear={() => {
+                  cancel();
+                  close();
+                  onChange("");
+                }}
+              />
+            ) : undefined,
           },
         }}
       />

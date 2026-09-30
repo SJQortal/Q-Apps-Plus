@@ -1,3 +1,4 @@
+import { ClearFieldButton } from "../../components/common/ClearFieldButton";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -305,6 +306,13 @@ export const Home = () => {
         label="Search titles"
         value={filterSearch}
         onChange={(e) => dispatch(changefilterSearch(e.target.value))}
+        slotProps={{
+          input: {
+            endAdornment: filterSearch ? (
+              <ClearFieldButton label="Clear the title search" onClear={() => dispatch(changefilterSearch(""))} />
+            ) : undefined,
+          },
+        }}
       />
       <NameSuggestField
         label="Publisher name (exact)"
@@ -313,6 +321,7 @@ export const Home = () => {
         onPick={pickPublisher}
         seenNames={seenPublishers}
         listLabel="Suggested publishers"
+        clearLabel="Clear the publisher filter"
       />
       <CategoryList categoryData={allCategoryData} ref={categoryListRef} initialCategories={pickerCategories} dense />
       <Box sx={{ display: "flex", gap: 1, "& .MuiButton-root": { minHeight: 44 } }}>

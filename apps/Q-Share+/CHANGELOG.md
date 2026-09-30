@@ -20,6 +20,7 @@ The first release of Q-Share+. It reads and writes the same QDN data as Q-Share:
 **Finding shares**
 - Home: a filters rail (a Filters sheet on phones), newest/oldest sort, My shares (for one or all of your names), a Following feed, hidden names, and clear loading, empty and error states. Titles show at once; shares that aren't reachable say so, deleted ones are left out, and paging continues past hidden names.
 - The publisher filter suggests names as you type, with avatars.
+- Every search field has a ✕ that clears it while it has text (title search, publisher filter, name switcher).
 - Profile pages with Shares and Collections tabs.
 
 **Share pages and downloads**

@@ -237,6 +237,22 @@ describe('NameSuggestField', () => {
     expect(document.activeElement).toBe(input());
   });
 
+  it('shows a clear button only with text, which empties the field, closes the list and keeps focus', async () => {
+    mockFetch('/names/search', [record('Alice')]);
+    renderWithProviders(<Field onPick={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Clear the name' })).toBeNull();
+    input().focus();
+    type('ali');
+    await waitFor(() => expect(options()).toHaveLength(1));
+    const clear = screen.getByRole('button', { name: 'Clear the name' });
+    expect(fireEvent.mouseDown(clear)).toBe(false);
+    fireEvent.click(clear);
+    expect(input()).toHaveValue('');
+    expect(options()).toHaveLength(0);
+    expect(document.activeElement).toBe(input());
+    expect(screen.queryByRole('button', { name: 'Clear the name' })).toBeNull();
+  });
+
   it("drops an answer to text that was changed before it came", async () => {
     // Both of the "ab" searches (prefix and contains) wait until the test releases them.
     const releaseAb: ((names: unknown) => void)[] = [];
