@@ -77,7 +77,7 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
 
   const { isLoadingGlobal } = useSelector((state: RootState) => state.global);
 
-  const { authenticate } = useUserAccount();
+  const { authenticate, authenticating } = useUserAccount();
 
   return (
     <>
@@ -91,6 +91,8 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
         setActiveName={switchActiveName}
         userAvatar={userAvatar}
         authenticate={authenticate}
+        // No account yet and no request out: a decline or a late answer left the app signed out.
+        canSignIn={!user && !authenticating}
       />
       <EditFile />
 

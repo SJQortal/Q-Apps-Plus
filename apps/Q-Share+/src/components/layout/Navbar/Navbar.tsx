@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import {
   Avatar,
   Box,
+  Button,
   IconButton,
   ListItemIcon,
   ListItemText,
@@ -31,6 +32,8 @@ interface Props {
   userName: string | null;
   userAvatar: string;
   authenticate: () => void;
+  /** Show Sign in: no account and no request out (Hub was declined, or answered too late). */
+  canSignIn?: boolean;
   accountNames: { name: string }[];
   setActiveName: (name: string) => void;
 }
@@ -41,7 +44,15 @@ const NAV_BUTTON_SX = { color: "text.primary", minWidth: 44, minHeight: 44 } as 
  * The sticky header. On phones it slides away when you scroll down and comes
  * back when you scroll up; the rest of the navigation lives in BottomNav.
  */
-const NavBar: React.FC<Props> = ({ isAuthenticated, userName, userAvatar, accountNames, setActiveName }) => {
+const NavBar: React.FC<Props> = ({
+  isAuthenticated,
+  userName,
+  userAvatar,
+  authenticate,
+  canSignIn = false,
+  accountNames,
+  setActiveName,
+}) => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const phone = usePhoneLayout();
@@ -147,6 +158,15 @@ const NavBar: React.FC<Props> = ({ isAuthenticated, userName, userAvatar, accoun
               <SettingsOutlinedIcon />
             </IconButton>
           </Tooltip>
+        )}
+        {canSignIn && (
+          <Button
+            variant="contained"
+            onClick={authenticate}
+            sx={{ minHeight: phone ? 44 : 40, flexShrink: 0, whiteSpace: "nowrap" }}
+          >
+            Sign in
+          </Button>
         )}
         {signedIn && <PublishFile hideTrigger={phone} />}
         {signedIn && (

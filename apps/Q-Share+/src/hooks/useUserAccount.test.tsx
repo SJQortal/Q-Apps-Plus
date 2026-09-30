@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { store } from '../state/store';
 import { addUser } from '../state/features/authSlice';
@@ -42,20 +42,20 @@ describe('useUserAccount', () => {
   it('signs in on mount with the primary name and all names', async () => {
     mockAccount();
     renderHook(() => useUserAccount(), { wrapper });
-    await vi.advanceTimersByTimeAsync(0);
+    await act(() => vi.advanceTimersByTimeAsync(0));
     expect(store.getState().auth.user).toMatchObject({ address: 'Qabc', name: 'alice', names: [{ name: 'alice' }] });
   });
 
   it("asks once more after Hub's dialog has gone when the request timed out", async () => {
     mockAccount(HUB_TIMEOUT);
     renderHook(() => useUserAccount(), { wrapper });
-    await vi.advanceTimersByTimeAsync(0);
+    await act(() => vi.advanceTimersByTimeAsync(0));
     expect(store.getState().auth.user).toBeNull();
     expect(qortalCallsFor('GET_USER_ACCOUNT')).toHaveLength(1);
 
-    await vi.advanceTimersByTimeAsync(ACCOUNT_RETRY_MS - 1);
+    await act(() => vi.advanceTimersByTimeAsync(ACCOUNT_RETRY_MS - 1));
     expect(qortalCallsFor('GET_USER_ACCOUNT')).toHaveLength(1);
-    await vi.advanceTimersByTimeAsync(1);
+    await act(() => vi.advanceTimersByTimeAsync(1));
     expect(qortalCallsFor('GET_USER_ACCOUNT')).toHaveLength(2);
     expect(store.getState().auth.user?.name).toBe('alice');
   });
@@ -65,7 +65,7 @@ describe('useUserAccount', () => {
       throw HUB_TIMEOUT;
     });
     renderHook(() => useUserAccount(), { wrapper });
-    await vi.advanceTimersByTimeAsync(ACCOUNT_RETRY_MS * 3);
+    await act(() => vi.advanceTimersByTimeAsync(ACCOUNT_RETRY_MS * 3));
     expect(qortalCallsFor('GET_USER_ACCOUNT')).toHaveLength(2);
   });
 
@@ -74,7 +74,7 @@ describe('useUserAccount', () => {
     try {
       mockAccount(DECLINED);
       renderHook(() => useUserAccount(), { wrapper });
-      await vi.advanceTimersByTimeAsync(ACCOUNT_RETRY_MS * 2);
+      await act(() => vi.advanceTimersByTimeAsync(ACCOUNT_RETRY_MS * 2));
       expect(qortalCallsFor('GET_USER_ACCOUNT')).toHaveLength(1);
       expect(store.getState().auth.user).toBeNull();
       expect(consoleError).not.toHaveBeenCalled();
@@ -83,12 +83,28 @@ describe('useUserAccount', () => {
     }
   });
 
+  it('reports a request in flight, and authenticate asks again after a decline', async () => {
+    mockAccount(DECLINED);
+    const { result } = renderHook(() => useUserAccount(), { wrapper });
+    expect(result.current.authenticating).toBe(true);
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(result.current.authenticating).toBe(false);
+    expect(store.getState().auth.user).toBeNull();
+
+    act(() => result.current.authenticate());
+    expect(result.current.authenticating).toBe(true);
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(result.current.authenticating).toBe(false);
+    expect(qortalCallsFor('GET_USER_ACCOUNT')).toHaveLength(2);
+    expect(store.getState().auth.user?.name).toBe('alice');
+  });
+
   it('drops the pending retry on unmount', async () => {
     mockAccount(HUB_TIMEOUT);
     const { unmount } = renderHook(() => useUserAccount(), { wrapper });
-    await vi.advanceTimersByTimeAsync(0);
+    await act(() => vi.advanceTimersByTimeAsync(0));
     unmount();
-    await vi.advanceTimersByTimeAsync(ACCOUNT_RETRY_MS * 2);
+    await act(() => vi.advanceTimersByTimeAsync(ACCOUNT_RETRY_MS * 2));
     expect(qortalCallsFor('GET_USER_ACCOUNT')).toHaveLength(1);
   });
 });

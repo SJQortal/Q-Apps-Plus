@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import { addUser } from "../state/features/authSlice";
 import { getAccountNames, getPrimaryAccountName } from "../utils/qortalRequestFunctions";
@@ -21,20 +21,27 @@ const ACCOUNT_REFUSED = /unable to get user account/i;
 
 /**
  * Asks Hub for the signed-in account on mount and puts it, with its names and
- * primary name, in the store. Returns `authenticate` to ask again.
+ * primary name, in the store. Returns `authenticate` to ask again (the header's
+ * Sign in button) and whether a request is in flight.
  */
-export function useUserAccount(): { authenticate: () => void } {
+export function useUserAccount(): { authenticate: () => void; authenticating: boolean } {
   const dispatch = useDispatch();
   const retryTimer = useRef<number | undefined>(undefined);
+  // True from the start: the first request goes out on mount.
+  const [authenticating, setAuthenticating] = useState(true);
 
   const loadAccount = useCallback(async () => {
-    const account = await qortalRequest({ action: "GET_USER_ACCOUNT" });
-    const names = await getAccountNames(account.address);
-    const primary = await getPrimaryAccountName(account.address);
-    dispatch(addUser({ ...account, name: primary, names }));
+    try {
+      const account = await qortalRequest({ action: "GET_USER_ACCOUNT" });
+      const names = await getAccountNames(account.address);
+      const primary = await getPrimaryAccountName(account.address);
+      dispatch(addUser({ ...account, name: primary, names }));
+    } finally {
+      setAuthenticating(false);
+    }
   }, [dispatch]);
 
-  const authenticate = useCallback(async () => {
+  const request = useCallback(async () => {
     window.clearTimeout(retryTimer.current);
     retryTimer.current = undefined;
     try {
@@ -44,6 +51,7 @@ export function useUserAccount(): { authenticate: () => void } {
         // Once only: if nobody answered, the retry's own dialog is the last one.
         retryTimer.current = window.setTimeout(() => {
           retryTimer.current = undefined;
+          setAuthenticating(true);
           loadAccount().catch(() => {});
         }, ACCOUNT_RETRY_MS);
       } else if (!isHubDecline(error) && !ACCOUNT_REFUSED.test(errorMessage(error, ""))) {
@@ -53,9 +61,14 @@ export function useUserAccount(): { authenticate: () => void } {
   }, [loadAccount]);
 
   useEffect(() => {
-    authenticate();
+    request();
     return () => window.clearTimeout(retryTimer.current);
-  }, [authenticate]);
+  }, [request]);
 
-  return { authenticate };
+  const authenticate = useCallback(() => {
+    setAuthenticating(true);
+    request();
+  }, [request]);
+
+  return { authenticate, authenticating };
 }
