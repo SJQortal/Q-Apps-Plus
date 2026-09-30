@@ -214,6 +214,16 @@ Run with `node e2e/screens.mjs` against the release build (`1.0.0-plus.2`, commi
 - **Found and fixed by this check:** the welcome notice and the share route in the harness itself; rows wrapping differently for own and others' shares; the collection page's remove button taking half the row; duplicate Downloads and Share buttons in the phone header; the 20-button editor toolbar on phones; the desktop layout on a phone held sideways; a tiny image stretched to full width; Classic's contained buttons with no fill and its white "primary" in light mode; the Collections page's New button hidden under the bottom bar (from the review).
 - **Not covered here, for Simon's Hub Dev Mode session:** the on-screen keyboard (the Publish button follows `visualViewport`, which Playwright does not drive), pull-to-refresh with a finger, the file picker inside GO, safe-area insets on a notched phone, and Hub's own light/dark switch at runtime.
 
+### Pass 3 (2026-09-30, later the same day)
+
+Same branch and PR, version `1.0.0-plus.3`. Every commit builds, lint is clean and the 122 tests pass. Hub itself could not be reached from the cloud session (the debug port is on Simon's desktop), so the Hub Dev Mode checks stay on the list below.
+
+- **Settings sync** (`utils/settingsQdn.ts`, Settings → Sync): after Torq's `settingsQdn.ts`, adapted for an app without qapp-core's identifier hashing: the settings and the theme go into one DOCUMENT `qshareplus_settings` under the user's name, read back tolerantly (object, JSON or base64 JSON; unknown fields dropped, missing ones defaulted, unknown themes ignored). Save and Restore are explicit buttons, so first load costs no extra call. Additive data with its own identifier.
+- **Save all as .zip** (`utils/zip.ts`, `components/common/SaveAllZipButton.tsx`): a store-only ZIP writer with CRC-32, UTF-8 names and unique names, no dependency; the button appears for shares with two or more files under 150 MB (built in memory) and is enabled once every file is on the node.
+- **Small features**: Save on ready files in the downloads list (one routine, `saveFromNode`, shared with the file rows); Edit share on your own share page; a Collections tab on profile pages that loads only when opened (one paged search for that name); the publish dialog shows the total size and the time elapsed.
+- **Why not per-file upload progress**: Hub answers `PUBLISH_MULTIPLE_QDN_RESOURCES` only when the whole batch is done and reports no bytes; one `PUBLISH_QDN_RESOURCE` per file would give per-file status but one Hub confirmation per file, which is worse for a ten-file share. The batch stays; the dialog shows size and elapsed time instead.
+- **Accessibility audit**: `e2e/screens.mjs` now injects axe-core (dev dependency) into every capture and lists the rules violated (WCAG 2.1 A/AA and best practices). First run on the White theme: no contrast findings; the structural ones (no `main` landmark, two banners on sub-pages, pages without an h1, unnamed bottom sheets, unnamed Quill pickers, a floating button outside any landmark) are fixed and the audit is clean on every screen checked. Contrast in the four themes is therefore verified rather than assumed.
+
 ## Follow-ups
 
 Questions for Simon (after pass 2):
@@ -229,10 +239,10 @@ Questions for Simon (after pass 2):
 
 Next pass ideas:
 
-- Upload progress per file: `PUBLISH_MULTIPLE_QDN_RESOURCES` reports only done/failed per resource; per-file progress needs one publish per file and a resumable flow.
+- Upload progress per file is not worth its cost today (see pass 3: one Hub confirmation per file); revisit if Hub ever reports publish progress.
 - A Hub Dev Mode session (docs/HUB-TESTING.md) for what jsdom and Playwright cannot show: the on-screen keyboard under the Publish button, pull-to-refresh on a real touch screen, the file picker in GO, and the header hiding on scroll.
 - Next-page loads on Home still wait for the request in flight (only reset searches supersede it); an `AbortController` in `searchQdn` would let both cancel cleanly.
-- Settings sync to QDN (Torq's `settingsQdn.ts` pattern) now that there are several settings.
+- Settings sync is manual (Save / Restore). An automatic restore on first sign-in on a new device would cost one FETCH per session; add it if Simon wants it.
 - Consider qapp-core for lists and identifier hashing in a later pass.
 - Network statistics count up to 3,000 shares (30 pages of 100) and then show "3000+"; raise the cap if the network grows past that.
 - The screenshot harness could grow into a regression check (compare against stored baselines) once the layouts settle.
