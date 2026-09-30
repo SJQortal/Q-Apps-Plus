@@ -20,6 +20,7 @@ import { RootState } from "../../state/store";
 import { addToHashMap, setEditFile } from "../../state/features/fileSlice.ts";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { useSafeBack } from "../../hooks/useSafeBack";
 import { searchQdn, type QdnResourceSummary } from "../../utils/qdnSearch";
 import { avatarUrl, profilePath, shareLink, decodeParam } from "../../utils/qortalLinks";
 import { formatDate } from "../../utils/time";
@@ -291,7 +292,8 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
     }
   };
 
-  const goBack = () => (window.history.length > 1 ? navigate(-1) : navigate("/"));
+  // window.history is shared by every Hub tab, so Back follows the app's own stack.
+  const goBack = useSafeBack("/");
   const title: string = fileData?.title || "";
 
   // A single file has its own Download in its row, so "Fetch all" only

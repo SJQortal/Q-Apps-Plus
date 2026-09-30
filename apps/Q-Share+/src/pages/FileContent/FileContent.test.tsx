@@ -9,6 +9,7 @@ import { resetSettingsCache } from '../../utils/settings';
 import { store } from '../../state/store';
 import { addToHashMap } from '../../state/features/fileSlice';
 import { addUser } from '../../state/features/authSlice';
+import { resetInAppHistory } from '../../hooks/useSafeBack';
 
 const NAME = 'alice b';
 const ID = 'qshare_file_holiday-pics_abcdefghijkl_metadata';
@@ -348,5 +349,29 @@ describe('FileContent (share page)', () => {
 
     expect(await screen.findByRole('button', { name: 'Back' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByText('Holiday pics').length).toBeGreaterThanOrEqual(2));
+  });
+
+  it('Back on a deep-linked share goes to Home, not through the history Hub tabs share', async () => {
+    setMatchMedia(true);
+    resetInAppHistory();
+    mockCommentSearches();
+    store.dispatch(addToHashMap({ ...body, id: ID, user: NAME, created: searchRow.created }));
+    // Other tabs' entries make history.length > 1 even on a first load, and
+    // the entry before this one is not the app's (here: some other page).
+    const length = vi.spyOn(window.history, 'length', 'get').mockReturnValue(5);
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/" element={<p>Home page</p>} />
+        <Route path="/elsewhere" element={<p>Not this app</p>} />
+        <Route path="/share/:name/:id" element={<FileContent />} />
+      </Routes>,
+      { initialEntries: ['/elsewhere', PATH] }
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Back' }));
+    expect(await screen.findByText('Home page')).toBeInTheDocument();
+    expect(screen.queryByText('Not this app')).not.toBeInTheDocument();
+    length.mockRestore();
   });
 });
