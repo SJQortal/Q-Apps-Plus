@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { useDispatch, useStore } from "react-redux";
 import { setAddToDownloads, updateDownloads } from "../state/features/globalSlice";
 import { RootState } from "../state/store";
+import { needsEncodedFetch } from "../utils/fetchVideos";
+import { resourceProperties, resourceStatus } from "../utils/qdnResource";
 
 /**
  * Download status machine. One entry per file identifier lives in
@@ -27,6 +29,8 @@ import { RootState } from "../state/store";
  * NOT_PUBLISHED, BLOCKED, UNSUPPORTED and BUILD_FAILED stop polling as failures and
  * can be started again. Six consecutive status errors stop polling too.
  * `retryDownload` resumes a paused or stopped poller. Every timer is cleared on unmount.
+ * Status and properties calls go through utils/qdnResource, so names such as
+ * "Vallot-/8/" (which q-apps.js puts into the URL unencoded) work too.
  */
 
 export const POLL_MS = 5_000;
@@ -133,7 +137,7 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
 
   const fetchResource = useCallback(async ({ name, service, identifier }: IResourceRef) => {
     try {
-      await qortalRequest({ action: "GET_QDN_RESOURCE_PROPERTIES", name, service, identifier });
+      await resourceProperties({ name, service, identifier });
     } catch {
       /* the status poll reports the outcome */
     }
@@ -186,7 +190,11 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
           identifier,
           build: true,
         };
-        qortalRequestWithTimeout(request, BUILD_TIMEOUT_MS)
+        // A name q-apps.js breaks is asked directly, a plain fetch with no timeout of its own.
+        const ask = needsEncodedFetch(name)
+          ? resourceStatus({ name, service, identifier }, { build: true })
+          : qortalRequestWithTimeout(request, BUILD_TIMEOUT_MS);
+        ask
           .then((res) => {
             if (!stopped && (res?.status === "READY" || isFailedStatus(res?.status))) {
               setStatus(res);
@@ -206,9 +214,12 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
         if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
         isCalling = true;
         try {
-          const res = await qortalRequest({ action: "GET_QDN_RESOURCE_STATUS", name, service, identifier });
+          const res = await resourceStatus({ name, service, identifier });
           // A build answer may have finished the download while this poll was out.
-          if (!res || stopped) return;
+          if (stopped) return;
+          // q-apps.js hands an error page back as a string: count it as a failure,
+          // don't store it as the status (the row would show 0% for ever).
+          if (!res || typeof res !== "object") throw new Error("The node's status answer is not JSON");
           failures = 0;
           const status: string | undefined = res.status;
           if (status === "READY" || isFailedStatus(status)) {

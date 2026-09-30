@@ -9,6 +9,7 @@ import { RootState } from "../../state/store";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { errorMessage, isHubDecline } from "../../utils/hubErrors";
+import { resourceProperties } from "../../utils/qdnResource";
 
 // Kept here too: other modules import it from this file.
 export { errorMessage };
@@ -77,7 +78,7 @@ export async function saveFromNode(
   let { filename, mimeType } = fallback;
   let size = fallback.size;
   try {
-    const props = await qortalRequest({ action: "GET_QDN_RESOURCE_PROPERTIES", ...ref });
+    const props = await resourceProperties(ref);
     filename = props?.filename || filename;
     mimeType = props?.mimeType || mimeType;
     size = Number(props?.size) || size;

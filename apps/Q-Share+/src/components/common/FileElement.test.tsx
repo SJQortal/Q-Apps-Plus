@@ -129,6 +129,29 @@ describe("FileElement save", () => {
     expect(keepsNameByLocation("تقرير.pdf")).toBe(false);
   });
 
+  it("reads the node's file details with the name encoded for a name q-apps.js breaks", async () => {
+    const vallot = { ...file, name: "Vallot-/8/", identifier: "qshare_file_qortal-corei-settingsjson-fail_yaGJk4", filename: "stored.pdf" };
+    store.dispatch(removeDownload(vallot.identifier));
+    store.dispatch(setAddToDownloads({ name: vallot.name, service: "FILE", identifier: vallot.identifier, properties: vallot }));
+    store.dispatch(updateDownloads({ identifier: vallot.identifier, status: { status: "READY" } }));
+    mockFetch("/arbitrary/resource/properties/", { filename: "guide.pdf", mimeType: "application/pdf", size: 200 * 1024 * 1024 });
+    mockQortalAction("SAVE_FILE", true);
+    renderWithProviders(<FileElement fileInfo={vallot} jsonId="qshare_file_qortal-corei-settingsjson-fail_WGvzlh_metadata" />);
+    fireEvent.click(screen.getByRole("button", { name: "Save stored.pdf" }));
+    await waitFor(() => expect(qortalCallsFor("SAVE_FILE").length).toBe(1));
+    expect(fetchCallsMatching("/arbitrary/resource/")).toEqual([
+      "/arbitrary/resource/properties/FILE/Vallot-%2F8%2F/qshare_file_qortal-corei-settingsjson-fail_yaGJk4",
+    ]);
+    expect(qortalCallsFor("GET_QDN_RESOURCE_PROPERTIES")).toEqual([]);
+    // Hub encodes the location itself.
+    expect(qortalCallsFor("SAVE_FILE")[0]).toMatchObject({
+      filename: "guide.pdf",
+      mimeType: "application/pdf",
+      location: { service: "FILE", name: "Vallot-/8/", identifier: vallot.identifier },
+    });
+    store.dispatch(removeDownload(vallot.identifier));
+  });
+
   it("never sends Hub an empty filename", async () => {
     markReady();
     mockQortalAction("GET_QDN_RESOURCE_PROPERTIES", {});

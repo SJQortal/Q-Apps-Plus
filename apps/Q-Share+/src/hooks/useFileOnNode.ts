@@ -2,6 +2,7 @@ import { useCallback, useContext, useState } from "react";
 import { useSelector, useStore } from "react-redux";
 import { FAILED_STATUSES, MyContext, downloadPhase, downloadStatusText } from "../wrappers/DownloadWrapper";
 import type { RootState } from "../state/store";
+import { resourceStatus } from "../utils/qdnResource";
 
 export interface NodeFileRef {
   name: string;
@@ -64,7 +65,7 @@ export function useFileOnNode(file: NodeFileRef, jsonId?: string) {
     setChecked({ state: "checking" });
     let res: { status?: string } | null = null;
     try {
-      res = await qortalRequest({ action: "GET_QDN_RESOURCE_STATUS", name: file.name, service, identifier: file.identifier });
+      res = await resourceStatus({ name: file.name, service, identifier: file.identifier });
     } catch {
       /* no answer: let the read itself say what is wrong */
     }

@@ -2,16 +2,18 @@ import { useContext } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen } from "@testing-library/react";
 import { renderWithProviders } from "../test/renderWithProviders";
-import { mockQortalAction, qortalCallsFor } from "../test/setup";
+import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from "../test/setup";
 import { store } from "../state/store";
 import { removeDownload } from "../state/features/globalSlice";
 import DownloadWrapper, { BUILD_NUDGE_MS, BUILD_TIMEOUT_MS, MyContext, POLL_MS } from "./DownloadWrapper";
 
 const ref = { name: "alice", service: "FILE", identifier: "qshare_file_big_1" };
+/** A real publisher whose name q-apps.js puts into the URL unencoded. */
+const slashed = { name: "Vallot-/8/", service: "FILE", identifier: "qshare_file_qortal-corei-settingsjson-fail_yaGJk4" };
 
-function StartButton() {
+function StartButton({ target }: { target: typeof ref }) {
   const { downloadVideo } = useContext(MyContext);
-  return <button onClick={() => downloadVideo({ ...ref, properties: { ...ref, filename: "big.iso" } })}>Start</button>;
+  return <button onClick={() => downloadVideo({ ...target, properties: { ...target, filename: "big.iso" } })}>Start</button>;
 }
 
 /** Let `ms` of fake time pass, running timers and the promises they start. */
@@ -25,10 +27,10 @@ const buildCalls = () => qortalCallsFor("GET_QDN_RESOURCE_STATUS").filter((c) =>
 const pollCalls = () => qortalCallsFor("GET_QDN_RESOURCE_STATUS").filter((c) => c.build === undefined);
 const statusOf = () => store.getState().global.downloads[ref.identifier]?.status?.status;
 
-function renderAndStart() {
+function renderAndStart(target = ref) {
   const view = renderWithProviders(
     <DownloadWrapper>
-      <StartButton />
+      <StartButton target={target} />
     </DownloadWrapper>
   );
   fireEvent.click(screen.getByRole("button", { name: "Start" }));
@@ -39,6 +41,7 @@ describe("DownloadWrapper", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     store.dispatch(removeDownload(ref.identifier));
+    store.dispatch(removeDownload(slashed.identifier));
     mockQortalAction("GET_QDN_RESOURCE_PROPERTIES", { filename: "big.iso", mimeType: "application/octet-stream", size: 1 });
     mockQortalAction("GET_QDN_RESOURCE_STATUS", { status: "DOWNLOADING", percentLoaded: 10 });
   });
@@ -149,6 +152,37 @@ describe("DownloadWrapper", () => {
     // 10 s and answers DOWNLOADED at 13 s.
     await wait(POLL_MS * 3);
     expect(statusOf()).toBe("READY");
+    unmount();
+  });
+
+  it("asks, polls and builds with the name encoded for a name q-apps.js breaks", async () => {
+    mockFetch("/arbitrary/resource/properties/", { filename: "guide.pdf", mimeType: "application/pdf", size: 628977 });
+    mockFetch("/arbitrary/resource/status/", (url: URL) =>
+      url.search === "?build=true" ? { status: "READY", percentLoaded: 100 } : { status: "DOWNLOADED", percentLoaded: 100 }
+    );
+    const { unmount } = renderAndStart(slashed);
+    await wait(POLL_MS);
+    const path = "FILE/Vallot-%2F8%2F/qshare_file_qortal-corei-settingsjson-fail_yaGJk4";
+    expect(fetchCallsMatching("/arbitrary/resource/")).toEqual([
+      `/arbitrary/resource/properties/${path}`,
+      `/arbitrary/resource/status/${path}`,
+      `/arbitrary/resource/status/${path}?build=true`,
+    ]);
+    expect(store.getState().global.downloads[slashed.identifier].status.status).toBe("READY");
+    expect(qortalCallsFor("GET_QDN_RESOURCE_STATUS")).toEqual([]);
+    expect(qortalCallsFor("GET_QDN_RESOURCE_PROPERTIES")).toEqual([]);
+    unmount();
+  });
+
+  it("counts an error page answered as text as a failure, and stops polling after six", async () => {
+    // q-apps.js resolves Jetty's HTML 400 page as a plain string.
+    mockQortalAction("GET_QDN_RESOURCE_STATUS", "<h1>Bad Message 400</h1><pre>reason: Ambiguous URI empty segment</pre>");
+    const { unmount } = renderAndStart();
+    await wait(POLL_MS * 6);
+    expect(statusOf()).toBe("REFETCHING");
+    const polls = pollCalls().length;
+    await wait(POLL_MS * 4);
+    expect(pollCalls().length).toBe(polls);
     unmount();
   });
 });
