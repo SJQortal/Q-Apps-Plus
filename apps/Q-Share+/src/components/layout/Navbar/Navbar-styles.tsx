@@ -69,8 +69,21 @@ export const HeaderInner = styled("div")(({ theme }) => ({
   [`@media ${PHONE_MEDIA}`]: { padding: theme.spacing(0, 1) },
 }));
 
+/**
+ * The logo button and the tagline on one line, the tagline's text on the
+ * title's baseline. It takes the width the actions leave, so they stay at the
+ * column's right edge.
+ */
+export const Brand = styled("div")(({ theme }) => ({
+  display: "flex",
+  alignItems: "baseline",
+  columnGap: theme.spacing(0.75),
+  flex: "1 1 auto",
+}));
+
 export const LogoContainer = styled("button")(({ theme }) => ({
   appearance: "none",
+  flexShrink: 0,
   border: 0,
   background: "transparent",
   cursor: "pointer",
@@ -92,19 +105,58 @@ export const LogoContainer = styled("button")(({ theme }) => ({
   },
 }));
 
-export const AppTitle = styled(Typography)(({ theme }) => ({
+/**
+ * The title and the tagline inherit the page's body font, as Typography's
+ * body1 would give them, so both follow the theme (Raleway in Classic).
+ */
+export const AppTitle = styled("span")(({ theme }) => ({
   fontWeight: 700,
   fontSize: 18,
   whiteSpace: "nowrap",
   color: theme.palette.text.primary,
+  // The button's only baseline item, so the button's baseline is the title's
+  // and the tagline beside it lines up. The 36 px line fills the button's
+  // content box (44 px less padding), so the title stays centred on the logo.
+  alignSelf: "baseline",
+  lineHeight: "36px",
 }));
 
-export const AppTagline = styled(Typography)(({ theme }) => ({
+const TAGLINE_LINE = 20;
+
+/**
+ * Room for the tagline: whatever the logo and the actions leave (its own
+ * width is 0, so it never pushes them). The tagline shows only where it fits
+ * whole; otherwise it wraps onto a second line that the fixed height clips,
+ * so the header never grows and never shows half a tagline. The zero-width
+ * space keeps the slot's baseline where the tagline's would be once it wraps.
+ */
+export const TaglineSlot = styled("div")({
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "baseline",
+  flex: "1 1 0",
+  width: 0,
+  minWidth: 0,
+  height: TAGLINE_LINE,
+  overflow: "hidden",
   fontSize: 13,
+  lineHeight: `${TAGLINE_LINE}px`,
+  "&::before": { content: '"\\200B"' },
+});
+
+export const AppTagline = styled("p")(({ theme }) => ({
+  margin: 0,
   whiteSpace: "nowrap",
   color: theme.palette.text.secondary,
-  [theme.breakpoints.down("md")]: {
-    display: "none",
+  // A quiet rule between the title and the tagline.
+  "&::before": {
+    content: '""',
+    display: "inline-block",
+    width: 1,
+    height: 14,
+    marginRight: theme.spacing(1.25),
+    verticalAlign: "middle",
+    backgroundColor: theme.palette.divider,
   },
 }));
 

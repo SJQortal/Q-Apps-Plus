@@ -24,7 +24,17 @@ import { PublishFile } from "../../PublishFile/PublishFile.tsx";
 import QShareLogoSrc from "../../../assets/img/q-share-icon.webp";
 import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { avatarUrl } from "../../../utils/qortalLinks";
-import { AppTagline, AppTitle, AvatarContainer, CustomAppBar, HeaderInner, LogoContainer, NavbarName } from "./Navbar-styles";
+import {
+  AppTagline,
+  AppTitle,
+  AvatarContainer,
+  Brand,
+  CustomAppBar,
+  HeaderInner,
+  LogoContainer,
+  NavbarName,
+  TaglineSlot,
+} from "./Navbar-styles";
 import { useHideOnScroll, usePublishHeaderOffset } from "./useHideOnScroll";
 
 interface Props {
@@ -129,13 +139,18 @@ const NavBar: React.FC<Props> = ({
   return (
     <CustomAppBar ref={headerRef} position="sticky" elevation={0} collapsed={hidden} onFocus={reveal}>
       <HeaderInner>
-        <LogoContainer type="button" onClick={() => navigate("/")} aria-label="Q-Share+ home">
-          <img src={QShareLogoSrc} alt="" width={36} height={36} style={{ width: "auto", height: 36 }} />
-          <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <Brand>
+          <LogoContainer type="button" onClick={() => navigate("/")} aria-label="Q-Share+ home">
+            <img src={QShareLogoSrc} alt="" width={36} height={36} style={{ width: "auto", height: 36 }} />
             <AppTitle>Q-Share+</AppTitle>
-            <AppTagline>Public file sharing on Qortal</AppTagline>
-          </Box>
-        </LogoContainer>
+          </LogoContainer>
+          {/* Beside the title, outside the button, so the button's name holds all its visible text. */}
+          {!phone && (
+            <TaglineSlot>
+              <AppTagline>Public file sharing on Qortal</AppTagline>
+            </TaglineSlot>
+          )}
+        </Brand>
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
           {!phone && (
