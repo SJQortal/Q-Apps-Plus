@@ -7,6 +7,7 @@ import AttachFileIcon from "@mui/icons-material/AttachFile";
 import CloudDownloadOutlinedIcon from "@mui/icons-material/CloudDownloadOutlined";
 import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import { CopyLinkButton } from "../../components/common/CopyLinkButton.tsx";
+import { SaveAllZipButton } from "../../components/common/SaveAllZipButton";
 import { SaveToCollectionButton } from "../../components/common/SaveToCollection/SaveToCollectionButton";
 import { FollowButton } from "../../components/common/FollowButton.tsx";
 import { EmptyState } from "../../components/common/EmptyState.tsx";
@@ -289,6 +290,7 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
                   {allReady ? "All files ready" : pendingFiles.length === 0 ? "Fetching…" : files.length === 1 ? "Fetch file" : "Fetch all files"}
                 </Button>
               )}
+              <SaveAllZipButton files={files} title={title} allReady={allReady} />
               <CopyLinkButton link={shareLink(author, id)} tooltipTitle="Copy link" label="Copy link" />
               <SaveToCollectionButton share={{ name: author, identifier: id, title: fileData?.title }} variant="button" size="medium" />
               {extraActions}

@@ -22,7 +22,7 @@ export interface FileInfo {
 
 const BUILD_NUDGE_MS = 7_500;
 
-function resourceUrl({ service, name, identifier }: FileInfo): string {
+export function resourceUrl({ service, name, identifier }: FileInfo): string {
   return `/arbitrary/${service}/${encodeURIComponent(name)}/${encodeURIComponent(identifier)}`;
 }
 
