@@ -1,16 +1,21 @@
-import { Avatar, Box, IconButton, Typography } from "@mui/material";
+import { useState } from "react";
+import { Avatar, Box, IconButton, Tab, Tabs, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, useParams } from "react-router-dom";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { FileListComponentLevel } from "../Home/FileListComponentLevel.tsx";
 import { FollowButton } from "../../components/common/FollowButton.tsx";
 import { CopyLinkButton } from "../../components/common/CopyLinkButton.tsx";
-import { avatarUrl, profileLink } from "../../utils/qortalLinks";
+import { avatarUrl, decodeParam, profileLink } from "../../utils/qortalLinks";
+import { ProfileCollections } from "./ProfileCollections";
+
+type ProfileTab = "shares" | "collections";
 
 export const IndividualProfile = () => {
   const { name: paramName } = useParams();
-  const name = paramName ? decodeURIComponent(paramName) : "";
+  const name = decodeParam(paramName);
   const phone = usePhoneLayout();
+  const [tab, setTab] = useState<ProfileTab>("shares");
   const navigate = useNavigate();
   const goBack = () => (window.history.length > 1 ? navigate(-1) : navigate("/"));
 
@@ -58,7 +63,16 @@ export const IndividualProfile = () => {
           <CopyLinkButton link={profileLink(name)} tooltipTitle="Copy profile link" />
         </Box>
       </Box>
-      <FileListComponentLevel key={name} />
+      <Tabs
+        value={tab}
+        onChange={(_, value: ProfileTab) => setTab(value)}
+        variant={phone ? "fullWidth" : "standard"}
+        aria-label="What to show for this name"
+      >
+        <Tab value="shares" label="Shares" sx={{ minHeight: 48 }} />
+        <Tab value="collections" label="Collections" sx={{ minHeight: 48 }} />
+      </Tabs>
+      {tab === "shares" ? <FileListComponentLevel key={name} /> : <ProfileCollections key={name} name={name} />}
     </Box>
   );
 };

@@ -32,7 +32,7 @@ type TabId = "mine" | "all";
 
 const countLabel = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
 
-function CollectionCard({ row }: { row: CollectionSummary }) {
+export function CollectionCard({ row }: { row: CollectionSummary }) {
   const navigate = useNavigate();
   const collection = useSelector((state: RootState) => state.collections.byKey[collectionKey(row.name, row.identifier)]);
   const title = row.title || collection?.title || "Untitled collection";
