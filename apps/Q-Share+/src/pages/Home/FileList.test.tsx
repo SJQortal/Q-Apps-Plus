@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { FileList } from './FileList';
 import { renderWithProviders } from '../../test/renderWithProviders';
-import { mockQortalAction, qortalCallsFor } from '../../test/setup';
+import { fetchCalls, mockQortalAction, qortalCalls, qortalCallsFor } from '../../test/setup';
 import { store } from '../../state/store';
 import { addUser } from '../../state/features/authSlice';
 import { addToHashMap, markUnavailable, type Video } from '../../state/features/fileSlice';
 import { setNotification } from '../../state/features/notificationsSlice';
 import { getIconsFromObject } from '../../constants/Categories/CategoryFunctions';
+import { resetSettingsCache, writeSettings } from '../../utils/settings';
+import { ListViewToggle } from '../../components/common/ListViewToggle';
 
 // Counts row renders: every row computes its icon once per render.
 vi.mock('../../constants/Categories/CategoryFunctions.ts', async (importOriginal) => {
@@ -132,5 +134,170 @@ describe('FileList rows without a body', () => {
     expect(screen.getByRole('button', { name: 'Edit share' })).toBeInTheDocument();
     expect(screen.getAllByText('Not available on your node right now')).toHaveLength(1);
     store.dispatch({ type: 'file/removeFromHashMap', payload: id });
+  });
+});
+
+describe('FileList grid', () => {
+  beforeEach(() => {
+    writeSettings({ listView: 'grid' });
+  });
+  afterEach(() => {
+    resetSettingsCache();
+  });
+
+  const cards = (root: HTMLElement = document.body) => Array.from(root.querySelectorAll<HTMLElement>('li.share-card'));
+
+  it('renders a card per share with the row actions, and makes no Qortal call of its own', () => {
+    const own = { ...share('qshare_file_grid-own_Gr0001_metadata', 'alice'), title: 'My notes' };
+    const other = { ...share('qshare_file_grid-other_Gr0002_metadata', 'bob'), title: 'Bob tools' };
+    store.dispatch(addToHashMap({ ...own, category: '1', files: [{ size: 1024 }, { size: 1024 }], isValid: true }));
+    store.dispatch(addToHashMap({ ...other, files: [{ size: 3 * 1024 * 1024 }], isValid: true }));
+
+    const { container } = renderWithProviders(<FileList files={[own, other]} />);
+
+    expect(cards(container)).toHaveLength(2);
+    const [mine, bobs] = cards(container);
+    // Same accessible names as the rows: "Open <title>", the publisher link and each action.
+    expect(within(mine).getByRole('button', { name: 'Open My notes' })).toHaveClass('row-main');
+    expect(within(mine).getByText(/2 files · 2 KB/)).toBeInTheDocument();
+    expect(within(mine).getByRole('button', { name: 'Shares by alice' })).toBeInTheDocument();
+    expect(within(mine).getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+    expect(within(mine).getByRole('button', { name: 'Add to collection' })).toBeInTheDocument();
+    expect(within(mine).getByRole('button', { name: 'Edit share' })).toBeInTheDocument();
+    expect(within(mine).queryByRole('button', { name: /^Block/ })).not.toBeInTheDocument();
+    expect(within(bobs).getByRole('button', { name: 'Open Bob tools' })).toBeInTheDocument();
+    expect(within(bobs).getByText(/1 file · 3 MB/)).toBeInTheDocument();
+    expect(within(bobs).getByRole('button', { name: 'Block bob' })).toBeInTheDocument();
+    // The art is the bundled category icon, and every image waits until it scrolls into view.
+    const images = Array.from(container.querySelectorAll('img'));
+    expect(images.length).toBeGreaterThan(0);
+    for (const img of images) expect(img).toHaveAttribute('loading', 'lazy');
+    expect(images.some((img) => /software/.test(img.getAttribute('src') || ''))).toBe(true);
+    expect(images.every((img) => !/\/arbitrary\/(FILE|DOCUMENT)\//.test(img.getAttribute('src') || ''))).toBe(true);
+    expect(qortalCalls).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(0);
+  });
+
+  it('keeps every row state: pending, unavailable, deleted and unreadable', () => {
+    const pending = { ...share('qshare_file_on-its-way_Pe1234_metadata'), title: 'On its way' };
+    const missing = { ...share('qshare_file_gone-away_Gm1234_metadata'), title: '' };
+    const deleted = { ...share('qshare_file_torq-test_Gd1234_metadata'), title: 'deleted' };
+    const broken = { ...share('qshare_file_broken_Gb1234_metadata'), title: 'Broken' };
+    store.dispatch(markUnavailable(missing));
+    store.dispatch(addToHashMap({ ...deleted, isValid: false, deleted: true }));
+    store.dispatch(addToHashMap({ ...broken, isValid: false }));
+
+    const { container } = renderWithProviders(<FileList files={[pending, missing, deleted, broken]} />);
+    const [pendingCard, missingCard, deletedCard, brokenCard] = cards(container);
+
+    // Pending: the search's title at once, the meta line still loading.
+    expect(pendingCard).toHaveAttribute('aria-busy', 'true');
+    expect(within(pendingCard).getByRole('button', { name: 'Open On its way' })).toBeInTheDocument();
+    expect(pendingCard.querySelector('.MuiSkeleton-root')).not.toBeNull();
+    // Unavailable: readable, and still opens the share page (it has Retry).
+    expect(missingCard).not.toHaveAttribute('aria-busy');
+    expect(within(missingCard).getByRole('button', { name: 'Open Gone away' })).toBeInTheDocument();
+    expect(within(missingCard).getByText('Not available on your node right now')).toBeInTheDocument();
+    // Deleted and unreadable: nothing to open, no actions, the publisher still links.
+    expect(within(deletedCard).getByText('Deleted by its publisher')).toBeInTheDocument();
+    expect(within(deletedCard).getByText('Torq test')).toBeInTheDocument();
+    expect(within(deletedCard).queryByRole('button', { name: /^Open/ })).not.toBeInTheDocument();
+    expect(within(deletedCard).queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
+    expect(within(deletedCard).getByRole('button', { name: 'Shares by bob' })).toBeInTheDocument();
+    expect(within(brokenCard).getByText("This share can't be read")).toBeInTheDocument();
+    store.dispatch({ type: 'file/removeFromHashMap', payload: deleted.id });
+    store.dispatch({ type: 'file/removeFromHashMap', payload: broken.id });
+  });
+
+  it('a body landing re-renders only its own card', () => {
+    const rows = [1, 2, 3, 4].map((n) => share(`qshare_file_grid-render-${n}_Gn000${n}_metadata`));
+    renderWithProviders(<FileList files={rows} />);
+    const renders = vi.mocked(getIconsFromObject);
+    expect(renders).toHaveBeenCalledTimes(4);
+
+    renders.mockClear();
+    act(() => {
+      store.dispatch(addToHashMap({ ...rows[1], title: 'Second, loaded', files: [], isValid: true }));
+    });
+    expect(screen.getByText('Second, loaded')).toBeInTheDocument();
+    expect(renders).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the publisher on a profile page, as rows do', () => {
+    const row = { ...share('qshare_file_profile-card_Pc1234_metadata'), title: 'Profile card' };
+    store.dispatch(addToHashMap({ ...row, files: [], isValid: true }));
+    renderWithProviders(<FileList files={[row]} showPublisher={false} />);
+    expect(screen.getByRole('button', { name: 'Open Profile card' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Shares by bob' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+  });
+
+  it('fits the whole category icon in the art, and keeps the art low on a phone in landscape', () => {
+    /** The declarations of the stylesheet rules that match `el`, keyed by media query without spaces ("" for none). */
+    const rulesFor = (el: Element) => {
+      const found: Record<string, string> = {};
+      const walk = (list: CSSRuleList, media: string) => {
+        for (const rule of Array.from(list) as any[]) {
+          if (rule.cssRules && rule.media) walk(rule.cssRules, rule.media.mediaText.replace(/\s+/g, ''));
+          else if (rule.selectorText && /^\.[\w-]+$/.test(rule.selectorText) && el.matches(rule.selectorText))
+            found[media] = `${found[media] ?? ''}${rule.style.cssText}`;
+        }
+      };
+      for (const sheet of Array.from(document.styleSheets)) walk(sheet.cssRules, '');
+      return found;
+    };
+    // Video's icon is wider than tall (484 × 285): a square cover crop cut off its lens.
+    const row = { ...share('qshare_file_wide-icon_Wi1234_metadata'), title: 'Wide icon' };
+    store.dispatch(addToHashMap({ ...row, category: '4', files: [], isValid: true }));
+    const { container } = renderWithProviders(<FileList files={[row]} />);
+
+    const img = cards(container)[0].querySelector('img')!;
+    expect(img.getAttribute('src')).toMatch(/video/);
+    const icon = rulesFor(img);
+    const landscape = '(pointer:coarse)and(max-height:500px)';
+    expect(icon['']).toMatch(/object-fit: contain/);
+    expect(icon['']).not.toMatch(/object-fit: cover/);
+    expect(icon['']).toMatch(/width: 96px;.*height: 64px/);
+    expect(icon[landscape]).toMatch(/width: 54px;.*height: 36px/);
+    const art = rulesFor(img.parentElement!);
+    expect(art['']).toMatch(/height: 96px/);
+    expect(art[landscape]).toMatch(/height: 48px/);
+  });
+
+  it('shows the manual-copy dialog from a card when copying is blocked', async () => {
+    const row = share('qshare_file_grid-copy_Gc1234_metadata', 'Simon James');
+    store.dispatch(addToHashMap({ ...row, files: [], isValid: true }));
+    Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true });
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+    Object.defineProperty(document, 'execCommand', { value: vi.fn().mockReturnValue(false), configurable: true });
+
+    renderWithProviders(<FileList files={[row]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+    await screen.findByRole('dialog', { name: 'Copy link' });
+    expect(screen.getByDisplayValue('qortal://APP/Q-Share+/share/Simon%20James/qshare_file_grid-copy_Gc1234_metadata')).toBeInTheDocument();
+  });
+
+  it('switches every list on the page between cards and rows from the toggle', () => {
+    writeSettings({ listView: 'list' });
+    const a = { ...share('qshare_file_toggle-a_Ta1234_metadata'), title: 'Toggle A' };
+    const b = { ...share('qshare_file_toggle-b_Tb1234_metadata', 'carol'), title: 'Toggle B' };
+    const { container } = renderWithProviders(
+      <>
+        <ListViewToggle />
+        <FileList files={[a]} />
+        <FileList files={[b]} showPublisher={false} />
+      </>
+    );
+    expect(cards(container)).toHaveLength(0);
+    expect(container.querySelectorAll('button.row-main')).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Grid' }));
+    expect(cards(container)).toHaveLength(2);
+    expect(container.querySelectorAll('button.row-main')).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    expect(cards(container)).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Open Toggle A' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Toggle B' })).toBeInTheDocument();
   });
 });

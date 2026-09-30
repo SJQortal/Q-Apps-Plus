@@ -7,7 +7,18 @@ import AttachFileIcon from "@mui/icons-material/AttachFile";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
+  CardArt,
+  CardBody,
+  CardFooter,
+  CardIcon,
+  CardMain,
+  CardMainStatic,
+  CardMeta,
+  CardPublisher,
+  CardTitle,
+  FileCard,
   FileContainer,
+  FileGrid,
   FileRow,
   NameLink,
   RowActions,
@@ -30,6 +41,7 @@ import { shareTitleFromIdentifier } from "../../hooks/useFetchFiles.tsx";
 import { copyText } from "../../utils/clipboard.ts";
 import { ManualCopyDialog } from "../../components/common/CopyLinkButton.tsx";
 import { isHubDecline } from "../../utils/hubErrors.ts";
+import { useListView } from "../../components/common/ListViewToggle.tsx";
 
 interface FileListProps {
   files: Video[];
@@ -39,19 +51,26 @@ interface FileListProps {
 
 /**
  * One list per page, one memoized row per share: each row selects its own
- * body, so a body landing re-renders that row and not the whole list.
+ * body, so a body landing re-renders that row and not the whole list. The
+ * layout setting (useListView) turns the rows into a grid of cards with the
+ * same states and actions.
  */
 export const FileList = ({ files, showPublisher = true }: FileListProps) => {
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const phone = usePhoneLayout();
-  return (
-    <FileContainer>
-      {files.map((file) => (
-        // Two names can publish under one identifier: each is its own row.
-        <FileListRow key={shareKey(file.user, file.id)} file={file} showPublisher={showPublisher} phone={phone} username={username} />
-      ))}
-    </FileContainer>
-  );
+  const grid = useListView() === "grid";
+  const items = files.map((file) => (
+    // Two names can publish under one identifier: each is its own row.
+    <FileListRow
+      key={shareKey(file.user, file.id)}
+      file={file}
+      showPublisher={showPublisher}
+      phone={phone}
+      username={username}
+      grid={grid}
+    />
+  ));
+  return grid ? <FileGrid>{items}</FileGrid> : <FileContainer>{items}</FileContainer>;
 };
 
 interface FileListRowProps {
@@ -59,9 +78,11 @@ interface FileListRowProps {
   showPublisher: boolean;
   phone: boolean;
   username?: string;
+  /** A card in the grid layout instead of a row. */
+  grid: boolean;
 }
 
-const FileListRow = memo(function FileListRow({ file, showPublisher, phone, username }: FileListRowProps) {
+const FileListRow = memo(function FileListRow({ file, showPublisher, phone, username, grid }: FileListRowProps) {
   // Only a body from this row's own name (another can reuse the identifier).
   const existingFile = useSelector((state: RootState) => heldShare(state.file, file.user, file.id));
   const isUnavailable = useSelector((state: RootState) => Boolean(state.file.unavailableFiles[shareKey(file.user, file.id)]));
@@ -107,6 +128,29 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
   const icon = getIconsFromObject(fileObj);
   if (existingFile?.isValid === false) {
     // Home and profiles leave deleted shares out; a collection can still list one.
+    if (grid) {
+      return (
+        <FileCard className="share-card">
+          <CardMainStatic>
+            <CardArt>{icon ? <CardIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon color="disabled" fontSize="large" />}</CardArt>
+            <CardBody>
+              <CardTitle sx={{ color: "text.secondary" }}>
+                {/^deleted$/i.test(title) ? shareTitleFromIdentifier(fileObj.id) : title}
+              </CardTitle>
+              <CardMeta>{existingFile.deleted ? "Deleted by its publisher" : "This share can't be read"}</CardMeta>
+            </CardBody>
+          </CardMainStatic>
+          {showPublisher && (
+            <CardFooter>
+              <CardPublisher onClick={() => navigate(profilePath(fileObj.user))} aria-label={`Shares by ${fileObj.user}`}>
+                <Avatar sx={{ width: 22, height: 22 }} src={avatarUrl(fileObj.user)} alt="" slotProps={{ img: { loading: "lazy" } }} />
+                <span>{fileObj.user}</span>
+              </CardPublisher>
+            </CardFooter>
+          )}
+        </FileCard>
+      );
+    }
     return (
       <FileRow>
         <RowMainStatic className="row-main">
@@ -132,12 +176,87 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
   }
   const totalSize = fileObj?.files?.reduce((acc: number, cur: any) => acc + (cur?.size || 0), 0) ?? 0;
   const fileCount = fileObj?.files?.length ?? 0;
+  const pending = !loaded && !unavailable ? true : undefined;
+  const openLabel = `Open ${title || shareTitleFromIdentifier(fileObj.id)}`;
+  const meta = (
+    <>
+      {loaded ? (
+        <span>
+          {fileCount} {fileCount === 1 ? "file" : "files"} · {formatBytes(totalSize)}
+        </span>
+      ) : unavailable ? (
+        <span>Not available on your node right now</span>
+      ) : (
+        <Skeleton variant="text" sx={{ width: 96 }} />
+      )}
+      {fileObj?.created && <span>· {formatDate(fileObj.created)}</span>}
+    </>
+  );
+  const actions = (
+    <RowActions className="row-actions">
+      <Tooltip title="Copy link">
+        <IconButton size={actionSize} sx={actionSx} aria-label="Copy link" onClick={() => copyLink(fileObj)}>
+          <LinkOutlinedIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <SaveToCollectionButton
+        share={{ name: fileObj.user, identifier: fileObj.id, title }}
+        size={actionSize}
+      />
+      {fileObj?.user === username ? (
+        // Editing needs the share's JSON body.
+        loaded && (
+          <Tooltip title="Edit share">
+            <IconButton size={actionSize} sx={actionSx} aria-label="Edit share" onClick={() => dispatch(setEditFile(fileObj))}>
+              <EditOutlinedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )
+      ) : (
+        username && (
+          <Tooltip title={`Block ${fileObj.user}`}>
+            <IconButton
+              size={actionSize}
+              aria-label={`Block ${fileObj.user}`}
+              onClick={() => blockUserFunc(fileObj.user)}
+              sx={{ color: "error.main", ...actionSx }}
+            >
+              <BlockOutlinedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )
+      )}
+    </RowActions>
+  );
+  if (grid) {
+    return (
+      <FileCard className="share-card" aria-busy={pending}>
+        <CardMain className="row-main" onClick={() => navigate(sharePath(fileObj.user, fileObj.id))} aria-label={openLabel}>
+          <CardArt>{icon ? <CardIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon fontSize="large" />}</CardArt>
+          <CardBody>
+            {title ? <CardTitle>{title}</CardTitle> : <Skeleton variant="text" sx={{ fontSize: 15, width: "80%" }} />}
+            <CardMeta>{meta}</CardMeta>
+          </CardBody>
+        </CardMain>
+        <CardFooter>
+          {showPublisher && (
+            <CardPublisher onClick={() => navigate(profilePath(fileObj.user))} aria-label={`Shares by ${fileObj.user}`}>
+              <Avatar sx={{ width: 22, height: 22 }} src={avatarUrl(fileObj.user)} alt="" slotProps={{ img: { loading: "lazy" } }} />
+              <span>{fileObj.user}</span>
+            </CardPublisher>
+          )}
+          {actions}
+        </CardFooter>
+        {manualLink && <ManualCopyDialog open onClose={() => setManualLink(null)} link={manualLink} />}
+      </FileCard>
+    );
+  }
   return (
-    <FileRow aria-busy={!loaded && !unavailable ? true : undefined}>
+    <FileRow aria-busy={pending}>
       <RowMain
         className="row-main"
         onClick={() => navigate(sharePath(fileObj.user, fileObj.id))}
-        aria-label={`Open ${title || shareTitleFromIdentifier(fileObj.id)}`}
+        aria-label={openLabel}
       >
         {icon ? <RowIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon />}
         <div style={{ minWidth: 0, flex: 1 }}>
@@ -146,18 +265,7 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
           ) : (
             <Skeleton variant="text" sx={{ fontSize: 15, width: "60%" }} />
           )}
-          <RowMeta>
-            {loaded ? (
-              <span>
-                {fileCount} {fileCount === 1 ? "file" : "files"} · {formatBytes(totalSize)}
-              </span>
-            ) : unavailable ? (
-              <span>Not available on your node right now</span>
-            ) : (
-              <Skeleton variant="text" sx={{ width: 96 }} />
-            )}
-            {fileObj?.created && <span>· {formatDate(fileObj.created)}</span>}
-          </RowMeta>
+          <RowMeta>{meta}</RowMeta>
         </div>
       </RowMain>
       {showPublisher && (
@@ -174,40 +282,7 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
           <span>{fileObj.user}</span>
         </NameLink>
       )}
-      <RowActions className="row-actions">
-        <Tooltip title="Copy link">
-          <IconButton size={actionSize} sx={actionSx} aria-label="Copy link" onClick={() => copyLink(fileObj)}>
-            <LinkOutlinedIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <SaveToCollectionButton
-          share={{ name: fileObj.user, identifier: fileObj.id, title }}
-          size={actionSize}
-        />
-        {fileObj?.user === username ? (
-          // Editing needs the share's JSON body.
-          loaded && (
-            <Tooltip title="Edit share">
-              <IconButton size={actionSize} sx={actionSx} aria-label="Edit share" onClick={() => dispatch(setEditFile(fileObj))}>
-                <EditOutlinedIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )
-        ) : (
-          username && (
-            <Tooltip title={`Block ${fileObj.user}`}>
-              <IconButton
-                size={actionSize}
-                aria-label={`Block ${fileObj.user}`}
-                onClick={() => blockUserFunc(fileObj.user)}
-                sx={{ color: "error.main", ...actionSx }}
-              >
-                <BlockOutlinedIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )
-        )}
-      </RowActions>
+      {actions}
       {manualLink && <ManualCopyDialog open onClose={() => setManualLink(null)} link={manualLink} />}
     </FileRow>
   );
