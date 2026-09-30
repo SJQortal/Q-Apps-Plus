@@ -9,7 +9,7 @@ import { RootState } from "../../state/store";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { formatBytes } from "../../utils/formatBytes";
-import { isHubDecline } from "../../utils/hubErrors";
+import { HUB_DIALOG_GRACE_MS, isHubDecline, isHubTimeout } from "../../utils/hubErrors";
 
 interface FollowButtonProps extends ButtonProps {
   followerName: string;
@@ -175,6 +175,13 @@ export const FollowButton = ({ followerName, compact = false, sx, ...props }: Fo
       if (following) await unfollowName();
       else await followName();
     } catch (error) {
+      if (isHubTimeout(error) && address) {
+        // Hub gave up waiting at 30 s but its dialog stays up and a late Accept
+        // still changes the list: read it again once the dialog has gone.
+        followedNames = null;
+        window.setTimeout(() => void readFollowedNames(address).then(setFollowingList), HUB_DIALOG_GRACE_MS);
+        return;
+      }
       // Saying no in Hub's dialog is not an error; the button keeps its state either way.
       if (!isHubDecline(error)) {
         const msg = `Could not ${following ? "unfollow" : "follow"} ${followerName}`;

@@ -5,7 +5,7 @@ import PersonOffOutlinedIcon from "@mui/icons-material/PersonOffOutlined";
 import { ResponsiveDialog } from "../mobile/ResponsiveDialog";
 import { EmptyState } from "../EmptyState";
 import { setNotification } from "../../../state/features/notificationsSlice";
-import { isHubDecline, isHubTimeout } from "../../../utils/hubErrors";
+import { HUB_DIALOG_GRACE_MS, isHubDecline, isHubTimeout } from "../../../utils/hubErrors";
 
 interface PostModalProps {
   open: boolean;
@@ -17,7 +17,7 @@ interface PostModalProps {
  * for 60 s and a late Accept still unblocks. Read the list again once the
  * dialog has gone.
  */
-export const RECHECK_AFTER_TIMEOUT_MS = 35_000;
+export const RECHECK_AFTER_TIMEOUT_MS = HUB_DIALOG_GRACE_MS;
 
 /**
  * The Qortal-wide `blockedNames` list. Reading and unblocking use the same

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import { addUser } from "../state/features/authSlice";
 import { getAccountNames, getPrimaryAccountName } from "../utils/qortalRequestFunctions";
-import { errorMessage, isHubDecline, isHubTimeout } from "../utils/hubErrors";
+import { HUB_DIALOG_GRACE_MS, errorMessage, isHubDecline, isHubTimeout } from "../utils/hubErrors";
 
 /**
  * Hub answers GET_USER_ACCOUNT with "Request timed out" after 30 s, but its
@@ -10,7 +10,7 @@ import { errorMessage, isHubDecline, isHubTimeout } from "../utils/hubErrors";
  * session. Asking once more after the dialog has gone signs the user in
  * without a second prompt.
  */
-export const ACCOUNT_RETRY_MS = 35_000;
+export const ACCOUNT_RETRY_MS = HUB_DIALOG_GRACE_MS;
 
 /**
  * Hub answers every failed GET_USER_ACCOUNT, a declined Authenticate dialog

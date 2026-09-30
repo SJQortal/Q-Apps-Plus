@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { FollowButton, resetFollowCaches } from './FollowButton';
+import { HUB_DIALOG_GRACE_MS } from '../../utils/hubErrors';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
 import { store } from '../../state/store';
@@ -14,6 +15,10 @@ function signIn(name: string | null) {
 }
 
 describe('FollowButton', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     resetFollowCaches();
     store.dispatch(removeNotification());
@@ -49,6 +54,29 @@ describe('FollowButton', () => {
     await act(async () => {});
     expect(screen.getByRole('button', { name: 'Unfollow alice' })).toBeInTheDocument();
     expect(qortalCallsFor('GET_LIST_ITEMS')).toHaveLength(1);
+  });
+
+  it('after Hub times out on Follow, reads the list again once the dialog has gone', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    signIn('carol');
+    let list: string[] = [];
+    mockQortalAction('GET_LIST_ITEMS', () => list);
+    // Hub answers after 30 s; the user accepts later, and Hub applies it.
+    mockQortalAction('ADD_LIST_ITEMS', () => {
+      list = ['alice'];
+      throw { error: 'Request timed out after 30000 ms (action: ADD_LIST_ITEMS)' };
+    });
+    renderWithProviders(<FollowButton followerName="alice" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Follow alice' }));
+    await waitFor(() => expect(qortalCallsFor('ADD_LIST_ITEMS')).toHaveLength(1));
+    // No error toast for a timeout: the outcome is not known yet.
+    expect(store.getState().notifications.alertTypes.alertError).toBe('');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(HUB_DIALOG_GRACE_MS);
+    });
+    expect(await screen.findByRole('button', { name: 'Unfollow alice' })).toBeInTheDocument();
+    expect(qortalCallsFor('GET_LIST_ITEMS')).toHaveLength(2);
   });
 
   it('remembers a declined list read for the session instead of asking on every page', async () => {
@@ -96,7 +124,7 @@ describe('FollowButton', () => {
     expect(store.getState().notifications.alertTypes.alertError).toBeFalsy();
 
     mockQortalAction('ADD_LIST_ITEMS', () => {
-      throw 'The request timed out';
+      throw { error: 'Unable to add to list', message: 'Unable to add to list' };
     });
     fireEvent.click(screen.getByRole('button', { name: 'Follow alice' }));
     await waitFor(() => expect(store.getState().notifications.alertTypes.alertError).toBe('Could not follow alice'));

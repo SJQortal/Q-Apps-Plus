@@ -29,3 +29,10 @@ export function isHubDecline(error: unknown): boolean {
 export function isHubTimeout(error: unknown): boolean {
   return /timed out/i.test(errorMessage(error, ""));
 }
+
+/**
+ * Hub answers a dialog-backed request with a timeout after 30 s but leaves its
+ * dialog up for 60 s, and applies a late Accept anyway. Check again after this
+ * long, when the dialog is gone either way.
+ */
+export const HUB_DIALOG_GRACE_MS = 35_000;
