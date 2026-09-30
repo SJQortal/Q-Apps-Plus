@@ -8,6 +8,7 @@
  */
 import { QSHARE_COLLECTION_BASE } from "../constants/Identifiers";
 import { objectToBase64 } from "./toBase64";
+import { fetchQdnResource, needsEncodedFetch } from "./fetchVideos";
 import {
   QDN_PAGE,
   QDN_SEARCH_TTL_MS,
@@ -298,12 +299,10 @@ export async function fetchCollection(
     bodyCache.delete(key);
   }
   const request = (async () => {
-    const raw = await qortalRequest({
-      action: "FETCH_QDN_RESOURCE",
-      name,
-      service: COLLECTION_SERVICE,
-      identifier,
-    });
+    // q-apps.js doesn't encode the name, so a name with "/" would read Core's error page.
+    const raw = needsEncodedFetch(name)
+      ? await fetchQdnResource(COLLECTION_SERVICE, name, identifier)
+      : await qortalRequest({ action: "FETCH_QDN_RESOURCE", name, service: COLLECTION_SERVICE, identifier });
     const body = parseCollection(raw);
     if (!body) return null;
     return remember({ ...body, name, identifier, fetchedAt: Date.now() });

@@ -210,6 +210,14 @@ describe('searchCollections and fetchCollection', () => {
     expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(1);
   });
 
+  it('reads a collection by a name with "/" with the name encoded', async () => {
+    mockFetch('/arbitrary/DOCUMENT/', { version: 1, title: 'Guides', description: '', items: [], created: 1, updated: 1 });
+    const c = await fetchCollection('Vallot-/8/', 'qshare_collection_guides_ab12cd');
+    expect(c).toMatchObject({ name: 'Vallot-/8/', title: 'Guides' });
+    expect(fetchCallsMatching('/arbitrary/DOCUMENT/')).toEqual(['/arbitrary/DOCUMENT/Vallot-%2F8%2F/qshare_collection_guides_ab12cd']);
+    expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(0);
+  });
+
   it('resolves null for a resource that is not a collection', async () => {
     mockQortalAction('FETCH_QDN_RESOURCE', { title: 'a share', files: [] });
     expect(await fetchCollection('alice', 'qshare_collection_x_ab12cd')).toBeNull();
