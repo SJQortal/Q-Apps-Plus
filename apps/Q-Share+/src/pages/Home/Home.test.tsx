@@ -73,6 +73,26 @@ describe('Home first load', () => {
     expect(await screen.findByText("That's every share that matches.")).toBeInTheDocument();
   });
 
+  it('in the grid layout, loads with placeholder cards, not rows, and then shows a card per share', async () => {
+    writeSettings({ listView: 'grid' });
+    let answer!: (rows: unknown) => void;
+    const rows = new Promise((resolve) => (answer = resolve));
+    mockFetch('/arbitrary/resources/search', () => rows);
+    mockQortalAction('FETCH_QDN_RESOURCE', { title: 'Grid share', files: [{ size: 10 }] });
+
+    const { container } = renderHome();
+    const loading = await screen.findByRole('list', { name: 'Loading shares' });
+    expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(loading.querySelectorAll('li')).toHaveLength(6);
+
+    answer([
+      { name: 'alice', service: 'DOCUMENT', identifier: 'qshare_file_grid-share_Gs0001_metadata', created: Date.now(), metadata: { title: 'Grid share' } },
+    ]);
+    expect(await screen.findByRole('button', { name: 'Open Grid share' })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Loading shares' })).not.toBeInTheDocument();
+    expect(container.querySelectorAll('li.share-card')).toHaveLength(1);
+  });
+
   it('the Following chip re-runs the search with followedonly=true and hidden names are filtered', async () => {
     store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
     localStorage.setItem('qshareplus-settings', JSON.stringify({ hiddenNames: ['spammer'] }));

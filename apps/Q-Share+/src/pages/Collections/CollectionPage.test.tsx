@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
@@ -11,6 +11,7 @@ import { removeNotification } from '../../state/features/notificationsSlice';
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
 import { resetCollectionCaches } from '../../utils/collections';
 import { resetInAppHistory } from '../../hooks/useSafeBack';
+import { resetSettingsCache, writeSettings } from '../../utils/settings';
 import { CollectionPage } from './CollectionPage';
 
 const COLLECTION_ID = 'qshare_collection_docs_ab12cd';
@@ -176,6 +177,95 @@ describe('CollectionPage', () => {
     await screen.findByRole('heading', { name: 'Docs' });
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(await screen.findByText('Collections list')).toBeInTheDocument();
+  });
+
+  describe('grid layout', () => {
+    const cards = () => Array.from(document.querySelectorAll<HTMLElement>('li.share-card'));
+
+    beforeEach(() => {
+      for (const item of items) store.dispatch(removeFromHashMap(item.identifier));
+    });
+    afterEach(() => {
+      resetSettingsCache();
+    });
+
+    it('switches the items between rows and cards from the list header, and the owner removes from a card', async () => {
+      store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
+      mockQortalAction('PUBLISH_QDN_RESOURCE', true);
+      renderPage();
+      await screen.findByText('First share');
+      expect(screen.getByRole('heading', { name: 'Shares' })).toBeInTheDocument();
+      expect(cards()).toHaveLength(0);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Grid' }));
+      expect(cards()).toHaveLength(2);
+      const first = cards().find((card) => within(card).queryByText('First share'))!;
+      expect(within(first).getByRole('button', { name: 'Open First share' })).toBeInTheDocument();
+      // One Remove per card, named as in the list, and the same confirmation.
+      expect(screen.getAllByRole('button', { name: /^Remove .* from collection$/ })).toHaveLength(2);
+      fireEvent.click(within(first).getByRole('button', { name: 'Remove First share from collection' }));
+      expect(await screen.findByText('Remove from collection?')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+      await waitFor(() => expect(qortalCallsFor('PUBLISH_QDN_RESOURCE').length).toBe(1));
+      const body = JSON.parse(atob(String(qortalCallsFor('PUBLISH_QDN_RESOURCE')[0].data64)));
+      expect(body.items).toEqual([items[1]]);
+      await waitFor(() => expect(screen.queryByText('First share')).not.toBeInTheDocument());
+      expect(cards()).toHaveLength(1);
+      await waitFor(() => expect(screen.queryByText('Remove from collection?')).not.toBeInTheDocument());
+
+      fireEvent.click(screen.getByRole('button', { name: 'List' }));
+      expect(cards()).toHaveLength(0);
+      expect(screen.getByRole('button', { name: 'Remove Second share from collection' })).toBeInTheDocument();
+    });
+
+    it("shows a visitor cards with no Remove, including a share its publisher deleted", async () => {
+      writeSettings({ listView: 'grid' });
+      store.dispatch(addUser(null));
+      mockQortalAction('FETCH_QDN_RESOURCE', (params) => {
+        if (params.identifier === COLLECTION_ID) {
+          return { version: 1, title: 'Docs', description: '', items, created: 1, updated: 2 };
+        }
+        return String(params.identifier).includes('first') ? 'D' : { title: 'Second share', files: [] };
+      });
+      renderPage();
+      expect(await screen.findByText('Deleted by its publisher')).toBeInTheDocument();
+      expect(await screen.findByText('Second share')).toBeInTheDocument();
+      expect(cards()).toHaveLength(2);
+      expect(screen.queryByRole('button', { name: /^Remove/ })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Shares by bob' })).toBeInTheDocument();
+    });
+
+    it("gives the owner a Remove on a deleted share's card too", async () => {
+      writeSettings({ listView: 'grid' });
+      store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
+      mockQortalAction('FETCH_QDN_RESOURCE', (params) => {
+        if (params.identifier === COLLECTION_ID) {
+          return { version: 1, title: 'Docs', description: '', items, created: 1, updated: 2 };
+        }
+        return String(params.identifier).includes('first') ? 'D' : { title: 'Second share', files: [] };
+      });
+      renderPage();
+      expect(await screen.findByText('Deleted by its publisher')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Remove First from collection' }));
+      expect(await screen.findByText('Remove from collection?')).toBeInTheDocument();
+    });
+
+    it('loads with placeholder cards in the grid', async () => {
+      writeSettings({ listView: 'grid' });
+      store.dispatch(addUser(null));
+      // A collection no earlier test put in the store, so the page starts loading.
+      const freshId = 'qshare_collection_fresh_ef56ab';
+      mockQortalAction('FETCH_QDN_RESOURCE', (params) =>
+        params.identifier === freshId ? { version: 1, title: 'Fresh', description: '', items, created: 1, updated: 2 } : { title: 'A share', files: [] }
+      );
+      renderPage(`/collection/alice/${freshId}`);
+      const loading = screen.getByRole('list', { name: 'Loading collection' });
+      expect(loading).toHaveAttribute('aria-busy', 'true');
+      expect(loading.querySelectorAll('li')).toHaveLength(3);
+      expect(await screen.findByRole('heading', { name: 'Fresh' })).toBeInTheDocument();
+      expect(screen.queryByRole('list', { name: 'Loading collection' })).not.toBeInTheDocument();
+    });
   });
 
   describe('share bodies', () => {

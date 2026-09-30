@@ -4,11 +4,13 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import BlockOutlinedIcon from "@mui/icons-material/BlockOutlined";
 import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
+import RemoveCircleOutlinedIcon from "@mui/icons-material/RemoveCircleOutlined";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
   CardArt,
   CardBody,
+  CardCorner,
   CardFooter,
   CardIcon,
   CardMain,
@@ -35,7 +37,7 @@ import { formatDate } from "../../utils/time.ts";
 import { RootState } from "../../state/store.ts";
 import { getIconsFromObject } from "../../constants/Categories/CategoryFunctions.ts";
 import { avatarUrl, profilePath, shareLink, sharePath } from "../../utils/qortalLinks.ts";
-import { usePhoneLayout } from "../../hooks/usePhoneLayout.ts";
+import { LANDSCAPE_PHONE_MEDIA, usePhoneLayout } from "../../hooks/usePhoneLayout.ts";
 import { SaveToCollectionButton } from "../../components/common/SaveToCollection/SaveToCollectionButton";
 import { shareTitleFromIdentifier } from "../../hooks/useFetchFiles.tsx";
 import { copyText } from "../../utils/clipboard.ts";
@@ -47,6 +49,32 @@ interface FileListProps {
   files: Video[];
   /** Hide the publisher (on a profile page every row has the same one). */
   showPublisher?: boolean;
+  /**
+   * Grid only: a Remove button on each card, for the owner of a collection
+   * (the list layout keeps its own button beside each row). Pass a stable
+   * function, such as a state setter, so the cards stay memoized.
+   */
+  onRemove?: (file: Video) => void;
+}
+
+/**
+ * Placeholder cards while a grid's first page loads, in the grid's own
+ * columns and about as tall as the cards (lower on a phone in landscape,
+ * where the card art is).
+ */
+export function FileGridSkeleton({ count, label }: { count: number; label?: string }) {
+  return (
+    <FileGrid aria-busy="true" aria-label={label}>
+      {Array.from({ length: count }, (_, i) => (
+        <li key={i}>
+          <Skeleton
+            variant="rounded"
+            sx={{ width: "100%", height: { xs: 232, sm: 208 }, [`@media ${LANDSCAPE_PHONE_MEDIA}`]: { height: 192 } }}
+          />
+        </li>
+      ))}
+    </FileGrid>
+  );
 }
 
 /**
@@ -55,7 +83,7 @@ interface FileListProps {
  * layout setting (useListView) turns the rows into a grid of cards with the
  * same states and actions.
  */
-export const FileList = ({ files, showPublisher = true }: FileListProps) => {
+export const FileList = ({ files, showPublisher = true, onRemove }: FileListProps) => {
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const phone = usePhoneLayout();
   const grid = useListView() === "grid";
@@ -68,10 +96,39 @@ export const FileList = ({ files, showPublisher = true }: FileListProps) => {
       phone={phone}
       username={username}
       grid={grid}
+      onRemove={grid ? onRemove : undefined}
     />
   ));
   return grid ? <FileGrid>{items}</FileGrid> : <FileContainer>{items}</FileContainer>;
 };
+
+/** A card's Remove button, over its art, on a collection its owner opens. The page's dialog confirms. */
+function CardRemoveButton({ title, phone, onClick }: { title: string; phone: boolean; onClick: () => void }) {
+  return (
+    <CardCorner className="row-actions">
+      <Tooltip title="Remove from collection">
+        <IconButton
+          aria-label={`Remove ${title} from collection`}
+          onClick={onClick}
+          sx={{
+            width: phone ? 44 : 36,
+            height: phone ? 44 : 36,
+            // Solid, so it reads on the tinted art in every theme.
+            bgcolor: "background.paper",
+            border: 1,
+            borderColor: "divider",
+            "&:hover": {
+              bgcolor: "background.paper",
+              backgroundImage: (theme) => `linear-gradient(${theme.palette.action.hover}, ${theme.palette.action.hover})`,
+            },
+          }}
+        >
+          <RemoveCircleOutlinedIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    </CardCorner>
+  );
+}
 
 interface FileListRowProps {
   file: Video;
@@ -80,9 +137,10 @@ interface FileListRowProps {
   username?: string;
   /** A card in the grid layout instead of a row. */
   grid: boolean;
+  onRemove?: (file: Video) => void;
 }
 
-const FileListRow = memo(function FileListRow({ file, showPublisher, phone, username, grid }: FileListRowProps) {
+const FileListRow = memo(function FileListRow({ file, showPublisher, phone, username, grid, onRemove }: FileListRowProps) {
   // Only a body from this row's own name (another can reuse the identifier).
   const existingFile = useSelector((state: RootState) => heldShare(state.file, file.user, file.id));
   const isUnavailable = useSelector((state: RootState) => Boolean(state.file.unavailableFiles[shareKey(file.user, file.id)]));
@@ -129,14 +187,13 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
   if (existingFile?.isValid === false) {
     // Home and profiles leave deleted shares out; a collection can still list one.
     if (grid) {
+      const shownTitle = /^deleted$/i.test(title) ? shareTitleFromIdentifier(fileObj.id) : title;
       return (
         <FileCard className="share-card">
           <CardMainStatic>
             <CardArt>{icon ? <CardIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon color="disabled" fontSize="large" />}</CardArt>
             <CardBody>
-              <CardTitle sx={{ color: "text.secondary" }}>
-                {/^deleted$/i.test(title) ? shareTitleFromIdentifier(fileObj.id) : title}
-              </CardTitle>
+              <CardTitle sx={{ color: "text.secondary" }}>{shownTitle}</CardTitle>
               <CardMeta>{existingFile.deleted ? "Deleted by its publisher" : "This share can't be read"}</CardMeta>
             </CardBody>
           </CardMainStatic>
@@ -148,6 +205,7 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
               </CardPublisher>
             </CardFooter>
           )}
+          {onRemove && <CardRemoveButton title={shownTitle} phone={phone} onClick={() => onRemove(file)} />}
         </FileCard>
       );
     }
@@ -247,6 +305,9 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
           )}
           {actions}
         </CardFooter>
+        {onRemove && (
+          <CardRemoveButton title={title || shareTitleFromIdentifier(fileObj.id)} phone={phone} onClick={() => onRemove(file)} />
+        )}
         {manualLink && <ManualCopyDialog open onClose={() => setManualLink(null)} link={manualLink} />}
       </FileCard>
     );

@@ -309,6 +309,15 @@ export const CardPublisher = styled(NameLink)({
   minWidth: 0,
 });
 
+/** A card's corner action over the art: Remove, on a collection its owner opens. */
+export const CardCorner = styled("div")(({ theme }) => ({
+  position: "absolute",
+  top: theme.spacing(0.75),
+  right: theme.spacing(0.75),
+  zIndex: 1,
+  transition: "opacity 150ms ease",
+}));
+
 export const FiltersRail = styled(Box)(({ theme }) => ({
   display: "flex",
   flexDirection: "column",

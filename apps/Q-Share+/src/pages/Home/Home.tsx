@@ -18,7 +18,7 @@ import { BottomSheet } from "../../components/common/mobile/BottomSheet";
 import { useNarrowLayout } from "../../hooks/usePhoneLayout";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { RootState } from "../../state/store";
-import { FileList } from "./FileList.tsx";
+import { FileGridSkeleton, FileList } from "./FileList.tsx";
 import { useFetchFiles, useListedFiles } from "../../hooks/useFetchFiles.tsx";
 import LazyLoad from "../../components/common/LazyLoad";
 import { PageRetry } from "../../components/common/PageRetry.tsx";
@@ -439,11 +439,16 @@ export const Home = () => {
         {error ? (
           <EmptyState title="Could not load shares" description={error} actionLabel="Retry" onAction={() => runSearch(true)} />
         ) : files.length === 0 && (isLoading || hasMore) ? (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            {Array.from({ length: 6 }, (_, i) => (
-              <Skeleton key={i} variant="rounded" height={64} />
-            ))}
-          </Box>
+          // The first page's placeholders take the layout the rows will have.
+          settings.listView === "grid" ? (
+            <FileGridSkeleton count={6} label="Loading shares" />
+          ) : (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              {Array.from({ length: 6 }, (_, i) => (
+                <Skeleton key={i} variant="rounded" height={64} />
+              ))}
+            </Box>
+          )
         ) : visibleFiles.length === 0 && !hasMore && !isLoading && hiddenAll ? (
           <EmptyState
             icon={<VisibilityOffOutlinedIcon />}

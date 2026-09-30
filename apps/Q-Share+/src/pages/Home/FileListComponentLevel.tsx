@@ -7,8 +7,9 @@ import { PageRetry } from "../../components/common/PageRetry.tsx";
 import { Video } from "../../state/features/fileSlice.ts";
 import { QSHARE_FILE_BASE } from "../../constants/Identifiers.ts";
 import { QDN_PAGE, QDN_SEARCH_TTL_MS, searchQdn } from "../../utils/qdnSearch";
-import { FileList } from "./FileList.tsx";
+import { FileGridSkeleton, FileList } from "./FileList.tsx";
 import { EmptyState } from "../../components/common/EmptyState.tsx";
+import { useListView } from "../../components/common/ListViewToggle.tsx";
 
 /** When each name's profile list last opened, to tell a new visit from coming back (share → Back). */
 const profileOpenedAt = new Map<string, number>();
@@ -94,6 +95,8 @@ export const FileListComponentLevel = () => {
 
   // Deleted shares ("D" bodies) are left out; a name whose shares are all deleted is empty.
   const listed = useListedFiles(videos);
+  // The first page's placeholders take the layout the rows will have.
+  const grid = useListView() === "grid";
   // Holds the list's rows, for Retry to move focus to the first row its page adds.
   const rows = useRef<HTMLDivElement>(null);
 
@@ -102,11 +105,15 @@ export const FileListComponentLevel = () => {
       {error && listed.length === 0 ? (
         <EmptyState title="Could not load this publisher's shares" actionLabel="Retry" onAction={() => getVideos(true)} />
       ) : videos.length === 0 && isLoading ? (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          {Array.from({ length: 4 }, (_, i) => (
-            <Skeleton key={i} variant="rounded" height={64} />
-          ))}
-        </Box>
+        grid ? (
+          <FileGridSkeleton count={6} label="Loading shares" />
+        ) : (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            {Array.from({ length: 4 }, (_, i) => (
+              <Skeleton key={i} variant="rounded" height={64} />
+            ))}
+          </Box>
+        )
       ) : listed.length === 0 && !hasMore && !isLoading ? (
         <EmptyState title="No shares from this name yet" />
       ) : (

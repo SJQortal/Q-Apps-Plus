@@ -7,6 +7,7 @@ import { useSafeBack } from "../../hooks/useSafeBack";
 import { FileListComponentLevel } from "../Home/FileListComponentLevel.tsx";
 import { FollowButton } from "../../components/common/FollowButton.tsx";
 import { CopyLinkButton } from "../../components/common/CopyLinkButton.tsx";
+import { ListViewToggle } from "../../components/common/ListViewToggle.tsx";
 import { avatarUrl, decodeParam, profileLink } from "../../utils/qortalLinks";
 import { ProfileCollections } from "./ProfileCollections";
 
@@ -63,15 +64,30 @@ export const IndividualProfile = () => {
           <CopyLinkButton link={profileLink(name)} tooltipTitle="Copy profile link" />
         </Box>
       </Box>
-      <Tabs
-        value={tab}
-        onChange={(_, value: ProfileTab) => setTab(value)}
-        variant={phone ? "fullWidth" : "standard"}
-        aria-label="What to show for this name"
-      >
-        <Tab value="shares" label="Shares" sx={{ minHeight: 48 }} />
-        <Tab value="collections" label="Collections" sx={{ minHeight: 48 }} />
-      </Tabs>
+      <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+        {/* Left-aligned at their own width, not full width, so the layout toggle fits
+            beside them on a 360 px phone and they don't move when it goes. Where both
+            don't fit (below about 350 px, or with a wider font) the toggle wraps under
+            them, so no tab is ever cut off; they only scroll in a pane narrower than
+            the two tabs themselves. */}
+        <Tabs
+          value={tab}
+          onChange={(_, value: ProfileTab) => setTab(value)}
+          variant="scrollable"
+          scrollButtons={false}
+          aria-label="What to show for this name"
+          sx={{ flex: "0 1 auto", minWidth: 0, maxWidth: "100%" }}
+        >
+          <Tab value="shares" label="Shares" sx={{ minHeight: 48 }} />
+          <Tab value="collections" label="Collections" sx={{ minHeight: 48 }} />
+        </Tabs>
+        {/* Rows or cards for the shares; collections have their own list. At the right on either line. */}
+        {tab === "shares" && (
+          <Box sx={{ ml: "auto", display: "flex" }}>
+            <ListViewToggle />
+          </Box>
+        )}
+      </Box>
       {tab === "shares" ? <FileListComponentLevel key={name} /> : <ProfileCollections key={name} name={name} />}
     </Box>
   );

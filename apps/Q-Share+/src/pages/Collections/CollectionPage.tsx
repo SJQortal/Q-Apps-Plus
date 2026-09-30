@@ -12,7 +12,8 @@ import { useSafeBack } from "../../hooks/useSafeBack";
 import { useFetchFiles } from "../../hooks/useFetchFiles";
 import { EmptyState } from "../../components/common/EmptyState";
 import { ResponsiveDialog } from "../../components/common/mobile/ResponsiveDialog";
-import { FileList } from "../Home/FileList";
+import { FileGridSkeleton, FileList } from "../Home/FileList";
+import { ListViewToggle, useListView } from "../../components/common/ListViewToggle";
 import { upsertCollection } from "../../state/features/collectionsSlice";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { heldShare, shareKey, type Video } from "../../state/features/fileSlice";
@@ -173,6 +174,7 @@ function CollectionView({ name, id }: { name: string; id: string }) {
 
   // Hidden names (Settings → Content) apply here as on Home and in comments.
   const settings = useAppSettings();
+  const grid = useListView() === "grid";
   const items: Video[] = useMemo(
     () =>
       (collection?.items ?? [])
@@ -249,13 +251,17 @@ function CollectionView({ name, id }: { name: string; id: string }) {
     body = (
       <>
         <Skeleton variant="rounded" sx={{ width: "100%", height: 120 }} />
-        <CardList aria-busy="true" aria-label="Loading collection">
-          {[0, 1, 2].map((n) => (
-            <li key={n}>
-              <Skeleton variant="rounded" sx={{ width: "100%", height: 64 }} />
-            </li>
-          ))}
-        </CardList>
+        {grid ? (
+          <FileGridSkeleton count={3} label="Loading collection" />
+        ) : (
+          <CardList aria-busy="true" aria-label="Loading collection">
+            {[0, 1, 2].map((n) => (
+              <li key={n}>
+                <Skeleton variant="rounded" sx={{ width: "100%", height: 64 }} />
+              </li>
+            ))}
+          </CardList>
+        )}
       </>
     );
   } else if (status === "fetching") {
@@ -329,12 +335,24 @@ function CollectionView({ name, id }: { name: string; id: string }) {
           ) : null}
         </InfoCard>
 
+        {items.length > 0 ? (
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: -1 }}>
+            <Typography component="h2" sx={{ fontWeight: 700, fontSize: 16 }}>
+              Shares
+            </Typography>
+            <ListViewToggle />
+          </Box>
+        ) : null}
+
         {items.length === 0 ? (
           <EmptyState
             icon={<CollectionsBookmarkOutlinedIcon />}
             title="This collection is empty"
             description={isOwner ? "Save shares to it with the bookmark button on any share." : undefined}
           />
+        ) : isOwner && grid ? (
+          // Each card carries its own Remove button; the rows keep theirs beside them.
+          <FileList files={items} onRemove={setRemoveTarget} />
         ) : isOwner ? (
           <ItemRows>
             {items.map((video) => (

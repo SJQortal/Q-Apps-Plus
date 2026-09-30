@@ -5,7 +5,7 @@ import { FileListComponentLevel } from './FileListComponentLevel';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
 import { QDN_SEARCH_TTL_MS, resetQdnSearchCache } from '../../utils/qdnSearch';
-import { resetSettingsCache } from '../../utils/settings';
+import { resetSettingsCache, writeSettings } from '../../utils/settings';
 import { readOncePerObserve } from '../../test/intersection';
 
 function renderProfile(name: string) {
@@ -78,6 +78,27 @@ describe('profile share list', () => {
     expect(screen.queryByText('Could not load more shares.')).not.toBeInTheDocument();
     // Focus moves on to the row that page added, not to the top of the document.
     expect(document.activeElement).toBe(screen.getByText('Bob last share').closest('button'));
+  });
+
+  it('in the grid layout, loads with placeholder cards and then shows a card per share', async () => {
+    resetQdnSearchCache();
+    writeSettings({ listView: 'grid' });
+    onTestFinished(() => resetSettingsCache());
+    let answer!: (rows: unknown) => void;
+    const rows = new Promise((resolve) => (answer = resolve));
+    mockFetch('/arbitrary/resources/search', () => rows);
+    mockQortalAction('FETCH_QDN_RESOURCE', { title: 'Grid one', files: [{ size: 10 }] });
+
+    const { container } = renderProfile('Gina');
+    const loading = await screen.findByRole('list', { name: 'Loading shares' });
+    expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(loading.querySelectorAll('li')).toHaveLength(6);
+
+    answer([{ name: 'Gina', service: 'DOCUMENT', identifier: 'qshare_file_grid-one_Gi0001_metadata', created: 1, metadata: { title: 'Grid one' } }]);
+    expect(await screen.findByRole('button', { name: 'Open Grid one' })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Loading shares' })).not.toBeInTheDocument();
+    expect(container.querySelectorAll('li.share-card')).toHaveLength(1);
+    expect(await screen.findByText(/1 file · 10 B/)).toBeInTheDocument();
   });
 });
 
