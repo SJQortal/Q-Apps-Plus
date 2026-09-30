@@ -29,6 +29,18 @@ export function readHostMode(): ColorMode {
   return 'dark';
 }
 
+/**
+ * Hub posts `{ action: 'THEME_CHANGED', theme: 'light' | 'dark' }` into the
+ * app's frame when the user flips Hub's own light/dark switch. Returns the new
+ * mode, or null for any other message.
+ */
+export function hostModeFromMessage(data: unknown): ColorMode | null {
+  if (!data || typeof data !== 'object') return null;
+  const { action, theme } = data as { action?: unknown; theme?: unknown };
+  if (action !== 'THEME_CHANGED') return null;
+  return theme === 'light' || theme === 'dark' ? theme : null;
+}
+
 /** The theme is stored as a JSON string so it matches jotai's atomWithStorage format. */
 export function readStoredUiTheme(storageKey: string): UiThemeId {
   if (typeof window === 'undefined') return DEFAULT_UI_THEME;
