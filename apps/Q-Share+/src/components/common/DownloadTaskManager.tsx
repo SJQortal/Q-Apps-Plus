@@ -177,7 +177,7 @@ export const DownloadTaskManager: React.FC<DownloadTaskManagerProps> = ({ hideBu
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           transformOrigin={{ vertical: "top", horizontal: "right" }}
         >
-          <Box sx={{ width: 320, maxWidth: "calc(100vw - 32px)", maxHeight: "60vh", overflowY: "auto", p: 1.5 }}>
+          <Box sx={{ width: 320, maxWidth: "calc(100vw - 32px)", maxHeight: "calc(var(--qshare-app-height, 100dvh) * 0.6)", overflowY: "auto", p: 1.5 }}>
             <Typography component="h2" sx={{ fontWeight: 700, fontSize: 15, mb: 1 }}>
               Downloads
             </Typography>

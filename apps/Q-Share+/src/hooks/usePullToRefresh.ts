@@ -17,6 +17,7 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown> | void, enabl
   const [pull, setPull] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const startY = useRef<number | null>(null);
+  const pullRef = useRef(0);
   const latest = useRef(onRefresh);
   useEffect(() => {
     latest.current = onRefresh;
@@ -28,8 +29,15 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown> | void, enabl
     if (!coarse) return;
     let active = false;
 
+    const setDistance = (value: number) => {
+      pullRef.current = value;
+      setPull(value);
+    };
     const onStart = (e: TouchEvent) => {
       if (refreshing || window.scrollY > 0 || e.touches.length !== 1) return;
+      // A drag inside a dialog, sheet or menu scrolls that surface, not the page.
+      const target = e.target as Element | null;
+      if (target?.closest?.('[role="dialog"], [role="menu"], .MuiModal-root, .MuiPopover-root')) return;
       startY.current = e.touches[0].clientY;
       active = true;
     };
@@ -37,26 +45,25 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown> | void, enabl
       if (!active || startY.current === null) return;
       const dy = e.touches[0].clientY - startY.current;
       if (dy <= 0 || window.scrollY > 0) {
-        setPull(0);
+        setDistance(0);
         return;
       }
       // Resistance: the indicator moves slower than the finger.
-      setPull(Math.min(MAX_PULL, dy * 0.55));
+      setDistance(Math.min(MAX_PULL, dy * 0.55));
     };
-    const onEnd = async () => {
+    const onEnd = () => {
       if (!active) return;
       active = false;
       startY.current = null;
-      setPull((current) => {
-        if (current >= THRESHOLD) {
-          setRefreshing(true);
-          Promise.resolve(latest.current()).finally(() => {
-            setRefreshing(false);
-            setPull(0);
-          });
-          return THRESHOLD * 0.8;
-        }
-        return 0;
+      if (pullRef.current < THRESHOLD) {
+        setDistance(0);
+        return;
+      }
+      setDistance(THRESHOLD * 0.8);
+      setRefreshing(true);
+      Promise.resolve(latest.current()).finally(() => {
+        setRefreshing(false);
+        setDistance(0);
       });
     };
 

@@ -117,7 +117,7 @@ function ImagePreview({ file }: { file: PreviewFile }) {
           <img
             src={src}
             alt={alt}
-            style={{ display: "block", maxWidth: "100%", maxHeight: "calc(100vh - 140px)", objectFit: "contain" }}
+            style={{ display: "block", maxWidth: "100%", maxHeight: "calc(var(--qshare-app-height, 100dvh) - 140px)", objectFit: "contain" }}
           />
         </Box>
       </ResponsiveDialog>
@@ -199,7 +199,7 @@ export function PreviewPanel({ file, kind, open }: PreviewPanelProps) {
             style={{
               display: "block",
               width: "100%",
-              maxHeight: "70vh",
+              maxHeight: "calc(var(--qshare-app-height, 100dvh) * 0.7)",
               borderRadius: Number(theme.shape.borderRadius) || 8,
               backgroundColor: theme.palette.common.black,
             }}
@@ -226,7 +226,7 @@ export function PreviewPanel({ file, kind, open }: PreviewPanelProps) {
             component="iframe"
             title={`Preview of ${file.filename || "PDF"}`}
             src={src}
-            sx={{ width: "100%", height: "70vh", border: 1, borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}
+            sx={{ width: "100%", height: "calc(var(--qshare-app-height, 100dvh) * 0.7)", border: 1, borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}
           />
           <Typography variant="body2" color="text.secondary">
             If the preview stays blank, download the file.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { Avatar, Box, Button, Fab, IconButton, Skeleton, Tab, Tabs, Typography } from "@mui/material";
+import { Avatar, Box, Button, IconButton, Skeleton, Tab, Tabs, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CollectionsBookmarkOutlinedIcon from "@mui/icons-material/CollectionsBookmarkOutlined";
@@ -163,6 +163,16 @@ export function CollectionsPage() {
           <Typography component="h1" noWrap sx={{ flex: 1, fontSize: 18, fontWeight: 700 }}>
             Collections
           </Typography>
+          {myName ? (
+            <IconButton
+              aria-label="New collection"
+              color="primary"
+              onClick={() => setDialogOpen(true)}
+              sx={{ minWidth: 44, minHeight: 44 }}
+            >
+              <AddIcon />
+            </IconButton>
+          ) : null}
         </PhoneHeader>
       ) : (
         <HeaderRow>
@@ -187,23 +197,6 @@ export function CollectionsPage() {
 
       {body}
 
-      {myName && phone ? (
-        <Fab
-          color="primary"
-          aria-label="New collection"
-          onClick={() => setDialogOpen(true)}
-          sx={{
-            position: "fixed",
-            right: 16,
-            bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
-            zIndex: 20,
-            minWidth: 56,
-            minHeight: 56,
-          }}
-        >
-          <AddIcon />
-        </Fab>
-      ) : null}
 
       <CollectionDialog
         open={dialogOpen}
