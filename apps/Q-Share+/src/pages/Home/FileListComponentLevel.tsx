@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Box, Skeleton } from "@mui/material";
-import { useFetchFiles, summaryToVideo } from "../../hooks/useFetchFiles.tsx";
+import { useFetchFiles, summaryToVideo, useListedFiles } from "../../hooks/useFetchFiles.tsx";
 import LazyLoad from "../../components/common/LazyLoad";
 import { Video } from "../../state/features/fileSlice.ts";
 import { queue } from "../../utils/queue";
@@ -79,9 +79,12 @@ export const FileListComponentLevel = () => {
     });
   }, [paramName, getVideos]);
 
+  // Deleted shares ("D" bodies) are left out; a name whose shares are all deleted is empty.
+  const listed = useListedFiles(videos);
+
   return (
     <Box sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 1.5 }}>
-      {error && videos.length === 0 ? (
+      {error && listed.length === 0 ? (
         <EmptyState title="Could not load this publisher's shares" actionLabel="Retry" onAction={() => getVideos(true)} />
       ) : videos.length === 0 && isLoading ? (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -89,11 +92,11 @@ export const FileListComponentLevel = () => {
             <Skeleton key={i} variant="rounded" height={64} />
           ))}
         </Box>
-      ) : videos.length === 0 ? (
+      ) : listed.length === 0 && !hasMore && !isLoading ? (
         <EmptyState title="No shares from this name yet" />
       ) : (
         <>
-          <FileList files={videos} showPublisher={false} />
+          <FileList files={listed} showPublisher={false} />
           <LazyLoad onLoadMore={() => getVideos(false)} isLoading={isLoading} />
         </>
       )}

@@ -17,7 +17,7 @@ import { useNarrowLayout } from "../../hooks/usePhoneLayout";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { RootState } from "../../state/store";
 import { FileList } from "./FileList.tsx";
-import { useFetchFiles } from "../../hooks/useFetchFiles.tsx";
+import { useFetchFiles, useListedFiles } from "../../hooks/useFetchFiles.tsx";
 import LazyLoad from "../../components/common/LazyLoad";
 import { FiltersRail } from "./FileList-styles.tsx";
 import { changefilterName, changefilterSearch } from "../../state/features/fileSlice.ts";
@@ -135,9 +135,11 @@ export const Home = () => {
     runSearch(true, { following: next });
   };
 
+  // Deleted shares ("D" bodies) and hidden names drop out of the list.
+  const listedFiles = useListedFiles(files);
   const visibleFiles = settings.hiddenNames.length
-    ? files.filter((f) => !isNameHidden(f.user, settings))
-    : files;
+    ? listedFiles.filter((f) => !isNameHidden(f.user, settings))
+    : listedFiles;
 
   const sortToggle = (
     <ToggleButtonGroup

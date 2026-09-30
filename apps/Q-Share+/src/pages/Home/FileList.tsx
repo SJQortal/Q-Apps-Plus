@@ -12,6 +12,7 @@ import {
   RowActions,
   RowIcon,
   RowMain,
+  RowMainStatic,
   RowMeta,
   VideoCardTitle,
 } from "./FileList-styles.tsx";
@@ -80,6 +81,31 @@ export const FileList = ({ files, showPublisher = true }: FileListProps) => {
         const unavailable = !loaded && Boolean(unavailableFiles[file?.id]);
         const title: string = fileObj.title || (loaded || unavailable ? shareTitleFromIdentifier(fileObj.id) : "");
         const icon = getIconsFromObject(fileObj);
+        if (existingFile?.isValid === false) {
+          // Home and profiles leave deleted shares out; a collection can still list one.
+          return (
+            <FileRow key={fileObj.id}>
+              <RowMainStatic className="row-main">
+                {icon ? <RowIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon color="disabled" />}
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <VideoCardTitle sx={{ color: "text.secondary" }}>
+                    {/* Some deletes also retitle the share "deleted". */}
+                    {/^deleted$/i.test(title) ? shareTitleFromIdentifier(fileObj.id) : title}
+                  </VideoCardTitle>
+                  <RowMeta>
+                    <span>{existingFile.deleted ? "Deleted by its publisher" : "This share can't be read"}</span>
+                  </RowMeta>
+                </div>
+              </RowMainStatic>
+              {showPublisher && (
+                <NameLink onClick={() => navigate(profilePath(fileObj.user))} aria-label={`Shares by ${fileObj.user}`}>
+                  <Avatar sx={{ width: 22, height: 22 }} src={avatarUrl(fileObj.user)} alt="" slotProps={{ img: { loading: "lazy" } }} />
+                  <span>{fileObj.user}</span>
+                </NameLink>
+              )}
+            </FileRow>
+          );
+        }
         const totalSize = fileObj?.files?.reduce((acc: number, cur: any) => acc + (cur?.size || 0), 0) ?? 0;
         const fileCount = fileObj?.files?.length ?? 0;
         return (

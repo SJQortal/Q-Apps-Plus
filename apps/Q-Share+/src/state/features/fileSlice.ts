@@ -48,6 +48,8 @@ export interface Video {
   tags?: string[];
   updated?: number | string;
   isValid?: boolean;
+  /** The body was not a JSON object ("D", "\n"): the publisher deleted the share. */
+  deleted?: boolean;
   code?: string;
 }
 

@@ -95,6 +95,27 @@ async function fetchShareBody(
   }
 }
 
+/**
+ * `files` without the shares whose body turned out to be deleted or unreadable
+ * (see isShareBody): Home and profile lists leave them out. The selector
+ * returns a string of ids, so a body landing re-renders the caller only when
+ * that set changes.
+ */
+export function useListedFiles(files: Video[]): Video[] {
+  const gone = useSelector((state: RootState) => {
+    let ids = "";
+    for (const file of files) {
+      if (state.file.hashMapFiles[file.id]?.isValid === false) ids += `${file.id}\n`;
+    }
+    return ids;
+  });
+  return React.useMemo(() => {
+    if (!gone) return files;
+    const drop = new Set(gone.split("\n"));
+    return files.filter((file) => !drop.has(file.id));
+  }, [files, gone]);
+}
+
 export const useFetchFiles = () => {
   const dispatch = useDispatch();
   const hashMapFiles = useSelector((state: RootState) => state.file.hashMapFiles);

@@ -67,6 +67,16 @@ export const RowMain = styled("button")(({ theme }) => ({
   },
 }));
 
+/** RowMain's layout for a row with nothing to open (a deleted share in a collection). */
+export const RowMainStatic = styled("div")(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  gap: theme.spacing(1.5),
+  flex: "1 1 200px",
+  minWidth: 0,
+  minHeight: 44,
+}));
+
 export const RowIcon = styled("img")(({ theme }) => ({
   width: 44,
   height: 44,

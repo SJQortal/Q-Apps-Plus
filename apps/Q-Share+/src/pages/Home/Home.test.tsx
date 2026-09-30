@@ -238,4 +238,30 @@ describe('Home rows before and without a body', () => {
     release();
     expect(await screen.findByText('Slow share with its full title')).toBeInTheDocument();
   });
+
+  it('leaves out shares whose body is not a JSON object (deleted), but keeps bare ones', async () => {
+    mockFetch('/arbitrary/resources/search', [
+      { name: 'Claude', service: 'DOCUMENT', identifier: 'qshare_file_torq-test_IiciuD_metadata', created: 3, metadata: { title: 'Torq Test' } },
+      { name: 'openbook', service: 'DOCUMENT', identifier: 'qshare_file_book_Ob1234_metadata', created: 2, metadata: { title: 'deleted', tags: ['deleted'] } },
+      { name: 'frank', service: 'DOCUMENT', identifier: 'qshare_file_bare_Fr1234_metadata', created: 1, metadata: { title: 'Bare share' } },
+    ]);
+    // Core hands non-JSON text back as a string: Torq's delete is "D", others publish "\n".
+    mockQortalAction('FETCH_QDN_RESOURCE', (params) => {
+      const id = String(params.identifier);
+      if (id.includes('torq')) return 'D';
+      if (id.includes('book')) return '\n';
+      return { title: 'Bare share' };
+    });
+
+    renderHome();
+
+    expect(await screen.findByText('Bare share')).toBeInTheDocument();
+    await waitFor(() => expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(3));
+    await waitFor(() => expect(screen.queryByText('Torq Test')).not.toBeInTheDocument());
+    expect(screen.queryByText('deleted')).not.toBeInTheDocument();
+    // Missing optional fields are not a delete.
+    expect(screen.getByText('Bare share')).toBeInTheDocument();
+    expect(screen.getByText(/0 files/)).toBeInTheDocument();
+    expect(store.getState().file.hashMapFiles['qshare_file_torq-test_IiciuD_metadata']).toMatchObject({ isValid: false, deleted: true });
+  });
 });
