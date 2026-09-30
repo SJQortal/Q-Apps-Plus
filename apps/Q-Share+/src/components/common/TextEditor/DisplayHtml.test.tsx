@@ -148,23 +148,67 @@ describe("sanitizeDescription: web links", () => {
       `<p><a href="https://github.com/gohugoio/hugo" target="_blank">Hugo</a> <a href="//example.com/x">x</a></p>`
     );
     const [hugo, relative] = Array.from(root.querySelectorAll("a"));
-    expect(hugo.hasAttribute("data-web-link")).toBe(true);
+    expect(hugo.hasAttribute("data-copy-link")).toBe(true);
     expect(hugo.getAttribute("title")).toMatch(/copy web link/i);
     expect(hugo.hasAttribute("target")).toBe(false);
-    expect(relative.hasAttribute("data-web-link")).toBe(true);
+    expect(relative.hasAttribute("data-copy-link")).toBe(true);
     expect(relative.getAttribute("href")).toMatch(/^https?:\/\/example\.com\/x$/);
   });
 
   it("leaves qortal:// links unmarked", () => {
     const root = parse(`<p><a href="qortal://APP/Q-Tube">tube</a> qortal://APP/Q-Mail</p>`);
     expect(root.querySelectorAll("a").length).toBe(2);
-    expect(root.querySelector("[data-web-link]")).toBeNull();
+    expect(root.querySelector("[data-copy-link]")).toBeNull();
   });
 
-  it("drops a data-web-link marker the publisher wrote", () => {
-    const root = parse(`<p><a href="qortal://APP/x" data-web-link>x</a> <span data-web-link="">y</span></p>`);
+  it("drops a data-copy-link marker the publisher wrote", () => {
+    const root = parse(`<p><a href="qortal://APP/x" data-copy-link>x</a> <span data-copy-link="">y</span></p>`);
     expect(root.querySelector("a")?.getAttribute("href")).toBe("qortal://APP/x");
-    expect(root.querySelector("[data-web-link]")).toBeNull();
+    expect(root.querySelector("[data-copy-link]")).toBeNull();
+  });
+});
+
+describe("sanitizeDescription: nothing leaves the description", () => {
+  it.each(["/render/APP/Evil", "http:/render/APP/Evil", "#top", "?x=1", "about:blank"])(
+    "turns a %s link into text",
+    (href) => {
+      const root = parse(`<p>Go <a href="${href}">here</a> now</p>`);
+      expect(root.querySelector("a")).toBeNull();
+      expect(root.textContent).toBe("Go here now");
+    }
+  );
+
+  it("routes a QORTAL:// link through q-apps.js by lower-casing its scheme", () => {
+    const root = parse(`<p><a href="QORTAL://APP/Q-Tube">tube</a></p>`);
+    expect(root.querySelector("a")?.getAttribute("href")).toBe("qortal://APP/Q-Tube");
+  });
+
+  it("keeps mailto: and tel: links, marked to copy their address", () => {
+    // Hub's frame sandbox blocks mail and phone links, so they copy like web links.
+    const root = parse(`<p><a href="mailto:a@example.com" target="_blank">mail</a> <a href="tel:+100">call</a></p>`);
+    const links = Array.from(root.querySelectorAll("a"));
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["mailto:a@example.com", "tel:+100"]);
+    expect(links.every((a) => a.hasAttribute("data-copy-link") && !a.hasAttribute("target"))).toBe(true);
+    expect(links.map((a) => a.getAttribute("title"))).toEqual([
+      "Copy email address (Hub can't open mail links)",
+      "Copy phone number (Hub can't open phone links)",
+    ]);
+  });
+
+  it("turns a mailto: link with no address into text", () => {
+    const root = parse(`<p>Write <a href="mailto:?subject=Hi">to me</a></p>`);
+    expect(root.querySelector("a")).toBeNull();
+    expect(root.textContent).toBe("Write to me");
+  });
+
+  it("drops <style>, forms and image-map links", () => {
+    const root = parse(
+      `<p>a</p><style>body{display:none}</style>` +
+        `<form action="/render/APP/Evil"><input name="q"><button>Go</button><textarea>t</textarea></form>` +
+        `<map name="m"><area shape="default" href="/render/APP/Evil"></map>`
+    );
+    expect(root.querySelector("style, form, input, button, textarea, map, area")).toBeNull();
+    expect(root.textContent).toBe("aGot");
   });
 });
 
@@ -210,6 +254,20 @@ describe("DisplayHtml", () => {
     await waitFor(() =>
       expect(store.getState().notifications.alertTypes.alertError).toContain("https://github.com/gohugoio/hugo")
     );
+  });
+
+  it.each([
+    ["mailto:a%40example.com?subject=Hi", "a@example.com", "Email address copied. Hub can't open mail links."],
+    ["TEL:+1 555 0100", "+1 555 0100", "Phone number copied. Hub can't open phone links."],
+  ])("copies the address of a %s link", async (href, address, message) => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    secure(true);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    renderWithProviders(<DisplayHtml html={`<p><a href="${href}">Contact</a></p>`} />);
+    fireEvent.click(screen.getByText("Contact"));
+    expect(prevented).toBe(true);
+    expect(writeText).toHaveBeenCalledWith(address);
+    await waitFor(() => expect(store.getState().notifications.alertTypes.alertSuccess).toBe(message));
   });
 
   it("leaves qortal:// link clicks to q-apps.js", () => {
