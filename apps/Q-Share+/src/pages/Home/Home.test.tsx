@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { addUser } from '../../state/features/authSlice';
 import { addFiles, changefilterName, changefilterSearch } from '../../state/features/fileSlice';
@@ -12,6 +12,7 @@ import { resetSettingsCache } from '../../utils/settings';
 import { readOncePerObserve } from '../../test/intersection';
 import { HubThemeProvider } from '../../hub-theme';
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme';
+import { OPEN_PUBLISH_EVENT } from '../../constants/events';
 
 function renderHome() {
   return render(
@@ -264,6 +265,54 @@ describe('Home rows before and without a body', () => {
     expect(screen.getByText('Bare share')).toBeInTheDocument();
     expect(screen.getByText(/0 files/)).toBeInTheDocument();
     expect(store.getState().file.hashMapFiles['qshare_file_torq-test_IiciuD_metadata']).toMatchObject({ isValid: false, deleted: true });
+  });
+});
+
+describe('Home chips and empty states', () => {
+  const signIn = () =>
+    store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
+  const other = { name: 'bob', service: 'DOCUMENT', identifier: 'qshare_file_other_Ot1234_metadata', created: 1, metadata: { title: 'Someone else' } };
+  const lastSearch = () => new URL(fetchCallsMatching('/arbitrary/resources/search').at(-1)!, 'http://localhost').searchParams;
+
+  it('My shares with nothing published invites you to share, and a second tap turns it off', async () => {
+    signIn();
+    mockFetch('/arbitrary/resources/search', (url) => (url.searchParams.get('name') === 'alice' ? [] : [other]));
+    mockQortalAction('FETCH_QDN_RESOURCE', { title: 'Someone else', files: [] });
+
+    renderHome();
+    expect(await screen.findByText('Someone else')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'My shares' }));
+    expect(await screen.findByText("You haven't shared anything yet")).toBeInTheDocument();
+    expect(lastSearch().get('name')).toBe('alice');
+    expect(screen.getByRole('button', { name: 'My shares' })).toHaveAttribute('aria-pressed', 'true');
+
+    const onOpen = vi.fn();
+    window.addEventListener(OPEN_PUBLISH_EVENT, onOpen);
+    fireEvent.click(screen.getByRole('button', { name: 'Share files' }));
+    window.removeEventListener(OPEN_PUBLISH_EVENT, onOpen);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'My shares' }));
+    expect(await screen.findByText('Someone else')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'My shares' })).toHaveAttribute('aria-pressed', 'false');
+    expect(lastSearch().has('name')).toBe(false);
+  });
+
+  it('the Following empty state goes back to the latest shares', async () => {
+    signIn();
+    mockFetch('/arbitrary/resources/search', (url) => (url.searchParams.get('followedonly') === 'true' ? [] : [other]));
+    mockQortalAction('FETCH_QDN_RESOURCE', { title: 'Someone else', files: [] });
+
+    renderHome();
+    expect(await screen.findByText('Someone else')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Following' }));
+    expect(await screen.findByText('Nothing from the names you follow yet')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show latest shares' }));
+    expect(await screen.findByText('Someone else')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Following' })).toHaveAttribute('aria-pressed', 'false');
+    expect(lastSearch().has('followedonly')).toBe(false);
   });
 });
 

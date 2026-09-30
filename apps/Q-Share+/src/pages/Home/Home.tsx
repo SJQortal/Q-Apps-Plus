@@ -28,6 +28,7 @@ import { CategoryList, CategoryListRef } from "../../components/common/CategoryL
 import { EmptyState } from "../../components/common/EmptyState.tsx";
 import { QDN_PAGE } from "../../utils/qdnSearch.ts";
 import { isNameHidden, useAppSettings } from "../../utils/settings.ts";
+import { requestOpenPublish } from "../../constants/events.ts";
 
 export type { SortOrder } from "../../utils/settings.ts";
 import type { SortOrder } from "../../utils/settings.ts";
@@ -132,10 +133,13 @@ export const Home = () => {
     runSearch(true, { sort: next });
   };
 
-  const showMine = () => {
+  const mine = Boolean(username) && filterName === username;
+  const toggleMine = () => {
     if (!username) return;
-    dispatch(changefilterName(username));
-    runSearch(true, { name: username });
+    // Like Following, a second tap goes back to everyone's shares.
+    const next = mine ? "" : username;
+    dispatch(changefilterName(next));
+    runSearch(true, { name: next });
   };
 
   const toggleFollowing = () => {
@@ -216,6 +220,31 @@ export const Home = () => {
 
   const activeFilters = Boolean(filterSearch || filterName);
 
+  const emptyState: React.ComponentProps<typeof EmptyState> = following
+    ? {
+        title: "Nothing from the names you follow yet",
+        description: "Follow a publisher from their profile and their shares appear here.",
+        actionLabel: "Show latest shares",
+        onAction: resetFilters,
+      }
+    : mine && !filterSearch
+      ? {
+          title: "You haven't shared anything yet",
+          description: "Files you share show up here.",
+          actionLabel: "Share files",
+          onAction: requestOpenPublish,
+        }
+      : activeFilters
+        ? {
+            title: "No shares match these filters",
+            description: "Try fewer filters or a different spelling.",
+            actionLabel: "Reset filters",
+            onAction: resetFilters,
+          }
+        : username
+          ? { title: "No shares yet", description: "Be the first to share files.", actionLabel: "Share files", onAction: requestOpenPublish }
+          : { title: "No shares yet", description: "Sign in to Hub with a Qortal name to share files." };
+
   return (
     <Box
       sx={{
@@ -266,7 +295,17 @@ export const Home = () => {
       )}
 
       <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", "& .MuiChip-root": { minHeight: 36 } }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            columnGap: 1,
+            rowGap: phone ? 1.5 : 1,
+            flexWrap: "wrap",
+            // Phones: 40 px chips with a 12 px row gap keep each tap target clear of the next.
+            "& .MuiChip-root": phone ? { minHeight: 40, fontSize: 14, px: 0.5 } : { minHeight: 36 },
+          }}
+        >
           <Typography component="h1" variant="h6" sx={{ fontWeight: 700, flex: "1 1 160px", minWidth: 0, wordBreak: "break-word" }}>
             {filterName ? `Shares by ${filterName}` : following ? "From names you follow" : "Latest shares"}
           </Typography>
@@ -295,11 +334,11 @@ export const Home = () => {
           {username && (
             <Chip
               label="My shares"
-              variant={filterName === username ? "filled" : "outlined"}
-              color={filterName === username ? "primary" : "default"}
-              onClick={showMine}
+              variant={mine ? "filled" : "outlined"}
+              color={mine ? "primary" : "default"}
+              onClick={toggleMine}
               clickable
-              aria-pressed={filterName === username}
+              aria-pressed={mine}
             />
           )}
           {!phone && sortToggle}
@@ -322,20 +361,7 @@ export const Home = () => {
             onAction={() => navigate("/settings")}
           />
         ) : visibleFiles.length === 0 && !hasMore && !isLoading ? (
-          <EmptyState
-            title={following ? "Nothing from the names you follow yet" : activeFilters ? "No shares match these filters" : "No shares yet"}
-            description={
-              following
-                ? "Follow a publisher from their profile and their shares appear here."
-                : activeFilters
-                ? "Try fewer filters or a different spelling."
-                : username
-                  ? "Be the first: use Share in the top bar to publish files."
-                  : "Sign in to Hub with a Qortal name to share files."
-            }
-            actionLabel={activeFilters || following ? "Reset filters" : undefined}
-            onAction={activeFilters || following ? resetFilters : undefined}
-          />
+          <EmptyState {...emptyState} />
         ) : (
           <>
             {hiddenAll && (
