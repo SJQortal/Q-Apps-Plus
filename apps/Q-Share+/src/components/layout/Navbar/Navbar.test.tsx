@@ -38,4 +38,18 @@ describe('NavBar', () => {
     expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Account menu for alice' })).toBeInTheDocument();
   });
+
+  it("spans the window but keeps the logo and actions in the page's 1200 px column", () => {
+    renderWithProviders(
+      <NavBar {...baseProps} isAuthenticated userName="alice" accountNames={[{ name: 'alice' }]} authenticate={() => {}} />
+    );
+    const header = screen.getByRole('banner');
+    expect(getComputedStyle(header).position).toBe('sticky');
+    expect(getComputedStyle(header).justifyContent).toBe('center');
+
+    const column = header.firstElementChild as HTMLElement;
+    expect(getComputedStyle(column).maxWidth).toBe('1200px');
+    expect(column).toContainElement(screen.getByRole('button', { name: 'Q-Share+ home' }));
+    expect(column).toContainElement(screen.getByRole('button', { name: 'Account menu for alice' }));
+  });
 });

@@ -1,6 +1,7 @@
 import { AppBar, Typography } from "@mui/material";
 import { styled, type Theme } from "@mui/material/styles";
 import { headerFill } from "../../../hub-theme";
+import { PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
 import { HEADER_OFFSET } from "./useHideOnScroll";
 
 /** The header's slide on phones; sticky sub-headers follow it with the same timing. */
@@ -28,11 +29,9 @@ export const CustomAppBar = styled(AppBar, {
 })<{ collapsed?: boolean }>(({ theme, collapsed }) => ({
   display: "flex",
   flexDirection: "row",
-  justifyContent: "space-between",
+  justifyContent: "center",
   alignItems: "center",
   width: "100%",
-  padding: theme.spacing(0, 1),
-  gap: theme.spacing(0.5),
   minHeight: 56,
   backgroundImage: "none",
   backgroundColor: headerFill(theme),
@@ -42,12 +41,32 @@ export const CustomAppBar = styled(AppBar, {
   color: theme.palette.text.primary,
   boxShadow: "none",
   paddingTop: "env(safe-area-inset-top, 0px)",
-  paddingLeft: `calc(${theme.spacing(1)} + env(safe-area-inset-left, 0px))`,
-  paddingRight: `calc(${theme.spacing(1)} + env(safe-area-inset-right, 0px))`,
+  paddingLeft: "env(safe-area-inset-left, 0px)",
+  paddingRight: "env(safe-area-inset-right, 0px)",
   transform: collapsed ? "translateY(-100%)" : "translateY(0)",
   transition: `transform ${SLIDE}`,
   willChange: "transform",
   "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+}));
+
+/**
+ * The header's content, in the same centred column as Home's (1200 px wide
+ * with the page's 16 / 24 px side padding), so on a wide window the logo
+ * lines up with the content's left edge and the actions end at its right
+ * edge instead of at the window's. Phones keep their 8 px edge.
+ */
+export const HeaderInner = styled("div")(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: theme.spacing(0.5),
+  width: "100%",
+  maxWidth: 1200,
+  minWidth: 0,
+  padding: theme.spacing(0, 2),
+  [theme.breakpoints.up("md")]: { padding: theme.spacing(0, 3) },
+  // Last, so a landscape phone wider than 900 px gets the phone edge too.
+  [`@media ${PHONE_MEDIA}`]: { padding: theme.spacing(0, 1) },
 }));
 
 export const LogoContainer = styled("button")(({ theme }) => ({
@@ -64,6 +83,9 @@ export const LogoContainer = styled("button")(({ theme }) => ({
   color: "inherit",
   font: "inherit",
   minWidth: 0,
+  // The logo image, not the button's padding, starts at the column's edge.
+  marginLeft: theme.spacing(-0.5),
+  [`@media ${PHONE_MEDIA}`]: { marginLeft: 0 },
   "&:focus-visible": {
     outline: `2px solid ${theme.palette.primary.main}`,
     outlineOffset: 2,
