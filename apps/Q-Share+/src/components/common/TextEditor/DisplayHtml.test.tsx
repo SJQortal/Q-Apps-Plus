@@ -102,6 +102,44 @@ describe("sanitizeDescription: qortal:// links", () => {
   });
 });
 
+describe("sanitizeDescription: inline colours", () => {
+  it.each([
+    // Style strings from real shares on the node.
+    "color: rgb(255, 255, 255); background-color: transparent;",
+    "background-color: transparent; color: rgb(255, 255, 255);",
+    "color: rgb(0, 0, 0);",
+    "background-color: rgb(15, 15, 15); color: rgb(241, 241, 241);",
+    "color: var(--fgColor-accent, var(--color-accent-fg)); background-color: transparent;",
+  ])("drops %s and keeps the text", (style) => {
+    const root = parse(`<p><strong style="${style}">Heading</strong> body</p>`);
+    const strong = root.querySelector("strong");
+    expect(strong?.textContent).toBe("Heading");
+    expect(strong?.hasAttribute("style")).toBe(false);
+    expect(root.textContent).toBe("Heading body");
+  });
+
+  it("keeps the declarations that are not colours", () => {
+    const root = parse(`<p><span style="color: rgb(0, 0, 0); font-weight: bold; text-decoration: underline">x</span></p>`);
+    const style = root.querySelector("span")?.getAttribute("style") ?? "";
+    expect(style).toContain("font-weight: bold");
+    expect(style).toContain("text-decoration: underline");
+    expect(style).not.toMatch(/(^|[^-])color/);
+  });
+
+  it("drops background shorthands and text fill colour", () => {
+    const root = parse(`<p><span style="background: #fff url(x.png); -webkit-text-fill-color: white; font-style: italic">x</span></p>`);
+    const style = root.querySelector("span")?.getAttribute("style") ?? "";
+    expect(style).not.toMatch(/background|fill-color/);
+    expect(style).toContain("font-style: italic");
+  });
+
+  it("drops colour attributes", () => {
+    const root = parse(`<p><font color="white">x</font></p><table><tbody><tr><td bgcolor="black">y</td></tr></tbody></table>`);
+    expect(root.querySelector("[color], [bgcolor]")).toBeNull();
+    expect(root.textContent).toBe("xy");
+  });
+});
+
 describe("DisplayHtml", () => {
   it("renders the payload without event handlers", () => {
     const { container } = renderWithProviders(

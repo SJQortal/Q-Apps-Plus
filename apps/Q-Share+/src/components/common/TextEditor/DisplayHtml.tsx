@@ -73,6 +73,25 @@ const RichText = styled("div")(({ theme }) => {
 /** DOMPurify's default URI allow-list plus qortal:, so qortal links written as links keep their href. */
 const ALLOWED_URI = /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|qortal):|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i;
 
+/** Inline declarations that would override the theme's text and paper colours. */
+const THEME_OWNED_STYLE = /^(?:color|-webkit-text-fill-color|background(?:-.+)?)$/;
+
+/**
+ * Text pasted into the editor keeps the colours of the page it came from:
+ * real shares have white text (blank on Hub 3.0 Light) and black headings
+ * (gone on Black). The theme colours descriptions, so drop those
+ * declarations and keep the rest (bold, underline, size…).
+ */
+function dropInlineColours(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>("[style]").forEach((el) => {
+    for (let i = el.style.length - 1; i >= 0; i--) {
+      const name = el.style[i];
+      if (THEME_OWNED_STYLE.test(name)) el.style.removeProperty(name);
+    }
+    if (el.style.length === 0) el.removeAttribute("style");
+  });
+}
+
 /**
  * Makes a stored `htmlDescription` safe to show. Anyone can publish one, so
  * after DOMPurify every change is made on DOM nodes and the result is only
@@ -84,8 +103,11 @@ export function sanitizeDescription(html: string | null | undefined): string {
   const fragment: DocumentFragment = DOMPurify.sanitize(source, {
     USE_PROFILES: { html: true },
     ALLOWED_URI_REGEXP: ALLOWED_URI,
+    // <font color> and <td bgcolor> are the old way of doing the same.
+    FORBID_ATTR: ["color", "bgcolor"],
     RETURN_DOM_FRAGMENT: true,
   });
+  dropInlineColours(fragment);
   // A link that lost its href (Quill stores qortal: links as about:blank) is
   // only text now: unwrap it, so a qortal:// URL in it becomes a real link.
   fragment.querySelectorAll("a:not([href])").forEach((a) => a.replaceWith(...a.childNodes));
