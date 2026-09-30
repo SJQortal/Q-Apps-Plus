@@ -523,7 +523,12 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
             )}
           </Box>
 
-          <CommentSection key={id} postId={id} postName={author} />
+          <CommentSection
+            key={id}
+            postId={id}
+            postName={author}
+            commentsId={typeof fileData.commentsId === "string" ? fileData.commentsId : undefined}
+          />
         </>
       )}
     </Page>
