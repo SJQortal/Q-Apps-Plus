@@ -216,7 +216,7 @@ function CollectionView({ name, id }: { name: string; id: string }) {
               <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => setEditOpen(true)}>
                 Edit
               </Button>
-              <Button variant="outlined" color="error" startIcon={<DeleteOutlinedIcon />} onClick={() => setDeleteOpen(true)}>
+              <Button variant="contained" color="error" startIcon={<DeleteOutlinedIcon />} onClick={() => setDeleteOpen(true)}>
                 Delete
               </Button>
             </Box>

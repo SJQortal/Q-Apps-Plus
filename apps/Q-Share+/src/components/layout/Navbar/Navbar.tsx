@@ -3,10 +3,10 @@ import {
   Avatar,
   Box,
   IconButton,
-  List,
-  ListItemButton,
   ListItemIcon,
   ListItemText,
+  MenuItem,
+  MenuList,
   Popover,
   Tooltip,
 } from "@mui/material";
@@ -64,11 +64,11 @@ const NavBar: React.FC<Props> = ({ isAuthenticated, userName, userAvatar, accoun
   const signedIn = isAuthenticated && !!userName;
 
   const menuItems = (
-    <List disablePadding aria-label="Account menu" sx={{ minWidth: 220 }}>
+    <MenuList disablePadding aria-label="Account menu" sx={{ minWidth: 220 }}>
       {names.map((n) => {
         const active = n.name === userName;
         return (
-          <ListItemButton
+          <MenuItem
             key={n.name}
             role="menuitemradio"
             aria-checked={active}
@@ -81,11 +81,10 @@ const NavBar: React.FC<Props> = ({ isAuthenticated, userName, userAvatar, accoun
           >
             <ListItemIcon sx={{ minWidth: 32, color: "primary.main" }}>{active ? <CheckIcon fontSize="small" /> : null}</ListItemIcon>
             <ListItemText primary={n.name} slotProps={{ primary: { noWrap: true } }} />
-          </ListItemButton>
+          </MenuItem>
         );
       })}
-      <ListItemButton
-        role="menuitem"
+      <MenuItem
         onClick={() => {
           closeMenu();
           setIsOpenBlockedNamesModal(true);
@@ -96,9 +95,8 @@ const NavBar: React.FC<Props> = ({ isAuthenticated, userName, userAvatar, accoun
           <PersonOffOutlinedIcon fontSize="small" />
         </ListItemIcon>
         <ListItemText primary="Blocked names" />
-      </ListItemButton>
-      <ListItemButton
-        role="menuitem"
+      </MenuItem>
+      <MenuItem
         selected={pathname.startsWith("/settings")}
         onClick={() => {
           closeMenu();
@@ -110,8 +108,8 @@ const NavBar: React.FC<Props> = ({ isAuthenticated, userName, userAvatar, accoun
           <SettingsOutlinedIcon fontSize="small" />
         </ListItemIcon>
         <ListItemText primary="Settings" />
-      </ListItemButton>
-    </List>
+      </MenuItem>
+    </MenuList>
   );
 
   return (
@@ -177,6 +175,7 @@ const NavBar: React.FC<Props> = ({ isAuthenticated, userName, userAvatar, accoun
             onClose={closeMenu}
             anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
             transformOrigin={{ vertical: "top", horizontal: "right" }}
+            slotProps={{ paper: { role: "dialog", "aria-label": "Account menu" } }}
           >
             {menuItems}
           </Popover>

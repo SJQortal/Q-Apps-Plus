@@ -51,7 +51,7 @@ export const IndividualProfile = () => {
         )}
         <Avatar src={avatarUrl(name)} alt="" sx={{ width: 56, height: 56 }} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, wordBreak: "break-word" }}>
+          <Typography component="h1" variant="h6" sx={{ fontWeight: 700, wordBreak: "break-word" }}>
             {name}
           </Typography>
           <Typography variant="body2" color="text.secondary">
