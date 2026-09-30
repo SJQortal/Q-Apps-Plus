@@ -6,6 +6,7 @@ import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from 
 import { store } from '../../state/store';
 import { addUser } from '../../state/features/authSlice';
 import { clearMine } from '../../state/features/collectionsSlice';
+import { addToHashMap, markUnavailable, removeFromHashMap } from '../../state/features/fileSlice';
 import { removeNotification } from '../../state/features/notificationsSlice';
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
 import { resetCollectionCaches } from '../../utils/collections';
@@ -175,6 +176,48 @@ describe('CollectionPage', () => {
     await screen.findByRole('heading', { name: 'Docs' });
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(await screen.findByText('Collections list')).toBeInTheDocument();
+  });
+
+  describe('share bodies', () => {
+    const bodyFetches = () => qortalCallsFor('FETCH_QDN_RESOURCE').filter((c) => c.identifier !== COLLECTION_ID);
+
+    beforeEach(() => {
+      store.dispatch(addUser(null));
+      for (const item of items) store.dispatch(removeFromHashMap(item.identifier));
+    });
+
+    it('leaves a share another list already gave up on alone', async () => {
+      // Home marked bob's share unavailable after its three tries.
+      store.dispatch(markUnavailable({ user: items[0].name, id: items[0].identifier }));
+      try {
+        renderPage();
+        expect(await screen.findByText('Second share')).toBeInTheDocument();
+        expect(bodyFetches().map((c) => c.identifier)).toEqual([items[1].identifier]);
+      } finally {
+        // Landing a body clears the mark.
+        store.dispatch(addToHashMap({ id: items[0].identifier, user: items[0].name }));
+        store.dispatch(removeFromHashMap(items[0].identifier));
+      }
+    });
+
+    it('does not queue a body again when the page opens while it is still on its way', async () => {
+      const finish: Array<() => void> = [];
+      mockQortalAction('FETCH_QDN_RESOURCE', (params) => {
+        if (params.identifier === COLLECTION_ID) return { version: 1, title: 'Docs', description: '', items, created: 1, updated: 2 };
+        const title = String(params.identifier).includes('first') ? 'First share' : 'Second share';
+        return new Promise((resolve) => finish.push(() => resolve({ title, files: [] })));
+      });
+      const first = renderPage();
+      await waitFor(() => expect(bodyFetches().length).toBe(2));
+      // Back, then straight into the collection again.
+      first.unmount();
+      renderPage();
+      await screen.findByRole('heading', { name: 'Docs' });
+      finish.forEach((done) => done());
+      expect(await screen.findByText('First share')).toBeInTheDocument();
+      expect(await screen.findByText('Second share')).toBeInTheDocument();
+      expect(bodyFetches().length).toBe(2);
+    });
   });
 
   describe('when the collection is not on the node yet', () => {

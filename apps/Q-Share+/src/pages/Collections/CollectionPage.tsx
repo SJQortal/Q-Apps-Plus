@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import { Avatar, Box, Button, CircularProgress, IconButton, Skeleton, Tooltip, Typography } from "@mui/material";
@@ -17,7 +17,6 @@ import { upsertCollection } from "../../state/features/collectionsSlice";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { heldShare, shareKey, type Video } from "../../state/features/fileSlice";
 import type { RootState } from "../../state/store";
-import { queue } from "../../wrappers/GlobalWrapper";
 import {
   COLLECTION_SERVICE,
   buildCollectionBody,
@@ -87,7 +86,7 @@ function CollectionView({ name, id }: { name: string; id: string }) {
   const [busy, setBusy] = useState(false);
   // Which of PEER_RETRY_DELAYS_MS the next status check waits for.
   const [peerRetry, setPeerRetry] = useState(0);
-  const { getFile, checkAndUpdateFile } = useFetchFiles();
+  const { queueBodies } = useFetchFiles();
 
   // State changes happen in the promise callbacks, so effects only start the read.
   // `retry` counts the status checks made so far in this round.
@@ -189,17 +188,13 @@ function CollectionView({ name, id }: { name: string; id: string }) {
     [collection?.items, settings]
   );
 
-  // One FETCH per share body through the queue; no search per item. Keyed by
-  // name and identifier: two names can publish under one identifier.
-  const requested = useRef(new Set<string>());
+  // One FETCH per share body through the shared queue, never one another list
+  // or an earlier visit already has queued; no search per item. With no search
+  // to refresh, shares already marked unavailable are left alone (their rows
+  // still open the share page, which has Retry).
   useEffect(() => {
-    for (const video of items) {
-      const key = shareKey(video.user, video.id);
-      if (requested.current.has(key) || !checkAndUpdateFile(video)) continue;
-      requested.current.add(key);
-      queue.push(() => getFile(video.user, video.id, video));
-    }
-  }, [items, checkAndUpdateFile, getFile]);
+    queueBodies(items, false);
+  }, [items, queueBodies]);
 
   const isOwner = Boolean(
     user && name && (user.name === name || (user.names ?? []).some((record) => record.name === name))
