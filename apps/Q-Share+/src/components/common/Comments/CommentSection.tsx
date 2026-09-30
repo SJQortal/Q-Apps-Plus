@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CommentEditor } from "./CommentEditor";
 import { Comment } from "./Comment";
-import { Button, CircularProgress, Typography } from "@mui/material";
+import { Box, Button, CircularProgress, Typography } from "@mui/material";
 import { useSelector } from "react-redux";
 import { RootState } from "../../../state/store";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -37,12 +37,13 @@ const COMMENTS_ID_SHAPE = new RegExp(`^${QSHARE_FILE_BASE}_cm_[A-Za-z0-9]{1,32}$
  * share JSON's `commentsId` instead (real rows exist, one from a publisher),
  * so on the first page one more prefix search reads those, base and replies
  * together. `nextOffset` only counts the paged search, so they never shift it.
+ * A body the node can't serve is left out and counted in `unreadable`.
  */
 async function loadComments(
   postId: string,
   offset: number,
   commentsId?: string
-): Promise<{ comments: any[]; hasMore: boolean; nextOffset: number }> {
+): Promise<{ comments: any[]; unreadable: number; hasMore: boolean; nextOffset: number }> {
   const postKey = postId.slice(-12);
   const extraPrefix =
     offset === 0 && commentsId && commentsId !== postKey && COMMENTS_ID_SHAPE.test(commentsId)
@@ -84,11 +85,24 @@ async function loadComments(
   });
   // Oldest first, as each search returns them, with the extra rows slotted in by date.
   if (extraRows.length > 0) rows.sort((a, b) => (a.created ?? 0) - (b.created ?? 0));
-  const comments = await mapWithConcurrency(rows, 5, async (comment) => ({
-    ...comment,
-    message: await fetchQdnText("BLOG_COMMENT", comment.name, comment.identifier),
-  }));
-  return { comments, hasMore: baseRows.length === COMMENT_PAGE, nextOffset: offset + baseRows.length };
+  // A body the node can't serve (missing data, a 404) is left out, never shown
+  // as the node's error text, and one bad row doesn't hide the others.
+  const read = await mapWithConcurrency(rows, 5, async (comment) => {
+    try {
+      return { ...comment, message: await fetchQdnText("BLOG_COMMENT", comment.name, comment.identifier) };
+    } catch {
+      return null;
+    }
+  });
+  const comments = read.filter((c) => c !== null);
+  // Counted, not thrown: the section says how many are missing (with Retry)
+  // and still shows the rest, and anything the user posts meanwhile.
+  return {
+    comments,
+    unreadable: rows.length - comments.length,
+    hasMore: baseRows.length === COMMENT_PAGE,
+    nextOffset: offset + baseRows.length,
+  };
 }
 
 interface CommentSectionProps {
@@ -111,6 +125,8 @@ export const CommentSection = ({ postId, postName, commentsId }: CommentSectionP
   const { user } = useSelector((state: RootState) => state.auth);
   const [loadingComments, setLoadingComments] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<boolean>(false);
+  // Comments found whose text the node couldn't serve (left out of the list).
+  const [unreadable, setUnreadable] = useState<number>(0);
   const [hasMore, setHasMore] = useState<boolean>(false);
   // Where the next page of base comments starts. Comments posted here and the
   // commentsId ones are in the list too, so the list length can't be used.
@@ -147,22 +163,32 @@ export const CommentSection = ({ postId, postName, commentsId }: CommentSectionP
     }
   }, [navigate, location, listComments]);
 
-  /** Callers set `loadingComments` (and clear `loadError`) first, so the first load can start from an effect. */
+  /**
+   * Callers set `loadingComments` (and clear `loadError`) first, so the first load can start from an effect.
+   * `keepListed` keeps what the list already shows (a comment just posted, which a cached search
+   * may not have yet) when page one is loaded again.
+   */
   const getComments = useCallback(
-    (offset = 0) => {
+    (offset = 0, keepListed = false) => {
       let active = true;
       loadComments(postId, offset, commentsId)
-        .then(({ comments, hasMore: more, nextOffset: next }) => {
+        .then(({ comments, unreadable: missing, hasMore: more, nextOffset: next }) => {
           if (!active) return;
           setHasMore(more);
           setNextOffset(next);
           if (offset > 0) {
+            setUnreadable((n) => n + missing);
             setListComments((prev) => {
               const known = new Set(prev.map((c) => c.identifier));
               return [...prev, ...comments.filter((c) => !known.has(c.identifier))];
             });
           } else {
-            setListComments(comments);
+            setUnreadable(missing);
+            setListComments((prev) => {
+              if (!keepListed) return comments;
+              const loaded = new Set(comments.map((c) => c.identifier));
+              return [...comments, ...prev.filter((c) => !loaded.has(c.identifier))];
+            });
           }
         })
         .catch(() => {
@@ -182,8 +208,9 @@ export const CommentSection = ({ postId, postName, commentsId }: CommentSectionP
 
   const retry = () => {
     setLoadError(false);
+    setUnreadable(0);
     setLoadingComments(true);
-    getComments();
+    getComments(0, true);
   };
 
   const loadMore = () => {
@@ -203,6 +230,14 @@ export const CommentSection = ({ postId, postName, commentsId }: CommentSectionP
     }, [] as any[]);
   }, [listComments, settings]);
 
+  // Nothing hides the list: what could be read, and anything posted here, always shows.
+  const couldNotLoad = loadError || unreadable > 0;
+  const retryButton = (
+    <Button size="small" sx={{ ml: 1, minHeight: 44 }} onClick={retry}>
+      Retry
+    </Button>
+  );
+
   return (
     <CommentsPanel aria-labelledby="comments-title">
       <CommentsTitle id="comments-title" component="h2">
@@ -213,21 +248,34 @@ export const CommentSection = ({ postId, postName, commentsId }: CommentSectionP
           <NoCommentsRow role="status" aria-label="Loading comments">
             <CircularProgress size={24} />
           </NoCommentsRow>
-        ) : loadError ? (
-          <NoCommentsRow role="status">
-            Comments could not be loaded.
-            <Button size="small" sx={{ ml: 1, minHeight: 44 }} onClick={retry}>
-              Retry
-            </Button>
-          </NoCommentsRow>
         ) : structuredCommentList.length === 0 ? (
-          <NoCommentsRow role="status">No comments yet. Be the first to comment.</NoCommentsRow>
+          couldNotLoad ? (
+            <NoCommentsRow role="status">
+              Comments could not be loaded.
+              {retryButton}
+            </NoCommentsRow>
+          ) : (
+            <NoCommentsRow role="status">No comments yet. Be the first to comment.</NoCommentsRow>
+          )
         ) : (
-          <CommentContainer>
-            {structuredCommentList.map((comment: any) => (
-              <Comment key={comment?.identifier} comment={comment} onSubmit={onSubmit} postId={postId} postName={postName} />
-            ))}
-          </CommentContainer>
+          <>
+            {couldNotLoad && (
+              <Box
+                role="status"
+                sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", mb: 1, fontSize: 14, color: "text.secondary" }}
+              >
+                {loadError
+                  ? "Some comments could not be loaded."
+                  : `${unreadable} ${unreadable === 1 ? "comment" : "comments"} could not be loaded.`}
+                {retryButton}
+              </Box>
+            )}
+            <CommentContainer>
+              {structuredCommentList.map((comment: any) => (
+                <Comment key={comment?.identifier} comment={comment} onSubmit={onSubmit} postId={postId} postName={postName} />
+              ))}
+            </CommentContainer>
+          </>
         )}
         {hasMore && (
           <LoadMoreCommentsButtonRow>

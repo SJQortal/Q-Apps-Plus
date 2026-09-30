@@ -4,7 +4,8 @@ import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
 import { CommentSection } from './CommentSection';
 import { store } from '../../../state/store';
-import { fetchCallsMatching, mockFetch } from '../../../test/setup';
+import { addUser } from '../../../state/features/authSlice';
+import { fetchCallsMatching, mockFetch, mockQortalAction } from '../../../test/setup';
 import { renderWithProviders } from '../../../test/renderWithProviders';
 import { resetQdnSearchCache } from '../../../utils/qdnSearch';
 import { HubThemeProvider } from '../../../hub-theme';
@@ -27,7 +28,10 @@ function mockBodies() {
 }
 
 describe('CommentSection loading', () => {
-  beforeEach(() => resetQdnSearchCache());
+  beforeEach(() => {
+    resetQdnSearchCache();
+    store.dispatch(addUser(null));
+  });
 
   it('loads a share with 2 comments and 3 replies in 2 searches and 5 body fetches', async () => {
     mockFetch(/service=BLOG_COMMENT&query=.*_base_/, [comment(`${BASE}aaaaaa`), comment(`${BASE}bbbbbb`)]);
@@ -154,5 +158,69 @@ describe('CommentSection loading', () => {
     // Only the base search pages; replies and commentsId rows came with the first page.
     expect(fetchCallsMatching('/arbitrary/resources/search').length).toBe(4);
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Load more comments' })).not.toBeInTheDocument());
+  });
+
+  it("leaves out a comment whose body can't be read and shows the rest", async () => {
+    mockFetch(/service=BLOG_COMMENT&query=.*_base_/, [comment(`${BASE}aaaaaa`), comment(`${BASE}bbbbbb`)]);
+    mockFetch(/service=BLOG_COMMENT&query=.*_reply_/, [comment(`${REPLY}bbbbbb_r1`)]);
+    mockFetch('/arbitrary/BLOG_COMMENT/', (url) => {
+      // fetchQdnText rejects when the node can't serve the body (e.g. a 404 with error JSON).
+      if (url.pathname.endsWith('aaaaaa')) throw new Error('QDN 404');
+      return `body of ${decodeURIComponent(url.pathname.split('/').pop() ?? '')}`;
+    });
+
+    renderWithProviders(<CommentSection postId={POST_ID} postName="alice" />);
+
+    expect(await screen.findByText(`body of ${BASE}bbbbbb`)).toBeInTheDocument();
+    expect(screen.getByText(`body of ${REPLY}bbbbbb_r1`)).toBeInTheDocument();
+    expect(screen.queryByText(/aaaaaa/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Comments could not be loaded.')).not.toBeInTheDocument();
+    // A small note (with Retry) above the list says one is missing.
+    expect(screen.getByText('1 comment could not be loaded.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('offers Retry when comments exist but none can be read', async () => {
+    let nodeUp = false;
+    mockFetch(/service=BLOG_COMMENT&query=.*_base_/, [comment(`${BASE}aaaaaa`)]);
+    mockFetch(/service=BLOG_COMMENT&query=.*_reply_/, []);
+    mockFetch('/arbitrary/BLOG_COMMENT/', (url) => {
+      if (!nodeUp) throw new Error('QDN 404');
+      return `body of ${decodeURIComponent(url.pathname.split('/').pop() ?? '')}`;
+    });
+
+    renderWithProviders(<CommentSection postId={POST_ID} postName="alice" />);
+
+    expect(await screen.findByText('Comments could not be loaded.')).toBeInTheDocument();
+    expect(screen.queryByText(/No comments yet/)).not.toBeInTheDocument();
+    nodeUp = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText(`body of ${BASE}aaaaaa`)).toBeInTheDocument();
+  });
+
+  it("shows a comment the user posts even when none of the others could be read", async () => {
+    store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice' }));
+    mockQortalAction('PUBLISH_QDN_RESOURCE', true);
+    mockFetch(/service=BLOG_COMMENT&query=.*_base_/, [comment(`${BASE}aaaaaa`)]);
+    mockFetch(/service=BLOG_COMMENT&query=.*_reply_/, []);
+    mockFetch('/arbitrary/BLOG_COMMENT/', () => {
+      throw new Error('QDN 404');
+    });
+
+    renderWithProviders(<CommentSection postId={POST_ID} postName="bob" />);
+
+    expect(await screen.findByText('Comments could not be loaded.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Your comment'), { target: { value: 'My new comment' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit comment' }));
+
+    expect(await screen.findByText('My new comment')).toBeInTheDocument();
+    expect(screen.queryByText('Comments could not be loaded.')).not.toBeInTheDocument();
+    expect(screen.getByText('1 comment could not be loaded.')).toBeInTheDocument();
+
+    // Retry reads page one again (the cached search doesn't have the new comment yet): it stays.
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(fetchCallsMatching('/arbitrary/BLOG_COMMENT/').length).toBe(2));
+    expect(await screen.findByText('1 comment could not be loaded.')).toBeInTheDocument();
+    expect(screen.getByText('My new comment')).toBeInTheDocument();
   });
 });
