@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getAccountNames,
   getPrimaryAccountName,
@@ -22,9 +22,10 @@ import {
 } from "../state/features/mailSlice";
 import { applyQAppTextSize } from "@qortal/qapp-lib/typography";
 import { useQMailAppShell } from "../app-shell/useQMailAppShell";
+import { AppShellContext } from "../app-shell/AppShellContext";
+import { subscribeToEvent, unsubscribeFromEvent } from "../utils/events";
 interface Props {
   children: React.ReactNode;
-  setTheme: (val: "light" | "dark") => void;
 }
 interface DataEntry {
   timestamp: number;
@@ -35,7 +36,7 @@ interface DataObject {
   [identifier: string]: DataEntry;
 }
 
-const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
+const GlobalWrapper: React.FC<Props> = ({ children }) => {
   const dispatch = useDispatch();
 
   const [userAvatar, setUserAvatar] = useState<string>("");
@@ -291,8 +292,49 @@ const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
           }
         : null,
       authenticate: askForAccountInformation,
-      onThemeChange: setTheme,
+      // Light/dark now comes from Hub through the theme kit (HubThemeProvider).
+      onThemeChange: () => {},
     });
+
+  // The mail page's "Authenticate" prompts fire this event.
+  useEffect(() => {
+    const onAuthenticate = () => {
+      void appShellController.authenticate();
+    };
+    subscribeToEvent("qmail:authenticate", onAuthenticate);
+    return () => {
+      unsubscribeFromEvent("qmail:authenticate", onAuthenticate);
+    };
+  }, [appShellController]);
+
+  const setActiveName = useCallback(
+    (name: string) => {
+      if (!user || name === user.name) return;
+      dispatch(clearMessages());
+      dispatch(addUser({ ...user, name }));
+      void getLocalSubjects(name);
+    },
+    [dispatch, user]
+  );
+
+  const appShellValue = useMemo(
+    () => ({
+      user,
+      userAvatar,
+      setActiveName,
+      authenticate: askForAccountInformation,
+      controller: appShellController,
+      state: appShellState,
+    }),
+    [
+      appShellController,
+      appShellState,
+      askForAccountInformation,
+      setActiveName,
+      user,
+      userAvatar,
+    ]
+  );
 
   useEffect(() => {
     applyQAppTextSize(
@@ -302,29 +344,17 @@ const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
   }, [appShellState.settings.textSize]);
 
   return (
-    <>
+    <AppShellContext.Provider value={appShellValue}>
       {isLoadingGlobal && <PageLoader />}
       {isLoadingCustom && <LoaderBar message={isLoadingCustom} />}
-      <NavBar
-        isAuthenticated={!!user}
-        userName={user?.name || ""}
-        accountNames={user?.names || []}
-        setActiveName={(name: string) => {
-          dispatch(clearMessages());
-          dispatch(addUser({ ...user, name }));
-          void getLocalSubjects(name);
-        }}
-        userAvatar={userAvatar}
-        appShellController={appShellController}
-        appShellState={appShellState}
-      />
+      <NavBar />
       <ConsentModal />
       {children}
 
       {audios && audios.length > 0 && (
         <AudioPlayer currAudio={currAudio} playlist={audios} />
       )}
-    </>
+    </AppShellContext.Provider>
   );
 };
 

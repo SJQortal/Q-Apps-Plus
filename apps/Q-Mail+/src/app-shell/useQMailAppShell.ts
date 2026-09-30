@@ -117,11 +117,13 @@ export const useQMailAppShell = (
         storage: {
           prefix: '',
         },
+        // The theme kit (src/hub-theme) owns <html data-theme> and reads
+        // Hub's _qdnTheme itself, so the app-shell writes to spare keys.
         theme: {
           root: document.documentElement,
-          datasetKey: 'theme',
-          themeDataKey: '_qdnTheme',
-          themeEventName: 'THEME_CHANGED',
+          datasetKey: 'hostTheme',
+          themeDataKey: '_qmailHostTheme',
+          themeEventName: 'qmail:host-theme-changed',
         },
       }),
     []
