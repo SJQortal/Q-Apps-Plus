@@ -315,7 +315,8 @@ describe("MultiplePublish", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(await screen.findByText("1 of 2 published")).toBeInTheDocument();
     expect(onError).not.toHaveBeenCalled();
-    expect(screen.getByText(/Hub may still be publishing them/)).toBeInTheDocument();
+    expect(screen.getByText(/Hub has not answered for this publish yet/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
 
     // Hub finishes after all.
     await act(async () => answer(true));
@@ -451,5 +452,64 @@ describe("MultiplePublish progress from Hub", () => {
     fireEvent.click(screen.getByRole("button", { name: "Check again" }));
     expect(await screen.findByRole("button", { name: "Retry missing" })).toBeInTheDocument();
     expect(screen.getByText("Not on QDN yet", { selector: "p" })).toBeInTheDocument();
+  });
+
+  it("offers no Retry for rows queued in a batch Hub has not answered, and re-checks QDN once it does", async () => {
+    // Hub publishes the batch one resource at a time: the file first, the details last.
+    let reject: (reason: unknown) => void = () => {};
+    let attempt = 0;
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => {
+      attempt += 1;
+      return attempt === 1 ? new Promise((_, no) => (reject = no)) : true;
+    });
+    mockQdnCheck({});
+    const onSubmit = vi.fn();
+    renderWithProviders(<MultiplePublish isOpen publishes={request} onSubmit={onSubmit} onError={vi.fn()} />);
+    expect(await screen.findByText(/Publishing 2 resources/)).toBeInTheDocument();
+
+    // The user stops waiting while Hub is still at the file.
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByText("0 of 2 published")).toBeInTheDocument();
+    expect(screen.getByText(/Hub has not answered for this publish yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/check again before you retry/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
+
+    // Hub reports only on the file; the details are queued behind it and still held back.
+    postFromHub(hubStatus(FILE_ID, "FILE", { chunks: 1, totalChunks: 8 }));
+    expect(screen.getByText("Hub is still uploading · Uploading 1 of 8 parts")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    expect(await screen.findByText("0 of 2 published")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
+    const checksBefore = fetchCallsMatching("/arbitrary/resources/search").length;
+
+    // Hub gives up on the batch after the file landed: QDN is asked again,
+    // and only what is still missing now can be retried.
+    mockQdnCheck({ [FILE_ID]: Date.now() });
+    await act(async () => reject("The request timed out"));
+    expect(await screen.findByText("1 of 2 published")).toBeInTheDocument();
+    expect(fetchCallsMatching("/arbitrary/resources/search").length).toBeGreaterThan(checksBefore);
+    expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(1);
+    fireEvent.click(await screen.findByRole("button", { name: "Retry missing" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const calls = qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
+    expect(calls[1].resources.map((r: any) => r.identifier)).toEqual([DOC_ID]);
+  });
+
+  it("offers Retry failed once Hub names what failed in a batch it was left to finish", async () => {
+    let reject: (reason: unknown) => void = () => {};
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => new Promise((_, no) => (reject = no)));
+    mockQdnCheck({});
+    renderWithProviders(<MultiplePublish isOpen publishes={request} onSubmit={vi.fn()} onError={vi.fn()} />);
+    expect(await screen.findByText(/Publishing 2 resources/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByText("0 of 2 published")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
+
+    await act(async () => reject({ error: { unsuccessfulPublishes: [{ identifier: FILE_ID }] }, message: "x" }));
+    expect(await screen.findByText("1 of 2 published")).toBeInTheDocument();
+    expect(screen.getByText("Failed", { selector: "p" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry failed" })).toBeInTheDocument();
+    expect(screen.queryByText(/Hub has not answered/)).not.toBeInTheDocument();
   });
 });

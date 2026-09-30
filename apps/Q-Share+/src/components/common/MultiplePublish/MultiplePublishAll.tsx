@@ -185,6 +185,11 @@ function without<T>(record: Record<string, T>, ids: string[]): Record<string, T>
   return next;
 }
 
+/** `awaiting` without the rows request `n` held: Hub has answered it. */
+function answeredBy(awaiting: Record<string, number>, ids: string[], n: number): Record<string, number> {
+  return without(awaiting, ids.filter((id) => awaiting[id] === n));
+}
+
 /**
  * For a share whose details landed but some files did not: the details
  * already list those files, so adding them again in Edit only helps once
@@ -280,6 +285,11 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
   // Rows a request may still publish, by request number: the app stopped
   // waiting for them and QDN has not confirmed them yet.
   const unsure = useRef(new Map<string, number>());
+  // Rows sent in a request Hub has not answered yet, by request number. Hub
+  // publishes a batch one resource at a time and reports only on the one it
+  // is at, so a row QDN does not have yet may just be queued behind it:
+  // retrying it would pay for it twice. Retry waits for Hub's answer.
+  const [awaiting, setAwaiting] = useState<Record<string, number>>({});
   // Status messages stop between resources (and a small file sends only
   // one), so also show that time is passing.
   const [elapsed, setElapsed] = useState(0);
@@ -410,12 +420,17 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
       for (const id of ids) sentBy.current.set(id, current);
       mark(ids, "waiting");
       setProgress((prev) => without(prev, ids));
+      setAwaiting((prev) => ({ ...prev, ...Object.fromEntries(ids.map((id) => [id, current])) }));
       setPhase("publishing");
       setErrorText(null);
       setElapsed(0);
+      const answered = () => {
+        if (alive.current) setAwaiting((prev) => answeredBy(prev, ids, current));
+      };
       try {
         await qortalRequestWithTimeout(request, request.resources.length * PUBLISH_MS_PER_RESOURCE);
       } catch (error: any) {
+        answered();
         if (!alive.current) return;
         // A retry replaced this request: take only what its answer confirms.
         const superseded = attempt.current !== current;
@@ -458,10 +473,13 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
           return;
         }
         // A timeout is not a failure: Hub keeps going on its own clock, so
-        // ask QDN (unless the user already did by stopping the wait).
-        if (!detached) await verify(request.resources.filter((r) => rowsRef.current[r.identifier] !== "done"));
+        // ask QDN. A user who stopped waiting asked QDN back then, before
+        // Hub had got through the batch, so ask again: Retry is only for
+        // what is still not there now.
+        await verify(request.resources.filter((r) => rowsRef.current[r.identifier] !== "done"));
         return;
       }
+      answered();
       mark(ids, "done");
       if (allDone()) finish();
     },
@@ -482,14 +500,17 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
   const count = (state: ResourceState) => resources.filter((r) => stateOf(r.identifier) === state).length;
   // Not on QDN at the last check, but Hub has reported progress since.
   const isBusy = (id: string) => ["missing", "unknown"].includes(stateOf(id)) && Boolean(progress[id]);
+  // Not on QDN, and Hub has not answered for the request that sent it yet.
+  const isHeld = (id: string) => stateOf(id) === "missing" && id in awaiting;
   const doneCount = count("done");
   const failedCount = count("failed");
   const missingCount = count("missing");
+  const heldCount = resources.filter((r) => isHeld(r.identifier)).length;
   const unknownCount = count("unknown");
   const settled = phase === "settled";
   const retryable = resources.filter((r) => {
     const state = stateOf(r.identifier);
-    return state === "failed" || (state === "missing" && !isBusy(r.identifier));
+    return state === "failed" || (state === "missing" && !isBusy(r.identifier) && !isHeld(r.identifier));
   });
   const uncertain = resources.filter((r) => ["missing", "unknown"].includes(stateOf(r.identifier)));
   const detailsDone = resources.some((r) => r.service === "DOCUMENT" && stateOf(r.identifier) === "done");
@@ -596,7 +617,14 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
             and try again.
           </Alert>
         )}
-        {settled && missingCount > 0 && (
+        {settled && heldCount > 0 && (
+          <Alert severity="info">
+            Hub has not answered for this publish yet. It publishes one resource at a time, so what is not on QDN yet
+            may still be on its way, and Retry waits for Hub's answer so you never pay twice. Check again later, or
+            close: Hub keeps publishing.
+          </Alert>
+        )}
+        {settled && missingCount > heldCount && (
           <Alert severity="warning">
             Some resources are not on QDN yet. Hub may still be publishing them, so check again before you retry: each
             retry costs a new fee.
