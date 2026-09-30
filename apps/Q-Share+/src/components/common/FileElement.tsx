@@ -30,9 +30,31 @@ export function resourceUrl({ service, name, identifier }: FileInfo): string {
   return `/arbitrary/${service}/${encodeURIComponent(name)}/${encodeURIComponent(identifier)}`;
 }
 
+/** An older Hub's "Missing fields: blob" (the field name is never translated). */
+function asksForBlob(error: unknown): boolean {
+  return /\bblob\b/i.test(errorMessage(error, ""));
+}
+
 /**
- * Reads a file that is on the node and hands it to Hub's SAVE_FILE dialog.
- * The node's own filename and type win over the stored ones when it has them.
+ * False when GO would save the file by `location` with no name. GO names that
+ * file with Hub's normalizeFilename, which keeps only A-Z, a-z, 0-9, space, _
+ * and - before the extension (accents stripped), so "Отчёт.pdf" or "规划.docx"
+ * lands in Documents/Qortal Go as a hidden, nameless ".pdf". A blob save keeps
+ * the name, so such files take that path until GO keeps Unicode names too.
+ */
+export function keepsNameByLocation(filename: string): boolean {
+  const dot = filename.lastIndexOf(".");
+  const stem = dot > 0 ? filename.slice(0, dot) : filename;
+  return /[A-Za-z0-9]/.test(stem.normalize("NFD"));
+}
+
+/**
+ * Hands a file that is on the node to Hub's SAVE_FILE dialog. Hub streams it
+ * from the node by `location` (Electron writes it to disk in chunks, GO
+ * downloads it natively), so the file never passes through this frame and the
+ * prompt comes before any bytes move. Hubs that only take a blob, and names
+ * GO would strip to nothing (see keepsNameByLocation), get one read here
+ * instead. The node's own filename and type win over the stored ones.
  */
 export async function saveFromNode(
   ref: FileInfo,
@@ -45,6 +67,24 @@ export async function saveFromNode(
     mimeType = props?.mimeType || mimeType;
   } catch {
     /* the stored filename is good enough */
+  }
+  // Hub refuses a save without a filename.
+  filename = filename || ref.identifier;
+  const byLocation: QortalRequestOptions & { location: { service: string; name: string; identifier: string } } = {
+    action: "SAVE_FILE",
+    filename,
+    mimeType,
+    location: { service: ref.service, name: ref.name, identifier: ref.identifier },
+  };
+  if (keepsNameByLocation(filename)) {
+    try {
+      await qortalRequest(byLocation);
+      return;
+    } catch (error) {
+      // Only a Hub without `location` support falls back: after a decline or a
+      // failed download a second prompt (and a whole-file read) would be wrong.
+      if (!asksForBlob(error)) throw error;
+    }
   }
   const response = await fetch(resourceUrl(ref));
   if (!response.ok) throw new Error(`The node answered ${response.status}`);
