@@ -135,7 +135,7 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
       <RowMain
         className="row-main"
         onClick={() => navigate(sharePath(fileObj.user, fileObj.id))}
-        aria-label={`Open ${title || "share"}`}
+        aria-label={`Open ${title || shareTitleFromIdentifier(fileObj.id)}`}
       >
         {icon ? <RowIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon />}
         <div style={{ minWidth: 0, flex: 1 }}>
