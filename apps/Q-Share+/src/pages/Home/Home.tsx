@@ -28,6 +28,7 @@ import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
 import { CategoryList, CategoryListRef } from "../../components/common/CategoryList/CategoryList.tsx";
 import { EmptyState } from "../../components/common/EmptyState.tsx";
 import { NameSuggestField } from "../../components/common/NameSuggestField.tsx";
+import { ListViewToggle } from "../../components/common/ListViewToggle.tsx";
 import { QDN_PAGE } from "../../utils/qdnSearch.ts";
 import { isNameHidden, useAppSettings } from "../../utils/settings.ts";
 import { requestOpenPublish } from "../../constants/events.ts";
@@ -480,6 +481,16 @@ export const Home = () => {
             />
           )}
           {!phone && sortToggle}
+          {phone ? (
+            // Phones and the narrow layout: at the right of the chips row, as tall as the chips (the
+            // sort is in the sheet). The group's class makes this rule outrank the toggle's own
+            // 40 px, which it keeps between 600 and 899 px.
+            <Box sx={{ ml: "auto", "& .MuiToggleButtonGroup-root .MuiToggleButton-root": { minHeight: 44, minWidth: 44 } }}>
+              <ListViewToggle />
+            </Box>
+          ) : (
+            <ListViewToggle />
+          )}
         </Box>
 
         {error ? (

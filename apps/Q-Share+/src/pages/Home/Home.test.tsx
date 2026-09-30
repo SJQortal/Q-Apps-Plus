@@ -9,7 +9,7 @@ import { store } from '../../state/store';
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
 import { resetNameSearchCache } from '../../utils/nameSearch';
-import { resetSettingsCache, writeSettings } from '../../utils/settings';
+import { readSettings, resetSettingsCache, writeSettings } from '../../utils/settings';
 import { mockAllIsIntersecting } from 'react-intersection-observer/test-utils';
 import { readOncePerObserve } from '../../test/intersection';
 import { optionText } from '../../test/options';
@@ -193,6 +193,12 @@ describe('Home filters on a phone', { timeout: 15_000 }, () => {
     expect(minHeight(screen.getByRole('button', { name: 'Following' }))).toBe('44px');
     expect(minHeight(screen.getByRole('button', { name: 'My shares' }))).toBe('44px');
     expect(minHeight(screen.getByRole('button', { name: 'Filters' }))).toBe('44px');
+    // The layout toggle sits in the chips row, with square 44 px buttons.
+    for (const name of ['List', 'Grid']) {
+      const button = screen.getByRole('button', { name });
+      expect(minHeight(button)).toBe('44px');
+      expect(getComputedStyle(button).minWidth).toBe('44px');
+    }
     fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
     const sheet = await screen.findByRole('dialog', { name: 'Filters and sort' });
     expect(minHeight(within(sheet).getByRole('button', { name: 'Newest' }))).toBe('44px');
@@ -489,6 +495,56 @@ describe('Home chips and empty states', () => {
     expect(await screen.findByText('Someone else')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Following' })).toHaveAttribute('aria-pressed', 'false');
     expect(lastSearch().has('followedonly')).toBe(false);
+  });
+});
+
+describe('Home layout toggle', () => {
+  it('sits next to the sort toggle and switches the lists between rows and a grid', async () => {
+    mockFetch('/arbitrary/resources/search', []);
+
+    renderHome();
+    expect(await screen.findByText('No shares yet')).toBeInTheDocument();
+    const layout = screen.getByRole('group', { name: 'Layout' });
+    // Right after the sort toggle in the list header.
+    expect(screen.getByRole('group', { name: 'Sort order' }).nextElementSibling).toBe(layout);
+    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Grid' }));
+    expect(readSettings().listView).toBe('grid');
+    expect(screen.getByRole('button', { name: 'Grid' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('has square 44 px buttons in the chips row of the narrow layout too (600-899 px, e.g. a tablet or a narrow Hub pane)', async () => {
+    const originalMatchMedia = window.matchMedia;
+    // Narrow but not a phone: only the 900 px breakpoint matches.
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: query.includes('899.95'),
+        media: query,
+        onchange: null,
+        addListener() {},
+        removeListener() {},
+        addEventListener() {},
+        removeEventListener() {},
+        dispatchEvent() {
+          return false;
+        },
+      }),
+    });
+    onTestFinished(() => {
+      Object.defineProperty(window, 'matchMedia', { writable: true, configurable: true, value: originalMatchMedia });
+    });
+    mockFetch('/arbitrary/resources/search', []);
+
+    renderHome();
+    expect(await screen.findByText('No shares yet')).toBeInTheDocument();
+    expect(getComputedStyle(screen.getByRole('button', { name: 'Filters' })).minHeight).toBe('44px');
+    for (const name of ['List', 'Grid']) {
+      const button = screen.getByRole('button', { name });
+      expect(getComputedStyle(button).minHeight).toBe('44px');
+      expect(getComputedStyle(button).minWidth).toBe('44px');
+    }
   });
 });
 
