@@ -210,7 +210,12 @@ export const Settings = () => {
       }}
       autoFocusSearch={!phone}
       onEscape={closeSwitcher}
-      maxListHeight={phone ? "min(55dvh, 440px)" : "min(420px, calc(var(--qshare-app-height, 100dvh) - 200px))"}
+      // Phones: room in the 85dvh sheet for its title and the field. Desktop: two rows at least.
+      maxListHeight={
+        phone
+          ? "min(55dvh, 440px, max(88px, calc(85dvh - 127px)))"
+          : "max(88px, min(420px, calc(var(--qshare-app-height, 100dvh) - 200px)))"
+      }
     />
   );
 

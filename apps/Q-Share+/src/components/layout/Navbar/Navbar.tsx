@@ -100,11 +100,25 @@ const NavBar: React.FC<Props> = ({
   const names = accountNames.filter((n) => n.name);
   const signedIn = isAuthenticated && !!userName;
 
+  // ↑ and ↓ run through the names and the rows under them as one menu, wrapping
+  // at the ends; ↑ from the top row goes to the name search when there is one.
+  const onMenuArrows = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    const rows = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role^="menuitem"]'));
+    const at = rows.indexOf(event.target as HTMLElement);
+    if (at === -1) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const search = event.currentTarget.querySelector("input");
+    if (event.key === "ArrowUp" && at === 0 && search) search.focus();
+    else rows[event.key === "ArrowDown" ? (at + 1) % rows.length : (at - 1 + rows.length) % rows.length].focus();
+  };
+
   // Mounted only while the menu is open (Popover and BottomSheet both unmount
   // their content when closed); each other name's avatar loads once its row
   // scrolls into view (NameAvatar). Many names get a search field (NameSwitcher).
   const menuItems = (
-    <Box sx={{ minWidth: 260, maxWidth: phone ? undefined : 340 }}>
+    <Box sx={{ minWidth: 260, maxWidth: phone ? undefined : 340 }} onKeyDownCapture={onMenuArrows}>
       {names.length > 0 && (
         <NameSwitcher
           names={names.map((n) => n.name)}
@@ -116,8 +130,14 @@ const NavBar: React.FC<Props> = ({
           }}
           autoFocusSearch={!phone}
           onEscape={closeMenu}
-          // The search field stays put above a list that scrolls.
-          maxListHeight={phone ? "min(45dvh, 360px)" : "min(360px, calc(var(--qshare-app-height, 100dvh) - 220px))"}
+          // The search field stays put above a list that scrolls. On phones the list
+          // leaves room in the 85dvh sheet for its title, the field and the two rows
+          // below; on desktop it keeps at least two rows in a short window.
+          maxListHeight={
+            phone
+              ? "min(45dvh, 360px, max(88px, calc(85dvh - 216px)))"
+              : "max(88px, min(360px, calc(var(--qshare-app-height, 100dvh) - 220px)))"
+          }
         />
       )}
       <MenuList disablePadding aria-label="Account menu" sx={{ borderTop: names.length ? 1 : 0, borderColor: "divider" }}>

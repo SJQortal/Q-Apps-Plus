@@ -249,10 +249,44 @@ describe('NavBar account menu', () => {
     expect(field).toHaveFocus();
     fireEvent.change(field, { target: { value: 'simon' } });
     expect(screen.getAllByRole('menuitemradio').map((r) => r.textContent)).toEqual(['Simon James']);
+    // Blocked names and Settings stay under the filtered list, outside it.
+    const namesList = screen.getByRole('menu', { name: 'Your names' });
+    for (const label of ['Blocked names', 'Settings']) {
+      const item = screen.getByRole('menuitem', { name: label });
+      expect(namesList).not.toContainElement(item);
+    }
     fireEvent.click(row('Simon James'));
     expect(setActiveName).toHaveBeenCalledWith('Simon James');
-    // Blocked names and Settings stay under the list.
-    expect(screen.queryByRole('menuitem', { name: 'Settings' })).toBeNull();
+  });
+
+  it('moves through the names and the rows under them with the arrow keys', () => {
+    mockPhone(false);
+    renderSignedIn([{ name: 'alice' }, { name: 'bob' }]);
+    openMenu();
+    const blocked = screen.getByRole('menuitem', { name: 'Blocked names' });
+    const settings = screen.getByRole('menuitem', { name: 'Settings' });
+    row('bob').focus();
+    fireEvent.keyDown(row('bob'), { key: 'ArrowDown' });
+    expect(blocked).toHaveFocus();
+    fireEvent.keyDown(blocked, { key: 'ArrowUp' });
+    expect(row('bob')).toHaveFocus();
+    settings.focus();
+    fireEvent.keyDown(settings, { key: 'ArrowDown' });
+    expect(row('alice')).toHaveFocus();
+    fireEvent.keyDown(row('alice'), { key: 'ArrowUp' });
+    expect(settings).toHaveFocus();
+  });
+
+  it('goes up from the rows under the names to the name search when nothing matches', () => {
+    mockPhone(false);
+    renderSignedIn([{ name: 'alice' }, ...Array.from({ length: 17 }, (_, i) => ({ name: `name ${i}` }))]);
+    openMenu();
+    const field = screen.getByRole('textbox', { name: 'Find one of your names' });
+    fireEvent.change(field, { target: { value: 'nobody' } });
+    const blocked = screen.getByRole('menuitem', { name: 'Blocked names' });
+    blocked.focus();
+    fireEvent.keyDown(blocked, { key: 'ArrowUp' });
+    expect(field).toHaveFocus();
   });
 
   it('keeps the active name marked, and switches on a tap', () => {
