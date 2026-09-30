@@ -30,6 +30,21 @@ afterEach(() => {
 });
 
 describe('FileList row actions', () => {
+  it('shows the link for a manual copy when copying is blocked outright', async () => {
+    const row = share('qshare_file_nocopy_Nc1234_metadata', 'Simon James');
+    store.dispatch(addToHashMap({ ...row, files: [], isValid: true }));
+    Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true });
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+    Object.defineProperty(document, 'execCommand', { value: vi.fn().mockReturnValue(false), configurable: true });
+
+    renderWithProviders(<FileList files={[row]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+
+    await screen.findByRole('dialog', { name: 'Copy link' });
+    expect(screen.getByDisplayValue('qortal://APP/Q-Share+/share/Simon%20James/qshare_file_nocopy_Nc1234_metadata')).toBeInTheDocument();
+    expect(alerts().alertError).toBe('');
+  });
+
   it('copies a link on a plain-http node, where navigator.clipboard is missing', async () => {
     const row = share('qshare_file_copy_Cp1234_metadata');
     store.dispatch(addToHashMap({ ...row, files: [], isValid: true }));

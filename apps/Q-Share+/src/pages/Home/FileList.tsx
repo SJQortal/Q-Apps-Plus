@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Avatar, IconButton, Skeleton, Tooltip } from "@mui/material";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import BlockOutlinedIcon from "@mui/icons-material/BlockOutlined";
@@ -28,6 +28,7 @@ import { usePhoneLayout } from "../../hooks/usePhoneLayout.ts";
 import { SaveToCollectionButton } from "../../components/common/SaveToCollection/SaveToCollectionButton";
 import { shareTitleFromIdentifier } from "../../hooks/useFetchFiles.tsx";
 import { copyText } from "../../utils/clipboard.ts";
+import { ManualCopyDialog } from "../../components/common/CopyLinkButton.tsx";
 import { isHubDecline } from "../../utils/hubErrors.ts";
 
 interface FileListProps {
@@ -66,6 +67,8 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
   const navigate = useNavigate();
   const actionSize = phone ? "medium" : "small";
   const actionSx = phone ? { minWidth: 44, minHeight: 44 } : undefined;
+  // Set when copying is blocked outright: the link is shown for a manual copy.
+  const [manualLink, setManualLink] = useState<string | null>(null);
 
   const blockUserFunc = async (user: string) => {
     if (user === "Q-Share") return;
@@ -87,12 +90,9 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
 
   // copyText falls back to execCommand where navigator.clipboard is missing (a node on plain http).
   const copyLink = async (share: Video) => {
-    const copied = await copyText(shareLink(share.user, share.id));
-    dispatch(
-      setNotification(
-        copied ? { msg: "Link copied", alertType: "success" } : { msg: "Could not copy the link", alertType: "error" }
-      )
-    );
+    const link = shareLink(share.user, share.id);
+    if (await copyText(link)) dispatch(setNotification({ msg: "Link copied", alertType: "success" }));
+    else setManualLink(link);
   };
 
   // A body fetched without a search (e.g. from a collection page) has no created stamp.
@@ -206,6 +206,7 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
           )
         )}
       </RowActions>
+      {manualLink && <ManualCopyDialog open onClose={() => setManualLink(null)} link={manualLink} />}
     </FileRow>
   );
 });
