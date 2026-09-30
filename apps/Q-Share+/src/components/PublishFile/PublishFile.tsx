@@ -11,7 +11,12 @@ import { buildSharePublish, toMultiplePublish, type MultiplePublishRequest } fro
 import { invalidateQdnSearches } from "../../utils/qdnSearch";
 import type { CategoryListRef } from "../common/CategoryList/CategoryList";
 import { ResponsiveDialog } from "../common/mobile/ResponsiveDialog";
-import { MultiplePublish } from "../common/MultiplePublish/MultiplePublishAll";
+import {
+  filesNotOnQdnText,
+  MultiplePublish,
+  PublishAgainDialog,
+  type PublishStopped,
+} from "../common/MultiplePublish/MultiplePublishAll";
 import { publishErrorMessage, toPublishInputs } from "./shareDraft";
 import { ShareForm } from "./ShareForm";
 import { useShareDraft } from "./useShareDraft";
@@ -40,6 +45,10 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
   // dialog is closed and handed back as initialCategories on reopen.
   const [savedCategories, setSavedCategories] = useState<string[] | undefined>(undefined);
   const [publishes, setPublishes] = useState<MultiplePublishRequest | null>(null);
+  // The last publish was left unconfirmed and Hub may still finish it, so
+  // the next Publish asks first: it would make a second share.
+  const [mayStillPublish, setMayStillPublish] = useState(false);
+  const [confirmAgain, setConfirmAgain] = useState(false);
 
   useEffect(() => {
     if (!username) return;
@@ -54,11 +63,16 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
     setIsOpen(false);
   }, []);
 
-  const publish = async () => {
+  const publish = async (confirmed = false) => {
     const categories = categoryListRef.current;
     const selected = categories?.getSelectedCategories() ?? [];
     const problems = draft.validate(Boolean(selected[0]));
     if (problems.length > 0 || !categories) return;
+    if (mayStillPublish && !confirmed) {
+      setConfirmAgain(true);
+      return;
+    }
+    setConfirmAgain(false);
 
     if (!userAddress) {
       dispatch(setNotification({ msg: "Unable to locate user address", alertType: "error" }));
@@ -80,21 +94,47 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
         categoriesObject: categories.categoriesToObject(),
         files: toPublishInputs(draft.files),
       });
+      setMayStillPublish(false);
       setPublishes(toMultiplePublish(resources));
     } catch (error) {
       dispatch(setNotification({ msg: publishErrorMessage(error, "Failed to publish share"), alertType: "error" }));
     }
   };
 
-  const onPublished = () => {
+  const onPublished = (msg = "Files published", alertType: "success" | "info" = "success") => {
     dispatch(markSharesChanged());
     invalidateQdnSearches();
     setPublishes(null);
+    setMayStillPublish(false);
     setIsOpen(false);
     draft.reset();
     setSavedCategories(undefined);
     categoryListRef.current?.clearCategories();
-    dispatch(setNotification({ msg: "Files published", alertType: "success" }));
+    dispatch(setNotification({ msg, alertType }));
+  };
+
+  const onPublishStopped = (message?: string, published: string[] = [], stopped?: PublishStopped) => {
+    const resources = publishes?.resources ?? [];
+    const detailsId = resources.find((r) => r.service === "DOCUMENT")?.identifier;
+    if (detailsId && published.includes(detailsId)) {
+      // The share itself is on QDN and only some files are not. Publishing
+      // the draft again would make a second share, so finish here.
+      const missing = resources.filter((r) => r.service === "FILE" && !published.includes(r.identifier)).length;
+      if (missing > 0) onPublished(`Share published, but ${filesNotOnQdnText(missing)}`, "info");
+      else onPublished();
+      return;
+    }
+    setPublishes(null);
+    if (stopped?.uncertain) {
+      setMayStillPublish(true);
+      dispatch(
+        setNotification({
+          msg: "Your share may still be publishing in Hub. Check My shares before you publish it again.",
+          alertType: "info",
+        })
+      );
+    }
+    if (message) dispatch(setNotification({ msg: message, alertType: "error" }));
   };
 
   if (!username) return null;
@@ -135,7 +175,7 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
             <Button onClick={close} color="inherit">
               Cancel
             </Button>
-            <Button variant="contained" onClick={publish}>
+            <Button variant="contained" onClick={() => publish()}>
               Publish
             </Button>
           </>
@@ -144,15 +184,19 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
         <ShareForm draft={draft} categoryListRef={categoryListRef} initialCategories={savedCategories} />
       </ResponsiveDialog>
 
+      <PublishAgainDialog
+        open={confirmAgain}
+        text="Your last publish may still be finishing in Hub. Check My shares first: if the share is there, publishing again makes a second copy and costs another fee."
+        onCancel={() => setConfirmAgain(false)}
+        onConfirm={() => publish(true)}
+      />
+
       {publishes && (
         <MultiplePublish
           isOpen
           publishes={publishes}
-          onError={(message) => {
-            setPublishes(null);
-            if (message) dispatch(setNotification({ msg: message, alertType: "error" }));
-          }}
-          onSubmit={onPublished}
+          onError={onPublishStopped}
+          onSubmit={() => onPublished()}
         />
       )}
     </>

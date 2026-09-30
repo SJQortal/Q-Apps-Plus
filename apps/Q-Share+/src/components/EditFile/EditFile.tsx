@@ -13,7 +13,13 @@ import {
 import { invalidateQdnSearches } from "../../utils/qdnSearch";
 import { getCategoriesFromObject, type CategoryListRef } from "../common/CategoryList/CategoryList";
 import { ResponsiveDialog } from "../common/mobile/ResponsiveDialog";
-import { MultiplePublish } from "../common/MultiplePublish/MultiplePublishAll";
+import {
+  filesNotOnQdnText,
+  MultiplePublish,
+  PublishAgainDialog,
+  type PublishStopped,
+  type ReplacedVersions,
+} from "../common/MultiplePublish/MultiplePublishAll";
 import { draftFromRef, publishErrorMessage, toPublishInputs } from "../PublishFile/shareDraft";
 import { ShareForm } from "../PublishFile/ShareForm";
 import { useShareDraft } from "../PublishFile/useShareDraft";
@@ -50,16 +56,31 @@ function EditShareDialog({ share }: EditShareDialogProps) {
   const categoryListRef = useRef<CategoryListRef>(null);
   const [publishes, setPublishes] = useState<MultiplePublishRequest | null>(null);
   const [pendingUpdate, setPendingUpdate] = useState<Record<string, unknown> | null>(null);
+  // An update reuses the details identifier, so after a timeout QDN must
+  // show a version newer than the one being replaced before it counts.
+  const replaces = useMemo<ReplacedVersions>(
+    () => ({ [share.id]: share.updated ?? share.created }),
+    [share]
+  );
+  // The last update was left unconfirmed and Hub may still finish it, so the
+  // next one asks first: it costs another fee.
+  const [mayStillPublish, setMayStillPublish] = useState(false);
+  const [confirmAgain, setConfirmAgain] = useState(false);
 
   const close = () => {
     dispatch(setEditFile(null));
   };
 
-  const publish = async () => {
+  const publish = async (confirmed = false) => {
     const categories = categoryListRef.current;
     const selected = categories?.getSelectedCategories() ?? [];
     const problems = draft.validate(Boolean(selected[0]));
     if (problems.length > 0 || !categories) return;
+    if (mayStillPublish && !confirmed) {
+      setConfirmAgain(true);
+      return;
+    }
+    setConfirmAgain(false);
 
     if (!userAddress) {
       dispatch(setNotification({ msg: "Unable to locate user address", alertType: "error" }));
@@ -87,23 +108,49 @@ function EditShareDialog({ share }: EditShareDialogProps) {
         edit: { identifier: share.id, version: share.version, commentsId: share.commentsId },
       });
       setPendingUpdate({ ...share, ...fileObject });
+      setMayStillPublish(false);
       setPublishes(toMultiplePublish(resources));
     } catch (error) {
       dispatch(setNotification({ msg: publishErrorMessage(error, "Failed to publish update"), alertType: "error" }));
     }
   };
 
-  const onPublished = () => {
+  const onPublished = (msg = "Share updated", alertType: "success" | "info" = "success") => {
     dispatch(markSharesChanged());
     invalidateQdnSearches();
     setPublishes(null);
     if (pendingUpdate) {
-      const updated = structuredClone(pendingUpdate);
+      // The new version's time, so that another update from here is checked
+      // against this one rather than the version it replaced.
+      const updated = { ...structuredClone(pendingUpdate), updated: Date.now() };
       dispatch(updateFile(updated));
       dispatch(updateInHashMap(updated));
     }
-    dispatch(setNotification({ msg: "Share updated", alertType: "success" }));
+    dispatch(setNotification({ msg, alertType }));
     close();
+  };
+
+  const onPublishStopped = (message?: string, published: string[] = [], stopped?: PublishStopped) => {
+    const resources = publishes?.resources ?? [];
+    const detailsId = resources.find((r) => r.service === "DOCUMENT")?.identifier;
+    if (detailsId && published.includes(detailsId)) {
+      // The share's details are updated on QDN; only some new files are not.
+      const missing = resources.filter((r) => r.service === "FILE" && !published.includes(r.identifier)).length;
+      if (missing > 0) onPublished(`Share updated, but ${filesNotOnQdnText(missing, "new file")}`, "info");
+      else onPublished();
+      return;
+    }
+    setPublishes(null);
+    if (stopped?.uncertain) {
+      setMayStillPublish(true);
+      dispatch(
+        setNotification({
+          msg: "Your update may still be publishing in Hub. Check the share before you publish it again.",
+          alertType: "info",
+        })
+      );
+    }
+    if (message) dispatch(setNotification({ msg: message, alertType: "error" }));
   };
 
   return (
@@ -118,7 +165,7 @@ function EditShareDialog({ share }: EditShareDialogProps) {
             <Button onClick={close} color="inherit">
               Cancel
             </Button>
-            <Button variant="contained" onClick={publish}>
+            <Button variant="contained" onClick={() => publish()}>
               Publish update
             </Button>
           </>
@@ -127,15 +174,20 @@ function EditShareDialog({ share }: EditShareDialogProps) {
         <ShareForm draft={draft} categoryListRef={categoryListRef} initialCategories={editCategories} />
       </ResponsiveDialog>
 
+      <PublishAgainDialog
+        open={confirmAgain}
+        text="Your last update may still be finishing in Hub. Check the share first: publishing again costs another fee."
+        onCancel={() => setConfirmAgain(false)}
+        onConfirm={() => publish(true)}
+      />
+
       {publishes && (
         <MultiplePublish
           isOpen
           publishes={publishes}
-          onError={(message) => {
-            setPublishes(null);
-            if (message) dispatch(setNotification({ msg: message, alertType: "error" }));
-          }}
-          onSubmit={onPublished}
+          replaces={replaces}
+          onError={onPublishStopped}
+          onSubmit={() => onPublished()}
         />
       )}
     </>
