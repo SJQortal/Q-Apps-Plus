@@ -43,7 +43,7 @@ describe('SaveToCollectionButton', () => {
   it('renders nothing when not signed in', () => {
     signIn(null);
     renderWithProviders(<SaveToCollectionButton share={share} />);
-    expect(screen.queryByRole('button', { name: 'Save to collection' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add to collection' })).not.toBeInTheDocument();
   });
 
   it('saves the share into a collection with one PUBLISH_QDN_RESOURCE of the same identifier', async () => {
@@ -56,7 +56,7 @@ describe('SaveToCollectionButton', () => {
 
     renderWithProviders(<SaveToCollectionButton share={share} />);
 
-    const trigger = await screen.findByRole('button', { name: 'Save to collection' });
+    const trigger = await screen.findByRole('button', { name: 'Add to collection' });
     expect(trigger).toHaveAttribute('aria-pressed', 'false');
     // The automatic load is deferred (AUTO_LOAD_DELAY_MS), so allow for it.
     await waitFor(() => expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(1), { timeout: 4000 });
@@ -82,7 +82,7 @@ describe('SaveToCollectionButton', () => {
     expect(body.created).toBe(5);
     expect(body.items).toEqual([{ name: share.name, identifier: share.identifier }]);
 
-    await waitFor(() => expect(store.getState().notifications.alertTypes.alertSuccess).toBe('Saved to My docs'));
+    await waitFor(() => expect(store.getState().notifications.alertTypes.alertSuccess).toBe('Added to My docs'));
     expect(trigger).toHaveAttribute('aria-pressed', 'true');
 
     // One paged search by my name, no per-item searches, no unlimited search.
@@ -105,7 +105,7 @@ describe('SaveToCollectionButton', () => {
     });
 
     renderWithProviders(<SaveToCollectionButton share={share} />);
-    const trigger = await screen.findByRole('button', { name: 'Save to collection' });
+    const trigger = await screen.findByRole('button', { name: 'Add to collection' });
     // The automatic load is deferred (AUTO_LOAD_DELAY_MS), so allow for it.
     await waitFor(() => expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(1), { timeout: 4000 });
     fireEvent.click(trigger);

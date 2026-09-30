@@ -1,4 +1,6 @@
 import { Button, ButtonProps } from "@mui/material";
+import PersonAddAlt1OutlinedIcon from "@mui/icons-material/PersonAddAlt1Outlined";
+import PersonRemoveOutlinedIcon from "@mui/icons-material/PersonRemoveOutlined";
 import Tooltip, { TooltipProps, tooltipClasses } from "@mui/material/Tooltip";
 import { MouseEvent, useEffect, useState } from "react";
 import { styled } from "@mui/material/styles";
@@ -9,6 +11,8 @@ import { formatBytes } from "../../utils/formatBytes";
 
 interface FollowButtonProps extends ButtonProps {
   followerName: string;
+  /** Icon over label, no minimum width: the share page's phone action row. */
+  compact?: boolean;
 }
 
 const TooltipLine = styled("div")({
@@ -85,7 +89,7 @@ export const resetFollowCaches = () => {
  * name is the signed-in user's own. The tooltip explains what following does
  * and loads the name's total size only when it opens.
  */
-export const FollowButton = ({ followerName, sx, ...props }: FollowButtonProps) => {
+export const FollowButton = ({ followerName, compact = false, sx, ...props }: FollowButtonProps) => {
   const phone = usePhoneLayout();
   const username = useSelector((state: RootState) => state.auth.user?.name);
   const [followingList, setFollowingList] = useState<string[]>([]);
@@ -113,6 +117,7 @@ export const FollowButton = ({ followerName, sx, ...props }: FollowButtonProps) 
   };
 
   const following = followingList.includes(followerName);
+  const compactIcon = following ? <PersonRemoveOutlinedIcon /> : <PersonAddAlt1OutlinedIcon />;
 
   const followName = async () => {
     const response: boolean = await qortalRequest({
@@ -176,12 +181,15 @@ export const FollowButton = ({ followerName, sx, ...props }: FollowButtonProps) 
       <Button
         {...props}
         variant={following ? "outlined" : "contained"}
+        startIcon={compact ? compactIcon : props.startIcon}
         onClick={manageFollow}
         disabled={busy || props.disabled}
         aria-pressed={following}
         aria-label={`${following ? "Unfollow" : "Follow"} ${followerName}`}
         sx={[
-          { fontWeight: 700, minWidth: 96, minHeight: phone ? 44 : 36, px: 2 },
+          compact
+            ? { fontWeight: 700, minHeight: 44 }
+            : { fontWeight: 700, minWidth: 96, minHeight: phone ? 44 : 36, px: 2 },
           ...(Array.isArray(sx) ? sx : [sx]),
         ]}
       >

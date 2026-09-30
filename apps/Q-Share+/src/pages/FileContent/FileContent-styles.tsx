@@ -118,6 +118,31 @@ export const ActionRow = styled("div")(({ theme }) => ({
   },
 }));
 
+/**
+ * Phones: the secondary actions (Copy link, Add to collection, Follow or
+ * Edit) as one row of equal icon-over-label buttons instead of a stack of
+ * full-width ones. Only the buttons are in the flow; menus and sheets portal.
+ */
+export const CompactActionRow = styled("div")(({ theme }) => ({
+  display: "grid",
+  gridAutoFlow: "column",
+  gridAutoColumns: "minmax(0, 1fr)",
+  gap: theme.spacing(1),
+  width: "100%",
+  maxWidth: 480,
+  "& .MuiButton-root": {
+    flexDirection: "column",
+    gap: theme.spacing(0.25),
+    minWidth: 0,
+    minHeight: 56,
+    padding: theme.spacing(0.75, 0.5),
+    fontSize: 13,
+    lineHeight: 1.2,
+    whiteSpace: "nowrap",
+  },
+  "& .MuiButton-startIcon": { margin: 0 },
+}));
+
 export const FileDescription = styled(Typography)(({ theme }) => ({
   fontSize: 16,
   lineHeight: 1.5,

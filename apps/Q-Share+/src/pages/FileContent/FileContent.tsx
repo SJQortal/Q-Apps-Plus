@@ -32,6 +32,7 @@ import {
   AuthorLink,
   Card,
   CategoryIcon,
+  CompactActionRow,
   DescriptionFade,
   FileDescription,
   FileList,
@@ -293,6 +294,45 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
   const goBack = () => (window.history.length > 1 ? navigate(-1) : navigate("/"));
   const title: string = fileData?.title || "";
 
+  // A single file has its own Download in its row, so "Fetch all" only
+  // appears for two or more (the .zip button has the same rule).
+  const primaryActions =
+    files.length > 1 || extraActions ? (
+      <>
+        {files.length > 1 && (
+          <Button variant="contained" startIcon={<CloudDownloadOutlinedIcon />} onClick={fetchAll} disabled={pendingFiles.length === 0}>
+            {allReady ? "All files ready" : pendingFiles.length === 0 ? "Fetching…" : "Fetch all files"}
+          </Button>
+        )}
+        <SaveAllZipButton files={files} title={title} allReady={allReady} />
+        {extraActions}
+      </>
+    ) : null;
+  // On phones these become one compact row of icon-over-label buttons.
+  const secondaryActions = fileData ? (
+    <>
+      <CopyLinkButton link={shareLink(author, id)} tooltipTitle="Copy link" label="Copy link" />
+      <SaveToCollectionButton
+        share={{ name: author, identifier: id, title: fileData.title }}
+        variant="button"
+        size="medium"
+        compact={phone}
+      />
+      {author === username ? (
+        <Button
+          variant="outlined"
+          startIcon={<EditOutlinedIcon />}
+          aria-label="Edit share"
+          onClick={() => dispatch(setEditFile(fileData))}
+        >
+          {phone ? "Edit" : "Edit share"}
+        </Button>
+      ) : (
+        <FollowButton followerName={author} compact={phone} />
+      )}
+    </>
+  ) : null;
+
   return (
     <Page>
       {phone && (
@@ -420,29 +460,19 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
               {categories && <Meta>{categories}</Meta>}
             </Box>
 
-            <ActionRow>
-              {files.length > 0 && (
-                <Button
-                  variant="contained"
-                  startIcon={<CloudDownloadOutlinedIcon />}
-                  onClick={fetchAll}
-                  disabled={pendingFiles.length === 0}
-                >
-                  {allReady ? "All files ready" : pendingFiles.length === 0 ? "Fetching…" : files.length === 1 ? "Fetch file" : "Fetch all files"}
-                </Button>
-              )}
-              <SaveAllZipButton files={files} title={title} allReady={allReady} />
-              <CopyLinkButton link={shareLink(author, id)} tooltipTitle="Copy link" label="Copy link" />
-              <SaveToCollectionButton share={{ name: author, identifier: id, title: fileData?.title }} variant="button" size="medium" />
-              {extraActions}
-              {author === username ? (
-                <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => dispatch(setEditFile(fileData))}>
-                  Edit share
-                </Button>
-              ) : (
-                <FollowButton followerName={author} />
-              )}
-            </ActionRow>
+            {phone ? (
+              <>
+                {primaryActions && <ActionRow>{primaryActions}</ActionRow>}
+                <CompactActionRow role="group" aria-label="Share actions">
+                  {secondaryActions}
+                </CompactActionRow>
+              </>
+            ) : (
+              <ActionRow>
+                {primaryActions}
+                {secondaryActions}
+              </ActionRow>
+            )}
           </Card>
 
           {(fileData.htmlDescription || fileData.fullDescription) && (

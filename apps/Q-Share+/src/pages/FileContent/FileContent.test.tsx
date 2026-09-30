@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
 import { FileContent } from './FileContent';
 import { renderWithProviders } from '../../test/renderWithProviders';
@@ -8,6 +8,7 @@ import { resetQdnSearchCache } from '../../utils/qdnSearch';
 import { resetSettingsCache } from '../../utils/settings';
 import { store } from '../../state/store';
 import { addToHashMap } from '../../state/features/fileSlice';
+import { addUser } from '../../state/features/authSlice';
 
 const NAME = 'alice b';
 const ID = 'qshare_file_holiday-pics_abcdefghijkl_metadata';
@@ -284,6 +285,58 @@ describe('FileContent (share page)', () => {
     expect(await screen.findByText('This share was deleted by its publisher')).toBeInTheDocument();
     expect(qortalCallsFor('FETCH_QDN_RESOURCE')).toHaveLength(0);
     store.dispatch({ type: 'file/removeFromHashMap', payload: ID });
+  });
+
+  describe('action row', () => {
+    const single = { ...body, files: [body.files[0]] };
+
+    afterEach(() => {
+      store.dispatch(addUser(null));
+      store.dispatch({ type: 'file/removeFromHashMap', payload: ID });
+    });
+
+    it('has no header Fetch button for a single file (its row has Download)', async () => {
+      mockCommentSearches();
+      store.dispatch(addToHashMap({ ...single, id: ID, user: NAME, created: searchRow.created }));
+      renderShare();
+      expect(await screen.findByRole('heading', { level: 1, name: 'Holiday pics' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Fetch/ })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Download beach.jpg' })).toBeInTheDocument();
+    });
+
+    it('on phones puts Copy link, Add to collection and Follow in one compact row', async () => {
+      setMatchMedia(true);
+      store.dispatch(addUser({ address: 'Qc', publicKey: 'k', name: 'carol', names: [{ name: 'carol', owner: 'Qc' }] }));
+      mockFetch('/arbitrary/resources/search', []);
+      mockCommentSearches();
+      store.dispatch(addToHashMap({ ...single, id: ID, user: NAME, created: searchRow.created }));
+      renderShare();
+
+      const group = await screen.findByRole('group', { name: 'Share actions' });
+      const buttons = within(group).getAllByRole('button');
+      expect(buttons.map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
+        'Copy link',
+        'Add to collection',
+        'Follow alice b',
+      ]);
+      expect(within(group).getByRole('button', { name: 'Add to collection' })).toHaveTextContent('Collect');
+      expect(screen.queryByRole('button', { name: /^Fetch/ })).not.toBeInTheDocument();
+    });
+
+    it("on phones offers Edit for the signed-in user's own share", async () => {
+      setMatchMedia(true);
+      store.dispatch(addUser({ address: 'Qa', publicKey: 'k', name: NAME, names: [{ name: NAME, owner: 'Qa' }] }));
+      mockFetch('/arbitrary/resources/search', []);
+      mockCommentSearches();
+      store.dispatch(addToHashMap({ ...body, id: ID, user: NAME, created: searchRow.created }));
+      renderShare();
+
+      const group = await screen.findByRole('group', { name: 'Share actions' });
+      expect(within(group).getByRole('button', { name: 'Edit share' })).toHaveTextContent('Edit');
+      expect(within(group).queryByRole('button', { name: /Follow/ })).not.toBeInTheDocument();
+      // Three files: Fetch all stays a full-width button above the row.
+      expect(screen.getByRole('button', { name: 'Fetch all files' })).toBeInTheDocument();
+    });
   });
 
   it('on phone width shows the sticky Back button with the title', async () => {

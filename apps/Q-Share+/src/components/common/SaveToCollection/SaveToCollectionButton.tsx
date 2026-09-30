@@ -37,14 +37,20 @@ export interface SaveToCollectionButtonProps {
   share: { name: string; identifier: string; title?: string };
   size?: "small" | "medium";
   variant?: "icon" | "button";
+  /** With variant "button": the one-word label for the share page's phone action row. */
+  compact?: boolean;
 }
 
+const LABEL = "Add to collection";
+
 /**
- * Save a share to one of the signed-in name's collections. Opens a bottom
+ * Add a share to one of the signed-in name's collections. Opens a bottom
  * sheet on phones and a menu on wider screens; each toggle republishes that
  * collection (one Hub confirmation). Renders nothing when not signed in.
+ * Called "Add to collection", not "Save": on the share page "Save" is the
+ * file row's SAVE_FILE.
  */
-export function SaveToCollectionButton({ share, size = "small", variant = "icon" }: SaveToCollectionButtonProps) {
+export function SaveToCollectionButton({ share, size = "small", variant = "icon", compact = false }: SaveToCollectionButtonProps) {
   const dispatch = useDispatch();
   const phone = usePhoneLayout();
   const { myName, mine, loading, error, byKey, reload } = useMyCollections();
@@ -110,7 +116,7 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
       dispatch(upsertCollection(published));
       dispatch(
         setNotification({
-          msg: adding ? `Saved to ${published.title}` : `Removed from ${published.title}`,
+          msg: adding ? `Added to ${published.title}` : `Removed from ${published.title}`,
           alertType: "success",
         })
       );
@@ -181,8 +187,9 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
 
   const tooltip = saved
     ? `In ${savedIn.length} ${savedIn.length === 1 ? "collection" : "collections"}`
-    : "Save to collection";
+    : LABEL;
   const icon = saved ? <BookmarkAddedIcon fontSize={size} /> : <BookmarkAddOutlinedIcon fontSize={size} />;
+  const buttonLabel = compact ? (saved ? "Collected" : "Collect") : saved ? "In collection" : LABEL;
 
   return (
     <>
@@ -191,25 +198,30 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
           size={size}
           variant="outlined"
           startIcon={icon}
-          aria-label="Save to collection"
+          aria-label={LABEL}
           aria-pressed={saved}
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={openPicker}
           sx={{ minHeight: phone ? 44 : undefined }}
         >
-          {saved ? "Saved" : "Save"}
+          {buttonLabel}
         </Button>
       ) : (
         <Tooltip title={tooltip}>
           <IconButton
             size={size}
-            aria-label="Save to collection"
+            aria-label={LABEL}
             aria-pressed={saved}
             aria-haspopup="menu"
             aria-expanded={open}
             onClick={openPicker}
-            sx={{ color: saved ? "primary.main" : undefined }}
+            sx={{
+              color: saved ? "primary.main" : undefined,
+              // Same 44 px target as the row's Copy link on phones.
+              minWidth: phone ? 44 : undefined,
+              minHeight: phone ? 44 : undefined,
+            }}
           >
             {icon}
           </IconButton>
@@ -217,7 +229,7 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
       )}
 
       {phone ? (
-        <BottomSheet open={sheetOpen} onClose={closePicker} title="Save to collection">
+        <BottomSheet open={sheetOpen} onClose={closePicker} title={LABEL}>
           <MenuList sx={{ mx: -2 }}>{rows}</MenuList>
         </BottomSheet>
       ) : (
@@ -225,7 +237,7 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
           open={Boolean(anchor)}
           anchorEl={anchor}
           onClose={closePicker}
-          slotProps={{ list: { "aria-label": "Save to collection", dense: false }, paper: { sx: { minWidth: 240, maxWidth: 320 } } }}
+          slotProps={{ list: { "aria-label": LABEL, dense: false }, paper: { sx: { minWidth: 240, maxWidth: 320 } } }}
         >
           {rows}
         </Menu>
