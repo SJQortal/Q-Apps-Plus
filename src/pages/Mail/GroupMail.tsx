@@ -566,11 +566,13 @@ export const GroupMail = ({
                 vertical: "top",
                 horizontal: "right",
               }}
-              PaperProps={{
-                sx: {
-                  backgroundColor: "var(--qmail-shell-popover-bg)",
-                  color: "var(--qmail-thread-text)",
-                  border: "1px solid var(--qmail-shell-border)",
+              slotProps={{
+                paper: {
+                  sx: {
+                    backgroundColor: "var(--qmail-shell-popover-bg)",
+                    color: "var(--qmail-thread-text)",
+                    border: "1px solid var(--qmail-shell-border)",
+                  },
                 },
               }}
             >
