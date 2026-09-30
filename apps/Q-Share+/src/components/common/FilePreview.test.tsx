@@ -1,9 +1,19 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
-import { FilePreview, IMAGE_AUTO_PREVIEW_BYTES, TEXT_PREVIEW_BYTES, previewKind, shouldAutoPreview } from './FilePreview';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import {
+  FilePreview,
+  IMAGE_AUTO_PREVIEW_BYTES,
+  PDF_OPEN_MAX_BYTES,
+  TEXT_PREVIEW_BYTES,
+  previewKind,
+  shouldAutoPreview,
+} from './FilePreview';
 import { renderWithProviders } from '../../test/renderWithProviders';
-import { fetchCallsMatching, mockFetch } from '../../test/setup';
+import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
+import { store } from '../../state/store';
+import { removeDownload, setAddToDownloads, updateDownloads } from '../../state/features/globalSlice';
+import { MyContext } from '../../wrappers/DownloadWrapper';
 import { DEFAULT_SETTINGS, SETTINGS_STORAGE_KEY, resetSettingsCache } from '../../utils/settings';
 
 const base = { name: 'alice', service: 'FILE' };
@@ -112,14 +122,81 @@ describe('FilePreview', () => {
     expect(container.querySelector('button')).toBeNull();
   });
 
-  it('shows a PDF frame only after "Preview PDF", without fetching anything itself', () => {
-    renderWithProviders(<FilePreview file={pdf} />);
-    expect(screen.queryByTitle('Preview of paper.pdf')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Preview PDF paper.pdf' }));
-    const frame = screen.getByTitle('Preview of paper.pdf');
-    expect(frame).toHaveAttribute('src', '/arbitrary/FILE/alice/qshare_file_x_pdf');
-    expect(screen.getByText('If the preview stays blank, download the file.')).toBeInTheDocument();
-    expect(fetchCallsMatching('/arbitrary/FILE/').length).toBe(0);
+  describe('PDF', () => {
+    beforeEach(() => {
+      store.dispatch(removeDownload(pdf.identifier));
+      mockQortalAction('SHOW_PDF_READER', true);
+    });
+
+    it('opens a PDF on the node in Hub\'s reader as an application/pdf blob, with no inline frame', async () => {
+      mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'READY', percentLoaded: 100 });
+      mockFetch('/arbitrary/FILE/', '%PDF-1.4 tiny');
+      const { container } = renderWithProviders(<FilePreview file={pdf} />);
+      expect(container.querySelector('iframe')).toBeNull();
+      expect(fetchCallsMatching('/arbitrary/FILE/').length).toBe(0);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open PDF paper.pdf' }));
+
+      await waitFor(() => expect(qortalCallsFor('SHOW_PDF_READER').length).toBe(1));
+      const blob = qortalCallsFor('SHOW_PDF_READER')[0].blob as Blob;
+      expect(blob.type).toBe('application/pdf');
+      expect(fetchCallsMatching('/arbitrary/FILE/')).toEqual(['/arbitrary/FILE/alice/qshare_file_x_pdf']);
+      expect(container.querySelector('iframe')).toBeNull();
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Open PDF paper.pdf' })).toBeEnabled());
+    });
+
+    it('fetches a PDF that is not on the node yet, then opens it when it is ready', async () => {
+      const downloadVideo = vi.fn();
+      mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'DOWNLOADING', percentLoaded: 20 });
+      mockFetch('/arbitrary/FILE/', '%PDF-1.7 later');
+      renderWithProviders(
+        <MyContext.Provider value={{ downloadVideo, retryDownload: () => {} }}>
+          <FilePreview file={pdf} />
+        </MyContext.Provider>
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open PDF paper.pdf' }));
+      await waitFor(() => expect(downloadVideo).toHaveBeenCalledTimes(1));
+      expect(downloadVideo.mock.calls[0][0]).toMatchObject({ name: 'alice', service: 'FILE', identifier: pdf.identifier });
+      // The shared download machine takes it from here; the file row shows its progress.
+      act(() => {
+        store.dispatch(setAddToDownloads({ name: 'alice', service: 'FILE', identifier: pdf.identifier, properties: {} }));
+        store.dispatch(updateDownloads({ identifier: pdf.identifier, status: { status: 'DOWNLOADING', percentLoaded: 40 } }));
+      });
+      expect(await screen.findByText('Opens when ready')).toBeInTheDocument();
+      expect(fetchCallsMatching('/arbitrary/FILE/').length).toBe(0);
+
+      act(() => {
+        store.dispatch(updateDownloads({ identifier: pdf.identifier, status: { status: 'READY', percentLoaded: 100 } }));
+      });
+      await waitFor(() => expect(qortalCallsFor('SHOW_PDF_READER').length).toBe(1));
+    });
+
+    it('refuses a file that is not really a PDF', async () => {
+      mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'READY' });
+      mockFetch('/arbitrary/FILE/', '<html><script>alert(1)</script></html>');
+      renderWithProviders(<FilePreview file={pdf} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Open PDF paper.pdf' }));
+      expect(await screen.findByText("This file isn't a PDF. Download to view.")).toBeInTheDocument();
+      expect(qortalCallsFor('SHOW_PDF_READER').length).toBe(0);
+    });
+
+    it('says to download when Hub cannot show the reader', async () => {
+      mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'READY' });
+      mockFetch('/arbitrary/FILE/', '%PDF-1.4 x');
+      mockQortalAction('SHOW_PDF_READER', () => {
+        throw { error: 'Unknown action', message: 'Unknown action' };
+      });
+      renderWithProviders(<FilePreview file={pdf} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Open PDF paper.pdf' }));
+      expect(await screen.findByText("Couldn't open the PDF. Download to view.")).toBeInTheDocument();
+    });
+
+    it('offers no reader for PDFs over the cap', () => {
+      renderWithProviders(<FilePreview file={{ ...pdf, size: PDF_OPEN_MAX_BYTES + 1 }} />);
+      expect(screen.queryByRole('button', { name: /Open PDF/ })).not.toBeInTheDocument();
+      expect(screen.getByText('Too large to open here. Download to view.')).toBeInTheDocument();
+    });
   });
 
   it('renders a video player with preload="none" after "Preview video"', () => {

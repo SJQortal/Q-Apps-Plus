@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Box, Typography } from "@mui/material";
 import FileElement, { type FileInfo } from "../../components/common/FileElement";
-import { PreviewPanel, PreviewToggleButton, previewKind, shouldAutoPreview } from "../../components/common/FilePreview";
+import { OpenPdfButton, PreviewPanel, PreviewToggleButton, previewKind, shouldAutoPreview } from "../../components/common/FilePreview";
 import { formatBytes } from "../../utils/formatBytes";
 import { useAppSettings } from "../../utils/settings";
 import { fileKind, fileKindIconElement, fileKindLabel } from "../../utils/fileKind";
@@ -25,7 +25,8 @@ interface FileRowProps {
 /**
  * One attachment on the share page: kind icon, a filename that wraps, the
  * size, the download control (Download → progress → Save) and, when the
- * file can be shown inline, a preview toggle with the preview below.
+ * file can be shown inline, a preview toggle with the preview below (PDFs:
+ * "Open PDF", which uses Hub's reader).
  */
 export const FileRow = ({ file, jsonId }: FileRowProps) => {
   const settings = useAppSettings();
@@ -101,17 +102,21 @@ export const FileRow = ({ file, jsonId }: FileRowProps) => {
         <Box sx={{ flex: 1, minWidth: 0, display: "flex" }}>
           <FileElement fileInfo={fileInfo} jsonId={jsonId} />
         </Box>
-        {preview && (
-          <PreviewToggleButton
-            kind={preview}
-            open={previewOpen}
-            onToggle={() => setPreviewOpen((o) => !o)}
-            filename={file.filename}
-          />
+        {preview === "pdf" ? (
+          <OpenPdfButton file={file} jsonId={jsonId} />
+        ) : (
+          preview && (
+            <PreviewToggleButton
+              kind={preview}
+              open={previewOpen}
+              onToggle={() => setPreviewOpen((o) => !o)}
+              filename={file.filename}
+            />
+          )
         )}
       </Box>
 
-      {preview && <PreviewPanel file={file} kind={preview} open={previewOpen} />}
+      {preview && preview !== "pdf" && <PreviewPanel file={file} kind={preview} open={previewOpen} />}
     </Box>
   );
 };
