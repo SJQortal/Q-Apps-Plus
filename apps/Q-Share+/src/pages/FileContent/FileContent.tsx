@@ -147,7 +147,7 @@ async function fetchShare(name: string, id: string): Promise<ShareLookup> {
 }
 
 export interface FileContentProps {
-  /** Extra primary actions (e.g. Save to collection), rendered after Copy link. */
+  /** Extra primary actions, rendered after Fetch all and Save all as .zip (full width on phones). */
   extraActions?: ReactNode;
 }
 
