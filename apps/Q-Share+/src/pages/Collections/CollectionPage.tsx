@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
-import { Avatar, Box, Button, IconButton, Skeleton, Tooltip, Typography } from "@mui/material";
+import { Avatar, Box, Button, CircularProgress, IconButton, Skeleton, Tooltip, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
@@ -19,6 +19,7 @@ import type { Video } from "../../state/features/fileSlice";
 import type { RootState } from "../../state/store";
 import { queue } from "../../wrappers/GlobalWrapper";
 import {
+  COLLECTION_SERVICE,
   buildCollectionBody,
   collectionKey,
   fetchCollection,
@@ -32,9 +33,29 @@ import { formatDate } from "../../utils/time";
 import { CollectionDialog } from "./CollectionDialog";
 import { CardList, InfoCard, ItemRow, ItemRows, Page, PhoneHeader, PublisherLink } from "./Collections-styles";
 
-type Status = "loading" | "ready" | "error" | "missing";
+/** "fetching": the node knows the collection but hasn't got its data yet; "unavailable": still not after the retries. */
+type Status = "loading" | "ready" | "error" | "missing" | "fetching" | "unavailable";
 
 const countLabel = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
+
+/**
+ * Core's statuses for a resource the node knows about but can't serve yet.
+ * FETCH_QDN_RESOURCE then fails within milliseconds ("Data unavailable")
+ * while the node asks its peers for the data.
+ */
+const NOT_LOCAL_YET = new Set(["PUBLISHED", "DOWNLOADING", "DOWNLOADED", "BUILDING", "MISSING_DATA"]);
+/** Waits before each automatic retry while the node fetches from peers: five tries in about 30 s. */
+const PEER_RETRY_DELAYS_MS = [2000, 4000, 8000, 16000];
+
+/** The resource's Core status, or null when the node doesn't answer. */
+async function resourceStatus(name: string, identifier: string): Promise<string | null> {
+  try {
+    const response = await qortalRequest({ action: "GET_QDN_RESOURCE_STATUS", service: COLLECTION_SERVICE, name, identifier });
+    return typeof response?.status === "string" ? response.status : null;
+  } catch {
+    return null;
+  }
+}
 
 /** /collection/:name/:id, keyed by the pair so every collection starts with fresh page state. */
 export function CollectionPage() {
@@ -56,11 +77,14 @@ function CollectionView({ name, id }: { name: string; id: string }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<Video | null>(null);
   const [busy, setBusy] = useState(false);
+  // Which of PEER_RETRY_DELAYS_MS the next automatic retry waits for.
+  const [peerRetry, setPeerRetry] = useState(0);
   const { getFile, checkAndUpdateFile } = useFetchFiles();
 
   // State changes happen in the promise callbacks, so effects only start the read.
+  // `retry` counts the automatic retries made so far in this round.
   const read = useCallback(
-    (fresh: boolean): Promise<void> =>
+    (fresh: boolean, retry = 0): Promise<void> =>
       fetchCollection(name, id, { fresh }).then(
         (loaded) => {
           if (!loaded) {
@@ -70,7 +94,21 @@ function CollectionView({ name, id }: { name: string; id: string }) {
           dispatch(upsertCollection(loaded));
           setStatus("ready");
         },
-        () => setStatus("error")
+        async () => {
+          const state = await resourceStatus(name, id);
+          if (state === "NOT_PUBLISHED") {
+            setStatus("missing");
+          } else if (state && NOT_LOCAL_YET.has(state)) {
+            if (retry < PEER_RETRY_DELAYS_MS.length) {
+              setPeerRetry(retry);
+              setStatus("fetching");
+            } else {
+              setStatus("unavailable");
+            }
+          } else {
+            setStatus("error");
+          }
+        }
       ),
     [name, id, dispatch]
   );
@@ -78,6 +116,35 @@ function CollectionView({ name, id }: { name: string; id: string }) {
   useEffect(() => {
     if (name && id) read(false);
   }, [read, name, id]);
+
+  // While the node fetches from peers, retry after each delay, counting only
+  // time the page is visible.
+  useEffect(() => {
+    if (status !== "fetching") return;
+    let timer: number | undefined;
+    let fired = false;
+    const schedule = () => {
+      if (fired || timer !== undefined || document.visibilityState !== "visible") return;
+      timer = window.setTimeout(() => {
+        fired = true;
+        read(true, peerRetry + 1);
+      }, PEER_RETRY_DELAYS_MS[peerRetry]);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        schedule();
+      } else if (timer !== undefined && !fired) {
+        window.clearTimeout(timer);
+        timer = undefined;
+      }
+    };
+    schedule();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [status, peerRetry, read]);
 
   const retry = () => {
     setStatus("loading");
@@ -170,6 +237,24 @@ function CollectionView({ name, id }: { name: string; id: string }) {
           ))}
         </CardList>
       </>
+    );
+  } else if (status === "fetching") {
+    body = (
+      <EmptyState
+        icon={<CircularProgress size={36} aria-hidden />}
+        title="Not on your node yet"
+        description="Fetching it from peers…"
+      />
+    );
+  } else if (status === "unavailable") {
+    body = (
+      <EmptyState
+        icon={<CollectionsBookmarkOutlinedIcon />}
+        title="Not on your node yet"
+        description="Your node couldn't get it from its peers yet. Try again in a minute."
+        actionLabel="Retry"
+        onAction={retry}
+      />
     );
   } else if (status === "error") {
     body = (

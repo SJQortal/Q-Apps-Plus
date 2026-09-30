@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { mockQortalAction, qortalCallsFor } from "../test/setup";
+import { beforeEach, describe, expect, it } from "vitest";
+import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from "../test/setup";
+import { resetQdnSearchCache } from "./qdnSearch";
 import { DEFAULT_SETTINGS } from "./settings";
 import {
   SETTINGS_IDENTIFIER,
@@ -13,6 +14,8 @@ import {
 const settings = { ...DEFAULT_SETTINGS, defaultSort: "oldest" as const, hiddenNames: ["spammer", " spammer ", "Bob"] };
 
 describe("settings sync to QDN", () => {
+  beforeEach(() => resetQdnSearchCache());
+
   it("collects a versioned snapshot with the theme and de-duplicated hidden names", () => {
     const snap = collectSettingsSnapshot(settings, "black", 1700000000000);
     expect(snap).toEqual({
@@ -71,18 +74,49 @@ describe("settings sync to QDN", () => {
     await expect(publishSettingsToQdn("", settings, "hub30")).rejects.toThrow();
   });
 
-  it("fetches with one FETCH_QDN_RESOURCE and returns null when nothing is stored", async () => {
+  it("fetches with one FETCH_QDN_RESOURCE and no search when the settings are there", async () => {
     mockQortalAction("FETCH_QDN_RESOURCE", { version: 1, followingFeed: false, uiTheme: "black", updatedAt: 9 });
-    const snap = await fetchSettingsFromQdn("alice");
+    const result = await fetchSettingsFromQdn("alice");
+    expect(result.kind).toBe("found");
+    const snap = result.kind === "found" ? result.snapshot : null;
     expect(snap?.followingFeed).toBe(false);
     expect(snap?.uiTheme).toBe("black");
     const call = qortalCallsFor("FETCH_QDN_RESOURCE")[0] as any;
     expect(call).toMatchObject({ name: "alice", service: "DOCUMENT", identifier: SETTINGS_IDENTIFIER });
+    expect(fetchCallsMatching("/arbitrary/resources/search").length).toBe(0);
+    expect(await fetchSettingsFromQdn("")).toEqual({ kind: "none" });
+  });
 
-    mockQortalAction("FETCH_QDN_RESOURCE", () => {
-      throw new Error("404");
+  describe("when the fetch fails", () => {
+    const row = { name: "alice", service: "DOCUMENT", identifier: SETTINGS_IDENTIFIER, created: 1 };
+    beforeEach(() =>
+      mockQortalAction("FETCH_QDN_RESOURCE", () => {
+        throw { error: 1401, message: "Data unavailable. Please try again later." };
+      })
+    );
+
+    it("says nothing is saved when one exact-name search, limit 1, finds nothing", async () => {
+      mockFetch("/arbitrary/resources/search", []);
+      expect(await fetchSettingsFromQdn("alice")).toEqual({ kind: "none" });
+      const [search] = fetchCallsMatching("/arbitrary/resources/search");
+      const params = new URL(search, "http://node").searchParams;
+      expect(params.get("service")).toBe("DOCUMENT");
+      expect(params.get("identifier")).toBe(SETTINGS_IDENTIFIER);
+      expect(params.get("name")).toBe("alice");
+      expect(params.get("exactmatchnames")).toBe("true");
+      expect(params.get("limit")).toBe("1");
     });
-    expect(await fetchSettingsFromQdn("alice")).toBeNull();
-    expect(await fetchSettingsFromQdn("")).toBeNull();
+
+    it("tells a save the node hasn't got yet apart from no save", async () => {
+      mockFetch("/arbitrary/resources/search", [row]);
+      expect(await fetchSettingsFromQdn("alice")).toEqual({ kind: "not-local" });
+    });
+
+    it("reports an error when the node answers neither", async () => {
+      mockFetch("/arbitrary/resources/search", () => {
+        throw new Error("Failed to fetch");
+      });
+      expect(await fetchSettingsFromQdn("alice")).toEqual({ kind: "error" });
+    });
   });
 });

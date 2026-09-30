@@ -1,6 +1,7 @@
 import { isUiThemeId, type UiThemeId } from "../hub-theme";
 import { type AppSettings, sanitizeSettings } from "./settings";
 import { objectToBase64 } from "./toBase64";
+import { searchQdn } from "./qdnSearch";
 
 /**
  * Settings sync to QDN, after Torq's settingsQdn.ts: the app settings plus
@@ -110,9 +111,25 @@ export async function buildSettingsPublish(name: string, snapshot: SettingsSnaps
   };
 }
 
-/** One FETCH_QDN_RESOURCE; null when nothing is stored or the node cannot serve it. */
-export async function fetchSettingsFromQdn(name: string): Promise<SettingsSnapshot | null> {
-  if (!name) return null;
+/**
+ * What Restore found: the snapshot; nothing saved under the name; a save the
+ * node knows about but hasn't got the data for yet; or no answer from the node.
+ */
+export type SettingsRestore =
+  | { kind: "found"; snapshot: SettingsSnapshot }
+  | { kind: "none" }
+  | { kind: "not-local" }
+  | { kind: "error" };
+
+/**
+ * One FETCH_QDN_RESOURCE. When it fails, one search (exact name, limit 1)
+ * tells "never saved" from "saved on another device, not on this node yet":
+ * Core fails a FETCH within milliseconds for data it still has to get from
+ * its peers, and saying "nothing saved" then could lead to a needless,
+ * paid save.
+ */
+export async function fetchSettingsFromQdn(name: string): Promise<SettingsRestore> {
+  if (!name) return { kind: "none" };
   try {
     const response = await qortalRequest({
       action: "FETCH_QDN_RESOURCE",
@@ -120,9 +137,18 @@ export async function fetchSettingsFromQdn(name: string): Promise<SettingsSnapsh
       service: SETTINGS_SERVICE,
       identifier: SETTINGS_IDENTIFIER,
     });
-    return normalizeSettingsSnapshot(response);
+    const snapshot = normalizeSettingsSnapshot(response);
+    return snapshot ? { kind: "found", snapshot } : { kind: "none" };
   } catch {
-    return null;
+    try {
+      const rows = await searchQdn(
+        { service: SETTINGS_SERVICE, identifier: SETTINGS_IDENTIFIER, name, exactmatchnames: true, limit: 1 },
+        { fresh: true }
+      );
+      return rows.some((row) => row.identifier === SETTINGS_IDENTIFIER) ? { kind: "not-local" } : { kind: "none" };
+    } catch {
+      return { kind: "error" };
+    }
   }
 }
 

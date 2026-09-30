@@ -109,11 +109,20 @@ export const Settings = () => {
     if (!user?.name) return;
     setSyncBusy("restore");
     try {
-      const snap = await fetchSettingsFromQdn(user.name);
-      if (!snap) {
+      const result = await fetchSettingsFromQdn(user.name);
+      if (result.kind === "none") {
         setSyncNote(`No settings saved on QDN for ${user.name} yet.`);
         return;
       }
+      if (result.kind === "not-local") {
+        setSyncNote("Your saved settings haven't reached this node yet. Try Restore again in a minute.");
+        return;
+      }
+      if (result.kind === "error") {
+        setSyncNote("Couldn't reach your node. Try again in a moment.");
+        return;
+      }
+      const snap = result.snapshot;
       writeSettings({
         autoPreviewImages: snap.autoPreviewImages,
         defaultSort: snap.defaultSort,

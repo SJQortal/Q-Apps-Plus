@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders } from '../../test/renderWithProviders';
-import { mockQortalAction, qortalCallsFor } from '../../test/setup';
+import { mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
+import { resetQdnSearchCache } from '../../utils/qdnSearch';
 import { store } from '../../state/store';
 import { addUser } from '../../state/features/authSlice';
 import { readSettings, resetSettingsCache, writeSettings } from '../../utils/settings';
@@ -55,10 +56,25 @@ describe('Settings → Sync', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(/Restored the settings saved/);
 
     mockQortalAction('FETCH_QDN_RESOURCE', () => {
-      throw new Error('404');
+      throw { error: 1401, message: 'Data unavailable. Please try again later.' };
     });
+    mockFetch('/arbitrary/resources/search', []);
     fireEvent.click(screen.getByRole('button', { name: /^restore/i }));
     expect(await screen.findByText(/No settings saved on QDN for alice/)).toBeInTheDocument();
+  });
+
+  it('Restore says when the saved settings are not on this node yet, instead of "nothing saved"', async () => {
+    resetQdnSearchCache();
+    mockQortalAction('FETCH_QDN_RESOURCE', () => {
+      throw { error: 1401, message: 'Data unavailable. Please try again later.' };
+    });
+    mockFetch('/arbitrary/resources/search', [{ name: 'alice', service: 'DOCUMENT', identifier: SETTINGS_IDENTIFIER }]);
+    renderWithProviders(<Settings />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^restore/i }));
+    expect(await screen.findByText(/haven't reached this node yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/No settings saved/)).not.toBeInTheDocument();
+    expect(readSettings().defaultSort).toBe('newest');
   });
 });
 
