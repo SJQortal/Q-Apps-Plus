@@ -262,6 +262,17 @@ Same branch and PR, version `1.0.0-plus.4`. A local session drove a second Hub i
 
 **Needs a phone (GO):** the on-screen keyboard under Publish (GO's adjustResize WebView), pull-to-refresh with a finger (works with emulated touch here), the file picker (Capacitor's `onShowFileChooser`), `SHOW_PDF_READER` and `SAVE_FILE` by location in GO (its native download card), safe-area insets, and landscape on a real phone.
 
+### Simon's requests after trying 1.0.0-plus.4 (2026-09-30)
+
+Version `1.0.0-plus.5`, same branch. Built by three agents in parallel worktrees (header, search, grid), each reviewed with its review findings applied, then integrated and checked in Hub Dev Mode at 1440, 700, 390×844, 360×740 and 844×390 (no overflow, no small targets, no clipped text on the seven main screens, in grid view).
+
+- **Publisher suggestions:** the publisher filter is a combobox modelled on Torq's user search. It queries Core's `/names/search` directly (prefix limit 20 and contains limit 40, `URLSearchParams`-encoded because q-apps.js's `SEARCH_NAMES` doesn't encode, debounced 220 ms, cached per query for the session, superseded answers ignored), ranks exact and prefix matches and names already publishing in the list first, and shows avatars and the matched part. Picking a name applies the filter; in the phone sheet it also closes the sheet. Checked in Hub: "Simon" lists Simon, Simon Dixon, Simon James… with avatars, 2 name searches per query; picking Simon James runs one search. Found in Hub and fixed: in the phone sheet the list opened ~250 px below the frame (absolute Popper in a frame whose body is taller than the viewport); it now uses fixed positioning.
+- **My shares for all names:** an account with several names gets "All my names" next to My shares, one search with repeated `name=` parameters (Core accepts them; `exactmatchnames` kept). Tester GO has one name, so this was checked by tests only.
+- **Account menu avatars:** every name in the switcher shows its avatar, fetched only when the menu opens and only for visible rows (MUI's Avatar preloads its `src` whatever `loading` says, so the menu uses its own in-view image), with the initial as a fallback.
+- **Header:** the header's content sits in Home's 1200 px column, so the logo lines up with the filters and the buttons end at the list's right edge; "Public file sharing on Qortal" sits beside the title and hides where it doesn't fit whole (at 700 px signed in, for example). The header stays 56 px.
+- **Grid view:** a `listView` setting (list by default; in the Settings sync snapshot) with a List/Grid toggle on Home, profile Shares and collection pages and a Layout choice in Settings → Appearance (DESIGN.md puts grid/list there). Cards: category art, title (two lines), file count · size · age, publisher, and the row actions (visible on touch, on hover or focus on desktop); every row state kept (pending, unavailable, deleted in collections); two columns on phones, one below 350 px. No extra Qortal calls.
+- 463 tests, lint clean.
+
 ## Follow-ups
 
 Questions for Simon (after pass 2):
@@ -294,4 +305,6 @@ Next pass ideas:
 - Some publishers' titles contain escaped entities such as `&amp;`; the app shows them as stored, as the original does.
 - Next-page loads on Home still wait for the request in flight (only reset searches supersede it); an `AbortController` in `searchQdn` would let both cancel cleanly.
 - Consider qapp-core for lists and identifier hashing in a later pass.
+- MUI's `Avatar` starts loading its `src` as soon as it mounts, so `loading="lazy"` on list avatars defers nothing (the account menu has its own in-view image). An in-view Avatar wrapper for rows, comments and profiles would load only visible avatars.
+- At 360 px a grid card's three actions can wrap to two lines where the emulated desktop scrollbar takes 16 px; on a phone (overlay scrollbars) they fit.
 - The screenshot harness could grow into a regression check (compare against stored baselines) once the layouts settle.
