@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   Box,
   IconButton,
@@ -14,7 +14,6 @@ import CheckIcon from "@mui/icons-material/Check";
 import ClearIcon from "@mui/icons-material/Clear";
 import SearchIcon from "@mui/icons-material/Search";
 import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
-import { splitNameHighlight } from "../../utils/nameSearch";
 import { NameAvatar } from "./NameAvatar";
 
 /** From this many names on, the switcher gets a search field and lists names A to Z. */
@@ -28,13 +27,72 @@ export const NAME_SEARCH_THRESHOLD = 15;
 const ROW_SX = { [`@media ${PHONE_MEDIA}`]: { minHeight: 44 } } as const;
 /** 32 px avatars in MenuItem's 36 px icon column. */
 const LEAD_SX = { width: 36, mr: 1, justifyContent: "center" } as const;
+/** Read out, not shown: the live match count. */
+const SR_ONLY = {
+  position: "absolute",
+  width: "1px",
+  height: "1px",
+  p: 0,
+  m: "-1px",
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+} as const;
 
-/** Case- and accent-insensitive form for matching ("Ä" finds "ä" and "a"). */
-function fold(text: string): string {
-  return text
+/** One character in its case- and accent-free form ("Ä" → "a", "ς" → "σ"). */
+function foldChar(char: string): string {
+  return char
     .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
+    .replace(/\p{Mn}/gu, "")
+    .toLowerCase()
+    .replace(/ς/g, "σ");
+}
+
+/**
+ * `text` folded for matching, plus where in `text` each folded character came
+ * from, so a match found in the folded form can be highlighted in the original.
+ * Folding a character at a time keeps the two in step.
+ */
+function foldIndexed(text: string): { folded: string; from: number[] } {
+  let folded = "";
+  const from: number[] = [];
+  let at = 0;
+  for (const char of text) {
+    const f = foldChar(char);
+    for (let k = 0; k < f.length; k++) from.push(at);
+    folded += f;
+    at += char.length;
+  }
+  return { folded, from };
+}
+
+const fold = (text: string) => foldIndexed(text).folded;
+
+/** The query as matched; one that folds away entirely (a lone accent) is matched as typed. */
+function foldQuery(query: string): string {
+  const raw = query.trim();
+  return raw ? fold(raw) || raw.toLowerCase() : "";
+}
+
+/** `name` split around each match of the folded query `q`, so "jose" marks "José". */
+export function highlightParts(name: string, q: string): Array<{ text: string; match: boolean }> {
+  const { folded, from } = foldIndexed(name);
+  const parts: Array<{ text: string; match: boolean }> = [];
+  let cursor = 0;
+  let found = q ? folded.indexOf(q) : -1;
+  while (found !== -1) {
+    const start = from[found];
+    const next = found + q.length;
+    // Up to where the next folded character starts: accents typed as their own character come along.
+    const end = next < folded.length ? from[next] : name.length;
+    if (start > cursor) parts.push({ text: name.slice(cursor, start), match: false });
+    if (end > start) parts.push({ text: name.slice(start, end), match: true });
+    cursor = Math.max(cursor, end);
+    found = folded.indexOf(q, next);
+  }
+  if (cursor < name.length) parts.push({ text: name.slice(cursor), match: false });
+  return parts;
 }
 
 /**
@@ -44,7 +102,7 @@ function fold(text: string): string {
  */
 export function orderNames(names: string[], activeName: string | null, query: string): string[] {
   const unique = [...new Set(names.filter(Boolean))];
-  const q = fold(query.trim());
+  const q = foldQuery(query);
   if (!q) {
     if (unique.length <= NAME_SEARCH_THRESHOLD) return unique;
     const rest = unique
@@ -89,19 +147,43 @@ export function NameSwitcher({
   onEscape,
 }: NameSwitcherProps) {
   const [query, setQuery] = useState("");
+  // The order is set when the switcher opens: picking a name must not reshuffle
+  // the list while the menu fades out. The check mark follows the live name.
+  const [openedActive] = useState(activeName);
   const searchable = new Set(names.filter(Boolean)).size > NAME_SEARCH_THRESHOLD;
   const shown = useMemo(
-    () => orderNames(names, activeName, searchable ? query : ""),
-    [names, activeName, query, searchable]
+    () => orderNames(names, openedActive, searchable ? query : ""),
+    [names, openedActive, query, searchable]
   );
   const listRef = useRef<HTMLUListElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const listId = useId();
   const trimmed = query.trim();
+  const q = foldQuery(query);
+  const announcement =
+    !searchable || !trimmed
+      ? ""
+      : shown.length === 0
+        ? `No name matches “${trimmed}”.`
+        : shown.length === 1
+          ? "1 name matches."
+          : `${shown.length} names match.`;
+
+  // Up to the threshold the list keeps the account's order, so the active name
+  // can sit below the fold: scroll it into view (the list only, not the page).
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    const row = list?.querySelector<HTMLElement>('[aria-checked="true"]');
+    if (!list || !row) return;
+    const bottom = row.offsetTop + row.offsetHeight;
+    if (bottom > list.clientHeight) list.scrollTop = bottom - list.clientHeight + row.offsetHeight / 2;
+  }, []);
 
   const focusFirstRow = () => listRef.current?.querySelector<HTMLElement>('[role^="menuitem"]')?.focus();
 
   const onSearchKey = (event: KeyboardEvent<HTMLInputElement>) => {
+    // Keys that confirm or cancel an input method's composition belong to it.
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
       focusFirstRow();
@@ -185,8 +267,14 @@ export function NameSwitcher({
           />
         </Box>
       )}
+      {searchable && (
+        // Mounted before the first keystroke, so screen readers pick up every change.
+        <Box role="status" aria-live="polite" aria-atomic="true" sx={SR_ONLY}>
+          {announcement}
+        </Box>
+      )}
       {searchable && trimmed && shown.length === 0 && (
-        <Typography role="status" variant="body2" color="text.secondary" sx={{ px: 2, py: 1.5 }}>
+        <Typography aria-hidden variant="body2" color="text.secondary" sx={{ px: 2, py: 1.5 }}>
           No name matches “{trimmed}”.
         </Typography>
       )}
@@ -201,6 +289,8 @@ export function NameSwitcher({
           maxHeight: maxListHeight,
           overflowY: maxListHeight ? "auto" : undefined,
           overscrollBehavior: "contain",
+          // In a phone sheet a swipe past the list's end scrolls the sheet on to the rows below.
+          [`@media ${PHONE_MEDIA}`]: { overscrollBehavior: "auto" },
         }}
       >
         {shown.map((name) => {
@@ -222,8 +312,8 @@ export function NameSwitcher({
               </ListItemIcon>
               <ListItemText
                 primary={
-                  searchable && trimmed
-                    ? splitNameHighlight(name, trimmed).map((part, i) =>
+                  searchable && q
+                    ? highlightParts(name, q).map((part, i) =>
                         part.match ? (
                           <Box key={i} component="span" sx={{ color: "primary.main", fontWeight: 700 }}>
                             {part.text}
