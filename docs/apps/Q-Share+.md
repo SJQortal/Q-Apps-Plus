@@ -2,6 +2,8 @@
 
 Share files and documents on QDN, with categories, comments and lists.
 
+**Version:** `1.0.0`, not published yet (no Published line). The work below was drafted in six rounds numbered `1.0.0-plus.1` … `plus.6`; under the plain-version rule (qplus-app skill) they are all part of `1.0.0`, and the version moves to `1.0.1` only after Simon publishes `1.0.0`.
+
 ## Baseline at import
 
 - **Upstream:** [Qortal/q-share](https://github.com/Qortal/q-share) branch `main` at `9c1ca81` (2026-06-10, 31 commits)
@@ -145,7 +147,7 @@ Areas run in parallel by separate agents on disjoint files; the lead integrates:
 2. **Share page** (FileContent, FileElement, FilePreview, DownloadTaskManager, DownloadWrapper, Comments, FollowButton, CopyLinkButton): PDF and text previews on click, image lightbox, Download all, file rows with kind icons and status, comment states, hidden-names filter, a11y.
 3. **Collections** (new `qshare_collection_` DOCUMENT, additive): `utils/collections.ts` with tests, Redux slice, Collections page, collection page, `SaveToCollectionButton` for rows and share pages, create/edit dialogs.
 4. **Shell** (layout, GlobalWrapper, Notification, ConsentModal, PageLoader, BlockedNamesModal, index.css, App/main, package.json): phone bottom nav, header that hides on scroll, dead Q-Tube player/playlist code and react-rnd removed, toast fix, consent fix, route wiring for collections.
-5. **Lead**: settings store, Following feed, hidden names, lazy avatars (done); wiring collections into rows; first-load search counts; review workflow on the diff; lint pass; version 1.0.0-plus.2; brief and PR.
+5. **Lead**: settings store, Following feed, hidden names, lazy avatars (done); wiring collections into rows; first-load search counts; review workflow on the diff; lint pass; version and changelog; brief and PR.
 
 ## Done
 
@@ -174,7 +176,7 @@ Not done in this pass: a right rail (nothing to put in it yet), a bottom navigat
 
 ### Pass 2 (2026-09-30)
 
-Same branch and PR, version `1.0.0-plus.2`. Every commit builds, `npm run lint` and the 106 tests pass, and `scripts/build-zip.sh Q-Share+` writes a 1.4 MB zip.
+Same branch and PR, Round 2 of `1.0.0`. Every commit builds, `npm run lint` and the 106 tests pass, and `scripts/build-zip.sh Q-Share+` writes a 1.4 MB zip.
 
 | | After pass 1 | After pass 2 |
 |---|---|---|
@@ -203,7 +205,7 @@ What changed, per area:
 
 #### Mobile check (DESIGN.md → Mobile → Check), 2026-09-30
 
-Run with `node e2e/screens.mjs` against the release build (`1.0.0-plus.2`, commit `d8bf0a8`), which serves `dist/` with `vite preview`, mocks `qortalRequest` and the Core search/resource endpoints (24 shares, 3 publishers, a 4-file share with image, text, PDF and audio, a comment thread with a reply, two collections), pre-accepts the welcome notice, and emulates a touch screen on the phone sizes (`hover: none`, `pointer: coarse`, reduced motion). No node was involved and nothing was published.
+Run with `node e2e/screens.mjs` against the release build of round 2 (commit `d8bf0a8`), which serves `dist/` with `vite preview`, mocks `qortalRequest` and the Core search/resource endpoints (24 shares, 3 publishers, a 4-file share with image, text, PDF and audio, a comment thread with a reply, two collections), pre-accepts the welcome notice, and emulates a touch screen on the phone sizes (`hover: none`, `pointer: coarse`, reduced motion). No node was involved and nothing was published.
 
 - **Screens:** Home, the Filters sheet, a share page, a profile, Settings, Collections, a collection, the Share files dialog, the account menu.
 - **Sizes:** 360×740, 390×844, 844×390 (phone landscape: top and scrolled shots), 700 (narrow Hub) and 1280.
@@ -216,7 +218,7 @@ Run with `node e2e/screens.mjs` against the release build (`1.0.0-plus.2`, commi
 
 ### Pass 3 (2026-09-30, later the same day)
 
-Same branch and PR, version `1.0.0-plus.3`. Every commit builds, lint is clean and the 122 tests pass. Hub itself could not be reached from the cloud session (the debug port is on Simon's desktop), so the Hub Dev Mode checks stay on the list below.
+Same branch and PR, Round 3 of `1.0.0`. Every commit builds, lint is clean and the 122 tests pass. Hub itself could not be reached from the cloud session (the debug port is on Simon's desktop), so the Hub Dev Mode checks stay on the list below.
 
 - **Settings sync** (`utils/settingsQdn.ts`, Settings → Sync): after Torq's `settingsQdn.ts`, adapted for an app without qapp-core's identifier hashing: the settings and the theme go into one DOCUMENT `qshareplus_settings` under the user's name, read back tolerantly (object, JSON or base64 JSON; unknown fields dropped, missing ones defaulted, unknown themes ignored). Save and Restore are explicit buttons, so first load costs no extra call. Additive data with its own identifier.
 - **Save all as .zip** (`utils/zip.ts`, `components/common/SaveAllZipButton.tsx`): a store-only ZIP writer with CRC-32, UTF-8 names and unique names, no dependency; the button appears for shares with two or more files under 150 MB (built in memory) and is enabled once every file is on the node.
@@ -230,7 +232,7 @@ Same branch and PR, version `1.0.0-plus.3`. Every commit builds, lint is clean a
 
 ### Hub Dev Mode check (2026-09-30)
 
-Same branch and PR, version `1.0.0-plus.4`. A local session drove a second Hub instance (GO 3.0 build, `qortal-hub/3.0.3`, Electron 32 / Chromium 128) over its debug port, signed in as **Tester GO** with Dev Mode on, against the Vite dev server through the node's dev proxy (127.0.0.1:12393) and the local Core 6.1.9. Nothing was published, no settings were saved to QDN and no QORT was spent. The only writes were saves to disk through Hub's own prompt (a 55 KB PDF, a 158 KB zip; one more save left a native Save As dialog open, see below) and one hidden name added and removed again in Settings (local only).
+Same branch and PR, Round 4 of `1.0.0`. A local session drove a second Hub instance (GO 3.0 build, `qortal-hub/3.0.3`, Electron 32 / Chromium 128) over its debug port, signed in as **Tester GO** with Dev Mode on, against the Vite dev server through the node's dev proxy (127.0.0.1:12393) and the local Core 6.1.9. Nothing was published, no settings were saved to QDN and no QORT was spent. The only writes were saves to disk through Hub's own prompt (a 55 KB PDF, a 158 KB zip; one more save left a native Save As dialog open, see below) and one hidden name added and removed again in Settings (local only).
 
 **How it was driven.** `scripts/hub-cdp.mjs` plus session helpers in the scratchpad (not in the repo): an emulated viewport held on the Hub window (Electron has no window-bounds call and the window was minimised), `pointer: coarse` / `hover: none` and touch emulated on the app's out-of-process frame, taps and swipes sent to the frame target (sending them to the page target applies the frame offset twice), every `qortalRequest` logged by wrapping q-apps.js's `executeQortalRequestImmediate` on each new document, and the frame's resource timings read for `/arbitrary` calls. Real data was found with read-only GETs on the node: shares with image, PDF, text, audio, video, multi-file and odd attachments, names with spaces, `+`, `/` and non-ASCII letters, comment threads, deleted and unreachable shares.
 
@@ -262,9 +264,9 @@ Same branch and PR, version `1.0.0-plus.4`. A local session drove a second Hub i
 
 **Needs a phone (GO):** the on-screen keyboard under Publish (GO's adjustResize WebView), pull-to-refresh with a finger (works with emulated touch here), the file picker (Capacitor's `onShowFileChooser`), `SHOW_PDF_READER` and `SAVE_FILE` by location in GO (its native download card), safe-area insets, and landscape on a real phone.
 
-### Simon's requests after trying 1.0.0-plus.4 (2026-09-30)
+### Simon's requests after trying round 4 (2026-09-30)
 
-Version `1.0.0-plus.5`, same branch. Built by three agents in parallel worktrees (header, search, grid), each reviewed with its review findings applied, then integrated and checked in Hub Dev Mode at 1440, 700, 390×844, 360×740 and 844×390 (no overflow, no small targets, no clipped text on the seven main screens, in grid view).
+Round 5 of `1.0.0`, same branch. Built by three agents in parallel worktrees (header, search, grid), each reviewed with its review findings applied, then integrated and checked in Hub Dev Mode at 1440, 700, 390×844, 360×740 and 844×390 (no overflow, no small targets, no clipped text on the seven main screens, in grid view).
 
 - **Publisher suggestions:** the publisher filter is a combobox modelled on Torq's user search. It queries Core's `/names/search` directly (prefix limit 20 and contains limit 40, `URLSearchParams`-encoded because q-apps.js's `SEARCH_NAMES` doesn't encode, debounced 220 ms, cached per query for the session, superseded answers ignored), ranks exact and prefix matches and names already publishing in the list first, and shows avatars and the matched part. Picking a name applies the filter; in the phone sheet it also closes the sheet. Checked in Hub: "Simon" lists Simon, Simon Dixon, Simon James… with avatars, 2 name searches per query; picking Simon James runs one search. Found in Hub and fixed: in the phone sheet the list opened ~250 px below the frame (absolute Popper in a frame whose body is taller than the viewport); it now uses fixed positioning.
 - **My shares for all names:** an account with several names gets "All my names" next to My shares, one search with repeated `name=` parameters (Core accepts them; `exactmatchnames` kept). Tester GO has one name, so this was checked by tests only.
@@ -275,7 +277,7 @@ Version `1.0.0-plus.5`, same branch. Built by three agents in parallel worktrees
 
 ### Name search for accounts with many names (2026-09-30)
 
-Version `1.0.0-plus.6`, same branch. Simon asked for a search in the name switcher once an account has more than 15 names, and for Settings to work the same way with avatars.
+Round 6 of `1.0.0`, same branch. Simon asked for a search in the name switcher once an account has more than 15 names, and for Settings to work the same way with avatars.
 
 - **One switcher** (`components/common/NameSwitcher.tsx`) serves the account menu and Settings → Account ("Switch name" opens it in a dialog on desktop, a bottom sheet on phones; it replaced a plain `Select`). Up to 15 names: the account's order, the active one scrolled into view. Above 15: a search field (autofocused on desktop only), the active name first and the rest A to Z; matching folds case and accents per character (so "jose" finds and highlights "José"), prefix matches first. ↓ enters the list, ↑ from the first row returns to the field, Enter picks the first match (not while an IME is composing), Escape clears then closes; a polite live region reads the match count. The order is fixed per open, so a pick doesn't reshuffle the list while it fades out.
 - **Avatars:** every row uses `NameAvatar` (moved out of Navbar): a plain `<img>` requested only when the row scrolls into view, with a per-session record of names that have none. The fallback letter is drawn by CSS from `data-letter`, so MenuList's type-to-jump sees only the name.
