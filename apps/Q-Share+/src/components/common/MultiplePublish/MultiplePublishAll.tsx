@@ -18,7 +18,7 @@ import HelpOutlineOutlinedIcon from "@mui/icons-material/HelpOutlineOutlined";
 import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
 import { fileKind, fileKindIconElement } from "../../../utils/fileKind";
 import { formatBytes } from "../../../utils/formatBytes";
-import { errorMessage, isHubTimeout } from "../../../utils/hubErrors";
+import { errorMessage, isHubDecline, isHubTimeout } from "../../../utils/hubErrors";
 import type { MultiplePublishRequest, PublishResource } from "../../../utils/publishPayload";
 import { mapWithConcurrency, searchQdn } from "../../../utils/qdnSearch";
 import { ResponsiveDialog } from "../mobile/ResponsiveDialog";
@@ -295,8 +295,10 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
         const superseded = attempt.current !== current;
         // The user stopped waiting for it and QDN has been checked already.
         const detached = !superseded && waitingOn.current !== current;
-        // Hub's Cancel stops the batch and removes what it had published: not a failure.
-        if (error?.error?.cancelled || error?.error === "User declined request") {
+        // A decline (in any of Hub's languages, or its 60 s auto-decline) and
+        // Hub's Cancel, which stops the batch and removes what it had
+        // published, are the user's choice: close without an error.
+        if (isHubDecline(error)) {
           settleUnsure(ids, current);
           if (!superseded) onError(undefined, publishedIds(), stopped());
           return;

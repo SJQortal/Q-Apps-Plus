@@ -119,6 +119,35 @@ describe("MultiplePublish", () => {
     expect(screen.queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
   });
 
+  it("treats a decline in another Hub language as a decline, also on a retry", async () => {
+    // Hub localises its decline: this is the German user_declined_request.
+    const german = "Benutzer hat die Anfrage abgelehnt";
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => {
+      throw { error: german, message: german };
+    });
+    const onDecline = vi.fn();
+    const { unmount } = renderWithProviders(
+      <MultiplePublish isOpen publishes={request} onSubmit={vi.fn()} onError={onDecline} />
+    );
+    await waitFor(() => expect(onDecline).toHaveBeenCalledWith(undefined, [], { uncertain: false }));
+    expect(screen.queryByText(german)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
+    expect(fetchCallsMatching("/arbitrary/resources/search").length).toBe(0);
+    unmount();
+
+    // Declining the retry of a partial publish hands back what did land.
+    let attempt = 0;
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => {
+      attempt += 1;
+      if (attempt === 1) throw { error: { unsuccessfulPublishes: [{ identifier: DOC_ID }] }, message: "x" };
+      throw { error: "用户拒绝请求", message: "用户拒绝请求" };
+    });
+    const onRetryDecline = vi.fn();
+    renderWithProviders(<MultiplePublish isOpen publishes={request} onSubmit={vi.fn()} onError={onRetryDecline} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Retry failed" }));
+    await waitFor(() => expect(onRetryDecline).toHaveBeenCalledWith(undefined, [FILE_ID], { uncertain: false }));
+  });
+
   it("after a timeout asks QDN, and finishes when everything landed", async () => {
     // qortalRequestWithTimeout rejects with a bare string, not { error }.
     mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => {
