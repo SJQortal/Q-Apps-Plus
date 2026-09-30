@@ -120,6 +120,7 @@ function qortalMockSource() {
         case 'FETCH_QDN_RESOURCE': return bodies[p.identifier] || (p.identifier && p.identifier.startsWith('qshare_collection_') ? { version: 1, title: 'Holiday pack', description: 'Photos and notes', items: [{ name: '${NAME}', identifier: '${ID(1)}' }, { name: 'Alice Wonder', identifier: '${ID(2)}' }], created: ${now}, updated: ${now} } : null);
         case 'GET_LIST_ITEMS': return p.list_name === 'followedNames' ? ['Alice Wonder'] : ['spammer'];
         case 'LIST_QDN_RESOURCES': return [{ size: 1000 }];
+        case 'SHOW_PDF_READER': return true;
         case 'GET_QDN_RESOURCE_STATUS': return { status: 'READY', percentLoaded: 100, localChunkCount: 1, totalChunkCount: 1 };
         case 'GET_QDN_RESOURCE_PROPERTIES': return { filename: 'file.bin', mimeType: 'application/octet-stream' };
         case 'ADD_LIST_ITEMS': case 'DELETE_LIST_ITEM': return true;
@@ -146,6 +147,10 @@ async function routeCore(page) {
     const p = url.pathname;
     const sp = url.searchParams;
     page.__fetches.push(p + url.search);
+    // The Follow tooltip's size list (a plain resources list, not a search).
+    if (p.endsWith("/arbitrary/resources")) {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([{ size: 1000 }]) });
+    }
     if (p.endsWith("/resources/search")) {
       let list = rows;
       const ident = sp.get("identifier") || "";
@@ -176,6 +181,8 @@ async function routeCore(page) {
     if (p.includes("/FILE/")) {
       if (p.includes("_p_")) return route.fulfill({ status: 200, contentType: "image/png", body: PNG });
       if (p.includes("_t_")) return route.fulfill({ status: 200, contentType: "text/plain", body: "Line one of the notes.\nLine two.\n" });
+      // PDFs open in Hub's reader, which checks for a PDF header.
+      if (p.includes("_d_")) return route.fulfill({ status: 200, contentType: "application/pdf", body: "%PDF-1.4\n%mock\n" });
       return route.fulfill({ status: 200, contentType: "application/octet-stream", body: Buffer.alloc(16) });
     }
     return route.fulfill({ status: 404, body: "" });
