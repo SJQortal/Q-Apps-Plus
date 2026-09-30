@@ -1375,11 +1375,13 @@ export const NewMessage = ({
                   select: {
                     disableUnderline: true,
                     MenuProps: {
-                      PaperProps: {
-                        sx: {
-                          backgroundColor: "var(--qmail-shell-popover-bg)",
-                          border: "1px solid var(--qmail-shell-border)",
-                          color: "var(--qmail-compose-text)",
+                      slotProps: {
+                        paper: {
+                          sx: {
+                            backgroundColor: "var(--qmail-shell-popover-bg)",
+                            border: "1px solid var(--qmail-shell-border)",
+                            color: "var(--qmail-compose-text)",
+                          },
                         },
                       },
                     },
@@ -1422,7 +1424,9 @@ export const NewMessage = ({
                 value={selectedTargetOption}
                 inputValue={destinationName}
                 isOptionEqualToValue={(option, value) => {
-                  return option.id === value.id;
+                  const optionId = typeof option === "string" ? option : option.id;
+                  const valueId = typeof value === "string" ? value : value.id;
+                  return optionId === valueId;
                 }}
                 getOptionLabel={option => {
                   if (typeof option === "string") return option;
