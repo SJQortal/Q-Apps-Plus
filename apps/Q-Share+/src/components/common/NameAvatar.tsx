@@ -57,6 +57,9 @@ export function NameAvatar({
         // The tint holds the spot until the image is in, and backs the letter.
         bgcolor: known === "loaded" ? "transparent" : primarySoft,
         color: "primary.main",
+        // The letter is drawn by CSS, so it stays out of the row's text: a menu's
+        // type-to-jump matches "carol", not "Ccarol".
+        "& > span[data-letter]::before": { content: "attr(data-letter)" },
       }}
     >
       {requested ? (
@@ -69,7 +72,7 @@ export function NameAvatar({
         />
       ) : (
         // Always a child, even while it waits: without one MUI draws its generic person icon.
-        <span>{known === "missing" ? Array.from(name)[0]?.toUpperCase() : null}</span>
+        <span data-letter={known === "missing" ? Array.from(name)[0]?.toUpperCase() ?? "" : ""} />
       )}
     </Avatar>
   );

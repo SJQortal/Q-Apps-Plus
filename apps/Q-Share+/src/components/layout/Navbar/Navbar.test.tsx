@@ -184,6 +184,8 @@ describe('NavBar account menu', () => {
   const avatarImg = (name: string, root: ParentNode = document) =>
     root.querySelector<HTMLImageElement>(`img[src="/arbitrary/THUMBNAIL/${encodeURIComponent(name)}/qortal_avatar"]`);
   const avatarOf = (row: HTMLElement) => row.querySelector<HTMLElement>('.MuiAvatar-root')!;
+  // The fallback letter is drawn from this attribute by CSS, outside the row's text.
+  const letter = (row: HTMLElement) => row.querySelector('[data-letter]')?.getAttribute('data-letter');
   const row = (name: string) => screen.getByRole('menuitemradio', { name });
   const openMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Account menu for alice' }));
 
@@ -280,8 +282,8 @@ describe('NavBar account menu', () => {
     // Core answers 404: the name has no qortal_avatar.
     fireEvent.error(avatarImg('carol', row('carol'))!);
     fireEvent.error(avatarImg('Ωrion', row('Ωrion'))!);
-    expect(within(row('carol')).getByText('C')).toBeInTheDocument();
-    expect(within(row('Ωrion')).getByText('Ω')).toBeInTheDocument();
+    expect(letter(row('carol'))).toBe('C');
+    expect(letter(row('Ωrion'))).toBe('Ω');
     // The letter is decoration: the row is still named by the name alone.
     expect(row('carol')).toHaveAccessibleName('carol');
 
@@ -289,7 +291,7 @@ describe('NavBar account menu', () => {
     await waitFor(() => expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument());
     openMenu();
     // Before anything scrolls into view: the letter at once, and no second request.
-    expect(within(row('carol')).getByText('C')).toBeInTheDocument();
+    expect(letter(row('carol'))).toBe('C');
     expect(avatarImg('carol')).toBeNull();
   });
 

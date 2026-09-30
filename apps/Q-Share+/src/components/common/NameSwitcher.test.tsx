@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, within } from "@testing-library/react";
+import { mockAllIsIntersecting } from "react-intersection-observer/test-utils";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { NAME_SEARCH_THRESHOLD, NameSwitcher, orderNames } from "./NameSwitcher";
 
@@ -92,5 +93,20 @@ describe("NameSwitcher", () => {
     fireEvent.click(screen.getByRole("button", { name: "Clear the search" }));
     expect(search()).toHaveValue("");
     expect(rows()).toHaveLength(20);
+  });
+
+  it("jumps to a name by its first letters, not its avatar's", () => {
+    const names = ["tia", "cody", "carol"];
+    renderWithProviders(<NameSwitcher names={names} activeName="tia" onPick={() => {}} />);
+    // None of them has an avatar, so each row shows its letter.
+    mockAllIsIntersecting(true);
+    for (const img of document.querySelectorAll("img")) fireEvent.error(img);
+    expect(document.querySelectorAll("[data-letter='C']")).toHaveLength(2);
+
+    const tia = screen.getByRole("menuitemradio", { name: "tia" });
+    tia.focus();
+    fireEvent.keyDown(tia, { key: "c" });
+    fireEvent.keyDown(document.activeElement!, { key: "a" });
+    expect(screen.getByRole("menuitemradio", { name: "carol" })).toHaveFocus();
   });
 });
