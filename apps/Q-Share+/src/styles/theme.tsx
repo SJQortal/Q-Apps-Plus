@@ -89,15 +89,19 @@ export const lightThemeOptions: ThemeOptions = {
     // The original used a white "primary" as a surface colour and its blue as
     // "secondary". MUI components colour every control from primary, so the
     // blue is primary here; the whites live on as the backgrounds below.
+    // A step darker than the original #417Ed4 so text and outlines on the
+    // white surfaces reach 4.5:1 (docs/DESIGN.md); the original stays as "light".
     primary: {
-      main: "#417Ed4",
-      dark: "#3e74c1",
-      light: "#6b9be0"
+      main: "#2f63b0",
+      dark: "#264f8d",
+      light: "#417Ed4"
     },
     secondary: {
-      main: "#417Ed4",
-      dark: "#3e74c1"
+      main: "#2f63b0",
+      dark: "#264f8d"
     },
+    // Fills take black or white text only when it reads at 4.5:1.
+    contrastThreshold: 4.5,
     background: {
       default: "#fcfcfc",
       paper: "#F5F5F5"
@@ -138,16 +142,21 @@ export const darkThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: "dark",
+    // Electric blue, one step lighter than the original #007FFF: on the deep
+    // purple paper the original read at 3.4:1 as text, this reads at 5:1
+    // (docs/DESIGN.md asks for 4.5:1). The original hue stays as "dark".
     primary: {
-      main: "#007FFF", // Electric blue
-      dark: "#0059B2", // Darker shade of electric blue
-      light: "#3399FF" // Lighter shade of electric blue
+      main: "#4DA6FF",
+      dark: "#007FFF",
+      light: "#7ABFFF"
     },
     secondary: {
-      main: "#007FFF", // Electric blue
-      dark: "#0059B2", // Darker shade of electric blue
-      light: "#3399FF" // Lighter shade of electric blue
+      main: "#4DA6FF",
+      dark: "#007FFF",
+      light: "#7ABFFF"
     },
+    // Fills take black or white text only when it reads at 4.5:1.
+    contrastThreshold: 4.5,
     background: {
       default: "#1C1C1C", // Deep space black
       paper: "#342F41" // Dark cyberpunk-style purple

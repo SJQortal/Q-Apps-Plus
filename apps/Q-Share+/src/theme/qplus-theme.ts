@@ -8,7 +8,7 @@ export const themeConfig: AppThemeConfig = {
   hub20: {
     name: "Q-Share Classic",
     description: "The original Q-Share electric blue",
-    swatches: ["#1C1C1C", "#342F41", "#007FFF", "#fcfcfc"],
+    swatches: ["#1C1C1C", "#342F41", "#4DA6FF", "#fcfcfc"],
     bootBackground: { light: "#fcfcfc", dark: "#1C1C1C" },
   },
   hub20Options: (mode) => (mode === "dark" ? darkThemeOptions : lightThemeOptions),
