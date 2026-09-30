@@ -11,7 +11,6 @@ export const AddReviewButton = styled(Button)(({ theme }) => ({
   alignItems: "center",
   padding: "4px 15px",
   gap: "10px",
-  fontFamily: "Livvic",
   fontSize: "16px",
   width: "auto",
   color: theme.palette.mode === "dark" ? "#000000" : "#ffffff",
@@ -40,7 +39,6 @@ export const AverageReviewContainer = styled(Box)(({ theme }) => ({
 
 export const ReviewsFont = styled(Typography)(({ theme }) => ({
   textAlign: "center",
-  fontFamily: "Raleway",
   fontSize: "19px",
   fontWeight: 600,
   color: theme.palette.text.primary,
@@ -49,7 +47,6 @@ export const ReviewsFont = styled(Typography)(({ theme }) => ({
 }));
 
 export const AverageReviewNumber = styled(Typography)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "60px",
   fontWeight: 600,
   letterSpacing: "2px",
@@ -60,7 +57,6 @@ export const AverageReviewNumber = styled(Typography)(({ theme }) => ({
 }));
 
 export const TotalReviewsFont = styled(Typography)(({ theme }) => ({
-  fontFamily: "Karla",
   fontSize: "15px",
   fontWeight: 300,
   color: theme.palette.text.primary,
@@ -105,14 +101,12 @@ export const ReviewTitleRow = styled(Box)(({ theme }) => ({
 }));
 
 export const ReviewUsernameFont = styled(Box)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "16px",
   fontWeight: 400,
   color: theme.palette.text.primary
 }));
 
 export const ReviewTitleFont = styled(Box)(({ theme }) => ({
-  fontFamily: "Merriweather Sans, sans-serif",
   fontSize: "18px",
   fontWeight: 400,
   letterSpacing: "0.5px",
@@ -120,7 +114,6 @@ export const ReviewTitleFont = styled(Box)(({ theme }) => ({
 }));
 
 export const ReviewDateFont = styled(Typography)(({ theme }) => ({
-  fontFamily: "Karla",
   fontSize: "15px",
   fontWeight: 300,
   letterSpacing: "0px",
@@ -129,7 +122,6 @@ export const ReviewDateFont = styled(Typography)(({ theme }) => ({
 }));
 
 export const ReviewDescriptionFont = styled(Box)(({ theme }) => ({
-  fontFamily: "Karla",
   fontSize: "17px",
   fontWeight: 300,
   letterSpacing: "0px",

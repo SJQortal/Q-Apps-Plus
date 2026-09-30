@@ -34,14 +34,12 @@ export const WelcomeRow = styled(Grid)(({ theme }) => ({
 }));
 
 export const WelcomeFont = styled(Typography)(({ theme }) => ({
-  fontFamily: "Cairo",
   fontSize: "40px",
   userSelect: "none",
   color: theme.palette.text.primary,
 }));
 
 export const WelcomeSubFont = styled(Typography)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "24px",
   userSelect: "none",
   color: theme.palette.text.primary,
@@ -117,7 +115,6 @@ export const OpenStoreCard = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.mode === "dark" ? "#aaa1a1e8" : "#f0f0f0",
   color: theme.palette.text.primary,
   fontSize: "18px",
-  fontFamily: "Karla",
   letterSpacing: "0px",
   fontWeight: 400,
   padding: "2px 8px",
@@ -135,7 +132,6 @@ export const StoreCardImage = styled("img")(({ theme }) => ({
 }));
 
 export const StoreCardTitle = styled(Typography)(({ theme }) => ({
-  fontFamily: "Merriweather Sans, sans-serif",
   fontWeight: 400,
   fontSize: "24px",
   letterSpacing: "0.4px",
@@ -144,7 +140,6 @@ export const StoreCardTitle = styled(Typography)(({ theme }) => ({
 }));
 
 export const StoreCardDescription = styled(Typography)(({ theme }) => ({
-  fontFamily: "Karla",
   fontSize: "20px",
   fontWeight: 300,
   letterSpacing: "0px",
@@ -193,7 +188,6 @@ export const AcceptedCoin = styled("img")({
 });
 
 export const StoreCardOwner = styled(Typography)(({ theme }) => ({
-  fontFamily: "Livvic",
   color: theme.palette.text.primary,
   fontSize: "15px",
   position: "absolute",
@@ -205,7 +199,6 @@ export const StoreCardOwner = styled(Typography)(({ theme }) => ({
 
 export const StyledTooltip = styled(Tooltip)(({ theme }) => ({
   "& .MuiTooltip-tooltip": {
-    fontFamily: "Karla",
     fontSize: "15px",
     letterSpacing: "0px",
     fontWeight: 300,
@@ -248,7 +241,6 @@ export const MyStoresCard = styled(Box)(({ theme }) => ({
   borderRadius: "4px",
   backgroundColor: theme.palette.background.paper,
   padding: "6px 10px",
-  fontFamily: "Raleway",
   fontSize: "15px",
   color: theme.palette.text.primary,
   userSelect: "none",
@@ -320,7 +312,6 @@ export const ExchangeRateRow = styled(Box)(({ theme }) => ({
 }));
 
 export const ExchangeRateTitle = styled(Typography)(({ theme }) => ({
-  fontFamily: "Merriweather Sans, sans-serif",
   fontSize: "20px",
   fontWeight: 400,
   letterSpacing: "0.3px",
@@ -329,7 +320,6 @@ export const ExchangeRateTitle = styled(Typography)(({ theme }) => ({
 }));
 
 export const ExchangeRateSubTitle = styled(Typography)(({ theme }) => ({
-  fontFamily: "Karla",
   fontSize: "17px",
   fontWeight: 300,
   letterSpacing: "0px",

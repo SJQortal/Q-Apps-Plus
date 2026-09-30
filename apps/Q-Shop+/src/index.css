@@ -1,51 +1,19 @@
 @font-face {
   font-family: "Cambon Light";
   src: url("./styles/fonts/Cambon-Light.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "Merriweather Sans";
-  src: url("./styles/fonts/Merriweather Sans.ttf") format("truetype");
+  font-display: swap;
 }
 
 @font-face {
   font-family: "Karla";
   src: url("./styles/fonts/Karla.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "Proxima Nova";
-  src: url("./styles/fonts/ProximaNova.otf") format("opentype");
+  font-display: swap;
 }
 
 @font-face {
   font-family: "Raleway";
   src: url("./styles/fonts/Raleway.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "Catamaran";
-  src: url("./styles/fonts/Catamaran.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "Oxygen";
-  src: url("./styles/fonts/Oxygen.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "Cairo";
-  src: url("./styles/fonts/Cairo.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "Montserrat";
-  src: url("./styles/fonts/Montserrat.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "Figtree";
-  src: url("./styles/fonts/Figtree.ttf") format("truetype");
+  font-display: swap;
 }
 
 :root {

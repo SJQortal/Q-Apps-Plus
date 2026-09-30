@@ -3,6 +3,7 @@ import { RootState } from "../store";
 import { CurrentStore, DataContainer, ProductDataContainer } from "./globalSlice";
 import { ForeignCoins } from "../../components/modals/CreateStoreModal";
 import { CoinFilter } from "../../pages/Store/Store/Store";
+import { readStoredSettings } from "../../utils/settingsStorage";
 
 interface GlobalState {
   products: Product[];
@@ -48,7 +49,8 @@ const initialState: GlobalState = {
     products: [],
     categories: []
   },
-  preferredCoin: CoinFilter.qort
+  preferredCoin:
+    readStoredSettings().preferredCoin === CoinFilter.arrr ? CoinFilter.arrr : CoinFilter.qort
 };
 
 export interface Price {

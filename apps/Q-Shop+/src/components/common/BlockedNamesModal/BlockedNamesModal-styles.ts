@@ -22,7 +22,6 @@ export const ModalContent = styled(Box)(({ theme }) => ({
 }))
 
 export const ModalText = styled(Typography)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "25px",
   color: theme.palette.text.primary,
 }));

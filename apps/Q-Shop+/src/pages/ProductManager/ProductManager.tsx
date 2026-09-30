@@ -557,11 +557,11 @@ export const ProductManager = () => {
                 return (
                   <Grid
                     style={{ maxWidth: "100%", flexGrow: 1 }}
-                    item
-                    xs={12}
-                    sm={3}
                     key={product?.id}
-                  >
+                    size={{
+                      xs: 12,
+                      sm: 3
+                    }}>
                     <ProductToSaveCard>
                       <CardHeader>{product?.title}</CardHeader>
                       <Bulletpoints>

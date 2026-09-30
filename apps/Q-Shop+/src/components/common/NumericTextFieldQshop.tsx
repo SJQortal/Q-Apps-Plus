@@ -106,8 +106,12 @@ export const NumericTextFieldQshop = React.forwardRef<
         label={label}
         required={required}
         variant={variant}
-        InputProps={
-          addIconButtons
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => listeners(e)}
+        autoComplete="off"
+        value={textFieldValue}
+        className={className}
+        slotProps={{
+          input: addIconButtons
             ? {
                 endAdornment: (
                   <InputAdornment position="end">
@@ -121,11 +125,7 @@ export const NumericTextFieldQshop = React.forwardRef<
                 )
               }
             : {}
-        }
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) => listeners(e)}
-        autoComplete="off"
-        value={textFieldValue}
-        className={className}
+        }}
       />
     );
   }
