@@ -26,6 +26,8 @@ import { avatarUrl, profilePath, shareLink, sharePath } from "../../utils/qortal
 import { usePhoneLayout } from "../../hooks/usePhoneLayout.ts";
 import { SaveToCollectionButton } from "../../components/common/SaveToCollection/SaveToCollectionButton";
 import { shareTitleFromIdentifier } from "../../hooks/useFetchFiles.tsx";
+import { copyText } from "../../utils/clipboard.ts";
+import { isHubDecline } from "../../utils/hubErrors.ts";
 
 interface FileListProps {
   files: Video[];
@@ -56,17 +58,19 @@ export const FileList = ({ files, showPublisher = true }: FileListProps) => {
         dispatch(setNotification({ msg: `${user} is now blocked`, alertType: "success" }));
       }
     } catch (error) {
-      dispatch(setNotification({ msg: `Could not block ${user}`, alertType: "error" }));
+      // Saying no in Hub's dialog is not a failure.
+      if (!isHubDecline(error)) dispatch(setNotification({ msg: `Could not block ${user}`, alertType: "error" }));
     }
   };
 
+  // copyText falls back to execCommand where navigator.clipboard is missing (a node on plain http).
   const copyLink = async (file: Video) => {
-    try {
-      await navigator.clipboard.writeText(shareLink(file.user, file.id));
-      dispatch(setNotification({ msg: "Link copied", alertType: "success" }));
-    } catch {
-      dispatch(setNotification({ msg: "Could not copy the link", alertType: "error" }));
-    }
+    const copied = await copyText(shareLink(file.user, file.id));
+    dispatch(
+      setNotification(
+        copied ? { msg: "Link copied", alertType: "success" } : { msg: "Could not copy the link", alertType: "error" }
+      )
+    );
   };
 
   return (
