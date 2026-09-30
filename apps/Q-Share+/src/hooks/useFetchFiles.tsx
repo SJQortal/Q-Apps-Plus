@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import {
   addFiles,
   addToHashMap,
+  markUnavailable,
   setCountNewFiles,
   upsertFiles,
   upsertFilesBeginning,
@@ -17,7 +18,41 @@ import { queue } from "../utils/queue";
 import { getCategoriesFetchString } from "../components/common/CategoryList/CategoryList.tsx";
 import { QDN_PAGE, QdnResourceSummary, searchQdn } from "../utils/qdnSearch";
 
-/** A list row built from a search result; the JSON body arrives later via getFile. */
+/**
+ * Q-Share writes the category ids at the start of the QDN description,
+ * "**cat:4;sub:421**…", so a row can show its category icon before the body lands.
+ */
+export function categoriesFromQdnDescription(description?: string): Record<string, string> {
+  const head = description?.match(/^\*\*([^*]*)\*\*/)?.[1];
+  const out: Record<string, string> = {};
+  for (const part of head?.split(";") ?? []) {
+    const [key, value] = part.split(":");
+    if (!value) continue;
+    if (key === "cat") out.category = value;
+    else if (key === "sub") out.subcategory = value;
+    else if (/^sub\d+$/.test(key)) out[`subcategory${key.slice(3)}`] = value;
+  }
+  return out;
+}
+
+/**
+ * A readable title for a share with no QDN metadata, from its identifier:
+ * "qshare_file_qorterminator-2-visual_WiRAxt_metadata" → "Qorterminator 2 visual".
+ */
+export function shareTitleFromIdentifier(identifier: string): string {
+  const slug = identifier
+    .replace(/^qshare_file_/, "")
+    .replace(/_metadata$/, "")
+    .replace(/_[^_]*$/, "")
+    .replace(/[-_]+/g, " ")
+    .trim();
+  return slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : "Untitled share";
+}
+
+/**
+ * A list row built from a search result (searched with metadata, so it has a
+ * title and date at once); the JSON body arrives later via getFile.
+ */
 export function summaryToVideo(video: QdnResourceSummary): Video {
   return {
     title: video?.metadata?.title,
@@ -31,10 +66,16 @@ export function summaryToVideo(video: QdnResourceSummary): Video {
     user: video.name,
     videoImage: "",
     id: video.identifier,
+    ...categoriesFromQdnDescription(video?.metadata?.description),
   };
 }
 
-/** Fetch one share's JSON body into the hash map, with two more tries through the queue. */
+/**
+ * Fetch one share's JSON body into the hash map, with two more tries through
+ * the queue. After the last one the share is marked unavailable, so its row
+ * says so instead of loading forever (a MISSING_DATA body answers "Data
+ * unavailable" after ~15 s, an empty one "Empty response").
+ */
 async function fetchShareBody(
   dispatch: (action: unknown) => unknown,
   user: string,
@@ -45,11 +86,11 @@ async function fetchShareBody(
   try {
     const res = await fetchAndEvaluateVideos({ user, videoId, content });
     dispatch(addToHashMap(res));
-  } catch (error) {
+  } catch {
     if (attempt < 2) {
       queue.push(() => fetchShareBody(dispatch, user, videoId, content, attempt + 1));
     } else {
-      console.error("Failed to get share after 3 attempts", error);
+      dispatch(markUnavailable(videoId));
     }
   }
 }
@@ -147,6 +188,7 @@ export const useFetchFiles = () => {
           limit: limit || QDN_PAGE,
           reverse: sort !== "oldest",
           followedonly: Boolean(following),
+          includemetadata: true,
         },
         { fresh: Boolean(reset) }
       );

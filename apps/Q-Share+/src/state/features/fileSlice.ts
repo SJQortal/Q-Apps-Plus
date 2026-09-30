@@ -4,6 +4,8 @@ interface GlobalState {
   files: Video[];
   filteredFiles: Video[];
   hashMapFiles: Record<string, Video>;
+  /** Shares whose JSON body could not be fetched after every retry (not on this node yet). */
+  unavailableFiles: Record<string, true>;
   countNewFiles: number;
   isFiltering: boolean;
   filterValue: string;
@@ -20,6 +22,7 @@ const initialState: GlobalState = {
   files: [],
   filteredFiles: [],
   hashMapFiles: {},
+  unavailableFiles: {},
   countNewFiles: 0,
   isFiltering: false,
   filterValue: "",
@@ -103,11 +106,21 @@ export const fileSlice = createSlice({
     addToHashMap: (state, action) => {
       const video = action.payload;
       state.hashMapFiles[video.id] = video;
+      delete state.unavailableFiles[video.id];
     },
     updateInHashMap: (state, action) => {
       const { id } = action.payload;
       const video = action.payload;
       state.hashMapFiles[id] = { ...video };
+      delete state.unavailableFiles[id];
+    },
+    /**
+     * Kept apart from hashMapFiles on purpose: the share page treats any
+     * hashMapFiles entry as loaded, and a missing entry is what makes the next
+     * search queue the body again.
+     */
+    markUnavailable: (state, action) => {
+      state.unavailableFiles[action.payload] = true;
     },
     removeFromHashMap: (state, action) => {
       const idToDelete = action.payload;
@@ -117,6 +130,7 @@ export const fileSlice = createSlice({
       const videos = action.payload;
       videos.forEach((video: Video) => {
         state.hashMapFiles[video.id] = video;
+        delete state.unavailableFiles[video.id];
       });
     },
     upsertFiles: (state, action) => {
@@ -174,6 +188,7 @@ export const {
   updateFile,
   addToHashMap,
   updateInHashMap,
+  markUnavailable,
   removeFromHashMap,
   addArrayToHashMap,
   upsertFiles,

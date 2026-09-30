@@ -24,6 +24,7 @@ import { getIconsFromObject } from "../../constants/Categories/CategoryFunctions
 import { avatarUrl, profilePath, shareLink, sharePath } from "../../utils/qortalLinks.ts";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout.ts";
 import { SaveToCollectionButton } from "../../components/common/SaveToCollection/SaveToCollectionButton";
+import { shareTitleFromIdentifier } from "../../hooks/useFetchFiles.tsx";
 
 interface FileListProps {
   files: Video[];
@@ -33,6 +34,7 @@ interface FileListProps {
 
 export const FileList = ({ files, showPublisher = true }: FileListProps) => {
   const hashMapFiles = useSelector((state: RootState) => state.file.hashMapFiles);
+  const unavailableFiles = useSelector((state: RootState) => state.file.unavailableFiles);
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -72,79 +74,90 @@ export const FileList = ({ files, showPublisher = true }: FileListProps) => {
         const existingFile = hashMapFiles[file?.id];
         // A body fetched without a search (e.g. from a collection page) has no created stamp.
         const fileObj: any = existingFile ? { ...existingFile, created: existingFile.created ?? file.created } : file;
-        const hasHash = Boolean(existingFile);
+        // Until the body lands the row shows the search's metadata. A body that never
+        // comes still gets a readable row, which opens the share page (it has Retry).
+        const loaded = Boolean(existingFile);
+        const unavailable = !loaded && Boolean(unavailableFiles[file?.id]);
+        const title: string = fileObj.title || (loaded || unavailable ? shareTitleFromIdentifier(fileObj.id) : "");
         const icon = getIconsFromObject(fileObj);
         const totalSize = fileObj?.files?.reduce((acc: number, cur: any) => acc + (cur?.size || 0), 0) ?? 0;
         const fileCount = fileObj?.files?.length ?? 0;
         return (
-          <FileRow key={fileObj.id}>
-            {hasHash ? (
-              <>
-                <RowMain
-                  className="row-main"
-                  onClick={() => navigate(sharePath(fileObj.user, fileObj.id))}
-                  aria-label={`Open ${fileObj.title}`}
-                >
-                  {icon ? <RowIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon />}
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <VideoCardTitle>{fileObj.title}</VideoCardTitle>
-                    <RowMeta>
-                      <span>
-                        {fileCount} {fileCount === 1 ? "file" : "files"} · {formatBytes(totalSize)}
-                      </span>
-                      {fileObj?.created && <span>· {formatDate(fileObj.created)}</span>}
-                    </RowMeta>
-                  </div>
-                </RowMain>
-                {showPublisher && (
-                  <NameLink
-                    onClick={() => navigate(profilePath(fileObj.user))}
-                    aria-label={`Shares by ${fileObj.user}`}
-                  >
-                    <Avatar
-                      sx={{ width: 22, height: 22 }}
-                      src={avatarUrl(fileObj.user)}
-                      alt=""
-                      slotProps={{ img: { loading: "lazy" } }}
-                    />
-                    <span>{fileObj.user}</span>
-                  </NameLink>
+          <FileRow key={fileObj.id} aria-busy={!loaded && !unavailable ? true : undefined}>
+            <RowMain
+              className="row-main"
+              onClick={() => navigate(sharePath(fileObj.user, fileObj.id))}
+              aria-label={`Open ${title || "share"}`}
+            >
+              {icon ? <RowIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon />}
+              <div style={{ minWidth: 0, flex: 1 }}>
+                {title ? (
+                  <VideoCardTitle>{title}</VideoCardTitle>
+                ) : (
+                  <Skeleton variant="text" sx={{ fontSize: 15, width: "60%" }} />
                 )}
-                <RowActions className="row-actions">
-                  <Tooltip title="Copy link">
-                    <IconButton size={actionSize} sx={actionSx} aria-label="Copy link" onClick={() => copyLink(fileObj)}>
-                      <LinkOutlinedIcon fontSize="small" />
+                <RowMeta>
+                  {loaded ? (
+                    <span>
+                      {fileCount} {fileCount === 1 ? "file" : "files"} · {formatBytes(totalSize)}
+                    </span>
+                  ) : unavailable ? (
+                    <span>Not available on your node right now</span>
+                  ) : (
+                    <Skeleton variant="text" sx={{ width: 96 }} />
+                  )}
+                  {fileObj?.created && <span>· {formatDate(fileObj.created)}</span>}
+                </RowMeta>
+              </div>
+            </RowMain>
+            {showPublisher && (
+              <NameLink
+                onClick={() => navigate(profilePath(fileObj.user))}
+                aria-label={`Shares by ${fileObj.user}`}
+              >
+                <Avatar
+                  sx={{ width: 22, height: 22 }}
+                  src={avatarUrl(fileObj.user)}
+                  alt=""
+                  slotProps={{ img: { loading: "lazy" } }}
+                />
+                <span>{fileObj.user}</span>
+              </NameLink>
+            )}
+            <RowActions className="row-actions">
+              <Tooltip title="Copy link">
+                <IconButton size={actionSize} sx={actionSx} aria-label="Copy link" onClick={() => copyLink(fileObj)}>
+                  <LinkOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <SaveToCollectionButton
+                share={{ name: fileObj.user, identifier: fileObj.id, title }}
+                size={actionSize}
+              />
+              {fileObj?.user === username ? (
+                // Editing needs the share's JSON body.
+                loaded && (
+                  <Tooltip title="Edit share">
+                    <IconButton size={actionSize} sx={actionSx} aria-label="Edit share" onClick={() => dispatch(setEditFile(fileObj))}>
+                      <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
-                  <SaveToCollectionButton
-                    share={{ name: fileObj.user, identifier: fileObj.id, title: fileObj.title }}
-                    size={actionSize}
-                  />
-                  {fileObj?.user === username ? (
-                    <Tooltip title="Edit share">
-                      <IconButton size={actionSize} sx={actionSx} aria-label="Edit share" onClick={() => dispatch(setEditFile(fileObj))}>
-                        <EditOutlinedIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  ) : (
-                    username && (
-                      <Tooltip title={`Block ${fileObj.user}`}>
-                        <IconButton
-                          size={actionSize}
-                          aria-label={`Block ${fileObj.user}`}
-                          onClick={() => blockUserFunc(fileObj.user)}
-                          sx={{ color: "error.main", ...actionSx }}
-                        >
-                          <BlockOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )
-                  )}
-                </RowActions>
-              </>
-            ) : (
-              <Skeleton variant="rounded" sx={{ width: "100%", height: 44 }} />
-            )}
+                )
+              ) : (
+                username && (
+                  <Tooltip title={`Block ${fileObj.user}`}>
+                    <IconButton
+                      size={actionSize}
+                      aria-label={`Block ${fileObj.user}`}
+                      onClick={() => blockUserFunc(fileObj.user)}
+                      sx={{ color: "error.main", ...actionSx }}
+                    >
+                      <BlockOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )
+              )}
+            </RowActions>
           </FileRow>
         );
       })}

@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { addUser } from '../../state/features/authSlice';
-import { addFiles } from '../../state/features/fileSlice';
+import { addFiles, changefilterName, changefilterSearch } from '../../state/features/fileSlice';
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
 import { Home } from './Home';
 import { store } from '../../state/store';
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
+import { resetSettingsCache } from '../../utils/settings';
 import { HubThemeProvider } from '../../hub-theme';
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme';
 
@@ -23,9 +24,18 @@ function renderHome() {
   );
 }
 
+// The store and the settings cache are module singletons: start each test clean.
+beforeEach(() => {
+  resetQdnSearchCache();
+  resetSettingsCache();
+  store.dispatch(addFiles([]));
+  store.dispatch(changefilterName(''));
+  store.dispatch(changefilterSearch(''));
+  store.dispatch(addUser(null));
+});
+
 describe('Home first load', () => {
   it('runs exactly one paged search and one FETCH per row, then shows the rows', async () => {
-    resetQdnSearchCache();
     const rows = [1, 2, 3].map((n) => ({
       name: 'alice',
       service: 'DOCUMENT',
@@ -53,17 +63,16 @@ describe('Home first load', () => {
     expect(searches.length).toBe(1);
     expect(searches[0]).toContain('limit=20');
     expect(searches[0]).toContain('identifier=qshare_file_');
+    // With metadata, so each row has its title and date before its body lands.
+    expect(searches[0]).toContain('includemetadata=true');
     expect(searches[0]).not.toMatch(/limit=0\b/);
     // Three rows came back (fewer than a page), so the list says it is complete.
     expect(await screen.findByText("That's every share that matches.")).toBeInTheDocument();
   });
 
   it('the Following chip re-runs the search with followedonly=true and hidden names are filtered', async () => {
-    resetQdnSearchCache();
-    store.dispatch(addFiles([]));
     store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
     localStorage.setItem('qshareplus-settings', JSON.stringify({ hiddenNames: ['spammer'] }));
-    const { resetSettingsCache } = await import('../../utils/settings');
     resetSettingsCache();
     mockFetch('/arbitrary/resources/search', (url) => {
       if (url.searchParams.get('followedonly') === 'true') {
@@ -196,5 +205,37 @@ describe('Home filters on a phone', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
     const reopened = await screen.findByRole('dialog', { name: 'Filters and sort' });
     expect(within(reopened).getByRole('combobox', { name: 'Category' })).toHaveTextContent('Software');
+  });
+});
+
+describe('Home rows before and without a body', () => {
+  it('shows the metadata title at once, and a readable row when the body never comes', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    mockFetch('/arbitrary/resources/search', [
+      { name: 'dave', service: 'DOCUMENT', identifier: 'qshare_file_slow_idS1_metadata', created: 5, metadata: { title: 'Slow share' } },
+      // No metadata, and the node answers "Data unavailable" (MISSING_DATA), as for Bob Arctor's share.
+      { name: 'erin', service: 'DOCUMENT', identifier: 'qshare_file_qorterminator-2-visual_WiRAxt_metadata', created: 4 },
+    ]);
+    mockQortalAction('FETCH_QDN_RESOURCE', async (params) => {
+      if (String(params.identifier).includes('slow')) {
+        await gate;
+        return { title: 'Slow share with its full title', files: [] };
+      }
+      throw { error: 1401, message: 'Data unavailable. Please try again later.' };
+    });
+
+    renderHome();
+
+    // The title comes from the search, before the body.
+    expect(await screen.findByText('Slow share')).toBeInTheDocument();
+    // Three tries, then the row says why and keeps a title from the identifier.
+    expect(await screen.findByText('Not available on your node right now')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Qorterminator 2 visual' })).toBeInTheDocument();
+    expect(qortalCallsFor('FETCH_QDN_RESOURCE').filter((c) => String(c.identifier).includes('WiRAxt')).length).toBe(3);
+    expect(store.getState().file.unavailableFiles['qshare_file_qorterminator-2-visual_WiRAxt_metadata']).toBe(true);
+
+    release();
+    expect(await screen.findByText('Slow share with its full title')).toBeInTheDocument();
   });
 });

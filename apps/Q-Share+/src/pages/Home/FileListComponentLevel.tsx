@@ -35,6 +35,8 @@ export const FileListComponentLevel = () => {
           name: paramName,
           limit: QDN_PAGE,
           offset,
+          // Titles and dates show before each body lands.
+          includemetadata: true,
         });
         const structureData = rows.map(summaryToVideo);
         setVideos((prev) => {
