@@ -10,6 +10,8 @@ import { setNotification } from '../../state/features/notificationsSlice';
 import { getIconsFromObject } from '../../constants/Categories/CategoryFunctions';
 import { resetSettingsCache, writeSettings } from '../../utils/settings';
 import { ListViewToggle } from '../../components/common/ListViewToggle';
+import { useTheme, type Theme } from '@mui/material/styles';
+import { THEME_STORAGE_KEY } from '../../theme/qplus-theme';
 
 // Counts row renders: every row computes its icon once per render.
 vi.mock('../../constants/Categories/CategoryFunctions.ts', async (importOriginal) => {
@@ -275,6 +277,76 @@ describe('FileList grid', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
     await screen.findByRole('dialog', { name: 'Copy link' });
     expect(screen.getByDisplayValue('qortal://APP/Q-Share+/share/Simon%20James/qshare_file_grid-copy_Gc1234_metadata')).toBeInTheDocument();
+  });
+
+  it('lays cards out in ~220 px columns, two on phones and one below 340 px, none wider than its column', () => {
+    /** The declarations of every stylesheet rule that matches `el`, keyed by media query ("" for none). */
+    const rulesFor = (el: Element) => {
+      const found: Record<string, string> = {};
+      const matches = (selector: string) => {
+        try {
+          return el.matches(selector);
+        } catch {
+          return false; // a selector jsdom can't parse, such as MUI's ::-moz-focus-inner
+        }
+      };
+      const walk = (list: CSSRuleList, media: string) => {
+        for (const rule of Array.from(list) as any[]) {
+          if (rule.cssRules && rule.media) walk(rule.cssRules, rule.media.mediaText.replace(/\s+/g, ''));
+          else if (rule.selectorText && matches(rule.selectorText)) found[media] = `${found[media] ?? ''}${rule.style.cssText}`;
+        }
+      };
+      for (const sheet of Array.from(document.styleSheets)) walk(sheet.cssRules, '');
+      return found;
+    };
+    const row = { ...share('qshare_file_columns_Co1234_metadata', 'a-very-long-publisher-name-that-goes-on'), title: 'Columns' };
+    store.dispatch(addToHashMap({ ...row, files: [], isValid: true }));
+    const { container } = renderWithProviders(<FileList files={[row]} />);
+
+    const grid = rulesFor(container.querySelector('ul')!);
+    expect(grid['']).toMatch(/grid-template-columns: repeat\(auto-fill, minmax\(220px, 1fr\)\)/);
+    expect(grid['(max-width:599.95px)']).toMatch(/grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+    expect(grid['(max-width:339.95px)']).toMatch(/grid-template-columns: minmax\(0, 1fr\)/);
+    // Gaps come from the theme's spacing (8 px units).
+    expect(grid['']).toMatch(/gap: 12px/);
+    expect(grid['(max-width:599.95px)']).toMatch(/gap: 8px/);
+    // A card, and the publisher in it, shrink to the column: a long name ends in an ellipsis.
+    const [card] = cards(container);
+    expect(rulesFor(card)['']).toMatch(/min-width: 0/);
+    const publisher = rulesFor(within(card).getByRole('button', { name: /^Shares by/ }))[''];
+    expect(publisher).toMatch(/max-width: 100%/);
+    expect(publisher).toMatch(/min-width: 0/);
+  });
+
+  it.each(['hub30', 'hub20', 'black', 'white'] as const)('takes every card colour from the %s theme', (id) => {
+    localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(id));
+    let theme!: Theme;
+    const Probe = () => {
+      theme = useTheme();
+      return null;
+    };
+    const row = { ...share(`qshare_file_theme-${id}_Th0${id.length}00_metadata`), title: `Theme ${id}` };
+    store.dispatch(addToHashMap({ ...row, category: '1', files: [], isValid: true }));
+    const { container } = renderWithProviders(
+      <>
+        <Probe />
+        <FileList files={[row]} />
+      </>
+    );
+    expect(theme.qplus.id).toBe(id);
+    // jsdom spells colours its own way: compare through an element's style.
+    const css = (value: string) => {
+      const probe = document.createElement('span');
+      probe.style.color = value;
+      expect(probe.style.color).not.toBe('');
+      return probe.style.color;
+    };
+    const [card] = cards(container);
+    expect(getComputedStyle(card).backgroundColor).toBe(css(theme.palette.background.paper));
+    expect(getComputedStyle(card).borderTopColor || getComputedStyle(card).border).toContain(css(theme.palette.divider));
+    const art = card.querySelector('img')!.parentElement!;
+    expect(getComputedStyle(art).backgroundColor).toBe(css(theme.qplus.primarySoft));
+    expect(getComputedStyle(within(card).getByText(`Theme ${id}`)).color).toBe(css(theme.palette.text.primary));
   });
 
   it('switches every list on the page between cards and rows from the toggle', () => {
