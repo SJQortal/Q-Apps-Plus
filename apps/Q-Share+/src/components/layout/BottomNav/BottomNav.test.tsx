@@ -8,16 +8,50 @@ import { OPEN_PUBLISH_EVENT } from '../../../constants/events';
 import { BottomNav, BottomNavSpacer } from './BottomNav';
 import { OPEN_DOWNLOADS_EVENT } from './events';
 
-const PHONE_QUERY = '599.95'; // part of PHONE_MEDIA in hooks/usePhoneLayout.ts
 const originalMatchMedia = window.matchMedia;
 
-/** Pretend the viewport is a phone: only the phone breakpoint query matches. */
-function mockPhoneViewport(phone: boolean) {
+type Viewport = { width: number; height: number; touch: boolean };
+const PORTRAIT: Viewport = { width: 390, height: 844, touch: true };
+const LANDSCAPE: Viewport = { width: 844, height: 390, touch: true };
+// GO resizes the app for the soft keyboard: at 360×740 the frame is about 320 px tall.
+const PORTRAIT_KEYBOARD: Viewport = { width: 360, height: 320, touch: true };
+const DESKTOP: Viewport = { width: 1440, height: 900, touch: false };
+
+/**
+ * Just enough of a media query engine for hooks/usePhoneLayout.ts: a comma is
+ * "or", every (feature: value) in a branch must hold.
+ */
+function matchesViewport(query: string, vp: Viewport): boolean {
+  return query
+    .replace(/^@media\s*/, '')
+    .split(',')
+    .some((branch) =>
+      [...branch.matchAll(/\(\s*([a-z-]+)\s*:\s*([^()]+?)\s*\)/g)].every(([, feature, value]) => {
+        const px = parseFloat(value);
+        switch (feature) {
+          case 'max-width':
+            return vp.width <= px;
+          case 'min-width':
+            return vp.width >= px;
+          case 'max-height':
+            return vp.height <= px;
+          case 'min-height':
+            return vp.height >= px;
+          case 'pointer':
+            return value === (vp.touch ? 'coarse' : 'fine');
+          default:
+            return false;
+        }
+      })
+    );
+}
+
+function mockViewport(vp: Viewport) {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     configurable: true,
     value: (query: string) => ({
-      matches: phone && query.includes(PHONE_QUERY),
+      matches: matchesViewport(query, vp),
       media: query,
       onchange: null,
       addListener() {},
@@ -36,7 +70,7 @@ const signIn = () =>
 const signOut = () => store.dispatch(addUser(null));
 
 describe('BottomNav', () => {
-  beforeAll(() => mockPhoneViewport(true));
+  beforeAll(() => mockViewport(PORTRAIT));
   afterAll(() => {
     Object.defineProperty(window, 'matchMedia', { writable: true, configurable: true, value: originalMatchMedia });
   });
@@ -61,6 +95,8 @@ describe('BottomNav', () => {
     const { unmount } = renderWithProviders(<BottomNav />);
 
     const fab = await screen.findByRole('button', { name: 'Share files' });
+    // In portrait it floats above the bar.
+    expect(fab).toHaveClass('MuiFab-root');
     fireEvent.click(fab);
     expect(onOpen).toHaveBeenCalledTimes(1);
     window.removeEventListener(OPEN_PUBLISH_EVENT, onOpen);
@@ -70,6 +106,62 @@ describe('BottomNav', () => {
     renderWithProviders(<BottomNav />);
     await screen.findByRole('navigation', { name: 'Main' });
     expect(screen.queryByRole('button', { name: 'Share files' })).not.toBeInTheDocument();
+  });
+
+  it('on a phone in landscape, Share is an item in the compact bar instead of a floating button', async () => {
+    mockViewport(LANDSCAPE);
+    const onOpen = vi.fn();
+    window.addEventListener(OPEN_PUBLISH_EVENT, onOpen);
+    try {
+      signIn();
+      const { container, unmount } = renderWithProviders(
+        <>
+          <BottomNav />
+          <BottomNavSpacer />
+        </>
+      );
+      const nav = await screen.findByRole('navigation', { name: 'Main' });
+      expect(container.querySelector('.MuiFab-root')).toBeNull();
+      const buttons = Array.from(nav.querySelectorAll('button')).map((b) => b.getAttribute('aria-label'));
+      expect(buttons).toEqual(['Home', 'Collections', 'Downloads', 'Settings', 'Share files']);
+
+      const share = screen.getByRole('button', { name: 'Share files' });
+      expect(share).toHaveTextContent('Share');
+      fireEvent.click(share);
+      expect(onOpen).toHaveBeenCalledTimes(1);
+      // Only the 52 px bar to clear: no floating button.
+      expect(screen.getByTestId('bottom-nav-spacer').style.height).toBe('calc(52px + env(safe-area-inset-bottom, 0px))');
+      unmount();
+
+      signOut();
+      renderWithProviders(<BottomNav />);
+      await screen.findByRole('navigation', { name: 'Main' });
+      expect(screen.queryByRole('button', { name: 'Share files' })).not.toBeInTheDocument();
+    } finally {
+      window.removeEventListener(OPEN_PUBLISH_EVENT, onOpen);
+      mockViewport(PORTRAIT);
+    }
+  });
+
+  it('stays as in portrait when the keyboard makes a portrait phone short', async () => {
+    mockViewport(PORTRAIT_KEYBOARD);
+    try {
+      signIn();
+      renderWithProviders(
+        <>
+          <BottomNav />
+          <BottomNavSpacer />
+        </>
+      );
+      await screen.findByRole('navigation', { name: 'Main' });
+      // Only the floating Share button, not the compact bar's pill.
+      const share = screen.getAllByRole('button', { name: 'Share files' });
+      expect(share).toHaveLength(1);
+      expect(share[0]).toHaveClass('MuiFab-root');
+      expect(screen.getByTestId('bottom-nav-spacer').style.height).toBe('calc(144px + env(safe-area-inset-bottom, 0px))');
+    } finally {
+      mockViewport(PORTRAIT);
+    }
   });
 
   it('the Downloads item shows the count and dispatches the open-downloads event', async () => {
@@ -102,7 +194,7 @@ describe('BottomNav', () => {
   });
 
   it('renders nothing on wider screens', () => {
-    mockPhoneViewport(false);
+    mockViewport(DESKTOP);
     try {
       const { container } = renderWithProviders(
         <>
@@ -113,7 +205,7 @@ describe('BottomNav', () => {
       expect(container.querySelector('nav')).toBeNull();
       expect(screen.queryByRole('button', { name: 'Home' })).not.toBeInTheDocument();
     } finally {
-      mockPhoneViewport(true);
+      mockViewport(PORTRAIT);
     }
   });
 });
