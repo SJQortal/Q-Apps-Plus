@@ -222,7 +222,11 @@ Same branch and PR, version `1.0.0-plus.3`. Every commit builds, lint is clean a
 - **Save all as .zip** (`utils/zip.ts`, `components/common/SaveAllZipButton.tsx`): a store-only ZIP writer with CRC-32, UTF-8 names and unique names, no dependency; the button appears for shares with two or more files under 150 MB (built in memory) and is enabled once every file is on the node.
 - **Small features**: Save on ready files in the downloads list (one routine, `saveFromNode`, shared with the file rows); Edit share on your own share page; a Collections tab on profile pages that loads only when opened (one paged search for that name); the publish dialog shows the total size and the time elapsed.
 - **Why not per-file upload progress**: Hub answers `PUBLISH_MULTIPLE_QDN_RESOURCES` only when the whole batch is done and reports no bytes; one `PUBLISH_QDN_RESOURCE` per file would give per-file status but one Hub confirmation per file, which is worse for a ten-file share. The batch stays; the dialog shows size and elapsed time instead.
-- **Accessibility audit**: `e2e/screens.mjs` now injects axe-core (dev dependency) into every capture and lists the rules violated (WCAG 2.1 A/AA and best practices). First run on the White theme: no contrast findings; the structural ones (no `main` landmark, two banners on sub-pages, pages without an h1, unnamed bottom sheets, unnamed Quill pickers, a floating button outside any landmark) are fixed and the audit is clean on every screen checked. Contrast in the four themes is therefore verified rather than assumed.
+- **Accessibility audit**: `e2e/screens.mjs` now injects axe-core (dev dependency) into every capture and lists the rules violated (WCAG 2.1 A/AA and best practices). Fixed from its findings:
+  - Structure: a `main` landmark, one banner per page, an h1 on every page, the Share button inside the bottom bar's `nav`, named bottom sheets and account popover, the account menu as a real menu, named Quill pickers.
+  - Contrast, in the app: Classic dark blue #007FFF → #4DA6FF (3.4 → 5:1 on its purple paper, original kept as the dark shade); Classic light #417Ed4 → #2f63b0 and 72% ink for inactive toggles; a filled Delete button on collection pages.
+  - Contrast, in the shared kit (`Repo:` commits, synced): MUI `contrastThreshold` 4.5; Black theme black text on the X blue and secondary text #8b9096; Hub 3.0 light primary text and outlines #2A56A5, secondary text #4A525E and 72% ink for inactive controls (filled buttons keep the soft Hub gradient; dark mode unchanged).
+- **Record** (release build of this pass, same harness as pass 2): 9 screens × 360×740, 390×844, 844×390, 700, 1280 in all four themes in dark mode (172 captures), plus Hub 3.0 and Classic in light mode for Home, filters, share, publish, Settings and a collection (56 captures). Every capture: 0 console errors, 0 sideways overflow, 0 unlabelled buttons, **0 axe violations**.
 
 ## Follow-ups
 
@@ -237,12 +241,14 @@ Questions for Simon (after pass 2):
 7. **Classic theme fonts:** Cambon Light, Raleway and Cairo stay (0.8 MB) for fidelity. Drop them and let Classic use Inter?
 8. **Fetch all files:** starts every file of a share through the 5-slot request queue. On a slow node a share with 10 large files will keep the queue busy for a while; cap it lower, or leave it?
 
+9. **Colour changes for 4.5:1 contrast** (pass 3): Classic's electric blue is one step lighter in dark mode and deeper in light mode, and the shared kit's Hub 3.0 light mode uses a deeper blue for text and outlines. Each is one line in `src/styles/theme.tsx` or `shared/hub-theme/tokens.ts` if you prefer the original shades over the contrast target.
+10. **Settings sync** is manual (Save / Restore on the Settings page). Say if you want an automatic restore on first sign-in on a new device (one FETCH per session).
+
 Next pass ideas:
 
 - Upload progress per file is not worth its cost today (see pass 3: one Hub confirmation per file); revisit if Hub ever reports publish progress.
 - A Hub Dev Mode session (docs/HUB-TESTING.md) for what jsdom and Playwright cannot show: the on-screen keyboard under the Publish button, pull-to-refresh on a real touch screen, the file picker in GO, and the header hiding on scroll.
 - Next-page loads on Home still wait for the request in flight (only reset searches supersede it); an `AbortController` in `searchQdn` would let both cancel cleanly.
-- Settings sync is manual (Save / Restore). An automatic restore on first sign-in on a new device would cost one FETCH per session; add it if Simon wants it.
 - Consider qapp-core for lists and identifier hashing in a later pass.
 - Network statistics count up to 3,000 shares (30 pages of 100) and then show "3000+"; raise the cap if the network grows past that.
 - The screenshot harness could grow into a regression check (compare against stored baselines) once the layouts settle.
