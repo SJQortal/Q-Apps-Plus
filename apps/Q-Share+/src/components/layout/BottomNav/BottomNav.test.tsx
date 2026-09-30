@@ -90,6 +90,17 @@ describe('BottomNav', () => {
     }
   });
 
+  it('the spacer clears the bar, and the Share button too when signed in', () => {
+    const { unmount } = renderWithProviders(<BottomNavSpacer />);
+    expect(screen.getByTestId('bottom-nav-spacer').style.height).toBe('calc(72px + env(safe-area-inset-bottom, 0px))');
+    unmount();
+
+    signIn();
+    renderWithProviders(<BottomNavSpacer />);
+    // 72 bar + 16 gap + 56 button.
+    expect(screen.getByTestId('bottom-nav-spacer').style.height).toBe('calc(144px + env(safe-area-inset-bottom, 0px))');
+  });
+
   it('renders nothing on wider screens', () => {
     mockPhoneViewport(false);
     try {

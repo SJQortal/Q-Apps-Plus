@@ -16,6 +16,9 @@ import { requestOpenDownloads } from "./events";
 
 /** Height of the bar without the safe-area inset; the spacer and the Fab use it too. */
 export const BOTTOM_NAV_HEIGHT = 72;
+/** The floating Share button's size and its gap above the bar. */
+const FAB_SIZE = 56;
+const FAB_GAP = 16;
 
 const Bar = styled("nav")(({ theme }) => ({
   position: "fixed",
@@ -71,9 +74,9 @@ const Item = styled("button", {
 const ShareFab = styled(Fab)(({ theme }) => ({
   position: "fixed",
   right: `calc(${theme.spacing(2)} + env(safe-area-inset-right, 0px))`,
-  bottom: `calc(${BOTTOM_NAV_HEIGHT + 16}px + env(safe-area-inset-bottom, 0px))`,
-  width: 56,
-  height: 56,
+  bottom: `calc(${BOTTOM_NAV_HEIGHT + FAB_GAP}px + env(safe-area-inset-bottom, 0px))`,
+  width: FAB_SIZE,
+  height: FAB_SIZE,
   zIndex: theme.zIndex.appBar,
   boxShadow: theme.shadows[6],
 }));
@@ -170,11 +173,23 @@ export function BottomNav() {
   );
 }
 
-/** Keeps the page's last content clear of the fixed bar. Phones only. */
+/**
+ * Keeps the page's last content clear of the fixed bar and, when signed in,
+ * of the Share button floating above it (in Hub it covered the end of
+ * "Submit comment"). Phones only.
+ */
 export function BottomNavSpacer() {
   const phone = usePhoneLayout();
+  const signedIn = useSelector((state: RootState) => Boolean(state.auth.user?.name));
   if (!phone) return null;
-  return <div aria-hidden style={{ height: `calc(${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom, 0px))`, flexShrink: 0 }} />;
+  const height = BOTTOM_NAV_HEIGHT + (signedIn ? FAB_GAP + FAB_SIZE : 0);
+  return (
+    <div
+      aria-hidden
+      data-testid="bottom-nav-spacer"
+      style={{ height: `calc(${height}px + env(safe-area-inset-bottom, 0px))`, flexShrink: 0 }}
+    />
+  );
 }
 
 export default BottomNav;
