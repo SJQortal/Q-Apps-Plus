@@ -1,8 +1,11 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useDispatch } from "react-redux";
 import { Box, Button, List, ListItem, Skeleton, Typography } from "@mui/material";
 import PersonOffOutlinedIcon from "@mui/icons-material/PersonOffOutlined";
 import { ResponsiveDialog } from "../mobile/ResponsiveDialog";
 import { EmptyState } from "../EmptyState";
+import { setNotification } from "../../../state/features/notificationsSlice";
+import { isHubDecline, isHubTimeout } from "../../../utils/hubErrors";
 
 interface PostModalProps {
   open: boolean;
@@ -10,14 +13,25 @@ interface PostModalProps {
 }
 
 /**
+ * Hub stops waiting for DELETE_LIST_ITEM after 30 s, but its dialog stays up
+ * for 60 s and a late Accept still unblocks. Read the list again once the
+ * dialog has gone.
+ */
+export const RECHECK_AFTER_TIMEOUT_MS = 35_000;
+
+/**
  * The Qortal-wide `blockedNames` list. Reading and unblocking use the same
  * GET_LIST_ITEMS / DELETE_LIST_ITEM calls as the original app.
  */
 export const BlockedNamesModal: React.FC<PostModalProps> = ({ open, onClose }) => {
+  const dispatch = useDispatch();
   const [blockedNames, setBlockedNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // The user said no to Hub's "access your list" prompt: close without an error.
+  const [declined, setDeclined] = useState(false);
+  const recheckTimer = useRef<number | undefined>(undefined);
 
   // State is set in promise callbacks, never synchronously from the effect.
   const load = useCallback(() => {
@@ -33,8 +47,9 @@ export const BlockedNamesModal: React.FC<PostModalProps> = ({ open, onClose }) =
         setBlockedNames(Array.isArray(response) ? response : []);
         setError(null);
       })
-      .catch(() => {
-        setError("The blocked list could not be loaded.");
+      .catch((err) => {
+        if (isHubDecline(err)) setDeclined(true);
+        else setError("The blocked list could not be loaded.");
       })
       .finally(() => {
         setLoading(false);
@@ -44,6 +59,12 @@ export const BlockedNamesModal: React.FC<PostModalProps> = ({ open, onClose }) =
   useEffect(() => {
     if (open) load();
   }, [open, load]);
+
+  useEffect(() => {
+    if (declined) onClose();
+  }, [declined, onClose]);
+
+  useEffect(() => () => window.clearTimeout(recheckTimer.current), []);
 
   const retry = () => {
     setLoading(true);
@@ -62,16 +83,24 @@ export const BlockedNamesModal: React.FC<PostModalProps> = ({ open, onClose }) =
 
       if (response === true) {
         setBlockedNames((prev) => prev.filter((n) => n !== name));
+      } else {
+        // The node removed nothing: the name was not on its list, so show what is.
+        load();
       }
-    } catch (error) {
-      // Hub shows its own message when the request is refused.
+    } catch (err) {
+      if (isHubTimeout(err)) {
+        window.clearTimeout(recheckTimer.current);
+        recheckTimer.current = window.setTimeout(() => load(), RECHECK_AFTER_TIMEOUT_MS);
+      } else if (!isHubDecline(err)) {
+        dispatch(setNotification({ msg: `Could not unblock ${name}`, alertType: "error" }));
+      }
     } finally {
       setBusy(null);
     }
   };
 
   let body: React.ReactNode;
-  if (loading) {
+  if (loading || declined) {
     body = (
       <Box role="status" aria-label="Loading blocked names" sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
         {[0, 1, 2].map((n) => (
