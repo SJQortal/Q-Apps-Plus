@@ -4,10 +4,12 @@ import PersonRemoveOutlinedIcon from "@mui/icons-material/PersonRemoveOutlined";
 import Tooltip, { TooltipProps, tooltipClasses } from "@mui/material/Tooltip";
 import { MouseEvent, useEffect, useState } from "react";
 import { styled } from "@mui/material/styles";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
+import { setNotification } from "../../state/features/notificationsSlice";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { formatBytes } from "../../utils/formatBytes";
+import { isHubDecline } from "../../utils/hubErrors";
 
 interface FollowButtonProps extends ButtonProps {
   followerName: string;
@@ -31,22 +33,38 @@ const CustomWidthTooltipStyles = styled(({ className, ...props }: TooltipProps) 
 const SIZE_PAGE = 100;
 const SIZE_MAX_PAGES = 10;
 const sizeCache = new Map<string, Promise<{ bytes: number; items: number; complete: boolean }>>();
-let followedNamesPromise: Promise<string[]> | null = null;
+let followedNames: { address: string; list: Promise<string[]> } | null = null;
 
-/** Followed names are read once per session and updated locally on follow/unfollow. */
-function readFollowedNames(): Promise<string[]> {
-  if (!followedNamesPromise) {
-    followedNamesPromise = qortalRequest({ action: "GET_LIST_ITEMS", list_name: "followedNames" })
-      .then((list) => (Array.isArray(list) ? list : []))
-      .catch(() => {
-        followedNamesPromise = null;
-        return [];
-      });
+/**
+ * The signed-in account's followedNames, read once per session and updated
+ * locally on follow/unfollow. The list belongs to the account, not to one of
+ * its names, so it is keyed by address: an account with no name has one too,
+ * and switching names doesn't read it again. Callers read it only once
+ * signed in: accepting GET_USER_ACCOUNT lets Hub answer list reads silently,
+ * while before that every read is a permission dialog. A decline (or any
+ * failure) counts as an empty list for the rest of the session, so it isn't
+ * asked again.
+ */
+function readFollowedNames(address: string): Promise<string[]> {
+  if (!followedNames || followedNames.address !== address) {
+    const list = qortalRequest({ action: "GET_LIST_ITEMS", list_name: "followedNames" })
+      .then((items) => (Array.isArray(items) ? items : []))
+      .catch(() => [] as string[]);
+    followedNames = { address, list };
   }
-  return followedNamesPromise;
+  return followedNames.list;
 }
 
-/** Sum of a name's publishes, read in bounded pages instead of one unlimited list. */
+function rememberFollowedNames(address: string | undefined, list: string[]) {
+  if (address) followedNames = { address, list: Promise.resolve(list) };
+}
+
+/**
+ * Sum of a name's publishes, read in bounded pages instead of one unlimited
+ * list. Read from Core directly: q-apps.js's LIST_QDN_RESOURCES puts the
+ * name into the URL unencoded, so "+" arrives as a space and "&" cuts the
+ * query (a name like "POS+" read as 0 files).
+ */
 function readPublishSize(name: string) {
   const cached = sizeCache.get(name);
   if (cached) return cached;
@@ -55,13 +73,15 @@ function readPublishSize(name: string) {
     let items = 0;
     let complete = false;
     for (let page = 0; page < SIZE_MAX_PAGES; page++) {
-      const rows = await qortalRequest({
-        action: "LIST_QDN_RESOURCES",
+      const params = new URLSearchParams({
         name,
-        limit: SIZE_PAGE,
-        offset: page * SIZE_PAGE,
-        includeMetadata: false,
+        includemetadata: "false",
+        limit: String(SIZE_PAGE),
+        offset: String(page * SIZE_PAGE),
       });
+      const response = await fetch(`/arbitrary/resources?${params.toString()}`);
+      if (!response.ok) throw new Error(`List failed (${response.status})`);
+      const rows = await response.json();
       const list = Array.isArray(rows) ? rows : [];
       for (const publish of list) {
         bytes += Number(publish?.size) || 0;
@@ -81,7 +101,7 @@ function readPublishSize(name: string) {
 
 export const resetFollowCaches = () => {
   sizeCache.clear();
-  followedNamesPromise = null;
+  followedNames = null;
 };
 
 /**
@@ -91,21 +111,24 @@ export const resetFollowCaches = () => {
  */
 export const FollowButton = ({ followerName, compact = false, sx, ...props }: FollowButtonProps) => {
   const phone = usePhoneLayout();
+  const dispatch = useDispatch();
   const username = useSelector((state: RootState) => state.auth.user?.name);
+  const address = useSelector((state: RootState) => state.auth.user?.address);
   const [followingList, setFollowingList] = useState<string[]>([]);
   const [size, setSize] = useState<{ bytes: number; items: number; complete: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Signed out, the list stays unread (reading it would be a Hub dialog).
   useEffect(() => {
-    if (!followerName) return;
+    if (!followerName || !address) return;
     let active = true;
-    readFollowedNames().then((list) => {
+    readFollowedNames(address).then((list) => {
       if (active) setFollowingList(list);
     });
     return () => {
       active = false;
     };
-  }, [followerName]);
+  }, [followerName, address]);
 
   if (!followerName || followerName === username) return null;
 
@@ -128,7 +151,7 @@ export const FollowButton = ({ followerName, compact = false, sx, ...props }: Fo
     if (response === false) return;
     const next = [...followingList, followerName];
     setFollowingList(next);
-    followedNamesPromise = Promise.resolve(next);
+    rememberFollowedNames(address, next);
   };
 
   const unfollowName = async () => {
@@ -140,7 +163,7 @@ export const FollowButton = ({ followerName, compact = false, sx, ...props }: Fo
     if (response === false) return;
     const next = followingList.filter((item) => followerName !== item);
     setFollowingList(next);
-    followedNamesPromise = Promise.resolve(next);
+    rememberFollowedNames(address, next);
   };
 
   const manageFollow = async (e: MouseEvent<HTMLButtonElement>) => {
@@ -151,8 +174,12 @@ export const FollowButton = ({ followerName, compact = false, sx, ...props }: Fo
     try {
       if (following) await unfollowName();
       else await followName();
-    } catch {
-      /* Hub shows its own error; the button keeps its state */
+    } catch (error) {
+      // Saying no in Hub's dialog is not an error; the button keeps its state either way.
+      if (!isHubDecline(error)) {
+        const msg = `Could not ${following ? "unfollow" : "follow"} ${followerName}`;
+        dispatch(setNotification({ msg, alertType: "error" }));
+      }
     } finally {
       setBusy(false);
     }
