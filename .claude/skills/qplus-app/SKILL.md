@@ -85,7 +85,12 @@ Guard rails:
 
 - **Keep data compatibility** (CLAUDE.md rule 1). Leave the code for money, names, encryption and `SIGN_TRANSACTION` behaviourally identical, and add tests around anything you refactor near it.
 - **Measure efficiency work.** Every efficiency change needs a test or a recorded before/after number.
-- **Add a version and changelog.** Bump the app's version with a `+` suffix series (e.g. `3.2.1` → `3.2.1-plus.1`). Add a `CHANGELOG` entry and a changelog dialog reachable from Settings → About.
+- **Version and changelog.** Every + app has its own version series, separate from the upstream app's number:
+  - The first published release is `1.0.0`. Each later published update bumps the last number: `1.0.1`, `1.0.2`, and so on. Simon may pick `1.1.0` for a big release. Never use suffixes like `-plus.1`.
+  - Only bump after the current version has been published. Until then, keep adding to the current version's changelog entry.
+  - The brief's **Published** line (e.g. `Published: 1.0.0 on 2026-10-02`) says what's live. With no such line, nothing is published yet, and the version is `1.0.0`.
+  - Keep `package.json`, the Settings → About line and the changelog in step.
+  - Add a `CHANGELOG` entry and a changelog dialog reachable from Settings → About.
 - **Add a README section.** At the top of the app's README (create one if missing), say this is the + version, what it adds, and link the upstream repo.
 
 ## 5. Verify
