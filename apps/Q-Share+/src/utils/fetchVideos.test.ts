@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { fetchAndEvaluateVideos, isShareBody } from './fetchVideos';
-import { mockQortalAction } from '../test/setup';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fetchAndEvaluateVideos, fetchQdnResource, isShareBody, needsEncodedFetch } from './fetchVideos';
+import { fetchCalls, mockFetch, mockQortalAction, qortalCallsFor } from '../test/setup';
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('share bodies', () => {
   it('only a JSON object is a share body', () => {
@@ -16,6 +18,43 @@ describe('share bodies', () => {
     mockQortalAction('FETCH_QDN_RESOURCE', 'D');
     const res = await fetchAndEvaluateVideos({ user: 'Claude', videoId: 'qshare_file_a_b_metadata', content: { id: 'qshare_file_a_b_metadata', title: 'Torq Test' } });
     expect(res).toMatchObject({ id: 'qshare_file_a_b_metadata', title: 'Torq Test', isValid: false, deleted: true });
+  });
+
+  it('fetches a name with "/" directly, encoded, because q-apps.js would not encode it', async () => {
+    const id = 'qshare_file_qortal-corei-settingsjson-fail_WGvzlh_metadata';
+    mockFetch('/arbitrary/DOCUMENT/', { title: "Qortal Core'i settings.json faili asukoht", files: [{ filename: 'a.pdf', size: 628000 }] });
+    const res = await fetchAndEvaluateVideos({ user: 'Vallot-/8/', videoId: id, content: { id, service: 'DOCUMENT' } });
+    expect(fetchCalls).toContain(`/arbitrary/DOCUMENT/Vallot-%2F8%2F/${id}`);
+    expect(qortalCallsFor('FETCH_QDN_RESOURCE')).toEqual([]);
+    expect(res).toMatchObject({ isValid: true, files: [{ filename: 'a.pdf' }] });
+  });
+
+  it('an HTTP error page rejects instead of becoming an empty share', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('<h1>Bad Message 400</h1><pre>reason: Ambiguous URI empty segment</pre>', { status: 400 })
+    );
+    await expect(fetchQdnResource('DOCUMENT', 'Vallot-/8/', 'x')).rejects.toThrow('QDN fetch failed (400)');
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('{"error":1401,"message":"Data unavailable. Please try again later."}', { status: 404 })
+    );
+    await expect(fetchQdnResource('DOCUMENT', 'a#b', 'x')).rejects.toThrow('Data unavailable');
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('', { status: 200 }));
+    await expect(fetchQdnResource('DOCUMENT', 'a?b', 'x')).rejects.toThrow('Empty response');
+
+    // A delete marker is text, handed back as a string like q-apps.js does.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('D', { status: 200 }));
+    await expect(fetchQdnResource('DOCUMENT', '100%', 'x')).resolves.toBe('D');
+  });
+
+  it('only names q-apps.js would break go around it', () => {
+    expect(needsEncodedFetch('Vallot-/8/')).toBe(true);
+    expect(needsEncodedFetch('Cryptic Puzzle #1')).toBe(true);
+    expect(needsEncodedFetch('%reset -f')).toBe(true);
+    expect(needsEncodedFetch('Simon James')).toBe(false);
+    expect(needsEncodedFetch('Qort Darlood ΑΩ')).toBe(false);
+    expect(needsEncodedFetch('POS+')).toBe(false);
   });
 
   it('merges a JSON body over the search row', async () => {

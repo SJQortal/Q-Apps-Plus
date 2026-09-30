@@ -67,12 +67,12 @@ function setVisibility(value: 'visible' | 'hidden') {
   document.dispatchEvent(new Event('visibilitychange'));
 }
 
-function renderShare() {
+function renderShare(path = PATH) {
   return renderWithProviders(
     <Routes>
       <Route path="/share/:name/:id" element={<FileContent />} />
     </Routes>,
-    { initialEntries: [PATH] }
+    { initialEntries: [path] }
   );
 }
 
@@ -373,5 +373,39 @@ describe('FileContent (share page)', () => {
     expect(await screen.findByText('Home page')).toBeInTheDocument();
     expect(screen.queryByText('Not this app')).not.toBeInTheDocument();
     length.mockRestore();
+  });
+
+  it('an error page instead of the body offers Retry rather than "deleted", and stores nothing', async () => {
+    const id = 'qshare_file_error-page_Er1234_metadata';
+    mockFetch('/arbitrary/resources/search', [{ ...searchRow, identifier: id }]);
+    mockQortalAction('FETCH_QDN_RESOURCE', '<html><body><h1>502 Bad Gateway</h1></body></html>');
+    mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'READY' });
+    mockCommentSearches();
+
+    renderShare(`/share/${encodeURIComponent(NAME)}/${id}`);
+
+    expect(await screen.findByText('This share could not be loaded')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.queryByText(/deleted by its publisher/)).not.toBeInTheDocument();
+    expect(store.getState().file.hashMapFiles[id]).toBeUndefined();
+  });
+
+  it('a name with "/" fetches its body with the name encoded, as a deep link or reload opens it', async () => {
+    const name = 'Vallot-/8/';
+    const id = 'qshare_file_qortal-corei-settingsjson-fail_WGvzlh_metadata';
+    mockFetch('/arbitrary/resources/search', [{ ...searchRow, name, identifier: id, metadata: { title: "Qortal Core'i settings.json faili asukoht" } }]);
+    mockFetch('/arbitrary/DOCUMENT/', {
+      title: "Qortal Core'i settings.json faili asukoht",
+      files: [{ filename: 'juhend.pdf', identifier: 'qshare_file_x_f1', name, service: 'FILE', mimetype: 'application/pdf', size: 628_000 }],
+    });
+    mockCommentSearches();
+
+    renderShare(`/share/${encodeURIComponent(name)}/${id}`);
+
+    expect(await screen.findByText('juhend.pdf')).toBeInTheDocument();
+    expect(screen.getByText('1 file')).toBeInTheDocument();
+    expect(fetchCallsMatching('/arbitrary/DOCUMENT/')).toEqual([`/arbitrary/DOCUMENT/Vallot-%2F8%2F/${id}`]);
+    expect(qortalCallsFor('FETCH_QDN_RESOURCE')).toEqual([]);
+    expect(store.getState().file.hashMapFiles[id]).toMatchObject({ user: name, files: [{ filename: 'juhend.pdf' }] });
   });
 });

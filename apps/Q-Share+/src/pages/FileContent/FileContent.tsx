@@ -24,6 +24,7 @@ import { useSafeBack } from "../../hooks/useSafeBack";
 import { searchQdn, type QdnResourceSummary } from "../../utils/qdnSearch";
 import { avatarUrl, profilePath, shareLink, decodeParam } from "../../utils/qortalLinks";
 import { formatDate } from "../../utils/time";
+import { fetchQdnResource, isShareBody, needsEncodedFetch, notShareFlags } from "../../utils/fetchVideos";
 import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
 import { getCategoriesFromObject, type Category } from "../../components/common/CategoryList/CategoryList.tsx";
 import { getIconsFromObject } from "../../constants/Categories/CategoryFunctions.ts";
@@ -101,7 +102,12 @@ async function readShareStatus(name: string, id: string): Promise<ResourceStatus
  * retitle the metadata "deleted" with the tag "deleted".
  */
 function isDeletedShare(summary: QdnResourceSummary, body: unknown): boolean {
-  if (!body || typeof body !== "object" || Array.isArray(body)) return true;
+  // A short marker is a delete; longer text is an error page (Jetty's 400, a
+  // proxy's 502), which notShareFlags throws for, so the page offers Retry.
+  if (!isShareBody(body)) {
+    notShareFlags(body);
+    return true;
+  }
   const meta = summary?.metadata;
   const files = (body as { files?: unknown }).files;
   return meta?.title === "deleted" && !!meta.tags?.includes("deleted") && !(Array.isArray(files) && files.length > 0);
@@ -119,7 +125,10 @@ async function fetchShare(name: string, id: string): Promise<ShareLookup> {
   const summary = rows[0];
   let body: any;
   try {
-    body = await qortalRequest({ action: "FETCH_QDN_RESOURCE", name, service: "DOCUMENT", identifier: id });
+    // q-apps.js doesn't encode the name: "Vallot-/8/" would get Core's HTTP 400 page back as the body.
+    body = needsEncodedFetch(name)
+      ? await fetchQdnResource("DOCUMENT", name, id)
+      : await qortalRequest({ action: "FETCH_QDN_RESOURCE", name, service: "DOCUMENT", identifier: id });
   } catch (error) {
     const status = await readShareStatus(name, id);
     if (status?.status === "NOT_PUBLISHED") return { kind: "notfound" };

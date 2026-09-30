@@ -1,4 +1,5 @@
 import { checkStructure } from './checkStructure'
+import { errorMessage } from './hubErrors'
 
 /**
  * A share body is a JSON object. Torq and qapp-core delete a share by
@@ -9,6 +10,39 @@ import { checkStructure } from './checkStructure'
  */
 export const isShareBody = (body: unknown): body is Record<string, unknown> =>
   !!body && typeof body === 'object' && !Array.isArray(body)
+
+/**
+ * Names that Core's q-apps.js can't fetch: it builds "/arbitrary/<service>/<name>/…"
+ * without encoding, so "Vallot-/8/" gets an HTTP 400 HTML page (read back as
+ * a string) and "#", "?", "%" or "\" break the URL too.
+ */
+export const needsEncodedFetch = (name: string): boolean => /[/#?%\\]/.test(name)
+
+/**
+ * GET a QDN resource with the name encoded, answering the way FETCH_QDN_RESOURCE
+ * does: parsed JSON, or the raw text when it isn't JSON; an empty body, an
+ * HTTP error or a Core `{error}` rejects.
+ */
+export async function fetchQdnResource(service: string, name: string, identifier: string): Promise<unknown> {
+  const response = await fetch(
+    `/arbitrary/${service}/${encodeURIComponent(name)}/${encodeURIComponent(identifier)}`,
+    { method: 'GET' }
+  )
+  const text = await response.text()
+  let body: unknown = text
+  try {
+    body = JSON.parse(text)
+  } catch {
+    // Not JSON: keep the text, as q-apps.js does.
+  }
+  if (!response.ok || (isShareBody(body) && 'error' in body)) {
+    // Core errors are JSON ({error: 1401, message}); Jetty's are HTML pages.
+    const fallback = `QDN fetch failed (${response.status})`
+    throw new Error(isShareBody(body) ? errorMessage(body, fallback) : fallback)
+  }
+  if (!text) throw new Error('Empty response')
+  return body
+}
 
 export const fetchAndEvaluateVideos = async (data: any) => {
   const getVideo = async () => {
@@ -21,13 +55,15 @@ export const fetchAndEvaluateVideos = async (data: any) => {
     if (!user || !videoId) return obj
 
     try {
-
-      const responseData = await qortalRequest({
-        action: 'FETCH_QDN_RESOURCE',
-        name: user,
-        service: content?.service || 'DOCUMENT',
-        identifier: videoId
-      })
+      const service = content?.service || 'DOCUMENT'
+      const responseData = needsEncodedFetch(user)
+        ? await fetchQdnResource(service, user, videoId)
+        : await qortalRequest({
+            action: 'FETCH_QDN_RESOURCE',
+            name: user,
+            service,
+            identifier: videoId
+          })
       if (isShareBody(responseData) && checkStructure(responseData)) {
         obj = {
           ...content,
