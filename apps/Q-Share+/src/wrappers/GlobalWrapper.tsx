@@ -13,6 +13,7 @@ import { queue } from "../utils/queue";
 import { EditFile } from "../components/EditFile/EditFile.tsx";
 import ConsentModal from "../components/common/ConsentModal";
 import { useIframe } from "../hooks/useIframe.tsx";
+import { useTrackInAppHistory } from "../hooks/useSafeBack";
 
 interface Props {
   children: React.ReactNode;
@@ -28,6 +29,7 @@ export { queue };
  */
 const GlobalWrapper: React.FC<Props> = ({ children }) => {
   useIframe();
+  useTrackInAppHistory();
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
   const username = useMemo(() => {
