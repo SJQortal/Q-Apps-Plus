@@ -25,6 +25,24 @@ const pdf = { ...base, identifier: 'qshare_file_x_pdf', filename: 'paper.pdf', m
 const video = { ...base, identifier: 'qshare_file_x_vid', filename: 'clip.mp4', mimetype: 'video/mp4', size: 90_000_000 };
 const archive = { ...base, identifier: 'qshare_file_x_zip', filename: 'all.zip', mimetype: 'application/zip', size: 1 };
 
+/**
+ * A download machine for one file: `retryDownload` starts polling again, which
+ * drops the `stopped` marker as DownloadWrapper does, and `giveUp` is its
+ * poller stopping after six status errors in a row.
+ */
+function stoppableDownload(identifier: string) {
+  const at = (status: Record<string, unknown>) =>
+    store.dispatch(updateDownloads({ identifier, status: { percentLoaded: 40, ...status } }));
+  const downloadVideo = vi.fn(() => {
+    store.dispatch(setAddToDownloads({ name: 'alice', service: 'FILE', identifier, properties: {} }));
+    at({ status: 'DOWNLOADING' });
+  });
+  const retryDownload = vi.fn(() => at({ status: 'REFETCHING' }));
+  const giveUp = () => act(() => at({ status: 'REFETCHING', stopped: true }));
+  const ready = () => act(() => at({ status: 'READY', percentLoaded: 100 }));
+  return { value: { downloadVideo, retryDownload }, retryDownload, giveUp, ready };
+}
+
 function setAutoPreview(on: boolean) {
   localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ ...DEFAULT_SETTINGS, autoPreviewImages: on }));
   resetSettingsCache();
@@ -198,6 +216,37 @@ describe('FilePreview', () => {
       act(() => {
         store.dispatch(updateDownloads({ identifier: pdf.identifier, status: { status: 'READY', percentLoaded: 100 } }));
       });
+      await waitFor(() => expect(qortalCallsFor('SHOW_PDF_READER').length).toBe(1));
+    });
+
+    it('starts a fetch again once when the node stops answering, then lets a tap start it', async () => {
+      mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'DOWNLOADING', percentLoaded: 20 });
+      mockFetch('/arbitrary/FILE/', '%PDF-1.7 later');
+      const machine = stoppableDownload(pdf.identifier);
+      renderWithProviders(
+        <MyContext.Provider value={machine.value}>
+          <FilePreview file={pdf} />
+        </MyContext.Provider>
+      );
+      const button = () => screen.getByRole('button', { name: 'Open PDF paper.pdf' });
+      fireEvent.click(button());
+      expect(await screen.findByText('Opens when ready')).toBeInTheDocument();
+
+      // Core drops out while the tap waits: picked up with no new tap.
+      machine.giveUp();
+      expect(machine.retryDownload).toHaveBeenCalledTimes(1);
+      expect(button()).toBeDisabled();
+
+      // Still down: the button comes back and says why.
+      machine.giveUp();
+      expect(machine.retryDownload).toHaveBeenCalledTimes(1);
+      expect(button()).toBeEnabled();
+      expect(screen.getByText('Your node stopped answering at 40%')).toBeInTheDocument();
+
+      fireEvent.click(button());
+      expect(machine.retryDownload).toHaveBeenCalledTimes(2);
+      expect(button()).toBeDisabled();
+      machine.ready();
       await waitFor(() => expect(qortalCallsFor('SHOW_PDF_READER').length).toBe(1));
     });
 
@@ -379,6 +428,33 @@ describe('FilePreview', () => {
         store.dispatch(clearFinishedDownloads());
       });
       expect(screen.queryByText(/Preview failed/)).not.toBeInTheDocument();
+      expect(container.querySelector('video')).not.toBeNull();
+    });
+
+    it('starts a fetch again once when the node stops answering, then offers Try again', async () => {
+      mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'PUBLISHED', percentLoaded: 0 });
+      const machine = stoppableDownload(video.identifier);
+      const { container } = renderWithProviders(
+        <MyContext.Provider value={machine.value}>
+          <FilePreview file={video} />
+        </MyContext.Provider>
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Preview video clip.mp4' }));
+      expect(await screen.findByText('Fetching from peers… 40%')).toBeInTheDocument();
+
+      machine.giveUp();
+      expect(machine.retryDownload).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Stalled, retrying… 40%')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+
+      machine.giveUp();
+      expect(machine.retryDownload).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Your node stopped answering at 40%')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+      expect(machine.retryDownload).toHaveBeenCalledTimes(2);
+      expect(screen.getByText('Stalled, retrying… 40%')).toBeInTheDocument();
+
+      machine.ready();
       expect(container.querySelector('video')).not.toBeNull();
     });
 

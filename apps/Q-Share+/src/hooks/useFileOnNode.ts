@@ -1,4 +1,4 @@
-import { useCallback, useContext, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useSelector, useStore } from "react-redux";
 import { FAILED_STATUSES, MyContext, downloadPhase, downloadStatusText } from "../wrappers/DownloadWrapper";
 import type { RootState } from "../state/store";
@@ -33,12 +33,19 @@ const ON_NODE: Checked = { state: "ready", status: "READY" };
  * `ensure()` first: one GET_QDN_RESOURCE_STATUS, and when the file isn't
  * READY it starts through the shared download machine (DownloadWrapper), so
  * the file row shows the same progress and nothing polls twice.
+ *
+ * While a reader waits on that download, one whose poller gave up (six status
+ * errors in a row: the node dropped out) is started again once without a new
+ * tap. If it gives up again, `stopped` is true and the reader offers a way to
+ * try again, rather than this hook asking a node that stays down over and over.
  */
 export function useFileOnNode(file: NodeFileRef, jsonId?: string) {
-  const { downloadVideo } = useContext(MyContext);
+  const { downloadVideo, retryDownload } = useContext(MyContext);
   const store = useStore<RootState>();
   const download = useSelector((state: RootState) => state.global?.downloads?.[file.identifier]);
   const [checked, setChecked] = useState<Checked>({ state: "idle" });
+  // ensure() is waiting on a download and may restart it once (the effect below).
+  const pickUp = useRef(false);
 
   const status: string | undefined = download?.status?.status;
   const phase = downloadPhase(status, Boolean(download));
@@ -56,12 +63,19 @@ export function useFileOnNode(file: NodeFileRef, jsonId?: string) {
     const service = file.service || "FILE";
     const entry = store.getState().global?.downloads?.[file.identifier];
     const entryPhase = downloadPhase(entry?.status?.status, Boolean(entry));
+    pickUp.current = false;
     if (entryPhase === "ready") {
       setChecked(ON_NODE);
       return true;
     }
-    // A download already under way (the row's Download, Fetch all): just follow it.
-    if (entry && entryPhase !== "failed") return false;
+    // A download already under way (the row's Download, Fetch all): follow it.
+    // REFETCHING may have no poller left (it gives up after six status errors),
+    // so pick it up as the row's Retry does; MISSING_DATA always keeps one.
+    if (entry && entryPhase !== "failed") {
+      if (entry.status?.status === "REFETCHING") retryDownload({ name: file.name, service, identifier: file.identifier });
+      pickUp.current = true;
+      return false;
+    }
     setChecked({ state: "checking" });
     let res: { status?: string } | null = null;
     try {
@@ -86,8 +100,9 @@ export function useFileOnNode(file: NodeFileRef, jsonId?: string) {
       properties: { ...file, service, mimeType: file.mimetype, jsonId },
     });
     setChecked({ state: "fetching" });
+    pickUp.current = true;
     return false;
-  }, [downloadVideo, file, jsonId, store]);
+  }, [downloadVideo, retryDownload, file, jsonId, store]);
 
   let state: FileOnNodeState;
   if (phase === "ready" || (checked.state === "ready" && phase !== "failed")) state = "ready";
@@ -95,11 +110,24 @@ export function useFileOnNode(file: NodeFileRef, jsonId?: string) {
   else if (download) state = phase === "failed" ? "failed" : "fetching";
   else state = checked.state;
 
-  const statusText =
-    state === "failed" && !download ? downloadStatusText(checked.status, 0) : downloadStatusText(status, percent, Boolean(download));
+  // The poller gave up on the download and nothing polls it now.
+  const stopped = state === "fetching" && phase === "stalled" && download?.status?.stopped === true;
+
+  const { name, identifier } = file;
+  const service = file.service || "FILE";
+  useEffect(() => {
+    if (!stopped || !pickUp.current) return;
+    pickUp.current = false;
+    retryDownload({ name, service, identifier });
+  }, [stopped, retryDownload, name, service, identifier]);
+
+  let statusText: string;
+  if (stopped) statusText = `Your node stopped answering at ${percent}%`;
+  else if (state === "failed" && !download) statusText = downloadStatusText(checked.status, 0);
+  else statusText = downloadStatusText(status, percent, Boolean(download));
 
   // The node itself said READY (status check or download entry), not just no answer.
   const confirmed = checked.status === "READY" || phase === "ready";
 
-  return { state, confirmed, percent, statusText, ensure };
+  return { state, confirmed, stopped, percent, statusText, ensure };
 }

@@ -27,8 +27,10 @@ import { resourceProperties, resourceStatus } from "../utils/qdnResource";
  *
  * MISSING_DATA keeps polling (peers may still come online) and shows as stalled.
  * NOT_PUBLISHED, BLOCKED, UNSUPPORTED and BUILD_FAILED stop polling as failures and
- * can be started again. Six consecutive status errors stop polling too.
- * `retryDownload` resumes a paused or stopped poller. Every timer is cleared on unmount.
+ * can be started again. Six consecutive status errors stop polling too, and leave
+ * the entry at REFETCHING with `stopped: true` (nothing polls it any more).
+ * `retryDownload` resumes a paused or stopped poller (and drops that marker).
+ * Every timer is cleared on unmount.
  * Status and properties calls go through utils/qdnResource, so names such as
  * "Vallot-/8/" (which q-apps.js puts into the URL unencoded) work too.
  */
@@ -251,7 +253,11 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
           failures += 1;
           if (failures >= MAX_FAILURES) {
             // Give up quietly but leave the row on Retry, not stuck at "fetching".
-            setStatus({ status: "REFETCHING", percentLoaded: Math.max(percentLoaded, 0) });
+            // `stopped` tells a reader waiting on the file that nothing polls it
+            // now. A restarted poller that never got an answer keeps the entry's
+            // progress rather than dropping it to 0%.
+            const last = Number(store.getState().global?.downloads?.[identifier]?.status?.percentLoaded) || 0;
+            setStatus({ status: "REFETCHING", percentLoaded: Math.max(percentLoaded, last, 0), stopped: true });
             stop();
           }
         } finally {
@@ -261,7 +267,7 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
 
       pollers.current.set(identifier, { stop, nudge });
     },
-    [dispatch, fetchResource]
+    [dispatch, fetchResource, store]
   );
 
   const downloadVideo = useCallback(
@@ -282,10 +288,16 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
         poller.nudge();
         return;
       }
+      // Polling again: drop the marker the poller left when it gave up.
+      const status = store.getState().global?.downloads?.[identifier]?.status;
+      if (status?.stopped) {
+        const { stopped: _stopped, ...rest } = status;
+        dispatch(updateDownloads({ name, service, identifier, status: rest }));
+      }
       startPolling({ name, service, identifier });
       fetchResource({ name, service, identifier });
     },
-    [fetchResource, startPolling]
+    [dispatch, fetchResource, startPolling, store]
   );
 
   const value = useMemo(() => ({ downloadVideo, retryDownload }), [downloadVideo, retryDownload]);

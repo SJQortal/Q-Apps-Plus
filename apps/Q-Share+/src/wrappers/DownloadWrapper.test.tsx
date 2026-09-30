@@ -16,6 +16,11 @@ function StartButton({ target }: { target: typeof ref }) {
   return <button onClick={() => downloadVideo({ ...target, properties: { ...target, filename: "big.iso" } })}>Start</button>;
 }
 
+function RetryButton({ target }: { target: typeof ref }) {
+  const { retryDownload } = useContext(MyContext);
+  return <button onClick={() => retryDownload(target)}>Retry</button>;
+}
+
 /** Let `ms` of fake time pass, running timers and the promises they start. */
 async function wait(ms: number) {
   await act(async () => {
@@ -183,6 +188,39 @@ describe("DownloadWrapper", () => {
     const polls = pollCalls().length;
     await wait(POLL_MS * 4);
     expect(pollCalls().length).toBe(polls);
+    unmount();
+  });
+
+  it("marks a download whose poller gave up as stopped, and Retry polls again, keeping its progress", async () => {
+    let down = false;
+    mockQortalAction("GET_QDN_RESOURCE_STATUS", () => {
+      if (down) throw new Error("Core is not answering");
+      return { status: "DOWNLOADING", percentLoaded: 30 };
+    });
+    const { unmount } = renderWithProviders(
+      <DownloadWrapper>
+        <StartButton target={ref} />
+        <RetryButton target={ref} />
+      </DownloadWrapper>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await wait(POLL_MS);
+    down = true;
+    await wait(POLL_MS * 6);
+    const entry = () => store.getState().global.downloads[ref.identifier].status;
+    expect(entry()).toEqual({ status: "REFETCHING", percentLoaded: 30, stopped: true });
+
+    // Retry drops the marker at once. A new poller that never gets an answer
+    // gives up at the same progress, not at 0%.
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(entry()).toEqual({ status: "REFETCHING", percentLoaded: 30 });
+    await wait(POLL_MS * 6);
+    expect(entry()).toEqual({ status: "REFETCHING", percentLoaded: 30, stopped: true });
+
+    down = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await wait(POLL_MS);
+    expect(entry()).toEqual({ status: "DOWNLOADING", percentLoaded: 30 });
     unmount();
   });
 });

@@ -172,6 +172,8 @@ interface OpenPdfButtonProps {
  * Hub (the sandboxed app frame and Electron without plugins have no PDF
  * viewer) and GO's WebView turns it into a download. A file that isn't on the
  * node yet is fetched first (the row shows the progress) and opens when ready.
+ * If the node stops answering on the way, the button comes back so a tap can
+ * start the fetch again.
  */
 export function OpenPdfButton({ file, jsonId }: OpenPdfButtonProps) {
   const phone = usePhoneLayout();
@@ -204,7 +206,9 @@ export function OpenPdfButton({ file, jsonId }: OpenPdfButtonProps) {
   }
 
   const failed = pending && state === "failed";
-  const busy = pending && !failed;
+  // The fetch stopped (the node isn't answering): a tap starts it again.
+  const stuck = pending && node.stopped;
+  const busy = pending && !failed && !stuck;
   const open = (e: MouseEvent) => {
     e.stopPropagation();
     setMessage(null);
@@ -212,7 +216,7 @@ export function OpenPdfButton({ file, jsonId }: OpenPdfButtonProps) {
     // Already known to be on the node: the effect above opens it.
     if (state !== "ready") void node.ensure();
   };
-  const note = failed ? node.statusText : message;
+  const note = failed || stuck ? node.statusText : message;
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, width, flexShrink: 0 }}>
@@ -329,8 +333,9 @@ interface MediaPreviewProps {
  * through the shared download machine and the player appears once it is
  * READY. A file the node confirmed that still won't play is a format this
  * player can't handle. Any other failed play offers Try again, and clears by
- * itself once the node confirms the file. Mounted only while the preview is
- * open, so closing and reopening starts over.
+ * itself once the node confirms the file. A fetch that stopped because the node
+ * isn't answering offers Try again too. Mounted only while the preview is open,
+ * so closing and reopening starts over.
  */
 function MediaPreview({ file, kind, jsonId }: MediaPreviewProps) {
   const theme = useTheme();
@@ -363,7 +368,7 @@ function MediaPreview({ file, kind, jsonId }: MediaPreviewProps) {
   if (failure?.confirmed) return failedBox("This format can't be played here. Download it instead.", false);
   // Unconfirmed: it clears (and the player mounts afresh) once the node confirms the file.
   if (failure && !node.confirmed) return failedBox("Preview failed. The file may not be on your node yet.", true);
-  if (node.state === "failed") return failedBox(node.statusText, true);
+  if (node.state === "failed" || node.stopped) return failedBox(node.statusText, true);
 
   if (node.state !== "ready") {
     // The file row above shows the download's progress bar; this says why there is no player yet.
