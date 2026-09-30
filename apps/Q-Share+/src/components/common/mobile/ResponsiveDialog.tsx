@@ -36,7 +36,8 @@ export function ResponsiveDialog({
   dismissible = true,
 }: ResponsiveDialogProps) {
   const phone = usePhoneLayout();
-  const viewport = useVisualViewport();
+  // Listeners only while a phone dialog is open: closed dialogs cost nothing.
+  const viewport = useVisualViewport(open && phone);
   const titleId = useId();
   const handleClose = dismissible ? onClose : undefined;
 

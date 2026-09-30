@@ -51,6 +51,12 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // The dialog mounts on first use: one per row would otherwise run its hooks for nothing.
+  const [dialogMounted, setDialogMounted] = useState(false);
+  const openDialog = () => {
+    setDialogMounted(true);
+    setDialogOpen(true);
+  };
   const item = useMemo(() => ({ name: share.name, identifier: share.identifier }), [share.name, share.identifier]);
 
   const savedIn = useMemo(
@@ -67,6 +73,8 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
   const saved = savedIn.length > 0;
   const open = Boolean(anchor) || sheetOpen;
   const openPicker = (event: MouseEvent<HTMLElement>) => {
+    // Opening before the deferred first load has run: fetch the list now.
+    if (mine === null && !loading) void reload();
     if (phone) setSheetOpen(true);
     else setAnchor(event.currentTarget);
   };
@@ -159,7 +167,7 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
       <MenuItem
         onClick={() => {
           closePicker();
-          setDialogOpen(true);
+          openDialog();
         }}
         sx={{ minHeight: 48 }}
       >
@@ -223,12 +231,14 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
         </Menu>
       )}
 
-      <CollectionDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        initialItems={[item]}
-        onSaved={() => setDialogOpen(false)}
-      />
+      {dialogMounted ? (
+        <CollectionDialog
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          initialItems={[item]}
+          onSaved={() => setDialogOpen(false)}
+        />
+      ) : null}
     </>
   );
 }

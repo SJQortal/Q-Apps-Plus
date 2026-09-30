@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchCollection, searchCollections } from "../../../utils/collections";
+import { QDN_PAGE } from "../../../utils/qdnSearch";
 import {
   setLoadingMine,
   setMine,
@@ -11,6 +12,22 @@ import { queue } from "../../../wrappers/GlobalWrapper";
 import type { RootState } from "../../../state/store";
 
 let inflight: { name: string; promise: Promise<void> } | null = null;
+
+/** Delay before the automatic first load, so it never competes with a list's first page. */
+export const AUTO_LOAD_DELAY_MS = 1500;
+
+/** Pages of 20 fetched for one name's collections; 100 collections is plenty for a picker. */
+export const MY_COLLECTIONS_MAX_PAGES = 5;
+
+async function searchAllMine(name: string, fresh: boolean) {
+  const all: Awaited<ReturnType<typeof searchCollections>> = [];
+  for (let page = 0; page < MY_COLLECTIONS_MAX_PAGES; page += 1) {
+    const rows = await searchCollections({ name, fresh, offset: page * QDN_PAGE, limit: QDN_PAGE });
+    all.push(...rows);
+    if (rows.length < QDN_PAGE) break;
+  }
+  return all;
+}
 
 /**
  * The signed-in name's collections, loaded once per session into the slice
@@ -30,7 +47,7 @@ export function useMyCollections(autoLoad = true) {
       const promise = (async () => {
         dispatch(setLoadingMine(name));
         try {
-          const rows = await searchCollections({ name, fresh });
+          const rows = await searchAllMine(name, fresh);
           dispatch(setMine({ name, rows }));
           await Promise.all(
             rows.map(async (row) => {
@@ -54,10 +71,13 @@ export function useMyCollections(autoLoad = true) {
     [dispatch, myName]
   );
 
+  // The first load waits a moment so the page's own search and body fetches
+  // go first; the bookmark buttons only need the list once someone looks.
   useEffect(() => {
     if (!autoLoad || !myName || loadingMine) return;
     if (mineName === myName && (mine !== null || mineError)) return;
-    load();
+    const timer = window.setTimeout(() => void load(), AUTO_LOAD_DELAY_MS);
+    return () => window.clearTimeout(timer);
   }, [autoLoad, myName, loadingMine, mineName, mine, mineError, load]);
 
   const current = mineName === myName;

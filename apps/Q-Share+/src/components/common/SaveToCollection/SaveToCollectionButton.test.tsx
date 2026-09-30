@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '../../../test/renderWithProviders';
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../../../test/setup';
@@ -8,7 +8,7 @@ import { clearMine } from '../../../state/features/collectionsSlice';
 import { resetQdnSearchCache } from '../../../utils/qdnSearch';
 import { resetCollectionCaches } from '../../../utils/collections';
 import { SaveToCollectionButton } from './SaveToCollectionButton';
-import { resetMyCollectionsLoader } from './useMyCollections';
+import { AUTO_LOAD_DELAY_MS, resetMyCollectionsLoader } from './useMyCollections';
 
 const COLLECTION_ID = 'qshare_collection_my-docs_ab12cd';
 const share = { name: 'bob', identifier: 'qshare_file_report_x1y2z3_metadata', title: 'Report' };
@@ -23,6 +23,21 @@ describe('SaveToCollectionButton', () => {
     resetCollectionCaches();
     resetMyCollectionsLoader();
     store.dispatch(clearMine());
+  });
+
+  it('waits AUTO_LOAD_DELAY_MS before the automatic load, so the page\'s own data goes first', async () => {
+    signIn('bob');
+    mockFetch('/arbitrary/resources/search', () => []);
+    vi.useFakeTimers();
+    try {
+      renderWithProviders(<SaveToCollectionButton share={share} />);
+      await vi.advanceTimersByTimeAsync(AUTO_LOAD_DELAY_MS - 100);
+      expect(fetchCallsMatching(/identifier=qshare_collection_/).length).toBe(0);
+      await vi.advanceTimersByTimeAsync(200);
+      expect(fetchCallsMatching(/identifier=qshare_collection_/).length).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('renders nothing when not signed in', () => {
@@ -43,7 +58,8 @@ describe('SaveToCollectionButton', () => {
 
     const trigger = await screen.findByRole('button', { name: 'Save to collection' });
     expect(trigger).toHaveAttribute('aria-pressed', 'false');
-    await waitFor(() => expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(1));
+    // The automatic load is deferred (AUTO_LOAD_DELAY_MS), so allow for it.
+    await waitFor(() => expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(1), { timeout: 4000 });
     fireEvent.click(trigger);
 
     const row = await screen.findByRole('menuitemcheckbox', { name: /My docs/ });
@@ -90,7 +106,8 @@ describe('SaveToCollectionButton', () => {
 
     renderWithProviders(<SaveToCollectionButton share={share} />);
     const trigger = await screen.findByRole('button', { name: 'Save to collection' });
-    await waitFor(() => expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(1));
+    // The automatic load is deferred (AUTO_LOAD_DELAY_MS), so allow for it.
+    await waitFor(() => expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(1), { timeout: 4000 });
     fireEvent.click(trigger);
     fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /My docs/ }));
 

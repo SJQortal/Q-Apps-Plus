@@ -19,9 +19,10 @@ function read(): VisualViewportSize {
  * Tracks `window.visualViewport`, so full-screen dialogs can keep their
  * inputs and action bar above the on-screen keyboard (DESIGN.md → Mobile).
  */
-export function useVisualViewport(): VisualViewportSize {
+export function useVisualViewport(enabled = true): VisualViewportSize {
   const [size, setSize] = useState<VisualViewportSize>(read);
   useEffect(() => {
+    if (!enabled) return;
     const vv = window.visualViewport;
     const update = () => setSize(read());
     update();
@@ -33,6 +34,6 @@ export function useVisualViewport(): VisualViewportSize {
       vv?.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
     };
-  }, []);
+  }, [enabled]);
   return size;
 }
