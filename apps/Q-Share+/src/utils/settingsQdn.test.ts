@@ -119,4 +119,28 @@ describe("settings sync to QDN", () => {
       expect(await fetchSettingsFromQdn("alice")).toEqual({ kind: "error" });
     });
   });
+
+  describe("for a name q-apps.js breaks", () => {
+    const vallot = "Vallot-/8/";
+    const settingsPath = `/arbitrary/DOCUMENT/Vallot-%2F8%2F/${SETTINGS_IDENTIFIER}`;
+
+    it("fetches the settings with the name encoded", async () => {
+      mockFetch("/arbitrary/DOCUMENT/", { version: 1, followingFeed: false, uiTheme: "black", updatedAt: 9 });
+      const result = await fetchSettingsFromQdn(vallot);
+      expect(result.kind).toBe("found");
+      expect(result.kind === "found" && result.snapshot.uiTheme).toBe("black");
+      expect(fetchCallsMatching("/arbitrary/DOCUMENT/")).toEqual([settingsPath]);
+      expect(qortalCallsFor("FETCH_QDN_RESOURCE")).toEqual([]);
+    });
+
+    it("still tells a save the node hasn't got yet apart from no save", async () => {
+      mockFetch("/arbitrary/DOCUMENT/", { error: 1401, message: "Data unavailable. Please try again later." });
+      mockFetch("/arbitrary/resources/search", [
+        { name: vallot, service: "DOCUMENT", identifier: SETTINGS_IDENTIFIER, created: 1 },
+      ]);
+      expect(await fetchSettingsFromQdn(vallot)).toEqual({ kind: "not-local" });
+      const [search] = fetchCallsMatching("/arbitrary/resources/search");
+      expect(new URL(search, "http://node").searchParams.get("name")).toBe(vallot);
+    });
+  });
 });

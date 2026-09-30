@@ -2,6 +2,7 @@ import { isUiThemeId, type UiThemeId } from "../hub-theme";
 import { type AppSettings, sanitizeSettings } from "./settings";
 import { objectToBase64 } from "./toBase64";
 import { searchQdn } from "./qdnSearch";
+import { fetchQdnResource, needsEncodedFetch } from "./fetchVideos";
 
 /**
  * Settings sync to QDN, after Torq's settingsQdn.ts: the app settings plus
@@ -124,19 +125,23 @@ export type SettingsRestore =
 /**
  * One FETCH_QDN_RESOURCE. When it fails, one search (exact name, limit 1)
  * tells "never saved" from "saved on another device, not on this node yet":
- * Core fails a FETCH within milliseconds for data it still has to get from
- * its peers, and saying "nothing saved" then could lead to a needless,
- * paid save.
+ * for data the node still has to get from its peers, Core holds a FETCH for
+ * up to about 15 s and then fails it ("Data unavailable"), and saying
+ * "nothing saved" then could lead to a needless, paid save.
  */
 export async function fetchSettingsFromQdn(name: string): Promise<SettingsRestore> {
   if (!name) return { kind: "none" };
   try {
-    const response = await qortalRequest({
-      action: "FETCH_QDN_RESOURCE",
-      name,
-      service: SETTINGS_SERVICE,
-      identifier: SETTINGS_IDENTIFIER,
-    });
+    // q-apps.js doesn't encode the name: "Vallot-/8/" would read Core's HTTP 400
+    // page back as a string, which looks like "nothing saved".
+    const response = needsEncodedFetch(name)
+      ? await fetchQdnResource(SETTINGS_SERVICE, name, SETTINGS_IDENTIFIER)
+      : await qortalRequest({
+          action: "FETCH_QDN_RESOURCE",
+          name,
+          service: SETTINGS_SERVICE,
+          identifier: SETTINGS_IDENTIFIER,
+        });
     const snapshot = normalizeSettingsSnapshot(response);
     return snapshot ? { kind: "found", snapshot } : { kind: "none" };
   } catch {
