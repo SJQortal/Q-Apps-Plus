@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Badge, Box, Button, IconButton, LinearProgress, List, ListItem, ListItemButton, Popover, Tooltip, Typography } from "@mui/material";
 import DownloadingOutlinedIcon from "@mui/icons-material/DownloadingOutlined";
-import DownloadDoneOutlinedIcon from "@mui/icons-material/DownloadDoneOutlined";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import SaveAltOutlinedIcon from "@mui/icons-material/SaveAltOutlined";
 import { saveFromNode } from "./FileElement";
@@ -195,7 +195,8 @@ export const DownloadTaskManager: React.FC<DownloadTaskManagerProps> = ({ hideBu
           sx={{ color: "text.primary", minWidth: 44, minHeight: 44 }}
         >
           <Badge badgeContent={inProgress} color="primary" overlap="circular">
-            {inProgress > 0 ? <DownloadingOutlinedIcon className="download-icon" /> : <DownloadDoneOutlinedIcon />}
+            {/* Idle shows the plain download icon, like the bottom bar: a check mark did not read as Downloads. */}
+            {inProgress > 0 ? <DownloadingOutlinedIcon className="download-icon" /> : <DownloadOutlinedIcon />}
           </Badge>
         </IconButton>
       </Tooltip>

@@ -22,6 +22,18 @@ describe("DownloadTaskManager", () => {
     mockFetch("/arbitrary/FILE/alice/qshare_file_notes_1", "hello");
   });
 
+  it("shows the download icon when idle and the animated one with a count while fetching", () => {
+    const { unmount } = renderWithProviders(<DownloadTaskManager />);
+    const idle = screen.getByRole("button", { name: "Downloads, 0 in progress" });
+    expect(within(idle).getByTestId("DownloadOutlinedIcon")).toBeInTheDocument();
+    unmount();
+    addDownload({ status: "DOWNLOADING", percentLoaded: 40 });
+    renderWithProviders(<DownloadTaskManager />);
+    const busy = screen.getByRole("button", { name: "Downloads, 1 in progress" });
+    expect(within(busy).getByTestId("DownloadingOutlinedIcon")).toHaveClass("download-icon");
+    expect(within(busy).getByText("1")).toBeInTheDocument();
+  });
+
   it("stays quiet when Hub's save prompt is declined", async () => {
     addDownload({ status: "READY" });
     mockQortalAction("SAVE_FILE", () => Promise.reject("User declined to save file"));
