@@ -16,7 +16,9 @@ import {
 import { styled } from "@mui/material/styles";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import PersonOffOutlinedIcon from "@mui/icons-material/PersonOffOutlined";
-import { ThemePicker, headerFill } from "../../hub-theme";
+import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
+import CloudDownloadOutlinedIcon from "@mui/icons-material/CloudDownloadOutlined";
+import { ThemePicker, headerFill, useHubTheme } from "../../hub-theme";
 import { RootState } from "../../state/store";
 import { addUser } from "../../state/features/authSlice";
 import { BlockedNamesModal } from "../../components/common/BlockedNamesModal/BlockedNamesModal";
@@ -24,6 +26,9 @@ import { ChangelogDialog } from "../../components/common/ChangelogDialog";
 import { APP_VERSION, PLUS_REPO, UPSTREAM_REPO } from "../../constants/changelog";
 import { ShareStats, loadShareStats, readCachedShareStats } from "../../utils/shareStats";
 import { useAppSettings, writeSettings } from "../../utils/settings";
+import { fetchSettingsFromQdn, publishSettingsToQdn } from "../../utils/settingsQdn";
+import { setNotification } from "../../state/features/notificationsSlice";
+import { formatDate } from "../../utils/time";
 
 const Page = styled("div")(({ theme }) => ({
   width: "100%",
@@ -81,6 +86,48 @@ export const Settings = () => {
     if (names.length) writeSettings({ hiddenNames: [...settings.hiddenNames, ...names] });
     setHiddenInput("");
   };
+  // Settings sync to QDN: explicit Save and Restore, nothing automatic.
+  const { uiTheme, setUiTheme } = useHubTheme();
+  const [syncBusy, setSyncBusy] = useState<"save" | "restore" | null>(null);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
+  const saveToQdn = async () => {
+    if (!user?.name) return;
+    setSyncBusy("save");
+    try {
+      const snap = await publishSettingsToQdn(user.name, settings, uiTheme);
+      setSyncNote(`Saved to QDN ${formatDate(snap.updatedAt)}.`);
+      dispatch(setNotification({ msg: "Settings saved to QDN", alertType: "success" }));
+    } catch (error: any) {
+      const declined = error?.error === "User declined request";
+      setSyncNote(declined ? "Save cancelled in Hub." : "The save failed; try again in a moment.");
+      if (!declined) dispatch(setNotification({ msg: "Could not save settings to QDN", alertType: "error" }));
+    } finally {
+      setSyncBusy(null);
+    }
+  };
+  const restoreFromQdn = async () => {
+    if (!user?.name) return;
+    setSyncBusy("restore");
+    try {
+      const snap = await fetchSettingsFromQdn(user.name);
+      if (!snap) {
+        setSyncNote(`No settings saved on QDN for ${user.name} yet.`);
+        return;
+      }
+      writeSettings({
+        autoPreviewImages: snap.autoPreviewImages,
+        defaultSort: snap.defaultSort,
+        hiddenNames: snap.hiddenNames,
+        followingFeed: snap.followingFeed,
+      });
+      if (snap.uiTheme) setUiTheme(snap.uiTheme);
+      setSyncNote(snap.updatedAt ? `Restored the settings saved ${formatDate(snap.updatedAt)}.` : "Settings restored.");
+      dispatch(setNotification({ msg: "Settings restored from QDN", alertType: "success" }));
+    } finally {
+      setSyncBusy(null);
+    }
+  };
+
   const [stats, setStats] = useState<ShareStats | null>(() => readCachedShareStats());
   const [statsBusy, setStatsBusy] = useState(false);
   const [statsError, setStatsError] = useState(false);
@@ -275,6 +322,42 @@ export const Settings = () => {
           <Button variant="outlined" onClick={refreshStats} disabled={statsBusy}>
             {statsBusy ? "Counting…" : stats ? "Recount" : "Load stats"}
           </Button>
+        </Row>
+      </Section>
+
+      <Section>
+        <SectionTitle>Sync</SectionTitle>
+        <Row>
+          <Box>
+            <Typography sx={{ fontWeight: 700 }}>Settings on QDN</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Save these settings and your theme under your name, so another device can restore them. Saving
+              publishes a small document: Hub asks you to confirm, and the usual fee applies.
+            </Typography>
+            {syncNote ? (
+              <Typography variant="body2" sx={{ mt: 0.5 }} role="status">
+                {syncNote}
+              </Typography>
+            ) : null}
+          </Box>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", "& .MuiButton-root": { minHeight: 44 } }}>
+            <Button
+              variant="outlined"
+              startIcon={<CloudDownloadOutlinedIcon />}
+              onClick={restoreFromQdn}
+              disabled={!user?.name || syncBusy !== null}
+            >
+              {syncBusy === "restore" ? "Restoring…" : "Restore"}
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<CloudUploadOutlinedIcon />}
+              onClick={saveToQdn}
+              disabled={!user?.name || syncBusy !== null}
+            >
+              {syncBusy === "save" ? "Saving…" : "Save to QDN"}
+            </Button>
+          </Box>
         </Row>
       </Section>
 

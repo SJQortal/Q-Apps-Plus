@@ -29,7 +29,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 const listeners = new Set<() => void>();
 let cached: AppSettings | null = null;
 
-function sanitize(raw: unknown): AppSettings {
+export function sanitizeSettings(raw: unknown): AppSettings {
   const r = (raw && typeof raw === "object" ? raw : {}) as Partial<Record<keyof AppSettings, unknown>>;
   return {
     autoPreviewImages:
@@ -46,7 +46,7 @@ export function readSettings(): AppSettings {
   if (cached) return cached;
   try {
     const raw = typeof localStorage === "undefined" ? null : localStorage.getItem(SETTINGS_STORAGE_KEY);
-    cached = sanitize(raw ? JSON.parse(raw) : null);
+    cached = sanitizeSettings(raw ? JSON.parse(raw) : null);
   } catch {
     cached = { ...DEFAULT_SETTINGS };
   }
@@ -54,7 +54,7 @@ export function readSettings(): AppSettings {
 }
 
 export function writeSettings(patch: Partial<AppSettings>): AppSettings {
-  const next = sanitize({ ...readSettings(), ...patch });
+  const next = sanitizeSettings({ ...readSettings(), ...patch });
   cached = next;
   try {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
