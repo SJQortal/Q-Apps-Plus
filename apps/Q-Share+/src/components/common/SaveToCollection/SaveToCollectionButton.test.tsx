@@ -95,6 +95,34 @@ describe('SaveToCollectionButton', () => {
     expect(searches[0]).not.toMatch(/limit=0\b/);
   });
 
+  it('as a button, its accessible name contains the visible text, saved or not, compact or not', async () => {
+    signIn('alice');
+    mockFetch('/arbitrary/resources/search', [
+      { name: 'alice', service: 'DOCUMENT', identifier: COLLECTION_ID, updated: 10, metadata: { title: 'My docs', description: '' } },
+    ]);
+    mockQortalAction('FETCH_QDN_RESOURCE', {
+      version: 1,
+      title: 'My docs',
+      description: '',
+      items: [{ name: share.name, identifier: share.identifier }],
+      created: 5,
+      updated: 5,
+    });
+
+    const { unmount } = renderWithProviders(<SaveToCollectionButton share={share} variant="button" compact />);
+    expect(screen.getByRole('button', { name: 'Collect: Add to collection' })).toHaveTextContent('Collect');
+
+    // Once the deferred load finds the share in "My docs", both the text and the name say so.
+    const saved = await screen.findByRole('button', { name: 'Collected: In 1 collection' }, { timeout: 4000 });
+    expect(saved).toHaveTextContent('Collected');
+    expect(saved).toHaveAttribute('aria-pressed', 'true');
+    unmount();
+
+    // Wider screens: the visible text is the whole name.
+    renderWithProviders(<SaveToCollectionButton share={share} variant="button" />);
+    expect(await screen.findByRole('button', { name: 'In collection' })).toHaveTextContent('In collection');
+  });
+
   it('rolls back and says so when the publish fails', async () => {
     signIn('alice');
     mockFetch('/arbitrary/resources/search', [

@@ -192,6 +192,9 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
     : LABEL;
   const icon = saved ? <BookmarkAddedIcon fontSize={size} /> : <BookmarkAddOutlinedIcon fontSize={size} />;
   const buttonLabel = compact ? (saved ? "Collected" : "Collect") : saved ? "In collection" : LABEL;
+  // Label in name (WCAG 2.5.3), so "tap Collected" works in Voice Access: the name is the visible
+  // text, and the one-word phone label leads it with the rest as context ("Collected: In 2 collections").
+  const buttonName = compact ? `${buttonLabel}: ${tooltip}` : undefined;
 
   return (
     <>
@@ -200,7 +203,7 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
           size={size}
           variant="outlined"
           startIcon={icon}
-          aria-label={LABEL}
+          aria-label={buttonName}
           aria-pressed={saved}
           aria-haspopup="menu"
           aria-expanded={open}

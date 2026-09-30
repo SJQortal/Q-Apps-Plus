@@ -357,10 +357,11 @@ describe('FileContent (share page)', () => {
       const buttons = within(group).getAllByRole('button');
       expect(buttons.map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual([
         'Copy link',
-        'Add to collection',
+        'Collect: Add to collection',
         'Follow alice b',
       ]);
-      expect(within(group).getByRole('button', { name: 'Add to collection' })).toHaveTextContent('Collect');
+      // Label in name: the accessible name starts with the visible word.
+      expect(within(group).getByRole('button', { name: 'Collect: Add to collection' })).toHaveTextContent('Collect');
       expect(screen.queryByRole('button', { name: /^Fetch/ })).not.toBeInTheDocument();
     });
 
