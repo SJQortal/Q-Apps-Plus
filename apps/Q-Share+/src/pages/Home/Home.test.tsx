@@ -229,6 +229,14 @@ describe('Home filters on a phone', { timeout: 15_000 }, () => {
     expect(zIndex(listbox.closest('.MuiPopper-root'))).toBeGreaterThan(zIndex(sheet.closest('.MuiModal-root')));
     // The rows are at least 44 px tall, for a thumb.
     expect(getComputedStyle(within(listbox).getAllByRole('option')[0]).minHeight).toBe('44px');
+    // Escape closes the list, not the sheet; Down opens it again.
+    fireEvent.keyDown(field, { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    // Longer than the sheet's close slide.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    expect(sheet).toBeVisible();
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+    expect(screen.getByRole('listbox', { name: 'Suggested publishers' })).toBeInTheDocument();
 
     // Shorter names first: Simona, then Simon James.
     expect(within(listbox).getAllByRole('option').map(optionText)).toEqual(['Simona', 'Simon James']);

@@ -299,7 +299,9 @@ export function NameSuggestField({
           elevation={8}
           onMouseDown={(event) => event.preventDefault()}
           sx={{
-            maxHeight: "min(360px, 45dvh)",
+            // Under half the frame, so it fits above or below the field even in a
+            // landscape phone's 266 px Hub frame (Popper flips it to the side with room).
+            maxHeight: "min(360px, 40dvh)",
             overflowY: "auto",
             overscrollBehavior: "contain",
             border: 1,
