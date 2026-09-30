@@ -40,6 +40,19 @@ interface AppliedFilters {
   categories: string[];
 }
 
+interface ListQuery {
+  applied: AppliedFilters;
+  sort: SortOrder;
+  following: boolean;
+  hasMore: boolean;
+}
+
+/**
+ * The query behind state.file.files. Home remounts on Back with the rows still
+ * in the store, and must show and page the same list, not its defaults.
+ */
+let listQuery: ListQuery | null = null;
+
 /** The most specific category picked, e.g. "Music" for Audio › Music. */
 export function categoryLabel(ids: string[]): string {
   let label = "";
@@ -64,13 +77,24 @@ export const Home = () => {
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const listVersion = useSelector((state: RootState) => state.file.listVersion);
   const settings = useAppSettings();
-  const [sort, setSort] = useState<SortOrder>(settings.defaultSort);
-  const [following, setFollowing] = useState(false);
+  // Back on Home with rows still loaded: pick up the query that loaded them. A
+  // Following list whose chip is gone (Following feed switched off in Settings,
+  // or signed out) is not restored: it would page followed shares with no way
+  // to turn that off. The default list loads over it instead.
+  const [{ restored, reloadDefault }] = useState(() => {
+    const query = files.length > 0 ? listQuery : null;
+    const chipGone = Boolean(query?.following) && !(username && settings.followingFeed);
+    return { restored: chipGone ? null : query, reloadDefault: chipGone };
+  });
+  const [sort, setSort] = useState<SortOrder>(restored?.sort ?? settings.defaultSort);
+  const [following, setFollowing] = useState(restored?.following ?? false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [applied, setApplied] = useState<AppliedFilters>(() => ({ name: filterName, keywords: filterSearch, categories: [] }));
+  const [hasMore, setHasMore] = useState(restored?.hasMore ?? true);
+  const [applied, setApplied] = useState<AppliedFilters>(
+    () => restored?.applied ?? { name: filterName, keywords: filterSearch, categories: [] }
+  );
   // The same, for next-page loads, which must not pick up edits that weren't applied.
   const appliedRef = useRef(applied);
   const isFetching = useRef(false);
@@ -103,20 +127,16 @@ export const Home = () => {
         appliedRef.current = filters;
         setApplied(filters);
       }
+      const listSort = overrides.sort ?? sort;
+      const listFollowing = overrides.clear ? false : (overrides.following ?? following);
       try {
-        const count = await getFiles(
-          {
-            ...filters,
-            sort: overrides.sort ?? sort,
-            following: overrides.clear ? false : (overrides.following ?? following),
-          },
-          reset,
-          undefined,
-          undefined,
-          current
-        );
+        const count = await getFiles({ ...filters, sort: listSort, following: listFollowing }, reset, undefined, undefined, current);
         if (!current()) return;
-        setHasMore(count >= QDN_PAGE);
+        const more = count >= QDN_PAGE;
+        setHasMore(more);
+        // Only once its rows are in the store: a reset that fails leaves the old list, and its query.
+        if (reset) listQuery = { applied: filters, sort: listSort, following: listFollowing, hasMore: more };
+        else if (listQuery) listQuery = { ...listQuery, hasMore: more };
       } catch (e) {
         if (current()) setError("The list could not be loaded. Check that your node is running, then try again.");
       } finally {
@@ -131,15 +151,29 @@ export const Home = () => {
 
   const { pull, refreshing } = usePullToRefresh(() => runSearch(true), true);
 
+  // The picker starts on the applied categories: one that mounts again (Back, or
+  // the layout crossing 900 px) matches the list on screen, which later searches read.
+  const pickerCategories = applied.categories.some(Boolean) ? applied.categories : undefined;
+
   const hasFiles = files.length > 0;
   useEffect(() => {
     if (mounted.current) return;
     mounted.current = true;
     if (!hasFiles) queueMicrotask(() => void runSearch(true));
+    else if (reloadDefault) queueMicrotask(() => void runSearch(true, { following: false }));
     // Back on Home: rows whose name was hidden when they loaded (and un-hidden
     // in Settings since) still need their body.
     else queueBodies(files, false);
-  }, [hasFiles, runSearch, queueBodies, files]);
+  }, [hasFiles, reloadDefault, runSearch, queueBodies, files]);
+
+  // Leaving Home drops the search in flight, so the rows in the store always
+  // match listQuery when Home mounts again.
+  useEffect(() => {
+    const requests = requestId;
+    return () => {
+      requests.current++;
+    };
+  }, []);
 
   // A publish or update from this session: reload page one so the new share shows.
   const seenVersion = useRef(listVersion);
@@ -232,7 +266,7 @@ export const Home = () => {
         value={filterName}
         onChange={(e) => dispatch(changefilterName(e.target.value))}
       />
-      <CategoryList categoryData={allCategoryData} ref={categoryListRef} dense />
+      <CategoryList categoryData={allCategoryData} ref={categoryListRef} initialCategories={pickerCategories} dense />
       <Box sx={{ display: "flex", gap: 1, "& .MuiButton-root": { minHeight: 44 } }}>
         <Button type="submit" variant="contained" fullWidth>
           {phone ? "Apply" : "Search"}

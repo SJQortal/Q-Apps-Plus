@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { addUser } from '../../state/features/authSlice';
 import { addFiles, changefilterName, changefilterSearch, shareKey } from '../../state/features/fileSlice';
@@ -8,7 +8,7 @@ import { Home } from './Home';
 import { store } from '../../state/store';
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
-import { resetSettingsCache } from '../../utils/settings';
+import { resetSettingsCache, writeSettings } from '../../utils/settings';
 import { mockAllIsIntersecting } from 'react-intersection-observer/test-utils';
 import { readOncePerObserve } from '../../test/intersection';
 import { HubThemeProvider } from '../../hub-theme';
@@ -366,6 +366,195 @@ describe('Home applied filters', () => {
     }, { timeout: 5000 });
     expect(lastSearch().has('query')).toBe(false);
     expect(screen.getByRole('heading', { name: 'Latest shares' })).toBeInTheDocument();
+  });
+});
+
+describe('Home after Back', () => {
+  const listSearches = () =>
+    fetchCallsMatching('/arbitrary/resources/search')
+      .map((u) => new URL(u, 'http://localhost').searchParams)
+      .filter((params) => params.get('identifier') === 'qshare_file_');
+  const nextPage = async () => {
+    await waitFor(() => {
+      mockAllIsIntersecting(true);
+      expect(fetchCallsMatching(/[?&]offset=20&/).length).toBe(1);
+    }, { timeout: 5000 });
+    return listSearches().at(-1)!;
+  };
+  // A full first page and a short second one, titled after the list they belong to.
+  const pages = (label: (url: URL) => string) => (url: URL) => {
+    const offset = Number(url.searchParams.get('offset'));
+    const kind = label(url);
+    return Array.from({ length: offset === 0 ? 20 : 2 }, (_, i) => ({
+      name: 'bob',
+      service: 'DOCUMENT',
+      identifier: `qshare_file_${kind.toLowerCase()}-${offset + i}_${kind.slice(0, 2)}${String(offset + i).padStart(4, '0')}_metadata`,
+      created: 1000 - offset - i,
+      metadata: { title: `${kind} ${offset + i}` },
+    }));
+  };
+
+  it('keeps the Following list, its heading and its next page', async () => {
+    store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
+    mockFetch('/arbitrary/resources/search', pages((url) => (url.searchParams.get('followedonly') === 'true' ? 'Followed' : 'Latest')));
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    const first = renderHome();
+    expect(await screen.findByText('Latest 0')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Following' }));
+    expect(await screen.findByText('Followed 0')).toBeInTheDocument();
+
+    // Open a share, then Back: a new Home over the rows still in the store.
+    first.unmount();
+    renderHome();
+    expect(screen.getByText('Followed 0')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Following' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('heading', { name: 'From names you follow' })).toBeInTheDocument();
+
+    expect((await nextPage()).get('followedonly')).toBe('true');
+    expect(await screen.findByText('Followed 21')).toBeInTheDocument();
+    expect(screen.queryByText(/^Latest/)).not.toBeInTheDocument();
+  });
+
+  it('keeps a category search and its sort, and leaves out text typed but not applied', async () => {
+    mockFetch('/arbitrary/resources/search', pages((url) => (url.searchParams.get('description') === 'cat:1' ? 'Software' : 'Any')));
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    const first = renderHome();
+    expect(await screen.findByText('Any 0')).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Category' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Software' }));
+    // Changing the sort searches with the category picked.
+    fireEvent.click(screen.getByRole('button', { name: 'Oldest' }));
+    expect(await screen.findByText('Software 0')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Search titles'), { target: { value: 'unsent' } });
+
+    first.unmount();
+    renderHome();
+    expect(screen.getByRole('heading', { name: 'Shares in Software' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Oldest' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('combobox', { name: 'Category' })).toHaveTextContent('Software');
+
+    const page = await nextPage();
+    expect(page.get('description')).toBe('cat:1');
+    expect(page.get('reverse')).toBe('false');
+    expect(page.has('query')).toBe(false);
+    expect(await screen.findByText('Software 21')).toBeInTheDocument();
+  });
+
+  it('starts from the defaults once the rows are gone', async () => {
+    store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
+    mockFetch('/arbitrary/resources/search', pages((url) => (url.searchParams.get('followedonly') === 'true' ? 'Followed' : 'Latest')));
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    const first = renderHome();
+    expect(await screen.findByText('Latest 0')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Following' }));
+    expect(await screen.findByText('Followed 0')).toBeInTheDocument();
+    first.unmount();
+
+    store.dispatch(addFiles([]));
+    renderHome();
+    expect(await screen.findByText('Latest 0')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Following' })).toHaveAttribute('aria-pressed', 'false');
+    expect(listSearches().at(-1)!.has('followedonly')).toBe(false);
+  });
+});
+
+// A list restored after Back, then changed from Settings or by the layout.
+describe('Home after Back, once Settings or the layout changed', () => {
+  const listSearches = () =>
+    fetchCallsMatching('/arbitrary/resources/search')
+      .map((u) => new URL(u, 'http://localhost').searchParams)
+      .filter((params) => params.get('identifier') === 'qshare_file_');
+  // One row a list, titled after the list it belongs to.
+  const oneRow = (label: (url: URL) => string) => (url: URL) => {
+    const kind = label(url);
+    return [
+      {
+        name: 'bob',
+        service: 'DOCUMENT',
+        identifier: `qshare_file_${kind.toLowerCase()}-0_${kind.slice(0, 2)}0000_metadata`,
+        created: 1000,
+        metadata: { title: `${kind} 0` },
+      },
+    ];
+  };
+
+  it('loads the latest shares over a Following list whose chip was switched off in Settings', async () => {
+    store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
+    mockFetch('/arbitrary/resources/search', oneRow((url) => (url.searchParams.get('followedonly') === 'true' ? 'Followed' : 'Latest')));
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    const first = renderHome();
+    expect(await screen.findByText('Latest 0')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Following' }));
+    expect(await screen.findByText('Followed 0')).toBeInTheDocument();
+    first.unmount();
+
+    // Settings, "Following feed" off, then back to Home over the followed rows.
+    writeSettings({ followingFeed: false });
+    renderHome();
+    expect(await screen.findByText('Latest 0')).toBeInTheDocument();
+    expect(screen.queryByText('Followed 0')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Latest shares' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Following' })).not.toBeInTheDocument();
+    expect(listSearches().at(-1)!.has('followedonly')).toBe(false);
+  });
+
+  it('a picker that mounts again with the layout shows the applied categories, not the restored ones', async () => {
+    // A window that can cross the 900 px breakpoint, which moves the filter form to the phone sheet.
+    const originalMatchMedia = window.matchMedia;
+    let narrow = false;
+    const listeners = new Set<() => void>();
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        get matches() {
+          return narrow && query.includes('899.95');
+        },
+        media: query,
+        onchange: null,
+        addListener: (listener: () => void) => listeners.add(listener),
+        removeListener: (listener: () => void) => listeners.delete(listener),
+        addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+        removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
+        dispatchEvent: () => false,
+      }),
+    });
+    onTestFinished(() => {
+      Object.defineProperty(window, 'matchMedia', { writable: true, configurable: true, value: originalMatchMedia });
+    });
+    mockFetch('/arbitrary/resources/search', oneRow((url) => (url.searchParams.get('description') === 'cat:1' ? 'Software' : 'Any')));
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    const first = renderHome();
+    expect(await screen.findByText('Any 0')).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Category' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Software' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(await screen.findByText('Software 0')).toBeInTheDocument();
+
+    // Back to the Software list, then Reset.
+    first.unmount();
+    renderHome();
+    expect(screen.getByRole('combobox', { name: 'Category' })).toHaveTextContent('Software');
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    expect(await screen.findByText('Any 0')).toBeInTheDocument();
+
+    // Hub is resized across 900 px: a new picker, in the phone sheet.
+    act(() => {
+      narrow = true;
+      listeners.forEach((listener) => listener());
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Filters and sort' });
+    expect(within(sheet).getByRole('combobox', { name: 'Category' })).not.toHaveTextContent('Software');
+    // The next search reads that picker: still no category.
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Oldest' }));
+    await waitFor(() => expect(listSearches().at(-1)!.get('reverse')).toBe('false'));
+    expect(listSearches().at(-1)!.has('description')).toBe(false);
   });
 });
 
