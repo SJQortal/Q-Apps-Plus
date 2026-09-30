@@ -5,6 +5,7 @@ import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from 
 import { store } from '../../../state/store';
 import { addUser } from '../../../state/features/authSlice';
 import { clearMine } from '../../../state/features/collectionsSlice';
+import { removeNotification } from '../../../state/features/notificationsSlice';
 import { resetQdnSearchCache } from '../../../utils/qdnSearch';
 import { resetCollectionCaches } from '../../../utils/collections';
 import { SaveToCollectionButton } from './SaveToCollectionButton';
@@ -94,14 +95,14 @@ describe('SaveToCollectionButton', () => {
     expect(searches[0]).not.toMatch(/limit=0\b/);
   });
 
-  it('rolls back when Hub refuses the publish', async () => {
+  it('rolls back and says so when the publish fails', async () => {
     signIn('alice');
     mockFetch('/arbitrary/resources/search', [
       { name: 'alice', service: 'DOCUMENT', identifier: COLLECTION_ID, updated: 10, metadata: { title: 'My docs', description: '' } },
     ]);
     mockQortalAction('FETCH_QDN_RESOURCE', { version: 1, title: 'My docs', description: '', items: [], created: 5, updated: 5 });
     mockQortalAction('PUBLISH_QDN_RESOURCE', () => {
-      throw new Error('User declined');
+      throw { error: 'Insufficient balance', message: 'Insufficient balance' };
     });
 
     renderWithProviders(<SaveToCollectionButton share={share} />);
@@ -114,5 +115,28 @@ describe('SaveToCollectionButton', () => {
     await waitFor(() => expect(store.getState().notifications.alertTypes.alertError).toBe('Could not update My docs'));
     expect(trigger).toHaveAttribute('aria-pressed', 'false');
     expect(store.getState().collections.byKey[`alice/${COLLECTION_ID}`].items).toEqual([]);
+  });
+
+  it('rolls back quietly when the publish is declined in Hub (any language)', async () => {
+    signIn('alice');
+    store.dispatch(removeNotification());
+    mockFetch('/arbitrary/resources/search', [
+      { name: 'alice', service: 'DOCUMENT', identifier: COLLECTION_ID, updated: 10, metadata: { title: 'My docs', description: '' } },
+    ]);
+    mockQortalAction('FETCH_QDN_RESOURCE', { version: 1, title: 'My docs', description: '', items: [], created: 5, updated: 5 });
+    mockQortalAction('PUBLISH_QDN_RESOURCE', () => {
+      throw { error: 'Benutzer hat die Anfrage abgelehnt', message: 'Benutzer hat die Anfrage abgelehnt' };
+    });
+
+    renderWithProviders(<SaveToCollectionButton share={share} />);
+    const trigger = await screen.findByRole('button', { name: 'Add to collection' });
+    await waitFor(() => expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(1), { timeout: 4000 });
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: /My docs/ }));
+
+    await waitFor(() => expect(qortalCallsFor('PUBLISH_QDN_RESOURCE').length).toBe(1));
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-pressed', 'false'));
+    expect(store.getState().collections.byKey[`alice/${COLLECTION_ID}`].items).toEqual([]);
+    expect(store.getState().notifications.alertTypes.alertError).toBe('');
   });
 });

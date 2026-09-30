@@ -31,6 +31,7 @@ import {
   toggleItem,
   type CollectionSummary,
 } from "../../../utils/collections";
+import { isHubDecline } from "../../../utils/hubErrors";
 import { useMyCollections } from "./useMyCollections";
 
 export interface SaveToCollectionButtonProps {
@@ -120,9 +121,10 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
           alertType: "success",
         })
       );
-    } catch {
+    } catch (error) {
       dispatch(upsertCollection(current));
-      dispatch(setNotification({ msg: `Could not update ${current.title}`, alertType: "error" }));
+      // Saying no in Hub's publish dialog is not an error: just undo.
+      if (!isHubDecline(error)) dispatch(setNotification({ msg: `Could not update ${current.title}`, alertType: "error" }));
     }
   };
 
