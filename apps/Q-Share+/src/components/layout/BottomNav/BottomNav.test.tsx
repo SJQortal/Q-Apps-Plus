@@ -8,7 +8,7 @@ import { OPEN_PUBLISH_EVENT } from '../../../constants/events';
 import { BottomNav, BottomNavSpacer } from './BottomNav';
 import { OPEN_DOWNLOADS_EVENT } from './events';
 
-const PHONE_QUERY = '(max-width:599.95px)';
+const PHONE_QUERY = '599.95'; // part of PHONE_MEDIA in hooks/usePhoneLayout.ts
 const originalMatchMedia = window.matchMedia;
 
 /** Pretend the viewport is a phone: only the phone breakpoint query matches. */
@@ -17,7 +17,7 @@ function mockPhoneViewport(phone: boolean) {
     writable: true,
     configurable: true,
     value: (query: string) => ({
-      matches: phone && query === PHONE_QUERY,
+      matches: phone && query.includes(PHONE_QUERY),
       media: query,
       onchange: null,
       addListener() {},

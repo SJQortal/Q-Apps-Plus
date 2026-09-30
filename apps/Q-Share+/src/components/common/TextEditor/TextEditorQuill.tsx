@@ -2,6 +2,7 @@ import { Box } from "@mui/material";
 import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
 import type { TextEditorProps } from "./TextEditor";
+import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 
 // Quill 2 has no maintained image-resize module; the toolbar never offered an
 // image button, so the old quill-image-resize-module-react is dropped.
@@ -24,6 +25,20 @@ const modules = {
 };
 
 /**
+ * On phones the toolbar is one row of nine 40 px buttons. Only the buttons
+ * change: every format still renders and survives editing, and the desktop
+ * toolbar is one rotation away.
+ */
+const phoneModules = {
+  toolbar: [
+    ["bold", "italic", "underline", "strike"],
+    [{ list: "ordered" }, { list: "bullet" }],
+    ["link", "code-block"],
+    ["clean"],
+  ],
+};
+
+/**
  * The value handed back is the editor's raw innerHTML as-is (the component
  * compares it with the next `value` prop, so it must round-trip untouched).
  * Quill 2.0.3's getSemanticHTML() loses the text of code blocks, so the
@@ -35,10 +50,15 @@ const modules = {
  * editor a usable minimum height.
  */
 export default function TextEditorQuill({ inlineContent, setInlineContent, placeholder }: TextEditorProps) {
+  const phone = usePhoneLayout();
   return (
     <Box
       sx={(theme) => ({
         width: "100%",
+        ...(phone && {
+          "& .ql-toolbar.ql-snow button": { width: 40, height: 40, padding: "8px" },
+          "& .ql-toolbar.ql-snow .ql-formats": { marginRight: "4px" },
+        }),
         "& .ql-toolbar.ql-snow": {
           display: "flex",
           flexWrap: "wrap",
@@ -98,11 +118,12 @@ export default function TextEditorQuill({ inlineContent, setInlineContent, place
       })}
     >
       <ReactQuill
+        key={phone ? "phone" : "desktop"}
         theme="snow"
         value={inlineContent}
         onChange={setInlineContent}
         useSemanticHTML={false}
-        modules={modules}
+        modules={phone ? phoneModules : modules}
         placeholder={placeholder}
       />
     </Box>

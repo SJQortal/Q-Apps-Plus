@@ -81,6 +81,7 @@ export const FileList = ({ files, showPublisher = true }: FileListProps) => {
             {hasHash ? (
               <>
                 <RowMain
+                  className="row-main"
                   onClick={() => navigate(sharePath(fileObj.user, fileObj.id))}
                   aria-label={`Open ${fileObj.title}`}
                 >

@@ -137,7 +137,7 @@ const NavBar: React.FC<Props> = ({ isAuthenticated, userName, userAvatar, accoun
             </IconButton>
           </Tooltip>
         )}
-        <DownloadTaskManager />
+        <DownloadTaskManager hideButton={phone} />
         {!phone && (
           <Tooltip title="Settings">
             <IconButton
@@ -150,7 +150,7 @@ const NavBar: React.FC<Props> = ({ isAuthenticated, userName, userAvatar, accoun
             </IconButton>
           </Tooltip>
         )}
-        {signedIn && <PublishFile />}
+        {signedIn && <PublishFile hideTrigger={phone} />}
         {signedIn && (
           <AvatarContainer
             type="button"

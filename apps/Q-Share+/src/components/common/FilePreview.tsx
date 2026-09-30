@@ -109,7 +109,7 @@ function ImagePreview({ file }: { file: PreviewFile }) {
           alt={alt}
           loading="lazy"
           onError={() => setFailed(true)}
-          style={{ display: "block", width: "100%", height: "auto", maxHeight: 480, objectFit: "contain" }}
+          style={{ display: "block", maxWidth: "100%", height: "auto", maxHeight: 480, margin: "0 auto", objectFit: "contain" }}
         />
       </Box>
       <ResponsiveDialog open={lightbox} onClose={() => setLightbox(false)} title={alt || "Image"} maxWidth="lg">

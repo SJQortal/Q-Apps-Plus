@@ -20,7 +20,12 @@ import { fileKind, fileKindIconElement } from "../../utils/fileKind";
  * links each file back to its share. The phone bottom bar opens the same view
  * through OPEN_DOWNLOADS_EVENT.
  */
-export const DownloadTaskManager: React.FC = () => {
+interface DownloadTaskManagerProps {
+  /** Render only the list (the phone bottom bar has its own Downloads item). */
+  hideButton?: boolean;
+}
+
+export const DownloadTaskManager: React.FC<DownloadTaskManagerProps> = ({ hideButton = false }) => {
   const downloads = useSelector((state: RootState) => state.global.downloads);
   const dispatch = useDispatch();
   const phone = usePhoneLayout();
@@ -140,6 +145,7 @@ export const DownloadTaskManager: React.FC = () => {
 
   return (
     <>
+      {hideButton ? null : (
       <Tooltip title="Downloads">
         <IconButton
           aria-label={label}
@@ -156,6 +162,7 @@ export const DownloadTaskManager: React.FC = () => {
           </Badge>
         </IconButton>
       </Tooltip>
+      )}
       {phone ? (
         <BottomSheet open={open} onClose={close} title="Downloads">
           {list}

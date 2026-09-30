@@ -1,5 +1,8 @@
 import { Box, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
+import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
+
+const phone = `@media ${PHONE_MEDIA}`;
 
 export const FileContainer = styled("ul")(({ theme }) => ({
   listStyle: "none",
@@ -20,8 +23,10 @@ export const FileRow = styled("li")(({ theme }) => ({
   width: "100%",
   minHeight: 64,
   padding: theme.spacing(1, 1.5),
-  [theme.breakpoints.down("sm")]: {
+  [phone]: {
     padding: theme.spacing(1, 1),
+    // Two fixed lines on phones: the title, then publisher and actions.
+    "& > .row-main": { flexBasis: "100%" },
   },
   backgroundColor: theme.palette.background.paper,
   border: `1px solid ${theme.palette.divider}`,
@@ -99,6 +104,7 @@ export const NameLink = styled("button")(({ theme }) => ({
   background: "transparent",
   padding: theme.spacing(0.5, 0),
   minHeight: 36,
+  [phone]: { minHeight: 44 },
   cursor: "pointer",
   display: "inline-flex",
   alignItems: "center",
@@ -123,7 +129,7 @@ export const RowActions = styled("div")(({ theme }) => ({
   flexShrink: 0,
   marginLeft: "auto",
   transition: "opacity 150ms ease",
-  [theme.breakpoints.down("sm")]: {
+  [phone]: {
     gap: theme.spacing(0.5),
   },
 }));

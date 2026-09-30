@@ -72,10 +72,33 @@ const body = (i) => ({
     { filename: "song.mp3", identifier: `qshare_file_a_${i}`, name: rows[i - 1].name, service: "FILE", mimetype: "audio/mpeg", size: 5_100_000 },
   ],
 });
-const PNG = Buffer.from(
+let PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAQklEQVR42u3OMQEAAAgDINc/9Mzg14MGLUmHCgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFbzwB2GwADvYAAAAASUVORK5CYII=",
   "base64"
 );
+
+/**
+ * Marks the one-time disclaimer as accepted before the app boots, in the same
+ * IndexedDB store localforage uses (database q-share-general, store
+ * keyvaluepairs, version 2), so no screen is captured under the consent dialog.
+ */
+function consentSource() {
+  return `
+    try {
+      const req = indexedDB.open('q-share-general', 2);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains('keyvaluepairs')) db.createObjectStore('keyvaluepairs');
+        if (!db.objectStoreNames.contains('local-forage-detect-blob-support')) db.createObjectStore('local-forage-detect-blob-support');
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        try { db.transaction('keyvaluepairs', 'readwrite').objectStore('keyvaluepairs').put(true, 'general-consent'); } catch (e) {}
+        db.close();
+      };
+    } catch (e) {}
+  `;
+}
 
 function qortalMockSource() {
   return `
@@ -106,6 +129,14 @@ function qortalMockSource() {
 }
 
 async function routeCore(page) {
+  // The build uses relative asset paths (vite base ""), which Hub resolves
+  // itself. Under /share/x/y the preview server would 404, so map them back.
+  await page.route(/\/(assets\/[^/?]+|favicon\.ico)(\?.*)?$/, (route) => {
+    const url = new URL(route.request().url());
+    const m = url.pathname.match(/\/(assets\/[^/]+|favicon\.ico)$/);
+    if (!m || url.pathname === "/" + m[1]) return route.continue();
+    return route.continue({ url: `${url.origin}/${m[1]}${url.search}` });
+  });
   await page.route("**/arbitrary/**", async (route) => {
     const url = new URL(route.request().url());
     const p = url.pathname;
@@ -171,6 +202,13 @@ function startPreview() {
 
 const preview = await startPreview();
 const browser = await chromium.launch({ headless: true });
+{
+  // A visible 64×64 avatar/thumbnail fixture, so avatars show up in the shots.
+  const gen = await browser.newPage({ viewport: { width: 64, height: 64 } });
+  await gen.setContent('<div style="width:64px;height:64px;background:linear-gradient(135deg,#f59e0b,#3b82f6)"></div>');
+  PNG = await gen.screenshot({ clip: { x: 0, y: 0, width: 64, height: 64 } });
+  await gen.close();
+}
 const report = [];
 try {
   for (const theme of themes) {
@@ -183,11 +221,26 @@ try {
         reducedMotion: "reduce",
       });
       await context.addInitScript(`try { localStorage.setItem('qshareplus-ui-theme', JSON.stringify('${theme}')); } catch (e) {}`);
+      await context.addInitScript(consentSource());
       await context.addInitScript(qortalMockSource());
       for (const screen of SCREENS) {
         if (onlyScreens.length && !onlyScreens.includes(screen.key)) continue;
         if (screen.mobileOnly && !vp.mobile) continue;
         const page = await context.newPage();
+        if (vp.mobile) {
+          // Playwright's touch emulation leaves the hover/pointer media
+          // features alone; a real phone reports hover:none and pointer:coarse.
+          const cdp = await context.newCDPSession(page);
+          await cdp.send("Emulation.setEmulatedMedia", {
+            features: [
+              { name: "hover", value: "none" },
+              { name: "any-hover", value: "none" },
+              { name: "pointer", value: "coarse" },
+              { name: "any-pointer", value: "coarse" },
+              { name: "prefers-reduced-motion", value: "reduce" },
+            ],
+          });
+        }
         page.__fetches = [];
         const errors = [];
         page.on("console", (m) => { if (m.type() === "error") errors.push(m.text().slice(0, 160)); });
@@ -196,6 +249,9 @@ try {
         let ok = true;
         try {
           await page.goto(`http://127.0.0.1:${PORT}${screen.path}?theme=dark`, { waitUntil: "load", timeout: 12000 });
+          await page.waitForSelector("#root > *", { timeout: 8000 }).catch(() => {});
+          const consent = page.getByRole("button", { name: "I understand" });
+          if (await consent.count()) await consent.first().click({ timeout: 2500 }).catch(() => {});
           if (screen.after) await screen.after(page);
           await page.waitForTimeout(300);
         } catch (e) {

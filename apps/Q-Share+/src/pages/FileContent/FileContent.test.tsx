@@ -41,7 +41,7 @@ function setMatchMedia(phone: boolean) {
     writable: true,
     configurable: true,
     value: (query: string) => ({
-      matches: phone && query === '(max-width:599.95px)',
+      matches: phone && query.includes('599.95'),
       media: query,
       onchange: null,
       addListener() {},

@@ -167,5 +167,5 @@ export const ItemRow = styled("div")(({ theme }) => ({
   alignItems: "center",
   gap: theme.spacing(0.5),
   width: "100%",
-  "& > :first-of-type": { flex: 1, minWidth: 0 },
+  "& > :first-child": { flex: 1, minWidth: 0 },
 }));

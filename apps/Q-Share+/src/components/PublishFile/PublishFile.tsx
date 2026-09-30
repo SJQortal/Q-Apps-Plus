@@ -22,7 +22,12 @@ import { useShareDraft } from "./useShareDraft";
  * Back keeps it until the files are published. The shell can open the dialog
  * by dispatching OPEN_PUBLISH_EVENT on window.
  */
-export const PublishFile = () => {
+interface PublishFileProps {
+  /** Render only the dialog (the phone shell has its own floating Share button). */
+  hideTrigger?: boolean;
+}
+
+export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
   const dispatch = useDispatch();
   const phone = usePhoneLayout();
   const username = useSelector((state: RootState) => state.auth?.user?.name);
@@ -96,7 +101,7 @@ export const PublishFile = () => {
 
   return (
     <>
-      {phone ? (
+      {hideTrigger ? null : phone ? (
         <Tooltip title="Share files">
           <IconButton
             aria-label="Share files"
