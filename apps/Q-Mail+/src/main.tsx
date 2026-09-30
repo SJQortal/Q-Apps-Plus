@@ -8,6 +8,17 @@ import { GlobalContextMenu } from './components/common/GlobalContextMenu/GlobalC
 import { applyQAppTextSize } from '@qortal/qapp-lib/typography'
 import { ensureLexendIllinoisTypographyStyle } from './styles/lexendIllinoisTypography'
 
+// Hub and GO inject qortalRequest. Outside them (npm run dev, vite preview,
+// a plain browser) every call rejects with a clear error instead of throwing
+// a ReferenceError that unmounts the whole app.
+const w = window as unknown as Record<string, unknown>
+if (typeof w.qortalRequest !== 'function') {
+  const notInHub = () =>
+    Promise.reject(new Error('qortalRequest is only available inside Qortal Hub or GO'))
+  w.qortalRequest = notInHub
+  if (typeof w.qortalRequestWithTimeout !== 'function') w.qortalRequestWithTimeout = notInHub
+}
+
 if (typeof global === 'undefined') {
   // Check if window is defined to avoid issues in non-browser environments
   if (typeof window !== 'undefined') {
