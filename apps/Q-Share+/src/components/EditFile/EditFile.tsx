@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@mui/material";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import { markSharesChanged, setEditFile, updateFile, updateInHashMap } from "../../state/features/fileSlice";
 import { setNotification } from "../../state/features/notificationsSlice";
 import type { RootState } from "../../state/store";
@@ -19,6 +19,7 @@ import {
   PublishAgainDialog,
   type PublishStopped,
   type ReplacedVersions,
+  versionOnQdn,
 } from "../common/MultiplePublish/MultiplePublishAll";
 import { draftFromRef, publishErrorMessage, toPublishInputs } from "../PublishFile/shareDraft";
 import { ShareForm } from "../PublishFile/ShareForm";
@@ -44,6 +45,7 @@ interface EditShareDialogProps {
 
 function EditShareDialog({ share }: EditShareDialogProps) {
   const dispatch = useDispatch();
+  const store = useStore<RootState>();
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const userAddress = useSelector((state: RootState) => state.auth?.user?.address);
 
@@ -57,11 +59,10 @@ function EditShareDialog({ share }: EditShareDialogProps) {
   const [publishes, setPublishes] = useState<MultiplePublishRequest | null>(null);
   const [pendingUpdate, setPendingUpdate] = useState<Record<string, unknown> | null>(null);
   // An update reuses the details identifier, so after a timeout QDN must
-  // show a version newer than the one being replaced before it counts.
-  const replaces = useMemo<ReplacedVersions>(
-    () => ({ [share.id]: share.updated ?? share.created }),
-    [share]
-  );
+  // show a version newer than the one being replaced before it counts. That
+  // version's time is read from the node when Publish is pressed: the stored
+  // copy may be older, and the device clock can be minutes off the node's.
+  const [replaces, setReplaces] = useState<ReplacedVersions>({ [share.id]: undefined });
   // The last update was left unconfirmed and Hub may still finish it, so the
   // next one asks first: it costs another fee.
   const [mayStillPublish, setMayStillPublish] = useState(false);
@@ -107,6 +108,13 @@ function EditShareDialog({ share }: EditShareDialogProps) {
         files: toPublishInputs(draft.files),
         edit: { identifier: share.id, version: share.version, commentsId: share.commentsId },
       });
+      let before: number | undefined;
+      try {
+        before = await versionOnQdn({ service: "DOCUMENT", name: username, identifier: share.id });
+      } catch {
+        // Unknown: then only Hub's answer or its status message confirms the details.
+      }
+      setReplaces({ [share.id]: before });
       setPendingUpdate({ ...share, ...fileObject });
       setMayStillPublish(false);
       setPublishes(toMultiplePublish(resources));
@@ -115,16 +123,37 @@ function EditShareDialog({ share }: EditShareDialogProps) {
     }
   };
 
+  /** Store the node's time for the version just published, once QDN shows one newer than `before`. */
+  const noteNewVersionTime = async (before: number | undefined) => {
+    if (before === undefined) return;
+    let time: number | undefined;
+    try {
+      time = await versionOnQdn({ service: "DOCUMENT", name: share.user, identifier: share.id });
+    } catch {
+      return;
+    }
+    if (time === undefined || time <= before) return;
+    const held = store.getState().file.hashMapFiles[share.id];
+    // A list search may have fetched the new version, with its time, meanwhile.
+    if (!held || Number(held.updated ?? 0) >= time) return;
+    const withTime = { ...held, updated: time };
+    dispatch(updateFile(withTime));
+    dispatch(updateInHashMap(withTime));
+  };
+
   const onPublished = (msg = "Share updated", alertType: "success" | "info" = "success") => {
     dispatch(markSharesChanged());
     invalidateQdnSearches();
     setPublishes(null);
     if (pendingUpdate) {
-      // The new version's time, so that another update from here is checked
-      // against this one rather than the version it replaced.
-      const updated = { ...structuredClone(pendingUpdate), updated: Date.now() };
+      // `updated` stays the node's time for the version the share was loaded
+      // with, never the device clock (it can be minutes off): the node's
+      // time for the new version follows once QDN shows it, and a list
+      // search that finds the newer version refreshes the share too.
+      const updated = structuredClone(pendingUpdate);
       dispatch(updateFile(updated));
       dispatch(updateInHashMap(updated));
+      void noteNewVersionTime(replaces[share.id]);
     }
     dispatch(setNotification({ msg, alertType }));
     close();

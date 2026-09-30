@@ -56,7 +56,6 @@ describe("EditFile", () => {
       throw { error: { unsuccessfulPublishes: [{ identifier: file.identifier }] }, message: "Some failed" };
     });
     const before = store.getState().file.listVersion;
-    const startedAt = Date.now();
     renderWithProviders(<EditFile />);
 
     expect(await screen.findByRole("dialog", { name: "Update share" })).toBeInTheDocument();
@@ -74,8 +73,41 @@ describe("EditFile", () => {
     expect(store.getState().notifications.alertTypes.alertInfo).toBe(
       "Share updated, but 1 new file is not on QDN yet. If it doesn't arrive, remove it in Edit and add it again."
     );
-    // The stored copy carries the new version's time, for the next update's check.
-    expect((store.getState().file.hashMapFiles[share.id] as any)?.updated).toBeGreaterThanOrEqual(startedAt);
+    // QDN could not be asked for the new version's time, so the stored copy
+    // keeps the one it was loaded with: never the device clock.
+    expect((store.getState().file.hashMapFiles[share.id] as any)?.updated).toBe((share as any).updated);
+  }, FLOW_TIMEOUT_MS);
+
+  it("checks an update against the node's time for the version on QDN, and stores the node's time after", async () => {
+    // The node's clock is ten minutes behind the device's, and the stored
+    // copy is ten seconds older than the version on QDN (an earlier update
+    // this session, stamped by an older build with the device clock).
+    const onQdn = Date.now() - 10 * 60_000;
+    const stale = { ...share, created: onQdn - 86_400_000, updated: onQdn - 10_000 };
+    store.dispatch(addUser({ address: "Qalice", publicKey: "pk", name: "alice" }));
+    store.dispatch(setEditFile(stale));
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => {
+      throw "The request timed out";
+    });
+    let newest = onQdn;
+    mockFetch("/arbitrary/resources/search", (url: URL) => [
+      { name: "alice", service: "DOCUMENT", identifier: url.searchParams.get("identifier"), created: stale.created, updated: newest },
+    ]);
+    renderWithProviders(<EditFile />);
+
+    fireEvent.change(await screen.findByRole("textbox", { name: /title/i }), { target: { value: "Report 3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Publish update" }));
+    // QDN still has the version from before this update, newer than the stored copy's time.
+    expect(await screen.findByText("0 of 1 published")).toBeInTheDocument();
+    expect(screen.getByText("Not on QDN yet", { selector: "p" })).toBeInTheDocument();
+    expect(store.getState().file.editFileProperties).not.toBeNull();
+
+    // The update lands, stamped by the node.
+    newest = onQdn + 5_000;
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() => expect(store.getState().file.editFileProperties).toBeNull());
+    await waitFor(() => expect((store.getState().file.hashMapFiles[share.id] as any)?.updated).toBe(newest));
+    expect((store.getState().file.hashMapFiles[share.id] as any)?.title).toBe("Report 3");
   }, FLOW_TIMEOUT_MS);
 
   it("after a timeout does not count the version it replaces, even one from a minute ago", async () => {

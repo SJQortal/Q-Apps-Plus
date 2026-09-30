@@ -41,10 +41,10 @@ interface MultiplePublishProps {
   isOpen: boolean;
   /**
    * Identifiers this publish replaces (an update reuses the share's details
-   * identifier), each with the time of the version already on QDN. The QDN
-   * check counts such a resource only when it finds a newer version, and
-   * never when that time is unknown. Any other identifier is new, so being
-   * on QDN is enough.
+   * identifier), each with the node's time for the version already on QDN
+   * (never the device clock, which can be minutes off). The QDN check counts
+   * such a resource only when it finds a newer version, and never when that
+   * time is unknown. Any other identifier is new, so being on QDN is enough.
    */
   replaces?: ReplacedVersions;
   /** Everything is on QDN. */
@@ -216,6 +216,30 @@ function detailsLandedText(count: number, canRetry: boolean): string {
 }
 
 /**
+ * The time of the newest version of a resource on QDN, by the node's clock
+ * (Core stamps each version with its own time), or undefined when QDN does
+ * not have it. Throws when the node cannot be asked.
+ */
+export async function versionOnQdn(resource: { service: string; name: string; identifier: string }): Promise<number | undefined> {
+  // Core matches identifiers by prefix at best; our ids end in a random
+  // uid, so the newest row plus an exact compare is enough.
+  const [row] = await searchQdn(
+    {
+      service: resource.service,
+      name: resource.name,
+      identifier: resource.identifier,
+      prefix: true,
+      exactmatchnames: true,
+      excludeblocked: false,
+      limit: 1,
+    },
+    { fresh: true }
+  );
+  if (row?.identifier !== resource.identifier) return undefined;
+  return row.updated ?? row.created ?? 0;
+}
+
+/**
  * Which of `resources` are on QDN from this publish, or null when the node
  * could not be asked. A new identifier counts as soon as it is there; one in
  * `replaces` only with a version newer than the one it replaces.
@@ -226,25 +250,12 @@ export async function findOnQdn(
 ): Promise<Set<string> | null> {
   try {
     const found = await mapWithConcurrency(resources, CHECK_CONCURRENCY, async (resource) => {
-      // Core matches identifiers by prefix at best; our ids end in a random
-      // uid, so the newest row plus an exact compare is enough.
-      const [row] = await searchQdn(
-        {
-          service: resource.service,
-          name: resource.name,
-          identifier: resource.identifier,
-          prefix: true,
-          exactmatchnames: true,
-          excludeblocked: false,
-          limit: 1,
-        },
-        { fresh: true }
-      );
-      if (row?.identifier !== resource.identifier) return false;
+      const time = await versionOnQdn(resource);
+      if (time === undefined) return false;
       if (!(resource.identifier in replaces)) return true;
       const before = replaces[resource.identifier];
       // Without the old version's time, QDN cannot tell this publish from it.
-      return before !== undefined && (row.updated ?? row.created ?? 0) > before;
+      return before !== undefined && time > before;
     });
     return new Set(resources.filter((_, i) => found[i]).map((r) => r.identifier));
   } catch {
