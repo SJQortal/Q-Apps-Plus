@@ -150,8 +150,9 @@ export const RowActions = styled("div")(({ theme }) => ({
 /*
  * The grid layout (Settings → Layout, or the toggle on a list): one card per
  * share, as many ~220 px columns as fit; two on portrait phones and narrow
- * panes, one below 340 px. Phones in landscape keep the auto-fill columns
- * and the 44 px targets.
+ * panes, one below 350 px. Phones in landscape keep the auto-fill columns
+ * and the 44 px targets. The cutoff is where a card stops holding three
+ * 44 px actions: two columns in 16 px page gutters are 155 px at 350 px wide.
  */
 export const FileGrid = styled("ul")(({ theme }) => ({
   listStyle: "none",
@@ -165,7 +166,7 @@ export const FileGrid = styled("ul")(({ theme }) => ({
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: theme.spacing(1),
   },
-  "@media (max-width:339.95px)": {
+  "@media (max-width:349.95px)": {
     gridTemplateColumns: "minmax(0, 1fr)",
   },
 }));
@@ -302,6 +303,8 @@ export const CardFooter = styled("div")(({ theme }) => ({
   padding: theme.spacing(0, 1.25, 0.75),
   minWidth: 0,
   [phone]: { padding: theme.spacing(0, 0.5, 0.5, 1) },
+  // Never wider than the card: in a pane narrower than planned the last action wraps, not clips.
+  "& .row-actions": { maxWidth: "100%", flexWrap: "wrap", justifyContent: "flex-end" },
 }));
 
 export const CardPublisher = styled(NameLink)({

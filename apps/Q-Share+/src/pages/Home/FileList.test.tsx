@@ -279,7 +279,7 @@ describe('FileList grid', () => {
     expect(screen.getByDisplayValue('qortal://APP/Q-Share+/share/Simon%20James/qshare_file_grid-copy_Gc1234_metadata')).toBeInTheDocument();
   });
 
-  it('lays cards out in ~220 px columns, two on phones and one below 340 px, none wider than its column', () => {
+  it('lays cards out in ~220 px columns, two on phones and one below 350 px, none wider than its column', () => {
     /** The declarations of every stylesheet rule that matches `el`, keyed by media query ("" for none). */
     const rulesFor = (el: Element) => {
       const found: Record<string, string> = {};
@@ -306,7 +306,8 @@ describe('FileList grid', () => {
     const grid = rulesFor(container.querySelector('ul')!);
     expect(grid['']).toMatch(/grid-template-columns: repeat\(auto-fill, minmax\(220px, 1fr\)\)/);
     expect(grid['(max-width:599.95px)']).toMatch(/grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
-    expect(grid['(max-width:339.95px)']).toMatch(/grid-template-columns: minmax\(0, 1fr\)/);
+    // Below 350 px two columns can't hold three 44 px actions a card: one column.
+    expect(grid['(max-width:349.95px)']).toMatch(/grid-template-columns: minmax\(0, 1fr\)/);
     // Gaps come from the theme's spacing (8 px units).
     expect(grid['']).toMatch(/gap: 12px/);
     expect(grid['(max-width:599.95px)']).toMatch(/gap: 8px/);
@@ -316,6 +317,10 @@ describe('FileList grid', () => {
     const publisher = rulesFor(within(card).getByRole('button', { name: /^Shares by/ }))[''];
     expect(publisher).toMatch(/max-width: 100%/);
     expect(publisher).toMatch(/min-width: 0/);
+    // The actions wrap rather than clip if a pane is narrower still.
+    const actions = rulesFor(within(card).getByRole('button', { name: 'Copy link' }).closest('.row-actions')!)[''];
+    expect(actions).toMatch(/max-width: 100%/);
+    expect(actions).toMatch(/flex-wrap: wrap/);
   });
 
   it.each(['hub30', 'hub20', 'black', 'white'] as const)('takes every card colour from the %s theme', (id) => {
