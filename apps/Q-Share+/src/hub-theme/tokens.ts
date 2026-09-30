@@ -173,7 +173,8 @@ const BLACK: Omit<ThemeTokens, 'id' | 'mode'> = {
     success: '#00ba7c',
     error: '#f91880',
     background: { default: '#000000', paper: '#000000', surface: '#000000', elevated: '#16181c' },
-    text: { primary: '#e7e9ea', secondary: '#71767b' },
+    // #8b9096 instead of X's #71767b: the input labels read at 3.9:1 on the elevated surface.
+    text: { primary: '#e7e9ea', secondary: '#8b9096' },
     divider: '#2f3336',
     action: { hover: 'rgba(231, 233, 234, 0.1)', selected: 'rgba(29, 155, 240, 0.12)' },
   },
