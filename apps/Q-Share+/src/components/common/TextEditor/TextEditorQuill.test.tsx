@@ -36,6 +36,36 @@ describe("TextEditorQuill", () => {
     expect(container.querySelector(".ql-toolbar .ql-image, .ql-toolbar .ql-video")).toBeNull();
   });
 
+  it("hides the placeholder while a keyboard is still composing the first word", async () => {
+    const view = renderWithProviders(
+      <TextEditorQuill inlineContent="" setInlineContent={vi.fn()} placeholder="Describe what you are sharing" />
+    );
+    await waitFor(() => expect(view.container.querySelector(".ql-editor")).not.toBeNull());
+    const editor = view.container.querySelector(".ql-editor")!;
+    expect(editor).toHaveClass("ql-blank");
+    expect(editor).toHaveAttribute("data-placeholder", "Describe what you are sharing");
+    const hidden = () => editor.classList.contains("qshare-composing");
+
+    // Gboard: the word is composed in the DOM while Quill holds its update back.
+    editor.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    expect(hidden()).toBe(false);
+    editor.querySelector("p")!.textContent = "Dkd";
+    editor.dispatchEvent(new CompositionEvent("compositionupdate", { bubbles: true, data: "Dkd" }));
+    expect(editor).toHaveClass("ql-blank");
+    expect(hidden()).toBe(true);
+
+    // Deleting the word again brings the placeholder back.
+    editor.querySelector("p")!.textContent = "";
+    editor.dispatchEvent(new InputEvent("input", { bubbles: true, isComposing: true }));
+    expect(hidden()).toBe(false);
+
+    editor.querySelector("p")!.textContent = "Dkdkdbd";
+    editor.dispatchEvent(new InputEvent("input", { bubbles: true, isComposing: true }));
+    expect(hidden()).toBe(true);
+    editor.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "Dkdkdbd" }));
+    expect(hidden()).toBe(false);
+  });
+
   it("does not turn a dropped or pasted image file into a base64 image", async () => {
     const { container } = renderEditor("<p>Text</p>");
     await waitFor(() => expect(container.querySelector(".ql-container")).not.toBeNull());

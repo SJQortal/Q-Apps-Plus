@@ -13,6 +13,9 @@ import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 // images come only with descriptions that already have them.
 const uploader = { handler: () => {} };
 
+/** On the editor while a composition (a keyboard's word in progress) has put text in it. */
+const COMPOSING_CLASS = "qshare-composing";
+
 /**
  * Pasted HTML without its <img> and <iframe>. With image and video listed in
  * `formats`, Quill keeps them from a paste as it does from a loaded
@@ -128,6 +131,25 @@ export default function TextEditorQuill({ inlineContent, setInlineContent, place
     root.addEventListener("paste", onPaste, true);
     return () => root.removeEventListener("paste", onPaste, true);
   }, []);
+  // Quill holds back its updates while a word is being composed (it batches
+  // them until compositionend), so `ql-blank` and the placeholder stayed on
+  // top of the first word: Android keyboards compose every word, and so do
+  // IMEs on desktop. While a composition has put text in the editor, a class
+  // of our own hides the placeholder; Quill takes over again when it ends.
+  useEffect(() => {
+    const root = wrapper.current;
+    if (!root) return;
+    const onComposition = (event: Event) => {
+      const editor = event.target instanceof Element ? event.target.closest(".ql-editor") : null;
+      if (!editor) return;
+      const composing =
+        event.type === "compositionend" ? false : event.type === "input" ? (event as InputEvent).isComposing : true;
+      editor.classList.toggle(COMPOSING_CLASS, composing && (editor.textContent ?? "") !== "");
+    };
+    const types = ["compositionstart", "compositionupdate", "input", "compositionend"];
+    types.forEach((type) => root.addEventListener(type, onComposition));
+    return () => types.forEach((type) => root.removeEventListener(type, onComposition));
+  }, []);
   return (
     <Box
       ref={wrapper}
@@ -166,6 +188,7 @@ export default function TextEditorQuill({ inlineContent, setInlineContent, place
           color: theme.palette.text.secondary,
           fontStyle: "normal",
         },
+        [`& .ql-editor.ql-blank.${COMPOSING_CLASS}::before`]: { content: "none" },
         "& .ql-snow .ql-stroke": { stroke: theme.palette.text.primary },
         "& .ql-snow .ql-fill, & .ql-snow .ql-stroke.ql-fill": { fill: theme.palette.text.primary },
         "& .ql-snow .ql-picker": { color: theme.palette.text.primary },

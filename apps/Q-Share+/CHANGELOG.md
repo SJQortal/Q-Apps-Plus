@@ -8,7 +8,7 @@ The first release of Q-Share+. It reads and writes the same QDN data as Q-Share:
 
 **Platform and quality**
 - React 19.3, MUI 9.4, Redux Toolkit 2, react-router 6.30 (v7 flags), Vite 8, TypeScript 5.9.
-- The editor runs on Quill 2 (react-quill-new); published descriptions are normalised to the Quill 1 markup the original stores, and old descriptions render with the app's own styles. Text and highlight colours are gone from the toolbar (they vanished in other themes) and pasted colours are dropped.
+- The editor runs on Quill 2 (react-quill-new); published descriptions are normalised to the Quill 1 markup the original stores, and old descriptions render with the app's own styles. Text and highlight colours are gone from the toolbar (they vanished in other themes) and pasted colours are dropped. The placeholder no longer sits on top of the first word while a phone keyboard (or a desktop IME) is still composing it.
 - ESLint 9 with the React hooks rules (clean), 485 vitest tests, an error boundary, and a screenshot harness (`e2e/screens.mjs`) that checks every screen at five sizes in four themes with an axe-core accessibility audit.
 - Removed: moment, react-quill, the unreachable Q-Tube player and playlist code, react-rnd, compressorjs and ts-key-enum.
 
