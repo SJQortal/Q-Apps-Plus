@@ -3,8 +3,10 @@ import { useDispatch, useSelector, useStore } from "react-redux";
 import {
   addFiles,
   addToHashMap,
+  heldShare,
   markUnavailable,
   setCountNewFiles,
+  shareKey,
   upsertFiles,
   upsertFilesBeginning,
   Video,
@@ -71,7 +73,7 @@ export function summaryToVideo(video: QdnResourceSummary): Video {
   };
 }
 
-/** Share ids whose body is queued or being fetched, so a list never queues one twice. */
+/** Shares (shareKey) whose body is queued or being fetched, so a list never queues one twice. */
 const bodiesInFlight = new Set<string>();
 
 /** The search row says the share changed after the copy in the hash map. */
@@ -94,21 +96,22 @@ async function fetchShareBody(
 ): Promise<void> {
   // While this waited in the queue, the share page (a row opens before its
   // body lands), a collection or another list may have fetched it.
-  const held = getState().file.hashMapFiles[videoId];
+  const key = shareKey(user, videoId);
+  const held = heldShare(getState().file, user, videoId);
   if (held && !updatedSince(content, held)) {
-    bodiesInFlight.delete(videoId);
+    bodiesInFlight.delete(key);
     return;
   }
   try {
     const res = await fetchAndEvaluateVideos({ user, videoId, content });
-    bodiesInFlight.delete(videoId);
+    bodiesInFlight.delete(key);
     dispatch(addToHashMap(res));
   } catch {
     if (attempt < 2) {
       queue.push(() => fetchShareBody(dispatch, getState, user, videoId, content, attempt + 1));
     } else {
-      bodiesInFlight.delete(videoId);
-      dispatch(markUnavailable(videoId));
+      bodiesInFlight.delete(key);
+      dispatch(markUnavailable({ user, id: videoId }));
     }
   }
 }
@@ -116,21 +119,23 @@ async function fetchShareBody(
 /**
  * `files` without the shares whose body turned out to be deleted or unreadable
  * (see isShareBody): Home and profile lists leave them out. The selector
- * returns a string of ids, so a body landing re-renders the caller only when
- * that set changes.
+ * returns a string of share keys, so a body landing re-renders the caller
+ * only when that set changes.
  */
 export function useListedFiles(files: Video[]): Video[] {
   const gone = useSelector((state: RootState) => {
-    let ids = "";
+    let keys = "";
     for (const file of files) {
-      if (state.file.hashMapFiles[file.id]?.isValid === false) ids += `${file.id}\n`;
+      if (heldShare(state.file, file.user, file.id)?.isValid === false) {
+        keys += `${shareKey(file.user, file.id)}\n`;
+      }
     }
-    return ids;
+    return keys;
   });
   return React.useMemo(() => {
     if (!gone) return files;
     const drop = new Set(gone.split("\n"));
-    return files.filter((file) => !drop.has(file.id));
+    return files.filter((file) => !drop.has(shareKey(file.user, file.id)));
   }, [files, gone]);
 }
 
@@ -144,7 +149,7 @@ export const useFetchFiles = () => {
   // this hook doesn't re-render for every body that lands (rows do that).
   const checkAndUpdateFile = React.useCallback(
     (video: Video) => {
-      const existingVideo = store.getState().file.hashMapFiles[video.id];
+      const existingVideo = heldShare(store.getState().file, video.user, video.id);
       if (!existingVideo) return true;
       // Re-fetch when the search says the share was updated after the copy we hold.
       return Boolean(
@@ -184,9 +189,10 @@ export const useFetchFiles = () => {
       const { unavailableFiles } = store.getState().file;
       for (const content of rows) {
         if (!content.user || !content.id || isNameHidden(content.user)) continue;
-        if (bodiesInFlight.has(content.id) || !checkAndUpdateFile(content)) continue;
-        if (!retryUnavailable && unavailableFiles[content.id]) continue;
-        bodiesInFlight.add(content.id);
+        const key = shareKey(content.user, content.id);
+        if (bodiesInFlight.has(key) || !checkAndUpdateFile(content)) continue;
+        if (!retryUnavailable && unavailableFiles[key]) continue;
+        bodiesInFlight.add(key);
         queue.push(() => getFile(content.user, content.id, content));
       }
     },

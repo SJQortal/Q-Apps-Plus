@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { addUser } from '../../state/features/authSlice';
-import { addFiles, changefilterName, changefilterSearch } from '../../state/features/fileSlice';
+import { addFiles, changefilterName, changefilterSearch, shareKey } from '../../state/features/fileSlice';
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
 import { Home } from './Home';
@@ -237,7 +237,7 @@ describe('Home rows before and without a body', () => {
     expect(await screen.findByText('Not available on your node right now')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Qorterminator 2 visual' })).toBeInTheDocument();
     expect(qortalCallsFor('FETCH_QDN_RESOURCE').filter((c) => String(c.identifier).includes('WiRAxt')).length).toBe(3);
-    expect(store.getState().file.unavailableFiles['qshare_file_qorterminator-2-visual_WiRAxt_metadata']).toBe(true);
+    expect(store.getState().file.unavailableFiles[shareKey('erin', 'qshare_file_qorterminator-2-visual_WiRAxt_metadata')]).toBe(true);
 
     release();
     expect(await screen.findByText('Slow share with its full title')).toBeInTheDocument();

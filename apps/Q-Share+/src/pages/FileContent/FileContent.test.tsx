@@ -288,6 +288,25 @@ describe('FileContent (share page)', () => {
     store.dispatch({ type: 'file/removeFromHashMap', payload: ID });
   });
 
+  it("ignores a body another name published under this identifier, and loads this name's own", async () => {
+    mockFetch('/arbitrary/resources/search', [{ ...searchRow, name: 'Alice B' }]);
+    mockCommentSearches();
+    mockQortalAction('FETCH_QDN_RESOURCE', body);
+    store.dispatch(addToHashMap({ id: ID, user: 'mallory', title: 'Holiday pics', isValid: false, deleted: true }));
+
+    renderShare();
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Holiday pics' })).toBeInTheDocument();
+    expect(screen.queryByText(/deleted by its publisher/)).not.toBeInTheDocument();
+    expect(qortalCallsFor('FETCH_QDN_RESOURCE')[0]).toMatchObject({ name: NAME, identifier: ID });
+    // The node's spelling of the name ("Alice B") is the same name as the link's
+    // ("alice b"), and mallory's row keeps its own body.
+    const { hashMapFiles, reusedIdFiles } = store.getState().file;
+    expect(hashMapFiles[ID]).toMatchObject({ user: 'mallory', isValid: false, deleted: true });
+    expect(Object.values(reusedIdFiles)).toEqual([expect.objectContaining({ id: ID, user: 'Alice B', isValid: true })]);
+    store.dispatch({ type: 'file/removeFromHashMap', payload: ID });
+  });
+
   describe('action row', () => {
     const single = { ...body, files: [body.files[0]] };
 

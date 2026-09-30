@@ -15,7 +15,7 @@ import { ResponsiveDialog } from "../../components/common/mobile/ResponsiveDialo
 import { FileList } from "../Home/FileList";
 import { upsertCollection } from "../../state/features/collectionsSlice";
 import { setNotification } from "../../state/features/notificationsSlice";
-import type { Video } from "../../state/features/fileSlice";
+import { heldShare, shareKey, type Video } from "../../state/features/fileSlice";
 import type { RootState } from "../../state/store";
 import { queue } from "../../wrappers/GlobalWrapper";
 import {
@@ -72,6 +72,7 @@ function CollectionView({ name, id }: { name: string; id: string }) {
   const phone = usePhoneLayout();
   const user = useSelector((state: RootState) => state.auth.user);
   const hashMapFiles = useSelector((state: RootState) => state.file.hashMapFiles);
+  const reusedIdFiles = useSelector((state: RootState) => state.file.reusedIdFiles);
   const collection = useSelector((state: RootState) => state.collections.byKey[collectionKey(name, id)]);
   const [status, setStatus] = useState<Status>(!name || !id ? "missing" : collection ? "ready" : "loading");
   const [editOpen, setEditOpen] = useState(false);
@@ -169,12 +170,14 @@ function CollectionView({ name, id }: { name: string; id: string }) {
     [collection?.items, settings]
   );
 
-  // One FETCH per share body through the queue; no search per item.
+  // One FETCH per share body through the queue; no search per item. Keyed by
+  // name and identifier: two names can publish under one identifier.
   const requested = useRef(new Set<string>());
   useEffect(() => {
     for (const video of items) {
-      if (requested.current.has(video.id) || !checkAndUpdateFile(video)) continue;
-      requested.current.add(video.id);
+      const key = shareKey(video.user, video.id);
+      if (requested.current.has(key) || !checkAndUpdateFile(video)) continue;
+      requested.current.add(key);
       queue.push(() => getFile(video.user, video.id, video));
     }
   }, [items, checkAndUpdateFile, getFile]);
@@ -223,8 +226,9 @@ function CollectionView({ name, id }: { name: string; id: string }) {
     }
   };
 
+  // Only this row's name's body: another name's under the same identifier is a different share.
   const shareTitle = (video: Video | null) =>
-    (video && hashMapFiles[video.id]?.title) || video?.id || "this share";
+    (video && heldShare({ hashMapFiles, reusedIdFiles }, video.user, video.id)?.title) || video?.id || "this share";
 
   let body: React.ReactNode;
   if (status === "loading" || (status === "ready" && !collection)) {
@@ -320,7 +324,7 @@ function CollectionView({ name, id }: { name: string; id: string }) {
         ) : isOwner ? (
           <ItemRows>
             {items.map((video) => (
-              <ItemRow key={video.id}>
+              <ItemRow key={shareKey(video.user, video.id)}>
                 <FileList files={[video]} />
                 <Tooltip title="Remove from collection">
                   <IconButton

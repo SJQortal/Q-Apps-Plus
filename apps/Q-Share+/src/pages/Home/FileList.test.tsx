@@ -102,7 +102,7 @@ describe('FileList rows without a body', () => {
   it('shows an unavailable row that still opens the share, and a deleted one with nothing to open', () => {
     const missing = { ...share('qshare_file_gone-away_Mi1234_metadata'), title: '' };
     const deleted = { ...share('qshare_file_torq-test_De1234_metadata'), title: 'deleted' };
-    store.dispatch(markUnavailable(missing.id));
+    store.dispatch(markUnavailable(missing));
     store.dispatch(addToHashMap({ ...deleted, isValid: false, deleted: true }));
 
     renderWithProviders(<FileList files={[missing, deleted]} />);
@@ -112,5 +112,25 @@ describe('FileList rows without a body', () => {
     expect(screen.getByText('Deleted by its publisher')).toBeInTheDocument();
     expect(screen.getByText('Torq test')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open Torq test' })).not.toBeInTheDocument();
+  });
+
+  it('keeps two names under one identifier apart: each row shows its own body and state', () => {
+    const id = 'qshare_file_same-id_Si1234_metadata';
+    const own = { ...share(id, 'alice'), title: 'Holiday' };
+    const other = { ...share(id, 'mallory'), title: 'Holiday' };
+    const third = { ...share(id, 'carol'), title: 'Holiday' };
+    store.dispatch(addToHashMap({ ...other, isValid: false, deleted: true }));
+    store.dispatch(addToHashMap({ ...own, title: 'Holiday pics', files: [{ size: 2048 }], isValid: true }));
+    store.dispatch(markUnavailable(third));
+
+    renderWithProviders(<FileList files={[other, own, third]} />);
+
+    expect(screen.getByText('Deleted by its publisher')).toBeInTheDocument();
+    expect(screen.getByText('Holiday pics')).toBeInTheDocument();
+    expect(screen.getByText(/1 file · 2 KB/)).toBeInTheDocument();
+    // The owner can edit, as the body is there.
+    expect(screen.getByRole('button', { name: 'Edit share' })).toBeInTheDocument();
+    expect(screen.getAllByText('Not available on your node right now')).toHaveLength(1);
+    store.dispatch({ type: 'file/removeFromHashMap', payload: id });
   });
 });

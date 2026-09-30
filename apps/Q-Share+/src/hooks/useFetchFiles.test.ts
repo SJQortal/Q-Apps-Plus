@@ -1,10 +1,10 @@
 import { createElement, type ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
-import { categoriesFromQdnDescription, shareTitleFromIdentifier, summaryToVideo, useFetchFiles } from './useFetchFiles';
+import { categoriesFromQdnDescription, shareTitleFromIdentifier, summaryToVideo, useFetchFiles, useListedFiles } from './useFetchFiles';
 import { store } from '../state/store';
-import { addToHashMap } from '../state/features/fileSlice';
+import { addToHashMap, heldShare, markUnavailable, shareKey, type Video } from '../state/features/fileSlice';
 import { mockQortalAction, qortalCallsFor } from '../test/setup';
 
 describe('share rows from search summaries', () => {
@@ -60,5 +60,71 @@ describe('queued body fetches', () => {
     await result.current.getFile('alice', id, { id, user: 'alice', updated: 6 });
     expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(1);
     expect(store.getState().file.hashMapFiles[id]).toMatchObject({ title: 'Newer', isValid: true });
+  });
+});
+
+describe('a body another name published under the same identifier', () => {
+  const id = 'qshare_file_reused_Re1234_metadata';
+  const alice: Video = { id, user: 'Alice', title: 'Holiday', description: '', created: 1, updated: 5 };
+  const mallory: Video = { id, user: 'mallory', title: 'Holiday', description: '', created: 2, updated: 9 };
+  const rows = [mallory, alice];
+
+  it("is not this share's: the row fetches its own body and only the other name's row is dropped", async () => {
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(Provider, { store, children });
+    const { result } = renderHook(() => ({ fetch: useFetchFiles(), listed: useListedFiles(rows) }), { wrapper });
+    // mallory's copy is a delete marker; Home fetched it first.
+    store.dispatch(addToHashMap({ ...mallory, isValid: false, deleted: true }));
+    await waitFor(() => expect(result.current.listed).toEqual([alice]));
+    expect(result.current.fetch.checkAndUpdateFile(alice)).toBe(true);
+
+    mockQortalAction('FETCH_QDN_RESOURCE', { title: 'Holiday pics', files: [] });
+    await result.current.fetch.getFile('Alice', id, alice);
+    expect(qortalCallsFor('FETCH_QDN_RESOURCE')).toEqual([expect.objectContaining({ name: 'Alice', identifier: id })]);
+    // Both bodies stay: neither evicts the other.
+    const file = store.getState().file;
+    expect(heldShare(file, 'Alice', id)).toMatchObject({ user: 'Alice', title: 'Holiday pics', isValid: true });
+    expect(heldShare(file, 'mallory', id)).toMatchObject({ user: 'mallory', deleted: true });
+    expect(result.current.listed).toEqual([alice]);
+    // Names are one name whatever their case.
+    expect(result.current.fetch.checkAndUpdateFile({ ...alice, user: 'alice' })).toBe(false);
+    expect(result.current.fetch.checkAndUpdateFile(mallory)).toBe(false);
+    store.dispatch({ type: 'file/removeFromHashMap', payload: id });
+    expect(heldShare(store.getState().file, 'Alice', id)).toBeUndefined();
+  });
+
+  it('queues a body per name, however the two land, and marks only the failing one unavailable', async () => {
+    const reused = 'qshare_file_reused-queue_Rq1234_metadata';
+    const a: Video = { ...alice, id: reused };
+    const m: Video = { ...mallory, id: reused };
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(Provider, { store, children });
+    const { result } = renderHook(() => ({ fetch: useFetchFiles(), listed: useListedFiles([m, a]) }), { wrapper });
+    mockQortalAction('FETCH_QDN_RESOURCE', (params) =>
+      params.name === 'mallory' ? 'D' : { title: 'Holiday pics', files: [{ filename: 'beach.jpg', size: 10 }] }
+    );
+
+    result.current.fetch.queueBodies([m, a]);
+
+    await waitFor(() => expect(result.current.listed).toEqual([a]));
+    await waitFor(() => expect(heldShare(store.getState().file, 'Alice', reused)).toMatchObject({ isValid: true }));
+    const fetches = qortalCallsFor('FETCH_QDN_RESOURCE');
+    expect(fetches).toHaveLength(2);
+    expect(fetches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'mallory', identifier: reused }),
+        expect.objectContaining({ name: 'Alice', identifier: reused }),
+      ])
+    );
+    expect(heldShare(store.getState().file, 'mallory', reused)).toMatchObject({ isValid: false, deleted: true });
+
+    // Coming back to the list fetches neither again.
+    result.current.fetch.queueBodies([m, a], false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(qortalCallsFor('FETCH_QDN_RESOURCE')).toHaveLength(2);
+
+    // One name's failed fetch says nothing about the other's.
+    store.dispatch(markUnavailable({ user: 'mallory', id: reused }));
+    expect(store.getState().file.unavailableFiles[shareKey('mallory', reused)]).toBe(true);
+    expect(store.getState().file.unavailableFiles[shareKey('Alice', reused)]).toBeUndefined();
+    store.dispatch({ type: 'file/removeFromHashMap', payload: reused });
   });
 });

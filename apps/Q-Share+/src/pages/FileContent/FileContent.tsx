@@ -17,7 +17,7 @@ import { CommentSection } from "../../components/common/Comments/CommentSection"
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
 import { MyContext, isFailedStatus } from "../../wrappers/DownloadWrapper";
 import { RootState } from "../../state/store";
-import { addToHashMap, setEditFile } from "../../state/features/fileSlice.ts";
+import { addToHashMap, heldShare, setEditFile } from "../../state/features/fileSlice.ts";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { useSafeBack } from "../../hooks/useSafeBack";
@@ -173,7 +173,8 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
   const { downloadVideo } = useContext(MyContext);
   const downloads = useSelector((state: RootState) => state.global.downloads);
   const username = useSelector((state: RootState) => state.auth.user?.name);
-  const cached = useSelector((state: RootState) => state.file.hashMapFiles[id]);
+  // A body another name published under this identifier is not this share.
+  const cached = useSelector((state: RootState) => heldShare(state.file, name, id));
 
   const [fetchState, setFetchState] = useState<FetchState>("loading");
   const [fetchPercent, setFetchPercent] = useState<number | null>(null);

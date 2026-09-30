@@ -17,7 +17,7 @@ import {
   RowMeta,
   VideoCardTitle,
 } from "./FileList-styles.tsx";
-import { blockUser, setEditFile, Video } from "../../state/features/fileSlice.ts";
+import { blockUser, heldShare, setEditFile, shareKey, Video } from "../../state/features/fileSlice.ts";
 import { setNotification } from "../../state/features/notificationsSlice.ts";
 import { formatBytes } from "../../utils/formatBytes.ts";
 import { formatDate } from "../../utils/time.ts";
@@ -47,7 +47,8 @@ export const FileList = ({ files, showPublisher = true }: FileListProps) => {
   return (
     <FileContainer>
       {files.map((file) => (
-        <FileListRow key={file.id} file={file} showPublisher={showPublisher} phone={phone} username={username} />
+        // Two names can publish under one identifier: each is its own row.
+        <FileListRow key={shareKey(file.user, file.id)} file={file} showPublisher={showPublisher} phone={phone} username={username} />
       ))}
     </FileContainer>
   );
@@ -61,8 +62,9 @@ interface FileListRowProps {
 }
 
 const FileListRow = memo(function FileListRow({ file, showPublisher, phone, username }: FileListRowProps) {
-  const existingFile = useSelector((state: RootState) => state.file.hashMapFiles[file.id]);
-  const isUnavailable = useSelector((state: RootState) => Boolean(state.file.unavailableFiles[file.id]));
+  // Only a body from this row's own name (another can reuse the identifier).
+  const existingFile = useSelector((state: RootState) => heldShare(state.file, file.user, file.id));
+  const isUnavailable = useSelector((state: RootState) => Boolean(state.file.unavailableFiles[shareKey(file.user, file.id)]));
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const actionSize = phone ? "medium" : "small";

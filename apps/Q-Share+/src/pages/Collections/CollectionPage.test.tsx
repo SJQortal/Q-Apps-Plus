@@ -89,6 +89,36 @@ describe('CollectionPage', () => {
     expect(screen.getByText('· 1 item')).toBeInTheDocument();
   });
 
+  it("fetches and names each name's share when two names publish under one identifier", async () => {
+    const shared = 'qshare_file_same_ccc333_metadata';
+    const collectionId = 'qshare_collection_twins_cd34ef';
+    store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
+    mockQortalAction('FETCH_QDN_RESOURCE', (params) => {
+      if (params.identifier === collectionId) {
+        const twins = [
+          { name: 'bob', identifier: shared },
+          { name: 'carol', identifier: shared },
+        ];
+        return { version: 1, title: 'Twins', description: '', items: twins, created: 1, updated: 2 };
+      }
+      return { title: params.name === 'bob' ? 'Bob share' : 'Carol share', files: [] };
+    });
+    renderWithProviders(
+      <Routes>
+        <Route path="/collection/:name/:id" element={<CollectionPage />} />
+      </Routes>,
+      { initialEntries: [`/collection/alice/${collectionId}`] }
+    );
+
+    expect(await screen.findByText('Bob share')).toBeInTheDocument();
+    expect(await screen.findByText('Carol share')).toBeInTheDocument();
+    const bodies = qortalCallsFor('FETCH_QDN_RESOURCE').filter((c) => c.identifier === shared);
+    expect(bodies.map((c) => c.name).sort()).toEqual(['bob', 'carol']);
+    expect(screen.getByRole('button', { name: 'Remove Bob share from collection' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove Carol share from collection' })).toBeInTheDocument();
+    store.dispatch({ type: 'file/removeFromHashMap', payload: shared });
+  });
+
   it('keeps the item and shows no error when the owner declines the republish in Hub', async () => {
     store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
     store.dispatch(removeNotification());
