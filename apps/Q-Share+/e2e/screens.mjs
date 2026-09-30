@@ -31,6 +31,8 @@ const opt = (name, fallback) => {
 const onlyScreens = opt("only", "").split(",").filter(Boolean);
 const themes = opt("themes", "hub30,hub20,black,white").split(",");
 const PORT = Number(opt("port", "4173"));
+// Hub's light or dark mode, which Hub 3.0 and Classic follow (--mode light).
+const MODE = opt("mode", "dark") === "light" ? "light" : "dark";
 
 const VIEWPORTS = [
   { name: "360x740", width: 360, height: 740, mobile: true },
@@ -102,7 +104,7 @@ function consentSource() {
 
 function qortalMockSource() {
   return `
-    window._qdnTheme = window._qdnTheme || 'dark';
+    window._qdnTheme = '${MODE}';
     window._qdnName = 'Q-Share+';
     window.__calls = [];
     const bodies = ${JSON.stringify(Object.fromEntries(rows.map((r, i) => [r.identifier, body(i + 1)])))};
@@ -248,7 +250,7 @@ try {
         await routeCore(page);
         let ok = true;
         try {
-          await page.goto(`http://127.0.0.1:${PORT}${screen.path}?theme=dark`, { waitUntil: "load", timeout: 12000 });
+          await page.goto(`http://127.0.0.1:${PORT}${screen.path}?theme=${MODE}`, { waitUntil: "load", timeout: 12000 });
           await page.waitForSelector("#root > *", { timeout: 8000 }).catch(() => {});
           const consent = page.getByRole("button", { name: "I understand" });
           if (await consent.count()) await consent.first().click({ timeout: 2500 }).catch(() => {});
@@ -258,8 +260,20 @@ try {
           ok = false;
           if (!screen.optional) errors.push("nav: " + String(e).slice(0, 120));
         }
-        const file = `${screen.key}-${vp.name}-${theme}.png`;
-        await page.screenshot({ path: path.join(shots, file), fullPage: !screen.key.includes("filters") && !screen.key.includes("publish") && !screen.key.includes("menu") });
+        const file = `${screen.key}-${vp.name}-${theme}${MODE === "light" ? "-light" : ""}.png`;
+        // A full-page capture stretches the viewport to the document height,
+        // which flips the landscape-phone media query (max-height) back to the
+        // desktop layout. Landscape gets two viewport shots instead: the top,
+        // and scrolled to the bottom (bottom bar, hidden header).
+        const overlay = screen.key.includes("filters") || screen.key.includes("publish") || screen.key.includes("menu");
+        const landscape = vp.mobile && vp.width > vp.height;
+        await page.screenshot({ path: path.join(shots, file), fullPage: !overlay && !landscape });
+        if (landscape && !overlay) {
+          await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+          await page.waitForTimeout(400);
+          await page.screenshot({ path: path.join(shots, file.replace(".png", "-scrolled.png")) });
+          await page.evaluate(() => window.scrollTo(0, 0));
+        }
         const metrics = await page.evaluate(() => {
           const doc = document.documentElement;
           const overflowX = doc.scrollWidth > window.innerWidth + 1;
