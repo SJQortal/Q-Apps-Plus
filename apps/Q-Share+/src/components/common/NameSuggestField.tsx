@@ -289,6 +289,10 @@ export function NameSuggestField({
         anchorEl={anchor}
         placement="bottom-start"
         modifiers={POPPER_MODIFIERS}
+        // Fixed, not absolute: in Hub's frame the body is taller than the viewport,
+        // and an absolute popper flipped above a field in the bottom sheet landed
+        // off-screen (bottom: 0 of the page, not of the frame).
+        popperOptions={{ strategy: "fixed" }}
         // Not a tooltip (Popper's default role): the listbox inside is what the field controls.
         role="presentation"
         sx={{ zIndex: theme.zIndex.modal + 1 }}
