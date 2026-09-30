@@ -35,7 +35,7 @@ describe('IndividualProfile', () => {
       { initialEntries: ['/channel/alice'] }
     );
     expect(await screen.findByRole('heading', { name: 'alice' })).toBeInTheDocument();
-    await waitFor(() => expect(fetchCallsMatching(/query=qshare_file_/).length).toBe(1));
+    await waitFor(() => expect(fetchCallsMatching(/identifier=qshare_file_/).length).toBe(1));
     expect(fetchCallsMatching(/identifier=qshare_collection_/).length).toBe(0);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Collections' }));

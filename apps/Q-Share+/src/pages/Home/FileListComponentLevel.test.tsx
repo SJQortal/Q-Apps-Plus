@@ -33,6 +33,11 @@ describe('profile share list', () => {
     expect(searches.length).toBe(1);
     expect(searches[0]).toContain('includemetadata=true');
     expect(searches[0]).toContain('name=Claude');
+    // Prefix match on the identifier, like Home, not a free-text query.
+    const params = new URL(searches[0], 'http://localhost').searchParams;
+    expect(params.get('identifier')).toBe('qshare_file_');
+    expect(params.has('query')).toBe(false);
+    expect(params.get('limit')).toBe('20');
   });
 
   it('a failed next page stops the pager and offers Retry instead of repeating the search', async () => {

@@ -29,9 +29,11 @@ export const FileListComponentLevel = () => {
       setError(false);
       try {
         const offset = reset ? 0 : videos.length;
+        // An identifier prefix, as Home searches: the same rows as query= (checked
+        // on a node for names with up to 300 shares) from a cheaper Core query.
         const rows = await searchQdn({
           service: "DOCUMENT",
-          query: QSHARE_FILE_BASE,
+          identifier: QSHARE_FILE_BASE,
           name: paramName,
           limit: QDN_PAGE,
           offset,
