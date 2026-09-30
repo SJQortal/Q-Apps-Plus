@@ -137,20 +137,21 @@ export function useListedFiles(files: Video[]): Video[] {
 export const useFetchFiles = () => {
   const dispatch = useDispatch();
   const store = useStore<RootState>();
-  const hashMapFiles = useSelector((state: RootState) => state.file.hashMapFiles);
   const videos = useSelector((state: RootState) => state.file.files);
   const filteredVideos = useSelector((state: RootState) => state.file.filteredFiles);
 
+  // Reads the store when called rather than subscribing, so the page using
+  // this hook doesn't re-render for every body that lands (rows do that).
   const checkAndUpdateFile = React.useCallback(
     (video: Video) => {
-      const existingVideo = hashMapFiles[video.id];
+      const existingVideo = store.getState().file.hashMapFiles[video.id];
       if (!existingVideo) return true;
       // Re-fetch when the search says the share was updated after the copy we hold.
       return Boolean(
         video?.updated && (!existingVideo?.updated || video.updated > existingVideo.updated)
       );
     },
-    [hashMapFiles]
+    [store]
   );
 
   const getAvatar = React.useCallback(async (author: string) => {
@@ -298,7 +299,6 @@ export const useFetchFiles = () => {
     checkAndUpdateFile,
     getFile,
     getAvatar,
-    hashMapFiles,
     getNewFiles,
     checkNewFiles,
     getFilesFiltered,

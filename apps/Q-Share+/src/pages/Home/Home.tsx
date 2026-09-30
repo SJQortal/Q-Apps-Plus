@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Box,
@@ -182,9 +182,11 @@ export const Home = () => {
 
   // Deleted shares ("D" bodies) and hidden names drop out of the list.
   const listedFiles = useListedFiles(files);
-  const visibleFiles = settings.hiddenNames.length
-    ? listedFiles.filter((f) => !isNameHidden(f.user, settings))
-    : listedFiles;
+  // Memoized so the list's rows keep stable props across Home's own re-renders.
+  const visibleFiles = useMemo(
+    () => (settings.hiddenNames.length ? listedFiles.filter((f) => !isNameHidden(f.user, settings)) : listedFiles),
+    [listedFiles, settings]
+  );
   // Rows came back, but every one of them is from a hidden name.
   const hiddenAll = listedFiles.length > 0 && visibleFiles.length === 0;
 

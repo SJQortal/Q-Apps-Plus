@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { FileList } from './FileList';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import { mockQortalAction, qortalCallsFor } from '../../test/setup';
@@ -7,6 +7,13 @@ import { store } from '../../state/store';
 import { addUser } from '../../state/features/authSlice';
 import { addToHashMap, markUnavailable, type Video } from '../../state/features/fileSlice';
 import { setNotification } from '../../state/features/notificationsSlice';
+import { getIconsFromObject } from '../../constants/Categories/CategoryFunctions';
+
+// Counts row renders: every row computes its icon once per render.
+vi.mock('../../constants/Categories/CategoryFunctions.ts', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../constants/Categories/CategoryFunctions.ts')>();
+  return { ...original, getIconsFromObject: vi.fn(original.getIconsFromObject) };
+});
 
 const share = (id: string, user = 'bob'): Video => ({ id, user, title: `Title ${id}`, description: '', created: 1, service: 'DOCUMENT' });
 const alerts = () => store.getState().notifications.alertTypes;
@@ -57,6 +64,22 @@ describe('FileList row actions', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Block bob' }));
     await waitFor(() => expect(alerts().alertError).toBe('Could not block bob'));
+  });
+});
+
+describe('FileList rendering', () => {
+  it('a body landing re-renders only its own row', () => {
+    const rows = [1, 2, 3, 4].map((n) => share(`qshare_file_render-${n}_Rn000${n}_metadata`));
+    renderWithProviders(<FileList files={rows} />);
+    const renders = vi.mocked(getIconsFromObject);
+    expect(renders).toHaveBeenCalledTimes(4);
+
+    renders.mockClear();
+    act(() => {
+      store.dispatch(addToHashMap({ ...rows[2], title: 'Third, loaded', files: [], isValid: true }));
+    });
+    expect(screen.getByText('Third, loaded')).toBeInTheDocument();
+    expect(renders).toHaveBeenCalledTimes(1);
   });
 });
 

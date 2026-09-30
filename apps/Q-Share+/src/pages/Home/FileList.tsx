@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Avatar, IconButton, Skeleton, Tooltip } from "@mui/material";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import BlockOutlinedIcon from "@mui/icons-material/BlockOutlined";
@@ -35,13 +36,34 @@ interface FileListProps {
   showPublisher?: boolean;
 }
 
+/**
+ * One list per page, one memoized row per share: each row selects its own
+ * body, so a body landing re-renders that row and not the whole list.
+ */
 export const FileList = ({ files, showPublisher = true }: FileListProps) => {
-  const hashMapFiles = useSelector((state: RootState) => state.file.hashMapFiles);
-  const unavailableFiles = useSelector((state: RootState) => state.file.unavailableFiles);
   const username = useSelector((state: RootState) => state.auth?.user?.name);
+  const phone = usePhoneLayout();
+  return (
+    <FileContainer>
+      {files.map((file) => (
+        <FileListRow key={file.id} file={file} showPublisher={showPublisher} phone={phone} username={username} />
+      ))}
+    </FileContainer>
+  );
+};
+
+interface FileListRowProps {
+  file: Video;
+  showPublisher: boolean;
+  phone: boolean;
+  username?: string;
+}
+
+const FileListRow = memo(function FileListRow({ file, showPublisher, phone, username }: FileListRowProps) {
+  const existingFile = useSelector((state: RootState) => state.file.hashMapFiles[file.id]);
+  const isUnavailable = useSelector((state: RootState) => Boolean(state.file.unavailableFiles[file.id]));
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const phone = usePhoneLayout();
   const actionSize = phone ? "medium" : "small";
   const actionSx = phone ? { minWidth: 44, minHeight: 44 } : undefined;
 
@@ -64,8 +86,8 @@ export const FileList = ({ files, showPublisher = true }: FileListProps) => {
   };
 
   // copyText falls back to execCommand where navigator.clipboard is missing (a node on plain http).
-  const copyLink = async (file: Video) => {
-    const copied = await copyText(shareLink(file.user, file.id));
+  const copyLink = async (share: Video) => {
+    const copied = await copyText(shareLink(share.user, share.id));
     dispatch(
       setNotification(
         copied ? { msg: "Link copied", alertType: "success" } : { msg: "Could not copy the link", alertType: "error" }
@@ -73,124 +95,117 @@ export const FileList = ({ files, showPublisher = true }: FileListProps) => {
     );
   };
 
+  // A body fetched without a search (e.g. from a collection page) has no created stamp.
+  const fileObj: any = existingFile ? { ...existingFile, created: existingFile.created ?? file.created } : file;
+  // Until the body lands the row shows the search's metadata. A body that never
+  // comes still gets a readable row, which opens the share page (it has Retry).
+  const loaded = Boolean(existingFile);
+  const unavailable = !loaded && isUnavailable;
+  const title: string = fileObj.title || (loaded || unavailable ? shareTitleFromIdentifier(fileObj.id) : "");
+  const icon = getIconsFromObject(fileObj);
+  if (existingFile?.isValid === false) {
+    // Home and profiles leave deleted shares out; a collection can still list one.
+    return (
+      <FileRow>
+        <RowMainStatic className="row-main">
+          {icon ? <RowIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon color="disabled" />}
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <VideoCardTitle sx={{ color: "text.secondary" }}>
+              {/* Some deletes also retitle the share "deleted". */}
+              {/^deleted$/i.test(title) ? shareTitleFromIdentifier(fileObj.id) : title}
+            </VideoCardTitle>
+            <RowMeta>
+              <span>{existingFile.deleted ? "Deleted by its publisher" : "This share can't be read"}</span>
+            </RowMeta>
+          </div>
+        </RowMainStatic>
+        {showPublisher && (
+          <NameLink onClick={() => navigate(profilePath(fileObj.user))} aria-label={`Shares by ${fileObj.user}`}>
+            <Avatar sx={{ width: 22, height: 22 }} src={avatarUrl(fileObj.user)} alt="" slotProps={{ img: { loading: "lazy" } }} />
+            <span>{fileObj.user}</span>
+          </NameLink>
+        )}
+      </FileRow>
+    );
+  }
+  const totalSize = fileObj?.files?.reduce((acc: number, cur: any) => acc + (cur?.size || 0), 0) ?? 0;
+  const fileCount = fileObj?.files?.length ?? 0;
   return (
-    <FileContainer>
-      {files.map((file) => {
-        const existingFile = hashMapFiles[file?.id];
-        // A body fetched without a search (e.g. from a collection page) has no created stamp.
-        const fileObj: any = existingFile ? { ...existingFile, created: existingFile.created ?? file.created } : file;
-        // Until the body lands the row shows the search's metadata. A body that never
-        // comes still gets a readable row, which opens the share page (it has Retry).
-        const loaded = Boolean(existingFile);
-        const unavailable = !loaded && Boolean(unavailableFiles[file?.id]);
-        const title: string = fileObj.title || (loaded || unavailable ? shareTitleFromIdentifier(fileObj.id) : "");
-        const icon = getIconsFromObject(fileObj);
-        if (existingFile?.isValid === false) {
-          // Home and profiles leave deleted shares out; a collection can still list one.
-          return (
-            <FileRow key={fileObj.id}>
-              <RowMainStatic className="row-main">
-                {icon ? <RowIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon color="disabled" />}
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <VideoCardTitle sx={{ color: "text.secondary" }}>
-                    {/* Some deletes also retitle the share "deleted". */}
-                    {/^deleted$/i.test(title) ? shareTitleFromIdentifier(fileObj.id) : title}
-                  </VideoCardTitle>
-                  <RowMeta>
-                    <span>{existingFile.deleted ? "Deleted by its publisher" : "This share can't be read"}</span>
-                  </RowMeta>
-                </div>
-              </RowMainStatic>
-              {showPublisher && (
-                <NameLink onClick={() => navigate(profilePath(fileObj.user))} aria-label={`Shares by ${fileObj.user}`}>
-                  <Avatar sx={{ width: 22, height: 22 }} src={avatarUrl(fileObj.user)} alt="" slotProps={{ img: { loading: "lazy" } }} />
-                  <span>{fileObj.user}</span>
-                </NameLink>
-              )}
-            </FileRow>
-          );
-        }
-        const totalSize = fileObj?.files?.reduce((acc: number, cur: any) => acc + (cur?.size || 0), 0) ?? 0;
-        const fileCount = fileObj?.files?.length ?? 0;
-        return (
-          <FileRow key={fileObj.id} aria-busy={!loaded && !unavailable ? true : undefined}>
-            <RowMain
-              className="row-main"
-              onClick={() => navigate(sharePath(fileObj.user, fileObj.id))}
-              aria-label={`Open ${title || "share"}`}
-            >
-              {icon ? <RowIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon />}
-              <div style={{ minWidth: 0, flex: 1 }}>
-                {title ? (
-                  <VideoCardTitle>{title}</VideoCardTitle>
-                ) : (
-                  <Skeleton variant="text" sx={{ fontSize: 15, width: "60%" }} />
-                )}
-                <RowMeta>
-                  {loaded ? (
-                    <span>
-                      {fileCount} {fileCount === 1 ? "file" : "files"} · {formatBytes(totalSize)}
-                    </span>
-                  ) : unavailable ? (
-                    <span>Not available on your node right now</span>
-                  ) : (
-                    <Skeleton variant="text" sx={{ width: 96 }} />
-                  )}
-                  {fileObj?.created && <span>· {formatDate(fileObj.created)}</span>}
-                </RowMeta>
-              </div>
-            </RowMain>
-            {showPublisher && (
-              <NameLink
-                onClick={() => navigate(profilePath(fileObj.user))}
-                aria-label={`Shares by ${fileObj.user}`}
-              >
-                <Avatar
-                  sx={{ width: 22, height: 22 }}
-                  src={avatarUrl(fileObj.user)}
-                  alt=""
-                  slotProps={{ img: { loading: "lazy" } }}
-                />
-                <span>{fileObj.user}</span>
-              </NameLink>
+    <FileRow aria-busy={!loaded && !unavailable ? true : undefined}>
+      <RowMain
+        className="row-main"
+        onClick={() => navigate(sharePath(fileObj.user, fileObj.id))}
+        aria-label={`Open ${title || "share"}`}
+      >
+        {icon ? <RowIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon />}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          {title ? (
+            <VideoCardTitle>{title}</VideoCardTitle>
+          ) : (
+            <Skeleton variant="text" sx={{ fontSize: 15, width: "60%" }} />
+          )}
+          <RowMeta>
+            {loaded ? (
+              <span>
+                {fileCount} {fileCount === 1 ? "file" : "files"} · {formatBytes(totalSize)}
+              </span>
+            ) : unavailable ? (
+              <span>Not available on your node right now</span>
+            ) : (
+              <Skeleton variant="text" sx={{ width: 96 }} />
             )}
-            <RowActions className="row-actions">
-              <Tooltip title="Copy link">
-                <IconButton size={actionSize} sx={actionSx} aria-label="Copy link" onClick={() => copyLink(fileObj)}>
-                  <LinkOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <SaveToCollectionButton
-                share={{ name: fileObj.user, identifier: fileObj.id, title }}
+            {fileObj?.created && <span>· {formatDate(fileObj.created)}</span>}
+          </RowMeta>
+        </div>
+      </RowMain>
+      {showPublisher && (
+        <NameLink
+          onClick={() => navigate(profilePath(fileObj.user))}
+          aria-label={`Shares by ${fileObj.user}`}
+        >
+          <Avatar
+            sx={{ width: 22, height: 22 }}
+            src={avatarUrl(fileObj.user)}
+            alt=""
+            slotProps={{ img: { loading: "lazy" } }}
+          />
+          <span>{fileObj.user}</span>
+        </NameLink>
+      )}
+      <RowActions className="row-actions">
+        <Tooltip title="Copy link">
+          <IconButton size={actionSize} sx={actionSx} aria-label="Copy link" onClick={() => copyLink(fileObj)}>
+            <LinkOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <SaveToCollectionButton
+          share={{ name: fileObj.user, identifier: fileObj.id, title }}
+          size={actionSize}
+        />
+        {fileObj?.user === username ? (
+          // Editing needs the share's JSON body.
+          loaded && (
+            <Tooltip title="Edit share">
+              <IconButton size={actionSize} sx={actionSx} aria-label="Edit share" onClick={() => dispatch(setEditFile(fileObj))}>
+                <EditOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )
+        ) : (
+          username && (
+            <Tooltip title={`Block ${fileObj.user}`}>
+              <IconButton
                 size={actionSize}
-              />
-              {fileObj?.user === username ? (
-                // Editing needs the share's JSON body.
-                loaded && (
-                  <Tooltip title="Edit share">
-                    <IconButton size={actionSize} sx={actionSx} aria-label="Edit share" onClick={() => dispatch(setEditFile(fileObj))}>
-                      <EditOutlinedIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                )
-              ) : (
-                username && (
-                  <Tooltip title={`Block ${fileObj.user}`}>
-                    <IconButton
-                      size={actionSize}
-                      aria-label={`Block ${fileObj.user}`}
-                      onClick={() => blockUserFunc(fileObj.user)}
-                      sx={{ color: "error.main", ...actionSx }}
-                    >
-                      <BlockOutlinedIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                )
-              )}
-            </RowActions>
-          </FileRow>
-        );
-      })}
-    </FileContainer>
+                aria-label={`Block ${fileObj.user}`}
+                onClick={() => blockUserFunc(fileObj.user)}
+                sx={{ color: "error.main", ...actionSx }}
+              >
+                <BlockOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )
+        )}
+      </RowActions>
+    </FileRow>
   );
-};
+});
