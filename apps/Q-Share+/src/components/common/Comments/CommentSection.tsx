@@ -15,19 +15,40 @@ import {
   LoadMoreCommentsButtonRow,
   NoCommentsRow,
 } from "./Comments-styles";
-import { QSHARE_COMMENT_BASE } from "../../../constants/Identifiers.ts";
+import { QSHARE_COMMENT_BASE, QSHARE_FILE_BASE } from "../../../constants/Identifiers.ts";
 import { fetchQdnText, mapWithConcurrency, searchQdn, searchQdnAll } from "../../../utils/qdnSearch";
 import { isNameHidden, useAppSettings } from "../../../utils/settings";
 
 const COMMENT_PAGE = 20;
 
 /**
+ * The only `commentsId` the original app writes (`qshare_file__cm_<short id>`).
+ * It comes from untrusted share JSON and becomes a Core LIKE prefix, where `%`
+ * and `_` are wildcards, so any other value is not searched at all.
+ */
+const COMMENTS_ID_SHAPE = new RegExp(`^${QSHARE_FILE_BASE}_cm_[A-Za-z0-9]{1,32}$`);
+
+/**
  * One page of base comments from `offset`, plus (on the first page) every
  * reply of the share from one prefix search, each with its body text.
+ *
+ * The original app keys comments by the last 12 characters of the share id,
+ * and so does everything we publish. Some other client keyed them by the
+ * share JSON's `commentsId` instead (real rows exist, one from a publisher),
+ * so on the first page one more prefix search reads those, base and replies
+ * together. `nextOffset` only counts the paged search, so they never shift it.
  */
-async function loadComments(postId: string, offset: number): Promise<{ comments: any[]; hasMore: boolean }> {
+async function loadComments(
+  postId: string,
+  offset: number,
+  commentsId?: string
+): Promise<{ comments: any[]; hasMore: boolean; nextOffset: number }> {
   const postKey = postId.slice(-12);
-  const [baseRows, replies] = await Promise.all([
+  const extraPrefix =
+    offset === 0 && commentsId && commentsId !== postKey && COMMENTS_ID_SHAPE.test(commentsId)
+      ? `${QSHARE_COMMENT_BASE}${commentsId}_`
+      : "";
+  const [baseRows, replies, extraRows] = await Promise.all([
     searchQdn({
       service: "BLOG_COMMENT",
       query: `${QSHARE_COMMENT_BASE}${postKey}_base_`,
@@ -45,18 +66,36 @@ async function loadComments(postId: string, offset: number): Promise<{ comments:
           { pageSize: 100, maxPages: 5 }
         ).then((r) => r.rows)
       : Promise.resolve([]),
+    extraPrefix
+      ? searchQdnAll(
+          { service: "BLOG_COMMENT", identifier: extraPrefix, prefix: true, reverse: false },
+          { pageSize: 100, maxPages: 5 }
+        )
+          .then((r) => r.rows.filter((c) => c.identifier?.startsWith(extraPrefix))) // Core matches case-insensitively
+          // Additive only: if this read fails, the upstream-key comments still show.
+          .catch(() => [])
+      : Promise.resolve([]),
   ]);
-  const rows = [...baseRows, ...replies].filter((c) => c.identifier && c.name);
+  const seen = new Set<string>();
+  const rows = [...baseRows, ...extraRows, ...replies].filter((c) => {
+    if (!c.identifier || !c.name || seen.has(c.identifier)) return false;
+    seen.add(c.identifier);
+    return true;
+  });
+  // Oldest first, as each search returns them, with the extra rows slotted in by date.
+  if (extraRows.length > 0) rows.sort((a, b) => (a.created ?? 0) - (b.created ?? 0));
   const comments = await mapWithConcurrency(rows, 5, async (comment) => ({
     ...comment,
     message: await fetchQdnText("BLOG_COMMENT", comment.name, comment.identifier),
   }));
-  return { comments, hasMore: baseRows.length === COMMENT_PAGE };
+  return { comments, hasMore: baseRows.length === COMMENT_PAGE, nextOffset: offset + baseRows.length };
 }
 
 interface CommentSectionProps {
   postId: string;
   postName: string;
+  /** The share JSON's `commentsId`, when it has one: comments keyed by it are shown too. */
+  commentsId?: string;
 }
 
 /**
@@ -64,7 +103,7 @@ interface CommentSectionProps {
  * the share come from one prefix search. Authors on the in-app hidden list are
  * left out, replies included.
  */
-export const CommentSection = ({ postId, postName }: CommentSectionProps) => {
+export const CommentSection = ({ postId, postName, commentsId }: CommentSectionProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const settings = useAppSettings();
@@ -73,6 +112,9 @@ export const CommentSection = ({ postId, postName }: CommentSectionProps) => {
   const [loadingComments, setLoadingComments] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<boolean>(false);
   const [hasMore, setHasMore] = useState<boolean>(false);
+  // Where the next page of base comments starts. Comments posted here and the
+  // commentsId ones are in the list too, so the list length can't be used.
+  const [nextOffset, setNextOffset] = useState<number>(0);
 
   const onSubmit = (obj?: any, isEdit?: boolean) => {
     if (isEdit) {
@@ -107,14 +149,14 @@ export const CommentSection = ({ postId, postName }: CommentSectionProps) => {
 
   /** Callers set `loadingComments` (and clear `loadError`) first, so the first load can start from an effect. */
   const getComments = useCallback(
-    (isNewMessages?: boolean, numberOfComments?: number) => {
+    (offset = 0) => {
       let active = true;
-      const offset = isNewMessages && numberOfComments ? numberOfComments : 0;
-      loadComments(postId, offset)
-        .then(({ comments, hasMore: more }) => {
+      loadComments(postId, offset, commentsId)
+        .then(({ comments, hasMore: more, nextOffset: next }) => {
           if (!active) return;
           setHasMore(more);
-          if (isNewMessages) {
+          setNextOffset(next);
+          if (offset > 0) {
             setListComments((prev) => {
               const known = new Set(prev.map((c) => c.identifier));
               return [...prev, ...comments.filter((c) => !known.has(c.identifier))];
@@ -133,7 +175,7 @@ export const CommentSection = ({ postId, postName }: CommentSectionProps) => {
         active = false;
       };
     },
-    [postId]
+    [postId, commentsId]
   );
 
   useEffect(() => getComments(), [getComments]);
@@ -146,7 +188,7 @@ export const CommentSection = ({ postId, postName }: CommentSectionProps) => {
 
   const loadMore = () => {
     setLoadingComments(true);
-    getComments(true, listComments.filter((item) => !item.identifier.includes("_reply_")).length);
+    getComments(nextOffset);
   };
 
   const structuredCommentList = useMemo(() => {
