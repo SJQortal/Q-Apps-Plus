@@ -14,6 +14,21 @@ export interface Release {
 /** Newest first. Keep this in step with CHANGELOG.md. */
 export const CHANGELOG: Release[] = [
   {
+    version: "1.0.0-plus.2",
+    date: "2026-09-30",
+    title: "Phones, collections and previews",
+    notes: [
+      "Built for phones and GO: a bottom bar, a floating Share button, a header that hides as you scroll, Back buttons, filters in a bottom sheet, pull-to-refresh, and Share and Edit forms that fill the screen with Publish above the keyboard.",
+      "Collections: save any share to a named collection with the bookmark button, browse them on the Collections page, and edit or remove items. Collections are new data; the original Q-Share ignores them.",
+      "Sharing files: drag and drop or tap to choose, see each file's type and size and the total, remove files before publishing, watch progress step by step and retry the ones that failed. A draft survives closing the dialog.",
+      "Share pages preview PDF and text files, open images in a lightbox, play audio and video on demand, and fetch all files with one tap.",
+      "Home has a Following feed, My shares, hidden names, and refreshes after you publish.",
+      "Settings: automatic image previews, the Following feed, default sort, hidden names, and Clear finished downloads.",
+      "Still lean on Qortal: one paged search on first load, one search and one fetch to open a share, and a smaller first download than before.",
+      "106 tests, a clean lint, and a screenshot check of every screen at five sizes in four themes.",
+    ],
+  },
+  {
     version: "1.0.0-plus.1",
     date: "2026-09-30",
     title: "Q-Share+ first pass",
