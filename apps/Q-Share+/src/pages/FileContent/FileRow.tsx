@@ -25,8 +25,8 @@ interface FileRowProps {
 /**
  * One attachment on the share page: kind icon, a filename that wraps, the
  * size, the download control (Download → progress → Save) and, when the
- * file can be shown inline, a preview toggle with the preview below (PDFs:
- * "Open PDF", which uses Hub's reader).
+ * file can be shown inline, a preview toggle with the preview below ("Play
+ * audio" / "Play video" for media; PDFs: "Open PDF", which uses Hub's reader).
  */
 export const FileRow = ({ file, jsonId }: FileRowProps) => {
   const settings = useAppSettings();

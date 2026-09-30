@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Box, Button, CircularProgress, Typography, useTheme } from "@mui/material";
+import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
 import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
+import PlayArrowOutlinedIcon from "@mui/icons-material/PlayArrowOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
@@ -27,13 +29,19 @@ export interface PreviewFile {
 
 export type PreviewKind = "image" | "video" | "audio" | "pdf" | "text";
 
-const KIND_LABEL: Record<PreviewKind, string> = {
-  image: "image",
-  video: "video",
-  audio: "audio",
-  pdf: "PDF",
-  text: "text",
+/**
+ * What the toggle says for each kind: audio and video play (and close their
+ * player), the rest are previewed. PDFs use OpenPdfButton instead.
+ */
+const TOGGLE_LABEL: Record<PreviewKind, { open: string; close: string }> = {
+  image: { open: "Preview image", close: "Hide preview" },
+  text: { open: "Preview text", close: "Hide preview" },
+  pdf: { open: "Open PDF", close: "Hide preview" },
+  video: { open: "Play video", close: "Close player" },
+  audio: { open: "Play audio", close: "Close player" },
 };
+
+const isMedia = (kind: PreviewKind) => kind === "video" || kind === "audio";
 
 export function previewUrl(file: PreviewFile): string {
   return `/arbitrary/${file.service || "FILE"}/${encodeURIComponent(file.name)}/${encodeURIComponent(file.identifier)}`;
@@ -103,19 +111,27 @@ interface PreviewToggleButtonProps {
 
 export function PreviewToggleButton({ kind, open, onToggle, filename }: PreviewToggleButtonProps) {
   const phone = usePhoneLayout();
+  const label = TOGGLE_LABEL[kind];
+  const media = isMedia(kind);
+  const openIcon = media ? <PlayArrowOutlinedIcon /> : <VisibilityOutlinedIcon />;
+  const closeIcon = media ? <CloseOutlinedIcon /> : <VisibilityOffOutlinedIcon />;
   return (
     <Button
       variant="outlined"
-      startIcon={open ? <VisibilityOffOutlinedIcon /> : <VisibilityOutlinedIcon />}
+      startIcon={open ? closeIcon : openIcon}
       onClick={(e: MouseEvent) => {
         e.stopPropagation();
         onToggle();
       }}
       aria-expanded={open}
-      aria-label={open ? `Hide preview of ${filename || "file"}` : `Preview ${KIND_LABEL[kind]} ${filename || ""}`.trim()}
+      aria-label={
+        open
+          ? `${label.close} ${media ? "for" : "of"} ${filename || "file"}`
+          : `${label.open} ${filename || ""}`.trim()
+      }
       sx={{ minHeight: phone ? 48 : 40, width: phone ? "100%" : "auto", flexShrink: 0 }}
     >
-      {open ? "Hide preview" : `Preview ${KIND_LABEL[kind]}`}
+      {open ? label.close : label.open}
     </Button>
   );
 }
@@ -240,7 +256,7 @@ function ImagePreview({ file }: { file: PreviewFile }) {
   const [lightbox, setLightbox] = useState(false);
   const src = previewUrl(file);
   const alt = file.filename || "";
-  if (failed) return <Failed>Preview failed</Failed>;
+  if (failed) return <Failed>Couldn't show the image. Download it instead.</Failed>;
   return (
     <>
       <Box
@@ -329,12 +345,12 @@ interface MediaPreviewProps {
 /**
  * Video and audio. The node can only stream a file it holds completely: for
  * anything else a GET blocks for about 15 s and then answers 404. So opening
- * the preview checks the node first; a file that isn't there is fetched
+ * the player checks the node first; a file that isn't there is fetched
  * through the shared download machine and the player appears once it is
  * READY. A file the node confirmed that still won't play is a format this
  * player can't handle. Any other failed play offers Try again, and clears by
  * itself once the node confirms the file. A fetch that stopped because the node
- * isn't answering offers Try again too. Mounted only while the preview is open,
+ * isn't answering offers Try again too. Mounted only while the player is open,
  * so closing and reopening starts over.
  */
 function MediaPreview({ file, kind, jsonId }: MediaPreviewProps) {
@@ -367,7 +383,7 @@ function MediaPreview({ file, kind, jsonId }: MediaPreviewProps) {
 
   if (failure?.confirmed) return failedBox("This format can't be played here. Download it instead.", false);
   // Unconfirmed: it clears (and the player mounts afresh) once the node confirms the file.
-  if (failure && !node.confirmed) return failedBox("Preview failed. The file may not be on your node yet.", true);
+  if (failure && !node.confirmed) return failedBox("Couldn't play it. The file may not be on your node yet.", true);
   if (node.state === "failed" || node.stopped) return failedBox(node.statusText, true);
 
   if (node.state !== "ready") {
@@ -402,7 +418,7 @@ function MediaPreview({ file, kind, jsonId }: MediaPreviewProps) {
           playsInline
           preload="none"
           src={src}
-          aria-label={file.filename || "Video preview"}
+          aria-label={file.filename || "Video player"}
           onError={onError}
           style={{
             display: "block",
@@ -417,7 +433,7 @@ function MediaPreview({ file, kind, jsonId }: MediaPreviewProps) {
           controls
           preload="none"
           src={src}
-          aria-label={file.filename || "Audio preview"}
+          aria-label={file.filename || "Audio player"}
           onError={onError}
           style={{ display: "block", width: "100%" }}
         />
@@ -461,8 +477,8 @@ interface FilePreviewProps {
 }
 
 /**
- * Self-contained preview for one attachment: a "Preview …" toggle and, once
- * open, the media fitted to the width. Small images open at once when the
+ * Self-contained preview for one attachment: a "Preview …" toggle ("Play
+ * audio" / "Play video" for media) and, once open, the media fitted to the width. Small images open at once when the
  * "auto preview images" setting is on; everything else waits for a tap.
  * PDFs get "Open PDF" (Hub's reader) instead.
  */

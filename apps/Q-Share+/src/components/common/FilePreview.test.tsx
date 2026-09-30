@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import {
   FilePreview,
   IMAGE_AUTO_PREVIEW_BYTES,
@@ -115,12 +115,12 @@ describe('FilePreview', () => {
     expect(screen.getByRole('button', { name: 'Preview image photo.png' })).toBeInTheDocument();
   });
 
-  it('hides a broken image and says the preview failed', () => {
+  it('hides a broken image and says it could not be shown', () => {
     setAutoPreview(true);
     renderWithProviders(<FilePreview file={image} />);
     fireEvent.error(screen.getByRole('img', { name: 'photo.png' }));
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
-    expect(screen.getByText('Preview failed')).toBeInTheDocument();
+    expect(screen.getByText("Couldn't show the image. Download it instead.")).toBeInTheDocument();
   });
 
   it('fetches text only after "Preview text" and shows it in a pre', async () => {
@@ -282,12 +282,35 @@ describe('FilePreview', () => {
       store.dispatch(removeDownload(video.identifier));
     });
 
-    it('checks the node once, then renders a player with preload="none" after "Preview video"', async () => {
+    it('says Play for audio and video, and Close player once it is open', () => {
+      mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'READY', percentLoaded: 100 });
+      const song = { ...base, identifier: 'qshare_file_x_label', filename: 'track.m4a', mimetype: 'audio/mp4', size: 4_000_000 };
+      renderWithProviders(
+        <>
+          <FilePreview file={song} />
+          <FilePreview file={video} />
+        </>
+      );
+      const play = screen.getByRole('button', { name: 'Play audio track.m4a' });
+      expect(play).toHaveTextContent(/^Play audio$/);
+      expect(within(play).getByTestId('PlayArrowOutlinedIcon')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Play video clip.mp4' })).toHaveTextContent(/^Play video$/);
+      expect(screen.queryByText(/Preview/)).toBeNull();
+
+      fireEvent.click(play);
+      const close = screen.getByRole('button', { name: 'Close player for track.m4a' });
+      expect(close).toHaveTextContent(/^Close player$/);
+      expect(close).toHaveAttribute('aria-expanded', 'true');
+      fireEvent.click(close);
+      expect(screen.getByRole('button', { name: 'Play audio track.m4a' })).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('checks the node once, then renders a player with preload="none" after "Play video"', async () => {
       mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'READY', percentLoaded: 100 });
       const { container } = renderWithProviders(<FilePreview file={video} />);
       expect(container.querySelector('video')).toBeNull();
       expect(qortalCallsFor('GET_QDN_RESOURCE_STATUS').length).toBe(0);
-      fireEvent.click(screen.getByRole('button', { name: 'Preview video clip.mp4' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Play video clip.mp4' }));
       await waitFor(() => expect(container.querySelector('video')).not.toBeNull());
       const player = container.querySelector('video');
       expect(player).toHaveAttribute('src', '/arbitrary/FILE/alice/qshare_file_x_vid');
@@ -304,20 +327,20 @@ describe('FilePreview', () => {
         throw new Error('no answer');
       });
       const { container } = renderWithProviders(<FilePreview file={video} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Preview video clip.mp4' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Play video clip.mp4' }));
       await waitFor(() => expect(container.querySelector('video')).not.toBeNull());
 
       fireEvent.error(container.querySelector('video')!);
-      expect(screen.getByText('Preview failed. The file may not be on your node yet.')).toBeInTheDocument();
+      expect(screen.getByText("Couldn't play it. The file may not be on your node yet.")).toBeInTheDocument();
       expect(container.querySelector('video')).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
       await waitFor(() => expect(container.querySelector('video')).not.toBeNull());
 
       fireEvent.error(container.querySelector('video')!);
-      fireEvent.click(screen.getByRole('button', { name: 'Hide preview of clip.mp4' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Preview video clip.mp4' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Close player for clip.mp4' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Play video clip.mp4' }));
       await waitFor(() => expect(container.querySelector('video')).not.toBeNull());
-      expect(screen.queryByText(/Preview failed/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Couldn't play it/)).not.toBeInTheDocument();
     });
 
     it('fetches audio that is not on the node, shows why there is no player, and plays once READY', async () => {
@@ -330,7 +353,7 @@ describe('FilePreview', () => {
           <FilePreview file={audio} />
         </MyContext.Provider>
       );
-      fireEvent.click(screen.getByRole('button', { name: 'Preview audio song.mp3' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Play audio song.mp3' }));
       await waitFor(() => expect(downloadVideo).toHaveBeenCalledTimes(1));
       act(() => {
         store.dispatch(setAddToDownloads({ name: 'alice', service: 'FILE', identifier: audio.identifier, properties: {} }));
@@ -356,7 +379,7 @@ describe('FilePreview', () => {
     it('says the format cannot be played when a file the node confirmed fails, with no Try again', async () => {
       mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'READY' });
       const { container } = renderWithProviders(<FilePreview file={video} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Preview video clip.mp4' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Play video clip.mp4' }));
       await waitFor(() => expect(container.querySelector('video')).not.toBeNull());
 
       fireEvent.error(container.querySelector('video')!);
@@ -365,15 +388,15 @@ describe('FilePreview', () => {
       expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
       expect(container.querySelector('video')).toBeNull();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Hide preview of clip.mp4' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Preview video clip.mp4' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Close player for clip.mp4' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Play video clip.mp4' }));
       await waitFor(() => expect(container.querySelector('video')).not.toBeNull());
     });
 
     it('keeps the same player when the file is downloaded while it plays', async () => {
       mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'READY' });
       const { container } = renderWithProviders(<FilePreview file={video} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Preview video clip.mp4' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Play video clip.mp4' }));
       await waitFor(() => expect(container.querySelector('video')).not.toBeNull());
       const player = container.querySelector('video');
 
@@ -392,7 +415,7 @@ describe('FilePreview', () => {
       store.dispatch(setAddToDownloads({ name: 'alice', service: 'FILE', identifier: video.identifier, properties: {} }));
       store.dispatch(updateDownloads({ identifier: video.identifier, status: { status: 'READY', percentLoaded: 100 } }));
       const { container } = renderWithProviders(<FilePreview file={video} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Preview video clip.mp4' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Play video clip.mp4' }));
       await waitFor(() => expect(container.querySelector('video')).not.toBeNull());
       const player = container.querySelector('video');
       // The READY entry is enough: no status check.
@@ -410,24 +433,24 @@ describe('FilePreview', () => {
         throw new Error('no answer');
       });
       const { container } = renderWithProviders(<FilePreview file={video} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Preview video clip.mp4' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Play video clip.mp4' }));
       await waitFor(() => expect(container.querySelector('video')).not.toBeNull());
       fireEvent.error(container.querySelector('video')!);
-      expect(screen.getByText(/Preview failed/)).toBeInTheDocument();
+      expect(screen.getByText(/Couldn't play it/)).toBeInTheDocument();
 
       // The row's Download finishes.
       act(() => {
         store.dispatch(setAddToDownloads({ name: 'alice', service: 'FILE', identifier: video.identifier, properties: {} }));
         store.dispatch(updateDownloads({ identifier: video.identifier, status: { status: 'READY', percentLoaded: 100 } }));
       });
-      expect(screen.queryByText(/Preview failed/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Couldn't play it/)).not.toBeInTheDocument();
       expect(container.querySelector('video')).not.toBeNull();
 
       // The node has confirmed it now, so clearing the entry doesn't bring the old failure back.
       act(() => {
         store.dispatch(clearFinishedDownloads());
       });
-      expect(screen.queryByText(/Preview failed/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Couldn't play it/)).not.toBeInTheDocument();
       expect(container.querySelector('video')).not.toBeNull();
     });
 
@@ -439,7 +462,7 @@ describe('FilePreview', () => {
           <FilePreview file={video} />
         </MyContext.Provider>
       );
-      fireEvent.click(screen.getByRole('button', { name: 'Preview video clip.mp4' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Play video clip.mp4' }));
       expect(await screen.findByText('Fetching from peers… 40%')).toBeInTheDocument();
 
       machine.giveUp();
@@ -461,7 +484,7 @@ describe('FilePreview', () => {
     it('says when the network does not have the file', async () => {
       mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'NOT_PUBLISHED' });
       const { container } = renderWithProviders(<FilePreview file={video} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Preview video clip.mp4' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Play video clip.mp4' }));
       expect(await screen.findByText('Not found on the network')).toBeInTheDocument();
       expect(container.querySelector('video')).toBeNull();
       expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
