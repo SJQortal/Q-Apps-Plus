@@ -5,11 +5,13 @@ import { useFetchFiles, summaryToVideo, useListedFiles } from "../../hooks/useFe
 import LazyLoad from "../../components/common/LazyLoad";
 import { PageRetry } from "../../components/common/PageRetry.tsx";
 import { Video } from "../../state/features/fileSlice.ts";
-import { queue } from "../../utils/queue";
 import { QSHARE_FILE_BASE } from "../../constants/Identifiers.ts";
-import { QDN_PAGE, searchQdn } from "../../utils/qdnSearch";
+import { QDN_PAGE, QDN_SEARCH_TTL_MS, searchQdn } from "../../utils/qdnSearch";
 import { FileList } from "./FileList.tsx";
 import { EmptyState } from "../../components/common/EmptyState.tsx";
+
+/** When each name's profile list last opened, to tell a new visit from coming back (share → Back). */
+const profileOpenedAt = new Map<string, number>();
 
 /** The shares of one publisher, on the profile page. */
 export const FileListComponentLevel = () => {
@@ -19,7 +21,9 @@ export const FileListComponentLevel = () => {
   const [hasMore, setHasMore] = useState(true);
   const [videos, setVideos] = React.useState<Video[]>([]);
   const isFetching = useRef(false);
-  const { getFile, checkAndUpdateFile } = useFetchFiles();
+  // Set per visit: whether shares marked unavailable get their tries again.
+  const retryUnavailable = useRef(true);
+  const { queueBodies } = useFetchFiles();
 
   const getVideos = useCallback(
     async (reset = false) => {
@@ -52,11 +56,9 @@ export const FileListComponentLevel = () => {
           return next;
         });
         setHasMore(structureData.length >= QDN_PAGE);
-        for (const content of structureData) {
-          if (content.user && content.id && checkAndUpdateFile(content)) {
-            queue.push(() => getFile(content.user, content.id, content));
-          }
-        }
+        // As on Home: a body already queued (by Home, or before Back) isn't queued twice.
+        // Hidden names too: Home never shows them, but a profile opened on purpose does.
+        queueBodies(structureData, retryUnavailable.current, false);
       } catch {
         setError(true);
       } finally {
@@ -64,7 +66,7 @@ export const FileListComponentLevel = () => {
         setIsLoading(false);
       }
     },
-    [paramName, videos, hasMore, checkAndUpdateFile, getFile]
+    [paramName, videos, hasMore, queueBodies]
   );
 
   // A new name: start over. The fetch is queued after this render so the
@@ -75,6 +77,14 @@ export const FileListComponentLevel = () => {
     if (lastParam.current === paramName) return;
     lastParam.current = paramName;
     isFetching.current = false;
+    // Within the search TTL the rows come from the session cache: this is coming
+    // back to the same list (share → Back), so, as Home on Back, shares marked
+    // unavailable keep their row (the share page has Retry) instead of three
+    // more ~15 s tries each.
+    const now = Date.now();
+    const opened = paramName ? profileOpenedAt.get(paramName) : undefined;
+    retryUnavailable.current = opened === undefined || now - opened > QDN_SEARCH_TTL_MS;
+    if (paramName) profileOpenedAt.set(paramName, now);
     queueMicrotask(() => {
       setVideos([]);
       setHasMore(true);

@@ -182,13 +182,14 @@ export const useFetchFiles = () => {
    * Queue the bodies a list still needs. Rows of hidden names are never shown,
    * so they are skipped: one name can fill 90% of a Latest page. A search
    * retries shares marked unavailable; `retryUnavailable: false` (coming back
-   * to a list) leaves them alone.
+   * to a list) leaves them alone. `skipHidden: false` is for a list that still
+   * shows hidden names (a profile opened on purpose).
    */
   const queueBodies = React.useCallback(
-    (rows: Video[], retryUnavailable = true) => {
+    (rows: Video[], retryUnavailable = true, skipHidden = true) => {
       const { unavailableFiles } = store.getState().file;
       for (const content of rows) {
-        if (!content.user || !content.id || isNameHidden(content.user)) continue;
+        if (!content.user || !content.id || (skipHidden && isNameHidden(content.user))) continue;
         const key = shareKey(content.user, content.id);
         if (bodiesInFlight.has(key) || !checkAndUpdateFile(content)) continue;
         if (!retryUnavailable && unavailableFiles[key]) continue;
