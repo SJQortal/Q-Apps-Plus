@@ -44,5 +44,9 @@
       "Bash(unzip -l *)"
     ]
   },
-  "effortLevel": "xhigh"
+  "effortLevel": "xhigh",
+  "attribution": {
+    "commit": "Co-Authored-By: Claude <noreply@anthropic.com>",
+    "pr": ""
+  }
 }
