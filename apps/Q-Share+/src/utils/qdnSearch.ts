@@ -140,7 +140,12 @@ export async function searchQdnAll(
 const textCache = new Map<string, { text: string; expires: number }>();
 const textInflight = new Map<string, Promise<string>>();
 
-/** Read a small resource body (comments) as text, cached for the session. */
+/**
+ * Read a small resource body (comments, text previews) as text, cached for
+ * the session. Rejects when the node answers with an error (e.g. 404 with
+ * `{"error":1401,…}` for data it doesn't have), so an error body is never
+ * shown as the content; failures aren't cached.
+ */
 export async function fetchQdnText(service: string, name: string, identifier: string): Promise<string> {
   const url = `/arbitrary/${service}/${encodeURIComponent(name)}/${encodeURIComponent(identifier)}`;
   const hit = textCache.get(url);
@@ -149,6 +154,7 @@ export async function fetchQdnText(service: string, name: string, identifier: st
   if (pending) return pending;
   const request = (async () => {
     const response = await fetch(url, { method: "GET" });
+    if (!response.ok) throw new Error(`The node answered ${response.status} for ${url}`);
     const text = await response.text();
     textCache.set(url, { text, expires: Date.now() + QDN_SEARCH_TTL_MS });
     return text;

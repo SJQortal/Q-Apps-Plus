@@ -125,6 +125,15 @@ describe('FilePreview', () => {
     expect(await screen.findByText('Could not load the text. Download the file instead.')).toBeInTheDocument();
   });
 
+  it("shows the error state, not the node's error JSON, when the text is not on the node", async () => {
+    const body = '{"error":1401,"message":"Couldn\'t find PUT transaction"}';
+    vi.mocked(fetch).mockImplementationOnce(async () => new Response(body, { status: 404 }));
+    renderWithProviders(<FilePreview file={text} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Preview text readme.md' }));
+    expect(await screen.findByText('Could not load the text. Download the file instead.')).toBeInTheDocument();
+    expect(screen.queryByText(body)).not.toBeInTheDocument();
+  });
+
   it('renders nothing for text over 200 KB or for archives', () => {
     const { container } = renderWithProviders(
       <>
