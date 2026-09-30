@@ -178,9 +178,10 @@ describe('CollectionPage', () => {
   });
 
   describe('when the collection is not on the node yet', () => {
-    // Core's answer for data it has to ask its peers for; it comes back within milliseconds.
+    // Core's answer for data it has to ask its peers for, after holding the FETCH for up to ~15 s.
     const unavailable = { error: 1401, message: 'Data unavailable. Please try again later.' };
     const collectionFetches = () => qortalCallsFor('FETCH_QDN_RESOURCE').filter((c) => c.identifier === COLLECTION_ID).length;
+    const statusChecks = () => qortalCallsFor('GET_QDN_RESOURCE_STATUS').length;
     const wait = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
     const setVisibility = (state: DocumentVisibilityState) => {
       Object.defineProperty(document, 'visibilityState', { value: state, configurable: true });
@@ -196,15 +197,19 @@ describe('CollectionPage', () => {
       delete (document as { visibilityState?: string }).visibilityState;
     });
 
-    it('says the node is fetching it from peers, retries after 2 and 4 s, then shows it', async () => {
+    it('says the node is fetching it from peers, checks after 2 and 4 s, and fetches again once it is local', async () => {
       let attempts = 0;
       mockQortalAction('FETCH_QDN_RESOURCE', (params) => {
         if (params.identifier !== COLLECTION_ID) return { title: 'A share', files: [] };
         attempts += 1;
-        if (attempts < 3) throw unavailable;
+        if (attempts < 2) throw unavailable;
         return { version: 1, title: 'Docs', description: '', items: [], created: 1, updated: 2 };
       });
-      mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'MISSING_DATA', localChunkCount: 0, totalChunkCount: 2, percentLoaded: 0 });
+      mockQortalAction('GET_QDN_RESOURCE_STATUS', () =>
+        statusChecks() < 3
+          ? { status: 'MISSING_DATA', localChunkCount: 0, totalChunkCount: 2, percentLoaded: 0 }
+          : { status: 'DOWNLOADED', localChunkCount: 2, totalChunkCount: 2, percentLoaded: 100 }
+      );
       renderPage();
       await wait(0);
       expect(screen.getByText('Not on your node yet')).toBeInTheDocument();
@@ -212,16 +217,19 @@ describe('CollectionPage', () => {
       expect(qortalCallsFor('GET_QDN_RESOURCE_STATUS')[0]).toMatchObject({ service: 'DOCUMENT', name: 'alice', identifier: COLLECTION_ID });
 
       await wait(1900);
-      expect(collectionFetches()).toBe(1);
+      expect(statusChecks()).toBe(1);
       await wait(100);
-      expect(collectionFetches()).toBe(2);
+      // Still MISSING_DATA: no second FETCH.
+      expect(statusChecks()).toBe(2);
+      expect(collectionFetches()).toBe(1);
       expect(screen.getByText('Fetching it from peers…')).toBeInTheDocument();
       await wait(4000);
-      expect(collectionFetches()).toBe(3);
+      expect(statusChecks()).toBe(3);
+      expect(collectionFetches()).toBe(2);
       expect(screen.getByRole('heading', { name: 'Docs' })).toBeInTheDocument();
     });
 
-    it('waits only while the page is visible, and stops after five tries with Retry', async () => {
+    it('waits only while the page is visible, and stops after four status checks with Retry', async () => {
       mockQortalAction('FETCH_QDN_RESOURCE', () => {
         throw unavailable;
       });
@@ -231,17 +239,36 @@ describe('CollectionPage', () => {
       setVisibility('hidden');
       await wait(60_000);
       expect(collectionFetches()).toBe(1);
+      expect(statusChecks()).toBe(1);
       setVisibility('visible');
       for (const delay of [2000, 4000, 8000, 16000]) await wait(delay);
-      expect(collectionFetches()).toBe(5);
+      // One FETCH in all: the node never had the data locally.
+      expect(collectionFetches()).toBe(1);
+      expect(statusChecks()).toBe(5);
       expect(screen.getByText("Your node couldn't get it from its peers yet. Try again in a minute.")).toBeInTheDocument();
       await wait(60_000);
-      expect(collectionFetches()).toBe(5);
+      expect(collectionFetches()).toBe(1);
+      expect(statusChecks()).toBe(5);
 
       fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
       await wait(0);
-      expect(collectionFetches()).toBe(6);
+      expect(collectionFetches()).toBe(2);
       expect(screen.getByText('Fetching it from peers…')).toBeInTheDocument();
+    });
+
+    it('stops waiting when a status check finds it was never published', async () => {
+      mockQortalAction('FETCH_QDN_RESOURCE', () => {
+        throw unavailable;
+      });
+      mockQortalAction('GET_QDN_RESOURCE_STATUS', () => ({ status: statusChecks() < 2 ? 'PUBLISHED' : 'NOT_PUBLISHED' }));
+      renderPage();
+      await wait(0);
+      expect(screen.getByText('Fetching it from peers…')).toBeInTheDocument();
+      await wait(2000);
+      expect(screen.getByText('Collection not found')).toBeInTheDocument();
+      await wait(60_000);
+      expect(statusChecks()).toBe(2);
+      expect(collectionFetches()).toBe(1);
     });
 
     it('shows "not found" with no retries when Core has never seen it', async () => {

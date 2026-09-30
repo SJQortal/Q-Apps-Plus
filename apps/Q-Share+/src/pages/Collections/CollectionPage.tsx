@@ -42,11 +42,13 @@ const countLabel = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
 
 /**
  * Core's statuses for a resource the node knows about but can't serve yet.
- * FETCH_QDN_RESOURCE then fails within milliseconds ("Data unavailable")
- * while the node asks its peers for the data.
+ * A FETCH_QDN_RESOURCE of it holds for up to about 15 s and then fails
+ * ("Data unavailable") while the node asks its peers for the data.
  */
 const NOT_LOCAL_YET = new Set(["PUBLISHED", "DOWNLOADING", "DOWNLOADED", "BUILDING", "MISSING_DATA"]);
-/** Waits before each automatic retry while the node fetches from peers: five tries in about 30 s. */
+/** Every chunk is here: FETCH again (the node builds it on the way). The share page's set. */
+const LOCAL = new Set(["READY", "DOWNLOADED", "BUILDING"]);
+/** Waits between status checks while the node fetches from peers (about 30 s in all). */
 const PEER_RETRY_DELAYS_MS = [2000, 4000, 8000, 16000];
 
 /**
@@ -83,12 +85,12 @@ function CollectionView({ name, id }: { name: string; id: string }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<Video | null>(null);
   const [busy, setBusy] = useState(false);
-  // Which of PEER_RETRY_DELAYS_MS the next automatic retry waits for.
+  // Which of PEER_RETRY_DELAYS_MS the next status check waits for.
   const [peerRetry, setPeerRetry] = useState(0);
   const { getFile, checkAndUpdateFile } = useFetchFiles();
 
   // State changes happen in the promise callbacks, so effects only start the read.
-  // `retry` counts the automatic retries made so far in this round.
+  // `retry` counts the status checks made so far in this round.
   const read = useCallback(
     (fresh: boolean, retry = 0): Promise<void> =>
       fetchCollection(name, id, { fresh }).then(
@@ -123,17 +125,29 @@ function CollectionView({ name, id }: { name: string; id: string }) {
     if (name && id) read(false);
   }, [read, name, id]);
 
-  // While the node fetches from peers, retry after each delay, counting only
-  // time the page is visible.
+  // While the node fetches from peers, check its status after each delay,
+  // counting only time the page is visible, and FETCH again only once every
+  // chunk is local, as the share page does: each FETCH of data that isn't
+  // local would hold a node thread for ~15 s.
   useEffect(() => {
     if (status !== "fetching") return;
+    let active = true;
     let timer: number | undefined;
     let fired = false;
+    const next = peerRetry + 1;
+    const check = () =>
+      collectionStatus(name, id).then((state) => {
+        if (!active) return;
+        if (state === "NOT_PUBLISHED") setStatus("missing");
+        else if (state && LOCAL.has(state)) void read(true, next);
+        else if (next < PEER_RETRY_DELAYS_MS.length) setPeerRetry(next);
+        else setStatus("unavailable");
+      });
     const schedule = () => {
       if (fired || timer !== undefined || document.visibilityState !== "visible") return;
       timer = window.setTimeout(() => {
         fired = true;
-        read(true, peerRetry + 1);
+        void check();
       }, PEER_RETRY_DELAYS_MS[peerRetry]);
     };
     const onVisibility = () => {
@@ -147,10 +161,11 @@ function CollectionView({ name, id }: { name: string; id: string }) {
     schedule();
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      active = false;
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [status, peerRetry, read]);
+  }, [status, peerRetry, read, name, id]);
 
   const retry = () => {
     setStatus("loading");
