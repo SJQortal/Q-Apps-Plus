@@ -8,9 +8,11 @@ import { Home } from './Home';
 import { store } from '../../state/store';
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
+import { resetNameSearchCache } from '../../utils/nameSearch';
 import { resetSettingsCache, writeSettings } from '../../utils/settings';
 import { mockAllIsIntersecting } from 'react-intersection-observer/test-utils';
 import { readOncePerObserve } from '../../test/intersection';
+import { optionText } from '../../test/options';
 import { HubThemeProvider } from '../../hub-theme';
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme';
 import { OPEN_PUBLISH_EVENT } from '../../constants/events';
@@ -30,6 +32,7 @@ function renderHome() {
 // The store and the settings cache are module singletons: start each test clean.
 beforeEach(() => {
   resetQdnSearchCache();
+  resetNameSearchCache();
   resetSettingsCache();
   store.dispatch(addFiles([]));
   store.dispatch(changefilterName(''));
@@ -194,6 +197,42 @@ describe('Home filters on a phone', { timeout: 15_000 }, () => {
     const sheet = await screen.findByRole('dialog', { name: 'Filters and sort' });
     expect(minHeight(within(sheet).getByRole('button', { name: 'Newest' }))).toBe('44px');
     expect(minHeight(within(sheet).getByRole('button', { name: 'Oldest' }))).toBe('44px');
+  });
+
+  it('a publisher suggested in the sheet is applied at once and closes the sheet; its list sits above the sheet', async () => {
+    mockFetch('/arbitrary/resources/search', (url) =>
+      url.searchParams.get('name') === 'Simon James'
+        ? [{ name: 'Simon James', service: 'DOCUMENT', identifier: 'qshare_file_by-simon_Si1234_metadata', created: 2, metadata: { title: 'By Simon' } }]
+        : [{ name: 'bob', service: 'DOCUMENT', identifier: 'qshare_file_by-bob_Bo1234_metadata', created: 1, metadata: { title: 'By Bob' } }]
+    );
+    mockFetch('/names/search', [{ name: 'Simon James' }, { name: 'Simona' }]);
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+    const lastSearch = () => new URL(fetchCallsMatching('/arbitrary/resources/search').at(-1)!, 'http://localhost').searchParams;
+
+    renderHome();
+    expect(await screen.findByText('By Bob')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Filters and sort' });
+    const field = within(sheet).getByRole('combobox', { name: 'Publisher name (exact)' });
+    field.focus();
+    fireEvent.change(field, { target: { value: 'simon' } });
+    const listbox = await screen.findByRole('listbox', { name: 'Suggested publishers' });
+    // Portaled above the sheet, so the sheet's scrolling content can't clip it.
+    expect(sheet.contains(listbox)).toBe(false);
+    const zIndex = (el: Element | null) => Number(getComputedStyle(el as Element).zIndex);
+    expect(zIndex(listbox.closest('.MuiPopper-root'))).toBeGreaterThan(zIndex(sheet.closest('.MuiModal-root')));
+    // The rows are at least 44 px tall, for a thumb.
+    expect(getComputedStyle(within(listbox).getAllByRole('option')[0]).minHeight).toBe('44px');
+
+    // Shorter names first: Simona, then Simon James.
+    expect(within(listbox).getAllByRole('option').map(optionText)).toEqual(['Simona', 'Simon James']);
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    await waitFor(() => expect(lastSearch().get('name')).toBe('Simon James'));
+    expect(await screen.findByText('By Simon')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('dialog', { hidden: true })).not.toBeVisible());
+    expect(screen.getByRole('heading', { name: 'Shares by Simon James' })).toBeInTheDocument();
   });
 
   it('keeps the applied category for the next page after the sheet has closed', async () => {
@@ -402,6 +441,44 @@ describe('Home applied filters', () => {
     }, { timeout: 5000 });
     expect(lastSearch().has('query')).toBe(false);
     expect(screen.getByRole('heading', { name: 'Latest shares' })).toBeInTheDocument();
+  });
+});
+
+describe('Home publisher suggestions', () => {
+  const lastSearch = () => new URL(fetchCallsMatching('/arbitrary/resources/search').at(-1)!, 'http://localhost').searchParams;
+  const share = (name: string, slug: string, title: string) => ({
+    name,
+    service: 'DOCUMENT',
+    identifier: `qshare_file_${slug}_${slug.slice(0, 6).padEnd(6, 'x')}_metadata`,
+    created: 1,
+    metadata: { title },
+  });
+
+  it('offers the publishers on screen, suggests names as you type, and applies the one picked', async () => {
+    mockFetch('/arbitrary/resources/search', (url) =>
+      url.searchParams.get('name') === 'Carol+' ? [share('Carol+', 'carols', 'Carol share')] : [share('bob', 'bobs', 'Bob share')]
+    );
+    mockFetch('/names/search', (url) => (url.searchParams.get('prefix') === 'true' ? [{ name: 'Carol+' }] : [{ name: 'Xcarol' }, { name: 'Carol+' }]));
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    renderHome();
+    expect(await screen.findByText('Bob share')).toBeInTheDocument();
+    const field = screen.getByRole('combobox', { name: 'Publisher name (exact)' });
+
+    // Nothing typed: the publishers in the list, without a name search.
+    fireEvent.click(field);
+    expect(screen.getByRole('listbox', { name: 'Suggested publishers' })).toBeInTheDocument();
+    expect(screen.getAllByRole('option').map(optionText)).toEqual(['bob']);
+    expect(fetchCallsMatching('/names/search')).toEqual([]);
+
+    fireEvent.change(field, { target: { value: 'carol' } });
+    await waitFor(() => expect(screen.getAllByRole('option').map(optionText)).toEqual(['Carol+', 'Xcarol']));
+    fireEvent.click(screen.getByRole('option', { name: 'Carol+' }));
+    expect(await screen.findByText('Carol share')).toBeInTheDocument();
+    expect(lastSearch().get('name')).toBe('Carol+');
+    expect(field).toHaveValue('Carol+');
+    expect(screen.getByRole('heading', { name: 'Shares by Carol+' })).toBeInTheDocument();
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 });
 

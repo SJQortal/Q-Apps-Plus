@@ -27,6 +27,7 @@ import { changefilterName, changefilterSearch } from "../../state/features/fileS
 import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
 import { CategoryList, CategoryListRef } from "../../components/common/CategoryList/CategoryList.tsx";
 import { EmptyState } from "../../components/common/EmptyState.tsx";
+import { NameSuggestField } from "../../components/common/NameSuggestField.tsx";
 import { QDN_PAGE } from "../../utils/qdnSearch.ts";
 import { isNameHidden, useAppSettings } from "../../utils/settings.ts";
 import { requestOpenPublish } from "../../constants/events.ts";
@@ -233,6 +234,16 @@ export const Home = () => {
   );
   // Rows came back, but every one of them is from a hidden name.
   const hiddenAll = listedFiles.length > 0 && visibleFiles.length === 0;
+  // The publishers on screen, in list order: they certainly have shares, so the
+  // publisher field ranks them up and offers them before anything is typed.
+  const seenPublishers = useMemo(() => [...new Set(visibleFiles.map((f) => f.user).filter(Boolean))], [visibleFiles]);
+
+  // A suggested publisher applies at once; in the phone sheet it also closes the sheet.
+  const pickPublisher = (name: string) => {
+    dispatch(changefilterName(name));
+    runSearch(true, { name });
+    if (phone) setFiltersOpen(false);
+  };
 
   const sortToggle = (
     <ToggleButtonGroup
@@ -273,11 +284,13 @@ export const Home = () => {
         value={filterSearch}
         onChange={(e) => dispatch(changefilterSearch(e.target.value))}
       />
-      <TextField
-        size="small"
+      <NameSuggestField
         label="Publisher name (exact)"
         value={filterName}
-        onChange={(e) => dispatch(changefilterName(e.target.value))}
+        onChange={(name) => dispatch(changefilterName(name))}
+        onPick={pickPublisher}
+        seenNames={seenPublishers}
+        listLabel="Suggested publishers"
       />
       <CategoryList categoryData={allCategoryData} ref={categoryListRef} initialCategories={pickerCategories} dense />
       <Box sx={{ display: "flex", gap: 1, "& .MuiButton-root": { minHeight: 44 } }}>
