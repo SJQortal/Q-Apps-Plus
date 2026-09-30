@@ -4,7 +4,8 @@ import DownloadingOutlinedIcon from "@mui/icons-material/DownloadingOutlined";
 import DownloadDoneOutlinedIcon from "@mui/icons-material/DownloadDoneOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import SaveAltOutlinedIcon from "@mui/icons-material/SaveAltOutlined";
-import { errorMessage, saveFromNode } from "./FileElement";
+import { saveFromNode } from "./FileElement";
+import { errorMessage, isHubDecline } from "../../utils/hubErrors";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
@@ -46,8 +47,7 @@ export const DownloadTaskManager: React.FC<DownloadTaskManagerProps> = ({ hideBu
         { filename: props.filename, mimeType: props.mimeType || props.mimetype }
       );
     } catch (error) {
-      const msg = errorMessage(error, "Could not save the file");
-      if (!/cancel/i.test(msg)) dispatch(setNotification({ msg, alertType: "error" }));
+      if (!isHubDecline(error)) dispatch(setNotification({ msg: errorMessage(error, "Could not save the file"), alertType: "error" }));
     } finally {
       setSavingId(null);
     }

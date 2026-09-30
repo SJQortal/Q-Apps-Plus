@@ -8,6 +8,7 @@ import { formatBytes } from "../../utils/formatBytes";
 import { shareSlug } from "../../utils/publishPayload";
 import { buildZip } from "../../utils/zip";
 import { resourceUrl } from "./FileElement";
+import { errorMessage, isHubDecline } from "../../utils/hubErrors";
 
 export interface ZipFile {
   name: string;
@@ -43,21 +44,32 @@ export function SaveAllZipButton({ files, title, allReady }: SaveAllZipButtonPro
 
   const save = async () => {
     if (progress) return;
+    const fail = (error: unknown, fallback: string) =>
+      dispatch(setNotification({ msg: errorMessage(error, fallback), alertType: "error" }));
     try {
-      const entries = [];
-      for (let i = 0; i < files.length; i += 1) {
-        const file = files[i];
-        setProgress(`Packing ${i + 1} of ${files.length}…`);
-        const response = await fetch(resourceUrl({ ...file, service: file.service || "FILE" }));
-        if (!response.ok) throw new Error(`The node answered ${response.status} for ${file.filename}`);
-        entries.push({ name: file.filename || file.identifier, data: new Uint8Array(await response.arrayBuffer()) });
+      let blob: Blob;
+      try {
+        const entries = [];
+        for (let i = 0; i < files.length; i += 1) {
+          const file = files[i];
+          setProgress(`Packing ${i + 1} of ${files.length}…`);
+          const response = await fetch(resourceUrl({ ...file, service: file.service || "FILE" }));
+          if (!response.ok) throw new Error(`The node answered ${response.status} for ${file.filename}`);
+          entries.push({ name: file.filename || file.identifier, data: new Uint8Array(await response.arrayBuffer()) });
+        }
+        blob = new Blob([buildZip(entries)], { type: "application/zip" });
+      } catch (error) {
+        // Always shown: these messages name a file, and a name like "cancelled.txt" is not a decline.
+        fail(error, "Could not build the zip");
+        return;
       }
       setProgress("Saving…");
-      const blob = new Blob([buildZip(entries)], { type: "application/zip" });
-      await qortalRequest({ action: "SAVE_FILE", blob, filename: `${shareSlug(title || "share")}.zip`, mimeType: "application/zip" });
-    } catch (error: any) {
-      const msg = typeof error?.error === "string" ? error.error : error?.message || "Could not build the zip";
-      if (!/cancel/i.test(msg)) dispatch(setNotification({ msg, alertType: "error" }));
+      try {
+        await qortalRequest({ action: "SAVE_FILE", blob, filename: `${shareSlug(title || "share")}.zip`, mimeType: "application/zip" });
+      } catch (error) {
+        // SAVE_FILE rejects with a bare string; a decline (or the prompt timing out) stays quiet.
+        if (!isHubDecline(error)) fail(error, "Could not save the zip");
+      }
     } finally {
       setProgress(null);
     }

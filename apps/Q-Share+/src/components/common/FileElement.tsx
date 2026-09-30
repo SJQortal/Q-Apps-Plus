@@ -8,6 +8,10 @@ import { MyContext, downloadPhase, downloadStatusText, type DownloadPhase } from
 import { RootState } from "../../state/store";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { errorMessage, isHubDecline } from "../../utils/hubErrors";
+
+// Kept here too: other modules import it from this file.
+export { errorMessage };
 
 export interface FileInfo {
   name: string;
@@ -46,14 +50,6 @@ export async function saveFromNode(
   if (!response.ok) throw new Error(`The node answered ${response.status}`);
   const blob = await response.blob();
   await qortalRequest({ action: "SAVE_FILE", blob, filename, mimeType });
-}
-
-export function errorMessage(error: unknown, fallback: string): string {
-  if (typeof error === "string") return error || fallback;
-  const e = error as { error?: unknown; message?: unknown } | null;
-  if (typeof e?.error === "string") return e.error || fallback;
-  if (typeof e?.message === "string") return e.message || fallback;
-  return fallback;
 }
 
 /**
@@ -99,8 +95,8 @@ export function useFileDownload(fileInfo: FileInfo, jsonId: string) {
         mimeType: download?.properties?.mimeType || fileInfo.mimeType || fileInfo.mimetype,
       });
     } catch (error) {
-      const msg = errorMessage(error, "Could not save the file");
-      if (!/cancel/i.test(msg)) dispatch(setNotification({ msg, alertType: "error" }));
+      // Declining Hub's save prompt (or letting it time out) is not an error.
+      if (!isHubDecline(error)) dispatch(setNotification({ msg: errorMessage(error, "Could not save the file"), alertType: "error" }));
     } finally {
       setSaving(false);
     }
