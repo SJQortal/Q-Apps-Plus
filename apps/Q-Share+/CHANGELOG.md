@@ -2,6 +2,21 @@
 
 Newest first. The in-app copy lives in `src/constants/changelog.ts` (Settings → About → What's new).
 
+## 1.0.0-plus.4 (2026-09-30)
+
+Checked live in Qortal Hub (GO 3.0 build, Dev Mode) with real data at 1440, 700, 390×844, 360×740 and 844×390; details in docs/apps/Q-Share+.md → Hub Dev Mode check.
+
+- Security: descriptions build `qortal://` links on the DOM (the regex linkifier allowed stored XSS, inherited from upstream); relative links, `<style>`, forms and image maps are dropped; DOMPurify 3.0.6 → 3.4.16. A share's JSON can no longer override its publisher or identifier, and cached bodies are matched by name as well as identifier.
+- Links: `qortal://APP/Q-Share+/…` (Hub never decodes `%2B`, so the old links opened a blank tab); the router accepts both spellings; copying falls back to a manual-copy dialog on plain-http nodes.
+- Share page: PDFs open with Hub's `SHOW_PDF_READER`; audio and video wait until the file is on the node; shares not on the node yet wait for peers; deleted shares and error pages are told apart; a compact action row on phones; "Add to collection" instead of a second "Save"; comments keyed by the share's `commentsId` are shown.
+- Home and lists: titles from the search at once, "Not available on your node right now" instead of an endless skeleton, deleted shares left out, paging continues past hidden names, the query survives Back, My shares toggles off, category filters count as filters.
+- Phones: sticky header and Back bars work again (`overflow-x: clip`), bottom sheets mount only when opened (Home's DOM halves), the Share button and toasts keep clear of content, a 52 px bar with Share in it in landscape, 44 px targets.
+- Downloads and saves: declines are quiet; GO and files over 100 MB stream by `location`; files that finish after you leave are built; names with `/` work; one node call fewer per file.
+- Publishing: the wait matches Hub's (30 min per resource), a timeout checks QDN before any retry, per-file progress from Hub's `PUBLISH_STATUS`, declines recognised in all 12 Hub languages.
+- Theme kit (`Repo:`): follows Hub's `THEME_CHANGED` without a reload.
+- Editor: no text or highlight colours (they vanished in other themes); pasted colours are dropped.
+- Quality: 399 tests (122 at 1.0.0-plus.3); lint clean.
+
 ## 1.0.0-plus.3 (2026-09-30)
 
 - Settings sync: a Sync section saves your settings and theme to QDN under your name (one small document; Hub confirms, the usual fee applies) and restores them on another device. Nothing runs on its own, so first load costs no extra call.

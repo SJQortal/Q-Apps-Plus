@@ -14,6 +14,22 @@ export interface Release {
 /** Newest first. Keep this in step with CHANGELOG.md. */
 export const CHANGELOG: Release[] = [
   {
+    version: "1.0.0-plus.4",
+    date: "2026-09-30",
+    title: "Tested in Qortal Hub",
+    notes: [
+      "Checked in Qortal Hub with real shares, on desktop, narrow and phone sizes, in all four themes and in Hub's light and dark mode.",
+      "Safer share pages: a description can no longer run script or restyle the app, and web links copy their address instead of doing nothing.",
+      "Copied links open Q-Share+ in Hub: they now name the app Q-Share+ instead of Q-Share%2B, which opened a blank tab.",
+      "PDFs open in Hub's own PDF reader. The inline preview was always blank in Hub and GO.",
+      "Home shows titles at once, says when a share isn't reachable instead of spinning forever, leaves deleted shares out, and keeps paging when hidden names empty a page.",
+      "Phones: the header and Back bars stay put, pages are lighter, the Share button and toasts no longer cover content, landscape has a compact bar with Share in it, and share pages have one compact row of actions.",
+      "Saving: saying no in Hub is not an error, GO and big files stream straight from the node, and downloads that finish after you leave a share can still be saved.",
+      "Publishing waits as long as Hub does, checks QDN before offering a retry so nothing is paid twice, shows each file's progress, and understands a decline in every Hub language.",
+      "Hub's light/dark switch applies without a reload; comments filed under a share's comments id show up; the editor no longer adds colours that vanish in other themes.",
+    ],
+  },
+  {
     version: "1.0.0-plus.3",
     date: "2026-09-30",
     title: "Settings sync, zip saves, profile collections",
