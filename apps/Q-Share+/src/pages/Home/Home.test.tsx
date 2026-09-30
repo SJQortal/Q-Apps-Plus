@@ -369,6 +369,104 @@ describe('Home applied filters', () => {
   });
 });
 
+describe('Home next page errors', () => {
+  it('a failed next page keeps the rows, stops the pager and offers Retry for that page', async () => {
+    readOncePerObserve();
+    const row = (slug: string, created: number, title: string) => ({
+      name: 'bob',
+      service: 'DOCUMENT',
+      identifier: `qshare_file_${slug}_${slug.slice(-6).padStart(6, 'x')}_metadata`,
+      created,
+      metadata: { title },
+    });
+    let nodeDown = true;
+    mockFetch('/arbitrary/resources/search', (url) => {
+      if (url.searchParams.get('offset') === '0') return Array.from({ length: 20 }, (_, i) => row(`home-${i}`, 100 - i, `Home share ${i}`));
+      if (nodeDown) throw new Error('node down');
+      return [row('home-last', 1, 'Home last share')];
+    });
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+    const searchesAt = (offset: number) => fetchCallsMatching(new RegExp(`[?&]offset=${offset}&`)).length;
+
+    renderHome();
+
+    expect(await screen.findByText('Could not load more shares.', {}, { timeout: 4000 })).toBeInTheDocument();
+    // The sentinel stays in view, but a failed page is tried once, not five times back to back.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(searchesAt(20)).toBe(1);
+    expect(screen.getByText('Home share 0')).toBeInTheDocument();
+    expect(screen.queryByText('Could not load shares')).not.toBeInTheDocument();
+
+    nodeDown = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('Home last share', {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(searchesAt(20)).toBe(2);
+    // Retry loads that page, not the list again from the top.
+    expect(searchesAt(0)).toBe(1);
+    expect(screen.getByText('Home share 0')).toBeInTheDocument();
+    expect(screen.queryByText('Could not load more shares.')).not.toBeInTheDocument();
+  });
+
+  it('a failed new search still takes the whole list, with Retry from the top', async () => {
+    let nodeDown = false;
+    mockFetch('/arbitrary/resources/search', () => {
+      if (nodeDown) throw new Error('node down');
+      return [{ name: 'bob', service: 'DOCUMENT', identifier: 'qshare_file_old_Old123_metadata', created: 1, metadata: { title: 'Newest first' } }];
+    });
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    renderHome();
+    expect(await screen.findByText('Newest first')).toBeInTheDocument();
+    nodeDown = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Oldest' }));
+    expect(await screen.findByText('Could not load shares')).toBeInTheDocument();
+    // The newest-first rows are still in the store, but not shown under the new sort.
+    expect(screen.queryByText('Newest first')).not.toBeInTheDocument();
+  });
+
+  it('Retry keeps focus: on the button while its page loads and fails again, then on the first row it adds', async () => {
+    readOncePerObserve();
+    const row = (slug: string, created: number, title: string) => ({
+      name: 'bob',
+      service: 'DOCUMENT',
+      identifier: `qshare_file_${slug}_${slug.slice(-6).padStart(6, 'x')}_metadata`,
+      created,
+      metadata: { title },
+    });
+    // Page two: fails, fails again once released, then lands.
+    let pageTwoCalls = 0;
+    let open: (() => void) | undefined;
+    mockFetch('/arbitrary/resources/search', async (url) => {
+      if (url.searchParams.get('offset') === '0') return Array.from({ length: 20 }, (_, i) => row(`home-${i}`, 100 - i, `Home share ${i}`));
+      pageTwoCalls += 1;
+      if (pageTwoCalls === 2) await new Promise<void>((resolve) => (open = resolve));
+      if (pageTwoCalls <= 2) throw new Error('node down');
+      return [row('home-last', 1, 'Home last share')];
+    });
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    renderHome();
+    const retry = await screen.findByRole('button', { name: 'Retry' }, { timeout: 4000 });
+    retry.focus();
+    fireEvent.click(retry);
+    // While the page loads, the button stays (busy, not disabled) and keeps focus.
+    await waitFor(() => expect(open).toBeDefined());
+    expect(screen.getByRole('button', { name: 'Loading…' })).toBe(retry);
+    expect(retry).toHaveAttribute('aria-disabled', 'true');
+    expect(document.activeElement).toBe(retry);
+
+    open!();
+    expect(await screen.findByRole('button', { name: 'Retry' })).toBe(retry);
+    expect(document.activeElement).toBe(retry);
+
+    fireEvent.click(retry);
+    const added = (await screen.findByText('Home last share', {}, { timeout: 4000 })).closest('button');
+    await waitFor(() => expect(document.activeElement).toBe(added));
+    expect(screen.queryByText('Could not load more shares.')).not.toBeInTheDocument();
+    expect(pageTwoCalls).toBe(3);
+  });
+});
+
 describe('Home after Back', () => {
   const listSearches = () =>
     fetchCallsMatching('/arbitrary/resources/search')

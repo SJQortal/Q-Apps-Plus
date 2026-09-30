@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Box, Button, Skeleton, Typography } from "@mui/material";
+import { Box, Skeleton } from "@mui/material";
 import { useFetchFiles, summaryToVideo, useListedFiles } from "../../hooks/useFetchFiles.tsx";
 import LazyLoad from "../../components/common/LazyLoad";
+import { PageRetry } from "../../components/common/PageRetry.tsx";
 import { Video } from "../../state/features/fileSlice.ts";
 import { queue } from "../../utils/queue";
 import { QSHARE_FILE_BASE } from "../../constants/Identifiers.ts";
@@ -83,9 +84,11 @@ export const FileListComponentLevel = () => {
 
   // Deleted shares ("D" bodies) are left out; a name whose shares are all deleted is empty.
   const listed = useListedFiles(videos);
+  // Holds the list's rows, for Retry to move focus to the first row its page adds.
+  const rows = useRef<HTMLDivElement>(null);
 
   return (
-    <Box sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 1.5 }}>
+    <Box ref={rows} sx={{ width: "100%", display: "flex", flexDirection: "column", gap: 1.5 }}>
       {error && listed.length === 0 ? (
         <EmptyState title="Could not load this publisher's shares" actionLabel="Retry" onAction={() => getVideos(true)} />
       ) : videos.length === 0 && isLoading ? (
@@ -101,16 +104,7 @@ export const FileListComponentLevel = () => {
           <FileList files={listed} showPublisher={false} />
           {/* A failed page stops the pager (it would retry at once, up to five times) until Retry. */}
           <LazyLoad onLoadMore={() => getVideos(false)} isLoading={isLoading} hasMore={hasMore && !error} />
-          {error && (
-            <Box role="status" sx={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                Could not load more shares.
-              </Typography>
-              <Button variant="outlined" onClick={() => getVideos(false)} sx={{ minHeight: 44 }}>
-                Retry
-              </Button>
-            </Box>
-          )}
+          <PageRetry failed={error} onRetry={() => getVideos(false)} rows={rows} />
         </>
       )}
     </Box>

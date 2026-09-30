@@ -69,9 +69,13 @@ describe('profile share list', () => {
     expect(screen.getByText('Bob share 0')).toBeInTheDocument();
 
     nodeDown = false;
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    const retry = screen.getByRole('button', { name: 'Retry' });
+    retry.focus();
+    fireEvent.click(retry);
     expect(await screen.findByText('Bob last share', {}, { timeout: 4000 })).toBeInTheDocument();
     expect(pageTwo()).toBe(2);
     expect(screen.queryByText('Could not load more shares.')).not.toBeInTheDocument();
+    // Focus moves on to the row that page added, not to the top of the document.
+    expect(document.activeElement).toBe(screen.getByText('Bob last share').closest('button'));
   });
 });

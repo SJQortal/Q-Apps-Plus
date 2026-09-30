@@ -21,6 +21,7 @@ import { RootState } from "../../state/store";
 import { FileList } from "./FileList.tsx";
 import { useFetchFiles, useListedFiles } from "../../hooks/useFetchFiles.tsx";
 import LazyLoad from "../../components/common/LazyLoad";
+import { PageRetry } from "../../components/common/PageRetry.tsx";
 import { FiltersRail } from "./FileList-styles.tsx";
 import { changefilterName, changefilterSearch } from "../../state/features/fileSlice.ts";
 import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
@@ -91,6 +92,8 @@ export const Home = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  // A next page failed: the rows stay, with a Retry for that page.
+  const [pageError, setPageError] = useState(false);
   const [hasMore, setHasMore] = useState(restored?.hasMore ?? true);
   const [applied, setApplied] = useState<AppliedFilters>(
     () => restored?.applied ?? { name: filterName, keywords: filterSearch, categories: [] }
@@ -100,6 +103,8 @@ export const Home = () => {
   const isFetching = useRef(false);
   const requestId = useRef(0);
   const mounted = useRef(false);
+  // Holds the list's rows, for Retry to move focus to the first row its page adds.
+  const listColumn = useRef<HTMLDivElement>(null);
   // A new one for each new list (filters, sort, refresh), so paging starts a fresh budget.
   const [listId, setListId] = useState(0);
 
@@ -116,6 +121,7 @@ export const Home = () => {
       isFetching.current = true;
       setIsLoading(true);
       setError(null);
+      setPageError(false);
       const filters: AppliedFilters = reset
         ? {
             name: overrides.clear ? "" : (overrides.name ?? filterName),
@@ -138,7 +144,11 @@ export const Home = () => {
         if (reset) listQuery = { applied: filters, sort: listSort, following: listFollowing, hasMore: more };
         else if (listQuery) listQuery = { ...listQuery, hasMore: more };
       } catch (e) {
-        if (current()) setError("The list could not be loaded. Check that your node is running, then try again.");
+        // A failed reset takes the whole list: the old rows still in the store don't
+        // belong under the new heading. A failed next page keeps the rows it follows.
+        if (!current()) return;
+        if (reset) setError("The list could not be loaded. Check that your node is running, then try again.");
+        else setPageError(true);
       } finally {
         if (current()) {
           isFetching.current = false;
@@ -373,7 +383,7 @@ export const Home = () => {
         </FiltersRail>
       )}
 
-      <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
+      <Box ref={listColumn} sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
         <Box
           sx={{
             display: "flex",
@@ -449,8 +459,10 @@ export const Home = () => {
               </Typography>
             )}
             <FileList files={visibleFiles} />
-            {/* hasMore lets it keep paging while hidden names leave the end of the list in view. */}
-            <LazyLoad key={listId} onLoadMore={() => runSearch(false)} isLoading={isLoading} hasMore={hasMore} />
+            {/* hasMore lets it keep paging while hidden names leave the end of the list in view.
+                A failed page stops the pager (it would retry at once, up to five times) until Retry. */}
+            <LazyLoad key={listId} onLoadMore={() => runSearch(false)} isLoading={isLoading} hasMore={hasMore && !pageError} />
+            <PageRetry failed={pageError} onRetry={() => runSearch(false)} rows={listColumn} />
             {!hasMore && visibleFiles.length > 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 1 }}>
                 That's every share that matches.
