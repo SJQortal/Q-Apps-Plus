@@ -86,7 +86,7 @@ export async function saveFromNode(
   }
   // Hub refuses a save without a filename.
   filename = filename || ref.identifier;
-  const byLocation: QortalRequestOptions & { location: { service: string; name: string; identifier: string } } = {
+  const byLocation: QortalRequestOptions = {
     action: "SAVE_FILE",
     filename,
     mimeType,

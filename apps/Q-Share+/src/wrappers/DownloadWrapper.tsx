@@ -179,7 +179,7 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
         if (building || Date.now() - lastBuild < BUILD_NUDGE_MS) return;
         building = true;
         lastBuild = Date.now();
-        const request: QortalRequestOptions & { build: boolean } = {
+        const request: QortalRequestOptions = {
           action: "GET_QDN_RESOURCE_STATUS",
           name,
           service,
