@@ -146,12 +146,12 @@ export function BottomNav() {
 
   return (
     <>
+      <Bar aria-label="Main">
       {signedIn && (
         <ShareFab color="primary" aria-label="Share files" onClick={requestOpenPublish}>
           <UploadFileOutlinedIcon />
         </ShareFab>
       )}
-      <Bar aria-label="Main">
         {items.map((item) => (
           <Item
             key={item.key}

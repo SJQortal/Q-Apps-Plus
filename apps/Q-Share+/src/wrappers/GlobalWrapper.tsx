@@ -108,7 +108,9 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
       />
       <EditFile />
 
-      <ErrorBoundary>{children}</ErrorBoundary>
+      <main id="main">
+        <ErrorBoundary>{children}</ErrorBoundary>
+      </main>
 
       <BottomNavSpacer />
       <BottomNav />

@@ -11,7 +11,7 @@
  * Screenshots land in e2e/shots/ (git-ignored).
  */
 import { execSync, spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -22,6 +22,8 @@ mkdirSync(shots, { recursive: true });
 
 const globalRoot = execSync("npm root -g").toString().trim();
 const { chromium } = await import(path.join(globalRoot, "playwright", "index.mjs"));
+// axe-core (a dev dependency) runs on every capture: WCAG 2.1 A/AA plus best practices.
+const AXE_SOURCE = readFileSync(path.join(app, "node_modules", "axe-core", "axe.min.js"), "utf8");
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -288,7 +290,26 @@ try {
           return { overflowX, unlabeled, small, smallText, calls: (window.__calls || []).length, actions: (window.__calls || []).reduce((m, a) => { const k = a.split(":")[0]; m[k] = (m[k] || 0) + 1; return m; }, {}) };
         });
         const searches = page.__fetches.filter((u) => u.includes("/resources/search")).length;
-        report.push({ screen: screen.key, viewport: vp.name, theme, ok, errors: errors.filter((e) => !/qortalRequest|favicon/.test(e)), ...metrics, searches });
+        let axe = [];
+        try {
+          await page.addScriptTag({ content: AXE_SOURCE });
+          const result = await page.evaluate(async () => {
+            const r = await window.axe.run(document, {
+              runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] },
+              resultTypes: ["violations"],
+            });
+            return r.violations.map((v) => ({
+              id: v.id,
+              impact: v.impact,
+              nodes: v.nodes.length,
+              sample: v.nodes.slice(0, 2).map((n) => n.target.join(" ")),
+            }));
+          });
+          axe = result;
+        } catch (e) {
+          errors.push("axe: " + String(e).slice(0, 120));
+        }
+        report.push({ screen: screen.key, viewport: vp.name, theme, ok, errors: errors.filter((e) => !/qortalRequest|favicon/.test(e)), ...metrics, searches, axe });
         await page.close();
       }
       await context.close();
@@ -310,6 +331,18 @@ for (const r of report.filter((r) => r.theme === themes[0])) {
   lines.push(`${r.screen.padEnd(13)} ${r.viewport.padEnd(8)} ${r.theme.padEnd(6)} searches=${r.searches} hub-calls=${r.calls} ${JSON.stringify(r.actions)} small-targets=${r.small} small-text=${r.smallText}${r.overflowX ? " OVERFLOW-X" : ""}${r.unlabeled ? " UNLABELED=" + r.unlabeled : ""}`);
 }
 for (const r of bad) lines.push(`!! ${r.screen} ${r.viewport} ${r.theme}: ${r.errors.join(" | ")}${r.overflowX ? " OVERFLOW-X" : ""}${r.unlabeled ? " UNLABELED=" + r.unlabeled : ""}`);
+// axe: one line per distinct rule, with where it shows up.
+const byRule = new Map();
+for (const r of report) for (const v of r.axe || []) {
+  const entry = byRule.get(v.id) || { impact: v.impact, screens: new Set(), nodes: 0, sample: v.sample };
+  entry.screens.add(`${r.screen}@${r.viewport}/${r.theme}`);
+  entry.nodes += v.nodes;
+  byRule.set(v.id, entry);
+}
+lines.push(`axe rules violated: ${byRule.size}`);
+for (const [id, e] of [...byRule.entries()].sort((a, b) => b[1].nodes - a[1].nodes)) {
+  lines.push(`axe ${id} (${e.impact}) nodes=${e.nodes} on ${e.screens.size} captures, e.g. ${[...e.screens][0]} ${JSON.stringify(e.sample)}`);
+}
 writeFileSync(path.join(shots, "report.json"), JSON.stringify(report, null, 1));
 console.log(lines.join("\n"));
 // The preview server's pipes would otherwise keep the process alive.

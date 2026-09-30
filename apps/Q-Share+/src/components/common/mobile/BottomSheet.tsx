@@ -32,10 +32,13 @@ export function BottomSheet({ open, onClose, title, children, ariaLabel }: Botto
       onClose={onClose}
       onOpen={() => {}}
       disableSwipeToOpen
-      aria-labelledby={title ? titleId : undefined}
-      aria-label={title ? undefined : ariaLabel}
       slotProps={{
         paper: {
+          // The paper is the dialog: named here so axe and screen readers agree.
+          role: "dialog",
+          "aria-modal": true,
+          "aria-labelledby": title ? titleId : undefined,
+          "aria-label": title ? undefined : ariaLabel,
           sx: {
             borderTopLeftRadius: 16,
             borderTopRightRadius: 16,

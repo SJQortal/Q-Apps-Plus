@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Box } from "@mui/material";
 import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
@@ -51,8 +52,28 @@ const phoneModules = {
  */
 export default function TextEditorQuill({ inlineContent, setInlineContent, placeholder }: TextEditorProps) {
   const phone = usePhoneLayout();
+  // Quill 2 names its toolbar buttons but not the dropdown pickers.
+  const wrapper = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = wrapper.current;
+    if (!root) return;
+    const names: Record<string, string> = {
+      "ql-size": "Text size",
+      "ql-header": "Heading level",
+      "ql-color": "Text colour",
+      "ql-background": "Highlight colour",
+      "ql-font": "Font",
+      "ql-align": "Alignment",
+    };
+    root.querySelectorAll<HTMLElement>(".ql-picker").forEach((picker) => {
+      const key = Object.keys(names).find((k) => picker.classList.contains(k));
+      const label = picker.querySelector<HTMLElement>(".ql-picker-label");
+      if (key && label && !label.getAttribute("aria-label")) label.setAttribute("aria-label", names[key]);
+    });
+  }, [phone]);
   return (
     <Box
+      ref={wrapper}
       sx={(theme) => ({
         width: "100%",
         ...(phone && {

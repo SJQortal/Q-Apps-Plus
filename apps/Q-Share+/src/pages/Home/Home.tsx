@@ -252,7 +252,7 @@ export const Home = () => {
 
       <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", "& .MuiChip-root": { minHeight: 36 } }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, flex: "1 1 160px", minWidth: 0, wordBreak: "break-word" }}>
+          <Typography component="h1" variant="h6" sx={{ fontWeight: 700, flex: "1 1 160px", minWidth: 0, wordBreak: "break-word" }}>
             {filterName ? `Shares by ${filterName}` : following ? "From names you follow" : "Latest shares"}
           </Typography>
           {phone && (
