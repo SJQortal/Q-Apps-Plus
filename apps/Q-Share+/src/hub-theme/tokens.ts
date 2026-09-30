@@ -36,7 +36,8 @@ export interface PaletteTokens {
   background: { default: string; paper: string; surface: string; elevated: string };
   text: { primary: string; secondary: string };
   divider: string;
-  action: { hover: string; selected: string };
+  /** `active` (inactive icons and toggles) is optional; MUI's default applies when absent. */
+  action: { hover: string; selected: string; active?: string };
 }
 
 /** Translucent header/rail fills and page backdrops that MUI's palette has no slot for. */
@@ -130,19 +131,23 @@ const HUB30: Record<ColorMode, Omit<ThemeTokens, 'id' | 'mode'>> = {
   light: {
     fontFamily: INTER_STACK,
     palette: {
+      // Text, outlines and icons need a deeper blue on the warm light surfaces:
+      // the soft #84AFF0 read at 2:1 there (DESIGN.md asks for 4.5:1). Filled
+      // primary buttons keep the soft Hub gradient (componentOverrides).
       primary: {
-        main: HUB_BLUE.primary,
-        dark: HUB_BLUE.pressed,
-        light: HUB_BLUE.gradientTop,
-        contrastText: HUB_BLUE.contrast,
+        main: '#2A56A5',
+        dark: '#234A8F',
+        light: HUB_BLUE.primary,
+        contrastText: '#FFFFFF',
       },
-      secondary: HUB_BLUE.hover,
+      secondary: '#2A56A5',
       success: 'rgb(94, 176, 73)',
       error: 'rgb(177, 70, 70)',
       background: { default: '#DDD6CA', paper: '#F6F2EA', surface: '#EEE7DC', elevated: '#E2D9CB' },
-      text: { primary: 'rgba(21, 26, 35, 0.94)', secondary: 'rgba(88, 96, 110, 0.86)' },
+      text: { primary: 'rgba(21, 26, 35, 0.94)', secondary: '#4A525E' },
       divider: 'rgba(28, 36, 52, 0.12)',
-      action: { hover: 'rgba(28, 36, 52, 0.06)', selected: 'rgba(41, 121, 218, 0.12)' },
+      // MUI's default 54% black for inactive toggles and icons read below 4.5:1 here.
+      action: { hover: 'rgba(28, 36, 52, 0.06)', selected: 'rgba(41, 121, 218, 0.12)', active: 'rgba(21, 26, 35, 0.72)' },
     },
     chrome: {
       chrome: 'rgba(246, 242, 234, 0.88)',
