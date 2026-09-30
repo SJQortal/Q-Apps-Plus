@@ -14,6 +14,18 @@ export interface Release {
 /** Newest first. Keep this in step with CHANGELOG.md. */
 export const CHANGELOG: Release[] = [
   {
+    version: "1.0.0-plus.3",
+    date: "2026-09-30",
+    title: "Settings sync, zip saves, profile collections",
+    notes: [
+      "Settings → Sync saves your settings and theme to QDN under your name and restores them on another device. Saving publishes a small document, so Hub asks you to confirm.",
+      "Save all as .zip on a share page once its files are on the node: one save dialog for the whole share.",
+      "The downloads list saves any file that is ready, your own share page offers Edit share, and profile pages have a Collections tab.",
+      "The publish dialog shows the total size and the time elapsed while Hub works.",
+      "An accessibility audit now runs on every screen in every theme; the structure it asked for is in place.",
+    ],
+  },
+  {
     version: "1.0.0-plus.2",
     date: "2026-09-30",
     title: "Phones, collections and previews",

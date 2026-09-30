@@ -2,6 +2,14 @@
 
 Newest first. The in-app copy lives in `src/constants/changelog.ts` (Settings → About → What's new).
 
+## 1.0.0-plus.3 (2026-09-30)
+
+- Settings sync: a Sync section saves your settings and theme to QDN under your name (one small document; Hub confirms, the usual fee applies) and restores them on another device. Nothing runs on its own, so first load costs no extra call.
+- Save all as .zip on a share page once every file is on the node: one Hub save dialog instead of one per file, built by a small store-only ZIP writer (no dependency), for shares up to 150 MB.
+- Downloads list: a Save button on every file that is ready. Share page: Edit share for the owner. Profile pages: a Collections tab that loads only when opened.
+- Publish dialog: shows the total size and the time elapsed while Hub works (it reports nothing until the batch is done).
+- Accessibility: an axe-core audit (WCAG 2.1 AA + best practices) runs in the screenshot harness on every capture; it found no contrast problems in any theme and the structure it asked for is in place (a `main` landmark, one banner, an h1 on every page, named bottom sheets, named editor pickers). 122 tests.
+
 ## 1.0.0-plus.2 (2026-09-30)
 
 - Phones and GO: a bottom bar (Home, Collections, Downloads, Settings) and a floating Share button; the header hides while you scroll down; Back buttons on share, profile and collection pages; filters and sort in a bottom sheet; pull-to-refresh on lists; full-screen Share and Edit dialogs whose Publish button stays above the keyboard; 44 px targets; safe-area insets; the same layout on a phone held sideways.
