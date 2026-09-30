@@ -25,9 +25,11 @@
   --qshare-app-height: 100dvh;
 }
 
+/* clip, not hidden: overflow-x: hidden on body makes it a scroll container
+   that never scrolls, and the sticky header and sub-headers stop sticking. */
 html,
 body {
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
