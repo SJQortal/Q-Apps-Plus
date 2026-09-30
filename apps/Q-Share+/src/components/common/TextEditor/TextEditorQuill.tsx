@@ -18,12 +18,22 @@ const modules = {
     [{ direction: "rtl" }], // text direction
     [{ size: ["small", false, "large", "huge"] }], // custom dropdown
     [{ header: [1, 2, 3, 4, 5, 6, false] }], // custom button values
-    [{ color: [] }, { background: [] }], // dropdown with defaults
     [{ font: [] }], // font family
     [{ align: [] }], // text align
     ["clean"], // remove formatting
   ],
 };
+
+/**
+ * Every format except text and highlight colours. A description is read in
+ * four themes, light and dark, so a fixed colour (often white text pasted
+ * from a dark web page) turns unreadable in half of them; display strips
+ * colours too. Leaving them out of `formats` also drops them on paste.
+ */
+const formats = [
+  "bold", "italic", "underline", "strike", "code", "link", "script", "size", "font",
+  "blockquote", "code-block", "header", "list", "indent", "direction", "align",
+];
 
 /**
  * On phones the toolbar is one row of nine 40 px buttons. Only the buttons
@@ -60,8 +70,6 @@ export default function TextEditorQuill({ inlineContent, setInlineContent, place
     const names: Record<string, string> = {
       "ql-size": "Text size",
       "ql-header": "Heading level",
-      "ql-color": "Text colour",
-      "ql-background": "Highlight colour",
       "ql-font": "Font",
       "ql-align": "Alignment",
     };
@@ -145,6 +153,7 @@ export default function TextEditorQuill({ inlineContent, setInlineContent, place
         onChange={setInlineContent}
         useSemanticHTML={false}
         modules={phone ? phoneModules : modules}
+        formats={formats}
         placeholder={placeholder}
       />
     </Box>
