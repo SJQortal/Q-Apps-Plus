@@ -19,7 +19,6 @@
     "localforage": "^1.10.0",
     "mime": "^4.0.1",
     "moment": "^2.29.4",
-    "philliplm-react-modern-audio-player": "^1.4.6",
     "react": "^19.3.0",
     "react-copy-to-clipboard": "^5.1.1",
     "react-dom": "^19.3.0",

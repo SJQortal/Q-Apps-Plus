@@ -13,7 +13,6 @@ import PageLoader from "../components/common/PageLoader";
 
 import localForage from "localforage";
 import ConsentModal from "../components/modals/ConsentModal";
-import { AudioPlayer } from "../components/common/AudioPlayer";
 import { setPrivateGroups } from "../state/features/globalSlice";
 import { LoaderBar } from "../components/common/LoaderBar";
 import {
@@ -42,7 +41,6 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
   const [userAvatar, setUserAvatar] = useState<string>("");
 
   const { user } = useSelector((state: RootState) => state.auth);
-  const { audios, currAudio } = useSelector((state: RootState) => state.global);
   const favoritesLocalRef = useRef<any>(null);
   useEffect(() => {
     if (!user?.name) return;
@@ -350,10 +348,6 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
       <NavBar />
       <ConsentModal />
       {children}
-
-      {audios && audios.length > 0 && (
-        <AudioPlayer currAudio={currAudio} playlist={audios} />
-      )}
     </AppShellContext.Provider>
   );
 };
