@@ -2,9 +2,10 @@ import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
-  Avatar,
   Box,
   Button,
+  Dialog,
+  DialogTitle,
   IconButton,
   MenuItem,
   Select,
@@ -36,7 +37,10 @@ import { setNotification } from "../../state/features/notificationsSlice";
 import { formatDate } from "../../utils/time";
 import { useSafeBack } from "../../hooks/useSafeBack";
 import { isHubDecline } from "../../utils/hubErrors";
-import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
+import { PHONE_MEDIA, usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { BottomSheet } from "../../components/common/mobile/BottomSheet";
+import { NameAvatar } from "../../components/common/NameAvatar";
+import { NameSwitcher } from "../../components/common/NameSwitcher";
 
 const Page = styled("div")(({ theme }) => ({
   width: "100%",
@@ -192,6 +196,23 @@ export const Settings = () => {
     }
   };
   const names = (user?.names ?? []).filter((n) => n.name);
+  // The same switcher as the header's account menu: avatars, and a search field for many names.
+  const phone = usePhoneLayout();
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const closeSwitcher = () => setSwitcherOpen(false);
+  const switcher = (
+    <NameSwitcher
+      names={names.map((n) => n.name)}
+      activeName={user?.name ?? null}
+      onPick={(name) => {
+        if (user) dispatch(addUser({ ...user, name }));
+        closeSwitcher();
+      }}
+      autoFocusSearch={!phone}
+      onEscape={closeSwitcher}
+      maxListHeight={phone ? "min(55dvh, 440px)" : "min(420px, calc(var(--qshare-app-height, 100dvh) - 200px))"}
+    />
+  );
 
   return (
     <Page>
@@ -209,11 +230,7 @@ export const Settings = () => {
         {user?.name ? (
           <Row>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
-              <Avatar
-                src={`/arbitrary/THUMBNAIL/${encodeURIComponent(user.name)}/qortal_avatar`}
-                alt=""
-                sx={{ width: 40, height: 40 }}
-              />
+              <NameAvatar name={user.name} size={40} eager />
               <Box sx={{ minWidth: 0 }}>
                 <Typography sx={{ fontWeight: 700 }} noWrap>
                   {user.name}
@@ -224,18 +241,14 @@ export const Settings = () => {
               </Box>
             </Box>
             {names.length > 1 && (
-              <Select
-                size="small"
-                value={user.name}
-                onChange={(e) => dispatch(addUser({ ...user, name: e.target.value }))}
-                inputProps={{ "aria-label": "Switch active name" }}
+              <Button
+                variant="outlined"
+                aria-haspopup="dialog"
+                onClick={() => setSwitcherOpen(true)}
+                sx={{ flexShrink: 0, [`@media ${PHONE_MEDIA}`]: { minHeight: 44 } }}
               >
-                {names.map((n) => (
-                  <MenuItem key={n.name} value={n.name}>
-                    {n.name}
-                  </MenuItem>
-                ))}
-              </Select>
+                Switch name
+              </Button>
             )}
           </Row>
         ) : (
@@ -244,6 +257,16 @@ export const Settings = () => {
           </Typography>
         )}
       </Section>
+      {phone ? (
+        <BottomSheet open={switcherOpen} onClose={closeSwitcher} title="Switch name">
+          {switcher}
+        </BottomSheet>
+      ) : (
+        <Dialog open={switcherOpen} onClose={closeSwitcher} maxWidth="xs" fullWidth aria-labelledby="switch-name-title">
+          <DialogTitle id="switch-name-title">Switch name</DialogTitle>
+          <Box sx={{ pb: 1 }}>{switcher}</Box>
+        </Dialog>
+      )}
 
       <Section>
         <SectionTitle>Appearance</SectionTitle>

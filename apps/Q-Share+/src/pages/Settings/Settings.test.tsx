@@ -175,3 +175,49 @@ describe('Settings → Hidden names', () => {
     expect(screen.getByText('Hidden names')).toHaveFocus();
   });
 });
+
+describe('Settings → Account', () => {
+  const account = (names: string[], name = names[0]) =>
+    store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name, names: names.map((n) => ({ name: n, owner: 'Qabc' })) }));
+
+  beforeEach(() => {
+    localStorage.clear();
+    resetSettingsCache();
+  });
+
+  it('switches names in the same picker as the header, with avatars', async () => {
+    account(['alice', 'bob', 'carol']);
+    renderWithProviders(<Settings />);
+    fireEvent.click(screen.getByRole('button', { name: 'Switch name' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Switch name' });
+    const rows = within(dialog).getAllByRole('menuitemradio');
+    expect(rows.map((r) => r.textContent)).toEqual(['alice', 'bob', 'carol']);
+    for (const row of rows) expect(row.querySelector('.MuiAvatar-root')).toBeInTheDocument();
+    expect(within(dialog).getByRole('menuitemradio', { name: 'alice' })).toHaveAttribute('aria-checked', 'true');
+    // Few names: no search field.
+    expect(within(dialog).queryByRole('textbox')).toBeNull();
+
+    fireEvent.click(within(dialog).getByRole('menuitemradio', { name: 'bob' }));
+    expect(store.getState().auth.user?.name).toBe('bob');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Switch name' })).toBeNull());
+  });
+
+  it('adds the search field for an account with many names', async () => {
+    const names = Array.from({ length: 18 }, (_, i) => `name ${String(i).padStart(2, '0')}`);
+    account([...names, 'Simon James']);
+    renderWithProviders(<Settings />);
+    fireEvent.click(screen.getByRole('button', { name: 'Switch name' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Switch name' });
+    const field = within(dialog).getByRole('textbox', { name: 'Find one of your names' });
+    fireEvent.change(field, { target: { value: 'james' } });
+    expect(within(dialog).getAllByRole('menuitemradio').map((r) => r.textContent)).toEqual(['Simon James']);
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(store.getState().auth.user?.name).toBe('Simon James');
+  });
+
+  it('shows no Switch name button for an account with one name', () => {
+    account(['alice']);
+    renderWithProviders(<Settings />);
+    expect(screen.queryByRole('button', { name: 'Switch name' })).toBeNull();
+  });
+});
