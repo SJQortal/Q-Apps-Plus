@@ -5,11 +5,11 @@ import { RootState } from "../state/store";
 
 /**
  * Download status machine. One entry per file identifier lives in
- * `state.global.downloads` as `{ name, service, identifier, properties, url?, status? }`.
+ * `state.global.downloads` as `{ name, service, identifier, properties, status? }`.
  *
  *   (no entry)           the file has not been requested on this visit
- *     │ downloadVideo()  → GET_QDN_RESOURCE_PROPERTIES + GET_QDN_RESOURCE_URL ask the
- *     ▼                    node to start fetching; polling begins
+ *     │ downloadVideo()  → GET_QDN_RESOURCE_PROPERTIES asks the node to start
+ *     ▼                    fetching; polling begins
  *   entry, no status     first GET_QDN_RESOURCE_STATUS not back yet ("Fetching from peers… 0%")
  *     ▼ every POLL_MS while the tab is visible
  *   NOT_STARTED / DOWNLOADING (percentLoaded 0–100)  chunks arriving from peers
@@ -130,19 +130,6 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
     }
   }, []);
 
-  const fetchVideoUrl = useCallback(
-    async ({ name, service, identifier }: IResourceRef) => {
-      try {
-        fetchResource({ name, service, identifier });
-        const url = await qortalRequest({ action: "GET_QDN_RESOURCE_URL", service, name, identifier });
-        if (url) dispatch(updateDownloads({ name, service, identifier, url }));
-      } catch {
-        /* the status poll reports the outcome */
-      }
-    },
-    [dispatch, fetchResource]
-  );
-
   const startPolling = useCallback(
     ({ name, service, identifier }: IResourceRef) => {
       pollers.current.get(identifier)?.stop();
@@ -226,9 +213,9 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
       if (existing && !isFailedStatus(existing?.status?.status)) return;
       dispatch(setAddToDownloads({ name, service, identifier, properties }));
       startPolling({ name, service, identifier });
-      fetchVideoUrl({ name, service, identifier });
+      fetchResource({ name, service, identifier });
     },
-    [dispatch, fetchVideoUrl, startPolling, store]
+    [dispatch, fetchResource, startPolling, store]
   );
 
   const retryDownload = useCallback(
@@ -239,9 +226,9 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
         return;
       }
       startPolling({ name, service, identifier });
-      fetchVideoUrl({ name, service, identifier });
+      fetchResource({ name, service, identifier });
     },
-    [fetchVideoUrl, startPolling]
+    [fetchResource, startPolling]
   );
 
   const value = useMemo(() => ({ downloadVideo, retryDownload }), [downloadVideo, retryDownload]);
