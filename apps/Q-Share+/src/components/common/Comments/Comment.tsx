@@ -10,9 +10,9 @@ import {
   CardContentContainerComment,
   CommentActionButton,
   CommentActionButtonRow,
+  CommentAuthorLine,
   CommentDateText,
   ReplyCard,
-  StyledCardColComment,
   StyledCardComment,
   StyledCardContentComment,
   StyledCardHeaderComment,
@@ -29,11 +29,16 @@ interface CommentProps {
   onSubmit: (obj?: any, isEdit?: boolean) => void;
 }
 
-/** A base comment with its replies, reply box and (for the author) an edit dialog. */
+/**
+ * A base comment: its own text and actions first, then the reply box, then
+ * its replies, so the time and Reply never end up below someone else's reply.
+ * The author also gets an edit dialog.
+ */
 export const Comment = ({ comment, postId, postName, onSubmit }: CommentProps) => {
   const [isReplying, setIsReplying] = useState<boolean>(false);
   const { user } = useSelector((state: RootState) => state.auth);
   const [currentEdit, setCurrentEdit] = useState<any>(null);
+  const replies: any[] = comment?.replies || [];
 
   const handleSubmit = useCallback(
     (obj: any, isEdit?: boolean) => {
@@ -59,11 +64,11 @@ export const Comment = ({ comment, postId, postName, onSubmit }: CommentProps) =
         )}
       </ResponsiveDialog>
 
-      <CommentCard name={comment?.name} message={comment?.message} replies={comment?.replies || []} setCurrentEdit={setCurrentEdit}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, marginTop: 1.5, justifyContent: "space-between", flexWrap: "wrap" }}>
-          {comment?.created && <CommentDateText>{formatDate(+comment.created)}</CommentDateText>}
+      <CardContentContainerComment>
+        <CommentBody name={comment?.name} message={comment?.message} created={comment?.created} />
+        {user?.name && (
           <CommentActionButtonRow>
-            {user?.name && !isReplying && (
+            {!isReplying && (
               <CommentActionButton
                 size="small"
                 variant="outlined"
@@ -74,7 +79,7 @@ export const Comment = ({ comment, postId, postName, onSubmit }: CommentProps) =
                 Reply
               </CommentActionButton>
             )}
-            {user?.name === comment?.name && (
+            {user.name === comment?.name && (
               <CommentActionButton
                 size="small"
                 variant="outlined"
@@ -97,57 +102,57 @@ export const Comment = ({ comment, postId, postName, onSubmit }: CommentProps) =
               </CommentActionButton>
             )}
           </CommentActionButtonRow>
-        </Box>
-      </CommentCard>
+        )}
+        {isReplying && <CommentEditor onSubmit={handleSubmit} postId={postId} postName={postName} isReply commentId={comment.identifier} />}
 
-      {isReplying && (
-        <Box sx={{ display: "flex", width: "100%", flexDirection: "column", alignItems: "center" }}>
-          <CommentEditor onSubmit={handleSubmit} postId={postId} postName={postName} isReply commentId={comment.identifier} />
-        </Box>
-      )}
+        {replies.length > 0 && (
+          <Box sx={{ paddingLeft: { xs: 1, sm: 2 }, display: "flex", flexDirection: "column", gap: 1, marginTop: 1 }}>
+            {replies.map((reply: any) => (
+              <ReplyCard key={reply?.identifier} id={reply?.identifier}>
+                <CardContentContainerComment>
+                  <CommentBody name={reply?.name} message={reply?.message} created={reply?.created} />
+                  {user?.name && user.name === reply?.name && (
+                    <CommentActionButtonRow>
+                      <CommentActionButton
+                        size="small"
+                        variant="outlined"
+                        startIcon={<EditOutlinedIcon />}
+                        onClick={() => setCurrentEdit(reply)}
+                        aria-label="Edit your reply"
+                      >
+                        Edit
+                      </CommentActionButton>
+                    </CommentActionButtonRow>
+                  )}
+                </CardContentContainerComment>
+              </ReplyCard>
+            ))}
+          </Box>
+        )}
+      </CardContentContainerComment>
     </Box>
   );
 };
 
-const CommentCard = ({ message, name, replies, children, setCurrentEdit }: any) => {
-  const { user } = useSelector((state: RootState) => state.auth);
-
+/** Avatar, author and time on one line, then the text. */
+const CommentBody = ({ name, message, created }: { name?: string; message?: string; created?: number | string }) => {
+  const when = Number(created);
   return (
-    <CardContentContainerComment>
+    <>
       <StyledCardHeaderComment>
         <Avatar src={name ? avatarUrl(name) : undefined} alt="" sx={{ width: 35, height: 35 }} slotProps={{ img: { loading: "lazy" } }} />
-        <StyledCardColComment>
+        <CommentAuthorLine>
           <AuthorTextComment>{name}</AuthorTextComment>
-        </StyledCardColComment>
+          {created && Number.isFinite(when) ? (
+            <CommentDateText component="time" dateTime={new Date(when).toISOString()}>
+              {formatDate(when)}
+            </CommentDateText>
+          ) : null}
+        </CommentAuthorLine>
       </StyledCardHeaderComment>
       <StyledCardContentComment>
         <StyledCardComment>{message}</StyledCardComment>
       </StyledCardContentComment>
-      {replies?.length > 0 && (
-        <Box sx={{ paddingLeft: { xs: 1, sm: 2 }, display: "flex", flexDirection: "column", gap: 1, marginTop: 1 }}>
-          {replies.map((reply: any) => (
-            <ReplyCard key={reply?.identifier} id={reply?.identifier}>
-              <CommentCard name={reply?.name} message={reply?.message} setCurrentEdit={setCurrentEdit}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, justifyContent: "space-between", flexWrap: "wrap" }}>
-                  {reply?.created && <CommentDateText>{formatDate(+reply.created)}</CommentDateText>}
-                  {user?.name === reply?.name && (
-                    <CommentActionButton
-                      size="small"
-                      variant="outlined"
-                      startIcon={<EditOutlinedIcon />}
-                      onClick={() => setCurrentEdit(reply)}
-                      aria-label="Edit your reply"
-                    >
-                      Edit
-                    </CommentActionButton>
-                  )}
-                </Box>
-              </CommentCard>
-            </ReplyCard>
-          ))}
-        </Box>
-      )}
-      {children}
-    </CardContentContainerComment>
+    </>
   );
 };

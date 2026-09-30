@@ -47,15 +47,14 @@ export const StyledCardHeaderComment = styled(Box)(({ theme }) => ({
   minWidth: 0,
 }));
 
-export const StyledCardColComment = styled(Box)({
+/** Author and time on one line: a long name is cut short, the time never is. */
+export const CommentAuthorLine = styled(Box)(({ theme }) => ({
   display: "flex",
-  overflow: "hidden",
-  flexDirection: "column",
-  gap: 2,
-  alignItems: "flex-start",
-  width: "100%",
+  alignItems: "baseline",
+  gap: theme.spacing(1),
+  flex: 1,
   minWidth: 0,
-});
+}));
 
 export const StyledCardContentComment = styled(Box)(({ theme }) => ({
   display: "flex",
@@ -145,9 +144,11 @@ export const CommentActionButton = styled(Button)(({ theme }) => ({
 export const CommentActionButtonRow = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
+  justifyContent: "flex-end",
   flexWrap: "wrap",
   gap: theme.spacing(1),
   marginLeft: "auto",
+  marginTop: theme.spacing(0.5),
 }));
 
 export const CommentEditorContainer = styled(Box)({
@@ -157,10 +158,12 @@ export const CommentEditorContainer = styled(Box)({
   justifyContent: "center",
 });
 
-export const CommentDateText = styled(Typography)(({ theme }) => ({
+export const CommentDateText = styled(Typography)<{ component?: ElementType; dateTime?: string }>(({ theme }) => ({
   fontWeight: 400,
   fontSize: 13,
   color: theme.palette.text.secondary,
+  flexShrink: 0,
+  whiteSpace: "nowrap",
 }));
 
 export const CommentInputContainer = styled(Box)(({ theme }) => ({
