@@ -24,7 +24,7 @@ The first release of Q-Share+. It reads and writes the same QDN data as Q-Share:
 - Profile pages with Shares and Collections tabs.
 
 **Share pages and downloads**
-- Files: Play audio and Play video once the file is on the node, previews of images (with a lightbox) and text, PDFs in Hub's own reader. Fetch all files, big Download buttons, Save all as .zip (up to 150 MB), Edit share for the owner, Copy link, Add to collection.
+- Files: Play audio and Play video once the file is on the node, previews of images (with a lightbox) and text, PDFs in Hub's own reader. Subtitles (.srt, .vtt) and checksum files preview as text, audiobooks (.m4b) and WebM audio play, and comic books (.cbz, .cbr) are listed as documents. Fetch all files, big Download buttons, Save all as .zip (up to 150 MB), Edit share for the owner, Copy link, Add to collection.
 - Descriptions are sanitised on the DOM: no script, styles, forms or relative links; `qortal://` links work (DOMPurify 3.4).
 - Downloads: a list with progress, Save on every ready file, and Clear finished; polling stops when a file is ready or the tab is hidden; GO and files over 100 MB stream from the node; declines in Hub are not errors.
 - Copied links use `qortal://APP/Q-Share+/…`, which Hub opens (the router also accepts the `%2B` spelling).

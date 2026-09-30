@@ -34,6 +34,20 @@ describe("fileKind", () => {
     expect(fileKind("", "slides.pptx")).toBe("document");
   });
 
+  it("knows the file types found in real shares that were missing", () => {
+    // Subtitles and checksums are text; Core stores srt as application/x-subrip.
+    expect(fileKind("application/x-subrip", "film.srt")).toBe("text");
+    expect(fileKind("", "film.vtt")).toBe("text");
+    expect(fileKind("", "release.iso.md5")).toBe("text");
+    expect(fileKind("", "release.sha256")).toBe("text");
+    // Comic books sit with epub, as documents.
+    expect(fileKind("application/vnd.comicbook+zip", "issue-1.cbz")).toBe("document");
+    expect(fileKind("application/vnd.comicbook-rar", "issue-2.cbr")).toBe("document");
+    // Audiobooks and WebM audio.
+    expect(fileKind("", "book.m4b")).toBe("audio");
+    expect(fileKind("", "voice.weba")).toBe("audio");
+  });
+
   it("returns 'other' for unknown types, no extension and dotfiles", () => {
     expect(fileKind("application/octet-stream", "firmware.bin")).toBe("other");
     expect(fileKind("", "README")).toBe("other");

@@ -63,7 +63,9 @@ describe('previewKind and shouldAutoPreview', () => {
   it('previews only video and audio formats the player can play', () => {
     const media = (filename: string, mimetype = '') => ({ ...base, identifier: filename, filename, mimetype, size: 1 });
     for (const name of ['a.mp4', 'a.M4V', 'a.webm', 'a.ogv', 'a.mov', 'a.mkv']) expect(previewKind(media(name))).toBe('video');
-    for (const name of ['a.mp3', 'a.m4a', 'a.aac', 'a.wav', 'a.ogg', 'a.oga', 'a.opus', 'a.flac']) expect(previewKind(media(name))).toBe('audio');
+    for (const name of ['a.mp3', 'a.m4a', 'a.m4b', 'a.aac', 'a.wav', 'a.ogg', 'a.oga', 'a.opus', 'a.weba', 'a.flac']) {
+      expect(previewKind(media(name))).toBe('audio');
+    }
     expect(previewKind(media('clip', 'video/webm'))).toBe('video');
     expect(previewKind(media('song.mp3', 'application/octet-stream'))).toBe('audio');
     for (const name of ['a.avi', 'a.wmv', 'a.flv', 'a.mpg', 'a.mpeg', 'a.3gp', 'a.wma', 'a.aiff', 'a.mid']) {

@@ -76,7 +76,7 @@ const PLAYABLE: Record<"video" | "audio", { types: string[]; extensions: string[
       "audio/x-flac",
       "audio/webm",
     ],
-    extensions: ["mp3", "m4a", "aac", "wav", "ogg", "oga", "opus", "flac"],
+    extensions: ["mp3", "m4a", "m4b", "aac", "wav", "ogg", "oga", "opus", "weba", "flac"],
   },
 };
 

@@ -40,11 +40,11 @@ const MIME_EXACT: Record<string, FileKind> = {
 const EXTENSIONS: Record<FileKind, string[]> = {
   image: ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif", "heic", "heif", "tif", "tiff", "ico"],
   video: ["mp4", "mkv", "webm", "mov", "avi", "m4v", "wmv", "flv", "mpg", "mpeg", "3gp", "ogv"],
-  audio: ["mp3", "wav", "ogg", "oga", "flac", "m4a", "aac", "opus", "wma", "aiff", "mid", "midi"],
+  audio: ["mp3", "wav", "ogg", "oga", "flac", "m4a", "m4b", "aac", "opus", "weba", "wma", "aiff", "mid", "midi"],
   pdf: ["pdf"],
-  text: ["txt", "md", "markdown", "csv", "tsv", "json", "xml", "yaml", "yml", "log", "ini", "cfg", "toml", "html", "htm", "css", "js", "mjs", "ts", "tsx", "jsx", "py", "sh", "java", "c", "h", "cpp", "rs", "go", "sql"],
+  text: ["txt", "md", "markdown", "csv", "tsv", "json", "xml", "yaml", "yml", "log", "ini", "cfg", "toml", "html", "htm", "css", "js", "mjs", "ts", "tsx", "jsx", "py", "sh", "java", "c", "h", "cpp", "rs", "go", "sql", "srt", "vtt", "md5", "sha1", "sha256", "sha512"],
   archive: ["zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "zst", "iso", "dmg"],
-  document: ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "epub", "pages", "numbers", "key"],
+  document: ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "epub", "cbz", "cbr", "pages", "numbers", "key"],
   other: [],
 };
 
