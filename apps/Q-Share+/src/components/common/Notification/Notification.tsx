@@ -44,8 +44,18 @@ const Notification = () => {
     '--toastify-color-progress-dark': theme.palette.primary.main,
     '--toastify-font-family': String(theme.typography.fontFamily),
     '--toastify-toast-min-height': '48px',
+    // Full width on phones. bottom-center also shifts the container left by half its width, and
+    // react-toastify only undoes that at 480 px or less; a landscape phone (about 780 px) would
+    // lose the left half of every toast, so cancel the shift here and clear the side notches.
     ...(phone
-      ? { bottom: `calc(${bottomChrome + 8}px + env(safe-area-inset-bottom, 0px))`, left: 0, right: 0, width: '100%', padding: '0 12px' }
+      ? {
+          bottom: `calc(${bottomChrome + 8}px + env(safe-area-inset-bottom, 0px))`,
+          left: 0,
+          right: 0,
+          width: '100%',
+          transform: 'none',
+          padding: '0 calc(12px + env(safe-area-inset-right, 0px)) 0 calc(12px + env(safe-area-inset-left, 0px))',
+        }
       : {}),
   } as CSSProperties
 
