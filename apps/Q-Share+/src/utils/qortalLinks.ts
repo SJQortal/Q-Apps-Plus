@@ -38,3 +38,13 @@ export function profilePath(name: string): string {
 export function avatarUrl(name: string): string {
   return `/arbitrary/THUMBNAIL/${encodeURIComponent(name)}/qortal_avatar`;
 }
+
+/** A route param as typed: React Router decodes once, and a stray `%` must not throw. */
+export function decodeParam(value: string | undefined): string {
+  if (!value) return "";
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}

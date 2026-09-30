@@ -17,7 +17,7 @@ import { RootState } from "../../state/store";
 import { addToHashMap } from "../../state/features/fileSlice.ts";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { searchQdn } from "../../utils/qdnSearch";
-import { avatarUrl, profilePath, shareLink } from "../../utils/qortalLinks";
+import { avatarUrl, profilePath, shareLink, decodeParam } from "../../utils/qortalLinks";
 import { formatDate } from "../../utils/time";
 import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
 import { getCategoriesFromObject, type Category } from "../../components/common/CategoryList/CategoryList.tsx";
@@ -42,15 +42,6 @@ const DESCRIPTION_COLLAPSE_PX = 300;
 
 type LoadState = "loading" | "ready" | "notfound" | "error";
 type FetchState = Exclude<LoadState, "ready">;
-
-function decodeParam(value: string | undefined): string {
-  if (!value) return "";
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
 
 /** "Category > Subcategory" from the share's stored category ids. */
 export function categoryPath(fileData: any): string {

@@ -133,7 +133,7 @@ export const useFetchFiles = () => {
   }, [videos, dispatch, queueBodies]);
 
   const getFiles = React.useCallback(
-    async (filters = {}, reset?: boolean, resetFilers?: boolean, limit?: number) => {
+    async (filters = {}, reset?: boolean, resetFilers?: boolean, limit?: number, isCurrent?: () => boolean) => {
       const { name = "", categories = [], keywords = "", sort = "newest", following = false }: any = resetFilers ? {} : filters;
       const offset = reset ? 0 : videos.length;
       const responseData = await searchQdn(
@@ -151,6 +151,8 @@ export const useFetchFiles = () => {
         { fresh: Boolean(reset) }
       );
       const structureData = responseData.map(summaryToVideo);
+      // Superseded by a newer search while waiting: leave the list alone.
+      if (isCurrent && !isCurrent()) return structureData.length;
       if (reset) dispatch(addFiles(structureData));
       else dispatch(upsertFiles(structureData));
       queueBodies(structureData);

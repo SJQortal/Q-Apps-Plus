@@ -47,14 +47,18 @@ export const Home = () => {
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const isFetching = useRef(false);
+  const requestId = useRef(0);
   const mounted = useRef(false);
 
   const { getFiles } = useFetchFiles();
 
   const runSearch = useCallback(
     async (reset: boolean, overrides: { name?: string; sort?: SortOrder; clear?: boolean; following?: boolean } = {}) => {
-      if (isFetching.current) return;
-      if (!reset && !hasMore) return;
+      // A next page waits for the one in flight; a reset (filters, sort, refresh)
+      // always starts, and whatever was in flight is ignored when it lands.
+      if (!reset && (isFetching.current || !hasMore)) return;
+      const id = ++requestId.current;
+      const current = () => id === requestId.current;
       isFetching.current = true;
       setIsLoading(true);
       setError(null);
@@ -67,14 +71,20 @@ export const Home = () => {
             sort: overrides.sort ?? sort,
             following: overrides.clear ? false : (overrides.following ?? following),
           },
-          reset
+          reset,
+          undefined,
+          undefined,
+          current
         );
+        if (!current()) return;
         setHasMore(count >= QDN_PAGE);
       } catch (e) {
-        setError("The list could not be loaded. Check that your node is running, then try again.");
+        if (current()) setError("The list could not be loaded. Check that your node is running, then try again.");
       } finally {
-        isFetching.current = false;
-        setIsLoading(false);
+        if (current()) {
+          isFetching.current = false;
+          setIsLoading(false);
+        }
       }
     },
     [getFiles, filterName, filterSearch, sort, following, hasMore]

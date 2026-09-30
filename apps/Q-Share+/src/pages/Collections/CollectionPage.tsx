@@ -25,7 +25,8 @@ import {
   toggleItem,
   type Collection,
 } from "../../utils/collections";
-import { avatarUrl, profilePath } from "../../utils/qortalLinks";
+import { avatarUrl, decodeParam, profilePath } from "../../utils/qortalLinks";
+import { isNameHidden, useAppSettings } from "../../utils/settings";
 import { formatDate } from "../../utils/time";
 import { CollectionDialog } from "./CollectionDialog";
 import { CardList, InfoCard, ItemRow, ItemRows, Page, PhoneHeader, PublisherLink } from "./Collections-styles";
@@ -34,10 +35,15 @@ type Status = "loading" | "ready" | "error" | "missing";
 
 const countLabel = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
 
+/** /collection/:name/:id, keyed by the pair so every collection starts with fresh page state. */
 export function CollectionPage() {
-  const { name: rawName, id: rawId } = useParams();
-  const name = rawName ? decodeURIComponent(rawName) : "";
-  const id = rawId ? decodeURIComponent(rawId) : "";
+  const params = useParams();
+  const name = decodeParam(params.name);
+  const id = decodeParam(params.id);
+  return <CollectionView key={`${name}/${id}`} name={name} id={id} />;
+}
+
+function CollectionView({ name, id }: { name: string; id: string }) {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const phone = usePhoneLayout();
@@ -77,9 +83,13 @@ export function CollectionPage() {
     read(true);
   };
 
+  // Hidden names (Settings → Content) apply here as on Home and in comments.
+  const settings = useAppSettings();
   const items: Video[] = useMemo(
     () =>
-      (collection?.items ?? []).map((item) => ({
+      (collection?.items ?? [])
+        .filter((item) => !isNameHidden(item.name, settings))
+        .map((item) => ({
         id: item.identifier,
         user: item.name,
         title: "",
@@ -87,7 +97,7 @@ export function CollectionPage() {
         created: undefined,
         service: "DOCUMENT",
       })),
-    [collection?.items]
+    [collection?.items, settings]
   );
 
   // One FETCH per share body through the queue; no search per item.

@@ -58,7 +58,7 @@ export const IndividualProfile = () => {
           <CopyLinkButton link={profileLink(name)} tooltipTitle="Copy profile link" />
         </Box>
       </Box>
-      <FileListComponentLevel />
+      <FileListComponentLevel key={name} />
     </Box>
   );
 };

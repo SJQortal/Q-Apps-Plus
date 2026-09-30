@@ -205,7 +205,11 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
           setStatus(res);
         } catch {
           failures += 1;
-          if (failures >= MAX_FAILURES) stop();
+          if (failures >= MAX_FAILURES) {
+            // Give up quietly but leave the row on Retry, not stuck at "fetching".
+            setStatus({ status: "REFETCHING", percentLoaded: Math.max(percentLoaded, 0) });
+            stop();
+          }
         } finally {
           isCalling = false;
         }
