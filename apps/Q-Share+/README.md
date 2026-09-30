@@ -4,8 +4,10 @@ This is the **+** version of [Qortal's Q-Share](https://github.com/Qortal/q-shar
 
 What it adds:
 
+- a phone layout for GO and narrow screens: bottom bar, floating Share button, bottom sheets, full-screen forms with Publish above the keyboard, pull-to-refresh;
+- collections (`qshare_collection_` documents, additive), previews for PDF, text, image, audio and video, a drag-and-drop publish flow with progress and retry;
 - the Hub 3.0 look with four themes (Hub 3.0, Q-Share Classic, Black, White) and a Settings page;
-- the current stack: React 19.3, MUI 9.4, Vite 8, with a vitest harness;
+- the current stack: React 19.3, MUI 9.4, Vite 8, with a vitest harness and an ESLint 9 config;
 - a Quill 2 description editor that keeps the stored format readable in the original app.
 
 See `CHANGELOG.md` for versions and `docs/apps/Q-Share+.md` in the monorepo for the audit, plan and status.
@@ -16,7 +18,9 @@ See `CHANGELOG.md` for versions and `docs/apps/Q-Share+.md` in the monorepo for 
 npm ci
 npm run dev        # Qortal calls need Hub; tests use the mocks in src/test/setup.ts
 npm test
+npm run lint
 npm run build
+node e2e/screens.mjs   # screenshots of every screen at five sizes in four themes (needs a global playwright)
 ```
 
 Publish zips are built from the monorepo root with `scripts/build-zip.sh Q-Share+`.

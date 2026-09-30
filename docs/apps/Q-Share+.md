@@ -172,21 +172,54 @@ Bugs fixed on the way: `checkAndUpdateFile` boolean comparison, unfollow `item`,
 
 Not done in this pass: a right rail (nothing to put in it yet), a bottom navigation bar (the app has two destinations; the sticky header covers it), i18n (upstream has none), lint (baseline 58 errors / 256 warnings on the old eslint 8 config; untouched).
 
+### Pass 2 (2026-09-30)
+
+Same branch and PR, version `1.0.0-plus.2`. Every commit builds, `npm run lint` and the 106 tests pass, and `scripts/build-zip.sh Q-Share+` writes a 1.4 MB zip.
+
+| | After pass 1 | After pass 2 |
+|---|---|---|
+| Tests | 26 | 106 (publish payload pinned to the original format, collection format, share draft, Home first load and sort, share page, bottom bar, consent, error boundary, previews, settings, save to collection) |
+| Lint | 58 errors / 256 warnings on the old eslint 8 config, not run | 0 / 0 on ESLint 9 + typescript-eslint 8 + react-hooks 7 (React Compiler rules) |
+| Biggest JS chunk | 415 kB (gzip 129 kB) | 265 kB (gzip 85 kB) |
+| JS + CSS on first load | 831 kB (gzip 261 kB) | 777 kB (gzip 250 kB), with collections, previews and the phone shell included |
+| Home first load, signed in (harness, 20 rows) | 1 search + 20 FETCH | 1 search + 20 FETCH for the list; the signed-in name's collections (1 search + 1 FETCH per collection) 1.5 s later, once per session |
+| Share page, cold | 1 search + 1 FETCH, then 2 searches for comments | same; a share already in the store opens with 0 calls |
+| Profile | 1 search + N FETCH | same, plus 1 GET_LIST_ITEMS for the follow state |
+| Collection page | n/a | 0 searches: 1 FETCH for the collection + 1 per item |
+| Collections page | n/a | 1 paged search |
+| Settings | 0 searches | 0 searches (statistics on demand) |
+| Phones | Filters button below 900 px | bottom bar, floating Share, header that hides on scroll, sheets, full-screen dialogs, pull-to-refresh, 44 px targets, safe-area insets, landscape phones |
+| Dependencies removed | moment, react-quill, quill-image-resize-module-react | react-rnd, compressorjs, ts-key-enum; the unreachable Q-Tube player and playlist code deleted |
+
+What changed, per area:
+
+- **Publish flow** (`components/PublishFile`, `EditFile`, `MultiplePublish`, `utils/publishPayload.ts`): a pure payload builder pinned by tests to the original resource shapes (FILE `qshare_file_<slug30>_<uid>`, DOCUMENT `…_metadata`, `video_metadata.json`, `**cat:N;sub:N**` description, `tag1`); drag and drop or tap to choose with type icons, sizes, a running total and remove; step-by-step publish progress with retry for failed resources; a draft that survives closing the dialog; full-screen on phones with Publish kept above the keyboard through `visualViewport`; the picker uses the plain input (no File System Access API) so it works in GO.
+- **Share page** (`pages/FileContent`, `FileElement`, `FilePreview`, `DownloadTaskManager`, `DownloadWrapper`): keyed by name/id; one search + one fetch cold, none warm; previews for PDF (iframe), text, image (lightbox), audio and video on demand, automatic image previews up to 5 MB (a setting); Fetch all files; big Download buttons; a collapsible description; a Back button and a sticky sub-header on phones; the downloads list as a bottom sheet with Clear finished; a poller that gives up leaves the row on Retry.
+- **Collections** (`utils/collections.ts`, `state/features/collectionsSlice.ts`, `pages/Collections`, `components/common/SaveToCollection`): new additive data, DOCUMENT `qshare_collection_<slug30>_<uid6>` with `{version, title, description, items:[{name, identifier}], created, updated}`, `tag1 qshare_collection_`, filename `collection.json`; the original app never matches it (it searches `qshare_file_`). Collections page (Mine / All, paged), a page per collection with edit, remove and delete (a republish, so Hub confirms), a bookmark button on every row and share page; the signed-in name's collections load once per session, paged and capped at 100, after the page's own data.
+- **Shell** (`components/layout/BottomNav`, `Navbar`, `common/mobile`, `wrappers/GlobalWrapper`, `utils/hubFrame.ts`): bottom bar with four items and a badge for downloads, floating Share button, header that hides on scroll and returns on focus, `ResponsiveDialog` and `BottomSheet` primitives, frame height from Hub's iframe instead of `100vh`, an error boundary, reduced motion honoured, the phone layout also on landscape phones (`PHONE_MEDIA`: under 600 px, or a touch screen under 500 px tall).
+- **Home and Settings**: Following feed through the Core's `followedonly` search, My shares, hidden names (applied on Home, comments and collection pages), default sort, lazy avatars, a refresh after publish or edit, pull-to-refresh, filters and sort in a bottom sheet; a reset search always starts and supersedes the one in flight, so tapping Oldest while a page loads no longer leaves the list on Newest.
+- **Review fixes** (one read-only review of the diff, findings verified before fixing): Collections' New button reachable on phones, pull-to-refresh ignored inside dialogs and sheets and decided outside a state updater, hidden names on collection pages, stuck download rows, keyed collection and profile pages against stale responses, route params decoded safely, `vh` replaced by the frame height in previews, viewport listeners only while a phone dialog is open, per-row dialogs mounted on first use.
+- **Quality**: ESLint 9 flat config with the React hooks rules (refs, immutability, set-state-in-effect) and `npm run lint` clean; 106 tests; a screenshot harness (`e2e/screens.mjs`) that serves the production build with mocked `qortalRequest` and Core endpoints, pre-accepts the welcome notice, emulates `hover: none` and `pointer: coarse` on phone viewports, and reports console errors, sideways overflow, unlabelled buttons, small targets and Qortal call counts per screen.
+
 ## Follow-ups
 
-Questions for Simon:
+Questions for Simon (after pass 2):
 
-1. **Deep link with `+`:** `shareLink()` now builds `qortal://APP/Q-Share%2B/share/<name>/<id>`. Check in Hub that this opens Q-Share+; if it does not, the fallback is to link to `Q-Share` again (docs/QORTAL.md asks for the exact failure to be recorded here).
+1. **Deep link with `+`:** `shareLink()` builds `qortal://APP/Q-Share%2B/share/<name>/<id>`. Check in Hub that this opens Q-Share+; if it does not, the fallback is to link to `Q-Share` again (docs/QORTAL.md asks for the exact failure to be recorded here).
 2. **Quill round trip in Hub:** publish a share from Q-Share+ with bullets, a numbered list and a code block, open it in the original Q-Share; then open an old share with formatting in Q-Share+. The jsdom round trip passes; this is the real check.
-3. **Classic theme fonts:** five TTFs that only sat in the fallback list were dropped (Merriweather Sans, Karla, Proxima Nova, Catamaran, Oxygen, plus the unused Livvic). Cambon Light, Raleway and Cairo stay (0.8 MB). Drop those too and let Classic use Inter, or keep them for fidelity?
-4. **Dead Q-Tube code** is still in the tree but unreachable: `VideoPlayer.tsx`, `VideoPlayerGlobal.tsx` and the `react-rnd` floating player, `Playlists.tsx`, `PlaylistListEdit.tsx`, the `PLAYLIST` branch in `getFiles`. Remove next pass?
+3. **Screenshots in the branch history:** commit `a230e39` added 9.3 MB of harness PNGs by mistake (`e2e/shots-old/`); `769b0b4` removes them and widens the ignore rule, but they stay in the history of `q-share-plus/pass-1`. Agents never force-push, so it is your call whether to rewrite the branch before merging or accept the weight.
+4. **Phone header:** on phones the header no longer shows the Share and Downloads buttons, since the floating button and the bottom bar provide both. Keep it that way, or bring one back?
+5. **Collections in "All":** the Collections page lists every name's collections under the All tab (one paged search on `qshare_collection_`). Keep it public like that, or show only your own and the ones you open by link?
+6. **Welcome notice on phones:** it can only be closed with *I understand*, so the full-screen dialog shows no Back arrow. Keep, or let Back dismiss it for the visit?
+7. **Classic theme fonts:** Cambon Light, Raleway and Cairo stay (0.8 MB) for fidelity. Drop them and let Classic use Inter?
+8. **Fetch all files:** starts every file of a share through the 5-slot request queue. On a slow node a share with 10 large files will keep the queue busy for a while; cap it lower, or leave it?
 
 Next pass ideas:
 
 - Upload progress per file: `PUBLISH_MULTIPLE_QDN_RESOURCES` reports only done/failed per resource; per-file progress needs one publish per file and a resumable flow.
-- Collections (`qshare_collection_` DOCUMENT, additive) and PDF/text previews.
-- ESLint 9 flat config with typescript-eslint 8 and react-hooks 7, then make `npm run lint` part of the build gate.
-- Settings sync to QDN (Torq's `settingsQdn.ts` pattern) once there are more settings than the theme.
-- Hidden-word/hidden-user filters inside the app (the block list is Qortal-wide).
+- A Hub Dev Mode session (docs/HUB-TESTING.md) for what jsdom and Playwright cannot show: the on-screen keyboard under the Publish button, pull-to-refresh on a real touch screen, the file picker in GO, and the header hiding on scroll.
+- Next-page loads on Home still wait for the request in flight (only reset searches supersede it); an `AbortController` in `searchQdn` would let both cancel cleanly.
+- Settings sync to QDN (Torq's `settingsQdn.ts` pattern) now that there are several settings.
 - Consider qapp-core for lists and identifier hashing in a later pass.
 - Network statistics count up to 3,000 shares (30 pages of 100) and then show "3000+"; raise the cap if the network grows past that.
+- The screenshot harness could grow into a regression check (compare against stored baselines) once the layouts settle.
