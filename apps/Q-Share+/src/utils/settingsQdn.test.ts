@@ -24,6 +24,7 @@ describe("settings sync to QDN", () => {
       defaultSort: "oldest",
       hiddenNames: ["spammer", "Bob"],
       followingFeed: true,
+      listView: "list",
       uiTheme: "black",
       updatedAt: 1700000000000,
     });

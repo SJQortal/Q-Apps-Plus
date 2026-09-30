@@ -7,6 +7,7 @@ import { useSyncExternalStore } from "react";
 export const SETTINGS_STORAGE_KEY = "qshareplus-settings";
 
 export type SortOrder = "newest" | "oldest";
+export type ListView = "list" | "grid";
 
 export interface AppSettings {
   /** Show image attachments up to 5 MB on the share page without a click. */
@@ -17,6 +18,8 @@ export interface AppSettings {
   hiddenNames: string[];
   /** Show the "Following" feed chip on Home. */
   followingFeed: boolean;
+  /** Share lists as rows or as a grid of cards. */
+  listView: ListView;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -24,6 +27,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultSort: "newest",
   hiddenNames: [],
   followingFeed: true,
+  listView: "list",
 };
 
 const listeners = new Set<() => void>();
@@ -39,6 +43,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
       ? [...new Set(r.hiddenNames.filter((n): n is string => typeof n === "string").map((n) => n.trim()).filter(Boolean))]
       : [],
     followingFeed: typeof r.followingFeed === "boolean" ? r.followingFeed : DEFAULT_SETTINGS.followingFeed,
+    listView: r.listView === "grid" ? "grid" : "list",
   };
 }
 
