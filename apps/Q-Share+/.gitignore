@@ -24,4 +24,4 @@ dist-ssr
 *.sw?
 *.zip
 # screenshot harness output (node e2e/screens.mjs)
-e2e/shots/
+e2e/shots*/
