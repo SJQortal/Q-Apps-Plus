@@ -6,6 +6,7 @@ import { fetchCallsMatching, mockQortalAction, qortalCallsFor } from '../../test
 import { store } from '../../state/store';
 import { addUser } from '../../state/features/authSlice';
 import { clearMine } from '../../state/features/collectionsSlice';
+import { removeNotification } from '../../state/features/notificationsSlice';
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
 import { resetCollectionCaches } from '../../utils/collections';
 import { resetInAppHistory } from '../../hooks/useSafeBack';
@@ -86,6 +87,53 @@ describe('CollectionPage', () => {
     expect(body.created).toBe(1);
     await waitFor(() => expect(screen.queryByText('First share')).not.toBeInTheDocument());
     expect(screen.getByText('· 1 item')).toBeInTheDocument();
+  });
+
+  it('keeps the item and shows no error when the owner declines the republish in Hub', async () => {
+    store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
+    store.dispatch(removeNotification());
+    mockQortalAction('PUBLISH_QDN_RESOURCE', () => {
+      throw { error: 'User declined request', message: 'User declined request' };
+    });
+    renderPage();
+    await screen.findByText('First share');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove First share from collection' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(qortalCallsFor('PUBLISH_QDN_RESOURCE').length).toBe(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Remove' })).toBeEnabled());
+    expect(store.getState().notifications.alertTypes.alertError).toBe('');
+    expect(screen.getByText('· 2 items')).toBeInTheDocument();
+  });
+
+  it('keeps the edit form open with no error when the owner declines the publish in Hub', async () => {
+    store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
+    store.dispatch(removeNotification());
+    mockQortalAction('PUBLISH_QDN_RESOURCE', () => {
+      throw { error: 'User declined request', message: 'User declined request' };
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    expect(await screen.findByText('Edit collection')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(qortalCallsFor('PUBLISH_QDN_RESOURCE').length).toBe(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+    expect(screen.getByText('Edit collection')).toBeInTheDocument();
+    expect(screen.queryByText('The collection was not saved.')).not.toBeInTheDocument();
+    expect(store.getState().notifications.alertTypes.alertError).toBe('');
+  });
+
+  it('says the collection was not saved when the publish fails for another reason', async () => {
+    store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
+    mockQortalAction('PUBLISH_QDN_RESOURCE', () => {
+      throw { error: 1234, message: 'Insufficient balance' };
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('The collection was not saved.')).toBeInTheDocument();
   });
 
   it('on a phone, Back goes to Collections when the page was opened from a link', async () => {

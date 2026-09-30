@@ -6,6 +6,7 @@ import { mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
 import { store } from '../../state/store';
 import { addUser } from '../../state/features/authSlice';
+import { removeNotification } from '../../state/features/notificationsSlice';
 import { readSettings, resetSettingsCache, writeSettings } from '../../utils/settings';
 import { SETTINGS_IDENTIFIER } from '../../utils/settingsQdn';
 import { resetInAppHistory } from '../../hooks/useSafeBack';
@@ -35,6 +36,18 @@ describe('Settings → Sync', () => {
     expect(stored.hiddenNames).toEqual(['spammer']);
     expect(stored.uiTheme).toBe('hub30');
     expect(await screen.findByRole('status')).toHaveTextContent(/Saved to QDN/);
+  });
+
+  it('a decline in Hub, in any language, is a quiet cancel, not a failure', async () => {
+    store.dispatch(removeNotification());
+    mockQortalAction('PUBLISH_QDN_RESOURCE', () => {
+      throw { error: 'Benutzer hat die Anfrage abgelehnt', message: 'Benutzer hat die Anfrage abgelehnt' };
+    });
+    renderWithProviders(<Settings />);
+
+    fireEvent.click(screen.getByRole('button', { name: /save to qdn/i }));
+    expect(await screen.findByText('Save cancelled in Hub.')).toBeInTheDocument();
+    expect(store.getState().notifications.alertTypes.alertError).toBe('');
   });
 
   it('Restore applies the stored settings and theme, and says so when nothing is stored', async () => {

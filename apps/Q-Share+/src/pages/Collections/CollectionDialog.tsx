@@ -15,6 +15,7 @@ import {
   type Collection,
   type CollectionItem,
 } from "../../utils/collections";
+import { isHubDecline } from "../../utils/hubErrors";
 
 export interface CollectionDialogProps {
   open: boolean;
@@ -89,7 +90,12 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
       dispatch(setNotification({ msg: isEdit ? "Collection saved" : "Collection created", alertType: "success" }));
       onSaved?.(saved);
       onClose();
-    } catch {
+    } catch (error) {
+      // A "no" in Hub's dialog is the user's choice, not a failure: keep the form open, no error.
+      if (isHubDecline(error)) {
+        setError(null);
+        return;
+      }
       setError(isEdit ? "The collection was not saved." : "The collection was not created.");
     } finally {
       setBusy(false);

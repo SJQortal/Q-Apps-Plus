@@ -29,6 +29,7 @@ import { fetchSettingsFromQdn, publishSettingsToQdn } from "../../utils/settings
 import { setNotification } from "../../state/features/notificationsSlice";
 import { formatDate } from "../../utils/time";
 import { useSafeBack } from "../../hooks/useSafeBack";
+import { isHubDecline } from "../../utils/hubErrors";
 
 const Page = styled("div")(({ theme }) => ({
   width: "100%",
@@ -97,8 +98,8 @@ export const Settings = () => {
       const snap = await publishSettingsToQdn(user.name, settings, uiTheme);
       setSyncNote(`Saved to QDN ${formatDate(snap.updatedAt)}.`);
       dispatch(setNotification({ msg: "Settings saved to QDN", alertType: "success" }));
-    } catch (error: any) {
-      const declined = error?.error === "User declined request";
+    } catch (error) {
+      const declined = isHubDecline(error);
       setSyncNote(declined ? "Save cancelled in Hub." : "The save failed; try again in a moment.");
       if (!declined) dispatch(setNotification({ msg: "Could not save settings to QDN", alertType: "error" }));
     } finally {

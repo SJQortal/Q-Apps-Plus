@@ -28,6 +28,7 @@ import {
   type Collection,
 } from "../../utils/collections";
 import { avatarUrl, decodeParam, profilePath } from "../../utils/qortalLinks";
+import { isHubDecline } from "../../utils/hubErrors";
 import { isNameHidden, useAppSettings } from "../../utils/settings";
 import { formatDate } from "../../utils/time";
 import { CollectionDialog } from "./CollectionDialog";
@@ -199,8 +200,9 @@ function CollectionView({ name, id }: { name: string; id: string }) {
       dispatch(upsertCollection(saved));
       dispatch(setNotification({ msg: successMessage, alertType: "success" }));
       return true;
-    } catch {
-      dispatch(setNotification({ msg: `Could not update ${next.title}`, alertType: "error" }));
+    } catch (error) {
+      // A "no" in Hub's dialog is the user's choice, not a failure.
+      if (!isHubDecline(error)) dispatch(setNotification({ msg: `Could not update ${next.title}`, alertType: "error" }));
       return false;
     } finally {
       setBusy(false);
