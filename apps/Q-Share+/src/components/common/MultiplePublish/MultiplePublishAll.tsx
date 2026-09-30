@@ -15,6 +15,7 @@ import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import { fileKind, fileKindIconElement } from "../../../utils/fileKind";
+import { formatBytes } from "../../../utils/formatBytes";
 import type { MultiplePublishRequest, PublishResource } from "../../../utils/publishPayload";
 import { publishErrorMessage } from "../../PublishFile/shareDraft";
 import { ResponsiveDialog } from "../mobile/ResponsiveDialog";
@@ -31,6 +32,12 @@ interface MultiplePublishProps {
 type ResourceState = "waiting" | "done" | "failed";
 
 const SECONDS_PER_RESOURCE = 30;
+
+function clock(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s < 10 ? "0" : ""}${s}`;
+}
 
 function resourceLabel(resource: PublishResource): string {
   return resource.service === "DOCUMENT" ? "Share details" : resource.filename;
@@ -60,6 +67,14 @@ export const MultiplePublish = ({ publishes, isOpen, onSubmit, onError }: Multip
   const [failed, setFailed] = useState<Set<string>>(() => new Set());
   const [errorText, setErrorText] = useState<string | null>(null);
   const hasStarted = useRef(false);
+  // Hub reports nothing while it works, so at least show that time is passing.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!isPublishing) return;
+    const started = Date.now();
+    const timer = window.setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [isPublishing]);
 
   const run = useCallback(
     async (request: MultiplePublishRequest) => {
@@ -108,6 +123,7 @@ export const MultiplePublish = ({ publishes, isOpen, onSubmit, onError }: Multip
 
   const resources = publishes?.resources ?? [];
   const total = resources.length;
+  const totalBytes = resources.reduce((sum, r) => sum + (r.service === "FILE" ? r.file.size : 0), 0);
   const stateOf = (id: string): ResourceState => (failed.has(id) ? "failed" : done.has(id) ? "done" : "waiting");
   const showRetry = !isPublishing && failed.size > 0;
 
@@ -138,8 +154,12 @@ export const MultiplePublish = ({ publishes, isOpen, onSubmit, onError }: Multip
           <Box>
             <LinearProgress aria-label="Publishing" />
             <Typography sx={{ mt: 1.5 }}>
-              Publishing {total} {total === 1 ? "resource" : "resources"}… Hub asks you to confirm once, then keep this
-              tab open
+              Publishing {total} {total === 1 ? "resource" : "resources"}
+              {totalBytes > 0 ? ` (${formatBytes(totalBytes)})` : ""}… Hub asks you to confirm once, then keep this
+              tab open.
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} aria-live="off">
+              {clock(elapsed)} so far. Large files take a while to reach the node; nothing is lost if you wait.
             </Typography>
           </Box>
         ) : (
