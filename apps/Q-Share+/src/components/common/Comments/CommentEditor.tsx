@@ -7,6 +7,7 @@ import { setNotification } from "../../../state/features/notificationsSlice";
 import localforage from "localforage";
 import { CommentInput, CommentInputContainer, SubmitCommentButton } from "./Comments-styles";
 import { QSHARE_COMMENT_BASE } from "../../../constants/Identifiers.ts";
+import { errorMessage, isHubDecline } from "../../../utils/hubErrors";
 
 const uid = new ShortUniqueId();
 
@@ -73,14 +74,6 @@ function utf8ToBase64(inputString: string): string {
   return btoa(utf8String);
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-  if (typeof error === "string") return error || fallback;
-  const e = error as { error?: unknown; message?: unknown } | null;
-  if (typeof e?.error === "string") return e.error || fallback;
-  if (typeof e?.message === "string") return e.message || fallback;
-  return fallback;
-}
-
 /**
  * Writes a BLOG_COMMENT with the original app's identifier scheme
  * (`qcomment_v1_qshare_<last 12 of share id>_base_<uid>` or
@@ -122,7 +115,10 @@ export const CommentEditor = ({ onSubmit, postId, postName, isReply, commentId, 
       }
       return resourceResponse;
     } catch (error) {
-      dispatch(setNotification({ msg: errorMessage(error, "Failed to publish comment"), alertType: "error" }));
+      // Saying no in Hub's dialog (in any of its languages) isn't a failure: keep the text, say nothing.
+      if (!isHubDecline(error)) {
+        dispatch(setNotification({ msg: errorMessage(error, "Failed to publish comment"), alertType: "error" }));
+      }
       throw new Error("Failed to publish comment");
     }
   };
@@ -152,7 +148,7 @@ export const CommentEditor = ({ onSubmit, postId, postName, isReply, commentId, 
       });
       setValue("");
     } catch {
-      /* the toast above already said what failed */
+      /* the toast above said what failed (a decline needs none); the text stays for another try */
     } finally {
       setSubmitting(false);
     }
