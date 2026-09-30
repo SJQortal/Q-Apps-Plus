@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
 import { FileContent } from './FileContent';
@@ -53,6 +53,16 @@ function setMatchMedia(phone: boolean) {
       },
     }),
   });
+}
+
+/** Under fake timers: let the chained qortalRequest promises settle. */
+async function flush() {
+  for (let i = 0; i < 5; i++) await vi.advanceTimersByTimeAsync(0);
+}
+
+function setVisibility(value: 'visible' | 'hidden') {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => value });
+  document.dispatchEvent(new Event('visibilitychange'));
 }
 
 function renderShare() {
@@ -152,6 +162,128 @@ describe('FileContent (share page)', () => {
     resetQdnSearchCache();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Holiday pics' })).toBeInTheDocument();
+  });
+
+  describe('when the JSON is not on the node yet', () => {
+    const unavailable = { error: 1401, message: 'Data unavailable. Please try again later.' };
+
+    beforeEach(() => {
+      store.dispatch({ type: 'file/removeFromHashMap', payload: ID });
+      mockFetch('/arbitrary/resources/search', [searchRow]);
+      mockCommentSearches();
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      setVisibility('visible');
+    });
+
+    it('says it is fetching from peers, re-checks the status with backoff and loads once it is local', async () => {
+      let local = false;
+      mockQortalAction('FETCH_QDN_RESOURCE', () => {
+        if (!local) throw unavailable;
+        return body;
+      });
+      mockQortalAction('GET_QDN_RESOURCE_STATUS', () =>
+        local ? { status: 'READY', percentLoaded: 100 } : { status: 'MISSING_DATA', percentLoaded: 50 }
+      );
+
+      renderShare();
+      await flush();
+      expect(screen.getByText('Not on your node yet')).toBeInTheDocument();
+      expect(screen.getByText('Fetching it from peers… 50%')).toBeInTheDocument();
+      expect(qortalCallsFor('FETCH_QDN_RESOURCE')).toHaveLength(1);
+      expect(qortalCallsFor('GET_QDN_RESOURCE_STATUS')).toHaveLength(1);
+
+      // Still missing after 2 s: only the status is asked again, not the FETCH.
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(qortalCallsFor('GET_QDN_RESOURCE_STATUS')).toHaveLength(2);
+      expect(qortalCallsFor('FETCH_QDN_RESOURCE')).toHaveLength(1);
+
+      local = true;
+      await vi.advanceTimersByTimeAsync(4_000);
+      expect(screen.getByRole('heading', { level: 1, name: 'Holiday pics' })).toBeInTheDocument();
+      expect(qortalCallsFor('FETCH_QDN_RESOURCE')).toHaveLength(2);
+      // One search in all: the retries reuse it.
+      expect(fetchCallsMatching(/service=DOCUMENT/)).toHaveLength(1);
+    });
+
+    it('gives up after the last wait with a Retry, and holds the checks while the tab is hidden', async () => {
+      mockQortalAction('FETCH_QDN_RESOURCE', () => {
+        throw unavailable;
+      });
+      mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'PUBLISHED', percentLoaded: 0 });
+
+      renderShare();
+      await flush();
+      expect(screen.getByText('Fetching it from peers…')).toBeInTheDocument();
+
+      setVisibility('hidden');
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(qortalCallsFor('GET_QDN_RESOURCE_STATUS')).toHaveLength(1);
+      setVisibility('visible');
+      await flush();
+      expect(qortalCallsFor('GET_QDN_RESOURCE_STATUS')).toHaveLength(2);
+
+      await vi.advanceTimersByTimeAsync(4_000 + 8_000 + 16_000);
+      await flush();
+      expect(qortalCallsFor('GET_QDN_RESOURCE_STATUS')).toHaveLength(5);
+      expect(screen.getByText("This share isn't on your node yet")).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(qortalCallsFor('GET_QDN_RESOURCE_STATUS')).toHaveLength(5);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      await flush();
+      expect(screen.getByText('Not on your node yet')).toBeInTheDocument();
+      expect(qortalCallsFor('FETCH_QDN_RESOURCE')).toHaveLength(2);
+    });
+
+    it('shows "Share not found" when the node says it was never published', async () => {
+      mockQortalAction('FETCH_QDN_RESOURCE', () => {
+        throw unavailable;
+      });
+      mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'NOT_PUBLISHED' });
+      renderShare();
+      await flush();
+      expect(screen.getByText('Share not found')).toBeInTheDocument();
+    });
+
+    it('keeps the node-down error when the status cannot be read either', async () => {
+      mockQortalAction('FETCH_QDN_RESOURCE', () => {
+        throw unavailable;
+      });
+      mockQortalAction('GET_QDN_RESOURCE_STATUS', () => {
+        throw new Error('offline');
+      });
+      renderShare();
+      await flush();
+      expect(screen.getByText('This share could not be loaded')).toBeInTheDocument();
+    });
+  });
+
+  it('says a share was deleted when its body is a delete marker such as "D"', async () => {
+    store.dispatch({ type: 'file/removeFromHashMap', payload: ID });
+    mockFetch('/arbitrary/resources/search', [searchRow]);
+    mockCommentSearches();
+    mockQortalAction('FETCH_QDN_RESOURCE', 'D');
+
+    renderShare();
+
+    expect(await screen.findByText('This share was deleted by its publisher')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to all shares' })).toBeInTheDocument();
+    expect(screen.queryByText('No files in this share')).not.toBeInTheDocument();
+  });
+
+  it('says a share was deleted when the list already marked it so, with no calls', async () => {
+    mockCommentSearches();
+    store.dispatch(addToHashMap({ id: ID, user: NAME, title: 'Torq Test', isValid: false, deleted: true }));
+
+    renderShare();
+
+    expect(await screen.findByText('This share was deleted by its publisher')).toBeInTheDocument();
+    expect(qortalCallsFor('FETCH_QDN_RESOURCE')).toHaveLength(0);
+    store.dispatch({ type: 'file/removeFromHashMap', payload: ID });
   });
 
   it('on phone width shows the sticky Back button with the title', async () => {

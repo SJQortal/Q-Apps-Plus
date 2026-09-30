@@ -1,10 +1,12 @@
 import { useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
-import { Avatar, Box, Button, IconButton, Skeleton, Typography } from "@mui/material";
+import { Avatar, Box, Button, IconButton, LinearProgress, Skeleton, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import CloudDownloadOutlinedIcon from "@mui/icons-material/CloudDownloadOutlined";
+import CloudOffOutlinedIcon from "@mui/icons-material/CloudOffOutlined";
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import { CopyLinkButton } from "../../components/common/CopyLinkButton.tsx";
 import { SaveAllZipButton } from "../../components/common/SaveAllZipButton";
@@ -18,7 +20,7 @@ import { RootState } from "../../state/store";
 import { addToHashMap, setEditFile } from "../../state/features/fileSlice.ts";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
-import { searchQdn } from "../../utils/qdnSearch";
+import { searchQdn, type QdnResourceSummary } from "../../utils/qdnSearch";
 import { avatarUrl, profilePath, shareLink, decodeParam } from "../../utils/qortalLinks";
 import { formatDate } from "../../utils/time";
 import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
@@ -42,8 +44,20 @@ import {
 
 const DESCRIPTION_COLLAPSE_PX = 300;
 
-type LoadState = "loading" | "ready" | "notfound" | "error";
+/**
+ * - "fetching": the JSON is on the network but not on this node yet.
+ * - "missing": still not here after the retries below.
+ * - "deleted": the publisher replaced the body with a delete marker.
+ */
+type LoadState = "loading" | "fetching" | "ready" | "notfound" | "deleted" | "missing" | "error";
 type FetchState = Exclude<LoadState, "ready">;
+
+/** Waits between status checks while the JSON comes from peers (about 30 s in all). */
+export const SHARE_RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 16_000];
+/** The node is getting the JSON from peers, or has it: worth waiting for. */
+const ON_THE_WAY = new Set(["PUBLISHED", "DOWNLOADING", "DOWNLOADED", "BUILDING", "MISSING_DATA"]);
+/** Every chunk is here: FETCH again (the node builds it on the way). */
+const LOCAL = new Set(["READY", "DOWNLOADED", "BUILDING"]);
 
 /** "Category > Subcategory" from the share's stored category ids. */
 export function categoryPath(fileData: any): string {
@@ -63,15 +77,55 @@ export function categoryPath(fileData: any): string {
   return names.filter(Boolean).join(" > ");
 }
 
-type ShareLookup = { kind: "notfound" } | { kind: "found"; data: any };
+type ShareLookup =
+  | { kind: "notfound" }
+  | { kind: "deleted" }
+  | { kind: "unavailable"; percent: number | null }
+  | { kind: "found"; data: any };
 
-/** One search (limit 1) for the metadata, then one FETCH_QDN_RESOURCE for the JSON body. */
+type ResourceStatus = { status?: string; percentLoaded?: number | null };
+
+async function readShareStatus(name: string, id: string): Promise<ResourceStatus | null> {
+  try {
+    return await qortalRequest({ action: "GET_QDN_RESOURCE_STATUS", name, service: "DOCUMENT", identifier: id });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Deletes elsewhere (Torq, qapp-core) replace the JSON with a non-JSON body
+ * such as "D" or "\n", which q-apps.js hands back as a string; some also
+ * retitle the metadata "deleted" with the tag "deleted".
+ */
+function isDeletedShare(summary: QdnResourceSummary, body: unknown): boolean {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return true;
+  const meta = summary?.metadata;
+  const files = (body as { files?: unknown }).files;
+  return meta?.title === "deleted" && !!meta.tags?.includes("deleted") && !(Array.isArray(files) && files.length > 0);
+}
+
+/**
+ * One search (limit 1) for the metadata, then one FETCH_QDN_RESOURCE for the
+ * JSON body. Core answers that FETCH with "Data unavailable" within
+ * milliseconds when the JSON isn't on this node yet (it has asked its peers),
+ * so a failed FETCH asks for the status to tell "on its way" from "gone".
+ */
 async function fetchShare(name: string, id: string): Promise<ShareLookup> {
   const rows = await searchQdn({ service: "DOCUMENT", identifier: id, name, limit: 1, includemetadata: true });
   if (!rows.length) return { kind: "notfound" };
   const summary = rows[0];
-  const body = await qortalRequest({ action: "FETCH_QDN_RESOURCE", name, service: "DOCUMENT", identifier: id });
-  if (!body || body.error) throw new Error(typeof body?.error === "string" ? body.error : "Could not read the share");
+  let body: any;
+  try {
+    body = await qortalRequest({ action: "FETCH_QDN_RESOURCE", name, service: "DOCUMENT", identifier: id });
+  } catch (error) {
+    const status = await readShareStatus(name, id);
+    if (status?.status === "NOT_PUBLISHED") return { kind: "notfound" };
+    if (status?.status && ON_THE_WAY.has(status.status)) return { kind: "unavailable", percent: status.percentLoaded ?? null };
+    throw error;
+  }
+  if (isDeletedShare(summary, body)) return { kind: "deleted" };
+  if (body.error) throw new Error(typeof body.error === "string" ? body.error : "Could not read the share");
   return {
     kind: "found",
     data: {
@@ -123,10 +177,16 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
   const cached = useSelector((state: RootState) => state.file.hashMapFiles[id]);
 
   const [fetchState, setFetchState] = useState<FetchState>("loading");
+  const [fetchPercent, setFetchPercent] = useState<number | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [collapsible, setCollapsible] = useState(false);
-  const fileData: any = cached ?? null;
-  const state: LoadState = cached ? "ready" : fetchState;
+  // A list row whose body turned out not to be a share: marked deleted, or
+  // unreadable (then this page looks for itself).
+  const cachedDeleted = (cached as { deleted?: unknown } | undefined)?.deleted === true;
+  const usable = cached && cached.isValid !== false && !cachedDeleted ? cached : null;
+  const fileData: any = usable;
+  const state: LoadState = cachedDeleted ? "deleted" : usable ? "ready" : fetchState;
 
   // Measured once the description is in the DOM; long ones start collapsed.
   const measureDescription = useCallback((el: HTMLDivElement | null) => {
@@ -134,38 +194,77 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
   }, []);
 
   /**
-   * Starts the fetch; callers set `fetchState` to "loading" first. Returns a
-   * cancel function so an unmounted page ignores a late answer. The found
-   * share goes into hashMapFiles, which is what the page renders from (and
-   * what makes the next open warm).
+   * Cold open. The found share goes into hashMapFiles, which is what the page
+   * renders from (and what makes the next open warm). When the JSON is still
+   * on its way from peers, the node's status is checked again after each of
+   * SHARE_RETRY_DELAYS_MS (held while the tab is hidden) and the FETCH repeats
+   * once every chunk is local. Cleanup drops late answers and timers.
    */
-  const load = useCallback(() => {
+  useEffect(() => {
+    if (!name || !id || usable || cachedDeleted) return;
     let active = true;
-    if (name && id) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let onVisible: (() => void) | undefined;
+
+    const whenVisible = (fn: () => void) => {
+      if (document.visibilityState !== "hidden") return fn();
+      const listener = () => {
+        if (document.visibilityState === "hidden") return;
+        document.removeEventListener("visibilitychange", listener);
+        onVisible = undefined;
+        if (active) fn();
+      };
+      onVisible = listener;
+      document.addEventListener("visibilitychange", listener);
+    };
+
+    const attempt = (next: number) => {
       fetchShare(name, id).then(
         (result) => {
           if (!active) return;
-          if (result.kind === "notfound") setFetchState("notfound");
-          else dispatch(addToHashMap(result.data));
+          if (result.kind === "found") dispatch(addToHashMap(result.data));
+          else if (result.kind === "unavailable") wait(next, result.percent);
+          else setFetchState(result.kind);
         },
         () => {
           if (active) setFetchState("error");
         }
       );
-    }
+    };
+
+    const wait = (next: number, percent: number | null) => {
+      if (next >= SHARE_RETRY_DELAYS_MS.length) {
+        setFetchState("missing");
+        return;
+      }
+      setFetchPercent(percent);
+      setFetchState("fetching");
+      timer = setTimeout(
+        () =>
+          whenVisible(() => {
+            void readShareStatus(name, id).then((status) => {
+              if (!active) return;
+              if (status?.status === "NOT_PUBLISHED") setFetchState("notfound");
+              else if (status?.status && LOCAL.has(status.status)) attempt(next + 1);
+              else wait(next + 1, status?.percentLoaded ?? percent);
+            });
+          }),
+        SHARE_RETRY_DELAYS_MS[next]
+      );
+    };
+
+    attempt(0);
     return () => {
       active = false;
+      clearTimeout(timer);
+      if (onVisible) document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [dispatch, id, name]);
-
-  useEffect(() => {
-    if (!name || !id || cached) return;
-    return load();
-  }, [cached, id, load, name]);
+  }, [cachedDeleted, dispatch, id, name, reloadKey, usable]);
 
   const retry = () => {
     setFetchState("loading");
-    load();
+    setFetchPercent(null);
+    setReloadKey((k) => k + 1);
   };
 
   const icon = useMemo(() => (fileData ? getIconsFromObject(fileData) : undefined), [fileData]);
@@ -207,6 +306,28 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
         </SubHeader>
       )}
 
+      {state === "fetching" && (
+        <Card role="status" aria-live="polite" aria-label="Fetching share">
+          <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}>
+            <Box sx={{ color: "text.secondary", display: "flex", pt: 0.25 }}>
+              <CloudDownloadOutlinedIcon />
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontWeight: 700 }}>Not on your node yet</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Fetching it from peers…{fetchPercent ? ` ${Math.round(fetchPercent)}%` : ""}
+              </Typography>
+            </Box>
+          </Box>
+          <LinearProgress
+            variant={fetchPercent ? "determinate" : "indeterminate"}
+            value={fetchPercent ? Math.min(100, Math.round(fetchPercent)) : undefined}
+            aria-label="Share download progress"
+            sx={{ borderRadius: 1, height: 6 }}
+          />
+        </Card>
+      )}
+
       {state === "loading" && (
         <>
           <Card aria-busy="true" aria-label="Loading share">
@@ -235,6 +356,25 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
           description="It may have been removed, or the link points at a different name."
           actionLabel="Back to all shares"
           onAction={() => navigate("/")}
+        />
+      )}
+
+      {state === "deleted" && (
+        <EmptyState
+          icon={<DeleteOutlineOutlinedIcon />}
+          title="This share was deleted by its publisher"
+          actionLabel="Back to all shares"
+          onAction={() => navigate("/")}
+        />
+      )}
+
+      {state === "missing" && (
+        <EmptyState
+          icon={<CloudOffOutlinedIcon />}
+          title="This share isn't on your node yet"
+          description="Your node has asked its peers for it. Try again in a minute."
+          actionLabel="Retry"
+          onAction={retry}
         />
       )}
 
