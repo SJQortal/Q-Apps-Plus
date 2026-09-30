@@ -26,7 +26,29 @@ export function resourceUrl({ service, name, identifier }: FileInfo): string {
   return `/arbitrary/${service}/${encodeURIComponent(name)}/${encodeURIComponent(identifier)}`;
 }
 
-function errorMessage(error: unknown, fallback: string): string {
+/**
+ * Reads a file that is on the node and hands it to Hub's SAVE_FILE dialog.
+ * The node's own filename and type win over the stored ones when it has them.
+ */
+export async function saveFromNode(
+  ref: FileInfo,
+  fallback: { filename?: string; mimeType?: string } = {}
+): Promise<void> {
+  let { filename, mimeType } = fallback;
+  try {
+    const props = await qortalRequest({ action: "GET_QDN_RESOURCE_PROPERTIES", ...ref });
+    filename = props?.filename || filename;
+    mimeType = props?.mimeType || mimeType;
+  } catch {
+    /* the stored filename is good enough */
+  }
+  const response = await fetch(resourceUrl(ref));
+  if (!response.ok) throw new Error(`The node answered ${response.status}`);
+  const blob = await response.blob();
+  await qortalRequest({ action: "SAVE_FILE", blob, filename, mimeType });
+}
+
+export function errorMessage(error: unknown, fallback: string): string {
   if (typeof error === "string") return error || fallback;
   const e = error as { error?: unknown; message?: unknown } | null;
   if (typeof e?.error === "string") return e.error || fallback;
@@ -71,20 +93,11 @@ export function useFileDownload(fileInfo: FileInfo, jsonId: string) {
   const save = useCallback(async () => {
     if (saving || phase !== "ready") return;
     setSaving(true);
-    let filename: string | undefined = download?.properties?.filename || fileInfo.filename;
-    let mimeType: string | undefined = download?.properties?.mimeType || fileInfo.mimeType || fileInfo.mimetype;
     try {
-      const props = await qortalRequest({ action: "GET_QDN_RESOURCE_PROPERTIES", ...ref });
-      filename = props?.filename || filename;
-      mimeType = props?.mimeType || mimeType;
-    } catch {
-      /* the stored filename is good enough */
-    }
-    try {
-      const response = await fetch(resourceUrl(ref));
-      if (!response.ok) throw new Error(`The node answered ${response.status}`);
-      const blob = await response.blob();
-      await qortalRequest({ action: "SAVE_FILE", blob, filename, mimeType });
+      await saveFromNode(ref, {
+        filename: download?.properties?.filename || fileInfo.filename,
+        mimeType: download?.properties?.mimeType || fileInfo.mimeType || fileInfo.mimetype,
+      });
     } catch (error) {
       const msg = errorMessage(error, "Could not save the file");
       if (!/cancel/i.test(msg)) dispatch(setNotification({ msg, alertType: "error" }));

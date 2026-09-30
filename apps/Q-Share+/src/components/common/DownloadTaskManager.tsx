@@ -3,6 +3,9 @@ import { Badge, Box, Button, IconButton, LinearProgress, List, ListItem, ListIte
 import DownloadingOutlinedIcon from "@mui/icons-material/DownloadingOutlined";
 import DownloadDoneOutlinedIcon from "@mui/icons-material/DownloadDoneOutlined";
 import CloseIcon from "@mui/icons-material/Close";
+import SaveAltOutlinedIcon from "@mui/icons-material/SaveAltOutlined";
+import { errorMessage, saveFromNode } from "./FileElement";
+import { setNotification } from "../../state/features/notificationsSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { RootState } from "../../state/store";
@@ -32,6 +35,23 @@ export const DownloadTaskManager: React.FC<DownloadTaskManagerProps> = ({ hideBu
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const saveItem = async (download: any) => {
+    const props = download?.properties ?? {};
+    const identifier: string = download?.identifier;
+    setSavingId(identifier);
+    try {
+      await saveFromNode(
+        { service: props.service || download?.service || "FILE", name: props.name || download?.name, identifier },
+        { filename: props.filename, mimeType: props.mimeType || props.mimetype }
+      );
+    } catch (error) {
+      const msg = errorMessage(error, "Could not save the file");
+      if (!/cancel/i.test(msg)) dispatch(setNotification({ msg, alertType: "error" }));
+    } finally {
+      setSavingId(null);
+    }
+  };
 
   useEffect(() => {
     const onOpenRequest = (e: Event) => {
@@ -80,14 +100,26 @@ export const DownloadTaskManager: React.FC<DownloadTaskManagerProps> = ({ hideBu
               sx={{ borderRadius: 2, border: 1, borderColor: "divider", alignItems: "stretch" }}
               secondaryAction={
                 removable ? (
-                  <IconButton
-                    edge="end"
-                    aria-label={`Remove ${filename} from the list`}
-                    onClick={() => dispatch(removeDownload(download.identifier))}
-                    sx={{ minWidth: 44, minHeight: 44 }}
-                  >
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
+                  <Box sx={{ display: "flex", alignItems: "center" }}>
+                    {phase === "ready" && (
+                      <IconButton
+                        aria-label={`Save ${filename}`}
+                        onClick={() => saveItem(download)}
+                        disabled={savingId === download?.identifier}
+                        sx={{ minWidth: 44, minHeight: 44 }}
+                      >
+                        <SaveAltOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                    <IconButton
+                      edge="end"
+                      aria-label={`Remove ${filename} from the list`}
+                      onClick={() => dispatch(removeDownload(download.identifier))}
+                      sx={{ minWidth: 44, minHeight: 44 }}
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
                 ) : undefined
               }
             >
@@ -106,7 +138,7 @@ export const DownloadTaskManager: React.FC<DownloadTaskManagerProps> = ({ hideBu
                   borderRadius: 2,
                   px: 1.5,
                   py: 1,
-                  pr: removable ? 6 : 1.5,
+                  pr: removable ? (phase === "ready" ? 12 : 6) : 1.5,
                 }}
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>

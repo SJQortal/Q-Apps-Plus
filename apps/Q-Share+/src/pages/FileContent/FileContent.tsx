@@ -15,7 +15,8 @@ import { CommentSection } from "../../components/common/Comments/CommentSection"
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
 import { MyContext, isFailedStatus } from "../../wrappers/DownloadWrapper";
 import { RootState } from "../../state/store";
-import { addToHashMap } from "../../state/features/fileSlice.ts";
+import { addToHashMap, setEditFile } from "../../state/features/fileSlice.ts";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { searchQdn } from "../../utils/qdnSearch";
 import { avatarUrl, profilePath, shareLink, decodeParam } from "../../utils/qortalLinks";
@@ -294,7 +295,13 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
               <CopyLinkButton link={shareLink(author, id)} tooltipTitle="Copy link" label="Copy link" />
               <SaveToCollectionButton share={{ name: author, identifier: id, title: fileData?.title }} variant="button" size="medium" />
               {extraActions}
-              {author !== username && <FollowButton followerName={author} />}
+              {author === username ? (
+                <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => dispatch(setEditFile(fileData))}>
+                  Edit share
+                </Button>
+              ) : (
+                <FollowButton followerName={author} />
+              )}
             </ActionRow>
           </Card>
 
