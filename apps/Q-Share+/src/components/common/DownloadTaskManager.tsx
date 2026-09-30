@@ -44,7 +44,7 @@ export const DownloadTaskManager: React.FC<DownloadTaskManagerProps> = ({ hideBu
     try {
       await saveFromNode(
         { service: props.service || download?.service || "FILE", name: props.name || download?.name, identifier },
-        { filename: props.filename, mimeType: props.mimeType || props.mimetype }
+        { filename: props.filename, mimeType: props.mimeType || props.mimetype, size: props.size }
       );
     } catch (error) {
       if (!isHubDecline(error)) dispatch(setNotification({ msg: errorMessage(error, "Could not save the file"), alertType: "error" }));

@@ -5,7 +5,7 @@ import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from 
 import { store } from "../../state/store";
 import { removeDownload, setAddToDownloads, updateDownloads } from "../../state/features/globalSlice";
 import { removeNotification } from "../../state/features/notificationsSlice";
-import FileElement, { keepsNameByLocation } from "./FileElement";
+import FileElement, { keepsNameByLocation, streamsByLocation } from "./FileElement";
 
 const file = { name: "alice", service: "FILE", identifier: "qshare_file_notes_1", filename: "notes.txt", mimetype: "text/plain" };
 
@@ -21,7 +21,8 @@ describe("FileElement save", () => {
   beforeEach(() => {
     store.dispatch(removeDownload(file.identifier));
     store.dispatch(removeNotification());
-    mockQortalAction("GET_QDN_RESOURCE_PROPERTIES", { filename: "notes.txt", mimeType: "text/plain", size: 5 });
+    // Big enough to stream on desktop (see streamsByLocation).
+    mockQortalAction("GET_QDN_RESOURCE_PROPERTIES", { filename: "notes.txt", mimeType: "text/plain", size: 200 * 1024 * 1024 });
     mockFetch("/arbitrary/FILE/alice/qshare_file_notes_1", "hello");
   });
 
@@ -94,6 +95,27 @@ describe("FileElement save", () => {
     expect(call.blob.size).toBe(5);
     expect(fetchCallsMatching("/arbitrary/FILE/alice/qshare_file_notes_1").length).toBe(1);
     expect(errorToast()).toBe("");
+  });
+
+  it("hands a small file to desktop Hub as a blob, so it saves in one step", async () => {
+    markReady();
+    mockQortalAction("GET_QDN_RESOURCE_PROPERTIES", { filename: "notes.txt", mimeType: "text/plain", size: 5 });
+    mockQortalAction("SAVE_FILE", true);
+    renderWithProviders(<FileElement fileInfo={file} jsonId="qshare_file_notes" />);
+    fireEvent.click(screen.getByRole("button", { name: "Save notes.txt" }));
+    await waitFor(() => expect(qortalCallsFor("SAVE_FILE").length).toBe(1));
+    const [call] = qortalCallsFor("SAVE_FILE") as any[];
+    expect(call.location).toBeUndefined();
+    expect(call.blob?.size).toBe(5);
+  });
+
+  it("streams in GO whatever the size, and on desktop from 100 MB", () => {
+    const android = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/128.0 Mobile Safari/537.36";
+    const desktop = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 qortal-hub/3.0.3 Chrome/128.0 Electron/32.3.1";
+    expect(streamsByLocation(5, android)).toBe(true);
+    expect(streamsByLocation(5, desktop)).toBe(false);
+    expect(streamsByLocation(100 * 1024 * 1024, desktop)).toBe(true);
+    expect(streamsByLocation(undefined, desktop)).toBe(true);
   });
 
   it("saves by location only when GO would keep part of the name", () => {

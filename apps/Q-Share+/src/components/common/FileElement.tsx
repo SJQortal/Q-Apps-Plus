@@ -46,23 +46,41 @@ export function keepsNameByLocation(filename: string): boolean {
   return /[A-Za-z0-9]/.test(stem.normalize("NFD"));
 }
 
+const STREAM_FROM_BYTES = 100 * 1024 * 1024;
+
+/**
+ * Whether to let Hub fetch the file itself (`location`) rather than handing it
+ * a blob. GO downloads by location natively, while a blob crosses the WebView
+ * bridge, so GO always streams. Desktop Hub follows its own prompt with a
+ * native Save As dialog for a location save; a blob goes straight to
+ * Downloads in one step, so small files keep that and only big ones, where
+ * holding the file in this frame costs real memory, stream.
+ */
+export function streamsByLocation(size: number | undefined, userAgent = navigator.userAgent): boolean {
+  if (/Android/i.test(userAgent)) return true;
+  return !size || size >= STREAM_FROM_BYTES;
+}
+
 /**
  * Hands a file that is on the node to Hub's SAVE_FILE dialog. Hub streams it
  * from the node by `location` (Electron writes it to disk in chunks, GO
  * downloads it natively), so the file never passes through this frame and the
- * prompt comes before any bytes move. Hubs that only take a blob, and names
- * GO would strip to nothing (see keepsNameByLocation), get one read here
- * instead. The node's own filename and type win over the stored ones.
+ * prompt comes before any bytes move. Small files on desktop (see
+ * streamsByLocation), Hubs that only take a blob, and names GO would strip to
+ * nothing (see keepsNameByLocation) get one read here instead. The node's own
+ * filename, type and size win over the stored ones.
  */
 export async function saveFromNode(
   ref: FileInfo,
-  fallback: { filename?: string; mimeType?: string } = {}
+  fallback: { filename?: string; mimeType?: string; size?: number } = {}
 ): Promise<void> {
   let { filename, mimeType } = fallback;
+  let size = fallback.size;
   try {
     const props = await qortalRequest({ action: "GET_QDN_RESOURCE_PROPERTIES", ...ref });
     filename = props?.filename || filename;
     mimeType = props?.mimeType || mimeType;
+    size = Number(props?.size) || size;
   } catch {
     /* the stored filename is good enough */
   }
@@ -74,7 +92,7 @@ export async function saveFromNode(
     mimeType,
     location: { service: ref.service, name: ref.name, identifier: ref.identifier },
   };
-  if (keepsNameByLocation(filename)) {
+  if (keepsNameByLocation(filename) && streamsByLocation(size)) {
     try {
       await qortalRequest(byLocation);
       return;
@@ -129,6 +147,7 @@ export function useFileDownload(fileInfo: FileInfo, jsonId: string) {
       await saveFromNode(ref, {
         filename: download?.properties?.filename || fileInfo.filename,
         mimeType: download?.properties?.mimeType || fileInfo.mimeType || fileInfo.mimetype,
+        size: fileInfo.size,
       });
     } catch (error) {
       // Declining Hub's save prompt (or letting it time out) is not an error.
