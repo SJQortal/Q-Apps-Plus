@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import DOMPurify from "dompurify";
 import { styled } from "@mui/material/styles";
-import { convertQortalLinks } from "./utils";
+import { linkifyQortalText } from "./utils";
 import { normalizeQuillHtml } from "../../../utils/quillHtml";
 
 /**
@@ -70,18 +70,38 @@ const RichText = styled("div")(({ theme }) => {
   };
 });
 
+/** DOMPurify's default URI allow-list plus qortal:, so qortal links written as links keep their href. */
+const ALLOWED_URI = /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|qortal):|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i;
+
+/**
+ * Makes a stored `htmlDescription` safe to show. Anyone can publish one, so
+ * after DOMPurify every change is made on DOM nodes and the result is only
+ * serialised at the end; nothing is pasted into an HTML string.
+ */
+export function sanitizeDescription(html: string | null | undefined): string {
+  const source = normalizeQuillHtml(html);
+  if (!source) return "";
+  const fragment: DocumentFragment = DOMPurify.sanitize(source, {
+    USE_PROFILES: { html: true },
+    ALLOWED_URI_REGEXP: ALLOWED_URI,
+    RETURN_DOM_FRAGMENT: true,
+  });
+  // A link that lost its href (Quill stores qortal: links as about:blank) is
+  // only text now: unwrap it, so a qortal:// URL in it becomes a real link.
+  fragment.querySelectorAll("a:not([href])").forEach((a) => a.replaceWith(...a.childNodes));
+  linkifyQortalText(fragment);
+  // Serialise in DOMPurify's inert document, so nothing loads before render.
+  const box = fragment.ownerDocument.createElement("div");
+  box.append(fragment);
+  return box.innerHTML;
+}
+
 interface DisplayHtmlProps {
   html: string | null | undefined;
 }
 
 export const DisplayHtml = ({ html }: DisplayHtmlProps) => {
-  const cleanContent = useMemo(() => {
-    if (!html) return null;
-    const sanitized = DOMPurify.sanitize(normalizeQuillHtml(html), {
-      USE_PROFILES: { html: true },
-    });
-    return convertQortalLinks(sanitized);
-  }, [html]);
+  const cleanContent = useMemo(() => sanitizeDescription(html), [html]);
 
   if (!cleanContent) return null;
   return <RichText dangerouslySetInnerHTML={{ __html: cleanContent }} />;
