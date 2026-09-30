@@ -152,6 +152,91 @@
   --new-message-text: var(--qmail-compose-text);
 }
 
+/*
+ * Hub 3.0, Black and White: every legacy --qmail-* colour follows the theme
+ * kit's --qp-* variables (set on :root by HubThemeProvider). Q-Mail Classic
+ * (data-ui-theme="hub20") keeps the original values above.
+ */
+:root:not([data-ui-theme='hub20']) {
+  --qapp-font-sans: var(--qp-font);
+  --qmail-app-bg: var(--qp-bg);
+  --qmail-app-bg-accent: transparent;
+  --qmail-app-bg-accent-soft: transparent;
+
+  --qmail-brand: var(--qp-primary);
+  --qmail-brand-strong: var(--qp-primary-light);
+  --qmail-brand-soft: var(--qp-primary-soft);
+  --qmail-link: var(--qp-primary);
+  --qmail-link-reply: var(--qp-primary-light);
+
+  --qmail-shell-top-bg: var(--qp-chrome-strong);
+  --qmail-shell-subbar-bg: var(--qp-surface);
+  --qmail-shell-sidebar-bg: var(--qp-chrome);
+  --qmail-shell-popover-bg: var(--qp-elevated);
+  --qmail-shell-border: var(--qp-divider);
+  --qmail-shell-hover: var(--qp-hover);
+  --qmail-shell-hover-strong: var(--qp-selected);
+  --qmail-shell-active: var(--qp-primary-soft);
+  --qmail-shell-active-strong: var(--qp-primary);
+  --qmail-shell-muted: var(--qp-text-secondary);
+  --qmail-shell-mobile-toggle-border: var(--qp-divider);
+  --qmail-shell-overlay-bg: var(--qp-bg);
+  --qmail-global-scrollbar-thumb: var(--qp-divider);
+  --qmail-global-scrollbar-thumb-hover: var(--qp-text-secondary);
+
+  --qmail-compose-surface: var(--qp-paper);
+  --qmail-compose-footer-surface: var(--qp-surface);
+  --qmail-compose-text: var(--qp-text);
+  --qmail-compose-muted: var(--qp-text-secondary);
+  --qmail-compose-placeholder: var(--qp-text-secondary);
+  --qmail-compose-divider: var(--qp-divider);
+  --qmail-compose-attach-border: var(--qp-divider);
+  --qmail-compose-button-text: var(--qp-text);
+  --qmail-compose-button-border: var(--qp-divider);
+  --qmail-compose-button-bg: var(--qp-elevated);
+  --qmail-compose-button-hover-bg: var(--qp-hover);
+  --qmail-compose-scroll-track: transparent;
+  --qmail-compose-scroll-thumb: var(--qp-divider);
+  --qmail-thread-summary-bg: var(--qp-primary-soft);
+  --qmail-thread-divider: var(--qp-divider);
+  --qmail-chat-bg: var(--qp-surface);
+  --qmail-reply-other-bg: var(--qp-elevated);
+  --qmail-reply-other-text: var(--qp-text);
+  --qmail-scroll-track-hover: transparent;
+  --qmail-scroll-thumb-hover: var(--qp-divider);
+  --qmail-message-meta: var(--qp-text-secondary);
+  --qmail-message-button-text: var(--qp-text);
+  --qmail-message-button-bg: var(--qp-elevated);
+  --qmail-message-button-border: var(--qp-divider);
+  --qmail-message-button-hover: var(--qp-hover);
+  --qmail-thread-card-bg: var(--qp-paper);
+  --qmail-thread-card-hover: var(--qp-hover);
+  --qmail-thread-text: var(--qp-text);
+  --qmail-thread-muted: var(--qp-text-secondary);
+  --qmail-thread-link-hover: var(--qp-primary-light);
+  --qmail-instance-input-bg: var(--qp-surface);
+  --qmail-instance-input-placeholder: var(--qp-text-secondary);
+  --qmail-action-primary-bg: var(--qp-primary);
+  --qmail-action-primary-text: var(--qp-on-primary);
+  --qmail-action-primary-border: var(--qp-primary-dark);
+  --qmail-action-primary-hover: var(--qp-primary-dark);
+  --qmail-danger-text: var(--qp-error);
+  --qmail-danger-hover: var(--qp-hover);
+}
+
+/* The bundled SVG icons are dark; invert them on dark surfaces. */
+:root:not([data-ui-theme='hub20'])[data-theme='dark'] {
+  --qmail-shell-icon-filter: brightness(0) saturate(100%) invert(100%) opacity(0.85);
+  --qmail-compose-icon-filter: brightness(0) saturate(100%) invert(100%) opacity(0.72);
+  --qmail-message-icon-filter: brightness(0) saturate(100%) invert(100%) opacity(0.85);
+}
+
+:root:not([data-ui-theme='hub20'])[data-theme='light'] {
+  --qmail-shell-icon-filter: none;
+  --qmail-compose-icon-filter: none;
+  --qmail-message-icon-filter: none;
+}
+
 *,
 *::before,
 *::after {
