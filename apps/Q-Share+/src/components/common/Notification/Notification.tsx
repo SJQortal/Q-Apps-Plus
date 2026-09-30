@@ -7,9 +7,7 @@ import { removeNotification } from '../../../state/features/notificationsSlice'
 import { RootState } from '../../../state/store'
 import { useHubTheme } from '../../../hub-theme'
 import { usePhoneLayout } from '../../../hooks/usePhoneLayout'
-
-/** Height of the phone bottom bar plus a gap, so toasts sit above it. */
-const PHONE_BOTTOM_OFFSET = 'calc(80px + env(safe-area-inset-bottom, 0px))'
+import { useBottomChromeHeight } from '../../layout/BottomNav/BottomNav'
 
 /**
  * Shows the app's notifications (Redux `notifications.alertTypes`) as toasts.
@@ -20,6 +18,8 @@ const Notification = () => {
   const theme = useTheme()
   const { mode } = useHubTheme()
   const phone = usePhoneLayout()
+  // Toasts sit above the bar and the floating Share button, not on them.
+  const bottomChrome = useBottomChromeHeight()
   const { alertTypes } = useSelector((state: RootState) => state.notifications)
   const { alertError, alertSuccess, alertInfo } = alertTypes
 
@@ -44,7 +44,9 @@ const Notification = () => {
     '--toastify-color-progress-dark': theme.palette.primary.main,
     '--toastify-font-family': String(theme.typography.fontFamily),
     '--toastify-toast-min-height': '48px',
-    ...(phone ? { bottom: PHONE_BOTTOM_OFFSET, left: 0, right: 0, width: '100%', padding: '0 12px' } : {}),
+    ...(phone
+      ? { bottom: `calc(${bottomChrome + 8}px + env(safe-area-inset-bottom, 0px))`, left: 0, right: 0, width: '100%', padding: '0 12px' }
+      : {}),
   } as CSSProperties
 
   return (

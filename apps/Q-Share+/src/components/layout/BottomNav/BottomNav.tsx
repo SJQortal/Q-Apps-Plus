@@ -208,17 +208,26 @@ export function BottomNav() {
 }
 
 /**
+ * How much of the bottom of a phone screen the bar and, when signed in, the
+ * Share button floating above it cover (without the safe-area inset); 0 on
+ * wider screens. The compact landscape bar carries Share itself.
+ */
+export function useBottomChromeHeight(): number {
+  const phone = usePhoneLayout();
+  const compact = useLandscapePhone();
+  const signedIn = useSelector((state: RootState) => Boolean(state.auth.user?.name));
+  if (!phone) return 0;
+  return compact ? COMPACT_BOTTOM_NAV_HEIGHT : BOTTOM_NAV_HEIGHT + (signedIn ? FAB_GAP + FAB_SIZE : 0);
+}
+
+/**
  * Keeps the page's last content clear of the fixed bar and, when signed in,
  * of the Share button floating above it (in Hub it covered the end of
  * "Submit comment"). Phones only.
  */
 export function BottomNavSpacer() {
-  const phone = usePhoneLayout();
-  const compact = useLandscapePhone();
-  const signedIn = useSelector((state: RootState) => Boolean(state.auth.user?.name));
-  if (!phone) return null;
-  // The compact bar carries Share itself, so there is no floating button to clear.
-  const height = compact ? COMPACT_BOTTOM_NAV_HEIGHT : BOTTOM_NAV_HEIGHT + (signedIn ? FAB_GAP + FAB_SIZE : 0);
+  const height = useBottomChromeHeight();
+  if (!height) return null;
   return (
     <div
       aria-hidden
