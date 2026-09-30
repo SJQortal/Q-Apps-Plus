@@ -33,6 +33,26 @@ import { requestOpenPublish } from "../../constants/events.ts";
 export type { SortOrder } from "../../utils/settings.ts";
 import type { SortOrder } from "../../utils/settings.ts";
 
+/** The filters a search ran with; the form fields may have changed since. */
+interface AppliedFilters {
+  name: string;
+  keywords: string;
+  categories: string[];
+}
+
+/** The most specific category picked, e.g. "Music" for Audio › Music. */
+export function categoryLabel(ids: string[]): string {
+  let label = "";
+  ids.forEach((id, index) => {
+    if (!id) return;
+    const options =
+      index === 0 ? allCategoryData.category : allCategoryData.subCategories[index - 1]?.[ids[index - 1]];
+    const match = options?.find((option) => option.id === +id);
+    if (match) label = match.name;
+  });
+  return label;
+}
+
 export const Home = () => {
   const phone = useNarrowLayout();
   const dispatch = useDispatch();
@@ -50,6 +70,9 @@ export const Home = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  const [applied, setApplied] = useState<AppliedFilters>(() => ({ name: filterName, keywords: filterSearch, categories: [] }));
+  // The same, for next-page loads, which must not pick up edits that weren't applied.
+  const appliedRef = useRef(applied);
   const isFetching = useRef(false);
   const requestId = useRef(0);
   const mounted = useRef(false);
@@ -69,12 +92,21 @@ export const Home = () => {
       isFetching.current = true;
       setIsLoading(true);
       setError(null);
+      const filters: AppliedFilters = reset
+        ? {
+            name: overrides.clear ? "" : (overrides.name ?? filterName),
+            keywords: overrides.clear ? "" : filterSearch,
+            categories: overrides.clear ? [] : (categoryListRef.current?.getSelectedCategories() ?? []),
+          }
+        : appliedRef.current;
+      if (reset) {
+        appliedRef.current = filters;
+        setApplied(filters);
+      }
       try {
         const count = await getFiles(
           {
-            name: overrides.clear ? "" : (overrides.name ?? filterName),
-            categories: overrides.clear ? [] : categoryListRef.current?.getSelectedCategories() || [],
-            keywords: overrides.clear ? "" : filterSearch,
+            ...filters,
             sort: overrides.sort ?? sort,
             following: overrides.clear ? false : (overrides.following ?? following),
           },
@@ -133,7 +165,7 @@ export const Home = () => {
     runSearch(true, { sort: next });
   };
 
-  const mine = Boolean(username) && filterName === username;
+  const mine = Boolean(username) && applied.name === username;
   const toggleMine = () => {
     if (!username) return;
     // Like Following, a second tap goes back to everyone's shares.
@@ -218,7 +250,18 @@ export const Home = () => {
     </Box>
   );
 
-  const activeFilters = Boolean(filterSearch || filterName);
+  const appliedCategory = categoryLabel(applied.categories);
+  const categoriesOn = applied.categories.some(Boolean);
+  const activeFilters = Boolean(applied.keywords || applied.name || categoriesOn);
+  const heading = applied.name
+    ? `Shares by ${applied.name}`
+    : following
+      ? "From names you follow"
+      : appliedCategory
+        ? `Shares in ${appliedCategory}`
+        : activeFilters
+          ? "Filtered shares"
+          : "Latest shares";
 
   const emptyState: React.ComponentProps<typeof EmptyState> = following
     ? {
@@ -227,7 +270,7 @@ export const Home = () => {
         actionLabel: "Show latest shares",
         onAction: resetFilters,
       }
-    : mine && !filterSearch
+    : mine && !applied.keywords && !categoriesOn
       ? {
           title: "You haven't shared anything yet",
           description: "Files you share show up here.",
@@ -307,7 +350,7 @@ export const Home = () => {
           }}
         >
           <Typography component="h1" variant="h6" sx={{ fontWeight: 700, flex: "1 1 160px", minWidth: 0, wordBreak: "break-word" }}>
-            {filterName ? `Shares by ${filterName}` : following ? "From names you follow" : "Latest shares"}
+            {heading}
           </Typography>
           {phone && (
             <Button

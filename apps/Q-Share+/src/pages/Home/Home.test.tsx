@@ -9,6 +9,7 @@ import { store } from '../../state/store';
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
 import { resetSettingsCache } from '../../utils/settings';
+import { mockAllIsIntersecting } from 'react-intersection-observer/test-utils';
 import { readOncePerObserve } from '../../test/intersection';
 import { HubThemeProvider } from '../../hub-theme';
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme';
@@ -204,7 +205,8 @@ describe('Home filters on a phone', () => {
     expect(descriptions()[2]).toEqual({ offset: '20', description: 'cat:1' });
 
     // And the sheet still shows it when it opens again.
-    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    // A category counts as a filter, so the button now says so.
+    fireEvent.click(screen.getByRole('button', { name: 'Filters on' }));
     const reopened = await screen.findByRole('dialog', { name: 'Filters and sort' });
     expect(within(reopened).getByRole('combobox', { name: 'Category' })).toHaveTextContent('Software');
   });
@@ -313,6 +315,57 @@ describe('Home chips and empty states', () => {
     expect(await screen.findByText('Someone else')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Following' })).toHaveAttribute('aria-pressed', 'false');
     expect(lastSearch().has('followedonly')).toBe(false);
+  });
+});
+
+describe('Home applied filters', () => {
+  const lastSearch = () => new URL(fetchCallsMatching('/arbitrary/resources/search').at(-1)!, 'http://localhost').searchParams;
+
+  it('a category-only search counts as filtered', async () => {
+    mockFetch('/arbitrary/resources/search', (url) =>
+      url.searchParams.get('description')
+        ? []
+        : [{ name: 'bob', service: 'DOCUMENT', identifier: 'qshare_file_any_An1234_metadata', created: 1, metadata: { title: 'Any share' } }]
+    );
+    mockQortalAction('FETCH_QDN_RESOURCE', { title: 'Any share', files: [] });
+
+    renderHome();
+    expect(await screen.findByText('Any share')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Latest shares' })).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Category' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Software' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+
+    expect(await screen.findByText('No shares match these filters')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Shares in Software' })).toBeInTheDocument();
+    expect(lastSearch().get('description')).toBe('cat:1');
+    expect(screen.getByRole('button', { name: 'Reset filters' })).toBeInTheDocument();
+  });
+
+  it('the next page uses the filters of the last search, not unsent edits', async () => {
+    mockFetch('/arbitrary/resources/search', (url) => {
+      const offset = Number(url.searchParams.get('offset'));
+      return Array.from({ length: offset === 0 ? 20 : 2 }, (_, i) => ({
+        name: 'bob',
+        service: 'DOCUMENT',
+        identifier: `qshare_file_page-${offset + i}_Pg${String(offset + i).padStart(4, '0')}_metadata`,
+        created: 1000 - offset - i,
+        metadata: { title: `Page row ${offset + i}` },
+      }));
+    });
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    renderHome();
+    expect(await screen.findByText('Page row 0')).toBeInTheDocument();
+    // Typed, not applied.
+    fireEvent.change(screen.getByLabelText('Search titles'), { target: { value: 'unsent' } });
+    await waitFor(() => {
+      mockAllIsIntersecting(true);
+      expect(fetchCallsMatching(/[?&]offset=20&/).length).toBe(1);
+    }, { timeout: 5000 });
+    expect(lastSearch().has('query')).toBe(false);
+    expect(screen.getByRole('heading', { name: 'Latest shares' })).toBeInTheDocument();
   });
 });
 
