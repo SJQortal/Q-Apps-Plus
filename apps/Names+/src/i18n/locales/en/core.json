@@ -1,7 +1,9 @@
 {
   "header": {
     "my_names": "my names",
-    "market": "names for sale"
+    "market": "names for sale",
+    "settings": "settings",
+    "navigation": "navigation"
   },
   "inputs": {
     "filter_names": "filter names"
@@ -19,7 +21,9 @@
     "continue": "continue",
     "publish": "publish",
     "buy": "buy",
-    "choose_image": "choose Image"
+    "choose_image": "choose Image",
+    "retry": "retry",
+    "confirm_buy": "buy for {{price}} QORT"
   },
   "new_name": {
     "choose_name": "choose a name",
@@ -31,7 +35,9 @@
       "success": "successfully registered the name",
       "error": "unable to register name",
       "loading": "registering name... please wait"
-    }
+    },
+    "name_too_short": "names need at least {{min}} characters",
+    "name_too_long": "names can have at most {{max}} characters"
   },
   "tables": {
     "name": "name",
@@ -41,7 +47,8 @@
     "responses": {
       "loading": "updating name... please wait",
       "success": "successfully updated name",
-      "error": "unable to update name"
+      "error": "unable to update name",
+      "error_primary": "cannot update primary name while having other names"
     },
     "title": "caution when updating your name",
     "choose_name": "choose new name",
@@ -58,7 +65,9 @@
       "error3": "invalid price"
     },
     "title": "selling name",
-    "choose_price": "choose selling price"
+    "choose_price": "choose selling price",
+    "fee": "listing fee: {{fee}} QORT",
+    "price_hint": "the buyer pays this amount in QORT"
   },
   "cancel_name": {
     "responses": {
@@ -91,6 +100,61 @@
       "loading": "attempting to purchase name... please wait",
       "success": "purchased name",
       "error": "unable to purchase name"
-    }
+    },
+    "sort": {
+      "name": "name",
+      "price": "price",
+      "length": "length",
+      "newest": "newest"
+    },
+    "sort_by": "sort by",
+    "empty": "no names are for sale right now",
+    "empty_filter": "no names for sale match “{{filter}}”",
+    "error": "could not load the names for sale",
+    "buy_title": "buy {{name}}",
+    "price": "price",
+    "fee": "transaction fee",
+    "total": "total",
+    "balance": "your balance",
+    "insufficient": "not enough QORT for this purchase",
+    "buy_confirm": "Qortal will ask you to confirm the payment",
+    "count_one": "{{count}} name for sale",
+    "count_other": "{{count}} names for sale"
+  },
+  "settings": {
+    "account": "account",
+    "appearance": "appearance",
+    "about": "about",
+    "no_primary_name": "no primary name yet",
+    "not_signed_in": "not signed in",
+    "names_count_one": "{{count}} name",
+    "names_count_other": "{{count}} names",
+    "address": "address",
+    "copy_address": "copy address",
+    "copied": "copied",
+    "changelog": "what's new",
+    "upstream": "original app: Qortal/names",
+    "source": "source code: SJQortal/Q-Apps-Plus",
+    "about_blurb": "Names+ is Simon's version of the official Qortal Names app. It reads and writes the same names, sales and avatars, so anything you do here shows up in the original app too."
+  },
+  "names": {
+    "primary": "primary",
+    "for_sale": "for sale",
+    "pending": "pending",
+    "empty_title": "no names yet",
+    "empty_hint": "register a name to publish on QDN and use it across Q-Apps",
+    "empty_filter": "no names match “{{filter}}”",
+    "error": "could not load your names",
+    "more_actions": "more actions",
+    "sign_in": "sign in to Qortal to see your names"
+  },
+  "pending": {
+    "title": "pending transactions",
+    "REGISTER_NAME": "registering {{name}}",
+    "UPDATE_NAME": "renaming {{name}} to {{newName}}",
+    "SELL_NAME": "listing {{name}} for sale",
+    "CANCEL_SELL_NAME": "removing {{name}} from sale",
+    "BUY_NAME": "buying {{name}}",
+    "hint": "confirmed with the next block, usually within a minute or two"
   }
 }

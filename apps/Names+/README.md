@@ -1,3 +1,20 @@
+# Names+
+
+Simon's "+" version of the official Qortal **Names** app ([Qortal/names](https://github.com/Qortal/names)), part of [Q-Apps+](https://github.com/SJQortal/Q-Apps-Plus). It reads and writes the same names, sales and avatars, so anything done here shows up in the original app and the other way round.
+
+What it adds:
+
+- the Hub 3.0 look with four themes (Hub 3.0, Names Classic, Black, White) and a Settings page;
+- a phone layout that works in GO: bottom navigation, list rows with an actions menu;
+- fewer node requests: paged lists, one batched avatar lookup, cached fees, polling only while visible;
+- market sorting (name, price, length, newest) with seller and registration date;
+- a buy confirmation showing price, fee, total and balance, and a clearer sell dialog;
+- loading, empty and error states everywhere, and a set of upstream bug fixes.
+
+Build and test from this folder: `npm ci && npm run build`, `npm test`, `npm run lint`. The publish zip comes from `scripts/build-zip.sh Names+` at the repo root. The brief with the audit, plan and follow-ups is `docs/apps/Names+.md`.
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
