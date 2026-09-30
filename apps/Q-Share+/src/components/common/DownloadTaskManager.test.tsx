@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { mockFetch, mockQortalAction, qortalCallsFor } from "../../test/setup";
 import { store } from "../../state/store";
@@ -31,5 +31,28 @@ describe("DownloadTaskManager", () => {
     await waitFor(() => expect(qortalCallsFor("SAVE_FILE").length).toBe(1));
     await waitFor(() => expect(screen.getByRole("button", { name: "Save notes.txt" })).toBeEnabled());
     expect(store.getState().notifications.alertTypes.alertError).toBe("");
+  });
+
+  it("puts a finished row's actions beside its text, with no progress bar", async () => {
+    addDownload({ status: "READY" });
+    renderWithProviders(<DownloadTaskManager />);
+    fireEvent.click(screen.getByRole("button", { name: /^downloads/i }));
+    const row = await screen.findByRole("button", { name: "notes.txt: Ready to save" });
+    expect(within(row).queryByRole("progressbar")).toBeNull();
+    // Not MUI's secondaryAction, whose fixed padding let Save cover the bar.
+    expect(document.querySelector(".MuiListItemSecondaryAction-root")).toBeNull();
+    const item = row.closest("li") as HTMLElement;
+    expect(within(item).getByRole("button", { name: "Save notes.txt" })).toBeInTheDocument();
+    expect(within(item).getByRole("button", { name: "Remove notes.txt from the list" })).toBeInTheDocument();
+  });
+
+  it("shows progress, and no actions, while a file is arriving", async () => {
+    addDownload({ status: "DOWNLOADING", percentLoaded: 40 });
+    renderWithProviders(<DownloadTaskManager />);
+    fireEvent.click(screen.getByRole("button", { name: /^downloads/i }));
+    const row = await screen.findByRole("button", { name: "notes.txt: Fetching from peers… 40%" });
+    expect(within(row).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "40");
+    expect(screen.queryByRole("button", { name: "Save notes.txt" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove notes.txt from the list" })).toBeNull();
   });
 });

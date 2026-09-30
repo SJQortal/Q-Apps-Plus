@@ -93,35 +93,13 @@ export const DownloadTaskManager: React.FC<DownloadTaskManagerProps> = ({ hideBu
           const publisher = props.name || download?.name;
           // Only rows without a running poller can be removed; a live poller would re-add the entry.
           const removable = phase === "ready" || phase === "failed";
+          // The actions sit in the row beside the text, not in MUI's secondaryAction,
+          // whose fixed right padding let the Save button cover the progress bar.
           return (
             <ListItem
               key={download?.identifier}
               disablePadding
               sx={{ borderRadius: 2, border: 1, borderColor: "divider", alignItems: "stretch" }}
-              secondaryAction={
-                removable ? (
-                  <Box sx={{ display: "flex", alignItems: "center" }}>
-                    {phase === "ready" && (
-                      <IconButton
-                        aria-label={`Save ${filename}`}
-                        onClick={() => saveItem(download)}
-                        disabled={savingId === download?.identifier}
-                        sx={{ minWidth: 44, minHeight: 44 }}
-                      >
-                        <SaveAltOutlinedIcon fontSize="small" />
-                      </IconButton>
-                    )}
-                    <IconButton
-                      edge="end"
-                      aria-label={`Remove ${filename} from the list`}
-                      onClick={() => dispatch(removeDownload(download.identifier))}
-                      sx={{ minWidth: 44, minHeight: 44 }}
-                    >
-                      <CloseIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                ) : undefined
-              }
             >
               <ListItemButton
                 onClick={() => {
@@ -133,28 +111,55 @@ export const DownloadTaskManager: React.FC<DownloadTaskManagerProps> = ({ hideBu
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "stretch",
+                  justifyContent: "center",
                   gap: 0.75,
+                  minWidth: 0,
                   minHeight: 56,
                   borderRadius: 2,
+                  ...(removable && { borderTopRightRadius: 0, borderBottomRightRadius: 0 }),
                   px: 1.5,
                   py: 1,
-                  pr: removable ? (phase === "ready" ? 12 : 6) : 1.5,
                 }}
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
                   {fileKindIconElement(kind, { fontSize: "small", sx: { color: "text.secondary", flexShrink: 0 } })}
                   <Typography sx={{ fontSize: 14, fontWeight: 600, minWidth: 0, overflowWrap: "anywhere" }}>{filename}</Typography>
                 </Box>
-                <LinearProgress
-                  variant={phase === "building" ? "indeterminate" : "determinate"}
-                  value={phase === "ready" ? 100 : percent}
-                  color={phase === "failed" ? "error" : "primary"}
-                  sx={{ borderRadius: 1, height: 5 }}
-                />
-                <Typography variant="caption" color={phase === "failed" ? "error" : "text.secondary"}>
+                {/* A finished row says "Ready to save"; a full bar adds nothing. */}
+                {phase !== "ready" && (
+                  <LinearProgress
+                    variant={phase === "building" ? "indeterminate" : "determinate"}
+                    value={percent}
+                    color={phase === "failed" ? "error" : "primary"}
+                    aria-label={`${filename} download progress`}
+                    sx={{ borderRadius: 1, height: 5 }}
+                  />
+                )}
+                <Typography variant="caption" color={phase === "failed" ? "error" : "text.secondary"} sx={{ fontSize: 13 }}>
                   {downloadStatusText(status, percent)}
                 </Typography>
               </ListItemButton>
+              {removable && (
+                <Box sx={{ display: "flex", alignItems: "center", flexShrink: 0, pr: 0.5 }}>
+                  {phase === "ready" && (
+                    <IconButton
+                      aria-label={`Save ${filename}`}
+                      onClick={() => saveItem(download)}
+                      disabled={savingId === download?.identifier}
+                      sx={{ minWidth: 44, minHeight: 44 }}
+                    >
+                      <SaveAltOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                  <IconButton
+                    aria-label={`Remove ${filename} from the list`}
+                    onClick={() => dispatch(removeDownload(download.identifier))}
+                    sx={{ minWidth: 44, minHeight: 44 }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              )}
             </ListItem>
           );
         })}
