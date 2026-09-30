@@ -44,6 +44,36 @@ export async function fetchQdnResource(service: string, name: string, identifier
   return body
 }
 
+/** The fields of a list row that come from the node's search, not from the publisher. */
+export interface ShareRow {
+  id: string
+  user: string
+  created?: number | string
+  updated?: number | string
+  service?: string
+}
+
+/**
+ * A share's hash-map entry: the publisher's JSON over the search row, except
+ * that the row's identifier, name, dates and service always win and the body
+ * can't mark itself deleted. Otherwise a body could file itself under another
+ * share's identifier or name, or date itself so far ahead that the real body
+ * is never fetched again. Q-Share bodies carry none of these fields.
+ */
+export function shareFromBody<Row extends ShareRow>(row: Row, body: Record<string, unknown>) {
+  const { deleted: _deleted, isValid: _isValid, ...fields } = body
+  return {
+    ...row,
+    ...fields,
+    id: row.id,
+    user: row.user,
+    created: row.created,
+    updated: row.updated,
+    service: row.service,
+    isValid: true as const
+  }
+}
+
 export const fetchAndEvaluateVideos = async (data: any) => {
   const getVideo = async () => {
     const { user, videoId, content } = data
@@ -65,11 +95,7 @@ export const fetchAndEvaluateVideos = async (data: any) => {
             identifier: videoId
           })
       if (isShareBody(responseData) && checkStructure(responseData)) {
-        obj = {
-          ...content,
-          ...responseData,
-          isValid: true
-        }
+        obj = shareFromBody({ ...content, id: videoId, user, service }, responseData)
       } else {
         // Kept in the hash map so lists can leave it out and it isn't fetched again.
         obj = { ...content, ...notShareFlags(responseData) }

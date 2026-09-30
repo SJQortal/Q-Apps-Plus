@@ -24,7 +24,8 @@ import { useSafeBack } from "../../hooks/useSafeBack";
 import { searchQdn, type QdnResourceSummary } from "../../utils/qdnSearch";
 import { avatarUrl, profilePath, shareLink, decodeParam } from "../../utils/qortalLinks";
 import { formatDate } from "../../utils/time";
-import { fetchQdnResource, isShareBody, needsEncodedFetch, notShareFlags } from "../../utils/fetchVideos";
+import { fetchQdnResource, isShareBody, needsEncodedFetch, notShareFlags, shareFromBody } from "../../utils/fetchVideos";
+import { summaryToVideo } from "../../hooks/useFetchFiles.tsx";
 import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
 import { getCategoriesFromObject, type Category } from "../../components/common/CategoryList/CategoryList.tsx";
 import { getIconsFromObject } from "../../constants/Categories/CategoryFunctions.ts";
@@ -137,22 +138,9 @@ async function fetchShare(name: string, id: string): Promise<ShareLookup> {
   }
   if (isDeletedShare(summary, body)) return { kind: "deleted" };
   if (body.error) throw new Error(typeof body.error === "string" ? body.error : "Could not read the share");
-  return {
-    kind: "found",
-    data: {
-      title: summary?.metadata?.title,
-      category: summary?.metadata?.category,
-      categoryName: summary?.metadata?.categoryName,
-      tags: summary?.metadata?.tags || [],
-      description: summary?.metadata?.description,
-      created: summary?.created,
-      updated: summary?.updated,
-      user: summary.name,
-      videoImage: "",
-      id: summary.identifier,
-      ...body,
-    },
-  };
+  // The body's title and description replace the metadata's shorter ones; the
+  // search row's name, identifier and dates stay (see shareFromBody).
+  return { kind: "found", data: shareFromBody(summaryToVideo(summary), body) };
 }
 
 export interface FileContentProps {

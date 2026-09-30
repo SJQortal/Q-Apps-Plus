@@ -64,6 +64,23 @@ describe('share bodies', () => {
     expect(res.deleted).toBeUndefined();
   });
 
+  it("a body can't replace the search row's identifier, name, dates or service, or mark itself deleted", async () => {
+    mockQortalAction('FETCH_QDN_RESOURCE', {
+      title: 'Full title',
+      files: [],
+      id: 'qshare_file_someone-elses_Ab1234_metadata',
+      user: 'alice',
+      created: 1,
+      updated: 9_999_999_999_999,
+      service: 'FILE',
+      deleted: true,
+      isValid: false,
+    });
+    const content = { id: 'id', user: 'mallory', title: 'Short', created: 10, updated: 20, service: 'DOCUMENT' };
+    const res = await fetchAndEvaluateVideos({ user: 'mallory', videoId: 'id', content });
+    expect(res).toEqual({ id: 'id', user: 'mallory', title: 'Full title', files: [], created: 10, updated: 20, service: 'DOCUMENT', isValid: true });
+  });
+
   it('only a delete marker is a delete: JSON that is not an object cannot be read, other text is retried', async () => {
     const content = { id: 'id', title: 'Short' };
     mockQortalAction('FETCH_QDN_RESOURCE', '\n');

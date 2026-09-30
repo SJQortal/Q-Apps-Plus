@@ -375,6 +375,29 @@ describe('FileContent (share page)', () => {
     length.mockRestore();
   });
 
+  it("the body can't change whose share it is, its identifier or its dates", async () => {
+    const id = 'qshare_file_spoofed_Sp1234_metadata';
+    mockFetch('/arbitrary/resources/search', [{ ...searchRow, identifier: id }]);
+    mockQortalAction('FETCH_QDN_RESOURCE', {
+      ...body,
+      id: ID,
+      user: 'mallory',
+      updated: 9_999_999_999_999,
+      deleted: true,
+    });
+    mockCommentSearches();
+
+    renderShare(`/share/${encodeURIComponent(NAME)}/${id}`);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Holiday pics' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Shares by alice b' })).toBeInTheDocument();
+    const held = store.getState().file.hashMapFiles[id];
+    expect(held).toMatchObject({ id, user: NAME, updated: searchRow.updated, isValid: true });
+    expect(held.deleted).toBeUndefined();
+    expect(store.getState().file.hashMapFiles[ID]?.user).not.toBe('mallory');
+    store.dispatch({ type: 'file/removeFromHashMap', payload: id });
+  });
+
   it('an error page instead of the body offers Retry rather than "deleted", and stores nothing', async () => {
     const id = 'qshare_file_error-page_Er1234_metadata';
     mockFetch('/arbitrary/resources/search', [{ ...searchRow, identifier: id }]);
