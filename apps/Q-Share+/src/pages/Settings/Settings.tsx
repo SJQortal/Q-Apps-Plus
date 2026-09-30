@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Avatar,
   Box,
   Button,
-  Chip,
   IconButton,
   MenuItem,
   Select,
@@ -14,6 +14,7 @@ import {
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import CloseIcon from "@mui/icons-material/Close";
 import PersonOffOutlinedIcon from "@mui/icons-material/PersonOffOutlined";
 import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
 import CloudDownloadOutlinedIcon from "@mui/icons-material/CloudDownloadOutlined";
@@ -31,6 +32,7 @@ import { setNotification } from "../../state/features/notificationsSlice";
 import { formatDate } from "../../utils/time";
 import { useSafeBack } from "../../hooks/useSafeBack";
 import { isHubDecline } from "../../utils/hubErrors";
+import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
 
 const Page = styled("div")(({ theme }) => ({
   width: "100%",
@@ -74,6 +76,28 @@ const Row = styled("div")(({ theme }) => ({
   flexWrap: "wrap",
 }));
 
+const HiddenNameList = styled("ul")(({ theme }) => ({
+  listStyle: "none",
+  margin: theme.spacing(1, 0, 0),
+  padding: 0,
+  display: "flex",
+  flexWrap: "wrap",
+  gap: theme.spacing(1),
+}));
+
+/** One hidden name: a pill with its own labelled Unhide button. */
+const HiddenName = styled("li")(({ theme }) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  maxWidth: "100%",
+  minWidth: 0,
+  paddingLeft: theme.spacing(1.5),
+  borderRadius: 999,
+  backgroundColor: theme.palette.action.selected,
+  color: theme.palette.text.primary,
+  fontSize: 14,
+}));
+
 export const Settings = () => {
   const goBack = useSafeBack("/");
   const dispatch = useDispatch();
@@ -86,6 +110,15 @@ export const Settings = () => {
     const names = hiddenInput.split(",").map((n) => n.trim()).filter(Boolean);
     if (names.length) writeSettings({ hiddenNames: [...settings.hiddenNames, ...names] });
     setHiddenInput("");
+  };
+  const hiddenListRef = useRef<HTMLUListElement>(null);
+  const hiddenTitleRef = useRef<HTMLElement>(null);
+  const unhide = (name: string, index: number) => {
+    flushSync(() => writeSettings({ hiddenNames: settings.hiddenNames.filter((n) => n !== name) }));
+    // The button is gone: keep focus on the name that took its place or the one before. After the
+    // last one, the title rather than the input, which would open the keyboard on a phone.
+    const buttons = hiddenListRef.current?.querySelectorAll("button");
+    (buttons?.[Math.min(index, buttons.length - 1)] ?? hiddenTitleRef.current)?.focus();
   };
   // Settings sync to QDN: explicit Save and Restore, nothing automatic.
   const { uiTheme, setUiTheme } = useHubTheme();
@@ -260,7 +293,9 @@ export const Settings = () => {
           </Select>
         </Row>
         <Box sx={{ py: 1 }}>
-          <Typography sx={{ fontWeight: 700 }}>Hidden names</Typography>
+          <Typography id="hidden-names-title" ref={hiddenTitleRef} tabIndex={-1} sx={{ fontWeight: 700 }}>
+            Hidden names
+          </Typography>
           <Typography variant="body2" color="text.secondary">
             Hide these names' shares and comments in Q-Share+ only. This is not a Qortal block; use Blocked names for that.
           </Typography>
@@ -284,15 +319,23 @@ export const Settings = () => {
             </Button>
           </Box>
           {settings.hiddenNames.length > 0 ? (
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}>
-              {settings.hiddenNames.map((name) => (
-                <Chip
-                  key={name}
-                  label={name}
-                  onDelete={() => writeSettings({ hiddenNames: settings.hiddenNames.filter((n) => n !== name) })}
-                />
+            <HiddenNameList ref={hiddenListRef} aria-labelledby="hidden-names-title">
+              {settings.hiddenNames.map((name, index) => (
+                <HiddenName key={name}>
+                  <Box component="span" sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {name}
+                  </Box>
+                  <IconButton
+                    size="small"
+                    aria-label={`Unhide ${name}`}
+                    onClick={() => unhide(name, index)}
+                    sx={{ flexShrink: 0, [`@media ${PHONE_MEDIA}`]: { width: 44, height: 44 } }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </HiddenName>
               ))}
-            </Box>
+            </HiddenNameList>
           ) : (
             <Typography variant="caption" color="text.secondary">
               No hidden names.

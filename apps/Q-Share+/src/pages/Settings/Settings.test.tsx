@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import { mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
@@ -104,5 +104,38 @@ describe('Settings → Back', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(await screen.findByText('Home page')).toBeInTheDocument();
+  });
+});
+
+describe('Settings → Hidden names', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetSettingsCache();
+    signIn();
+  });
+
+  it('gives each hidden name its own labelled Unhide button, and keeps focus in the list', () => {
+    writeSettings({ hiddenNames: ['spammer', 'troll', 'bot'] });
+    renderWithProviders(<Settings />);
+
+    const list = screen.getByRole('list', { name: 'Hidden names' });
+    expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['spammer', 'troll', 'bot']);
+
+    // A real button: screen readers and switch access reach it, and activating it un-hides the name.
+    const unhideTroll = within(list).getByRole('button', { name: 'Unhide troll' });
+    unhideTroll.focus();
+    fireEvent.click(unhideTroll);
+    expect(readSettings().hiddenNames).toEqual(['spammer', 'bot']);
+    expect(screen.queryByRole('button', { name: 'Unhide troll' })).not.toBeInTheDocument();
+    // Focus moves to the name that took its place, not back to the top of the page.
+    expect(screen.getByRole('button', { name: 'Unhide bot' })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unhide bot' }));
+    expect(screen.getByRole('button', { name: 'Unhide spammer' })).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'Unhide spammer' }));
+    expect(readSettings().hiddenNames).toEqual([]);
+    expect(screen.getByText('No hidden names.')).toBeInTheDocument();
+    // After the last one, the section title, not the input: that would open the keyboard on a phone.
+    expect(screen.getByText('Hidden names')).toHaveFocus();
   });
 });
