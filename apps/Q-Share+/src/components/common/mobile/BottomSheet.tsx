@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { Box, SwipeableDrawer, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 
@@ -17,14 +17,30 @@ export interface BottomSheetProps {
   children: ReactNode;
   /** Accessible name when there is no visible title. */
   ariaLabel?: string;
+  /**
+   * Keep the sheet and its children mounted while closed, so state held inside
+   * them survives (Home's filters: CategoryList keeps its own selection, which
+   * later pages read through a ref). Only for one-per-page sheets.
+   */
+  keepMounted?: boolean;
 }
 
 /**
  * A sheet that slides up from the bottom and can be dragged down to close.
  * Use it on phones for filters, menus and pickers (DESIGN.md → Mobile).
+ *
+ * SwipeableDrawer always keeps its drawer mounted and listens for touches on
+ * the whole document, so a closed sheet still costs DOM nodes and listeners.
+ * With one per share row that added up (in Hub, 458 of 2,020 nodes on Home),
+ * so the drawer is mounted only while the sheet is open or sliding closed,
+ * unless `keepMounted` asks for the old behaviour.
  */
-export function BottomSheet({ open, onClose, title, children, ariaLabel }: BottomSheetProps) {
+export function BottomSheet({ open, onClose, title, children, ariaLabel, keepMounted = false }: BottomSheetProps) {
   const titleId = useId();
+  // True from the start of the open slide until the close slide has finished.
+  const [shown, setShown] = useState(false);
+  if (!open && !shown && !keepMounted) return null;
+
   return (
     <SwipeableDrawer
       anchor="bottom"
@@ -32,7 +48,10 @@ export function BottomSheet({ open, onClose, title, children, ariaLabel }: Botto
       onClose={onClose}
       onOpen={() => {}}
       disableSwipeToOpen
+      ModalProps={{ onTransitionEnter: () => setShown(true), onTransitionExited: () => setShown(false) }}
       slotProps={{
+        // Drawer skips the slide-in when it mounts already open; this one always mounts on open.
+        transition: { appear: true },
         paper: {
           // The paper is the dialog: named here so axe and screen readers agree.
           role: "dialog",

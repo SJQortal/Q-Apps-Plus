@@ -238,7 +238,9 @@ export const Home = () => {
         </Box>
       )}
       {phone ? (
-        <BottomSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters and sort">
+        // keepMounted: CategoryList holds the selected categories, and every later
+        // page, refresh and chip reads them through categoryListRef.
+        <BottomSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters and sort" keepMounted>
           {filterForm}
         </BottomSheet>
       ) : (
