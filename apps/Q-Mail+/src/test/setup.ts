@@ -7,7 +7,8 @@
  * URL, and can assert which calls were made and how many. Nothing here ever
  * publishes, signs, decrypts or spends anything.
  */
-import { beforeEach, vi } from 'vitest'
+import { afterEach, beforeEach, vi } from 'vitest'
+import { cleanup } from '@testing-library/react'
 
 type QortalHandler = (request: Record<string, any>) => any
 const qortalHandlers = new Map<string, QortalHandler>()
@@ -84,6 +85,11 @@ if (typeof window !== 'undefined') {
     })
   }
 }
+
+// vitest runs without `globals`, so Testing Library can't register its own cleanup.
+afterEach(() => {
+  cleanup()
+})
 
 beforeEach(() => {
   qortalHandlers.clear()
