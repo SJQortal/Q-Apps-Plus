@@ -22,6 +22,7 @@ import { RootState } from "../../state/store";
 import { addUser } from "../../state/features/authSlice";
 import { BlockedNamesModal } from "../../components/common/BlockedNamesModal/BlockedNamesModal";
 import { ChangelogDialog } from "../../components/common/ChangelogDialog";
+import { stickyBelowHeader } from "../../components/layout/Navbar/Navbar-styles";
 import { APP_VERSION, PLUS_REPO, UPSTREAM_REPO } from "../../constants/changelog";
 import { ShareStats, loadShareStats, readCachedShareStats } from "../../utils/shareStats";
 import { useAppSettings, writeSettings } from "../../utils/settings";
@@ -38,14 +39,13 @@ const Page = styled("div")(({ theme }) => ({
   paddingBottom: theme.spacing(6),
 }));
 
+/** Sticky below the app header, which on desktop is always there. */
 const PageHeader = styled("header")(({ theme }) => ({
-  position: "sticky",
-  top: 0,
-  zIndex: theme.zIndex.appBar + 1,
   display: "flex",
   alignItems: "center",
   gap: theme.spacing(1),
   padding: theme.spacing(1.5, 2),
+  ...stickyBelowHeader(theme, theme.spacing(1.5)),
   background: headerFill(theme),
   backdropFilter: "blur(20px) saturate(180%)",
   borderBottom: `1px solid ${theme.palette.divider}`,

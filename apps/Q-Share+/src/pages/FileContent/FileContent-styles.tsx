@@ -2,6 +2,7 @@ import type { ElementType } from "react";
 import { Box, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { headerFill } from "../../hub-theme";
+import { stickyBelowHeader } from "../../components/layout/Navbar/Navbar-styles";
 
 /** One column, phone first; 900 px wide on desktop. */
 export const Page = styled(Box)(({ theme }) => ({
@@ -19,17 +20,14 @@ export const Page = styled(Box)(({ theme }) => ({
   },
 }));
 
-/** Sticky sub-header on phones: Back plus the truncated title. */
+/** Sticky sub-header on phones: Back plus the truncated title, below the app header. */
 export const SubHeader = styled("header")(({ theme }) => ({
-  position: "sticky",
-  top: 0,
-  zIndex: theme.zIndex.appBar + 1,
   display: "flex",
   alignItems: "center",
   gap: theme.spacing(0.5),
   margin: theme.spacing(-1.5, -2, 0),
   padding: theme.spacing(0.5, 0.5),
-  paddingTop: `calc(${theme.spacing(0.5)} + env(safe-area-inset-top, 0px))`,
+  ...stickyBelowHeader(theme, theme.spacing(0.5)),
   background: headerFill(theme),
   backdropFilter: "blur(20px) saturate(180%)",
   WebkitBackdropFilter: "blur(20px) saturate(180%)",

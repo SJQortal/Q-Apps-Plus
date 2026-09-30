@@ -2,6 +2,7 @@ import { Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
 import { headerFill } from "../../hub-theme";
+import { stickyBelowHeader } from "../../components/layout/Navbar/Navbar-styles";
 
 export const Page = styled("div")(({ theme }) => ({
   width: "100%",
@@ -19,17 +20,14 @@ export const Page = styled("div")(({ theme }) => ({
   },
 }));
 
-/** Full-bleed sticky header for phones: Back, title, optional action. */
+/** Full-bleed sticky header for phones, below the app header: Back, title, optional action. */
 export const PhoneHeader = styled("header")(({ theme }) => ({
-  position: "sticky",
-  top: 0,
-  zIndex: theme.zIndex.appBar + 1,
   display: "flex",
   alignItems: "center",
   gap: theme.spacing(0.5),
   margin: theme.spacing(-1.5, -2, 0),
   padding: theme.spacing(0.5, 1),
-  paddingTop: "calc(4px + env(safe-area-inset-top, 0px))",
+  ...stickyBelowHeader(theme, theme.spacing(0.5)),
   background: headerFill(theme),
   backdropFilter: "blur(20px) saturate(180%)",
   borderBottom: `1px solid ${theme.palette.divider}`,

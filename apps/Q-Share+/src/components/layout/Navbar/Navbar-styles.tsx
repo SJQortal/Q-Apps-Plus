@@ -1,6 +1,27 @@
 import { AppBar, Typography } from "@mui/material";
-import { styled } from "@mui/material/styles";
+import { styled, type Theme } from "@mui/material/styles";
 import { headerFill } from "../../../hub-theme";
+import { HEADER_OFFSET } from "./useHideOnScroll";
+
+/** The header's slide on phones; sticky sub-headers follow it with the same timing. */
+const SLIDE = "180ms ease";
+
+/**
+ * Positions a page's sticky sub-header (Back plus title): just below the
+ * header while it shows, at the top of the screen once it slides away, and
+ * under it in the stacking order, so the header never comes back underneath.
+ * `padTop` is the bar's own top padding; the notch inset is added only once
+ * the header has gone and the bar is at the top.
+ */
+export const stickyBelowHeader = (theme: Theme, padTop: string) =>
+  ({
+    position: "sticky",
+    top: HEADER_OFFSET,
+    zIndex: theme.zIndex.appBar - 1,
+    paddingTop: `max(${padTop}, calc(${padTop} + env(safe-area-inset-top, 0px) - ${HEADER_OFFSET}))`,
+    transition: `top ${SLIDE}`,
+    "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+  }) as const;
 
 export const CustomAppBar = styled(AppBar, {
   shouldForwardProp: (prop) => prop !== "collapsed",
@@ -24,7 +45,7 @@ export const CustomAppBar = styled(AppBar, {
   paddingLeft: `calc(${theme.spacing(1)} + env(safe-area-inset-left, 0px))`,
   paddingRight: `calc(${theme.spacing(1)} + env(safe-area-inset-right, 0px))`,
   transform: collapsed ? "translateY(-100%)" : "translateY(0)",
-  transition: "transform 180ms ease",
+  transition: `transform ${SLIDE}`,
   willChange: "transform",
   "@media (prefers-reduced-motion: reduce)": { transition: "none" },
 }));

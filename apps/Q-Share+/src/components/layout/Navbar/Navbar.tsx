@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   Avatar,
   Box,
@@ -25,7 +25,7 @@ import QShareLogoSrc from "../../../assets/img/q-share-icon.webp";
 import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { avatarUrl } from "../../../utils/qortalLinks";
 import { AppTagline, AppTitle, AvatarContainer, CustomAppBar, LogoContainer, NavbarName } from "./Navbar-styles";
-import { useHideOnScroll } from "./useHideOnScroll";
+import { useHideOnScroll, usePublishHeaderOffset } from "./useHideOnScroll";
 
 interface Props {
   isAuthenticated: boolean;
@@ -57,6 +57,9 @@ const NavBar: React.FC<Props> = ({
   const { pathname } = useLocation();
   const phone = usePhoneLayout();
   const { hidden, reveal } = useHideOnScroll(phone);
+  // The pages' sticky sub-headers stack under the header using this (Navbar-styles stickyBelowHeader).
+  const headerRef = useRef<HTMLElement>(null);
+  usePublishHeaderOffset(headerRef, hidden);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [isOpenBlockedNamesModal, setIsOpenBlockedNamesModal] = useState<boolean>(false);
@@ -124,7 +127,7 @@ const NavBar: React.FC<Props> = ({
   );
 
   return (
-    <CustomAppBar position="sticky" elevation={0} collapsed={hidden} onFocus={reveal}>
+    <CustomAppBar ref={headerRef} position="sticky" elevation={0} collapsed={hidden} onFocus={reveal}>
       <LogoContainer type="button" onClick={() => navigate("/")} aria-label="Q-Share+ home">
         <img src={QShareLogoSrc} alt="" width={36} height={36} style={{ width: "auto", height: 36 }} />
         <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
