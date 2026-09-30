@@ -1,6 +1,5 @@
-import React, { useReducer, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import {
-  Avatar,
   Box,
   Button,
   IconButton,
@@ -11,21 +10,19 @@ import {
   Popover,
   Tooltip,
 } from "@mui/material";
-import CheckIcon from "@mui/icons-material/Check";
 import CollectionsBookmarkOutlinedIcon from "@mui/icons-material/CollectionsBookmarkOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PersonOffOutlinedIcon from "@mui/icons-material/PersonOffOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
-import { useInView } from "react-intersection-observer";
 import { useLocation, useNavigate } from "react-router-dom";
 import { BlockedNamesModal } from "../../common/BlockedNamesModal/BlockedNamesModal";
 import { BottomSheet } from "../../common/mobile/BottomSheet";
+import { NameAvatar } from "../../common/NameAvatar";
+import { NameSwitcher } from "../../common/NameSwitcher";
 import { DownloadTaskManager } from "../../common/DownloadTaskManager";
 import { PublishFile } from "../../PublishFile/PublishFile.tsx";
 import QShareLogoSrc from "../../../assets/img/q-share-icon.webp";
-import { primarySoft } from "../../../hub-theme";
 import { PHONE_MEDIA, usePhoneLayout } from "../../../hooks/usePhoneLayout";
-import { avatarUrl } from "../../../utils/qortalLinks";
 import {
   AppTagline,
   AppTitle,
@@ -67,61 +64,6 @@ const MENU_LEAD_SX = { width: 36, mr: 1, justifyContent: "center" } as const;
 const MENU_ROW_SX = { [`@media ${PHONE_MEDIA}`]: { minHeight: 44 } } as const;
 
 /**
- * What each avatar URL did this session. Most names have no avatar, and a
- * 404 is not cached, so a name known to have none shows its letter on every
- * later open without asking again. One that loaded shows at once (from the
- * browser's image cache) instead of waiting to scroll into view.
- */
-const avatarResults = new Map<string, "loaded" | "missing">();
-
-const AVATAR_IMG_STYLE = { width: "100%", height: "100%", objectFit: "cover" } as const;
-
-/**
- * A name's avatar (its `qortal_avatar` thumbnail), or the name's first letter
- * when it has none. Hidden from screen readers: the name beside it says it.
- *
- * A plain <img>, not Avatar's `src`: MUI preloads every `src` with
- * `new Image()` as soon as the Avatar mounts, whatever `loading` says, so
- * opening the menu asked for every name's avatar at once. A menu row asks
- * only once it scrolls into the menu's view; `eager` is for the header's own.
- */
-function NameAvatar({ name, src, size, eager = false }: { name: string; src?: string; size: number; eager?: boolean }) {
-  const url = src || avatarUrl(name);
-  const known = avatarResults.get(url);
-  const [, rerender] = useReducer((n: number) => n + 1, 0);
-  const { ref, inView } = useInView({ triggerOnce: true, skip: eager || known !== undefined });
-  const settle = (result: "loaded" | "missing") => {
-    if (avatarResults.get(url) === result) return;
-    avatarResults.set(url, result);
-    rerender();
-  };
-  const requested = known === "loaded" || (known === undefined && (eager || inView));
-
-  return (
-    <Avatar
-      ref={ref}
-      aria-hidden
-      sx={{
-        width: size,
-        height: size,
-        fontSize: Math.round(size * 0.45),
-        fontWeight: 700,
-        // The tint holds the spot until the image is in, and backs the letter.
-        bgcolor: known === "loaded" ? "transparent" : primarySoft,
-        color: "primary.main",
-      }}
-    >
-      {requested ? (
-        <img src={url} alt="" onLoad={() => settle("loaded")} onError={() => settle("missing")} style={AVATAR_IMG_STYLE} />
-      ) : (
-        // Always a child, even while it waits: without one MUI draws its generic person icon.
-        <span>{known === "missing" ? Array.from(name)[0]?.toUpperCase() : null}</span>
-      )}
-    </Avatar>
-  );
-}
-
-/**
  * The sticky header. On phones it slides away when you scroll down and comes
  * back when you scroll up; the rest of the navigation lives in BottomNav.
  */
@@ -160,58 +102,52 @@ const NavBar: React.FC<Props> = ({
 
   // Mounted only while the menu is open (Popover and BottomSheet both unmount
   // their content when closed); each other name's avatar loads once its row
-  // scrolls into view (NameAvatar).
+  // scrolls into view (NameAvatar). Many names get a search field (NameSwitcher).
   const menuItems = (
-    <MenuList disablePadding aria-label="Account menu" sx={{ minWidth: 220 }}>
-      {names.map((n) => {
-        const active = n.name === userName;
-        return (
-          <MenuItem
-            key={n.name}
-            role="menuitemradio"
-            aria-checked={active}
-            selected={active}
-            onClick={() => {
-              setActiveName(n.name);
-              closeMenu();
-            }}
-            sx={MENU_ROW_SX}
-          >
-            <ListItemIcon sx={MENU_LEAD_SX}>
-              {/* The active name reuses the header's avatar URL, already loaded. */}
-              <NameAvatar name={n.name} src={active ? userAvatar : undefined} size={32} />
-            </ListItemIcon>
-            <ListItemText primary={n.name} slotProps={{ primary: { noWrap: true } }} />
-            {active && <CheckIcon fontSize="small" sx={{ color: "primary.main", ml: 1, flexShrink: 0 }} />}
-          </MenuItem>
-        );
-      })}
-      <MenuItem
-        onClick={() => {
-          closeMenu();
-          setIsOpenBlockedNamesModal(true);
-        }}
-        sx={{ ...MENU_ROW_SX, borderTop: names.length ? 1 : 0, borderColor: "divider" }}
-      >
-        <ListItemIcon sx={MENU_LEAD_SX}>
-          <PersonOffOutlinedIcon fontSize="small" />
-        </ListItemIcon>
-        <ListItemText primary="Blocked names" />
-      </MenuItem>
-      <MenuItem
-        selected={pathname.startsWith("/settings")}
-        onClick={() => {
-          closeMenu();
-          navigate("/settings");
-        }}
-        sx={MENU_ROW_SX}
-      >
-        <ListItemIcon sx={MENU_LEAD_SX}>
-          <SettingsOutlinedIcon fontSize="small" />
-        </ListItemIcon>
-        <ListItemText primary="Settings" />
-      </MenuItem>
-    </MenuList>
+    <Box sx={{ minWidth: 260, maxWidth: phone ? undefined : 340 }}>
+      {names.length > 0 && (
+        <NameSwitcher
+          names={names.map((n) => n.name)}
+          activeName={userName}
+          activeAvatar={userAvatar}
+          onPick={(name) => {
+            setActiveName(name);
+            closeMenu();
+          }}
+          autoFocusSearch={!phone}
+          onEscape={closeMenu}
+          // The search field stays put above a list that scrolls.
+          maxListHeight={phone ? "min(45dvh, 360px)" : "min(360px, calc(var(--qshare-app-height, 100dvh) - 220px))"}
+        />
+      )}
+      <MenuList disablePadding aria-label="Account menu" sx={{ borderTop: names.length ? 1 : 0, borderColor: "divider" }}>
+        <MenuItem
+          onClick={() => {
+            closeMenu();
+            setIsOpenBlockedNamesModal(true);
+          }}
+          sx={MENU_ROW_SX}
+        >
+          <ListItemIcon sx={MENU_LEAD_SX}>
+            <PersonOffOutlinedIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Blocked names" />
+        </MenuItem>
+        <MenuItem
+          selected={pathname.startsWith("/settings")}
+          onClick={() => {
+            closeMenu();
+            navigate("/settings");
+          }}
+          sx={MENU_ROW_SX}
+        >
+          <ListItemIcon sx={MENU_LEAD_SX}>
+            <SettingsOutlinedIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Settings" />
+        </MenuItem>
+      </MenuList>
+    </Box>
   );
 
   return (

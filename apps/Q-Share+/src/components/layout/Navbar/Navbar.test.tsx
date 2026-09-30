@@ -236,6 +236,23 @@ describe('NavBar account menu', () => {
     expect(avatarImg('Ωmega', row('Ωmega'))).toBeNull();
   });
 
+  it('adds a search field to the menu for an account with many names', () => {
+    mockPhone(false);
+    const setActiveName = vi.fn();
+    const many = Array.from({ length: 20 }, (_, i) => ({ name: i === 0 ? 'alice' : `name ${String(i).padStart(2, '0')}` }));
+    renderSignedIn([...many, { name: 'Simon James' }], setActiveName);
+    openMenu();
+    const field = screen.getByRole('textbox', { name: 'Find one of your names' });
+    // The desktop menu opens with the field ready to type into.
+    expect(field).toHaveFocus();
+    fireEvent.change(field, { target: { value: 'simon' } });
+    expect(screen.getAllByRole('menuitemradio').map((r) => r.textContent)).toEqual(['Simon James']);
+    fireEvent.click(row('Simon James'));
+    expect(setActiveName).toHaveBeenCalledWith('Simon James');
+    // Blocked names and Settings stay under the list.
+    expect(screen.queryByRole('menuitem', { name: 'Settings' })).toBeNull();
+  });
+
   it('keeps the active name marked, and switches on a tap', () => {
     mockPhone(false);
     const setActiveName = vi.fn();
