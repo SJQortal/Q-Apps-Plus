@@ -32,6 +32,7 @@
     "src/components/DynamicHeightItem.tsx",
     "src/components/DynamicHeightItemMinimal.tsx",
     "src/components/common/AudioPanel.tsx",
+    "src/components/common/AudioPlayer.tsx",
     "src/components/common/AudioPublishModal.tsx",
     "src/components/common/Comments/Comment.tsx",
     "src/components/common/Comments/CommentEditor.tsx",
