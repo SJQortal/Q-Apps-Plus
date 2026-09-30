@@ -1,8 +1,14 @@
-import { createTheme } from '@mui/material/styles';
+import type { ThemeOptions } from '@mui/material/styles';
 
-const commonThemeOptions = {
+/**
+ * Q-Tube's original look. These options build the "Q-Tube Classic" (Hub 2.0)
+ * theme through the theme kit (src/theme/qplus-theme.ts). Roboto is no longer
+ * bundled (it cost 1.8 MB of TTF files); the OS copy is used where there is
+ * one, otherwise the kit's Inter.
+ */
+const commonThemeOptions: ThemeOptions = {
   typography: {
-    fontFamily: ['Roboto'].join(','),
+    fontFamily: ['Roboto', 'Inter', 'Segoe UI', 'system-ui', 'sans-serif'].join(','),
     h1: {
       fontSize: '2rem',
       fontWeight: 700, // changed from 600 to match Roboto weights
@@ -59,6 +65,9 @@ const commonThemeOptions = {
       xl: 1536,
     },
   },
+};
+
+const commonComponents: ThemeOptions['components'] = {
   MuiDialog: {
     styleOverrides: {
       paper: {
@@ -73,9 +82,23 @@ const commonThemeOptions = {
       },
     },
   },
+  MuiButton: {
+    styleOverrides: {
+      root: {
+        color: '#ffffff', // White text color for buttons
+      },
+    },
+  },
+  MuiCssBaseline: {
+    styleOverrides: (theme) => ({
+      body: {
+        backgroundColor: theme.palette.background.default,
+      },
+    }),
+  },
 };
 
-const lightTheme = createTheme({
+export const lightThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: 'light',
@@ -111,27 +134,11 @@ const lightTheme = createTheme({
       active: '#4a4a4a',
     },
   },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          color: '#ffffff', // White text color for buttons
-        },
-      },
-    },
-    MuiCssBaseline: {
-      styleOverrides: (theme) => ({
-        body: {
-          backgroundColor: theme.palette.background.default,
-        },
-      }),
-    },
-  },
-});
+  components: commonComponents,
+};
 
-const darkTheme = createTheme({
+export const darkThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
-
   palette: {
     mode: 'dark',
     primary: {
@@ -166,22 +173,5 @@ const darkTheme = createTheme({
       active: '#949496',
     },
   },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          color: '#ffffff', // White text color for buttons
-        },
-      },
-    },
-    MuiCssBaseline: {
-      styleOverrides: (theme) => ({
-        body: {
-          backgroundColor: theme.palette.background.default,
-        },
-      }),
-    },
-  },
-});
-
-export { lightTheme, darkTheme };
+  components: commonComponents,
+};

@@ -1,4 +1,6 @@
+import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
+import PageLoader from './components/common/PageLoader';
 import { AppWrapper } from './AppWrapper';
 import { Bookmarks } from './pages/Bookmarks/Bookmarks';
 import { ChannelPage } from './pages/ContentPages/IndividualProfile/ChannelPage.tsx';
@@ -8,6 +10,8 @@ import { History } from './pages/History/History';
 import { Home } from './pages/Home/Home';
 import { Search } from './pages/Search/Search';
 import { Subscriptions } from './pages/Subscriptions/Subscriptions';
+
+const Settings = lazy(() => import('./pages/Settings/Settings'));
 
 interface CustomWindow extends Window {
   _qdnBase: string;
@@ -41,6 +45,14 @@ export function Routes() {
           {
             path: 'search',
             element: <Search />,
+          },
+          {
+            path: 'settings',
+            element: (
+              <Suspense fallback={<PageLoader />}>
+                <Settings />
+              </Suspense>
+            ),
           },
           {
             path: 'video/:name/:id',

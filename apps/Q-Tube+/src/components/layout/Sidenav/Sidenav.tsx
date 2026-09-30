@@ -1,6 +1,7 @@
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import BookmarksIcon from '@mui/icons-material/Bookmarks';
 import HomeIcon from '@mui/icons-material/Home';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import StarIcon from '@mui/icons-material/Star';
 import {
   Box,
@@ -93,6 +94,13 @@ export const Sidenav = ({ allNames }) => {
         path: `/channel/${name}`,
         disabled: !name,
         isChannelButton: true,
+      },
+      {
+        name: t('core:sidenav.settings', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        icon: SettingsOutlinedIcon,
+        path: '/settings',
       },
     ];
   }, [name, t]);
