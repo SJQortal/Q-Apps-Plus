@@ -1,5 +1,5 @@
 import { useCallback, useContext, useState } from "react";
-import { useSelector } from "react-redux";
+import { useSelector, useStore } from "react-redux";
 import { FAILED_STATUSES, MyContext, downloadPhase, downloadStatusText } from "../wrappers/DownloadWrapper";
 import type { RootState } from "../state/store";
 
@@ -23,6 +23,8 @@ export type FileOnNodeState = "idle" | "checking" | "fetching" | "ready" | "fail
 
 type Checked = { state: FileOnNodeState; status?: string };
 
+const ON_NODE: Checked = { state: "ready", status: "READY" };
+
 /**
  * Gets a file onto the node before the app reads it. A GET of
  * `/arbitrary/FILE/…` for a file that isn't fully local blocks for up to
@@ -33,19 +35,32 @@ type Checked = { state: FileOnNodeState; status?: string };
  */
 export function useFileOnNode(file: NodeFileRef, jsonId?: string) {
   const { downloadVideo } = useContext(MyContext);
+  const store = useStore<RootState>();
   const download = useSelector((state: RootState) => state.global?.downloads?.[file.identifier]);
   const [checked, setChecked] = useState<Checked>({ state: "idle" });
 
   const status: string | undefined = download?.status?.status;
   const phase = downloadPhase(status, Boolean(download));
   const percent = Math.max(0, Math.min(100, Math.round(download?.status?.percentLoaded ?? 0)));
-  const service = file.service || "FILE";
 
-  /** Resolves true when the file can be read now; otherwise follow `state`. */
+  // A READY entry means the file is on the node. Remember it, so clearing the
+  // entry from the downloads list doesn't take away a player that is showing.
+  if (phase === "ready" && checked.status !== "READY") setChecked(ON_NODE);
+
+  /**
+   * Resolves true when the file can be read now; otherwise follow `state`.
+   * Reads the download entry at call time, so it stays stable for effects.
+   */
   const ensure = useCallback(async (): Promise<boolean> => {
-    if (phase === "ready" || (checked.state === "ready" && !download)) return true;
+    const service = file.service || "FILE";
+    const entry = store.getState().global?.downloads?.[file.identifier];
+    const entryPhase = downloadPhase(entry?.status?.status, Boolean(entry));
+    if (entryPhase === "ready") {
+      setChecked(ON_NODE);
+      return true;
+    }
     // A download already under way (the row's Download, Fetch all): just follow it.
-    if (download && phase !== "failed") return false;
+    if (entry && entryPhase !== "failed") return false;
     setChecked({ state: "checking" });
     let res: { status?: string } | null = null;
     try {
@@ -55,7 +70,8 @@ export function useFileOnNode(file: NodeFileRef, jsonId?: string) {
     }
     const current = res?.status;
     if (!current || current === "READY") {
-      setChecked({ state: "ready" });
+      // No answer counts as ready too, but not as confirmed.
+      setChecked({ state: "ready", status: current });
       return true;
     }
     if (FAILED_STATUSES.has(current)) {
@@ -70,7 +86,7 @@ export function useFileOnNode(file: NodeFileRef, jsonId?: string) {
     });
     setChecked({ state: "fetching" });
     return false;
-  }, [checked.state, download, downloadVideo, file, jsonId, phase, service]);
+  }, [downloadVideo, file, jsonId, store]);
 
   let state: FileOnNodeState;
   if (phase === "ready" || (checked.state === "ready" && phase !== "failed")) state = "ready";
@@ -81,5 +97,8 @@ export function useFileOnNode(file: NodeFileRef, jsonId?: string) {
   const statusText =
     state === "failed" && !download ? downloadStatusText(checked.status, 0) : downloadStatusText(status, percent, Boolean(download));
 
-  return { state, percent, statusText, ensure };
+  // The node itself said READY (status check or download entry), not just no answer.
+  const confirmed = checked.status === "READY" || phase === "ready";
+
+  return { state, confirmed, percent, statusText, ensure };
 }

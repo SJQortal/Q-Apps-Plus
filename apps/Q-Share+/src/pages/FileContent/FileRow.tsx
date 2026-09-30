@@ -116,7 +116,7 @@ export const FileRow = ({ file, jsonId }: FileRowProps) => {
         )}
       </Box>
 
-      {preview && preview !== "pdf" && <PreviewPanel file={file} kind={preview} open={previewOpen} />}
+      {preview && preview !== "pdf" && <PreviewPanel file={file} kind={preview} open={previewOpen} jsonId={jsonId} />}
     </Box>
   );
 };
