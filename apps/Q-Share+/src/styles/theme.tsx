@@ -109,6 +109,11 @@ export const lightThemeOptions: ThemeOptions = {
     text: {
       primary: "#000000",
       secondary: "#525252"
+    },
+    // Unselected toggle buttons and icons use action.active; MUI's default
+    // 54% black fell short of 4.5:1 on the off-white paper.
+    action: {
+      active: "rgba(0, 0, 0, 0.72)"
     }
   },
   components: {
