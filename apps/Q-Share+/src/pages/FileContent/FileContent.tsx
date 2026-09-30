@@ -17,7 +17,7 @@ import { CommentSection } from "../../components/common/Comments/CommentSection"
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
 import { MyContext, isFailedStatus } from "../../wrappers/DownloadWrapper";
 import { RootState } from "../../state/store";
-import { addToHashMap, heldShare, setEditFile } from "../../state/features/fileSlice.ts";
+import { addToHashMap, heldShare, setEditFile, type Video } from "../../state/features/fileSlice.ts";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { useSafeBack } from "../../hooks/useSafeBack";
@@ -83,7 +83,7 @@ export function categoryPath(fileData: any): string {
 
 type ShareLookup =
   | { kind: "notfound" }
-  | { kind: "deleted" }
+  | { kind: "deleted"; row: Video }
   | { kind: "unavailable"; percent: number | null }
   | { kind: "found"; data: any };
 
@@ -136,7 +136,9 @@ async function fetchShare(name: string, id: string): Promise<ShareLookup> {
     if (status?.status && ON_THE_WAY.has(status.status)) return { kind: "unavailable", percent: status.percentLoaded ?? null };
     throw error;
   }
-  if (isDeletedShare(summary, body)) return { kind: "deleted" };
+  if (isDeletedShare(summary, body)) {
+    return { kind: "deleted", row: { ...summaryToVideo(summary), isValid: false, deleted: true } };
+  }
   if (body.error) throw new Error(typeof body.error === "string" ? body.error : "Could not read the share");
   // The body's title and description replace the metadata's shorter ones; the
   // search row's name, identifier and dates stay (see shareFromBody).
@@ -224,7 +226,12 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
           if (!active) return;
           if (result.kind === "found") dispatch(addToHashMap(result.data));
           else if (result.kind === "unavailable") wait(next, result.percent);
-          else setFetchState(result.kind);
+          else {
+            // Stored the way a list stores a delete marker, so Home and
+            // profiles leave the share out too (and stop calling it unavailable).
+            if (result.kind === "deleted") dispatch(addToHashMap(result.row));
+            setFetchState(result.kind);
+          }
         },
         () => {
           if (active) setFetchState("error");

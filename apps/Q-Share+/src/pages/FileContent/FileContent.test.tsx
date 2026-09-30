@@ -7,7 +7,7 @@ import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from 
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
 import { resetSettingsCache } from '../../utils/settings';
 import { store } from '../../state/store';
-import { addToHashMap } from '../../state/features/fileSlice';
+import { addToHashMap, markUnavailable, shareKey } from '../../state/features/fileSlice';
 import { addUser } from '../../state/features/authSlice';
 import { resetInAppHistory } from '../../hooks/useSafeBack';
 
@@ -264,8 +264,10 @@ describe('FileContent (share page)', () => {
     });
   });
 
-  it('says a share was deleted when its body is a delete marker such as "D"', async () => {
+  it('says a share was deleted when its body is a delete marker such as "D", and tells the lists', async () => {
     store.dispatch({ type: 'file/removeFromHashMap', payload: ID });
+    // Home gave up on the body earlier; the node has the "D" by now.
+    store.dispatch(markUnavailable({ user: NAME, id: ID }));
     mockFetch('/arbitrary/resources/search', [searchRow]);
     mockCommentSearches();
     mockQortalAction('FETCH_QDN_RESOURCE', 'D');
@@ -275,6 +277,10 @@ describe('FileContent (share page)', () => {
     expect(await screen.findByText('This share was deleted by its publisher')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Back to all shares' })).toBeInTheDocument();
     expect(screen.queryByText('No files in this share')).not.toBeInTheDocument();
+    // Home and profiles drop a share through this entry.
+    expect(store.getState().file.hashMapFiles[ID]).toMatchObject({ id: ID, user: NAME, updated: searchRow.updated, isValid: false, deleted: true });
+    expect(store.getState().file.unavailableFiles[shareKey(NAME, ID)]).toBeUndefined();
+    store.dispatch({ type: 'file/removeFromHashMap', payload: ID });
   });
 
   it('says a share was deleted when the list already marked it so, with no calls', async () => {
