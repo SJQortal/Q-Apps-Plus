@@ -2,6 +2,16 @@
 
 Newest first. The in-app copy lives in `src/constants/changelog.ts` (Settings → About → What's new).
 
+## 1.0.0-plus.6 (2026-09-30)
+
+Requested by Simon after 1.0.0-plus.5: a search for accounts with many names, in the account menu and in Settings.
+
+- Name switcher: one component for the account menu and Settings. More than 15 names get a search field (focused on desktop, not on phones so the keyboard stays down) and an A to Z list with the active name first; matching ignores case and accents, names that start with the query come first, and the matched part is highlighted. ↓ moves into the list, Enter picks the first match, Escape clears the query and then closes; a live region reads out the match count. Every row has its avatar, loaded when it scrolls into view.
+- Settings → Account: "Switch name" opens the same picker (a dialog on desktop, a bottom sheet on phones) instead of a plain dropdown; the account row shows the avatar.
+- Account menu: ↑/↓ run through the names and Blocked names/Settings as one menu; the list keeps its order while the menu closes, scrolls the active name into view, and fits short windows and landscape phones.
+- Avatar letters are drawn with CSS, so typing a name's first letters in the menu jumps to it.
+- 483 tests; lint clean.
+
 ## 1.0.0-plus.5 (2026-09-30)
 
 Requested by Simon after trying 1.0.0-plus.4:

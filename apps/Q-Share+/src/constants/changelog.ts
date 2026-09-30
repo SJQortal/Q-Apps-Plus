@@ -14,6 +14,16 @@ export interface Release {
 /** Newest first. Keep this in step with CHANGELOG.md. */
 export const CHANGELOG: Release[] = [
   {
+    version: "1.0.0-plus.6",
+    date: "2026-09-30",
+    title: "Find your names",
+    notes: [
+      "With more than 15 names, the name switcher has a search field: type part of a name, accents and capitals optional, and press Enter or tap it.",
+      "Settings → Account uses the same picker, with avatars, instead of a plain list.",
+      "The arrow keys move through the whole account menu, and your active name is always in view when it opens.",
+    ],
+  },
+  {
     version: "1.0.0-plus.5",
     date: "2026-09-30",
     title: "Grid view and name suggestions",
