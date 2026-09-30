@@ -14,6 +14,18 @@ export interface Release {
 /** Newest first. Keep this in step with CHANGELOG.md. */
 export const CHANGELOG: Release[] = [
   {
+    version: "1.0.0-plus.5",
+    date: "2026-09-30",
+    title: "Grid view and name suggestions",
+    notes: [
+      "Grid view: show shares as cards on Home, profiles and collections, with the list/grid switch above each list or in Settings → Appearance.",
+      "The publisher filter suggests names as you type, with their avatars; pick one to filter at once.",
+      "My shares can show the shares of all your names, not only the active one.",
+      "The account menu shows each name's avatar.",
+      "The header lines up with the page: the tagline sits beside Q-Share+, and the buttons end where the content ends.",
+    ],
+  },
+  {
     version: "1.0.0-plus.4",
     date: "2026-09-30",
     title: "Tested in Qortal Hub",

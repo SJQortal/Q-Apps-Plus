@@ -2,6 +2,16 @@
 
 Newest first. The in-app copy lives in `src/constants/changelog.ts` (Settings → About → What's new).
 
+## 1.0.0-plus.5 (2026-09-30)
+
+Requested by Simon after trying 1.0.0-plus.4:
+
+- Grid view: a `listView` setting (list by default, kept on this device and in the Settings sync snapshot) with a List/Grid toggle on Home, profile Shares and collection pages, and a Layout choice in Settings → Appearance. Cards show the category art, title, file count, size, age, publisher and the row actions; two columns on phones, one below 350 px.
+- Publisher suggestions: the publisher filter is a combobox that searches Core's `/names/search` (prefix and contains, encoded, debounced, cached per query) and ranks names already publishing in the list first, with avatars, highlighting and keyboard support; picking a name applies the filter (and closes the phone sheet).
+- My shares for all names: accounts with several names can show the shares of every name (one search with repeated `name=` parameters).
+- Header: content in the page's 1200 px column, the tagline beside the title (hidden where it doesn't fit), avatars for every name in the account menu (loaded when the menu opens).
+- 463 tests; lint clean.
+
 ## 1.0.0-plus.4 (2026-09-30)
 
 Checked live in Qortal Hub (GO 3.0 build, Dev Mode) with real data at 1440, 700, 390×844, 360×740 and 844×390; details in docs/apps/Q-Share+.md → Hub Dev Mode check.
