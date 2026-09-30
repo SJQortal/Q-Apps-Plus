@@ -167,7 +167,8 @@ const HUB30: Record<ColorMode, Omit<ThemeTokens, 'id' | 'mode'>> = {
 const BLACK: Omit<ThemeTokens, 'id' | 'mode'> = {
   fontFamily: SYSTEM_STACK,
   palette: {
-    primary: { main: '#1d9bf0', dark: '#1a8cd8', light: '#8ecdf8', contrastText: '#ffffff' },
+    // Black text on the X blue: white read at 3.2:1 on it (DESIGN.md asks for 4.5:1).
+    primary: { main: '#1d9bf0', dark: '#1a8cd8', light: '#8ecdf8', contrastText: '#000000' },
     secondary: '#e7e9ea',
     success: '#00ba7c',
     error: '#f91880',
