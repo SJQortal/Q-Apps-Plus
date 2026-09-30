@@ -241,7 +241,10 @@ export const Home = () => {
       value={sort}
       onChange={(_e, v) => changeSort(v)}
       aria-label="Sort order"
-      sx={{ "& .MuiToggleButton-root": { minHeight: 40, px: 2 } }}
+      sx={{
+        // 44 px tap targets in the phone sheet; the desktop header keeps the compact size.
+        "& .MuiToggleButton-root": { minHeight: phone ? 44 : 40, px: 2 },
+      }}
     >
       <ToggleButton value="newest">Newest</ToggleButton>
       <ToggleButton value="oldest">Oldest</ToggleButton>
@@ -391,8 +394,8 @@ export const Home = () => {
             columnGap: 1,
             rowGap: phone ? 1.5 : 1,
             flexWrap: "wrap",
-            // Phones: 40 px chips with a 12 px row gap keep each tap target clear of the next.
-            "& .MuiChip-root": phone ? { minHeight: 40, fontSize: 14, px: 0.5 } : { minHeight: 36 },
+            // Phones: 44 px chips with a 12 px row gap keep each tap target clear of the next.
+            "& .MuiChip-root": phone ? { minHeight: 44, fontSize: 14, px: 0.5 } : { minHeight: 36 },
           }}
         >
           <Typography component="h1" variant="h6" sx={{ fontWeight: 700, flex: "1 1 160px", minWidth: 0, wordBreak: "break-word" }}>
@@ -405,7 +408,7 @@ export const Home = () => {
               startIcon={<FilterListIcon />}
               onClick={() => setFiltersOpen(true)}
               aria-haspopup="dialog"
-              sx={{ minHeight: 40 }}
+              sx={{ minHeight: 44 }}
             >
               {activeFilters ? "Filters on" : "Filters"}
             </Button>

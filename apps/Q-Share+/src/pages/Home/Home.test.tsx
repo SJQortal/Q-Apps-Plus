@@ -160,6 +160,22 @@ describe('Home filters on a phone', () => {
       }
     });
 
+  it('gives the chips, the Filters button and the sort toggle 44 px tap targets', async () => {
+    store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
+    mockFetch('/arbitrary/resources/search', []);
+
+    renderHome();
+    expect(await screen.findByText('No shares yet')).toBeInTheDocument();
+    const minHeight = (el: HTMLElement) => getComputedStyle(el).minHeight;
+    expect(minHeight(screen.getByRole('button', { name: 'Following' }))).toBe('44px');
+    expect(minHeight(screen.getByRole('button', { name: 'My shares' }))).toBe('44px');
+    expect(minHeight(screen.getByRole('button', { name: 'Filters' }))).toBe('44px');
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Filters and sort' });
+    expect(minHeight(within(sheet).getByRole('button', { name: 'Newest' }))).toBe('44px');
+    expect(minHeight(within(sheet).getByRole('button', { name: 'Oldest' }))).toBe('44px');
+  });
+
   it('keeps the applied category for the next page after the sheet has closed', async () => {
     resetQdnSearchCache();
     store.dispatch(addFiles([]));
