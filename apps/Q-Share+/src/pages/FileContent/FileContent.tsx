@@ -25,6 +25,7 @@ import { searchQdn, type QdnResourceSummary } from "../../utils/qdnSearch";
 import { avatarUrl, profilePath, shareLink, decodeParam } from "../../utils/qortalLinks";
 import { formatDate } from "../../utils/time";
 import { fetchQdnResource, isShareBody, needsEncodedFetch, notShareFlags, shareFromBody } from "../../utils/fetchVideos";
+import { resourceStatus } from "../../utils/qdnResource";
 import { summaryToVideo } from "../../hooks/useFetchFiles.tsx";
 import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
 import { getCategoriesFromObject, type Category } from "../../components/common/CategoryList/CategoryList.tsx";
@@ -89,9 +90,10 @@ type ShareLookup =
 
 type ResourceStatus = { status?: string; percentLoaded?: number | null };
 
+/** Through resourceStatus, which encodes names such as "Vallot-/8/" that q-apps.js would break. */
 async function readShareStatus(name: string, id: string): Promise<ResourceStatus | null> {
   try {
-    return await qortalRequest({ action: "GET_QDN_RESOURCE_STATUS", name, service: "DOCUMENT", identifier: id });
+    return await resourceStatus({ service: "DOCUMENT", name, identifier: id });
   } catch {
     return null;
   }

@@ -251,6 +251,21 @@ describe('FileContent (share page)', () => {
       expect(screen.getByText('Share not found')).toBeInTheDocument();
     });
 
+    it('asks for the status of a name with "/" with the name encoded, as q-apps.js would break it', async () => {
+      const name = 'Vallot-/8/';
+      const id = 'qshare_file_qortal-corei-settingsjson-fail_WGvzlh_metadata';
+      mockFetch('/arbitrary/resources/search', [{ ...searchRow, name, identifier: id }]);
+      mockFetch('/arbitrary/DOCUMENT/', unavailable);
+      mockFetch('/arbitrary/resource/status/', { status: 'MISSING_DATA', percentLoaded: 25 });
+
+      renderShare(`/share/${encodeURIComponent(name)}/${id}`);
+      await flush();
+
+      expect(screen.getByText('Fetching it from peers… 25%')).toBeInTheDocument();
+      expect(fetchCallsMatching('/arbitrary/resource/status/')).toEqual([`/arbitrary/resource/status/DOCUMENT/Vallot-%2F8%2F/${id}`]);
+      expect(qortalCallsFor('GET_QDN_RESOURCE_STATUS')).toEqual([]);
+    });
+
     it('keeps the node-down error when the status cannot be read either', async () => {
       mockQortalAction('FETCH_QDN_RESOURCE', () => {
         throw unavailable;
