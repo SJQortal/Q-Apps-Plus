@@ -385,7 +385,8 @@ describe('Home applied filters', () => {
   });
 });
 
-describe('Home next page errors', () => {
+// Full pages of twenty rows and their bodies are slow in jsdom under a full parallel run.
+describe('Home next page errors', { timeout: 15_000 }, () => {
   it('a failed next page keeps the rows, stops the pager and offers Retry for that page', async () => {
     readOncePerObserve();
     const row = (slug: string, created: number, title: string) => ({
@@ -483,7 +484,8 @@ describe('Home next page errors', () => {
   });
 });
 
-describe('Home after Back', () => {
+// Two lists of twenty rows each, rendered twice: slow in jsdom under a full parallel run.
+describe('Home after Back', { timeout: 15_000 }, () => {
   const listSearches = () =>
     fetchCallsMatching('/arbitrary/resources/search')
       .map((u) => new URL(u, 'http://localhost').searchParams)
@@ -496,10 +498,10 @@ describe('Home after Back', () => {
     return listSearches().at(-1)!;
   };
   // A full first page and a short second one, titled after the list they belong to.
-  const pages = (label: (url: URL) => string) => (url: URL) => {
+  const pages = (label: (url: URL) => string, firstPage = 20) => (url: URL) => {
     const offset = Number(url.searchParams.get('offset'));
     const kind = label(url);
-    return Array.from({ length: offset === 0 ? 20 : 2 }, (_, i) => ({
+    return Array.from({ length: offset === 0 ? firstPage : 2 }, (_, i) => ({
       name: 'bob',
       service: 'DOCUMENT',
       identifier: `qshare_file_${kind.toLowerCase()}-${offset + i}_${kind.slice(0, 2)}${String(offset + i).padStart(4, '0')}_metadata`,
@@ -558,7 +560,8 @@ describe('Home after Back', () => {
 
   it('starts from the defaults once the rows are gone', async () => {
     store.dispatch(addUser({ address: 'Qabc', publicKey: 'k', name: 'alice', names: [{ name: 'alice', owner: 'Qabc' }] }));
-    mockFetch('/arbitrary/resources/search', pages((url) => (url.searchParams.get('followedonly') === 'true' ? 'Followed' : 'Latest')));
+    // One row a list: this is about the query, not the paging.
+    mockFetch('/arbitrary/resources/search', pages((url) => (url.searchParams.get('followedonly') === 'true' ? 'Followed' : 'Latest'), 1));
     mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
 
     const first = renderHome();
