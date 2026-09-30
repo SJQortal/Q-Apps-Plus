@@ -56,6 +56,7 @@ describe('Settings → Sync', () => {
       defaultSort: 'oldest',
       followingFeed: false,
       hiddenNames: ['x'],
+      listView: 'grid',
       uiTheme: 'black',
       updatedAt: 1700000000000,
     });
@@ -65,6 +66,8 @@ describe('Settings → Sync', () => {
     await waitFor(() => expect(readSettings().defaultSort).toBe('oldest'));
     expect(readSettings().followingFeed).toBe(false);
     expect(readSettings().hiddenNames).toEqual(['x']);
+    expect(readSettings().listView).toBe('grid');
+    expect(screen.getByRole('button', { name: 'Grid' })).toHaveAttribute('aria-pressed', 'true');
     expect(JSON.parse(localStorage.getItem('qshareplus-ui-theme') || '""')).toBe('black');
     expect(await screen.findByRole('status')).toHaveTextContent(/Restored the settings saved/);
 
@@ -88,6 +91,39 @@ describe('Settings → Sync', () => {
     expect(await screen.findByText(/haven't reached this node yet/)).toBeInTheDocument();
     expect(screen.queryByText(/No settings saved/)).not.toBeInTheDocument();
     expect(readSettings().defaultSort).toBe('newest');
+  });
+});
+
+describe('Settings → Layout', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetSettingsCache();
+  });
+
+  it('chooses rows or a grid of cards for every share list, with the words on the buttons', () => {
+    renderWithProviders(<Settings />);
+    const layout = screen.getByRole('group', { name: 'Layout' });
+    const list = within(layout).getByRole('button', { name: 'List' });
+    const grid = within(layout).getByRole('button', { name: 'Grid' });
+    expect(list).toHaveAttribute('aria-pressed', 'true');
+    expect(list).toHaveTextContent('List');
+
+    fireEvent.click(grid);
+    expect(readSettings().listView).toBe('grid');
+    expect(grid).toHaveAttribute('aria-pressed', 'true');
+    // Pressing the chosen one again keeps it.
+    fireEvent.click(grid);
+    expect(readSettings().listView).toBe('grid');
+
+    fireEvent.click(list);
+    expect(readSettings().listView).toBe('list');
+    expect(list).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('shows a choice made elsewhere (the toggle on a list)', () => {
+    writeSettings({ listView: 'grid' });
+    renderWithProviders(<Settings />);
+    expect(screen.getByRole('button', { name: 'Grid' })).toHaveAttribute('aria-pressed', 'true');
   });
 });
 

@@ -10,6 +10,8 @@ import {
   Select,
   Switch,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
@@ -18,6 +20,8 @@ import CloseIcon from "@mui/icons-material/Close";
 import PersonOffOutlinedIcon from "@mui/icons-material/PersonOffOutlined";
 import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
 import CloudDownloadOutlinedIcon from "@mui/icons-material/CloudDownloadOutlined";
+import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
+import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import { ThemePicker, headerFill, useHubTheme } from "../../hub-theme";
 import { RootState } from "../../state/store";
 import { addUser } from "../../state/features/authSlice";
@@ -26,7 +30,7 @@ import { ChangelogDialog } from "../../components/common/ChangelogDialog";
 import { stickyBelowHeader } from "../../components/layout/Navbar/Navbar-styles";
 import { APP_VERSION, PLUS_REPO, UPSTREAM_REPO } from "../../constants/changelog";
 import { ShareStats, loadShareStats, readCachedShareStats } from "../../utils/shareStats";
-import { useAppSettings, writeSettings } from "../../utils/settings";
+import { useAppSettings, writeSettings, type ListView } from "../../utils/settings";
 import { fetchSettingsFromQdn, publishSettingsToQdn } from "../../utils/settingsQdn";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { formatDate } from "../../utils/time";
@@ -162,6 +166,7 @@ export const Settings = () => {
         defaultSort: snap.defaultSort,
         hiddenNames: snap.hiddenNames,
         followingFeed: snap.followingFeed,
+        listView: snap.listView,
       });
       if (snap.uiTheme) setUiTheme(snap.uiTheme);
       setSyncNote(snap.updatedAt ? `Restored the settings saved ${formatDate(snap.updatedAt)}.` : "Settings restored.");
@@ -247,6 +252,43 @@ export const Settings = () => {
           Hub 3.0 and Q-Share Classic follow Hub's light or dark mode. The choice is saved on this device.
         </Typography>
         <ThemePicker />
+        <Row sx={{ mt: 1.5 }}>
+          <Box>
+            <Typography id="layout-title" sx={{ fontWeight: 700 }}>
+              Layout
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Shares on Home, profiles and collections as rows or as a grid of cards.
+            </Typography>
+          </Box>
+          {/* The same setting as the toggle above each list, with its words spelled out. */}
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={settings.listView}
+            onChange={(_e, next: ListView | null) => next && writeSettings({ listView: next })}
+            aria-labelledby="layout-title"
+            sx={{
+              "& .MuiToggleButton-root": {
+                gap: 0.75,
+                minHeight: 40,
+                px: 1.5,
+                fontSize: 14,
+                textTransform: "none",
+                [`@media ${PHONE_MEDIA}`]: { minHeight: 44 },
+              },
+            }}
+          >
+            <ToggleButton value="list">
+              <ViewAgendaOutlinedIcon fontSize="small" />
+              List
+            </ToggleButton>
+            <ToggleButton value="grid">
+              <GridViewOutlinedIcon fontSize="small" />
+              Grid
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Row>
       </Section>
 
       <Section>
