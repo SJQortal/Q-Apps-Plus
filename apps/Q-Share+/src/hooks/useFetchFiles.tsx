@@ -232,13 +232,15 @@ export const useFetchFiles = () => {
 
   const getFiles = React.useCallback(
     async (filters = {}, reset?: boolean, resetFilers?: boolean, limit?: number, isCurrent?: () => boolean) => {
-      const { name = "", categories = [], keywords = "", sort = "newest", following = false }: any = resetFilers ? {} : filters;
+      const { name = "", names = [], categories = [], keywords = "", sort = "newest", following = false }: any = resetFilers ? {} : filters;
       const offset = reset ? 0 : videos.length;
       const responseData = await searchQdn(
         {
           service: "DOCUMENT",
           identifier: QSHARE_FILE_BASE,
-          name: name || undefined,
+          // `names` (every name of the account, for "All my names") takes the place of `name`.
+          name: names.length > 0 ? undefined : name || undefined,
+          names: names.length > 0 ? names : undefined,
           description: categories.length > 0 ? getCategoriesFetchString(categories) : undefined,
           query: keywords || undefined,
           offset,

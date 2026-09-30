@@ -33,6 +33,23 @@ describe('qdnSearch', () => {
     );
   });
 
+  it('sends one name= per publisher when given several, without repeats', () => {
+    expect(
+      buildSearchUrl({
+        service: 'DOCUMENT',
+        identifier: 'qshare_file_',
+        names: ['Simon James', 'Q-Share+', 'Simon James'],
+        limit: 20,
+        offset: 40,
+      })
+    ).toBe(
+      '/arbitrary/resources/search?mode=ALL&service=DOCUMENT&identifier=qshare_file_&name=Simon+James&name=Q-Share%2B&limit=20&offset=40&includemetadata=false&reverse=true&excludeblocked=true&exactmatchnames=true'
+    );
+    // A single name is sent as before.
+    expect(buildSearchUrl({ service: 'DOCUMENT', name: 'alice' })).toContain('&name=alice&limit=');
+    expect(buildSearchUrl({ service: 'DOCUMENT', name: 'alice', names: ['alice', 'bob'] })).toContain('&name=alice&name=bob&limit=');
+  });
+
   it('merges identical searches in flight and reuses the result for the session', async () => {
     let resolveFetch: (v: unknown) => void = () => {};
     mockFetch('/arbitrary/resources/search', () => new Promise((r) => (resolveFetch = r)));

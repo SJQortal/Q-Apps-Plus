@@ -17,6 +17,8 @@ export interface QdnSearchParams {
   identifier?: string;
   query?: string;
   name?: string;
+  /** Several publishers: one `name=` each, and Core returns resources by any of them. */
+  names?: string[];
   title?: string;
   description?: string;
   limit?: number;
@@ -60,7 +62,10 @@ export function buildSearchUrl(params: QdnSearchParams): string {
   p.set("service", params.service);
   if (params.identifier) p.set("identifier", params.identifier);
   if (params.query) p.set("query", params.query);
-  if (params.name) p.set("name", params.name);
+  // Repeats dropped, so the same names always make the same URL (and cache entry).
+  for (const name of new Set([params.name, ...(params.names ?? [])])) {
+    if (name) p.append("name", name);
+  }
   if (params.title) p.set("title", params.title);
   if (params.description) p.set("description", params.description);
   p.set("limit", String(normalizeLimit(params.limit)));

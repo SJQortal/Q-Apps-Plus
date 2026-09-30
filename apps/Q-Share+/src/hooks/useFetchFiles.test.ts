@@ -1,11 +1,12 @@
 import { createElement, type ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { categoriesFromQdnDescription, shareTitleFromIdentifier, summaryToVideo, useFetchFiles, useListedFiles } from './useFetchFiles';
 import { store } from '../state/store';
-import { addToHashMap, heldShare, markUnavailable, shareKey, type Video } from '../state/features/fileSlice';
-import { mockQortalAction, qortalCallsFor } from '../test/setup';
+import { addFiles, addToHashMap, heldShare, markUnavailable, shareKey, type Video } from '../state/features/fileSlice';
+import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../test/setup';
+import { resetQdnSearchCache } from '../utils/qdnSearch';
 
 describe('share rows from search summaries', () => {
   it('derives a readable title from the identifier when there is no metadata', () => {
@@ -126,5 +127,36 @@ describe('a body another name published under the same identifier', () => {
     expect(store.getState().file.unavailableFiles[shareKey('mallory', reused)]).toBe(true);
     expect(store.getState().file.unavailableFiles[shareKey('Alice', reused)]).toBeUndefined();
     store.dispatch({ type: 'file/removeFromHashMap', payload: reused });
+  });
+});
+
+describe('a list of shares by several names', () => {
+  it('searches with one name= per name, exact, paged, in place of the single name', async () => {
+    resetQdnSearchCache();
+    store.dispatch(addFiles([]));
+    mockFetch('/arbitrary/resources/search', (url) => {
+      const offset = Number(url.searchParams.get('offset'));
+      return Array.from({ length: offset === 0 ? 20 : 1 }, (_, i) => ({
+        name: i % 2 ? 'Simon James' : 'Q-Share+',
+        service: 'DOCUMENT',
+        identifier: `qshare_file_mine-${offset + i}_Mn${String(offset + i).padStart(4, '0')}_metadata`,
+        created: 100 - offset - i,
+      }));
+    });
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(Provider, { store, children });
+    const { result } = renderHook(() => useFetchFiles(), { wrapper });
+    const filters = { name: 'Simon James', names: ['Simon James', 'Q-Share+'] };
+
+    await act(() => result.current.getFiles(filters, true));
+    await act(() => result.current.getFiles(filters, false));
+
+    const searches = fetchCallsMatching('/arbitrary/resources/search');
+    expect(searches).toEqual([
+      '/arbitrary/resources/search?mode=ALL&service=DOCUMENT&identifier=qshare_file_&name=Simon+James&name=Q-Share%2B&limit=20&offset=0&includemetadata=true&reverse=true&excludeblocked=true&exactmatchnames=true',
+      '/arbitrary/resources/search?mode=ALL&service=DOCUMENT&identifier=qshare_file_&name=Simon+James&name=Q-Share%2B&limit=20&offset=20&includemetadata=true&reverse=true&excludeblocked=true&exactmatchnames=true',
+    ]);
+    expect(store.getState().file.files).toHaveLength(21);
+    store.dispatch(addFiles([]));
   });
 });

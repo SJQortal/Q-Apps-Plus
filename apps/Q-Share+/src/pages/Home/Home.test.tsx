@@ -376,6 +376,105 @@ describe('Home chips and empty states', () => {
     expect(lastSearch().has('name')).toBe(false);
   });
 
+  it('with several names, My shares can show the shares of all of them, and Reset clears it', async () => {
+    store.dispatch(
+      addUser({
+        address: 'Qabc',
+        publicKey: 'k',
+        name: 'alice',
+        names: [
+          { name: 'alice', owner: 'Qabc' },
+          { name: 'Alice+Co', owner: 'Qabc' },
+        ],
+      })
+    );
+    const byAlice = { ...other, name: 'alice', identifier: 'qshare_file_by-alice_Al1234_metadata', metadata: { title: 'By alice' } };
+    const byCo = { ...other, name: 'Alice+Co', identifier: 'qshare_file_by-co_Co1234_metadata', metadata: { title: 'By Alice+Co' } };
+    mockFetch('/arbitrary/resources/search', (url) => {
+      const names = url.searchParams.getAll('name');
+      if (names.length === 2) return [byCo, byAlice];
+      if (names[0] === 'alice') return [byAlice];
+      return [other];
+    });
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    renderHome();
+    expect(await screen.findByText('Someone else')).toBeInTheDocument();
+    // Only while My shares is on.
+    expect(screen.queryByRole('button', { name: 'All my names' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'My shares' }));
+    expect(await screen.findByText('By alice')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Shares by alice' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All my names' })).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'All my names' }));
+    expect(await screen.findByText('By Alice+Co')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Shares by your names' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All my names' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'My shares' })).toHaveAttribute('aria-pressed', 'true');
+    const all = lastSearch();
+    expect(all.getAll('name')).toEqual(['alice', 'Alice+Co']);
+    expect(all.get('exactmatchnames')).toBe('true');
+    expect(all.get('limit')).toBe('20');
+    expect(all.get('offset')).toBe('0');
+    // The publisher field doesn't hold one of them.
+    expect(screen.getByRole('combobox', { name: 'Publisher name (exact)' })).toHaveValue('');
+
+    // A new sort keeps every name.
+    fireEvent.click(screen.getByRole('button', { name: 'Oldest' }));
+    await waitFor(() => expect(lastSearch().get('reverse')).toBe('false'));
+    expect(lastSearch().getAll('name')).toEqual(['alice', 'Alice+Co']);
+
+    // Tapping it again goes back to the active name.
+    fireEvent.click(screen.getByRole('button', { name: 'All my names' }));
+    await waitFor(() => expect(lastSearch().getAll('name')).toEqual(['alice']));
+    expect(await screen.findByRole('heading', { name: 'Shares by alice' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'All my names' }));
+    await waitFor(() => expect(lastSearch().getAll('name')).toHaveLength(2));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    expect(await screen.findByText('Someone else')).toBeInTheDocument();
+    expect(lastSearch().has('name')).toBe(false);
+    expect(screen.getByRole('heading', { name: 'Latest shares' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'All my names' })).not.toBeInTheDocument();
+  });
+
+  it('All my names with nothing published says so for every name', async () => {
+    store.dispatch(
+      addUser({
+        address: 'Qabc',
+        publicKey: 'k',
+        name: 'alice',
+        names: [
+          { name: 'alice', owner: 'Qabc' },
+          { name: 'alice two', owner: 'Qabc' },
+        ],
+      })
+    );
+    mockFetch('/arbitrary/resources/search', (url) => (url.searchParams.has('name') ? [] : [other]));
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    renderHome();
+    expect(await screen.findByText('Someone else')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'My shares' }));
+    expect(await screen.findByText("You haven't shared anything yet")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'All my names' }));
+    expect(await screen.findByText('None of your names has shared anything yet')).toBeInTheDocument();
+    expect(screen.getByText('Files you share under any of your names show up here.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Share files' })).toBeInTheDocument();
+  });
+
+  it('offers no All my names choice to an account with one name', async () => {
+    signIn();
+    mockFetch('/arbitrary/resources/search', [other]);
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    renderHome();
+    fireEvent.click(await screen.findByRole('button', { name: 'My shares' }));
+    await waitFor(() => expect(lastSearch().get('name')).toBe('alice'));
+    expect(screen.queryByRole('button', { name: 'All my names' })).not.toBeInTheDocument();
+  });
+
   it('the Following empty state goes back to the latest shares', async () => {
     signIn();
     mockFetch('/arbitrary/resources/search', (url) => (url.searchParams.get('followedonly') === 'true' ? [] : [other]));
@@ -653,6 +752,47 @@ describe('Home after Back', { timeout: 15_000 }, () => {
     expect(page.get('reverse')).toBe('false');
     expect(page.has('query')).toBe(false);
     expect(await screen.findByText('Software 21')).toBeInTheDocument();
+  });
+
+  it('keeps All my names, its heading and its next page', async () => {
+    store.dispatch(
+      addUser({
+        address: 'Qabc',
+        publicKey: 'k',
+        name: 'alice',
+        names: [
+          { name: 'alice', owner: 'Qabc' },
+          { name: 'alice two', owner: 'Qabc' },
+        ],
+      })
+    );
+    mockFetch(
+      '/arbitrary/resources/search',
+      pages((url) => {
+        const names = url.searchParams.getAll('name');
+        return names.length === 2 ? 'Every' : names.length === 1 ? 'Active' : 'Latest';
+      })
+    );
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    const first = renderHome();
+    expect(await screen.findByText('Latest 0')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'My shares' }));
+    expect(await screen.findByText('Active 0')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'All my names' }));
+    expect(await screen.findByText('Every 0')).toBeInTheDocument();
+
+    first.unmount();
+    renderHome();
+    expect(screen.getByText('Every 0')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Shares by your names' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All my names' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'My shares' })).toHaveAttribute('aria-pressed', 'true');
+
+    const page = await nextPage();
+    expect(page.getAll('name')).toEqual(['alice', 'alice two']);
+    expect(page.get('exactmatchnames')).toBe('true');
+    expect(await screen.findByText('Every 21')).toBeInTheDocument();
   });
 
   it('starts from the defaults once the rows are gone', async () => {

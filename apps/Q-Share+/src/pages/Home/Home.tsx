@@ -38,6 +38,8 @@ import type { SortOrder } from "../../utils/settings.ts";
 /** The filters a search ran with; the form fields may have changed since. */
 interface AppliedFilters {
   name: string;
+  /** Every name of the signed-in account ("All my names"), in place of `name`; empty otherwise. */
+  names: string[];
   keywords: string;
   categories: string[];
 }
@@ -77,15 +79,19 @@ export const Home = () => {
   const filterSearch = useSelector((state: RootState) => state.file.filterSearch);
   const filterName = useSelector((state: RootState) => state.file.filterName);
   const username = useSelector((state: RootState) => state.auth?.user?.name);
+  const accountNames = useSelector((state: RootState) => state.auth?.user?.names);
+  const myNames = useMemo(() => [...new Set((accountNames ?? []).map((n) => n.name).filter(Boolean))], [accountNames]);
   const listVersion = useSelector((state: RootState) => state.file.listVersion);
   const settings = useAppSettings();
   // Back on Home with rows still loaded: pick up the query that loaded them. A
-  // Following list whose chip is gone (Following feed switched off in Settings,
-  // or signed out) is not restored: it would page followed shares with no way
-  // to turn that off. The default list loads over it instead.
+  // Following or "All my names" list whose chip is gone (Following feed
+  // switched off in Settings, or signed out) is not restored: it would page
+  // those shares with no way to turn that off. The default list loads over it instead.
   const [{ restored, reloadDefault }] = useState(() => {
     const query = files.length > 0 ? listQuery : null;
-    const chipGone = Boolean(query?.following) && !(username && settings.followingFeed);
+    const chipGone =
+      (Boolean(query?.following) && !(username && settings.followingFeed)) ||
+      (Boolean(query?.applied.names.length) && !username);
     return { restored: chipGone ? null : query, reloadDefault: chipGone };
   });
   const [sort, setSort] = useState<SortOrder>(restored?.sort ?? settings.defaultSort);
@@ -97,7 +103,7 @@ export const Home = () => {
   const [pageError, setPageError] = useState(false);
   const [hasMore, setHasMore] = useState(restored?.hasMore ?? true);
   const [applied, setApplied] = useState<AppliedFilters>(
-    () => restored?.applied ?? { name: filterName, keywords: filterSearch, categories: [] }
+    () => restored?.applied ?? { name: filterName, names: [], keywords: filterSearch, categories: [] }
   );
   // The same, for next-page loads, which must not pick up edits that weren't applied.
   const appliedRef = useRef(applied);
@@ -112,7 +118,10 @@ export const Home = () => {
   const { getFiles, queueBodies } = useFetchFiles();
 
   const runSearch = useCallback(
-    async (reset: boolean, overrides: { name?: string; sort?: SortOrder; clear?: boolean; following?: boolean } = {}) => {
+    async (
+      reset: boolean,
+      overrides: { name?: string; sort?: SortOrder; clear?: boolean; following?: boolean; allNames?: boolean } = {}
+    ) => {
       // A next page waits for the one in flight; a reset (filters, sort, refresh)
       // always starts, and whatever was in flight is ignored when it lands.
       if (!reset && (isFetching.current || !hasMore)) return;
@@ -123,9 +132,13 @@ export const Home = () => {
       setIsLoading(true);
       setError(null);
       setPageError(false);
+      const name = overrides.clear ? "" : (overrides.name ?? filterName);
+      // "All my names" stays on for a new sort, filter or refresh, until a publisher is searched or it is turned off.
+      const allNames = !overrides.clear && !name && (overrides.allNames ?? appliedRef.current.names.length > 0);
       const filters: AppliedFilters = reset
         ? {
-            name: overrides.clear ? "" : (overrides.name ?? filterName),
+            name,
+            names: allNames ? myNames : [],
             keywords: overrides.clear ? "" : filterSearch,
             categories: overrides.clear ? [] : (categoryListRef.current?.getSelectedCategories() ?? []),
           }
@@ -157,7 +170,7 @@ export const Home = () => {
         }
       }
     },
-    [getFiles, filterName, filterSearch, sort, following, hasMore]
+    [getFiles, filterName, myNames, filterSearch, sort, following, hasMore]
   );
 
   const { pull, refreshing } = usePullToRefresh(() => runSearch(true), true);
@@ -171,7 +184,7 @@ export const Home = () => {
     if (mounted.current) return;
     mounted.current = true;
     if (!hasFiles) queueMicrotask(() => void runSearch(true));
-    else if (reloadDefault) queueMicrotask(() => void runSearch(true, { following: false }));
+    else if (reloadDefault) queueMicrotask(() => void runSearch(true, { following: false, allNames: false }));
     // Back on Home: rows whose name was hidden when they loaded (and un-hidden
     // in Settings since) still need their body.
     else queueBodies(files, false);
@@ -211,12 +224,20 @@ export const Home = () => {
   };
 
   const mine = Boolean(username) && applied.name === username;
+  const allMine = applied.names.length > 0;
   const toggleMine = () => {
     if (!username) return;
     // Like Following, a second tap goes back to everyone's shares.
-    const next = mine ? "" : username;
+    const next = mine || allMine ? "" : username;
     dispatch(changefilterName(next));
-    runSearch(true, { name: next });
+    runSearch(true, { name: next, allNames: false });
+  };
+  // With more than one name, My shares can take in every one of them.
+  const toggleAllNames = () => {
+    if (!username) return;
+    const next = !allMine;
+    dispatch(changefilterName(next ? "" : username));
+    runSearch(true, { name: next ? "" : username, allNames: next });
   };
 
   const toggleFollowing = () => {
@@ -314,16 +335,18 @@ export const Home = () => {
 
   const appliedCategory = categoryLabel(applied.categories);
   const categoriesOn = applied.categories.some(Boolean);
-  const activeFilters = Boolean(applied.keywords || applied.name || categoriesOn);
-  const heading = applied.name
-    ? `Shares by ${applied.name}`
-    : following
-      ? "From names you follow"
-      : appliedCategory
-        ? `Shares in ${appliedCategory}`
-        : activeFilters
-          ? "Filtered shares"
-          : "Latest shares";
+  const activeFilters = Boolean(applied.keywords || applied.name || allMine || categoriesOn);
+  const heading = allMine
+    ? "Shares by your names"
+    : applied.name
+      ? `Shares by ${applied.name}`
+      : following
+        ? "From names you follow"
+        : appliedCategory
+          ? `Shares in ${appliedCategory}`
+          : activeFilters
+            ? "Filtered shares"
+            : "Latest shares";
 
   const emptyState: React.ComponentProps<typeof EmptyState> = following
     ? {
@@ -332,10 +355,10 @@ export const Home = () => {
         actionLabel: "Show latest shares",
         onAction: resetFilters,
       }
-    : mine && !applied.keywords && !categoriesOn
+    : (mine || allMine) && !applied.keywords && !categoriesOn
       ? {
-          title: "You haven't shared anything yet",
-          description: "Files you share show up here.",
+          title: allMine ? "None of your names has shared anything yet" : "You haven't shared anything yet",
+          description: allMine ? "Files you share under any of your names show up here." : "Files you share show up here.",
           actionLabel: "Share files",
           onAction: requestOpenPublish,
         }
@@ -439,11 +462,21 @@ export const Home = () => {
           {username && (
             <Chip
               label="My shares"
-              variant={mine ? "filled" : "outlined"}
-              color={mine ? "primary" : "default"}
+              variant={mine || allMine ? "filled" : "outlined"}
+              color={mine || allMine ? "primary" : "default"}
               onClick={toggleMine}
               clickable
-              aria-pressed={mine}
+              aria-pressed={mine || allMine}
+            />
+          )}
+          {username && (mine || allMine) && myNames.length > 1 && (
+            <Chip
+              label="All my names"
+              variant={allMine ? "filled" : "outlined"}
+              color={allMine ? "primary" : "default"}
+              onClick={toggleAllNames}
+              clickable
+              aria-pressed={allMine}
             />
           )}
           {!phone && sortToggle}
