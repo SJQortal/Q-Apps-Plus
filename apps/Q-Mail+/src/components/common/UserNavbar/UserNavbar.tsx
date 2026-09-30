@@ -104,7 +104,7 @@ export const UserNavbar: React.FC<Props> = ({
           anchorEl={anchorEl}
           open={Boolean(anchorEl)}
           onClose={handleClose}
-          PaperProps={{ style: { width: '250px' } }}
+          slotProps={{ paper: { style: { width: '250px' } } }}
         >
           {menuItems.map((item, index) => (
             <StyledMenuItem
