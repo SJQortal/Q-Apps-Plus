@@ -8,6 +8,7 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import RemoveCircleOutlinedIcon from "@mui/icons-material/RemoveCircleOutlined";
 import CollectionsBookmarkOutlinedIcon from "@mui/icons-material/CollectionsBookmarkOutlined";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { useSafeBack } from "../../hooks/useSafeBack";
 import { useFetchFiles } from "../../hooks/useFetchFiles";
 import { EmptyState } from "../../components/common/EmptyState";
 import { ResponsiveDialog } from "../../components/common/mobile/ResponsiveDialog";
@@ -113,7 +114,7 @@ function CollectionView({ name, id }: { name: string; id: string }) {
   const isOwner = Boolean(
     user && name && (user.name === name || (user.names ?? []).some((record) => record.name === name))
   );
-  const goBack = () => (window.history.length > 1 ? navigate(-1) : navigate("/collections"));
+  const goBack = useSafeBack("/collections");
 
   const republish = async (next: Collection, successMessage: string): Promise<boolean> => {
     setBusy(true);

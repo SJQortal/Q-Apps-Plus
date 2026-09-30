@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Avatar, Box, IconButton, Tab, Tabs, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { useSafeBack } from "../../hooks/useSafeBack";
 import { FileListComponentLevel } from "../Home/FileListComponentLevel.tsx";
 import { FollowButton } from "../../components/common/FollowButton.tsx";
 import { CopyLinkButton } from "../../components/common/CopyLinkButton.tsx";
@@ -16,8 +17,7 @@ export const IndividualProfile = () => {
   const name = decodeParam(paramName);
   const phone = usePhoneLayout();
   const [tab, setTab] = useState<ProfileTab>("shares");
-  const navigate = useNavigate();
-  const goBack = () => (window.history.length > 1 ? navigate(-1) : navigate("/"));
+  const goBack = useSafeBack("/");
 
   return (
     <Box

@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
 import { store } from '../../state/store';
@@ -7,6 +8,7 @@ import { addUser } from '../../state/features/authSlice';
 import { clearMine } from '../../state/features/collectionsSlice';
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
 import { resetCollectionCaches } from '../../utils/collections';
+import { resetInAppHistory } from '../../hooks/useSafeBack';
 import { CollectionsPage } from './CollectionsPage';
 
 const alice = { name: 'alice', service: 'DOCUMENT', identifier: 'qshare_collection_docs_ab12cd', updated: 10, metadata: { title: 'Docs', description: 'Handy files' } };
@@ -18,8 +20,15 @@ const bodies: Record<string, { title: string; items: Array<{ name: string; ident
   [carol.identifier]: { title: 'Emptied', items: [] },
 };
 
+const realMatchMedia = window.matchMedia;
+
 describe('CollectionsPage', () => {
+  afterEach(() => {
+    window.matchMedia = realMatchMedia;
+  });
+
   beforeEach(() => {
+    resetInAppHistory();
     resetQdnSearchCache();
     resetCollectionCaches();
     store.dispatch(clearMine());
@@ -82,5 +91,23 @@ describe('CollectionsPage', () => {
     expect(await screen.findByText("Couldn't load collections")).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('button', { name: 'Open Docs' })).toBeInTheDocument();
+  });
+
+  it('on a phone, Back goes Home when Collections was opened directly', async () => {
+    // Every media query matches, so usePhoneLayout() is true.
+    window.matchMedia = ((query: string) => ({ ...realMatchMedia(query), matches: true })) as typeof window.matchMedia;
+    // Other Hub tabs' entries share window.history, so its length says nothing about this app.
+    window.history.pushState(null, '', '/other-tab');
+    mockFetch('/arbitrary/resources/search', []);
+    renderWithProviders(
+      <Routes>
+        <Route path="/" element={<p>Home page</p>} />
+        <Route path="/collections" element={<CollectionsPage />} />
+      </Routes>,
+      { initialEntries: ['/collections'] }
+    );
+    await screen.findByText('No collections yet');
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(await screen.findByText('Home page')).toBeInTheDocument();
   });
 });

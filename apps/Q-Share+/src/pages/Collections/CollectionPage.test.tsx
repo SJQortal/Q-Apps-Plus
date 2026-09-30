@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders } from '../../test/renderWithProviders';
@@ -8,6 +8,7 @@ import { addUser } from '../../state/features/authSlice';
 import { clearMine } from '../../state/features/collectionsSlice';
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
 import { resetCollectionCaches } from '../../utils/collections';
+import { resetInAppHistory } from '../../hooks/useSafeBack';
 import { CollectionPage } from './CollectionPage';
 
 const COLLECTION_ID = 'qshare_collection_docs_ab12cd';
@@ -20,13 +21,25 @@ function renderPage() {
   return renderWithProviders(
     <Routes>
       <Route path="/collection/:name/:id" element={<CollectionPage />} />
+      <Route path="/collections" element={<p>Collections list</p>} />
     </Routes>,
     { initialEntries: [`/collection/alice/${COLLECTION_ID}`] }
   );
 }
 
+const realMatchMedia = window.matchMedia;
+/** Every media query matches, so usePhoneLayout() is true. */
+const phoneScreen = () => {
+  window.matchMedia = ((query: string) => ({ ...realMatchMedia(query), matches: true })) as typeof window.matchMedia;
+};
+
 describe('CollectionPage', () => {
+  afterEach(() => {
+    window.matchMedia = realMatchMedia;
+  });
+
   beforeEach(() => {
+    resetInAppHistory();
     resetQdnSearchCache();
     resetCollectionCaches();
     store.dispatch(clearMine());
@@ -73,5 +86,16 @@ describe('CollectionPage', () => {
     expect(body.created).toBe(1);
     await waitFor(() => expect(screen.queryByText('First share')).not.toBeInTheDocument());
     expect(screen.getByText('· 1 item')).toBeInTheDocument();
+  });
+
+  it('on a phone, Back goes to Collections when the page was opened from a link', async () => {
+    phoneScreen();
+    // Other Hub tabs' entries share window.history, so its length says nothing about this app.
+    window.history.pushState(null, '', '/other-tab');
+    store.dispatch(addUser(null));
+    renderPage();
+    await screen.findByRole('heading', { name: 'Docs' });
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(await screen.findByText('Collections list')).toBeInTheDocument();
   });
 });

@@ -6,6 +6,7 @@ import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CollectionsBookmarkOutlinedIcon from "@mui/icons-material/CollectionsBookmarkOutlined";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { useSafeBack } from "../../hooks/useSafeBack";
 import { EmptyState } from "../../components/common/EmptyState";
 import LazyLoad from "../../components/common/LazyLoad";
 import { setMine } from "../../state/features/collectionsSlice";
@@ -86,7 +87,7 @@ export function CollectionsPage() {
         })
       : rows;
 
-  const goBack = () => (window.history.length > 1 ? navigate(-1) : navigate("/"));
+  const goBack = useSafeBack("/");
   const newButton = myName ? (
     <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)} sx={{ minHeight: 44 }}>
       New collection

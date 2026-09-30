@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
 import {
   Avatar,
   Box,
@@ -29,6 +28,7 @@ import { useAppSettings, writeSettings } from "../../utils/settings";
 import { fetchSettingsFromQdn, publishSettingsToQdn } from "../../utils/settingsQdn";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { formatDate } from "../../utils/time";
+import { useSafeBack } from "../../hooks/useSafeBack";
 
 const Page = styled("div")(({ theme }) => ({
   width: "100%",
@@ -74,7 +74,7 @@ const Row = styled("div")(({ theme }) => ({
 }));
 
 export const Settings = () => {
-  const navigate = useNavigate();
+  const goBack = useSafeBack("/");
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
   const [blockedOpen, setBlockedOpen] = useState(false);
@@ -148,7 +148,7 @@ export const Settings = () => {
   return (
     <Page>
       <PageHeader>
-        <IconButton aria-label="Back" onClick={() => navigate(-1)} sx={{ minWidth: 44, minHeight: 44 }}>
+        <IconButton aria-label="Back" onClick={goBack} sx={{ minWidth: 44, minHeight: 44 }}>
           <ArrowBackIcon />
         </IconButton>
         <Typography component="h1" variant="h6" sx={{ fontWeight: 700 }}>

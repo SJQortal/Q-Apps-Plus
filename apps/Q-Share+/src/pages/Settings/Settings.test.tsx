@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import { mockQortalAction, qortalCallsFor } from '../../test/setup';
 import { store } from '../../state/store';
 import { addUser } from '../../state/features/authSlice';
 import { readSettings, resetSettingsCache, writeSettings } from '../../utils/settings';
 import { SETTINGS_IDENTIFIER } from '../../utils/settingsQdn';
+import { resetInAppHistory } from '../../hooks/useSafeBack';
 import { Settings } from './Settings';
 
 const signIn = () =>
@@ -57,5 +59,21 @@ describe('Settings → Sync', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /^restore/i }));
     expect(await screen.findByText(/No settings saved on QDN for alice/)).toBeInTheDocument();
+  });
+});
+
+describe('Settings → Back', () => {
+  beforeEach(() => resetInAppHistory());
+
+  it('goes Home when Settings was opened directly, not to whatever the shared Hub history holds', async () => {
+    renderWithProviders(
+      <Routes>
+        <Route path="/" element={<p>Home page</p>} />
+        <Route path="/settings" element={<Settings />} />
+      </Routes>,
+      { initialEntries: ['/settings'] }
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(await screen.findByText('Home page')).toBeInTheDocument();
   });
 });
