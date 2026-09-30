@@ -64,8 +64,10 @@ const commonThemeOptions: ThemeOptions = {
   components: {
     MuiButton: {
       styleOverrides: {
+        // The original set backgroundColor: "inherit" here, which the + app's
+        // contained buttons (Download, Publish) cannot live with: they lost
+        // their fill and read as plain text.
         root: {
-          backgroundColor: "inherit",
           transition: "filter 0.3s ease-in-out",
           "&:hover": {
             filter: "brightness(1.1)"
@@ -84,10 +86,13 @@ export const lightThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: "light",
+    // The original used a white "primary" as a surface colour and its blue as
+    // "secondary". MUI components colour every control from primary, so the
+    // blue is primary here; the whites live on as the backgrounds below.
     primary: {
-      main: "#ffffff",
-      dark: "#F5F5F5",
-      light: "#FCFCFC"
+      main: "#417Ed4",
+      dark: "#3e74c1",
+      light: "#6b9be0"
     },
     secondary: {
       main: "#417Ed4",
