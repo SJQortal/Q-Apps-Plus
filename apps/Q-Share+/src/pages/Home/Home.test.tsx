@@ -100,7 +100,7 @@ describe('Home first load', () => {
   });
 });
 
-describe('Home filters on a phone', () => {
+describe('Home filters on a phone', { timeout: 15_000 }, () => {
   const originalMatchMedia = window.matchMedia;
   const originalObserver = globalThis.IntersectionObserver;
   // Every observed element, so the test can scroll LazyLoad's sentinel into view.

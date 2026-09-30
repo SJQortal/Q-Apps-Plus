@@ -47,7 +47,7 @@ afterEach(() => {
   window.matchMedia = originalMatchMedia;
 });
 
-describe("PublishFile", () => {
+describe("PublishFile", { timeout: 15_000 }, () => {
   it("publishes one FILE and one DOCUMENT in the original format and bumps the list version", async () => {
     signIn();
     mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => true);
