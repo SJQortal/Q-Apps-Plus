@@ -2,7 +2,6 @@ import React, { useEffect, useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import { addUser } from "../state/features/authSlice";
-import { getAccountNames, getPrimaryAccountName } from "../utils/qortalRequestFunctions";
 import NavBar from "../components/layout/Navbar/Navbar";
 import { BottomNav, BottomNavSpacer } from "../components/layout/BottomNav/BottomNav";
 import PageLoader from "../components/common/PageLoader";
@@ -14,6 +13,7 @@ import { EditFile } from "../components/EditFile/EditFile.tsx";
 import ConsentModal from "../components/common/ConsentModal";
 import { useIframe } from "../hooks/useIframe.tsx";
 import { useTrackInAppHistory } from "../hooks/useSafeBack";
+import { useUserAccount } from "../hooks/useUserAccount";
 
 interface Props {
   children: React.ReactNode;
@@ -77,23 +77,7 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
 
   const { isLoadingGlobal } = useSelector((state: RootState) => state.global);
 
-  const askForAccountInformation = React.useCallback(async () => {
-    try {
-      const account = await qortalRequest({
-        action: "GET_USER_ACCOUNT",
-      });
-
-      const names = await getAccountNames(account.address);
-      const primary = await getPrimaryAccountName(account.address);
-      dispatch(addUser({ ...account, name: primary, names }));
-    } catch (error) {
-      console.error(error);
-    }
-  }, [dispatch]);
-
-  React.useEffect(() => {
-    askForAccountInformation();
-  }, [askForAccountInformation]);
+  const { authenticate } = useUserAccount();
 
   return (
     <>
@@ -106,7 +90,7 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
         accountNames={user?.names || []}
         setActiveName={switchActiveName}
         userAvatar={userAvatar}
-        authenticate={askForAccountInformation}
+        authenticate={authenticate}
       />
       <EditFile />
 
