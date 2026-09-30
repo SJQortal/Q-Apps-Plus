@@ -12,6 +12,8 @@ import {
   Typography,
 } from "@mui/material";
 import FilterListIcon from "@mui/icons-material/FilterList";
+import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
+import { useNavigate } from "react-router-dom";
 import { BottomSheet } from "../../components/common/mobile/BottomSheet";
 import { useNarrowLayout } from "../../hooks/usePhoneLayout";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
@@ -33,6 +35,7 @@ import type { SortOrder } from "../../utils/settings.ts";
 export const Home = () => {
   const phone = useNarrowLayout();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const categoryListRef = useRef<CategoryListRef>(null);
   const files = useSelector((state: RootState) => state.file.files);
   const filterSearch = useSelector((state: RootState) => state.file.filterSearch);
@@ -49,8 +52,10 @@ export const Home = () => {
   const isFetching = useRef(false);
   const requestId = useRef(0);
   const mounted = useRef(false);
+  // A new one for each new list (filters, sort, refresh), so paging starts a fresh budget.
+  const [listId, setListId] = useState(0);
 
-  const { getFiles } = useFetchFiles();
+  const { getFiles, queueBodies } = useFetchFiles();
 
   const runSearch = useCallback(
     async (reset: boolean, overrides: { name?: string; sort?: SortOrder; clear?: boolean; following?: boolean } = {}) => {
@@ -59,6 +64,7 @@ export const Home = () => {
       if (!reset && (isFetching.current || !hasMore)) return;
       const id = ++requestId.current;
       const current = () => id === requestId.current;
+      if (reset) setListId((n) => n + 1);
       isFetching.current = true;
       setIsLoading(true);
       setError(null);
@@ -97,7 +103,10 @@ export const Home = () => {
     if (mounted.current) return;
     mounted.current = true;
     if (!hasFiles) queueMicrotask(() => void runSearch(true));
-  }, [hasFiles, runSearch]);
+    // Back on Home: rows whose name was hidden when they loaded (and un-hidden
+    // in Settings since) still need their body.
+    else queueBodies(files, false);
+  }, [hasFiles, runSearch, queueBodies, files]);
 
   // A publish or update from this session: reload page one so the new share shows.
   const seenVersion = useRef(listVersion);
@@ -140,6 +149,8 @@ export const Home = () => {
   const visibleFiles = settings.hiddenNames.length
     ? listedFiles.filter((f) => !isNameHidden(f.user, settings))
     : listedFiles;
+  // Rows came back, but every one of them is from a hidden name.
+  const hiddenAll = listedFiles.length > 0 && visibleFiles.length === 0;
 
   const sortToggle = (
     <ToggleButtonGroup
@@ -296,13 +307,21 @@ export const Home = () => {
 
         {error ? (
           <EmptyState title="Could not load shares" description={error} actionLabel="Retry" onAction={() => runSearch(true)} />
-        ) : files.length === 0 && isLoading ? (
+        ) : files.length === 0 && (isLoading || hasMore) ? (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {Array.from({ length: 6 }, (_, i) => (
               <Skeleton key={i} variant="rounded" height={64} />
             ))}
           </Box>
-        ) : files.length === 0 ? (
+        ) : visibleFiles.length === 0 && !hasMore && !isLoading && hiddenAll ? (
+          <EmptyState
+            icon={<VisibilityOffOutlinedIcon />}
+            title="Every share here is from a name you hid"
+            description="You can show those names again in Settings."
+            actionLabel="Open Settings"
+            onAction={() => navigate("/settings")}
+          />
+        ) : visibleFiles.length === 0 && !hasMore && !isLoading ? (
           <EmptyState
             title={following ? "Nothing from the names you follow yet" : activeFilters ? "No shares match these filters" : "No shares yet"}
             description={
@@ -319,9 +338,15 @@ export const Home = () => {
           />
         ) : (
           <>
+            {hiddenAll && (
+              <Typography role="status" variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 1 }}>
+                Every share loaded so far is from a name you hid in Settings.
+              </Typography>
+            )}
             <FileList files={visibleFiles} />
-            <LazyLoad onLoadMore={() => runSearch(false)} isLoading={isLoading} />
-            {!hasMore && files.length > 0 && (
+            {/* hasMore lets it keep paging while hidden names leave the end of the list in view. */}
+            <LazyLoad key={listId} onLoadMore={() => runSearch(false)} isLoading={isLoading} hasMore={hasMore} />
+            {!hasMore && visibleFiles.length > 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 1 }}>
                 That's every share that matches.
               </Typography>

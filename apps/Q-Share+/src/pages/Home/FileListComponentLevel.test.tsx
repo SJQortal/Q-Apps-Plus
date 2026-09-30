@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
 import { FileListComponentLevel } from './FileListComponentLevel';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import { fetchCallsMatching, mockFetch, mockQortalAction } from '../../test/setup';
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
+import { readOncePerObserve } from '../../test/intersection';
 
 function renderProfile(name: string) {
   return renderWithProviders(
@@ -32,5 +33,40 @@ describe('profile share list', () => {
     expect(searches.length).toBe(1);
     expect(searches[0]).toContain('includemetadata=true');
     expect(searches[0]).toContain('name=Claude');
+  });
+
+  it('a failed next page stops the pager and offers Retry instead of repeating the search', async () => {
+    resetQdnSearchCache();
+    readOncePerObserve();
+    const row = (slug: string, created: number, title: string) => ({
+      name: 'Bob',
+      service: 'DOCUMENT',
+      identifier: `qshare_file_${slug}_${slug.slice(-6).padStart(6, 'x')}_metadata`,
+      created,
+      metadata: { title },
+    });
+    let nodeDown = true;
+    mockFetch('/arbitrary/resources/search', (url) => {
+      if (url.searchParams.get('offset') === '0') return Array.from({ length: 20 }, (_, i) => row(`bob-${i}`, 100 - i, `Bob share ${i}`));
+      if (nodeDown) throw new Error('node down');
+      return [row('bob-last', 1, 'Bob last share')];
+    });
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+    const pageTwo = () => fetchCallsMatching(/[?&]offset=20&/).length;
+
+    renderProfile('Bob');
+
+    // Twenty rows and their bodies render first, which is slow in jsdom under a full parallel run.
+    expect(await screen.findByText('Could not load more shares.', {}, { timeout: 4000 })).toBeInTheDocument();
+    // The sentinel stays in view, but a failed page is tried once, not five times back to back.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(pageTwo()).toBe(1);
+    expect(screen.getByText('Bob share 0')).toBeInTheDocument();
+
+    nodeDown = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('Bob last share', {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(pageTwo()).toBe(2);
+    expect(screen.queryByText('Could not load more shares.')).not.toBeInTheDocument();
   });
 });

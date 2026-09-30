@@ -1,5 +1,5 @@
 import React from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import {
   addFiles,
   addToHashMap,
@@ -17,6 +17,7 @@ import { QSHARE_FILE_BASE } from "../constants/Identifiers.ts";
 import { queue } from "../utils/queue";
 import { getCategoriesFetchString } from "../components/common/CategoryList/CategoryList.tsx";
 import { QDN_PAGE, QdnResourceSummary, searchQdn } from "../utils/qdnSearch";
+import { isNameHidden } from "../utils/settings";
 
 /**
  * Q-Share writes the category ids at the start of the QDN description,
@@ -70,6 +71,13 @@ export function summaryToVideo(video: QdnResourceSummary): Video {
   };
 }
 
+/** Share ids whose body is queued or being fetched, so a list never queues one twice. */
+const bodiesInFlight = new Set<string>();
+
+/** The search row says the share changed after the copy in the hash map. */
+const updatedSince = (row: { updated?: number | string } | undefined, held: Video) =>
+  Boolean(row?.updated && (!held.updated || row.updated > held.updated));
+
 /**
  * Fetch one share's JSON body into the hash map, with two more tries through
  * the queue. After the last one the share is marked unavailable, so its row
@@ -78,18 +86,28 @@ export function summaryToVideo(video: QdnResourceSummary): Video {
  */
 async function fetchShareBody(
   dispatch: (action: unknown) => unknown,
+  getState: () => RootState,
   user: string,
   videoId: string,
   content: any,
   attempt = 0
 ): Promise<void> {
+  // While this waited in the queue, the share page (a row opens before its
+  // body lands), a collection or another list may have fetched it.
+  const held = getState().file.hashMapFiles[videoId];
+  if (held && !updatedSince(content, held)) {
+    bodiesInFlight.delete(videoId);
+    return;
+  }
   try {
     const res = await fetchAndEvaluateVideos({ user, videoId, content });
+    bodiesInFlight.delete(videoId);
     dispatch(addToHashMap(res));
   } catch {
     if (attempt < 2) {
-      queue.push(() => fetchShareBody(dispatch, user, videoId, content, attempt + 1));
+      queue.push(() => fetchShareBody(dispatch, getState, user, videoId, content, attempt + 1));
     } else {
+      bodiesInFlight.delete(videoId);
       dispatch(markUnavailable(videoId));
     }
   }
@@ -118,6 +136,7 @@ export function useListedFiles(files: Video[]): Video[] {
 
 export const useFetchFiles = () => {
   const dispatch = useDispatch();
+  const store = useStore<RootState>();
   const hashMapFiles = useSelector((state: RootState) => state.file.hashMapFiles);
   const videos = useSelector((state: RootState) => state.file.files);
   const filteredVideos = useSelector((state: RootState) => state.file.filteredFiles);
@@ -149,19 +168,28 @@ export const useFetchFiles = () => {
   }, [dispatch]);
 
   const getFile = React.useCallback(
-    (user: string, videoId: string, content: any) => fetchShareBody(dispatch, user, videoId, content),
-    [dispatch]
+    (user: string, videoId: string, content: any) => fetchShareBody(dispatch, store.getState, user, videoId, content),
+    [dispatch, store]
   );
 
+  /**
+   * Queue the bodies a list still needs. Rows of hidden names are never shown,
+   * so they are skipped: one name can fill 90% of a Latest page. A search
+   * retries shares marked unavailable; `retryUnavailable: false` (coming back
+   * to a list) leaves them alone.
+   */
   const queueBodies = React.useCallback(
-    (rows: Video[]) => {
+    (rows: Video[], retryUnavailable = true) => {
+      const { unavailableFiles } = store.getState().file;
       for (const content of rows) {
-        if (content.user && content.id && checkAndUpdateFile(content)) {
-          queue.push(() => getFile(content.user, content.id, content));
-        }
+        if (!content.user || !content.id || isNameHidden(content.user)) continue;
+        if (bodiesInFlight.has(content.id) || !checkAndUpdateFile(content)) continue;
+        if (!retryUnavailable && unavailableFiles[content.id]) continue;
+        bodiesInFlight.add(content.id);
+        queue.push(() => getFile(content.user, content.id, content));
       }
     },
-    [checkAndUpdateFile, getFile]
+    [checkAndUpdateFile, getFile, store]
   );
 
   const getNewFiles = React.useCallback(async () => {
@@ -274,5 +302,6 @@ export const useFetchFiles = () => {
     getNewFiles,
     checkNewFiles,
     getFilesFiltered,
+    queueBodies,
   };
 };

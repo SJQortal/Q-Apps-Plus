@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Box, Skeleton } from "@mui/material";
+import { Box, Button, Skeleton, Typography } from "@mui/material";
 import { useFetchFiles, summaryToVideo, useListedFiles } from "../../hooks/useFetchFiles.tsx";
 import LazyLoad from "../../components/common/LazyLoad";
 import { Video } from "../../state/features/fileSlice.ts";
@@ -97,7 +97,18 @@ export const FileListComponentLevel = () => {
       ) : (
         <>
           <FileList files={listed} showPublisher={false} />
-          <LazyLoad onLoadMore={() => getVideos(false)} isLoading={isLoading} />
+          {/* A failed page stops the pager (it would retry at once, up to five times) until Retry. */}
+          <LazyLoad onLoadMore={() => getVideos(false)} isLoading={isLoading} hasMore={hasMore && !error} />
+          {error && (
+            <Box role="status" sx={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                Could not load more shares.
+              </Typography>
+              <Button variant="outlined" onClick={() => getVideos(false)} sx={{ minHeight: 44 }}>
+                Retry
+              </Button>
+            </Box>
+          )}
         </>
       )}
     </Box>

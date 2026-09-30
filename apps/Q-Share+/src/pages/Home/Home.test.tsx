@@ -9,6 +9,7 @@ import { store } from '../../state/store';
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
 import { resetQdnSearchCache } from '../../utils/qdnSearch';
 import { resetSettingsCache } from '../../utils/settings';
+import { readOncePerObserve } from '../../test/intersection';
 import { HubThemeProvider } from '../../hub-theme';
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme';
 
@@ -263,5 +264,98 @@ describe('Home rows before and without a body', () => {
     expect(screen.getByText('Bare share')).toBeInTheDocument();
     expect(screen.getByText(/0 files/)).toBeInTheDocument();
     expect(store.getState().file.hashMapFiles['qshare_file_torq-test_IiciuD_metadata']).toMatchObject({ isValid: false, deleted: true });
+  });
+});
+
+describe('Home with hidden names', () => {
+  const hide = (names: string[]) => {
+    localStorage.setItem('qshareplus-settings', JSON.stringify({ hiddenNames: names }));
+    resetSettingsCache();
+  };
+  const row = (name: string, slug: string, created: number) => ({
+    name,
+    service: 'DOCUMENT',
+    identifier: `qshare_file_${slug}_${slug.slice(-6).padStart(6, 'x')}_metadata`,
+    created,
+    metadata: { title: slug },
+  });
+  const spamPage = (offset: number, count = 20) =>
+    Array.from({ length: count }, (_, i) => row('spammer', `spam-${offset + i}`, 10_000 - offset - i));
+  const searchAt = (offset: number) => fetchCallsMatching(new RegExp(`[?&]offset=${offset}&`)).length;
+
+  it('keeps paging while hidden rows leave the end of the list in view, and skips their bodies', async () => {
+    // PixelMage fills ~92% of Latest on the real node; hiding it left 1-3 rows and a stalled list.
+    hide(['spammer']);
+    readOncePerObserve();
+    mockFetch('/arbitrary/resources/search', (url) => {
+      const offset = Number(url.searchParams.get('offset'));
+      if (offset === 0) return [...spamPage(0, 19), row('carol', 'keep-one', 1)];
+      if (offset === 20) return spamPage(20);
+      if (offset === 40) return [row('carol', 'keep-two', 0)];
+      return [];
+    });
+    mockQortalAction('FETCH_QDN_RESOURCE', (params) => ({ title: String(params.identifier).includes('keep-one') ? 'Keep one' : 'Keep two', files: [] }));
+
+    renderHome();
+    expect(await screen.findByText('Keep one')).toBeInTheDocument();
+
+    // The short list leaves the sentinel in view: its one reading loads page 2 without a scroll.
+    // Page 2 (all hidden) leaves it in view again, and only observing a new sentinel element
+    // when loading ends gets a browser to read it again and load page 3.
+    await waitFor(() => expect(searchAt(40)).toBe(1), { timeout: 5000 });
+    expect(await screen.findByText('Keep two')).toBeInTheDocument();
+    expect(searchAt(20)).toBe(1);
+    expect(await screen.findByText("That's every share that matches.")).toBeInTheDocument();
+    // Rows of hidden names never cost a FETCH.
+    expect(qortalCallsFor('FETCH_QDN_RESOURCE').map((c) => String(c.identifier)).filter((id) => id.includes('spam'))).toEqual([]);
+  });
+
+  it('stops after five automatic pages and offers Load more, which keeps focus', async () => {
+    hide(['spammer']);
+    readOncePerObserve();
+    mockFetch('/arbitrary/resources/search', (url) => spamPage(Number(url.searchParams.get('offset'))));
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    renderHome();
+    expect(await screen.findByText('Every share loaded so far is from a name you hid in Settings.')).toBeInTheDocument();
+    const loadMore = await screen.findByRole('button', { name: 'Load more' }, { timeout: 5000 });
+    // Page 1, then five pages from the sentinel.
+    expect(fetchCallsMatching('/arbitrary/resources/search').length).toBe(6);
+
+    loadMore.focus();
+    fireEvent.click(loadMore);
+    await waitFor(() => expect(searchAt(120)).toBe(1));
+    // The sentinel carries on for another five pages; the button stays put and focused throughout.
+    await waitFor(() => expect(searchAt(220)).toBe(1), { timeout: 5000 });
+    expect(await screen.findByRole('button', { name: 'Load more' })).toBe(loadMore);
+    expect(document.activeElement).toBe(loadMore);
+    expect(searchAt(240)).toBe(0);
+  });
+
+  it('a new search starts a fresh budget of automatic pages', async () => {
+    hide(['spammer']);
+    readOncePerObserve();
+    mockFetch('/arbitrary/resources/search', (url) => spamPage(Number(url.searchParams.get('offset'))));
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    renderHome();
+    expect(await screen.findByRole('button', { name: 'Load more' }, { timeout: 5000 })).toBeInTheDocument();
+    expect(fetchCallsMatching('/arbitrary/resources/search').length).toBe(6);
+
+    // The old rows stay up while the new search runs, so only a new pager starts over.
+    fireEvent.click(screen.getByRole('button', { name: 'Oldest' }));
+    await waitFor(() => expect(fetchCallsMatching(/[?&]reverse=false/).length).toBe(6), { timeout: 5000 });
+    expect(await screen.findByRole('button', { name: 'Load more' })).toBeInTheDocument();
+  });
+
+  it('says so when every share is from a hidden name', async () => {
+    hide(['spammer']);
+    mockFetch('/arbitrary/resources/search', spamPage(0, 3));
+    mockQortalAction('FETCH_QDN_RESOURCE', { files: [] });
+
+    renderHome();
+    expect(await screen.findByText('Every share here is from a name you hid')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Settings' })).toBeInTheDocument();
+    expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(0);
   });
 });
