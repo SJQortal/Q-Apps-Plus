@@ -29,6 +29,7 @@ import {
 } from "../../utils/collections";
 import { avatarUrl, decodeParam, profilePath } from "../../utils/qortalLinks";
 import { isHubDecline } from "../../utils/hubErrors";
+import { resourceStatus } from "../../utils/qdnResource";
 import { isNameHidden, useAppSettings } from "../../utils/settings";
 import { formatDate } from "../../utils/time";
 import { CollectionDialog } from "./CollectionDialog";
@@ -48,10 +49,13 @@ const NOT_LOCAL_YET = new Set(["PUBLISHED", "DOWNLOADING", "DOWNLOADED", "BUILDI
 /** Waits before each automatic retry while the node fetches from peers: five tries in about 30 s. */
 const PEER_RETRY_DELAYS_MS = [2000, 4000, 8000, 16000];
 
-/** The resource's Core status, or null when the node doesn't answer. */
-async function resourceStatus(name: string, identifier: string): Promise<string | null> {
+/**
+ * The collection's Core status, or null when the node doesn't answer.
+ * resourceStatus encodes names such as "Vallot-/8/", which q-apps.js breaks.
+ */
+async function collectionStatus(name: string, identifier: string): Promise<string | null> {
   try {
-    const response = await qortalRequest({ action: "GET_QDN_RESOURCE_STATUS", service: COLLECTION_SERVICE, name, identifier });
+    const response = await resourceStatus({ service: COLLECTION_SERVICE, name, identifier });
     return typeof response?.status === "string" ? response.status : null;
   } catch {
     return null;
@@ -97,7 +101,7 @@ function CollectionView({ name, id }: { name: string; id: string }) {
           setStatus("ready");
         },
         async () => {
-          const state = await resourceStatus(name, id);
+          const state = await collectionStatus(name, id);
           if (state === "NOT_PUBLISHED") {
             setStatus("missing");
           } else if (state && NOT_LOCAL_YET.has(state)) {

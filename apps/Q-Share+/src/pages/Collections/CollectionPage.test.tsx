@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders } from '../../test/renderWithProviders';
-import { fetchCallsMatching, mockQortalAction, qortalCallsFor } from '../../test/setup';
+import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../../test/setup';
 import { store } from '../../state/store';
 import { addUser } from '../../state/features/authSlice';
 import { clearMine } from '../../state/features/collectionsSlice';
@@ -18,13 +18,13 @@ const items = [
   { name: 'carol', identifier: 'qshare_file_second_bbb222_metadata' },
 ];
 
-function renderPage() {
+function renderPage(path = `/collection/alice/${COLLECTION_ID}`) {
   return renderWithProviders(
     <Routes>
       <Route path="/collection/:name/:id" element={<CollectionPage />} />
       <Route path="/collections" element={<p>Collections list</p>} />
     </Routes>,
-    { initialEntries: [`/collection/alice/${COLLECTION_ID}`] }
+    { initialEntries: [path] }
   );
 }
 
@@ -254,6 +254,19 @@ describe('CollectionPage', () => {
       expect(screen.getByText('Collection not found')).toBeInTheDocument();
       await wait(60_000);
       expect(collectionFetches()).toBe(1);
+    });
+
+    it('asks the status with the name encoded for a name q-apps.js breaks', async () => {
+      // Core's JSON 404 for data it hasn't got; q-apps.js would have read Jetty's HTML 400 page.
+      mockFetch('/arbitrary/DOCUMENT/', unavailable);
+      mockFetch('/arbitrary/resource/status/', { status: 'PUBLISHED', percentLoaded: 0 });
+      renderPage(`/collection/${encodeURIComponent('Vallot-/8/')}/${COLLECTION_ID}`);
+      await wait(0);
+      expect(screen.getByText('Fetching it from peers…')).toBeInTheDocument();
+      expect(fetchCallsMatching('/arbitrary/resource/status/')[0]).toBe(
+        `/arbitrary/resource/status/DOCUMENT/Vallot-%2F8%2F/${COLLECTION_ID}`
+      );
+      expect(qortalCallsFor('GET_QDN_RESOURCE_STATUS')).toEqual([]);
     });
 
     it('keeps the node error when the status check fails too', async () => {
