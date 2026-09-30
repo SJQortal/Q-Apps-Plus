@@ -121,6 +121,63 @@ describe("EditFile", () => {
     expect((store.getState().file.hashMapFiles[share.id] as any)?.title).toBe("Report 3");
   }, FLOW_TIMEOUT_MS);
 
+  it("ignores a second Publish update tap while the node is asked, so what is stored is what Hub was sent", async () => {
+    // Before the guard, a second tap built the update again, with a new random
+    // identifier for each new file, and swapped that build into the running
+    // publish dialog and the copy kept for the hash map, while Hub had the first.
+    const slow = { ...share, id: "qshare_file_report_twice1_metadata", updated: Date.now() - 60_000 };
+    store.dispatch(addUser({ address: "Qalice", publicKey: "pk", name: "alice" }));
+    store.dispatch(setEditFile(slow));
+    // Hub publishes the details but not the new file, when the test says so.
+    let hubAnswers: () => void = () => {};
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", (params: any) => {
+      const file = params.resources.find((r: any) => r.service === "FILE");
+      return new Promise((_, reject) => {
+        hubAnswers = () =>
+          reject({ error: { unsuccessfulPublishes: [{ identifier: file.identifier }] }, message: "Some failed" });
+      });
+    });
+    // The node answers each search for the version on QDN when the test says so.
+    const nodeAnswers: Array<() => void> = [];
+    mockFetch("/arbitrary/resources/search", async (url: URL) => {
+      await new Promise<void>((resolve) => nodeAnswers.push(resolve));
+      return [{ name: "alice", service: "DOCUMENT", identifier: url.searchParams.get("identifier"), updated: slow.updated }];
+    });
+    renderWithProviders(<EditFile />);
+
+    expect(await screen.findByRole("dialog", { name: "Update share" })).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId("share-file-input"), {
+      target: { files: [new File(["more"], "appendix.txt", { type: "text/plain" })] },
+    });
+    expect(await screen.findByText("appendix.txt")).toBeInTheDocument();
+    const publishButton = screen.getByRole("button", { name: "Publish update" });
+    // Two taps before React renders again, then the button is disabled.
+    act(() => {
+      fireEvent.click(publishButton);
+      fireEvent.click(publishButton);
+    });
+    await waitFor(() => expect(publishButton).toBeDisabled());
+
+    // The node answers the first tap; Hub is sent that build.
+    await waitFor(() => expect(nodeAnswers.length).toBeGreaterThan(0));
+    await act(async () => nodeAnswers[0]());
+    await waitFor(() => expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(1));
+    // Any other search is answered while Hub is still at it: the node was asked once.
+    const searchesBeforeHub = nodeAnswers.length;
+    for (const answer of nodeAnswers.slice(1)) await act(async () => answer());
+    await act(async () => hubAnswers());
+    expect(await screen.findByText("1 of 2 published")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
+    await waitFor(() => expect(store.getState().file.editFileProperties).toBeNull());
+
+    const [request] = qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
+    const sentFile = request.resources.find((r: any) => r.service === "FILE").identifier;
+    const stored = (store.getState().file.hashMapFiles[slow.id] as any).files.map((f: any) => f.identifier);
+    expect(stored).toEqual([share.files[0].identifier, sentFile]);
+    expect(searchesBeforeHub).toBe(1);
+    expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(1);
+  }, FLOW_TIMEOUT_MS);
+
   it("asks before publishing again after an unconfirmed update, also once Edit was closed and reopened", async () => {
     const guarded = { ...share, id: "qshare_file_report_guard1_metadata", updated: Date.now() - 60_000 };
     store.dispatch(addUser({ address: "Qalice", publicKey: "pk", name: "alice" }));

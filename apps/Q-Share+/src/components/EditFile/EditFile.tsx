@@ -80,12 +80,17 @@ function EditShareDialog({ share }: EditShareDialogProps) {
   // copy may be older, and the device clock can be minutes off the node's.
   const [replaces, setReplaces] = useState<ReplacedVersions>({ [share.id]: undefined });
   const [confirmAgain, setConfirmAgain] = useState(false);
+  // Publish update asks the node before Hub shows its prompt; a second tap
+  // meanwhile must not send a second batch.
+  const preparing = useRef(false);
+  const [isPreparing, setIsPreparing] = useState(false);
 
   const close = () => {
     dispatch(setEditFile(null));
   };
 
   const publish = async (confirmed = false) => {
+    if (preparing.current) return;
     const categories = categoryListRef.current;
     const selected = categories?.getSelectedCategories() ?? [];
     const problems = draft.validate(Boolean(selected[0]));
@@ -111,6 +116,8 @@ function EditShareDialog({ share }: EditShareDialogProps) {
       return;
     }
 
+    preparing.current = true;
+    setIsPreparing(true);
     try {
       const { resources, fileObject } = await buildSharePublish({
         name: username,
@@ -133,6 +140,9 @@ function EditShareDialog({ share }: EditShareDialogProps) {
       setPublishes(toMultiplePublish(resources));
     } catch (error) {
       dispatch(setNotification({ msg: publishErrorMessage(error, "Failed to publish update"), alertType: "error" }));
+    } finally {
+      preparing.current = false;
+      setIsPreparing(false);
     }
   };
 
@@ -224,7 +234,7 @@ function EditShareDialog({ share }: EditShareDialogProps) {
             <Button onClick={close} color="inherit">
               Cancel
             </Button>
-            <Button variant="contained" onClick={() => publish()}>
+            <Button variant="contained" onClick={() => publish()} disabled={isPreparing}>
               Publish update
             </Button>
           </>
