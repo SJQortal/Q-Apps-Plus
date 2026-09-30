@@ -1,4 +1,4 @@
-import { createTheme } from '@mui/material/styles'
+import { createTheme, type ThemeOptions } from '@mui/material/styles'
 
 
 // Extend the Theme interface
@@ -86,7 +86,7 @@ const commonThemeOptions = {
   }
 }
 
-const lightTheme = createTheme({
+const lightThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: 'light',
@@ -131,9 +131,9 @@ const lightTheme = createTheme({
       }
     }
   },
-})
+}
 
-const darkTheme = createTheme({
+const darkThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: 'dark',
@@ -177,6 +177,11 @@ const darkTheme = createTheme({
       }
     }
   },
-})
+}
 
-export { lightTheme, darkTheme }
+const lightTheme = createTheme(lightThemeOptions)
+const darkTheme = createTheme(darkThemeOptions)
+
+// The options objects feed the theme kit's Hub 2.0 ("Q-Mail Classic") theme;
+// the built themes stay for anything that still wants them.
+export { lightTheme, darkTheme, lightThemeOptions, darkThemeOptions }

@@ -1,11 +1,7 @@
 import React from 'react'
 import {
   Box,
-  Checkbox,
-  Divider,
-  FormControlLabel,
   IconButton,
-  Popover,
   Tooltip,
   Typography,
   useMediaQuery,
@@ -13,85 +9,32 @@ import {
 } from '@mui/material'
 import { useSelector } from 'react-redux'
 import { RootState } from '../../../state/store'
-import { AppMenu } from '@qortal/qapp-lib/app-shell/react'
-import type {
-  AppShellController,
-  AppShellState
-} from '@qortal/qapp-lib/app-shell/core'
 import { UserNavbar } from '../../common/UserNavbar/UserNavbar'
 import { removePrefix } from '../../../utils/blogIdformats'
-import { useLocation } from 'react-router-dom'
-import { BlockedNamesModal } from '../../common/BlockedNamesModal/BlockedNamesModal'
+import { useLocation, useNavigate } from 'react-router-dom'
 import Logo from '../../../assets/svgs/Logo.svg'
 import LogoLight from '../../../assets/svgs/LogoLight.svg'
-import {
-  readAutoApplyQdnState,
-  writeAutoApplyQdnState
-} from '../../../utils/qdnStatePreference'
 import packageJson from '../../../../package.json'
 import {
   CustomAppBar,
   CustomToolbar,
-  DropdownContainer,
-  DropdownText,
   QblogLogoContainer
 } from './Navbar-styles'
-import PersonOffIcon from '@mui/icons-material/PersonOff'
 import MenuIcon from '@mui/icons-material/Menu'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
-import { executeEvent, subscribeToEvent, unsubscribeFromEvent } from '../../../utils/events'
-interface Props {
-  isAuthenticated: boolean
-  userName: string | null
-  userAvatar: string
-  accountNames: { name: string }[]
-  setActiveName: (name: string) => void
-  appShellController: AppShellController
-  appShellState: AppShellState
-}
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
+import { executeEvent } from '../../../utils/events'
+import { SETTINGS_PATH } from '../../../pages/Settings/SettingsPage'
 
-const AppMenuCompat = AppMenu as unknown as React.ComponentType<any>
-
-const NavBar: React.FC<Props> = ({
-  isAuthenticated,
-  userName,
-  userAvatar,
-  accountNames,
-  setActiveName,
-  appShellController,
-  appShellState
-}) => {
+const NavBar: React.FC = () => {
   const theme = useTheme()
   const isMobile = useMediaQuery('(max-width:950px)')
   const logoSrc = theme.palette.mode === 'light' ? LogoLight : Logo
   const appVersion = packageJson.version
-  const userAddress = useSelector(
-    (state: RootState) =>
-      state.auth?.user?.address || state.auth?.user?.name || ''
-  )
   const { visitingBlog } = useSelector((state: RootState) => state.global)
   const location = useLocation()
-  const [anchorEl, setAnchorEl] = React.useState<HTMLElement | null>(null)
-  const [isOpenModal, setIsOpenModal] = React.useState<boolean>(false)
-  const [autoApplyQdnState, setAutoApplyQdnState] = React.useState<boolean>(
-    () => readAutoApplyQdnState(userAddress)
-  )
+  const navigate = useNavigate()
   const stripBlogId = removePrefix(visitingBlog?.blogId || '')
-
-  React.useEffect(() => {
-    setAutoApplyQdnState(readAutoApplyQdnState(userAddress))
-  }, [userAddress])
-
-  React.useEffect(() => {
-    const onAuthenticate = () => {
-      void appShellController.authenticate()
-    }
-
-    subscribeToEvent('qmail:authenticate', onAuthenticate)
-    return () => {
-      unsubscribeFromEvent('qmail:authenticate', onAuthenticate)
-    }
-  }, [appShellController])
 
   if (visitingBlog?.navbarConfig && location?.pathname?.includes(stripBlogId)) {
     return (
@@ -104,21 +47,9 @@ const NavBar: React.FC<Props> = ({
     )
   }
 
-  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget)
-  }
-
-  const handleCloseUserDropdown = () => {
-    setAnchorEl(null)
-    appShellController.closeMenu()
-  }
-  const onClose = () => {
-    setIsOpenModal(false)
-  }
-
-  const handleOpenUserMenu = (event: React.MouseEvent<HTMLElement>) => {
-    handleClick(event)
-    appShellController.openMenu()
+  const openSettings = () => {
+    if (location.pathname === SETTINGS_PATH) return
+    navigate(SETTINGS_PATH, { state: { backgroundLocation: location } })
   }
 
   const handleSidebarAnchorClick = () => {
@@ -132,9 +63,6 @@ const NavBar: React.FC<Props> = ({
   const handleSidebarAnchorPointerLeave = () => {
     executeEvent('qmail:left-sidebar-anchor-pointer-leave', {})
   }
-
-  const open = Boolean(anchorEl) && appShellState.ui.menuOpen
-  const id = open ? 'simple-popover' : undefined
 
   return (
     <CustomAppBar position="sticky" elevation={2}>
@@ -261,114 +189,16 @@ const NavBar: React.FC<Props> = ({
             gap: 0
           }]}
         >
-          <IconButton
-            className='qapp-shell-icon-button qapp-shell-menu-button'
-            onClick={handleOpenUserMenu}
-            aria-label='Menu'
-            title='Menu'
-            sx={{ color: theme.palette.text.primary }}
-          >
-            <MenuIcon />
-          </IconButton>
-          <Popover
-            id={id}
-            open={open}
-            anchorEl={anchorEl}
-            onClose={handleCloseUserDropdown}
-            anchorOrigin={{
-              vertical: 'bottom',
-              horizontal: 'left'
-            }}
-            slotProps={{
-              paper: {
-                sx: {
-                  minWidth: '280px',
-                  backgroundColor: 'var(--qmail-shell-popover-bg)',
-                  border: '1px solid var(--qmail-shell-border)',
-                  color: 'var(--qmail-thread-text)'
-                }
-              }
-            }}
-          >
-            <Box className='qmail-user-menu-content'>
-              <Box
-                sx={{
-                  borderTop: 'none'
-                }}
-              >
-                <AppMenuCompat
-                  state={appShellState}
-                  controller={appShellController}
-                  sections={['auth', 'settings', 'rating']}
-                  labels={{
-                    authSectionTitle: 'Authentication',
-                    authenticateButton: 'Authenticate',
-                    authenticatingButton: 'Authenticating',
-                    settingsSectionTitle: 'Settings',
-                    textSizeLabel: 'Text size',
-                    themeModeLabel: 'Theme mode',
-                    authOnStartupLabel: 'Authenticate on startup',
-                    ratingSectionTitle: 'Rate this app',
-                    ratingNoRatingsLabel: 'No ratings yet',
-                    ratingRefreshButton: 'Refresh'
-                  }}
-                />
-              </Box>
-              {isAuthenticated && userAddress && (
-                <>
-                  <Divider />
-                  <Box
-                    sx={{
-                      p: 2,
-                      display: 'grid',
-                      gap: 1
-                    }}
-                  >
-                    <Typography variant="subtitle2">
-                      QDN State
-                    </Typography>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={autoApplyQdnState}
-                          onChange={event => {
-                            const checked = event.target.checked
-                            setAutoApplyQdnState(checked)
-                            writeAutoApplyQdnState(userAddress, checked)
-                          }}
-                        />
-                      }
-                      label="Always fetch and apply QDN state"
-                    />
-                  </Box>
-                </>
-              )}
-              {isAuthenticated && (
-                <Box
-                  sx={theme => ({
-                    borderTop: `1px solid ${theme.palette.divider}`
-                  })}
-                >
-                  <DropdownContainer
-                    onClick={() => {
-                      setIsOpenModal(true)
-                      handleCloseUserDropdown()
-                    }}
-                  >
-                    <PersonOffIcon
-                      sx={{
-                        color: 'var(--qmail-danger-text)'
-                      }}
-                    />
-                    <DropdownText>Blocked Names</DropdownText>
-                  </DropdownContainer>
-                </Box>
-              )}
-            </Box>
-          </Popover>
-          {isOpenModal && (
-            <BlockedNamesModal open={isOpenModal} onClose={onClose} />
-          )}
+          <Tooltip title='Settings'>
+            <IconButton
+              className='qapp-shell-icon-button qapp-shell-menu-button'
+              onClick={openSettings}
+              aria-label='Settings'
+              sx={{ color: theme.palette.text.primary }}
+            >
+              <SettingsOutlinedIcon />
+            </IconButton>
+          </Tooltip>
         </Box>
       </CustomToolbar>
     </CustomAppBar>
