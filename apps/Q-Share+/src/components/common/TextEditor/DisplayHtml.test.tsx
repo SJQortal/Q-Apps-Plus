@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { renderWithProviders } from "../../../test/renderWithProviders";
+import { store } from "../../../state/store";
 import { DisplayHtml, sanitizeDescription } from "./DisplayHtml";
 
 /** Parse the sanitised output the way the page will. */
@@ -140,7 +142,86 @@ describe("sanitizeDescription: inline colours", () => {
   });
 });
 
+describe("sanitizeDescription: web links", () => {
+  it("marks http(s) links, including protocol-relative ones", () => {
+    const root = parse(
+      `<p><a href="https://github.com/gohugoio/hugo" target="_blank">Hugo</a> <a href="//example.com/x">x</a></p>`
+    );
+    const [hugo, relative] = Array.from(root.querySelectorAll("a"));
+    expect(hugo.hasAttribute("data-web-link")).toBe(true);
+    expect(hugo.getAttribute("title")).toMatch(/copy web link/i);
+    expect(hugo.hasAttribute("target")).toBe(false);
+    expect(relative.hasAttribute("data-web-link")).toBe(true);
+    expect(relative.getAttribute("href")).toMatch(/^https?:\/\/example\.com\/x$/);
+  });
+
+  it("leaves qortal:// links unmarked", () => {
+    const root = parse(`<p><a href="qortal://APP/Q-Tube">tube</a> qortal://APP/Q-Mail</p>`);
+    expect(root.querySelectorAll("a").length).toBe(2);
+    expect(root.querySelector("[data-web-link]")).toBeNull();
+  });
+
+  it("drops a data-web-link marker the publisher wrote", () => {
+    const root = parse(`<p><a href="qortal://APP/x" data-web-link>x</a> <span data-web-link="">y</span></p>`);
+    expect(root.querySelector("a")?.getAttribute("href")).toBe("qortal://APP/x");
+    expect(root.querySelector("[data-web-link]")).toBeNull();
+  });
+});
+
 describe("DisplayHtml", () => {
+  const html = `<p><a href="https://github.com/gohugoio/hugo">Hugo</a> and <a href="qortal://APP/Q-Tube">Q-Tube</a></p>`;
+  const secure = (value: boolean) => Object.defineProperty(window, "isSecureContext", { value, configurable: true });
+
+  // Stands in for q-apps.js's document listener: records what the app did, then stops jsdom navigating.
+  let prevented: boolean | null = null;
+  const recordDefault = (event: Event) => {
+    prevented = event.defaultPrevented;
+    event.preventDefault();
+  };
+  beforeEach(() => {
+    prevented = null;
+    document.addEventListener("click", recordDefault);
+  });
+  afterEach(() => {
+    document.removeEventListener("click", recordDefault);
+    vi.restoreAllMocks();
+  });
+
+  it("copies a web link on click instead of following it", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    secure(true);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    renderWithProviders(<DisplayHtml html={html} />);
+    fireEvent.click(screen.getByText("Hugo"));
+    expect(prevented).toBe(true);
+    expect(writeText).toHaveBeenCalledWith("https://github.com/gohugoio/hugo");
+    await waitFor(() =>
+      expect(store.getState().notifications.alertTypes.alertSuccess).toBe(
+        "Link copied. Hub can't open web links, so paste it in your browser."
+      )
+    );
+  });
+
+  it("shows the link when copying fails", async () => {
+    secure(false);
+    Object.defineProperty(document, "execCommand", { value: vi.fn().mockReturnValue(false), configurable: true });
+    renderWithProviders(<DisplayHtml html={html} />);
+    fireEvent.click(screen.getByText("Hugo"));
+    await waitFor(() =>
+      expect(store.getState().notifications.alertTypes.alertError).toContain("https://github.com/gohugoio/hugo")
+    );
+  });
+
+  it("leaves qortal:// link clicks to q-apps.js", () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    secure(true);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    renderWithProviders(<DisplayHtml html={html} />);
+    fireEvent.click(screen.getByText("Q-Tube"));
+    expect(prevented).toBe(false);
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
   it("renders the payload without event handlers", () => {
     const { container } = renderWithProviders(
       <DisplayHtml html={`<p>qortal://APP/x"/onpointerenter="alert(1)"/data-x="</p>`} />

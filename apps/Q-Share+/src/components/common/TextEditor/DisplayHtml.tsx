@@ -1,8 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, type MouseEvent } from "react";
+import { useDispatch } from "react-redux";
 import DOMPurify from "dompurify";
 import { styled } from "@mui/material/styles";
 import { linkifyQortalText } from "./utils";
 import { normalizeQuillHtml } from "../../../utils/quillHtml";
+import { copyText } from "../../../utils/clipboard";
+import { setNotification } from "../../../state/features/notificationsSlice";
 
 /**
  * Renders a stored `htmlDescription` with the app's own styles instead of
@@ -57,6 +60,15 @@ const RichText = styled("div")(({ theme }) => {
     "& code": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" },
     "& img": { maxWidth: "100%", height: "auto", borderRadius: theme.shape.borderRadius },
     "& a": { color: theme.palette.primary.main, wordBreak: "break-all" },
+    // Web links copy themselves (see DisplayHtml); the arrow says they leave Qortal.
+    "& a[data-web-link]": { cursor: "copy" },
+    "& a[data-web-link]::after": {
+      // The second value gives the arrow empty alt text, so screen readers skip it.
+      content: ['"\\2197"', '"\\2197" / ""'],
+      display: "inline-block",
+      marginLeft: "0.15em",
+      fontSize: "0.85em",
+    },
     "& .ql-align-center": { textAlign: "center" },
     "& .ql-align-right": { textAlign: "right" },
     "& .ql-align-justify": { textAlign: "justify" },
@@ -92,6 +104,33 @@ function dropInlineColours(root: ParentNode): void {
   });
 }
 
+/** The absolute URL of a link to another web site, or null. */
+function webLinkUrl(href: string): string | null {
+  try {
+    const url = new URL(href, window.location.href);
+    if ((url.protocol === "http:" || url.protocol === "https:") && url.origin !== window.location.origin) return url.href;
+  } catch {
+    // not a URL
+  }
+  return null;
+}
+
+/**
+ * Core's q-apps.js swallows clicks on http(s) links in every Q-App and Hub
+ * can't open web pages, so these links look live but do nothing. Mark them;
+ * DisplayHtml copies them on click instead.
+ */
+function markWebLinks(root: ParentNode): void {
+  root.querySelectorAll("a[href]").forEach((a) => {
+    const url = webLinkUrl(a.getAttribute("href") ?? "");
+    if (!url) return;
+    a.setAttribute("href", url);
+    a.setAttribute("data-web-link", "");
+    a.setAttribute("title", "Copy web link (Hub can't open it)");
+    a.removeAttribute("target");
+  });
+}
+
 /**
  * Makes a stored `htmlDescription` safe to show. Anyone can publish one, so
  * after DOMPurify every change is made on DOM nodes and the result is only
@@ -104,7 +143,9 @@ export function sanitizeDescription(html: string | null | undefined): string {
     USE_PROFILES: { html: true },
     ALLOWED_URI_REGEXP: ALLOWED_URI,
     // <font color> and <td bgcolor> are the old way of doing the same.
-    FORBID_ATTR: ["color", "bgcolor"],
+    // data-web-link is the app's own marker: a publisher who sets it would
+    // turn a qortal:// link into one that copies itself.
+    FORBID_ATTR: ["color", "bgcolor", "data-web-link"],
     RETURN_DOM_FRAGMENT: true,
   });
   dropInlineColours(fragment);
@@ -112,6 +153,7 @@ export function sanitizeDescription(html: string | null | undefined): string {
   // only text now: unwrap it, so a qortal:// URL in it becomes a real link.
   fragment.querySelectorAll("a:not([href])").forEach((a) => a.replaceWith(...a.childNodes));
   linkifyQortalText(fragment);
+  markWebLinks(fragment);
   // Serialise in DOMPurify's inert document, so nothing loads before render.
   const box = fragment.ownerDocument.createElement("div");
   box.append(fragment);
@@ -123,8 +165,25 @@ interface DisplayHtmlProps {
 }
 
 export const DisplayHtml = ({ html }: DisplayHtmlProps) => {
+  const dispatch = useDispatch();
   const cleanContent = useMemo(() => sanitizeDescription(html), [html]);
 
+  // qortal:// links keep their default: q-apps.js routes them in Hub.
+  const copyWebLink = async (event: MouseEvent<HTMLDivElement>) => {
+    const link = event.target instanceof Element ? event.target.closest("a[data-web-link]") : null;
+    if (!link) return;
+    event.preventDefault();
+    const url = link.getAttribute("href") ?? "";
+    const copied = await copyText(url);
+    dispatch(
+      setNotification(
+        copied
+          ? { msg: "Link copied. Hub can't open web links, so paste it in your browser.", alertType: "success" }
+          : { msg: `Hub can't open web links, and copying failed. The link is ${url}`, alertType: "error" }
+      )
+    );
+  };
+
   if (!cleanContent) return null;
-  return <RichText dangerouslySetInnerHTML={{ __html: cleanContent }} />;
+  return <RichText onClick={copyWebLink} dangerouslySetInnerHTML={{ __html: cleanContent }} />;
 };
