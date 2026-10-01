@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { ReusableModal } from "../../components/modals/ReusableModal";
 import {
+  Alert,
   Autocomplete,
   Box,
   Button,
@@ -17,8 +18,8 @@ import {
   MenuItem,
   TextField,
   Typography,
-  useMediaQuery,
 } from "@mui/material";
+import { useLayoutMode } from "../../layout/useLayoutMode";
 import ShortUniqueId from "short-unique-id";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
@@ -42,7 +43,6 @@ import {
 import { TextEditor } from "../../components/common/TextEditor/TextEditor";
 import { toQuill1Html } from "../../components/common/TextEditor/quillHtml";
 import {
-  AliasLabelP,
   AttachmentContainer,
   ComposeContainer,
   ComposeIcon,
@@ -53,8 +53,6 @@ import {
   NewMessageAttachmentImg,
   NewMessageInputLabelP,
   NewMessageInputRow,
-  NewMessageSendButton,
-  NewMessageSendP,
 } from "./Mail-styles";
 import ComposeIconSVG from "../../assets/svgs/ComposeIcon.svg";
 import AttachmentSVG from "../../assets/svgs/NewMessageAttachment.svg";
@@ -102,6 +100,15 @@ import { fetchingLabel } from "../../layout/states";
 
 const uid = new ShortUniqueId();
 const maxSize = 40 * 1024 * 1024; // 40 MB in bytes
+
+const aliasToggleSx = {
+  textTransform: "none",
+  minHeight: 44,
+  px: 1,
+  fontWeight: 500,
+  color: "var(--qmail-compose-muted)",
+  "&:hover": { color: "var(--qmail-compose-text)" },
+} as const;
 
 type ComposeTargetType = "name" | "group";
 type PendingPublishType = "mail" | "thread";
@@ -339,8 +346,18 @@ export const NewMessage = ({
   const [replyPreviewMode, setReplyPreviewMode] = useState<
     "preview" | "full" | "hidden"
   >("preview");
-  const isMobile = useMediaQuery("(max-width:950px)");
+  // The shell decides the layout; "phone" also covers narrow Hub panes.
+  const isMobile = useLayoutMode() === "phone";
   const isHydratingDraftRef = useRef(false);
+  // A clear, inline error for the current send attempt (next to the toast).
+  const [composeError, setComposeError] = useState<{
+    text: string;
+    retry?: "thread-header";
+  } | null>(null);
+  // The MAIL thread header is published only after the message batch
+  // succeeds, so declining or failing the batch leaves no empty thread
+  // behind (Bugs #21).
+  const pendingThreadHeaderRef = useRef<any>(null);
   const lastLoadedDraftKeyRef = useRef<string | null>(null);
   // What the composer started with (the reply quote, the forward header, a
   // prefilled subject). Content equal to this is not "something the user
@@ -366,6 +383,12 @@ export const NewMessage = ({
     message:
       "To keep yourself anonymous remember to not use the same alias as the person you are messaging",
   });
+  const { Modal: DiscardModal, showModal: showDiscardModal } =
+    useConfirmationModal({
+      title: "Discard this message?",
+      message:
+        "What you wrote, and the draft saved on this device, will be deleted.",
+    });
 
   const fromOptions = useMemo(() => {
     const options = dedupeStrings([user?.name || "", ...ownedNames]);
@@ -736,6 +759,10 @@ export const NewMessage = ({
     setPendingPublishType("mail");
     initialValueRef.current = "";
     initialSubjectRef.current = "";
+    pendingDraftRef.current = null;
+    skipNextDraftHydrationRef.current = false;
+    setDraftSavedAt(null);
+    setComposeError(null);
   }, [cancelForwardAttachmentJobs]);
 
   const discardComposerDraft = useCallback(() => {
@@ -1400,7 +1427,9 @@ export const NewMessage = ({
 
         const groupPublicKeys = await fetchGroupPublicKeys(groupId);
         if (!groupPublicKeys.length) {
-          throw new Error("No group members were found for encryption");
+          throw new Error(
+            "No group members with a public key were found, so the thread cannot be encrypted. Check the group, or try again in a moment."
+          );
         }
 
         const createdAt = Date.now();
@@ -1424,7 +1453,8 @@ export const NewMessage = ({
           identifier: threadIdentifier,
           description: threadTitle.slice(0, 200),
         };
-        await qortalRequest(threadPublishRequest);
+        // Published after the message batch succeeds (see onSubmit).
+        pendingThreadHeaderRef.current = threadPublishRequest;
 
         const threadMessageObject = {
           subject: threadTitle,
@@ -1551,6 +1581,7 @@ export const NewMessage = ({
       setPublishes(null);
       setPendingPublishType("mail");
       setThreadPublishResult(null);
+      pendingThreadHeaderRef.current = null;
 
       const message =
         typeof error === "string"
@@ -1559,6 +1590,7 @@ export const NewMessage = ({
           ? error.error
           : error?.message || "Failed to send message";
 
+      setComposeError({ text: message });
       dispatch(
         setNotification({
           msg: message,
@@ -1570,7 +1602,97 @@ export const NewMessage = ({
   }
 
   const sendMail = () => {
-    void publishQDNResource();
+    setComposeError(null);
+    publishQDNResource().catch(() => {
+      // Already reported inline and as a toast.
+    });
+  };
+
+  // Publishes the thread header kept back until the posts went through.
+  // Returns false (and shows a Retry) when that publish fails.
+  const finishThreadPublish = useCallback(async (): Promise<boolean> => {
+    const header = pendingThreadHeaderRef.current;
+    if (!header) return true;
+    try {
+      await qortalRequest(header);
+      pendingThreadHeaderRef.current = null;
+      return true;
+    } catch (error: any) {
+      const detail =
+        typeof error?.message === "string" && error.message
+          ? ` (${error.message})`
+          : "";
+      setComposeError({
+        text: `Your post was published, but the thread's title record was not${detail}. Retry to publish it; until then the thread is not listed.`,
+        retry: "thread-header",
+      });
+      return false;
+    }
+  }, []);
+
+  const completeThreadPublish = useCallback(() => {
+    dispatch(
+      setNotification({
+        msg: "Thread published",
+        alertType: "success",
+      })
+    );
+    if (threadPublishResult) {
+      onThreadPublished?.(threadPublishResult);
+    }
+    clearStoredDraft(activeDraftKey);
+    clearStoredDraft(openedDraftKeyRef.current);
+    setIsOpenMultiplePublish(false);
+    setPublishes(null);
+    setPendingPublishType("mail");
+    setThreadPublishResult(null);
+    setComposeError(null);
+    closeModal();
+  }, [
+    activeDraftKey,
+    clearStoredDraft,
+    closeModal,
+    dispatch,
+    onThreadPublished,
+    threadPublishResult,
+  ]);
+
+  const retryThreadHeader = async () => {
+    setComposeError(null);
+    const ok = await finishThreadPublish();
+    if (ok) completeThreadPublish();
+  };
+
+  const hasUserContent = () => {
+    const subjectChanged =
+      subject.trim() && subject !== initialSubjectRef.current;
+    const bodyChanged =
+      value !== initialValueRef.current && stripHtmlTags(value).trim();
+    return Boolean(
+      subjectChanged ||
+        bodyChanged ||
+        attachments.length ||
+        bccNames.length ||
+        aliasValue.trim()
+    );
+  };
+
+  // Discard asks only when there is something to lose.
+  const requestDiscard = async () => {
+    if (hasUserContent()) {
+      const confirmed = await showDiscardModal();
+      if (!confirmed) return;
+    }
+    setComposeError(null);
+    discardComposerDraft();
+  };
+
+  const handleComposerKeyDown = (event: React.KeyboardEvent) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!isOpenMultiplePublish) sendMail();
+    }
   };
 
   const sendButtonLabel = replyTo
@@ -1834,7 +1956,8 @@ export const NewMessage = ({
                         <Typography
                           sx={{
                             color: "var(--qmail-compose-muted)",
-                            fontSize: "0.75rem",
+                            fontSize: "0.875rem",
+                            flexShrink: 0,
                           }}
                         >
                           {typeLabel} · {sourceLabel}
@@ -1851,10 +1974,26 @@ export const NewMessage = ({
                   flexShrink: 0,
                 }}
               >
-                <AliasLabelP onClick={() => setShowAlias(true)}>
-                  Add Alias
-                </AliasLabelP>
-                <AliasLabelP onClick={() => setShowBCC(true)}>Bcc</AliasLabelP>
+                {!showAlias && !requireSenderAlias && (
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={() => setShowAlias(true)}
+                    sx={aliasToggleSx}
+                  >
+                    Send to alias
+                  </Button>
+                )}
+                {!showBCC && (
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={() => setShowBCC(true)}
+                    sx={aliasToggleSx}
+                  >
+                    Bcc
+                  </Button>
+                )}
               </NewMessageAliasContainer>
             )}
           </NewMessageInputRow>
@@ -1945,16 +2084,24 @@ export const NewMessage = ({
                   minWidth: 0,
                 }}
               >
-                <NewMessageInputLabelP>Alias:</NewMessageInputLabelP>
+                <NewMessageInputLabelP>
+                  {requireSenderAlias ? "Reply alias:" : "Send to alias:"}
+                </NewMessageInputLabelP>
                 <Input
-                  id="standard-adornment-name"
+                  id="qmail-compose-alias"
                   value={aliasValue}
                   onChange={e => {
                     setAliasValue(e.target.value);
                   }}
+                  placeholder={
+                    requireSenderAlias
+                      ? "An alias of yours (not the inbox's)"
+                      : "The recipient's alias inbox"
+                  }
                   disableUnderline
                   autoComplete="off"
                   autoCorrect="off"
+                  inputProps={{ "aria-describedby": "qmail-compose-alias-help" }}
                   sx={{
                     width: "100%",
                     color: "var(--new-message-text)",
@@ -1974,6 +2121,20 @@ export const NewMessage = ({
                 />
               </NewMessageAliasContainer>
             </NewMessageInputRow>
+          )}
+          {allowAliasAndBcc && (requireSenderAlias || showAlias) && (
+            <Typography
+              id="qmail-compose-alias-help"
+              sx={{
+                fontSize: "0.875rem",
+                color: "var(--qmail-compose-muted)",
+                mt: "-0.4rem",
+              }}
+            >
+              {requireSenderAlias
+                ? "Replies from an alias inbox are sent under an alias of your own, so the other side keeps writing to the alias. It must differ from the inbox's alias."
+                : "The message is delivered to the alias inbox named here instead of the recipient's name inbox; it is still encrypted to the recipient, and you stay the sender. Bcc copies are not sent with an alias."}
+            </Typography>
           )}
 
           {allowAliasAndBcc && showBCC && (
@@ -2247,7 +2408,7 @@ export const NewMessage = ({
                       minWidth: "unset",
                       textTransform: "none",
                       color: "var(--qmail-compose-text)",
-                      fontSize: "0.8rem",
+                      fontSize: "0.875rem",
                     }}
                   >
                     Hide
@@ -2256,7 +2417,7 @@ export const NewMessage = ({
               </Box>
               <Typography
                 sx={{
-                  fontSize: "0.8rem",
+                  fontSize: "0.875rem",
                   color: "var(--qmail-compose-muted)",
                 }}
               >
@@ -2265,7 +2426,7 @@ export const NewMessage = ({
               </Typography>
               <Typography
                 sx={{
-                  fontSize: "0.8rem",
+                  fontSize: "0.875rem",
                   color: "var(--qmail-compose-muted)",
                 }}
               >
@@ -2328,26 +2489,37 @@ export const NewMessage = ({
       <InstanceFooter
         sx={[{
           backgroundColor: "var(--qmail-compose-footer-surface)",
+          borderTop: "1px solid var(--qmail-compose-divider)",
           alignItems: "stretch",
-          height: "auto"
+          height: "auto",
+          gap: "0.5rem"
         }, isMobile ? {
-          padding: "0.85rem 0.9rem calc(env(safe-area-inset-bottom, 0px) + 0.85rem)"
+          padding: "0.6rem 0.75rem calc(env(safe-area-inset-bottom, 0px) + 0.6rem)"
         } : {
-          padding: "1rem 2rem"
-        }, isMobile ? {
-          position: "sticky"
-        } : {
-          position: "static"
-        }, isMobile ? {
-          bottom: 0
-        } : {
-          bottom: "auto"
-        }, isMobile ? {
-          zIndex: 2
-        } : {
-          zIndex: "auto"
+          padding: "0.85rem 2rem"
         }]}
       >
+        {composeError && (
+          <Alert
+            severity="error"
+            onClose={() => setComposeError(null)}
+            action={
+              composeError.retry === "thread-header" ? (
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => void retryThreadHeader()}
+                  sx={{ minHeight: 36 }}
+                >
+                  Retry
+                </Button>
+              ) : undefined
+            }
+            sx={{ alignItems: "center", fontSize: "0.875rem" }}
+          >
+            {composeError.text}
+          </Alert>
+        )}
         <Box
           sx={{
             display: "flex",
@@ -2360,7 +2532,7 @@ export const NewMessage = ({
         >
           <Button
             variant="outlined"
-            onClick={discardComposerDraft}
+            onClick={() => void requestDiscard()}
             sx={{
               textTransform: "none",
               borderColor: "var(--qmail-shell-border)",
@@ -2384,33 +2556,53 @@ export const NewMessage = ({
               Draft saved {formatFullTimestamp(draftSavedAt).slice(11, 16)}
             </Typography>
           )}
-          <NewMessageSendButton
-            sx={[{
-              marginLeft: "auto"
-            }, isMobile ? {
-              padding: "10px 14px"
-            } : {
-              padding: "8px 16px 8px 12px"
-            }]}
+          <Button
+            variant="contained"
             onClick={sendMail}
+            disabled={isOpenMultiplePublish}
+            title="Ctrl+Enter (⌘+Enter on Mac) also sends"
+            endIcon={
+              isGroupTarget && !replyTo ? (
+                <CreateThreadIcon
+                  color="currentColor"
+                  opacity={1}
+                  height="22px"
+                  width="22px"
+                />
+              ) : (
+                <SendNewMessage
+                  color="currentColor"
+                  opacity={1}
+                  height="22px"
+                  width="22px"
+                />
+              )
+            }
+            sx={[{
+              marginLeft: "auto",
+              minHeight: 44,
+              minWidth: 120,
+              textTransform: "none",
+              fontWeight: 600,
+              borderRadius: "0.85rem",
+              px: "1.1rem",
+              color: "var(--qmail-action-primary-text)",
+              backgroundColor: "var(--qmail-action-primary-bg)",
+              border: "1px solid var(--qmail-action-primary-border)",
+              boxShadow: "none",
+              "&:hover": {
+                backgroundColor: "var(--qmail-action-primary-hover)",
+                boxShadow: "none",
+              },
+              "& svg path": { fill: "currentColor" },
+            }, isMobile ? {
+              flex: "1 1 auto"
+            } : {
+              flex: "0 0 auto"
+            }]}
           >
-            <NewMessageSendP>{sendButtonLabel}</NewMessageSendP>
-            {isGroupTarget && !replyTo ? (
-              <CreateThreadIcon
-                color="currentColor"
-                opacity={1}
-                height="25px"
-                width="25px"
-              />
-            ) : (
-              <SendNewMessage
-                color="currentColor"
-                opacity={1}
-                height="25px"
-                width="25px"
-              />
-            )}
-          </NewMessageSendButton>
+            {sendButtonLabel}
+          </Button>
         </Box>
       </InstanceFooter>
     </>
@@ -2418,9 +2610,11 @@ export const NewMessage = ({
 
   return (
     <Box
+      onKeyDown={handleComposerKeyDown}
       sx={[{
         display: "flex",
         height: "100%",
+        minHeight: 0,
         width: "100%"
       }, inlineMode ? {
         flexDirection: "column"
@@ -2447,6 +2641,7 @@ export const NewMessage = ({
             display: "flex",
             flexDirection: "column",
             height: "100%",
+            minHeight: 0,
             width: "100%",
             background: "var(--Mail-Background)",
           }}
@@ -2457,21 +2652,38 @@ export const NewMessage = ({
         <ReusableModal
           open={isOpen}
           onClose={closeModal}
-          customStyles={{
-            maxHeight: "95vh",
-            maxWidth: "950px",
-            height: isMobile ? "95vh" : "700px",
-            borderRadius: "12px 12px 0px 0px",
-            background: "var(--Mail-Background)",
-            padding: "0px",
-            gap: "0px",
-            width: isMobile ? "95%" : "75%",
-          }}
+          customStyles={
+            isMobile
+              ? {
+                  top: 0,
+                  left: 0,
+                  transform: "none",
+                  width: "100%",
+                  maxWidth: "100%",
+                  height: "var(--qmail-app-height, 100dvh)",
+                  maxHeight: "var(--qmail-app-height, 100dvh)",
+                  borderRadius: 0,
+                  background: "var(--Mail-Background)",
+                  padding: "0px",
+                  gap: "0px",
+                }
+              : {
+                  maxHeight: "calc(var(--qmail-app-height, 100dvh) - 32px)",
+                  maxWidth: "950px",
+                  height: "700px",
+                  borderRadius: "12px",
+                  background: "var(--Mail-Background)",
+                  padding: "0px",
+                  gap: "0px",
+                  width: "75%",
+                }
+          }
         >
           {composerContent}
         </ReusableModal>
       )}
       <Modal />
+      <DiscardModal />
       {isOpenMultiplePublish && (
         <MultiplePublish
           isOpen={isOpenMultiplePublish}
@@ -2490,27 +2702,29 @@ export const NewMessage = ({
             }
           }}
           onSubmit={() => {
-            const successMessage =
-              pendingPublishType === "thread"
-                ? "Thread published"
-                : "Message sent";
+            if (pendingPublishType === "thread") {
+              // The posts are on QDN; now the thread header that lists them.
+              setIsOpenMultiplePublish(false);
+              setPublishes(null);
+              void finishThreadPublish().then(ok => {
+                if (ok) completeThreadPublish();
+              });
+              return;
+            }
+
             dispatch(
               setNotification({
-                msg: successMessage,
+                msg: "Message sent",
                 alertType: "success",
               })
             );
-
-            if (pendingPublishType === "thread" && threadPublishResult) {
-              onThreadPublished?.(threadPublishResult);
-            }
-
             clearStoredDraft(activeDraftKey);
             clearStoredDraft(openedDraftKeyRef.current);
             setIsOpenMultiplePublish(false);
             setPublishes(null);
             setPendingPublishType("mail");
             setThreadPublishResult(null);
+            setComposeError(null);
             closeModal();
           }}
           publishes={publishes}
