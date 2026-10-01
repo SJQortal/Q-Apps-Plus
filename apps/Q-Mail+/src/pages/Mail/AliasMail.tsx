@@ -277,7 +277,6 @@ export const AliasMail = ({ value, onOpen, messageOpenedId}: AliasMailProps) => 
                       key={item?.id || item?.identifier}
                       messageData={item}
                       openMessage={openMessage}
-                      useFullTimestamp
                       isOpen={messageOpenedId === (item?.id || item?.identifier)}
                     />
                   );

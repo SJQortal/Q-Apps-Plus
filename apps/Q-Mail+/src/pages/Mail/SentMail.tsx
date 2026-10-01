@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { Box, CircularProgress } from '@mui/material'
+import { Button } from '@mui/material'
+import SendOutlinedIcon from '@mui/icons-material/SendOutlined'
 import { RootState } from '../../state/store'
 import { MAIL_SERVICE_TYPE } from '../../constants/mail'
 import { GroupedMailboxList } from './GroupedMailboxList'
@@ -24,6 +25,8 @@ interface SentMailProps {
     to?: string
   ) => Promise<void>
   openedMessageId?: string | number | null
+  /** The empty state's next action. */
+  onCompose?: () => void
 }
 
 interface ResolvedRecipientInfo {
@@ -271,6 +274,7 @@ export const SentMail = ({
   instanceNames,
   onOpen,
   openedMessageId,
+  onCompose,
 }: SentMailProps) => {
   const dispatch = useDispatch()
   const { user } = useSelector((state: RootState) => state.auth)
@@ -297,6 +301,7 @@ export const SentMail = ({
 
   const [mailMessages, setMailMessages] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [deletingMessageIds, setDeletingMessageIds] = useState<
     Record<string, boolean>
@@ -398,6 +403,7 @@ export const SentMail = ({
       const silent = Boolean(options?.silent)
       if (!silent) {
         setIsLoading(true)
+        setLoadError(null)
       }
 
       try {
@@ -476,6 +482,9 @@ export const SentMail = ({
         dedupedMessages.sort(sortByCreatedDescending)
         setMailMessages(dedupedMessages)
       } catch (error) {
+        if (!silent) {
+          setLoadError(toErrorMessage(error, "Couldn't reach the node."))
+        }
       } finally {
         if (!silent) {
           setIsLoading(false)
@@ -667,19 +676,24 @@ export const SentMail = ({
         openedMessageId={openedMessageId}
         onDeleteMessage={handleDeleteSentMessage}
         isDeletingMessage={isDeletingMessage}
+        status={isLoading ? 'loading' : loadError ? 'error' : 'ready'}
+        errorMessage={loadError || undefined}
+        onRetry={() => void fetchSentIndexes()}
+        emptyIcon={<SendOutlinedIcon />}
+        emptyTitle={searchQuery.trim() ? 'No matches' : 'No sent mail yet'}
+        emptyHint={
+          searchQuery.trim()
+            ? 'Try fewer words, or search message bodies.'
+            : 'Mail you send shows up here once it is published.'
+        }
+        emptyAction={
+          !searchQuery.trim() && onCompose ? (
+            <Button variant='contained' onClick={onCompose} sx={{ minHeight: 44 }}>
+              Compose
+            </Button>
+          ) : undefined
+        }
       />
-      {isLoading && (
-        <Box
-          sx={{
-            display: 'flex',
-            width: '100%',
-            justifyContent: 'center',
-            pt: '10px',
-          }}
-        >
-          <CircularProgress />
-        </Box>
-      )}
       <DeleteConfirmModal />
     </>
   )
