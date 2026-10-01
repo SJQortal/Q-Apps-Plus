@@ -6,8 +6,8 @@ import { THEME_STORAGE_KEY, themeConfig } from '../theme/qplus-theme'
 import { layoutModeForWidth } from './useLayoutMode'
 import { appHeightValue } from './useAppViewport'
 import { MailShell } from './MailShell'
-import { BottomNav } from './BottomNav'
-import { Rail, groupRailItems, NAME_FILTER_THRESHOLD } from './Rail'
+import { BottomNav, badgeLabel } from './BottomNav'
+import { Rail, badgeFor, groupRailItems, NAME_FILTER_THRESHOLD } from './Rail'
 import { fetchingLabel } from './states'
 
 function wrap(ui: React.ReactElement) {
@@ -177,6 +177,64 @@ describe('Rail', () => {
     expect(screen.getByRole('button', { name: 'name1' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'name15' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'name2' })).toBeNull()
+  })
+})
+
+describe('Rail and BottomNav badges', () => {
+  it('shows numeric badges as counts with 99+, keeps text badges, and never a badge on Threads', () => {
+    expect(badgeFor('5')).toEqual({ kind: 'count', value: 5 })
+    expect(badgeFor('0')).toBeNull()
+    expect(badgeFor('!')).toEqual({ kind: 'text', value: '!' })
+    expect(badgeFor(undefined)).toBeNull()
+    const items = [
+      { id: 'inbox', label: 'Inbox', badgeText: '120' },
+      { id: 'inbox-instance:alice', label: 'alice', badgeText: '3' },
+      { id: 'threads', label: 'Q-Mail Threads', badgeText: '+' },
+      { id: 'threads-group:7', label: 'Devs', badgeText: '2' },
+    ]
+    wrap(<Rail items={items} activeItemId="inbox" onSelect={() => {}} onOpenSettings={() => {}} version="1.0.0" />)
+    expect(screen.getByRole('button', { name: 'Inbox, 120 unread' })).toBeTruthy()
+    expect(screen.getByText('99+')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'alice, 3 unread' })).toBeTruthy()
+    const threads = screen.getByRole('button', { name: 'Threads' })
+    expect(threads.getAttribute('aria-expanded')).toBe('false')
+    expect(threads.textContent).not.toContain('+')
+    // Collapsed: the group child is hidden from the rail by Mail.tsx (hidden flag); here it is listed with its count.
+    expect(screen.getByRole('button', { name: 'Devs, 2 unread' })).toBeTruthy()
+  })
+
+  it('closes the drawer after any selection', () => {
+    const onSelect = vi.fn()
+    const onClose = vi.fn()
+    const onOpenSettings = vi.fn()
+    const items = [
+      { id: 'compose', label: 'Compose' },
+      { id: 'inbox', label: 'Inbox' },
+      { id: 'inbox-instance:bob', label: 'bob' },
+    ]
+    wrap(<Rail items={items} activeItemId="inbox" onSelect={onSelect} onOpenSettings={onOpenSettings} version="1.0.0" onClose={onClose} />)
+    fireEvent.click(screen.getByRole('button', { name: 'bob' }))
+    expect(onSelect).toHaveBeenCalledWith('inbox-instance:bob')
+    expect(onClose).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    expect(onClose).toHaveBeenCalledTimes(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Close menu' }))
+    expect(onClose).toHaveBeenCalledTimes(3)
+  })
+
+  it('bottom nav badges read as counts and cap at 99+', () => {
+    const items = [
+      { id: 'inbox', label: 'Inbox', icon: <InboxOutlinedIcon />, badge: 250 },
+      { id: 'threads', label: 'Threads', icon: <InboxOutlinedIcon />, badge: 4 },
+      { id: 'sent', label: 'Sent', icon: <InboxOutlinedIcon /> },
+    ]
+    wrap(<BottomNav items={items} activeId="inbox" onSelect={() => {}} />)
+    expect(screen.getByRole('button', { name: 'Inbox, 250 unread' })).toBeTruthy()
+    expect(screen.getByText('99+')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Threads, 4 unread' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Sent' })).toBeTruthy()
+    expect(badgeLabel({ id: 'x', label: 'X', icon: null, badge: '7' })).toBe('X, 7 unread')
   })
 })
 

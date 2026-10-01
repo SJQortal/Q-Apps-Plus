@@ -3626,7 +3626,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       items={[
         { id: "inbox", label: "Inbox", icon: <InboxOutlinedIcon />, badge: unreadCounts.inbox || undefined },
         { id: "sent", label: "Sent", icon: <SendOutlinedIcon /> },
-        { id: "threads", label: "Threads", icon: <ForumOutlinedIcon /> },
+        { id: "threads", label: "Threads", icon: <ForumOutlinedIcon />, badge: Object.values(threadUnreadByGroup || {}).reduce((sum, n) => sum + (n || 0), 0) || undefined },
         { id: "aliases", label: "Aliases", icon: <AlternateEmailOutlinedIcon />, badge: unreadCounts.aliases || undefined },
         { id: "menu", label: "Menu", icon: <MenuIcon /> },
       ]}
