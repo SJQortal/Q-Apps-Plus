@@ -25,6 +25,7 @@ import {
   upsertMessagesBeginning
 } from '../state/features/mailSlice'
 import { MAIL_SERVICE_TYPE } from '../constants/mail'
+import { searchResources } from '../utils/qdnSearch'
 
 export const useFetchMail = () => {
   const dispatch = useDispatch()
@@ -37,6 +38,9 @@ export const useFetchMail = () => {
   const posts = useSelector((state: RootState) => state.blog.posts)
   const mailMessages = useSelector(
     (state: RootState) => state.mail.mailMessages
+  )
+  const userAvatarHash = useSelector(
+    (state: RootState) => state.global.userAvatarHash
   )
 
   const filteredPosts = useSelector(
@@ -94,31 +98,43 @@ export const useFetchMail = () => {
     dispatch(addToHashMapMail(res))
   }
 
+  /**
+   * The new-mail poll for the primary name: one limit-20 search (always to the
+   * node, TTL 0). Resolves to the number of messages added. Unlike the original,
+   * it does not give up when the newest known message is not among the 20 (or
+   * the inbox is empty): every unknown row is added instead (Bugs #20).
+   */
   const checkNewMessages = React.useCallback(
-    async (recipientName: string, recipientAddress: string) => {
+    async (recipientName: string, recipientAddress: string): Promise<number> => {
       try {
         const query = `qortal_qmail_${recipientName.slice(
           0,
           20
         )}_${recipientAddress.slice(-6)}_mail_`
-        const encodedQuery = encodeURIComponent(query)
-        const url = `/arbitrary/resources/search?mode=ALL&service=${MAIL_SERVICE_TYPE}&query=${encodedQuery}&limit=20&includemetadata=true&reverse=true&excludeblocked=true`
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        })
-        const responseData = await response.json()
-        const latestPost = mailMessages[0]
-        if (!latestPost) return
-        const findPost = responseData?.findIndex(
-          (item: any) => item?.identifier === latestPost?.id
+        const responseData = await searchResources(
+          {
+            mode: 'ALL',
+            service: MAIL_SERVICE_TYPE,
+            query,
+            limit: 20,
+            includemetadata: true,
+            reverse: true,
+            excludeblocked: true
+          },
+          { ttlMs: 0 }
         )
-        if (findPost === -1) {
-          return
-        }
-        const newArray = responseData.slice(0, findPost)
+        const latestPost = mailMessages[0]
+        const findPost = latestPost
+          ? responseData.findIndex(
+              (item: any) => item?.identifier === latestPost?.id
+            )
+          : -1
+        const knownIds = new Set(mailMessages.map((item: any) => item?.id))
+        const newArray = (findPost === -1
+          ? responseData
+          : responseData.slice(0, findPost)
+        ).filter((item: any) => item?.identifier && !knownIds.has(item.identifier))
+        if (!newArray.length) return 0
         const structureData = newArray.map((post: any): BlogPost => {
           return {
             title: post?.metadata?.title,
@@ -133,8 +149,10 @@ export const useFetchMail = () => {
           }
         })
         dispatch(upsertMessagesBeginning(structureData))
-        return
-      } catch (error) {}
+        return structureData.length
+      } catch (error) {
+        return 0
+      }
     },
     [mailMessages]
   )
@@ -274,6 +292,7 @@ export const useFetchMail = () => {
     })
   }
 
+  /** The whole inbox index of the primary name, 200 per page, through the session cache. */
   const getAllMailMessages = React.useCallback(
     async (recipientName: string, recipientAddress: string) => {
       try {
@@ -281,22 +300,23 @@ export const useFetchMail = () => {
           0,
           20
         )}_${recipientAddress.slice(-6)}_mail_`
-        const encodedQuery = encodeURIComponent(query)
         const pageSize = 200
         let offset = 0
         let hasMore = true
         const allMessages: BlogPost[] = []
 
         while (hasMore) {
-          const url = `/arbitrary/resources/search?mode=ALL&service=${MAIL_SERVICE_TYPE}&query=${encodedQuery}&limit=${pageSize}&includemetadata=false&offset=${offset}&reverse=true&excludeblocked=true`
-          const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json'
-            }
+          const responseData = await searchResources({
+            mode: 'ALL',
+            service: MAIL_SERVICE_TYPE,
+            query,
+            limit: pageSize,
+            includemetadata: false,
+            offset,
+            reverse: true,
+            excludeblocked: true
           })
-          const responseData = await response.json()
-          if (!Array.isArray(responseData) || responseData.length === 0) {
+          if (responseData.length === 0) {
             break
           }
 
@@ -312,16 +332,21 @@ export const useFetchMail = () => {
 
         dispatch(upsertMessages(allMessages))
 
+        // One avatar lookup per distinct sender, skipping names already known.
+        const senders = new Set<string>()
         for (const content of allMessages) {
-          if (content.user && content.id) {
-            getAvatar(content.user)
+          if (content.user && content.id && !userAvatarHash?.[content.user]) {
+            senders.add(content.user)
           }
+        }
+        for (const sender of senders) {
+          getAvatar(sender)
         }
       } catch (error) {
       } finally {
       }
     },
-    [dispatch]
+    [dispatch, userAvatarHash]
   )
 
   const getMailMessages = React.useCallback(
@@ -334,15 +359,16 @@ export const useFetchMail = () => {
           0,
           20
         )}_${recipientAddress.slice(-6)}_mail_`
-        const encodedQuery = encodeURIComponent(query)
-        const url = `/arbitrary/resources/search?mode=ALL&service=${MAIL_SERVICE_TYPE}&query=${encodedQuery}&limit=20&includemetadata=true&offset=${offset}&reverse=true&excludeblocked=true`
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
+        const responseData = await searchResources({
+          mode: 'ALL',
+          service: MAIL_SERVICE_TYPE,
+          query,
+          limit: 20,
+          includemetadata: true,
+          offset,
+          reverse: true,
+          excludeblocked: true
         })
-        const responseData = await response.json()
         const structureData = mapMailResources(responseData)
         dispatch(upsertMessages(structureData))
 
