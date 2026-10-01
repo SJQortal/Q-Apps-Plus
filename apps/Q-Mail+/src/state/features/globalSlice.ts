@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { isAvatarUrl } from '../../utils/avatarCache';
 
 
 interface GlobalState {
@@ -109,8 +110,12 @@ export const globalSlice = createSlice({
     },
     setUserAvatarHash: (state, action) => {
       const avatar = action.payload
-      if (avatar?.name && avatar?.url) {
-        state.userAvatarHash[avatar?.name] = avatar?.url
+      // Only real URLs: Hub's "Resource does not exist" answer used to be
+      // stored here and handed to <Avatar src> (Bugs #7).
+      if (avatar?.name && isAvatarUrl(avatar?.url)) {
+        if (state.userAvatarHash[avatar.name] !== avatar.url) {
+          state.userAvatarHash[avatar.name] = avatar.url
+        }
       }
     },
     setPrivateGroups: (state, action) => {
