@@ -39,6 +39,7 @@ import {
   ThreadSingleTitle,
 } from "./Mail-styles";
 import { Spacer } from "../../components/common/Spacer";
+import { AttachmentList } from "../../components/AttachmentPreview/AttachmentList";
 const initialValue: Descendant[] = [
   {
     type: "paragraph",
@@ -100,89 +101,8 @@ export const ShowMessage = ({ message }: any) => {
         }}
       >
          {message?.attachments?.length > 0 && (
-          <Box
-            sx={{
-              width: "100%",
-              marginTop: "10px",
-            }}
-          >
-            {message?.attachments
-              .map((file: any, index: number) => {
-                const isFirst = index === 0
-                return (
-                  <Box
-                    sx={[{
-                      alignItems: "center",
-                      justifyContent: "flex-start",
-                      width: "100%"
-                    }, expandAttachments ? {
-                      display: "flex"
-                    } : {
-                      display: !expandAttachments && isFirst ? 'flex' : 'none'
-                    }]}
-                  >
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "5px",
-                        cursor: "pointer",
-                        width: "auto",
-                      }}
-                    >
-                      <FileElement
-                        fileInfo={{ ...file, mimeTypeSaved: file?.type }}
-                        title={file?.filename}
-                        mode="mail"
-                        otherUser={message?.user}
-                      >
-                        <MailAttachmentImg src={AttachmentMailSVG} />
-
-                        <Typography
-                          sx={{
-                            fontSize: "1rem",
-                            transition: '0.2s all',
-                            "&:hover": {
-                              color: 'var(--qmail-thread-link-hover)',
-                              textDecoration: 'underline'
-                            }
-                          }}
-                        >
-                          {file?.originalFilename || file?.filename}
-                        </Typography>
-                      </FileElement>
-                      {message?.attachments?.length > 1 && isFirst && (
-                        <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "5px",
-                          }}
-                          onClick={() => {
-                            setExpandAttachments(prev => !prev);
-                          }}
-                        >
-                          <MoreImg
-                            sx={[{
-                              marginLeft: "5px"
-                            }, expandAttachments ? {
-                              transform: "rotate(180deg)"
-                            } : {
-                              transform: "unset"
-                            }]}
-                            src={MoreSVG}
-                          />
-                          <MoreP>
-                            {expandAttachments ? 'hide' : `(${message?.attachments?.length - 1} more)`}
-                            
-                          </MoreP>
-                        </Box>
-                      )}
-                    </Box>
-                  </Box>
-                );
-              })
-              }
+          <Box sx={{ width: "100%", marginTop: "10px" }}>
+            <AttachmentList attachments={message?.attachments} />
           </Box>
         )}
       
