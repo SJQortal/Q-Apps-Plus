@@ -1438,13 +1438,18 @@ export const Mail = ({ isFromTo }: MailProps) => {
     }
   };
 
+  // Reply all: the composer also addresses everyone in the original's
+  // additive `to`/`cc` fields (as separate Bcc-style copies).
+  const [composeReplyAll, setComposeReplyAll] = useState(false);
+
   const openReplyComposerFromMessage = useCallback(
-    (messagePayload: any) => {
+    (messagePayload: any, options?: { replyAll?: boolean }) => {
       const linkedReplyAlias = activeAliasInboxName
         ? aliasReplyLinks[activeAliasInboxName.toLowerCase()] || ""
         : "";
       setIsChangelogOpen(false);
       setForwardInfo(null);
+      setComposeReplyAll(Boolean(options?.replyAll));
       setReplyTo(messagePayload);
       setComposePrefill(null);
       setComposeReturnView("inbox");
@@ -1465,6 +1470,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     (forwardPayload: any) => {
       setIsChangelogOpen(false);
       setReplyTo(null);
+      setComposeReplyAll(false);
       // The reader may send ready-made HTML (string) or the message itself;
       // the composer builds the Fwd: subject, the header and the re-attached
       // files from the open message.
@@ -1514,6 +1520,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
 
       setIsChangelogOpen(false);
       setReplyTo(null);
+      setComposeReplyAll(false);
       setForwardInfo(null);
       setCurrentThread(null);
       setSelectedGroup(groupInfo);
@@ -3253,6 +3260,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     setComposeRequireReplyAlias(false);
     setComposeDefaultReplyAlias("");
     setComposeMode("standard");
+    setComposeReplyAll(false);
     if (composeReturnView === "threads") {
       setActiveMailboxItem("threads");
       setMobileMode("threads");
@@ -3456,7 +3464,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
   let wideKeepsChrome = false;
   if (isComposeView) {
     const composeTitle = replyTo
-      ? "Reply"
+      ? composeReplyAll
+        ? "Reply all"
+        : "Reply"
       : forwardInfo
       ? "Forward"
       : composeMode === "alias"
@@ -3474,6 +3484,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
           <NewMessage
             isFromTo={isFromTo}
             replyTo={replyTo}
+            replyAll={composeReplyAll}
             setReplyTo={setReplyTo}
             setForwardInfo={setForwardInfo}
             forwardInfo={forwardInfo}
