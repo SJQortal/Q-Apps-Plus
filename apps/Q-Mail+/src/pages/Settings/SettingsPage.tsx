@@ -1,6 +1,6 @@
 /**
  * Settings: a full page (docs/DESIGN.md → Settings page), reached from the
- * navigation. Sections: Account, Appearance, Mail, About.
+ * navigation. Sections: Account, Appearance, Mail, Sync, About.
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate, type Location } from 'react-router-dom';
@@ -24,6 +24,8 @@ import { styled } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CheckIcon from '@mui/icons-material/Check';
 import PersonOffOutlinedIcon from '@mui/icons-material/PersonOffOutlined';
+import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
+import useConfirmationModal from '../../hooks/useConfirmModal';
 import { ThemePicker, headerFill } from '../../hub-theme';
 import { useAppShell } from '../../app-shell/AppShellContext';
 import { BlockedNamesModal } from '../../components/common/BlockedNamesModal/BlockedNamesModal';
@@ -122,7 +124,7 @@ type TextSize = 'small' | 'medium' | 'large';
 export function SettingsPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, userAvatar, setActiveName, authenticate, controller, state } = useAppShell();
+  const { user, userAvatar, setActiveName, authenticate, controller, state, mailSync } = useAppShell();
   const [blockedOpen, setBlockedOpen] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const identityKey = user?.address || user?.name || '';
@@ -131,6 +133,26 @@ export function SettingsPage() {
   useEffect(() => {
     setAutoApplyQdnState(readAutoApplyQdnState(identityKey));
   }, [identityKey]);
+
+  const { Modal: PublishStateModal, showModal: showPublishStateModal } = useConfirmationModal({
+    title: 'Publish mail state?',
+    message: `This publishes your read state, subjects and archived list as an encrypted document (qmail_state_v1) under ${
+      user?.name || 'your name'
+    }, so other devices can load it. It costs one QDN publish.`,
+  });
+  const [isPublishingFromSettings, setIsPublishingFromSettings] = useState(false);
+  const publishMailStateNow = async () => {
+    if (!mailSync) return;
+    const confirmed = await showPublishStateModal();
+    if (!confirmed) return;
+    setIsPublishingFromSettings(true);
+    try {
+      await mailSync.publishMailState();
+    } finally {
+      setIsPublishingFromSettings(false);
+    }
+  };
+  const isPublishingState = Boolean(mailSync?.isPublishing) || isPublishingFromSettings;
 
   const goBack = () => {
     const background = (location.state as { backgroundLocation?: Location } | null)?.backgroundLocation;
@@ -239,6 +261,42 @@ export function SettingsPage() {
               />
             }
           />
+          <Row label="Blocked names" hint="Mail from blocked names is hidden.">
+            <Button
+              variant="outlined"
+              startIcon={<PersonOffOutlinedIcon />}
+              onClick={() => setBlockedOpen(true)}
+              disabled={!isAuthenticated}
+            >
+              Manage
+            </Button>
+          </Row>
+        </Section>
+
+        <Section title="Sync">
+          <Row
+            label="Publish mail state now"
+            hint={
+              !isAuthenticated
+                ? 'Sign in to publish.'
+                : !mailSync
+                ? 'Open your mailbox first.'
+                : mailSync.hasPendingChanges
+                ? 'Unpublished changes. Costs one QDN publish.'
+                : 'Up to date. Publishing again costs one QDN publish.'
+            }
+          >
+            <Button
+              variant="outlined"
+              startIcon={<CloudUploadOutlinedIcon />}
+              onClick={() => void publishMailStateNow()}
+              disabled={!isAuthenticated || !mailSync || isPublishingState}
+              sx={{ minHeight: 44 }}
+            >
+              {isPublishingState ? 'Publishing…' : 'Publish'}
+            </Button>
+          </Row>
+          <Divider />
           <FormControlLabel
             sx={{ m: 0, justifyContent: 'space-between', minHeight: 44 }}
             labelPlacement="start"
@@ -256,19 +314,9 @@ export function SettingsPage() {
             }
           />
           <Typography variant="body2" color="text.secondary">
-            Read state and subjects you publish from the sidebar are loaded on other devices without asking first.
+            When on, the published state is loaded on this device without asking first. When off, Q-Mail+ asks
+            once per sign-in.
           </Typography>
-          <Divider />
-          <Row label="Blocked names" hint="Mail from blocked names is hidden.">
-            <Button
-              variant="outlined"
-              startIcon={<PersonOffOutlinedIcon />}
-              onClick={() => setBlockedOpen(true)}
-              disabled={!isAuthenticated}
-            >
-              Manage
-            </Button>
-          </Row>
         </Section>
 
         <Section title="About">
@@ -302,6 +350,7 @@ export function SettingsPage() {
         </Section>
       </Column>
 
+      <PublishStateModal />
       {blockedOpen && <BlockedNamesModal open={blockedOpen} onClose={() => setBlockedOpen(false)} />}
       <ChangelogDialog open={changelogOpen} onClose={() => setChangelogOpen(false)} />
     </Page>

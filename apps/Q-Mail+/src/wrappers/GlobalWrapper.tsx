@@ -20,7 +20,10 @@ import {
 } from "../state/features/mailSlice";
 import { applyQAppTextSize } from "@qortal/qapp-lib/typography";
 import { useQMailAppShell } from "../app-shell/useQMailAppShell";
-import { AppShellContext } from "../app-shell/AppShellContext";
+import {
+  AppShellContext,
+  type MailSyncState,
+} from "../app-shell/AppShellContext";
 import { subscribeToEvent, unsubscribeFromEvent } from "../utils/events";
 import { useMailLocalState } from "../hooks/useMailLocalState";
 import { usePolling } from "../hooks/usePolling";
@@ -40,6 +43,10 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
   const dispatch = useDispatch();
 
   const [userAvatar, setUserAvatar] = useState<string>("");
+  const [mailSync, setMailSync] = useState<MailSyncState | null>(null);
+  const registerMailSync = useCallback((sync: MailSyncState | null) => {
+    setMailSync(sync);
+  }, []);
 
   const { user } = useSelector((state: RootState) => state.auth);
   useMailLocalState(user?.address);
@@ -321,11 +328,15 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
       authenticate: askForAccountInformation,
       controller: appShellController,
       state: appShellState,
+      mailSync,
+      registerMailSync,
     }),
     [
       appShellController,
       appShellState,
       askForAccountInformation,
+      mailSync,
+      registerMailSync,
       setActiveName,
       user,
       userAvatar,
