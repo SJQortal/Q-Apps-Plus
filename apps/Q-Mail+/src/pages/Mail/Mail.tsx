@@ -129,6 +129,27 @@ import { invalidateThreadSearches } from "./threadData";
 import { useThreadUnreadCounts } from "./threadUnread";
 import { getAvatarUrl } from "../../utils/avatarCache";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
+import {
+  SENT_INDEX_KEY,
+  aliasIndexKey,
+  getMailIndex,
+  useMailIndex,
+  useMailIndexVersion,
+} from "./mailIndexStore";
+import { ensureAliasIndex, ensureSentIndex } from "./mailIndexes";
+import { SearchResultsList } from "./SearchResultsList";
+import {
+  BODY_SEARCH_STEP,
+  idleSearchStatus,
+  type MailboxSearchStatus,
+} from "./useMailboxSearch";
+import {
+  mailboxRefOf,
+  tagForMailbox,
+  type MailSearchScope,
+  type MailboxRef,
+} from "./mailSearch";
+import { getSentRecipientDisplayLabel } from "./mailIdentifier";
 
 type MailboxSidebarItemId =
   | "inbox"
@@ -1007,20 +1028,125 @@ export const Mail = ({ isFromTo }: MailProps) => {
     normalizedUserName,
     selectedInboxInstanceName,
   ]);
-  const shouldRunInboxSearch =
+  // ---- search (N8): one box, "This mailbox" or "All mail" -----------------
+  const [searchScope, setSearchScope] = useState<MailSearchScope>("mailbox");
+  const [bodySearchLimit, setBodySearchLimit] = useState(0);
+  const [mailboxSearchStatus, setMailboxSearchStatus] =
+    useState<MailboxSearchStatus | null>(null);
+  const [isLoadingAllMail, setIsLoadingAllMail] = useState(false);
+  const isMailboxSearchView =
+    isInboxViewActive ||
+    isArchivedViewActive ||
+    isSentViewActive ||
+    (isAliasesViewActive && Boolean(activeAliasInboxName));
+  const hasSearchQuery = inboxSearchQuery.trim().length > 0;
+  const isAllMailSearch =
     hasAuthenticatedIdentity &&
-    isInboxViewActive &&
-    inboxMessagesForList !== null;
+    isMailboxSearchView &&
+    searchScope === "all" &&
+    hasSearchQuery;
+  // Body decrypts are opt-in per query and per view.
+  useEffect(() => {
+    setBodySearchLimit(0);
+  }, [inboxSearchQuery, activeMailboxItem, searchScope, selectedAlias]);
+  useEffect(() => {
+    setMailboxSearchStatus(null);
+  }, [activeMailboxItem, selectedAlias]);
 
   const { results: inboxSearchResults, status: inboxSearchStatus } =
     useMailboxSearch({
-      messages: inboxMessagesForList || [],
+      messages: isArchivedViewActive
+        ? archivedMessages
+        : inboxMessagesForList || [],
       query: inboxSearchQuery,
       mailboxType: "inbox",
       username: user?.name,
       hashMapMailMessages,
-      enabled: shouldRunInboxSearch,
+      enabled:
+        hasAuthenticatedIdentity &&
+        (isInboxViewActive || isArchivedViewActive) &&
+        !isAllMailSearch,
+      bodyLimit: bodySearchLimit,
     });
+
+  const sentIndexForSearch = useMailIndex(SENT_INDEX_KEY);
+  const mailIndexVersion = useMailIndexVersion();
+  const allMailRows = useMemo(() => {
+    if (!isAllMailSearch) return [];
+    void mailIndexVersion;
+    const rows: any[] = [];
+    const seen = new Set<string>();
+    const push = (message: any, ref: MailboxRef) => {
+      const id = getMessageIdentifier(message);
+      const key = `${ref.kind}:${ref.alias || ""}:${id}`;
+      if (!id || seen.has(key)) return;
+      seen.add(key);
+      rows.push(tagForMailbox(message, ref));
+    };
+    combinedInboxMessages.forEach(message => {
+      push(message, {
+        kind: isArchivedId(archived, getMessageIdentifier(message))
+          ? "archived"
+          : "inbox",
+      });
+    });
+    (sentIndexForSearch || []).forEach(message => push(message, { kind: "sent" }));
+    watchedAliases.forEach(alias => {
+      const loaded =
+        getMailIndex(aliasIndexKey(alias)) ||
+        watchedAliasRecentMessages[alias] ||
+        [];
+      loaded.forEach(message => push(message, { kind: "alias", alias }));
+    });
+    return rows;
+  }, [
+    archived,
+    combinedInboxMessages,
+    isAllMailSearch,
+    mailIndexVersion,
+    sentIndexForSearch,
+    watchedAliasRecentMessages,
+    watchedAliases,
+  ]);
+
+  const { results: allMailResults, status: allMailStatus } = useMailboxSearch({
+    messages: allMailRows,
+    query: inboxSearchQuery,
+    username: user?.name,
+    hashMapMailMessages,
+    enabled: isAllMailSearch,
+    bodyLimit: bodySearchLimit,
+  });
+
+  // "All mail" needs the sent index and the alias inboxes; load each once.
+  useEffect(() => {
+    if (!isAllMailSearch || !user?.address) return;
+    let cancelled = false;
+    setIsLoadingAllMail(true);
+    const address = user.address;
+    const sentNames = ownedSentNames.length
+      ? ownedSentNames
+      : user?.name
+        ? [user.name]
+        : [];
+    Promise.all([
+      ensureSentIndex(sentNames),
+      ...watchedAliases.map(alias => ensureAliasIndex(alias, address)),
+    ])
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setIsLoadingAllMail(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAllMailSearch, ownedSentNames, user?.address, user?.name, watchedAliases]);
+
+  const activeSearchStatus: MailboxSearchStatus = isAllMailSearch
+    ? allMailStatus
+    : isInboxViewActive || isArchivedViewActive
+      ? inboxSearchStatus
+      : mailboxSearchStatus || idleSearchStatus(0);
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
@@ -3021,6 +3147,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
         onOpen={openMessage}
         openedMessageId={message?.id || message?.identifier}
         onCompose={() => onSelectSidebarItem("compose")}
+        searchQuery={inboxSearchQuery}
+        bodySearchLimit={bodySearchLimit}
+        onSearchStatus={setMailboxSearchStatus}
       />
     ) : (
       renderAuthenticationPrompt("Sent")
@@ -3050,7 +3179,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     };
     listBody = hasAuthenticatedIdentity ? (
       <GroupedMailboxList
-        messages={archivedMessages}
+        messages={inboxSearchResults}
         mailboxType="inbox"
         showSelectAll
         openMessage={openMessage}
@@ -3059,13 +3188,20 @@ export const Mail = ({ isFromTo }: MailProps) => {
         onMarkAsUnread={markMessagesAsUnread}
         onUnarchive={unarchiveMessages}
         status={isLoading && !archivedMessages.length ? "loading" : "ready"}
+        highlightTerms={inboxSearchStatus.terms}
         emptyIcon={<ArchiveOutlinedIcon />}
-        emptyTitle="Nothing archived"
-        emptyHint="Select messages in the inbox and choose Archive to tidy them away. They stay on QDN."
+        emptyTitle={hasSearchQuery ? "No matches" : "Nothing archived"}
+        emptyHint={
+          hasSearchQuery
+            ? "Try fewer words, or search message bodies."
+            : "Select messages in the inbox and choose Archive to tidy them away. They stay on QDN."
+        }
         emptyAction={
-          <Button variant="outlined" onClick={() => onSelectSidebarItem("inbox")} sx={{ minHeight: 44 }}>
-            Back to inbox
-          </Button>
+          hasSearchQuery ? undefined : (
+            <Button variant="outlined" onClick={() => onSelectSidebarItem("inbox")} sx={{ minHeight: 44 }}>
+              Back to inbox
+            </Button>
+          )
         }
       />
     ) : (
@@ -3124,12 +3260,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     listSubtitle = selectedInboxInstanceName ? "Inbox" : user?.name || undefined;
     listBody = hasAuthenticatedIdentity ? (
       <>
-        <MailboxSearchBar
-          value={inboxSearchQuery}
-          onChange={setInboxSearchQuery}
-          placeholder="Search inbox messages..."
-          status={inboxSearchStatus}
-        />
         <GroupedMailboxList
           messages={inboxSearchResults}
           mailboxType="inbox"
@@ -3139,6 +3269,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
           onMarkAsRead={markMessagesAsRead}
           onMarkAsUnread={markMessagesAsUnread}
           onArchive={archiveMessages}
+          highlightTerms={inboxSearchStatus.terms}
           status={
             isLoading ||
             (isLoadingCombinedAliasInbox &&
@@ -3151,14 +3282,14 @@ export const Mail = ({ isFromTo }: MailProps) => {
           }
           errorMessage={inboxLoadError || undefined}
           onRetry={() => void getMessages(true)}
-          emptyTitle={inboxSearchQuery.trim() ? "No matches" : "No mail yet"}
+          emptyTitle={hasSearchQuery ? "No matches" : "No mail yet"}
           emptyHint={
-            inboxSearchQuery.trim()
+            hasSearchQuery
               ? "Try fewer words, or search message bodies."
               : `Mail sent to ${selectedInboxInstanceName || user?.name || "you"} shows up here.`
           }
           emptyAction={
-            inboxSearchQuery.trim() ? undefined : (
+            hasSearchQuery ? undefined : (
               <Button
                 variant="contained"
                 onClick={() => onSelectSidebarItem("compose")}
@@ -3175,6 +3306,39 @@ export const Mail = ({ isFromTo }: MailProps) => {
     );
   }
 
+  // A hit of the cross-mailbox search opens in its own mailbox.
+  const openSearchResult = (hit: any) => {
+    const ref = mailboxRefOf(hit);
+    const id = getMessageIdentifier(hit);
+    if (!id) return;
+    if (ref?.kind === "sent") {
+      onSelectSidebarItem("sent");
+      const decrypted: any = hashMapMailMessages[id];
+      const recipient =
+        typeof decrypted?.recipient === "string" && decrypted.recipient.trim()
+          ? decrypted.recipient.trim()
+          : getSentRecipientDisplayLabel(id);
+      void openMessage(hit?.user, id, hit, recipient);
+      return;
+    }
+    if (ref?.kind === "alias" && ref.alias) {
+      onSelectSidebarItem(createAliasesInstanceItemId(ref.alias));
+    } else if (ref?.kind === "archived") {
+      onSelectSidebarItem(ARCHIVED_ITEM_ID);
+    } else {
+      onSelectSidebarItem("inbox");
+    }
+    void openMessage(hit?.user, id, hit);
+  };
+
+  const searchPlaceholder = isSentViewActive
+    ? "Search sent mail"
+    : isArchivedViewActive
+      ? "Search archived mail"
+      : isAliasesViewActive && activeAliasInboxName
+        ? `Search ${activeAliasInboxName}`
+        : "Search mail";
+
   const listPane = (
     <>
       <PaneHeader
@@ -3184,9 +3348,34 @@ export const Mail = ({ isFromTo }: MailProps) => {
         leading={menuButton}
         actions={settingsButton}
       />
+      {isMailboxSearchView && hasAuthenticatedIdentity && (
+        <MailboxSearchBar
+          value={inboxSearchQuery}
+          onChange={setInboxSearchQuery}
+          placeholder={searchPlaceholder}
+          status={activeSearchStatus}
+          scope={searchScope}
+          onScopeChange={setSearchScope}
+          onSearchBodies={() =>
+            setBodySearchLimit(limit => limit + BODY_SEARCH_STEP)
+          }
+          bodyStep={BODY_SEARCH_STEP}
+          isLoadingScope={isAllMailSearch && isLoadingAllMail}
+        />
+      )}
       <PaneScroll>
         <Box className="step-1" sx={centeredColumnSx}>
-          {listBody}
+          {isAllMailSearch ? (
+            <SearchResultsList
+              hits={allMailResults}
+              terms={allMailStatus.terms}
+              status={isLoadingAllMail && !allMailRows.length ? "loading" : "ready"}
+              openedMessageId={message?.id || message?.identifier}
+              onOpen={openSearchResult}
+            />
+          ) : (
+            listBody
+          )}
         </Box>
       </PaneScroll>
     </>
