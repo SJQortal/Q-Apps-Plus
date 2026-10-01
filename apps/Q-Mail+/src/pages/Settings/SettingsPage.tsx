@@ -35,8 +35,9 @@ import {
 } from '../../utils/qdnStatePreference';
 import packageJson from '../../../package.json';
 import { ChangelogDialog } from './ChangelogDialog';
+import { SETTINGS_PATH } from './settingsPath';
 
-export const SETTINGS_PATH = '/settings';
+export { SETTINGS_PATH };
 export const APP_VERSION: string = packageJson.version;
 const UPSTREAM_URL = 'https://github.com/Qortal/q-mail';
 const SOURCE_URL = 'https://github.com/SJQortal/Q-Apps-Plus';
