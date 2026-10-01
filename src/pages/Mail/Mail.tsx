@@ -116,6 +116,7 @@ import { getAvatarUrl } from "../../utils/avatarCache";
 import { lazyNamed, preloadOnIdle } from "../../components/common/lazyNamed";
 import { ListSkeleton } from "../../layout/states";
 import { TOUR_STATUS_DISMISSED, TOUR_STATUS_STORAGE_KEY } from "./MailTour";
+import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
 
 // Lazy boundaries (docs/apps/Q-Mail+.md → Bundle §5): the composer (Quill,
 // react-dropzone), the reader (dompurify), threads, aliases, sent, drafts and
@@ -133,6 +134,10 @@ const ThreadsMailbox = lazyNamed(() => import("./ThreadsMailbox"), "ThreadsMailb
 const Thread = lazyNamed(() => import("./Thread"), "Thread");
 const DraftsMailbox = lazyNamed(() => import("./DraftsMailbox"), "DraftsMailbox");
 const MailTour = lazyNamed(() => import("./MailTour"), "MailTour");
+const ShortcutsHelpDialog = lazyNamed(
+  () => import("../../components/common/ShortcutsHelpDialog"),
+  "ShortcutsHelpDialog"
+);
 
 type MailboxSidebarItemId =
   | "inbox"
@@ -558,6 +563,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const [ownedInboxNames, setOwnedInboxNames] = useState<string[]>([]);
   const [ownedSentNames, setOwnedSentNames] = useState<string[]>([]);
   const [run, setRun] = useState(false);
+  const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
   const [filterMode, setFilterMode] = useState<string>("Recently active");
   const [selectedAlias, setSelectedAlias] = useState<string | null>(null);
   const [selectedAliasScope, setSelectedAliasScope] =
@@ -3030,6 +3036,80 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const isComposeView = activeMailboxItem === "compose";
   const isThreadsView = activeMailboxItem === "threads";
 
+  // ---- keyboard shortcuts (desktop only; src/hooks/useKeyboardShortcuts.ts)
+  // j/k move through the list the pane shows (the inbox search results or
+  // the archived list) by opening the next/previous message in the reading
+  // pane; the other lists live in their own components.
+  const shortcutList: any[] = isInboxViewActive
+    ? inboxSearchResults
+    : isArchivedViewActive
+    ? archivedMessages
+    : [];
+  const openMessageFromList = (item: any) => {
+    const id = item?.id || item?.identifier;
+    if (!id) return;
+    void openMessage(item?.user, id, item, undefined);
+  };
+  const openAdjacentMessage = (step: 1 | -1) => {
+    if (!shortcutList.length) return;
+    const openedId = message?.id || message?.identifier;
+    const index = openedId
+      ? shortcutList.findIndex(item => (item?.id || item?.identifier) === openedId)
+      : -1;
+    const nextIndex = index === -1 ? (step === 1 ? 0 : shortcutList.length - 1) : index + step;
+    const next = shortcutList[nextIndex];
+    if (next) openMessageFromList(next);
+  };
+  useKeyboardShortcuts(
+    {
+      compose: () => onSelectSidebarItem("compose"),
+      reply: () => {
+        if (isReadingOpen) openReplyComposerFromMessage(message);
+      },
+      replyAll: () => {
+        if (isReadingOpen) openReplyComposerFromMessage(message, { replyAll: true });
+      },
+      forward: () => {
+        if (isReadingOpen) openForwardComposerFromMessage(message);
+      },
+      archive: () => {
+        if (!isReadingOpen || !(isInboxViewActive || isArchivedViewActive)) return;
+        if (isArchivedViewActive) unarchiveMessages([message]);
+        else archiveMessages([message]);
+        closeOpenMessage();
+      },
+      markUnread: () => {
+        if (isReadingOpen) {
+          void markMessagesAsUnread([message]);
+          closeOpenMessage();
+        }
+      },
+      next: () => openAdjacentMessage(1),
+      previous: () => openAdjacentMessage(-1),
+      open: () => {
+        if (!isReadingOpen && shortcutList.length) openMessageFromList(shortcutList[0]);
+      },
+      close: () => {
+        if (shortcutsHelpOpen) setShortcutsHelpOpen(false);
+        else if (isComposeView) handleComposerClose();
+        else if (isReadingOpen) closeOpenMessage();
+      },
+      focusSearch: () => {
+        const input = document.querySelector<HTMLInputElement>(
+          '[aria-label="Messages"] input[aria-label^="Search"]'
+        );
+        input?.focus();
+        input?.select();
+      },
+      goInbox: () => onSelectSidebarItem("inbox"),
+      goSent: () => onSelectSidebarItem("sent"),
+      goThreads: () => onSelectSidebarItem("threads"),
+      goAliases: () => onSelectSidebarItem("aliases"),
+      showHelp: () => setShortcutsHelpOpen(open => !open),
+    },
+    { enabled: isDesktopLayout && hasAuthenticatedIdentity }
+  );
+
   const menuButton = !isDesktopLayout ? (
     <IconButton
       onClick={() => setRailOpen(true)}
@@ -3474,6 +3554,14 @@ export const Mail = ({ isFromTo }: MailProps) => {
       overlays={
         <>
           <LoadPublishedStateModal />
+          {shortcutsHelpOpen && (
+            <React.Suspense fallback={null}>
+              <ShortcutsHelpDialog
+                open={shortcutsHelpOpen}
+                onClose={() => setShortcutsHelpOpen(false)}
+              />
+            </React.Suspense>
+          )}
           {hasAuthenticatedIdentity && isInboxViewActive && run && (
             <React.Suspense fallback={null}>
               <MailTour run={run} onDone={handleTourDone} />
