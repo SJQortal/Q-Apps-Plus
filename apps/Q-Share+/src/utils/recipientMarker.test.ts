@@ -19,7 +19,14 @@ describe("recipient markers", () => {
 
   it("adds markers after the text, without repeats, at most four, within QDN's 240 characters", () => {
     const text = "x".repeat(150);
-    const many = [ALICE, BOB, ALICE, "Q1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "Q2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "Q3cccccccccccccccccccccccccccccccc"];
+    const many = [
+      ALICE,
+      BOB,
+      ALICE,
+      "Q1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "Q2bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "Q3cccccccccccccccccccccccccccccccc",
+    ];
     const described = withRecipientMarkers(text, many);
     expect(described.match(/~qsn-/g)).toHaveLength(MAX_MARKERS);
     expect(described.length).toBeLessThanOrEqual(240);
