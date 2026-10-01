@@ -22,6 +22,7 @@
  */
 import { QSHARE_COMMENT_BASE } from "../../constants/Identifiers";
 import { REPLY_KEY_LENGTH, shareCommentKey, type Activity } from "./activity";
+import { HUB_DIALOG_GRACE_MS, isHubTimeout } from "../hubErrors";
 
 export const HUB_SHARE_RULES = 30;
 export const HUB_REPLY_RULES = 20;
@@ -127,25 +128,30 @@ export async function hubAlertsAvailable(): Promise<boolean> {
   }
 }
 
-async function hasPermission(): Promise<boolean> {
+/** Hub's stored answer: true or false, or null when Hub didn't answer at all. */
+async function hasPermission(): Promise<boolean | null> {
   try {
     return (await qortalRequest({ action: "NOTIFICATION_HAS_PERMISSION" })) === true;
   } catch {
-    return false;
+    return null;
   }
 }
 
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Hub's permission for this session (NOTIFICATION_ADD needs it each session).
- * Silent when the user allowed it before; otherwise Hub slides down a banner
- * and waits up to 60 s, past its own 30 s request timeout, so a timeout is
- * followed by asking whether the answer arrived after all.
+ * Silent when the user allowed it before; otherwise Hub slides down a banner.
+ * The request times out after 30 s while the banner stays up for 60, and a
+ * late Allow still counts: after a timeout, ask again once the banner is gone.
  */
 async function askPermission(): Promise<boolean> {
   try {
     return (await qortalRequest({ action: "NOTIFICATION_PERMISSION" })) === true;
-  } catch {
-    return hasPermission();
+  } catch (error) {
+    if (!isHubTimeout(error)) return false; // the user said no
+    await wait(HUB_DIALOG_GRACE_MS);
+    return (await hasPermission()) === true;
   }
 }
 
@@ -167,13 +173,16 @@ export async function enableHubAlerts(address: string, activity: Activity): Prom
   return true;
 }
 
-/** Turn them off: take our rules out of Hub. */
+/**
+ * Turn them off: take our rules out of Hub. The record is cleared only once
+ * Hub has removed them, so a failed removal can be tried again.
+ */
 export async function disableHubAlerts(address: string): Promise<void> {
   const record = readHubAlerts(address);
-  writeHubAlerts(address, EMPTY);
   if (record.registered.length) {
     await qortalRequest({ action: "NOTIFICATION_REMOVE", notificationIds: record.registered });
   }
+  writeHubAlerts(address, EMPTY);
 }
 
 /**
@@ -186,10 +195,13 @@ export async function syncHubAlerts(address: string, activity: Activity): Promis
   if (!record.enabled) return "off";
   const rules = buildHubRules(activity);
   if (JSON.stringify(rules) === record.signature) return "unchanged";
-  if (!(await hasPermission())) {
+  const permitted = await hasPermission();
+  // Taken back in Hub (which removed the rules itself): off here too. No answer: try next time.
+  if (permitted === false) {
     writeHubAlerts(address, EMPTY);
     return "off";
   }
+  if (permitted === null) return "unchanged";
   if (!(await askPermission())) return "unchanged";
   await send(address, rules, record);
   return "sent";

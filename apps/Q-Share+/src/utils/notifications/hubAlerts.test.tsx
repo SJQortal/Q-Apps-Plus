@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { mockFetch, mockQortalAction, qortalCalls, qortalCallsFor } from "../../test/setup";
 import { renderWithProviders } from "../../test/renderWithProviders";
@@ -6,6 +6,7 @@ import { store } from "../../state/store";
 import { addUser } from "../../state/features/authSlice";
 import { HubAlertsSetting } from "../../components/common/Notifications/HubAlertsSetting";
 import { resetQdnSearchCache } from "../qdnSearch";
+import { HUB_DIALOG_GRACE_MS } from "../hubErrors";
 import { resetActivity, type Activity } from "./activity";
 import {
   HUB_REPLY_RULES,
@@ -96,18 +97,33 @@ describe("Hub alerts on and off", () => {
     });
   });
 
-  it("stay off when the user says no, and catch an answer that came after Hub's timeout", async () => {
+  it("stay off when the user says no", async () => {
     mockQortalAction("NOTIFICATION_PERMISSION", () => {
       throw { error: "User declined request" };
     });
-    mockQortalAction("NOTIFICATION_HAS_PERMISSION", false);
     expect(await enableHubAlerts(ADDRESS, activity(1, 0))).toBe(false);
     expect(qortalCallsFor("NOTIFICATION_ADD")).toHaveLength(0);
+    expect(qortalCallsFor("NOTIFICATION_HAS_PERMISSION")).toHaveLength(0);
     expect(readHubAlerts(ADDRESS).enabled).toBe(false);
+  });
 
-    mockQortalAction("NOTIFICATION_HAS_PERMISSION", true);
-    mockQortalAction("NOTIFICATION_ADD", true);
-    expect(await enableHubAlerts(ADDRESS, activity(1, 0))).toBe(true);
+  it("catch an Allow that came after Hub's 30 s timeout, once the banner is gone", async () => {
+    vi.useFakeTimers();
+    try {
+      mockQortalAction("NOTIFICATION_PERMISSION", () => {
+        throw "The request timed out";
+      });
+      mockQortalAction("NOTIFICATION_HAS_PERMISSION", true);
+      mockQortalAction("NOTIFICATION_ADD", true);
+      const pending = enableHubAlerts(ADDRESS, activity(1, 0));
+      await vi.advanceTimersByTimeAsync(HUB_DIALOG_GRACE_MS - 1);
+      expect(qortalCallsFor("NOTIFICATION_HAS_PERMISSION")).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await pending).toBe(true);
+      expect(qortalCallsFor("NOTIFICATION_ADD")).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("send the rules again only when they change, and take stale ones out", async () => {
@@ -127,13 +143,29 @@ describe("Hub alerts on and off", () => {
     expect(qortalCallsFor("NOTIFICATION_REMOVE")[0].notificationIds).toEqual(["qshare-c-001_metadata"]);
   });
 
-  it("switch off here when the permission was taken back in Hub", async () => {
+  it("switch off here when the permission was taken back in Hub, but not when Hub just didn't answer", async () => {
     mockQortalAction("NOTIFICATION_PERMISSION", true);
     mockQortalAction("NOTIFICATION_ADD", true);
     await enableHubAlerts(ADDRESS, activity(1, 0));
+    mockQortalAction("NOTIFICATION_HAS_PERMISSION", () => {
+      throw "The request timed out";
+    });
+    expect(await syncHubAlerts(ADDRESS, activity(2, 0))).toBe("unchanged");
+    expect(readHubAlerts(ADDRESS).enabled).toBe(true);
     mockQortalAction("NOTIFICATION_HAS_PERMISSION", false);
     expect(await syncHubAlerts(ADDRESS, activity(2, 0))).toBe("off");
     expect(readHubAlerts(ADDRESS).enabled).toBe(false);
+  });
+
+  it("keep the rule list when Hub fails to remove them, so turning off can be tried again", async () => {
+    mockQortalAction("NOTIFICATION_PERMISSION", true);
+    mockQortalAction("NOTIFICATION_ADD", true);
+    await enableHubAlerts(ADDRESS, activity(1, 0));
+    mockQortalAction("NOTIFICATION_REMOVE", () => {
+      throw "The request timed out";
+    });
+    await expect(disableHubAlerts(ADDRESS)).rejects.toBeDefined();
+    expect(readHubAlerts(ADDRESS)).toMatchObject({ enabled: true, registered: ["qshare-c-000_metadata"] });
   });
 
   it("remove the rules when turned off, and mark Hub's alerts seen with the in-app list", async () => {
