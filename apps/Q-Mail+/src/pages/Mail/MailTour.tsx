@@ -1,81 +1,68 @@
 /**
- * The first-run tour, loaded lazily (Bundle §5.3): react-joyride and its
- * floating-ui closure only reach a browser that has not dismissed the tour
- * yet (localStorage `tourStatus-qmail`).
+ * First-run tips: three small popovers anchored to the real controls
+ * (Compose, the mailboxes, Aliases) instead of react-joyride (UX #25,
+ * Bugs #10). Seen once per browser: localStorage `tourStatus-qmail`
+ * (the same key the original app used) is set when the tips finish or
+ * are skipped. The disclaimer lives in ConsentModal only.
  */
-import { Joyride, ACTIONS, STATUS, type Step } from "react-joyride";
+import { useEffect, useLayoutEffect, useState } from "react";
+import { Box, Button, Popover, Typography } from "@mui/material";
+import { useLayoutMode } from "../../layout/useLayoutMode";
 
 export const TOUR_STATUS_STORAGE_KEY = "tourStatus-qmail";
 export const TOUR_STATUS_DISMISSED = "dismissed";
 
-const steps: Step[] = [
+export interface TourStep {
+  id: string;
+  title: string;
+  body: string;
+  /** Anchor candidates in order; the first element found wins. */
+  selectors: string[];
+}
+
+export const TOUR_STEPS: TourStep[] = [
   {
-    content: (
-      <div>
-        <h2>Welcome To Q-Mail</h2>
-        <p style={{ fontSize: "1.125rem" }}>Let's take a tour</p>
-        <p style={{ fontSize: "0.75rem" }}>
-          The Qortal community, along with its development team and the creators
-          of this application, cannot be held accountable for any content
-          published or displayed. Furthermore, they bear no responsibility for
-          any data loss that may occur as a result of using this application.
-        </p>
-      </div>
-    ),
-    placement: "center",
-    target: ".step-1",
+    id: "compose",
+    title: "Write a message",
+    body:
+      "Compose a message with encrypted attachments (up to 40 MB each). Only the recipient can read it.",
+    selectors: [
+      "[data-qapp-lib-sidebar-item='compose']",
+      "[data-qmail-tour='compose']",
+      "[aria-label='Open mailboxes menu']",
+    ],
   },
   {
-    target: "[data-qapp-lib-sidebar-item='inbox']",
-    content: (
-      <div>
-        <h2>Changing instances</h2>
-        <p style={{ fontSize: "1.125rem" }}>
-          Toggle between your main inbox, aliases, and groups you've joined.
-        </p>
-      </div>
-    ),
-    placement: "bottom",
+    id: "mailboxes",
+    title: "Your mailboxes",
+    body:
+      "Switch between your inbox, each name you own, Sent, Drafts and the threads of groups you have joined.",
+    selectors: [
+      "[data-qapp-lib-sidebar-item='inbox']",
+      "nav[aria-label='Mailboxes'] [aria-label='Inbox']",
+      "[aria-label='Open mailboxes menu']",
+    ],
   },
   {
-    target: "[data-qapp-lib-sidebar-item='compose']",
-    content: (
-      <div>
-        <h2>Composing a mail message</h2>
-        <p style={{ fontSize: "1.125rem", fontWeight: "bold" }}>
-          Compose a secure message featuring encrypted attachments (up to 40MB
-          per attachment).
-        </p>
-        <p style={{ fontSize: "1.125rem" }}>
-          To protect the identity of the recipient, assign them an alias for
-          added anonymity.
-        </p>
-      </div>
-    ),
-    placement: "bottom",
-  },
-  {
-    target: "[data-qapp-lib-sidebar-item='aliases']",
-    content: (
-      <div>
-        <h2>What is an alias?</h2>
-        <p style={{ fontSize: "1.125rem", fontWeight: "bold" }}>
-          To conceal the identity of the message recipient, utilize the alias
-          option when sending.
-        </p>
-        <p style={{ fontSize: "0.875rem" }}>
-          For instance, instruct your friend to address the message to you using
-          the alias 'FrederickGreat'.
-        </p>
-        <p style={{ fontSize: "0.875rem" }}>
-          To access messages sent to that alias, simply add the alias as an
-          instance.
-        </p>
-      </div>
-    ),
-    placement: "bottom",
+    id: "aliases",
+    title: "Aliases keep recipients private",
+    body:
+      "Ask people to write to an alias, such as FrederickGreat, and watch that alias here to read what arrives.",
+    selectors: [
+      "[data-qapp-lib-sidebar-item='aliases']",
+      "nav[aria-label='Mailboxes'] [aria-label='Aliases']",
+      "[aria-label='Open mailboxes menu']",
+    ],
   },
 ];
+
+export function findTourAnchor(step: TourStep, root: ParentNode = document): HTMLElement | null {
+  for (const selector of step.selectors) {
+    const element = root.querySelector<HTMLElement>(selector);
+    if (element) return element;
+  }
+  return null;
+}
 
 interface MailTourProps {
   run: boolean;
@@ -83,23 +70,73 @@ interface MailTourProps {
 }
 
 export function MailTour({ run, onDone }: MailTourProps) {
+  const isPhone = useLayoutMode() === "phone";
+  const [index, setIndex] = useState(0);
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const step = TOUR_STEPS[index];
+  const isLast = index === TOUR_STEPS.length - 1;
+
+  // Find the anchor after the layout settled (the rail or the bottom nav).
+  useLayoutEffect(() => {
+    if (!run) return;
+    setAnchor(findTourAnchor(step));
+  }, [run, step]);
+
+  useEffect(() => {
+    if (run) setIndex(0);
+  }, [run]);
+
+  if (!run || !step) return null;
+
+  const finish = () => {
+    setIndex(0);
+    onDone();
+  };
+
   return (
-    <Joyride
-      steps={steps}
-      run={run}
-      onEvent={(data: any) => {
-        const { action, status } = data;
-        if (
-          status === STATUS.FINISHED ||
-          status === STATUS.SKIPPED ||
-          action === ACTIONS.SKIP
-        ) {
-          onDone();
-        }
+    <Popover
+      open
+      anchorEl={anchor ?? undefined}
+      anchorReference={anchor ? "anchorEl" : "anchorPosition"}
+      anchorPosition={anchor ? undefined : { top: 96, left: Math.round((window.innerWidth || 360) / 2) }}
+      anchorOrigin={
+        isPhone ? { vertical: "top", horizontal: "center" } : { vertical: "center", horizontal: "right" }
+      }
+      transformOrigin={
+        isPhone ? { vertical: "bottom", horizontal: "center" } : { vertical: "center", horizontal: "left" }
+      }
+      onClose={finish}
+      disableRestoreFocus
+      aria-labelledby="qmail-tour-title"
+      slotProps={{
+        paper: {
+          sx: { maxWidth: 320, m: 1, p: 2, display: "flex", flexDirection: "column", gap: 1 },
+          "data-qmail-tour-step": step.id,
+        } as any,
       }}
-      continuous={true}
-      scrollToFirstStep={true}
-      options={{ showProgress: true }}
-    />
+    >
+      <Typography variant="caption" color="text.secondary">
+        Tip {index + 1} of {TOUR_STEPS.length}
+      </Typography>
+      <Typography id="qmail-tour-title" sx={{ fontWeight: 700, fontSize: "1.05rem" }}>
+        {step.title}
+      </Typography>
+      <Typography variant="body2">{step.body}</Typography>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1, mt: 0.5 }}>
+        {!isLast && (
+          <Button variant="text" color="inherit" onClick={finish} sx={{ minHeight: 44 }}>
+            Skip
+          </Button>
+        )}
+        <Button
+          variant="contained"
+          autoFocus
+          onClick={() => (isLast ? finish() : setIndex(index + 1))}
+          sx={{ minHeight: 44, minWidth: 88 }}
+        >
+          {isLast ? "Done" : "Next"}
+        </Button>
+      </Box>
+    </Popover>
   );
 }

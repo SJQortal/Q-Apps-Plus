@@ -117,6 +117,7 @@ import { lazyNamed, preloadOnIdle } from "../../components/common/lazyNamed";
 import { ListSkeleton } from "../../layout/states";
 import { TOUR_STATUS_DISMISSED, TOUR_STATUS_STORAGE_KEY } from "./MailTour";
 import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
+import { usePhoneBackClose } from "../../layout/usePhoneBackClose";
 
 // Lazy boundaries (docs/apps/Q-Mail+.md → Bundle §5): the composer (Quill,
 // react-dropzone), the reader (dompurify), threads, aliases, sent, drafts and
@@ -3373,6 +3374,42 @@ export const Mail = ({ isFromTo }: MailProps) => {
       </React.Suspense>
     ) : null;
   const isThreadReadingOpen = Boolean(threadReadingPane);
+
+  // Hardware / browser Back on phones closes the open sub-pane (GO's back
+  // button then works) instead of leaving the app.
+  const phoneSubPaneKey = !isMobile
+    ? null
+    : isComposeView
+    ? "compose"
+    : isThreadReadingOpen
+    ? "thread"
+    : isReadingOpen
+    ? "message"
+    : isOpeningMessage
+    ? "opening"
+    : isThreadsView && selectedGroup
+    ? "thread-group"
+    : activeAliasInboxName
+    ? "alias-inbox"
+    : null;
+  usePhoneBackClose({
+    enabled: isMobile,
+    activeKey: phoneSubPaneKey,
+    onBack: () => {
+      if (phoneSubPaneKey === "compose") handleComposerClose();
+      else if (phoneSubPaneKey === "thread") setCurrentThread(null);
+      else if (phoneSubPaneKey === "message") closeOpenMessage();
+      else if (phoneSubPaneKey === "opening") onOk(undefined);
+      else if (phoneSubPaneKey === "thread-group") {
+        setSelectedGroup(null);
+        setCurrentThread(null);
+      } else if (phoneSubPaneKey === "alias-inbox") {
+        setSelectedAlias(null);
+        setSelectedAliasScope(null);
+        closeOpenMessage();
+      }
+    },
+  });
 
   // ---- wide views (take the place of list + reading) -----------------------
   let wide: React.ReactNode | null = null;

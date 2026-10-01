@@ -243,6 +243,24 @@
   box-sizing: inherit;
 }
 
+/* Keyboard focus is always visible, in the theme's primary colour (DESIGN → Accessibility). */
+:focus-visible {
+  outline: 2px solid var(--qp-primary, var(--qmail-brand));
+  outline-offset: 2px;
+}
+
+/* Short, cheap motion everywhere; none at all when the system asks for it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 body {
   margin: 0;
   font-family: inherit;

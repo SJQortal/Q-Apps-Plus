@@ -2042,9 +2042,6 @@ export const NewMessage = ({
                   letterSpacing: "0.15px",
                   opacity: 1,
                 },
-                "&:focus": {
-                  outline: "none",
-                },
               }}
             />
           </NewMessageInputRow>
@@ -2087,9 +2084,6 @@ export const NewMessage = ({
                       lineHeight: "120%",
                       letterSpacing: "0.15px",
                       opacity: 1,
-                    },
-                    "&:focus": {
-                      outline: "none",
                     },
                   }}
                 />
