@@ -28,6 +28,10 @@ interface GroupedMailboxListProps {
   isDeletingMessage?: (messageId: string) => boolean;
   onMarkAsRead?: (messages: any[]) => void | Promise<void>;
   onMarkAsUnread?: (messages: any[]) => void | Promise<void>;
+  /** Archive the selected messages (local only; shown in the Archived view). */
+  onArchive?: (messages: any[]) => void | Promise<void>;
+  /** Move the selected messages back to the inbox. */
+  onUnarchive?: (messages: any[]) => void | Promise<void>;
 }
 
 interface MessageGroup {
@@ -67,6 +71,8 @@ export const GroupedMailboxList = ({
   showSelectAll = false,
   onMarkAsRead,
   onMarkAsUnread,
+  onArchive,
+  onUnarchive,
 }: GroupedMailboxListProps) => {
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
     new Set()
@@ -216,6 +222,21 @@ export const GroupedMailboxList = ({
   const handleMarkAsUnread = async () => {
     if (selectedMessageIds.size === 0 || !onMarkAsUnread) return;
     await onMarkAsUnread(
+      Array.from(selectedMessageIds)
+        .map(id => {
+          const message = messages.find(m => getMessageId(m) === id);
+          return message || null;
+        })
+        .filter(Boolean)
+    );
+    setSelectedMessageIds(new Set());
+  };
+
+  const handleArchiveSelection = async (
+    handler?: (messages: any[]) => void | Promise<void>
+  ) => {
+    if (selectedMessageIds.size === 0 || !handler) return;
+    await handler(
       Array.from(selectedMessageIds)
         .map(id => {
           const message = messages.find(m => getMessageId(m) === id);
@@ -543,7 +564,8 @@ export const GroupedMailboxList = ({
           </Box>
         );
       })}
-      {selectedMessageIds.size > 0 && (onMarkAsRead || onMarkAsUnread) && (
+      {selectedMessageIds.size > 0 &&
+        (onMarkAsRead || onMarkAsUnread || onArchive || onUnarchive) && (
         <Box
           sx={{
             width: "100%",
@@ -558,6 +580,44 @@ export const GroupedMailboxList = ({
             zIndex: 2,
           }}
         >
+          {onArchive && (
+            <Button
+              onClick={() => void handleArchiveSelection(onArchive)}
+              variant="outlined"
+              sx={{
+                minHeight: 44,
+                fontWeight: 700,
+                textTransform: "none",
+                borderColor: "var(--qmail-shell-border)",
+                color: "var(--qmail-thread-text)",
+                background: "var(--qmail-shell-hover)",
+                "&:hover": {
+                  background: "var(--qmail-shell-hover-strong)",
+                },
+              }}
+            >
+              Archive ({selectedMessageIds.size})
+            </Button>
+          )}
+          {onUnarchive && (
+            <Button
+              onClick={() => void handleArchiveSelection(onUnarchive)}
+              variant="outlined"
+              sx={{
+                minHeight: 44,
+                fontWeight: 700,
+                textTransform: "none",
+                borderColor: "var(--qmail-shell-border)",
+                color: "var(--qmail-thread-text)",
+                background: "var(--qmail-shell-hover)",
+                "&:hover": {
+                  background: "var(--qmail-shell-hover-strong)",
+                },
+              }}
+            >
+              Move to Inbox ({selectedMessageIds.size})
+            </Button>
+          )}
           {onMarkAsUnread && (
             <Button
               onClick={handleMarkAsUnread}
