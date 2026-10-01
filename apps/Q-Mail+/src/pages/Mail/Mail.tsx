@@ -128,6 +128,28 @@ import { Thread } from "./Thread";
 import { invalidateThreadSearches } from "./threadData";
 import { useThreadUnreadCounts } from "./threadUnread";
 import { getAvatarUrl } from "../../utils/avatarCache";
+import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
+import {
+  SENT_INDEX_KEY,
+  aliasIndexKey,
+  getMailIndex,
+  useMailIndex,
+  useMailIndexVersion,
+} from "./mailIndexStore";
+import { ensureAliasIndex, ensureSentIndex } from "./mailIndexes";
+import { SearchResultsList } from "./SearchResultsList";
+import {
+  BODY_SEARCH_STEP,
+  idleSearchStatus,
+  type MailboxSearchStatus,
+} from "./useMailboxSearch";
+import {
+  mailboxRefOf,
+  tagForMailbox,
+  type MailSearchScope,
+  type MailboxRef,
+} from "./mailSearch";
+import { getSentRecipientDisplayLabel } from "./mailIdentifier";
 
 type MailboxSidebarItemId =
   | "inbox"
@@ -1006,24 +1028,155 @@ export const Mail = ({ isFromTo }: MailProps) => {
     normalizedUserName,
     selectedInboxInstanceName,
   ]);
-  const shouldRunInboxSearch =
+  // Archived alias mail lives in AliasMail's rows (fed back through
+  // watchedAliasRecentMessages), not in the combined inbox.
+  const archivedForList = useMemo(() => {
+    const seen = new Set(archivedMessages.map(getMessageIdentifier));
+    const extra: any[] = [];
+    Object.values(watchedAliasRecentMessages).forEach(rows => {
+      rows.forEach(row => {
+        const id = getMessageIdentifier(row);
+        if (!id || seen.has(id) || !isArchivedId(archived, id)) return;
+        seen.add(id);
+        extra.push(row);
+      });
+    });
+    if (!extra.length) return archivedMessages;
+    return [...archivedMessages, ...extra].sort((a, b) => {
+      return Number(b?.createdAt || 0) - Number(a?.createdAt || 0);
+    });
+  }, [archived, archivedMessages, watchedAliasRecentMessages]);
+  const handleAliasMessagesLoaded = useCallback((alias: string, rows: any[]) => {
+    setWatchedAliasRecentMessages(previous => {
+      return previous[alias] === rows ? previous : { ...previous, [alias]: rows };
+    });
+  }, []);
+
+  // ---- search (N8): one box, "This mailbox" or "All mail" -----------------
+  const [searchScope, setSearchScope] = useState<MailSearchScope>("mailbox");
+  const [bodySearchLimit, setBodySearchLimit] = useState(0);
+  const [mailboxSearchStatus, setMailboxSearchStatus] =
+    useState<MailboxSearchStatus | null>(null);
+  const [isLoadingAllMail, setIsLoadingAllMail] = useState(false);
+  const isMailboxSearchView =
+    isInboxViewActive ||
+    isArchivedViewActive ||
+    isSentViewActive ||
+    (isAliasesViewActive && Boolean(activeAliasInboxName));
+  const hasSearchQuery = inboxSearchQuery.trim().length > 0;
+  const isAllMailSearch =
     hasAuthenticatedIdentity &&
-    isInboxViewActive &&
-    inboxMessagesForList !== null;
+    isMailboxSearchView &&
+    searchScope === "all" &&
+    hasSearchQuery;
+  // Body decrypts are opt-in per query and per view.
+  useEffect(() => {
+    setBodySearchLimit(0);
+  }, [inboxSearchQuery, activeMailboxItem, searchScope, selectedAlias]);
+  useEffect(() => {
+    setMailboxSearchStatus(null);
+  }, [activeMailboxItem, selectedAlias]);
 
   const { results: inboxSearchResults, status: inboxSearchStatus } =
     useMailboxSearch({
-      messages: inboxMessagesForList || [],
+      messages: isArchivedViewActive
+        ? archivedForList
+        : inboxMessagesForList || [],
       query: inboxSearchQuery,
       mailboxType: "inbox",
       username: user?.name,
       hashMapMailMessages,
-      enabled: shouldRunInboxSearch,
+      enabled:
+        hasAuthenticatedIdentity &&
+        (isInboxViewActive || isArchivedViewActive) &&
+        !isAllMailSearch,
+      bodyLimit: bodySearchLimit,
     });
+
+  const sentIndexForSearch = useMailIndex(SENT_INDEX_KEY);
+  const mailIndexVersion = useMailIndexVersion();
+  const allMailRows = useMemo(() => {
+    if (!isAllMailSearch) return [];
+    void mailIndexVersion;
+    const rows: any[] = [];
+    const seen = new Set<string>();
+    const push = (message: any, ref: MailboxRef) => {
+      const id = getMessageIdentifier(message);
+      const key = `${ref.kind}:${ref.alias || ""}:${id}`;
+      if (!id || seen.has(key)) return;
+      seen.add(key);
+      rows.push(tagForMailbox(message, ref));
+    };
+    combinedInboxMessages.forEach(message => {
+      push(message, {
+        kind: isArchivedId(archived, getMessageIdentifier(message))
+          ? "archived"
+          : "inbox",
+      });
+    });
+    (sentIndexForSearch || []).forEach(message => push(message, { kind: "sent" }));
+    watchedAliases.forEach(alias => {
+      const loaded =
+        getMailIndex(aliasIndexKey(alias)) ||
+        watchedAliasRecentMessages[alias] ||
+        [];
+      loaded.forEach(message => push(message, { kind: "alias", alias }));
+    });
+    return rows;
+  }, [
+    archived,
+    combinedInboxMessages,
+    isAllMailSearch,
+    mailIndexVersion,
+    sentIndexForSearch,
+    watchedAliasRecentMessages,
+    watchedAliases,
+  ]);
+
+  const { results: allMailResults, status: allMailStatus } = useMailboxSearch({
+    messages: allMailRows,
+    query: inboxSearchQuery,
+    username: user?.name,
+    hashMapMailMessages,
+    enabled: isAllMailSearch,
+    bodyLimit: bodySearchLimit,
+  });
+
+  // "All mail" needs the sent index and the alias inboxes; load each once.
+  useEffect(() => {
+    if (!isAllMailSearch || !user?.address) return;
+    let cancelled = false;
+    setIsLoadingAllMail(true);
+    const address = user.address;
+    const sentNames = ownedSentNames.length
+      ? ownedSentNames
+      : user?.name
+        ? [user.name]
+        : [];
+    Promise.all([
+      ensureSentIndex(sentNames),
+      ...watchedAliases.map(alias => ensureAliasIndex(alias, address)),
+    ])
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setIsLoadingAllMail(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAllMailSearch, ownedSentNames, user?.address, user?.name, watchedAliases]);
+
+  const activeSearchStatus: MailboxSearchStatus = isAllMailSearch
+    ? allMailStatus
+    : isInboxViewActive || isArchivedViewActive
+      ? inboxSearchStatus
+      : mailboxSearchStatus || idleSearchStatus(0);
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
   const { getAllMailMessages, checkNewMessages } = useFetchMail();
+  // The inbox index load error, surfaced by the list as an ErrorState with Retry.
+  const [inboxLoadError, setInboxLoadError] = useState<string | null>(null);
   const getMessages = React.useCallback(
     async (isOnMount?: boolean) => {
       if (!user?.name || !user?.address) return;
@@ -1031,8 +1184,14 @@ export const Mail = ({ isFromTo }: MailProps) => {
         if (isOnMount) {
           setIsLoading(true);
         }
+        setInboxLoadError(null);
         await getAllMailMessages(user.name, user.address);
-      } catch (error) {
+      } catch (error: any) {
+        setInboxLoadError(
+          typeof error?.message === "string" && error.message
+            ? error.message
+            : "Couldn't reach the node."
+        );
       } finally {
         setIsLoading(false);
       }
@@ -1459,9 +1618,12 @@ export const Mail = ({ isFromTo }: MailProps) => {
           .filter(result => result.messages.length > 0)
           .map(result => result.aliasName);
         setWatchedAliasesWithMessages(aliasesWithMessages);
-        setWatchedAliasRecentMessages(
+        setWatchedAliasRecentMessages(previous =>
           results.reduce<Record<string, any[]>>((accumulator, result) => {
-            accumulator[result.aliasName] = result.messages;
+            // AliasMail hands back everything it loaded; keep that over the probe's 20.
+            const known = previous[result.aliasName];
+            accumulator[result.aliasName] =
+              known && known.length > result.messages.length ? known : result.messages;
             return accumulator;
           }, {})
         );
@@ -2218,117 +2380,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     watchedAliasOwnerAddress,
   ]);
 
-  const applyReadStateToMessages = useCallback(
-    (messagesToUpdate: any[], readIdSet: Set<string>): any[] => {
-      let didChange = false;
-      const nextMessages = messagesToUpdate.map(message => {
-        const identifier = getMessageIdentifier(message);
-        if (!identifier || !readIdSet.has(identifier)) return message;
-
-        const existingThread = Array.isArray(
-          message?.generalData?.threadV2
-        )
-          ? message.generalData.threadV2
-          : [];
-        if (existingThread.length > 0) return message;
-
-        didChange = true;
-        const updatedMessage = structuredClone(message);
-        updatedMessage.generalData = updatedMessage.generalData || {};
-
-        updatedMessage.generalData.threadV2 = [
-          {
-            reference: {
-              identifier,
-              name: updatedMessage?.user,
-              service: MAIL_SERVICE_TYPE,
-            },
-            data: {
-              markedAsReadLocally: true,
-              createdAt: Date.now(),
-            },
-          },
-        ];
-        return updatedMessage;
-      });
-      return didChange ? nextMessages : messagesToUpdate;
-    },
-    []
-  );
-
-  const applyReadStateToCombinedMap = useCallback(
-    (
-      messageMap: Record<string, any[]>,
-      readIdSet: Set<string>
-    ): Record<string, any[]> => {
-      let didChange = false;
-      const nextMap = Object.entries(messageMap).reduce<Record<string, any[]>>(
-        (accumulator, [name, entries]) => {
-          const updatedEntries = applyReadStateToMessages(
-            entries || [],
-            readIdSet
-          );
-          accumulator[name] = updatedEntries;
-          if (updatedEntries !== entries) {
-            didChange = true;
-          }
-          return accumulator;
-        },
-        {}
-      );
-      return didChange ? nextMap : messageMap;
-    },
-    [applyReadStateToMessages]
-  );
-
-  const applyUnreadStateToMessages = useCallback(
-    (messagesToUpdate: any[], unreadIdSet: Set<string>): any[] => {
-      let didChange = false;
-      const nextMessages = messagesToUpdate.map(message => {
-        const identifier = getMessageIdentifier(message);
-        if (!identifier || !unreadIdSet.has(identifier)) return message;
-
-        const existingThread = Array.isArray(message?.generalData?.threadV2)
-          ? message.generalData.threadV2
-          : [];
-        if (existingThread.length === 0) return message;
-
-        didChange = true;
-        const updatedMessage = structuredClone(message);
-        updatedMessage.generalData = updatedMessage.generalData || {};
-        updatedMessage.generalData.threadV2 = [];
-        return updatedMessage;
-      });
-      return didChange ? nextMessages : messagesToUpdate;
-    },
-    []
-  );
-
-  const applyUnreadStateToCombinedMap = useCallback(
-    (
-      messageMap: Record<string, any[]>,
-      unreadIdSet: Set<string>
-    ): Record<string, any[]> => {
-      let didChange = false;
-      const nextMap = Object.entries(messageMap).reduce<Record<string, any[]>>(
-        (accumulator, [name, entries]) => {
-          const updatedEntries = applyUnreadStateToMessages(
-            entries || [],
-            unreadIdSet
-          );
-          accumulator[name] = updatedEntries;
-          if (updatedEntries !== entries) {
-            didChange = true;
-          }
-          return accumulator;
-        },
-        {}
-      );
-      return didChange ? nextMap : messageMap;
-    },
-    [applyUnreadStateToMessages]
-  );
-
   const localMailStateById = useMemo(() => {
     const collectedState: Record<string, QMailPublishedStateEntry> = {};
 
@@ -2387,26 +2438,14 @@ export const Mail = ({ isFromTo }: MailProps) => {
           .filter(Boolean);
         if (!readIdentifiers.length) return;
 
-        const readIdSet = new Set(readIdentifiers);
+        // The read store (src/utils/readState.ts) is the only source of truth;
+        // list copies keep their real generalData.threadV2 (Bugs #5).
         dispatch(markRead({ ids: readIdentifiers }));
-        const updatedMailMessages = applyReadStateToMessages(
-          mailMessages,
-          readIdSet
-        );
-        dispatch(upsertMessages(updatedMailMessages));
-        setCombinedAliasInboxMessages(previous => {
-          return applyReadStateToCombinedMap(previous, readIdSet);
-        });
       } catch (error) {
         console.error("Failed to mark messages as read:", error);
       }
     },
-    [
-      applyReadStateToCombinedMap,
-      applyReadStateToMessages,
-      dispatch,
-      mailMessages,
-    ]
+    [dispatch]
   );
 
   useEffect(() => {
@@ -2422,26 +2461,12 @@ export const Mail = ({ isFromTo }: MailProps) => {
           .filter(Boolean);
         if (!unreadIdentifiers.length) return;
 
-        const unreadIdSet = new Set(unreadIdentifiers);
         dispatch(markUnread({ ids: unreadIdentifiers }));
-        const updatedMailMessages = applyUnreadStateToMessages(
-          mailMessages,
-          unreadIdSet
-        );
-        dispatch(upsertMessages(updatedMailMessages));
-        setCombinedAliasInboxMessages(previous => {
-          return applyUnreadStateToCombinedMap(previous, unreadIdSet);
-        });
       } catch (error) {
         console.error("Failed to mark messages as unread:", error);
       }
     },
-    [
-      applyUnreadStateToCombinedMap,
-      applyUnreadStateToMessages,
-      dispatch,
-      mailMessages,
-    ]
+    [dispatch]
   );
 
   const archiveMessages = useCallback(
@@ -2659,7 +2684,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   ]);
 
   const renderAuthenticationPrompt = useCallback(
-    (mailboxLabel: "Inbox" | "Sent" | "Threads") => {
+    (mailboxLabel: "Inbox" | "Sent" | "Threads" | "Aliases") => {
       return (
         <Box
           sx={{
@@ -2973,31 +2998,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     dispatch(applyPublishedReadState({ ids: readIds }));
   }, [dispatch, publishedMailStateById]);
 
-  // Read store → the list copies, so rows show read state after a reload. Only
-  // adds the local marker; "mark as unread" strips it through markMessagesAsUnread.
-  useEffect(() => {
-    const readIdSet = readIdsFromState(readState);
-    if (!readIdSet.size) return;
-    if (mailMessages.length > 0) {
-      const updatedMailMessages = applyReadStateToMessages(
-        mailMessages,
-        readIdSet
-      );
-      if (updatedMailMessages !== mailMessages) {
-        dispatch(upsertMessages(updatedMailMessages));
-      }
-    }
-    setCombinedAliasInboxMessages(previous => {
-      return applyReadStateToCombinedMap(previous, readIdSet);
-    });
-  }, [
-    applyReadStateToCombinedMap,
-    applyReadStateToMessages,
-    dispatch,
-    mailMessages,
-    readState,
-  ]);
-
   useEffect(() => {
     const identityKey = `${user?.name || ""}:${user?.address || ""}`;
     if (!hasAuthenticatedIdentity || !identityKey) {
@@ -3160,12 +3160,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     alignItems: "center",
   } as const;
 
-  const spinner = (
-    <Box sx={{ display: "flex", width: "100%", justifyContent: "center", py: 2 }}>
-      <CircularProgress />
-    </Box>
-  );
-
   // ---- list pane -----------------------------------------------------------
   let listTitle = "Inbox";
   let listSubtitle: string | undefined = user?.name || undefined;
@@ -3179,6 +3173,10 @@ export const Mail = ({ isFromTo }: MailProps) => {
         instanceNames={sentInstanceNamesForCurrentView}
         onOpen={openMessage}
         openedMessageId={message?.id || message?.identifier}
+        onCompose={() => onSelectSidebarItem("compose")}
+        searchQuery={inboxSearchQuery}
+        bodySearchLimit={bodySearchLimit}
+        onSearchStatus={setMailboxSearchStatus}
       />
     ) : (
       renderAuthenticationPrompt("Sent")
@@ -3195,10 +3193,17 @@ export const Mail = ({ isFromTo }: MailProps) => {
       <AliasMail
         value={activeAliasInboxName}
         onOpen={openMessage}
-        messageOpenedId={message?.id}
+        messageOpenedId={message?.id || message?.identifier}
+        onMessagesLoaded={handleAliasMessagesLoaded}
+        onMarkAsRead={markMessagesAsRead}
+        onMarkAsUnread={markMessagesAsUnread}
+        onArchive={archiveMessages}
+        searchQuery={inboxSearchQuery}
+        bodySearchLimit={bodySearchLimit}
+        onSearchStatus={setMailboxSearchStatus}
       />
     ) : (
-      renderAuthenticationPrompt("Inbox")
+      renderAuthenticationPrompt("Aliases")
     );
   } else if (isArchivedViewActive) {
     listTitle = "Archived";
@@ -3207,24 +3212,32 @@ export const Mail = ({ isFromTo }: MailProps) => {
       onSelectSidebarItem("inbox");
     };
     listBody = hasAuthenticatedIdentity ? (
-      archivedMessages.length ? (
-        <GroupedMailboxList
-          messages={archivedMessages}
-          mailboxType="inbox"
-          showSelectAll
-          openMessage={openMessage}
-          openedMessageId={message?.id || message?.identifier}
-          onMarkAsRead={markMessagesAsRead}
-          onMarkAsUnread={markMessagesAsUnread}
-          onUnarchive={unarchiveMessages}
-        />
-      ) : (
-        <EmptyState
-          icon={<InboxOutlinedIcon />}
-          title="Nothing archived"
-          hint="Select messages in the inbox and choose Archive to tidy them away. They stay on QDN."
-        />
-      )
+      <GroupedMailboxList
+        messages={inboxSearchResults}
+        mailboxType="inbox"
+        showSelectAll
+        openMessage={openMessage}
+        openedMessageId={message?.id || message?.identifier}
+        onMarkAsRead={markMessagesAsRead}
+        onMarkAsUnread={markMessagesAsUnread}
+        onUnarchive={unarchiveMessages}
+        status={isLoading && !archivedForList.length ? "loading" : "ready"}
+        highlightTerms={inboxSearchStatus.terms}
+        emptyIcon={<ArchiveOutlinedIcon />}
+        emptyTitle={hasSearchQuery ? "No matches" : "Nothing archived"}
+        emptyHint={
+          hasSearchQuery
+            ? "Try fewer words, or search message bodies."
+            : "Select messages in the inbox and choose Archive to tidy them away. They stay on QDN."
+        }
+        emptyAction={
+          hasSearchQuery ? undefined : (
+            <Button variant="outlined" onClick={() => onSelectSidebarItem("inbox")} sx={{ minHeight: 44 }}>
+              Back to inbox
+            </Button>
+          )
+        }
+      />
     ) : (
       renderAuthenticationPrompt("Inbox")
     );
@@ -3281,12 +3294,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     listSubtitle = selectedInboxInstanceName ? "Inbox" : user?.name || undefined;
     listBody = hasAuthenticatedIdentity ? (
       <>
-        <MailboxSearchBar
-          value={inboxSearchQuery}
-          onChange={setInboxSearchQuery}
-          placeholder="Search inbox messages..."
-          status={inboxSearchStatus}
-        />
         <GroupedMailboxList
           messages={inboxSearchResults}
           mailboxType="inbox"
@@ -3296,17 +3303,75 @@ export const Mail = ({ isFromTo }: MailProps) => {
           onMarkAsRead={markMessagesAsRead}
           onMarkAsUnread={markMessagesAsUnread}
           onArchive={archiveMessages}
+          highlightTerms={inboxSearchStatus.terms}
+          status={
+            isLoading ||
+            (isLoadingCombinedAliasInbox &&
+              (!selectedInboxInstanceName ||
+                !combinedAliasInboxMessages[selectedInboxInstanceName]))
+              ? "loading"
+              : inboxLoadError
+                ? "error"
+                : "ready"
+          }
+          errorMessage={inboxLoadError || undefined}
+          onRetry={() => void getMessages(true)}
+          emptyTitle={hasSearchQuery ? "No matches" : "No mail yet"}
+          emptyHint={
+            hasSearchQuery
+              ? "Try fewer words, or search message bodies."
+              : `Mail sent to ${selectedInboxInstanceName || user?.name || "you"} shows up here.`
+          }
+          emptyAction={
+            hasSearchQuery ? undefined : (
+              <Button
+                variant="contained"
+                onClick={() => onSelectSidebarItem("compose")}
+                sx={{ minHeight: 44 }}
+              >
+                Compose
+              </Button>
+            )
+          }
         />
-        {isLoading && spinner}
-        {isLoadingCombinedAliasInbox &&
-          (!selectedInboxInstanceName ||
-            !combinedAliasInboxMessages[selectedInboxInstanceName]) &&
-          spinner}
       </>
     ) : (
       renderAuthenticationPrompt("Inbox")
     );
   }
+
+  // A hit of the cross-mailbox search opens in its own mailbox.
+  const openSearchResult = (hit: any) => {
+    const ref = mailboxRefOf(hit);
+    const id = getMessageIdentifier(hit);
+    if (!id) return;
+    if (ref?.kind === "sent") {
+      onSelectSidebarItem("sent");
+      const decrypted: any = hashMapMailMessages[id];
+      const recipient =
+        typeof decrypted?.recipient === "string" && decrypted.recipient.trim()
+          ? decrypted.recipient.trim()
+          : getSentRecipientDisplayLabel(id);
+      void openMessage(hit?.user, id, hit, recipient);
+      return;
+    }
+    if (ref?.kind === "alias" && ref.alias) {
+      onSelectSidebarItem(createAliasesInstanceItemId(ref.alias));
+    } else if (ref?.kind === "archived") {
+      onSelectSidebarItem(ARCHIVED_ITEM_ID);
+    } else {
+      onSelectSidebarItem("inbox");
+    }
+    void openMessage(hit?.user, id, hit);
+  };
+
+  const searchPlaceholder = isSentViewActive
+    ? "Search sent mail"
+    : isArchivedViewActive
+      ? "Search archived mail"
+      : isAliasesViewActive && activeAliasInboxName
+        ? `Search ${activeAliasInboxName}`
+        : "Search mail";
 
   const listPane = (
     <>
@@ -3317,9 +3382,34 @@ export const Mail = ({ isFromTo }: MailProps) => {
         leading={menuButton}
         actions={settingsButton}
       />
+      {isMailboxSearchView && hasAuthenticatedIdentity && (
+        <MailboxSearchBar
+          value={inboxSearchQuery}
+          onChange={setInboxSearchQuery}
+          placeholder={searchPlaceholder}
+          status={activeSearchStatus}
+          scope={searchScope}
+          onScopeChange={setSearchScope}
+          onSearchBodies={() =>
+            setBodySearchLimit(limit => limit + BODY_SEARCH_STEP)
+          }
+          bodyStep={BODY_SEARCH_STEP}
+          isLoadingScope={isAllMailSearch && isLoadingAllMail}
+        />
+      )}
       <PaneScroll>
         <Box className="step-1" sx={centeredColumnSx}>
-          {listBody}
+          {isAllMailSearch ? (
+            <SearchResultsList
+              hits={allMailResults}
+              terms={allMailStatus.terms}
+              status={isLoadingAllMail && !allMailRows.length ? "loading" : "ready"}
+              openedMessageId={message?.id || message?.identifier}
+              onOpen={openSearchResult}
+            />
+          ) : (
+            listBody
+          )}
         </Box>
       </PaneScroll>
     </>
@@ -3509,7 +3599,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
                 }}
               />
             ) : (
-              renderAuthenticationPrompt("Inbox")
+              renderAuthenticationPrompt("Aliases")
             )}
           </Box>
         </PaneScroll>
@@ -3536,7 +3626,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       items={[
         { id: "inbox", label: "Inbox", icon: <InboxOutlinedIcon />, badge: unreadCounts.inbox || undefined },
         { id: "sent", label: "Sent", icon: <SendOutlinedIcon /> },
-        { id: "threads", label: "Threads", icon: <ForumOutlinedIcon /> },
+        { id: "threads", label: "Threads", icon: <ForumOutlinedIcon />, badge: Object.values(threadUnreadByGroup || {}).reduce((sum, n) => sum + (n || 0), 0) || undefined },
         { id: "aliases", label: "Aliases", icon: <AlternateEmailOutlinedIcon />, badge: unreadCounts.aliases || undefined },
         { id: "menu", label: "Menu", icon: <MenuIcon /> },
       ]}
