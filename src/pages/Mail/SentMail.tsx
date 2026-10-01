@@ -5,15 +5,19 @@ import SendOutlinedIcon from '@mui/icons-material/SendOutlined'
 import { RootState } from '../../state/store'
 import { MAIL_SERVICE_TYPE } from '../../constants/mail'
 import { GroupedMailboxList } from './GroupedMailboxList'
-import { useMailboxSearch } from './useMailboxSearch'
-import { MailboxSearchBar } from './MailboxSearchBar'
+import { useMailboxSearch, type MailboxSearchStatus } from './useMailboxSearch'
 import useConfirmationModal from '../../hooks/useConfirmModal'
 import { setNotification } from '../../state/features/notificationsSlice'
 import { objectToBase64 } from '../../utils/toBase64'
+import { parseSentRecipientFromIdentifier } from './mailIdentifier'
 import {
-  isSentMailIdentifier,
-  parseSentRecipientFromIdentifier,
-} from './mailIdentifier'
+  SENT_DELETED_TAG,
+  SENT_DELETED_TITLE,
+  fetchSentIndex,
+  readDeletedSentIds,
+  writeDeletedSentIds,
+} from '../../utils/sentIndex'
+import { SENT_INDEX_KEY, publishMailIndex } from './mailIndexStore'
 
 interface SentMailProps {
   instanceName?: string | null
@@ -27,6 +31,10 @@ interface SentMailProps {
   openedMessageId?: string | number | null
   /** The empty state's next action. */
   onCompose?: () => void
+  /** The list pane's search box (Mail.tsx owns the query and the body limit). */
+  searchQuery?: string
+  bodySearchLimit?: number
+  onSearchStatus?: (status: MailboxSearchStatus) => void
 }
 
 interface ResolvedRecipientInfo {
@@ -34,32 +42,6 @@ interface ResolvedRecipientInfo {
   address: string
   publicKey: string
 }
-
-const SENT_DELETED_TITLE = '__qmail_deleted__'
-const SENT_DELETED_TAG = 'qmail-deleted'
-const LEGACY_SENT_QUERY = 'qortal_qmail_'
-
-type SentQueryConfig = {
-  query: string
-  identifier?: string
-  matchesIdentifier: (identifier: string) => boolean
-}
-
-const SENT_QUERY_CONFIGS: SentQueryConfig[] = [
-  {
-    query: '_mail_qortal_qmail_',
-    identifier: '_mail_',
-    matchesIdentifier: identifier => {
-      return identifier.toLowerCase().startsWith('_mail_qortal_qmail_')
-    },
-  },
-  {
-    query: LEGACY_SENT_QUERY,
-    matchesIdentifier: identifier => {
-      return identifier.toLowerCase().startsWith(LEGACY_SENT_QUERY)
-    },
-  },
-]
 
 const toStringOrEmpty = (value: any): string => {
   return typeof value === 'string' ? value.trim() : ''
@@ -70,94 +52,6 @@ const toErrorMessage = (error: any, fallback: string): string => {
   if (typeof error?.error === 'string' && error.error.trim()) return error.error
   if (typeof error?.message === 'string' && error.message.trim()) return error.message
   return fallback
-}
-
-const getDeletedSentStorageKey = (username: string): string => {
-  return `qmail_deleted_sent_${username}`
-}
-
-const readDeletedSentIds = (username: string): Record<string, boolean> => {
-  try {
-    const raw = localStorage.getItem(getDeletedSentStorageKey(username))
-    if (!raw) return {}
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return {}
-
-    return parsed.reduce<Record<string, boolean>>((accumulator, identifier) => {
-      const value = toStringOrEmpty(identifier)
-      if (value) {
-        accumulator[value] = true
-      }
-      return accumulator
-    }, {})
-  } catch {
-    return {}
-  }
-}
-
-const writeDeletedSentIds = (
-  username: string,
-  deletedIds: Record<string, boolean>
-): void => {
-  try {
-    localStorage.setItem(
-      getDeletedSentStorageKey(username),
-      JSON.stringify(Object.keys(deletedIds))
-    )
-  } catch {
-    // Ignore storage failures in private browsing or restricted environments.
-  }
-}
-
-const isDeletedSentResource = (resource: any): boolean => {
-  const title = toStringOrEmpty(resource?.metadata?.title).toLowerCase()
-  if (title === SENT_DELETED_TITLE.toLowerCase()) {
-    return true
-  }
-
-  const tags = Array.isArray(resource?.metadata?.tags)
-    ? resource.metadata.tags
-    : []
-
-  return tags.some((tag: any) => {
-    const normalizedTag = toStringOrEmpty(tag).toLowerCase()
-    return (
-      normalizedTag === SENT_DELETED_TAG ||
-      normalizedTag === SENT_DELETED_TITLE.toLowerCase()
-    )
-  })
-}
-
-const shouldHideSentResource = (
-  resource: any,
-  locallyDeletedIds: Record<string, boolean>
-): boolean => {
-  const identifier = toStringOrEmpty(resource?.identifier)
-  if (identifier && locallyDeletedIds[identifier]) {
-    return true
-  }
-
-  return isDeletedSentResource(resource)
-}
-
-const mapMailResources = (resources: any[]) => {
-  return resources.map((post: any) => {
-    return {
-      title: post?.metadata?.title,
-      category: post?.metadata?.category,
-      categoryName: post?.metadata?.categoryName,
-      tags: post?.metadata?.tags || [],
-      description: post?.metadata?.description,
-      createdAt: post?.created,
-      updated: post?.updated,
-      user: post.name,
-      id: post.identifier,
-    }
-  })
-}
-
-const sortByCreatedDescending = (a: any, b: any) => {
-  return Number(b?.createdAt || 0) - Number(a?.createdAt || 0)
 }
 
 const getAccountPublicKey = async (address: string): Promise<string | null> => {
@@ -275,6 +169,9 @@ export const SentMail = ({
   onOpen,
   openedMessageId,
   onCompose,
+  searchQuery = '',
+  bodySearchLimit = 0,
+  onSearchStatus,
 }: SentMailProps) => {
   const dispatch = useDispatch()
   const { user } = useSelector((state: RootState) => state.auth)
@@ -302,7 +199,6 @@ export const SentMail = ({
   const [mailMessages, setMailMessages] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
   const [deletingMessageIds, setDeletingMessageIds] = useState<
     Record<string, boolean>
   >({})
@@ -354,7 +250,17 @@ export const SentMail = ({
     username: activeInstanceNames[0] || user?.name,
     hashMapMailMessages,
     enabled: hasActiveInstances,
+    bodyLimit: bodySearchLimit,
   })
+
+  useEffect(() => {
+    onSearchStatus?.(searchStatus)
+  }, [onSearchStatus, searchStatus])
+
+  // Share the index with the cross-mailbox search.
+  useEffect(() => {
+    if (hasActiveInstances) publishMailIndex(SENT_INDEX_KEY, mailMessages)
+  }, [hasActiveInstances, mailMessages])
 
   const markDeletedLocally = useCallback(
     (messageIdentifier: string, senderName?: string | null) => {
@@ -407,79 +313,11 @@ export const SentMail = ({
       }
 
       try {
-        const pageSize = 200
-        const allResources: any[] = []
-
-        for (const name of activeInstanceNames) {
-          for (const queryConfig of SENT_QUERY_CONFIGS) {
-            let offset = 0
-            let hasMore = true
-
-            while (hasMore) {
-              const params = new URLSearchParams({
-                mode: 'ALL',
-                service: MAIL_SERVICE_TYPE,
-                query: queryConfig.query,
-                name,
-                exactmatchnames: 'true',
-                limit: String(pageSize),
-                includemetadata: 'true',
-                offset: String(offset),
-                reverse: 'true',
-                excludeblocked: 'true',
-              })
-
-              if (queryConfig.identifier) {
-                params.set('identifier', queryConfig.identifier)
-              }
-
-              const response = await fetch(
-                `/arbitrary/resources/search?${params.toString()}`,
-                {
-                  method: 'GET',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                }
-              )
-              const responseData = await response.json()
-
-              if (!Array.isArray(responseData) || responseData.length === 0) {
-                break
-              }
-
-              const visibleResources = responseData.filter(resource => {
-                const identifier = toStringOrEmpty(resource?.identifier)
-                if (!identifier) return false
-                if (!queryConfig.matchesIdentifier(identifier)) return false
-                if (!isSentMailIdentifier(identifier)) return false
-                return !shouldHideSentResource(resource, deletedMessageIdsRef.current)
-              })
-              allResources.push(...visibleResources)
-
-              if (responseData.length < pageSize) {
-                hasMore = false
-              } else {
-                offset += responseData.length
-              }
-            }
-          }
-        }
-
-        const structureData = mapMailResources(allResources)
-        const seen = new Set<string>()
-        const dedupedMessages = structureData.filter(message => {
-          if (!message?.id || seen.has(message.id)) {
-            return false
-          }
-          if (deletedMessageIdsRef.current[message.id]) {
-            return false
-          }
-          seen.add(message.id)
-          return true
-        })
-
-        dedupedMessages.sort(sortByCreatedDescending)
+        const dedupedMessages = await fetchSentIndex(
+          activeInstanceNames,
+          deletedMessageIdsRef.current,
+          silent ? { ttlMs: 0 } : undefined
+        )
         setMailMessages(dedupedMessages)
       } catch (error) {
         if (!silent) {
@@ -506,12 +344,10 @@ export const SentMail = ({
   useEffect(() => {
     if (!hasActiveInstances) {
       setMailMessages([])
-      setSearchQuery('')
       return
     }
 
     setMailMessages([])
-    setSearchQuery('')
     void fetchSentIndexes()
   }, [fetchSentIndexes, hasActiveInstances])
 
@@ -663,12 +499,6 @@ export const SentMail = ({
 
   return (
     <>
-      <MailboxSearchBar
-        value={searchQuery}
-        onChange={setSearchQuery}
-        placeholder='Search sent messages...'
-        status={searchStatus}
-      />
       <GroupedMailboxList
         messages={searchedMessages}
         mailboxType='sent'
@@ -679,6 +509,7 @@ export const SentMail = ({
         status={isLoading ? 'loading' : loadError ? 'error' : 'ready'}
         errorMessage={loadError || undefined}
         onRetry={() => void fetchSentIndexes()}
+        highlightTerms={searchStatus.terms}
         emptyIcon={<SendOutlinedIcon />}
         emptyTitle={searchQuery.trim() ? 'No matches' : 'No sent mail yet'}
         emptyHint={
