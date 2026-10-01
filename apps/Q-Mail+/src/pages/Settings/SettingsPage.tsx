@@ -140,6 +140,7 @@ export function SettingsPage() {
     message: `This publishes your read state, subjects and archived list as an encrypted document (qmail_state_v1) under ${
       user?.name || 'your name'
     }, so other devices can load it. It costs one QDN publish.`,
+    confirmLabel: 'Publish',
   });
   const [isPublishingFromSettings, setIsPublishingFromSettings] = useState(false);
   const publishMailStateNow = async () => {

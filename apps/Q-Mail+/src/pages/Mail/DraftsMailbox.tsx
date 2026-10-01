@@ -110,6 +110,8 @@ export function DraftsMailbox({ address, onOpenDraft }: DraftsMailboxProps) {
           pendingDelete.draft
         )}) will be removed from this device.`
       : "",
+    confirmLabel: "Delete",
+    destructive: true,
   });
 
   const requestDelete = useCallback(
