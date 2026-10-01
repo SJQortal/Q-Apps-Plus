@@ -253,6 +253,53 @@ export function replyAllRecipients(message: any, ownNames: string[]): { to: stri
   return { to: sender, others };
 }
 
+/**
+ * When each correspondent was last in touch, from the rows the app already
+ * holds: a received message counts for its sender, a sent message (one whose
+ * `user` is one of our own names) for its recipient. Keys are normalised names.
+ */
+export function recipientActivityByName(
+  messages: any[],
+  messagesById: Record<string, any> | undefined,
+  ownNames: string[]
+): Map<string, number> {
+  const own = new Set(ownNames.map(normalize).filter(Boolean));
+  const activity = new Map<string, number>();
+  const bump = (value: unknown, at: number) => {
+    const key = normalize(value);
+    if (!key || own.has(key)) return;
+    if ((activity.get(key) || 0) < at) activity.set(key, at);
+  };
+  const consider = (message: any) => {
+    if (!message || typeof message !== "object") return;
+    const at = Number(message.createdAt || message.created || 0);
+    if (!Number.isFinite(at) || at <= 0) return;
+    const sender = normalize(message.user);
+    if (sender && own.has(sender)) {
+      bump(message.recipient, at);
+      bump(message.to && !Array.isArray(message.to) ? message.to : undefined, at);
+      (Array.isArray(message.to) ? message.to : []).forEach((name: unknown) => bump(name, at));
+    } else {
+      bump(message.user, at);
+    }
+  };
+  (Array.isArray(messages) ? messages : []).forEach(consider);
+  if (messagesById && typeof messagesById === "object") {
+    Object.values(messagesById).forEach(consider);
+  }
+  return activity;
+}
+
+/** Names ordered by last contact (newest first); names never seen go last, A–Z. */
+export function sortNamesByRecency(names: string[], activity: Map<string, number>): string[] {
+  return [...names].sort((a, b) => {
+    const atA = activity.get(normalize(a)) || 0;
+    const atB = activity.get(normalize(b)) || 0;
+    if (atA !== atB) return atB - atA;
+    return a.localeCompare(b, undefined, { sensitivity: "base" });
+  });
+}
+
 /** Direct-mail identifier (binding, §2): first 20 chars of the name + last 6 of the owner address. */
 export function directMailIdentifier(recipientName: string, recipientAddress: string, sendId: string): string {
   return `_mail_qortal_qmail_${recipientName.slice(0, 20)}_${recipientAddress.slice(-6)}_mail_${sendId}`;

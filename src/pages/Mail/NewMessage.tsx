@@ -70,10 +70,21 @@ import {
   buildReplyQuoteHtml,
   directMailIdentifier,
   messageBodyLines,
+  recipientActivityByName,
   replyAllRecipients,
+  sortNamesByRecency,
   withSubjectPrefix,
 } from "../../utils/mailCompose";
-import { resolveName } from "../../utils/nameCache";
+import {
+  lookupName,
+  lookupPublicKey,
+  peekName,
+  resolveName,
+} from "../../utils/nameCache";
+import { AvatarWrapper } from "./MailTable";
+import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlined";
 import {
   composeDraftKey,
   createComposeDraftId,
@@ -219,6 +230,9 @@ interface NewMessageProps {
   ownedNames?: string[];
   joinedGroups?: JoinedGroupOption[];
   priorityRecipientNames?: string[];
+  /** Inbox rows and opened messages, to order "Recent" names by last contact. */
+  recentInboxMessages?: any[];
+  openedMessagesById?: Record<string, any>;
   composePrefill?: ComposePrefill | null;
   onThreadPublished?: (result: ThreadPublishResult) => void;
 }
@@ -287,6 +301,8 @@ export const NewMessage = ({
   ownedNames = [],
   joinedGroups = [],
   priorityRecipientNames = [],
+  recentInboxMessages = [],
+  openedMessagesById,
   composePrefill = null,
   onThreadPublished,
 }: NewMessageProps) => {
@@ -367,9 +383,27 @@ export const NewMessage = ({
     return normalizeJoinedGroups(joinedGroups);
   }, [joinedGroups]);
 
+  // "Recent" means recent: last contact in either direction, newest first.
+  const recipientActivity = useMemo(() => {
+    return recipientActivityByName(recentInboxMessages, openedMessagesById, [
+      user?.name || "",
+      ...ownedNames,
+    ]);
+  }, [openedMessagesById, ownedNames, recentInboxMessages, user?.name]);
+
   const knownRecipientNameOptions = useMemo(() => {
-    return dedupeStrings(priorityRecipientNames);
-  }, [priorityRecipientNames]);
+    return sortNamesByRecency(
+      dedupeStrings(priorityRecipientNames),
+      recipientActivity
+    );
+  }, [priorityRecipientNames, recipientActivity]);
+
+  // Inline check of the typed name against the name cache (one GET_NAME_DATA
+  // per name per session), debounced so a pause in typing costs one request.
+  const [recipientCheck, setRecipientCheck] = useState<{
+    name: string;
+    status: "checking" | "found" | "missing";
+  } | null>(null);
 
   useEffect(() => {
     if (!fromOptions.length) {
@@ -538,6 +572,42 @@ export const NewMessage = ({
   );
   const isGroupTarget = resolvedTarget?.type === "group";
   const allowAliasAndBcc = !isGroupTarget;
+
+  useEffect(() => {
+    const candidate =
+      resolvedTarget?.type === "name" ? resolvedTarget.label.trim() : "";
+    if (!candidate) {
+      setRecipientCheck(null);
+      return;
+    }
+    const known = peekName(candidate);
+    if (known) {
+      setRecipientCheck({
+        name: candidate,
+        status: known.status === "found" ? "found" : "missing",
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setRecipientCheck({ name: candidate, status: "checking" });
+    const timeout = window.setTimeout(async () => {
+      try {
+        const lookup = await lookupName(candidate);
+        if (cancelled) return;
+        setRecipientCheck({
+          name: candidate,
+          status: lookup.status === "found" ? "found" : "missing",
+        });
+      } catch {
+        if (!cancelled) setRecipientCheck(null);
+      }
+    }, 450);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [resolvedTarget]);
   const activeDraftKey = useMemo(() => {
     const senderName = fromName.trim();
     if (!user?.address || !senderName || resolvedTarget?.type !== "name")
@@ -1264,6 +1334,13 @@ export const NewMessage = ({
     if (!target) {
       errorMsg = "Cannot send without selecting a recipient or group";
     }
+    if (
+      target?.type === "name" &&
+      recipientCheck?.status === "missing" &&
+      normalizeValue(recipientCheck.name) === normalizeValue(target.label)
+    ) {
+      errorMsg = `"${target.label}" is not a registered name`;
+    }
     if (target?.type === "group" && !subject.trim()) {
       errorMsg = "Please provide a Subject (used as the thread title)";
     }
@@ -1393,26 +1470,13 @@ export const NewMessage = ({
       }
 
       const recipientName = target.label;
-      const recipientNameData = await qortalRequest({
-        action: "GET_NAME_DATA",
-        name: recipientName,
-      });
-      const recipientAddress =
-        typeof recipientNameData?.owner === "string"
-          ? recipientNameData.owner
-          : "";
-      if (!recipientAddress) {
+      // Through the name cache: the inline check already looked this name up.
+      const recipientLookup = await lookupName(recipientName);
+      if (recipientLookup.status !== "found") {
         throw new Error("Recipient name cannot be found");
       }
-
-      const recipientAccount = await qortalRequest({
-        action: "GET_ACCOUNT_DATA",
-        address: recipientAddress,
-      });
-      const recipientPublicKey =
-        typeof recipientAccount?.publicKey === "string"
-          ? recipientAccount.publicKey
-          : "";
+      const recipientAddress = recipientLookup.address;
+      const recipientPublicKey = await lookupPublicKey(recipientAddress);
       if (!recipientPublicKey) {
         throw new Error("Cannot retrieve recipient public key");
       }
@@ -1706,6 +1770,8 @@ export const NewMessage = ({
                   );
                 }}
                 renderOption={(props, option) => {
+                  // MUI 9 puts `key` in props; spreading it warns (Bugs #22).
+                  const { key: _optionKey, ...optionProps } = props as any;
                   const typeLabel =
                     option.targetType === "group" ? "Group" : "Name";
                   const sourceLabel =
@@ -1716,7 +1782,12 @@ export const NewMessage = ({
                       : "Directory";
 
                   return (
-                    <Box component="li" {...props} key={option.id}>
+                    <Box
+                      component="li"
+                      {...optionProps}
+                      key={option.id}
+                      sx={{ minHeight: 44 }}
+                    >
                       <Box
                         sx={{
                           width: "100%",
@@ -1724,16 +1795,42 @@ export const NewMessage = ({
                           alignItems: "center",
                           justifyContent: "space-between",
                           gap: "12px",
+                          minWidth: 0,
                         }}
                       >
-                        <Typography
+                        <Box
                           sx={{
-                            color: "var(--qmail-compose-text)",
-                            fontSize: "0.95rem",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            minWidth: 0,
                           }}
                         >
-                          {option.label}
-                        </Typography>
+                          {option.targetType === "group" ? (
+                            <ForumOutlinedIcon
+                              sx={{
+                                fontSize: 22,
+                                color: "var(--qmail-compose-muted)",
+                              }}
+                            />
+                          ) : (
+                            <AvatarWrapper
+                              height="28px"
+                              user={option.label}
+                              fallback={option.label}
+                            />
+                          )}
+                          <Typography
+                            noWrap
+                            sx={{
+                              color: "var(--qmail-compose-text)",
+                              fontSize: "0.95rem",
+                              minWidth: 0,
+                            }}
+                          >
+                            {option.label}
+                          </Typography>
+                        </Box>
                         <Typography
                           sx={{
                             color: "var(--qmail-compose-muted)",
@@ -1762,8 +1859,10 @@ export const NewMessage = ({
             )}
           </NewMessageInputRow>
 
-          {(isDirectorySearchLoading || isGroupTarget) && (
+          {(isDirectorySearchLoading || isGroupTarget || recipientCheck) && (
             <Box
+              role="status"
+              aria-live="polite"
               sx={{
                 display: "flex",
                 alignItems: "center",
@@ -1771,15 +1870,37 @@ export const NewMessage = ({
                 flexWrap: "wrap",
               }}
             >
-              {isDirectorySearchLoading && <CircularProgress size={14} />}
+              {(isDirectorySearchLoading ||
+                recipientCheck?.status === "checking") && (
+                <CircularProgress size={14} />
+              )}
+              {!isGroupTarget && recipientCheck?.status === "found" && (
+                <CheckCircleOutlineIcon
+                  sx={{ fontSize: 18, color: "var(--qmail-compose-muted)" }}
+                />
+              )}
+              {!isGroupTarget && recipientCheck?.status === "missing" && (
+                <ErrorOutlineIcon
+                  sx={{ fontSize: 18, color: "var(--qmail-danger-text)" }}
+                />
+              )}
               <Typography
                 sx={{
-                  fontSize: "0.78rem",
-                  color: "var(--qmail-compose-muted)",
+                  fontSize: "0.875rem",
+                  color:
+                    !isGroupTarget && recipientCheck?.status === "missing"
+                      ? "var(--qmail-danger-text)"
+                      : "var(--qmail-compose-muted)",
                 }}
               >
                 {isGroupTarget
                   ? "Group selected: this will publish a new thread. Subject is used as thread title."
+                  : recipientCheck?.status === "missing"
+                  ? `"${recipientCheck.name}" is not a registered name`
+                  : recipientCheck?.status === "found"
+                  ? `${recipientCheck.name} is a registered name`
+                  : recipientCheck?.status === "checking"
+                  ? "Checking the name…"
                   : "Type to search joined groups and registered names."}
               </Typography>
             </Box>
