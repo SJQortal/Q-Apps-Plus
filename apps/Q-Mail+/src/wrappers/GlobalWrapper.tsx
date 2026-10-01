@@ -8,7 +8,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { addUser } from "../state/features/authSlice";
 import { RootState } from "../state/store";
 
-import NavBar from "../components/layout/Navbar/Navbar";
 import PageLoader from "../components/common/PageLoader";
 
 import localForage from "localforage";
@@ -345,7 +344,6 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
     <AppShellContext.Provider value={appShellValue}>
       {isLoadingGlobal && <PageLoader />}
       {isLoadingCustom && <LoaderBar message={isLoadingCustom} />}
-      <NavBar />
       <ConsentModal />
       {children}
     </AppShellContext.Provider>
