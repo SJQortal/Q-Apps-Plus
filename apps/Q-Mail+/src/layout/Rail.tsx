@@ -217,6 +217,7 @@ export function Rail({
         $active={active}
         disabled={child.disabled}
         onClick={() => onSelect(child.id)}
+        data-qapp-lib-sidebar-item={child.id}
         aria-current={active ? 'page' : undefined}
         aria-label={child.ariaLabel || child.label}
       >
@@ -254,6 +255,7 @@ export function Rail({
           size="large"
           startIcon={<EditOutlinedIcon />}
           onClick={() => onSelect(compose.id)}
+          data-qapp-lib-sidebar-item={compose.id}
           sx={{ minHeight: 44, justifyContent: 'flex-start' }}
         >
           {compose.label}
@@ -305,6 +307,7 @@ export function Rail({
                 $active={active}
                 disabled={item.disabled}
                 onClick={() => onSelect(item.id)}
+                data-qapp-lib-sidebar-item={item.id}
                 aria-current={active ? 'page' : undefined}
                 aria-expanded={isThreads ? expanded : undefined}
                 aria-label={item.ariaLabel || item.label}
