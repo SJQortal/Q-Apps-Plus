@@ -61,6 +61,14 @@ import { formatBytes } from "../../utils/displaySize";
 import { formatFullTimestamp } from "../../utils/time";
 import { extractTextFromSlate } from "../../utils/extractTextFromSlate";
 import { CreateThreadIcon } from "../../assets/svgs/CreateThreadIcon";
+import {
+  aliasMailIdentifier,
+  buildDirectMailObject,
+  buildReplyQuoteHtml,
+  directMailIdentifier,
+  messageBodyLines,
+  withSubjectPrefix,
+} from "../../utils/mailCompose";
 
 const uid = new ShortUniqueId();
 const maxSize = 40 * 1024 * 1024; // 40 MB in bytes
@@ -203,15 +211,6 @@ const stripHtmlTags = (value: string): string => {
   return value.replace(/<[^>]*>/g, " ");
 };
 
-const escapeHtml = (value: string): string => {
-  return value
-    .replace(/&/g, "&")
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
-    .replace(/"/g, '"')
-    .replace(/'/g, "&#39;");
-};
-
 const getComposeDraftsStorageKey = (address: string): string => {
   return `qmail_compose_drafts_${address}`;
 };
@@ -338,6 +337,11 @@ export const NewMessage = ({
   const isMobile = useMediaQuery("(max-width:950px)");
   const isHydratingDraftRef = useRef(false);
   const lastLoadedDraftKeyRef = useRef<string | null>(null);
+  // What the composer started with (the reply quote, the forward header, a
+  // prefilled subject). Content equal to this is not "something the user
+  // wrote", so it is neither saved as a draft nor guarded on Discard.
+  const initialValueRef = useRef("");
+  const initialSubjectRef = useRef("");
 
   const { Modal, showModal } = useConfirmationModal({
     title: "Important",
@@ -538,8 +542,11 @@ export const NewMessage = ({
       return null;
     const targetName = resolvedTarget.label.trim();
     if (!targetName) return null;
-    return `${normalizeValue(senderName)}::${normalizeValue(targetName)}`;
-  }, [fromName, resolvedTarget, user?.address]);
+    const baseKey = `${normalizeValue(senderName)}::${normalizeValue(targetName)}`;
+    // A reply keeps its own draft; a new mail to the same name keeps the old key.
+    const replyToId = typeof replyTo?.id === "string" ? replyTo.id : "";
+    return replyToId ? `${baseKey}::reply:${replyToId}` : baseKey;
+  }, [fromName, replyTo?.id, resolvedTarget, user?.address]);
 
   useEffect(() => {
     if (allowAliasAndBcc) return;
@@ -586,6 +593,8 @@ export const NewMessage = ({
     setReplyPreviewMode("preview");
     setThreadPublishResult(null);
     setPendingPublishType("mail");
+    initialValueRef.current = "";
+    initialSubjectRef.current = "";
   }, []);
 
   const discardComposerDraft = useCallback(() => {
@@ -738,9 +747,19 @@ export const NewMessage = ({
           : null
       );
       setReplyPreviewMode("preview");
-      if (replyTo?.subject) {
-        setSubject(replyTo.subject);
-      }
+      const nextSubject = withSubjectPrefix(replyTo?.subject, "Re");
+      setSubject(nextSubject);
+      initialSubjectRef.current = nextSubject;
+      // Start the editor with the quoted original (Quill 1 markup, so the
+      // original app renders it too). A stored draft for this reply, if any,
+      // replaces it when the draft key resolves.
+      const quoteHtml = buildReplyQuoteHtml({
+        sender: replyTo?.user,
+        sentAt: formatFullTimestamp(replyTo?.createdAt),
+        lines: messageBodyLines(replyTo, extractTextFromSlate),
+      });
+      setValue(quoteHtml);
+      initialValueRef.current = quoteHtml;
     }
   }, [replyTo]);
 
@@ -754,42 +773,8 @@ export const NewMessage = ({
 
   const replyBodyText = useMemo(() => {
     if (!replyTo) return "";
-
-    if (typeof replyTo?.textContentV2 === "string" && replyTo.textContentV2) {
-      return stripHtmlTags(replyTo.textContentV2).trim();
-    }
-
-    if (Array.isArray(replyTo?.textContent)) {
-      return extractTextFromSlate(replyTo.textContent).trim();
-    }
-
-    if (typeof replyTo?.textContent === "string") {
-      return replyTo.textContent.trim();
-    }
-
-    if (typeof replyTo?.htmlContent === "string" && replyTo.htmlContent) {
-      return stripHtmlTags(replyTo.htmlContent).trim();
-    }
-
-    return "";
+    return messageBodyLines(replyTo, extractTextFromSlate).join("\n").trim();
   }, [replyTo]);
-
-  const replyQuoteIntro = useMemo(() => {
-    if (!replyTo) return "";
-    const sender = replyTo?.user || "Unknown sender";
-    const sentAt = formatFullTimestamp(replyTo?.createdAt);
-    return `On ${sentAt}, ${sender} wrote:`;
-  }, [replyTo]);
-
-  const quotedReplyHtml = useMemo(() => {
-    if (!replyTo) return "";
-    const body = replyBodyText || "- no message body -";
-    const escapedBody = escapeHtml(body).replace(/\n/g, "<br />");
-
-    return `<blockquote data-qmail-quote="true"><p>${escapeHtml(
-      replyQuoteIntro
-    )}</p><p>[Message content preserved in thread history]</p></blockquote>`;
-  }, [replyBodyText, replyQuoteIntro, replyTo]);
 
   useEffect(() => {
     if (!activeDraftKey || !user?.address) {
@@ -828,11 +813,12 @@ export const NewMessage = ({
         resolvedTarget?.type === "name" ? resolvedTarget.label.trim() : "";
       if (!fromNameValue || !toNameValue) return;
 
+      const subjectChanged =
+        subject.trim() && subject !== initialSubjectRef.current;
+      const bodyChanged =
+        value !== initialValueRef.current && stripHtmlTags(value).trim();
       const hasDraftContent = Boolean(
-        subject.trim() ||
-          stripHtmlTags(value).trim() ||
-          aliasValue.trim() ||
-          bccNames.length
+        subjectChanged || bodyChanged || aliasValue.trim() || bccNames.length
       );
 
       if (!hasDraftContent) {
@@ -1198,44 +1184,27 @@ export const NewMessage = ({
       const bccPublicKeys = bccNames.map(item => item.publicKey);
       const sendId = uid();
       const createdAt = Date.now();
-      const mailObject: any = {
+      // Binding JSON shape (data contract §3a) plus the additive to/cc fields;
+      // the embedded reply history is stripped of its own history (Bugs #12).
+      const mailObject: any = buildDirectMailObject({
         subject,
         createdAt,
-        version: 1,
         attachments: attachmentReferences,
         textContentV2: composedMessageBody,
-        generalData: {
-          thread: [],
-          threadV2: [],
-        },
         recipient: recipientName,
-      };
-
-      if (isReply) {
-        const previousThread = Array.isArray(replyTo?.generalData?.threadV2)
-          ? replyTo.generalData.threadV2
-          : [];
-        mailObject.generalData.threadV2 = [
-          ...previousThread,
-          {
-            reference: {
-              identifier: replyTo.id,
-              name: replyTo.user,
-              service: MAIL_SERVICE_TYPE,
-            },
-            data: replyTo,
-          },
-        ];
-      }
+        replyTo: isReply ? replyTo : undefined,
+        service: MAIL_SERVICE_TYPE,
+      });
 
       const mailPostToBase64 = await objectToBase64(mailObject);
-      let identifier = `_mail_qortal_qmail_${recipientName.slice(
-        0,
-        20
-      )}_${recipientAddress.slice(-6)}_mail_${sendId}`;
+      let identifier = directMailIdentifier(
+        recipientName,
+        recipientAddress,
+        sendId
+      );
 
       if (aliasValue) {
-        identifier = `_mail_qortal_qmail_${aliasValue}_mail_${sendId}`;
+        identifier = aliasMailIdentifier(aliasValue, sendId);
       }
 
       const primaryMailPublish = {
@@ -1252,10 +1221,11 @@ export const NewMessage = ({
           const copyMailObject = structuredClone(mailObject);
           copyMailObject.recipient = element.name;
           const bccMailToBase64 = await objectToBase64(copyMailObject);
-          const bccIdentifier = `_mail_qortal_qmail_${element.name.slice(
-            0,
-            20
-          )}_${element.address.slice(-6)}_mail_${sendId}`;
+          const bccIdentifier = directMailIdentifier(
+            element.name,
+            element.address,
+            sendId
+          );
 
           mailPublishes.push({
             action: "PUBLISH_QDN_RESOURCE",
@@ -1839,8 +1809,8 @@ export const NewMessage = ({
                   color: "var(--qmail-compose-muted)",
                 }}
               >
-                Your reply is written above. The original message preview is
-                shown for context but is not included in the sent message.
+                The original is quoted in your reply below, and the message
+                itself travels with the reply as thread history.
               </Typography>
               {replyPreviewMode !== "hidden" && (
                 <Box
