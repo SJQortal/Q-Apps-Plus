@@ -70,22 +70,6 @@ export const AliasMail = ({ value, onOpen, messageOpenedId}: AliasMailProps) => 
   const dispatch = useDispatch()
   const navigate = useNavigate()
 
-  const getAvatar = async (user: string) => {
-    try {
-      let url = await qortalRequest({
-        action: 'GET_QDN_RESOURCE_URL',
-        name: user,
-        service: 'THUMBNAIL',
-        identifier: 'qortal_avatar'
-      })
-      dispatch(
-        setUserAvatarHash({
-          name: user,
-          url
-        })
-      )
-    } catch (error) {}
-  }
 
   const mapMailResources = useCallback((resources: any[]): BlogPost[] => {
     return resources.map((post: any): BlogPost => {
@@ -201,12 +185,6 @@ export const AliasMail = ({ value, onOpen, messageOpenedId}: AliasMailProps) => 
     try {
       const nextMessages = await fetchAliasMailboxMessages()
       setMailMessages(nextMessages)
-
-      for (const content of nextMessages) {
-        if (content.user && content.id) {
-          getAvatar(content.user)
-        }
-      }
     } catch (error) {}
   }, [fetchAliasMailboxMessages])
 
