@@ -2218,117 +2218,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     watchedAliasOwnerAddress,
   ]);
 
-  const applyReadStateToMessages = useCallback(
-    (messagesToUpdate: any[], readIdSet: Set<string>): any[] => {
-      let didChange = false;
-      const nextMessages = messagesToUpdate.map(message => {
-        const identifier = getMessageIdentifier(message);
-        if (!identifier || !readIdSet.has(identifier)) return message;
-
-        const existingThread = Array.isArray(
-          message?.generalData?.threadV2
-        )
-          ? message.generalData.threadV2
-          : [];
-        if (existingThread.length > 0) return message;
-
-        didChange = true;
-        const updatedMessage = structuredClone(message);
-        updatedMessage.generalData = updatedMessage.generalData || {};
-
-        updatedMessage.generalData.threadV2 = [
-          {
-            reference: {
-              identifier,
-              name: updatedMessage?.user,
-              service: MAIL_SERVICE_TYPE,
-            },
-            data: {
-              markedAsReadLocally: true,
-              createdAt: Date.now(),
-            },
-          },
-        ];
-        return updatedMessage;
-      });
-      return didChange ? nextMessages : messagesToUpdate;
-    },
-    []
-  );
-
-  const applyReadStateToCombinedMap = useCallback(
-    (
-      messageMap: Record<string, any[]>,
-      readIdSet: Set<string>
-    ): Record<string, any[]> => {
-      let didChange = false;
-      const nextMap = Object.entries(messageMap).reduce<Record<string, any[]>>(
-        (accumulator, [name, entries]) => {
-          const updatedEntries = applyReadStateToMessages(
-            entries || [],
-            readIdSet
-          );
-          accumulator[name] = updatedEntries;
-          if (updatedEntries !== entries) {
-            didChange = true;
-          }
-          return accumulator;
-        },
-        {}
-      );
-      return didChange ? nextMap : messageMap;
-    },
-    [applyReadStateToMessages]
-  );
-
-  const applyUnreadStateToMessages = useCallback(
-    (messagesToUpdate: any[], unreadIdSet: Set<string>): any[] => {
-      let didChange = false;
-      const nextMessages = messagesToUpdate.map(message => {
-        const identifier = getMessageIdentifier(message);
-        if (!identifier || !unreadIdSet.has(identifier)) return message;
-
-        const existingThread = Array.isArray(message?.generalData?.threadV2)
-          ? message.generalData.threadV2
-          : [];
-        if (existingThread.length === 0) return message;
-
-        didChange = true;
-        const updatedMessage = structuredClone(message);
-        updatedMessage.generalData = updatedMessage.generalData || {};
-        updatedMessage.generalData.threadV2 = [];
-        return updatedMessage;
-      });
-      return didChange ? nextMessages : messagesToUpdate;
-    },
-    []
-  );
-
-  const applyUnreadStateToCombinedMap = useCallback(
-    (
-      messageMap: Record<string, any[]>,
-      unreadIdSet: Set<string>
-    ): Record<string, any[]> => {
-      let didChange = false;
-      const nextMap = Object.entries(messageMap).reduce<Record<string, any[]>>(
-        (accumulator, [name, entries]) => {
-          const updatedEntries = applyUnreadStateToMessages(
-            entries || [],
-            unreadIdSet
-          );
-          accumulator[name] = updatedEntries;
-          if (updatedEntries !== entries) {
-            didChange = true;
-          }
-          return accumulator;
-        },
-        {}
-      );
-      return didChange ? nextMap : messageMap;
-    },
-    [applyUnreadStateToMessages]
-  );
-
   const localMailStateById = useMemo(() => {
     const collectedState: Record<string, QMailPublishedStateEntry> = {};
 
@@ -2387,26 +2276,14 @@ export const Mail = ({ isFromTo }: MailProps) => {
           .filter(Boolean);
         if (!readIdentifiers.length) return;
 
-        const readIdSet = new Set(readIdentifiers);
+        // The read store (src/utils/readState.ts) is the only source of truth;
+        // list copies keep their real generalData.threadV2 (Bugs #5).
         dispatch(markRead({ ids: readIdentifiers }));
-        const updatedMailMessages = applyReadStateToMessages(
-          mailMessages,
-          readIdSet
-        );
-        dispatch(upsertMessages(updatedMailMessages));
-        setCombinedAliasInboxMessages(previous => {
-          return applyReadStateToCombinedMap(previous, readIdSet);
-        });
       } catch (error) {
         console.error("Failed to mark messages as read:", error);
       }
     },
-    [
-      applyReadStateToCombinedMap,
-      applyReadStateToMessages,
-      dispatch,
-      mailMessages,
-    ]
+    [dispatch]
   );
 
   useEffect(() => {
@@ -2422,26 +2299,12 @@ export const Mail = ({ isFromTo }: MailProps) => {
           .filter(Boolean);
         if (!unreadIdentifiers.length) return;
 
-        const unreadIdSet = new Set(unreadIdentifiers);
         dispatch(markUnread({ ids: unreadIdentifiers }));
-        const updatedMailMessages = applyUnreadStateToMessages(
-          mailMessages,
-          unreadIdSet
-        );
-        dispatch(upsertMessages(updatedMailMessages));
-        setCombinedAliasInboxMessages(previous => {
-          return applyUnreadStateToCombinedMap(previous, unreadIdSet);
-        });
       } catch (error) {
         console.error("Failed to mark messages as unread:", error);
       }
     },
-    [
-      applyUnreadStateToCombinedMap,
-      applyUnreadStateToMessages,
-      dispatch,
-      mailMessages,
-    ]
+    [dispatch]
   );
 
   const archiveMessages = useCallback(
@@ -2972,31 +2835,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     if (!readIds.length) return;
     dispatch(applyPublishedReadState({ ids: readIds }));
   }, [dispatch, publishedMailStateById]);
-
-  // Read store → the list copies, so rows show read state after a reload. Only
-  // adds the local marker; "mark as unread" strips it through markMessagesAsUnread.
-  useEffect(() => {
-    const readIdSet = readIdsFromState(readState);
-    if (!readIdSet.size) return;
-    if (mailMessages.length > 0) {
-      const updatedMailMessages = applyReadStateToMessages(
-        mailMessages,
-        readIdSet
-      );
-      if (updatedMailMessages !== mailMessages) {
-        dispatch(upsertMessages(updatedMailMessages));
-      }
-    }
-    setCombinedAliasInboxMessages(previous => {
-      return applyReadStateToCombinedMap(previous, readIdSet);
-    });
-  }, [
-    applyReadStateToCombinedMap,
-    applyReadStateToMessages,
-    dispatch,
-    mailMessages,
-    readState,
-  ]);
 
   useEffect(() => {
     const identityKey = `${user?.name || ""}:${user?.address || ""}`;
