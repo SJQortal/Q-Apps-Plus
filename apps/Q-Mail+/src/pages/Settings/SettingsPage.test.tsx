@@ -103,7 +103,7 @@ describe('SettingsPage', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Publish mail state?' })).toBeNull())
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Proceed' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
     })
     expect(publishMailState).toHaveBeenCalledTimes(1)
   })

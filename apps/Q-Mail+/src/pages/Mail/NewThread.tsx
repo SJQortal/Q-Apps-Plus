@@ -325,7 +325,7 @@ export const NewThread = ({
     const noExtension = attachments.filter(item => !item.extension);
     if (noExtension.length > 0) {
       errorMsg =
-        "One of your attachments does not have an extension (example: .png, .pdf, ect...)";
+        "One of your attachments has no file extension (for example .png or .pdf)";
     }
 
     if (errorMsg) {

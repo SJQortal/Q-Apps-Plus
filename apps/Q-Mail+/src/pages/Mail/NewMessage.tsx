@@ -380,15 +380,20 @@ export const NewMessage = ({
   const forwardJobControllersRef = useRef(new Map<string, AbortController>());
 
   const { Modal, showModal } = useConfirmationModal({
-    title: "Important",
+    title: "Same alias on both sides",
     message:
-      "To keep yourself anonymous remember to not use the same alias as the person you are messaging",
+      "To stay anonymous, do not use the same alias as the person you are messaging. Send anyway?",
+    confirmLabel: "Send anyway",
+    cancelLabel: "Go back",
   });
   const { Modal: DiscardModal, showModal: showDiscardModal } =
     useConfirmationModal({
       title: "Discard this message?",
       message:
         "What you wrote, and the draft saved on this device, will be deleted.",
+      confirmLabel: "Discard",
+      cancelLabel: "Keep editing",
+      destructive: true,
     });
 
   const fromOptions = useMemo(() => {
@@ -1355,7 +1360,7 @@ export const NewMessage = ({
     }
     if (noExtension.length > 0) {
       errorMsg =
-        "One of your attachments does not have an extension (example: .png, .pdf, ect...)";
+        "One of your attachments has no file extension (for example .png or .pdf)";
     }
     if (forwardAttachmentJobs.some(job => job.status === "loading")) {
       errorMsg = "Forwarded attachments are still being fetched";

@@ -661,6 +661,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
       title: "Load published QDN state?",
       message:
         "Q-Mail found a published mailbox state for this account. Keep fetching it in the background and apply it when the download finishes?",
+      confirmLabel: "Load state",
+      cancelLabel: "Not now",
       children: (
         <FormControlLabel
           sx={{
