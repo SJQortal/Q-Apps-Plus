@@ -14,7 +14,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import CreateIcon from "@mui/icons-material/Create";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { useNavigate, useLocation } from "react-router-dom";
-import mime from "mime";
+import { extensionFromMimeType } from "../../utils/fileExtension";
 import ModalCloseSVG from "../../assets/svgs/ModalClose.svg";
 import AttachmentSVG from "../../assets/svgs/NewMessageAttachment.svg";
 import CreateThreadSVG from "../../assets/svgs/CreateThread.svg";
@@ -218,7 +218,7 @@ export const NewThread = ({
               extension: null,
             });
           } else {
-            const extension = mime.getExtension(type);
+            const extension = extensionFromMimeType(type);
             if (!extension) {
               files.push({
                 file: item,
