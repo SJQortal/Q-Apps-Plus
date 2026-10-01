@@ -1,4 +1,4 @@
-import React, { Dispatch, useCallback, useEffect, useState } from "react";
+import React, { Dispatch, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReusableModal } from "../../components/modals/ReusableModal";
 import { Box, Button, Input, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { BuilderButton } from "../CreatePost/CreatePost-styles";
@@ -56,6 +56,14 @@ import { SendNewMessage } from "../../assets/svgs/SendNewMessage";
 import { formatBytes } from "../../utils/displaySize";
 import { CreateThreadIcon } from "../../assets/svgs/CreateThreadIcon";
 import { MultiplePublish } from "../../components/common/MultiplePublish/MultiplePublish";
+import {
+  createComposeDraftId,
+  deleteComposeDraft,
+  readComposeDrafts,
+  saveComposeDraft,
+  threadDraftKey,
+  type StoredComposeDraft,
+} from "./composeDrafts";
 const initialValue: Descendant[] = [
   {
     type: "paragraph",
@@ -98,6 +106,96 @@ export const NewThread = ({
   const [publishes, setPublishes] = useState<any>(null);
   const [callbackContent, setCallbackContent] = useState<any>(null);
  const isMobile = useMediaQuery("(max-width:950px)");
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
+  const isHydratingDraftRef = useRef(false);
+
+  // Thread-post drafts share the mail drafts store (additive `kind: "thread"`),
+  // keyed by group and thread, so the Drafts mailbox lists them too.
+  const groupName: string =
+    (typeof groupInfo?.name === "string" && groupInfo.name.trim()) ||
+    (typeof groupInfo?.groupName === "string" && groupInfo.groupName.trim()) ||
+    "Group";
+  const draftKey = useMemo(() => {
+    const groupId = String(groupInfo?.id || "").trim();
+    if (!groupId) return null;
+    return threadDraftKey(groupId, isMessage ? currentThread?.threadId || null : null);
+  }, [currentThread?.threadId, groupInfo?.id, isMessage]);
+
+  useEffect(() => {
+    if (!isOpen || !draftKey || !user?.address) return;
+    const stored = readComposeDrafts(user.address)[draftKey];
+    if (!stored) return;
+    isHydratingDraftRef.current = true;
+    setValue(stored.value || "");
+    if (!isMessage) setThreadTitle(stored.threadTitle || stored.subject || "");
+    setDraftSavedAt(stored.updatedAt || null);
+    window.setTimeout(() => {
+      isHydratingDraftRef.current = false;
+    }, 0);
+  }, [draftKey, isMessage, isOpen, user?.address]);
+
+  useEffect(() => {
+    if (!isOpen || !draftKey || !user?.address || isHydratingDraftRef.current) return;
+    const address = user.address;
+    const timeout = window.setTimeout(() => {
+      const hasText = Boolean(value.replace(/<[^>]*>/g, "").trim() || threadTitle.trim());
+      if (!hasText) {
+        deleteComposeDraft(address, draftKey);
+        setDraftSavedAt(null);
+        return;
+      }
+      const updatedAt = Date.now();
+      const fromName = user?.name || "";
+      if (!fromName) return;
+      const draft: StoredComposeDraft = {
+        draftId: createComposeDraftId(fromName, groupName, updatedAt),
+        fromName,
+        toName: groupName,
+        subject: isMessage ? "" : threadTitle,
+        value,
+        aliasValue: "",
+        showAlias: false,
+        showBCC: false,
+        bccNames: [],
+        updatedAt,
+        kind: "thread",
+        groupId: String(groupInfo?.id || ""),
+        groupName,
+        threadId: isMessage ? currentThread?.threadId || null : null,
+        threadTitle: isMessage ? currentThread?.threadData?.title || "" : threadTitle,
+      };
+      if (attachments.length) {
+        draft.attachments = attachments.map(item => ({
+          name: item?.file?.name || "attachment",
+          size: Number(item?.file?.size || 0),
+          type: item?.file?.type || null,
+        }));
+      }
+      saveComposeDraft(address, draftKey, draft);
+      setDraftSavedAt(updatedAt);
+    }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [
+    attachments,
+    currentThread?.threadData?.title,
+    currentThread?.threadId,
+    draftKey,
+    groupInfo?.id,
+    groupName,
+    isMessage,
+    isOpen,
+    threadTitle,
+    user?.address,
+    user?.name,
+    value,
+  ]);
+
+  const discardDraft = () => {
+    if (draftKey && user?.address) deleteComposeDraft(user.address, draftKey);
+    setDraftSavedAt(null);
+    setThreadTitle("");
+    closeModal();
+  };
 
 
   const theme = useTheme();
@@ -648,8 +746,40 @@ export const NewThread = ({
             zIndex: 'auto'
           }]}
         >
+          <Box
+            sx={{
+              display: "flex",
+              width: "100%",
+              alignItems: "center",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <Button
+              variant="outlined"
+              onClick={discardDraft}
+              sx={{
+                textTransform: "none",
+                borderColor: "var(--qmail-shell-border)",
+                color: "var(--qmail-compose-text)",
+                minHeight: "2.9rem",
+                px: "1rem",
+                borderRadius: "0.85rem",
+              }}
+            >
+              Discard
+            </Button>
+            {draftSavedAt && (
+              <Typography
+                role="status"
+                aria-live="polite"
+                sx={{ fontSize: "0.875rem", color: "var(--qmail-compose-muted)" }}
+              >
+                Draft saved
+              </Typography>
+            )}
           <NewMessageSendButton
-            sx={[isMobile ? {
+            sx={[{ marginLeft: "auto" }, isMobile ? {
               padding: '10px 14px'
             } : {
               padding: null
@@ -670,8 +800,9 @@ export const NewThread = ({
               <CreateThreadIcon  color="currentColor"
               opacity={1} height="25px" width="25px"  />
             )}
-           
+
           </NewMessageSendButton>
+          </Box>
         </InstanceFooter>
        
       </ReusableModal>
@@ -707,6 +838,9 @@ export const NewThread = ({
             setCallbackContent(null)
             setIsOpenMultiplePublish(false);
             setPublishes(null)
+            if (draftKey && user?.address) deleteComposeDraft(user.address, draftKey)
+            setDraftSavedAt(null)
+            setThreadTitle("")
 
             closeModal()
           }}

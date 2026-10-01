@@ -86,11 +86,14 @@ import MenuIcon from "@mui/icons-material/Menu";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import MailOutlineIcon from "@mui/icons-material/MailOutlined";
 import { IconButton } from "@mui/material";
+import { DraftsMailbox } from "./DraftsMailbox";
+import type { StoredComposeDraft } from "./composeDrafts";
 
 type MailboxSidebarItemId =
   | "inbox"
   | "aliases"
   | "sent"
+  | "drafts"
   | "threads"
   | "compose"
   | "alias-compose";
@@ -451,6 +454,7 @@ const buildSidebarItems = ({
       label: name,
     });
   });
+  items.push({ id: "drafts", label: "Drafts" });
 
   items.push({
     id: "threads",
@@ -1544,6 +1548,86 @@ export const Mail = ({ isFromTo }: MailProps) => {
       setMobileMode("compose");
     },
     [ownedNameCandidates, selectedAlias, user?.name]
+  );
+
+  // Open a stored draft from the Drafts mailbox: a mail draft goes to the
+  // composer (as a reply when the replied-to message is still in memory); a
+  // thread-post draft opens its thread, where NewThread restores it.
+  const handleOpenDraft = useCallback(
+    (draftKey: string, draft: StoredComposeDraft) => {
+      setIsChangelogOpen(false);
+      setIsOpen(false);
+      setMessage(null);
+
+      if (draft.kind === "thread") {
+        const groupInfo = draft.groupId
+          ? groupOptionsById.get(String(draft.groupId))
+          : undefined;
+        if (!groupInfo) {
+          dispatch(
+            setNotification({
+              msg: "This draft belongs to a group you are no longer in",
+              alertType: "info",
+            })
+          );
+          return;
+        }
+        setReplyTo(null);
+        setForwardInfo(null);
+        setComposeReplyAll(false);
+        setComposePrefill(null);
+        setSelectedAlias(null);
+        setSelectedAliasScope(null);
+        setSelectedGroup(groupInfo);
+        setCurrentThread(
+          draft.threadId
+            ? {
+                threadId: draft.threadId,
+                identifier: draft.threadId,
+                name: draft.fromName,
+                threadOwner: draft.fromName,
+                service: THREAD_SERVICE_TYPE,
+                threadData: {
+                  title: draft.threadTitle || "",
+                  groupId: String(draft.groupId),
+                  name: draft.fromName,
+                },
+              }
+            : null
+        );
+        setIsThreadsSectionExpanded(true);
+        setActiveMailboxItem("threads");
+        setMobileMode("threads");
+        return;
+      }
+
+      const repliedTo: any = draft.replyTo?.id
+        ? hashMapMailMessages[draft.replyTo.id]
+        : null;
+      const replyMessage =
+        repliedTo && repliedTo.isValid && !repliedTo.unableToDecrypt
+          ? repliedTo
+          : null;
+      setForwardInfo(null);
+      setReplyTo(replyMessage);
+      setComposeReplyAll(Boolean(replyMessage && draft.replyAll));
+      setComposePrefill({
+        draftId: Date.now(),
+        fromName: draft.fromName,
+        toValue: draft.toName,
+        toType: "name",
+        draftKey,
+      });
+      setComposeReturnView("inbox");
+      setComposeReturnGroupId(null);
+      setComposeRecipientAlias(null);
+      setComposeRequireReplyAlias(false);
+      setComposeDefaultReplyAlias("");
+      setComposeMode("standard");
+      setActiveMailboxItem("compose");
+      setMobileMode("compose");
+    },
+    [dispatch, groupOptionsById, hashMapMailMessages]
   );
 
   const firstMount = useRef(false);
@@ -3072,7 +3156,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
         return;
       }
 
-      if (itemId === "inbox" || itemId === "sent") {
+      if (itemId === "inbox" || itemId === "sent" || itemId === "drafts") {
         setActiveMailboxItem(itemId);
         setMobileMode(itemId);
         setSelectedAlias(null);
@@ -3376,6 +3460,17 @@ export const Mail = ({ isFromTo }: MailProps) => {
       />
     ) : (
       renderAuthenticationPrompt("Threads")
+    );
+  } else if (activeMailboxItem === "drafts") {
+    listTitle = "Drafts";
+    listSubtitle = "Saved on this device";
+    listBody = hasAuthenticatedIdentity ? (
+      <DraftsMailbox
+        address={user?.address || ""}
+        onOpenDraft={handleOpenDraft}
+      />
+    ) : (
+      renderAuthenticationPrompt("Inbox")
     );
   } else {
     listTitle = selectedInboxInstanceName || "Inbox";
