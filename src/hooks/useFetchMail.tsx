@@ -319,7 +319,8 @@ export const useFetchMail = () => {
         // One avatar lookup per distinct sender, skipping names already known.
         // Avatars are resolved lazily per visible row (src/utils/avatarCache.ts).
       } catch (error) {
-      } finally {
+        // Let the caller (Mail.getMessages) show an error state with Retry.
+        throw error
       }
     },
     [dispatch, userAvatarHash]
