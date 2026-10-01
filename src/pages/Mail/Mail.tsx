@@ -53,10 +53,7 @@ import { MailboxSearchBar } from "./MailboxSearchBar";
 import { useMailboxSearch } from "./useMailboxSearch";
 import { ThreadsMailbox } from "./ThreadsMailbox";
 import { AliasesPage } from "./AliasesPage";
-import {
-  isSentMailIdentifier,
-  parseSentRecipientFromIdentifier,
-} from "./mailIdentifier";
+import { parseSentRecipientFromIdentifier } from "./mailIdentifier";
 import {
   base64ToUint8Array,
   objectToBase64,
@@ -108,6 +105,18 @@ import {
   parsePublishedMailStateDocument,
   type QMailPublishedStateEntry,
 } from "../../utils/mailStateDocument";
+import { usePolling } from "../../hooks/usePolling";
+import { invalidateSearches, searchResources } from "../../utils/qdnSearch";
+import {
+  fetchGroupAvatarUrl,
+  fetchInboxMessagesForOwnedName,
+  fetchRecentInboxMessagesForOwnedName,
+  fetchRecentInboxMessagesForSavedAlias,
+  hasGroupThreadActivity,
+  hasInboxMailActivityForOwnedName,
+  hasSentMailActivityForOwnedName,
+  mergeNewRows,
+} from "../../utils/mailInbox";
 import {
   countUnreadMessages,
   hasThreadHistory,
@@ -486,429 +495,6 @@ export const buildSidebarItems = ({
     });
   }
   return items;
-};
-
-const fetchHasMailResources = async (
-  params: URLSearchParams,
-  matcher?: (item: any) => boolean
-): Promise<boolean> => {
-  try {
-    const response = await fetch(
-      `/arbitrary/resources/search?${params.toString()}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    const responseData = await response.json();
-    if (!Array.isArray(responseData) || responseData.length === 0) {
-      return false;
-    }
-
-    if (!matcher) {
-      return responseData.length > 0;
-    }
-
-    return responseData.some(matcher);
-  } catch {
-    return false;
-  }
-};
-
-const hasGroupThreadActivity = async (
-  groupId: string | number
-): Promise<boolean> => {
-  const normalizedGroupId =
-    typeof groupId === "number"
-      ? String(groupId)
-      : typeof groupId === "string"
-      ? groupId.trim()
-      : "";
-  if (!normalizedGroupId) return false;
-
-  const params = new URLSearchParams({
-    mode: "ALL",
-    service: THREAD_SERVICE_TYPE,
-    query: `qortal_qmail_thread_group${normalizedGroupId}`,
-    limit: "1",
-    includemetadata: "false",
-    reverse: "true",
-    excludeblocked: "true",
-  });
-
-  return fetchHasMailResources(params);
-};
-
-const fetchGroupAvatarPublisherName = async (
-  groupId: string | number
-): Promise<string | null> => {
-  const normalizedGroupId =
-    typeof groupId === "number"
-      ? String(groupId)
-      : typeof groupId === "string"
-      ? groupId.trim()
-      : "";
-  if (!normalizedGroupId) return null;
-
-  try {
-    const params = new URLSearchParams({
-      mode: "ALL",
-      service: "THUMBNAIL",
-      identifier: `qortal_group_avatar_${normalizedGroupId}`,
-      limit: "1",
-      reverse: "true",
-      excludeblocked: "true",
-    });
-    const response = await fetch(
-      `/arbitrary/resources/search?${params.toString()}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    const responseData = await response.json();
-    if (!Array.isArray(responseData) || responseData.length === 0) {
-      return null;
-    }
-    const publisherName =
-      typeof responseData[0]?.name === "string"
-        ? responseData[0].name.trim()
-        : "";
-    return publisherName || null;
-  } catch {
-    return null;
-  }
-};
-
-const fetchGroupAvatarUrl = async (
-  groupId: string | number
-): Promise<string> => {
-  const normalizedGroupId =
-    typeof groupId === "number"
-      ? String(groupId)
-      : typeof groupId === "string"
-      ? groupId.trim()
-      : "";
-  if (!normalizedGroupId) return "";
-
-  const publisherName = await fetchGroupAvatarPublisherName(normalizedGroupId);
-  if (!publisherName) return "";
-
-  try {
-    const avatarUrl = await qortalRequest({
-      action: "GET_QDN_RESOURCE_URL",
-      name: publisherName,
-      service: "THUMBNAIL",
-      identifier: `qortal_group_avatar_${normalizedGroupId}`,
-    });
-    if (typeof avatarUrl !== "string") return "";
-    const normalizedUrl = avatarUrl.trim();
-    if (!normalizedUrl || normalizedUrl === "Resource does not exist") {
-      return "";
-    }
-    return normalizedUrl;
-  } catch {
-    return "";
-  }
-};
-
-const isDeletedSentResourceInSearch = (item: any): boolean => {
-  const title =
-    typeof item?.metadata?.title === "string"
-      ? item.metadata.title.trim().toLowerCase()
-      : "";
-  const tags = Array.isArray(item?.metadata?.tags)
-    ? item.metadata.tags.map((tag: any) => {
-        return typeof tag === "string" ? tag.trim().toLowerCase() : "";
-      })
-    : [];
-  return title === "__qmail_deleted__" || tags.includes("qmail-deleted");
-};
-
-const hasSentMailActivityForOwnedName = async (
-  name: string
-): Promise<boolean> => {
-  const normalizedName = typeof name === "string" ? name.trim() : "";
-  if (!normalizedName) return false;
-  const normalizedNameLower = normalizedName.toLowerCase();
-
-  const sentQueryConfigs: Array<{ query: string; identifier?: string }> = [
-    {
-      query: "_mail_qortal_qmail_",
-      identifier: "_mail_",
-    },
-    {
-      query: "qortal_qmail_",
-    },
-  ];
-
-  for (const queryConfig of sentQueryConfigs) {
-    const sentParams = new URLSearchParams({
-      mode: "ALL",
-      service: MAIL_SERVICE_TYPE,
-      query: queryConfig.query,
-      name: normalizedName,
-      exactmatchnames: "true",
-      limit: "20",
-      includemetadata: "true",
-      reverse: "true",
-      excludeblocked: "true",
-    });
-
-    if (queryConfig.identifier) {
-      sentParams.set("identifier", queryConfig.identifier);
-    }
-
-    const hasSent = await fetchHasMailResources(sentParams, item => {
-      const itemName =
-        typeof item?.name === "string" ? item.name.trim().toLowerCase() : "";
-      const identifier =
-        typeof item?.identifier === "string" ? item.identifier : "";
-      return (
-        itemName === normalizedNameLower &&
-        isSentMailIdentifier(identifier) &&
-        !isDeletedSentResourceInSearch(item)
-      );
-    });
-
-    if (hasSent) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
-const hasInboxMailActivityForOwnedName = async (
-  name: string,
-  ownerAddress: string
-): Promise<boolean> => {
-  const normalizedName = typeof name === "string" ? name.trim() : "";
-  const normalizedAddress =
-    typeof ownerAddress === "string" ? ownerAddress.trim() : "";
-  if (!normalizedName || !normalizedAddress) return false;
-  const normalizedAddressSuffix = normalizedAddress.slice(-6).toLowerCase();
-
-  const inboxAddressQuery = `qortal_qmail_${normalizedName.slice(
-    0,
-    20
-  )}_${normalizedAddress.slice(-6)}_mail_`;
-  const expectedAddressIdentifierPrefix =
-    `_mail_${inboxAddressQuery}`.toLowerCase();
-  const inboxByAddressParams = new URLSearchParams({
-    mode: "ALL",
-    service: MAIL_SERVICE_TYPE,
-    query: inboxAddressQuery,
-    limit: "20",
-    includemetadata: "false",
-    reverse: "true",
-    excludeblocked: "true",
-  });
-
-  if (
-    await fetchHasMailResources(inboxByAddressParams, item => {
-      const identifier =
-        typeof item?.identifier === "string"
-          ? item.identifier.toLowerCase()
-          : "";
-      return (
-        identifier.startsWith(expectedAddressIdentifierPrefix) &&
-        identifier.includes(`_${normalizedAddressSuffix}_mail_`)
-      );
-    })
-  ) {
-    return true;
-  }
-
-  const inboxAliasQuery = `qortal_qmail_${normalizedName}_mail_`;
-  const expectedAliasIdentifierPrefix =
-    `_mail_${inboxAliasQuery}`.toLowerCase();
-  const inboxAliasParams = new URLSearchParams({
-    mode: "ALL",
-    service: MAIL_SERVICE_TYPE,
-    query: inboxAliasQuery,
-    limit: "20",
-    includemetadata: "false",
-    reverse: "true",
-    excludeblocked: "true",
-  });
-
-  return fetchHasMailResources(inboxAliasParams, item => {
-    const identifier =
-      typeof item?.identifier === "string" ? item.identifier.toLowerCase() : "";
-    return identifier.startsWith(expectedAliasIdentifierPrefix);
-  });
-};
-
-const fetchRecentInboxMessagesForSavedAlias = async (
-  aliasName: string
-): Promise<any[]> => {
-  const normalizedAlias = typeof aliasName === "string" ? aliasName.trim() : "";
-  if (!normalizedAlias) return [];
-
-  const aliasQuery = `qortal_qmail_${normalizedAlias}_mail_`;
-  const expectedAliasIdentifierPrefix = `_mail_${aliasQuery}`.toLowerCase();
-  const aliasParams = new URLSearchParams({
-    mode: "ALL",
-    service: MAIL_SERVICE_TYPE,
-    query: aliasQuery,
-    limit: "20",
-    includemetadata: "false",
-    reverse: "true",
-    excludeblocked: "true",
-  });
-
-  try {
-    const response = await fetch(
-      `/arbitrary/resources/search?${aliasParams.toString()}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    const responseData = await response.json();
-    if (!Array.isArray(responseData)) return [];
-    return mapMailResources(
-      responseData.filter((item: any) => {
-        const identifier =
-          typeof item?.identifier === "string"
-            ? item.identifier.toLowerCase()
-            : "";
-        return identifier.startsWith(expectedAliasIdentifierPrefix);
-      })
-    );
-  } catch {
-    return [];
-  }
-};
-
-const mapMailResources = (resources: any[]) => {
-  return resources.map((post: any) => {
-    return {
-      title: post?.metadata?.title,
-      category: post?.metadata?.category,
-      categoryName: post?.metadata?.categoryName,
-      tags: post?.metadata?.tags || [],
-      description: post?.metadata?.description,
-      createdAt: post?.created,
-      updated: post?.updated,
-      user: post?.name,
-      id: post?.identifier,
-    };
-  });
-};
-
-const fetchInboxMessagesForOwnedName = async (
-  name: string,
-  ownerAddress: string
-): Promise<any[]> => {
-  const normalizedName = typeof name === "string" ? name.trim() : "";
-  const normalizedAddress =
-    typeof ownerAddress === "string" ? ownerAddress.trim() : "";
-  if (!normalizedName || !normalizedAddress) return [];
-
-  const addressSuffix = normalizedAddress.slice(-6);
-  if (!addressSuffix) return [];
-  const normalizedAddressSuffix = `_${addressSuffix}_mail_`.toLowerCase();
-  const byAddressQuery = `qortal_qmail_${normalizedName.slice(
-    0,
-    20
-  )}_${addressSuffix}_mail_`;
-  const byAliasQuery = `qortal_qmail_${normalizedName}_mail_`;
-
-  const queryConfigs: Array<{
-    query: string;
-    matches: (identifier: string) => boolean;
-  }> = [
-    {
-      query: byAddressQuery,
-      matches: (identifier: string) => {
-        const normalizedIdentifier = identifier.toLowerCase();
-        return (
-          normalizedIdentifier.startsWith(
-            `_mail_${byAddressQuery}`.toLowerCase()
-          ) && normalizedIdentifier.includes(normalizedAddressSuffix)
-        );
-      },
-    },
-    {
-      query: byAliasQuery,
-      matches: (identifier: string) => {
-        return identifier
-          .toLowerCase()
-          .startsWith(`_mail_${byAliasQuery}`.toLowerCase());
-      },
-    },
-  ];
-
-  const allResources: any[] = [];
-  const pageSize = 200;
-
-  for (const queryConfig of queryConfigs) {
-    let offset = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      const params = new URLSearchParams({
-        mode: "ALL",
-        service: MAIL_SERVICE_TYPE,
-        query: queryConfig.query,
-        limit: String(pageSize),
-        includemetadata: "true",
-        offset: String(offset),
-        reverse: "true",
-        excludeblocked: "true",
-      });
-
-      const response = await fetch(
-        `/arbitrary/resources/search?${params.toString()}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      const responseData = await response.json();
-
-      if (!Array.isArray(responseData) || responseData.length === 0) {
-        break;
-      }
-
-      const filteredResponse = responseData.filter((item: any) => {
-        const identifier =
-          typeof item?.identifier === "string" ? item.identifier : "";
-        if (!identifier) return false;
-        return queryConfig.matches(identifier);
-      });
-      allResources.push(...filteredResponse);
-
-      if (responseData.length < pageSize) {
-        hasMore = false;
-      } else {
-        offset += responseData.length;
-      }
-    }
-  }
-
-  const mapped = mapMailResources(allResources);
-  const deduped = new Map<string, any>();
-  mapped.forEach(item => {
-    if (!item?.id) return;
-    if (!deduped.has(item.id)) {
-      deduped.set(item.id, item);
-    }
-  });
-
-  return Array.from(deduped.values()).sort((a, b) => {
-    return Number(b?.createdAt || 0) - Number(a?.createdAt || 0);
-  });
 };
 
 const steps: Step[] = [
@@ -1433,27 +1019,58 @@ export const Mail = ({ isFromTo }: MailProps) => {
     [getAllMailMessages, user]
   );
 
-  const interval = useRef<any>(null);
-
-  const checkNewMessagesFunc = useCallback(() => {
-    if (!user?.name || !user?.address) return;
-    let isCalling = false;
-    interval.current = setInterval(async () => {
-      if (isCalling || !user?.name || !user?.address) return;
-      isCalling = true;
-      const res = await checkNewMessages(user?.name, user.address);
-      isCalling = false;
-    }, 30000);
-  }, [checkNewMessages, user]);
-
+  const combinedAliasInboxMessagesRef = useRef(combinedAliasInboxMessages);
   useEffect(() => {
-    checkNewMessagesFunc();
-    return () => {
-      if (interval?.current) {
-        clearInterval(interval.current);
+    combinedAliasInboxMessagesRef.current = combinedAliasInboxMessages;
+  }, [combinedAliasInboxMessages]);
+
+  // New-mail poll for the combined inbox: the primary name through
+  // checkNewMessages, every other owned name with mail through the limit-20
+  // owned-name queries. Pauses while hidden and backs off while nothing is new.
+  usePolling(
+    async () => {
+      if (!user?.name || !user?.address) return;
+      const address = user.address;
+      const namesToPoll = combinedAliasInboxNames.filter(name => {
+        return Boolean(combinedAliasInboxMessagesRef.current[name]);
+      });
+      const [primaryNewCount, ...secondaryResults] = await Promise.all([
+        checkNewMessages(user.name, address),
+        ...namesToPoll.map(async name => {
+          const rows = await fetchRecentInboxMessagesForOwnedName(name, address);
+          return { name, rows };
+        }),
+      ]);
+      let foundNew = Boolean(primaryNewCount);
+      if (secondaryResults.length) {
+        const previous = combinedAliasInboxMessagesRef.current;
+        secondaryResults.forEach(({ name, rows }) => {
+          const known = previous[name];
+          if (known && mergeNewRows(known, rows) !== known) {
+            foundNew = true;
+          }
+        });
+        setCombinedAliasInboxMessages(current => {
+          let next = current;
+          secondaryResults.forEach(({ name, rows }) => {
+            const known = current[name];
+            if (!known) return;
+            const merged = mergeNewRows(known, rows);
+            if (merged === known) return;
+            if (next === current) next = { ...current };
+            next[name] = merged;
+          });
+          return next;
+        });
       }
-    };
-  }, [checkNewMessagesFunc]);
+      return foundNew;
+    },
+    {
+      intervalMs: 30000,
+      maxIntervalMs: 300000,
+      enabled: hasAuthenticatedIdentity,
+    }
+  );
 
   const openMessage = async (
     user: string,
@@ -2217,17 +1834,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
           excludeblocked: "true",
         });
 
-        const response = await fetch(
-          `/arbitrary/resources/search?${params.toString()}`,
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        const responseData = await response.json();
-        if (!Array.isArray(responseData) || responseData.length === 0) {
+        const responseData = await searchResources(params, { ttlMs: 0 });
+        if (responseData.length === 0) {
           break;
         }
 
@@ -2756,6 +2364,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
         publicKeys: userPublicKey ? [userPublicKey] : [],
       });
 
+      invalidateSearches(`service=${MAIL_STATE_DOCUMENT_SERVICE}`);
+      invalidateSearches("service=MAIL_PRIVATE");
       dispatch(
         setNotification({
           msg: "Published Q-Mail read state",
@@ -2816,17 +2426,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
           reverse: "true",
           excludeblocked: "true",
         });
-        const searchResponse = await fetch(
-          `/arbitrary/resources/search?${searchParams.toString()}`,
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        const searchData = await searchResponse.json();
-        if (!Array.isArray(searchData) || searchData.length === 0) {
+        const searchData = await searchResources(searchParams);
+        if (!searchData.length) {
           return;
         }
 
