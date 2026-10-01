@@ -126,6 +126,8 @@ import { DraftsMailbox } from "./DraftsMailbox";
 import type { StoredComposeDraft } from "./composeDrafts";
 import { Thread } from "./Thread";
 import { invalidateThreadSearches } from "./threadData";
+import { useThreadUnreadCounts } from "./threadUnread";
+import { getAvatarUrl } from "../../utils/avatarCache";
 
 type MailboxSidebarItemId =
   | "inbox"
@@ -400,6 +402,8 @@ interface BuildSidebarItemsInput {
   isPublishingState?: boolean;
   hasPendingStateChanges?: boolean;
   unreadCounts?: UnreadCounts;
+  /** Unread threads per group id, for the threads-group items. */
+  threadUnreadByGroup?: Record<string, number>;
 }
 
 const getMessageIdentifier = (message: any): string => {
@@ -421,6 +425,7 @@ export const buildSidebarItems = ({
   isPublishingState,
   hasPendingStateChanges,
   unreadCounts = EMPTY_UNREAD_COUNTS,
+  threadUnreadByGroup,
 }: BuildSidebarItemsInput): LeftSidebarItem[] => {
   const items: LeftSidebarItem[] = [{ id: "compose", label: "Compose" }];
   const normalizedSelectedAliasInboxName = (
@@ -486,10 +491,12 @@ export const buildSidebarItems = ({
       });
     })
     .forEach(group => {
+      const unreadThreads = threadUnreadByGroup?.[String(group.id)] || 0;
       items.push({
         id: createThreadGroupItemId(group.id),
         label: group.name,
         hidden: !isThreadsSectionExpanded,
+        badgeText: unreadThreads > 0 ? formatUnreadBadge(unreadThreads) : undefined,
       });
     });
   if (canPublishState) {
@@ -1530,12 +1537,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
           continue;
         }
         try {
-          const avatarUrl = await qortalRequest({
-            action: "GET_QDN_RESOURCE_URL",
-            name,
-            service: "THUMBNAIL",
-            identifier: "qortal_avatar",
-          });
+          // One GET_QDN_RESOURCE_URL per name per session; misses are remembered.
+          const avatarUrl = await getAvatarUrl(name);
 
           if (cancelled) return;
           if (typeof avatarUrl !== "string" || !avatarUrl.trim()) {
@@ -2716,6 +2719,11 @@ export const Mail = ({ isFromTo }: MailProps) => {
     []
   );
 
+  const { byGroup: threadUnreadByGroup } = useThreadUnreadCounts(
+    groupOptionsWithThreads,
+    user?.name,
+    { enabled: hasAuthenticatedIdentity }
+  );
   const sidebarItems = useMemo(() => {
     return buildSidebarItems({
       inboxNames: hasAuthenticatedIdentity ? inboxSidebarNames : [],
@@ -2732,8 +2740,10 @@ export const Mail = ({ isFromTo }: MailProps) => {
       isPublishingState: isPublishingMailState,
       hasPendingStateChanges: hasPendingStateChanges || hasPendingArchivedChanges,
       unreadCounts,
+      threadUnreadByGroup,
     });
   }, [
+    threadUnreadByGroup,
     aliasSidebarNames,
     aliasReplyLinks,
     groupOptionsWithThreads,
@@ -3337,6 +3347,10 @@ export const Mail = ({ isFromTo }: MailProps) => {
             message={message}
             setReplyTo={openReplyComposerFromMessage}
             setForwardInfo={openForwardComposerFromMessage}
+            onReplyAll={replyAllMessage =>
+              openReplyComposerFromMessage(replyAllMessage, { replyAll: true })
+            }
+            onForward={info => openForwardComposerFromMessage(info.message)}
             alias={activeAliasInboxName}
             onClose={closeOpenMessage}
           />
@@ -3365,8 +3379,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
     <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <EmptyState
         icon={<MailOutlineIcon />}
-        title="Select a message"
-        hint="Messages you open show up here."
+        title={isThreadsView ? "Select a thread" : "Select a message"}
+        hint={isThreadsView ? "Threads you open show up here." : "Messages you open show up here."}
       />
     </Box>
   );
