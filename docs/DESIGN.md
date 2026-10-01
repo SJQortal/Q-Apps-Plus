@@ -64,7 +64,9 @@ Every + app must feel like a native phone app in **GO** (Android WebView) and on
   - Keep first load light: code-split, lazy-load heavy screens.
   - Keep animations short and cheap.
   - Honour `prefers-reduced-motion`.
-- **Check:** test every screen at **360×740**, **390×844** and phone landscape, plus 700 px (narrow Hub) and 1280 px, in all four themes. Record what you checked in the brief.
+- **Check:** test every screen at **360×740**, **390×844** and phone landscape (844×390), plus 700 px (narrow Hub) and 1280 px, in all four themes. Record what you checked in the brief.
+  - `scripts/screens.mjs <App+>` does this offline with mock data.
+  - The Hub check repeats it with real data in a test Hub (`node scripts/hub-cdp.mjs size 390 844 --touch`).
 
 ## Settings page
 

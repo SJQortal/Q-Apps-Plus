@@ -26,3 +26,6 @@ hub-theme-check.tmp/
 # scripts/build-pr-zips.sh checks PR branches out here
 .worktrees/
 .claude/settings.local.json
+
+# screenshot check output (scripts/screens.mjs)
+apps/*/e2e/shots*/

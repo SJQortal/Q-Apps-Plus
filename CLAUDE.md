@@ -7,10 +7,13 @@ This monorepo holds Simon's "+" versions of the official Qortal Q-Apps. Each app
 - **more capable**: the obvious missing features;
 - **Hub 3.0 styled**: four themes and a real Settings page, the same way Torq does it.
 - **Great on phones**: every app must work like a native mobile app in GO and on narrow screens (docs/DESIGN.md → Mobile).
+- **Proven in Hub**: no app is finished until it has been checked in a test Hub with real data (the skill's round 4).
 
 They publish to QDN under the names Simon registered: Q-Mail+, Q-Shop+, Q-Share+, Q-Support+, Q-Tube+, Q-Trade+, Q-Fund+, Names+, Q-Node+, Q-Mintership+ and Q-Apps+. `apps/Q-Apps+/` is a new launcher app that presents all the others.
 
-Torq is Simon's Quitter fork and the model to follow. Selected Torq files are in `shared/reference/torq/`; read them for patterns, never import them.
+Torq is Simon's Quitter fork and the model to follow for look and Qortal patterns. Selected Torq files are in `shared/reference/torq/`; read them for patterns, never import them.
+
+**Q-Share+ is the reference + app.** It was published as 1.0.0 on 2026-09-30. Every app aims for its standard: the rounds and "Done means" checklist in the `qplus-app` skill, and its brief `docs/apps/Q-Share+.md` as the worked example.
 
 ## Read before working on an app
 
@@ -20,8 +23,9 @@ Torq is Simon's Quitter fork and the model to follow. Selected Torq files are in
 4. `docs/apps/<App+>.md`: the brief for that app. Baseline facts are there already; the audit, plan and status sections are yours to fill.
 5. `shared/hub-theme/README.md`: how to install the theme kit.
 6. `docs/HUB-TESTING.md`: how to test inside Qortal Hub Dev Mode (local sessions only, via Hub's debug port and `scripts/hub-cdp.mjs`).
+7. `docs/apps/Q-Share+.md`: the worked example of every round, from audit to Hub check and release.
 
-For a full redesign pass on an app, use the `qplus-app` skill in `.claude/skills/qplus-app/`.
+For work on an app, use the `qplus-app` skill in `.claude/skills/qplus-app/`. `docs/OVERNIGHT.md` covers the setup around it: one folder and one chat per app, the day prompt, the morning and release.
 
 ## Layout
 
@@ -29,9 +33,10 @@ For a full redesign pass on an app, use the `qplus-app` skill in `.claude/skills
 apps/<App+>/            one folder per app, each with its own package.json and lockfile
 shared/hub-theme/       the theme kit (source of truth); copied into apps by scripts/sync-theme.sh
 shared/reference/torq/  read-only Torq files: theme, Hub boot, QDN search cache, Settings, tests
-docs/                   DESIGN.md, QORTAL.md, PLATFORM.md, MIGRATION-NOTES.md, HUB-TESTING.md,
-                        PROGRESS.md, OVERNIGHT.md, apps/<App+>.md briefs
-scripts/                sync-upstream.sh, sync-theme.sh, build-zip.sh, check-theme-kit.sh, check-mui-icons.sh
+docs/                   DESIGN.md, QORTAL.md (incl. Hub & GO pitfalls), PLATFORM.md, MIGRATION-NOTES.md,
+                        HUB-TESTING.md, PROGRESS.md, OVERNIGHT.md (daily sessions), apps/<App+>.md briefs
+scripts/                sync-upstream.sh, sync-theme.sh, build-zip.sh, build-pr-zips.sh, check-theme-kit.sh,
+                        check-mui-icons.sh, screens.mjs (screenshot check), hub-cdp.mjs (drive a test Hub)
 upstreams.tsv           folder → upstream GitHub repo and branch
 ```
 
@@ -65,6 +70,8 @@ scripts/build-pr-zips.sh               # morning: zips for every open app PR + r
 scripts/sync-theme.sh [--check]        # copy the theme kit into opted-in apps / verify no drift
 scripts/check-theme-kit.sh Q-Tube+     # typecheck + smoke-test the kit against an app's MUI
 scripts/check-mui-icons.sh Q-Tube+     # icon imports that MUI 9 removed (use the …Outlined names)
+scripts/screens.mjs Q-Share+           # every screen × 5 sizes × 4 themes, with overflow/a11y/call checks (needs Playwright)
+node scripts/hub-cdp.mjs size 390 844 --touch   # drive a test Hub: sizes, touch, request logs (docs/HUB-TESTING.md)
 scripts/sync-upstream.sh --check       # new commits in the Qortal repos since import
 ```
 
