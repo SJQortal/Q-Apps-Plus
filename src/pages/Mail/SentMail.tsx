@@ -6,13 +6,15 @@ import { RootState } from '../../state/store'
 import { MAIL_SERVICE_TYPE } from '../../constants/mail'
 import { GroupedMailboxList } from './GroupedMailboxList'
 import { useMailboxSearch, type MailboxSearchStatus } from './useMailboxSearch'
-import useConfirmationModal from '../../hooks/useConfirmModal'
+import { useConfirmSheet } from './ConfirmSheet'
+import { usePolling } from '../../hooks/usePolling'
 import { setNotification } from '../../state/features/notificationsSlice'
 import { objectToBase64 } from '../../utils/toBase64'
 import { parseSentRecipientFromIdentifier } from './mailIdentifier'
 import {
   SENT_DELETED_TAG,
   SENT_DELETED_TITLE,
+  fetchSentDelta,
   fetchSentIndex,
   readDeletedSentIds,
   writeDeletedSentIds,
@@ -42,6 +44,8 @@ interface ResolvedRecipientInfo {
   address: string
   publicKey: string
 }
+
+export const SENT_POLL_INTERVAL_MS = 30_000
 
 const toStringOrEmpty = (value: any): string => {
   return typeof value === 'string' ? value.trim() : ''
@@ -209,11 +213,14 @@ export const SentMail = ({
   const deletedMessageIdsRef = useRef<Record<string, boolean>>({})
   const deletingMessageIdsRef = useRef<Record<string, boolean>>({})
 
-  const { Modal: DeleteConfirmModal, showModal: showDeleteConfirmModal } =
-    useConfirmationModal({
-      title: 'Delete sent message?',
+  const { Sheet: DeleteConfirmSheet, confirm: showDeleteConfirmModal } =
+    useConfirmSheet({
+      title: 'Delete this sent message?',
       message:
-        'This republishes the same message identifier with minimal deleted content. A publish fee applies. Continue?',
+        'It is replaced on QDN by an empty placeholder, so the recipient can no longer open it. Publishing the placeholder costs the usual fee.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep',
+      destructive: true,
     })
 
   useEffect(() => {
@@ -332,15 +339,6 @@ export const SentMail = ({
     [activeInstanceNames, hasActiveInstances]
   )
 
-  const checkNewMessages = useCallback(async () => {
-    if (!hasActiveInstances) return
-
-    try {
-      await fetchSentIndexes({ silent: true })
-    } catch (error) {
-    }
-  }, [fetchSentIndexes, hasActiveInstances])
-
   useEffect(() => {
     if (!hasActiveInstances) {
       setMailMessages([])
@@ -351,24 +349,28 @@ export const SentMail = ({
     void fetchSentIndexes()
   }, [fetchSentIndexes, hasActiveInstances])
 
-  const interval = useRef<any>(null)
+  const mailMessagesRef = useRef<any[]>([])
   useEffect(() => {
-    if (!hasActiveInstances) return
+    mailMessagesRef.current = mailMessages
+  }, [mailMessages])
 
-    let isCalling = false
-    interval.current = setInterval(async () => {
-      if (isCalling) return
-      isCalling = true
-      await checkNewMessages()
-      isCalling = false
-    }, 30000)
-
-    return () => {
-      if (interval.current) {
-        clearInterval(interval.current)
-      }
-    }
-  }, [checkNewMessages, hasActiveInstances])
+  // Polite delta poll (docs/QORTAL.md rule 7): newest 20 per name and query,
+  // cut at the first known id, merged in front; `false` backs off.
+  usePolling(
+    async () => {
+      if (!hasActiveInstances) return
+      const known = new Set(mailMessagesRef.current.map(message => toStringOrEmpty(message?.id)))
+      const fresh = await fetchSentDelta(activeInstanceNames, known, deletedMessageIdsRef.current)
+      if (!fresh.length) return false
+      setMailMessages(previous => {
+        const knownNow = new Set(previous.map(message => toStringOrEmpty(message?.id)))
+        const additions = fresh.filter(row => !knownNow.has(row.id))
+        return additions.length ? [...additions, ...previous] : previous
+      })
+      return true
+    },
+    { intervalMs: SENT_POLL_INTERVAL_MS, enabled: hasActiveInstances }
+  )
 
   const openMessage = useCallback(
     async (messageUser: string, messageIdentifier: string, content: any, to?: string) => {
@@ -525,7 +527,7 @@ export const SentMail = ({
           ) : undefined
         }
       />
-      <DeleteConfirmModal />
+      <DeleteConfirmSheet />
     </>
   )
 }
