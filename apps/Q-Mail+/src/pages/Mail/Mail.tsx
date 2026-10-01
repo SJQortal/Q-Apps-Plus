@@ -117,6 +117,7 @@ import {
   hasSentMailActivityForOwnedName,
   mergeNewRows,
 } from "../../utils/mailInbox";
+import { useAppShell } from "../../app-shell/AppShellContext";
 import {
   countUnreadMessages,
   hasThreadHistory,
@@ -619,6 +620,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const { name: composeRouteName } = useParams();
   const { isShow, onCancel, onOk, show } = useModal();
   const { user } = useSelector((state: RootState) => state.auth);
+  const { registerMailSync } = useAppShell();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [message, setMessage] = useState<any>(null);
@@ -2433,6 +2435,31 @@ export const Mail = ({ isFromTo }: MailProps) => {
     user?.address,
     user?.name,
   ]);
+
+  // Settings → Sync uses the same publish path as the rail item.
+  useEffect(() => {
+    if (!hasAuthenticatedIdentity) {
+      registerMailSync(null);
+      return;
+    }
+    registerMailSync({
+      publishMailState: publishMailStateToQdn,
+      isPublishing: isPublishingMailState,
+      hasPendingChanges: hasPendingStateChanges || hasPendingArchivedChanges,
+    });
+  }, [
+    hasAuthenticatedIdentity,
+    hasPendingArchivedChanges,
+    hasPendingStateChanges,
+    isPublishingMailState,
+    publishMailStateToQdn,
+    registerMailSync,
+  ]);
+  useEffect(() => {
+    return () => {
+      registerMailSync(null);
+    };
+  }, [registerMailSync]);
 
   const loadPublishedMailStateFromQdn = useCallback(async () => {
     if (!user?.name) return;
