@@ -3591,6 +3591,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
             ownedNames={ownedNameCandidates}
             joinedGroups={memberGroupOptions}
             priorityRecipientNames={composePriorityRecipientNames}
+            recentInboxMessages={combinedInboxMessages}
+            openedMessagesById={hashMapMailMessages}
             composePrefill={composePrefill}
             onRequestClose={handleComposerClose}
           />
