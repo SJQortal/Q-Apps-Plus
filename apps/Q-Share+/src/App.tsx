@@ -20,6 +20,7 @@ const Settings = lazy(() => import("./pages/Settings/Settings").then((m) => ({ d
 const CollectionsPage = lazy(() =>
   import("./pages/Collections/CollectionsPage").then((m) => ({ default: m.CollectionsPage }))
 );
+const CommentLink = lazy(() => import("./pages/CommentLink/CommentLink"));
 const CollectionPage = lazy(() =>
   import("./pages/Collections/CollectionPage").then((m) => ({ default: m.CollectionPage }))
 );
@@ -39,6 +40,7 @@ function App() {
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/collections" element={<CollectionsPage />} />
                 <Route path="/collection/:name/:id" element={<CollectionPage />} />
+                <Route path="/comment/:name/:identifier" element={<CommentLink />} />
               </Routes>
             </Suspense>
           </GlobalWrapper>

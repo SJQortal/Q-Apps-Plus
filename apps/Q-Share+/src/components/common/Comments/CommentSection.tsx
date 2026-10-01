@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CommentEditor } from "./CommentEditor";
 import { Comment } from "./Comment";
 import { Box, Button, CircularProgress, Typography } from "@mui/material";
@@ -131,6 +131,13 @@ export const CommentSection = ({ postId, postName, commentsId }: CommentSectionP
   // Where the next page of base comments starts. Comments posted here and the
   // commentsId ones are in the list too, so the list length can't be used.
   const [nextOffset, setNextOffset] = useState<number>(0);
+  const panelRef = useRef<HTMLElement>(null);
+  const wantsComments = location.hash === "#comments";
+
+  // A notification opens the share at #comments: scroll there once the first page is in.
+  useEffect(() => {
+    if (wantsComments && !loadingComments) panelRef.current?.scrollIntoView({ block: "start" });
+  }, [wantsComments, loadingComments]);
 
   const onSubmit = (obj?: any, isEdit?: boolean) => {
     if (isEdit) {
@@ -239,7 +246,7 @@ export const CommentSection = ({ postId, postName, commentsId }: CommentSectionP
   );
 
   return (
-    <CommentsPanel aria-labelledby="comments-title">
+    <CommentsPanel ref={panelRef} id="comments" aria-labelledby="comments-title">
       <CommentsTitle id="comments-title" component="h2">
         Comments
       </CommentsTitle>
