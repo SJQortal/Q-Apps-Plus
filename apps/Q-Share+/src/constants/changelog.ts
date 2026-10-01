@@ -16,8 +16,10 @@ export const CHANGELOG: Release[] = [
   {
     version: "1.0.1",
     date: "2026-10-01",
-    title: "Play audio and video",
+    title: "Notifications",
     notes: [
+      "A bell at the top tells you when someone comments on your shares, replies to your comments or adds your share to a collection.",
+      "Turn on Hub alerts in Settings → Notifications, and Qortal Hub tells you about new comments even while Q-Share+ is closed.",
       "Audio and video files say Play audio and Play video, and Close player once the player is open.",
       "Subtitles and checksum files preview as text, audiobooks (.m4b) and WebM audio play, and comic books are listed as documents.",
       "On phones, the description's placeholder no longer covers the first word while the keyboard is still composing it.",
