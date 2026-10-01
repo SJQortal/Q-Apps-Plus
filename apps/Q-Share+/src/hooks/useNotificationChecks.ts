@@ -4,6 +4,9 @@ import type { RootState } from "../state/store";
 import { useAppSettings } from "../utils/settings";
 import { checkNotifications } from "../utils/notifications/check";
 import { readNotifications } from "../utils/notifications/store";
+import { loadActivity } from "../utils/notifications/activity";
+import { readHubAlerts, syncHubAlerts } from "../utils/notifications/hubAlerts";
+import { onQdnSearchesInvalidated } from "../utils/qdnSearch";
 
 /** Between checks while the app is on screen; doubled after each check that finds nothing. */
 export const CHECK_INTERVAL_MS = 2 * 60_000;
@@ -83,4 +86,40 @@ export function useNotificationChecks(): void {
       window.removeEventListener(CHECK_EVENT, onRequest);
     };
   }, [account, comments, collections, hiddenKey]);
+}
+
+/** After a publish, wait this long before bringing Hub's alert rules up to date. */
+export const HUB_SYNC_DELAY_MS = 10_000;
+
+/**
+ * Keeps Hub's alert rules in step with the account's shares and comments:
+ * once after start and again after each publish (debounced). Sends nothing
+ * unless alerts are on in Settings and the rules changed.
+ */
+export function useHubAlertsSync(): void {
+  const account = useNotificationAccount();
+  useEffect(() => {
+    if (!account) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const sync = () => {
+      if (!readHubAlerts(account.address).enabled) return;
+      loadActivity(account.names)
+        .then((activity) => (stopped ? undefined : syncHubAlerts(account.address, activity)))
+        .catch(() => {
+          /* Hub or Core didn't answer: the next publish or start tries again */
+        });
+    };
+    const later = (delay: number) => {
+      clearTimeout(timer);
+      timer = setTimeout(sync, delay);
+    };
+    later(HUB_SYNC_DELAY_MS);
+    const unsubscribe = onQdnSearchesInvalidated(() => later(HUB_SYNC_DELAY_MS));
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [account]);
 }

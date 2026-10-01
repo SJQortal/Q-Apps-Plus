@@ -14,7 +14,7 @@ import ConsentModal from "../components/common/ConsentModal";
 import { useIframe } from "../hooks/useIframe.tsx";
 import { useTrackInAppHistory } from "../hooks/useSafeBack";
 import { useUserAccount } from "../hooks/useUserAccount";
-import { useNotificationChecks } from "../hooks/useNotificationChecks";
+import { useHubAlertsSync, useNotificationChecks } from "../hooks/useNotificationChecks";
 
 interface Props {
   children: React.ReactNode;
@@ -31,6 +31,7 @@ export { queue };
 const GlobalWrapper: React.FC<Props> = ({ children }) => {
   useIframe();
   useNotificationChecks();
+  useHubAlertsSync();
   useTrackInAppHistory();
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.auth.user);

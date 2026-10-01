@@ -41,6 +41,7 @@ import { PHONE_MEDIA, usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { BottomSheet } from "../../components/common/mobile/BottomSheet";
 import { NameAvatar } from "../../components/common/NameAvatar";
 import { NameSwitcher } from "../../components/common/NameSwitcher";
+import { HubAlertsSetting } from "../../components/common/Notifications/HubAlertsSetting";
 import { useLocation } from "react-router-dom";
 
 const Page = styled("div")(({ theme }) => ({
@@ -472,6 +473,7 @@ export const Settings = () => {
             slotProps={{ input: { "aria-label": "Added to a collection" } }}
           />
         </Row>
+        <HubAlertsSetting row={Row} />
       </Section>
 
       <Section>

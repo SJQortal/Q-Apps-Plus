@@ -36,6 +36,8 @@ function App() {
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/share/:name/:id" element={<FileContent />} />
+                {/* Hub alert links: the share, scrolled to its comments (Hub's links can't carry a #). */}
+                <Route path="/share/:name/:id/comments" element={<FileContent />} />
                 <Route path="/channel/:name" element={<IndividualProfile />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/collections" element={<CollectionsPage />} />

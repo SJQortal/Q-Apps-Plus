@@ -7,6 +7,7 @@ import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { requestNotificationCheck, useNotificationAccount } from "../../../hooks/useNotificationChecks";
 import { useAppSettings } from "../../../utils/settings";
 import { markAllRead, useNotificationState, type AppNotification } from "../../../utils/notifications/store";
+import { markHubAlertsSeen } from "../../../utils/notifications/hubAlerts";
 import { NotificationList, notificationPath } from "./NotificationList";
 
 /**
@@ -32,6 +33,8 @@ export function NotificationsButton({ sx }: { sx?: SxProps<Theme> }) {
     setAnchor(null);
     setSheetOpen(false);
     markAllRead(account.address);
+    // Seen here, so seen in Hub's bell too.
+    void markHubAlertsSeen(account.address);
   };
   const openList = (event: MouseEvent<HTMLElement>) => {
     requestNotificationCheck();

@@ -132,9 +132,10 @@ export const CommentSection = ({ postId, postName, commentsId }: CommentSectionP
   // commentsId ones are in the list too, so the list length can't be used.
   const [nextOffset, setNextOffset] = useState<number>(0);
   const panelRef = useRef<HTMLElement>(null);
-  const wantsComments = location.hash === "#comments";
+  const wantsComments = location.hash === "#comments" || location.pathname.endsWith("/comments");
 
-  // A notification opens the share at #comments: scroll there once the first page is in.
+  // A notification opens the share at #comments (in the app) or …/comments (Hub's alerts):
+  // scroll there once the first page is in.
   useEffect(() => {
     if (wantsComments && !loadingComments) panelRef.current?.scrollIntoView({ block: "start" });
   }, [wantsComments, loadingComments]);
