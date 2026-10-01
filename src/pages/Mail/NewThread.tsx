@@ -664,9 +664,6 @@ export const NewThread = ({
                   letterSpacing: '0.15px',
                   opacity: 1
                 },
-                '&:focus': {
-                  outline: 'none',
-                },
                 // Add any additional styles for the input here
               }}
             />
