@@ -102,6 +102,7 @@ export default {
     const p = url.pathname;
     const sp = url.searchParams;
     if (p.endsWith('/arbitrary/resources')) return json(route, [{ size: 1000 }]).then(() => true); // the Follow tooltip's size list
+    if (p.endsWith('/blocks/last')) return json(route, { height: 2744531, timestamp: Date.now() }).then(() => true); // notification checks: the node's indexed-up-to time
     if (p.endsWith('/resources/search')) {
       let list = rows;
       const ident = sp.get('identifier') || '';
@@ -151,5 +152,7 @@ export default {
     { key: 'collection', path: `/collection/${NAME}/qshare_collection_holiday-pack_ab12cd`, optional: true },
     { key: 'publish', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: /share files/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(500); } },
     { key: 'account-menu', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: /account menu/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
+    // Opening the bell runs the first check: a comment by bob+builder on share 1, and Alice Wonder's Tools collection holding it.
+    { key: 'notifications', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: /^Notifications/ }).first().click({ timeout: 2500 }); await page.getByText(/added .* to Tools/).first().waitFor({ timeout: 5000 }).catch(() => {}); await page.waitForTimeout(400); } },
   ],
 };
