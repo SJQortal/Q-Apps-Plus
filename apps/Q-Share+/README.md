@@ -20,7 +20,7 @@ npm run dev        # Qortal calls need Hub; tests use the mocks in src/test/setu
 npm test
 npm run lint
 npm run build
-node e2e/screens.mjs   # screenshots of every screen at five sizes in four themes (needs a global playwright)
+../../scripts/screens.mjs Q-Share+   # every screen at five sizes in four themes, with checks (config: e2e/screens.config.mjs)
 ```
 
 Publish zips are built from the monorepo root with `scripts/build-zip.sh Q-Share+`.

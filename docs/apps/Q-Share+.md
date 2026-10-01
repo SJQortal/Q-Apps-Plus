@@ -323,7 +323,7 @@ Next pass ideas:
 
 - A GO session on a phone for what Hub on the desktop can't show: the on-screen keyboard under Publish, pull-to-refresh by finger, the file picker, `SHOW_PDF_READER` and saves by location with GO's download card, safe-area insets, landscape.
 - Names containing `/`, `#`, `?`, `%` or `\` (one real share today, by "Vallot-/8/"): their JSON is now fetched encoded, but downloads still go through q-apps.js's `GET_QDN_RESOURCE_STATUS`/`PROPERTIES`, which build the URL with the raw name. Direct GETs to `/arbitrary/resource/status|properties/…` with the name encoded would fix them.
-- Run the screenshot harness again (`e2e/screens.mjs`); its mocks were updated for the PDF reader and the Follow size list but it was not run in the Hub session (no Playwright on the desktop).
+- The screenshot harness now runs on the shared runner: `scripts/screens.mjs Q-Share+` with `e2e/screens.config.mjs` (2026-10-01: 43 captures in Hub 3.0 at all five sizes, 0 console errors, 0 overflow, 0 unlabelled buttons, 0 axe violations, using playwright-core and the desktop's Brave). Run all four themes before the next release.
 - `useFetchFiles`' `getNewFiles`, `checkNewFiles` and `getFilesFiltered` have no callers (upstream leftovers); `CollectionPage` still subscribes to the whole `hashMapFiles`.
 - Some publishers' titles contain escaped entities such as `&amp;`; the app shows them as stored, as the original does.
 - Next-page loads on Home still wait for the request in flight (only reset searches supersede it); an `AbortController` in `searchQdn` would let both cancel cleanly.
