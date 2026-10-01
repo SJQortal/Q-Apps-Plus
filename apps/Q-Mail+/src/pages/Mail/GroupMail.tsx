@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
-import { Box, Button, Chip, Collapse, Menu, MenuItem, Typography } from "@mui/material";
+import { Box, Button, Chip, Collapse, Typography } from "@mui/material";
+import { BottomSheetMenu } from "../../components/common/BottomSheetMenu";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
 import GroupOutlinedIcon from "@mui/icons-material/GroupOutlined";
@@ -193,21 +194,19 @@ export const GroupMail = ({
         >
           {mode}
         </Button>
-        <Menu anchorEl={sortAnchorEl} open={Boolean(sortAnchorEl)} onClose={() => setSortAnchorEl(null)}>
-          {threadFilterOptions.map((option) => (
-            <MenuItem
-              key={option}
-              selected={option === mode}
-              onClick={() => {
-                setSortAnchorEl(null);
-                setFilterMode?.(option);
-              }}
-              sx={{ minHeight: 44 }}
-            >
-              {option}
-            </MenuItem>
-          ))}
-        </Menu>
+        <BottomSheetMenu
+          anchorEl={sortAnchorEl}
+          open={Boolean(sortAnchorEl)}
+          onClose={() => setSortAnchorEl(null)}
+          title="Sort threads"
+          ariaLabel="Sort threads"
+          items={threadFilterOptions.map((option) => ({
+            id: option,
+            label: option,
+            selected: option === mode,
+            onSelect: () => setFilterMode?.(option),
+          }))}
+        />
       </Box>
       <Button
         onClick={() => setShowMembers((value) => !value)}

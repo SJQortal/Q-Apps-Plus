@@ -1,85 +1,77 @@
+/**
+ * App-wide toasts on MUI Snackbar + Alert (replaces react-toastify, Bundle
+ * §5.7). The redux notification is consumed in an effect, never during render
+ * (Bugs #22), and queued so two quick messages both show.
+ */
+import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { toast, ToastContainer, Zoom, Slide } from 'react-toastify'
+import { Alert, Snackbar, useMediaQuery, useTheme } from '@mui/material'
 import { removeNotification } from '../../../state/features/notificationsSlice'
-import 'react-toastify/dist/ReactToastify.css'
 import { RootState } from '../../../state/store'
+
+type Severity = 'success' | 'error' | 'info'
+
+interface Toast {
+  key: number
+  severity: Severity
+  message: string
+}
+
+const AUTO_HIDE_MS: Record<Severity, number> = { success: 4000, error: 6000, info: 2500 }
+
+let nextKey = 1
 
 const Notification = () => {
   const dispatch = useDispatch()
-
+  const theme = useTheme()
+  const isPhone = useMediaQuery(theme.breakpoints.down('sm'))
   const { alertTypes } = useSelector((state: RootState) => state.notifications)
+  const [queue, setQueue] = useState<Toast[]>([])
+  const [current, setCurrent] = useState<Toast | null>(null)
+  const [open, setOpen] = useState(false)
 
-  if (alertTypes.alertError) {
-    toast.error(`❌ ${alertTypes?.alertError}`, {
-      position: 'bottom-right',
-      autoClose: 4000,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-      progress: undefined,
-      icon: false
-    })
+  useEffect(() => {
+    const incoming: Toast[] = []
+    if (alertTypes.alertError) incoming.push({ key: nextKey++, severity: 'error', message: alertTypes.alertError })
+    if (alertTypes.alertSuccess) incoming.push({ key: nextKey++, severity: 'success', message: alertTypes.alertSuccess })
+    if (alertTypes.alertInfo) incoming.push({ key: nextKey++, severity: 'info', message: alertTypes.alertInfo })
+    if (!incoming.length) return
+    setQueue((previous) => [...previous, ...incoming])
     dispatch(removeNotification())
-  }
-  if (alertTypes.alertSuccess) {
-    toast.success(`✔️ ${alertTypes?.alertSuccess}`, {
-      position: 'bottom-right',
-      autoClose: 4000,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-      progress: undefined,
-      icon: false
-    })
-    dispatch(removeNotification())
-  }
-  if (alertTypes.alertInfo) {
-    toast.info(`${alertTypes?.alertInfo}`, {
-      position: 'top-right',
-      autoClose: 1300,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-      progress: undefined,
-      theme: 'light'
-    })
-    dispatch(removeNotification())
-  }
+  }, [alertTypes.alertError, alertTypes.alertInfo, alertTypes.alertSuccess, dispatch])
 
-  if (alertTypes.alertInfo) {
-    return (
-      <ToastContainer
-        position="top-right"
-        autoClose={2000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="light"
-        toastStyle={{ fontSize: '1rem' }}
-        transition={Slide}
-      />
-    )
+  useEffect(() => {
+    if (current || !queue.length) return
+    setCurrent(queue[0])
+    setQueue((previous) => previous.slice(1))
+    setOpen(true)
+  }, [current, queue])
+
+  const handleClose = (_event?: unknown, reason?: string) => {
+    if (reason === 'clickaway') return
+    setOpen(false)
   }
 
   return (
-    <ToastContainer
-      transition={Zoom}
-      position="bottom-right"
-      autoClose={false}
-      hideProgressBar={false}
-      newestOnTop={false}
-      closeOnClick
-      rtl={false}
-      draggable
-      pauseOnHover
-    />
+    <Snackbar
+      key={current?.key}
+      open={open && Boolean(current)}
+      autoHideDuration={current ? AUTO_HIDE_MS[current.severity] : null}
+      onClose={handleClose}
+      slotProps={{ transition: { onExited: () => setCurrent(null) } }}
+      anchorOrigin={{ vertical: 'bottom', horizontal: isPhone ? 'center' : 'right' }}
+      sx={{ bottom: { xs: 'calc(72px + env(safe-area-inset-bottom, 0px))', sm: 24 } }}
+    >
+      <Alert
+        severity={current?.severity || 'info'}
+        variant="filled"
+        onClose={() => setOpen(false)}
+        role={current?.severity === 'error' ? 'alert' : 'status'}
+        sx={{ width: '100%', maxWidth: 480, fontSize: '0.9375rem', alignItems: 'center' }}
+      >
+        {current?.message}
+      </Alert>
+    </Snackbar>
   )
 }
 

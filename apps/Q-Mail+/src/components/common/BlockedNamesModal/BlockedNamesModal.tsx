@@ -1,99 +1,102 @@
 import React, { useState } from 'react'
-import {
-  Box,
-  Button,
-  Modal,
-  Typography,
-  SelectChangeEvent,
-  ListItem,
-  List,
-  useTheme
-} from '@mui/material'
-import {
-  StyledModal,
-  ModalContent,
-  ModalText
-} from './BlockedNamesModal-styles'
+import { Button, List, ListItem, ListItemText, Typography } from '@mui/material'
+import { ResponsiveDialog } from '../ResponsiveDialog'
+import { EmptyState, ErrorState, ListSkeleton } from '../../../layout/states'
 
 interface PostModalProps {
   open: boolean
   onClose: () => void
 }
 
-export const BlockedNamesModal: React.FC<PostModalProps> = ({
-  open,
-  onClose
-}) => {
-  const [blockedNames, setBlockedNames] = useState<string[]>([])
-  const theme = useTheme()
+/** Settings → Blocked names: the Qortal `blockedNames` list, with Remove per name. */
+export const BlockedNamesModal: React.FC<PostModalProps> = ({ open, onClose }) => {
+  const [blockedNames, setBlockedNames] = useState<string[] | null>(null)
+  const [error, setError] = useState<string>('')
+  const [removing, setRemoving] = useState<string>('')
+
   const getBlockedNames = React.useCallback(async () => {
+    setError('')
     try {
-      const listName = `blockedNames`
       const response = await qortalRequest({
         action: 'GET_LIST_ITEMS',
-        list_name: listName
+        list_name: 'blockedNames'
       })
-      setBlockedNames(response)
-    } catch (error) {
-      onClose()
+      setBlockedNames(Array.isArray(response) ? response : [])
+    } catch (err: any) {
+      setBlockedNames([])
+      setError(err?.message || 'Could not read the blocked names list')
     }
   }, [])
 
   React.useEffect(() => {
-    getBlockedNames()
-  }, [getBlockedNames])
+    if (open) void getBlockedNames()
+  }, [getBlockedNames, open])
 
   const removeFromBlockList = async (name: string) => {
+    setRemoving(name)
     try {
       const response = await qortalRequest({
         action: 'DELETE_LIST_ITEM',
         list_name: 'blockedNames',
         item: name
       })
-
       if (response === true) {
-        setBlockedNames((prev) => prev.filter((n) => n !== name))
+        setBlockedNames((prev) => (prev || []).filter((n) => n !== name))
       }
-    } catch (error) {}
+    } catch {
+      /* the name stays in the list; the user can try again */
+    } finally {
+      setRemoving('')
+    }
   }
 
   return (
-    <StyledModal open={open} onClose={onClose}>
-      <ModalContent>
-        <ModalText>Manage blocked names</ModalText>
-        <List
-          sx={{
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            flex: '1',
-            overflow: 'auto'
-          }}
-        >
-          {blockedNames.map((name, index) => (
+    <ResponsiveDialog
+      open={open}
+      onClose={onClose}
+      title="Blocked names"
+      maxWidth="xs"
+      actions={
+        <Button variant="contained" onClick={onClose}>
+          Done
+        </Button>
+      }
+    >
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        Mail from these names is hidden everywhere in Qortal.
+      </Typography>
+      {blockedNames === null ? (
+        <ListSkeleton rows={3} />
+      ) : error ? (
+        <ErrorState title="Could not load the list" message={error} onRetry={getBlockedNames} />
+      ) : blockedNames.length === 0 ? (
+        <EmptyState title="No blocked names" hint="Names you block from a message show up here." />
+      ) : (
+        <List disablePadding sx={{ width: '100%' }}>
+          {blockedNames.map((name) => (
             <ListItem
-              key={name + index}
-              sx={{
-                display: 'flex'
-              }}
+              key={name}
+              disableGutters
+              sx={{ minHeight: 48, gap: 1 }}
+              secondaryAction={
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  size="small"
+                  disabled={removing === name}
+                  onClick={() => removeFromBlockList(name)}
+                  aria-label={`Unblock ${name}`}
+                  sx={{ minHeight: 44 }}
+                >
+                  Unblock
+                </Button>
+              }
             >
-              <Typography>{name}</Typography>
-              <Button
-                sx={{
-                  backgroundColor: theme.palette.primary.light,
-                  color: theme.palette.text.primary
-                }}
-                onClick={() => removeFromBlockList(name)}
-              >
-                Remove
-              </Button>
+              <ListItemText primary={name} slotProps={{ primary: { sx: { overflowWrap: 'anywhere', pr: 10 } } }} />
             </ListItem>
           ))}
         </List>
-        <Button variant="contained" color="primary" onClick={onClose}>
-          Close
-        </Button>
-      </ModalContent>
-    </StyledModal>
+      )}
+    </ResponsiveDialog>
   )
 }
