@@ -7,6 +7,12 @@ import {
   withPublishedReadState,
   type ReadStateMap,
 } from '../../utils/readState'
+import {
+  withArchived,
+  withPublishedArchived,
+  withUnarchived,
+  type ArchivedMap,
+} from '../../utils/archiveState'
 const favoritesLocal = localForage.createInstance({
   name: 'q-blog-favorites'
 })
@@ -36,6 +42,9 @@ interface GlobalState {
   readState: ReadStateMap
   /** The address `readState` was loaded for ('' until loaded); persistence is gated on it. */
   readStateAddress: string
+  /** Locally archived received mail (src/utils/archiveState.ts), loaded per account address. */
+  archived: ArchivedMap
+  archivedAddress: string
 }
 const initialState: GlobalState = {
   posts: [],
@@ -53,7 +62,9 @@ const initialState: GlobalState = {
   hashMapMailMessages: {},
   hashMapSavedSubjects: {},
   readState: {},
-  readStateAddress: ''
+  readStateAddress: '',
+  archived: {},
+  archivedAddress: ''
 }
 
 export interface BlogPost {
@@ -245,6 +256,26 @@ export const mailSlice = createSlice({
         action.payload.at
       )
     },
+    setArchivedState: (
+      state,
+      action: { payload: { address: string; entries: ArchivedMap } }
+    ) => {
+      state.archivedAddress = action.payload.address || ''
+      state.archived = action.payload.entries || {}
+    },
+    archiveIds: (state, action: { payload: { ids: string[]; at?: number } }) => {
+      state.archived = withArchived(
+        state.archived,
+        action.payload.ids,
+        action.payload.at
+      )
+    },
+    unarchiveIds: (state, action: { payload: { ids: string[] } }) => {
+      state.archived = withUnarchived(state.archived, action.payload.ids)
+    },
+    applyPublishedArchived: (state, action: { payload: ArchivedMap }) => {
+      state.archived = withPublishedArchived(state.archived, action.payload)
+    },
     updateInHashMap: (state, action) => {
       const { id } = action.payload
       const post = action.payload
@@ -407,12 +438,18 @@ export const {
   setReadState,
   markRead,
   markUnread,
-  applyPublishedReadState
+  applyPublishedReadState,
+  setArchivedState,
+  archiveIds,
+  unarchiveIds,
+  applyPublishedArchived
 } = mailSlice.actions
 
 export const selectReadState = (state: RootState): ReadStateMap =>
   state.mail.readState
 export const selectReadStateAddress = (state: RootState): string =>
   state.mail.readStateAddress
+export const selectArchived = (state: RootState): ArchivedMap =>
+  state.mail.archived
 
 export default mailSlice.reducer
