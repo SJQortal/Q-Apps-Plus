@@ -1,107 +1,149 @@
 ---
 name: qplus-app
-description: Full pass on one Q-Apps+ app — platform upgrade to React 19.3 + MUI 9.4, deep-dive audit, plan, Hub 3.0 theme kit and Settings page, Qortal efficiency fixes, UX redesign, obvious features, tests, and a publish zip. For Q-Mintership+ it drives the phased React rewrite. Use when asked to redesign, upgrade, audit or "do" an app in apps/ (e.g. "do Q-Mail+", "run the overnight pass on Names+").
+description: Build one Q-Apps+ app to the Q-Share+ standard, in rounds — platform upgrade to React 19.3 + MUI 9.4, audit, theme kit and Settings, efficiency, mobile-first redesign and features, screenshot check, quality, a Hub Dev Mode check with real data, Simon's requests, and release. For Q-Mintership+ it drives the phased React rewrite. Use when asked to redesign, upgrade, audit, test in Hub or "do" an app in apps/ (e.g. "do Q-Mail+", "run the next round on Names+").
 ---
 
-# Redesign pass on one + app
+# Building a + app to the Q-Share+ standard
 
-Work on exactly one app per pass, and follow the steps in order. Write findings into `docs/apps/<App+>.md` as you go, so the brief is always current and another session can pick up where you stopped.
+**Q-Share+ is the reference.** It was published as 1.0.0 on 2026-09-30 after six rounds, and its brief, `docs/apps/Q-Share+.md`, shows what every section looks like when it's done. When in doubt, do what Q-Share+ did, and read its code before writing your own (its parts are listed under Round 2).
 
-## Overnight mode (unattended cloud runs)
+Work on one app per session. Write findings into `docs/apps/<App+>.md` as you go, so the brief is always current and the next session can pick up where you stopped. A session may cover several rounds. Record each round as its own subsection under **Done**.
 
-When the prompt says **overnight mode**, the goal is a publishable app by morning, even if the session stops early. So change the order:
+## The rounds
 
-1. **Checkpoint first:** branch → baseline (step 1) → platform upgrade (1b) → test harness → theme kit + Settings page with the four themes. `npm run build` must pass, and so must tests if present. `scripts/build-zip.sh <App+>` must produce a zip.
-2. **Open the PR now:** push the branch and open the PR (step 6 format) with "Checkpoint reached" in the body.
-3. **Then continue:** deep-dive audit (2), plan (3), efficiency fixes, UX redesign and features (4). **Push after every commit**, so the PR always holds your latest working state. Never leave the branch with a failing build. If something can't be finished, revert it rather than leave it half-done.
-4. **Finish:** fill in the brief's Done and Follow-ups, update the PR description, and bump the version and changelog.
+| Round | Where | What it adds | Ends with |
+|---|---|---|---|
+| 1. Foundation | cloud or local | baseline, platform upgrade, test harness, theme kit + Settings, audit, efficiency, layout | checkpoint PR, then a working redesign |
+| 2. Features and phone | cloud or local | data writes pinned by tests, the phone shell, the obvious missing features, screenshot config | the screenshot check passing at all five sizes |
+| 3. Quality | cloud or local | accessibility (axe), contrast, Settings sync, changelog, README, a review of the whole diff | 0 axe violations, review findings fixed |
+| 4. Hub check | **local only** | every screen with real data in a test Hub, the Hub & GO pitfalls, measured call counts, an audit against Hub's source | the Hub check section in the brief |
+| 5. Simon's requests | local | what Simon asks for after trying the app | his requests done and checked in Hub |
+| Release | Simon + local | version, Published line, README merge-back section, PR merged | the zip Simon publishes |
 
-Data-code changes still need the data contract from the audit first (CLAUDE.md rule 1). The checkpoint steps don't touch data code.
+Cloud sessions can't reach Hub, so they do rounds 1–3 and leave round 4 for a local session. **Never call an app finished before its Hub check:** most of Q-Share+'s serious bugs only showed up there.
 
-## 0. Load context
+## Done means (the Q-Share+ bar)
 
-Read `CLAUDE.md`, `docs/PLATFORM.md`, `docs/MIGRATION-NOTES.md`, `docs/DESIGN.md`, `docs/QORTAL.md`, `shared/hub-theme/README.md` and the app's brief. Skim the matching Torq files in `shared/reference/torq/` (theme, Settings page, QDN search cache, test setup).
+An app is ready for Simon to publish when all of this is true, and the brief records it:
 
-## 1. Baseline
+- [ ] **Stack:** React 19.3 + MUI 9.4 in their own commits. `npm run build`, `npm test` and `npm run lint` pass, and so does `scripts/sync-theme.sh --check`.
+- [ ] **Data:** the data contract is in the brief, and every write (publish payloads, identifiers, JSON shapes) is pinned by tests to the original app's format. New data is additive only (CLAUDE.md rule 1).
+- [ ] **Efficiency:** no `limit: 0`, every list paged, searches deduped and cached, media lazy, polling polite, heavy screens code-split. There's a table of measured calls on first load for each main screen, before and after.
+- [ ] **Look:** four themes, Hub 2.0 = the original look, and a Settings page (Account, Appearance, the app's own sections, Sync, About with changelog), following docs/DESIGN.md.
+- [ ] **Phone:**
+  - every point in docs/DESIGN.md → Mobile: a bottom bar with 5 or fewer items, a floating main action (not in landscape), a header that hides on scroll, sheets and full-screen dialogs, forms that stay usable above the keyboard, 44 px targets, safe areas, the Hub frame's height, and a compact landscape layout;
+  - plus pull-to-refresh where it feels natural.
+- [ ] **Screenshot check:** `scripts/screens.mjs <App+>` in all four themes at all five sizes shows 0 console errors, 0 sideways overflow, 0 unlabelled buttons and 0 axe violations.
+- [ ] **Hub check:**
+  - every main screen with real data in a test Hub, at 1440, 700, 390×844 touch, 360×740 touch and 844×390 touch;
+  - Hub's light/dark switch;
+  - each Hub & GO pitfall in docs/QORTAL.md checked;
+  - Qortal calls counted with `hub-cdp.mjs requests` and `calls`;
+  - the same data showing as in the original app.
+- [ ] **Review:** a final review of the whole diff, by dimension (correctness, data compatibility, efficiency, mobile/UX, accessibility, security), with each finding verified before it's fixed.
+- [ ] **Paperwork:** the brief follows the template below; the README has its + section; there's a CHANGELOG and a version; Follow-ups lists numbered questions for Simon.
 
-Create your branch first, e.g. `git switch -c names-plus/pass-1` (naming rules in CLAUDE.md → Git). `main` is protected, so work never goes there directly.
+## Round 1: foundation
 
-```bash
-cd "apps/<App+>" && npm ci && npm run build   # Q-Mintership+ has no build
-```
+**Overnight mode** (the prompt says so, or Simon is asleep): reach a publishable checkpoint first, so there's a working app even if the session stops early. The checkpoint is: branch → baseline → platform upgrade → test harness → theme kit + Settings with four themes. `npm run build`, the tests and `scripts/build-zip.sh <App+>` must pass. Then push and open the PR, with "Checkpoint reached" in its body, and **push after every commit** from then on. Never leave the branch with a failing build, and revert anything you can't finish.
 
-Record the result, the dist size and the biggest chunk if they differ from the brief. If the baseline fails, fix only what's needed to build, in its own commit, and note it.
+1. **Load context.** Read CLAUDE.md, docs/PLATFORM.md, docs/MIGRATION-NOTES.md, docs/DESIGN.md, docs/QORTAL.md (including the pitfalls), `shared/hub-theme/README.md`, the app's brief, and docs/apps/Q-Share+.md. Skim the matching Torq files in `shared/reference/torq/`.
+2. **Baseline.** Work on the app's branch (CLAUDE.md → Git). Run `cd "apps/<App+>" && npm ci && npm run build`, then record the dist size and the biggest chunk. If the baseline fails, fix only what's needed to build, in its own commit.
+3. **Platform upgrade.** Follow "How each app upgrades" in docs/PLATFORM.md: dependencies, codemods, `scripts/check-mui-icons.sh <App+>`, type errors. Commit it on its own (`<App+>: upgrade to React 19.3 and MUI 9.4`). **Then open the app in a browser or Hub before going on.** A green build isn't enough: React 19 has blanked apps at runtime (an audio player in Q-Shop+).
+4. **Harness.** vitest + jsdom + a `qortalRequest` mock that answers by action (docs/QORTAL.md → Testing).
+5. **Theme kit + Settings.** Run `mkdir "apps/<App+>/src/hub-theme" && scripts/sync-theme.sh`, then follow the kit README. Never edit the copied files. Build Hub 2.0 from the app's old theme. If the kit needs a change, make it in `shared/hub-theme` and commit it as `Repo: …`.
+6. **Audit.** Read the whole app, not a sample, and fill in the brief's Audit:
+   - architecture map;
+   - **data contract** (binding; finish it before any data change);
+   - Qortal call inventory: every `limit: 0`, poll, N+1 and uncached repeat, plus the searches on first load;
+   - performance: chunks and what's in them;
+   - UX problems;
+   - bugs, with file:line;
+   - missing features.
+   Rank each finding by user impact × effort.
+7. **Plan.** Write the rounds you intend into the brief's Plan. Defer anything risky (money, names or encryption code; major rewrites) to Follow-ups with a reason. Don't stop for approval.
+8. **Efficiency and layout.** Do the top efficiency fixes with measured numbers, then the Hub 3.0 layout of the main screens, mobile-first.
 
-## 1b. Platform upgrade to React 19.3 + MUI 9.4
+Q-Mintership+ is rewritten instead: follow the phased Rewrite plan in its brief instead of steps 3 and 8. Each session does one phase and ends with a working app and a PR.
 
-Follow "How each app upgrades" in `docs/PLATFORM.md`:
-- bump the dependencies and add the qapp-core workaround where needed;
-- run the codemods, then `scripts/check-mui-icons.sh <App+>`;
-- clear the new type errors, then build and preview.
+## Round 2: features and the phone shell
 
-Commit this on its own (`<App+>: upgrade to React 19.3 and MUI 9.4`) before anything else, so the redesign is done once on the final stack. Record the before/after type-error counts and bundle sizes in the brief.
+- **Pin data writes first.** Before touching a publish flow, write a pure payload builder and tests that pin it to the original resource shapes (Q-Share+ `utils/publishPayload.ts`).
+- **Reuse Q-Share+'s parts.** If `shared/qplus-kit/` exists, install it the way the theme kit is installed. Otherwise read the Q-Share+ file and adapt it; don't import across `apps/`.
+  - phone shell: `components/common/mobile/BottomSheet.tsx` and `ResponsiveDialog.tsx`, `components/layout/BottomNav/`, `components/layout/Navbar/useHideOnScroll.ts`, and the hooks `usePhoneLayout`, `useVisualViewport`, `usePullToRefresh` and `useSafeBack`, plus `utils/hubFrame.ts`;
+  - names: `NameSwitcher.tsx` (search above 15 names), `NameAvatar.tsx` (loads only in view), `NameSuggestField.tsx` with `utils/nameSearch.ts`;
+  - Qortal: `utils/qdnSearch.ts` (paged, deduped, cached), `utils/hubErrors.ts` (declines in 12 languages), `utils/qortalLinks.ts` (deep links with `+`), `utils/settingsQdn.ts` (Settings sync), `hooks/useFileOnNode.ts`;
+  - states and extras: `EmptyState.tsx`, `PageRetry.tsx`, `ErrorBoundary.tsx`, `ChangelogDialog.tsx`, `ClearFieldButton.tsx`, `ListViewToggle.tsx`, `utils/zip.ts`.
+- **Features.** Build the obvious missing features from the audit, most valuable first. Use local-only state (localStorage/IndexedDB) where you can, and new QDN data only with its own prefix.
+- **Screenshot config.** Copy `apps/Q-Share+/e2e/screens.config.mjs` to the app, with fixtures that cover the app's real cases (long titles, names with `+` and spaces, empty and error states). Run `scripts/screens.mjs <App+>` and fix what it reports. Record the matrix in the brief.
 
-**Q-Mintership+ is different:** it isn't upgraded, it's rewritten. Follow the phased **Rewrite plan** in its brief instead of steps 1b and 4. One session does one phase and ends with a working app and a PR.
+## Round 3: quality
 
-## 2. Deep-dive audit (write it into the brief's "Audit" section)
+- Get to 0 axe violations with `scripts/screens.mjs` (axe-core as a dev dependency), and 4.5:1 contrast in all four themes. Kit colour changes are `Repo:` commits.
+- Add Settings sync (Torq's and Q-Share+'s `settingsQdn.ts`), a changelog dialog, and the README's + section.
+- Review the whole diff by dimension, verify each finding before fixing it, and fix the confirmed ones one commit at a time.
 
-Read the whole app, not a sample. Produce:
+## Round 4: the Hub check (local sessions only)
 
-- **Architecture map:** entry point, routes and pages, state stores, the main components, and where Qortal is called.
-- **Data contract:** every QDN service and identifier pattern the app reads or writes, with the JSON shape of each. This list is binding (ground rule 1). Finish it before any data-layer change.
-- **Qortal call inventory:** each `qortalRequest` action and direct `fetch('/…')`, when it fires, and how often. Count the searches on first load. Mark every `limit: 0`, polling loop, N+1 pattern and uncached repeat.
-- **Performance:** the biggest chunks and what's in them (`npx vite build --mode production` output, or a quick `rollup-plugin-visualizer` run you don't commit), images loaded at full size, and re-render hot spots.
-- **UX problems:** confusing flows, missing loading, empty and error states, phone and small-window breakage, accessibility gaps, and unclear copy.
-- **Bugs:** anything broken you find, with file:line.
-- **Missing features:** what users of this kind of app obviously expect. Weigh the ideas already in the brief.
+Follow docs/HUB-TESTING.md: a test Hub next to the normal one, the app's dev server through the node's dev proxy, and `scripts/hub-cdp.mjs`.
 
-Rank each finding by user impact × effort.
+1. **Find real test data** with read-only GETs on the node (`/arbitrary/resources/search`, `/names/…`): items of every kind the app shows, odd names (spaces, `+`, `/`, non-ASCII), long threads, and deleted or unreachable items.
+2. **Walk every screen** at the five sizes (`size` with `--touch` for the phones), in four themes and in Hub light and dark. Count calls with `requests` and `calls`, and compare with the original app in a second tab (`qortal://APP/<Original>`).
+3. **Check every Hub & GO pitfall** in docs/QORTAL.md.
+4. **Audit against Hub's source.** Read how Hub handles the requests the app uses: `/home/simon-james/Desktop/Qortal GO/Qortal-Hub`, read only. Look at timeouts, error texts, public-node behaviour and encoding. Verify each finding before fixing it.
+5. **Fix, then re-test in Hub.** Finish with the review from round 3 over the new commits.
+6. **Writes need Simon.** Ask before anything that publishes, sends, saves to QDN or spends QORT, even on Tester GO. Hub shows its own confirmation too. Saves to disk through Hub's prompt are fine.
 
-## 3. Plan (write it into the brief's "Plan" section)
+Record it in the brief as Q-Share+ did (its "Hub Dev Mode check" section):
 
-This pass always includes:
+- how the app was driven;
+- screens, sizes and calls measured;
+- what was found and fixed, one line each;
+- the exact result of any open question;
+- what still "needs a phone (GO)".
 
-1. A test harness (`vitest` + `jsdom`) with a `qortalRequest` mock, if the app has none (see docs/QORTAL.md).
-2. The theme kit, a Settings page and the four themes (DESIGN.md checklist).
-3. The top efficiency fixes (every `limit: 0`, request dedupe and cache, lazy media, code-splitting).
-4. A UX redesign of the main screens to the Hub 3.0 layout, **mobile-first**, meeting every point in docs/DESIGN.md → Mobile (GO and phones).
-5. 2–4 of the most obvious missing features.
+## Round 5: Simon's requests
 
-Defer anything risky, such as major dependency upgrades or rewriting money or encryption code, to "Follow-ups" with a reason. Don't stop to ask for approval. The plan exists so Simon can review it later.
+Simon tries the app in Hub and asks for changes. Build them, check them in Hub at the five sizes, and record them as their own round.
 
-## 4. Implement in small commits
+## Release
 
-Order (after the platform upgrade in 1b): harness → theme kit → Settings → efficiency → layout/UX → features. After each step:
+1. Simon publishes `release/<App+>.zip` (from `scripts/build-zip.sh <App+>`) as `APP` under the app's name.
+2. Then add the **Published** line to the top of the brief, e.g. `Published: 1.0.0 on 2026-10-02, built from commit abc1234`.
+3. Version rules:
+   - Every + app has its own series: the first published release is `1.0.0`, and each later published update bumps the last number (`1.0.1`, …). Simon may pick `1.1.0`.
+   - Never use suffixes like `-plus.1`.
+   - Bump only after the current version is published; until then, add to its changelog entry.
+   - Keep `package.json`, Settings → About and the changelog in step.
+4. **README:** add a "Merging this back into <Original>" section like Q-Share+'s: the subtree history, how to merge, the data notes, and what is specific to the + build. Optionally, offer a `<slug>/for-upstream` branch made with `git subtree split`.
+5. Simon merges the PR (merge commit). Never force-push; Q-Share+'s one history rewrite had Simon's explicit OK.
 
-```bash
-npm run build && (npm test --if-present) && (npm run lint --if-present)
-cd ../.. && scripts/sync-theme.sh --check
-git add -A "apps/<App+>" "docs/apps/<App+>.md" && git commit -m "<App+>: <what changed>"
-```
+## Working with parallel agents
 
-For the theme kit, create the opt-in folder and sync (`mkdir "apps/<App+>/src/hub-theme" && scripts/sync-theme.sh`). Then follow `shared/hub-theme/README.md`. Never edit the copied files. If the kit needs a change, change `shared/hub-theme`, run `scripts/check-theme-kit.sh` on an MUI 5 app and an MUI 7 app, and commit that as `Repo: …`.
+Only use parallel agents when the prompt allows workflows or ultracode.
 
-Guard rails:
+- Do the foundation (round 1 through the layout shell) with one agent.
+- Then fan out over **disjoint groups of files**: each agent in its own worktree on a local branch `<slug>/feat-<topic>`, tested and committed but not pushed.
+- Integrate the branches one at a time: merge, resolve conflicts, run build + lint + tests, push. Then delete the feature branch and its worktree.
+- Only one agent drives the test Hub.
+- Q-Share+ round 4 is the worked example: scout and audit, 8 agents fixing in parallel, then integration, re-test and a final review.
 
-- **Keep data compatibility** (CLAUDE.md rule 1). Leave the code for money, names, encryption and `SIGN_TRANSACTION` behaviourally identical, and add tests around anything you refactor near it.
-- **Measure efficiency work.** Every efficiency change needs a test or a recorded before/after number.
-- **Version and changelog.** Every + app has its own version series, separate from the upstream app's number:
-  - The first published release is `1.0.0`. Each later published update bumps the last number: `1.0.1`, `1.0.2`, and so on. Simon may pick `1.1.0` for a big release. Never use suffixes like `-plus.1`.
-  - Only bump after the current version has been published. Until then, keep adding to the current version's changelog entry.
-  - The brief's **Published** line (e.g. `Published: 1.0.0 on 2026-10-02`) says what's live. With no such line, nothing is published yet, and the version is `1.0.0`.
-  - Keep `package.json`, the Settings → About line and the changelog in step.
-  - Add a `CHANGELOG` entry and a changelog dialog reachable from Settings → About.
-- **Add a README section.** At the top of the app's README (create one if missing), say this is the + version, what it adds, and link the upstream repo.
+## Brief template
 
-## 5. Verify
+The headings Q-Share+'s brief uses, in order:
 
-- The build, tests and lint pass, and `scripts/sync-theme.sh --check` passes.
-- `scripts/build-zip.sh <App+>` produces a zip with `index.html` at the root (`unzip -l release/<App+>.zip | head`).
-- If a browser tool is available, run `npm run dev` or `npx vite preview` and check all four themes at 1280, 700 and 375 px, and that the console shows no errors beyond the ones expected outside Hub (no `qortalRequest`).
-- In a **local** session with Hub available, also test inside Hub Dev Mode through its debug port (`docs/HUB-TESTING.md`, `scripts/hub-cdp.mjs`). Ask Simon before any action that publishes or spends QORT. Without a node, Qortal calls fail, so use the test mocks or a dev-only mock of `qortalRequest`, and never commit a mock into production code paths.
+1. Title and one line on the app.
+2. **Published** and **Version on the branch** lines.
+3. Baseline at import, Notes, Feature ideas.
+4. **Audit:** Architecture map, Data contract, Qortal call inventory, Performance, UX problems, Bugs, Missing features.
+5. **Plan.**
+6. **Done:** one `###` subsection per round, with before/after tables, the screenshot matrix and the Hub check.
+7. **Follow-ups:** numbered questions for Simon, then next-pass ideas.
 
-## 6. Hand off
+## Guard rails
 
-- Fill in the brief's "Done" section, with numbers, and its "Follow-ups" section, including questions for Simon.
-- Commit, push the branch (`git push -u origin <branch>`) and open the PR: `gh pr create --base main --title "<App+>: React 19.3 / MUI 9.4 + redesign pass 1" --body-file <notes>`. The body summarises the audit's top findings, what changed, before/after numbers, and anything Simon should test in Hub. If `gh` fails, end your report with the branch name so Simon can click "Create PR".
-- Only update `docs/PROGRESS.md` if you are the only session working in the repo.
+- **Data compatibility** (CLAUDE.md rule 1): leave the code for money, names, encryption and `SIGN_TRANSACTION` behaving identically, and test anything you refactor near it.
+- **Measure efficiency work:** every efficiency change gets a test or a recorded before/after number.
+- **Don't drop upstream features** (rule 6), and never publish or spend QORT (rule 7).
+- **One logical change per commit.** Keep build, lint and tests green on every commit. No Claude attribution lines (CLAUDE.md → Git).
+- **Hand off:** fill in Done and Follow-ups, push, and open or update the PR. The PR body gives a short summary of what changed, the before/after numbers, and what Simon should check.
