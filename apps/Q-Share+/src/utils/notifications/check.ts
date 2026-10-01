@@ -2,15 +2,19 @@
  * One notification check: new comments on your shares and replies to your
  * comments, and your shares added to someone's collection. Reads only.
  *
- * Comments: one search for Q-Share comments first published since the last
- * check (Core's `after`), matched against your shares and comments by the
+ * Comments: Q-Share comments first published since the last check (Core's
+ * `after`), oldest first, matched against your shares and comments by the
  * keys in their identifiers. That covers comments written in the original
- * Q-Share too. Collections: one search for collections whose QDN description
- * carries your account's recipient marker (utils/recipientMarker.ts); only a
- * collection with a version not read before is fetched.
+ * Q-Share too. The window only moves up to the node's last block, so comments
+ * a syncing or offline node hasn't indexed yet are read once it has; when a
+ * check stops at its page limit, the next one carries on from there.
+ * Collections: one search for collections whose QDN description carries your
+ * account's recipient marker (utils/recipientMarker.ts); only a collection
+ * with a version not read before is fetched.
  *
- * The first check looks back a week and files what it finds as read, so a new
- * install starts with a history but no pile of unread items.
+ * The first check of each kind looks back a week (comments) or at what is
+ * there (collections) and files it as read, so the list starts with a history
+ * but no pile of unread items.
  */
 import { QSHARE_COLLECTION_BASE, QSHARE_COMMENT_BASE } from "../../constants/Identifiers";
 import { fetchCollection } from "../collections";
@@ -69,22 +73,39 @@ function commentNotification(
   };
 }
 
+/** The node's newest block time: comments up to it are indexed. Null when the node doesn't say. */
+async function indexedUpTo(): Promise<number | null> {
+  try {
+    const response = await fetch("/blocks/last", { method: "GET" });
+    if (!response.ok) return null;
+    const block = (await response.json()) as { timestamp?: unknown };
+    return typeof block?.timestamp === "number" ? block.timestamp : null;
+  } catch {
+    return null;
+  }
+}
+
 async function run(account: CheckAccount, options: CheckOptions): Promise<number> {
   const now = options.now ?? Date.now();
   const before = readNotifications(account.address);
-  const first = before.lastCheck === 0;
   const mine = new Set(account.names.map(lower));
   const hidden = new Set(options.hiddenNames.map(lower));
   const seen = new Set(before.seen);
   const versions = { ...before.collectionVersions };
   const found: AppNotification[] = [];
   let commentsCheckedTo = before.commentsCheckedTo;
+  let collectionsCheckedAt = before.collectionsCheckedAt;
 
   if (options.comments || options.collections) {
     const activity = await loadActivity(account.names, now);
 
     if (options.comments) {
-      const after = first ? now - FIRST_LOOK_BACK_MS : Math.max(0, before.commentsCheckedTo - COMMENT_SLACK_MS);
+      const firstLook = before.commentsCheckedTo === 0;
+      // At least 1: Core reads after=0 as no filter at all.
+      const after = Math.max(1, firstLook ? now - FIRST_LOOK_BACK_MS : before.commentsCheckedTo - COMMENT_SLACK_MS);
+      const indexedTo = await indexedUpTo();
+      let lastRead = 0;
+      let full = false;
       for (let page = 0; page < COMMENT_MAX_PAGES; page++) {
         const rows = await searchQdn(
           {
@@ -92,25 +113,33 @@ async function run(account: CheckAccount, options: CheckOptions): Promise<number
             identifier: QSHARE_COMMENT_BASE,
             prefix: true,
             after,
+            reverse: false,
             limit: COMMENT_PAGE,
             offset: page * COMMENT_PAGE,
           },
           { fresh: true }
         );
         for (const row of rows) {
+          lastRead = Math.max(lastRead, row.created ?? 0);
           const id = `c:${row.name}/${row.identifier}`;
           if (seen.has(id) || mine.has(lower(row.name)) || hidden.has(lower(row.name))) continue;
-          const item = commentNotification(row, activity, first, now);
+          const item = commentNotification(row, activity, firstLook, now);
           if (!item) continue;
           seen.add(id);
           found.push(item);
         }
-        if (rows.length < COMMENT_PAGE) break;
+        full = rows.length === COMMENT_PAGE;
+        if (!full) break;
       }
-      commentsCheckedTo = now;
+      // The next check starts where this one could vouch for: after the last
+      // comment read when the pages ran out, else up to the node's last block
+      // (or the same window again when the node didn't say).
+      const reached = full ? lastRead : Math.min(now, indexedTo ?? after + COMMENT_SLACK_MS);
+      commentsCheckedTo = Math.max(reached + (full ? COMMENT_SLACK_MS : 0), before.commentsCheckedTo, 1);
     }
 
     if (options.collections) {
+      const firstLook = before.collectionsCheckedAt === 0;
       // No `prefix`: Core applies it to every field, and the marker sits at the end of the description.
       const { rows } = await searchQdnAll(
         {
@@ -148,7 +177,7 @@ async function run(account: CheckAccount, options: CheckOptions): Promise<number
             kind: "collection",
             actor: row.name,
             time: version || now,
-            read: first,
+            read: firstLook,
             share: {
               name: item.name,
               identifier: item.identifier,
@@ -162,6 +191,7 @@ async function run(account: CheckAccount, options: CheckOptions): Promise<number
           });
         }
       }
+      collectionsCheckedAt = now;
     }
   }
 
@@ -171,9 +201,11 @@ async function run(account: CheckAccount, options: CheckOptions): Promise<number
   writeNotifications(account.address, {
     items: [...found.filter((i) => !known.has(i.id)), ...current.items],
     commentsCheckedTo: Math.max(commentsCheckedTo, current.commentsCheckedTo),
+    collectionsCheckedAt: Math.max(collectionsCheckedAt, current.collectionsCheckedAt),
     seen: [...new Set([...current.seen, ...seen])],
     collectionVersions: { ...current.collectionVersions, ...versions },
     lastCheck: now,
+    lastError: 0,
   });
   return found.filter((i) => !i.read).length;
 }
@@ -188,7 +220,14 @@ const inflight = new Map<string, Promise<number>>();
 export function checkNotifications(account: CheckAccount, options: CheckOptions): Promise<number> {
   const pending = inflight.get(account.address);
   if (pending) return pending;
-  const request = run(account, options);
+  const request = run(account, options).catch((error: unknown) => {
+    // Kept so the list can say the check failed instead of waiting forever.
+    writeNotifications(account.address, {
+      ...readNotifications(account.address),
+      lastError: options.now ?? Date.now(),
+    });
+    throw error;
+  });
   inflight.set(account.address, request);
   const forget = () => {
     if (inflight.get(account.address) === request) inflight.delete(account.address);

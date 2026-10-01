@@ -35,22 +35,28 @@ export interface AppNotification {
 
 export interface NotificationState {
   items: AppNotification[];
-  /** Comments first published before this were looked at (ms); 0 before the first check. */
+  /** Comments first published before this were looked at (ms); 0 before comments were first checked. */
   commentsCheckedTo: number;
-  /** Ids already turned into notifications, or passed over (your own, hidden names). */
+  /** When collections were last checked (ms); 0 before they were first checked. */
+  collectionsCheckedAt: number;
+  /** Ids already turned into notifications. */
   seen: string[];
   /** Collection versions already read: "name/identifier" → its `updated` time. */
   collectionVersions: Record<string, number>;
   /** When the last check finished (ms); 0 before the first. */
   lastCheck: number;
+  /** When the last check failed (ms), 0 once one succeeds: the list says so instead of waiting. */
+  lastError: number;
 }
 
 export const EMPTY_STATE: NotificationState = {
   items: [],
   commentsCheckedTo: 0,
+  collectionsCheckedAt: 0,
   seen: [],
   collectionVersions: {},
   lastCheck: 0,
+  lastError: 0,
 };
 
 const storageKey = (address: string) => `${NOTIFICATIONS_STORAGE_PREFIX}${address}`;
@@ -79,6 +85,7 @@ function sanitize(raw: unknown): NotificationState {
   return {
     items: items.map((i) => ({ ...i, read: Boolean(i.read) })).slice(0, MAX_ITEMS),
     commentsCheckedTo: typeof r.commentsCheckedTo === "number" ? r.commentsCheckedTo : 0,
+    collectionsCheckedAt: typeof r.collectionsCheckedAt === "number" ? r.collectionsCheckedAt : 0,
     seen: Array.isArray(r.seen) ? r.seen.filter((s): s is string => typeof s === "string").slice(-MAX_SEEN) : [],
     collectionVersions:
       r.collectionVersions && typeof r.collectionVersions === "object"
@@ -89,6 +96,7 @@ function sanitize(raw: unknown): NotificationState {
           )
         : {},
     lastCheck: typeof r.lastCheck === "number" ? r.lastCheck : 0,
+    lastError: typeof r.lastError === "number" ? r.lastError : 0,
   };
 }
 

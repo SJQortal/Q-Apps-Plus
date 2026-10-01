@@ -32,6 +32,8 @@ type Row = Record<string, unknown>;
 let comments: Row[];
 let collections: Row[];
 let bodies: Record<string, unknown>;
+/** The node's last block time; comments up to it are indexed. */
+let lastBlock: number;
 
 function serve() {
   mockFetch("/arbitrary/resources/search", (url: URL) => {
@@ -43,7 +45,9 @@ function serve() {
     if (q.get("service") === "BLOG_COMMENT") {
       const after = Number(q.get("after") ?? 0);
       const offset = Number(q.get("offset") ?? 0);
-      return comments.filter((c) => Number(c.created) > after).slice(offset, offset + Number(q.get("limit")));
+      const ordered = [...comments].sort((a, b) => Number(a.created) - Number(b.created));
+      if (q.get("reverse") !== "false") ordered.reverse();
+      return ordered.filter((c) => Number(c.created) > after).slice(offset, offset + Number(q.get("limit")));
     }
     if (q.get("service") === "DOCUMENT" && q.get("identifier") === "qshare_collection_") {
       return collections.filter((c) =>
@@ -53,6 +57,7 @@ function serve() {
     return [];
   });
   mockQortalAction("FETCH_QDN_RESOURCE", (p: Row) => bodies[`${p.name}/${p.identifier}`]);
+  mockFetch("/blocks/last", () => ({ height: 1, timestamp: lastBlock }));
 }
 
 const comment = (name: string, identifier: string, created: number): Row => ({
@@ -88,6 +93,7 @@ describe("notification checks", () => {
     comments = [];
     collections = [];
     bodies = {};
+    lastBlock = Number.MAX_SAFE_INTEGER;
     serve();
   });
 
@@ -174,6 +180,55 @@ describe("notification checks", () => {
     // The same version isn't read again.
     await check(NOW + 120_000);
     expect(qortalCallsFor("FETCH_QDN_RESOURCE")).toHaveLength(1);
+  });
+
+  it("reads comments oldest first and moves only as far as the node has indexed", async () => {
+    // The node is two hours behind (syncing): the window stops there.
+    lastBlock = NOW - 2 * 60 * 60_000;
+    await check(NOW);
+    expect(fetchCallsMatching(/service=BLOG_COMMENT.*after=/)[0]).toContain("reverse=false");
+    // A comment from an hour ago, indexed once the node caught up, is still found.
+    comments = [comment("bob", "qcomment_v1_qshare_def_metadata_base_late11", NOW - 60 * 60_000)];
+    lastBlock = NOW + 60_000;
+    expect(await check(NOW + 60_000)).toBe(1);
+    expect(fetchCallsMatching(/service=BLOG_COMMENT.*after=/).at(-1)).toContain(
+      `after=${NOW - 2 * 60 * 60_000 - COMMENT_SLACK_MS}`
+    );
+  });
+
+  it("carries on after the last comment read when a check stops at its page limit", async () => {
+    await check(NOW);
+    // 230 comments on other shares, then one on alice's: more than four pages of 50.
+    comments = Array.from({ length: 230 }, (_, i) =>
+      comment("carol", `qcomment_v1_qshare_zzzzzzzzzzzz_base_x${String(i).padStart(5, "0")}`, NOW + 1 + i)
+    );
+    comments.push(comment("bob", "qcomment_v1_qshare_def_metadata_base_last11", NOW + 500));
+    expect(await check(NOW + 60_000)).toBe(0);
+    expect(fetchCallsMatching(/service=BLOG_COMMENT.*after=/)).toHaveLength(5);
+    // The next check starts after the 200th comment (created NOW + 200) and finds alice's.
+    expect(await check(NOW + 120_000)).toBe(1);
+    expect(fetchCallsMatching(/service=BLOG_COMMENT.*after=/).at(-1)).toContain(`after=${NOW + 200}`);
+  });
+
+  it("gives a kind switched on later its own first look, filed as read", async () => {
+    comments = [comment("bob", "qcomment_v1_qshare_def_metadata_base_wk1111", NOW - DAY)];
+    await check(NOW, { comments: false, collections: true, hiddenNames: [] });
+    expect(await check(NOW + 60_000)).toBe(0);
+    expect(fetchCallsMatching(/service=BLOG_COMMENT.*after=/)[0]).toContain(
+      `after=${NOW + 60_000 - FIRST_LOOK_BACK_MS}`
+    );
+    expect(items()).toMatchObject([{ actor: "bob", read: true }]);
+  });
+
+  it("notes a failed check, and clears the note when one works", async () => {
+    mockFetch("/arbitrary/resources/search", () => {
+      throw new Error("node down");
+    });
+    await expect(check(NOW)).rejects.toThrow();
+    expect(readNotifications(ADDRESS)).toMatchObject({ lastError: NOW, lastCheck: 0 });
+    serve();
+    await check(NOW + 60_000);
+    expect(readNotifications(ADDRESS)).toMatchObject({ lastError: 0, lastCheck: NOW + 60_000 });
   });
 
   it("checks only what Settings asks for", async () => {
