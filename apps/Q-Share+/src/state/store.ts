@@ -3,6 +3,7 @@ import notificationsReducer from "./features/notificationsSlice";
 import authReducer from "./features/authSlice";
 import globalReducer from "./features/globalSlice";
 import fileReducer from "./features/fileSlice.ts";
+import collectionsReducer from "./features/collectionsSlice";
 
 export const store = configureStore({
   reducer: {
@@ -10,12 +11,12 @@ export const store = configureStore({
     auth: authReducer,
     global: globalReducer,
     file: fileReducer,
+    collections: collectionsReducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({
       serializableCheck: false,
     }),
-  preloadedState: undefined, // optional, can be any valid state object
 });
 
 // Define the RootState type, which is the type of the entire Redux state tree.

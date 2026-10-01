@@ -39,11 +39,11 @@
 
 :root[data-ui-theme='hub30'][data-theme='light'] {
   --qp-font: Inter,"Segoe UI",ui-sans-serif,system-ui,sans-serif;
-  --qp-primary: #84AFF0;
-  --qp-primary-dark: #5A8FE0;
-  --qp-primary-light: #8FB8F3;
-  --qp-on-primary: rgba(10, 18, 30, 0.92);
-  --qp-secondary: #6FA3F0;
+  --qp-primary: #2A56A5;
+  --qp-primary-dark: #234A8F;
+  --qp-primary-light: #84AFF0;
+  --qp-on-primary: #FFFFFF;
+  --qp-secondary: #2A56A5;
   --qp-success: rgb(94, 176, 73);
   --qp-error: rgb(177, 70, 70);
   --qp-bg: #DDD6CA;
@@ -51,7 +51,7 @@
   --qp-surface: #EEE7DC;
   --qp-elevated: #E2D9CB;
   --qp-text: rgba(21, 26, 35, 0.94);
-  --qp-text-secondary: rgba(88, 96, 110, 0.86);
+  --qp-text-secondary: #4A525E;
   --qp-divider: rgba(28, 36, 52, 0.12);
   --qp-hover: rgba(28, 36, 52, 0.06);
   --qp-selected: rgba(41, 121, 218, 0.12);
@@ -77,7 +77,7 @@
   --qp-primary: #1d9bf0;
   --qp-primary-dark: #1a8cd8;
   --qp-primary-light: #8ecdf8;
-  --qp-on-primary: #ffffff;
+  --qp-on-primary: #000000;
   --qp-secondary: #e7e9ea;
   --qp-success: #00ba7c;
   --qp-error: #f91880;
@@ -86,7 +86,7 @@
   --qp-surface: #000000;
   --qp-elevated: #16181c;
   --qp-text: #e7e9ea;
-  --qp-text-secondary: #71767b;
+  --qp-text-secondary: #8b9096;
   --qp-divider: #2f3336;
   --qp-hover: rgba(231, 233, 234, 0.1);
   --qp-selected: rgba(29, 155, 240, 0.12);

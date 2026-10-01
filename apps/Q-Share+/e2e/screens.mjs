@@ -1,0 +1,356 @@
+/**
+ * Visual check harness (DESIGN.md → Mobile → Check). Serves the production
+ * build with `vite preview`, mocks qortalRequest and the Core endpoints the
+ * app reads, and screenshots every screen at the required sizes in all four
+ * themes. It also reports console errors, sideways overflow, icon buttons
+ * without an accessible name, and how many Qortal calls each screen made.
+ *
+ *   npm run build && node e2e/screens.mjs [--only home,share] [--themes hub30]
+ *
+ * Nothing here publishes or touches a node: every call is answered locally.
+ * Screenshots land in e2e/shots/ (git-ignored).
+ */
+import { execSync, spawn } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const app = path.resolve(here, "..");
+const shots = path.join(here, "shots");
+mkdirSync(shots, { recursive: true });
+
+const globalRoot = execSync("npm root -g").toString().trim();
+const { chromium } = await import(path.join(globalRoot, "playwright", "index.mjs"));
+// axe-core (a dev dependency) runs on every capture: WCAG 2.1 A/AA plus best practices.
+const AXE_SOURCE = readFileSync(path.join(app, "node_modules", "axe-core", "axe.min.js"), "utf8");
+
+const args = process.argv.slice(2);
+const opt = (name, fallback) => {
+  const i = args.indexOf(`--${name}`);
+  return i >= 0 ? args[i + 1] : fallback;
+};
+const onlyScreens = opt("only", "").split(",").filter(Boolean);
+const themes = opt("themes", "hub30,hub20,black,white").split(",");
+const PORT = Number(opt("port", "4173"));
+// Hub's light or dark mode, which Hub 3.0 and Classic follow (--mode light).
+const MODE = opt("mode", "dark") === "light" ? "light" : "dark";
+
+const VIEWPORTS = [
+  { name: "360x740", width: 360, height: 740, mobile: true },
+  { name: "390x844", width: 390, height: 844, mobile: true },
+  { name: "844x390", width: 844, height: 390, mobile: true },
+  { name: "700", width: 700, height: 900, mobile: false },
+  { name: "1280", width: 1280, height: 800, mobile: false },
+];
+
+// ---- fixtures -----------------------------------------------------------
+const NAME = "Tester";
+const ID = (n) => `qshare_file_share-number-${n}_id00${n}_metadata`;
+const COUNT = 24;
+const now = Date.now();
+const rows = Array.from({ length: COUNT }, (_, i) => ({
+  name: i % 3 === 0 ? NAME : i % 3 === 1 ? "Alice Wonder" : "bob+builder",
+  service: "DOCUMENT",
+  identifier: ID(i + 1),
+  created: now - i * 3600_000 * 7,
+  updated: now - i * 3600_000 * 7,
+  size: 1200,
+  metadata: {
+    title: `Share number ${i + 1}: ${["Photos from the coast", "Firmware build", "Podcast episode", "Album art", "Long report with an unusually long title that wraps on phones"][i % 5]}`,
+    description: `**cat:${[6, 1, 3, 5, 6][i % 5]}**A description`,
+  },
+}));
+const body = (i) => ({
+  title: rows[i - 1].metadata.title,
+  version: 1,
+  fullDescription: "Shared files. Lists work: one, two.",
+  htmlDescription:
+    "<h2>About this share</h2><p>Some <strong>formatted</strong> text with a <a href=\"qortal://APP/Q-Tube\">link</a>.</p><ul><li>one</li><li>two</li></ul><pre class=\"ql-syntax\" spellcheck=\"false\">const x = 1;\n</pre>",
+  commentsId: `qshare_file__cm_id00${i}`,
+  category: String([6, 1, 3, 5, 6][(i - 1) % 5]),
+  files: [
+    { filename: "photo-of-the-coast.png", identifier: `qshare_file_p_${i}`, name: rows[i - 1].name, service: "FILE", mimetype: "image/png", size: 245_000 },
+    { filename: "notes.txt", identifier: `qshare_file_t_${i}`, name: rows[i - 1].name, service: "FILE", mimetype: "text/plain", size: 2_048 },
+    { filename: "manual-with-a-long-file-name-for-wrapping.pdf", identifier: `qshare_file_d_${i}`, name: rows[i - 1].name, service: "FILE", mimetype: "application/pdf", size: 3_400_000 },
+    { filename: "song.mp3", identifier: `qshare_file_a_${i}`, name: rows[i - 1].name, service: "FILE", mimetype: "audio/mpeg", size: 5_100_000 },
+  ],
+});
+let PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAQklEQVR42u3OMQEAAAgDINc/9Mzg14MGLUmHCgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFbzwB2GwADvYAAAAASUVORK5CYII=",
+  "base64"
+);
+
+/**
+ * Marks the one-time disclaimer as accepted before the app boots, in the same
+ * IndexedDB store localforage uses (database q-share-general, store
+ * keyvaluepairs, version 2), so no screen is captured under the consent dialog.
+ */
+function consentSource() {
+  return `
+    try {
+      const req = indexedDB.open('q-share-general', 2);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains('keyvaluepairs')) db.createObjectStore('keyvaluepairs');
+        if (!db.objectStoreNames.contains('local-forage-detect-blob-support')) db.createObjectStore('local-forage-detect-blob-support');
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        try { db.transaction('keyvaluepairs', 'readwrite').objectStore('keyvaluepairs').put(true, 'general-consent'); } catch (e) {}
+        db.close();
+      };
+    } catch (e) {}
+  `;
+}
+
+function qortalMockSource() {
+  return `
+    window._qdnTheme = '${MODE}';
+    window._qdnName = 'Q-Share+';
+    window.__calls = [];
+    const bodies = ${JSON.stringify(Object.fromEntries(rows.map((r, i) => [r.identifier, body(i + 1)])))};
+    const answer = async (p) => {
+      window.__calls.push(p.action + (p.identifier ? ':' + p.identifier : ''));
+      switch (p.action) {
+        case 'GET_USER_ACCOUNT': return { address: 'QTesterAddress', publicKey: 'pk' };
+        case 'GET_ACCOUNT_NAMES': return [{ name: '${NAME}', owner: 'QTesterAddress' }, { name: 'Second Name', owner: 'QTesterAddress' }];
+        case 'GET_PRIMARY_NAME': return '${NAME}';
+        case 'GET_QDN_RESOURCE_URL': return '/arbitrary/' + p.service + '/' + p.name + '/' + p.identifier;
+        case 'FETCH_QDN_RESOURCE': return bodies[p.identifier] || (p.identifier && p.identifier.startsWith('qshare_collection_') ? { version: 1, title: 'Holiday pack', description: 'Photos and notes', items: [{ name: '${NAME}', identifier: '${ID(1)}' }, { name: 'Alice Wonder', identifier: '${ID(2)}' }], created: ${now}, updated: ${now} } : null);
+        case 'GET_LIST_ITEMS': return p.list_name === 'followedNames' ? ['Alice Wonder'] : ['spammer'];
+        case 'LIST_QDN_RESOURCES': return [{ size: 1000 }];
+        case 'SHOW_PDF_READER': return true;
+        case 'GET_QDN_RESOURCE_STATUS': return { status: 'READY', percentLoaded: 100, localChunkCount: 1, totalChunkCount: 1 };
+        case 'GET_QDN_RESOURCE_PROPERTIES': return { filename: 'file.bin', mimeType: 'application/octet-stream' };
+        case 'ADD_LIST_ITEMS': case 'DELETE_LIST_ITEM': return true;
+        case 'PUBLISH_QDN_RESOURCE': case 'PUBLISH_MULTIPLE_QDN_RESOURCES': throw { error: 'User declined request' };
+        default: return null;
+      }
+    };
+    window.qortalRequest = answer;
+    window.qortalRequestWithTimeout = (p) => answer(p);
+  `;
+}
+
+async function routeCore(page) {
+  // The build uses relative asset paths (vite base ""), which Hub resolves
+  // itself. Under /share/x/y the preview server would 404, so map them back.
+  await page.route(/\/(assets\/[^/?]+|favicon\.ico)(\?.*)?$/, (route) => {
+    const url = new URL(route.request().url());
+    const m = url.pathname.match(/\/(assets\/[^/]+|favicon\.ico)$/);
+    if (!m || url.pathname === "/" + m[1]) return route.continue();
+    return route.continue({ url: `${url.origin}/${m[1]}${url.search}` });
+  });
+  await page.route("**/arbitrary/**", async (route) => {
+    const url = new URL(route.request().url());
+    const p = url.pathname;
+    const sp = url.searchParams;
+    page.__fetches.push(p + url.search);
+    // The Follow tooltip's size list (a plain resources list, not a search).
+    if (p.endsWith("/arbitrary/resources")) {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([{ size: 1000 }]) });
+    }
+    if (p.endsWith("/resources/search")) {
+      let list = rows;
+      const ident = sp.get("identifier") || "";
+      const name = sp.get("name");
+      const query = sp.get("query") || "";
+      if (ident.startsWith("qshare_collection_")) {
+        list = [
+          { name: NAME, service: "DOCUMENT", identifier: "qshare_collection_holiday-pack_ab12cd", created: now, updated: now, metadata: { title: "Holiday pack", description: "Photos and notes" } },
+          { name: "Alice Wonder", service: "DOCUMENT", identifier: "qshare_collection_tools_ef34gh", created: now - 86400000, updated: now - 86400000, metadata: { title: "Tools", description: "" } },
+        ];
+      } else if (sp.get("service") === "BLOG_COMMENT") {
+        const base = query.includes("_base_");
+        list = base
+          ? [1, 2].map((n) => ({ name: n === 1 ? "Alice Wonder" : NAME, service: "BLOG_COMMENT", identifier: `qcomment_v1_qshare_${"id001_metadata".slice(-12)}_base_c${n}0000`, created: now - n * 3600_000 }))
+          : [{ name: "bob+builder", service: "BLOG_COMMENT", identifier: `qcomment_v1_qshare_${"id001_metadata".slice(-12)}_reply_c10000_r1`, created: now - 1800_000 }];
+      } else if (ident.startsWith("qshare_file_") && ident.endsWith("_metadata")) {
+        list = rows.filter((r) => r.identifier === ident);
+      }
+      if (name) list = list.filter((r) => r.name === name);
+      if (sp.get("followedonly") === "true") list = list.filter((r) => r.name === "Alice Wonder");
+      const offset = Number(sp.get("offset") || 0);
+      const limit = Number(sp.get("limit") || 20);
+      if (sp.get("reverse") === "false") list = [...list].reverse();
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(list.slice(offset, offset + limit)) });
+    }
+    if (p.includes("/THUMBNAIL/")) return route.fulfill({ status: 200, contentType: "image/png", body: PNG });
+    if (p.includes("/BLOG_COMMENT/")) return route.fulfill({ status: 200, contentType: "text/plain", body: "A comment with enough words to wrap on a phone screen, and a qortal://APP/Q-Tube link." });
+    if (p.includes("/FILE/")) {
+      if (p.includes("_p_")) return route.fulfill({ status: 200, contentType: "image/png", body: PNG });
+      if (p.includes("_t_")) return route.fulfill({ status: 200, contentType: "text/plain", body: "Line one of the notes.\nLine two.\n" });
+      // PDFs open in Hub's reader, which checks for a PDF header.
+      if (p.includes("_d_")) return route.fulfill({ status: 200, contentType: "application/pdf", body: "%PDF-1.4\n%mock\n" });
+      return route.fulfill({ status: 200, contentType: "application/octet-stream", body: Buffer.alloc(16) });
+    }
+    return route.fulfill({ status: 404, body: "" });
+  });
+}
+
+const SCREENS = [
+  { key: "home", path: "/", after: async (page) => page.waitForSelector("li, [role=status]", { timeout: 8000 }).catch(() => {}) },
+  { key: "home-filters", path: "/", mobileOnly: true, after: async (page) => { await page.getByRole("button", { name: /^Filters/ }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
+  { key: "share", path: `/share/${NAME}/${ID(1)}`, after: async (page) => page.waitForSelector("text=Share number 1", { timeout: 8000 }).catch(() => {}) },
+  { key: "profile", path: `/channel/${encodeURIComponent("Alice Wonder")}`, after: async (page) => page.waitForSelector("li, [role=status]", { timeout: 8000 }).catch(() => {}) },
+  { key: "settings", path: "/settings" },
+  { key: "collections", path: "/collections", optional: true },
+  { key: "collection", path: `/collection/${NAME}/qshare_collection_holiday-pack_ab12cd`, optional: true },
+  { key: "publish", path: "/", after: async (page) => { await page.getByRole("button", { name: /share files/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(500); } },
+  { key: "account-menu", path: "/", after: async (page) => { await page.getByRole("button", { name: /account menu/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
+];
+
+function startPreview() {
+  // Its own process group, so the real vite process dies with the npx wrapper.
+  const child = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort", "--host", "127.0.0.1"], { cwd: app, stdio: ["ignore", "pipe", "pipe"], detached: true });
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("vite preview did not start")), 20000);
+    child.stdout.on("data", (d) => { if (String(d).includes("http")) { clearTimeout(t); resolve(child); } });
+    child.stderr.on("data", (d) => process.stderr.write(d));
+    child.on("exit", (c) => reject(new Error(`vite preview exited ${c}`)));
+  });
+}
+
+const preview = await startPreview();
+const browser = await chromium.launch({ headless: true });
+{
+  // A visible 64×64 avatar/thumbnail fixture, so avatars show up in the shots.
+  const gen = await browser.newPage({ viewport: { width: 64, height: 64 } });
+  await gen.setContent('<div style="width:64px;height:64px;background:linear-gradient(135deg,#f59e0b,#3b82f6)"></div>');
+  PNG = await gen.screenshot({ clip: { x: 0, y: 0, width: 64, height: 64 } });
+  await gen.close();
+}
+const report = [];
+try {
+  for (const theme of themes) {
+    for (const vp of VIEWPORTS) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height },
+        deviceScaleFactor: 1,
+        isMobile: vp.mobile,
+        hasTouch: vp.mobile,
+        reducedMotion: "reduce",
+      });
+      await context.addInitScript(`try { localStorage.setItem('qshareplus-ui-theme', JSON.stringify('${theme}')); } catch (e) {}`);
+      await context.addInitScript(consentSource());
+      await context.addInitScript(qortalMockSource());
+      for (const screen of SCREENS) {
+        if (onlyScreens.length && !onlyScreens.includes(screen.key)) continue;
+        if (screen.mobileOnly && !vp.mobile) continue;
+        const page = await context.newPage();
+        if (vp.mobile) {
+          // Playwright's touch emulation leaves the hover/pointer media
+          // features alone; a real phone reports hover:none and pointer:coarse.
+          const cdp = await context.newCDPSession(page);
+          await cdp.send("Emulation.setEmulatedMedia", {
+            features: [
+              { name: "hover", value: "none" },
+              { name: "any-hover", value: "none" },
+              { name: "pointer", value: "coarse" },
+              { name: "any-pointer", value: "coarse" },
+              { name: "prefers-reduced-motion", value: "reduce" },
+            ],
+          });
+        }
+        page.__fetches = [];
+        const errors = [];
+        page.on("console", (m) => { if (m.type() === "error") errors.push(m.text().slice(0, 160)); });
+        page.on("pageerror", (e) => errors.push("pageerror: " + String(e).slice(0, 160)));
+        await routeCore(page);
+        let ok = true;
+        try {
+          await page.goto(`http://127.0.0.1:${PORT}${screen.path}?theme=${MODE}`, { waitUntil: "load", timeout: 12000 });
+          await page.waitForSelector("#root > *", { timeout: 8000 }).catch(() => {});
+          const consent = page.getByRole("button", { name: "I understand" });
+          if (await consent.count()) await consent.first().click({ timeout: 2500 }).catch(() => {});
+          if (screen.after) await screen.after(page);
+          await page.waitForTimeout(300);
+        } catch (e) {
+          ok = false;
+          if (!screen.optional) errors.push("nav: " + String(e).slice(0, 120));
+        }
+        const file = `${screen.key}-${vp.name}-${theme}${MODE === "light" ? "-light" : ""}.png`;
+        // A full-page capture stretches the viewport to the document height,
+        // which flips the landscape-phone media query (max-height) back to the
+        // desktop layout. Landscape gets two viewport shots instead: the top,
+        // and scrolled to the bottom (bottom bar, hidden header).
+        const overlay = screen.key.includes("filters") || screen.key.includes("publish") || screen.key.includes("menu");
+        const landscape = vp.mobile && vp.width > vp.height;
+        await page.screenshot({ path: path.join(shots, file), fullPage: !overlay && !landscape });
+        if (landscape && !overlay) {
+          await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+          await page.waitForTimeout(400);
+          await page.screenshot({ path: path.join(shots, file.replace(".png", "-scrolled.png")) });
+          await page.evaluate(() => window.scrollTo(0, 0));
+        }
+        const metrics = await page.evaluate(() => {
+          const doc = document.documentElement;
+          const overflowX = doc.scrollWidth > window.innerWidth + 1;
+          const unlabeled = [...document.querySelectorAll("button, a[role=button]")].filter((b) => {
+            const name = (b.getAttribute("aria-label") || b.textContent || "").trim();
+            const labelled = b.getAttribute("aria-labelledby");
+            return !name && !labelled;
+          }).length;
+          const small = [...document.querySelectorAll("button")].filter((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && (r.width < 40 || r.height < 40); }).length;
+          const smallText = [...document.querySelectorAll("p, span, li, a, button, h1, h2, h3, h4, div")].filter((el) => { if (!el.textContent?.trim() || el.children.length) return false; const s = parseFloat(getComputedStyle(el).fontSize); return s > 0 && s < 13; }).length;
+          return { overflowX, unlabeled, small, smallText, calls: (window.__calls || []).length, actions: (window.__calls || []).reduce((m, a) => { const k = a.split(":")[0]; m[k] = (m[k] || 0) + 1; return m; }, {}) };
+        });
+        const searches = page.__fetches.filter((u) => u.includes("/resources/search")).length;
+        let axe = [];
+        try {
+          await page.addScriptTag({ content: AXE_SOURCE });
+          const result = await page.evaluate(async () => {
+            const r = await window.axe.run(document, {
+              runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] },
+              resultTypes: ["violations"],
+            });
+            return r.violations.map((v) => ({
+              id: v.id,
+              impact: v.impact,
+              nodes: v.nodes.length,
+              sample: v.nodes.slice(0, 2).map((n) => n.target.join(" ")),
+            }));
+          });
+          axe = result;
+        } catch (e) {
+          errors.push("axe: " + String(e).slice(0, 120));
+        }
+        report.push({ screen: screen.key, viewport: vp.name, theme, ok, errors: errors.filter((e) => !/qortalRequest|favicon/.test(e)), ...metrics, searches, axe });
+        await page.close();
+      }
+      await context.close();
+    }
+  }
+} finally {
+  await browser.close();
+  try {
+    process.kill(-preview.pid, "SIGTERM");
+  } catch {
+    preview.kill();
+  }
+}
+
+const bad = report.filter((r) => r.errors.length || r.overflowX || r.unlabeled);
+const lines = [];
+lines.push(`screens: ${report.length}  with console errors: ${report.filter((r) => r.errors.length).length}  overflow-x: ${report.filter((r) => r.overflowX).length}  unlabeled buttons: ${report.filter((r) => r.unlabeled).length}`);
+for (const r of report.filter((r) => r.theme === themes[0])) {
+  lines.push(`${r.screen.padEnd(13)} ${r.viewport.padEnd(8)} ${r.theme.padEnd(6)} searches=${r.searches} hub-calls=${r.calls} ${JSON.stringify(r.actions)} small-targets=${r.small} small-text=${r.smallText}${r.overflowX ? " OVERFLOW-X" : ""}${r.unlabeled ? " UNLABELED=" + r.unlabeled : ""}`);
+}
+for (const r of bad) lines.push(`!! ${r.screen} ${r.viewport} ${r.theme}: ${r.errors.join(" | ")}${r.overflowX ? " OVERFLOW-X" : ""}${r.unlabeled ? " UNLABELED=" + r.unlabeled : ""}`);
+// axe: one line per distinct rule, with where it shows up.
+const byRule = new Map();
+for (const r of report) for (const v of r.axe || []) {
+  const entry = byRule.get(v.id) || { impact: v.impact, screens: new Set(), nodes: 0, sample: v.sample };
+  entry.screens.add(`${r.screen}@${r.viewport}/${r.theme}`);
+  entry.nodes += v.nodes;
+  byRule.set(v.id, entry);
+}
+lines.push(`axe rules violated: ${byRule.size}`);
+for (const [id, e] of [...byRule.entries()].sort((a, b) => b[1].nodes - a[1].nodes)) {
+  lines.push(`axe ${id} (${e.impact}) nodes=${e.nodes} on ${e.screens.size} captures, e.g. ${[...e.screens][0]} ${JSON.stringify(e.sample)}`);
+}
+writeFileSync(path.join(shots, "report.json"), JSON.stringify(report, null, 1));
+console.log(lines.join("\n"));
+// The preview server's pipes would otherwise keep the process alive.
+process.exit(0);

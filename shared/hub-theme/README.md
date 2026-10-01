@@ -7,9 +7,9 @@ This kit gives every + app the same four themes (Hub 3.0, Hub 2.0, Black and Whi
 | `tokens.ts` | **Source of truth.** Palettes, chrome tokens, shapes, theme list, `cssVariables()`. No dependencies. |
 | `mui-theme.ts` | `createAppTheme(id, hostMode, config)` plus helpers: `headerFill`, `embedFill`, `primarySoft`, `accentWash`, `appSurface`, `fadeEdge`. |
 | `mui-augment.d.ts` | Adds `theme.qplus` and `background.surface` / `background.elevated` to MUI's types. |
-| `HubThemeProvider.tsx` | Wraps the app; `useHubTheme()` returns `{ uiTheme, setUiTheme, mode, hostMode }`. |
+| `HubThemeProvider.tsx` | Wraps the app; `useHubTheme()` returns `{ uiTheme, setUiTheme, mode, hostMode }`. Follows Hub's `THEME_CHANGED` message, so Hub's light/dark switch applies without a reload. |
 | `ThemePicker.tsx` | The four theme cards for Settings. |
-| `boot.ts` | Reads Hub's mode (`_qdnTheme` / `?theme=`) and the saved theme; paints `<html>`. |
+| `boot.ts` | Reads Hub's mode (`_qdnTheme` / `?theme=`, and `hostModeFromMessage()` for Hub's runtime switch) and the saved theme; paints `<html>`. |
 | `fonts.css` + `fonts/` | Inter 400/500/600/700 as woff2 (~100 KB each; SIL OFL, see `fonts/LICENSE-Inter.txt`). |
 | `hub-theme.css` | *Generated.* `--qp-*` CSS variables per theme, for apps without MUI. |
 | `boot-inline.js` | *Generated.* Snippet for `<head>` in `index.html`. |

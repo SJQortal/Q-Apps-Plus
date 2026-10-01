@@ -25,6 +25,15 @@ The Linux desktop app has no Computer use switch (checked 2026-09-29), so a loca
    node scripts/hub-cdp.mjs console "12393" 10            # app console for 10 s (old entries replay first)
    ```
 
+### Lessons from the Q-Share+ session (2026-09-30)
+
+- **Sizes without touching the window.** Electron has no `Browser.setWindowBounds`, but `Emulation.setDeviceMetricsOverride` on the Hub page works even while the window is minimised, and screenshots work while it is held. Hub zooms its page by 1.2 and re-applies that after resizes, so check the app frame's `innerWidth` and adjust. `mobile: true` makes the zoom flip back and forth; `mobile: false` plus touch emulation is stable.
+- **Touch lives in the app frame.** The app is an out-of-process iframe with its own CDP target. `pointer: coarse` / `hover: none` must be set there with `Emulation.setEmulatedMedia`, and any other session that detaches from that target (every `eval`) resets it, so re-apply it on a timer. Touch events sent to the page target get the frame offset subtracted twice and are dropped below the viewport; send them to the frame target, in page coordinates.
+- **Counting `qortalRequest`.** q-apps.js routes every request through `window.executeQortalRequestImmediate`; wrapping it from `Page.addScriptToEvaluateOnNewDocument` at `readystatechange` logs each action. `/arbitrary` fetches show in the frame's resource timings (raise the buffer with `performance.setResourceTimingBufferSize`).
+- **Dev proxy quirks.** Only `/` (and `*.html`) get q-apps.js injected, so reload at `/` and navigate with the app's router; a deep path loads without `qortalRequest`. Vite's HMR socket never connects through the proxy, so after new dependencies are optimised the page can load two copies of React ("Invalid hook call"): reload again, or restart Vite with `--force`. Core's proxy on 12393 can stop after Vite restarts; re-add the server in Dev Mode (Server → 127.0.0.1:5173 → Add) and close the dead tab.
+- **Hub dialogs.** Accept and Decline in Hub's request dialogs are plain `div`s with those texts. `SAVE_FILE` by `location` opens a native Save As dialog on desktop, which CDP can't reach, so test saves with small files and blobs.
+- **Deep links with `+`.** Hub never decodes the app name in `qortal://APP/<name>/…`; test with a published app whose name has `+` (e.g. `POS+`).
+
 ## Running an app in Hub
 
 **Known Core bug:** Qortal Core 6.1.9's dev proxy returns 404 for every path under `/assets/`, before the request ever reaches your server. Vite puts built files there, so a built app (`vite preview`) shows a blank tab. Two ways around it:

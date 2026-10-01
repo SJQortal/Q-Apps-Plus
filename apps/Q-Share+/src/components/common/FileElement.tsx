@@ -1,446 +1,255 @@
-import * as React from "react";
-import { styled, useTheme } from "@mui/material/styles";
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { CircularProgress } from "@mui/material";
-import AttachFileIcon from "@mui/icons-material/AttachFile";
-import { MyContext } from "../../wrappers/DownloadWrapper";
+import { Box, Button, LinearProgress, Typography } from "@mui/material";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import SaveAltOutlinedIcon from "@mui/icons-material/SaveAltOutlined";
+import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
+import { MyContext, downloadPhase, downloadStatusText, type DownloadPhase } from "../../wrappers/DownloadWrapper";
 import { RootState } from "../../state/store";
 import { setNotification } from "../../state/features/notificationsSlice";
+import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { errorMessage, isHubDecline } from "../../utils/hubErrors";
+import { resourceProperties } from "../../utils/qdnResource";
 
-const Widget = styled("div")(({ theme }) => ({
-  padding: 8,
-  borderRadius: 10,
-  maxWidth: 350,
-  position: "relative",
-  zIndex: 1,
-  backdropFilter: "blur(40px)",
-  background: "skyblue",
-  transition: "0.2s all",
-  "&:hover": {
-    opacity: 0.75,
-  },
-}));
+// Kept here too: other modules import it from this file.
+export { errorMessage };
 
-const CoverImage = styled("div")({
-  width: 40,
-  height: 40,
-  objectFit: "cover",
-  overflow: "hidden",
-  flexShrink: 0,
-  borderRadius: 8,
-  backgroundColor: "rgba(0,0,0,0.08)",
-  "& > img": {
-    width: "100%",
-  },
-});
-
-interface IAudioElement {
-  title: string;
-  description?: string;
-  author?: string;
-  fileInfo?: any;
-  postId?: string;
-  user?: string;
-  children?: React.ReactNode;
+export interface FileInfo {
+  name: string;
+  service: string;
+  identifier: string;
+  filename?: string;
+  /** Stored as `mimetype` in the share JSON; some callers pass `mimeType`. */
+  mimetype?: string;
   mimeType?: string;
-  disable?: boolean;
-  mode?: string;
-  otherUser?: string;
-  customStyles?: any;
-  jsonId:string;
+  size?: number;
 }
 
-interface CustomWindow extends Window {
-  showSaveFilePicker: any; // Replace 'any' with the appropriate type if you know it
+export function resourceUrl({ service, name, identifier }: FileInfo): string {
+  return `/arbitrary/${service}/${encodeURIComponent(name)}/${encodeURIComponent(identifier)}`;
 }
 
-const customWindow = window as unknown as CustomWindow;
+/** An older Hub's "Missing fields: blob" (the field name is never translated). */
+function asksForBlob(error: unknown): boolean {
+  return /\bblob\b/i.test(errorMessage(error, ""));
+}
 
-export default function FileElement({
-  title,
-  description,
-  author,
-  fileInfo,
-  children,
-  mimeType,
-  disable,
-  customStyles,
-  jsonId
-}: IAudioElement) {
-  const { downloadVideo } = React.useContext(MyContext);
-  const [startedDownload, setStartedDownload] = React.useState<boolean>(false)
-  const [isLoading, setIsLoading] = React.useState<boolean>(false);
-  const [fileProperties, setFileProperties] = React.useState<any>(null);
-  const [downloadLoader, setDownloadLoader] = React.useState<any>(false);
-  const downloads  = useSelector((state: RootState) => state.global?.downloads);
-  const status = React.useRef<null | string>(null)
+/** GO (Hub on Android) rather than desktop Hub. */
+const isGo = (userAgent: string) => /Android/i.test(userAgent);
 
-  const hasCommencedDownload = React.useRef(false);
-  const dispatch = useDispatch();
-  const reDownload = React.useRef<boolean>(false)
-  const isFetchingProperties = React.useRef<boolean>(false)
-  const download = React.useMemo(() => {
-    if (!downloads || !fileInfo?.identifier) return {};
-    const findDownload = downloads[fileInfo?.identifier];
+/**
+ * False when GO would save the file by `location` with no name. GO names that
+ * file with Hub's normalizeFilename, which keeps only A-Z, a-z, 0-9, space, _
+ * and - before the extension (accents stripped), so "Отчёт.pdf" or "规划.docx"
+ * lands in Documents/Qortal Go as a hidden, nameless ".pdf". A blob save keeps
+ * the name, so in GO such files take that path until GO keeps Unicode names
+ * too. Desktop Hub's Save As dialog keeps the name, so there it doesn't apply.
+ */
+export function keepsNameByLocation(filename: string): boolean {
+  const dot = filename.lastIndexOf(".");
+  const stem = dot > 0 ? filename.slice(0, dot) : filename;
+  return /[A-Za-z0-9]/.test(stem.normalize("NFD"));
+}
 
-    if (!findDownload) return {};
-    return findDownload;
-  }, [downloads, fileInfo]);
+const STREAM_FROM_BYTES = 100 * 1024 * 1024;
 
-  const resourceStatus = React.useMemo(() => {
-    return download?.status || {};
-  }, [download]);
+/**
+ * Whether to let Hub fetch the file itself (`location`) rather than handing it
+ * a blob. GO downloads by location natively, while a blob crosses the WebView
+ * bridge, so GO always streams. Desktop Hub follows its own prompt with a
+ * native Save As dialog for a location save; a blob goes straight to
+ * Downloads in one step, so small files keep that and only big ones, where
+ * holding the file in this frame costs real memory, stream.
+ */
+export function streamsByLocation(size: number | undefined, userAgent = navigator.userAgent): boolean {
+  if (isGo(userAgent)) return true;
+  return !size || size >= STREAM_FROM_BYTES;
+}
 
-  const retryDownload = React.useRef(0);
-
-  const handlePlay = async () => {
-    if (disable) return;
-    hasCommencedDownload.current = true;
-    setStartedDownload(true)
-    if (
-      resourceStatus?.status === "READY"
-    ) {
-      if (downloadLoader) return;
-     
-      setDownloadLoader(true);
-      let filename = download?.properties?.filename
-      let mimeType = download?.properties?.type
-
-      try {
-        const { name, service, identifier } = fileInfo;
-
-        const res = await qortalRequest({
-          action: "GET_QDN_RESOURCE_PROPERTIES",
-          name: name,
-          service: service,
-          identifier: identifier,
-        });
-        filename = res?.filename || filename;
-        mimeType = res?.mimeType || mimeType;
-      } catch (error) {
-        
-      }
-      try {
-        const { name, service, identifier } = fileInfo;
-
-        const url = `/arbitrary/${service}/${name}/${identifier}`;
-        fetch(url)
-          .then(response => response.blob())
-          .then(async blob => {
-            await qortalRequest({
-              action: "SAVE_FILE",
-              blob,
-              filename: filename,
-              mimeType,
-            });
-          })
-          .catch(error => {
-            console.error("Error fetching the video:", error);
-          });
-      } catch (error: any) {
-        let notificationObj: any = null;
-        if (typeof error === "string") {
-          notificationObj = {
-            msg: error || "Failed to send message",
-            alertType: "error",
-          };
-        } else if (typeof error?.error === "string") {
-          notificationObj = {
-            msg: error?.error || "Failed to send message",
-            alertType: "error",
-          };
-        } else {
-          notificationObj = {
-            msg: error?.message || "Failed to send message",
-            alertType: "error",
-          };
-        }
-        if (!notificationObj) return;
-        dispatch(setNotification(notificationObj));
-      } finally {
-        setDownloadLoader(false);
-      }
-      return;
-    }
-
-    const { name, service, identifier } = fileInfo;
-   
-    setIsLoading(true);
-    downloadVideo({
-      name,
-      service,
-      identifier,
-      properties: {
-        ...fileInfo,
-        jsonId
-      },
-    });
+/**
+ * Hands a file that is on the node to Hub's SAVE_FILE dialog. Hub streams it
+ * from the node by `location` (Electron writes it to disk in chunks, GO
+ * downloads it natively), so the file never passes through this frame and the
+ * prompt comes before any bytes move. Small files on desktop (see
+ * streamsByLocation), Hubs that only take a blob, and in GO names it would
+ * strip to nothing (see keepsNameByLocation) get one read here instead. The
+ * node's own filename, type and size win over the stored ones.
+ */
+export async function saveFromNode(
+  ref: FileInfo,
+  fallback: { filename?: string; mimeType?: string; size?: number } = {}
+): Promise<void> {
+  let { filename, mimeType } = fallback;
+  let size = fallback.size;
+  try {
+    const props = await resourceProperties(ref);
+    filename = props?.filename || filename;
+    mimeType = props?.mimeType || mimeType;
+    size = Number(props?.size) || size;
+  } catch {
+    /* the stored filename is good enough */
+  }
+  // Hub refuses a save without a filename.
+  filename = filename || ref.identifier;
+  const byLocation: QortalRequestOptions = {
+    action: "SAVE_FILE",
+    filename,
+    mimeType,
+    location: { service: ref.service, name: ref.name, identifier: ref.identifier },
   };
-
-  const refetch = React.useCallback(async () => {
-    if (!fileInfo) return
+  const userAgent = navigator.userAgent;
+  if (streamsByLocation(size, userAgent) && (!isGo(userAgent) || keepsNameByLocation(filename))) {
     try {
-      const { name, service, identifier } = fileInfo;
-      isFetchingProperties.current = true
-      await qortalRequest({
-        action: 'GET_QDN_RESOURCE_PROPERTIES',
-        name,
-        service,
-        identifier
-      })
-      
+      await qortalRequest(byLocation);
+      return;
     } catch (error) {
-      
-    } finally {
-      isFetchingProperties.current = false
-    }
-   
-  }, [fileInfo])
-
-  const refetchInInterval = ()=> {
-    try {
-      const interval = setInterval(()=> {
-          if(status?.current === 'DOWNLOADED'){
-            refetch()
-          }
-          if(status?.current === 'READY'){
-            clearInterval(interval);
-          }
-         
-        }, 7500)
-    } catch (error) {
-      
+      // Only a Hub without `location` support falls back: after a decline or a
+      // failed download a second prompt (and a whole-file read) would be wrong.
+      if (!asksForBlob(error)) throw error;
     }
   }
+  const response = await fetch(resourceUrl(ref));
+  if (!response.ok) throw new Error(`The node answered ${response.status}`);
+  const blob = await response.blob();
+  await qortalRequest({ action: "SAVE_FILE", blob, filename, mimeType });
+}
 
-  React.useEffect(() => {
-    if(resourceStatus?.status){
-      status.current = resourceStatus?.status
-    }
-    if (
-      resourceStatus?.status === 'DOWNLOADED' &&
-      reDownload?.current === false
-    ) {
-      refetchInInterval()
-      reDownload.current = true
-    }
-  }, [resourceStatus])
+/**
+ * One attachment's place in the download machine (see DownloadWrapper), plus
+ * the actions a row needs: `start` asks the node to fetch it, `retry` nudges a
+ * stalled fetch, and `save` hands the built file to Hub's SAVE_FILE dialog.
+ */
+export function useFileDownload(fileInfo: FileInfo, jsonId: string) {
+  const { downloadVideo, retryDownload } = useContext(MyContext);
+  const dispatch = useDispatch();
+  const download = useSelector((state: RootState) => state.global?.downloads?.[fileInfo?.identifier]);
+  const [saving, setSaving] = useState(false);
+  const startedHere = useRef(false);
 
+  const status: string | undefined = download?.status?.status;
+  const percent = Math.max(0, Math.min(100, Math.round(download?.status?.percentLoaded ?? 0)));
+  const phase: DownloadPhase = downloadPhase(status, Boolean(download));
+  const statusText = downloadStatusText(status, percent, Boolean(download));
 
-  React.useEffect(() => {
-    if (
-      resourceStatus?.status === "READY" &&
-      download?.url &&
-      download?.properties?.filename &&
-      hasCommencedDownload.current
-    ) {
-      setIsLoading(false);
-      dispatch(
-        setNotification({
-          msg: "Download completed. Click to save file",
-          alertType: "info",
-        })
-      );
+  const ref = useMemo(
+    () => ({ name: fileInfo.name, service: fileInfo.service || "FILE", identifier: fileInfo.identifier }),
+    [fileInfo.name, fileInfo.service, fileInfo.identifier]
+  );
+
+  const start = useCallback(() => {
+    startedHere.current = true;
+    downloadVideo({ ...ref, properties: { ...fileInfo, service: ref.service, jsonId } });
+  }, [downloadVideo, fileInfo, jsonId, ref]);
+
+  const retry = useCallback(() => {
+    startedHere.current = true;
+    retryDownload(ref);
+  }, [retryDownload, ref]);
+
+  const save = useCallback(async () => {
+    if (saving || phase !== "ready") return;
+    setSaving(true);
+    try {
+      await saveFromNode(ref, {
+        filename: download?.properties?.filename || fileInfo.filename,
+        mimeType: download?.properties?.mimeType || fileInfo.mimeType || fileInfo.mimetype,
+        size: fileInfo.size,
+      });
+    } catch (error) {
+      // Declining Hub's save prompt (or letting it time out) is not an error.
+      if (!isHubDecline(error)) dispatch(setNotification({ msg: errorMessage(error, "Could not save the file"), alertType: "error" }));
+    } finally {
+      setSaving(false);
     }
-  }, [resourceStatus, download]);
+  }, [dispatch, download, fileInfo, phase, ref, saving]);
+
+  useEffect(() => {
+    if (phase === "ready" && startedHere.current) {
+      startedHere.current = false;
+      dispatch(setNotification({ msg: `${fileInfo.filename || "File"} is ready to save`, alertType: "info" }));
+    }
+  }, [dispatch, fileInfo.filename, phase]);
+
+  return { download, phase, status, percent, statusText, start, retry, save, saving };
+}
+
+interface FileElementProps {
+  fileInfo: FileInfo;
+  jsonId: string;
+  disable?: boolean;
+}
+
+/**
+ * The download control of one attachment: Download → progress (with Retry when
+ * stalled) → Building → Save. Buttons fill the width on phones.
+ */
+export default function FileElement({ fileInfo, jsonId, disable }: FileElementProps) {
+  const phone = usePhoneLayout();
+  const { phase, percent, statusText, start, retry, save, saving } = useFileDownload(fileInfo, jsonId);
+  const label = fileInfo.filename || "file";
+  const bigButton = { minHeight: phone ? 48 : 40, width: phone ? "100%" : "auto" };
+
+  if (phase === "idle") {
+    return (
+      <Button
+        variant="contained"
+        startIcon={<DownloadOutlinedIcon />}
+        onClick={start}
+        disabled={disable}
+        aria-label={`Download ${label}`}
+        sx={bigButton}
+      >
+        Download
+      </Button>
+    );
+  }
+
+  if (phase === "ready") {
+    return (
+      <Button
+        variant="contained"
+        startIcon={<SaveAltOutlinedIcon />}
+        onClick={save}
+        disabled={disable || saving}
+        aria-label={`Save ${label}`}
+        sx={bigButton}
+      >
+        {saving ? "Saving…" : "Save"}
+      </Button>
+    );
+  }
+
+  if (phase === "failed") {
+    return (
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+        <Typography variant="body2" color="error" role="status">
+          {statusText}
+        </Typography>
+        <Button size="small" startIcon={<RefreshOutlinedIcon />} onClick={start} sx={{ minHeight: 44 }}>
+          Try again
+        </Button>
+      </Box>
+    );
+  }
 
   return (
-    <Box
-      onClick={handlePlay}
-      sx={{
-        width: "100%",
-        overflow: "hidden",
-        position: "relative",
-        cursor: "pointer",
-        ...(customStyles || {}),
-      }}
-    >
-      {children && (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            position: "relative",
-            gap: "7px",
-          }}
-        >
-          {children}{" "}
-          {((resourceStatus.status && resourceStatus?.status !== "READY") ||
-          isLoading) && startedDownload ? (
-            <>
-              <CircularProgress color="secondary" size={14} />
-              <Typography variant="body2">{`${Math.round(
-                resourceStatus?.percentLoaded || 0
-              ).toFixed(0)}% loaded`}</Typography>
-            </>
-          ) : resourceStatus?.status === "READY" ? (
-            <>
-              <Typography
-                sx={{
-                  fontSize: "14px",
-                }}
-              >
-                Ready to save: click here
-              </Typography>
-              {downloadLoader && (
-                <CircularProgress color="secondary" size={14} />
-              )}
-            </>
-          ) : null}
-        </Box>
-      )}
-      {!children && (
-        <Widget>
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <CoverImage>
-              <AttachFileIcon
-                sx={{
-                  width: "90%",
-                  height: "auto",
-                }}
-              />
-            </CoverImage>
-            <Box sx={{ ml: 1.5, minWidth: 0 }}>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                fontWeight={500}
-              >
-                {author}
-              </Typography>
-              <Typography
-                noWrap
-                sx={{
-                  fontSize: "16px",
-                }}
-              >
-                <b>{title}</b>
-              </Typography>
-              <Typography
-                noWrap
-                letterSpacing={-0.25}
-                sx={{
-                  fontSize: "14px",
-                }}
-              >
-                {description}
-              </Typography>
-              {mimeType && (
-                <Typography
-                  noWrap
-                  letterSpacing={-0.25}
-                  sx={{
-                    fontSize: "12px",
-                  }}
-                >
-                  {mimeType}
-                </Typography>
-              )}
-            </Box>
-          </Box>
-          {((resourceStatus.status && resourceStatus?.status !== "READY") ||
-            isLoading) && startedDownload && (
-            <Box
-              position="absolute"
-              top={0}
-              left={0}
-              right={0}
-              bottom={0}
-              display="flex"
-              justifyContent="center"
-              alignItems="center"
-              zIndex={4999}
-              bgcolor="rgba(0, 0, 0, 0.6)"
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-                padding: "8px",
-                borderRadius: "10px",
-              }}
-            >
-              <CircularProgress color="secondary" />
-              {resourceStatus && (
-                <Typography
-                  variant="subtitle2"
-                  component="div"
-                  sx={{
-                    color: "white",
-                    fontSize: "14px",
-                  }}
-                >
-                  {resourceStatus?.status === "REFETCHING" ? (
-                    <>
-                      <>
-                        {(
-                          (resourceStatus?.localChunkCount /
-                            resourceStatus?.totalChunkCount) *
-                          100
-                        )?.toFixed(0)}
-                        %
-                      </>
-
-                      <> Refetching in 2 minutes</>
-                    </>
-                  ) : resourceStatus?.status === "DOWNLOADED" ? (
-                    <>Download Completed: building file...</>
-                  ) : resourceStatus?.status !== "READY" ? (
-                    <>
-                      {(
-                        (resourceStatus?.localChunkCount /
-                          resourceStatus?.totalChunkCount) *
-                        100
-                      )?.toFixed(0)}
-                      %
-                    </>
-                  ) : (
-                    <>Download Completed: fetching file...</>
-                  )}
-                </Typography>
-              )}
-            </Box>
-          )}
-          {resourceStatus?.status === "READY" &&
-            download?.url &&
-            download?.properties?.filename && (
-              <Box
-                position="absolute"
-                top={0}
-                left={0}
-                right={0}
-                bottom={0}
-                display="flex"
-                justifyContent="center"
-                alignItems="center"
-                zIndex={4999}
-                bgcolor="rgba(0, 0, 0, 0.6)"
-                sx={{
-                  display: "flex",
-                  flexDirection: "row",
-                  gap: "10px",
-                  padding: "8px",
-                  borderRadius: "10px",
-                }}
-              >
-                <Typography
-                  variant="subtitle2"
-                  component="div"
-                  sx={{
-                    color: "white",
-                    fontSize: "14px",
-                  }}
-                >
-                  Ready to save: click here
-                </Typography>
-                {downloadLoader && (
-                  <CircularProgress color="secondary" size={14} />
-                )}
-              </Box>
-            )}
-        </Widget>
-      )}
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, width: "100%" }}>
+      <LinearProgress
+        variant={phase === "building" ? "indeterminate" : "determinate"}
+        value={percent}
+        aria-label={`${label} download progress`}
+        sx={{ borderRadius: 1, height: 6 }}
+      />
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, flexWrap: "wrap" }}>
+        <Typography variant="body2" color="text.secondary" role="status" aria-live="polite">
+          {statusText}
+        </Typography>
+        {phase === "stalled" && (
+          <Button size="small" startIcon={<RefreshOutlinedIcon />} onClick={retry} sx={{ minHeight: 44 }}>
+            Retry
+          </Button>
+        )}
+      </Box>
     </Box>
   );
 }
