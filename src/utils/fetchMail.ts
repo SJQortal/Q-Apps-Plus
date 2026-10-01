@@ -119,7 +119,21 @@ export const fetchAndEvaluateMail = async (data: any, saveToHash?: (val: any)=> 
       }
       return obj
     } catch (error) {
-      console.log({ error })
+      // Bugs #3: a thrown FETCH/GET_NAME_DATA/GET_ACCOUNT_DATA used to resolve
+      // `undefined` and leave the open-message dialog spinning for ever.
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : typeof (error as any)?.error === 'string'
+              ? (error as any).error
+              : 'The message could not be fetched.'
+      return {
+        ...obj,
+        isValid: false,
+        fetchError: message
+      }
     }
   }
 
