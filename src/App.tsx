@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { Box } from '@mui/material'
 import { Provider } from 'react-redux'
 import { Route, Routes, useLocation, type Location } from 'react-router-dom'
@@ -8,7 +9,13 @@ import GlobalWrapper from './wrappers/GlobalWrapper'
 import DownloadWrapper from './wrappers/DownloadWrapper'
 import Notification from './components/common/Notification/Notification'
 import { Mail } from './pages/Mail/Mail'
-import { SettingsPage, SETTINGS_PATH } from './pages/Settings/SettingsPage'
+import { SETTINGS_PATH } from './pages/Settings/settingsPath'
+import { lazyNamed } from './components/common/lazyNamed'
+import { ListSkeleton } from './layout/states'
+
+// Settings is a separate chunk: it is opened rarely and carries the theme
+// picker, the blocked-names dialog and the changelog.
+const SettingsPage = lazyNamed(() => import('./pages/Settings/SettingsPage'), 'SettingsPage')
 
 type LocationState = { backgroundLocation?: Location } | null
 
@@ -33,7 +40,11 @@ function AppRoutes() {
           <Route path="*" element={<Mail isFromTo={false} />} />
         </Routes>
       </Box>
-      {isSettings && <SettingsPage />}
+      {isSettings && (
+        <Suspense fallback={<ListSkeleton rows={8} />}>
+          <SettingsPage />
+        </Suspense>
+      )}
     </>
   )
 }

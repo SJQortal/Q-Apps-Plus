@@ -1,6 +1,11 @@
+import { Suspense } from 'react';
 import { Dialog, DialogContent, DialogTitle, IconButton, useMediaQuery, useTheme } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { ChangelogPage } from '../Mail/ChangelogPage';
+import { lazyNamed } from '../../components/common/lazyNamed';
+import { ListSkeleton } from '../../layout/states';
+
+// The changelog text is its own chunk: it is read once per version, if at all.
+const ChangelogPage = lazyNamed(() => import('../Mail/ChangelogPage'), 'ChangelogPage');
 
 interface ChangelogDialogProps {
   open: boolean;
@@ -25,12 +30,16 @@ export function ChangelogDialog({ open, onClose }: ChangelogDialogProps) {
         sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}
       >
         What's new
-        <IconButton onClick={onClose} aria-label="Close changelog" edge="end">
+        <IconButton onClick={onClose} aria-label="Close changelog" edge="end" sx={{ minWidth: 44, minHeight: 44 }}>
           <CloseIcon />
         </IconButton>
       </DialogTitle>
       <DialogContent dividers sx={{ p: { xs: 1, sm: 2 } }}>
-        <ChangelogPage />
+        {open && (
+          <Suspense fallback={<ListSkeleton rows={5} />}>
+            <ChangelogPage />
+          </Suspense>
+        )}
       </DialogContent>
     </Dialog>
   );
