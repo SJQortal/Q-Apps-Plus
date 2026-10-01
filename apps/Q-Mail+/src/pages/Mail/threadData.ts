@@ -9,7 +9,7 @@
  *   thread message  qortal_qmail_thmsg_group<groupId>_<token>_<uid>   service MAIL_PRIVATE
  */
 import { MAIL_SERVICE_TYPE, THREAD_SERVICE_TYPE } from "../../constants/mail";
-import { searchResources, type SearchOptions } from "../../utils/qdnSearch";
+import { invalidateSearches, searchResources, type SearchOptions } from "../../utils/qdnSearch";
 
 export interface GroupOption {
   id: string | number;
@@ -292,6 +292,15 @@ export function applyActivity(threads: ThreadSummary[], activity: ThreadActivity
 
 export const lastActivityOf = (thread: ThreadSummary): number =>
   toNumber(thread.lastActivity) || toNumber(thread.created) || toNumber(thread.threadData?.createdAt);
+
+/** Drop every cached search for a group's threads and posts (after a publish). */
+export function invalidateThreadSearches(groupId?: string | number): number {
+  const id = normalizeGroupId(groupId);
+  if (!id) return invalidateSearches((key) => key.includes("qortal_qmail_thread_") || key.includes("qortal_qmail_thmsg_"));
+  return invalidateSearches(
+    (key) => key.includes(`qortal_qmail_thread_group${id}`) || key.includes(`qortal_qmail_thmsg_group${id}`)
+  );
+}
 
 export function resetThreadDataCache(): void {
   titleByIdentifier.clear();

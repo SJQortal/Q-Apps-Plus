@@ -10,7 +10,7 @@ import mailReducer from '../../state/features/mailSlice'
 import notificationsReducer from '../../state/features/notificationsSlice'
 import blogReducer from '../../state/features/blogSlice'
 import { fetchedUrls, mockFetchRoute, mockQortalAction, qortalCalls } from '../../test/setup'
-import { resetSearchCache } from '../../utils/qdnSearch'
+import { resetSearchCache, searchStats } from '../../utils/qdnSearch'
 import { resetGroupMembersCache } from '../../utils/groupMembersCache'
 import { resetThreadDataCache } from './threadData'
 import { resetAvatarAttempts } from './ThreadAvatar'
@@ -88,6 +88,50 @@ describe('ThreadsMailbox', () => {
     expect(screen.getAllByText(/Thread \d of \d/)).toHaveLength(8)
     expect(screen.getByText('5 threads · 5 unread')).toBeTruthy()
     expect(screen.getByText('3 threads · 3 unread')).toBeTruthy()
+  })
+
+  it('opening a group with N threads reuses the overview searches and adds none per thread', async () => {
+    mockGroup('1', 8, [post('1', 't2', 'm1', 5_000), post('1', 't0', 'm2', 4_000)])
+    mockGroup('2', 2)
+    const onOpenThread = vi.fn()
+    const onSelectGroup = vi.fn()
+    const view = renderThreads(
+      <ThreadsMailbox groups={groups} onOpenThread={onOpenThread} onSelectGroup={onSelectGroup} selectedGroup={null} />
+    )
+    await waitFor(() => expect(screen.getByText('Thread 7 of 1')).toBeTruthy())
+    const before = fetchedUrls('/arbitrary/resources/search').length
+    expect(before).toBe(4)
+
+    fireEvent.click(screen.getByText('Devs'))
+    expect(onSelectGroup).toHaveBeenCalledWith({ id: '1', name: 'Devs' })
+
+    // The parent filters to that group: "Recently active" for 8 threads.
+    view.rerender(
+      <Provider store={makeStore()}>
+        <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+          <ThreadsMailbox groups={groups} onOpenThread={onOpenThread} onSelectGroup={onSelectGroup} selectedGroup={groups[0]} />
+        </HubThemeProvider>
+      </Provider>
+    )
+    await waitFor(() => expect(screen.getByText('Recently active')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Thread 2 of 1')).toBeTruthy())
+    // Both searches were cached by the overview; the group view issued none and fetched no headers one by one.
+    expect(fetchedUrls('/arbitrary/resources/search')).toHaveLength(before)
+    expect(searchStats().cacheHits).toBeGreaterThanOrEqual(2)
+    expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(0)
+    // Members come from the paged endpoint, never limit=0.
+    await waitFor(() => expect(fetchedUrls('/groups/members/1')).toHaveLength(1))
+    expect(fetchedUrls('/groups/members/1')[0]).toContain('limit=100&offset=0')
+
+    // Newest activity first: t2 (5000) then t0 (4000) then the quiet threads.
+    const titles = screen.getAllByText(/Thread \d of 1/).map((node) => node.textContent)
+    expect(titles.slice(0, 2)).toEqual(['Thread 2 of 1', 'Thread 0 of 1'])
+    expect(titles).toHaveLength(8)
+
+    fireEvent.click(screen.getByText('Thread 2 of 1'))
+    expect(onOpenThread).toHaveBeenCalledTimes(1)
+    expect(onOpenThread.mock.calls[0][0].threadId).toBe('qortal_qmail_thread_group1_t2')
+    expect(onOpenThread.mock.calls[0][0].lastActivity).toBe(5_000)
   })
 
   it('shows unread from the viewed store and clears it once a thread was opened', async () => {
