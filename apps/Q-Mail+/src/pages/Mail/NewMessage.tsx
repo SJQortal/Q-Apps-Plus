@@ -7,16 +7,19 @@ import React, {
 } from "react";
 import { ReusableModal } from "../../components/modals/ReusableModal";
 import {
+  Alert,
   Autocomplete,
   Box,
   Button,
   CircularProgress,
+  IconButton,
   Input,
+  LinearProgress,
   MenuItem,
   TextField,
   Typography,
-  useMediaQuery,
 } from "@mui/material";
+import { useLayoutMode } from "../../layout/useLayoutMode";
 import ShortUniqueId from "short-unique-id";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
@@ -40,7 +43,6 @@ import {
 import { TextEditor } from "../../components/common/TextEditor/TextEditor";
 import { toQuill1Html } from "../../components/common/TextEditor/quillHtml";
 import {
-  AliasLabelP,
   AttachmentContainer,
   ComposeContainer,
   ComposeIcon,
@@ -51,8 +53,6 @@ import {
   NewMessageAttachmentImg,
   NewMessageInputLabelP,
   NewMessageInputRow,
-  NewMessageSendButton,
-  NewMessageSendP,
 } from "./Mail-styles";
 import ComposeIconSVG from "../../assets/svgs/ComposeIcon.svg";
 import AttachmentSVG from "../../assets/svgs/NewMessageAttachment.svg";
@@ -61,9 +61,54 @@ import { formatBytes } from "../../utils/displaySize";
 import { formatFullTimestamp } from "../../utils/time";
 import { extractTextFromSlate } from "../../utils/extractTextFromSlate";
 import { CreateThreadIcon } from "../../assets/svgs/CreateThreadIcon";
+import {
+  aliasMailIdentifier,
+  buildDirectMailObject,
+  buildForwardHtml,
+  buildReplyQuoteHtml,
+  directMailIdentifier,
+  messageBodyLines,
+  recipientActivityByName,
+  replyAllRecipients,
+  sortNamesByRecency,
+  withSubjectPrefix,
+} from "../../utils/mailCompose";
+import {
+  lookupName,
+  lookupPublicKey,
+  peekName,
+  resolveName,
+} from "../../utils/nameCache";
+import { AvatarWrapper } from "./MailTable";
+import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlined";
+import {
+  composeDraftKey,
+  createComposeDraftId,
+  deleteComposeDraft,
+  readComposeDrafts,
+  saveComposeDraft,
+  type StoredComposeDraft,
+} from "./composeDrafts";
+import {
+  fetchAttachmentFile,
+  type AttachmentFetchProgress,
+  type AttachmentReference,
+} from "../../utils/attachmentBytes";
+import { fetchingLabel } from "../../layout/states";
 
 const uid = new ShortUniqueId();
 const maxSize = 40 * 1024 * 1024; // 40 MB in bytes
+
+const aliasToggleSx = {
+  textTransform: "none",
+  minHeight: 44,
+  px: 1,
+  fontWeight: 500,
+  color: "var(--qmail-compose-muted)",
+  "&:hover": { color: "var(--qmail-compose-text)" },
+} as const;
 
 type ComposeTargetType = "name" | "group";
 type PendingPublishType = "mail" | "thread";
@@ -80,6 +125,8 @@ interface ComposePrefill {
   toType?: ComposeTargetType;
   groupId?: string | number | null;
   subject?: string;
+  /** Open this stored draft (its key in qmail_compose_drafts_<address>). */
+  draftKey?: string;
 }
 
 interface ThreadPublishResult {
@@ -133,8 +180,50 @@ interface ResolvedComposeTarget {
   groupId?: string;
 }
 
+/**
+ * What Mail.tsx hands over for a forward: the original message (subject,
+ * body and attachments come from it) and, for older callers, a ready-made
+ * HTML string. `to` is the label for the header's To line.
+ */
+interface ForwardInfo {
+  message?: any;
+  html?: string;
+  to?: string;
+}
+
+interface ForwardAttachmentJob {
+  key: string;
+  reference: AttachmentReference;
+  status: "loading" | "error";
+  progress?: AttachmentFetchProgress;
+  error?: string;
+}
+
+const attachmentReferencesOf = (message: any): AttachmentReference[] => {
+  if (!Array.isArray(message?.attachments)) return [];
+  return message.attachments.filter((item: any) => {
+    return (
+      item &&
+      typeof item.identifier === "string" &&
+      item.identifier &&
+      typeof item.name === "string" &&
+      item.name &&
+      typeof item.service === "string" &&
+      item.service
+    );
+  });
+};
+
+const extensionOfFile = (file: File): string | null => {
+  const fromName = file.name.includes(".") ? file.name.split(".").pop() || "" : "";
+  if (fromName) return fromName;
+  return file.type ? mime.getExtension(file.type) || null : null;
+};
+
 interface NewMessageProps {
   replyTo?: any;
+  /** Reply to the sender plus everyone in the original's `to`/`cc` (each a separate copy). */
+  replyAll?: boolean;
   setReplyTo: React.Dispatch<any>;
   recipientAlias?: string;
   requireSenderAlias?: boolean;
@@ -142,27 +231,17 @@ interface NewMessageProps {
   hideButton?: boolean;
   isFromTo?: boolean;
   setForwardInfo: React.Dispatch<any>;
-  forwardInfo: any;
+  forwardInfo: ForwardInfo | string | null;
   inlineMode?: boolean;
   onRequestClose?: () => void;
   ownedNames?: string[];
   joinedGroups?: JoinedGroupOption[];
   priorityRecipientNames?: string[];
+  /** Inbox rows and opened messages, to order "Recent" names by last contact. */
+  recentInboxMessages?: any[];
+  openedMessagesById?: Record<string, any>;
   composePrefill?: ComposePrefill | null;
   onThreadPublished?: (result: ThreadPublishResult) => void;
-}
-
-interface StoredComposeDraft {
-  draftId: string;
-  fromName: string;
-  toName: string;
-  subject: string;
-  value: string;
-  aliasValue: string;
-  showAlias: boolean;
-  showBCC: boolean;
-  bccNames: NameChip[];
-  updatedAt: number;
 }
 
 const normalizeValue = (value: string): string => value.trim().toLowerCase();
@@ -203,90 +282,20 @@ const stripHtmlTags = (value: string): string => {
   return value.replace(/<[^>]*>/g, " ");
 };
 
-const escapeHtml = (value: string): string => {
-  return value
-    .replace(/&/g, "&")
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
-    .replace(/"/g, '"')
-    .replace(/'/g, "&#39;");
-};
-
-const getComposeDraftsStorageKey = (address: string): string => {
-  return `qmail_compose_drafts_${address}`;
-};
-
-const readComposeDraftsFromStorage = (
-  address: string
-): Record<string, StoredComposeDraft> => {
-  try {
-    const raw = localStorage.getItem(getComposeDraftsStorageKey(address));
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-
-    const sanitized: Record<string, StoredComposeDraft> = {};
-    Object.entries(parsed).forEach(([key, value]) => {
-      if (!key || !value || typeof value !== "object" || Array.isArray(value))
-        return;
-      const draft = value as Partial<StoredComposeDraft>;
-      const fromName =
-        typeof draft.fromName === "string" ? draft.fromName.trim() : "";
-      const toName =
-        typeof draft.toName === "string" ? draft.toName.trim() : "";
-      if (!fromName || !toName) return;
-
-      sanitized[key] = {
-        draftId:
-          typeof draft.draftId === "string" && draft.draftId.trim()
-            ? draft.draftId.trim()
-            : `${fromName}-${toName}-Draft-${Date.now()}`,
-        fromName,
-        toName,
-        subject: typeof draft.subject === "string" ? draft.subject : "",
-        value: typeof draft.value === "string" ? draft.value : "",
-        aliasValue:
-          typeof draft.aliasValue === "string" ? draft.aliasValue : "",
-        showAlias: Boolean(draft.showAlias),
-        showBCC: Boolean(draft.showBCC),
-        bccNames: Array.isArray(draft.bccNames) ? draft.bccNames : [],
-        updatedAt: Number(draft.updatedAt || 0),
-      };
-    });
-
-    return sanitized;
-  } catch {
-    return {};
-  }
-};
-
-const writeComposeDraftsToStorage = (
-  address: string,
-  drafts: Record<string, StoredComposeDraft>
-): void => {
-  try {
-    localStorage.setItem(
-      getComposeDraftsStorageKey(address),
-      JSON.stringify(drafts)
-    );
-  } catch {
-    // Ignore storage failures.
-  }
-};
-
-const createComposeDraftId = (
-  fromName: string,
-  toName: string,
-  updatedAt: number
-): string => {
-  return `${fromName}-${toName}-Draft-${updatedAt}`;
-};
+/** Applies a stored draft to the composer fields (not From/To, which pick the key). */
+const draftFieldsOf = (draft: StoredComposeDraft) => ({
+  subject: draft.subject || "",
+  value: draft.value || "",
+  aliasValue: draft.aliasValue || "",
+  showAlias: Boolean(draft.showAlias || draft.aliasValue),
+  showBCC: Boolean(draft.showBCC && draft.bccNames?.length),
+  bccNames: Array.isArray(draft.bccNames) ? draft.bccNames : [],
+});
 
 export const NewMessage = ({
   setReplyTo,
   replyTo,
+  replyAll = false,
   recipientAlias,
   requireSenderAlias = false,
   defaultReplyAlias = "",
@@ -299,6 +308,8 @@ export const NewMessage = ({
   ownedNames = [],
   joinedGroups = [],
   priorityRecipientNames = [],
+  recentInboxMessages = [],
+  openedMessagesById,
   composePrefill = null,
   onThreadPublished,
 }: NewMessageProps) => {
@@ -335,15 +346,49 @@ export const NewMessage = ({
   const [replyPreviewMode, setReplyPreviewMode] = useState<
     "preview" | "full" | "hidden"
   >("preview");
-  const isMobile = useMediaQuery("(max-width:950px)");
+  // The shell decides the layout; "phone" also covers narrow Hub panes.
+  const isMobile = useLayoutMode() === "phone";
   const isHydratingDraftRef = useRef(false);
+  // A clear, inline error for the current send attempt (next to the toast).
+  const [composeError, setComposeError] = useState<{
+    text: string;
+    retry?: "thread-header";
+  } | null>(null);
+  // The MAIL thread header is published only after the message batch
+  // succeeds, so declining or failing the batch leaves no empty thread
+  // behind (Bugs #21).
+  const pendingThreadHeaderRef = useRef<any>(null);
   const lastLoadedDraftKeyRef = useRef<string | null>(null);
+  // What the composer started with (the reply quote, the forward header, a
+  // prefilled subject). Content equal to this is not "something the user
+  // wrote", so it is neither saved as a draft nor guarded on Discard.
+  const initialValueRef = useRef("");
+  const initialSubjectRef = useRef("");
+  // A draft opened from the Drafts mailbox: its stored key (deleted once the
+  // composer saves under a different key) and, while it is being applied, the
+  // draft itself so the reply/forward initialisers do not overwrite it.
+  const openedDraftKeyRef = useRef<string | null>(null);
+  const pendingDraftRef = useRef<StoredComposeDraft | null>(null);
+  const skipNextDraftHydrationRef = useRef(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
+  // Attachments of a forwarded message being fetched and decrypted so they
+  // can be re-published, encrypted, to the new recipient.
+  const [forwardAttachmentJobs, setForwardAttachmentJobs] = useState<
+    ForwardAttachmentJob[]
+  >([]);
+  const forwardJobControllersRef = useRef(new Map<string, AbortController>());
 
   const { Modal, showModal } = useConfirmationModal({
     title: "Important",
     message:
       "To keep yourself anonymous remember to not use the same alias as the person you are messaging",
   });
+  const { Modal: DiscardModal, showModal: showDiscardModal } =
+    useConfirmationModal({
+      title: "Discard this message?",
+      message:
+        "What you wrote, and the draft saved on this device, will be deleted.",
+    });
 
   const fromOptions = useMemo(() => {
     const options = dedupeStrings([user?.name || "", ...ownedNames]);
@@ -361,9 +406,27 @@ export const NewMessage = ({
     return normalizeJoinedGroups(joinedGroups);
   }, [joinedGroups]);
 
+  // "Recent" means recent: last contact in either direction, newest first.
+  const recipientActivity = useMemo(() => {
+    return recipientActivityByName(recentInboxMessages, openedMessagesById, [
+      user?.name || "",
+      ...ownedNames,
+    ]);
+  }, [openedMessagesById, ownedNames, recentInboxMessages, user?.name]);
+
   const knownRecipientNameOptions = useMemo(() => {
-    return dedupeStrings(priorityRecipientNames);
-  }, [priorityRecipientNames]);
+    return sortNamesByRecency(
+      dedupeStrings(priorityRecipientNames),
+      recipientActivity
+    );
+  }, [priorityRecipientNames, recipientActivity]);
+
+  // Inline check of the typed name against the name cache (one GET_NAME_DATA
+  // per name per session), debounced so a pause in typing costs one request.
+  const [recipientCheck, setRecipientCheck] = useState<{
+    name: string;
+    status: "checking" | "found" | "missing";
+  } | null>(null);
 
   useEffect(() => {
     if (!fromOptions.length) {
@@ -532,14 +595,52 @@ export const NewMessage = ({
   );
   const isGroupTarget = resolvedTarget?.type === "group";
   const allowAliasAndBcc = !isGroupTarget;
+
+  useEffect(() => {
+    const candidate =
+      resolvedTarget?.type === "name" ? resolvedTarget.label.trim() : "";
+    if (!candidate) {
+      setRecipientCheck(null);
+      return;
+    }
+    const known = peekName(candidate);
+    if (known) {
+      setRecipientCheck({
+        name: candidate,
+        status: known.status === "found" ? "found" : "missing",
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setRecipientCheck({ name: candidate, status: "checking" });
+    const timeout = window.setTimeout(async () => {
+      try {
+        const lookup = await lookupName(candidate);
+        if (cancelled) return;
+        setRecipientCheck({
+          name: candidate,
+          status: lookup.status === "found" ? "found" : "missing",
+        });
+      } catch {
+        if (!cancelled) setRecipientCheck(null);
+      }
+    }, 450);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [resolvedTarget]);
   const activeDraftKey = useMemo(() => {
     const senderName = fromName.trim();
     if (!user?.address || !senderName || resolvedTarget?.type !== "name")
       return null;
     const targetName = resolvedTarget.label.trim();
     if (!targetName) return null;
-    return `${normalizeValue(senderName)}::${normalizeValue(targetName)}`;
-  }, [fromName, resolvedTarget, user?.address]);
+    // A reply keeps its own draft; a new mail to the same name keeps the old key.
+    const replyToId = typeof replyTo?.id === "string" ? replyTo.id : "";
+    return composeDraftKey(senderName, targetName, replyToId);
+  }, [fromName, replyTo?.id, resolvedTarget, user?.address]);
 
   useEffect(() => {
     if (allowAliasAndBcc) return;
@@ -560,19 +661,89 @@ export const NewMessage = ({
   const clearStoredDraft = useCallback(
     (draftKey?: string | null) => {
       const address = user?.address || "";
-      const normalizedDraftKey =
-        typeof draftKey === "string" ? draftKey.trim() : "";
-      if (!address || !normalizedDraftKey) return;
-
-      const existingDrafts = readComposeDraftsFromStorage(address);
-      if (!existingDrafts[normalizedDraftKey]) return;
-      delete existingDrafts[normalizedDraftKey];
-      writeComposeDraftsToStorage(address, existingDrafts);
+      if (!address) return;
+      deleteComposeDraft(address, draftKey);
+      if (draftKey && openedDraftKeyRef.current === draftKey) {
+        openedDraftKeyRef.current = null;
+      }
+      setDraftSavedAt(null);
     },
     [user?.address]
   );
 
+  const cancelForwardAttachmentJobs = useCallback(() => {
+    forwardJobControllersRef.current.forEach(controller => controller.abort());
+    forwardJobControllersRef.current.clear();
+    setForwardAttachmentJobs([]);
+  }, []);
+
+  const startForwardAttachmentJob = useCallback(
+    (reference: AttachmentReference) => {
+      const key = `forward:${reference.identifier}`;
+      forwardJobControllersRef.current.get(key)?.abort();
+      const controller = new AbortController();
+      forwardJobControllersRef.current.set(key, controller);
+      setForwardAttachmentJobs(prev => [
+        ...prev.filter(job => job.key !== key),
+        { key, reference, status: "loading" },
+      ]);
+
+      fetchAttachmentFile(reference, {
+        signal: controller.signal,
+        onProgress: progress => {
+          if (controller.signal.aborted) return;
+          setForwardAttachmentJobs(prev =>
+            prev.map(job => (job.key === key ? { ...job, progress } : job))
+          );
+        },
+      })
+        .then(file => {
+          if (controller.signal.aborted) return;
+          forwardJobControllersRef.current.delete(key);
+          setForwardAttachmentJobs(prev => prev.filter(job => job.key !== key));
+          setAttachments(prev => [
+            ...prev.filter(item => item?.forwardKey !== key),
+            {
+              file,
+              mimetype: file.type || null,
+              extension: extensionOfFile(file),
+              forwardKey: key,
+            },
+          ]);
+        })
+        .catch(error => {
+          if (controller.signal.aborted) return;
+          forwardJobControllersRef.current.delete(key);
+          const message =
+            typeof error?.message === "string" && error.message
+              ? error.message
+              : "The attachment could not be fetched";
+          setForwardAttachmentJobs(prev =>
+            prev.map(job =>
+              job.key === key ? { ...job, status: "error", error: message } : job
+            )
+          );
+        });
+    },
+    []
+  );
+
+  const removeForwardAttachmentJob = useCallback((key: string) => {
+    forwardJobControllersRef.current.get(key)?.abort();
+    forwardJobControllersRef.current.delete(key);
+    setForwardAttachmentJobs(prev => prev.filter(job => job.key !== key));
+  }, []);
+
+  useEffect(() => {
+    const controllers = forwardJobControllersRef.current;
+    return () => {
+      controllers.forEach(controller => controller.abort());
+      controllers.clear();
+    };
+  }, []);
+
   const resetComposerDraft = useCallback(() => {
+    cancelForwardAttachmentJobs();
     setAttachments([]);
     setSubject("");
     setDestinationName("");
@@ -586,10 +757,17 @@ export const NewMessage = ({
     setReplyPreviewMode("preview");
     setThreadPublishResult(null);
     setPendingPublishType("mail");
-  }, []);
+    initialValueRef.current = "";
+    initialSubjectRef.current = "";
+    pendingDraftRef.current = null;
+    skipNextDraftHydrationRef.current = false;
+    setDraftSavedAt(null);
+    setComposeError(null);
+  }, [cancelForwardAttachmentJobs]);
 
   const discardComposerDraft = useCallback(() => {
     clearStoredDraft(activeDraftKey || lastLoadedDraftKeyRef.current);
+    clearStoredDraft(openedDraftKeyRef.current);
     lastLoadedDraftKeyRef.current = null;
     resetComposerDraft();
     setReplyTo(null);
@@ -658,9 +836,38 @@ export const NewMessage = ({
 
     resetComposerDraft();
     lastLoadedDraftKeyRef.current = null;
+    openedDraftKeyRef.current = null;
     setIsOpen(true);
-    setReplyTo(null);
     setForwardInfo(null);
+
+    // Opening a stored draft: restore its fields here. Mail.tsx sets replyTo
+    // for a reply draft in the same render, so the reply initialiser must not
+    // overwrite the draft's subject and body (pendingDraftRef), and the
+    // key-based hydration below must not re-apply another draft.
+    const storedDraft =
+      composePrefill.draftKey && user?.address
+        ? readComposeDrafts(user.address)[composePrefill.draftKey]
+        : undefined;
+    if (storedDraft) {
+      openedDraftKeyRef.current = composePrefill.draftKey || null;
+      pendingDraftRef.current = storedDraft;
+      skipNextDraftHydrationRef.current = true;
+      isHydratingDraftRef.current = true;
+      const fields = draftFieldsOf(storedDraft);
+      setSubject(fields.subject);
+      setValue(fields.value);
+      setAliasValue(fields.aliasValue);
+      setShowAlias(fields.showAlias);
+      setShowBCC(fields.showBCC);
+      setBccNames(fields.bccNames);
+      setDraftSavedAt(storedDraft.updatedAt || null);
+      window.setTimeout(() => {
+        pendingDraftRef.current = null;
+        isHydratingDraftRef.current = false;
+      }, 0);
+    } else {
+      setReplyTo(null);
+    }
 
     if (composePrefill.fromName) {
       const matchingFrom = fromOptions.find(option => {
@@ -673,8 +880,9 @@ export const NewMessage = ({
     }
 
     const prefillSubject = composePrefill.subject;
-    if (typeof prefillSubject === "string") {
+    if (typeof prefillSubject === "string" && !storedDraft) {
       setSubject(prefillSubject);
+      initialSubjectRef.current = prefillSubject;
     }
 
     const toValue = (composePrefill.toValue || "").trim();
@@ -712,6 +920,7 @@ export const NewMessage = ({
       targetType: "name",
       source: "known-name",
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     composePrefill,
     fromOptions,
@@ -738,58 +947,126 @@ export const NewMessage = ({
           : null
       );
       setReplyPreviewMode("preview");
-      if (replyTo?.subject) {
-        setSubject(replyTo.subject);
+      const nextSubject = withSubjectPrefix(replyTo?.subject, "Re");
+      initialSubjectRef.current = nextSubject;
+      if (pendingDraftRef.current) {
+        // A stored reply draft is being opened: keep its subject and body.
+        initialValueRef.current = "";
+        return;
       }
+      setSubject(nextSubject);
+      // Start the editor with the quoted original (Quill 1 markup, so the
+      // original app renders it too). A stored draft for this reply, if any,
+      // replaces it when the draft key resolves.
+      const quoteHtml = buildReplyQuoteHtml({
+        sender: replyTo?.user,
+        sentAt: formatFullTimestamp(replyTo?.createdAt),
+        lines: messageBodyLines(replyTo, extractTextFromSlate),
+      });
+      setValue(quoteHtml);
+      initialValueRef.current = quoteHtml;
     }
   }, [replyTo]);
 
+  // Reply all: everyone from the original's to/cc (minus our own names and
+  // the sender) becomes a Bcc chip, i.e. a separate encrypted copy.
   useEffect(() => {
-    if (forwardInfo) {
-      setIsOpen(true);
-      lastLoadedDraftKeyRef.current = null;
-      setValue(forwardInfo);
+    if (!replyTo || !replyAll) return;
+    const { others } = replyAllRecipients(replyTo, [
+      user?.name || "",
+      ...ownedNames,
+    ]);
+    if (!others.length) return;
+
+    let cancelled = false;
+    setShowBCC(true);
+    void (async () => {
+      const resolved = await Promise.all(
+        others.map(async nameToAdd => {
+          try {
+            return await resolveName(nameToAdd);
+          } catch {
+            return null;
+          }
+        })
+      );
+      if (cancelled) return;
+      const missing = others.filter((_, index) => !resolved[index]);
+      const chips: NameChip[] = resolved
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        .map(item => ({
+          name: item.name,
+          publicKey: item.publicKey,
+          address: item.address,
+        }));
+      setBccNames(prev => {
+        const known = new Set(prev.map(chip => normalizeValue(chip.name)));
+        return [
+          ...prev,
+          ...chips.filter(chip => !known.has(normalizeValue(chip.name))),
+        ];
+      });
+      if (missing.length) {
+        dispatch(
+          setNotification({
+            msg: `Could not add to Reply all (name not found or no public key): ${missing.join(
+              ", "
+            )}`,
+            alertType: "error",
+          })
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replyAll, replyTo?.id]);
+
+  useEffect(() => {
+    if (!forwardInfo) return;
+    setIsOpen(true);
+    lastLoadedDraftKeyRef.current = null;
+
+    const info: ForwardInfo =
+      typeof forwardInfo === "string" ? { html: forwardInfo } : forwardInfo;
+    const source = info.message;
+    if (!source || typeof source !== "object") {
+      // An older caller sent ready-made HTML: use it as is.
+      const html = info.html || "";
+      setValue(html);
+      initialValueRef.current = html;
+      return;
     }
+
+    const nextSubject = withSubjectPrefix(source.subject, "Fwd");
+    setSubject(nextSubject);
+    initialSubjectRef.current = nextSubject;
+    const html = buildForwardHtml(
+      {
+        from: source.user,
+        sentAt: formatFullTimestamp(source.createdAt),
+        subject: typeof source.subject === "string" ? source.subject : "",
+        to: info.to || source.recipient || user?.name || "",
+      },
+      messageBodyLines(source, extractTextFromSlate)
+    );
+    setValue(html);
+    initialValueRef.current = html;
+
+    // Re-attach the original files: fetched and decrypted here, re-published
+    // encrypted to the new recipient on Send.
+    cancelForwardAttachmentJobs();
+    setAttachments(prev => prev.filter(item => !item?.forwardKey));
+    attachmentReferencesOf(source).forEach(startForwardAttachmentJob);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forwardInfo]);
 
   const replyBodyText = useMemo(() => {
     if (!replyTo) return "";
-
-    if (typeof replyTo?.textContentV2 === "string" && replyTo.textContentV2) {
-      return stripHtmlTags(replyTo.textContentV2).trim();
-    }
-
-    if (Array.isArray(replyTo?.textContent)) {
-      return extractTextFromSlate(replyTo.textContent).trim();
-    }
-
-    if (typeof replyTo?.textContent === "string") {
-      return replyTo.textContent.trim();
-    }
-
-    if (typeof replyTo?.htmlContent === "string" && replyTo.htmlContent) {
-      return stripHtmlTags(replyTo.htmlContent).trim();
-    }
-
-    return "";
+    return messageBodyLines(replyTo, extractTextFromSlate).join("\n").trim();
   }, [replyTo]);
-
-  const replyQuoteIntro = useMemo(() => {
-    if (!replyTo) return "";
-    const sender = replyTo?.user || "Unknown sender";
-    const sentAt = formatFullTimestamp(replyTo?.createdAt);
-    return `On ${sentAt}, ${sender} wrote:`;
-  }, [replyTo]);
-
-  const quotedReplyHtml = useMemo(() => {
-    if (!replyTo) return "";
-    const body = replyBodyText || "- no message body -";
-    const escapedBody = escapeHtml(body).replace(/\n/g, "<br />");
-
-    return `<blockquote data-qmail-quote="true"><p>${escapeHtml(
-      replyQuoteIntro
-    )}</p><p>[Message content preserved in thread history]</p></blockquote>`;
-  }, [replyBodyText, replyQuoteIntro, replyTo]);
 
   useEffect(() => {
     if (!activeDraftKey || !user?.address) {
@@ -797,22 +1074,25 @@ export const NewMessage = ({
       return;
     }
     if (activeDraftKey === lastLoadedDraftKeyRef.current) return;
-
-    const storedDraft = readComposeDraftsFromStorage(user.address)[
-      activeDraftKey
-    ];
     lastLoadedDraftKeyRef.current = activeDraftKey;
+    if (skipNextDraftHydrationRef.current) {
+      // The composer was just filled from a draft opened by key.
+      skipNextDraftHydrationRef.current = false;
+      return;
+    }
+
+    const storedDraft = readComposeDrafts(user.address)[activeDraftKey];
     if (!storedDraft) return;
 
     isHydratingDraftRef.current = true;
-    setSubject(storedDraft.subject || "");
-    setValue(storedDraft.value || "");
-    setAliasValue(storedDraft.aliasValue || "");
-    setShowAlias(Boolean(storedDraft.showAlias || storedDraft.aliasValue));
-    setShowBCC(Boolean(storedDraft.showBCC && storedDraft.bccNames?.length));
-    setBccNames(
-      Array.isArray(storedDraft.bccNames) ? storedDraft.bccNames : []
-    );
+    const fields = draftFieldsOf(storedDraft);
+    setSubject(fields.subject);
+    setValue(fields.value);
+    setAliasValue(fields.aliasValue);
+    setShowAlias(fields.showAlias);
+    setShowBCC(fields.showBCC);
+    setBccNames(fields.bccNames);
+    setDraftSavedAt(storedDraft.updatedAt || null);
     window.setTimeout(() => {
       isHydratingDraftRef.current = false;
     }, 0);
@@ -828,11 +1108,16 @@ export const NewMessage = ({
         resolvedTarget?.type === "name" ? resolvedTarget.label.trim() : "";
       if (!fromNameValue || !toNameValue) return;
 
+      const subjectChanged =
+        subject.trim() && subject !== initialSubjectRef.current;
+      const bodyChanged =
+        value !== initialValueRef.current && stripHtmlTags(value).trim();
       const hasDraftContent = Boolean(
-        subject.trim() ||
-          stripHtmlTags(value).trim() ||
+        subjectChanged ||
+          bodyChanged ||
           aliasValue.trim() ||
-          bccNames.length
+          bccNames.length ||
+          attachments.length
       );
 
       if (!hasDraftContent) {
@@ -841,8 +1126,7 @@ export const NewMessage = ({
       }
 
       const updatedAt = Date.now();
-      const existingDrafts = readComposeDraftsFromStorage(user.address);
-      existingDrafts[activeDraftKey] = {
+      const draft: StoredComposeDraft = {
         draftId: createComposeDraftId(fromNameValue, toNameValue, updatedAt),
         fromName: fromNameValue,
         toName: toNameValue,
@@ -853,8 +1137,34 @@ export const NewMessage = ({
         showBCC,
         bccNames,
         updatedAt,
+        kind: "mail",
       };
-      writeComposeDraftsToStorage(user.address, existingDrafts);
+      // Additive fields: attachment names only (bytes are never stored), and
+      // which message a reply answers so the Drafts list can reopen it.
+      if (attachments.length) {
+        draft.attachments = attachments.map(item => ({
+          name: item?.file?.name || "attachment",
+          size: Number(item?.file?.size || 0),
+          type: item?.file?.type || null,
+        }));
+      }
+      if (replyTo?.id) {
+        draft.replyTo = {
+          id: replyTo.id,
+          user: replyTo.user,
+          subject: replyTo.subject,
+          createdAt: replyTo.createdAt,
+        };
+        if (replyAll) draft.replyAll = true;
+      }
+      saveComposeDraft(user.address, activeDraftKey, draft);
+      setDraftSavedAt(updatedAt);
+      // Opened under another key (e.g. a reply draft whose message is no
+      // longer in memory): the old entry would otherwise linger as a duplicate.
+      if (openedDraftKeyRef.current && openedDraftKeyRef.current !== activeDraftKey) {
+        deleteComposeDraft(user.address, openedDraftKeyRef.current);
+        openedDraftKeyRef.current = null;
+      }
     }, 350);
 
     return () => {
@@ -863,9 +1173,12 @@ export const NewMessage = ({
   }, [
     activeDraftKey,
     aliasValue,
+    attachments,
     bccNames,
     clearStoredDraft,
     fromName,
+    replyAll,
+    replyTo,
     resolvedTarget,
     showAlias,
     showBCC,
@@ -1048,6 +1361,13 @@ export const NewMessage = ({
     if (!target) {
       errorMsg = "Cannot send without selecting a recipient or group";
     }
+    if (
+      target?.type === "name" &&
+      recipientCheck?.status === "missing" &&
+      normalizeValue(recipientCheck.name) === normalizeValue(target.label)
+    ) {
+      errorMsg = `"${target.label}" is not a registered name`;
+    }
     if (target?.type === "group" && !subject.trim()) {
       errorMsg = "Please provide a Subject (used as the thread title)";
     }
@@ -1067,6 +1387,12 @@ export const NewMessage = ({
     if (noExtension.length > 0) {
       errorMsg =
         "One of your attachments does not have an extension (example: .png, .pdf, ect...)";
+    }
+    if (forwardAttachmentJobs.some(job => job.status === "loading")) {
+      errorMsg = "Forwarded attachments are still being fetched";
+    } else if (forwardAttachmentJobs.some(job => job.status === "error")) {
+      errorMsg =
+        "A forwarded attachment could not be fetched: retry it or remove it";
     }
 
     if (errorMsg) {
@@ -1101,7 +1427,9 @@ export const NewMessage = ({
 
         const groupPublicKeys = await fetchGroupPublicKeys(groupId);
         if (!groupPublicKeys.length) {
-          throw new Error("No group members were found for encryption");
+          throw new Error(
+            "No group members with a public key were found, so the thread cannot be encrypted. Check the group, or try again in a moment."
+          );
         }
 
         const createdAt = Date.now();
@@ -1125,7 +1453,8 @@ export const NewMessage = ({
           identifier: threadIdentifier,
           description: threadTitle.slice(0, 200),
         };
-        await qortalRequest(threadPublishRequest);
+        // Published after the message batch succeeds (see onSubmit).
+        pendingThreadHeaderRef.current = threadPublishRequest;
 
         const threadMessageObject = {
           subject: threadTitle,
@@ -1171,26 +1500,13 @@ export const NewMessage = ({
       }
 
       const recipientName = target.label;
-      const recipientNameData = await qortalRequest({
-        action: "GET_NAME_DATA",
-        name: recipientName,
-      });
-      const recipientAddress =
-        typeof recipientNameData?.owner === "string"
-          ? recipientNameData.owner
-          : "";
-      if (!recipientAddress) {
+      // Through the name cache: the inline check already looked this name up.
+      const recipientLookup = await lookupName(recipientName);
+      if (recipientLookup.status !== "found") {
         throw new Error("Recipient name cannot be found");
       }
-
-      const recipientAccount = await qortalRequest({
-        action: "GET_ACCOUNT_DATA",
-        address: recipientAddress,
-      });
-      const recipientPublicKey =
-        typeof recipientAccount?.publicKey === "string"
-          ? recipientAccount.publicKey
-          : "";
+      const recipientAddress = recipientLookup.address;
+      const recipientPublicKey = await lookupPublicKey(recipientAddress);
       if (!recipientPublicKey) {
         throw new Error("Cannot retrieve recipient public key");
       }
@@ -1198,44 +1514,27 @@ export const NewMessage = ({
       const bccPublicKeys = bccNames.map(item => item.publicKey);
       const sendId = uid();
       const createdAt = Date.now();
-      const mailObject: any = {
+      // Binding JSON shape (data contract §3a) plus the additive to/cc fields;
+      // the embedded reply history is stripped of its own history (Bugs #12).
+      const mailObject: any = buildDirectMailObject({
         subject,
         createdAt,
-        version: 1,
         attachments: attachmentReferences,
         textContentV2: composedMessageBody,
-        generalData: {
-          thread: [],
-          threadV2: [],
-        },
         recipient: recipientName,
-      };
-
-      if (isReply) {
-        const previousThread = Array.isArray(replyTo?.generalData?.threadV2)
-          ? replyTo.generalData.threadV2
-          : [];
-        mailObject.generalData.threadV2 = [
-          ...previousThread,
-          {
-            reference: {
-              identifier: replyTo.id,
-              name: replyTo.user,
-              service: MAIL_SERVICE_TYPE,
-            },
-            data: replyTo,
-          },
-        ];
-      }
+        replyTo: isReply ? replyTo : undefined,
+        service: MAIL_SERVICE_TYPE,
+      });
 
       const mailPostToBase64 = await objectToBase64(mailObject);
-      let identifier = `_mail_qortal_qmail_${recipientName.slice(
-        0,
-        20
-      )}_${recipientAddress.slice(-6)}_mail_${sendId}`;
+      let identifier = directMailIdentifier(
+        recipientName,
+        recipientAddress,
+        sendId
+      );
 
       if (aliasValue) {
-        identifier = `_mail_qortal_qmail_${aliasValue}_mail_${sendId}`;
+        identifier = aliasMailIdentifier(aliasValue, sendId);
       }
 
       const primaryMailPublish = {
@@ -1252,10 +1551,11 @@ export const NewMessage = ({
           const copyMailObject = structuredClone(mailObject);
           copyMailObject.recipient = element.name;
           const bccMailToBase64 = await objectToBase64(copyMailObject);
-          const bccIdentifier = `_mail_qortal_qmail_${element.name.slice(
-            0,
-            20
-          )}_${element.address.slice(-6)}_mail_${sendId}`;
+          const bccIdentifier = directMailIdentifier(
+            element.name,
+            element.address,
+            sendId
+          );
 
           mailPublishes.push({
             action: "PUBLISH_QDN_RESOURCE",
@@ -1281,6 +1581,7 @@ export const NewMessage = ({
       setPublishes(null);
       setPendingPublishType("mail");
       setThreadPublishResult(null);
+      pendingThreadHeaderRef.current = null;
 
       const message =
         typeof error === "string"
@@ -1289,6 +1590,7 @@ export const NewMessage = ({
           ? error.error
           : error?.message || "Failed to send message";
 
+      setComposeError({ text: message });
       dispatch(
         setNotification({
           msg: message,
@@ -1300,11 +1602,105 @@ export const NewMessage = ({
   }
 
   const sendMail = () => {
-    void publishQDNResource();
+    setComposeError(null);
+    publishQDNResource().catch(() => {
+      // Already reported inline and as a toast.
+    });
+  };
+
+  // Publishes the thread header kept back until the posts went through.
+  // Returns false (and shows a Retry) when that publish fails.
+  const finishThreadPublish = useCallback(async (): Promise<boolean> => {
+    const header = pendingThreadHeaderRef.current;
+    if (!header) return true;
+    try {
+      await qortalRequest(header);
+      pendingThreadHeaderRef.current = null;
+      return true;
+    } catch (error: any) {
+      const detail =
+        typeof error?.message === "string" && error.message
+          ? ` (${error.message})`
+          : "";
+      setComposeError({
+        text: `Your post was published, but the thread's title record was not${detail}. Retry to publish it; until then the thread is not listed.`,
+        retry: "thread-header",
+      });
+      return false;
+    }
+  }, []);
+
+  const completeThreadPublish = useCallback(() => {
+    dispatch(
+      setNotification({
+        msg: "Thread published",
+        alertType: "success",
+      })
+    );
+    if (threadPublishResult) {
+      onThreadPublished?.(threadPublishResult);
+    }
+    clearStoredDraft(activeDraftKey);
+    clearStoredDraft(openedDraftKeyRef.current);
+    setIsOpenMultiplePublish(false);
+    setPublishes(null);
+    setPendingPublishType("mail");
+    setThreadPublishResult(null);
+    setComposeError(null);
+    closeModal();
+  }, [
+    activeDraftKey,
+    clearStoredDraft,
+    closeModal,
+    dispatch,
+    onThreadPublished,
+    threadPublishResult,
+  ]);
+
+  const retryThreadHeader = async () => {
+    setComposeError(null);
+    const ok = await finishThreadPublish();
+    if (ok) completeThreadPublish();
+  };
+
+  const hasUserContent = () => {
+    const subjectChanged =
+      subject.trim() && subject !== initialSubjectRef.current;
+    const bodyChanged =
+      value !== initialValueRef.current && stripHtmlTags(value).trim();
+    return Boolean(
+      subjectChanged ||
+        bodyChanged ||
+        attachments.length ||
+        bccNames.length ||
+        aliasValue.trim()
+    );
+  };
+
+  // Discard asks only when there is something to lose.
+  const requestDiscard = async () => {
+    if (hasUserContent()) {
+      const confirmed = await showDiscardModal();
+      if (!confirmed) return;
+    }
+    setComposeError(null);
+    discardComposerDraft();
+  };
+
+  const handleComposerKeyDown = (event: React.KeyboardEvent) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!isOpenMultiplePublish) sendMail();
+    }
   };
 
   const sendButtonLabel = replyTo
-    ? "Reply"
+    ? replyAll
+      ? "Reply all"
+      : "Reply"
+    : forwardInfo
+    ? "Forward"
     : isGroupTarget
     ? "Create Thread"
     : "Send Message";
@@ -1496,6 +1892,8 @@ export const NewMessage = ({
                   );
                 }}
                 renderOption={(props, option) => {
+                  // MUI 9 puts `key` in props; spreading it warns (Bugs #22).
+                  const { key: _optionKey, ...optionProps } = props as any;
                   const typeLabel =
                     option.targetType === "group" ? "Group" : "Name";
                   const sourceLabel =
@@ -1506,7 +1904,12 @@ export const NewMessage = ({
                       : "Directory";
 
                   return (
-                    <Box component="li" {...props} key={option.id}>
+                    <Box
+                      component="li"
+                      {...optionProps}
+                      key={option.id}
+                      sx={{ minHeight: 44 }}
+                    >
                       <Box
                         sx={{
                           width: "100%",
@@ -1514,20 +1917,47 @@ export const NewMessage = ({
                           alignItems: "center",
                           justifyContent: "space-between",
                           gap: "12px",
+                          minWidth: 0,
                         }}
                       >
-                        <Typography
+                        <Box
                           sx={{
-                            color: "var(--qmail-compose-text)",
-                            fontSize: "0.95rem",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            minWidth: 0,
                           }}
                         >
-                          {option.label}
-                        </Typography>
+                          {option.targetType === "group" ? (
+                            <ForumOutlinedIcon
+                              sx={{
+                                fontSize: 22,
+                                color: "var(--qmail-compose-muted)",
+                              }}
+                            />
+                          ) : (
+                            <AvatarWrapper
+                              height="28px"
+                              user={option.label}
+                              fallback={option.label}
+                            />
+                          )}
+                          <Typography
+                            noWrap
+                            sx={{
+                              color: "var(--qmail-compose-text)",
+                              fontSize: "0.95rem",
+                              minWidth: 0,
+                            }}
+                          >
+                            {option.label}
+                          </Typography>
+                        </Box>
                         <Typography
                           sx={{
                             color: "var(--qmail-compose-muted)",
-                            fontSize: "0.75rem",
+                            fontSize: "0.875rem",
+                            flexShrink: 0,
                           }}
                         >
                           {typeLabel} · {sourceLabel}
@@ -1544,16 +1974,34 @@ export const NewMessage = ({
                   flexShrink: 0,
                 }}
               >
-                <AliasLabelP onClick={() => setShowAlias(true)}>
-                  Add Alias
-                </AliasLabelP>
-                <AliasLabelP onClick={() => setShowBCC(true)}>Bcc</AliasLabelP>
+                {!showAlias && !requireSenderAlias && (
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={() => setShowAlias(true)}
+                    sx={aliasToggleSx}
+                  >
+                    Send to alias
+                  </Button>
+                )}
+                {!showBCC && (
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={() => setShowBCC(true)}
+                    sx={aliasToggleSx}
+                  >
+                    Bcc
+                  </Button>
+                )}
               </NewMessageAliasContainer>
             )}
           </NewMessageInputRow>
 
-          {(isDirectorySearchLoading || isGroupTarget) && (
+          {(isDirectorySearchLoading || isGroupTarget || recipientCheck) && (
             <Box
+              role="status"
+              aria-live="polite"
               sx={{
                 display: "flex",
                 alignItems: "center",
@@ -1561,15 +2009,37 @@ export const NewMessage = ({
                 flexWrap: "wrap",
               }}
             >
-              {isDirectorySearchLoading && <CircularProgress size={14} />}
+              {(isDirectorySearchLoading ||
+                recipientCheck?.status === "checking") && (
+                <CircularProgress size={14} />
+              )}
+              {!isGroupTarget && recipientCheck?.status === "found" && (
+                <CheckCircleOutlineIcon
+                  sx={{ fontSize: 18, color: "var(--qmail-compose-muted)" }}
+                />
+              )}
+              {!isGroupTarget && recipientCheck?.status === "missing" && (
+                <ErrorOutlineIcon
+                  sx={{ fontSize: 18, color: "var(--qmail-danger-text)" }}
+                />
+              )}
               <Typography
                 sx={{
-                  fontSize: "0.78rem",
-                  color: "var(--qmail-compose-muted)",
+                  fontSize: "0.875rem",
+                  color:
+                    !isGroupTarget && recipientCheck?.status === "missing"
+                      ? "var(--qmail-danger-text)"
+                      : "var(--qmail-compose-muted)",
                 }}
               >
                 {isGroupTarget
                   ? "Group selected: this will publish a new thread. Subject is used as thread title."
+                  : recipientCheck?.status === "missing"
+                  ? `"${recipientCheck.name}" is not a registered name`
+                  : recipientCheck?.status === "found"
+                  ? `${recipientCheck.name} is a registered name`
+                  : recipientCheck?.status === "checking"
+                  ? "Checking the name…"
                   : "Type to search joined groups and registered names."}
               </Typography>
             </Box>
@@ -1614,16 +2084,24 @@ export const NewMessage = ({
                   minWidth: 0,
                 }}
               >
-                <NewMessageInputLabelP>Alias:</NewMessageInputLabelP>
+                <NewMessageInputLabelP>
+                  {requireSenderAlias ? "Reply alias:" : "Send to alias:"}
+                </NewMessageInputLabelP>
                 <Input
-                  id="standard-adornment-name"
+                  id="qmail-compose-alias"
                   value={aliasValue}
                   onChange={e => {
                     setAliasValue(e.target.value);
                   }}
+                  placeholder={
+                    requireSenderAlias
+                      ? "An alias of yours (not the inbox's)"
+                      : "The recipient's alias inbox"
+                  }
                   disableUnderline
                   autoComplete="off"
                   autoCorrect="off"
+                  inputProps={{ "aria-describedby": "qmail-compose-alias-help" }}
                   sx={{
                     width: "100%",
                     color: "var(--new-message-text)",
@@ -1644,6 +2122,20 @@ export const NewMessage = ({
               </NewMessageAliasContainer>
             </NewMessageInputRow>
           )}
+          {allowAliasAndBcc && (requireSenderAlias || showAlias) && (
+            <Typography
+              id="qmail-compose-alias-help"
+              sx={{
+                fontSize: "0.875rem",
+                color: "var(--qmail-compose-muted)",
+                mt: "-0.4rem",
+              }}
+            >
+              {requireSenderAlias
+                ? "Replies from an alias inbox are sent under an alias of your own, so the other side keeps writing to the alias. It must differ from the inbox's alias."
+                : "The message is delivered to the alias inbox named here instead of the recipient's name inbox; it is still encrypted to the recipient, and you stay the sender. Bcc copies are not sent with an alias."}
+            </Typography>
+          )}
 
           {allowAliasAndBcc && showBCC && (
             <NewMessageInputRow>
@@ -1659,6 +2151,17 @@ export const NewMessage = ({
               </NewMessageAliasContainer>
             </NewMessageInputRow>
           )}
+          {allowAliasAndBcc && replyAll && replyTo && (
+            <Typography
+              sx={{
+                fontSize: "0.875rem",
+                color: "var(--qmail-compose-muted)",
+              }}
+            >
+              Reply all: the other people on the original get their own copy
+              (listed under Bcc). Remove anyone who should not receive it.
+            </Typography>
+          )}
 
           <AttachmentContainer
             {...getRootProps()}
@@ -1670,49 +2173,137 @@ export const NewMessage = ({
             <NewMessageAttachmentImg src={AttachmentSVG} />
           </AttachmentContainer>
 
-          {attachments.map(({ file, extension }, index) => {
+          {attachments.map(({ file, extension, forwardKey }, index) => {
             return (
               <Box
                 key={`${file?.name || "attachment"}-${index}`}
                 sx={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "15px",
+                  gap: "8px",
+                  minWidth: 0,
                 }}
               >
                 <Typography
                   sx={{
                     fontSize: "1rem",
+                    minWidth: 0,
+                    overflowWrap: "anywhere",
                     color: !extension
                       ? "var(--qmail-danger-text)"
                       : "var(--qmail-compose-text)",
                   }}
                 >
                   {file?.name} ({formatBytes(file?.size || 0)})
+                  {forwardKey ? " · forwarded" : ""}
                 </Typography>
-                <CloseIcon
+                <IconButton
+                  aria-label={`Remove attachment ${file?.name || ""}`}
                   onClick={() =>
                     setAttachments(prev =>
                       prev.filter((item, itemIndex) => itemIndex !== index)
                     )
                   }
+                  size="small"
                   sx={{
-                    height: "16px",
-                    width: "auto",
-                    cursor: "pointer",
+                    minWidth: 44,
+                    minHeight: 44,
                     color: "var(--qmail-compose-muted)",
                   }}
-                />
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
                 {!extension && (
                   <Typography
                     sx={{
-                      fontSize: "0.75rem",
+                      fontSize: "0.875rem",
                       fontWeight: "bold",
                       color: "var(--qmail-danger-text)",
                     }}
                   >
                     This file has no extension
                   </Typography>
+                )}
+              </Box>
+            );
+          })}
+
+          {forwardAttachmentJobs.map(job => {
+            const label =
+              job.reference.originalFilename ||
+              job.reference.filename ||
+              job.reference.identifier;
+            const percent = job.progress?.percentLoaded;
+            const hasPercent =
+              typeof percent === "number" && Number.isFinite(percent) && percent > 0;
+            return (
+              <Box
+                key={job.key}
+                role="status"
+                aria-live="polite"
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                  minWidth: 0,
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    minWidth: 0,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: "1rem",
+                      minWidth: 0,
+                      overflowWrap: "anywhere",
+                      color:
+                        job.status === "error"
+                          ? "var(--qmail-danger-text)"
+                          : "var(--qmail-compose-text)",
+                    }}
+                  >
+                    {label}
+                    {" · "}
+                    {job.status === "error"
+                      ? job.error || "Could not fetch"
+                      : `${fetchingLabel(job.progress?.status)}${
+                          hasPercent ? ` ${Math.min(100, Math.round(percent))}%` : ""
+                        }`}
+                  </Typography>
+                  {job.status === "error" && (
+                    <Button
+                      size="small"
+                      onClick={() => startForwardAttachmentJob(job.reference)}
+                      sx={{ textTransform: "none", minHeight: 44 }}
+                    >
+                      Retry
+                    </Button>
+                  )}
+                  <IconButton
+                    aria-label={`Remove attachment ${label}`}
+                    onClick={() => removeForwardAttachmentJob(job.key)}
+                    size="small"
+                    sx={{
+                      minWidth: 44,
+                      minHeight: 44,
+                      color: "var(--qmail-compose-muted)",
+                    }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+                {job.status === "loading" && (
+                  <LinearProgress
+                    variant={hasPercent ? "determinate" : "indeterminate"}
+                    value={hasPercent ? Math.min(100, percent) : undefined}
+                    sx={{ borderRadius: 2, maxWidth: 320 }}
+                  />
                 )}
               </Box>
             );
@@ -1817,7 +2408,7 @@ export const NewMessage = ({
                       minWidth: "unset",
                       textTransform: "none",
                       color: "var(--qmail-compose-text)",
-                      fontSize: "0.8rem",
+                      fontSize: "0.875rem",
                     }}
                   >
                     Hide
@@ -1826,7 +2417,7 @@ export const NewMessage = ({
               </Box>
               <Typography
                 sx={{
-                  fontSize: "0.8rem",
+                  fontSize: "0.875rem",
                   color: "var(--qmail-compose-muted)",
                 }}
               >
@@ -1835,12 +2426,12 @@ export const NewMessage = ({
               </Typography>
               <Typography
                 sx={{
-                  fontSize: "0.8rem",
+                  fontSize: "0.875rem",
                   color: "var(--qmail-compose-muted)",
                 }}
               >
-                Your reply is written above. The original message preview is
-                shown for context but is not included in the sent message.
+                The original is quoted in your reply below, and the message
+                itself travels with the reply as thread history.
               </Typography>
               {replyPreviewMode !== "hidden" && (
                 <Box
@@ -1898,26 +2489,37 @@ export const NewMessage = ({
       <InstanceFooter
         sx={[{
           backgroundColor: "var(--qmail-compose-footer-surface)",
+          borderTop: "1px solid var(--qmail-compose-divider)",
           alignItems: "stretch",
-          height: "auto"
+          height: "auto",
+          gap: "0.5rem"
         }, isMobile ? {
-          padding: "0.85rem 0.9rem calc(env(safe-area-inset-bottom, 0px) + 0.85rem)"
+          padding: "0.6rem 0.75rem calc(env(safe-area-inset-bottom, 0px) + 0.6rem)"
         } : {
-          padding: "1rem 2rem"
-        }, isMobile ? {
-          position: "sticky"
-        } : {
-          position: "static"
-        }, isMobile ? {
-          bottom: 0
-        } : {
-          bottom: "auto"
-        }, isMobile ? {
-          zIndex: 2
-        } : {
-          zIndex: "auto"
+          padding: "0.85rem 2rem"
         }]}
       >
+        {composeError && (
+          <Alert
+            severity="error"
+            onClose={() => setComposeError(null)}
+            action={
+              composeError.retry === "thread-header" ? (
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => void retryThreadHeader()}
+                  sx={{ minHeight: 36 }}
+                >
+                  Retry
+                </Button>
+              ) : undefined
+            }
+            sx={{ alignItems: "center", fontSize: "0.875rem" }}
+          >
+            {composeError.text}
+          </Alert>
+        )}
         <Box
           sx={{
             display: "flex",
@@ -1930,7 +2532,7 @@ export const NewMessage = ({
         >
           <Button
             variant="outlined"
-            onClick={discardComposerDraft}
+            onClick={() => void requestDiscard()}
             sx={{
               textTransform: "none",
               borderColor: "var(--qmail-shell-border)",
@@ -1942,33 +2544,65 @@ export const NewMessage = ({
           >
             Discard
           </Button>
-          <NewMessageSendButton
-            sx={[{
-              marginLeft: "auto"
-            }, isMobile ? {
-              padding: "10px 14px"
-            } : {
-              padding: "8px 16px 8px 12px"
-            }]}
+          {draftSavedAt && (
+            <Typography
+              role="status"
+              aria-live="polite"
+              sx={{
+                fontSize: "0.875rem",
+                color: "var(--qmail-compose-muted)",
+              }}
+            >
+              Draft saved {formatFullTimestamp(draftSavedAt).slice(11, 16)}
+            </Typography>
+          )}
+          <Button
+            variant="contained"
             onClick={sendMail}
+            disabled={isOpenMultiplePublish}
+            title="Ctrl+Enter (⌘+Enter on Mac) also sends"
+            endIcon={
+              isGroupTarget && !replyTo ? (
+                <CreateThreadIcon
+                  color="currentColor"
+                  opacity={1}
+                  height="22px"
+                  width="22px"
+                />
+              ) : (
+                <SendNewMessage
+                  color="currentColor"
+                  opacity={1}
+                  height="22px"
+                  width="22px"
+                />
+              )
+            }
+            sx={[{
+              marginLeft: "auto",
+              minHeight: 44,
+              minWidth: 120,
+              textTransform: "none",
+              fontWeight: 600,
+              borderRadius: "0.85rem",
+              px: "1.1rem",
+              color: "var(--qmail-action-primary-text)",
+              backgroundColor: "var(--qmail-action-primary-bg)",
+              border: "1px solid var(--qmail-action-primary-border)",
+              boxShadow: "none",
+              "&:hover": {
+                backgroundColor: "var(--qmail-action-primary-hover)",
+                boxShadow: "none",
+              },
+              "& svg path": { fill: "currentColor" },
+            }, isMobile ? {
+              flex: "1 1 auto"
+            } : {
+              flex: "0 0 auto"
+            }]}
           >
-            <NewMessageSendP>{sendButtonLabel}</NewMessageSendP>
-            {isGroupTarget && !replyTo ? (
-              <CreateThreadIcon
-                color="currentColor"
-                opacity={1}
-                height="25px"
-                width="25px"
-              />
-            ) : (
-              <SendNewMessage
-                color="currentColor"
-                opacity={1}
-                height="25px"
-                width="25px"
-              />
-            )}
-          </NewMessageSendButton>
+            {sendButtonLabel}
+          </Button>
         </Box>
       </InstanceFooter>
     </>
@@ -1976,9 +2610,11 @@ export const NewMessage = ({
 
   return (
     <Box
+      onKeyDown={handleComposerKeyDown}
       sx={[{
         display: "flex",
         height: "100%",
+        minHeight: 0,
         width: "100%"
       }, inlineMode ? {
         flexDirection: "column"
@@ -2005,6 +2641,7 @@ export const NewMessage = ({
             display: "flex",
             flexDirection: "column",
             height: "100%",
+            minHeight: 0,
             width: "100%",
             background: "var(--Mail-Background)",
           }}
@@ -2015,21 +2652,38 @@ export const NewMessage = ({
         <ReusableModal
           open={isOpen}
           onClose={closeModal}
-          customStyles={{
-            maxHeight: "95vh",
-            maxWidth: "950px",
-            height: isMobile ? "95vh" : "700px",
-            borderRadius: "12px 12px 0px 0px",
-            background: "var(--Mail-Background)",
-            padding: "0px",
-            gap: "0px",
-            width: isMobile ? "95%" : "75%",
-          }}
+          customStyles={
+            isMobile
+              ? {
+                  top: 0,
+                  left: 0,
+                  transform: "none",
+                  width: "100%",
+                  maxWidth: "100%",
+                  height: "var(--qmail-app-height, 100dvh)",
+                  maxHeight: "var(--qmail-app-height, 100dvh)",
+                  borderRadius: 0,
+                  background: "var(--Mail-Background)",
+                  padding: "0px",
+                  gap: "0px",
+                }
+              : {
+                  maxHeight: "calc(var(--qmail-app-height, 100dvh) - 32px)",
+                  maxWidth: "950px",
+                  height: "700px",
+                  borderRadius: "12px",
+                  background: "var(--Mail-Background)",
+                  padding: "0px",
+                  gap: "0px",
+                  width: "75%",
+                }
+          }
         >
           {composerContent}
         </ReusableModal>
       )}
       <Modal />
+      <DiscardModal />
       {isOpenMultiplePublish && (
         <MultiplePublish
           isOpen={isOpenMultiplePublish}
@@ -2048,26 +2702,29 @@ export const NewMessage = ({
             }
           }}
           onSubmit={() => {
-            const successMessage =
-              pendingPublishType === "thread"
-                ? "Thread published"
-                : "Message sent";
+            if (pendingPublishType === "thread") {
+              // The posts are on QDN; now the thread header that lists them.
+              setIsOpenMultiplePublish(false);
+              setPublishes(null);
+              void finishThreadPublish().then(ok => {
+                if (ok) completeThreadPublish();
+              });
+              return;
+            }
+
             dispatch(
               setNotification({
-                msg: successMessage,
+                msg: "Message sent",
                 alertType: "success",
               })
             );
-
-            if (pendingPublishType === "thread" && threadPublishResult) {
-              onThreadPublished?.(threadPublishResult);
-            }
-
             clearStoredDraft(activeDraftKey);
+            clearStoredDraft(openedDraftKeyRef.current);
             setIsOpenMultiplePublish(false);
             setPublishes(null);
             setPendingPublishType("mail");
             setThreadPublishResult(null);
+            setComposeError(null);
             closeModal();
           }}
           publishes={publishes}

@@ -1,6 +1,7 @@
-import React, { Dispatch, useCallback, useEffect, useState } from "react";
+import React, { Dispatch, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReusableModal } from "../../components/modals/ReusableModal";
-import { Box, Button, Input, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { Box, Button, Input, Typography, useTheme } from "@mui/material";
+import { useLayoutMode } from "../../layout/useLayoutMode";
 import { BuilderButton } from "../CreatePost/CreatePost-styles";
 import EmailIcon from "@mui/icons-material/Email";
 import type { SlateNode as Descendant } from '../../components/editor/ReadOnlySlate'
@@ -46,8 +47,6 @@ import {
   NewMessageCloseImg,
   NewMessageHeaderP,
   NewMessageInputRow,
-  NewMessageSendButton,
-  NewMessageSendP,
 } from "./Mail-styles";
 import { Spacer } from "../../components/common/Spacer";
 import { TextEditor } from "../../components/common/TextEditor/TextEditor";
@@ -56,6 +55,14 @@ import { SendNewMessage } from "../../assets/svgs/SendNewMessage";
 import { formatBytes } from "../../utils/displaySize";
 import { CreateThreadIcon } from "../../assets/svgs/CreateThreadIcon";
 import { MultiplePublish } from "../../components/common/MultiplePublish/MultiplePublish";
+import {
+  createComposeDraftId,
+  deleteComposeDraft,
+  readComposeDrafts,
+  saveComposeDraft,
+  threadDraftKey,
+  type StoredComposeDraft,
+} from "./composeDrafts";
 const initialValue: Descendant[] = [
   {
     type: "paragraph",
@@ -97,7 +104,99 @@ export const NewThread = ({
   const [isOpenMultiplePublish, setIsOpenMultiplePublish] = useState(false);
   const [publishes, setPublishes] = useState<any>(null);
   const [callbackContent, setCallbackContent] = useState<any>(null);
- const isMobile = useMediaQuery("(max-width:950px)");
+  const isMobile = useLayoutMode() === "phone";
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
+  // The MAIL thread header goes out after the post batch succeeds (Bugs #21).
+  const pendingThreadHeaderRef = useRef<any>(null);
+  const isHydratingDraftRef = useRef(false);
+
+  // Thread-post drafts share the mail drafts store (additive `kind: "thread"`),
+  // keyed by group and thread, so the Drafts mailbox lists them too.
+  const groupName: string =
+    (typeof groupInfo?.name === "string" && groupInfo.name.trim()) ||
+    (typeof groupInfo?.groupName === "string" && groupInfo.groupName.trim()) ||
+    "Group";
+  const draftKey = useMemo(() => {
+    const groupId = String(groupInfo?.id || "").trim();
+    if (!groupId) return null;
+    return threadDraftKey(groupId, isMessage ? currentThread?.threadId || null : null);
+  }, [currentThread?.threadId, groupInfo?.id, isMessage]);
+
+  useEffect(() => {
+    if (!isOpen || !draftKey || !user?.address) return;
+    const stored = readComposeDrafts(user.address)[draftKey];
+    if (!stored) return;
+    isHydratingDraftRef.current = true;
+    setValue(stored.value || "");
+    if (!isMessage) setThreadTitle(stored.threadTitle || stored.subject || "");
+    setDraftSavedAt(stored.updatedAt || null);
+    window.setTimeout(() => {
+      isHydratingDraftRef.current = false;
+    }, 0);
+  }, [draftKey, isMessage, isOpen, user?.address]);
+
+  useEffect(() => {
+    if (!isOpen || !draftKey || !user?.address || isHydratingDraftRef.current) return;
+    const address = user.address;
+    const timeout = window.setTimeout(() => {
+      const hasText = Boolean(value.replace(/<[^>]*>/g, "").trim() || threadTitle.trim());
+      if (!hasText) {
+        deleteComposeDraft(address, draftKey);
+        setDraftSavedAt(null);
+        return;
+      }
+      const updatedAt = Date.now();
+      const fromName = user?.name || "";
+      if (!fromName) return;
+      const draft: StoredComposeDraft = {
+        draftId: createComposeDraftId(fromName, groupName, updatedAt),
+        fromName,
+        toName: groupName,
+        subject: isMessage ? "" : threadTitle,
+        value,
+        aliasValue: "",
+        showAlias: false,
+        showBCC: false,
+        bccNames: [],
+        updatedAt,
+        kind: "thread",
+        groupId: String(groupInfo?.id || ""),
+        groupName,
+        threadId: isMessage ? currentThread?.threadId || null : null,
+        threadTitle: isMessage ? currentThread?.threadData?.title || "" : threadTitle,
+      };
+      if (attachments.length) {
+        draft.attachments = attachments.map(item => ({
+          name: item?.file?.name || "attachment",
+          size: Number(item?.file?.size || 0),
+          type: item?.file?.type || null,
+        }));
+      }
+      saveComposeDraft(address, draftKey, draft);
+      setDraftSavedAt(updatedAt);
+    }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [
+    attachments,
+    currentThread?.threadData?.title,
+    currentThread?.threadId,
+    draftKey,
+    groupInfo?.id,
+    groupName,
+    isMessage,
+    isOpen,
+    threadTitle,
+    user?.address,
+    user?.name,
+    value,
+  ]);
+
+  const discardDraft = () => {
+    if (draftKey && user?.address) deleteComposeDraft(user.address, draftKey);
+    setDraftSavedAt(null);
+    setThreadTitle("");
+    closeModal();
+  };
 
 
   const theme = useTheme();
@@ -340,7 +439,7 @@ export const NewThread = ({
           encrypt: true,
           publicKeys: groupPublicKeys,
         };
-        await qortalRequest(requestBodyThread);
+        pendingThreadHeaderRef.current = requestBodyThread;
         setPublishes(multiplePublishMsg);
         setIsOpenMultiplePublish(true);
         // await qortalRequest(multiplePublishMsg);
@@ -451,26 +550,55 @@ export const NewThread = ({
   }
 
   const sendMail = () => {
-    publishQDNResource();
+    publishQDNResource().catch(() => {
+      // Reported through the notification already.
+    });
   };
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!isOpenMultiplePublish) sendMail();
+    }
+  };
+
   return (
     <Box
       sx={{
         display: "flex",
       }}
+      onKeyDown={handleKeyDown}
     >
       <ReusableModal
         open={isOpen}
-        customStyles={{
-          maxHeight: "95vh",
-          maxWidth: "950px",
-          height: isMobile ? '95vh' : '700px',
-          borderRadius: "12px 12px 0px 0px",
-          background: "var(--Mail-Background)",
-          padding: "0px",
-          gap: "0px",
-          width: isMobile ? '95%' : '75%'
-        }}
+        onClose={closeModal}
+        customStyles={
+          isMobile
+            ? {
+                top: 0,
+                left: 0,
+                transform: "none",
+                width: "100%",
+                maxWidth: "100%",
+                height: "var(--qmail-app-height, 100dvh)",
+                maxHeight: "var(--qmail-app-height, 100dvh)",
+                borderRadius: 0,
+                background: "var(--Mail-Background)",
+                padding: "0px",
+                gap: "0px",
+              }
+            : {
+                maxHeight: "calc(var(--qmail-app-height, 100dvh) - 32px)",
+                maxWidth: "950px",
+                height: "700px",
+                borderRadius: "12px",
+                background: "var(--Mail-Background)",
+                padding: "0px",
+                gap: "0px",
+                width: "75%",
+              }
+        }
       >
         <InstanceListHeader
           sx={[{
@@ -495,8 +623,10 @@ export const NewThread = ({
         <InstanceListContainer
           sx={[{
             backgroundColor: "var(--qmail-compose-surface)",
-            height: "calc(100% - 150px)",
-            flexShrink: 0
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column"
           }, isMobile ? {
             padding: '10px'
           } : {
@@ -614,64 +744,105 @@ export const NewThread = ({
           <Spacer height="30px" />
           <Box
             sx={{
-              maxHeight: "40vh",
+              flex: 1,
+              minHeight: "12rem",
+              display: "flex",
+              flexDirection: "column",
+              minWidth: 0,
             }}
           >
             <TextEditor
+              className="qmail-compose-editor"
               inlineContent={value}
               setInlineContent={(val: any) => {
                 setValue(val);
               }}
+              placeholder={isMessage ? "Write your post here" : "Write the first post here"}
             />
           </Box>
         </InstanceListContainer>
         <InstanceFooter
           sx={[{
             backgroundColor: "var(--qmail-compose-footer-surface)",
+            borderTop: "1px solid var(--qmail-compose-divider)",
             alignItems: "center",
             height: 'auto'
           }, isMobile ? {
             padding: '10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px)'
           } : {
-            padding: '20px 42px'
-          }, isMobile ? {
-            position: 'sticky'
-          } : {
-            position: 'static'
-          }, isMobile ? {
-            bottom: 0
-          } : {
-            bottom: 'auto'
-          }, isMobile ? {
-            zIndex: 2
-          } : {
-            zIndex: 'auto'
+            padding: '14px 42px'
           }]}
         >
-          <NewMessageSendButton
-            sx={[isMobile ? {
-              padding: '10px 14px'
-            } : {
-              padding: null
-            }]}
-            onClick={sendMail}
+          <Box
+            sx={{
+              display: "flex",
+              width: "100%",
+              alignItems: "center",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+            }}
           >
-            <NewMessageSendP>
-              {isMessage ? "Post" : "Create Thread"}
-            </NewMessageSendP>
-            {isMessage ? (
-               <SendNewMessage
-               color="currentColor"
-               opacity={1}
-               height="25px"
-               width="25px"
-             />
-            ) : (
-              <CreateThreadIcon  color="currentColor"
-              opacity={1} height="25px" width="25px"  />
+            <Button
+              variant="outlined"
+              onClick={discardDraft}
+              sx={{
+                textTransform: "none",
+                borderColor: "var(--qmail-shell-border)",
+                color: "var(--qmail-compose-text)",
+                minHeight: "2.9rem",
+                px: "1rem",
+                borderRadius: "0.85rem",
+              }}
+            >
+              Discard
+            </Button>
+            {draftSavedAt && (
+              <Typography
+                role="status"
+                aria-live="polite"
+                sx={{ fontSize: "0.875rem", color: "var(--qmail-compose-muted)" }}
+              >
+                Draft saved
+              </Typography>
             )}
-           
-          </NewMessageSendButton>
+          <Button
+            variant="contained"
+            onClick={sendMail}
+            disabled={isOpenMultiplePublish}
+            title="Ctrl+Enter (⌘+Enter on Mac) also posts"
+            endIcon={
+              isMessage ? (
+                <SendNewMessage color="currentColor" opacity={1} height="22px" width="22px" />
+              ) : (
+                <CreateThreadIcon color="currentColor" opacity={1} height="22px" width="22px" />
+              )
+            }
+            sx={[{
+              marginLeft: "auto",
+              minHeight: 44,
+              minWidth: 120,
+              textTransform: "none",
+              fontWeight: 600,
+              borderRadius: "0.85rem",
+              px: "1.1rem",
+              color: "var(--qmail-action-primary-text)",
+              backgroundColor: "var(--qmail-action-primary-bg)",
+              border: "1px solid var(--qmail-action-primary-border)",
+              boxShadow: "none",
+              "&:hover": {
+                backgroundColor: "var(--qmail-action-primary-hover)",
+                boxShadow: "none",
+              },
+              "& svg path": { fill: "currentColor" },
+            }, isMobile ? {
+              flex: "1 1 auto"
+            } : {
+              flex: "0 0 auto"
+            }]}
+          >
+            {isMessage ? "Post" : "Create Thread"}
+          </Button>
+          </Box>
         </InstanceFooter>
        
       </ReusableModal>
@@ -691,7 +862,26 @@ export const NewThread = ({
               )
             }
           }}
-          onSubmit={() => {
+          onSubmit={async () => {
+            const header = pendingThreadHeaderRef.current
+            if (header) {
+              try {
+                await qortalRequest(header)
+                pendingThreadHeaderRef.current = null
+              } catch (error: any) {
+                setIsOpenMultiplePublish(false);
+                setPublishes(null)
+                dispatch(
+                  setNotification({
+                    msg: `The post was published, but the thread's title record was not${
+                      error?.message ? ` (${error.message})` : ''
+                    }. Press Create Thread again to retry it.`,
+                    alertType: 'error'
+                  })
+                )
+                return
+              }
+            }
             dispatch(
               setNotification({
                 msg: 'Posted',
@@ -707,6 +897,9 @@ export const NewThread = ({
             setCallbackContent(null)
             setIsOpenMultiplePublish(false);
             setPublishes(null)
+            if (draftKey && user?.address) deleteComposeDraft(user.address, draftKey)
+            setDraftSavedAt(null)
+            setThreadTitle("")
 
             closeModal()
           }}

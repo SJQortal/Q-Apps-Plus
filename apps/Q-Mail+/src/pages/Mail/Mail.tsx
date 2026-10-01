@@ -123,12 +123,15 @@ import {
   hasThreadHistory,
   readIdsFromState,
 } from "../../utils/readState";
+import { DraftsMailbox } from "./DraftsMailbox";
+import type { StoredComposeDraft } from "./composeDrafts";
 
 type MailboxSidebarItemId =
   | "inbox"
   | "archived"
   | "aliases"
   | "sent"
+  | "drafts"
   | "threads"
   | "compose"
   | "alias-compose";
@@ -468,6 +471,7 @@ export const buildSidebarItems = ({
       label: name,
     });
   });
+  items.push({ id: "drafts", label: "Drafts" });
 
   items.push({
     id: "threads",
@@ -1137,13 +1141,18 @@ export const Mail = ({ isFromTo }: MailProps) => {
     }
   };
 
+  // Reply all: the composer also addresses everyone in the original's
+  // additive `to`/`cc` fields (as separate Bcc-style copies).
+  const [composeReplyAll, setComposeReplyAll] = useState(false);
+
   const openReplyComposerFromMessage = useCallback(
-    (messagePayload: any) => {
+    (messagePayload: any, options?: { replyAll?: boolean }) => {
       const linkedReplyAlias = activeAliasInboxName
         ? aliasReplyLinks[activeAliasInboxName.toLowerCase()] || ""
         : "";
       setIsChangelogOpen(false);
       setForwardInfo(null);
+      setComposeReplyAll(Boolean(options?.replyAll));
       setReplyTo(messagePayload);
       setComposePrefill(null);
       setComposeReturnView("inbox");
@@ -1164,7 +1173,21 @@ export const Mail = ({ isFromTo }: MailProps) => {
     (forwardPayload: any) => {
       setIsChangelogOpen(false);
       setReplyTo(null);
-      setForwardInfo(forwardPayload);
+      setComposeReplyAll(false);
+      // The reader may send ready-made HTML (string) or the message itself;
+      // the composer builds the Fwd: subject, the header and the re-attached
+      // files from the open message.
+      const forwardedMessage =
+        forwardPayload && typeof forwardPayload === "object" && forwardPayload.id
+          ? forwardPayload
+          : message;
+      setForwardInfo({
+        html: typeof forwardPayload === "string" ? forwardPayload : "",
+        message: forwardedMessage,
+        to: activeAliasInboxName
+          ? `${activeAliasInboxName} (alias inbox)`
+          : user?.name || "",
+      });
       setComposePrefill(null);
       setComposeReturnView("inbox");
       setComposeReturnGroupId(null);
@@ -1177,7 +1200,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       setActiveMailboxItem("compose");
       setMobileMode("compose");
     },
-    [activeAliasInboxName]
+    [activeAliasInboxName, message, user?.name]
   );
 
   const handleRequestComposeThread = useCallback(
@@ -1200,6 +1223,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
 
       setIsChangelogOpen(false);
       setReplyTo(null);
+      setComposeReplyAll(false);
       setForwardInfo(null);
       setCurrentThread(null);
       setSelectedGroup(groupInfo);
@@ -1223,6 +1247,86 @@ export const Mail = ({ isFromTo }: MailProps) => {
       setMobileMode("compose");
     },
     [ownedNameCandidates, selectedAlias, user?.name]
+  );
+
+  // Open a stored draft from the Drafts mailbox: a mail draft goes to the
+  // composer (as a reply when the replied-to message is still in memory); a
+  // thread-post draft opens its thread, where NewThread restores it.
+  const handleOpenDraft = useCallback(
+    (draftKey: string, draft: StoredComposeDraft) => {
+      setIsChangelogOpen(false);
+      setIsOpen(false);
+      setMessage(null);
+
+      if (draft.kind === "thread") {
+        const groupInfo = draft.groupId
+          ? groupOptionsById.get(String(draft.groupId))
+          : undefined;
+        if (!groupInfo) {
+          dispatch(
+            setNotification({
+              msg: "This draft belongs to a group you are no longer in",
+              alertType: "info",
+            })
+          );
+          return;
+        }
+        setReplyTo(null);
+        setForwardInfo(null);
+        setComposeReplyAll(false);
+        setComposePrefill(null);
+        setSelectedAlias(null);
+        setSelectedAliasScope(null);
+        setSelectedGroup(groupInfo);
+        setCurrentThread(
+          draft.threadId
+            ? {
+                threadId: draft.threadId,
+                identifier: draft.threadId,
+                name: draft.fromName,
+                threadOwner: draft.fromName,
+                service: THREAD_SERVICE_TYPE,
+                threadData: {
+                  title: draft.threadTitle || "",
+                  groupId: String(draft.groupId),
+                  name: draft.fromName,
+                },
+              }
+            : null
+        );
+        setIsThreadsSectionExpanded(true);
+        setActiveMailboxItem("threads");
+        setMobileMode("threads");
+        return;
+      }
+
+      const repliedTo: any = draft.replyTo?.id
+        ? hashMapMailMessages[draft.replyTo.id]
+        : null;
+      const replyMessage =
+        repliedTo && repliedTo.isValid && !repliedTo.unableToDecrypt
+          ? repliedTo
+          : null;
+      setForwardInfo(null);
+      setReplyTo(replyMessage);
+      setComposeReplyAll(Boolean(replyMessage && draft.replyAll));
+      setComposePrefill({
+        draftId: Date.now(),
+        fromName: draft.fromName,
+        toValue: draft.toName,
+        toType: "name",
+        draftKey,
+      });
+      setComposeReturnView("inbox");
+      setComposeReturnGroupId(null);
+      setComposeRecipientAlias(null);
+      setComposeRequireReplyAlias(false);
+      setComposeDefaultReplyAlias("");
+      setComposeMode("standard");
+      setActiveMailboxItem("compose");
+      setMobileMode("compose");
+    },
+    [dispatch, groupOptionsById, hashMapMailMessages]
   );
 
   const firstMount = useRef(false);
@@ -2819,7 +2923,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
         return;
       }
 
-      if (itemId === "inbox" || itemId === "sent") {
+      if (itemId === "inbox" || itemId === "sent" || itemId === "drafts") {
         setActiveMailboxItem(itemId);
         setMobileMode(itemId);
         setSelectedAlias(null);
@@ -2984,6 +3088,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     setComposeRequireReplyAlias(false);
     setComposeDefaultReplyAlias("");
     setComposeMode("standard");
+    setComposeReplyAll(false);
     if (composeReturnView === "threads") {
       setActiveMailboxItem("threads");
       setMobileMode("threads");
@@ -3128,6 +3233,17 @@ export const Mail = ({ isFromTo }: MailProps) => {
     ) : (
       renderAuthenticationPrompt("Threads")
     );
+  } else if (activeMailboxItem === "drafts") {
+    listTitle = "Drafts";
+    listSubtitle = "Saved on this device";
+    listBody = hasAuthenticatedIdentity ? (
+      <DraftsMailbox
+        address={user?.address || ""}
+        onOpenDraft={handleOpenDraft}
+      />
+    ) : (
+      renderAuthenticationPrompt("Inbox")
+    );
   } else {
     listTitle = selectedInboxInstanceName || "Inbox";
     listSubtitle = selectedInboxInstanceName ? "Inbox" : user?.name || undefined;
@@ -3219,7 +3335,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
   let wideKeepsChrome = false;
   if (isComposeView) {
     const composeTitle = replyTo
-      ? "Reply"
+      ? composeReplyAll
+        ? "Reply all"
+        : "Reply"
       : forwardInfo
       ? "Forward"
       : composeMode === "alias"
@@ -3237,6 +3355,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
           <NewMessage
             isFromTo={isFromTo}
             replyTo={replyTo}
+            replyAll={composeReplyAll}
             setReplyTo={setReplyTo}
             setForwardInfo={setForwardInfo}
             forwardInfo={forwardInfo}
@@ -3248,6 +3367,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
             ownedNames={ownedNameCandidates}
             joinedGroups={memberGroupOptions}
             priorityRecipientNames={composePriorityRecipientNames}
+            recentInboxMessages={combinedInboxMessages}
+            openedMessagesById={hashMapMailMessages}
             composePrefill={composePrefill}
             onRequestClose={handleComposerClose}
           />
