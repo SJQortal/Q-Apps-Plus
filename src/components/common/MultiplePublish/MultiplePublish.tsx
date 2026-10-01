@@ -121,11 +121,17 @@ interface MultiplePublishProps {
         aria-labelledby="modal-title"
         aria-describedby="modal-description"
       >
-        <ModalBody
-          sx={{
-            minHeight: "50vh",
-          }}
-        >
+        <ModalBody>
+          <Typography id="modal-title" sx={{ fontWeight: 700 }}>
+            {isPublishing ? "Publishing…" : "Publish"}
+          </Typography>
+          <Typography id="modal-description" variant="body2" color="text.secondary">
+            {isPublishing
+              ? "Confirm the publish in Hub if asked. Each item below is published once."
+              : listOfUnsuccessfulPublishes.length > 0
+              ? "Some items did not publish."
+              : "All items published."}
+          </Typography>
           {publishes?.resources?.map((publish: any, index: number) => {
             const unpublished = listOfUnsuccessfulPublishes.map(item => item?.identifier)
             return (
@@ -138,7 +144,9 @@ interface MultiplePublishProps {
                   alignItems: "center",
                 }}
               >
-                <Typography>{publish?.identifier}</Typography>
+                <Typography sx={{ minWidth: 0, overflowWrap: "anywhere", fontSize: "0.875rem" }}>
+                  {publish?.identifier}
+                </Typography>
                 {!isPublishing && hasStarted.current ? (
                   <>
                     {!unpublished.includes(publish.identifier) ? (
@@ -166,7 +174,7 @@ interface MultiplePublishProps {
               marginTop: '20px',
               fontSize: '1rem'
              }}>Some files were not published. Please try again. It's important that all the files get published. Maybe wait a couple minutes if the error keeps occurring</Typography>
-          <Button variant="contained" onClick={()=> {
+          <Button variant="contained" sx={{ minHeight: 44, alignSelf: "flex-start" }} onClick={()=> {
             retry()
           }}>Try again</Button>
           </>
@@ -177,53 +185,22 @@ interface MultiplePublishProps {
     );
   };
   
+  // Colours and radius come from the theme (ground rule 3); the modal fills
+  // the width on phones and never exceeds the app's own height.
   export const ModalBody = styled(Box)(({ theme }) => ({
     position: "absolute",
-    backgroundColor: theme.palette.background.default,
-    borderRadius: "4px",
+    backgroundColor: theme.palette.background.paper,
+    color: theme.palette.text.primary,
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: theme.shape.borderRadius,
     top: "50%",
     left: "50%",
     transform: "translate(-50%, -50%)",
-    width: "75%",
-    maxWidth: "900px",
-    padding: "15px 35px",
+    width: "min(92%, 900px)",
+    padding: theme.spacing(2, 2.5),
     display: "flex",
     flexDirection: "column",
-    gap: "17px",
+    gap: theme.spacing(2),
     overflowY: "auto",
-    maxHeight: "95vh",
-    boxShadow:
-      "rgba(99, 99, 99, 0.2) 0px 2px 8px 0px",
-    "&::-webkit-scrollbar-track": {
-      backgroundColor: theme.palette.background.paper,
-    },
-    "&::-webkit-scrollbar-track:hover": {
-      backgroundColor: theme.palette.background.paper,
-    },
-    "&::-webkit-scrollbar": {
-      width: "16px",
-      height: "10px",
-      backgroundColor: "#292d3e",
-      ...theme.applyStyles("light", {
-        backgroundColor: "#f6f8fa"
-      })
-    },
-    "&::-webkit-scrollbar-thumb": {
-      backgroundColor: "#575757",
-      borderRadius: "8px",
-      backgroundClip: "content-box",
-      border: "4px solid transparent",
-      ...theme.applyStyles("light", {
-        backgroundColor: "#d3d9e1"
-      })
-    },
-    "&::-webkit-scrollbar-thumb:hover": {
-      backgroundColor: "#474646",
-      ...theme.applyStyles("light", {
-        backgroundColor: "#b7bcc4"
-      })
-    },
-    ...theme.applyStyles("dark", {
-      boxShadow: "0px 4px 5px 0px hsla(0,0%,0%,0.14),  0px 1px 10px 0px hsla(0,0%,0%,0.12),  0px 2px 4px -1px hsla(0,0%,0%,0.2)"
-    })
+    maxHeight: "calc(var(--qmail-app-height, 100dvh) - 32px)",
   }));
