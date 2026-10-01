@@ -29,6 +29,7 @@ import ReplySVG from '../../assets/svgs/Reply.svg'
 import ForwardSVG from '../../assets/svgs/Forward.svg'
 import MoreSVG from "../../assets/svgs/More.svg";
 import AttachmentMailSVG from "../../assets/svgs/AttachmentMail.svg";
+import { AttachmentList } from "../../components/AttachmentPreview/AttachmentList";
 
 
 const initialValue: Descendant[] = [
@@ -159,92 +160,8 @@ export const ShowMessageV2Replies = ({
           {isExpanded && (
             <>
               {message?.attachments?.length > 0 && (
-            <Box
-              sx={{
-                width: "100%",
-                marginTop: "10px",
-              }}
-            >
-             {message?.attachments?.length > 0 && (
-            <Box
-              sx={{
-                width: "100%",
-                marginTop: "10px",
-              }}
-            >
-              {message?.attachments
-                .map((file: any, index: number) => {
-                  const isFirst = index === 0
-                  return (
-                    <Box
-                      sx={[{
-                        alignItems: "center",
-                        justifyContent: "flex-start",
-                        width: "100%"
-                      }, expandAttachments ? {
-                        display: "flex"
-                      } : {
-                        display: !expandAttachments && isFirst ? 'flex' : 'none'
-                      }]}
-                    >
-                      <Box
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "5px",
-                          cursor: "pointer",
-                          width: "auto",
-                        }}
-                      >
-                        <FileElement
-                          fileInfo={{ ...file, mimeTypeSaved: file?.type }}
-                          title={file?.filename}
-                          mode="mail"
-                          otherUser={message?.user}
-                        >
-                          <MailAttachmentImg src={AttachmentMailSVG} />
-
-                          <Typography
-                            sx={{
-                              fontSize: "1rem",
-                            }}
-                          >
-                            {file?.originalFilename || file?.filename}
-                          </Typography>
-                        </FileElement>
-                        {message?.attachments?.length > 1 && isFirst && (
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "5px",
-                            }}
-                            onClick={() => {
-                              setExpandAttachments(prev => !prev);
-                            }}
-                          >
-                            <MoreImg
-                              sx={[{
-                                marginLeft: "5px"
-                              }, expandAttachments ? {
-                                transform: "rotate(180deg)"
-                              } : {
-                                transform: "unset"
-                              }]}
-                              src={MoreSVG}
-                            />
-                            <MoreP>
-                              ({message?.attachments?.length - 1} more)
-                            </MoreP>
-                          </Box>
-                        )}
-                      </Box>
-                    </Box>
-                  );
-                })
-                }
-            </Box>
-          )}
+            <Box sx={{ width: "100%", marginTop: "10px" }}>
+              <AttachmentList attachments={message?.attachments} compact />
             </Box>
           )}
           <Spacer height="7px" />
