@@ -19,6 +19,7 @@ import { EmptyState, ErrorState } from "../../layout/states";
 import { ShowMessage } from "./ShowMessageWithoutModal";
 import {
   THREAD_MESSAGE_PAGE_SIZE,
+  invalidateThreadSearches,
   normalizeGroupId,
   threadMessagesSearchParams,
   threadTokenFromThreadId,
@@ -239,6 +240,7 @@ export const Thread = ({ currentThread, groupInfo, closeThread, members, backLab
     (msg: any) => {
       dispatch(addToHashMapMail(msg));
       setMessages((existing) => [msg, ...existing.filter((row) => row.identifier !== msg.identifier)]);
+      invalidateThreadSearches(groupId);
       if (user?.name) saveThreadViewed(user.name, groupId, threadId);
     },
     [dispatch, groupId, threadId, user?.name]

@@ -86,6 +86,7 @@ import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import MailOutlineIcon from "@mui/icons-material/MailOutlined";
 import { IconButton } from "@mui/material";
 import { Thread } from "./Thread";
+import { invalidateThreadSearches } from "./threadData";
 
 type MailboxSidebarItemId =
   | "inbox"
@@ -3243,6 +3244,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     if (composeReturnView === "threads") {
       setActiveMailboxItem("threads");
       setMobileMode("threads");
+      invalidateThreadSearches(composeReturnGroupId || undefined);
       if (composeReturnGroupId) {
         const returnGroup = groupOptionsById.get(composeReturnGroupId);
         if (returnGroup) {
