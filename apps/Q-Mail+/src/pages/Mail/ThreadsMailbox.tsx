@@ -1,358 +1,388 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Avatar, Box, CircularProgress, Typography } from "@mui/material";
-import { THREAD_SERVICE_TYPE } from "../../constants/mail";
-import { formatFullTimestamp } from "../../utils/time";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSelector } from "react-redux";
+import { Avatar, Badge, Box, Button, IconButton, ListItemButton, Typography } from "@mui/material";
+import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import { RootState } from "../../state/store";
+import { EmptyState, ErrorState, ListSkeleton } from "../../layout/states";
+import { usePolling } from "../../hooks/usePolling";
+import { GroupMail } from "./GroupMail";
+import { NewThreadButton } from "./NewThreadButton";
+import { ThreadRow } from "./ThreadRow";
+import {
+  applyActivity,
+  fetchGroupActivity,
+  fetchThreadPage,
+  lastActivityOf,
+  normalizeGroupId,
+  type GroupOption,
+  type ThreadSummary,
+} from "./threadData";
+import { countUnread, isThreadUnread, useViewedThreads } from "./threadUnread";
 
-interface GroupOption {
-  id: string | number;
-  name: string;
-}
-
-interface ThreadSummary {
-  identifier: string;
-  threadId: string;
-  created: number;
-  threadOwner: string;
-  threadData: {
-    title: string;
-    groupId: string;
-    createdAt: number;
-    name: string;
-  };
-  groupName: string;
-}
+export type { GroupOption, ThreadSummary } from "./threadData";
 
 interface ThreadsMailboxProps {
+  /** Groups that have threads. */
   groups: GroupOption[];
+  /** Every joined group, for "New thread" when a group has no threads yet. */
+  joinedGroups?: GroupOption[];
   groupAvatarUrlById?: Record<string, string>;
   isLoadingGroups?: boolean;
+  selectedGroup?: GroupOption | null;
+  onSelectGroup?: (group: GroupOption | null) => void;
+  currentThreadId?: string | null;
   onOpenThread: (thread: ThreadSummary, group: GroupOption) => void;
+  onRequestComposeThread?: (group: GroupOption) => void;
+  filterMode?: string;
+  setFilterMode?: (mode: string) => void;
 }
 
-const toNumber = (value: any): number => {
-  const numericValue = Number(value || 0);
-  return Number.isFinite(numericValue) ? numericValue : 0;
+interface GroupPageState {
+  threads: ThreadSummary[];
+  offset: number;
+  hasMore: boolean;
+  error: string | null;
+}
+
+export const normalizeGroups = (groups: GroupOption[]): GroupOption[] => {
+  const deduped = new Map<string, GroupOption>();
+  (groups || []).forEach((group) => {
+    const groupId = normalizeGroupId(group?.id);
+    const groupName = typeof group?.name === "string" ? group.name.trim() : "";
+    if (!groupId || !groupName || deduped.has(groupId)) return;
+    deduped.set(groupId, { id: groupId, name: groupName });
+  });
+  return Array.from(deduped.values());
 };
 
-const fetchThreadTitle = async (resource: any): Promise<string> => {
-  const metadataTitle =
-    typeof resource?.metadata?.description === "string"
-      ? resource.metadata.description.trim()
-      : "";
-  if (metadataTitle) {
-    return metadataTitle;
-  }
+const pageSignature = (pages: Record<string, GroupPageState>): string =>
+  Object.entries(pages)
+    .map(([groupId, page]) => `${groupId}:${page.threads.map((thread) => `${thread.identifier}@${thread.lastActivity}`).join(",")}`)
+    .join("|");
 
-  try {
-    const threadResource = await qortalRequest({
-      action: "FETCH_QDN_RESOURCE",
-      name: resource?.name,
-      service: THREAD_SERVICE_TYPE,
-      identifier: resource?.identifier,
-    });
-    const fallbackTitle =
-      typeof threadResource?.title === "string" ? threadResource.title.trim() : "";
-    return fallbackTitle;
-  } catch {
-    return "";
-  }
-};
-
-const fetchThreadsForGroup = async (group: GroupOption): Promise<ThreadSummary[]> => {
-  const groupId = String(group?.id || "").trim();
-  const groupName = typeof group?.name === "string" ? group.name.trim() : "";
-  if (!groupId || !groupName) return [];
-
-  try {
-    const params = new URLSearchParams({
-      mode: "ALL",
-      service: THREAD_SERVICE_TYPE,
-      query: `qortal_qmail_thread_group${groupId}`,
-      limit: "60",
-      includemetadata: "true",
-      offset: "0",
-      reverse: "true",
-      excludeblocked: "true",
-    });
-
-    const response = await fetch(`/arbitrary/resources/search?${params.toString()}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-    const responseData = await response.json();
-    if (!Array.isArray(responseData) || responseData.length === 0) {
-      return [];
+/** Merge per-group pages into one list, newest activity first, one entry per identifier. */
+export const mergeThreadLists = (lists: ThreadSummary[][]): ThreadSummary[] => {
+  const byId = new Map<string, ThreadSummary>();
+  for (const list of lists) {
+    for (const thread of list) {
+      if (!thread?.identifier) continue;
+      const existing = byId.get(thread.identifier);
+      if (!existing || lastActivityOf(thread) > lastActivityOf(existing)) byId.set(thread.identifier, thread);
     }
-
-    const mapped = await Promise.all(
-      responseData.map(async (resource: any) => {
-        const identifier =
-          typeof resource?.identifier === "string" ? resource.identifier.trim() : "";
-        if (!identifier) return null;
-
-        const ownerName = typeof resource?.name === "string" ? resource.name.trim() : "";
-        const createdAt = toNumber(resource?.created);
-        const title = (await fetchThreadTitle(resource)) || "Untitled thread";
-
-        const threadSummary: ThreadSummary = {
-          identifier,
-          threadId: identifier,
-          created: createdAt,
-          threadOwner: ownerName,
-          threadData: {
-            title,
-            groupId,
-            createdAt,
-            name: ownerName,
-          },
-          groupName,
-        };
-
-        return threadSummary;
-      })
-    );
-
-    return mapped.filter(Boolean) as ThreadSummary[];
-  } catch {
-    return [];
   }
+  return Array.from(byId.values()).sort((a, b) => lastActivityOf(b) - lastActivityOf(a));
 };
 
 export const ThreadsMailbox = ({
   groups,
+  joinedGroups,
   groupAvatarUrlById,
   isLoadingGroups = false,
+  selectedGroup = null,
+  onSelectGroup,
+  currentThreadId,
   onOpenThread,
+  onRequestComposeThread,
+  filterMode = "Recently active",
+  setFilterMode,
 }: ThreadsMailboxProps) => {
-  const [threads, setThreads] = useState<ThreadSummary[]>([]);
-  const [isLoadingThreads, setIsLoadingThreads] = useState(false);
+  const { user } = useSelector((state: RootState) => state.auth);
+  const viewed = useViewedThreads(user?.name);
+  const normalizedGroups = useMemo(() => normalizeGroups(groups), [groups]);
+  const composeGroups = useMemo(
+    () => (joinedGroups?.length ? normalizeGroups(joinedGroups) : normalizedGroups),
+    [joinedGroups, normalizedGroups]
+  );
+  const [pages, setPages] = useState<Record<string, GroupPageState>>({});
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const groupKey = normalizedGroups.map((group) => group.id).join(",");
+  const generation = useRef(0);
+  const lastSignature = useRef("");
+  const pagesRef = useRef(pages);
+  pagesRef.current = pages;
 
-  const normalizedGroups = useMemo(() => {
-    const deduped = new Map<string, GroupOption>();
-    groups.forEach(group => {
-      const groupId = String(group?.id || "").trim();
-      const groupName = typeof group?.name === "string" ? group.name.trim() : "";
-      if (!groupId || !groupName || deduped.has(groupId)) return;
-      deduped.set(groupId, {
-        id: groupId,
-        name: groupName,
-      });
-    });
-    return Array.from(deduped.values());
-  }, [groups]);
+  /**
+   * Fetch one page for a group. `offset` 0 with a `previous` state is a
+   * refresh: the new first page is merged over what is shown, and the paging
+   * position is kept so "Load more" still continues where it was.
+   */
+  const loadGroupPage = useCallback(
+    async (
+      group: GroupOption,
+      previous: GroupPageState | undefined,
+      offset: number,
+      force: boolean
+    ): Promise<GroupPageState> => {
+      const groupId = normalizeGroupId(group.id);
+      const options = force ? { force: true } : undefined;
+      try {
+        const [page, activity] = await Promise.all([
+          fetchThreadPage(group, { offset }, options),
+          fetchGroupActivity(groupId, options),
+        ]);
+        const threads = applyActivity(mergeThreadLists([previous?.threads ?? [], page.threads]), activity);
+        const isRefresh = offset === 0 && Boolean(previous);
+        return {
+          threads,
+          offset: isRefresh ? Math.max(previous?.offset ?? 0, page.threads.length) : offset + page.threads.length,
+          hasMore: isRefresh ? Boolean(previous?.hasMore) || page.hasMore : page.hasMore,
+          error: null,
+        };
+      } catch (error: any) {
+        return {
+          threads: previous?.threads ?? [],
+          offset: previous?.offset ?? offset,
+          hasMore: previous?.hasMore ?? false,
+          error: typeof error?.message === "string" ? error.message : "Could not load threads",
+        };
+      }
+    },
+    []
+  );
 
-  useEffect(() => {
-    if (!normalizedGroups.length) {
-      setThreads([]);
-      setIsLoadingThreads(false);
-      return;
-    }
-
-    let cancelled = false;
-    const loadCombinedThreads = async () => {
-      setIsLoadingThreads(true);
+  const loadAll = useCallback(
+    async (force: boolean) => {
+      const run = ++generation.current;
+      if (!normalizedGroups.length) {
+        setPages({});
+        setHasLoaded(true);
+        return false;
+      }
+      setIsLoading(true);
       try {
         const results = await Promise.all(
-          normalizedGroups.map(group => fetchThreadsForGroup(group))
+          normalizedGroups.map(
+            async (group) =>
+              [String(group.id), await loadGroupPage(group, force ? pagesRef.current[String(group.id)] : undefined, 0, force)] as const
+          )
         );
-
-        if (cancelled) return;
-
-        const threadMap = new Map<string, ThreadSummary>();
-        results.flat().forEach(thread => {
-          if (!thread?.identifier) return;
-          const existingThread = threadMap.get(thread.identifier);
-          if (!existingThread) {
-            threadMap.set(thread.identifier, thread);
-            return;
-          }
-          if (toNumber(thread?.threadData?.createdAt) > toNumber(existingThread?.threadData?.createdAt)) {
-            threadMap.set(thread.identifier, thread);
-          }
-        });
-
-        const sortedThreads = Array.from(threadMap.values()).sort((a, b) => {
-          return toNumber(b?.threadData?.createdAt) - toNumber(a?.threadData?.createdAt);
-        });
-
-        setThreads(sortedThreads);
+        if (run !== generation.current) return;
+        const next = Object.fromEntries(results);
+        const signature = pageSignature(next);
+        const changed = signature !== lastSignature.current;
+        lastSignature.current = signature;
+        setPages(next);
+        return changed;
       } finally {
-        if (!cancelled) {
-          setIsLoadingThreads(false);
+        if (run === generation.current) {
+          setIsLoading(false);
+          setHasLoaded(true);
         }
       }
-    };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [groupKey, loadGroupPage]
+  );
 
-    void loadCombinedThreads();
-    return () => {
-      cancelled = true;
-    };
-  }, [normalizedGroups]);
+  useEffect(() => {
+    setHasLoaded(false);
+    void loadAll(false);
+  }, [loadAll]);
 
-  if (isLoadingGroups || isLoadingThreads) {
+  usePolling(() => loadAll(true), {
+    intervalMs: 60_000,
+    maxIntervalMs: 8 * 60_000,
+    enabled: Boolean(user?.name) && normalizedGroups.length > 0 && !selectedGroup,
+  });
+
+  const loadMore = useCallback(async () => {
+    const run = generation.current;
+    setIsLoadingMore(true);
+    try {
+      const results = await Promise.all(
+        normalizedGroups
+          .filter((group) => pages[String(group.id)]?.hasMore)
+          .map(async (group) => {
+            const previous = pages[String(group.id)];
+            return [String(group.id), await loadGroupPage(group, previous, previous?.offset ?? 0, false)] as const;
+          })
+      );
+      if (run !== generation.current) return;
+      setPages((current) => ({ ...current, ...Object.fromEntries(results) }));
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [loadGroupPage, normalizedGroups, pages]);
+
+  const threads = useMemo(() => mergeThreadLists(Object.values(pages).map((page) => page.threads)), [pages]);
+  const unreadByGroup = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const [groupId, page] of Object.entries(pages)) counts[groupId] = countUnread(viewed, page.threads);
+    return counts;
+  }, [pages, viewed]);
+  const hasMore = Object.values(pages).some((page) => page.hasMore);
+  const errors = Object.values(pages).filter((page) => page.error);
+  const allFailed = normalizedGroups.length > 0 && errors.length === normalizedGroups.length && threads.length === 0;
+
+  if (selectedGroup) {
     return (
-      <Box
-        sx={{
-          width: "100%",
-          minHeight: "220px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
+      <GroupMail
+        groupInfo={selectedGroup}
+        currentThreadId={currentThreadId}
+        onOpenThread={(thread) => onOpenThread(thread, selectedGroup)}
+        filterMode={filterMode}
+        setFilterMode={setFilterMode}
+        onRequestComposeThread={onRequestComposeThread}
+      />
+    );
+  }
+
+  const actionBar = (
+    <Box
+      sx={(theme) => ({
+        display: "flex",
+        alignItems: "center",
+        gap: 1,
+        px: 2,
+        py: 1,
+        borderBottom: `1px solid ${theme.palette.divider}`,
+      })}
+    >
+      <NewThreadButton groups={composeGroups} onRequestComposeThread={onRequestComposeThread} />
+      <Box sx={{ flex: 1 }} />
+      <IconButton
+        aria-label="Refresh threads"
+        onClick={() => void loadAll(true)}
+        disabled={isLoading}
+        sx={{ minWidth: 44, minHeight: 44 }}
       >
-        <CircularProgress />
+        <RefreshIcon />
+      </IconButton>
+    </Box>
+  );
+
+  if (isLoadingGroups || (!hasLoaded && normalizedGroups.length > 0)) {
+    return (
+      <Box sx={{ width: "100%" }}>
+        {actionBar}
+        <ListSkeleton rows={6} />
       </Box>
     );
   }
 
   if (!normalizedGroups.length) {
     return (
-      <Box
-        sx={{
-          width: "100%",
-          minHeight: "220px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--qmail-thread-subtle-text)",
-        }}
-      >
-        <Typography sx={{ fontSize: "1rem", fontWeight: 500 }}>
-          No groups with threads available.
-        </Typography>
+      <Box sx={{ width: "100%" }}>
+        <EmptyState
+          icon={<ForumOutlinedIcon />}
+          title="No threads yet"
+          hint={
+            composeGroups.length
+              ? "Start the first thread in one of your groups."
+              : "Join a Qortal group to see its threads here."
+          }
+          action={<NewThreadButton groups={composeGroups} onRequestComposeThread={onRequestComposeThread} />}
+        />
       </Box>
     );
   }
 
-  if (!threads.length) {
+  if (allFailed) {
     return (
-      <Box
-        sx={{
-          width: "100%",
-          minHeight: "220px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--qmail-thread-subtle-text)",
-        }}
-      >
-        <Typography sx={{ fontSize: "1rem", fontWeight: 500 }}>
-          No threads to display.
-        </Typography>
+      <Box sx={{ width: "100%" }}>
+        {actionBar}
+        <ErrorState title="Could not load threads" message={errors[0]?.error || undefined} onRetry={() => void loadAll(true)} />
       </Box>
     );
   }
 
   return (
-    <Box
-      sx={{
-        width: "100%",
-        maxWidth: "1254px",
-        padding: "20px 16px",
-        display: "flex",
-        flexDirection: "column",
-        gap: "10px",
-      }}
-    >
-      {threads.map(thread => {
-        const groupId = String(thread?.threadData?.groupId || "").trim();
-        const group = normalizedGroups.find(item => String(item.id) === groupId);
-        if (!group) return null;
-
-        const groupAvatar = groupAvatarUrlById?.[groupId] || undefined;
-        const groupName = thread.groupName || group.name;
-        const ownerName = thread?.threadData?.name || "Unknown";
-        const threadTitle = thread?.threadData?.title || "Untitled thread";
-
+    <Box sx={{ width: "100%" }}>
+      {actionBar}
+      <Typography
+        variant="overline"
+        component="h2"
+        sx={{ px: 2, pt: 1.5, pb: 0.5, color: "text.secondary", fontWeight: 600, letterSpacing: 1 }}
+      >
+        Groups
+      </Typography>
+      {normalizedGroups.map((group) => {
+        const groupId = String(group.id);
+        const unread = unreadByGroup[groupId] || 0;
+        const page = pages[groupId];
         return (
-          <Box
-            key={thread.identifier}
-            onClick={() => {
-              onOpenThread(thread, group);
-            }}
-            sx={{
-              width: "100%",
-              borderRadius: "12px",
-              border: "1px solid var(--qmail-shell-border)",
-              background: "var(--qmail-thread-card-bg)",
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              padding: "10px 12px",
-              cursor: "pointer",
-              transition: "background 0.2s ease, border-color 0.2s ease",
-              "&:hover": {
-                background: "var(--qmail-thread-card-hover)",
-                borderColor: "var(--qmail-shell-active-strong)",
-              },
-            }}
+          <ListItemButton
+            key={groupId}
+            onClick={() => onSelectGroup?.(group)}
+            sx={(theme) => ({ minHeight: 56, gap: 1.5, px: 2, borderBottom: `1px solid ${theme.palette.divider}` })}
           >
-            <Avatar
-              src={groupAvatar}
-              alt={groupName}
-              sx={{
-                width: "42px",
-                height: "42px",
-                background: "var(--qmail-shell-hover-strong)",
-                color: "var(--qmail-thread-text)",
-                border: "1px solid var(--qmail-shell-border)",
-                fontSize: "0.95rem",
-                fontWeight: 700,
-                flexShrink: 0,
-              }}
-            >
-              {groupName.charAt(0).toUpperCase()}
-            </Avatar>
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                minWidth: 0,
-                flex: 1,
-                gap: "2px",
-              }}
-            >
-              <Typography
-                sx={{
-                  fontSize: "1.05rem",
-                  fontWeight: 650,
-                  color: "var(--qmail-thread-text)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
+            <Badge color="primary" badgeContent={unread} max={99} overlap="circular">
+              <Avatar
+                src={groupAvatarUrlById?.[groupId] || undefined}
+                alt={group.name}
+                sx={(theme) => ({
+                  width: 36,
+                  height: 36,
+                  bgcolor: theme.qplus.primarySoft,
+                  color: theme.palette.primary.main,
+                  fontWeight: 700,
+                })}
               >
-                {threadTitle}
+                {group.name.charAt(0).toUpperCase()}
+              </Avatar>
+            </Badge>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography noWrap sx={{ fontWeight: unread ? 700 : 500 }}>
+                {group.name}
               </Typography>
-              <Typography
-                sx={{
-                  fontSize: "0.9rem",
-                  fontWeight: 500,
-                  color: "var(--qmail-thread-muted)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {groupName} · by {ownerName}
+              <Typography noWrap variant="body2" color="text.secondary">
+                {page?.error
+                  ? "Could not load"
+                  : `${page?.threads.length ?? 0}${page?.hasMore ? "+" : ""} threads${unread ? ` · ${unread} unread` : ""}`}
               </Typography>
             </Box>
-            <Typography
-              sx={{
-                flexShrink: 0,
-                fontSize: "0.85rem",
-                color: "var(--qmail-thread-muted)",
-                textAlign: "right",
-                minWidth: "160px",
-              }}
-            >
-              {formatFullTimestamp(thread?.threadData?.createdAt)}
-            </Typography>
-          </Box>
+            <ChevronRightIcon sx={{ color: "text.secondary" }} />
+          </ListItemButton>
         );
       })}
+      <Typography
+        variant="overline"
+        component="h2"
+        sx={{ px: 2, pt: 2, pb: 0.5, color: "text.secondary", fontWeight: 600, letterSpacing: 1 }}
+      >
+        Recent threads
+      </Typography>
+      {threads.length === 0 ? (
+        <EmptyState
+          icon={<ForumOutlinedIcon />}
+          title="No threads yet"
+          hint="Start the first thread in one of your groups."
+          action={<NewThreadButton groups={composeGroups} onRequestComposeThread={onRequestComposeThread} />}
+        />
+      ) : (
+        threads.map((thread) => {
+          const groupId = normalizeGroupId(thread.threadData?.groupId);
+          const group = normalizedGroups.find((item) => String(item.id) === groupId);
+          if (!group) return null;
+          return (
+            <ThreadRow
+              key={thread.identifier}
+              thread={thread}
+              context={thread.groupName || group.name}
+              unread={isThreadUnread(viewed, thread)}
+              selected={currentThreadId === thread.identifier}
+              onOpen={() => onOpenThread(thread, group)}
+            />
+          );
+        })
+      )}
+      {hasMore && (
+        <Box sx={{ p: 2 }}>
+          <Button
+            fullWidth
+            variant="outlined"
+            onClick={() => void loadMore()}
+            disabled={isLoadingMore}
+            sx={{ minHeight: 44, textTransform: "none" }}
+          >
+            {isLoadingMore ? "Loading…" : "Load more"}
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 };
