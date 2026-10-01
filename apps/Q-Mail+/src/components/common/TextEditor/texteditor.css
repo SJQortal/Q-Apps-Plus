@@ -120,6 +120,102 @@
     border: 1px solid var(--qmail-compose-divider) !important;
 }
 
+.qmail-editor-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.qmail-editor-root .quill {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Our two-row toolbar: everyday controls, then "More" (hidden until asked). */
+.qmail-toolbar.ql-toolbar.ql-snow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  flex-shrink: 0;
+}
+
+.qmail-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 0;
+  min-width: 0;
+}
+
+.qmail-toolbar-more {
+  display: none;
+}
+
+.qmail-toolbar-more.is-open {
+  display: flex;
+}
+
+.qmail-toolbar.ql-toolbar.ql-snow .ql-formats {
+  margin-right: 10px;
+}
+
+.qmail-toolbar-more-toggle {
+  margin-left: auto;
+  margin-right: 0 !important;
+}
+
+.qmail-more-button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--qmail-compose-divider);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--qmail-compose-text);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.qmail-more-button:hover,
+.qmail-more-button.is-open {
+  background: var(--qmail-shell-hover);
+}
+
+.qmail-more-button:focus-visible {
+  outline: 2px solid var(--qmail-brand, currentColor);
+  outline-offset: 1px;
+}
+
+/* Bigger targets on touch screens (docs/DESIGN.md → Touch). */
+@media (pointer: coarse) {
+  .qmail-toolbar.ql-toolbar.ql-snow button {
+    width: 36px;
+    height: 36px;
+    padding: 6px;
+  }
+  .qmail-toolbar.ql-toolbar.ql-snow .ql-picker-label {
+    min-height: 36px;
+    line-height: 36px;
+  }
+  .qmail-more-button {
+    min-height: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ql-toolbar.ql-snow button,
+  .ql-toolbar.ql-snow .ql-picker-label,
+  .qmail-more-button {
+    transition: none;
+  }
+}
+
 .qmail-compose-editor {
   display: flex;
   flex-direction: column;
