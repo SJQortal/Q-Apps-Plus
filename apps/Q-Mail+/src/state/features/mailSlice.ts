@@ -1,6 +1,18 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import localForage from 'localforage'
 import { RootState } from '../store'
+import {
+  withMessagesRead,
+  withMessagesUnread,
+  withPublishedReadState,
+  type ReadStateMap,
+} from '../../utils/readState'
+import {
+  withArchived,
+  withPublishedArchived,
+  withUnarchived,
+  type ArchivedMap,
+} from '../../utils/archiveState'
 const favoritesLocal = localForage.createInstance({
   name: 'q-blog-favorites'
 })
@@ -26,6 +38,13 @@ interface GlobalState {
   mailMessages: any[]
   hashMapMailMessages: Record<string, BlogPost>
   hashMapSavedSubjects : Record<string, SavedSubject>
+  /** Local read/unread state (src/utils/readState.ts), loaded per account address. */
+  readState: ReadStateMap
+  /** The address `readState` was loaded for ('' until loaded); persistence is gated on it. */
+  readStateAddress: string
+  /** Locally archived received mail (src/utils/archiveState.ts), loaded per account address. */
+  archived: ArchivedMap
+  archivedAddress: string
 }
 const initialState: GlobalState = {
   posts: [],
@@ -41,7 +60,11 @@ const initialState: GlobalState = {
   filterValue: '',
   mailMessages: [],
   hashMapMailMessages: {},
-  hashMapSavedSubjects: {}
+  hashMapSavedSubjects: {},
+  readState: {},
+  readStateAddress: '',
+  archived: {},
+  archivedAddress: ''
 }
 
 export interface BlogPost {
@@ -206,6 +229,53 @@ export const mailSlice = createSlice({
       state.mailMessages = [];
       state.hashMapMailMessages = {};
     },
+    setReadState: (
+      state,
+      action: { payload: { address: string; entries: ReadStateMap } }
+    ) => {
+      state.readStateAddress = action.payload.address || ''
+      state.readState = action.payload.entries || {}
+    },
+    markRead: (state, action: { payload: { ids: string[]; at?: number } }) => {
+      state.readState = withMessagesRead(
+        state.readState,
+        action.payload.ids,
+        action.payload.at
+      )
+    },
+    markUnread: (state, action: { payload: { ids: string[] } }) => {
+      state.readState = withMessagesUnread(state.readState, action.payload.ids)
+    },
+    applyPublishedReadState: (
+      state,
+      action: { payload: { ids: string[]; at?: number } }
+    ) => {
+      state.readState = withPublishedReadState(
+        state.readState,
+        action.payload.ids,
+        action.payload.at
+      )
+    },
+    setArchivedState: (
+      state,
+      action: { payload: { address: string; entries: ArchivedMap } }
+    ) => {
+      state.archivedAddress = action.payload.address || ''
+      state.archived = action.payload.entries || {}
+    },
+    archiveIds: (state, action: { payload: { ids: string[]; at?: number } }) => {
+      state.archived = withArchived(
+        state.archived,
+        action.payload.ids,
+        action.payload.at
+      )
+    },
+    unarchiveIds: (state, action: { payload: { ids: string[] } }) => {
+      state.archived = withUnarchived(state.archived, action.payload.ids)
+    },
+    applyPublishedArchived: (state, action: { payload: ArchivedMap }) => {
+      state.archived = withPublishedArchived(state.archived, action.payload)
+    },
     updateInHashMap: (state, action) => {
       const { id } = action.payload
       const post = action.payload
@@ -364,7 +434,22 @@ export const {
   upsertMessagesBeginning,
   addAllHashMapSubject,
   addToHashMapSubject,
-  clearMessages
+  clearMessages,
+  setReadState,
+  markRead,
+  markUnread,
+  applyPublishedReadState,
+  setArchivedState,
+  archiveIds,
+  unarchiveIds,
+  applyPublishedArchived
 } = mailSlice.actions
+
+export const selectReadState = (state: RootState): ReadStateMap =>
+  state.mail.readState
+export const selectReadStateAddress = (state: RootState): string =>
+  state.mail.readStateAddress
+export const selectArchived = (state: RootState): ArchivedMap =>
+  state.mail.archived
 
 export default mailSlice.reducer
