@@ -87,10 +87,27 @@ import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import MailOutlineIcon from "@mui/icons-material/MailOutlined";
 import { IconButton } from "@mui/material";
 import {
+  applyPublishedArchived,
   applyPublishedReadState,
+  archiveIds,
   markRead,
   markUnread,
+  unarchiveIds,
 } from "../../state/features/mailSlice";
+import {
+  haveSameArchivedIds,
+  isArchivedId,
+  type ArchivedMap,
+} from "../../utils/archiveState";
+import {
+  MAIL_STATE_DOCUMENT_IDENTIFIER,
+  MAIL_STATE_DOCUMENT_SERVICE,
+  arePublishedStateEntriesEqual,
+  buildPublishedMailStateDocument,
+  mergePublishedStateEntries,
+  parsePublishedMailStateDocument,
+  type QMailPublishedStateEntry,
+} from "../../utils/mailStateDocument";
 import {
   countUnreadMessages,
   hasThreadHistory,
@@ -99,6 +116,7 @@ import {
 
 type MailboxSidebarItemId =
   | "inbox"
+  | "archived"
   | "aliases"
   | "sent"
   | "threads"
@@ -114,8 +132,7 @@ const SENT_INSTANCE_ITEM_PREFIX = "sent-instance:";
 const THREAD_GROUP_ITEM_PREFIX = "threads-group:";
 const ALIAS_COMPOSE_ITEM_ID = "alias-compose";
 const PUBLISH_STATE_ITEM_ID = "publish-mail-state";
-const MAIL_STATE_DOCUMENT_SERVICE = "DOCUMENT_PRIVATE";
-const MAIL_STATE_DOCUMENT_IDENTIFIER = "qmail_state_v1";
+const ARCHIVED_ITEM_ID = "archived";
 
 const encodeSidebarInstanceName = (name: string): string => {
   return encodeURIComponent(name);
@@ -330,20 +347,6 @@ const sortOwnedNamesForDisplay = (
   });
 };
 
-interface QMailPublishedStateEntry {
-  read?: boolean;
-  updatedAt?: number;
-  subject?: string;
-}
-
-interface QMailPublishedStateDocument {
-  version: number;
-  updatedAt: number;
-  ownerAddress: string;
-  names: string[];
-  messages: Record<string, QMailPublishedStateEntry>;
-}
-
 /** Unread numbers for badges and the page title (archived mail is excluded). */
 export interface UnreadCounts {
   /** The combined inbox: every owned name. */
@@ -391,51 +394,6 @@ const getMessageIdentifier = (message: any): string => {
   return String(value);
 };
 
-const normalizePublishedStateEntry = (
-  entry: QMailPublishedStateEntry | null | undefined
-): QMailPublishedStateEntry => {
-  const read = Boolean(entry?.read);
-  const subject =
-    typeof entry?.subject === "string" ? entry.subject.trim() : "";
-  const updatedAt = Number(entry?.updatedAt || 0);
-  const normalized: QMailPublishedStateEntry = {};
-  if (read) normalized.read = true;
-  if (subject) normalized.subject = subject;
-  if (Number.isFinite(updatedAt) && updatedAt > 0) {
-    normalized.updatedAt = updatedAt;
-  }
-  return normalized;
-};
-
-const mergePublishedStateEntries = (
-  base: QMailPublishedStateEntry | null | undefined,
-  incoming: QMailPublishedStateEntry | null | undefined
-): QMailPublishedStateEntry => {
-  const normalizedBase = normalizePublishedStateEntry(base);
-  const normalizedIncoming = normalizePublishedStateEntry(incoming);
-  return {
-    read: Boolean(normalizedBase.read || normalizedIncoming.read) || undefined,
-    subject: normalizedIncoming.subject || normalizedBase.subject || undefined,
-    updatedAt:
-      Math.max(
-        Number(normalizedBase.updatedAt || 0),
-        Number(normalizedIncoming.updatedAt || 0)
-      ) || undefined,
-  };
-};
-
-const arePublishedStateEntriesEqual = (
-  a: QMailPublishedStateEntry | null | undefined,
-  b: QMailPublishedStateEntry | null | undefined
-): boolean => {
-  const normalizedA = normalizePublishedStateEntry(a);
-  const normalizedB = normalizePublishedStateEntry(b);
-  return (
-    Boolean(normalizedA.read) === Boolean(normalizedB.read) &&
-    (normalizedA.subject || "") === (normalizedB.subject || "")
-  );
-};
-
 export const buildSidebarItems = ({
   inboxNames,
   aliasesNames,
@@ -475,6 +433,7 @@ export const buildSidebarItems = ({
       badgeText: formatUnreadBadge(unreadCounts.byName[name]),
     });
   });
+  items.push({ id: ARCHIVED_ITEM_ID, label: "Archived" });
 
   items.push({
     id: "aliases",
@@ -1199,6 +1158,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
     (state: RootState) => state.mail.mailMessages
   );
   const readState = useSelector((state: RootState) => state.mail.readState);
+  const archived = useSelector((state: RootState) => state.mail.archived);
+  const [publishedArchivedById, setPublishedArchivedById] =
+    useState<ArchivedMap>({});
   const { Modal: LoadPublishedStateModal, showModal: showLoadPublishedStateModal } =
     useConfirmationModal({
       title: "Load published QDN state?",
@@ -1262,6 +1224,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const isAliasesViewActive = activeMailboxItem === "aliases";
   const isSentViewActive = activeMailboxItem === "sent";
   const isInboxViewActive = activeMailboxItem === "inbox";
+  const isArchivedViewActive = activeMailboxItem === "archived";
   const selectedInboxInstanceName =
     isInboxViewActive && selectedAliasScope === "inbox" ? selectedAlias : null;
   const selectedAliasInboxName =
@@ -1353,18 +1316,19 @@ export const Mail = ({ isFromTo }: MailProps) => {
         name.toLowerCase() === normalizedUserName
           ? mailMessages
           : combinedAliasInboxMessages[name] || [];
-      byName[name] = countUnreadMessages(messages, readState);
+      byName[name] = countUnreadMessages(messages, readState, archived);
     });
     const byAlias: Record<string, number> = {};
     let aliases = 0;
     Object.entries(watchedAliasRecentMessages).forEach(([alias, messages]) => {
-      const count = countUnreadMessages(messages, readState);
+      const count = countUnreadMessages(messages, readState, archived);
       byAlias[alias] = count;
       aliases += count;
     });
-    const inbox = countUnreadMessages(combinedInboxMessages, readState);
+    const inbox = countUnreadMessages(combinedInboxMessages, readState, archived);
     return { inbox, byName, byAlias, aliases, total: inbox + aliases };
   }, [
+    archived,
     combinedAliasInboxMessages,
     combinedInboxMessages,
     hasAuthenticatedIdentity,
@@ -1410,15 +1374,26 @@ export const Mail = ({ isFromTo }: MailProps) => {
       return a.localeCompare(b, undefined, { sensitivity: "base" });
     });
   }, [combinedAliasInboxMessages, hashMapMailMessages, mailMessages]);
+  const archivedMessages = useMemo(() => {
+    return combinedInboxMessages.filter(message => {
+      return isArchivedId(archived, getMessageIdentifier(message));
+    });
+  }, [archived, combinedInboxMessages]);
   const inboxMessagesForList = useMemo(() => {
+    const withoutArchived = (messages: any[]) => {
+      return messages.filter(message => {
+        return !isArchivedId(archived, getMessageIdentifier(message));
+      });
+    };
     if (!selectedInboxInstanceName) {
-      return combinedInboxMessages;
+      return withoutArchived(combinedInboxMessages);
     }
     if (selectedInboxInstanceName.toLowerCase() === normalizedUserName) {
-      return mailMessages;
+      return withoutArchived(mailMessages);
     }
     return null;
   }, [
+    archived,
     combinedInboxMessages,
     mailMessages,
     normalizedUserName,
@@ -2001,7 +1976,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     if (
       !hasAuthenticatedIdentity ||
       !user?.address ||
-      !isInboxViewActive ||
+      !(isInboxViewActive || isArchivedViewActive) ||
       selectedInboxInstanceName
     ) {
       return;
@@ -2049,6 +2024,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   }, [
     combinedAliasInboxNames,
     hasAuthenticatedIdentity,
+    isArchivedViewActive,
     isInboxViewActive,
     selectedInboxInstanceName,
     user?.address,
@@ -2714,30 +2690,45 @@ export const Mail = ({ isFromTo }: MailProps) => {
     ]
   );
 
+  const archiveMessages = useCallback(
+    (messages: any[]) => {
+      const ids = messages
+        .map(message => getMessageIdentifier(message))
+        .filter(Boolean);
+      if (!ids.length) return;
+      dispatch(archiveIds({ ids }));
+    },
+    [dispatch]
+  );
+
+  const unarchiveMessages = useCallback(
+    (messages: any[]) => {
+      const ids = messages
+        .map(message => getMessageIdentifier(message))
+        .filter(Boolean);
+      if (!ids.length) return;
+      dispatch(unarchiveIds({ ids }));
+    },
+    [dispatch]
+  );
+
+  const hasPendingArchivedChanges = useMemo(() => {
+    return !haveSameArchivedIds(archived, publishedArchivedById);
+  }, [archived, publishedArchivedById]);
+
   const publishMailStateToQdn = useCallback(async () => {
     if (!user?.name || !user?.address) return;
     try {
       setIsPublishingMailState(true);
-      const mergedStateEntries: Record<string, QMailPublishedStateEntry> = {
-        ...publishedMailStateById,
-      };
-      Object.entries(localMailStateById).forEach(([identifier, entry]) => {
-        mergedStateEntries[identifier] = mergePublishedStateEntries(
-          mergedStateEntries[identifier],
-          {
-            ...entry,
-            updatedAt: Date.now(),
-          }
-        );
-      });
-
-      const payload: QMailPublishedStateDocument = {
-        version: 1,
-        updatedAt: Date.now(),
-        ownerAddress: user.address,
-        names: ownedNameCandidates,
-        messages: mergedStateEntries,
-      };
+      const { document: payload, mergedEntries: mergedStateEntries } =
+        buildPublishedMailStateDocument({
+          ownerAddress: user.address,
+          names: ownedNameCandidates,
+          publishedEntries: publishedMailStateById,
+          localEntries: localMailStateById,
+          archived,
+        });
+      const archivedToPublish: ArchivedMap = payload.archived || {};
       const encoded = await objectToBase64(payload);
 
       // Get user's public key for encryption
@@ -2772,6 +2763,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
         })
       );
       setPublishedMailStateById(mergedStateEntries);
+      setPublishedArchivedById(archivedToPublish);
     } catch (error: any) {
       const messageText =
         typeof error?.message === "string"
@@ -2787,6 +2779,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       setIsPublishingMailState(false);
     }
   }, [
+    archived,
     dispatch,
     localMailStateById,
     ownedNameCandidates,
@@ -2862,22 +2855,14 @@ export const Mail = ({ isFromTo }: MailProps) => {
         decodedObject = uint8ArrayToObject(base64ToUint8Array(encodedResource));
       }
 
-      if (!decodedObject || typeof decodedObject !== "object") return;
-      const maybeMessages = decodedObject.messages;
-      if (!maybeMessages || typeof maybeMessages !== "object") return;
-
-      const normalizedPublishedStateById: Record<
-        string,
-        QMailPublishedStateEntry
-      > = {};
-      Object.entries(maybeMessages).forEach(([identifier, entry]) => {
-        if (!identifier || typeof entry !== "object" || !entry) return;
-        const normalizedEntry = normalizePublishedStateEntry(
-          entry as QMailPublishedStateEntry
-        );
-        if (!normalizedEntry.read && !normalizedEntry.subject) return;
-        normalizedPublishedStateById[identifier] = normalizedEntry;
-      });
+      const parsed = parsePublishedMailStateDocument(decodedObject);
+      if (!parsed) return;
+      const loadedArchived = parsed.archived;
+      if (Object.keys(loadedArchived).length) {
+        setPublishedArchivedById(loadedArchived);
+        dispatch(applyPublishedArchived(loadedArchived));
+      }
+      const normalizedPublishedStateById = parsed.messages;
 
       if (!Object.keys(normalizedPublishedStateById).length) return;
       setPublishedMailStateById(normalizedPublishedStateById);
@@ -2977,7 +2962,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       primaryName: user?.name,
       canPublishState: hasAuthenticatedIdentity,
       isPublishingState: isPublishingMailState,
-      hasPendingStateChanges,
+      hasPendingStateChanges: hasPendingStateChanges || hasPendingArchivedChanges,
       unreadCounts,
     });
   }, [
@@ -2985,6 +2970,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     aliasReplyLinks,
     groupOptionsWithThreads,
     hasAuthenticatedIdentity,
+    hasPendingArchivedChanges,
     hasPendingStateChanges,
     inboxSidebarNames,
     isThreadsSectionExpanded,
@@ -3157,6 +3143,19 @@ export const Mail = ({ isFromTo }: MailProps) => {
         return;
       }
 
+      if (itemId === ARCHIVED_ITEM_ID) {
+        setActiveMailboxItem("archived");
+        setMobileMode("inbox");
+        setSelectedAlias(null);
+        setSelectedAliasScope(null);
+        setSelectedGroup(null);
+        setCurrentThread(null);
+        setIsOpen(false);
+        setMessage(null);
+        closeSidebarIfTransient();
+        return;
+      }
+
       if (itemId === "inbox" || itemId === "sent") {
         setActiveMailboxItem(itemId);
         setMobileMode(itemId);
@@ -3179,6 +3178,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
 
   useEffect(() => {
     setPublishedMailStateById({});
+    setPublishedArchivedById({});
   }, [user?.address, user?.name]);
 
   useEffect(() => {
@@ -3419,6 +3419,34 @@ export const Mail = ({ isFromTo }: MailProps) => {
     ) : (
       renderAuthenticationPrompt("Inbox")
     );
+  } else if (isArchivedViewActive) {
+    listTitle = "Archived";
+    listSubtitle = user?.name || undefined;
+    listBack = () => {
+      onSelectSidebarItem("inbox");
+    };
+    listBody = hasAuthenticatedIdentity ? (
+      archivedMessages.length ? (
+        <GroupedMailboxList
+          messages={archivedMessages}
+          mailboxType="inbox"
+          showSelectAll
+          openMessage={openMessage}
+          openedMessageId={message?.id || message?.identifier}
+          onMarkAsRead={markMessagesAsRead}
+          onMarkAsUnread={markMessagesAsUnread}
+          onUnarchive={unarchiveMessages}
+        />
+      ) : (
+        <EmptyState
+          icon={<InboxOutlinedIcon />}
+          title="Nothing archived"
+          hint="Select messages in the inbox and choose Archive to tidy them away. They stay on QDN."
+        />
+      )
+    ) : (
+      renderAuthenticationPrompt("Inbox")
+    );
   } else if (isThreadsView) {
     listTitle = "Threads";
     listSubtitle = "Group mail";
@@ -3455,6 +3483,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
           openedMessageId={message?.id || message?.identifier}
           onMarkAsRead={markMessagesAsRead}
           onMarkAsUnread={markMessagesAsUnread}
+          onArchive={archiveMessages}
         />
         {isLoading && spinner}
         {!selectedInboxInstanceName && isLoadingCombinedAliasInbox && spinner}
