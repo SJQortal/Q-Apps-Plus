@@ -18,7 +18,7 @@ import {
 } from "../../../utils/notifications/store";
 import { findCommentShare } from "../../../pages/CommentLink/CommentLink";
 import { NotificationsButton } from "./NotificationsButton";
-import { notificationPath } from "./NotificationList";
+import { notificationPath } from "./notificationPath";
 
 vi.mock("../../../hooks/usePhoneLayout", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../hooks/usePhoneLayout")>()),
@@ -100,6 +100,8 @@ describe("NotificationsButton", () => {
     expect(bell()).toHaveAccessibleName("Notifications, 1 new");
     fireEvent.click(bell());
     const dialog = screen.getByRole("dialog", { name: "Notifications" });
+    // The list loads on first open.
+    await within(dialog).findByRole("list", { name: "Notifications" });
     const rows = within(dialog)
       .getAllByRole("button")
       .filter((b) => b.closest("li"));
@@ -118,46 +120,46 @@ describe("NotificationsButton", () => {
     seed([comment, added]);
     render();
     fireEvent.click(bell());
-    fireEvent.click(screen.getByRole("button", { name: /bob commented on Docs/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /bob commented on Docs/ }));
     expect(screen.getByTestId("where")).toHaveTextContent("/share/alice/qshare_file_docs_abcdef_metadata#comments");
     expect(readNotifications(ADDRESS).items.every((i) => i.read)).toBe(true);
     await waitFor(() => expect(bell()).toHaveAccessibleName("Notifications"));
   });
 
-  it("says when there is nothing yet, or when notifications are off, with a way to Settings", () => {
+  it("says when there is nothing yet, or when notifications are off, with a way to Settings", async () => {
     seed([]);
     render();
     fireEvent.click(bell());
-    expect(screen.getByText("Nothing yet")).toBeInTheDocument();
+    expect(await screen.findByText("Nothing yet")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Notification settings" }));
     expect(screen.getByTestId("where")).toHaveTextContent("/settings#notifications");
 
     act(() => writeSettings({ notifyComments: false, notifyCollections: false }));
     fireEvent.click(bell());
-    expect(screen.getByText("Notifications are off")).toBeInTheDocument();
+    expect(await screen.findByText("Notifications are off")).toBeInTheDocument();
   });
 
-  it("says when checks fail instead of waiting forever, with a way to try again", () => {
+  it("says when checks fail instead of waiting forever, with a way to try again", async () => {
     writeNotifications(ADDRESS, { ...EMPTY_STATE, lastError: Date.now() });
     const tries = vi.fn();
     window.addEventListener("qshareplus:check-notifications", tries);
     render();
     fireEvent.click(bell());
+    expect(await screen.findByText(/Couldn't check for new ones/)).toBeInTheDocument();
     expect(screen.queryByText("Checking for notifications…")).toBeNull();
-    expect(screen.getByText(/Couldn't check for new ones/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     // Opening the list asked once, Try again once more.
     expect(tries).toHaveBeenCalledTimes(2);
     window.removeEventListener("qshareplus:check-notifications", tries);
   });
 
-  it("uses a bottom sheet on phones", () => {
+  it("uses a bottom sheet on phones", async () => {
     phone = true;
     seed([comment]);
     render();
     fireEvent.click(bell());
     expect(screen.getByRole("dialog", { name: "Notifications" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /bob commented on Docs/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /bob commented on Docs/ })).toBeInTheDocument();
   });
 });
 

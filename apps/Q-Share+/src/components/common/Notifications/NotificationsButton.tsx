@@ -1,5 +1,15 @@
-import { useState, type MouseEvent } from "react";
-import { Badge, IconButton, Popover, Tooltip, Typography, type SxProps, type Theme } from "@mui/material";
+import { Suspense, lazy, useState, type MouseEvent } from "react";
+import {
+  Badge,
+  Box,
+  CircularProgress,
+  IconButton,
+  Popover,
+  Tooltip,
+  Typography,
+  type SxProps,
+  type Theme,
+} from "@mui/material";
 import NotificationsNoneOutlinedIcon from "@mui/icons-material/NotificationsNoneOutlined";
 import { useNavigate } from "react-router-dom";
 import { BottomSheet } from "../mobile/BottomSheet";
@@ -7,8 +17,15 @@ import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { requestNotificationCheck, useNotificationAccount } from "../../../hooks/useNotificationChecks";
 import { useAppSettings } from "../../../utils/settings";
 import { markAllRead, useNotificationState, type AppNotification } from "../../../utils/notifications/store";
-import { markHubAlertsSeen } from "../../../utils/notifications/hubAlerts";
-import { NotificationList, notificationPath } from "./NotificationList";
+import { notificationPath } from "./notificationPath";
+
+// Loaded when the list first opens; the bell and its count are all the first screen needs.
+const NotificationList = lazy(() => import("./NotificationList").then((m) => ({ default: m.NotificationList })));
+const listLoading = (
+  <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+    <CircularProgress size={24} aria-label="Loading notifications" />
+  </Box>
+);
 
 /**
  * The header's bell: the unread count, and the list in a popover (desktop) or
@@ -33,8 +50,8 @@ export function NotificationsButton({ sx }: { sx?: SxProps<Theme> }) {
     setAnchor(null);
     setSheetOpen(false);
     markAllRead(account.address);
-    // Seen here, so seen in Hub's bell too.
-    void markHubAlertsSeen(account.address);
+    // Seen here, so seen in Hub's bell too (that code loads only now).
+    void import("../../../utils/notifications/hubAlerts").then((m) => m.markHubAlertsSeen(account.address));
   };
   const openList = (event: MouseEvent<HTMLElement>) => {
     requestNotificationCheck();
@@ -47,15 +64,17 @@ export function NotificationsButton({ sx }: { sx?: SxProps<Theme> }) {
   };
 
   const list = (
-    <NotificationList
-      items={state.items}
-      checking={state.lastCheck === 0 && state.lastError === 0}
-      failed={state.lastError > 0}
-      onRetry={requestNotificationCheck}
-      off={off}
-      onOpen={(item: AppNotification) => go(notificationPath(item))}
-      onSettings={() => go("/settings#notifications")}
-    />
+    <Suspense fallback={listLoading}>
+      <NotificationList
+        items={state.items}
+        checking={state.lastCheck === 0 && state.lastError === 0}
+        failed={state.lastError > 0}
+        onRetry={requestNotificationCheck}
+        off={off}
+        onOpen={(item: AppNotification) => go(notificationPath(item))}
+        onSettings={() => go("/settings#notifications")}
+      />
+    </Suspense>
   );
 
   return (

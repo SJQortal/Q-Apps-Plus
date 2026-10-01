@@ -4,21 +4,9 @@ import NotificationsNoneOutlinedIcon from "@mui/icons-material/NotificationsNone
 import { useInView } from "react-intersection-observer";
 import { NameAvatar } from "../NameAvatar";
 import { PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
-import { collectionPath } from "../../../utils/collections";
 import { fetchQdnText } from "../../../utils/qdnSearch";
-import { sharePath } from "../../../utils/qortalLinks";
 import { fromNow } from "../../../utils/time";
 import type { AppNotification } from "../../../utils/notifications/store";
-
-/** Where a notification leads: the share's comments, the collection, or the comment's share once it is found. */
-export function notificationPath(item: AppNotification): string {
-  if (item.kind === "collection" && item.collection)
-    return collectionPath(item.collection.name, item.collection.identifier);
-  if (item.share) return `${sharePath(item.share.name, item.share.identifier)}#comments`;
-  if (item.comment)
-    return `/comment/${encodeURIComponent(item.comment.name)}/${encodeURIComponent(item.comment.identifier)}`;
-  return "/";
-}
 
 const Strong = ({ children }: { children: string }) => (
   <Box component="span" sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>

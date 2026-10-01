@@ -5,7 +5,6 @@ import { useAppSettings } from "../utils/settings";
 import { checkNotifications } from "../utils/notifications/check";
 import { readNotifications } from "../utils/notifications/store";
 import { loadActivity } from "../utils/notifications/activity";
-import { readHubAlerts, syncHubAlerts } from "../utils/notifications/hubAlerts";
 import { onQdnSearchesInvalidated } from "../utils/qdnSearch";
 
 /** Between checks while the app is on screen; doubled after each check that finds nothing. */
@@ -119,17 +118,20 @@ export function useHubAlertsSync(): void {
     if (!account) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const sync = () => {
-      if (!readHubAlerts(account.address).enabled) return;
-      loadActivity(account.names)
-        .then((activity) => (stopped ? undefined : syncHubAlerts(account.address, activity)))
-        .catch(() => {
-          /* Hub or Core didn't answer: the next publish or start tries again */
-        });
+    const sync = async () => {
+      try {
+        // The Hub alerts code loads only here, after the first screen.
+        const { readHubAlerts, syncHubAlerts } = await import("../utils/notifications/hubAlerts");
+        if (stopped || !readHubAlerts(account.address).enabled) return;
+        const activity = await loadActivity(account.names);
+        if (!stopped) await syncHubAlerts(account.address, activity);
+      } catch {
+        /* Hub or Core didn't answer: the next publish or start tries again */
+      }
     };
     const later = (delay: number) => {
       clearTimeout(timer);
-      timer = setTimeout(sync, delay);
+      timer = setTimeout(() => void sync(), delay);
     };
     later(HUB_SYNC_DELAY_MS);
     const unsubscribe = onQdnSearchesInvalidated(() => later(HUB_SYNC_DELAY_MS));
