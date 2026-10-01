@@ -16,6 +16,18 @@ export interface AppShellUser {
   names?: { name: string; owner?: string }[];
 }
 
+/**
+ * What the mail page exposes to Settings → Sync: the same publish path the rail's
+ * "Publish Q-Mail State" uses, plus whether anything is waiting to be published.
+ */
+export interface MailSyncState {
+  /** Publishes qmail_state_v1 (one QDN publish). The caller confirms first. */
+  publishMailState: () => Promise<void>;
+  isPublishing: boolean;
+  /** Local read state, subjects or archived ids differ from the last published/loaded document. */
+  hasPendingChanges: boolean;
+}
+
 export interface AppShellContextValue {
   user: AppShellUser | null;
   userAvatar: string;
@@ -24,6 +36,9 @@ export interface AppShellContextValue {
   authenticate: () => Promise<void>;
   controller: AppShellController;
   state: AppShellState;
+  /** Set by the mail page while it is mounted; null otherwise. */
+  mailSync: MailSyncState | null;
+  registerMailSync: (sync: MailSyncState | null) => void;
 }
 
 export const AppShellContext = createContext<AppShellContextValue | null>(null);

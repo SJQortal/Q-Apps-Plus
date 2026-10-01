@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { HubThemeProvider } from '../../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
@@ -22,6 +22,8 @@ function renderSettings(overrides: Partial<AppShellContextValue> = {}) {
     userAvatar: '',
     setActiveName: vi.fn(),
     authenticate: vi.fn(async () => {}),
+    mailSync: null,
+    registerMailSync: vi.fn(),
     controller: controller as unknown as AppShellContextValue['controller'],
     state: {
       ui: { menuOpen: false, busy: false, error: null },
@@ -44,9 +46,9 @@ function renderSettings(overrides: Partial<AppShellContextValue> = {}) {
 }
 
 describe('SettingsPage', () => {
-  it('shows the Account, Appearance, Mail and About sections', () => {
+  it('shows the Account, Appearance, Mail, Sync and About sections', () => {
     renderSettings()
-    for (const title of ['Account', 'Appearance', 'Mail', 'About']) {
+    for (const title of ['Account', 'Appearance', 'Mail', 'Sync', 'About']) {
       expect(screen.getByRole('heading', { name: title })).toBeTruthy()
     }
     expect(screen.getByText(`Q-Mail+ ${APP_VERSION}`)).toBeTruthy()
@@ -74,6 +76,42 @@ describe('SettingsPage', () => {
     renderSettings()
     fireEvent.click(screen.getByRole('button', { name: "What's new" }))
     expect(screen.getByRole('dialog', { name: "What's new" })).toBeTruthy()
+  })
+
+  it('saves the "always fetch and apply" preference under the existing key', () => {
+    renderSettings()
+    const toggle = screen.getByRole('switch', { name: 'Always fetch and apply published mail state' })
+    expect((toggle as HTMLInputElement).checked).toBe(false)
+    fireEvent.click(toggle)
+    expect(window.localStorage.getItem('qmail_auto_apply_qdn_state_qaddress1')).toBe('true')
+    fireEvent.click(toggle)
+    expect(window.localStorage.getItem('qmail_auto_apply_qdn_state_qaddress1')).toBe('false')
+  })
+
+  it('publishes the mail state only after confirming, through the mail page\'s publish path', async () => {
+    const publishMailState = vi.fn(async () => {})
+    renderSettings({ mailSync: { publishMailState, isPublishing: false, hasPendingChanges: true } })
+    expect(screen.getByText('Unpublished changes. Costs one QDN publish.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+    expect(publishMailState).not.toHaveBeenCalled()
+    const dialog = screen.getByRole('dialog', { name: 'Publish mail state?' })
+    expect(dialog.textContent).toContain('one QDN publish')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    })
+    expect(publishMailState).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Publish mail state?' })).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Proceed' }))
+    })
+    expect(publishMailState).toHaveBeenCalledTimes(1)
+  })
+
+  it('disables Publish until the mail page has registered its publish path', () => {
+    renderSettings()
+    expect((screen.getByRole('button', { name: 'Publish' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('Open your mailbox first.')).toBeTruthy()
   })
 
   it('offers Authenticate when signed out', () => {
