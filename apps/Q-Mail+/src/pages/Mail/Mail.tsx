@@ -6,20 +6,11 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
 import { Joyride, ACTIONS, STATUS, Step } from "react-joyride";
-import SendIcon from "@mui/icons-material/Send";
-import ComposeIconSVG from "../../assets/svgs/ComposeIcon.svg";
-import MailSVG from "../../assets/svgs/mail.svg";
-import SendSVG from "../../assets/svgs/Send.svg";
-import ReplySVG from "../../assets/svgs/Reply.svg";
 
-import MailIcon from "@mui/icons-material/Mail";
-import GroupIcon from "@mui/icons-material/Group";
-import GroupSVG from "../../assets/svgs/Group.svg";
-import AddAliasSVG from "../../assets/svgs/AddAlias.svg";
 
 import { styled } from "@mui/system";
 import {
@@ -51,24 +42,12 @@ import { useModal } from "../../components/common/useModal";
 import useConfirmationModal from "../../hooks/useConfirmModal";
 import { OpenMail } from "./OpenMail";
 import { MAIL_SERVICE_TYPE, THREAD_SERVICE_TYPE } from "../../constants/mail";
-import {
-  CloseParent,
-  ComposeP,
-  MailBody,
-  MailBodyInner,
-  MailBodyInnerHeader,
-  MailBodyInnerScroll,
-  MailContainer,
-  MailIconImg,
-} from "./Mail-styles";
 import { ShowMessageV2 } from "./ShowMessageV2";
 import {
   executeEvent,
   subscribeToEvent,
   unsubscribeFromEvent,
 } from "../../utils/events";
-import { Spacer } from "../../components/common/Spacer";
-import { ChangelogPage } from "./ChangelogPage";
 import { GroupedMailboxList } from "./GroupedMailboxList";
 import { MailboxSearchBar } from "./MailboxSearchBar";
 import { useMailboxSearch } from "./useMailboxSearch";
@@ -88,18 +67,25 @@ import {
   writeAutoApplyQdnState,
 } from "../../utils/qdnStatePreference";
 import { formatFullTimestamp } from "../../utils/time";
-import PublishIcon from "@mui/icons-material/Publish";
-import {
-  LeftSidebar,
-  useLeftSidebarController,
-  useLeftSidebarHoverPreview,
-  useLeftSidebarState,
-} from "@qortal/qapp-lib/left-sidebar/react";
-import type {
-  LeftSidebarConfig,
-  LeftSidebarDeps,
-  LeftSidebarItem,
-} from "@qortal/qapp-lib/left-sidebar/core";
+import type { LeftSidebarItem } from "@qortal/qapp-lib/left-sidebar/core";
+import { MailShell, PaneScroll } from "../../layout/MailShell";
+import { Rail } from "../../layout/Rail";
+import { BottomNav } from "../../layout/BottomNav";
+import { ComposeFab } from "../../layout/ComposeFab";
+import { PaneHeader } from "../../layout/PaneHeader";
+import { EmptyState, LoadingBanner } from "../../layout/states";
+import { useLayoutMode } from "../../layout/useLayoutMode";
+import { useAppViewport } from "../../layout/useAppViewport";
+import { SETTINGS_PATH } from "../Settings/SettingsPage";
+import packageJson from "../../../package.json";
+import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
+import SendOutlinedIcon from "@mui/icons-material/SendOutlined";
+import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
+import AlternateEmailOutlinedIcon from "@mui/icons-material/AlternateEmailOutlined";
+import MenuIcon from "@mui/icons-material/Menu";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import MailOutlineIcon from "@mui/icons-material/MailOutlined";
+import { IconButton } from "@mui/material";
 
 type MailboxSidebarItemId =
   | "inbox"
@@ -1067,7 +1053,12 @@ export const Mail = ({ isFromTo }: MailProps) => {
   >({});
   const [isLoadingGroupInstances, setIsLoadingGroupInstances] = useState(false);
   const [mailInfo, setMailInfo] = useState<any>(null);
-  const isMobile = useMediaQuery("(max-width:950px)");
+  const layoutMode = useLayoutMode();
+  const isMobile = layoutMode === "phone";
+  const [railOpen, setRailOpen] = useState(false);
+  const location = useLocation();
+  useAppViewport();
+  // Kept in step with activeMailboxItem; the shell reads activeMailboxItem only.
   const [mobileMode, setMobileMode] = useState("inbox");
   const [activeMailboxItem, setActiveMailboxItem] =
     useState<MailboxSidebarItemId>("inbox");
@@ -1204,15 +1195,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
   }, [watchedAliases]);
   const selectedAliasIsPrimaryName =
     Boolean(selectedAlias) && normalizedSelectedAlias === normalizedUserName;
-  const isAliasesViewActive =
-    (!isMobile && activeMailboxItem === "aliases") ||
-    (isMobile && mobileMode === "aliases");
-  const isSentViewActive =
-    (!isMobile && activeMailboxItem === "sent") ||
-    (isMobile && mobileMode === "sent");
-  const isInboxViewActive =
-    (!isMobile && activeMailboxItem === "inbox") ||
-    (isMobile && mobileMode === "inbox");
+  const isAliasesViewActive = activeMailboxItem === "aliases";
+  const isSentViewActive = activeMailboxItem === "sent";
+  const isInboxViewActive = activeMailboxItem === "inbox";
   const selectedInboxInstanceName =
     isInboxViewActive && selectedAliasScope === "inbox" ? selectedAlias : null;
   const selectedAliasInboxName =
@@ -1470,12 +1455,10 @@ export const Mail = ({ isFromTo }: MailProps) => {
       setComposeMode(activeAliasInboxName ? "alias" : "standard");
       setIsOpen(false);
       setMessage(null);
-
-      if (!isMobile) {
-        setActiveMailboxItem("compose");
-      }
+      setActiveMailboxItem("compose");
+      setMobileMode("compose");
     },
-    [activeAliasInboxName, aliasReplyLinks, isMobile]
+    [activeAliasInboxName, aliasReplyLinks]
   );
 
   const openForwardComposerFromMessage = useCallback(
@@ -1492,12 +1475,10 @@ export const Mail = ({ isFromTo }: MailProps) => {
       setComposeMode("standard");
       setIsOpen(false);
       setMessage(null);
-
-      if (!isMobile) {
-        setActiveMailboxItem("compose");
-      }
+      setActiveMailboxItem("compose");
+      setMobileMode("compose");
     },
-    [activeAliasInboxName, isMobile]
+    [activeAliasInboxName]
   );
 
   const handleRequestComposeThread = useCallback(
@@ -2908,188 +2889,10 @@ export const Mail = ({ isFromTo }: MailProps) => {
     selectedAliasInboxName,
     user?.name,
   ]);
-  const leftSidebarStorage = useMemo<LeftSidebarDeps["storage"]>(() => {
-    return {
-      get: <T,>(key: string): T | null => {
-        try {
-          const raw = localStorage.getItem(key);
-          if (raw === null) return null;
-          return JSON.parse(raw) as T;
-        } catch {
-          return null;
-        }
-      },
-      set: <T,>(key: string, value: T) => {
-        try {
-          localStorage.setItem(key, JSON.stringify(value));
-        } catch {
-          /* ignore */
-        }
-      },
-      remove: (key: string) => {
-        try {
-          localStorage.removeItem(key);
-        } catch {
-          /* ignore */
-        }
-      },
-    };
-  }, []);
-
-  const leftSidebarConfig = useMemo<LeftSidebarConfig>(
-    () => ({
-      appId: "qmail",
-      items: sidebarItems,
-      breakpointPx: 950,
-      defaults: {
-        pinned: true,
-        openDesktop: true,
-        openMobile: false,
-      },
-    }),
-    [sidebarItems]
-  );
-
-  const leftSidebarDeps = useMemo<LeftSidebarDeps>(
-    () => ({
-      storage: leftSidebarStorage,
-      getViewportWidth: () => window.innerWidth,
-    }),
-    [leftSidebarStorage]
-  );
-
-  const leftSidebarController = useLeftSidebarController(
-    leftSidebarConfig,
-    leftSidebarDeps
-  );
-  const leftSidebarState = useLeftSidebarState(leftSidebarController);
-  const leftSidebarHoverPreviewBindings = useLeftSidebarHoverPreview(
-    leftSidebarController,
-    {
-      closeDelayMs: SIDEBAR_HOVER_CLOSE_DELAY_MS,
-      onAnchorClickMode: "togglePinnedDesktop",
-    }
-  );
-
-  useEffect(() => {
-    leftSidebarController.setItems(sidebarItems);
-  }, [leftSidebarController, sidebarItems]);
-
-  const renderSidebarIcon = useCallback(
-    (item: LeftSidebarItem) => {
-      const isComposeItem = item.id === "compose";
-      const iconStyle: React.CSSProperties = {
-        width: isComposeItem ? "1.5rem" : "1rem",
-        height: isComposeItem ? "1.5rem" : "1rem",
-        objectFit: "contain",
-        filter: "var(--qmail-shell-icon-filter)",
-      };
-
-      const inboxInstanceName = parseSidebarInstanceNameFromItemId(
-        item.id,
-        INBOX_INSTANCE_ITEM_PREFIX
-      );
-      const aliasesInstanceName = parseSidebarInstanceNameFromItemId(
-        item.id,
-        ALIASES_INSTANCE_ITEM_PREFIX
-      );
-      const sentInstanceName = parseSidebarInstanceNameFromItemId(
-        item.id,
-        SENT_INSTANCE_ITEM_PREFIX
-      );
-      const threadGroupId = parseSidebarGroupIdFromItemId(item.id);
-      const instanceName =
-        inboxInstanceName || aliasesInstanceName || sentInstanceName;
-      if (instanceName) {
-        const avatarUrl =
-          avatarUrlByNameLowercase.get(instanceName.toLowerCase()) || undefined;
-        return (
-          <span
-            className="qapp-lib-left-sidebar-item-icon qmail-sidebar-subitem-avatar-icon"
-            aria-hidden="true"
-          >
-            <Avatar
-              className="qmail-sidebar-subitem-avatar"
-              src={avatarUrl}
-              alt={instanceName}
-            >
-              {instanceName.charAt(0).toUpperCase()}
-            </Avatar>
-          </span>
-        );
-      }
-
-      if (threadGroupId) {
-        const groupInfo = groupOptionsById.get(threadGroupId);
-        const groupName =
-          typeof groupInfo?.name === "string" && groupInfo.name.trim()
-            ? groupInfo.name.trim()
-            : `Group ${threadGroupId}`;
-        const avatarUrl = groupAvatarUrlById[threadGroupId] || undefined;
-        return (
-          <span
-            className="qapp-lib-left-sidebar-item-icon qmail-sidebar-subitem-avatar-icon"
-            aria-hidden="true"
-          >
-            <Avatar
-              className="qmail-sidebar-subitem-avatar"
-              src={avatarUrl}
-              alt={groupName}
-            >
-              {groupName.charAt(0).toUpperCase()}
-            </Avatar>
-          </span>
-        );
-      }
-
-      if (item.id === "inbox") {
-        return <img src={MailSVG} alt="" style={iconStyle} />;
-      }
-
-      if (item.id === "sent") {
-        return <img src={SendSVG} alt="" style={iconStyle} />;
-      }
-
-      if (item.id === "aliases") {
-        return <img src={AddAliasSVG} alt="" style={iconStyle} />;
-      }
-
-      if (item.id === "threads") {
-        return <img src={GroupSVG} alt="" style={iconStyle} />;
-      }
-
-      if (item.id === "compose") {
-        return <img src={ComposeIconSVG} alt="" style={iconStyle} />;
-      }
-
-      if (item.id === ALIAS_COMPOSE_ITEM_ID) {
-        return <img src={ReplySVG} alt="" style={iconStyle} />;
-      }
-
-      if (item.id === PUBLISH_STATE_ITEM_ID) {
-        const hasPendingChanges = item.badgeText === "!";
-        return (
-          <PublishIcon
-            sx={[{
-              fontSize: "1rem"
-            }, hasPendingChanges ? {
-              color: "var(--qmail-warning-border, rgba(255, 171, 64, 0.95))"
-            } : {
-              color: "inherit"
-            }]}
-          />
-        );
-      }
-
-      return null;
-    },
-    [avatarUrlByNameLowercase, groupAvatarUrlById, groupOptionsById]
-  );
-
   const onSelectSidebarItem = useCallback(
     (itemId: string) => {
       const closeSidebarIfTransient = () => {
-        leftSidebarController.handleOutsideInteraction();
+        setRailOpen(false);
       };
 
       setIsChangelogOpen(false);
@@ -3264,7 +3067,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     [
       aliasReplyLinks,
       groupOptionsById,
-      leftSidebarController,
       publishMailStateToQdn,
       selectedAliasInboxName,
     ]
@@ -3353,17 +3155,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     user?.name,
   ]);
 
-  useEffect(() => {
-    const onToggleChangelog = () => {
-      setIsOpen(false);
-      setMessage(null);
-      setIsChangelogOpen(prev => !prev);
-    };
-    subscribeToEvent("qmail:toggle-changelog", onToggleChangelog);
-    return () => {
-      unsubscribeFromEvent("qmail:toggle-changelog", onToggleChangelog);
-    };
-  }, []);
 
   const sidebarItemIdSet = useMemo(() => {
     return new Set(sidebarItems.map(item => item.id));
@@ -3414,92 +3205,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     sidebarItemIdSet,
   ]);
 
-  useEffect(() => {
-    leftSidebarController.setActiveItem(activeSidebarItem);
-  }, [activeSidebarItem, leftSidebarController]);
-
-  useEffect(() => {
-    leftSidebarController.setViewportWidth(window.innerWidth);
-    const handleResize = () => {
-      leftSidebarController.setViewportWidth(window.innerWidth);
-    };
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [leftSidebarController]);
-
-  useEffect(() => {
-    const onAnchorClick = () => {
-      leftSidebarHoverPreviewBindings.onAnchorClick();
-    };
-    const onAnchorPointerEnter = () => {
-      leftSidebarHoverPreviewBindings.onAnchorPointerEnter();
-    };
-    const onAnchorPointerLeave = () => {
-      leftSidebarHoverPreviewBindings.onAnchorPointerLeave();
-    };
-
-    subscribeToEvent("qmail:left-sidebar-anchor-click", onAnchorClick);
-    subscribeToEvent(
-      "qmail:left-sidebar-anchor-pointer-enter",
-      onAnchorPointerEnter
-    );
-    subscribeToEvent(
-      "qmail:left-sidebar-anchor-pointer-leave",
-      onAnchorPointerLeave
-    );
-
-    return () => {
-      unsubscribeFromEvent("qmail:left-sidebar-anchor-click", onAnchorClick);
-      unsubscribeFromEvent(
-        "qmail:left-sidebar-anchor-pointer-enter",
-        onAnchorPointerEnter
-      );
-      unsubscribeFromEvent(
-        "qmail:left-sidebar-anchor-pointer-leave",
-        onAnchorPointerLeave
-      );
-    };
-  }, [leftSidebarHoverPreviewBindings]);
-
-  useEffect(() => {
-    const handleKeydown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
-        return;
-      }
-      leftSidebarController.handleEscapeKey();
-    };
-    document.addEventListener("keydown", handleKeydown);
-    return () => {
-      document.removeEventListener("keydown", handleKeydown);
-    };
-  }, [leftSidebarController]);
-
-  useEffect(() => {
-    if (!leftSidebarState.open) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-      if (target.closest(".qapp-lib-top-bar-icon")) {
-        return;
-      }
-      if (target.closest("[data-qapp-lib='left-sidebar']")) {
-        return;
-      }
-      leftSidebarController.handleOutsideInteraction();
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-    };
-  }, [leftSidebarController, leftSidebarState.open]);
 
   const sentInstanceNamesForCurrentView = useMemo(() => {
     if (selectedSentInstanceName) {
@@ -3519,1181 +3224,444 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const isMailBootstrapLoading =
     isLoading || isLoadingCombinedAliasInbox || isLoadingQdnState;
 
-  return (
-    <MailContainer className="qmail-mail-page">
-      <LoadPublishedStateModal />
-      {isMailBootstrapLoading && (
-        <Box
-          sx={{
-            width: "100%",
-            display: "flex",
-            flexDirection: "column",
-            borderBottom: "1px solid var(--qmail-warning-border, rgba(255, 171, 64, 0.95))",
-            background:
-              "linear-gradient(90deg, rgba(255, 171, 64, 0.24), rgba(255, 171, 64, 0.12) 55%, var(--qmail-shell-bg))",
-            boxShadow: "0 10px 24px rgba(0, 0, 0, 0.22)",
-            backdropFilter: "blur(10px)",
-            position: "sticky",
-            top: 0,
-            zIndex: 4,
-            flexShrink: 0,
-          }}
-          role="status"
-          aria-live="polite"
-        >
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: "14px",
-              padding: {
-                xs: "12px 14px",
-                md: "14px 18px",
-              },
-            }}
-          >
-            <Box
-              sx={{
-                width: "42px",
-                height: "42px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "999px",
-                backgroundColor: "var(--qmail-shell-bg)",
-                border: "1px solid var(--qmail-warning-border, rgba(255, 171, 64, 0.95))",
-                boxShadow: "0 0 0 4px rgba(255, 171, 64, 0.12)",
-                flexShrink: 0,
-              }}
-            >
-              <CircularProgress
-                size={30}
-                thickness={4.5}
-                sx={{
-                  color: "var(--qmail-warning-border, rgba(255, 171, 64, 0.95))",
-                }}
-              />
-            </Box>
-            <Box
-              sx={{
-                minWidth: 0,
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                gap: "2px",
-              }}
-            >
-              <Typography
-                sx={{
-                  fontSize: {
-                    xs: "0.68rem",
-                    md: "0.72rem",
-                  },
-                  fontWeight: 800,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "var(--qmail-warning-border, rgba(255, 171, 64, 0.95))",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Loading
-              </Typography>
-              <Typography
-                sx={{
-                  fontSize: {
-                    xs: "0.92rem",
-                    md: "0.98rem",
-                  },
-                  fontWeight: 800,
-                  color: "var(--qmail-thread-text)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Fetching mail and state...
-              </Typography>
-              <Typography
-                sx={{
-                  fontSize: {
-                    xs: "0.78rem",
-                    md: "0.82rem",
-                  },
-                  fontWeight: 500,
-                  color: "var(--qmail-thread-subtle-text)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  display: {
-                    xs: "none",
-                    sm: "block",
-                  },
-                }}
-              >
-                QDN state and inbox history are still syncing. This can take a
-                bit on larger mailboxes.
-              </Typography>
-            </Box>
-          </Box>
-          <LinearProgress
-            sx={{
-              height: "4px",
-              borderRadius: 0,
-              backgroundColor: "rgba(0, 0, 0, 0.06)",
-              "& .MuiLinearProgress-bar": {
-                backgroundColor: "var(--qmail-warning-border, rgba(255, 171, 64, 0.95))",
-              },
-            }}
+  const openSettings = useCallback(() => {
+    navigate(SETTINGS_PATH, { state: { backgroundLocation: location } });
+  }, [location, navigate]);
+
+  const closeOpenMessage = useCallback(() => {
+    setIsOpen(false);
+    setMessage(null);
+  }, []);
+
+  const handleComposerClose = useCallback(() => {
+    const shouldReturnToAliasInbox =
+      composeMode === "alias" && Boolean(selectedAliasInboxName);
+    setComposeRecipientAlias(null);
+    setComposeRequireReplyAlias(false);
+    setComposeDefaultReplyAlias("");
+    setComposeMode("standard");
+    if (composeReturnView === "threads") {
+      setActiveMailboxItem("threads");
+      setMobileMode("threads");
+      if (composeReturnGroupId) {
+        const returnGroup = groupOptionsById.get(composeReturnGroupId);
+        if (returnGroup) {
+          setSelectedGroup(returnGroup);
+        }
+      }
+    } else if (shouldReturnToAliasInbox) {
+      setActiveMailboxItem("aliases");
+      setMobileMode("aliases");
+      setSelectedAlias(selectedAliasInboxName);
+      setSelectedAliasScope("aliases");
+    } else {
+      setActiveMailboxItem("inbox");
+      setMobileMode("inbox");
+      setSelectedAlias(null);
+      setSelectedAliasScope(null);
+    }
+    setComposePrefill(null);
+    setComposeReturnView("inbox");
+    setComposeReturnGroupId(null);
+  }, [
+    composeMode,
+    composeReturnGroupId,
+    composeReturnView,
+    groupOptionsById,
+    selectedAliasInboxName,
+  ]);
+
+  const isDesktopLayout = layoutMode === "desktop";
+  const isReadingOpen = Boolean(isOpen && message);
+  const isComposeView = activeMailboxItem === "compose";
+  const isThreadsView = activeMailboxItem === "threads";
+
+  const menuButton = !isDesktopLayout ? (
+    <IconButton
+      onClick={() => setRailOpen(true)}
+      aria-label="Open mailboxes menu"
+      size="large"
+      sx={{ minWidth: 44, minHeight: 44 }}
+    >
+      <MenuIcon />
+    </IconButton>
+  ) : undefined;
+  const settingsButton = !isDesktopLayout ? (
+    <IconButton onClick={openSettings} aria-label="Settings" size="large" sx={{ minWidth: 44, minHeight: 44 }}>
+      <SettingsOutlinedIcon />
+    </IconButton>
+  ) : undefined;
+
+  const centeredColumnSx = {
+    display: "flex",
+    width: "100%",
+    flexDirection: "column",
+    alignItems: "center",
+  } as const;
+
+  const spinner = (
+    <Box sx={{ display: "flex", width: "100%", justifyContent: "center", py: 2 }}>
+      <CircularProgress />
+    </Box>
+  );
+
+  // ---- list pane -----------------------------------------------------------
+  let listTitle = "Inbox";
+  let listSubtitle: string | undefined = user?.name || undefined;
+  let listBack: (() => void) | undefined;
+  let listBody: React.ReactNode;
+  if (isSentViewActive) {
+    listTitle = selectedSentInstanceName || "Sent";
+    listSubtitle = selectedSentInstanceName ? "Sent" : user?.name || undefined;
+    listBody = hasAuthenticatedIdentity ? (
+      <SentMail
+        instanceNames={sentInstanceNamesForCurrentView}
+        onOpen={openMessage}
+        openedMessageId={message?.id || message?.identifier}
+      />
+    ) : (
+      renderAuthenticationPrompt("Sent")
+    );
+  } else if (isAliasesViewActive && activeAliasInboxName) {
+    listTitle = activeAliasInboxName;
+    listSubtitle = "Alias inbox";
+    listBack = () => {
+      setSelectedAlias(null);
+      setSelectedAliasScope(null);
+      closeOpenMessage();
+    };
+    listBody = hasAuthenticatedIdentity ? (
+      <AliasMail
+        value={activeAliasInboxName}
+        onOpen={openMessage}
+        messageOpenedId={message?.id}
+      />
+    ) : (
+      renderAuthenticationPrompt("Inbox")
+    );
+  } else if (isThreadsView) {
+    listTitle = "Threads";
+    listSubtitle = "Group mail";
+    listBody = hasAuthenticatedIdentity ? (
+      <ThreadsMailbox
+        groups={groupOptionsWithThreads}
+        groupAvatarUrlById={groupAvatarUrlById}
+        isLoadingGroups={isLoadingGroupInstances}
+        onOpenThread={(thread, group) => {
+          setSelectedGroup(group);
+          setCurrentThread(thread);
+          closeOpenMessage();
+        }}
+      />
+    ) : (
+      renderAuthenticationPrompt("Threads")
+    );
+  } else {
+    listTitle = selectedInboxInstanceName || "Inbox";
+    listSubtitle = selectedInboxInstanceName ? "Inbox" : user?.name || undefined;
+    listBody = hasAuthenticatedIdentity ? (
+      <>
+        <MailboxSearchBar
+          value={inboxSearchQuery}
+          onChange={setInboxSearchQuery}
+          placeholder="Search inbox messages..."
+          status={inboxSearchStatus}
+        />
+        <GroupedMailboxList
+          messages={inboxSearchResults}
+          mailboxType="inbox"
+          showSelectAll
+          openMessage={openMessage}
+          openedMessageId={message?.id || message?.identifier}
+          onMarkAsRead={markMessagesAsRead}
+          onMarkAsUnread={markMessagesAsUnread}
+        />
+        {isLoading && spinner}
+        {!selectedInboxInstanceName && isLoadingCombinedAliasInbox && spinner}
+      </>
+    ) : (
+      renderAuthenticationPrompt("Inbox")
+    );
+  }
+
+  const listPane = (
+    <>
+      <PaneHeader
+        title={listTitle}
+        subtitle={listSubtitle}
+        onBack={listBack}
+        leading={menuButton}
+        actions={settingsButton}
+      />
+      <PaneScroll>
+        <Box className="step-1" sx={centeredColumnSx}>
+          {listBody}
+        </Box>
+      </PaneScroll>
+    </>
+  );
+
+  // ---- reading pane --------------------------------------------------------
+  const readingPane = isReadingOpen ? (
+    <>
+      {isMobile && (
+        <PaneHeader
+          title={message?.subject || "Message"}
+          subtitle={message?.user}
+          onBack={closeOpenMessage}
+          backLabel="Back to messages"
+        />
+      )}
+      <PaneScroll>
+        <Box sx={centeredColumnSx}>
+          <ShowMessageV2
+            isOpen={isOpen}
+            setIsOpen={setIsOpen}
+            message={message}
+            setReplyTo={openReplyComposerFromMessage}
+            setForwardInfo={openForwardComposerFromMessage}
+            alias={activeAliasInboxName}
+            onClose={closeOpenMessage}
           />
         </Box>
-      )}
+      </PaneScroll>
+    </>
+  ) : null;
+
+  const readingPlaceholder = (
+    <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <EmptyState
+        icon={<MailOutlineIcon />}
+        title="Select a message"
+        hint="Messages you open show up here."
+      />
+    </Box>
+  );
+
+  // ---- wide views (take the place of list + reading) -----------------------
+  let wide: React.ReactNode | null = null;
+  let wideKeepsChrome = false;
+  if (isComposeView) {
+    const composeTitle = replyTo
+      ? "Reply"
+      : forwardInfo
+      ? "Forward"
+      : composeMode === "alias"
+      ? "New message as alias"
+      : "New message";
+    wide = (
       <>
-        {!isMobile && (
-          <MailBody>
-            <LeftSidebar
-              state={leftSidebarState}
-              controller={leftSidebarController}
-              onSelectItem={onSelectSidebarItem}
-              renderItemIcon={renderSidebarIcon}
-              hoverPreviewBindings={{
-                onSidebarPointerEnter:
-                  leftSidebarHoverPreviewBindings.onSidebarPointerEnter,
-                onSidebarPointerLeave:
-                  leftSidebarHoverPreviewBindings.onSidebarPointerLeave,
-              }}
-            />
-            <Box
-              sx={{
-                display: "flex",
-                flex: 1,
-                minWidth: 0,
-              }}
-            >
-              {isChangelogOpen ? (
-                <MailBodyInner sx={{ width: "100%" }}>
-                  <MailBodyInnerScroll
-                    sx={{
-                      direction: "rtl",
-                      height: "100%",
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        display: "flex",
-                        width: "100%",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        direction: "ltr",
-                      }}
-                    >
-                      <ChangelogPage />
-                    </Box>
-                  </MailBodyInnerScroll>
-                </MailBodyInner>
-              ) : activeMailboxItem === "compose" ? (
-                <MailBodyInner sx={{ width: "100%" }}>
-                  <Box
-                    sx={{
-                      flex: 1,
-                      minHeight: 0,
-                      width: "100%",
-                    }}
-                  >
-                    <NewMessage
-                      isFromTo={isFromTo}
-                      replyTo={replyTo}
-                      setReplyTo={setReplyTo}
-                      setForwardInfo={setForwardInfo}
-                      forwardInfo={forwardInfo}
-                      recipientAlias={composeRecipientAlias || ""}
-                      requireSenderAlias={composeRequireReplyAlias}
-                      defaultReplyAlias={composeDefaultReplyAlias}
-                      hideButton
-                      inlineMode
-                      ownedNames={ownedNameCandidates}
-                      joinedGroups={memberGroupOptions}
-                      priorityRecipientNames={composePriorityRecipientNames}
-                      composePrefill={composePrefill}
-                      onRequestClose={() => {
-                        const shouldReturnToAliasInbox =
-                          composeMode === "alias" &&
-                          Boolean(selectedAliasInboxName);
-                        setComposeRecipientAlias(null);
-                        setComposeRequireReplyAlias(false);
-                        setComposeDefaultReplyAlias("");
-                        setComposeMode("standard");
-                        if (composeReturnView === "threads") {
-                          setActiveMailboxItem("threads");
-                          setMobileMode("threads");
-                          if (composeReturnGroupId) {
-                            const returnGroup =
-                              groupOptionsById.get(composeReturnGroupId);
-                            if (returnGroup) {
-                              setSelectedGroup(returnGroup);
-                            }
-                          }
-                        } else if (shouldReturnToAliasInbox) {
-                          setActiveMailboxItem("aliases");
-                          setMobileMode("aliases");
-                          setSelectedAlias(selectedAliasInboxName);
-                          setSelectedAliasScope("aliases");
-                        } else {
-                          setActiveMailboxItem("inbox");
-                          setMobileMode("inbox");
-                          setSelectedAlias(null);
-                          setSelectedAliasScope(null);
-                        }
-                        setComposePrefill(null);
-                        setComposeReturnView("inbox");
-                        setComposeReturnGroupId(null);
-                      }}
-                    />
-                  </Box>
-                </MailBodyInner>
-              ) : activeMailboxItem === "threads" ? (
-                <MailBodyInner sx={{ width: "100%" }}>
-                  <MailBodyInnerScroll
-                    sx={{
-                      direction: "ltr",
-                      height: "100%",
-                    }}
-                  >
-                    <Box
-                      className="step-1"
-                      sx={{
-                        display: "flex",
-                        width: "100%",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        direction: "ltr",
-                      }}
-                    >
-                      {hasAuthenticatedIdentity ? (
-                        selectedGroup ? (
-                          <GroupMail
-                            groupInfo={selectedGroup}
-                            currentThread={currentThread}
-                            setCurrentThread={setCurrentThread}
-                            filterMode={filterMode}
-                            setFilterMode={setFilterMode}
-                            onRequestComposeThread={handleRequestComposeThread}
-                          />
-                        ) : (
-                          <ThreadsMailbox
-                            groups={groupOptionsWithThreads}
-                            groupAvatarUrlById={groupAvatarUrlById}
-                            isLoadingGroups={isLoadingGroupInstances}
-                            onOpenThread={(thread, group) => {
-                              setSelectedGroup(group);
-                              setCurrentThread(thread);
-                              setIsOpen(false);
-                              setMessage(null);
-                            }}
-                          />
-                        )
-                      ) : (
-                        renderAuthenticationPrompt("Threads")
-                      )}
-                    </Box>
-                  </MailBodyInnerScroll>
-                </MailBodyInner>
-              ) : activeMailboxItem === "aliases" ? (
-                <MailBodyInner sx={{ width: "100%" }}>
-                  <MailBodyInnerScroll
-                    sx={{
-                      direction: "ltr",
-                      height: "100%",
-                    }}
-                  >
-                    <Box
-                      className="step-1"
-                      sx={{
-                        display: "flex",
-                        width: "100%",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        direction: "ltr",
-                      }}
-                    >
-                      {hasAuthenticatedIdentity ? (
-                        activeAliasInboxName ? (
-                          <AliasMail
-                            value={activeAliasInboxName}
-                            onOpen={openMessage}
-                            messageOpenedId={message?.id}
-                          />
-                        ) : (
-                          <AliasesPage
-                            aliases={watchedAliases}
-                            aliasesWithMessages={watchedAliasesWithMessages}
-                            replyAliasLinks={aliasReplyLinks}
-                            isLoadingAliasesWithMessages={
-                              isLoadingWatchedAliasActivity
-                            }
-                            onOpenAlias={aliasName => {
-                              setSelectedAlias(aliasName);
-                              setSelectedAliasScope("aliases");
-                            }}
-                            onAddAlias={aliasName => {
-                              setSelectedAlias(null);
-                              setSelectedAliasScope(null);
-                              const didAdd = addWatchedAliasByName(aliasName);
-                              if (didAdd) {
-                                dispatch(
-                                  setNotification({
-                                    msg: `Alias saved: ${aliasName}`,
-                                    alertType: "success",
-                                  })
-                                );
-                              } else {
-                                dispatch(
-                                  setNotification({
-                                    msg: "Alias is already saved or invalid",
-                                    alertType: "info",
-                                  })
-                                );
-                              }
-                            }}
-                            onRemoveAlias={aliasName => {
-                              removeWatchedAlias(aliasName);
-                            }}
-                            onSetReplyAlias={(aliasName, replyAlias) => {
-                              const didSet = setLinkedReplyAlias(
-                                aliasName,
-                                replyAlias
-                              );
-                              dispatch(
-                                setNotification({
-                                  msg: didSet
-                                    ? `Reply alias linked for ${aliasName}`
-                                    : "Reply alias is invalid or matches the inbox alias",
-                                  alertType: didSet ? "success" : "info",
-                                })
-                              );
-                            }}
-                            onClearReplyAlias={aliasName => {
-                              clearLinkedReplyAlias(aliasName);
-                            }}
-                            onRunAliasScan={runAliasScan}
-                            onCancelAliasScan={cancelAliasScan}
-                            hasScanCheckpoint={aliasScanCheckpointTimestamp > 0}
-                            scanCheckpointTimestamp={
-                              aliasScanCheckpointTimestamp
-                            }
-                            scanState={{
-                              isRunning: isAliasScanRunning,
-                              isCancelRequested: isAliasScanCancelRequested,
-                              phase: aliasScanPhase,
-                              scannedCount: aliasScanScannedCount,
-                              totalCount: aliasScanTotalCount,
-                              discoveredCount: aliasScanDiscoveredCount,
-                              statusMessage: aliasScanStatusMessage,
-                            }}
-                          />
-                        )
-                      ) : (
-                        renderAuthenticationPrompt("Inbox")
-                      )}
-                    </Box>
-                  </MailBodyInnerScroll>
-                </MailBodyInner>
-              ) : (
-                <MailBodyInner sx={{ width: "100%" }}>
-                  {isOpen && message ? (
-                    <>
-                      <MailBodyInnerScroll
-                        sx={{
-                          direction: "rtl",
-                          height: "100%",
-                        }}
-                      >
-                        <Box
-                          className="step-1"
-                          sx={{
-                            display: "flex",
-                            width: "100%",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            direction: "ltr",
-                          }}
-                        >
-                          <ShowMessageV2
-                            isOpen={isOpen}
-                            setIsOpen={setIsOpen}
-                            message={message}
-                            setReplyTo={openReplyComposerFromMessage}
-                            setForwardInfo={openForwardComposerFromMessage}
-                            alias={activeAliasInboxName}
-                            onClose={() => {
-                              setIsOpen(false);
-                              setMessage(null);
-                            }}
-                          />
-                        </Box>
-                      </MailBodyInnerScroll>
-                    </>
-                  ) : (
-                    <>
-                      <MailBodyInnerScroll
-                        sx={[{
-                          height: "100%"
-                        }, activeMailboxItem === "sent" ? {
-                          direction: "rtl"
-                        } : {
-                          direction: "ltr"
-                        }]}
-                      >
-                        <Box
-                          className="step-1"
-                          sx={{
-                            display: "flex",
-                            width: "100%",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            direction: "ltr",
-                          }}
-                        >
-                          {activeMailboxItem === "sent" ? (
-                            hasAuthenticatedIdentity ? (
-                              <SentMail
-                                instanceNames={sentInstanceNamesForCurrentView}
-                                onOpen={openMessage}
-                                openedMessageId={
-                                  message?.id || message?.identifier
-                                }
-                              />
-                            ) : (
-                              renderAuthenticationPrompt("Sent")
-                            )
-                          ) : hasAuthenticatedIdentity ? (
-                            <>
-                              {!shouldRenderAliasInboxMailbox && (
-                                <>
-                                  <MailboxSearchBar
-                                    value={inboxSearchQuery}
-                                    onChange={setInboxSearchQuery}
-                                    placeholder="Search inbox messages..."
-                                    status={inboxSearchStatus}
-                                  />
-                                  <GroupedMailboxList
-                                    messages={inboxSearchResults}
-                                    mailboxType="inbox"
-                                    showSelectAll
-                                    openMessage={openMessage}
-                                    openedMessageId={
-                                      message?.id || message?.identifier
-                                    }
-                                    onMarkAsRead={markMessagesAsRead}
-                                    onMarkAsUnread={markMessagesAsUnread}
-                                  />
-                                  {isLoading && (
-                                    <Box
-                                      sx={{
-                                        display: "flex",
-                                        width: "100%",
-                                        justifyContent: "center",
-                                      }}
-                                    >
-                                      <CircularProgress />
-                                    </Box>
-                                  )}
-                                  {!selectedInboxInstanceName &&
-                                    isLoadingCombinedAliasInbox && (
-                                      <Box
-                                        sx={{
-                                          display: "flex",
-                                          width: "100%",
-                                          justifyContent: "center",
-                                        }}
-                                      >
-                                        <CircularProgress />
-                                      </Box>
-                                    )}
-                                </>
-                              )}
-
-                              {shouldRenderAliasInboxMailbox && (
-                                <AliasMail
-                                  value={activeAliasInboxName || ""}
-                                  onOpen={openMessage}
-                                  messageOpenedId={message?.id}
-                                />
-                              )}
-                              <Joyride
-                                steps={steps}
-                                run={run}
-                                onEvent={handleJoyrideCallback}
-                                continuous={true}
-                                scrollToFirstStep={true}
-                                options={{ showProgress: true }}
-                              />
-                            </>
-                          ) : (
-                            renderAuthenticationPrompt("Inbox")
-                          )}
-                          {mailInfo && isShow && (
-                            <OpenMail
-                              open={isShow}
-                              handleClose={onOk}
-                              fileInfo={mailInfo}
-                            />
-                          )}
-                        </Box>
-                      </MailBodyInnerScroll>
-                    </>
-                  )}
-                </MailBodyInner>
-              )}
-            </Box>
-          </MailBody>
-        )}
-        {isMobile && (
-          <MailBody
-            sx={{
-              height: "100%",
-            }}
-          >
-            <LeftSidebar
-              state={leftSidebarState}
-              controller={leftSidebarController}
-              onSelectItem={onSelectSidebarItem}
-              renderItemIcon={renderSidebarIcon}
-              hoverPreviewBindings={{
-                onSidebarPointerEnter:
-                  leftSidebarHoverPreviewBindings.onSidebarPointerEnter,
-                onSidebarPointerLeave:
-                  leftSidebarHoverPreviewBindings.onSidebarPointerLeave,
-              }}
-            />
-            {isChangelogOpen && (
-              <Box
-                sx={{
-                  position: "absolute",
-                  top: 0,
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  zIndex: 6,
-                  backgroundColor: "var(--Mail-Background)",
-                }}
-              >
-                <MailBodyInnerScroll
-                  sx={{
-                    direction: "rtl",
-                    height: "100%",
-                  }}
-                >
-                  <Box
-                    sx={{
-                      display: "flex",
-                      width: "100%",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      direction: "ltr",
-                    }}
-                  >
-                    <ChangelogPage />
-                  </Box>
-                </MailBodyInnerScroll>
-              </Box>
-            )}
-            {isOpen && message && (
-              <Box
-                sx={{
-                  position: "absolute",
-                  top: 0,
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  zIndex: 5,
-                  backgroundColor: "var(--Mail-Background)",
-                }}
-              >
-                <MailBodyInnerScroll
-                  sx={{
-                    direction: "rtl",
-                    height: "100%",
-                  }}
-                >
-                  <Box
-                    className="step-1"
-                    sx={{
-                      display: "flex",
-                      width: "100%",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      direction: "ltr",
-                    }}
-                  >
-                    <ShowMessageV2
-                      isOpen={isOpen}
-                      setIsOpen={setIsOpen}
-                      message={message}
-                      setReplyTo={openReplyComposerFromMessage}
-                      setForwardInfo={openForwardComposerFromMessage}
-                      alias={activeAliasInboxName}
-                      onClose={() => {
-                        setIsOpen(false);
-                        setMessage(null);
-                      }}
-                    />
-                  </Box>
-                </MailBodyInnerScroll>
-              </Box>
-            )}
-            {mailInfo && isShow && (
-              <OpenMail open={isShow} handleClose={onOk} fileInfo={mailInfo} />
-            )}
-
-            {mobileMode === "compose" && (
-              <MailBodyInner
-                sx={{
-                  width: "100%",
-                }}
-              >
-                <Box
-                  sx={{
-                    width: "100%",
-                    height: "100%",
-                    minHeight: 0,
-                  }}
-                >
-                  <NewMessage
-                    isFromTo={isFromTo}
-                    replyTo={replyTo}
-                    setReplyTo={setReplyTo}
-                    setForwardInfo={setForwardInfo}
-                    forwardInfo={forwardInfo}
-                    recipientAlias={composeRecipientAlias || ""}
-                    requireSenderAlias={composeRequireReplyAlias}
-                    defaultReplyAlias={composeDefaultReplyAlias}
-                    hideButton
-                    inlineMode
-                    ownedNames={ownedNameCandidates}
-                    joinedGroups={memberGroupOptions}
-                    priorityRecipientNames={composePriorityRecipientNames}
-                    composePrefill={composePrefill}
-                    onRequestClose={() => {
-                      const shouldReturnToAliasInbox =
-                        composeMode === "alias" &&
-                        Boolean(selectedAliasInboxName);
-                      setComposeRecipientAlias(null);
-                      setComposeRequireReplyAlias(false);
-                      setComposeDefaultReplyAlias("");
-                      setComposeMode("standard");
-                      if (composeReturnView === "threads") {
-                        setMobileMode("threads");
-                        setActiveMailboxItem("threads");
-                        if (composeReturnGroupId) {
-                          const returnGroup =
-                            groupOptionsById.get(composeReturnGroupId);
-                          if (returnGroup) {
-                            setSelectedGroup(returnGroup);
-                          }
-                        }
-                      } else if (shouldReturnToAliasInbox) {
-                        setMobileMode("aliases");
-                        setActiveMailboxItem("aliases");
-                        setSelectedAlias(selectedAliasInboxName);
-                        setSelectedAliasScope("aliases");
-                      } else {
-                        setMobileMode("inbox");
-                        setActiveMailboxItem("inbox");
-                        setSelectedAlias(null);
-                        setSelectedAliasScope(null);
-                      }
-                      setComposePrefill(null);
-                      setComposeReturnView("inbox");
-                      setComposeReturnGroupId(null);
-                    }}
-                  />
-                </Box>
-              </MailBodyInner>
-            )}
-
-            {mobileMode === "aliases" && (
-              <MailBodyInner
-                sx={{
-                  width: "100%",
-                }}
-              >
-                <MailBodyInnerScroll
-                  sx={{
-                    direction: "ltr",
-                    height: "100%",
-                  }}
-                >
-                  <Box
-                    sx={{
-                      display: "flex",
-                      width: "100%",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      direction: "ltr",
-                    }}
-                  >
-                    {hasAuthenticatedIdentity ? (
-                      activeAliasInboxName ? (
-                        <AliasMail
-                          value={activeAliasInboxName}
-                          onOpen={openMessage}
-                          messageOpenedId={message?.id}
-                        />
-                      ) : (
-                        <AliasesPage
-                          aliases={watchedAliases}
-                          aliasesWithMessages={watchedAliasesWithMessages}
-                          replyAliasLinks={aliasReplyLinks}
-                          isLoadingAliasesWithMessages={
-                            isLoadingWatchedAliasActivity
-                          }
-                          onOpenAlias={aliasName => {
-                            setSelectedAlias(aliasName);
-                            setSelectedAliasScope("aliases");
-                          }}
-                          onAddAlias={aliasName => {
-                            setSelectedAlias(null);
-                            setSelectedAliasScope(null);
-                            const didAdd = addWatchedAliasByName(aliasName);
-                            if (didAdd) {
-                              dispatch(
-                                setNotification({
-                                  msg: `Alias saved: ${aliasName}`,
-                                  alertType: "success",
-                                })
-                              );
-                            } else {
-                              dispatch(
-                                setNotification({
-                                  msg: "Alias is already saved or invalid",
-                                  alertType: "info",
-                                })
-                              );
-                            }
-                          }}
-                          onRemoveAlias={aliasName => {
-                            removeWatchedAlias(aliasName);
-                          }}
-                          onSetReplyAlias={(aliasName, replyAlias) => {
-                            const didSet = setLinkedReplyAlias(
-                              aliasName,
-                              replyAlias
-                            );
-                            dispatch(
-                              setNotification({
-                                msg: didSet
-                                  ? `Reply alias linked for ${aliasName}`
-                                  : "Reply alias is invalid or matches the inbox alias",
-                                alertType: didSet ? "success" : "info",
-                              })
-                            );
-                          }}
-                          onClearReplyAlias={aliasName => {
-                            clearLinkedReplyAlias(aliasName);
-                          }}
-                          onRunAliasScan={runAliasScan}
-                          onCancelAliasScan={cancelAliasScan}
-                          hasScanCheckpoint={aliasScanCheckpointTimestamp > 0}
-                          scanCheckpointTimestamp={aliasScanCheckpointTimestamp}
-                          scanState={{
-                            isRunning: isAliasScanRunning,
-                            isCancelRequested: isAliasScanCancelRequested,
-                            phase: aliasScanPhase,
-                            scannedCount: aliasScanScannedCount,
-                            totalCount: aliasScanTotalCount,
-                            discoveredCount: aliasScanDiscoveredCount,
-                            statusMessage: aliasScanStatusMessage,
-                          }}
-                        />
-                      )
-                    ) : (
-                      renderAuthenticationPrompt("Inbox")
-                    )}
-                  </Box>
-                </MailBodyInnerScroll>
-              </MailBodyInner>
-            )}
-
-            {mobileMode === "inbox" && (
-              <MailBodyInner
-                sx={{
-                  width: "100%",
-                }}
-              >
-                <Spacer height="15px" />
-                <Box
-                  sx={{
-                    display: "flex",
-                    gap: "20px",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <ButtonBase
-                    onClick={() => {
-                      setMobileMode("inbox");
-                    }}
-                    sx={{
-                      height: "40px",
-                    }}
-                  >
-                    <MailBodyInnerHeader
-                      sx={{
-                        marginTop: "0px",
-                        marginBottom: "0px",
-                        outline:
-                          "1px solid var(--qmail-shell-mobile-toggle-border)",
-                        padding: "4px 8px",
-                        borderRadius: "5px",
-                        height: "100%",
-                      }}
-                    >
-                      <MailIconImg src={MailSVG} />
-                      <ComposeP>Inbox</ComposeP>
-                    </MailBodyInnerHeader>
-                  </ButtonBase>
-                  <ButtonBase
-                    onClick={() => {
-                      setMobileMode("sent");
-                    }}
-                    sx={{
-                      height: "40px",
-                    }}
-                  >
-                    <MailBodyInnerHeader
-                      sx={{
-                        marginTop: "0px",
-                        marginBottom: "0px",
-                        outline: "none",
-                        padding: "4px 8px",
-                        borderRadius: "5px",
-                        height: "100%",
-                      }}
-                    >
-                      <MailIconImg src={SendSVG} />
-                      <ComposeP>Sent</ComposeP>
-                    </MailBodyInnerHeader>
-                  </ButtonBase>
-                </Box>
-                <Spacer height="15px" />
-
-                <MailBodyInnerScroll
-                  sx={{
-                    borderRight: "1px solid var(--qmail-shell-border)",
-                    height: "calc(100% - 75px)",
-                  }}
-                >
-                  <Box
-                    className="step-1"
-                    sx={{
-                      display: "flex",
-                      width: "100%",
-                      flexDirection: "column",
-                      alignItems: "center",
-                    }}
-                  >
-                    {hasAuthenticatedIdentity ? (
-                      <>
-                        {!shouldRenderAliasInboxMailbox && (
-                          <>
-                            <MailboxSearchBar
-                              value={inboxSearchQuery}
-                              onChange={setInboxSearchQuery}
-                              placeholder="Search inbox messages..."
-                              status={inboxSearchStatus}
-                            />
-                            <GroupedMailboxList
-                              messages={inboxSearchResults}
-                              mailboxType="inbox"
-                              showSelectAll
-                              openMessage={openMessage}
-                              openedMessageId={
-                                message?.id || message?.identifier
-                              }
-                              onMarkAsRead={markMessagesAsRead}
-                              onMarkAsUnread={markMessagesAsUnread}
-                            />
-                            {isLoading && (
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  width: "100%",
-                                  justifyContent: "center",
-                                }}
-                              >
-                                <CircularProgress />
-                              </Box>
-                            )}
-                            {!selectedInboxInstanceName &&
-                              isLoadingCombinedAliasInbox && (
-                                <Box
-                                  sx={{
-                                    display: "flex",
-                                    width: "100%",
-                                    justifyContent: "center",
-                                  }}
-                                >
-                                  <CircularProgress />
-                                </Box>
-                              )}
-                          </>
-                        )}
-                        {shouldRenderAliasInboxMailbox && (
-                          <AliasMail
-                            value={activeAliasInboxName || ""}
-                            onOpen={openMessage}
-                            messageOpenedId={message?.id}
-                          />
-                        )}
-                      </>
-                    ) : (
-                      renderAuthenticationPrompt("Inbox")
-                    )}
-                  </Box>
-                </MailBodyInnerScroll>
-              </MailBodyInner>
-            )}
-
-            {mobileMode === "sent" && (
-              <MailBodyInner
-                sx={{
-                  width: "100%",
-                }}
-              >
-                <>
-                  <Spacer height="15px" />
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: "20px",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <ButtonBase
-                      onClick={() => {
-                        setMobileMode("inbox");
-                      }}
-                      sx={{
-                        height: "40px",
-                      }}
-                    >
-                      <MailBodyInnerHeader
-                        sx={{
-                          marginTop: "0px",
-                          marginBottom: "0px",
-                          outline: "none",
-                          padding: "4px 8px",
-                          borderRadius: "5px",
-                          height: "100%",
-                        }}
-                      >
-                        <MailIconImg src={MailSVG} />
-                        <ComposeP>Inbox</ComposeP>
-                      </MailBodyInnerHeader>
-                    </ButtonBase>
-                    <ButtonBase
-                      onClick={() => {
-                        setMobileMode("sent");
-                      }}
-                      sx={{
-                        height: "40px",
-                      }}
-                    >
-                      <MailBodyInnerHeader
-                        sx={{
-                          marginTop: "0px",
-                          marginBottom: "0px",
-                          outline:
-                            "1px solid var(--qmail-shell-mobile-toggle-border)",
-                          padding: "4px 8px",
-                          borderRadius: "5px",
-                          height: "100%",
-                        }}
-                      >
-                        <MailIconImg src={SendSVG} />
-                        <ComposeP>Sent</ComposeP>
-                      </MailBodyInnerHeader>
-                    </ButtonBase>
-                  </Box>
-                  <Spacer height="15px" />
-                  <MailBodyInnerScroll
-                    sx={{
-                      direction: "rtl",
-                      display: isOpen && message ? "none" : "flex",
-                      height: "calc(100% - 75px)",
-                    }}
-                  >
-                    <Box
-                      className="step-1"
-                      sx={{
-                        display: "flex",
-                        width: "100%",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        direction: "ltr",
-                      }}
-                    >
-                      {hasAuthenticatedIdentity ? (
-                        <SentMail
-                          instanceNames={sentInstanceNamesForCurrentView}
-                          onOpen={openMessage}
-                          openedMessageId={message?.id || message?.identifier}
-                        />
-                      ) : (
-                        renderAuthenticationPrompt("Sent")
-                      )}
-                    </Box>
-                  </MailBodyInnerScroll>
-                </>
-              </MailBodyInner>
-            )}
-            {mobileMode === "threads" && (
-              <MailBodyInner
-                sx={{
-                  width: "100%",
-                }}
-              >
-                <>
-                  <Spacer height="15px" />
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: "12px",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <ButtonBase
-                      onClick={() => {
-                        setMobileMode("inbox");
-                        setActiveMailboxItem("inbox");
-                        setSelectedGroup(null);
-                        setCurrentThread(null);
-                      }}
-                      sx={{
-                        height: "40px",
-                      }}
-                    >
-                      <MailBodyInnerHeader
-                        sx={{
-                          marginTop: "0px",
-                          marginBottom: "0px",
-                          outline: "none",
-                          padding: "4px 8px",
-                          borderRadius: "5px",
-                          height: "100%",
-                        }}
-                      >
-                        <MailIconImg src={MailSVG} />
-                        <ComposeP>Inbox</ComposeP>
-                      </MailBodyInnerHeader>
-                    </ButtonBase>
-                    <ButtonBase
-                      onClick={() => {
-                        setMobileMode("sent");
-                        setActiveMailboxItem("sent");
-                        setSelectedGroup(null);
-                        setCurrentThread(null);
-                      }}
-                      sx={{
-                        height: "40px",
-                      }}
-                    >
-                      <MailBodyInnerHeader
-                        sx={{
-                          marginTop: "0px",
-                          marginBottom: "0px",
-                          outline: "none",
-                          padding: "4px 8px",
-                          borderRadius: "5px",
-                          height: "100%",
-                        }}
-                      >
-                        <MailIconImg src={SendSVG} />
-                        <ComposeP>Sent</ComposeP>
-                      </MailBodyInnerHeader>
-                    </ButtonBase>
-                    <ButtonBase
-                      onClick={() => {
-                        setMobileMode("threads");
-                        setActiveMailboxItem("threads");
-                      }}
-                      sx={{
-                        height: "40px",
-                      }}
-                    >
-                      <MailBodyInnerHeader
-                        sx={{
-                          marginTop: "0px",
-                          marginBottom: "0px",
-                          outline:
-                            "1px solid var(--qmail-shell-mobile-toggle-border)",
-                          padding: "4px 8px",
-                          borderRadius: "5px",
-                          height: "100%",
-                        }}
-                      >
-                        <MailIconImg src={GroupSVG} />
-                        <ComposeP>Threads</ComposeP>
-                      </MailBodyInnerHeader>
-                    </ButtonBase>
-                  </Box>
-                  <Spacer height="15px" />
-                  <MailBodyInnerScroll
-                    sx={{
-                      direction: "ltr",
-                      display: isOpen && message ? "none" : "flex",
-                      height: "calc(100% - 75px)",
-                    }}
-                  >
-                    <Box
-                      className="step-1"
-                      sx={{
-                        display: "flex",
-                        width: "100%",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        direction: "ltr",
-                      }}
-                    >
-                      {hasAuthenticatedIdentity ? (
-                        selectedGroup ? (
-                          <GroupMail
-                            groupInfo={selectedGroup}
-                            currentThread={currentThread}
-                            setCurrentThread={setCurrentThread}
-                            filterMode={filterMode}
-                            setFilterMode={setFilterMode}
-                            onRequestComposeThread={handleRequestComposeThread}
-                          />
-                        ) : (
-                          <ThreadsMailbox
-                            groups={groupOptionsWithThreads}
-                            groupAvatarUrlById={groupAvatarUrlById}
-                            isLoadingGroups={isLoadingGroupInstances}
-                            onOpenThread={(thread, group) => {
-                              setSelectedGroup(group);
-                              setCurrentThread(thread);
-                              setIsOpen(false);
-                              setMessage(null);
-                            }}
-                          />
-                        )
-                      ) : (
-                        renderAuthenticationPrompt("Threads")
-                      )}
-                    </Box>
-                  </MailBodyInnerScroll>
-                </>
-              </MailBodyInner>
-            )}
-          </MailBody>
-        )}
+        <PaneHeader
+          title={composeTitle}
+          subtitle={composeRecipientAlias || undefined}
+          onBack={handleComposerClose}
+          backLabel="Close composer"
+        />
+        <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <NewMessage
+            isFromTo={isFromTo}
+            replyTo={replyTo}
+            setReplyTo={setReplyTo}
+            setForwardInfo={setForwardInfo}
+            forwardInfo={forwardInfo}
+            recipientAlias={composeRecipientAlias || ""}
+            requireSenderAlias={composeRequireReplyAlias}
+            defaultReplyAlias={composeDefaultReplyAlias}
+            hideButton
+            inlineMode
+            ownedNames={ownedNameCandidates}
+            joinedGroups={memberGroupOptions}
+            priorityRecipientNames={composePriorityRecipientNames}
+            composePrefill={composePrefill}
+            onRequestClose={handleComposerClose}
+          />
+        </Box>
       </>
-    </MailContainer>
+    );
+  } else if (isThreadsView && selectedGroup) {
+    const groupName =
+      typeof selectedGroup?.name === "string" && selectedGroup.name.trim()
+        ? selectedGroup.name.trim()
+        : "Group";
+    wide = (
+      <>
+        <PaneHeader
+          title={currentThread ? currentThread?.threadData?.title || "Thread" : groupName}
+          subtitle={currentThread ? groupName : "Threads"}
+          onBack={() => {
+            if (currentThread) {
+              setCurrentThread(null);
+            } else {
+              setSelectedGroup(null);
+            }
+          }}
+          backLabel={currentThread ? "Back to threads" : "Back to groups"}
+        />
+        <PaneScroll>
+          <Box sx={centeredColumnSx}>
+            {hasAuthenticatedIdentity ? (
+              <GroupMail
+                groupInfo={selectedGroup}
+                currentThread={currentThread}
+                setCurrentThread={setCurrentThread}
+                filterMode={filterMode}
+                setFilterMode={setFilterMode}
+                onRequestComposeThread={handleRequestComposeThread}
+              />
+            ) : (
+              renderAuthenticationPrompt("Threads")
+            )}
+          </Box>
+        </PaneScroll>
+      </>
+    );
+  } else if (isAliasesViewActive && !activeAliasInboxName) {
+    wideKeepsChrome = true;
+    wide = (
+      <>
+        <PaneHeader
+          title="Aliases"
+          subtitle="Inboxes for names you watch"
+          leading={menuButton}
+          actions={settingsButton}
+        />
+        <PaneScroll>
+          <Box sx={centeredColumnSx}>
+            {hasAuthenticatedIdentity ? (
+              <AliasesPage
+                aliases={watchedAliases}
+                aliasesWithMessages={watchedAliasesWithMessages}
+                replyAliasLinks={aliasReplyLinks}
+                isLoadingAliasesWithMessages={isLoadingWatchedAliasActivity}
+                onOpenAlias={aliasName => {
+                  setSelectedAlias(aliasName);
+                  setSelectedAliasScope("aliases");
+                }}
+                onAddAlias={aliasName => {
+                  setSelectedAlias(null);
+                  setSelectedAliasScope(null);
+                  const didAdd = addWatchedAliasByName(aliasName);
+                  dispatch(
+                    setNotification({
+                      msg: didAdd
+                        ? `Alias saved: ${aliasName}`
+                        : "Alias is already saved or invalid",
+                      alertType: didAdd ? "success" : "info",
+                    })
+                  );
+                }}
+                onRemoveAlias={aliasName => {
+                  removeWatchedAlias(aliasName);
+                }}
+                onSetReplyAlias={(aliasName, replyAlias) => {
+                  const didSet = setLinkedReplyAlias(aliasName, replyAlias);
+                  dispatch(
+                    setNotification({
+                      msg: didSet
+                        ? `Reply alias linked for ${aliasName}`
+                        : "Reply alias is invalid or matches the inbox alias",
+                      alertType: didSet ? "success" : "info",
+                    })
+                  );
+                }}
+                onClearReplyAlias={aliasName => {
+                  clearLinkedReplyAlias(aliasName);
+                }}
+                onRunAliasScan={runAliasScan}
+                onCancelAliasScan={cancelAliasScan}
+                hasScanCheckpoint={aliasScanCheckpointTimestamp > 0}
+                scanCheckpointTimestamp={aliasScanCheckpointTimestamp}
+                scanState={{
+                  isRunning: isAliasScanRunning,
+                  isCancelRequested: isAliasScanCancelRequested,
+                  phase: aliasScanPhase,
+                  scannedCount: aliasScanScannedCount,
+                  totalCount: aliasScanTotalCount,
+                  discoveredCount: aliasScanDiscoveredCount,
+                  statusMessage: aliasScanStatusMessage,
+                }}
+              />
+            ) : (
+              renderAuthenticationPrompt("Inbox")
+            )}
+          </Box>
+        </PaneScroll>
+      </>
+    );
+  }
+
+  // ---- navigation ----------------------------------------------------------
+  const rail = (
+    <Rail
+      items={sidebarItems}
+      activeItemId={activeSidebarItem}
+      onSelect={onSelectSidebarItem}
+      avatarUrlByName={avatarUrlByNameLowercase}
+      groupAvatarUrlById={groupAvatarUrlById}
+      onOpenSettings={openSettings}
+      version={packageJson.version}
+      onClose={isDesktopLayout ? undefined : () => setRailOpen(false)}
+    />
+  );
+
+  const bottomNav = (
+    <BottomNav
+      items={[
+        { id: "inbox", label: "Inbox", icon: <InboxOutlinedIcon /> },
+        { id: "sent", label: "Sent", icon: <SendOutlinedIcon /> },
+        { id: "threads", label: "Threads", icon: <ForumOutlinedIcon /> },
+        { id: "aliases", label: "Aliases", icon: <AlternateEmailOutlinedIcon /> },
+        { id: "menu", label: "Menu", icon: <MenuIcon /> },
+      ]}
+      activeId={isComposeView ? null : activeMailboxItem}
+      onSelect={id => {
+        if (id === "menu") {
+          setRailOpen(true);
+          return;
+        }
+        onSelectSidebarItem(id);
+      }}
+    />
+  );
+
+  return (
+    <MailShell
+      mode={layoutMode}
+      rail={rail}
+      railOpen={railOpen}
+      onRailOpenChange={setRailOpen}
+      bottomNav={bottomNav}
+      fab={<ComposeFab onClick={() => onSelectSidebarItem("compose")} />}
+      banner={
+        isMailBootstrapLoading ? (
+          <LoadingBanner text="Fetching mail and state…" />
+        ) : null
+      }
+      list={listPane}
+      reading={readingPane}
+      readingPlaceholder={readingPlaceholder}
+      readingOpen={isReadingOpen}
+      wide={wide}
+      wideKeepsChrome={wideKeepsChrome}
+      overlays={
+        <>
+          <LoadPublishedStateModal />
+          {mailInfo && isShow && (
+            <OpenMail open={isShow} handleClose={onOk} fileInfo={mailInfo} />
+          )}
+          {hasAuthenticatedIdentity && isInboxViewActive && (
+            <Joyride
+              steps={steps}
+              run={run}
+              onEvent={handleJoyrideCallback}
+              continuous={true}
+              scrollToFirstStep={true}
+              options={{ showProgress: true }}
+            />
+          )}
+        </>
+      }
+    />
   );
 };
 

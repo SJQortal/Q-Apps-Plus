@@ -50,6 +50,8 @@
     "src/components/common/PublishVideo.tsx",
     "src/components/common/TextEditor/quillHtml.test.ts",
     "src/components/common/Tipping/Tipping.tsx",
+    "src/components/common/UserNavbar/UserNavbar-styles.ts",
+    "src/components/common/UserNavbar/UserNavbar.tsx",
     "src/components/common/VideoContent.tsx",
     "src/components/common/VideoPanel.tsx",
     "src/components/common/VideoPlayer.tsx",
