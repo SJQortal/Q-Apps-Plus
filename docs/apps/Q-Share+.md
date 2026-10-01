@@ -2,7 +2,9 @@
 
 Share files and documents on QDN, with categories, comments and lists.
 
-**Version:** `1.0.0`, not published yet (no Published line). The work below was drafted in six rounds numbered `1.0.0-plus.1` … `plus.6`; under the plain-version rule (qplus-app skill) they are all part of `1.0.0`, and the version moves to `1.0.1` only after Simon publishes `1.0.0`.
+**Published:** `1.0.0` on 2026-09-30, as the QDN `APP` resource `Q-Share+`, built from commit `2bc12cc`. Checked on 2026-10-01: the live bundle's 17 JavaScript chunks have the same content-hashed names as a build of that commit.
+
+**Version on the branch:** `1.0.1`, not published yet: Play audio / Play video, more file types, and the description placeholder fix (CHANGELOG.md). The work below was drafted in six rounds numbered `1.0.0-plus.1` … `plus.6`; under the plain-version rule (qplus-app skill) they are all part of `1.0.0`.
 
 ## Baseline at import
 
@@ -298,7 +300,7 @@ Both runs verified each rebuilt commit against the original and found no differe
 
 Questions for Simon (after pass 2):
 
-1. **Deep link with `+`:** answered by the Hub Dev Mode check: `%2B` opens a blank tab named "Q-Share%2B", the literal `+` works. Links now use `+`, and the router accepts both spellings. Once Q-Share+ is published, copy a share link and open it from Hub's address bar and from a chat message to confirm on the real app.
+1. **Deep link with `+`:** answered by the Hub Dev Mode check: `%2B` opens a blank tab named "Q-Share%2B", the literal `+` works. Links now use `+`, and the router accepts both spellings. Now that Q-Share+ is published, copy a share link and open it from Hub's address bar and from a chat message to confirm on the real app.
 2. **Quill round trip in Hub:** publish a share from Q-Share+ with bullets, a numbered list and a code block, open it in the original Q-Share; then open an old share with formatting in Q-Share+. The jsdom round trip passes; this is the real check. Still open: it publishes, so it waits for your go-ahead (the Hub session reached the Share dialog and stopped there).
 3. **Screenshots in the branch history:** done. The harness PNGs committed by mistake are gone from the history (Branch history cleaned, above).
 4. **Phone header:** on phones the header no longer shows the Share and Downloads buttons, since the floating button and the bottom bar provide both. Keep it that way, or bring one back?
