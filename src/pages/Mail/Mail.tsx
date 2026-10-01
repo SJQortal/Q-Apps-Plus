@@ -3294,6 +3294,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
   );
 
   // ---- reading pane --------------------------------------------------------
+  // A message still being fetched/decrypted shows in the reading pane too
+  // (shared FetchingFromPeers state, full-screen on phones), not in a modal.
+  const isOpeningMessage = Boolean(mailInfo) && isShow;
   const readingPane = isReadingOpen ? (
     <>
       {isMobile && (
@@ -3315,6 +3318,22 @@ export const Mail = ({ isFromTo }: MailProps) => {
             alias={activeAliasInboxName}
             onClose={closeOpenMessage}
           />
+        </Box>
+      </PaneScroll>
+    </>
+  ) : isOpeningMessage ? (
+    <>
+      {isMobile && (
+        <PaneHeader
+          title="Opening message"
+          subtitle={mailInfo?.name}
+          onBack={() => onOk(undefined)}
+          backLabel="Back to messages"
+        />
+      )}
+      <PaneScroll>
+        <Box sx={centeredColumnSx}>
+          <OpenMail open={isShow} handleClose={onOk} fileInfo={mailInfo} />
         </Box>
       </PaneScroll>
     </>
@@ -3537,15 +3556,12 @@ export const Mail = ({ isFromTo }: MailProps) => {
       list={listPane}
       reading={readingPane}
       readingPlaceholder={readingPlaceholder}
-      readingOpen={isReadingOpen}
+      readingOpen={isReadingOpen || isOpeningMessage}
       wide={wide}
       wideKeepsChrome={wideKeepsChrome}
       overlays={
         <>
           <LoadPublishedStateModal />
-          {mailInfo && isShow && (
-            <OpenMail open={isShow} handleClose={onOk} fileInfo={mailInfo} />
-          )}
           {hasAuthenticatedIdentity && isInboxViewActive && (
             <Joyride
               steps={steps}
