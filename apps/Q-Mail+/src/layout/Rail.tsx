@@ -129,7 +129,7 @@ const Row = styled(ButtonBase, { shouldForwardProp: (p) => p !== '$active' && p 
   color: $active ? theme.palette.primary.main : theme.palette.text.primary,
   backgroundColor: $active ? primarySoft(theme) : 'transparent',
   fontWeight: $active ? 650 : 500,
-  fontSize: $child ? '0.875rem' : '0.95rem',
+  fontSize: $child ? '0.9375rem' : '1rem',
   textAlign: 'left',
   transition: 'background-color 150ms ease, color 150ms ease',
   '&:hover': { backgroundColor: $active ? primarySoft(theme) : theme.palette.action.hover },
@@ -149,7 +149,7 @@ const Label = styled('span')({
 
 const Secondary = styled('span')(({ theme }) => ({
   display: 'block',
-  fontSize: '0.75rem',
+  fontSize: '0.875rem',
   color: theme.palette.text.secondary,
   fontWeight: 400,
   overflow: 'hidden',
@@ -178,6 +178,38 @@ export interface RailProps {
   version: string;
   /** In a drawer: show a close button and call this. */
   onClose?: () => void;
+}
+
+/** A count badge ("99+" past 99) for numeric badge text, else the text itself (e.g. "!"). */
+export function badgeFor(text: string | undefined): { kind: 'count'; value: number } | { kind: 'text'; value: string } | null {
+  if (!text) return null;
+  if (/^\d+$/.test(text)) {
+    const value = Number(text);
+    return value > 0 ? { kind: 'count', value } : null;
+  }
+  return { kind: 'text', value: text };
+}
+
+function renderBadge(text: string | undefined) {
+  const badge = badgeFor(text);
+  if (!badge) return null;
+  return (
+    <Badge
+      color="primary"
+      badgeContent={badge.value}
+      max={99}
+      aria-hidden
+      sx={{ mr: 1.5, '& .MuiBadge-badge': { fontSize: '0.75rem', fontWeight: 700, minWidth: 18, height: 18 } }}
+    />
+  );
+}
+
+/** The accessible name of a row: its label plus the unread count when it has one. */
+export function rowAriaLabel(item: LeftSidebarItem): string {
+  const base = item.ariaLabel || item.label;
+  const badge = badgeFor(item.badgeText);
+  if (badge?.kind === 'count') return `${base}, ${badge.value} unread`;
+  return base;
 }
 
 function childAvatar(item: LeftSidebarItem, avatarUrlByName?: Map<string, string>, groupAvatarUrlById?: Record<string, string>) {
@@ -209,6 +241,15 @@ export function Rail({
   );
   const showNameFilter = nameCount > NAME_FILTER_THRESHOLD;
   const filter = nameFilter.trim().toLowerCase();
+  // In a drawer, every selection closes it (the page changes behind it).
+  const select = (id: string) => {
+    onSelect(id);
+    onClose?.();
+  };
+  const openSettings = () => {
+    onOpenSettings();
+    onClose?.();
+  };
 
   const renderChild = (child: LeftSidebarItem) => {
     if (child.hidden) return null;
@@ -220,17 +261,17 @@ export function Rail({
         $child
         $active={active}
         disabled={child.disabled}
-        onClick={() => onSelect(child.id)}
+        onClick={() => select(child.id)}
         data-qapp-lib-sidebar-item={child.id}
         aria-current={active ? 'page' : undefined}
-        aria-label={child.ariaLabel || child.label}
+        aria-label={rowAriaLabel(child)}
       >
         {childAvatar(child, avatarUrlByName, groupAvatarUrlById)}
         <Label>
           {child.label}
           {child.secondaryLabel && <Secondary>↩ {child.secondaryLabel}</Secondary>}
         </Label>
-        {child.badgeText && <Badge color="primary" badgeContent={child.badgeText} sx={{ mr: 1.5 }} />}
+        {renderBadge(child.badgeText)}
       </Row>
     );
   };
@@ -258,7 +299,7 @@ export function Rail({
           fullWidth
           size="large"
           startIcon={<EditOutlinedIcon />}
-          onClick={() => onSelect(compose.id)}
+          onClick={() => select(compose.id)}
           data-qapp-lib-sidebar-item={compose.id}
           sx={{ minHeight: 44, justifyContent: 'flex-start' }}
         >
@@ -271,7 +312,7 @@ export function Rail({
             variant="outlined"
             fullWidth
             startIcon={<ReplyOutlinedIcon />}
-            onClick={() => onSelect(aliasCompose.id)}
+            onClick={() => select(aliasCompose.id)}
             sx={{ minHeight: 44, justifyContent: 'flex-start' }}
           >
             <Label>Compose as {aliasCompose.secondaryLabel}</Label>
@@ -304,21 +345,22 @@ export function Rail({
           const isThreads = item.id === 'threads';
           const expanded = isThreads ? item.badgeText === '-' : true;
           const icon = SECTION_ICONS[item.id as (typeof SECTION_IDS)[number]] ?? null;
-          const badge = isThreads ? null : item.badgeText;
+          // The Threads row's "+"/"-" only means expanded; it is drawn as a chevron, never as text.
+          const sectionItem = isThreads ? { ...item, label: 'Threads', badgeText: undefined } : item;
           return (
             <Box key={item.id} sx={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
               <Row
                 $active={active}
                 disabled={item.disabled}
-                onClick={() => onSelect(item.id)}
+                onClick={() => select(item.id)}
                 data-qapp-lib-sidebar-item={item.id}
                 aria-current={active ? 'page' : undefined}
                 aria-expanded={isThreads ? expanded : undefined}
-                aria-label={item.ariaLabel || item.label}
+                aria-label={rowAriaLabel(sectionItem)}
               >
                 {icon}
-                <Label>{item.id === 'threads' ? 'Threads' : item.label}</Label>
-                {badge && <Badge color="primary" badgeContent={badge} sx={{ mr: 1.5 }} />}
+                <Label>{sectionItem.label}</Label>
+                {renderBadge(sectionItem.badgeText)}
                 {isThreads && children.length > 0 && (expanded ? <ExpandMoreIcon /> : <ChevronRightIcon />)}
               </Row>
               {children.map(renderChild)}
@@ -331,15 +373,15 @@ export function Rail({
         {publishState && (
           <Row
             disabled={publishState.disabled}
-            onClick={() => onSelect(publishState.id)}
-            aria-label={publishState.label}
+            onClick={() => select(publishState.id)}
+            aria-label={publishState.badgeText ? `${publishState.label}, changes not yet published` : publishState.label}
           >
             <CloudUploadOutlinedIcon color={publishState.badgeText ? 'warning' : 'inherit'} />
             <Label>{publishState.label}</Label>
             {publishState.badgeText && <Badge color="warning" variant="dot" sx={{ mr: 1.5 }} />}
           </Row>
         )}
-        <Row onClick={onOpenSettings} aria-label="Settings">
+        <Row onClick={openSettings} aria-label="Settings">
           <SettingsOutlinedIcon />
           <Label>Settings</Label>
         </Row>

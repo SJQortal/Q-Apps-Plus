@@ -1,18 +1,25 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { Box, CircularProgress } from '@mui/material'
+import { Button } from '@mui/material'
+import SendOutlinedIcon from '@mui/icons-material/SendOutlined'
 import { RootState } from '../../state/store'
 import { MAIL_SERVICE_TYPE } from '../../constants/mail'
 import { GroupedMailboxList } from './GroupedMailboxList'
-import { useMailboxSearch } from './useMailboxSearch'
-import { MailboxSearchBar } from './MailboxSearchBar'
-import useConfirmationModal from '../../hooks/useConfirmModal'
+import { useMailboxSearch, type MailboxSearchStatus } from './useMailboxSearch'
+import { useConfirmSheet } from './ConfirmSheet'
+import { usePolling } from '../../hooks/usePolling'
 import { setNotification } from '../../state/features/notificationsSlice'
 import { objectToBase64 } from '../../utils/toBase64'
+import { parseSentRecipientFromIdentifier } from './mailIdentifier'
 import {
-  isSentMailIdentifier,
-  parseSentRecipientFromIdentifier,
-} from './mailIdentifier'
+  SENT_DELETED_TAG,
+  SENT_DELETED_TITLE,
+  fetchSentDelta,
+  fetchSentIndex,
+  readDeletedSentIds,
+  writeDeletedSentIds,
+} from '../../utils/sentIndex'
+import { SENT_INDEX_KEY, publishMailIndex } from './mailIndexStore'
 
 interface SentMailProps {
   instanceName?: string | null
@@ -24,6 +31,12 @@ interface SentMailProps {
     to?: string
   ) => Promise<void>
   openedMessageId?: string | number | null
+  /** The empty state's next action. */
+  onCompose?: () => void
+  /** The list pane's search box (Mail.tsx owns the query and the body limit). */
+  searchQuery?: string
+  bodySearchLimit?: number
+  onSearchStatus?: (status: MailboxSearchStatus) => void
 }
 
 interface ResolvedRecipientInfo {
@@ -32,31 +45,7 @@ interface ResolvedRecipientInfo {
   publicKey: string
 }
 
-const SENT_DELETED_TITLE = '__qmail_deleted__'
-const SENT_DELETED_TAG = 'qmail-deleted'
-const LEGACY_SENT_QUERY = 'qortal_qmail_'
-
-type SentQueryConfig = {
-  query: string
-  identifier?: string
-  matchesIdentifier: (identifier: string) => boolean
-}
-
-const SENT_QUERY_CONFIGS: SentQueryConfig[] = [
-  {
-    query: '_mail_qortal_qmail_',
-    identifier: '_mail_',
-    matchesIdentifier: identifier => {
-      return identifier.toLowerCase().startsWith('_mail_qortal_qmail_')
-    },
-  },
-  {
-    query: LEGACY_SENT_QUERY,
-    matchesIdentifier: identifier => {
-      return identifier.toLowerCase().startsWith(LEGACY_SENT_QUERY)
-    },
-  },
-]
+export const SENT_POLL_INTERVAL_MS = 30_000
 
 const toStringOrEmpty = (value: any): string => {
   return typeof value === 'string' ? value.trim() : ''
@@ -67,94 +56,6 @@ const toErrorMessage = (error: any, fallback: string): string => {
   if (typeof error?.error === 'string' && error.error.trim()) return error.error
   if (typeof error?.message === 'string' && error.message.trim()) return error.message
   return fallback
-}
-
-const getDeletedSentStorageKey = (username: string): string => {
-  return `qmail_deleted_sent_${username}`
-}
-
-const readDeletedSentIds = (username: string): Record<string, boolean> => {
-  try {
-    const raw = localStorage.getItem(getDeletedSentStorageKey(username))
-    if (!raw) return {}
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return {}
-
-    return parsed.reduce<Record<string, boolean>>((accumulator, identifier) => {
-      const value = toStringOrEmpty(identifier)
-      if (value) {
-        accumulator[value] = true
-      }
-      return accumulator
-    }, {})
-  } catch {
-    return {}
-  }
-}
-
-const writeDeletedSentIds = (
-  username: string,
-  deletedIds: Record<string, boolean>
-): void => {
-  try {
-    localStorage.setItem(
-      getDeletedSentStorageKey(username),
-      JSON.stringify(Object.keys(deletedIds))
-    )
-  } catch {
-    // Ignore storage failures in private browsing or restricted environments.
-  }
-}
-
-const isDeletedSentResource = (resource: any): boolean => {
-  const title = toStringOrEmpty(resource?.metadata?.title).toLowerCase()
-  if (title === SENT_DELETED_TITLE.toLowerCase()) {
-    return true
-  }
-
-  const tags = Array.isArray(resource?.metadata?.tags)
-    ? resource.metadata.tags
-    : []
-
-  return tags.some((tag: any) => {
-    const normalizedTag = toStringOrEmpty(tag).toLowerCase()
-    return (
-      normalizedTag === SENT_DELETED_TAG ||
-      normalizedTag === SENT_DELETED_TITLE.toLowerCase()
-    )
-  })
-}
-
-const shouldHideSentResource = (
-  resource: any,
-  locallyDeletedIds: Record<string, boolean>
-): boolean => {
-  const identifier = toStringOrEmpty(resource?.identifier)
-  if (identifier && locallyDeletedIds[identifier]) {
-    return true
-  }
-
-  return isDeletedSentResource(resource)
-}
-
-const mapMailResources = (resources: any[]) => {
-  return resources.map((post: any) => {
-    return {
-      title: post?.metadata?.title,
-      category: post?.metadata?.category,
-      categoryName: post?.metadata?.categoryName,
-      tags: post?.metadata?.tags || [],
-      description: post?.metadata?.description,
-      createdAt: post?.created,
-      updated: post?.updated,
-      user: post.name,
-      id: post.identifier,
-    }
-  })
-}
-
-const sortByCreatedDescending = (a: any, b: any) => {
-  return Number(b?.createdAt || 0) - Number(a?.createdAt || 0)
 }
 
 const getAccountPublicKey = async (address: string): Promise<string | null> => {
@@ -271,6 +172,10 @@ export const SentMail = ({
   instanceNames,
   onOpen,
   openedMessageId,
+  onCompose,
+  searchQuery = '',
+  bodySearchLimit = 0,
+  onSearchStatus,
 }: SentMailProps) => {
   const dispatch = useDispatch()
   const { user } = useSelector((state: RootState) => state.auth)
@@ -297,7 +202,7 @@ export const SentMail = ({
 
   const [mailMessages, setMailMessages] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [deletingMessageIds, setDeletingMessageIds] = useState<
     Record<string, boolean>
   >({})
@@ -308,11 +213,14 @@ export const SentMail = ({
   const deletedMessageIdsRef = useRef<Record<string, boolean>>({})
   const deletingMessageIdsRef = useRef<Record<string, boolean>>({})
 
-  const { Modal: DeleteConfirmModal, showModal: showDeleteConfirmModal } =
-    useConfirmationModal({
-      title: 'Delete sent message?',
+  const { Sheet: DeleteConfirmSheet, confirm: showDeleteConfirmModal } =
+    useConfirmSheet({
+      title: 'Delete this sent message?',
       message:
-        'This republishes the same message identifier with minimal deleted content. A publish fee applies. Continue?',
+        'It is replaced on QDN by an empty placeholder, so the recipient can no longer open it. Publishing the placeholder costs the usual fee.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep',
+      destructive: true,
     })
 
   useEffect(() => {
@@ -349,7 +257,17 @@ export const SentMail = ({
     username: activeInstanceNames[0] || user?.name,
     hashMapMailMessages,
     enabled: hasActiveInstances,
+    bodyLimit: bodySearchLimit,
   })
+
+  useEffect(() => {
+    onSearchStatus?.(searchStatus)
+  }, [onSearchStatus, searchStatus])
+
+  // Share the index with the cross-mailbox search.
+  useEffect(() => {
+    if (hasActiveInstances) publishMailIndex(SENT_INDEX_KEY, mailMessages)
+  }, [hasActiveInstances, mailMessages])
 
   const markDeletedLocally = useCallback(
     (messageIdentifier: string, senderName?: string | null) => {
@@ -398,84 +316,20 @@ export const SentMail = ({
       const silent = Boolean(options?.silent)
       if (!silent) {
         setIsLoading(true)
+        setLoadError(null)
       }
 
       try {
-        const pageSize = 200
-        const allResources: any[] = []
-
-        for (const name of activeInstanceNames) {
-          for (const queryConfig of SENT_QUERY_CONFIGS) {
-            let offset = 0
-            let hasMore = true
-
-            while (hasMore) {
-              const params = new URLSearchParams({
-                mode: 'ALL',
-                service: MAIL_SERVICE_TYPE,
-                query: queryConfig.query,
-                name,
-                exactmatchnames: 'true',
-                limit: String(pageSize),
-                includemetadata: 'true',
-                offset: String(offset),
-                reverse: 'true',
-                excludeblocked: 'true',
-              })
-
-              if (queryConfig.identifier) {
-                params.set('identifier', queryConfig.identifier)
-              }
-
-              const response = await fetch(
-                `/arbitrary/resources/search?${params.toString()}`,
-                {
-                  method: 'GET',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                }
-              )
-              const responseData = await response.json()
-
-              if (!Array.isArray(responseData) || responseData.length === 0) {
-                break
-              }
-
-              const visibleResources = responseData.filter(resource => {
-                const identifier = toStringOrEmpty(resource?.identifier)
-                if (!identifier) return false
-                if (!queryConfig.matchesIdentifier(identifier)) return false
-                if (!isSentMailIdentifier(identifier)) return false
-                return !shouldHideSentResource(resource, deletedMessageIdsRef.current)
-              })
-              allResources.push(...visibleResources)
-
-              if (responseData.length < pageSize) {
-                hasMore = false
-              } else {
-                offset += responseData.length
-              }
-            }
-          }
-        }
-
-        const structureData = mapMailResources(allResources)
-        const seen = new Set<string>()
-        const dedupedMessages = structureData.filter(message => {
-          if (!message?.id || seen.has(message.id)) {
-            return false
-          }
-          if (deletedMessageIdsRef.current[message.id]) {
-            return false
-          }
-          seen.add(message.id)
-          return true
-        })
-
-        dedupedMessages.sort(sortByCreatedDescending)
+        const dedupedMessages = await fetchSentIndex(
+          activeInstanceNames,
+          deletedMessageIdsRef.current,
+          silent ? { ttlMs: 0 } : undefined
+        )
         setMailMessages(dedupedMessages)
       } catch (error) {
+        if (!silent) {
+          setLoadError(toErrorMessage(error, "Couldn't reach the node."))
+        }
       } finally {
         if (!silent) {
           setIsLoading(false)
@@ -485,45 +339,38 @@ export const SentMail = ({
     [activeInstanceNames, hasActiveInstances]
   )
 
-  const checkNewMessages = useCallback(async () => {
-    if (!hasActiveInstances) return
-
-    try {
-      await fetchSentIndexes({ silent: true })
-    } catch (error) {
-    }
-  }, [fetchSentIndexes, hasActiveInstances])
-
   useEffect(() => {
     if (!hasActiveInstances) {
       setMailMessages([])
-      setSearchQuery('')
       return
     }
 
     setMailMessages([])
-    setSearchQuery('')
     void fetchSentIndexes()
   }, [fetchSentIndexes, hasActiveInstances])
 
-  const interval = useRef<any>(null)
+  const mailMessagesRef = useRef<any[]>([])
   useEffect(() => {
-    if (!hasActiveInstances) return
+    mailMessagesRef.current = mailMessages
+  }, [mailMessages])
 
-    let isCalling = false
-    interval.current = setInterval(async () => {
-      if (isCalling) return
-      isCalling = true
-      await checkNewMessages()
-      isCalling = false
-    }, 30000)
-
-    return () => {
-      if (interval.current) {
-        clearInterval(interval.current)
-      }
-    }
-  }, [checkNewMessages, hasActiveInstances])
+  // Polite delta poll (docs/QORTAL.md rule 7): newest 20 per name and query,
+  // cut at the first known id, merged in front; `false` backs off.
+  usePolling(
+    async () => {
+      if (!hasActiveInstances) return
+      const known = new Set(mailMessagesRef.current.map(message => toStringOrEmpty(message?.id)))
+      const fresh = await fetchSentDelta(activeInstanceNames, known, deletedMessageIdsRef.current)
+      if (!fresh.length) return false
+      setMailMessages(previous => {
+        const knownNow = new Set(previous.map(message => toStringOrEmpty(message?.id)))
+        const additions = fresh.filter(row => !knownNow.has(row.id))
+        return additions.length ? [...additions, ...previous] : previous
+      })
+      return true
+    },
+    { intervalMs: SENT_POLL_INTERVAL_MS, enabled: hasActiveInstances }
+  )
 
   const openMessage = useCallback(
     async (messageUser: string, messageIdentifier: string, content: any, to?: string) => {
@@ -654,12 +501,6 @@ export const SentMail = ({
 
   return (
     <>
-      <MailboxSearchBar
-        value={searchQuery}
-        onChange={setSearchQuery}
-        placeholder='Search sent messages...'
-        status={searchStatus}
-      />
       <GroupedMailboxList
         messages={searchedMessages}
         mailboxType='sent'
@@ -667,20 +508,26 @@ export const SentMail = ({
         openedMessageId={openedMessageId}
         onDeleteMessage={handleDeleteSentMessage}
         isDeletingMessage={isDeletingMessage}
+        status={isLoading ? 'loading' : loadError ? 'error' : 'ready'}
+        errorMessage={loadError || undefined}
+        onRetry={() => void fetchSentIndexes()}
+        highlightTerms={searchStatus.terms}
+        emptyIcon={<SendOutlinedIcon />}
+        emptyTitle={searchQuery.trim() ? 'No matches' : 'No sent mail yet'}
+        emptyHint={
+          searchQuery.trim()
+            ? 'Try fewer words, or search message bodies.'
+            : 'Mail you send shows up here once it is published.'
+        }
+        emptyAction={
+          !searchQuery.trim() && onCompose ? (
+            <Button variant='contained' onClick={onCompose} sx={{ minHeight: 44 }}>
+              Compose
+            </Button>
+          ) : undefined
+        }
       />
-      {isLoading && (
-        <Box
-          sx={{
-            display: 'flex',
-            width: '100%',
-            justifyContent: 'center',
-            pt: '10px',
-          }}
-        >
-          <CircularProgress />
-        </Box>
-      )}
-      <DeleteConfirmModal />
+      <DeleteConfirmSheet />
     </>
   )
 }

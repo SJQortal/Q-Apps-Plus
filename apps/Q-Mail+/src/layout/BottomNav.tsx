@@ -50,6 +50,12 @@ interface BottomNavProps {
   onSelect: (id: string) => void;
 }
 
+/** The accessible name: the label plus the unread count when there is one. */
+export function badgeLabel(item: BottomNavItem): string {
+  const count = typeof item.badge === 'number' ? item.badge : Number(item.badge);
+  return Number.isFinite(count) && count > 0 ? `${item.label}, ${count} unread` : item.label;
+}
+
 /** Phone bottom navigation: at most 5 thumb-reachable items. */
 export function BottomNav({ items, activeId, onSelect }: BottomNavProps) {
   return (
@@ -61,7 +67,7 @@ export function BottomNav({ items, activeId, onSelect }: BottomNavProps) {
             key={item.id}
             $active={active}
             onClick={() => onSelect(item.id)}
-            aria-label={item.label}
+            aria-label={badgeLabel(item)}
             aria-current={active ? 'page' : undefined}
           >
             <Badge
@@ -69,11 +75,12 @@ export function BottomNav({ items, activeId, onSelect }: BottomNavProps) {
               badgeContent={item.badge}
               invisible={!item.badge}
               max={99}
-              sx={{ '& .MuiBadge-badge': { fontSize: '0.65rem', minWidth: 16, height: 16 } }}
+              aria-hidden
+              sx={{ '& .MuiBadge-badge': { fontSize: '0.75rem', fontWeight: 700, minWidth: 18, height: 18 } }}
             >
               {item.icon}
             </Badge>
-            <Typography sx={{ fontSize: '0.68rem', fontWeight: active ? 700 : 500, lineHeight: 1 }}>
+            <Typography sx={{ fontSize: '0.875rem', fontWeight: active ? 700 : 500, lineHeight: 1 }}>
               {item.label}
             </Typography>
           </Item>
