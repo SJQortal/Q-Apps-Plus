@@ -45,6 +45,26 @@ describe('CommentSection from a notification', () => {
     await waitFor(() => expect(scrolled).toEqual(['comments']));
   });
 
+  it('scrolls only once, not again after "Load more comments"', async () => {
+    mockBodies();
+    const page = Array.from({ length: 20 }, (_, i) => comment(`${BASE}p${String(i).padStart(5, '0')}`));
+    mockFetch(/service=BLOG_COMMENT&query=.*_base_/, (url: URL) =>
+      url.searchParams.get('offset') === '0' ? page : [comment(`${BASE}last01`)]
+    );
+    mockFetch(/service=BLOG_COMMENT&query=.*_reply_/, []);
+    const scrolled: string[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this.id);
+    };
+    renderWithProviders(<CommentSection postId={POST_ID} postName="alice" />, {
+      initialEntries: [`/share/alice/${POST_ID}#comments`],
+    });
+    await waitFor(() => expect(scrolled).toEqual(['comments']));
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more comments' }));
+    expect(await screen.findByText(`body of ${BASE}last01`)).toBeInTheDocument();
+    expect(scrolled).toEqual(['comments']);
+  });
+
   it('stays where it is when opened normally', async () => {
     mockBodies();
     mockFetch(/service=BLOG_COMMENT&query=.*_base_/, [comment(`${BASE}aaaaaa`)]);

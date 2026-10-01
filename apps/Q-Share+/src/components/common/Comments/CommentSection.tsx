@@ -135,10 +135,13 @@ export const CommentSection = ({ postId, postName, commentsId }: CommentSectionP
   const wantsComments = location.hash === "#comments" || location.pathname.endsWith("/comments");
 
   // A notification opens the share at #comments (in the app) or …/comments (Hub's alerts):
-  // scroll there once the first page is in.
+  // scroll there once the first page is in, once per visit (not again after "Load more").
+  const scrolledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (wantsComments && !loadingComments) panelRef.current?.scrollIntoView({ block: "start" });
-  }, [wantsComments, loadingComments]);
+    if (!wantsComments || loadingComments || scrolledFor.current === location.key) return;
+    scrolledFor.current = location.key;
+    panelRef.current?.scrollIntoView({ block: "start" });
+  }, [wantsComments, loadingComments, location.key]);
 
   const onSubmit = (obj?: any, isEdit?: boolean) => {
     if (isEdit) {
