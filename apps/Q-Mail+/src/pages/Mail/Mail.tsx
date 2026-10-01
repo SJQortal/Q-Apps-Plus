@@ -9,10 +9,8 @@ import React, {
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
-import { Joyride, ACTIONS, STATUS, Step } from "react-joyride";
 
 
-import { styled } from "@mui/system";
 import {
   Avatar,
   Box,
@@ -22,26 +20,17 @@ import {
   Typography,
   CircularProgress,
   LinearProgress,
-  useMediaQuery,
   ButtonBase,
 } from "@mui/material";
-import { NewMessage } from "./NewMessage";
-import Tabs from "@mui/material/Tabs";
-import Tab from "@mui/material/Tab";
 import { useFetchMail } from "../../hooks/useFetchMail";
-import { ShowMessage } from "./ShowMessage";
 import { clearMessages, upsertMessages } from "../../state/features/mailSlice";
 import { setUserAvatarHash } from "../../state/features/globalSlice";
 import { setNotification } from "../../state/features/notificationsSlice";
 
-import SimpleTable from "./MailTable";
-import { AliasMail } from "./AliasMail";
-import { SentMail } from "./SentMail";
 import { useModal } from "../../components/common/useModal";
 import useConfirmationModal from "../../hooks/useConfirmModal";
 import { OpenMail } from "./OpenMail";
 import { MAIL_SERVICE_TYPE, THREAD_SERVICE_TYPE } from "../../constants/mail";
-import { ShowMessageV2 } from "./ShowMessageV2";
 import {
   executeEvent,
   subscribeToEvent,
@@ -50,8 +39,6 @@ import {
 import { GroupedMailboxList } from "./GroupedMailboxList";
 import { MailboxSearchBar } from "./MailboxSearchBar";
 import { useMailboxSearch } from "./useMailboxSearch";
-import { ThreadsMailbox } from "./ThreadsMailbox";
-import { AliasesPage } from "./AliasesPage";
 import { parseSentRecipientFromIdentifier } from "./mailIdentifier";
 import {
   base64ToUint8Array,
@@ -72,7 +59,7 @@ import { PaneHeader } from "../../layout/PaneHeader";
 import { EmptyState, LoadingBanner } from "../../layout/states";
 import { useLayoutMode } from "../../layout/useLayoutMode";
 import { useAppViewport } from "../../layout/useAppViewport";
-import { SETTINGS_PATH } from "../Settings/SettingsPage";
+import { SETTINGS_PATH } from "../Settings/settingsPath";
 import packageJson from "../../../package.json";
 import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
 import SendOutlinedIcon from "@mui/icons-material/SendOutlined";
@@ -122,9 +109,7 @@ import {
   hasThreadHistory,
   readIdsFromState,
 } from "../../utils/readState";
-import { DraftsMailbox } from "./DraftsMailbox";
 import type { StoredComposeDraft } from "./composeDrafts";
-import { Thread } from "./Thread";
 import { invalidateThreadSearches } from "./threadData";
 import { useThreadUnreadCounts } from "./threadUnread";
 import { getAvatarUrl } from "../../utils/avatarCache";
@@ -150,6 +135,32 @@ import {
   type MailboxRef,
 } from "./mailSearch";
 import { getSentRecipientDisplayLabel } from "./mailIdentifier";
+import { lazyNamed, preloadOnIdle } from "../../components/common/lazyNamed";
+import { ListSkeleton } from "../../layout/states";
+import { TOUR_STATUS_DISMISSED, TOUR_STATUS_STORAGE_KEY } from "./MailTour";
+import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
+import { usePhoneBackClose } from "../../layout/usePhoneBackClose";
+
+// Lazy boundaries (docs/apps/Q-Mail+.md → Bundle §5): the composer (Quill,
+// react-dropzone), the reader (dompurify), threads, aliases, sent, drafts and
+// the tour each load on first use. The composer and reader chunks are warmed
+// on idle after first paint (see the effect in Mail), so Compose and opening
+// a message still feel instant.
+const loadNewMessage = () => import("./NewMessage");
+const loadShowMessageV2 = () => import("./ShowMessageV2");
+const NewMessage = lazyNamed(loadNewMessage, "NewMessage");
+const ShowMessageV2 = lazyNamed(loadShowMessageV2, "ShowMessageV2");
+const SentMail = lazyNamed(() => import("./SentMail"), "SentMail");
+const AliasMail = lazyNamed(() => import("./AliasMail"), "AliasMail");
+const AliasesPage = lazyNamed(() => import("./AliasesPage"), "AliasesPage");
+const ThreadsMailbox = lazyNamed(() => import("./ThreadsMailbox"), "ThreadsMailbox");
+const Thread = lazyNamed(() => import("./Thread"), "Thread");
+const DraftsMailbox = lazyNamed(() => import("./DraftsMailbox"), "DraftsMailbox");
+const MailTour = lazyNamed(() => import("./MailTour"), "MailTour");
+const ShortcutsHelpDialog = lazyNamed(
+  () => import("../../components/common/ShortcutsHelpDialog"),
+  "ShortcutsHelpDialog"
+);
 
 type MailboxSidebarItemId =
   | "inbox"
@@ -532,119 +543,6 @@ export const buildSidebarItems = ({
   return items;
 };
 
-const steps: Step[] = [
-  {
-    content: (
-      <div>
-        <h2>Welcome To Q-Mail</h2>
-        <p
-          style={{
-            fontSize: "1.125rem",
-          }}
-        >
-          Let's take a tour
-        </p>
-        <p
-          style={{
-            fontSize: "0.75rem",
-          }}
-        >
-          The Qortal community, along with its development team and the creators
-          of this application, cannot be held accountable for any content
-          published or displayed. Furthermore, they bear no responsibility for
-          any data loss that may occur as a result of using this application.
-        </p>
-      </div>
-    ),
-    placement: "center",
-    target: ".step-1",
-  },
-  {
-    target: "[data-qapp-lib-sidebar-item='inbox']",
-    content: (
-      <div>
-        <h2>Changing instances</h2>
-
-        <p
-          style={{
-            fontSize: "1.125rem",
-          }}
-        >
-          Toggle between your main inbox, aliases, and groups you've joined.
-        </p>
-      </div>
-    ),
-    placement: "bottom",
-  },
-  {
-    target: "[data-qapp-lib-sidebar-item='compose']",
-    content: (
-      <div>
-        <h2>Composing a mail message</h2>
-        <p
-          style={{
-            fontSize: "1.125rem",
-            fontWeight: "bold",
-          }}
-        >
-          Compose a secure message featuring encrypted attachments (up to 40MB
-          per attachment).
-        </p>
-        <p
-          style={{
-            fontSize: "1.125rem",
-          }}
-        >
-          To protect the identity of the recipient, assign them an alias for
-          added anonymity.
-        </p>
-      </div>
-    ),
-    placement: "bottom",
-  },
-
-  {
-    target: "[data-qapp-lib-sidebar-item='aliases']",
-    content: (
-      <div>
-        <h2>What is an alias?</h2>
-        <p
-          style={{
-            fontSize: "1.125rem",
-            fontWeight: "bold",
-          }}
-        >
-          To conceal the identity of the message recipient, utilize the alias
-          option when sending.
-        </p>
-        <p
-          style={{
-            fontSize: "0.875rem",
-          }}
-        >
-          For instance, instruct your friend to address the message to you using
-          the alias 'FrederickGreat'.
-        </p>
-        <p
-          style={{
-            fontSize: "0.875rem",
-          }}
-        >
-          To access messages sent to that alias, simply add the alias as an
-          instance.
-        </p>
-      </div>
-    ),
-    placement: "bottom",
-  },
-];
-
-const TOUR_STATUS_STORAGE_KEY = "tourStatus-qmail";
-const TOUR_STATUS_DISMISSED = "dismissed";
-
-const GroupTabs = styled(Tabs)({
-  maxWidth: "50vw",
-});
 
 interface MailProps {
   isFromTo: boolean;
@@ -688,6 +586,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const [ownedInboxNames, setOwnedInboxNames] = useState<string[]>([]);
   const [ownedSentNames, setOwnedSentNames] = useState<string[]>([]);
   const [run, setRun] = useState(false);
+  const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
   const [filterMode, setFilterMode] = useState<string>("Recently active");
   const [selectedAlias, setSelectedAlias] = useState<string | null>(null);
   const [selectedAliasScope, setSelectedAliasScope] =
@@ -791,6 +690,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
       title: "Load published QDN state?",
       message:
         "Q-Mail found a published mailbox state for this account. Keep fetching it in the background and apply it when the download finishes?",
+      confirmLabel: "Load state",
+      cancelLabel: "Not now",
       children: (
         <FormControlLabel
           sx={{
@@ -1955,18 +1856,17 @@ export const Mail = ({ isFromTo }: MailProps) => {
     user?.address,
   ]);
 
-  const handleJoyrideCallback = (data: any) => {
-    const { action, status } = data;
+  const handleTourDone = useCallback(() => {
+    setRun(false);
+    localStorage.setItem(TOUR_STATUS_STORAGE_KEY, TOUR_STATUS_DISMISSED);
+  }, []);
 
-    if (
-      status === STATUS.FINISHED ||
-      status === STATUS.SKIPPED ||
-      action === ACTIONS.SKIP
-    ) {
-      setRun(false);
-      localStorage.setItem(TOUR_STATUS_STORAGE_KEY, TOUR_STATUS_DISMISSED);
-    }
-  };
+  // Warm the composer and reader chunks once the browser is idle after first
+  // paint, so Compose and opening a message do not wait on the network.
+  useEffect(() => {
+    const handle = preloadOnIdle([loadNewMessage, loadShowMessageV2]);
+    return () => handle.cancel();
+  }, []);
 
   const addWatchedAliasByName = useCallback(
     (aliasName: string) => {
@@ -3137,6 +3037,80 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const isComposeView = activeMailboxItem === "compose";
   const isThreadsView = activeMailboxItem === "threads";
 
+  // ---- keyboard shortcuts (desktop only; src/hooks/useKeyboardShortcuts.ts)
+  // j/k move through the list the pane shows (the inbox search results or
+  // the archived list) by opening the next/previous message in the reading
+  // pane; the other lists live in their own components.
+  const shortcutList: any[] = isInboxViewActive
+    ? inboxSearchResults
+    : isArchivedViewActive
+    ? archivedMessages
+    : [];
+  const openMessageFromList = (item: any) => {
+    const id = item?.id || item?.identifier;
+    if (!id) return;
+    void openMessage(item?.user, id, item, undefined);
+  };
+  const openAdjacentMessage = (step: 1 | -1) => {
+    if (!shortcutList.length) return;
+    const openedId = message?.id || message?.identifier;
+    const index = openedId
+      ? shortcutList.findIndex(item => (item?.id || item?.identifier) === openedId)
+      : -1;
+    const nextIndex = index === -1 ? (step === 1 ? 0 : shortcutList.length - 1) : index + step;
+    const next = shortcutList[nextIndex];
+    if (next) openMessageFromList(next);
+  };
+  useKeyboardShortcuts(
+    {
+      compose: () => onSelectSidebarItem("compose"),
+      reply: () => {
+        if (isReadingOpen) openReplyComposerFromMessage(message);
+      },
+      replyAll: () => {
+        if (isReadingOpen) openReplyComposerFromMessage(message, { replyAll: true });
+      },
+      forward: () => {
+        if (isReadingOpen) openForwardComposerFromMessage(message);
+      },
+      archive: () => {
+        if (!isReadingOpen || !(isInboxViewActive || isArchivedViewActive)) return;
+        if (isArchivedViewActive) unarchiveMessages([message]);
+        else archiveMessages([message]);
+        closeOpenMessage();
+      },
+      markUnread: () => {
+        if (isReadingOpen) {
+          void markMessagesAsUnread([message]);
+          closeOpenMessage();
+        }
+      },
+      next: () => openAdjacentMessage(1),
+      previous: () => openAdjacentMessage(-1),
+      open: () => {
+        if (!isReadingOpen && shortcutList.length) openMessageFromList(shortcutList[0]);
+      },
+      close: () => {
+        if (shortcutsHelpOpen) setShortcutsHelpOpen(false);
+        else if (isComposeView) handleComposerClose();
+        else if (isReadingOpen) closeOpenMessage();
+      },
+      focusSearch: () => {
+        const input = document.querySelector<HTMLInputElement>(
+          '[aria-label="Messages"] input[aria-label^="Search"]'
+        );
+        input?.focus();
+        input?.select();
+      },
+      goInbox: () => onSelectSidebarItem("inbox"),
+      goSent: () => onSelectSidebarItem("sent"),
+      goThreads: () => onSelectSidebarItem("threads"),
+      goAliases: () => onSelectSidebarItem("aliases"),
+      showHelp: () => setShortcutsHelpOpen(open => !open),
+    },
+    { enabled: isDesktopLayout && hasAuthenticatedIdentity }
+  );
+
   const menuButton = !isDesktopLayout ? (
     <IconButton
       onClick={() => setRailOpen(true)}
@@ -3408,7 +3382,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
               onOpen={openSearchResult}
             />
           ) : (
-            listBody
+            <React.Suspense fallback={<ListSkeleton />}>{listBody}</React.Suspense>
           )}
         </Box>
       </PaneScroll>
@@ -3431,6 +3405,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       )}
       <PaneScroll>
         <Box sx={centeredColumnSx}>
+          <React.Suspense fallback={<ListSkeleton rows={4} />}>
           <ShowMessageV2
             isOpen={isOpen}
             setIsOpen={setIsOpen}
@@ -3444,6 +3419,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
             alias={activeAliasInboxName}
             onClose={closeOpenMessage}
           />
+          </React.Suspense>
         </Box>
       </PaneScroll>
     </>
@@ -3478,14 +3454,52 @@ export const Mail = ({ isFromTo }: MailProps) => {
   // ---- thread reading pane (group threads open like a message) --------------
   const threadReadingPane =
     isThreadsView && currentThread && hasAuthenticatedIdentity ? (
+      <React.Suspense fallback={<ListSkeleton rows={4} />}>
       <Thread
         key={currentThread?.threadId || currentThread?.identifier}
         currentThread={currentThread}
         groupInfo={selectedGroup || { id: currentThread?.threadData?.groupId, name: currentThread?.groupName }}
         closeThread={() => setCurrentThread(null)}
       />
+      </React.Suspense>
     ) : null;
   const isThreadReadingOpen = Boolean(threadReadingPane);
+
+  // Hardware / browser Back on phones closes the open sub-pane (GO's back
+  // button then works) instead of leaving the app.
+  const phoneSubPaneKey = !isMobile
+    ? null
+    : isComposeView
+    ? "compose"
+    : isThreadReadingOpen
+    ? "thread"
+    : isReadingOpen
+    ? "message"
+    : isOpeningMessage
+    ? "opening"
+    : isThreadsView && selectedGroup
+    ? "thread-group"
+    : activeAliasInboxName
+    ? "alias-inbox"
+    : null;
+  usePhoneBackClose({
+    enabled: isMobile,
+    activeKey: phoneSubPaneKey,
+    onBack: () => {
+      if (phoneSubPaneKey === "compose") handleComposerClose();
+      else if (phoneSubPaneKey === "thread") setCurrentThread(null);
+      else if (phoneSubPaneKey === "message") closeOpenMessage();
+      else if (phoneSubPaneKey === "opening") onOk(undefined);
+      else if (phoneSubPaneKey === "thread-group") {
+        setSelectedGroup(null);
+        setCurrentThread(null);
+      } else if (phoneSubPaneKey === "alias-inbox") {
+        setSelectedAlias(null);
+        setSelectedAliasScope(null);
+        closeOpenMessage();
+      }
+    },
+  });
 
   // ---- wide views (take the place of list + reading) -----------------------
   let wide: React.ReactNode | null = null;
@@ -3509,6 +3523,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
           backLabel="Close composer"
         />
         <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <React.Suspense fallback={<ListSkeleton rows={3} />}>
           <NewMessage
             isFromTo={isFromTo}
             replyTo={replyTo}
@@ -3529,6 +3544,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
             composePrefill={composePrefill}
             onRequestClose={handleComposerClose}
           />
+          </React.Suspense>
         </Box>
       </>
     );
@@ -3545,6 +3561,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
         <PaneScroll>
           <Box sx={centeredColumnSx}>
             {hasAuthenticatedIdentity ? (
+              <React.Suspense fallback={<ListSkeleton rows={4} />}>
               <AliasesPage
                 aliases={watchedAliases}
                 aliasesWithMessages={watchedAliasesWithMessages}
@@ -3598,6 +3615,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
                   statusMessage: aliasScanStatusMessage,
                 }}
               />
+              </React.Suspense>
             ) : (
               renderAuthenticationPrompt("Aliases")
             )}
@@ -3663,43 +3681,21 @@ export const Mail = ({ isFromTo }: MailProps) => {
       overlays={
         <>
           <LoadPublishedStateModal />
-          {hasAuthenticatedIdentity && isInboxViewActive && (
-            <Joyride
-              steps={steps}
-              run={run}
-              onEvent={handleJoyrideCallback}
-              continuous={true}
-              scrollToFirstStep={true}
-              options={{ showProgress: true }}
-            />
+          {shortcutsHelpOpen && (
+            <React.Suspense fallback={null}>
+              <ShortcutsHelpDialog
+                open={shortcutsHelpOpen}
+                onClose={() => setShortcutsHelpOpen(false)}
+              />
+            </React.Suspense>
+          )}
+          {hasAuthenticatedIdentity && isInboxViewActive && run && (
+            <React.Suspense fallback={null}>
+              <MailTour run={run} onDone={handleTourDone} />
+            </React.Suspense>
           )}
         </>
       }
     />
   );
 };
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number | null;
-}
-
-export function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`mail-tabs-${index}`}
-      aria-labelledby={`mail-tabs-${index}`}
-      {...other}
-      style={{
-        width: "100%",
-      }}
-    >
-      {value === index && children}
-    </div>
-  );
-}

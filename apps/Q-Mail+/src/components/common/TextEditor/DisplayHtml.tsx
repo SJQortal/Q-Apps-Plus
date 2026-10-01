@@ -5,9 +5,6 @@
  */
 import { useMemo } from "react";
 import DOMPurify from "dompurify";
-import "react-quill-new/dist/quill.snow.css";
-import "react-quill-new/dist/quill.core.css";
-import "react-quill-new/dist/quill.bubble.css";
 import { convertQortalLinks } from "./utils";
 import { toQuill1Html } from "./quillHtml";
 import { Box, styled } from "@mui/material";
@@ -34,6 +31,37 @@ const Body = styled(Box)(({ theme }) => ({
     fontFamily: "inherit",
     whiteSpace: "normal",
   },
+  // The Quill display classes a message body can carry (quill.core.css only
+  // scopes them to the live editor, so they are written out here and the
+  // three Quill stylesheets stay in the compose chunk).
+  "& .ql-align-center": { textAlign: "center" },
+  "& .ql-align-right": { textAlign: "right" },
+  "& .ql-align-justify": { textAlign: "justify" },
+  "& .ql-direction-rtl": { direction: "rtl", textAlign: "inherit" },
+  ...Object.fromEntries(
+    Array.from({ length: 9 }, (_, i) => [
+      `& .ql-indent-${i + 1}:not(.ql-direction-rtl)`,
+      { paddingLeft: `${(i + 1) * 3}em` },
+    ])
+  ),
+  ...Object.fromEntries(
+    Array.from({ length: 9 }, (_, i) => [
+      `& .ql-indent-${i + 1}.ql-direction-rtl.ql-align-right`,
+      { paddingRight: `${(i + 1) * 3}em` },
+    ])
+  ),
+  "& .ql-size-small": { fontSize: "0.75em" },
+  "& .ql-size-large": { fontSize: "1.5em" },
+  "& .ql-size-huge": { fontSize: "2.5em" },
+  "& .ql-font-serif": { fontFamily: "Georgia, 'Times New Roman', serif" },
+  "& .ql-font-monospace": { fontFamily: "var(--qapp-font-mono, monospace)" },
+  "& .ql-code-block-container": { fontFamily: "var(--qapp-font-mono, monospace)" },
+  "& .ql-video": { display: "block", maxWidth: "100%" },
+  "& .ql-ui": { display: "none" },
+  "& ul[data-checked] > li::before": { marginRight: "0.4em" },
+  "& ul[data-checked='true'] > li::before": { content: "'\\2611'" },
+  "& ul[data-checked='false'] > li::before": { content: "'\\2610'" },
+  "& ul[data-checked] > li": { listStyle: "none" },
   "& img, & video, & iframe, & embed": {
     maxWidth: "100%",
     height: "auto",

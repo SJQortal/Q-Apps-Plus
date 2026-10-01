@@ -67,7 +67,7 @@ describe('DraftsMailbox', () => {
     saveComposeDraft(address, 'me::you', draft({}))
     renderDrafts()
     fireEvent.click(screen.getByRole('button', { name: 'Delete draft: Hello' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Proceed' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
     await waitFor(() => {
       expect(listComposeDrafts(address)).toHaveLength(0)
     })

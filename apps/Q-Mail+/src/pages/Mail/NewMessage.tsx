@@ -27,7 +27,7 @@ import { useDropzone } from "react-dropzone";
 import CloseIcon from "@mui/icons-material/Close";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { useParams } from "react-router-dom";
-import mime from "mime";
+import { extensionFromMimeType } from "../../utils/fileExtension";
 import { objectToBase64, toBase64 } from "../../utils/toBase64";
 import {
   MAIL_ATTACHMENT_SERVICE_TYPE,
@@ -218,7 +218,7 @@ const attachmentReferencesOf = (message: any): AttachmentReference[] => {
 const extensionOfFile = (file: File): string | null => {
   const fromName = file.name.includes(".") ? file.name.split(".").pop() || "" : "";
   if (fromName) return fromName;
-  return file.type ? mime.getExtension(file.type) || null : null;
+  return extensionFromMimeType(file.type);
 };
 
 interface NewMessageProps {
@@ -380,15 +380,20 @@ export const NewMessage = ({
   const forwardJobControllersRef = useRef(new Map<string, AbortController>());
 
   const { Modal, showModal } = useConfirmationModal({
-    title: "Important",
+    title: "Same alias on both sides",
     message:
-      "To keep yourself anonymous remember to not use the same alias as the person you are messaging",
+      "To stay anonymous, do not use the same alias as the person you are messaging. Send anyway?",
+    confirmLabel: "Send anyway",
+    cancelLabel: "Go back",
   });
   const { Modal: DiscardModal, showModal: showDiscardModal } =
     useConfirmationModal({
       title: "Discard this message?",
       message:
         "What you wrote, and the draft saved on this device, will be deleted.",
+      confirmLabel: "Discard",
+      cancelLabel: "Keep editing",
+      destructive: true,
     });
 
   const fromOptions = useMemo(() => {
@@ -1217,7 +1222,7 @@ export const NewMessage = ({
             return;
           }
 
-          const extension = mime.getExtension(type);
+          const extension = extensionFromMimeType(type);
           files.push({
             file: item,
             mimetype: type,
@@ -1355,7 +1360,7 @@ export const NewMessage = ({
     }
     if (noExtension.length > 0) {
       errorMsg =
-        "One of your attachments does not have an extension (example: .png, .pdf, ect...)";
+        "One of your attachments has no file extension (for example .png or .pdf)";
     }
     if (forwardAttachmentJobs.some(job => job.status === "loading")) {
       errorMsg = "Forwarded attachments are still being fetched";
@@ -2037,9 +2042,6 @@ export const NewMessage = ({
                   letterSpacing: "0.15px",
                   opacity: 1,
                 },
-                "&:focus": {
-                  outline: "none",
-                },
               }}
             />
           </NewMessageInputRow>
@@ -2082,9 +2084,6 @@ export const NewMessage = ({
                       lineHeight: "120%",
                       letterSpacing: "0.15px",
                       opacity: 1,
-                    },
-                    "&:focus": {
-                      outline: "none",
                     },
                   }}
                 />

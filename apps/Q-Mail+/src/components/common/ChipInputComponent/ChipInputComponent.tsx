@@ -134,9 +134,6 @@ export const ChipInputComponent = ({
             letterSpacing: "0.15px",
             opacity: 1,
           },
-          "&:focus": {
-            outline: "none",
-          },
         }}
       />
     </Box>
