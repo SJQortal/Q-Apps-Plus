@@ -1,306 +1,221 @@
-import React, {
-  FC,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useDispatch, useSelector } from 'react-redux'
-import { RootState } from '../../state/store'
-import EditIcon from '@mui/icons-material/Edit'
-import { Box, Button, Input, Typography, useTheme } from '@mui/material'
-import LazyLoad from '../../components/common/LazyLoad'
-import { removePrefix } from '../../utils/blogIdformats'
-import { NewMessage } from './NewMessage'
-import Tabs from '@mui/material/Tabs'
-import Tab from '@mui/material/Tab'
-import { useFetchMail } from '../../hooks/useFetchMail'
-import { ShowMessage } from './ShowMessage'
-import { addToHashMapMail } from '../../state/features/mailSlice'
-import {
-  setIsLoadingGlobal,
-  setUserAvatarHash
-} from '../../state/features/globalSlice'
-import SimpleTable from './MailTable'
-import { MAIL_SERVICE_TYPE } from '../../constants/mail'
-import { BlogPost } from '../../state/features/blogSlice'
-import { useModal } from '../../components/common/useModal'
-import { OpenMail } from './OpenMail'
-import { MessagesContainer } from './Mail-styles'
-import { MailMessageRow } from './MailMessageRow'
+/**
+ * A watched alias inbox (I5): the same grouped list, search, mark read /
+ * unread and archive as the main inbox, with real offset paging (Bugs #8)
+ * and a polite 30 s delta poll (visibility-aware, newest 20 per query).
+ *
+ * The rows it loads are handed back to Mail.tsx (`onMessagesLoaded`) so the
+ * alias unread badges count the whole loaded inbox, not just the probe's
+ * latest 20, and published to the shared index store for the cross-mailbox
+ * search.
+ */
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSelector } from "react-redux";
+import { Box, Button } from "@mui/material";
+import AlternateEmailOutlinedIcon from "@mui/icons-material/AlternateEmailOutlined";
+import { RootState } from "../../state/store";
+import { selectArchived } from "../../state/features/mailSlice";
+import { isArchivedId } from "../../utils/archiveState";
+import { usePolling } from "../../hooks/usePolling";
+import { LoadMoreSentinel } from "../../layout/states";
+import { ALIAS_PAGE_SIZE, fetchAliasInboxPage } from "../../utils/aliasInbox";
+import { fetchRecentInboxMessagesForOwnedName, mergeNewRows } from "../../utils/mailInbox";
+import { GroupedMailboxList, type ListStatus } from "./GroupedMailboxList";
+import { useMailboxSearch, type MailboxSearchStatus } from "./useMailboxSearch";
+import { aliasIndexKey, publishMailIndex } from "./mailIndexStore";
+
+export const ALIAS_POLL_INTERVAL_MS = 30_000;
 
 interface AliasMailProps {
+  /** The watched alias. */
   value: string;
-  onOpen: (user: string, identifier: string, content: any)=> Promise<void>
-  messageOpenedId: number
+  onOpen: (user: string, identifier: string, content: any) => Promise<void> | void;
+  messageOpenedId?: string | number | null;
+  /** Every row loaded so far for this alias (for exact unread counts). */
+  onMessagesLoaded?: (alias: string, rows: any[]) => void;
+  onMarkAsRead?: (messages: any[]) => void | Promise<void>;
+  onMarkAsUnread?: (messages: any[]) => void | Promise<void>;
+  onArchive?: (messages: any[]) => void | Promise<void>;
+  /** The list pane's search box (Mail.tsx owns the query and the body limit). */
+  searchQuery?: string;
+  bodySearchLimit?: number;
+  onSearchStatus?: (status: MailboxSearchStatus) => void;
 }
-export const AliasMail = ({ value, onOpen, messageOpenedId}: AliasMailProps) => {
-  const {isShow, onCancel, onOk, show} = useModal()
 
-  const theme = useTheme()
-  const { user } = useSelector((state: RootState) => state.auth)
-  const [isOpen, setIsOpen] = useState<boolean>(false)
-  const [message, setMessage] = useState<any>(null)
-  const [replyTo, setReplyTo] = useState<any>(null)
-  const [forwardInfo, setForwardInfo] = useState<any>(null);
-  const [valueTab, setValueTab] = React.useState(0)
-  const [aliasValue, setAliasValue] = useState('')
-  const [alias, setAlias] = useState<string[]>([])
-  const [mailInfo, setMailInfo] = useState<any>(null)
-  const hashMapPosts = useSelector(
-    (state: RootState) => state.blog.hashMapPosts
-  )
-  const [mailMessages, setMailMessages] = useState<any[]>([])
-  const hashMapMailMessages = useSelector(
-    (state: RootState) => state.mail.hashMapMailMessages
-  )
+const toErrorMessage = (error: any): string => {
+  if (typeof error?.message === "string" && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  return "Couldn't reach the node.";
+};
 
-  const fullMailMessages = useMemo(() => {
-    return mailMessages.map((msg) => {
-      let message = msg
-      const existingMessage = hashMapMailMessages[msg.id]
-      if (existingMessage) {
-        message = existingMessage
-      }
-      return message
-    })
-  }, [mailMessages, hashMapMailMessages, user])
-  const dispatch = useDispatch()
-  const navigate = useNavigate()
+const getRowId = (row: any): string => String(row?.id || row?.identifier || "");
 
+export const AliasMail = ({
+  value,
+  onOpen,
+  messageOpenedId,
+  onMessagesLoaded,
+  onMarkAsRead,
+  onMarkAsUnread,
+  onArchive,
+  searchQuery = "",
+  bodySearchLimit = 0,
+  onSearchStatus,
+}: AliasMailProps) => {
+  const { user } = useSelector((state: RootState) => state.auth);
+  const hashMapMailMessages = useSelector((state: RootState) => state.mail.hashMapMailMessages);
+  const archived = useSelector(selectArchived);
+  const address = user?.address || "";
+  const alias = (value || "").trim();
+  const enabled = Boolean(alias && address);
 
-  const mapMailResources = useCallback((resources: any[]): BlogPost[] => {
-    return resources.map((post: any): BlogPost => {
-      return {
-        title: post?.metadata?.title,
-        category: post?.metadata?.category,
-        categoryName: post?.metadata?.categoryName,
-        tags: post?.metadata?.tags || [],
-        description: post?.metadata?.description,
-        createdAt: post?.created,
-        updated: post?.updated,
-        user: post.name,
-        id: post.identifier
-      }
-    })
-  }, [])
-
-  const fetchAliasMailboxMessages = useCallback(async (): Promise<BlogPost[]> => {
-    if (!value || !user?.address) return []
-
-    const addressSuffix = user.address.slice(-6)
-    if (!addressSuffix) return []
-    const normalizedAddressSuffix = `_${addressSuffix}_mail_`.toLowerCase()
-    const byAddressQuery = `qortal_qmail_${value.slice(0, 20)}_${addressSuffix}_mail_`
-    const byAliasQuery = `qortal_qmail_${value}_mail_`
-
-    const queryConfigs: Array<{
-      query: string
-      matches: (identifier: string) => boolean
-    }> = [
-      {
-        query: byAddressQuery,
-        matches: (identifier: string) => {
-          const normalizedIdentifier = identifier.toLowerCase()
-          return (
-            normalizedIdentifier.startsWith(`_mail_${byAddressQuery}`.toLowerCase()) &&
-            normalizedIdentifier.includes(normalizedAddressSuffix)
-          )
-        }
-      },
-      {
-        query: byAliasQuery,
-        matches: (identifier: string) => {
-          return identifier
-            .toLowerCase()
-            .startsWith(`_mail_${byAliasQuery}`.toLowerCase())
-        }
-      }
-    ]
-
-    const allResources: any[] = []
-    const pageSize = 200
-
-    for (const queryConfig of queryConfigs) {
-      let offset = 0
-      let hasMore = true
-
-      while (hasMore) {
-        const params = new URLSearchParams({
-          mode: 'ALL',
-          service: MAIL_SERVICE_TYPE,
-          query: queryConfig.query,
-          limit: String(pageSize),
-          includemetadata: 'true',
-          offset: String(offset),
-          reverse: 'true',
-          excludeblocked: 'true'
-        })
-
-        const response = await fetch(`/arbitrary/resources/search?${params.toString()}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        })
-        const responseData = await response.json()
-
-        if (!Array.isArray(responseData) || responseData.length === 0) {
-          break
-        }
-
-        const filteredResponse = responseData.filter((item: any) => {
-          const identifier =
-            typeof item?.identifier === 'string' ? item.identifier : ''
-          if (!identifier) return false
-          return queryConfig.matches(identifier)
-        })
-        allResources.push(...filteredResponse)
-
-        if (responseData.length < pageSize) {
-          hasMore = false
-        } else {
-          offset += responseData.length
-        }
-      }
-    }
-
-    const mapped = mapMailResources(allResources)
-    const deduped = new Map<string, BlogPost>()
-    mapped.forEach(item => {
-      if (!item?.id) return
-      if (!deduped.has(item.id)) {
-        deduped.set(item.id, item)
-      }
-    })
-
-    return Array.from(deduped.values()).sort((a, b) => {
-      return Number(b?.createdAt || 0) - Number(a?.createdAt || 0)
-    })
-  }, [mapMailResources, user?.address, value])
-
-  const refreshMailboxMessages = useCallback(async () => {
-    try {
-      const nextMessages = await fetchAliasMailboxMessages()
-      setMailMessages(nextMessages)
-    } catch (error) {}
-  }, [fetchAliasMailboxMessages])
-
-  const getMessages = useCallback(async () => {
-    await refreshMailboxMessages()
-  }, [refreshMailboxMessages])
-
-  const interval = useRef<any>(null)
-
-  const checkNewMessagesFunc = useCallback(() => {
-    if (!user?.address || !value) return
-    let isCalling = false
-    interval.current = setInterval(async () => {
-      if (isCalling || !user?.address || !value) return
-      isCalling = true
-      await refreshMailboxMessages()
-      isCalling = false
-    }, 30000)
-  }, [refreshMailboxMessages, user?.address, value])
+  const [rows, setRows] = useState<any[]>([]);
+  const [status, setStatus] = useState<ListStatus>("idle");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const offsetRef = useRef(0);
+  const rowsRef = useRef<any[]>([]);
+  const loadIdRef = useRef(0);
 
   useEffect(() => {
-    checkNewMessagesFunc()
-    return () => {
-      if (interval?.current) {
-        clearInterval(interval.current)
-      }
-    }
-  }, [checkNewMessagesFunc])
+    rowsRef.current = rows;
+  }, [rows]);
 
-  const openMessage = async (
-    user: string,
-    messageIdentifier: string,
-    content: any
-  ) => {
+  const loadFirstPage = useCallback(async () => {
+    if (!enabled) return;
+    const loadId = ++loadIdRef.current;
+    setStatus("loading");
+    setLoadError(null);
     try {
-      onOpen(user, messageIdentifier, {})
-      // const existingMessage: any = hashMapMailMessages[messageIdentifier]
-      // if (existingMessage && existingMessage.isValid && !existingMessage.unableToDecrypt) {
-      //   setMessage(existingMessage)
-      //   setIsOpen(true)
-      //   return
-      // }
-      // setMailInfo({
-      //   identifier: messageIdentifier,
-      //   name: user,
-      //   service: MAIL_SERVICE_TYPE
-      // })
-      // const res: any = await show()
-      // setMailInfo(null)
-      // const existingMessageAgain = hashMapMailMessages[messageIdentifier]
-      // if (res && res.isValid && !res.unableToDecrypt) {
-      //   setMessage(res)
-      //   setIsOpen(true)
-      //   return
-      // }
+      const page = await fetchAliasInboxPage(alias, address, 0, ALIAS_PAGE_SIZE);
+      if (loadIdRef.current !== loadId) return;
+      offsetRef.current = ALIAS_PAGE_SIZE;
+      setRows(page.rows);
+      setHasMore(page.hasMore);
+      setStatus("ready");
     } catch (error) {
-    } finally {
+      if (loadIdRef.current !== loadId) return;
+      setLoadError(toErrorMessage(error));
+      setStatus("error");
     }
-  }
+  }, [address, alias, enabled]);
+
+  const loadMore = useCallback(async () => {
+    if (!enabled || !hasMore || isLoadingMore) return;
+    const loadId = loadIdRef.current;
+    setIsLoadingMore(true);
+    try {
+      const offset = offsetRef.current;
+      const page = await fetchAliasInboxPage(alias, address, offset, ALIAS_PAGE_SIZE);
+      if (loadIdRef.current !== loadId) return;
+      offsetRef.current = offset + ALIAS_PAGE_SIZE;
+      setRows(previous => {
+        const known = new Set(previous.map(getRowId));
+        const fresh = page.rows.filter(row => !known.has(getRowId(row)));
+        return fresh.length ? [...previous, ...fresh] : previous;
+      });
+      setHasMore(page.hasMore);
+    } catch {
+      // Keep what we have; the button stays for another try.
+    } finally {
+      if (loadIdRef.current === loadId) setIsLoadingMore(false);
+    }
+  }, [address, alias, enabled, hasMore, isLoadingMore]);
 
   useEffect(() => {
-    if (user?.address && value) {
-      setMailMessages([])
-      void refreshMailboxMessages()
+    offsetRef.current = 0;
+    setRows([]);
+    setHasMore(false);
+    setIsLoadingMore(false);
+    if (!enabled) {
+      setStatus("idle");
+      return;
     }
-  }, [refreshMailboxMessages, user?.address, value])
+    void loadFirstPage();
+  }, [enabled, loadFirstPage]);
+
+  // Delta poll: the newest 20 per query, merged in front; `false` backs off.
+  usePolling(
+    async () => {
+      if (!enabled) return;
+      const recent = await fetchRecentInboxMessagesForOwnedName(alias, address);
+      const merged = mergeNewRows(rowsRef.current, recent);
+      if (merged === rowsRef.current) return false;
+      setRows(merged);
+      return true;
+    },
+    { intervalMs: ALIAS_POLL_INTERVAL_MS, enabled }
+  );
+
+  const visibleRows = useMemo(() => {
+    return rows.filter(row => !isArchivedId(archived, getRowId(row)));
+  }, [archived, rows]);
+
+  useEffect(() => {
+    if (!enabled || status === "idle" || status === "loading") return;
+    onMessagesLoaded?.(alias, rows);
+    publishMailIndex(aliasIndexKey(alias), rows);
+  }, [alias, enabled, onMessagesLoaded, rows, status]);
+
+  const { results, status: searchStatus } = useMailboxSearch({
+    messages: visibleRows,
+    query: searchQuery,
+    mailboxType: "inbox",
+    username: user?.name,
+    hashMapMailMessages,
+    enabled,
+    bodyLimit: bodySearchLimit,
+  });
+
+  useEffect(() => {
+    onSearchStatus?.(searchStatus);
+  }, [onSearchStatus, searchStatus]);
+
+  const openMessage = useCallback(
+    (messageUser: string, messageIdentifier: string) => {
+      void onOpen(messageUser, messageIdentifier, {});
+    },
+    [onOpen]
+  );
+
+  const hasQuery = searchQuery.trim().length > 0;
+  const footer =
+    hasMore && !hasQuery ? (
+      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 1 }}>
+        <Button
+          variant="outlined"
+          onClick={() => void loadMore()}
+          disabled={isLoadingMore}
+          sx={{ minHeight: 44, textTransform: "none" }}
+        >
+          {isLoadingMore ? "Loading…" : "Load older messages"}
+        </Button>
+        <LoadMoreSentinel onVisible={() => void loadMore()} disabled={isLoadingMore} />
+      </Box>
+    ) : null;
 
   return (
-    <>
-      <NewMessage
-        replyTo={replyTo}
-        setReplyTo={setReplyTo}
-        setForwardInfo={setForwardInfo}
-        forwardInfo={forwardInfo}
-        recipientAlias={value}
-        requireSenderAlias={false}
-        hideButton
-      />
-      <ShowMessage
-        isOpen={isOpen}
-        setIsOpen={setIsOpen}
-        message={message}
-        setReplyTo={setReplyTo}
-        alias={value}
-      />
-       <MessagesContainer>
-                {fullMailMessages.map(item => {
-                  return (
-                    <MailMessageRow
-                      key={item?.id || item?.identifier}
-                      messageData={item}
-                      openMessage={openMessage}
-                      isOpen={messageOpenedId === (item?.id || item?.identifier)}
-                    />
-                  );
-                })}
-                <LazyLoad onLoadMore={getMessages}></LazyLoad>
-              </MessagesContainer>
-      {/* <SimpleTable
-        openMessage={openMessage}
-        data={fullMailMessages}
-      ></SimpleTable> */}
-      <Box
-        sx={{
-          width: '100%',
-          justifyContent: 'center'
-        }}
-      >
-        {mailMessages.length > 20 && (
-          <Button onClick={getMessages}>Load Older Messages</Button>
-        )}
-      </Box>
-      {mailInfo && isShow && (
-              <OpenMail open={isShow} handleClose={onOk} fileInfo={mailInfo}/>
-      )}
-      {/* <LazyLoad onLoadMore={getMessages}></LazyLoad> */}
-    </>
-  )
-}
+    <GroupedMailboxList
+      messages={results}
+      mailboxType="inbox"
+      showSelectAll
+      openMessage={openMessage}
+      openedMessageId={messageOpenedId}
+      onMarkAsRead={onMarkAsRead}
+      onMarkAsUnread={onMarkAsUnread}
+      onArchive={onArchive}
+      status={status}
+      errorMessage={loadError || undefined}
+      onRetry={() => void loadFirstPage()}
+      highlightTerms={searchStatus.terms}
+      emptyIcon={<AlternateEmailOutlinedIcon />}
+      emptyTitle={hasQuery ? "No matches" : "No mail for this alias yet"}
+      emptyHint={
+        hasQuery
+          ? "Try fewer words, or search message bodies."
+          : `Mail addressed to ${alias} shows up here. Give the alias to people who should reach you this way.`
+      }
+      footer={footer}
+    />
+  );
+};
