@@ -5,11 +5,18 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
-import localForage from 'localforage'
 import { useTheme } from '@mui/material'
-const generalLocal = localForage.createInstance({
-  name: 'q-blog-general'
-})
+
+/** Set once the disclaimer has been shown on this browser. */
+export const CONSENT_STORAGE_KEY = 'qmail-general-consent'
+
+export function hasConsented(): boolean {
+  try {
+    return localStorage.getItem(CONSENT_STORAGE_KEY) === 'true'
+  } catch {
+    return true
+  }
+}
 
 export default function ConsentModal() {
   const theme = useTheme()
@@ -20,18 +27,14 @@ export default function ConsentModal() {
     setOpen(false)
   }
 
-  const getIsConsented = React.useCallback(async () => {
-    try {
-      const hasConsented = await generalLocal.getItem('general-consent')
-      if (hasConsented) return
-
-      setOpen(true)
-      generalLocal.setItem('general-consent', true)
-    } catch (error) {}
-  }, [])
-
   React.useEffect(() => {
-    getIsConsented()
+    if (hasConsented()) return
+    setOpen(true)
+    try {
+      localStorage.setItem(CONSENT_STORAGE_KEY, 'true')
+    } catch {
+      /* private mode: show it again next time */
+    }
   }, [])
   return (
     <div>

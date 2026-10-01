@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice } from '@reduxjs/toolkit';
 import { isAvatarUrl } from '../../utils/avatarCache';
 
 
@@ -29,11 +29,7 @@ interface GlobalState {
     navbarConfig?: any
     name?: string
   } | null
-  audios: any[] | null
-  currAudio: any
-  audioPostId: string
   downloads: any
-  showingAudioPlayer: boolean
   userAvatarHash: Record<string, string>
   privateGroups: Record<string, any>
   hasFetchedPrivateGroups: boolean
@@ -46,11 +42,7 @@ const initialState: GlobalState = {
   currentBlog: null,
   isOpenEditBlogModal: false,
   visitingBlog: null,
-  audios: null,
-  currAudio: null,
-  audioPostId: '',
   downloads: {},
-  showingAudioPlayer: false,
   userAvatarHash: {},
   privateGroups: {},
   hasFetchedPrivateGroups: false
@@ -70,25 +62,9 @@ export const globalSlice = createSlice({
       state.currentBlog = action.payload
       state.isLoadingCurrentBlog = false
     },
-    setShowingAudioPlayer: (state, action) => {
-      state.showingAudioPlayer = action.payload
-    },
     setVisitingBlog: (state, action) => {
       state.visitingBlog = action.payload
       state.isLoadingCurrentBlog = false
-    },
-    setAudio: (state, action) => {
-      state.audios = action.payload.audios
-      state.audioPostId = action.payload.postId
-    },
-
-    setCurrAudio: (state, action) => {
-      state.currAudio = action.payload
-    },
-    removeAudio: (state, action) => {
-      state.audios = null
-      state.currAudio = null
-      state.audioPostId = ''
     },
     setIsLoadingGlobal: (state, action) => {
       state.isLoadingGlobal = action.payload
@@ -131,12 +107,8 @@ export const {
   setIsLoadingGlobal,
   toggleEditBlogModal,
   setVisitingBlog,
-  setAudio,
-  setCurrAudio,
-  removeAudio,
   setAddToDownloads,
   updateDownloads,
-  setShowingAudioPlayer,
   setUserAvatarHash,
   setPrivateGroups,
   setIsLoadingCustom
