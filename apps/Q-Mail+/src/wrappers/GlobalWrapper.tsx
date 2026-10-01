@@ -10,7 +10,6 @@ import { RootState } from "../state/store";
 
 import PageLoader from "../components/common/PageLoader";
 
-import localForage from "localforage";
 import ConsentModal from "../components/modals/ConsentModal";
 import { setPrivateGroups } from "../state/features/globalSlice";
 import { LoaderBar } from "../components/common/LoaderBar";
@@ -50,13 +49,8 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
 
   const { user } = useSelector((state: RootState) => state.auth);
   useMailLocalState(user?.address);
-  const favoritesLocalRef = useRef<any>(null);
   useEffect(() => {
     if (!user?.name) return;
-    const dynamicInstanceName = `q-blog-favorites-${user.name}`; // Replace this with your dynamic value
-    favoritesLocalRef.current = localForage.createInstance({
-      name: dynamicInstanceName,
-    });
     getAvatar();
   }, [user?.name]);
 

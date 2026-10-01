@@ -27,7 +27,7 @@ import { useDropzone } from "react-dropzone";
 import CloseIcon from "@mui/icons-material/Close";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { useParams } from "react-router-dom";
-import mime from "mime";
+import { extensionFromMimeType } from "../../utils/fileExtension";
 import { objectToBase64, toBase64 } from "../../utils/toBase64";
 import {
   MAIL_ATTACHMENT_SERVICE_TYPE,
@@ -218,7 +218,7 @@ const attachmentReferencesOf = (message: any): AttachmentReference[] => {
 const extensionOfFile = (file: File): string | null => {
   const fromName = file.name.includes(".") ? file.name.split(".").pop() || "" : "";
   if (fromName) return fromName;
-  return file.type ? mime.getExtension(file.type) || null : null;
+  return extensionFromMimeType(file.type);
 };
 
 interface NewMessageProps {
@@ -1217,7 +1217,7 @@ export const NewMessage = ({
             return;
           }
 
-          const extension = mime.getExtension(type);
+          const extension = extensionFromMimeType(type);
           files.push({
             file: item,
             mimetype: type,

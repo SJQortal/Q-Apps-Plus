@@ -11,7 +11,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
 
 
-import { styled } from "@mui/system";
 import {
   Avatar,
   Box,
@@ -21,18 +20,13 @@ import {
   Typography,
   CircularProgress,
   LinearProgress,
-  useMediaQuery,
   ButtonBase,
 } from "@mui/material";
-import Tabs from "@mui/material/Tabs";
-import Tab from "@mui/material/Tab";
 import { useFetchMail } from "../../hooks/useFetchMail";
-import { ShowMessage } from "./ShowMessage";
 import { clearMessages, upsertMessages } from "../../state/features/mailSlice";
 import { setUserAvatarHash } from "../../state/features/globalSlice";
 import { setNotification } from "../../state/features/notificationsSlice";
 
-import SimpleTable from "./MailTable";
 import { useModal } from "../../components/common/useModal";
 import useConfirmationModal from "../../hooks/useConfirmModal";
 import { OpenMail } from "./OpenMail";
@@ -521,10 +515,6 @@ export const buildSidebarItems = ({
   return items;
 };
 
-
-const GroupTabs = styled(Tabs)({
-  maxWidth: "50vw",
-});
 
 interface MailProps {
   isFromTo: boolean;
@@ -3492,28 +3482,3 @@ export const Mail = ({ isFromTo }: MailProps) => {
     />
   );
 };
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number | null;
-}
-
-export function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`mail-tabs-${index}`}
-      aria-labelledby={`mail-tabs-${index}`}
-      {...other}
-      style={{
-        width: "100%",
-      }}
-    >
-      {value === index && children}
-    </div>
-  );
-}
