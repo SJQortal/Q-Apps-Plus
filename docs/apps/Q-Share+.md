@@ -205,7 +205,7 @@ What changed, per area:
 
 #### Mobile check (DESIGN.md → Mobile → Check), 2026-09-30
 
-Run with `node e2e/screens.mjs` against the release build of round 2 (commit `d8bf0a8`), which serves `dist/` with `vite preview`, mocks `qortalRequest` and the Core search/resource endpoints (24 shares, 3 publishers, a 4-file share with image, text, PDF and audio, a comment thread with a reply, two collections), pre-accepts the welcome notice, and emulates a touch screen on the phone sizes (`hover: none`, `pointer: coarse`, reduced motion). No node was involved and nothing was published.
+Run with `node e2e/screens.mjs` against the release build of round 2 (commit `b8c72ac`), which serves `dist/` with `vite preview`, mocks `qortalRequest` and the Core search/resource endpoints (24 shares, 3 publishers, a 4-file share with image, text, PDF and audio, a comment thread with a reply, two collections), pre-accepts the welcome notice, and emulates a touch screen on the phone sizes (`hover: none`, `pointer: coarse`, reduced motion). No node was involved and nothing was published.
 
 - **Screens:** Home, the Filters sheet, a share page, a profile, Settings, Collections, a collection, the Share files dialog, the account menu.
 - **Sizes:** 360×740, 390×844, 844×390 (phone landscape: top and scrolled shots), 700 (narrow Hub) and 1280.
@@ -283,7 +283,11 @@ Round 6 of `1.0.0`, same branch. Simon asked for a search in the name switcher o
 - **Avatars:** every row uses `NameAvatar` (moved out of Navbar): a plain `<img>` requested only when the row scrolls into view, with a per-session record of names that have none. The fallback letter is drawn by CSS from `data-letter`, so MenuList's type-to-jump sees only the name.
 - **Account menu:** ↑/↓ cross between the names and Blocked names/Settings, wrapping. List heights: at least two rows on desktop; in phone sheets the list leaves room in the 85dvh sheet for the title, field and the rows below.
 - **Hub check** with 25 simulated names (the app's own Redux store, real publisher names so avatars show; reloaded afterwards to restore Tester GO): desktop menu focused the field, 7 avatar requests for the visible rows only, "andi" found and highlighted "äNDi", arrow keys walked names → Blocked names → Settings and back; 12 names with the active one last opened scrolled to it; phone sheet at 390×844 has a 44 px field and 44 px rows with the footer on screen; 844×390 keeps two name rows and the sheet scrolls; Settings dialog and sheet match. No new console errors. Switching to a name the account doesn't really own was only checked with the simulation, which reads but never writes.
-- A review pass (11 confirmed findings) is applied in 88de770, cd74837 and bd4577d. 483 tests, lint clean.
+- A review pass (11 confirmed findings) is applied in f351feb, b25c0ed and 1e7a1d4. 483 tests, lint clean.
+
+### Commit messages cleaned (2026-10-01)
+
+With Simon's one-off OK, the branch was force-pushed once (e8099d2 → fc3f5ab) to drop Claude attribution from its 182 commit messages: 178 `Co-Authored-By: Claude` trailers and 59 `Claude-Session` links. Every commit kept its files, author, dates and order (each rebuilt commit has the original's tree, and the old and new tips have no diff), so only the hashes changed; the hashes quoted in this brief are the new ones. The 61 commits the cloud session had signed lost their signatures. The old tip is kept locally as `backup/q-share-plus-pass-1-before-clean`, never pushed.
 
 ## Follow-ups
 
@@ -291,7 +295,7 @@ Questions for Simon (after pass 2):
 
 1. **Deep link with `+`:** answered by the Hub Dev Mode check: `%2B` opens a blank tab named "Q-Share%2B", the literal `+` works. Links now use `+`, and the router accepts both spellings. Once Q-Share+ is published, copy a share link and open it from Hub's address bar and from a chat message to confirm on the real app.
 2. **Quill round trip in Hub:** publish a share from Q-Share+ with bullets, a numbered list and a code block, open it in the original Q-Share; then open an old share with formatting in Q-Share+. The jsdom round trip passes; this is the real check. Still open: it publishes, so it waits for your go-ahead (the Hub session reached the Share dialog and stopped there).
-3. **Screenshots in the branch history:** commit `a230e39` added 9.3 MB of harness PNGs by mistake (`e2e/shots-old/`); `769b0b4` removes them and widens the ignore rule, but they stay in the history of `q-share-plus/pass-1`. Agents never force-push, so it is your call whether to rewrite the branch before merging or accept the weight.
+3. **Screenshots in the branch history:** commit `856318c` added 9.3 MB of harness PNGs by mistake (`e2e/shots-old/`); `acfb02d` removes them and widens the ignore rule, but they stay in the history of `q-share-plus/pass-1` (the 2026-10-01 clean-up changed commit messages only). Agents never force-push without your OK, so it is your call whether to rewrite the branch again before merging or accept the weight.
 4. **Phone header:** on phones the header no longer shows the Share and Downloads buttons, since the floating button and the bottom bar provide both. Keep it that way, or bring one back?
 5. **Collections in "All":** the Collections page lists every name's collections under the All tab (one paged search on `qshare_collection_`). Keep it public like that, or show only your own and the ones you open by link?
 6. **Welcome notice on phones:** it can only be closed with *I understand*, so the full-screen dialog shows no Back arrow. Keep, or let Back dismiss it for the visit?
