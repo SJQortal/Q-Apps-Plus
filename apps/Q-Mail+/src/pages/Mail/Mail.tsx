@@ -86,6 +86,15 @@ import MenuIcon from "@mui/icons-material/Menu";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import MailOutlineIcon from "@mui/icons-material/MailOutlined";
 import { IconButton } from "@mui/material";
+import {
+  applyPublishedReadState,
+  markRead,
+  markUnread,
+} from "../../state/features/mailSlice";
+import {
+  hasThreadHistory,
+  readIdsFromState,
+} from "../../utils/readState";
 
 type MailboxSidebarItemId =
   | "inbox"
@@ -1098,13 +1107,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const markMessagesAsReadRef = useRef<
     ((messages: any[]) => void | Promise<void>) | null
   >(null);
-  const publishedMailStateApplyStatusRef = useRef<{
-    mailMessagesApplied: boolean;
-    combinedAliasInboxMessagesApplied: boolean;
-  }>({
-    mailMessagesApplied: false,
-    combinedAliasInboxMessagesApplied: false,
-  });
   const userAvatarHash = useSelector(
     (state: RootState) => state.global.userAvatarHash
   );
@@ -1135,6 +1137,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const mailMessages = useSelector(
     (state: RootState) => state.mail.mailMessages
   );
+  const readState = useSelector((state: RootState) => state.mail.readState);
   const { Modal: LoadPublishedStateModal, showModal: showLoadPublishedStateModal } =
     useConfirmationModal({
       title: "Load published QDN state?",
@@ -2502,11 +2505,11 @@ export const Mail = ({ isFromTo }: MailProps) => {
       if (!identifier) return;
 
       const relatedHashMessage: any = hashMapMailMessages[identifier] || {};
+      const readEntry = readState[identifier];
       const isRead =
-        (Array.isArray(message?.generalData?.threadV2) &&
-          message.generalData.threadV2.length > 0) ||
-        (Array.isArray(relatedHashMessage?.generalData?.threadV2) &&
-          relatedHashMessage.generalData.threadV2.length > 0);
+        typeof readEntry === "number"
+          ? readEntry > 0
+          : hasThreadHistory(message) || hasThreadHistory(relatedHashMessage);
 
       const subjectCandidates = [
         relatedHashMessage?.subject,
@@ -2532,7 +2535,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     Object.values(hashMapMailMessages).forEach(collectFromMessage);
 
     return collectedState;
-  }, [combinedAliasInboxMessages, hashMapMailMessages, mailMessages]);
+  }, [combinedAliasInboxMessages, hashMapMailMessages, mailMessages, readState]);
 
   const hasPendingStateChanges = useMemo(() => {
     return Object.keys(localMailStateById).some(identifier => {
@@ -2553,6 +2556,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
         if (!readIdentifiers.length) return;
 
         const readIdSet = new Set(readIdentifiers);
+        dispatch(markRead({ ids: readIdentifiers }));
         const updatedMailMessages = applyReadStateToMessages(
           mailMessages,
           readIdSet
@@ -2587,6 +2591,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
         if (!unreadIdentifiers.length) return;
 
         const unreadIdSet = new Set(unreadIdentifiers);
+        dispatch(markUnread({ ids: unreadIdentifiers }));
         const updatedMailMessages = applyUnreadStateToMessages(
           mailMessages,
           unreadIdSet
@@ -2773,10 +2778,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
       });
 
       if (!Object.keys(normalizedPublishedStateById).length) return;
-      publishedMailStateApplyStatusRef.current = {
-        mailMessagesApplied: false,
-        combinedAliasInboxMessagesApplied: false,
-      };
       setPublishedMailStateById(normalizedPublishedStateById);
       dispatch(
         setNotification({
@@ -3074,69 +3075,44 @@ export const Mail = ({ isFromTo }: MailProps) => {
 
   useEffect(() => {
     setPublishedMailStateById({});
-    publishedMailStateApplyStatusRef.current = {
-      mailMessagesApplied: false,
-      combinedAliasInboxMessagesApplied: false,
-    };
   }, [user?.address, user?.name]);
 
   useEffect(() => {
     setRememberQdnStatePreferenceOnLoad(false);
   }, [user?.address, user?.name]);
 
+  // Loaded document → read store (only ids with no local decision, see readState.ts).
   useEffect(() => {
-    if (!Object.keys(publishedMailStateById).length) {
-      publishedMailStateApplyStatusRef.current = {
-        mailMessagesApplied: false,
-        combinedAliasInboxMessagesApplied: false,
-      };
-      return;
-    }
+    const readIds = Object.entries(publishedMailStateById)
+      .filter(([identifier, entry]) => Boolean(identifier) && Boolean(entry?.read))
+      .map(([identifier]) => identifier);
+    if (!readIds.length) return;
+    dispatch(applyPublishedReadState({ ids: readIds }));
+  }, [dispatch, publishedMailStateById]);
 
-    const readIdSet = new Set<string>();
-    Object.entries(publishedMailStateById).forEach(([identifier, entry]) => {
-      if (!identifier || !entry?.read) return;
-      readIdSet.add(identifier);
-    });
-
-    const applyStatus = publishedMailStateApplyStatusRef.current;
-    if (!readIdSet.size) {
-      applyStatus.mailMessagesApplied = true;
-      applyStatus.combinedAliasInboxMessagesApplied = true;
-      return;
-    }
-
-    if (!applyStatus.mailMessagesApplied && mailMessages.length > 0) {
+  // Read store → the list copies, so rows show read state after a reload. Only
+  // adds the local marker; "mark as unread" strips it through markMessagesAsUnread.
+  useEffect(() => {
+    const readIdSet = readIdsFromState(readState);
+    if (!readIdSet.size) return;
+    if (mailMessages.length > 0) {
       const updatedMailMessages = applyReadStateToMessages(
         mailMessages,
         readIdSet
       );
-      applyStatus.mailMessagesApplied = true;
       if (updatedMailMessages !== mailMessages) {
         dispatch(upsertMessages(updatedMailMessages));
       }
     }
-
-    if (
-      !applyStatus.combinedAliasInboxMessagesApplied &&
-      Object.keys(combinedAliasInboxMessages).length > 0
-    ) {
-      const updatedCombinedAliasInboxMessages = applyReadStateToCombinedMap(
-        combinedAliasInboxMessages,
-        readIdSet
-      );
-      applyStatus.combinedAliasInboxMessagesApplied = true;
-      if (updatedCombinedAliasInboxMessages !== combinedAliasInboxMessages) {
-        setCombinedAliasInboxMessages(updatedCombinedAliasInboxMessages);
-      }
-    }
+    setCombinedAliasInboxMessages(previous => {
+      return applyReadStateToCombinedMap(previous, readIdSet);
+    });
   }, [
     applyReadStateToCombinedMap,
     applyReadStateToMessages,
-    combinedAliasInboxMessages,
     dispatch,
     mailMessages,
-    publishedMailStateById,
+    readState,
   ]);
 
   useEffect(() => {

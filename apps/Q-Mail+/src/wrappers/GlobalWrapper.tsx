@@ -22,6 +22,7 @@ import { applyQAppTextSize } from "@qortal/qapp-lib/typography";
 import { useQMailAppShell } from "../app-shell/useQMailAppShell";
 import { AppShellContext } from "../app-shell/AppShellContext";
 import { subscribeToEvent, unsubscribeFromEvent } from "../utils/events";
+import { useMailLocalState } from "../hooks/useMailLocalState";
 interface Props {
   children: React.ReactNode;
 }
@@ -40,6 +41,7 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
   const [userAvatar, setUserAvatar] = useState<string>("");
 
   const { user } = useSelector((state: RootState) => state.auth);
+  useMailLocalState(user?.address);
   const favoritesLocalRef = useRef<any>(null);
   useEffect(() => {
     if (!user?.name) return;
