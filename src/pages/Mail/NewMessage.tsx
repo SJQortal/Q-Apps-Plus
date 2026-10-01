@@ -11,7 +11,9 @@ import {
   Box,
   Button,
   CircularProgress,
+  IconButton,
   Input,
+  LinearProgress,
   MenuItem,
   TextField,
   Typography,
@@ -64,11 +66,18 @@ import { CreateThreadIcon } from "../../assets/svgs/CreateThreadIcon";
 import {
   aliasMailIdentifier,
   buildDirectMailObject,
+  buildForwardHtml,
   buildReplyQuoteHtml,
   directMailIdentifier,
   messageBodyLines,
   withSubjectPrefix,
 } from "../../utils/mailCompose";
+import {
+  fetchAttachmentFile,
+  type AttachmentFetchProgress,
+  type AttachmentReference,
+} from "../../utils/attachmentBytes";
+import { fetchingLabel } from "../../layout/states";
 
 const uid = new ShortUniqueId();
 const maxSize = 40 * 1024 * 1024; // 40 MB in bytes
@@ -141,6 +150,46 @@ interface ResolvedComposeTarget {
   groupId?: string;
 }
 
+/**
+ * What Mail.tsx hands over for a forward: the original message (subject,
+ * body and attachments come from it) and, for older callers, a ready-made
+ * HTML string. `to` is the label for the header's To line.
+ */
+interface ForwardInfo {
+  message?: any;
+  html?: string;
+  to?: string;
+}
+
+interface ForwardAttachmentJob {
+  key: string;
+  reference: AttachmentReference;
+  status: "loading" | "error";
+  progress?: AttachmentFetchProgress;
+  error?: string;
+}
+
+const attachmentReferencesOf = (message: any): AttachmentReference[] => {
+  if (!Array.isArray(message?.attachments)) return [];
+  return message.attachments.filter((item: any) => {
+    return (
+      item &&
+      typeof item.identifier === "string" &&
+      item.identifier &&
+      typeof item.name === "string" &&
+      item.name &&
+      typeof item.service === "string" &&
+      item.service
+    );
+  });
+};
+
+const extensionOfFile = (file: File): string | null => {
+  const fromName = file.name.includes(".") ? file.name.split(".").pop() || "" : "";
+  if (fromName) return fromName;
+  return file.type ? mime.getExtension(file.type) || null : null;
+};
+
 interface NewMessageProps {
   replyTo?: any;
   setReplyTo: React.Dispatch<any>;
@@ -150,7 +199,7 @@ interface NewMessageProps {
   hideButton?: boolean;
   isFromTo?: boolean;
   setForwardInfo: React.Dispatch<any>;
-  forwardInfo: any;
+  forwardInfo: ForwardInfo | string | null;
   inlineMode?: boolean;
   onRequestClose?: () => void;
   ownedNames?: string[];
@@ -342,6 +391,12 @@ export const NewMessage = ({
   // wrote", so it is neither saved as a draft nor guarded on Discard.
   const initialValueRef = useRef("");
   const initialSubjectRef = useRef("");
+  // Attachments of a forwarded message being fetched and decrypted so they
+  // can be re-published, encrypted, to the new recipient.
+  const [forwardAttachmentJobs, setForwardAttachmentJobs] = useState<
+    ForwardAttachmentJob[]
+  >([]);
+  const forwardJobControllersRef = useRef(new Map<string, AbortController>());
 
   const { Modal, showModal } = useConfirmationModal({
     title: "Important",
@@ -579,7 +634,79 @@ export const NewMessage = ({
     [user?.address]
   );
 
+  const cancelForwardAttachmentJobs = useCallback(() => {
+    forwardJobControllersRef.current.forEach(controller => controller.abort());
+    forwardJobControllersRef.current.clear();
+    setForwardAttachmentJobs([]);
+  }, []);
+
+  const startForwardAttachmentJob = useCallback(
+    (reference: AttachmentReference) => {
+      const key = `forward:${reference.identifier}`;
+      forwardJobControllersRef.current.get(key)?.abort();
+      const controller = new AbortController();
+      forwardJobControllersRef.current.set(key, controller);
+      setForwardAttachmentJobs(prev => [
+        ...prev.filter(job => job.key !== key),
+        { key, reference, status: "loading" },
+      ]);
+
+      fetchAttachmentFile(reference, {
+        signal: controller.signal,
+        onProgress: progress => {
+          if (controller.signal.aborted) return;
+          setForwardAttachmentJobs(prev =>
+            prev.map(job => (job.key === key ? { ...job, progress } : job))
+          );
+        },
+      })
+        .then(file => {
+          if (controller.signal.aborted) return;
+          forwardJobControllersRef.current.delete(key);
+          setForwardAttachmentJobs(prev => prev.filter(job => job.key !== key));
+          setAttachments(prev => [
+            ...prev.filter(item => item?.forwardKey !== key),
+            {
+              file,
+              mimetype: file.type || null,
+              extension: extensionOfFile(file),
+              forwardKey: key,
+            },
+          ]);
+        })
+        .catch(error => {
+          if (controller.signal.aborted) return;
+          forwardJobControllersRef.current.delete(key);
+          const message =
+            typeof error?.message === "string" && error.message
+              ? error.message
+              : "The attachment could not be fetched";
+          setForwardAttachmentJobs(prev =>
+            prev.map(job =>
+              job.key === key ? { ...job, status: "error", error: message } : job
+            )
+          );
+        });
+    },
+    []
+  );
+
+  const removeForwardAttachmentJob = useCallback((key: string) => {
+    forwardJobControllersRef.current.get(key)?.abort();
+    forwardJobControllersRef.current.delete(key);
+    setForwardAttachmentJobs(prev => prev.filter(job => job.key !== key));
+  }, []);
+
+  useEffect(() => {
+    const controllers = forwardJobControllersRef.current;
+    return () => {
+      controllers.forEach(controller => controller.abort());
+      controllers.clear();
+    };
+  }, []);
+
   const resetComposerDraft = useCallback(() => {
+    cancelForwardAttachmentJobs();
     setAttachments([]);
     setSubject("");
     setDestinationName("");
@@ -595,7 +722,7 @@ export const NewMessage = ({
     setPendingPublishType("mail");
     initialValueRef.current = "";
     initialSubjectRef.current = "";
-  }, []);
+  }, [cancelForwardAttachmentJobs]);
 
   const discardComposerDraft = useCallback(() => {
     clearStoredDraft(activeDraftKey || lastLoadedDraftKeyRef.current);
@@ -764,11 +891,42 @@ export const NewMessage = ({
   }, [replyTo]);
 
   useEffect(() => {
-    if (forwardInfo) {
-      setIsOpen(true);
-      lastLoadedDraftKeyRef.current = null;
-      setValue(forwardInfo);
+    if (!forwardInfo) return;
+    setIsOpen(true);
+    lastLoadedDraftKeyRef.current = null;
+
+    const info: ForwardInfo =
+      typeof forwardInfo === "string" ? { html: forwardInfo } : forwardInfo;
+    const source = info.message;
+    if (!source || typeof source !== "object") {
+      // An older caller sent ready-made HTML: use it as is.
+      const html = info.html || "";
+      setValue(html);
+      initialValueRef.current = html;
+      return;
     }
+
+    const nextSubject = withSubjectPrefix(source.subject, "Fwd");
+    setSubject(nextSubject);
+    initialSubjectRef.current = nextSubject;
+    const html = buildForwardHtml(
+      {
+        from: source.user,
+        sentAt: formatFullTimestamp(source.createdAt),
+        subject: typeof source.subject === "string" ? source.subject : "",
+        to: info.to || source.recipient || user?.name || "",
+      },
+      messageBodyLines(source, extractTextFromSlate)
+    );
+    setValue(html);
+    initialValueRef.current = html;
+
+    // Re-attach the original files: fetched and decrypted here, re-published
+    // encrypted to the new recipient on Send.
+    cancelForwardAttachmentJobs();
+    setAttachments(prev => prev.filter(item => !item?.forwardKey));
+    attachmentReferencesOf(source).forEach(startForwardAttachmentJob);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forwardInfo]);
 
   const replyBodyText = useMemo(() => {
@@ -1054,6 +1212,12 @@ export const NewMessage = ({
       errorMsg =
         "One of your attachments does not have an extension (example: .png, .pdf, ect...)";
     }
+    if (forwardAttachmentJobs.some(job => job.status === "loading")) {
+      errorMsg = "Forwarded attachments are still being fetched";
+    } else if (forwardAttachmentJobs.some(job => job.status === "error")) {
+      errorMsg =
+        "A forwarded attachment could not be fetched: retry it or remove it";
+    }
 
     if (errorMsg) {
       dispatch(
@@ -1275,6 +1439,8 @@ export const NewMessage = ({
 
   const sendButtonLabel = replyTo
     ? "Reply"
+    : forwardInfo
+    ? "Forward"
     : isGroupTarget
     ? "Create Thread"
     : "Send Message";
@@ -1640,49 +1806,137 @@ export const NewMessage = ({
             <NewMessageAttachmentImg src={AttachmentSVG} />
           </AttachmentContainer>
 
-          {attachments.map(({ file, extension }, index) => {
+          {attachments.map(({ file, extension, forwardKey }, index) => {
             return (
               <Box
                 key={`${file?.name || "attachment"}-${index}`}
                 sx={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "15px",
+                  gap: "8px",
+                  minWidth: 0,
                 }}
               >
                 <Typography
                   sx={{
                     fontSize: "1rem",
+                    minWidth: 0,
+                    overflowWrap: "anywhere",
                     color: !extension
                       ? "var(--qmail-danger-text)"
                       : "var(--qmail-compose-text)",
                   }}
                 >
                   {file?.name} ({formatBytes(file?.size || 0)})
+                  {forwardKey ? " · forwarded" : ""}
                 </Typography>
-                <CloseIcon
+                <IconButton
+                  aria-label={`Remove attachment ${file?.name || ""}`}
                   onClick={() =>
                     setAttachments(prev =>
                       prev.filter((item, itemIndex) => itemIndex !== index)
                     )
                   }
+                  size="small"
                   sx={{
-                    height: "16px",
-                    width: "auto",
-                    cursor: "pointer",
+                    minWidth: 44,
+                    minHeight: 44,
                     color: "var(--qmail-compose-muted)",
                   }}
-                />
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
                 {!extension && (
                   <Typography
                     sx={{
-                      fontSize: "0.75rem",
+                      fontSize: "0.875rem",
                       fontWeight: "bold",
                       color: "var(--qmail-danger-text)",
                     }}
                   >
                     This file has no extension
                   </Typography>
+                )}
+              </Box>
+            );
+          })}
+
+          {forwardAttachmentJobs.map(job => {
+            const label =
+              job.reference.originalFilename ||
+              job.reference.filename ||
+              job.reference.identifier;
+            const percent = job.progress?.percentLoaded;
+            const hasPercent =
+              typeof percent === "number" && Number.isFinite(percent) && percent > 0;
+            return (
+              <Box
+                key={job.key}
+                role="status"
+                aria-live="polite"
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                  minWidth: 0,
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    minWidth: 0,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: "1rem",
+                      minWidth: 0,
+                      overflowWrap: "anywhere",
+                      color:
+                        job.status === "error"
+                          ? "var(--qmail-danger-text)"
+                          : "var(--qmail-compose-text)",
+                    }}
+                  >
+                    {label}
+                    {" · "}
+                    {job.status === "error"
+                      ? job.error || "Could not fetch"
+                      : `${fetchingLabel(job.progress?.status)}${
+                          hasPercent ? ` ${Math.min(100, Math.round(percent))}%` : ""
+                        }`}
+                  </Typography>
+                  {job.status === "error" && (
+                    <Button
+                      size="small"
+                      onClick={() => startForwardAttachmentJob(job.reference)}
+                      sx={{ textTransform: "none", minHeight: 44 }}
+                    >
+                      Retry
+                    </Button>
+                  )}
+                  <IconButton
+                    aria-label={`Remove attachment ${label}`}
+                    onClick={() => removeForwardAttachmentJob(job.key)}
+                    size="small"
+                    sx={{
+                      minWidth: 44,
+                      minHeight: 44,
+                      color: "var(--qmail-compose-muted)",
+                    }}
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+                {job.status === "loading" && (
+                  <LinearProgress
+                    variant={hasPercent ? "determinate" : "indeterminate"}
+                    value={hasPercent ? Math.min(100, percent) : undefined}
+                    sx={{ borderRadius: 2, maxWidth: 320 }}
+                  />
                 )}
               </Box>
             );

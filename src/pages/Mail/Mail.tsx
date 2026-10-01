@@ -1465,7 +1465,20 @@ export const Mail = ({ isFromTo }: MailProps) => {
     (forwardPayload: any) => {
       setIsChangelogOpen(false);
       setReplyTo(null);
-      setForwardInfo(forwardPayload);
+      // The reader may send ready-made HTML (string) or the message itself;
+      // the composer builds the Fwd: subject, the header and the re-attached
+      // files from the open message.
+      const forwardedMessage =
+        forwardPayload && typeof forwardPayload === "object" && forwardPayload.id
+          ? forwardPayload
+          : message;
+      setForwardInfo({
+        html: typeof forwardPayload === "string" ? forwardPayload : "",
+        message: forwardedMessage,
+        to: activeAliasInboxName
+          ? `${activeAliasInboxName} (alias inbox)`
+          : user?.name || "",
+      });
       setComposePrefill(null);
       setComposeReturnView("inbox");
       setComposeReturnGroupId(null);
@@ -1478,7 +1491,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       setActiveMailboxItem("compose");
       setMobileMode("compose");
     },
-    [activeAliasInboxName]
+    [activeAliasInboxName, message, user?.name]
   );
 
   const handleRequestComposeThread = useCallback(
