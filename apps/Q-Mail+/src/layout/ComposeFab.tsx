@@ -24,7 +24,7 @@ interface ComposeFabProps {
 /** The floating main action on phones (docs/DESIGN.md → Mobile → Navigation). */
 export function ComposeFab({ onClick, aboveNav = true, label = 'Compose' }: ComposeFabProps) {
   return (
-    <Floating color="primary" onClick={onClick} aria-label={label} $aboveNav={aboveNav}>
+    <Floating color="primary" onClick={onClick} aria-label={label} $aboveNav={aboveNav} data-qmail-tour="compose">
       <EditOutlinedIcon />
     </Floating>
   );

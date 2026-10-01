@@ -201,7 +201,7 @@ export const MailMessageRowProfile = styled(Box)(({ theme }) => ({
   maxWidth: "45%",
   minWidth: 0,
   overflow: "hidden",
-  "@media (max-width:950px)": {
+  [theme.breakpoints.down("sm")]: {
     flex: "1 1 auto",
     maxWidth: "100%",
     width: "100%",
@@ -215,7 +215,7 @@ export const MailMessageRowInfo = styled(Box)(({ theme }) => ({
   gap: "7px",
   flex: "1 1 auto",
   minWidth: 0,
-  "@media (max-width:950px)": {
+  [theme.breakpoints.down("sm")]: {
     width: "100%",
   },
 }));
@@ -380,7 +380,6 @@ export const TypeInAliasTextfield = styled(TextField)(({ theme }) => ({
   borderRadius: "5px",
   backgroundColor: "var(--qmail-instance-input-bg)",
   border: "none",
-  outline: "none",
   input: {
     fontSize: "1rem",
     color: theme.palette.text.primary,
@@ -389,7 +388,6 @@ export const TypeInAliasTextfield = styled(TextField)(({ theme }) => ({
       color: "var(--qmail-instance-input-placeholder)",
     },
     border: "none",
-    outline: "none",
     padding: "10px",
   },
   "& .MuiOutlinedInput-root": {
@@ -435,7 +433,7 @@ export const NewMessageInputRow = styled(Box)(({ theme }) => ({
   width: "100%",
   paddingBottom: "6px",
   gap: "12px",
-  "@media (max-width:950px)": {
+  [theme.breakpoints.down("sm")]: {
     alignItems: "flex-start",
     flexWrap: "wrap",
   },
@@ -466,7 +464,7 @@ export const NewMessageAliasContainer = styled(Box)(({ theme }) => ({
   alignItems: "center",
   gap: "12px",
   minWidth: 0,
-  "@media (max-width:950px)": {
+  [theme.breakpoints.down("sm")]: {
     flexWrap: "wrap",
     width: "100%",
   },
@@ -510,7 +508,7 @@ export const NewMessageSendButton = styled(Box)`
       fill: currentColor;
     }
   }
-  @media (max-width: 950px) {
+  ${({ theme }) => theme.breakpoints.down("sm")} {
     width: 100%;
     min-height: 48px;
     padding: 10px 14px;
