@@ -128,6 +128,7 @@ import { Thread } from "./Thread";
 import { invalidateThreadSearches } from "./threadData";
 import { useThreadUnreadCounts } from "./threadUnread";
 import { getAvatarUrl } from "../../utils/avatarCache";
+import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 
 type MailboxSidebarItemId =
   | "inbox"
@@ -1024,6 +1025,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const navigate = useNavigate();
 
   const { getAllMailMessages, checkNewMessages } = useFetchMail();
+  // The inbox index load error, surfaced by the list as an ErrorState with Retry.
+  const [inboxLoadError, setInboxLoadError] = useState<string | null>(null);
   const getMessages = React.useCallback(
     async (isOnMount?: boolean) => {
       if (!user?.name || !user?.address) return;
@@ -1031,8 +1034,14 @@ export const Mail = ({ isFromTo }: MailProps) => {
         if (isOnMount) {
           setIsLoading(true);
         }
+        setInboxLoadError(null);
         await getAllMailMessages(user.name, user.address);
-      } catch (error) {
+      } catch (error: any) {
+        setInboxLoadError(
+          typeof error?.message === "string" && error.message
+            ? error.message
+            : "Couldn't reach the node."
+        );
       } finally {
         setIsLoading(false);
       }
@@ -2998,12 +3007,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     alignItems: "center",
   } as const;
 
-  const spinner = (
-    <Box sx={{ display: "flex", width: "100%", justifyContent: "center", py: 2 }}>
-      <CircularProgress />
-    </Box>
-  );
-
   // ---- list pane -----------------------------------------------------------
   let listTitle = "Inbox";
   let listSubtitle: string | undefined = user?.name || undefined;
@@ -3017,6 +3020,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
         instanceNames={sentInstanceNamesForCurrentView}
         onOpen={openMessage}
         openedMessageId={message?.id || message?.identifier}
+        onCompose={() => onSelectSidebarItem("compose")}
       />
     ) : (
       renderAuthenticationPrompt("Sent")
@@ -3045,24 +3049,25 @@ export const Mail = ({ isFromTo }: MailProps) => {
       onSelectSidebarItem("inbox");
     };
     listBody = hasAuthenticatedIdentity ? (
-      archivedMessages.length ? (
-        <GroupedMailboxList
-          messages={archivedMessages}
-          mailboxType="inbox"
-          showSelectAll
-          openMessage={openMessage}
-          openedMessageId={message?.id || message?.identifier}
-          onMarkAsRead={markMessagesAsRead}
-          onMarkAsUnread={markMessagesAsUnread}
-          onUnarchive={unarchiveMessages}
-        />
-      ) : (
-        <EmptyState
-          icon={<InboxOutlinedIcon />}
-          title="Nothing archived"
-          hint="Select messages in the inbox and choose Archive to tidy them away. They stay on QDN."
-        />
-      )
+      <GroupedMailboxList
+        messages={archivedMessages}
+        mailboxType="inbox"
+        showSelectAll
+        openMessage={openMessage}
+        openedMessageId={message?.id || message?.identifier}
+        onMarkAsRead={markMessagesAsRead}
+        onMarkAsUnread={markMessagesAsUnread}
+        onUnarchive={unarchiveMessages}
+        status={isLoading && !archivedMessages.length ? "loading" : "ready"}
+        emptyIcon={<ArchiveOutlinedIcon />}
+        emptyTitle="Nothing archived"
+        emptyHint="Select messages in the inbox and choose Archive to tidy them away. They stay on QDN."
+        emptyAction={
+          <Button variant="outlined" onClick={() => onSelectSidebarItem("inbox")} sx={{ minHeight: 44 }}>
+            Back to inbox
+          </Button>
+        }
+      />
     ) : (
       renderAuthenticationPrompt("Inbox")
     );
@@ -3134,12 +3139,36 @@ export const Mail = ({ isFromTo }: MailProps) => {
           onMarkAsRead={markMessagesAsRead}
           onMarkAsUnread={markMessagesAsUnread}
           onArchive={archiveMessages}
+          status={
+            isLoading ||
+            (isLoadingCombinedAliasInbox &&
+              (!selectedInboxInstanceName ||
+                !combinedAliasInboxMessages[selectedInboxInstanceName]))
+              ? "loading"
+              : inboxLoadError
+                ? "error"
+                : "ready"
+          }
+          errorMessage={inboxLoadError || undefined}
+          onRetry={() => void getMessages(true)}
+          emptyTitle={inboxSearchQuery.trim() ? "No matches" : "No mail yet"}
+          emptyHint={
+            inboxSearchQuery.trim()
+              ? "Try fewer words, or search message bodies."
+              : `Mail sent to ${selectedInboxInstanceName || user?.name || "you"} shows up here.`
+          }
+          emptyAction={
+            inboxSearchQuery.trim() ? undefined : (
+              <Button
+                variant="contained"
+                onClick={() => onSelectSidebarItem("compose")}
+                sx={{ minHeight: 44 }}
+              >
+                Compose
+              </Button>
+            )
+          }
         />
-        {isLoading && spinner}
-        {isLoadingCombinedAliasInbox &&
-          (!selectedInboxInstanceName ||
-            !combinedAliasInboxMessages[selectedInboxInstanceName]) &&
-          spinner}
       </>
     ) : (
       renderAuthenticationPrompt("Inbox")
