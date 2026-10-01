@@ -337,7 +337,7 @@ export async function publishCollection(input: {
   previousItems?: CollectionItem[];
 }): Promise<Collection> {
   const previous = input.previousItems ?? getCachedCollection(input.name, input.identifier)?.items ?? [];
-  const recipients = await addedShareOwners(input.name, previous, input.body.items);
+  const recipients = await markedShareOwners(input.name, previous, input.body.items);
   const payload = await buildCollectionPublish({ ...input, recipients });
   await qortalRequest(payload);
   invalidateCollectionCaches();
@@ -345,20 +345,32 @@ export async function publishCollection(input: {
 }
 
 /**
- * The addresses owning the shares that `next` adds to `previous`, newest
- * addition first, without the publisher's own account; at most MAX_MARKERS.
- * A name Core can't resolve is skipped (that owner just isn't told).
+ * The accounts a publish of `next` names in its markers: the owners of the
+ * shares it adds to `previous` (newest first), then of the newest shares
+ * already in it, so a marker stays through later publishes until four newer
+ * owners push it out (an owner whose app was closed meanwhile still finds it;
+ * what was already read is never reported twice). Never the publisher's own
+ * account; at most MAX_MARKERS. A name Core can't resolve is skipped.
  */
-export async function addedShareOwners(
+export async function markedShareOwners(
   publisher: string,
   previous: CollectionItem[],
   next: CollectionItem[]
 ): Promise<string[]> {
-  const added = next.filter((item) => !previous.some((old) => sameItem(old, item))).reverse();
-  const names = [...new Map(added.map((item) => [item.name.toLowerCase(), item.name])).values()];
+  const isNew = (item: CollectionItem) => !previous.some((old) => sameItem(old, item));
+  const newestFirst = [...next].reverse();
+  const ordered = [...newestFirst.filter(isNew), ...newestFirst.filter((item) => !isNew(item))];
+  const names = [...new Map(ordered.map((item) => [item.name.toLowerCase(), item.name])).values()];
   if (!names.length) return [];
-  const [own, ...addresses] = await Promise.all([ownerAddress(publisher), ...names.map(ownerAddress)]);
-  return [...new Set(addresses.filter((a): a is string => Boolean(a) && a !== own))].slice(0, MAX_MARKERS);
+  const own = await ownerAddress(publisher);
+  const addresses: string[] = [];
+  // One lookup at a time (remembered for the session), stopping at four owners.
+  for (const name of names) {
+    const address = await ownerAddress(name);
+    if (address && address !== own && !addresses.includes(address)) addresses.push(address);
+    if (addresses.length >= MAX_MARKERS) break;
+  }
+  return addresses;
 }
 
 /** In-app route for a collection page. */

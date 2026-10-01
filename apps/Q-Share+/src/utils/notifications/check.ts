@@ -14,7 +14,7 @@
  */
 import { QSHARE_COLLECTION_BASE, QSHARE_COMMENT_BASE } from "../../constants/Identifiers";
 import { fetchCollection } from "../collections";
-import { searchQdn, type QdnResourceSummary } from "../qdnSearch";
+import { searchQdn, searchQdnAll, type QdnResourceSummary } from "../qdnSearch";
 import { recipientMarker } from "../recipientMarker";
 import { loadActivity, parseCommentIdentifier, shareCommentKey, type Activity } from "./activity";
 import { readNotifications, writeNotifications, type AppNotification } from "./store";
@@ -25,7 +25,9 @@ export const COMMENT_MAX_PAGES = 4;
 export const COMMENT_SLACK_MS = 30 * 60_000;
 /** The first check looks back this far. */
 export const FIRST_LOOK_BACK_MS = 7 * 24 * 60 * 60_000;
-export const COLLECTION_PAGE = 20;
+export const COLLECTION_PAGE = 50;
+/** Core orders by first publish, so a re-published old collection can be on a later page. */
+export const COLLECTION_MAX_PAGES = 2;
 /** Collection bodies read per check at most; the rest wait for the next one. */
 export const COLLECTION_FETCHES_PER_CHECK = 5;
 
@@ -110,15 +112,14 @@ async function run(account: CheckAccount, options: CheckOptions): Promise<number
 
     if (options.collections) {
       // No `prefix`: Core applies it to every field, and the marker sits at the end of the description.
-      const rows = await searchQdn(
+      const { rows } = await searchQdnAll(
         {
           service: "DOCUMENT",
           identifier: QSHARE_COLLECTION_BASE,
           description: recipientMarker(account.address),
           includemetadata: true,
-          limit: COLLECTION_PAGE,
         },
-        { fresh: true }
+        { pageSize: COLLECTION_PAGE, maxPages: COLLECTION_MAX_PAGES, fresh: true }
       );
       let fetches = 0;
       for (const row of rows) {

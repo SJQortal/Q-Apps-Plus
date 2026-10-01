@@ -1,10 +1,12 @@
 /**
  * Recipient markers: a short tag in a collection's QDN description for each
- * account whose share the publish just added, so that account's Q-Share+ can
+ * account owning one of its newest shares, so that account's Q-Share+ can
  * find "my share was added to a collection" with one description search
  * instead of reading every collection.
  *
  * A marker is `~qsn-` + the last 12 characters of the owner's address + `~`.
+ * Each publish names the owners of its newest shares (collections.ts,
+ * markedShareOwners), so a marker outlasts the publish that added it.
  * Addresses are public, and so is the share in the collection; the marker
  * names the account rather than the name so one search covers every name it
  * owns. Additive QDN metadata: the original Q-Share never reads collections,

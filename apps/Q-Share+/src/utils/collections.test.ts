@@ -12,7 +12,7 @@ import {
   hasItem,
   newCollectionUid,
   parseCollection,
-  addedShareOwners,
+  markedShareOwners,
   publishCollection,
   resetCollectionCaches,
   searchCollections,
@@ -105,7 +105,7 @@ describe('recipient markers on publish', () => {
     });
   });
 
-  it('names the owners of newly added shares, not the publisher or shares already there', async () => {
+  it('names the owners of newly added shares first, then of the newest ones already there, never the publisher', async () => {
     const before = [{ name: 'bob', identifier: 'b1' }];
     await publishCollection({
       name: 'alice',
@@ -118,19 +118,27 @@ describe('recipient markers on publish', () => {
       }),
     });
     const [payload] = qortalCallsFor('PUBLISH_QDN_RESOURCE');
-    expect(payload.description).toBe(`Guides I like ${recipientMarker(CAROL)}`);
+    expect(payload.description).toBe(`Guides I like ${recipientMarker(CAROL)}${recipientMarker(BOB)}`);
     // The JSON body never carries markers.
     expect(decode(String(payload.data64)).description).toBe('Guides I like');
   });
 
-  it('tags every owner of a new collection, and no one when nothing was added', async () => {
-    expect(await addedShareOwners('alice', [], [{ name: 'bob', identifier: 'b1' }, { name: 'carol', identifier: 'c1' }])).toEqual([
-      CAROL,
-      BOB,
-    ]);
-    expect(await addedShareOwners('alice', [{ name: 'bob', identifier: 'b1' }], [])).toEqual([]);
-    // An owner Core doesn't know is skipped.
-    expect(await addedShareOwners('alice', [], [{ name: 'ghost', identifier: 'g1' }])).toEqual([]);
+  it('keeps naming earlier owners on later publishes, so an owner whose app was closed still finds it', async () => {
+    const bobs = { name: 'bob', identifier: 'b1' };
+    const carols = { name: 'carol', identifier: 'c1' };
+    // bob's share was added first; carol's now: both stay marked.
+    expect(await markedShareOwners('alice', [bobs], [bobs, carols])).toEqual([CAROL, BOB]);
+    // A publish that adds nothing (a title edit) keeps them too, newest first.
+    expect(await markedShareOwners('alice', [bobs, carols], [bobs, carols])).toEqual([CAROL, BOB]);
+    // An emptied collection names no one; an owner Core doesn't know is skipped.
+    expect(await markedShareOwners('alice', [bobs], [])).toEqual([]);
+    expect(await markedShareOwners('alice', [], [{ name: 'ghost', identifier: 'g1' }])).toEqual([]);
+  });
+
+  it('stops at four owners, newest first', async () => {
+    for (const n of [1, 2, 3, 4, 5]) OWNERS[`owner${n}`] = `Q${String(n).repeat(33)}`;
+    const items = [1, 2, 3, 4, 5].map((n) => ({ name: `owner${n}`, identifier: `s${n}` }));
+    expect(await markedShareOwners('alice', items, items)).toEqual([5, 4, 3, 2].map((n) => `Q${String(n).repeat(33)}`));
   });
 
   it('keeps markers out of the descriptions the app shows', () => {
