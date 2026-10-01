@@ -166,9 +166,10 @@ describe("notification checks", () => {
       share: { name: "alice", identifier: SHARE.identifier, title: "Docs" },
       collection: { name: "bob", identifier: coll.identifier, title: "Faves" },
     });
-    expect(fetchCallsMatching(/description=/)[0]).toContain(
-      new URLSearchParams({ description: recipientMarker(ADDRESS) }).toString()
-    );
+    const markerSearch = fetchCallsMatching(/description=/)[0];
+    expect(markerSearch).toContain(new URLSearchParams({ description: recipientMarker(ADDRESS) }).toString());
+    // Core's prefix=true would match the description from its start only, and the marker is at the end.
+    expect(markerSearch).not.toContain("prefix=true");
 
     // The same version isn't read again.
     await check(NOW + 120_000);

@@ -109,11 +109,11 @@ async function run(account: CheckAccount, options: CheckOptions): Promise<number
     }
 
     if (options.collections) {
+      // No `prefix`: Core applies it to every field, and the marker sits at the end of the description.
       const rows = await searchQdn(
         {
           service: "DOCUMENT",
           identifier: QSHARE_COLLECTION_BASE,
-          prefix: true,
           description: recipientMarker(account.address),
           includemetadata: true,
           limit: COLLECTION_PAGE,
@@ -122,6 +122,7 @@ async function run(account: CheckAccount, options: CheckOptions): Promise<number
       );
       let fetches = 0;
       for (const row of rows) {
+        if (!row.identifier.startsWith(QSHARE_COLLECTION_BASE)) continue;
         if (mine.has(lower(row.name)) || hidden.has(lower(row.name))) continue;
         const key = `${row.name}/${row.identifier}`;
         const version = row.updated ?? row.created ?? 0;
