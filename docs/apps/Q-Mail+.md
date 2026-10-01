@@ -1230,21 +1230,24 @@ Checked in the preview (outside Hub, four themes): desktop 1280, 700 px and 390�
 
 ## Follow-ups
 
-**Unfinished (next session starts here):** the working tree on the WIP commit has MUI 9.4 installed and the codemods applied. `npm run build` fails with exactly these 7 type errors:
+**Paused by Simon on 2026-10-01 at about 03:15, mid Phase 3. Where to resume:**
 
-1. `src/components/common/UserNavbar/UserNavbar.tsx:107` and `src/pages/Mail/GroupMail.tsx:569`: `<Menu PaperProps={…}>` → `slotProps={{ paper: … }}` (the codemod missed these two).
-2. `src/pages/Mail/NewMessage.tsx:1378`: `MenuProps: { PaperProps }` inside a Select → `MenuProps: { slotProps: { paper: … } }`.
-3. `src/pages/Mail/NewMessage.tsx:1425`: freeSolo Autocomplete option is now `string | ComposeTargetOption`; guard with `typeof option === 'string' ? option : option.id`.
-4. `src/pages/Mail/OpenMail.tsx:225` and `:241`: `deprecations/all` produced two `slotProps` keys in one object; merge them into one.
-5. `src/pages/Mail/MailMessageRow.tsx:2`: `@mui/icons-material/DeleteOutline` → `DeleteOutlineOutlined`, then run `scripts/check-mui-icons.sh Q-Mail+`.
+1. **Review workflow (Phase 3, step 6):** stopped after the five reviewers had started (two had reported). Resume with `Workflow({scriptPath: ".../workflows/scripts/qmail-review-wf_62f2d53f-be7.js", resumeFromRunId: "wf_62f2d53f-be7"})` from the session's workflow directory (completed reviewers replay from cache), then fix each confirmed finding in its own commit. Two things already seen in Hub to fix regardless: (a) the first-run tips popover opens at the same time as the consent dialog (make the tour wait until `qmail-general-consent` is set); (b) on first load the app sends the `includemetadata=true&limit=20` inbox search twice (the poll's immediate tick and the owned-name probe share the query with TTL 0; dedupe or drop the immediate tick).
+2. **Hub test (step 7), done so far on the Hub at debug port 9223 with the dev server on 5174 (Dev Mode → Server → 127.0.0.1:5174 is added):** Q-Mail+ runs with the real Tester GO account; inbox, Sent and Threads show exactly what the original Q-Mail shows for that account (all three empty: Tester GO has no mail, no sent mail and no group threads). First load = 9 searches + 1 state-doc fetch + 1 avatar status (counted from `performance.getEntriesByType('resource')`). The size sweep screenshots (`scratchpad/sweep-{1440,700,390,360,844}.jpg`) were taken but not yet reviewed; layout modes reported: 1440 → desktop, 700 → phone (Hub's 1.2 zoom makes a 700 px window 583 CSS px wide), 390×844 and 360×740 → phone, 844×390 → medium (703×201 CSS px). Still to do: look at those five shots, the four themes and Hub light (set `qmailplus-ui-theme` in the frame's localStorage and reload; `?theme=light` on the frame URL), the composer at 360 px, Settings on a phone. **Needs an account with mail** to check opening a message, attachments and the PDF viewer in Hub: Tester GO has none; Simon could send a test mail with a PDF to Tester GO from another name (publishing is Simon's).
+3. **Finish (step 8):** version 1.0.0 (plain) in `package.json` + the About line + a `CHANGELOG.md` entry and the changelog dialog entry; `scripts/build-zip.sh Q-Mail+`; rewrite the PR #15 description with the morning summary (the Done table above has the numbers).
 
-Then `npm run build && npm test`, look at the 17 `<MenuItem>` uses (MUI 9 throws for a MenuItem outside Menu/Select), the Menu/Dialog `slotProps`, and check the layout at 1280/700/375 px. Amend or follow the WIP commit with `Q-Mail+: upgrade MUI to 9.4`, then continue with the Plan above.
+Hub helpers that work (scratchpad of this session): `hubshot.mjs <file> [scale]` (Page.bringToFront before capture; without it `Page.captureScreenshot` hangs), `hubkey.mjs Enter|Escape`, `hubsweep.sh <tag> <w> <h> [touch]`. Never run `pkill -f` with the helper's name literally in the same command line (it kills the calling shell).
 
-Other open items:
+**Open questions for Simon**
 
-- **Delete the 55 unreachable files** listed in `tsconfig.json` → `exclude` (tonight's session guard blocked a bulk `git rm`). After deleting, remove the `exclude` list. Simon: OK to delete the Q-Blog leftovers?
-- **quill-image-resize-module-react** was dropped (Quill 1 only). The toolbar has no image button, so inline resize was only reachable by pasting an image. If wanted, look at a Quill 2 blot-formatter module.
-- **Check Quill 2 mail in the original Q-Mail** in Hub: send a message with a bullet list, numbered list and code block from Q-Mail+ and open it in Q-Mail. The normaliser is unit-tested but not Hub-tested.
-- **Joyride 3:** `showSkipButton` no longer exists as a prop; confirm the tour still shows Skip (v3 default) in Hub.
-- **tsconfig target** was raised to ES2022 (needed for `Array.prototype.at`); fine for Chromium ≥ 117.
-- Multi-name: verify in code that `main` already has the 2.2.0 multi-name inbox before considering `feature/version-2`.
+- Delete the 55 unreachable Q-Blog files listed in `tsconfig.json` → `exclude` (and `src/pages/Mail/ShowMessage.tsx`, `MailThread*.tsx`, which only the aliases chunk still references)? Tonight's agents left them excluded.
+- `cc` is always `[]` in the new additive `to`/`cc` fields: should a visible Cc row exist (names in `cc` would be readable by every recipient of the copy)?
+- Unarchive does not sync as a removal across devices (the published `archived` map is a union); a tombstone would need a schema addition. OK as is?
+- The ratings control in Settings → About is local-only (the upstream adapter never called Qortal). Keep it, hide it, or wire a real poll (`app-library-APP-rating-qmails`)?
+- Roboto Regular/Medium ttf (337 kB) still ship for Q-Mail Classic; convert to subset woff2 or drop Roboto from Classic?
+- Should the load-published-state prompt keep its own "Always fetch and apply" checkbox now that Settings → Sync has the switch?
+- `scripts/hub-cdp.mjs shot` should send `Page.bringToFront` first (Repo fix, outside this app PR).
+
+**Known leftovers from the agents' reports** (not blocking): `moment` still in the time chunk (60 kB, used by `utils/time.ts` and `readerTime.ts`); `blogSlice` still registered (type imports); keyboard j/k and e/u act on the inbox and archived lists only; alias "All mail" search covers what is loaded; `MailMessageRow*` styled components in `Mail-styles.ts` unused; Bug #19 (names with `_` in the sent identifier regex) and #15 (missing keys in a few lists) still open; the thread unread hook polls every 120 s (one cached search per group); `@types/dompurify` can be dropped.
+
+**Earlier items (2026-09-29/30):** `quill-image-resize-module-react` was dropped (Quill 1 only; no toolbar image button); check Quill 2 mail (bullet list, numbered list, code block, and now the reply `<blockquote>`) in the original Q-Mail with a real message; `tsconfig` target ES2022 (Chromium ≥ 117); the alias scan is still a whole-network page walk (N9 not done); nothing on upstream `feature/version-2` needs porting (verified).
