@@ -10,10 +10,45 @@ import {
   htmlToTextLines,
   messageBodyLines,
   quoteLinesToHtml,
+  recipientActivityByName,
   replyAllRecipients,
+  sortNamesByRecency,
   stripEmbeddedHistory,
   withSubjectPrefix,
 } from './mailCompose'
+
+describe('recipient recency', () => {
+  const inbox = [
+    { user: 'Ali', createdAt: 300 },
+    { user: 'Bob', createdAt: 100 },
+    { user: 'ali', createdAt: 200 },
+  ]
+  const opened = {
+    sent1: { user: 'Me', recipient: 'Carl', createdAt: 250 },
+    sent2: { user: 'me-work', recipient: 'Bob', to: ['Bob'], createdAt: 400 },
+    junk: { user: 'Dana' },
+  }
+
+  it('takes the newest timestamp per correspondent, from either direction', () => {
+    const activity = recipientActivityByName(inbox, opened, ['Me', 'me-work'])
+    expect(activity.get('ali')).toBe(300)
+    expect(activity.get('bob')).toBe(400)
+    expect(activity.get('carl')).toBe(250)
+    expect(activity.has('me')).toBe(false)
+    expect(activity.has('dana')).toBe(false)
+  })
+
+  it('orders names by recency, then alphabetically for the unseen', () => {
+    const activity = recipientActivityByName(inbox, opened, ['Me', 'me-work'])
+    expect(sortNamesByRecency(['Zed', 'Ali', 'Bob', 'Carl', 'Amy'], activity)).toEqual([
+      'Bob',
+      'Ali',
+      'Carl',
+      'Amy',
+      'Zed',
+    ])
+  })
+})
 
 describe('withSubjectPrefix', () => {
   it('adds Re: and Fwd: once', () => {
