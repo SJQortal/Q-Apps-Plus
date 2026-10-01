@@ -259,22 +259,6 @@ export const useFetchMail = () => {
     }
   }, [posts, hashMapPosts])
 
-  const getAvatar = async (user: string) => {
-    try {
-      let url = await qortalRequest({
-        action: 'GET_QDN_RESOURCE_URL',
-        name: user,
-        service: 'THUMBNAIL',
-        identifier: 'qortal_avatar'
-      })
-      dispatch(
-        setUserAvatarHash({
-          name: user,
-          url
-        })
-      )
-    } catch (error) {}
-  }
 
   const mapMailResources = (resources: any[]): BlogPost[] => {
     return resources.map((post: any): BlogPost => {
@@ -333,15 +317,7 @@ export const useFetchMail = () => {
         dispatch(upsertMessages(allMessages))
 
         // One avatar lookup per distinct sender, skipping names already known.
-        const senders = new Set<string>()
-        for (const content of allMessages) {
-          if (content.user && content.id && !userAvatarHash?.[content.user]) {
-            senders.add(content.user)
-          }
-        }
-        for (const sender of senders) {
-          getAvatar(sender)
-        }
+        // Avatars are resolved lazily per visible row (src/utils/avatarCache.ts).
       } catch (error) {
       } finally {
       }
@@ -372,11 +348,6 @@ export const useFetchMail = () => {
         const structureData = mapMailResources(responseData)
         dispatch(upsertMessages(structureData))
 
-        for (const content of structureData) {
-          if (content.user && content.id) {
-            getAvatar(content.user)
-          }
-        }
       } catch (error) {
       } finally {
         // dispatch(setIsLoadingGlobal(false))
