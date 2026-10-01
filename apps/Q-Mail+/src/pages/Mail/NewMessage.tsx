@@ -75,6 +75,14 @@ import {
 } from "../../utils/mailCompose";
 import { resolveName } from "../../utils/nameCache";
 import {
+  composeDraftKey,
+  createComposeDraftId,
+  deleteComposeDraft,
+  readComposeDrafts,
+  saveComposeDraft,
+  type StoredComposeDraft,
+} from "./composeDrafts";
+import {
   fetchAttachmentFile,
   type AttachmentFetchProgress,
   type AttachmentReference,
@@ -99,6 +107,8 @@ interface ComposePrefill {
   toType?: ComposeTargetType;
   groupId?: string | number | null;
   subject?: string;
+  /** Open this stored draft (its key in qmail_compose_drafts_<address>). */
+  draftKey?: string;
 }
 
 interface ThreadPublishResult {
@@ -213,19 +223,6 @@ interface NewMessageProps {
   onThreadPublished?: (result: ThreadPublishResult) => void;
 }
 
-interface StoredComposeDraft {
-  draftId: string;
-  fromName: string;
-  toName: string;
-  subject: string;
-  value: string;
-  aliasValue: string;
-  showAlias: boolean;
-  showBCC: boolean;
-  bccNames: NameChip[];
-  updatedAt: number;
-}
-
 const normalizeValue = (value: string): string => value.trim().toLowerCase();
 
 const dedupeStrings = (values: string[]): string[] => {
@@ -264,77 +261,15 @@ const stripHtmlTags = (value: string): string => {
   return value.replace(/<[^>]*>/g, " ");
 };
 
-const getComposeDraftsStorageKey = (address: string): string => {
-  return `qmail_compose_drafts_${address}`;
-};
-
-const readComposeDraftsFromStorage = (
-  address: string
-): Record<string, StoredComposeDraft> => {
-  try {
-    const raw = localStorage.getItem(getComposeDraftsStorageKey(address));
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-
-    const sanitized: Record<string, StoredComposeDraft> = {};
-    Object.entries(parsed).forEach(([key, value]) => {
-      if (!key || !value || typeof value !== "object" || Array.isArray(value))
-        return;
-      const draft = value as Partial<StoredComposeDraft>;
-      const fromName =
-        typeof draft.fromName === "string" ? draft.fromName.trim() : "";
-      const toName =
-        typeof draft.toName === "string" ? draft.toName.trim() : "";
-      if (!fromName || !toName) return;
-
-      sanitized[key] = {
-        draftId:
-          typeof draft.draftId === "string" && draft.draftId.trim()
-            ? draft.draftId.trim()
-            : `${fromName}-${toName}-Draft-${Date.now()}`,
-        fromName,
-        toName,
-        subject: typeof draft.subject === "string" ? draft.subject : "",
-        value: typeof draft.value === "string" ? draft.value : "",
-        aliasValue:
-          typeof draft.aliasValue === "string" ? draft.aliasValue : "",
-        showAlias: Boolean(draft.showAlias),
-        showBCC: Boolean(draft.showBCC),
-        bccNames: Array.isArray(draft.bccNames) ? draft.bccNames : [],
-        updatedAt: Number(draft.updatedAt || 0),
-      };
-    });
-
-    return sanitized;
-  } catch {
-    return {};
-  }
-};
-
-const writeComposeDraftsToStorage = (
-  address: string,
-  drafts: Record<string, StoredComposeDraft>
-): void => {
-  try {
-    localStorage.setItem(
-      getComposeDraftsStorageKey(address),
-      JSON.stringify(drafts)
-    );
-  } catch {
-    // Ignore storage failures.
-  }
-};
-
-const createComposeDraftId = (
-  fromName: string,
-  toName: string,
-  updatedAt: number
-): string => {
-  return `${fromName}-${toName}-Draft-${updatedAt}`;
-};
+/** Applies a stored draft to the composer fields (not From/To, which pick the key). */
+const draftFieldsOf = (draft: StoredComposeDraft) => ({
+  subject: draft.subject || "",
+  value: draft.value || "",
+  aliasValue: draft.aliasValue || "",
+  showAlias: Boolean(draft.showAlias || draft.aliasValue),
+  showBCC: Boolean(draft.showBCC && draft.bccNames?.length),
+  bccNames: Array.isArray(draft.bccNames) ? draft.bccNames : [],
+});
 
 export const NewMessage = ({
   setReplyTo,
@@ -396,6 +331,13 @@ export const NewMessage = ({
   // wrote", so it is neither saved as a draft nor guarded on Discard.
   const initialValueRef = useRef("");
   const initialSubjectRef = useRef("");
+  // A draft opened from the Drafts mailbox: its stored key (deleted once the
+  // composer saves under a different key) and, while it is being applied, the
+  // draft itself so the reply/forward initialisers do not overwrite it.
+  const openedDraftKeyRef = useRef<string | null>(null);
+  const pendingDraftRef = useRef<StoredComposeDraft | null>(null);
+  const skipNextDraftHydrationRef = useRef(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
   // Attachments of a forwarded message being fetched and decrypted so they
   // can be re-published, encrypted, to the new recipient.
   const [forwardAttachmentJobs, setForwardAttachmentJobs] = useState<
@@ -602,10 +544,9 @@ export const NewMessage = ({
       return null;
     const targetName = resolvedTarget.label.trim();
     if (!targetName) return null;
-    const baseKey = `${normalizeValue(senderName)}::${normalizeValue(targetName)}`;
     // A reply keeps its own draft; a new mail to the same name keeps the old key.
     const replyToId = typeof replyTo?.id === "string" ? replyTo.id : "";
-    return replyToId ? `${baseKey}::reply:${replyToId}` : baseKey;
+    return composeDraftKey(senderName, targetName, replyToId);
   }, [fromName, replyTo?.id, resolvedTarget, user?.address]);
 
   useEffect(() => {
@@ -627,14 +568,12 @@ export const NewMessage = ({
   const clearStoredDraft = useCallback(
     (draftKey?: string | null) => {
       const address = user?.address || "";
-      const normalizedDraftKey =
-        typeof draftKey === "string" ? draftKey.trim() : "";
-      if (!address || !normalizedDraftKey) return;
-
-      const existingDrafts = readComposeDraftsFromStorage(address);
-      if (!existingDrafts[normalizedDraftKey]) return;
-      delete existingDrafts[normalizedDraftKey];
-      writeComposeDraftsToStorage(address, existingDrafts);
+      if (!address) return;
+      deleteComposeDraft(address, draftKey);
+      if (draftKey && openedDraftKeyRef.current === draftKey) {
+        openedDraftKeyRef.current = null;
+      }
+      setDraftSavedAt(null);
     },
     [user?.address]
   );
@@ -731,6 +670,7 @@ export const NewMessage = ({
 
   const discardComposerDraft = useCallback(() => {
     clearStoredDraft(activeDraftKey || lastLoadedDraftKeyRef.current);
+    clearStoredDraft(openedDraftKeyRef.current);
     lastLoadedDraftKeyRef.current = null;
     resetComposerDraft();
     setReplyTo(null);
@@ -799,9 +739,38 @@ export const NewMessage = ({
 
     resetComposerDraft();
     lastLoadedDraftKeyRef.current = null;
+    openedDraftKeyRef.current = null;
     setIsOpen(true);
-    setReplyTo(null);
     setForwardInfo(null);
+
+    // Opening a stored draft: restore its fields here. Mail.tsx sets replyTo
+    // for a reply draft in the same render, so the reply initialiser must not
+    // overwrite the draft's subject and body (pendingDraftRef), and the
+    // key-based hydration below must not re-apply another draft.
+    const storedDraft =
+      composePrefill.draftKey && user?.address
+        ? readComposeDrafts(user.address)[composePrefill.draftKey]
+        : undefined;
+    if (storedDraft) {
+      openedDraftKeyRef.current = composePrefill.draftKey || null;
+      pendingDraftRef.current = storedDraft;
+      skipNextDraftHydrationRef.current = true;
+      isHydratingDraftRef.current = true;
+      const fields = draftFieldsOf(storedDraft);
+      setSubject(fields.subject);
+      setValue(fields.value);
+      setAliasValue(fields.aliasValue);
+      setShowAlias(fields.showAlias);
+      setShowBCC(fields.showBCC);
+      setBccNames(fields.bccNames);
+      setDraftSavedAt(storedDraft.updatedAt || null);
+      window.setTimeout(() => {
+        pendingDraftRef.current = null;
+        isHydratingDraftRef.current = false;
+      }, 0);
+    } else {
+      setReplyTo(null);
+    }
 
     if (composePrefill.fromName) {
       const matchingFrom = fromOptions.find(option => {
@@ -814,8 +783,9 @@ export const NewMessage = ({
     }
 
     const prefillSubject = composePrefill.subject;
-    if (typeof prefillSubject === "string") {
+    if (typeof prefillSubject === "string" && !storedDraft) {
       setSubject(prefillSubject);
+      initialSubjectRef.current = prefillSubject;
     }
 
     const toValue = (composePrefill.toValue || "").trim();
@@ -853,6 +823,7 @@ export const NewMessage = ({
       targetType: "name",
       source: "known-name",
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     composePrefill,
     fromOptions,
@@ -880,8 +851,13 @@ export const NewMessage = ({
       );
       setReplyPreviewMode("preview");
       const nextSubject = withSubjectPrefix(replyTo?.subject, "Re");
-      setSubject(nextSubject);
       initialSubjectRef.current = nextSubject;
+      if (pendingDraftRef.current) {
+        // A stored reply draft is being opened: keep its subject and body.
+        initialValueRef.current = "";
+        return;
+      }
+      setSubject(nextSubject);
       // Start the editor with the quoted original (Quill 1 markup, so the
       // original app renders it too). A stored draft for this reply, if any,
       // replaces it when the draft key resolves.
@@ -1001,22 +977,25 @@ export const NewMessage = ({
       return;
     }
     if (activeDraftKey === lastLoadedDraftKeyRef.current) return;
-
-    const storedDraft = readComposeDraftsFromStorage(user.address)[
-      activeDraftKey
-    ];
     lastLoadedDraftKeyRef.current = activeDraftKey;
+    if (skipNextDraftHydrationRef.current) {
+      // The composer was just filled from a draft opened by key.
+      skipNextDraftHydrationRef.current = false;
+      return;
+    }
+
+    const storedDraft = readComposeDrafts(user.address)[activeDraftKey];
     if (!storedDraft) return;
 
     isHydratingDraftRef.current = true;
-    setSubject(storedDraft.subject || "");
-    setValue(storedDraft.value || "");
-    setAliasValue(storedDraft.aliasValue || "");
-    setShowAlias(Boolean(storedDraft.showAlias || storedDraft.aliasValue));
-    setShowBCC(Boolean(storedDraft.showBCC && storedDraft.bccNames?.length));
-    setBccNames(
-      Array.isArray(storedDraft.bccNames) ? storedDraft.bccNames : []
-    );
+    const fields = draftFieldsOf(storedDraft);
+    setSubject(fields.subject);
+    setValue(fields.value);
+    setAliasValue(fields.aliasValue);
+    setShowAlias(fields.showAlias);
+    setShowBCC(fields.showBCC);
+    setBccNames(fields.bccNames);
+    setDraftSavedAt(storedDraft.updatedAt || null);
     window.setTimeout(() => {
       isHydratingDraftRef.current = false;
     }, 0);
@@ -1037,7 +1016,11 @@ export const NewMessage = ({
       const bodyChanged =
         value !== initialValueRef.current && stripHtmlTags(value).trim();
       const hasDraftContent = Boolean(
-        subjectChanged || bodyChanged || aliasValue.trim() || bccNames.length
+        subjectChanged ||
+          bodyChanged ||
+          aliasValue.trim() ||
+          bccNames.length ||
+          attachments.length
       );
 
       if (!hasDraftContent) {
@@ -1046,8 +1029,7 @@ export const NewMessage = ({
       }
 
       const updatedAt = Date.now();
-      const existingDrafts = readComposeDraftsFromStorage(user.address);
-      existingDrafts[activeDraftKey] = {
+      const draft: StoredComposeDraft = {
         draftId: createComposeDraftId(fromNameValue, toNameValue, updatedAt),
         fromName: fromNameValue,
         toName: toNameValue,
@@ -1058,8 +1040,34 @@ export const NewMessage = ({
         showBCC,
         bccNames,
         updatedAt,
+        kind: "mail",
       };
-      writeComposeDraftsToStorage(user.address, existingDrafts);
+      // Additive fields: attachment names only (bytes are never stored), and
+      // which message a reply answers so the Drafts list can reopen it.
+      if (attachments.length) {
+        draft.attachments = attachments.map(item => ({
+          name: item?.file?.name || "attachment",
+          size: Number(item?.file?.size || 0),
+          type: item?.file?.type || null,
+        }));
+      }
+      if (replyTo?.id) {
+        draft.replyTo = {
+          id: replyTo.id,
+          user: replyTo.user,
+          subject: replyTo.subject,
+          createdAt: replyTo.createdAt,
+        };
+        if (replyAll) draft.replyAll = true;
+      }
+      saveComposeDraft(user.address, activeDraftKey, draft);
+      setDraftSavedAt(updatedAt);
+      // Opened under another key (e.g. a reply draft whose message is no
+      // longer in memory): the old entry would otherwise linger as a duplicate.
+      if (openedDraftKeyRef.current && openedDraftKeyRef.current !== activeDraftKey) {
+        deleteComposeDraft(user.address, openedDraftKeyRef.current);
+        openedDraftKeyRef.current = null;
+      }
     }, 350);
 
     return () => {
@@ -1068,9 +1076,12 @@ export const NewMessage = ({
   }, [
     activeDraftKey,
     aliasValue,
+    attachments,
     bccNames,
     clearStoredDraft,
     fromName,
+    replyAll,
+    replyTo,
     resolvedTarget,
     showAlias,
     showBCC,
@@ -2240,6 +2251,18 @@ export const NewMessage = ({
           >
             Discard
           </Button>
+          {draftSavedAt && (
+            <Typography
+              role="status"
+              aria-live="polite"
+              sx={{
+                fontSize: "0.875rem",
+                color: "var(--qmail-compose-muted)",
+              }}
+            >
+              Draft saved {formatFullTimestamp(draftSavedAt).slice(11, 16)}
+            </Typography>
+          )}
           <NewMessageSendButton
             sx={[{
               marginLeft: "auto"
@@ -2362,6 +2385,7 @@ export const NewMessage = ({
             }
 
             clearStoredDraft(activeDraftKey);
+            clearStoredDraft(openedDraftKeyRef.current);
             setIsOpenMultiplePublish(false);
             setPublishes(null);
             setPendingPublishType("mail");
