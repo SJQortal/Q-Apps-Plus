@@ -53,10 +53,7 @@ import { MailboxSearchBar } from "./MailboxSearchBar";
 import { useMailboxSearch } from "./useMailboxSearch";
 import { ThreadsMailbox } from "./ThreadsMailbox";
 import { AliasesPage } from "./AliasesPage";
-import {
-  isSentMailIdentifier,
-  parseSentRecipientFromIdentifier,
-} from "./mailIdentifier";
+import { parseSentRecipientFromIdentifier } from "./mailIdentifier";
 import {
   base64ToUint8Array,
   objectToBase64,
@@ -86,9 +83,50 @@ import MenuIcon from "@mui/icons-material/Menu";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import MailOutlineIcon from "@mui/icons-material/MailOutlined";
 import { IconButton } from "@mui/material";
+import {
+  applyPublishedArchived,
+  applyPublishedReadState,
+  archiveIds,
+  markRead,
+  markUnread,
+  unarchiveIds,
+} from "../../state/features/mailSlice";
+import {
+  haveSameArchivedIds,
+  isArchivedId,
+  type ArchivedMap,
+} from "../../utils/archiveState";
+import {
+  MAIL_STATE_DOCUMENT_IDENTIFIER,
+  MAIL_STATE_DOCUMENT_SERVICE,
+  arePublishedStateEntriesEqual,
+  buildPublishedMailStateDocument,
+  mergePublishedStateEntries,
+  parsePublishedMailStateDocument,
+  type QMailPublishedStateEntry,
+} from "../../utils/mailStateDocument";
+import { usePolling } from "../../hooks/usePolling";
+import { invalidateSearches, searchResources } from "../../utils/qdnSearch";
+import {
+  fetchGroupAvatarUrl,
+  fetchInboxMessagesForOwnedName,
+  fetchRecentInboxMessagesForOwnedName,
+  fetchRecentInboxMessagesForSavedAlias,
+  hasGroupThreadActivity,
+  hasInboxMailActivityForOwnedName,
+  hasSentMailActivityForOwnedName,
+  mergeNewRows,
+} from "../../utils/mailInbox";
+import { useAppShell } from "../../app-shell/AppShellContext";
+import {
+  countUnreadMessages,
+  hasThreadHistory,
+  readIdsFromState,
+} from "../../utils/readState";
 
 type MailboxSidebarItemId =
   | "inbox"
+  | "archived"
   | "aliases"
   | "sent"
   | "threads"
@@ -104,8 +142,7 @@ const SENT_INSTANCE_ITEM_PREFIX = "sent-instance:";
 const THREAD_GROUP_ITEM_PREFIX = "threads-group:";
 const ALIAS_COMPOSE_ITEM_ID = "alias-compose";
 const PUBLISH_STATE_ITEM_ID = "publish-mail-state";
-const MAIL_STATE_DOCUMENT_SERVICE = "DOCUMENT_PRIVATE";
-const MAIL_STATE_DOCUMENT_IDENTIFIER = "qmail_state_v1";
+const ARCHIVED_ITEM_ID = "archived";
 
 const encodeSidebarInstanceName = (name: string): string => {
   return encodeURIComponent(name);
@@ -320,19 +357,31 @@ const sortOwnedNamesForDisplay = (
   });
 };
 
-interface QMailPublishedStateEntry {
-  read?: boolean;
-  updatedAt?: number;
-  subject?: string;
+/** Unread numbers for badges and the page title (archived mail is excluded). */
+export interface UnreadCounts {
+  /** The combined inbox: every owned name. */
+  inbox: number;
+  /** Per owned name (keys as in `inboxNames`). */
+  byName: Record<string, number>;
+  /** Per watched alias, counted over the latest 20 messages the alias probe returns. */
+  byAlias: Record<string, number>;
+  /** Sum over watched aliases. */
+  aliases: number;
+  /** inbox + aliases. */
+  total: number;
 }
 
-interface QMailPublishedStateDocument {
-  version: number;
-  updatedAt: number;
-  ownerAddress: string;
-  names: string[];
-  messages: Record<string, QMailPublishedStateEntry>;
-}
+const EMPTY_UNREAD_COUNTS: UnreadCounts = {
+  inbox: 0,
+  byName: {},
+  byAlias: {},
+  aliases: 0,
+  total: 0,
+};
+
+const formatUnreadBadge = (count: number | undefined): string | undefined => {
+  return count && count > 0 ? String(count) : undefined;
+};
 
 interface BuildSidebarItemsInput {
   inboxNames: string[];
@@ -346,6 +395,7 @@ interface BuildSidebarItemsInput {
   canPublishState?: boolean;
   isPublishingState?: boolean;
   hasPendingStateChanges?: boolean;
+  unreadCounts?: UnreadCounts;
 }
 
 const getMessageIdentifier = (message: any): string => {
@@ -354,52 +404,7 @@ const getMessageIdentifier = (message: any): string => {
   return String(value);
 };
 
-const normalizePublishedStateEntry = (
-  entry: QMailPublishedStateEntry | null | undefined
-): QMailPublishedStateEntry => {
-  const read = Boolean(entry?.read);
-  const subject =
-    typeof entry?.subject === "string" ? entry.subject.trim() : "";
-  const updatedAt = Number(entry?.updatedAt || 0);
-  const normalized: QMailPublishedStateEntry = {};
-  if (read) normalized.read = true;
-  if (subject) normalized.subject = subject;
-  if (Number.isFinite(updatedAt) && updatedAt > 0) {
-    normalized.updatedAt = updatedAt;
-  }
-  return normalized;
-};
-
-const mergePublishedStateEntries = (
-  base: QMailPublishedStateEntry | null | undefined,
-  incoming: QMailPublishedStateEntry | null | undefined
-): QMailPublishedStateEntry => {
-  const normalizedBase = normalizePublishedStateEntry(base);
-  const normalizedIncoming = normalizePublishedStateEntry(incoming);
-  return {
-    read: Boolean(normalizedBase.read || normalizedIncoming.read) || undefined,
-    subject: normalizedIncoming.subject || normalizedBase.subject || undefined,
-    updatedAt:
-      Math.max(
-        Number(normalizedBase.updatedAt || 0),
-        Number(normalizedIncoming.updatedAt || 0)
-      ) || undefined,
-  };
-};
-
-const arePublishedStateEntriesEqual = (
-  a: QMailPublishedStateEntry | null | undefined,
-  b: QMailPublishedStateEntry | null | undefined
-): boolean => {
-  const normalizedA = normalizePublishedStateEntry(a);
-  const normalizedB = normalizePublishedStateEntry(b);
-  return (
-    Boolean(normalizedA.read) === Boolean(normalizedB.read) &&
-    (normalizedA.subject || "") === (normalizedB.subject || "")
-  );
-};
-
-const buildSidebarItems = ({
+export const buildSidebarItems = ({
   inboxNames,
   aliasesNames,
   aliasReplyLinks,
@@ -411,6 +416,7 @@ const buildSidebarItems = ({
   canPublishState,
   isPublishingState,
   hasPendingStateChanges,
+  unreadCounts = EMPTY_UNREAD_COUNTS,
 }: BuildSidebarItemsInput): LeftSidebarItem[] => {
   const items: LeftSidebarItem[] = [{ id: "compose", label: "Compose" }];
   const normalizedSelectedAliasInboxName = (
@@ -424,16 +430,26 @@ const buildSidebarItems = ({
     });
   }
 
-  items.push({ id: "inbox", label: "Inbox" });
+  items.push({
+    id: "inbox",
+    label: "Inbox",
+    badgeText: formatUnreadBadge(unreadCounts.inbox),
+  });
 
   sortOwnedNamesForDisplay(inboxNames, primaryName).forEach(name => {
     items.push({
       id: createInboxInstanceItemId(name),
       label: name,
+      badgeText: formatUnreadBadge(unreadCounts.byName[name]),
     });
   });
+  items.push({ id: ARCHIVED_ITEM_ID, label: "Archived" });
 
-  items.push({ id: "aliases", label: "Aliases" });
+  items.push({
+    id: "aliases",
+    label: "Aliases",
+    badgeText: formatUnreadBadge(unreadCounts.aliases),
+  });
   sortOwnedNamesForDisplay(aliasesNames, primaryName).forEach(name => {
     const normalizedAliasName = name.trim().toLowerCase();
     const linkedReplyAlias = aliasReplyLinks[normalizedAliasName] || "";
@@ -441,6 +457,7 @@ const buildSidebarItems = ({
       id: createAliasesInstanceItemId(name),
       label: name,
       secondaryLabel: linkedReplyAlias || undefined,
+      badgeText: formatUnreadBadge(unreadCounts.byAlias[name]),
     });
   });
 
@@ -479,410 +496,6 @@ const buildSidebarItems = ({
     });
   }
   return items;
-};
-
-const fetchHasMailResources = async (
-  params: URLSearchParams,
-  matcher?: (item: any) => boolean
-): Promise<boolean> => {
-  try {
-    const response = await fetch(
-      `/arbitrary/resources/search?${params.toString()}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    const responseData = await response.json();
-    if (!Array.isArray(responseData) || responseData.length === 0) {
-      return false;
-    }
-
-    if (!matcher) {
-      return responseData.length > 0;
-    }
-
-    return responseData.some(matcher);
-  } catch {
-    return false;
-  }
-};
-
-const hasGroupThreadActivity = async (
-  groupId: string | number
-): Promise<boolean> => {
-  const normalizedGroupId =
-    typeof groupId === "number"
-      ? String(groupId)
-      : typeof groupId === "string"
-      ? groupId.trim()
-      : "";
-  if (!normalizedGroupId) return false;
-
-  const params = new URLSearchParams({
-    mode: "ALL",
-    service: THREAD_SERVICE_TYPE,
-    query: `qortal_qmail_thread_group${normalizedGroupId}`,
-    limit: "1",
-    includemetadata: "false",
-    reverse: "true",
-    excludeblocked: "true",
-  });
-
-  return fetchHasMailResources(params);
-};
-
-const fetchGroupAvatarPublisherName = async (
-  groupId: string | number
-): Promise<string | null> => {
-  const normalizedGroupId =
-    typeof groupId === "number"
-      ? String(groupId)
-      : typeof groupId === "string"
-      ? groupId.trim()
-      : "";
-  if (!normalizedGroupId) return null;
-
-  try {
-    const params = new URLSearchParams({
-      mode: "ALL",
-      service: "THUMBNAIL",
-      identifier: `qortal_group_avatar_${normalizedGroupId}`,
-      limit: "1",
-      reverse: "true",
-      excludeblocked: "true",
-    });
-    const response = await fetch(
-      `/arbitrary/resources/search?${params.toString()}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    const responseData = await response.json();
-    if (!Array.isArray(responseData) || responseData.length === 0) {
-      return null;
-    }
-    const publisherName =
-      typeof responseData[0]?.name === "string"
-        ? responseData[0].name.trim()
-        : "";
-    return publisherName || null;
-  } catch {
-    return null;
-  }
-};
-
-const fetchGroupAvatarUrl = async (
-  groupId: string | number
-): Promise<string> => {
-  const normalizedGroupId =
-    typeof groupId === "number"
-      ? String(groupId)
-      : typeof groupId === "string"
-      ? groupId.trim()
-      : "";
-  if (!normalizedGroupId) return "";
-
-  const publisherName = await fetchGroupAvatarPublisherName(normalizedGroupId);
-  if (!publisherName) return "";
-
-  try {
-    const avatarUrl = await qortalRequest({
-      action: "GET_QDN_RESOURCE_URL",
-      name: publisherName,
-      service: "THUMBNAIL",
-      identifier: `qortal_group_avatar_${normalizedGroupId}`,
-    });
-    if (typeof avatarUrl !== "string") return "";
-    const normalizedUrl = avatarUrl.trim();
-    if (!normalizedUrl || normalizedUrl === "Resource does not exist") {
-      return "";
-    }
-    return normalizedUrl;
-  } catch {
-    return "";
-  }
-};
-
-const isDeletedSentResourceInSearch = (item: any): boolean => {
-  const title =
-    typeof item?.metadata?.title === "string"
-      ? item.metadata.title.trim().toLowerCase()
-      : "";
-  const tags = Array.isArray(item?.metadata?.tags)
-    ? item.metadata.tags.map((tag: any) => {
-        return typeof tag === "string" ? tag.trim().toLowerCase() : "";
-      })
-    : [];
-  return title === "__qmail_deleted__" || tags.includes("qmail-deleted");
-};
-
-const hasSentMailActivityForOwnedName = async (
-  name: string
-): Promise<boolean> => {
-  const normalizedName = typeof name === "string" ? name.trim() : "";
-  if (!normalizedName) return false;
-  const normalizedNameLower = normalizedName.toLowerCase();
-
-  const sentQueryConfigs: Array<{ query: string; identifier?: string }> = [
-    {
-      query: "_mail_qortal_qmail_",
-      identifier: "_mail_",
-    },
-    {
-      query: "qortal_qmail_",
-    },
-  ];
-
-  for (const queryConfig of sentQueryConfigs) {
-    const sentParams = new URLSearchParams({
-      mode: "ALL",
-      service: MAIL_SERVICE_TYPE,
-      query: queryConfig.query,
-      name: normalizedName,
-      exactmatchnames: "true",
-      limit: "20",
-      includemetadata: "true",
-      reverse: "true",
-      excludeblocked: "true",
-    });
-
-    if (queryConfig.identifier) {
-      sentParams.set("identifier", queryConfig.identifier);
-    }
-
-    const hasSent = await fetchHasMailResources(sentParams, item => {
-      const itemName =
-        typeof item?.name === "string" ? item.name.trim().toLowerCase() : "";
-      const identifier =
-        typeof item?.identifier === "string" ? item.identifier : "";
-      return (
-        itemName === normalizedNameLower &&
-        isSentMailIdentifier(identifier) &&
-        !isDeletedSentResourceInSearch(item)
-      );
-    });
-
-    if (hasSent) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
-const hasInboxMailActivityForOwnedName = async (
-  name: string,
-  ownerAddress: string
-): Promise<boolean> => {
-  const normalizedName = typeof name === "string" ? name.trim() : "";
-  const normalizedAddress =
-    typeof ownerAddress === "string" ? ownerAddress.trim() : "";
-  if (!normalizedName || !normalizedAddress) return false;
-  const normalizedAddressSuffix = normalizedAddress.slice(-6).toLowerCase();
-
-  const inboxAddressQuery = `qortal_qmail_${normalizedName.slice(
-    0,
-    20
-  )}_${normalizedAddress.slice(-6)}_mail_`;
-  const expectedAddressIdentifierPrefix =
-    `_mail_${inboxAddressQuery}`.toLowerCase();
-  const inboxByAddressParams = new URLSearchParams({
-    mode: "ALL",
-    service: MAIL_SERVICE_TYPE,
-    query: inboxAddressQuery,
-    limit: "20",
-    includemetadata: "false",
-    reverse: "true",
-    excludeblocked: "true",
-  });
-
-  if (
-    await fetchHasMailResources(inboxByAddressParams, item => {
-      const identifier =
-        typeof item?.identifier === "string"
-          ? item.identifier.toLowerCase()
-          : "";
-      return (
-        identifier.startsWith(expectedAddressIdentifierPrefix) &&
-        identifier.includes(`_${normalizedAddressSuffix}_mail_`)
-      );
-    })
-  ) {
-    return true;
-  }
-
-  const inboxAliasQuery = `qortal_qmail_${normalizedName}_mail_`;
-  const expectedAliasIdentifierPrefix =
-    `_mail_${inboxAliasQuery}`.toLowerCase();
-  const inboxAliasParams = new URLSearchParams({
-    mode: "ALL",
-    service: MAIL_SERVICE_TYPE,
-    query: inboxAliasQuery,
-    limit: "20",
-    includemetadata: "false",
-    reverse: "true",
-    excludeblocked: "true",
-  });
-
-  return fetchHasMailResources(inboxAliasParams, item => {
-    const identifier =
-      typeof item?.identifier === "string" ? item.identifier.toLowerCase() : "";
-    return identifier.startsWith(expectedAliasIdentifierPrefix);
-  });
-};
-
-const hasInboxMailActivityForSavedAlias = async (
-  aliasName: string
-): Promise<boolean> => {
-  const normalizedAlias = typeof aliasName === "string" ? aliasName.trim() : "";
-  if (!normalizedAlias) return false;
-
-  const aliasQuery = `qortal_qmail_${normalizedAlias}_mail_`;
-  const expectedAliasIdentifierPrefix = `_mail_${aliasQuery}`.toLowerCase();
-  const aliasParams = new URLSearchParams({
-    mode: "ALL",
-    service: MAIL_SERVICE_TYPE,
-    query: aliasQuery,
-    limit: "20",
-    includemetadata: "false",
-    reverse: "true",
-    excludeblocked: "true",
-  });
-
-  return fetchHasMailResources(aliasParams, item => {
-    const identifier =
-      typeof item?.identifier === "string" ? item.identifier.toLowerCase() : "";
-    return identifier.startsWith(expectedAliasIdentifierPrefix);
-  });
-};
-
-const mapMailResources = (resources: any[]) => {
-  return resources.map((post: any) => {
-    return {
-      title: post?.metadata?.title,
-      category: post?.metadata?.category,
-      categoryName: post?.metadata?.categoryName,
-      tags: post?.metadata?.tags || [],
-      description: post?.metadata?.description,
-      createdAt: post?.created,
-      updated: post?.updated,
-      user: post?.name,
-      id: post?.identifier,
-    };
-  });
-};
-
-const fetchInboxMessagesForOwnedName = async (
-  name: string,
-  ownerAddress: string
-): Promise<any[]> => {
-  const normalizedName = typeof name === "string" ? name.trim() : "";
-  const normalizedAddress =
-    typeof ownerAddress === "string" ? ownerAddress.trim() : "";
-  if (!normalizedName || !normalizedAddress) return [];
-
-  const addressSuffix = normalizedAddress.slice(-6);
-  if (!addressSuffix) return [];
-  const normalizedAddressSuffix = `_${addressSuffix}_mail_`.toLowerCase();
-  const byAddressQuery = `qortal_qmail_${normalizedName.slice(
-    0,
-    20
-  )}_${addressSuffix}_mail_`;
-  const byAliasQuery = `qortal_qmail_${normalizedName}_mail_`;
-
-  const queryConfigs: Array<{
-    query: string;
-    matches: (identifier: string) => boolean;
-  }> = [
-    {
-      query: byAddressQuery,
-      matches: (identifier: string) => {
-        const normalizedIdentifier = identifier.toLowerCase();
-        return (
-          normalizedIdentifier.startsWith(
-            `_mail_${byAddressQuery}`.toLowerCase()
-          ) && normalizedIdentifier.includes(normalizedAddressSuffix)
-        );
-      },
-    },
-    {
-      query: byAliasQuery,
-      matches: (identifier: string) => {
-        return identifier
-          .toLowerCase()
-          .startsWith(`_mail_${byAliasQuery}`.toLowerCase());
-      },
-    },
-  ];
-
-  const allResources: any[] = [];
-  const pageSize = 200;
-
-  for (const queryConfig of queryConfigs) {
-    let offset = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      const params = new URLSearchParams({
-        mode: "ALL",
-        service: MAIL_SERVICE_TYPE,
-        query: queryConfig.query,
-        limit: String(pageSize),
-        includemetadata: "true",
-        offset: String(offset),
-        reverse: "true",
-        excludeblocked: "true",
-      });
-
-      const response = await fetch(
-        `/arbitrary/resources/search?${params.toString()}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      const responseData = await response.json();
-
-      if (!Array.isArray(responseData) || responseData.length === 0) {
-        break;
-      }
-
-      const filteredResponse = responseData.filter((item: any) => {
-        const identifier =
-          typeof item?.identifier === "string" ? item.identifier : "";
-        if (!identifier) return false;
-        return queryConfig.matches(identifier);
-      });
-      allResources.push(...filteredResponse);
-
-      if (responseData.length < pageSize) {
-        hasMore = false;
-      } else {
-        offset += responseData.length;
-      }
-    }
-  }
-
-  const mapped = mapMailResources(allResources);
-  const deduped = new Map<string, any>();
-  mapped.forEach(item => {
-    if (!item?.id) return;
-    if (!deduped.has(item.id)) {
-      deduped.set(item.id, item);
-    }
-  });
-
-  return Array.from(deduped.values()).sort((a, b) => {
-    return Number(b?.createdAt || 0) - Number(a?.createdAt || 0);
-  });
 };
 
 const steps: Step[] = [
@@ -1007,6 +620,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const { name: composeRouteName } = useParams();
   const { isShow, onCancel, onOk, show } = useModal();
   const { user } = useSelector((state: RootState) => state.auth);
+  const { registerMailSync } = useAppShell();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [message, setMessage] = useState<any>(null);
@@ -1017,6 +631,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const [watchedAliasesWithMessages, setWatchedAliasesWithMessages] = useState<
     string[]
   >([]);
+  const [watchedAliasRecentMessages, setWatchedAliasRecentMessages] = useState<
+    Record<string, any[]>
+  >({});
   const [isLoadingWatchedAliasActivity, setIsLoadingWatchedAliasActivity] =
     useState(false);
   const [isAliasScanRunning, setIsAliasScanRunning] = useState(false);
@@ -1095,16 +712,12 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const hasPromptedForPublishedMailStateRef = useRef<string | null>(null);
   const [rememberQdnStatePreferenceOnLoad, setRememberQdnStatePreferenceOnLoad] =
     useState(false);
+  // Mirrors the checkbox so the load prompt (awaited inside a callback created
+  // before the user ticked it) reads the current value (Bugs #2).
+  const rememberQdnStatePreferenceRef = useRef(false);
   const markMessagesAsReadRef = useRef<
     ((messages: any[]) => void | Promise<void>) | null
   >(null);
-  const publishedMailStateApplyStatusRef = useRef<{
-    mailMessagesApplied: boolean;
-    combinedAliasInboxMessagesApplied: boolean;
-  }>({
-    mailMessagesApplied: false,
-    combinedAliasInboxMessagesApplied: false,
-  });
   const userAvatarHash = useSelector(
     (state: RootState) => state.global.userAvatarHash
   );
@@ -1135,6 +748,10 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const mailMessages = useSelector(
     (state: RootState) => state.mail.mailMessages
   );
+  const readState = useSelector((state: RootState) => state.mail.readState);
+  const archived = useSelector((state: RootState) => state.mail.archived);
+  const [publishedArchivedById, setPublishedArchivedById] =
+    useState<ArchivedMap>({});
   const { Modal: LoadPublishedStateModal, showModal: showLoadPublishedStateModal } =
     useConfirmationModal({
       title: "Load published QDN state?",
@@ -1151,6 +768,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
             <Checkbox
               checked={rememberQdnStatePreferenceOnLoad}
               onChange={(_, checked) => {
+                rememberQdnStatePreferenceRef.current = checked;
                 setRememberQdnStatePreferenceOnLoad(checked);
               }}
             />
@@ -1198,6 +816,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const isAliasesViewActive = activeMailboxItem === "aliases";
   const isSentViewActive = activeMailboxItem === "sent";
   const isInboxViewActive = activeMailboxItem === "inbox";
+  const isArchivedViewActive = activeMailboxItem === "archived";
   const selectedInboxInstanceName =
     isInboxViewActive && selectedAliasScope === "inbox" ? selectedAlias : null;
   const selectedAliasInboxName =
@@ -1281,6 +900,41 @@ export const Mail = ({ isFromTo }: MailProps) => {
       return Number(b?.createdAt || 0) - Number(a?.createdAt || 0);
     });
   }, [combinedAliasInboxMessages, mailMessages]);
+  const unreadCounts = useMemo<UnreadCounts>(() => {
+    if (!hasAuthenticatedIdentity) return EMPTY_UNREAD_COUNTS;
+    const byName: Record<string, number> = {};
+    ownedInboxNames.forEach(name => {
+      const messages =
+        name.toLowerCase() === normalizedUserName
+          ? mailMessages
+          : combinedAliasInboxMessages[name] || [];
+      byName[name] = countUnreadMessages(messages, readState, archived);
+    });
+    const byAlias: Record<string, number> = {};
+    let aliases = 0;
+    Object.entries(watchedAliasRecentMessages).forEach(([alias, messages]) => {
+      const count = countUnreadMessages(messages, readState, archived);
+      byAlias[alias] = count;
+      aliases += count;
+    });
+    const inbox = countUnreadMessages(combinedInboxMessages, readState, archived);
+    return { inbox, byName, byAlias, aliases, total: inbox + aliases };
+  }, [
+    archived,
+    combinedAliasInboxMessages,
+    combinedInboxMessages,
+    hasAuthenticatedIdentity,
+    mailMessages,
+    normalizedUserName,
+    ownedInboxNames,
+    readState,
+    watchedAliasRecentMessages,
+  ]);
+
+  useEffect(() => {
+    const total = unreadCounts.total;
+    document.title = total > 0 ? `(${total}) Q-Mail+` : "Q-Mail+";
+  }, [unreadCounts.total]);
   const composePriorityRecipientNames = useMemo(() => {
     const deduped = new Map<string, string>();
     const addName = (value: any) => {
@@ -1312,15 +966,29 @@ export const Mail = ({ isFromTo }: MailProps) => {
       return a.localeCompare(b, undefined, { sensitivity: "base" });
     });
   }, [combinedAliasInboxMessages, hashMapMailMessages, mailMessages]);
+  const archivedMessages = useMemo(() => {
+    return combinedInboxMessages.filter(message => {
+      return isArchivedId(archived, getMessageIdentifier(message));
+    });
+  }, [archived, combinedInboxMessages]);
   const inboxMessagesForList = useMemo(() => {
+    const withoutArchived = (messages: any[]) => {
+      return messages.filter(message => {
+        return !isArchivedId(archived, getMessageIdentifier(message));
+      });
+    };
     if (!selectedInboxInstanceName) {
-      return combinedInboxMessages;
+      return withoutArchived(combinedInboxMessages);
     }
     if (selectedInboxInstanceName.toLowerCase() === normalizedUserName) {
-      return mailMessages;
+      return withoutArchived(mailMessages);
     }
-    return null;
+    return withoutArchived(
+      combinedAliasInboxMessages[selectedInboxInstanceName] ?? []
+    );
   }, [
+    archived,
+    combinedAliasInboxMessages,
     combinedInboxMessages,
     mailMessages,
     normalizedUserName,
@@ -1360,27 +1028,58 @@ export const Mail = ({ isFromTo }: MailProps) => {
     [getAllMailMessages, user]
   );
 
-  const interval = useRef<any>(null);
-
-  const checkNewMessagesFunc = useCallback(() => {
-    if (!user?.name || !user?.address) return;
-    let isCalling = false;
-    interval.current = setInterval(async () => {
-      if (isCalling || !user?.name || !user?.address) return;
-      isCalling = true;
-      const res = await checkNewMessages(user?.name, user.address);
-      isCalling = false;
-    }, 30000);
-  }, [checkNewMessages, user]);
-
+  const combinedAliasInboxMessagesRef = useRef(combinedAliasInboxMessages);
   useEffect(() => {
-    checkNewMessagesFunc();
-    return () => {
-      if (interval?.current) {
-        clearInterval(interval.current);
+    combinedAliasInboxMessagesRef.current = combinedAliasInboxMessages;
+  }, [combinedAliasInboxMessages]);
+
+  // New-mail poll for the combined inbox: the primary name through
+  // checkNewMessages, every other owned name with mail through the limit-20
+  // owned-name queries. Pauses while hidden and backs off while nothing is new.
+  usePolling(
+    async () => {
+      if (!user?.name || !user?.address) return;
+      const address = user.address;
+      const namesToPoll = combinedAliasInboxNames.filter(name => {
+        return Boolean(combinedAliasInboxMessagesRef.current[name]);
+      });
+      const [primaryNewCount, ...secondaryResults] = await Promise.all([
+        checkNewMessages(user.name, address),
+        ...namesToPoll.map(async name => {
+          const rows = await fetchRecentInboxMessagesForOwnedName(name, address);
+          return { name, rows };
+        }),
+      ]);
+      let foundNew = Boolean(primaryNewCount);
+      if (secondaryResults.length) {
+        const previous = combinedAliasInboxMessagesRef.current;
+        secondaryResults.forEach(({ name, rows }) => {
+          const known = previous[name];
+          if (known && mergeNewRows(known, rows) !== known) {
+            foundNew = true;
+          }
+        });
+        setCombinedAliasInboxMessages(current => {
+          let next = current;
+          secondaryResults.forEach(({ name, rows }) => {
+            const known = current[name];
+            if (!known) return;
+            const merged = mergeNewRows(known, rows);
+            if (merged === known) return;
+            if (next === current) next = { ...current };
+            next[name] = merged;
+          });
+          return next;
+        });
       }
-    };
-  }, [checkNewMessagesFunc]);
+      return foundNew;
+    },
+    {
+      intervalMs: 30000,
+      maxIntervalMs: 300000,
+      enabled: hasAuthenticatedIdentity,
+    }
+  );
 
   const openMessage = async (
     user: string,
@@ -1622,6 +1321,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   useEffect(() => {
     if (!hasAuthenticatedIdentity || watchedAliases.length === 0) {
       setWatchedAliasesWithMessages([]);
+      setWatchedAliasRecentMessages({});
       setIsLoadingWatchedAliasActivity(false);
       return;
     }
@@ -1632,21 +1332,27 @@ export const Mail = ({ isFromTo }: MailProps) => {
       try {
         const results = await Promise.all(
           watchedAliases.map(async aliasName => {
-            const hasMessages = await hasInboxMailActivityForSavedAlias(
+            const messages = await fetchRecentInboxMessagesForSavedAlias(
               aliasName
             );
             return {
               aliasName,
-              hasMessages,
+              messages,
             };
           })
         );
 
         if (cancelled) return;
         const aliasesWithMessages = results
-          .filter(result => result.hasMessages)
+          .filter(result => result.messages.length > 0)
           .map(result => result.aliasName);
         setWatchedAliasesWithMessages(aliasesWithMessages);
+        setWatchedAliasRecentMessages(
+          results.reduce<Record<string, any[]>>((accumulator, result) => {
+            accumulator[result.aliasName] = result.messages;
+            return accumulator;
+          }, {})
+        );
       } finally {
         if (!cancelled) {
           setIsLoadingWatchedAliasActivity(false);
@@ -1892,59 +1598,89 @@ export const Mail = ({ isFromTo }: MailProps) => {
     };
   }, [hasAuthenticatedIdentity, missingGroupAvatarIds]);
 
+  // Per-name inbox indexes are fetched once per session and address (Bugs #9);
+  // the poll keeps them fresh. Names whose fetch failed are retried next visit.
+  const fetchedInboxNamesRef = useRef<{ address: string; names: Set<string> }>({
+    address: "",
+    names: new Set(),
+  });
+  const combinedInboxFetchesInFlightRef = useRef(0);
+
+  useEffect(() => {
+    const address = typeof user?.address === "string" ? user.address : "";
+    if (fetchedInboxNamesRef.current.address === address) return;
+    fetchedInboxNamesRef.current = { address, names: new Set() };
+    setCombinedAliasInboxMessages({});
+  }, [user?.address]);
+
   useEffect(() => {
     if (
       !hasAuthenticatedIdentity ||
       !user?.address ||
-      !isInboxViewActive ||
-      selectedInboxInstanceName
+      !(isInboxViewActive || isArchivedViewActive)
     ) {
       return;
     }
+    const address = user.address;
+    const selectedSecondaryName =
+      selectedInboxInstanceName &&
+      selectedInboxInstanceName.toLowerCase() !== normalizedUserName
+        ? selectedInboxInstanceName
+        : null;
+    const wantedNames = selectedSecondaryName
+      ? [selectedSecondaryName]
+      : combinedAliasInboxNames;
+    const cache = fetchedInboxNamesRef.current;
+    const namesToFetch = wantedNames.filter(name => {
+      return cache.address === address && !cache.names.has(name);
+    });
+    if (!namesToFetch.length) return;
 
-    if (!combinedAliasInboxNames.length) {
-      setCombinedAliasInboxMessages({});
-      return;
-    }
-
-    let canceled = false;
+    // Results are merged even if this effect is cleaned up meanwhile: the names
+    // are already marked as fetched, so dropping them would lose them.
     const fetchCombinedAliasInboxMessages = async () => {
+      combinedInboxFetchesInFlightRef.current += 1;
       setIsLoadingCombinedAliasInbox(true);
       try {
+        namesToFetch.forEach(name => cache.names.add(name));
         const results = await Promise.all(
-          combinedAliasInboxNames.map(async name => {
-            const messages = await fetchInboxMessagesForOwnedName(
-              name,
-              user.address
-            );
-            return { name, messages };
+          namesToFetch.map(async name => {
+            try {
+              const messages = await fetchInboxMessagesForOwnedName(
+                name,
+                address
+              );
+              return { name, messages };
+            } catch {
+              cache.names.delete(name);
+              return null;
+            }
           })
         );
 
-        if (canceled) return;
-        const nextState = results.reduce<Record<string, any[]>>(
-          (accumulator, result) => {
-            accumulator[result.name] = result.messages;
-            return accumulator;
-          },
-          {}
-        );
-        setCombinedAliasInboxMessages(nextState);
+        setCombinedAliasInboxMessages(previous => {
+          const next = { ...previous };
+          results.forEach(result => {
+            if (!result) return;
+            next[result.name] = result.messages;
+          });
+          return next;
+        });
       } finally {
-        if (!canceled) {
-          setIsLoadingCombinedAliasInbox(false);
-        }
+        combinedInboxFetchesInFlightRef.current -= 1;
+        setIsLoadingCombinedAliasInbox(
+          combinedInboxFetchesInFlightRef.current > 0
+        );
       }
     };
 
     void fetchCombinedAliasInboxMessages();
-    return () => {
-      canceled = true;
-    };
   }, [
     combinedAliasInboxNames,
     hasAuthenticatedIdentity,
+    isArchivedViewActive,
     isInboxViewActive,
+    normalizedUserName,
     selectedInboxInstanceName,
     user?.address,
   ]);
@@ -2136,17 +1872,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
           excludeblocked: "true",
         });
 
-        const response = await fetch(
-          `/arbitrary/resources/search?${params.toString()}`,
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        const responseData = await response.json();
-        if (!Array.isArray(responseData) || responseData.length === 0) {
+        const responseData = await searchResources(params, { ttlMs: 0 });
+        if (responseData.length === 0) {
           break;
         }
 
@@ -2502,11 +2229,11 @@ export const Mail = ({ isFromTo }: MailProps) => {
       if (!identifier) return;
 
       const relatedHashMessage: any = hashMapMailMessages[identifier] || {};
+      const readEntry = readState[identifier];
       const isRead =
-        (Array.isArray(message?.generalData?.threadV2) &&
-          message.generalData.threadV2.length > 0) ||
-        (Array.isArray(relatedHashMessage?.generalData?.threadV2) &&
-          relatedHashMessage.generalData.threadV2.length > 0);
+        typeof readEntry === "number"
+          ? readEntry > 0
+          : hasThreadHistory(message) || hasThreadHistory(relatedHashMessage);
 
       const subjectCandidates = [
         relatedHashMessage?.subject,
@@ -2532,7 +2259,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     Object.values(hashMapMailMessages).forEach(collectFromMessage);
 
     return collectedState;
-  }, [combinedAliasInboxMessages, hashMapMailMessages, mailMessages]);
+  }, [combinedAliasInboxMessages, hashMapMailMessages, mailMessages, readState]);
 
   const hasPendingStateChanges = useMemo(() => {
     return Object.keys(localMailStateById).some(identifier => {
@@ -2553,6 +2280,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
         if (!readIdentifiers.length) return;
 
         const readIdSet = new Set(readIdentifiers);
+        dispatch(markRead({ ids: readIdentifiers }));
         const updatedMailMessages = applyReadStateToMessages(
           mailMessages,
           readIdSet
@@ -2587,6 +2315,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
         if (!unreadIdentifiers.length) return;
 
         const unreadIdSet = new Set(unreadIdentifiers);
+        dispatch(markUnread({ ids: unreadIdentifiers }));
         const updatedMailMessages = applyUnreadStateToMessages(
           mailMessages,
           unreadIdSet
@@ -2607,30 +2336,45 @@ export const Mail = ({ isFromTo }: MailProps) => {
     ]
   );
 
+  const archiveMessages = useCallback(
+    (messages: any[]) => {
+      const ids = messages
+        .map(message => getMessageIdentifier(message))
+        .filter(Boolean);
+      if (!ids.length) return;
+      dispatch(archiveIds({ ids }));
+    },
+    [dispatch]
+  );
+
+  const unarchiveMessages = useCallback(
+    (messages: any[]) => {
+      const ids = messages
+        .map(message => getMessageIdentifier(message))
+        .filter(Boolean);
+      if (!ids.length) return;
+      dispatch(unarchiveIds({ ids }));
+    },
+    [dispatch]
+  );
+
+  const hasPendingArchivedChanges = useMemo(() => {
+    return !haveSameArchivedIds(archived, publishedArchivedById);
+  }, [archived, publishedArchivedById]);
+
   const publishMailStateToQdn = useCallback(async () => {
     if (!user?.name || !user?.address) return;
     try {
       setIsPublishingMailState(true);
-      const mergedStateEntries: Record<string, QMailPublishedStateEntry> = {
-        ...publishedMailStateById,
-      };
-      Object.entries(localMailStateById).forEach(([identifier, entry]) => {
-        mergedStateEntries[identifier] = mergePublishedStateEntries(
-          mergedStateEntries[identifier],
-          {
-            ...entry,
-            updatedAt: Date.now(),
-          }
-        );
-      });
-
-      const payload: QMailPublishedStateDocument = {
-        version: 1,
-        updatedAt: Date.now(),
-        ownerAddress: user.address,
-        names: ownedNameCandidates,
-        messages: mergedStateEntries,
-      };
+      const { document: payload, mergedEntries: mergedStateEntries } =
+        buildPublishedMailStateDocument({
+          ownerAddress: user.address,
+          names: ownedNameCandidates,
+          publishedEntries: publishedMailStateById,
+          localEntries: localMailStateById,
+          archived,
+        });
+      const archivedToPublish: ArchivedMap = payload.archived || {};
       const encoded = await objectToBase64(payload);
 
       // Get user's public key for encryption
@@ -2658,6 +2402,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
         publicKeys: userPublicKey ? [userPublicKey] : [],
       });
 
+      invalidateSearches(`service=${MAIL_STATE_DOCUMENT_SERVICE}`);
+      invalidateSearches("service=MAIL_PRIVATE");
       dispatch(
         setNotification({
           msg: "Published Q-Mail read state",
@@ -2665,6 +2411,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
         })
       );
       setPublishedMailStateById(mergedStateEntries);
+      setPublishedArchivedById(archivedToPublish);
     } catch (error: any) {
       const messageText =
         typeof error?.message === "string"
@@ -2680,6 +2427,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       setIsPublishingMailState(false);
     }
   }, [
+    archived,
     dispatch,
     localMailStateById,
     ownedNameCandidates,
@@ -2687,6 +2435,31 @@ export const Mail = ({ isFromTo }: MailProps) => {
     user?.address,
     user?.name,
   ]);
+
+  // Settings → Sync uses the same publish path as the rail item.
+  useEffect(() => {
+    if (!hasAuthenticatedIdentity) {
+      registerMailSync(null);
+      return;
+    }
+    registerMailSync({
+      publishMailState: publishMailStateToQdn,
+      isPublishing: isPublishingMailState,
+      hasPendingChanges: hasPendingStateChanges || hasPendingArchivedChanges,
+    });
+  }, [
+    hasAuthenticatedIdentity,
+    hasPendingArchivedChanges,
+    hasPendingStateChanges,
+    isPublishingMailState,
+    publishMailStateToQdn,
+    registerMailSync,
+  ]);
+  useEffect(() => {
+    return () => {
+      registerMailSync(null);
+    };
+  }, [registerMailSync]);
 
   const loadPublishedMailStateFromQdn = useCallback(async () => {
     if (!user?.name) return;
@@ -2716,17 +2489,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
           reverse: "true",
           excludeblocked: "true",
         });
-        const searchResponse = await fetch(
-          `/arbitrary/resources/search?${searchParams.toString()}`,
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        const searchData = await searchResponse.json();
-        if (!Array.isArray(searchData) || searchData.length === 0) {
+        const searchData = await searchResources(searchParams);
+        if (!searchData.length) {
           return;
         }
 
@@ -2735,7 +2499,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
           return;
         }
 
-        if (rememberQdnStatePreferenceOnLoad) {
+        if (rememberQdnStatePreferenceRef.current) {
           writeAutoApplyQdnState(qdnIdentity, true);
         }
       }
@@ -2755,28 +2519,16 @@ export const Mail = ({ isFromTo }: MailProps) => {
         decodedObject = uint8ArrayToObject(base64ToUint8Array(encodedResource));
       }
 
-      if (!decodedObject || typeof decodedObject !== "object") return;
-      const maybeMessages = decodedObject.messages;
-      if (!maybeMessages || typeof maybeMessages !== "object") return;
-
-      const normalizedPublishedStateById: Record<
-        string,
-        QMailPublishedStateEntry
-      > = {};
-      Object.entries(maybeMessages).forEach(([identifier, entry]) => {
-        if (!identifier || typeof entry !== "object" || !entry) return;
-        const normalizedEntry = normalizePublishedStateEntry(
-          entry as QMailPublishedStateEntry
-        );
-        if (!normalizedEntry.read && !normalizedEntry.subject) return;
-        normalizedPublishedStateById[identifier] = normalizedEntry;
-      });
+      const parsed = parsePublishedMailStateDocument(decodedObject);
+      if (!parsed) return;
+      const loadedArchived = parsed.archived;
+      if (Object.keys(loadedArchived).length) {
+        setPublishedArchivedById(loadedArchived);
+        dispatch(applyPublishedArchived(loadedArchived));
+      }
+      const normalizedPublishedStateById = parsed.messages;
 
       if (!Object.keys(normalizedPublishedStateById).length) return;
-      publishedMailStateApplyStatusRef.current = {
-        mailMessagesApplied: false,
-        combinedAliasInboxMessagesApplied: false,
-      };
       setPublishedMailStateById(normalizedPublishedStateById);
       dispatch(
         setNotification({
@@ -2793,7 +2545,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     }
   }, [
     dispatch,
-    rememberQdnStatePreferenceOnLoad,
     showLoadPublishedStateModal,
     user?.name,
     user?.address,
@@ -2874,19 +2625,22 @@ export const Mail = ({ isFromTo }: MailProps) => {
       primaryName: user?.name,
       canPublishState: hasAuthenticatedIdentity,
       isPublishingState: isPublishingMailState,
-      hasPendingStateChanges,
+      hasPendingStateChanges: hasPendingStateChanges || hasPendingArchivedChanges,
+      unreadCounts,
     });
   }, [
     aliasSidebarNames,
     aliasReplyLinks,
     groupOptionsWithThreads,
     hasAuthenticatedIdentity,
+    hasPendingArchivedChanges,
     hasPendingStateChanges,
     inboxSidebarNames,
     isThreadsSectionExpanded,
     isPublishingMailState,
     ownedSentNames,
     selectedAliasInboxName,
+    unreadCounts,
     user?.name,
   ]);
   const onSelectSidebarItem = useCallback(
@@ -3052,6 +2806,19 @@ export const Mail = ({ isFromTo }: MailProps) => {
         return;
       }
 
+      if (itemId === ARCHIVED_ITEM_ID) {
+        setActiveMailboxItem("archived");
+        setMobileMode("inbox");
+        setSelectedAlias(null);
+        setSelectedAliasScope(null);
+        setSelectedGroup(null);
+        setCurrentThread(null);
+        setIsOpen(false);
+        setMessage(null);
+        closeSidebarIfTransient();
+        return;
+      }
+
       if (itemId === "inbox" || itemId === "sent") {
         setActiveMailboxItem(itemId);
         setMobileMode(itemId);
@@ -3074,69 +2841,46 @@ export const Mail = ({ isFromTo }: MailProps) => {
 
   useEffect(() => {
     setPublishedMailStateById({});
-    publishedMailStateApplyStatusRef.current = {
-      mailMessagesApplied: false,
-      combinedAliasInboxMessagesApplied: false,
-    };
+    setPublishedArchivedById({});
   }, [user?.address, user?.name]);
 
   useEffect(() => {
+    rememberQdnStatePreferenceRef.current = false;
     setRememberQdnStatePreferenceOnLoad(false);
   }, [user?.address, user?.name]);
 
+  // Loaded document → read store (only ids with no local decision, see readState.ts).
   useEffect(() => {
-    if (!Object.keys(publishedMailStateById).length) {
-      publishedMailStateApplyStatusRef.current = {
-        mailMessagesApplied: false,
-        combinedAliasInboxMessagesApplied: false,
-      };
-      return;
-    }
+    const readIds = Object.entries(publishedMailStateById)
+      .filter(([identifier, entry]) => Boolean(identifier) && Boolean(entry?.read))
+      .map(([identifier]) => identifier);
+    if (!readIds.length) return;
+    dispatch(applyPublishedReadState({ ids: readIds }));
+  }, [dispatch, publishedMailStateById]);
 
-    const readIdSet = new Set<string>();
-    Object.entries(publishedMailStateById).forEach(([identifier, entry]) => {
-      if (!identifier || !entry?.read) return;
-      readIdSet.add(identifier);
-    });
-
-    const applyStatus = publishedMailStateApplyStatusRef.current;
-    if (!readIdSet.size) {
-      applyStatus.mailMessagesApplied = true;
-      applyStatus.combinedAliasInboxMessagesApplied = true;
-      return;
-    }
-
-    if (!applyStatus.mailMessagesApplied && mailMessages.length > 0) {
+  // Read store → the list copies, so rows show read state after a reload. Only
+  // adds the local marker; "mark as unread" strips it through markMessagesAsUnread.
+  useEffect(() => {
+    const readIdSet = readIdsFromState(readState);
+    if (!readIdSet.size) return;
+    if (mailMessages.length > 0) {
       const updatedMailMessages = applyReadStateToMessages(
         mailMessages,
         readIdSet
       );
-      applyStatus.mailMessagesApplied = true;
       if (updatedMailMessages !== mailMessages) {
         dispatch(upsertMessages(updatedMailMessages));
       }
     }
-
-    if (
-      !applyStatus.combinedAliasInboxMessagesApplied &&
-      Object.keys(combinedAliasInboxMessages).length > 0
-    ) {
-      const updatedCombinedAliasInboxMessages = applyReadStateToCombinedMap(
-        combinedAliasInboxMessages,
-        readIdSet
-      );
-      applyStatus.combinedAliasInboxMessagesApplied = true;
-      if (updatedCombinedAliasInboxMessages !== combinedAliasInboxMessages) {
-        setCombinedAliasInboxMessages(updatedCombinedAliasInboxMessages);
-      }
-    }
+    setCombinedAliasInboxMessages(previous => {
+      return applyReadStateToCombinedMap(previous, readIdSet);
+    });
   }, [
     applyReadStateToCombinedMap,
     applyReadStateToMessages,
-    combinedAliasInboxMessages,
     dispatch,
     mailMessages,
-    publishedMailStateById,
+    readState,
   ]);
 
   useEffect(() => {
@@ -3339,6 +3083,34 @@ export const Mail = ({ isFromTo }: MailProps) => {
     ) : (
       renderAuthenticationPrompt("Inbox")
     );
+  } else if (isArchivedViewActive) {
+    listTitle = "Archived";
+    listSubtitle = user?.name || undefined;
+    listBack = () => {
+      onSelectSidebarItem("inbox");
+    };
+    listBody = hasAuthenticatedIdentity ? (
+      archivedMessages.length ? (
+        <GroupedMailboxList
+          messages={archivedMessages}
+          mailboxType="inbox"
+          showSelectAll
+          openMessage={openMessage}
+          openedMessageId={message?.id || message?.identifier}
+          onMarkAsRead={markMessagesAsRead}
+          onMarkAsUnread={markMessagesAsUnread}
+          onUnarchive={unarchiveMessages}
+        />
+      ) : (
+        <EmptyState
+          icon={<InboxOutlinedIcon />}
+          title="Nothing archived"
+          hint="Select messages in the inbox and choose Archive to tidy them away. They stay on QDN."
+        />
+      )
+    ) : (
+      renderAuthenticationPrompt("Inbox")
+    );
   } else if (isThreadsView) {
     listTitle = "Threads";
     listSubtitle = "Group mail";
@@ -3375,9 +3147,13 @@ export const Mail = ({ isFromTo }: MailProps) => {
           openedMessageId={message?.id || message?.identifier}
           onMarkAsRead={markMessagesAsRead}
           onMarkAsUnread={markMessagesAsUnread}
+          onArchive={archiveMessages}
         />
         {isLoading && spinner}
-        {!selectedInboxInstanceName && isLoadingCombinedAliasInbox && spinner}
+        {isLoadingCombinedAliasInbox &&
+          (!selectedInboxInstanceName ||
+            !combinedAliasInboxMessages[selectedInboxInstanceName]) &&
+          spinner}
       </>
     ) : (
       renderAuthenticationPrompt("Inbox")
@@ -3607,10 +3383,10 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const bottomNav = (
     <BottomNav
       items={[
-        { id: "inbox", label: "Inbox", icon: <InboxOutlinedIcon /> },
+        { id: "inbox", label: "Inbox", icon: <InboxOutlinedIcon />, badge: unreadCounts.inbox || undefined },
         { id: "sent", label: "Sent", icon: <SendOutlinedIcon /> },
         { id: "threads", label: "Threads", icon: <ForumOutlinedIcon /> },
-        { id: "aliases", label: "Aliases", icon: <AlternateEmailOutlinedIcon /> },
+        { id: "aliases", label: "Aliases", icon: <AlternateEmailOutlinedIcon />, badge: unreadCounts.aliases || undefined },
         { id: "menu", label: "Menu", icon: <MenuIcon /> },
       ]}
       activeId={isComposeView ? null : activeMailboxItem}

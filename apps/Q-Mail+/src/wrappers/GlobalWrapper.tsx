@@ -20,8 +20,13 @@ import {
 } from "../state/features/mailSlice";
 import { applyQAppTextSize } from "@qortal/qapp-lib/typography";
 import { useQMailAppShell } from "../app-shell/useQMailAppShell";
-import { AppShellContext } from "../app-shell/AppShellContext";
+import {
+  AppShellContext,
+  type MailSyncState,
+} from "../app-shell/AppShellContext";
 import { subscribeToEvent, unsubscribeFromEvent } from "../utils/events";
+import { useMailLocalState } from "../hooks/useMailLocalState";
+import { usePolling } from "../hooks/usePolling";
 interface Props {
   children: React.ReactNode;
 }
@@ -38,8 +43,13 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
   const dispatch = useDispatch();
 
   const [userAvatar, setUserAvatar] = useState<string>("");
+  const [mailSync, setMailSync] = useState<MailSyncState | null>(null);
+  const registerMailSync = useCallback((sync: MailSyncState | null) => {
+    setMailSync(sync);
+  }, []);
 
   const { user } = useSelector((state: RootState) => state.auth);
+  useMailLocalState(user?.address);
   const favoritesLocalRef = useRef<any>(null);
   useEffect(() => {
     if (!user?.name) return;
@@ -83,8 +93,10 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
     (state: RootState) => state.global.isLoadingCustom
   );
 
+  const lastGroupsJsonRef = useRef<string>("");
+  /** Resolves to true when the membership changed (a fresh `privateGroups` object is dispatched only then). */
   const getGroups = React.useCallback(
-    async (address: string) => {
+    async (address: string): Promise<boolean> => {
       try {
         const groups: any = {};
         const response = await fetch(
@@ -101,9 +113,14 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
             };
           }
         }
+        const groupsJson = JSON.stringify(groups);
+        if (groupsJson === lastGroupsJsonRef.current) return false;
+        lastGroupsJsonRef.current = groupsJson;
         dispatch(setPrivateGroups(groups));
+        return true;
       } catch (error) {
         console.log({ error });
+        return false;
       }
     },
     [dispatch]
@@ -192,8 +209,6 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
   //     console.log({ error });
   //   }
   // }
-  const interval = useRef<any>(null);
-
   const getLocalSubjects = async (name?: string) => {
     try {
       const subjects = JSON.parse(
@@ -227,22 +242,6 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
     }
   };
 
-  const checkGroupMembers = React.useCallback(
-    (address: string) => {
-      if (interval.current) {
-        clearInterval(interval.current);
-      }
-      let isCalling = false;
-      interval.current = setInterval(async () => {
-        if (isCalling) return;
-        isCalling = true;
-        await getGroups(address);
-        isCalling = false;
-      }, 600000);
-    },
-    [getGroups]
-  );
-
   const askForAccountInformation = React.useCallback(async () => {
     try {
       let account = await qortalRequest({
@@ -261,16 +260,23 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
     if (!user?.address) {
       return;
     }
-
+    lastGroupsJsonRef.current = "";
     void getGroups(user.address);
-    checkGroupMembers(user.address);
+  }, [getGroups, user?.address]);
 
-    return () => {
-      if (interval.current) {
-        clearInterval(interval.current);
-      }
-    };
-  }, [checkGroupMembers, getGroups, user?.address]);
+  // Group membership refresh: every 10 min while visible, backing off to 30 min
+  // while nothing changes (the original polled every 10 min, hidden or not).
+  usePolling(
+    async () => {
+      if (!user?.address) return;
+      return getGroups(user.address);
+    },
+    {
+      intervalMs: 600000,
+      maxIntervalMs: 1800000,
+      enabled: Boolean(user?.address),
+    }
+  );
 
   React.useEffect(() => {
     if (!user?.name) {
@@ -322,11 +328,15 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
       authenticate: askForAccountInformation,
       controller: appShellController,
       state: appShellState,
+      mailSync,
+      registerMailSync,
     }),
     [
       appShellController,
       appShellState,
       askForAccountInformation,
+      mailSync,
+      registerMailSync,
       setActiveName,
       user,
       userAvatar,
