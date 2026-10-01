@@ -22,6 +22,8 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
+import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
+import DraftsOutlinedIcon from '@mui/icons-material/DraftsOutlined';
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined';
 import AlternateEmailOutlinedIcon from '@mui/icons-material/AlternateEmailOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
@@ -44,13 +46,15 @@ export const PUBLISH_STATE_ID = 'publish-mail-state';
 /** Above this many names the rail shows a filter box. */
 export const NAME_FILTER_THRESHOLD = 15;
 
-const SECTION_IDS = ['inbox', 'aliases', 'sent', 'threads'] as const;
+const SECTION_IDS = ['inbox', 'archived', 'aliases', 'sent', 'drafts', 'threads'] as const;
 const CHILD_PREFIXES = [INBOX_INSTANCE_PREFIX, ALIASES_INSTANCE_PREFIX, SENT_INSTANCE_PREFIX, THREAD_GROUP_PREFIX];
 
 const SECTION_ICONS: Record<(typeof SECTION_IDS)[number], ReactNode> = {
   inbox: <InboxOutlinedIcon />,
+  archived: <ArchiveOutlinedIcon />,
   aliases: <AlternateEmailOutlinedIcon />,
   sent: <SendOutlinedIcon />,
+  drafts: <DraftsOutlinedIcon />,
   threads: <ForumOutlinedIcon />,
 };
 
