@@ -162,7 +162,7 @@ describe('GroupedMailboxList states and rows', () => {
     expect(openMessage.mock.calls[0][1]).toBe('f1')
 
     // The group header expands instead of opening.
-    const header = screen.getByRole('button', { name: /bob, 2 messages/ })
+    const header = screen.getByRole('button', { name: /bob.*2 messages/ })
     fireEvent.click(header)
     expect(openMessage).toHaveBeenCalledTimes(1)
     expect(header.getAttribute('aria-expanded')).toBe('true')

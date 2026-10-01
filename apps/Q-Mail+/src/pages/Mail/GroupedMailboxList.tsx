@@ -24,7 +24,9 @@ import {
   getSentRecipientGroupKey,
 } from "./mailIdentifier";
 import { selectReadState } from "../../state/features/mailSlice";
+import { RootState } from "../../state/store";
 import { isMessageRead } from "../../utils/readState";
+import { useSentRecipient } from "../../utils/sentRecipientCache";
 import { EmptyState, ErrorState, ListSkeleton, UnreadDot } from "../../layout/states";
 import { headerFill } from "../../hub-theme";
 
@@ -141,6 +143,12 @@ export function groupMessages(messages: any[], mailboxType: MailboxType): Messag
 
 const checkboxSx = { minWidth: 44, minHeight: 44, flexShrink: 0 } as const;
 
+/** "To: <name>" for a sent group: the decrypted recipient of any opened message, else one cached lookup. */
+function SentGroupLabel({ identifier, known }: { identifier: string; known?: string }) {
+  const recipient = useSentRecipient(identifier, known);
+  return <>To: {recipient.name}</>;
+}
+
 export const GroupedMailboxList = ({
   messages,
   mailboxType,
@@ -166,6 +174,9 @@ export const GroupedMailboxList = ({
   // Read/unread comes from the read store (src/utils/readState.ts), never
   // from generalData.threadV2, so a real reply chain is left alone (Bugs #5).
   const readState = useSelector(selectReadState);
+  const hashMapMailMessages = useSelector(
+    (state: RootState) => state.mail.hashMapMailMessages
+  );
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
     new Set()
   );
@@ -371,7 +382,18 @@ export const GroupedMailboxList = ({
 
         const relativeDate = formatRelativeDate(latestMessage?.createdAt);
         const fullDate = formatFullTimestamp(latestMessage?.createdAt);
-        const label = mailboxType === "sent" ? `To: ${group.label}` : group.label;
+        const decryptedRecipient =
+          mailboxType === "sent"
+            ? group.messages
+                .map(message => {
+                  const copy: any = hashMapMailMessages[getMessageId(message)];
+                  return copy?.isValid && typeof copy?.recipient === "string"
+                    ? copy.recipient.trim()
+                    : "";
+                })
+                .find(Boolean)
+            : "";
+        const label = mailboxType === "sent" ? `To: ${decryptedRecipient || group.label}` : group.label;
         const summary = `${group.messages.length} messages${
           groupHasUnread ? ` · ${unreadCount} unread` : ""
         }`;
@@ -400,9 +422,7 @@ export const GroupedMailboxList = ({
                   setExpandedGroups(prev => ({ ...prev, [group.key]: !prev[group.key] }))
                 }
                 aria-expanded={isExpanded}
-                aria-label={`${groupHasUnread ? "Unread. " : ""}${label}, ${summary}, latest ${fullDate}. ${
-                  isExpanded ? "Collapse" : "Expand"
-                }`}
+                title={`Latest ${fullDate}. ${isExpanded ? "Collapse" : "Expand"} ${label}`}
                 sx={theme => ({
                   flex: 1,
                   minWidth: 0,
@@ -445,7 +465,14 @@ export const GroupedMailboxList = ({
                         fontWeight: groupHasUnread ? 700 : 500,
                       }}
                     >
-                      {label}
+                      {mailboxType === "sent" ? (
+                        <SentGroupLabel
+                          identifier={getMessageId(latestMessage)}
+                          known={decryptedRecipient}
+                        />
+                      ) : (
+                        label
+                      )}
                     </Typography>
                     <Typography
                       component="time"

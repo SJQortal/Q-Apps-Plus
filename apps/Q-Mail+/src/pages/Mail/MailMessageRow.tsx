@@ -10,7 +10,7 @@
  *   the ciphertext (Bugs #18, UX #27);
  * - fluid widths, nothing under 14 px, colours from the theme (UX #12, #14, #26).
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo } from "react";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import AttachFileOutlinedIcon from "@mui/icons-material/AttachFileOutlined";
@@ -28,7 +28,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "../../state/store";
 import { AvatarWrapper } from "./MailTable";
 import { formatFullTimestamp, formatRelativeDate } from "../../utils/time";
-import { parseSentRecipientFromIdentifier } from "./mailIdentifier";
+import { useSentRecipient } from "../../utils/sentRecipientCache";
 import { selectReadState } from "../../state/features/mailSlice";
 import { isMessageRead } from "../../utils/readState";
 import { UnreadDot } from "../../layout/states";
@@ -163,63 +163,20 @@ export const MailMessageRow = ({
   }
   const isLocked = subject === null;
 
-  // Sent rows: the recipient from the decrypted copy when we have it, else the
-  // identifier (alias, or a 20-char name prefix + 6-char address suffix).
-  const [sentToName, setSentToName] = useState("");
-  const [alias, setAlias] = useState<string | null>(null);
+  // Sent rows: the recipient from the decrypted copy when we have it, else
+  // one cached lookup per (name prefix, address suffix) group (I4).
   const decryptedRecipient =
     isFromSent && isDecrypted && typeof data?.recipient === "string"
       ? data.recipient.trim()
       : "";
-
-  const getSentToName = useCallback(async (id: string) => {
-    try {
-      setAlias(null);
-      setSentToName("");
-      const { recipientName, recipientAddress } =
-        parseSentRecipientFromIdentifier(id);
-      if (!recipientAddress && recipientName) {
-        setAlias(recipientName);
-        return;
-      }
-      if (!recipientName || !recipientAddress) return;
-      setSentToName(recipientName);
-      const response = await qortalRequest({
-        action: "SEARCH_NAMES",
-        query: recipientName,
-        prefix: true,
-        limit: 10,
-        reverse: false,
-      });
-      const normalizedRecipientAddress = recipientAddress.toLowerCase();
-      const findName = response?.find((item: any) => {
-        const owner =
-          typeof item?.owner === "string" ? item.owner.toLowerCase() : "";
-        const candidateName =
-          typeof item?.name === "string" ? item.name.toLowerCase() : "";
-        return (
-          owner.endsWith(normalizedRecipientAddress) &&
-          candidateName.startsWith(recipientName.toLowerCase())
-        );
-      });
-      if (findName) setSentToName(findName.name);
-    } catch {
-      // Keep the prefix from the identifier.
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isFromSent && identifier && !decryptedRecipient) {
-      void getSentToName(identifier);
-    }
-  }, [decryptedRecipient, getSentToName, identifier, isFromSent]);
-
+  const sentRecipient = useSentRecipient(isFromSent ? identifier : "", decryptedRecipient);
+  const alias = sentRecipient.isAlias ? sentRecipient.name : null;
   const name: string = isFromSent
-    ? decryptedRecipient || alias || sentToName
+    ? sentRecipient.name
     : typeof messageData?.user === "string"
       ? messageData.user
       : "";
-  const isAliasRecipient = isFromSent && !decryptedRecipient && Boolean(alias);
+  const isAliasRecipient = isFromSent && sentRecipient.isAlias;
 
   const createdAt = messageData?.createdAt;
   const relativeDate = useMemo(() => formatRelativeDate(createdAt), [createdAt]);
