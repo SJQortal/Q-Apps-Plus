@@ -71,5 +71,23 @@
     "minting_status": "Estado de minteo",
     "node_uptime": "Tiempo de actividad del nodo",
     "sync_status": "Estado de sincronización"
+  },
+  "header": {
+    "node": "nodo",
+    "settings": "ajustes",
+    "navigation": "navegación"
+  },
+  "settings": {
+    "account": "cuenta",
+    "appearance": "apariencia",
+    "about": "acerca de",
+    "copy_address": "copiar dirección",
+    "copied": "copiado",
+    "changelog": "novedades",
+    "upstream": "app original: Qortal/Q-Node",
+    "source": "código fuente: SJQortal/Q-Apps-Plus",
+    "not_signed_in": "sin sesión iniciada",
+    "no_name": "sin nombre registrado",
+    "about_blurb": "Q-Node+ es la versión de Simon de la app oficial Q-Node de Qortal. Usa la misma API del nodo, así que todo lo que cambies aquí también se ve en la app original."
   }
 }
