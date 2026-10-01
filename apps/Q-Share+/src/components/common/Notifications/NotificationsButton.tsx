@@ -49,7 +49,9 @@ export function NotificationsButton({ sx }: { sx?: SxProps<Theme> }) {
   const list = (
     <NotificationList
       items={state.items}
-      checking={state.lastCheck === 0}
+      checking={state.lastCheck === 0 && state.lastError === 0}
+      failed={state.lastError > 0}
+      onRetry={requestNotificationCheck}
       off={off}
       onOpen={(item: AppNotification) => go(notificationPath(item))}
       onSettings={() => go("/settings#notifications")}

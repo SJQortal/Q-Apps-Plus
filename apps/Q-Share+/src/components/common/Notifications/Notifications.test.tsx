@@ -137,6 +137,20 @@ describe("NotificationsButton", () => {
     expect(screen.getByText("Notifications are off")).toBeInTheDocument();
   });
 
+  it("says when checks fail instead of waiting forever, with a way to try again", () => {
+    writeNotifications(ADDRESS, { ...EMPTY_STATE, lastError: Date.now() });
+    const tries = vi.fn();
+    window.addEventListener("qshareplus:check-notifications", tries);
+    render();
+    fireEvent.click(bell());
+    expect(screen.queryByText("Checking for notifications…")).toBeNull();
+    expect(screen.getByText(/Couldn't check for new ones/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    // Opening the list asked once, Try again once more.
+    expect(tries).toHaveBeenCalledTimes(2);
+    window.removeEventListener("qshareplus:check-notifications", tries);
+  });
+
   it("uses a bottom sheet on phones", () => {
     phone = true;
     seed([comment]);

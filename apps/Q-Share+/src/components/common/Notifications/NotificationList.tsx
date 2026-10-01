@@ -94,6 +94,9 @@ interface NotificationListProps {
   items: AppNotification[];
   /** No check has finished yet. */
   checking: boolean;
+  /** The last check failed (the node didn't answer). */
+  failed: boolean;
+  onRetry: () => void;
   /** Both kinds are switched off in Settings. */
   off: boolean;
   onOpen: (item: AppNotification) => void;
@@ -104,12 +107,28 @@ interface NotificationListProps {
  * The notification list, shared by the header's popover and the phone sheet.
  * Unread items carry a dot and a tint until the list closes.
  */
-export function NotificationList({ items, checking, off, onOpen, onSettings }: NotificationListProps) {
+export function NotificationList({ items, checking, failed, onRetry, off, onOpen, onSettings }: NotificationListProps) {
   const settingsLink = (
     <Button onClick={onSettings} sx={{ alignSelf: "center", minHeight: 44 }}>
       Notification settings
     </Button>
   );
+  const failure =
+    failed && !off ? (
+      <Box
+        role="status"
+        sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, px: 2, py: 1 }}
+      >
+        <Typography variant="body2" color="text.secondary">
+          Couldn't check for new ones: your node didn't answer.
+        </Typography>
+        <Button onClick={onRetry} sx={{ minHeight: 44, flexShrink: 0 }}>
+          Try again
+        </Button>
+      </Box>
+    ) : null;
+
+  if (!items.length && failure) return failure;
 
   if (!items.length) {
     return (
@@ -149,6 +168,7 @@ export function NotificationList({ items, checking, off, onOpen, onSettings }: N
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+      {failure}
       <Box component="ul" aria-label="Notifications" sx={{ listStyle: "none", m: 0, p: 0 }}>
         {items.map((item) => (
           <Box component="li" key={item.id} sx={{ borderBottom: 1, borderColor: "divider" }}>
