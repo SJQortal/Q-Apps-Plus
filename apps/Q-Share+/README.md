@@ -27,7 +27,16 @@ Publish zips are built from the monorepo root with `scripts/build-zip.sh Q-Share
 
 ## Merging this back into Q-Share
 
-Q-Share+ was imported into the monorepo with `git subtree`, so this folder's history still sits on top of Q-Share's own: all 31 commits of [Qortal/q-share](https://github.com/Qortal/q-share) `main` up to `9c1ca81`, with their original hashes, then the Q-Share+ commits. To take it into Q-Share with that history:
+Q-Share+ was imported into the monorepo with `git subtree`, so this folder's history still sits on top of Q-Share's own: all 31 commits of [Qortal/q-share](https://github.com/Qortal/q-share) `main` up to `9c1ca81`, with their original hashes, then the Q-Share+ commits.
+
+The branch [`q-share-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-share-plus/for-upstream) is that history ready to merge, with this folder as its root (split at version 1.0.1). In a clone of Qortal/q-share:
+
+```bash
+git fetch https://github.com/SJQortal/Q-Apps-Plus.git q-share-plus/for-upstream
+git merge FETCH_HEAD
+```
+
+To split it yourself, for example to include later changes:
 
 ```bash
 # In a clone of SJQortal/Q-Apps-Plus: this folder's history as a branch of its own
@@ -39,7 +48,7 @@ git fetch /path/to/Q-Apps-Plus q-share-plus
 git merge FETCH_HEAD
 ```
 
-As of 2026-10-01 Q-Share's `main` has not moved since `9c1ca81`, so the merge is a fast-forward. Each commit is one change with a message that explains it; the full audit, the data contract and the test records are in [docs/apps/Q-Share+.md](https://github.com/SJQortal/Q-Apps-Plus/blob/main/docs/apps/Q-Share%2B.md).
+As of 2026-10-01 Q-Share's `main` has not moved since `9c1ca81`, so the merge is a fast-forward. Each commit is one change with a message that explains it; the full audit, the data contract and the test records are in [docs/apps/Q-Share+.md](https://github.com/SJQortal/Q-Apps-Plus/blob/613ff3ba58270c31b827003145045ed803a44ba1/docs/apps/Q-Share%2B.md).
 
 **Data:** shares, files and comments use the same services, identifiers and JSON shapes as Q-Share, and descriptions are stored in the Quill 1 markup Q-Share writes, so nothing needs migrating. Two kinds of data are new, and Q-Share ignores both: collections (DOCUMENT `qshare_collection_…`) and the optional Settings sync snapshot (DOCUMENT `qshareplus_settings`).
 
