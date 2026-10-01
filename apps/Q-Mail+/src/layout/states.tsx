@@ -2,7 +2,7 @@
  * Loading, empty, error and "fetching from peers" states shared by every
  * screen (docs/DESIGN.md → Components and states).
  */
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Box, Button, LinearProgress, Skeleton, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -134,6 +134,33 @@ export function FetchingFromPeers({ status, percentLoaded, onRetry, compact }: F
       )}
     </Box>
   );
+}
+
+/**
+ * Calls `onVisible` once each time it scrolls into view (IntersectionObserver;
+ * inert where it does not exist, so a Load more button must sit next to it).
+ */
+export function LoadMoreSentinel({ onVisible, disabled }: { onVisible: () => void; disabled?: boolean }) {
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+  const callbackRef = useRef(onVisible);
+  callbackRef.current = onVisible;
+  useEffect(() => {
+    if (!node || disabled || typeof IntersectionObserver === 'undefined') return;
+    let observer: IntersectionObserver | null = null;
+    try {
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) callbackRef.current();
+        },
+        { rootMargin: '200px' }
+      );
+      observer.observe(node);
+    } catch {
+      return;
+    }
+    return () => observer?.disconnect();
+  }, [disabled, node]);
+  return <div ref={setNode} aria-hidden style={{ height: 1, width: '100%' }} />;
 }
 
 /** The unread marker used by every list row (a dot plus weight, never colour alone). */

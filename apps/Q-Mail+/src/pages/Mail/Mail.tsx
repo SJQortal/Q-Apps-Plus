@@ -1028,6 +1028,30 @@ export const Mail = ({ isFromTo }: MailProps) => {
     normalizedUserName,
     selectedInboxInstanceName,
   ]);
+  // Archived alias mail lives in AliasMail's rows (fed back through
+  // watchedAliasRecentMessages), not in the combined inbox.
+  const archivedForList = useMemo(() => {
+    const seen = new Set(archivedMessages.map(getMessageIdentifier));
+    const extra: any[] = [];
+    Object.values(watchedAliasRecentMessages).forEach(rows => {
+      rows.forEach(row => {
+        const id = getMessageIdentifier(row);
+        if (!id || seen.has(id) || !isArchivedId(archived, id)) return;
+        seen.add(id);
+        extra.push(row);
+      });
+    });
+    if (!extra.length) return archivedMessages;
+    return [...archivedMessages, ...extra].sort((a, b) => {
+      return Number(b?.createdAt || 0) - Number(a?.createdAt || 0);
+    });
+  }, [archived, archivedMessages, watchedAliasRecentMessages]);
+  const handleAliasMessagesLoaded = useCallback((alias: string, rows: any[]) => {
+    setWatchedAliasRecentMessages(previous => {
+      return previous[alias] === rows ? previous : { ...previous, [alias]: rows };
+    });
+  }, []);
+
   // ---- search (N8): one box, "This mailbox" or "All mail" -----------------
   const [searchScope, setSearchScope] = useState<MailSearchScope>("mailbox");
   const [bodySearchLimit, setBodySearchLimit] = useState(0);
@@ -1056,7 +1080,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const { results: inboxSearchResults, status: inboxSearchStatus } =
     useMailboxSearch({
       messages: isArchivedViewActive
-        ? archivedMessages
+        ? archivedForList
         : inboxMessagesForList || [],
       query: inboxSearchQuery,
       mailboxType: "inbox",
@@ -1594,9 +1618,12 @@ export const Mail = ({ isFromTo }: MailProps) => {
           .filter(result => result.messages.length > 0)
           .map(result => result.aliasName);
         setWatchedAliasesWithMessages(aliasesWithMessages);
-        setWatchedAliasRecentMessages(
+        setWatchedAliasRecentMessages(previous =>
           results.reduce<Record<string, any[]>>((accumulator, result) => {
-            accumulator[result.aliasName] = result.messages;
+            // AliasMail hands back everything it loaded; keep that over the probe's 20.
+            const known = previous[result.aliasName];
+            accumulator[result.aliasName] =
+              known && known.length > result.messages.length ? known : result.messages;
             return accumulator;
           }, {})
         );
@@ -2657,7 +2684,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   ]);
 
   const renderAuthenticationPrompt = useCallback(
-    (mailboxLabel: "Inbox" | "Sent" | "Threads") => {
+    (mailboxLabel: "Inbox" | "Sent" | "Threads" | "Aliases") => {
       return (
         <Box
           sx={{
@@ -3166,10 +3193,17 @@ export const Mail = ({ isFromTo }: MailProps) => {
       <AliasMail
         value={activeAliasInboxName}
         onOpen={openMessage}
-        messageOpenedId={message?.id}
+        messageOpenedId={message?.id || message?.identifier}
+        onMessagesLoaded={handleAliasMessagesLoaded}
+        onMarkAsRead={markMessagesAsRead}
+        onMarkAsUnread={markMessagesAsUnread}
+        onArchive={archiveMessages}
+        searchQuery={inboxSearchQuery}
+        bodySearchLimit={bodySearchLimit}
+        onSearchStatus={setMailboxSearchStatus}
       />
     ) : (
-      renderAuthenticationPrompt("Inbox")
+      renderAuthenticationPrompt("Aliases")
     );
   } else if (isArchivedViewActive) {
     listTitle = "Archived";
@@ -3187,7 +3221,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
         onMarkAsRead={markMessagesAsRead}
         onMarkAsUnread={markMessagesAsUnread}
         onUnarchive={unarchiveMessages}
-        status={isLoading && !archivedMessages.length ? "loading" : "ready"}
+        status={isLoading && !archivedForList.length ? "loading" : "ready"}
         highlightTerms={inboxSearchStatus.terms}
         emptyIcon={<ArchiveOutlinedIcon />}
         emptyTitle={hasSearchQuery ? "No matches" : "Nothing archived"}
@@ -3565,7 +3599,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
                 }}
               />
             ) : (
-              renderAuthenticationPrompt("Inbox")
+              renderAuthenticationPrompt("Aliases")
             )}
           </Box>
         </PaneScroll>
