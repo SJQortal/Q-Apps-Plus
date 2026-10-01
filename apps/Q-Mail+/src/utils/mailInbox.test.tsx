@@ -93,8 +93,9 @@ describe('first load for one name', () => {
       `_mail_qortal_qmail_alice_${SUFFIX}_mail_m2`,
       `_mail_qortal_qmail_alice_${SUFFIX}_mail_m3`,
     ])
-    // Avatars: one lookup per distinct sender, not per message.
-    expect(qortalCalls('GET_QDN_RESOURCE_URL').map((c) => c.name).sort()).toEqual(['bob', 'dave'])
+    // Avatars are not fetched by the inbox load at all any more: rows resolve
+    // them lazily through src/utils/avatarCache.ts when they become visible.
+    expect(qortalCalls('GET_QDN_RESOURCE_URL')).toEqual([])
 
     // Switching away and back within the TTL (Bugs #9): served from the cache.
     await act(async () => {
