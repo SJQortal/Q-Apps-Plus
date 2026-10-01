@@ -96,6 +96,7 @@ import {
   type AttachmentFetchProgress,
   type AttachmentReference,
 } from "../../utils/attachmentBytes";
+import { getGroupPublicKeys } from "../../utils/groupMembersCache";
 import { fetchingLabel } from "../../layout/states";
 
 const uid = new ShortUniqueId();
@@ -1300,45 +1301,13 @@ export const NewMessage = ({
     [attachments]
   );
 
+  // Members and keys come from the shared, paged cache (no limit=0, one
+  // lookup per address per session); see src/utils/groupMembersCache.ts.
   const fetchGroupPublicKeys = useCallback(
     async (groupId: string): Promise<string[]> => {
       const normalizedGroupId = groupId.trim();
       if (!normalizedGroupId) return [];
-
-      const response = await fetch(
-        `/groups/members/${encodeURIComponent(normalizedGroupId)}?limit=0`
-      );
-      const responseData = await response.json();
-      const membersArray = Array.isArray(responseData?.members)
-        ? responseData.members
-        : [];
-
-      const addresses = dedupeStrings(
-        membersArray
-          .map((item: any) => {
-            return typeof item?.member === "string" ? item.member.trim() : "";
-          })
-          .filter(Boolean)
-      );
-      if (!addresses.length) return [];
-
-      const accountData = await Promise.all(
-        addresses.map(async address => {
-          try {
-            const account = await qortalRequest({
-              action: "GET_ACCOUNT_DATA",
-              address,
-            });
-            return typeof account?.publicKey === "string"
-              ? account.publicKey
-              : "";
-          } catch {
-            return "";
-          }
-        })
-      );
-
-      return dedupeStrings(accountData.filter(Boolean));
+      return getGroupPublicKeys(normalizedGroupId);
     },
     []
   );
