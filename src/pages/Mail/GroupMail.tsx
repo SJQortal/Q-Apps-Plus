@@ -48,7 +48,7 @@ import { Thread } from "./Thread";
 import { current } from "@reduxjs/toolkit";
 import { delay } from "../../utils/helpers";
 import { setNotification } from "../../state/features/notificationsSlice";
-import { getNameInfo } from "../../utils/apiCalls";
+import { useGroupMembers } from "../../hooks/useGroupMembers";
 import BackupIcon from "@mui/icons-material/Backup";
 import { AllThreadP, GroupContainer, GroupNameP, SingleThreadParent, ThreadContainer, ThreadContainerFullWidth, ThreadInfoColumn, ThreadInfoColumnNameP, ThreadInfoColumnTime, ThreadInfoColumnbyP, ThreadSingleLastMessageP, ThreadSingleLastMessageSpanP, ThreadSingleTitle } from "./Mail-styles";
 import { Spacer } from "../../components/common/Spacer";
@@ -362,7 +362,6 @@ export const GroupMail = ({
     await getMailMessages(groupId, members);
   }, [getMailMessages, user, groupId, members]);
 
-  const interval = useRef<any>(null);
 
   const firstMount = useRef(false);
   const filterModeRef = useRef("");
@@ -417,53 +416,12 @@ export const GroupMail = ({
 
 
 
-  const getGroupMembers = useCallback(async (groupNumber: string) => {
-    try {
-      const response = await fetch(
-        `/groups/members/${encodeURIComponent(groupNumber)}?limit=0`
-      );
-      const groupData = await response.json();
-
-      let members: any = {};
-      if (groupData && Array.isArray(groupData?.members)) {
-        for (const member of groupData.members) {
-          if (member.member) {
-            const res = await getNameInfo(member.member);
-            const resAddress = await qortalRequest({
-              action: "GET_ACCOUNT_DATA",
-              address: member.member,
-            });
-            const name = res;
-            const publicKey = resAddress.publicKey;
-            if (name) {
-              members[name] = {
-                publicKey,
-                address: member.member,
-              };
-            }
-          }
-        }
-      }
-
-      setMembers(members);
-    } catch (error) {
-      console.log({ error });
-    }
-  }, []);
-
+  // Members (names + public keys) come from the session cache: paged with
+  // limit=100, each address resolved once, refreshed at most every 10 minutes.
+  const { membersByName } = useGroupMembers(groupId);
   useEffect(() => {
-    if(groupId){
-      getGroupMembers(groupId);
-      interval.current = setInterval(async () => {
-        getGroupMembers(groupId);
-      }, 180000)
-    }
-    return () => {
-      if (interval?.current) {
-        clearInterval(interval.current)
-      }
-    }
-  }, [getGroupMembers, groupId]);
+    setMembers(membersByName);
+  }, [membersByName]);
 
 
   let listOfThreadsToDisplay = recentThreads
