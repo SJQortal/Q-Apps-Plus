@@ -8,6 +8,7 @@ import localforage from "localforage";
 import { CommentInput, CommentInputContainer, SubmitCommentButton } from "./Comments-styles";
 import { QSHARE_COMMENT_BASE } from "../../../constants/Identifiers.ts";
 import { errorMessage, isHubDecline } from "../../../utils/hubErrors";
+import { invalidateQdnSearches } from "../../../utils/qdnSearch";
 
 const uid = new ShortUniqueId();
 
@@ -110,6 +111,9 @@ export const CommentEditor = ({ onSubmit, postId, postName, isReply, commentId, 
         identifier,
       });
       dispatch(setNotification({ msg: "Comment published", alertType: "success" }));
+      // Comment searches read again from here on; notifications learn about the new comment
+      // (Hub alerts get a rule for replies to it).
+      invalidateQdnSearches((url) => url.includes("service=BLOG_COMMENT"));
       if (idForNotification) {
         addItem({ id: idForNotification, lastSeen: Date.now(), postId, postName });
       }

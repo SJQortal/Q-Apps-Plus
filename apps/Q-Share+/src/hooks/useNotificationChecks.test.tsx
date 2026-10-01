@@ -11,11 +11,23 @@ import {
   MAX_CHECK_INTERVAL_MS,
   requestNotificationCheck,
   useNotificationChecks,
+  useHubAlertsSync,
+  HUB_SYNC_DELAY_MS,
 } from "./useNotificationChecks";
+import { invalidateQdnSearches } from "../utils/qdnSearch";
 
 const checkNotifications = vi.fn(async (_account: unknown, _options: unknown) => 0);
 vi.mock("../utils/notifications/check", () => ({
   checkNotifications: (account: unknown, options: unknown) => checkNotifications(account, options),
+}));
+const syncHubAlerts = vi.fn(async () => "sent");
+let hubAlertsOn = true;
+vi.mock("../utils/notifications/hubAlerts", () => ({
+  readHubAlerts: () => ({ enabled: hubAlertsOn, registered: [], signature: "" }),
+  syncHubAlerts: () => syncHubAlerts(),
+}));
+vi.mock("../utils/notifications/activity", () => ({
+  loadActivity: async () => ({ shares: new Map(), comments: new Map(), complete: true }),
 }));
 
 const ADDRESS = "Q9aWbQnCZXmuNNkpg6t4sTCk8CRYoGF7Ce";
@@ -120,5 +132,46 @@ describe("useNotificationChecks", () => {
     });
     await advance(MAX_CHECK_INTERVAL_MS);
     expect(checkNotifications).not.toHaveBeenCalled();
+  });
+});
+
+describe("useHubAlertsSync", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    syncHubAlerts.mockClear();
+    hubAlertsOn = true;
+    store.dispatch(
+      addUser({ address: ADDRESS, publicKey: "k", name: "alice", names: [{ name: "alice", owner: ADDRESS }] })
+    );
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    store.dispatch(addUser(null));
+  });
+
+  function SyncHost() {
+    useHubAlertsSync();
+    return null;
+  }
+
+  it("brings Hub's rules up to date after start and after each publish, comments included", async () => {
+    renderWithProviders(<SyncHost />);
+    await advance(HUB_SYNC_DELAY_MS);
+    expect(syncHubAlerts).toHaveBeenCalledTimes(1);
+    // A comment, share or collection publish invalidates searches; the sync follows 10 s later.
+    act(() => invalidateQdnSearches((url) => url.includes("service=BLOG_COMMENT")));
+    await advance(HUB_SYNC_DELAY_MS - 1);
+    expect(syncHubAlerts).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(syncHubAlerts).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends nothing while Hub alerts are off", async () => {
+    hubAlertsOn = false;
+    renderWithProviders(<SyncHost />);
+    await advance(HUB_SYNC_DELAY_MS);
+    act(() => invalidateQdnSearches());
+    await advance(HUB_SYNC_DELAY_MS);
+    expect(syncHubAlerts).not.toHaveBeenCalled();
   });
 });
