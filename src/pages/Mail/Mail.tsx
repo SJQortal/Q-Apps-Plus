@@ -37,7 +37,6 @@ import { setNotification } from "../../state/features/notificationsSlice";
 import SimpleTable from "./MailTable";
 import { AliasMail } from "./AliasMail";
 import { SentMail } from "./SentMail";
-import { GroupMail } from "./GroupMail";
 import { useModal } from "../../components/common/useModal";
 import useConfirmationModal from "../../hooks/useConfirmModal";
 import { OpenMail } from "./OpenMail";
@@ -125,6 +124,8 @@ import {
 } from "../../utils/readState";
 import { DraftsMailbox } from "./DraftsMailbox";
 import type { StoredComposeDraft } from "./composeDrafts";
+import { Thread } from "./Thread";
+import { invalidateThreadSearches } from "./threadData";
 
 type MailboxSidebarItemId =
   | "inbox"
@@ -3092,6 +3093,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     if (composeReturnView === "threads") {
       setActiveMailboxItem("threads");
       setMobileMode("threads");
+      invalidateThreadSearches(composeReturnGroupId || undefined);
       if (composeReturnGroupId) {
         const returnGroup = groupOptionsById.get(composeReturnGroupId);
         if (returnGroup) {
@@ -3217,18 +3219,38 @@ export const Mail = ({ isFromTo }: MailProps) => {
       renderAuthenticationPrompt("Inbox")
     );
   } else if (isThreadsView) {
-    listTitle = "Threads";
-    listSubtitle = "Group mail";
+    const selectedGroupName =
+      typeof selectedGroup?.name === "string" && selectedGroup.name.trim()
+        ? selectedGroup.name.trim()
+        : "";
+    listTitle = selectedGroupName || "Threads";
+    listSubtitle = selectedGroupName ? "Group threads" : "Group mail";
+    listBack = selectedGroup
+      ? () => {
+          setSelectedGroup(null);
+          setCurrentThread(null);
+        }
+      : undefined;
     listBody = hasAuthenticatedIdentity ? (
       <ThreadsMailbox
         groups={groupOptionsWithThreads}
+        joinedGroups={memberGroupOptions}
         groupAvatarUrlById={groupAvatarUrlById}
         isLoadingGroups={isLoadingGroupInstances}
+        selectedGroup={selectedGroup}
+        onSelectGroup={group => {
+          setSelectedGroup(group);
+          setCurrentThread(null);
+        }}
+        currentThreadId={currentThread?.threadId || currentThread?.identifier || null}
         onOpenThread={(thread, group) => {
           setSelectedGroup(group);
           setCurrentThread(thread);
           closeOpenMessage();
         }}
+        onRequestComposeThread={handleRequestComposeThread}
+        filterMode={filterMode}
+        setFilterMode={setFilterMode}
       />
     ) : (
       renderAuthenticationPrompt("Threads")
@@ -3349,6 +3371,18 @@ export const Mail = ({ isFromTo }: MailProps) => {
     </Box>
   );
 
+  // ---- thread reading pane (group threads open like a message) --------------
+  const threadReadingPane =
+    isThreadsView && currentThread && hasAuthenticatedIdentity ? (
+      <Thread
+        key={currentThread?.threadId || currentThread?.identifier}
+        currentThread={currentThread}
+        groupInfo={selectedGroup || { id: currentThread?.threadData?.groupId, name: currentThread?.groupName }}
+        closeThread={() => setCurrentThread(null)}
+      />
+    ) : null;
+  const isThreadReadingOpen = Boolean(threadReadingPane);
+
   // ---- wide views (take the place of list + reading) -----------------------
   let wide: React.ReactNode | null = null;
   let wideKeepsChrome = false;
@@ -3392,43 +3426,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
             onRequestClose={handleComposerClose}
           />
         </Box>
-      </>
-    );
-  } else if (isThreadsView && selectedGroup) {
-    const groupName =
-      typeof selectedGroup?.name === "string" && selectedGroup.name.trim()
-        ? selectedGroup.name.trim()
-        : "Group";
-    wide = (
-      <>
-        <PaneHeader
-          title={currentThread ? currentThread?.threadData?.title || "Thread" : groupName}
-          subtitle={currentThread ? groupName : "Threads"}
-          onBack={() => {
-            if (currentThread) {
-              setCurrentThread(null);
-            } else {
-              setSelectedGroup(null);
-            }
-          }}
-          backLabel={currentThread ? "Back to threads" : "Back to groups"}
-        />
-        <PaneScroll>
-          <Box sx={centeredColumnSx}>
-            {hasAuthenticatedIdentity ? (
-              <GroupMail
-                groupInfo={selectedGroup}
-                currentThread={currentThread}
-                setCurrentThread={setCurrentThread}
-                filterMode={filterMode}
-                setFilterMode={setFilterMode}
-                onRequestComposeThread={handleRequestComposeThread}
-              />
-            ) : (
-              renderAuthenticationPrompt("Threads")
-            )}
-          </Box>
-        </PaneScroll>
       </>
     );
   } else if (isAliasesViewActive && !activeAliasInboxName) {
@@ -3554,9 +3551,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
         ) : null
       }
       list={listPane}
-      reading={readingPane}
+      reading={threadReadingPane ?? readingPane}
       readingPlaceholder={readingPlaceholder}
-      readingOpen={isReadingOpen || isOpeningMessage}
+      readingOpen={isReadingOpen || isOpeningMessage || isThreadReadingOpen}
       wide={wide}
       wideKeepsChrome={wideKeepsChrome}
       overlays={

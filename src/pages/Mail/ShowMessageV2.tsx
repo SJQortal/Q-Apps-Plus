@@ -29,7 +29,6 @@ import { ShowMessageV2Replies } from "./ShowMessageV2Replies";
 import { updateMessageDetails } from "../../utils/helpers";
 import { AttachmentList, usableAttachments } from "../../components/AttachmentPreview/AttachmentList";
 import { useDownloadAll } from "../../components/AttachmentPreview/useDownloadAll";
-import { escapeHtmlText } from "./readerTime";
 import { MessageDate } from "./MessageDate";
 
 /** Below this pane width the reader stacks (subject under the header, wrapped actions). */
@@ -106,7 +105,8 @@ export const ShowMessageV2 = ({ setIsOpen, message, setReplyTo, alias, setForwar
     if (message?.htmlContent) secondpart = DOMPurify.sanitize(message.htmlContent);
     let newTo = username;
     if (alias) newTo = `${alias} (alias inbox)`;
-    const firstPart = updateMessageDetails(escapeHtmlText(message?.user), escapeHtmlText(message?.subject || ""), escapeHtmlText(newTo));
+    // updateMessageDetails escapes its arguments (src/utils/mailCompose.ts).
+    const firstPart = updateMessageDetails(message?.user, message?.subject || "", newTo);
     const fullMessage = firstPart + secondpart;
     if (onForward) {
       onForward({ html: fullMessage, subject: message?.subject || "", attachments, message });
