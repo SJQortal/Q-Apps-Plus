@@ -8,6 +8,7 @@ import {
   fetchGroupActivity,
   fetchThreadHeader,
   fetchThreadPage,
+  invalidateThreadSearches,
   resetThreadDataCache,
   threadActivitySearchParams,
   threadHeaderSearchParams,
@@ -118,5 +119,18 @@ describe('fetching', () => {
     const found = await fetchThreadHeader(group, 'qortal_qmail_thread_group1_t1')
     expect(found?.threadData.title).toBe('First thread')
     expect(fetchedUrls('/arbitrary/resources/search')).toHaveLength(1)
+  })
+
+  it('invalidates a group\'s thread and post searches after a publish', async () => {
+    mockFetchRoute('/arbitrary/resources/search?', [])
+    await fetchThreadPage(group)
+    await fetchGroupActivity('1')
+    await fetchThreadPage({ id: '2', name: 'Other' })
+    expect(fetchedUrls('/arbitrary/resources/search')).toHaveLength(3)
+    expect(invalidateThreadSearches('1')).toBe(2)
+    await fetchThreadPage(group)
+    await fetchGroupActivity('1')
+    await fetchThreadPage({ id: '2', name: 'Other' })
+    expect(fetchedUrls('/arbitrary/resources/search')).toHaveLength(5)
   })
 })
