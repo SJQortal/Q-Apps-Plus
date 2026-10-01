@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../test/setup';
 import { QSHARE_COLLECTION_BASE } from '../constants/Identifiers';
 import { QDN_PAGE, resetQdnSearchCache } from './qdnSearch';
+import { recipientMarker, resetOwnerAddresses } from './recipientMarker';
 import {
   QDN_IDENTIFIER_MAX,
   buildCollectionBody,
@@ -11,9 +12,11 @@ import {
   hasItem,
   newCollectionUid,
   parseCollection,
+  addedShareOwners,
   publishCollection,
   resetCollectionCaches,
   searchCollections,
+  summaryToCollection,
   slugifyCollectionTitle,
   toggleItem,
   type Collection,
@@ -83,6 +86,61 @@ describe('collection bodies and publish payload', () => {
       filename: 'collection.json',
     });
     expect(decode(payload.data64)).toEqual(body);
+  });
+});
+
+describe('recipient markers on publish', () => {
+  const ALICE = 'Q9aWbQnCZXmuNNkpg6t4sTCk8CRYoGF7Ce';
+  const BOB = 'QWEsSfJdVa1DR4HPDQ29iRXSNtDdZ9H8fZ';
+  const CAROL = 'QZ4gAsrEf1HaMz8HCJdQeyB6oDRSvJV6JS';
+  const OWNERS: Record<string, string> = { alice: ALICE, bob: BOB, carol: CAROL };
+
+  beforeEach(() => {
+    resetCollectionCaches();
+    resetOwnerAddresses();
+    mockQortalAction('PUBLISH_QDN_RESOURCE', true);
+    mockFetch('/names/', (url: URL) => {
+      const owner = OWNERS[decodeURIComponent(url.pathname.slice('/names/'.length)).toLowerCase()];
+      return owner ? { name: 'x', owner } : { error: 401 };
+    });
+  });
+
+  it('names the owners of newly added shares, not the publisher or shares already there', async () => {
+    const before = [{ name: 'bob', identifier: 'b1' }];
+    await publishCollection({
+      name: 'alice',
+      identifier: 'qshare_collection_docs_ab12cd',
+      previousItems: before,
+      body: buildCollectionBody({
+        title: 'Docs',
+        description: 'Guides I like',
+        items: [...before, { name: 'alice', identifier: 'a1' }, { name: 'carol', identifier: 'c1' }],
+      }),
+    });
+    const [payload] = qortalCallsFor('PUBLISH_QDN_RESOURCE');
+    expect(payload.description).toBe(`Guides I like ${recipientMarker(CAROL)}`);
+    // The JSON body never carries markers.
+    expect(decode(String(payload.data64)).description).toBe('Guides I like');
+  });
+
+  it('tags every owner of a new collection, and no one when nothing was added', async () => {
+    expect(await addedShareOwners('alice', [], [{ name: 'bob', identifier: 'b1' }, { name: 'carol', identifier: 'c1' }])).toEqual([
+      CAROL,
+      BOB,
+    ]);
+    expect(await addedShareOwners('alice', [{ name: 'bob', identifier: 'b1' }], [])).toEqual([]);
+    // An owner Core doesn't know is skipped.
+    expect(await addedShareOwners('alice', [], [{ name: 'ghost', identifier: 'g1' }])).toEqual([]);
+  });
+
+  it('keeps markers out of the descriptions the app shows', () => {
+    const summary = summaryToCollection({
+      name: 'alice',
+      service: 'DOCUMENT',
+      identifier: 'qshare_collection_docs_ab12cd',
+      metadata: { title: 'Docs', description: `Guides I like ${recipientMarker(BOB)}` },
+    });
+    expect(summary.description).toBe('Guides I like');
   });
 });
 

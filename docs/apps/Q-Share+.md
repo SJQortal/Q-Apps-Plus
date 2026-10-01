@@ -56,6 +56,7 @@ Read in full on 2026-09-29 (12.2k lines). Line numbers are from the branch after
 | Lists | `blockedNames`, `followedNames` | R/W | ADD_LIST_ITEMS / DELETE_LIST_ITEM / GET_LIST_ITEMS | FileList.tsx:46, FollowButton.tsx:49-97, BlockedNamesModal |
 | localforage | db `q-share-general` key `general-consent`; db `notification` keys `comments`, `post-comments` | R/W | boolean; comment notification bookkeeping | ConsentModal, CommentEditor |
 | localStorage | `qshareplus-ui-theme` (new) | R/W | JSON string theme id | hub-theme |
+| DOCUMENT (new in Q-Share+) | `qshare_collection_<slug≤30>_<uid6>` | R/W | JSON `{ version: 1, title, description, items: [{ name, identifier }], created, updated }`, `tag1: "qshare_collection_"`, `filename: "collection.json"`. Since 1.0.1 the QDN metadata `description` is the collection's description (≤150) followed by up to four recipient markers `~qsn-<last 12 characters of the owner's address>~`, one for each account whose share that publish added; the JSON body never carries them, and the app strips them wherever it shows a description. The original app never reads collections. | utils/collections.ts, utils/recipientMarker.ts |
 
 Searches filter on the metadata description with `description=cat:N;sub:N` (category filter) and on `query=` (title/identifier substring). All of this stays as is. New data is additive only.
 

@@ -113,7 +113,12 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
     });
     dispatch(upsertCollection({ ...next, ...body }));
     try {
-      const published = await publishCollection({ name: row.name, identifier: row.identifier, body });
+      const published = await publishCollection({
+        name: row.name,
+        identifier: row.identifier,
+        body,
+        previousItems: current.items,
+      });
       dispatch(upsertCollection(published));
       dispatch(
         setNotification({
