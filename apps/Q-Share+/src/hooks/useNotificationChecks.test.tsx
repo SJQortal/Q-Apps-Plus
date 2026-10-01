@@ -110,6 +110,24 @@ describe("useNotificationChecks", () => {
     expect(checkNotifications).toHaveBeenCalledTimes(2);
   });
 
+  it("treats a Hub tab in the background (no size) as hidden, and checks when it comes back", async () => {
+    renderWithProviders(<Host />);
+    await advance(FIRST_CHECK_DELAY_MS);
+    const width = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 0 });
+    act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    await advance(60 * 60_000);
+    expect(checkNotifications).toHaveBeenCalledTimes(1);
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+    act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    await advance(0);
+    expect(checkNotifications).toHaveBeenCalledTimes(2);
+  });
+
   it("checks at once when the list opens, unless it just did", async () => {
     renderWithProviders(<Host />);
     await advance(FIRST_CHECK_DELAY_MS);

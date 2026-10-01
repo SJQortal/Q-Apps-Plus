@@ -18,6 +18,16 @@ export const ON_DEMAND_MIN_AGE_MS = 30_000;
 
 const CHECK_EVENT = "qshareplus:check-notifications";
 
+/**
+ * Whether the app is out of sight. Hub hides a background app tab with
+ * `display: none`, which leaves `document.hidden` false inside the app's frame
+ * but gives the frame no size; a minimised window or hidden GO sets
+ * `document.hidden`.
+ */
+export function isAppHidden(): boolean {
+  return document.hidden || window.innerWidth === 0 || window.innerHeight === 0;
+}
+
 /** Ask for a check now (opening the notification list), unless one ran in the last 30 s. */
 export function requestNotificationCheck(): void {
   window.dispatchEvent(new CustomEvent(CHECK_EVENT));
@@ -34,9 +44,9 @@ export function useNotificationAccount(): { address: string; names: string[] } |
 /**
  * Runs notification checks for the signed-in account while the app is on
  * screen: after the first screen, then every 2 minutes, backing off to 15
- * when nothing turns up. Hidden (another Hub tab, minimised, GO in the
- * background): no checks; coming back checks at once if the last one is
- * older than the interval. Mounted once, in GlobalWrapper.
+ * when nothing turns up. Out of sight (another Hub tab, minimised, GO in the
+ * background; see isAppHidden): no checks; coming back checks at once if the
+ * last one is older than the interval. Mounted once, in GlobalWrapper.
  */
 export function useNotificationChecks(): void {
   const account = useNotificationAccount();
@@ -54,10 +64,10 @@ export function useNotificationChecks(): void {
 
     const schedule = (delay: number) => {
       clearTimeout(timer);
-      if (!stopped && !document.hidden) timer = setTimeout(run, Math.max(0, delay));
+      if (!stopped && !isAppHidden()) timer = setTimeout(run, Math.max(0, delay));
     };
     async function run() {
-      if (stopped || document.hidden) return;
+      if (stopped || isAppHidden()) return;
       try {
         const fresh = await checkNotifications(account!, options);
         interval = fresh > 0 ? CHECK_INTERVAL_MS : Math.min(interval * 2, MAX_CHECK_INTERVAL_MS);
@@ -66,8 +76,12 @@ export function useNotificationChecks(): void {
       }
       schedule(interval);
     }
+    let wasHidden = isAppHidden();
     const onVisibility = () => {
-      if (document.hidden) clearTimeout(timer);
+      const hidden = isAppHidden();
+      if (hidden === wasHidden) return; // a resize while on screen changes nothing
+      wasHidden = hidden;
+      if (hidden) clearTimeout(timer);
       else schedule(sinceLast() >= interval ? 0 : interval - sinceLast());
     };
     const onRequest = () => {
@@ -78,11 +92,14 @@ export function useNotificationChecks(): void {
     // A reload within the interval waits for the rest of it.
     schedule(Math.max(FIRST_CHECK_DELAY_MS, CHECK_INTERVAL_MS - sinceLast()));
     document.addEventListener("visibilitychange", onVisibility);
+    // A Hub tab coming back into view gives the frame its size again.
+    window.addEventListener("resize", onVisibility);
     window.addEventListener(CHECK_EVENT, onRequest);
     return () => {
       stopped = true;
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("resize", onVisibility);
       window.removeEventListener(CHECK_EVENT, onRequest);
     };
   }, [account, comments, collections, hiddenKey]);
