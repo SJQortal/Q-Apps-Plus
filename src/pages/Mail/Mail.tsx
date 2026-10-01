@@ -710,6 +710,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const hasPromptedForPublishedMailStateRef = useRef<string | null>(null);
   const [rememberQdnStatePreferenceOnLoad, setRememberQdnStatePreferenceOnLoad] =
     useState(false);
+  // Mirrors the checkbox so the load prompt (awaited inside a callback created
+  // before the user ticked it) reads the current value (Bugs #2).
+  const rememberQdnStatePreferenceRef = useRef(false);
   const markMessagesAsReadRef = useRef<
     ((messages: any[]) => void | Promise<void>) | null
   >(null);
@@ -763,6 +766,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
             <Checkbox
               checked={rememberQdnStatePreferenceOnLoad}
               onChange={(_, checked) => {
+                rememberQdnStatePreferenceRef.current = checked;
                 setRememberQdnStatePreferenceOnLoad(checked);
               }}
             />
@@ -977,9 +981,12 @@ export const Mail = ({ isFromTo }: MailProps) => {
     if (selectedInboxInstanceName.toLowerCase() === normalizedUserName) {
       return withoutArchived(mailMessages);
     }
-    return null;
+    return withoutArchived(
+      combinedAliasInboxMessages[selectedInboxInstanceName] ?? []
+    );
   }, [
     archived,
+    combinedAliasInboxMessages,
     combinedInboxMessages,
     mailMessages,
     normalizedUserName,
@@ -1589,60 +1596,89 @@ export const Mail = ({ isFromTo }: MailProps) => {
     };
   }, [hasAuthenticatedIdentity, missingGroupAvatarIds]);
 
+  // Per-name inbox indexes are fetched once per session and address (Bugs #9);
+  // the poll keeps them fresh. Names whose fetch failed are retried next visit.
+  const fetchedInboxNamesRef = useRef<{ address: string; names: Set<string> }>({
+    address: "",
+    names: new Set(),
+  });
+  const combinedInboxFetchesInFlightRef = useRef(0);
+
+  useEffect(() => {
+    const address = typeof user?.address === "string" ? user.address : "";
+    if (fetchedInboxNamesRef.current.address === address) return;
+    fetchedInboxNamesRef.current = { address, names: new Set() };
+    setCombinedAliasInboxMessages({});
+  }, [user?.address]);
+
   useEffect(() => {
     if (
       !hasAuthenticatedIdentity ||
       !user?.address ||
-      !(isInboxViewActive || isArchivedViewActive) ||
-      selectedInboxInstanceName
+      !(isInboxViewActive || isArchivedViewActive)
     ) {
       return;
     }
+    const address = user.address;
+    const selectedSecondaryName =
+      selectedInboxInstanceName &&
+      selectedInboxInstanceName.toLowerCase() !== normalizedUserName
+        ? selectedInboxInstanceName
+        : null;
+    const wantedNames = selectedSecondaryName
+      ? [selectedSecondaryName]
+      : combinedAliasInboxNames;
+    const cache = fetchedInboxNamesRef.current;
+    const namesToFetch = wantedNames.filter(name => {
+      return cache.address === address && !cache.names.has(name);
+    });
+    if (!namesToFetch.length) return;
 
-    if (!combinedAliasInboxNames.length) {
-      setCombinedAliasInboxMessages({});
-      return;
-    }
-
-    let canceled = false;
+    // Results are merged even if this effect is cleaned up meanwhile: the names
+    // are already marked as fetched, so dropping them would lose them.
     const fetchCombinedAliasInboxMessages = async () => {
+      combinedInboxFetchesInFlightRef.current += 1;
       setIsLoadingCombinedAliasInbox(true);
       try {
+        namesToFetch.forEach(name => cache.names.add(name));
         const results = await Promise.all(
-          combinedAliasInboxNames.map(async name => {
-            const messages = await fetchInboxMessagesForOwnedName(
-              name,
-              user.address
-            );
-            return { name, messages };
+          namesToFetch.map(async name => {
+            try {
+              const messages = await fetchInboxMessagesForOwnedName(
+                name,
+                address
+              );
+              return { name, messages };
+            } catch {
+              cache.names.delete(name);
+              return null;
+            }
           })
         );
 
-        if (canceled) return;
-        const nextState = results.reduce<Record<string, any[]>>(
-          (accumulator, result) => {
-            accumulator[result.name] = result.messages;
-            return accumulator;
-          },
-          {}
-        );
-        setCombinedAliasInboxMessages(nextState);
+        setCombinedAliasInboxMessages(previous => {
+          const next = { ...previous };
+          results.forEach(result => {
+            if (!result) return;
+            next[result.name] = result.messages;
+          });
+          return next;
+        });
       } finally {
-        if (!canceled) {
-          setIsLoadingCombinedAliasInbox(false);
-        }
+        combinedInboxFetchesInFlightRef.current -= 1;
+        setIsLoadingCombinedAliasInbox(
+          combinedInboxFetchesInFlightRef.current > 0
+        );
       }
     };
 
     void fetchCombinedAliasInboxMessages();
-    return () => {
-      canceled = true;
-    };
   }, [
     combinedAliasInboxNames,
     hasAuthenticatedIdentity,
     isArchivedViewActive,
     isInboxViewActive,
+    normalizedUserName,
     selectedInboxInstanceName,
     user?.address,
   ]);
@@ -2436,7 +2472,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
           return;
         }
 
-        if (rememberQdnStatePreferenceOnLoad) {
+        if (rememberQdnStatePreferenceRef.current) {
           writeAutoApplyQdnState(qdnIdentity, true);
         }
       }
@@ -2482,7 +2518,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     }
   }, [
     dispatch,
-    rememberQdnStatePreferenceOnLoad,
     showLoadPublishedStateModal,
     user?.name,
     user?.address,
@@ -2783,6 +2818,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   }, [user?.address, user?.name]);
 
   useEffect(() => {
+    rememberQdnStatePreferenceRef.current = false;
     setRememberQdnStatePreferenceOnLoad(false);
   }, [user?.address, user?.name]);
 
@@ -3087,7 +3123,10 @@ export const Mail = ({ isFromTo }: MailProps) => {
           onArchive={archiveMessages}
         />
         {isLoading && spinner}
-        {!selectedInboxInstanceName && isLoadingCombinedAliasInbox && spinner}
+        {isLoadingCombinedAliasInbox &&
+          (!selectedInboxInstanceName ||
+            !combinedAliasInboxMessages[selectedInboxInstanceName]) &&
+          spinner}
       </>
     ) : (
       renderAuthenticationPrompt("Inbox")
