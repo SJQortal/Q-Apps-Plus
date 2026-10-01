@@ -1,126 +1,85 @@
-import React, { useEffect, useState } from "react";
-import { ReusableModal } from "../../components/modals/ReusableModal";
-import { Box, Button, Input, Typography, useTheme } from "@mui/material";
-import { BuilderButton } from "../CreatePost/CreatePost-styles";
-import EmailIcon from "@mui/icons-material/Email";
-import type { SlateNode as Descendant } from '../../components/editor/ReadOnlySlate'
-import ShortUniqueId from "short-unique-id";
-import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "../../state/store";
-import AttachFileIcon from "@mui/icons-material/AttachFile";
+import { Box, Button, Paper, Typography } from "@mui/material";
 import DOMPurify from "dompurify";
-import { setNotification } from "../../state/features/notificationsSlice";
-import {
-  objectToBase64,
-  objectToUint8Array,
-  objectToUint8ArrayFromResponse,
-  uint8ArrayToBase64,
-} from "../../utils/toBase64";
+import ReplyOutlinedIcon from "@mui/icons-material/ReplyOutlined";
 import ReadOnlySlate from "../../components/editor/ReadOnlySlate";
-import MailThread from "./MailThread";
-import { AvatarWrapper } from "./MailTable";
-import { formatFullTimestamp } from "../../utils/time";
-import FileElement from "../../components/FileElement";
-import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
-import AttachmentMailSVG from "../../assets/svgs/AttachmentMail.svg";
-import MoreSVG from "../../assets/svgs/More.svg";
-import {
-  MailAttachmentImg,
-  MoreImg,
-  MoreP,
-  SingleTheadMessageParent,
-  SingleThreadParent,
-  ThreadInfoColumn,
-  ThreadInfoColumnNameP,
-  ThreadInfoColumnTime,
-  ThreadInfoColumnbyP,
-  ThreadSingleLastMessageP,
-  ThreadSingleLastMessageSpanP,
-  ThreadSingleTitle,
-} from "./Mail-styles";
-import { Spacer } from "../../components/common/Spacer";
 import { AttachmentList } from "../../components/AttachmentPreview/AttachmentList";
-const initialValue: Descendant[] = [
-  {
-    type: "paragraph",
-    children: [{ text: "" }],
-  },
-];
-const uid = new ShortUniqueId();
+import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
+import { formatEmailDate, formatFullTimestamp } from "../../utils/time";
+import { ThreadAvatar } from "./ThreadAvatar";
 
-export const ShowMessage = ({ message }: any) => {
-  const [expandAttachments, setExpandAttachments] = useState<boolean>(false);
+interface ShowMessageProps {
+  message: any;
+  /** Quote this post in a new reply. */
+  onReply?: (message: any) => void;
+}
 
-  const theme = useTheme();
-  let cleanHTML = "";
-  if (message?.htmlContent) {
-    cleanHTML = DOMPurify.sanitize(message.htmlContent);
-  }
+/** One post in a group thread: who, when, the body and its attachments. */
+export const ShowMessage = ({ message, onReply }: ShowMessageProps) => {
+  const name = typeof message?.name === "string" ? message.name : "";
+  const postedAt = Number(message?.created || message?.createdAt) || 0;
+  const cleanHTML = typeof message?.htmlContent === "string" && message.htmlContent ? DOMPurify.sanitize(message.htmlContent) : "";
+  const attachments: any[] = Array.isArray(message?.attachments) ? message.attachments : [];
 
   return (
-    <SingleTheadMessageParent
-      sx={{
-        height: "auto",
-        alignItems: "flex-start",
-        cursor: "default",
-        borderRadius: '35px 4px 4px 4px'
-      }}
+    <Paper
+      component="article"
+      variant="outlined"
+      aria-label={name ? `Post by ${name}` : "Post"}
+      sx={(theme) => ({
+        width: "100%",
+        p: { xs: 1.5, sm: 2 },
+        borderRadius: 3,
+        backgroundColor: theme.palette.background.paper,
+        display: "flex",
+        flexDirection: "column",
+        gap: 1.5,
+        overflowWrap: "anywhere",
+      })}
     >
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-start",
-          width: '100%'
-        }}
-      >
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: "10px",
-          }}
-        >
-          <AvatarWrapper
-            isAlias={false}
-            height="50px"
-            user={message?.name}
-            fallback={message?.name}
-          ></AvatarWrapper>
-          <ThreadInfoColumn>
-            <ThreadInfoColumnNameP>{message?.name}</ThreadInfoColumnNameP>
-            <ThreadInfoColumnTime>
-              {formatFullTimestamp(message?.created)}
-            </ThreadInfoColumnTime>
-          </ThreadInfoColumn>
-          <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-        }}
-      >
-         {message?.attachments?.length > 0 && (
-          <Box sx={{ width: "100%", marginTop: "10px" }}>
-            <AttachmentList attachments={message?.attachments} />
-          </Box>
-        )}
-      
-      </div>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+        <ThreadAvatar name={name} size={40} />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography noWrap sx={{ fontWeight: 700, fontSize: "1rem" }}>
+            {name || "Unknown"}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" title={formatFullTimestamp(postedAt)}>
+            {postedAt ? formatEmailDate(postedAt) : "-"}
+          </Typography>
         </Box>
-        <Spacer height="20px" />
-
-        {message?.textContent && (
-          <ReadOnlySlate content={message.textContent} mode="mail" />
-        )}
-        {message?.textContentV2 && (
-          <DisplayHtml html={message?.textContentV2} />
-        )}
-        {message?.htmlContent && (
-          <div dangerouslySetInnerHTML={{ __html: cleanHTML }} />
-        )}
       </Box>
 
-    </SingleTheadMessageParent>
+      <Box
+        sx={{
+          fontSize: "0.9375rem",
+          lineHeight: 1.5,
+          "& img, & video": { maxWidth: "100%", height: "auto" },
+          "& pre": { overflowX: "auto" },
+        }}
+      >
+        {message?.textContent && <ReadOnlySlate content={message.textContent} mode="mail" />}
+        {typeof message?.textContentV2 === "string" && message.textContentV2 && <DisplayHtml html={message.textContentV2} />}
+        {cleanHTML && <div dangerouslySetInnerHTML={{ __html: cleanHTML }} />}
+      </Box>
+
+      {attachments.length > 0 && (
+        <Box sx={{ width: "100%", minWidth: 0 }}>
+          <AttachmentList attachments={attachments} />
+        </Box>
+      )}
+
+      {onReply && (
+        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+          <Button
+            size="small"
+            startIcon={<ReplyOutlinedIcon />}
+            onClick={() => onReply(message)}
+            aria-label={name ? `Reply to ${name}` : "Reply"}
+            sx={{ minHeight: 44, textTransform: "none" }}
+          >
+            Reply
+          </Button>
+        </Box>
+      )}
+    </Paper>
   );
 };

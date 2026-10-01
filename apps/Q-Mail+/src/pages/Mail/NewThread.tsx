@@ -278,8 +278,13 @@ export const NewThread = ({
     };
   }, [openModalFromEvent]);
 
-  const openModalPostFromEvent = useCallback(() => {
+  const openModalPostFromEvent = useCallback((event?: any) => {
     if (isMessage) {
+      // Reply to a post: the thread screen passes a quote block to prefill.
+      const quoteHtml = event?.detail?.quoteHtml;
+      if (typeof quoteHtml === "string" && quoteHtml) {
+        setValue(prev => (prev ? `${prev}${quoteHtml}` : quoteHtml));
+      }
       setIsOpen(true);
     }
   }, [isMessage]);
