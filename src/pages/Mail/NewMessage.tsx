@@ -70,8 +70,10 @@ import {
   buildReplyQuoteHtml,
   directMailIdentifier,
   messageBodyLines,
+  replyAllRecipients,
   withSubjectPrefix,
 } from "../../utils/mailCompose";
+import { resolveName } from "../../utils/nameCache";
 import {
   fetchAttachmentFile,
   type AttachmentFetchProgress,
@@ -192,6 +194,8 @@ const extensionOfFile = (file: File): string | null => {
 
 interface NewMessageProps {
   replyTo?: any;
+  /** Reply to the sender plus everyone in the original's `to`/`cc` (each a separate copy). */
+  replyAll?: boolean;
   setReplyTo: React.Dispatch<any>;
   recipientAlias?: string;
   requireSenderAlias?: boolean;
@@ -335,6 +339,7 @@ const createComposeDraftId = (
 export const NewMessage = ({
   setReplyTo,
   replyTo,
+  replyAll = false,
   recipientAlias,
   requireSenderAlias = false,
   defaultReplyAlias = "",
@@ -890,6 +895,62 @@ export const NewMessage = ({
     }
   }, [replyTo]);
 
+  // Reply all: everyone from the original's to/cc (minus our own names and
+  // the sender) becomes a Bcc chip, i.e. a separate encrypted copy.
+  useEffect(() => {
+    if (!replyTo || !replyAll) return;
+    const { others } = replyAllRecipients(replyTo, [
+      user?.name || "",
+      ...ownedNames,
+    ]);
+    if (!others.length) return;
+
+    let cancelled = false;
+    setShowBCC(true);
+    void (async () => {
+      const resolved = await Promise.all(
+        others.map(async nameToAdd => {
+          try {
+            return await resolveName(nameToAdd);
+          } catch {
+            return null;
+          }
+        })
+      );
+      if (cancelled) return;
+      const missing = others.filter((_, index) => !resolved[index]);
+      const chips: NameChip[] = resolved
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        .map(item => ({
+          name: item.name,
+          publicKey: item.publicKey,
+          address: item.address,
+        }));
+      setBccNames(prev => {
+        const known = new Set(prev.map(chip => normalizeValue(chip.name)));
+        return [
+          ...prev,
+          ...chips.filter(chip => !known.has(normalizeValue(chip.name))),
+        ];
+      });
+      if (missing.length) {
+        dispatch(
+          setNotification({
+            msg: `Could not add to Reply all (name not found or no public key): ${missing.join(
+              ", "
+            )}`,
+            alertType: "error",
+          })
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replyAll, replyTo?.id]);
+
   useEffect(() => {
     if (!forwardInfo) return;
     setIsOpen(true);
@@ -1438,7 +1499,9 @@ export const NewMessage = ({
   };
 
   const sendButtonLabel = replyTo
-    ? "Reply"
+    ? replyAll
+      ? "Reply all"
+      : "Reply"
     : forwardInfo
     ? "Forward"
     : isGroupTarget
@@ -1794,6 +1857,17 @@ export const NewMessage = ({
                 <ChipInputComponent chips={bccNames} setChips={setBccNames} />
               </NewMessageAliasContainer>
             </NewMessageInputRow>
+          )}
+          {allowAliasAndBcc && replyAll && replyTo && (
+            <Typography
+              sx={{
+                fontSize: "0.875rem",
+                color: "var(--qmail-compose-muted)",
+              }}
+            >
+              Reply all: the other people on the original get their own copy
+              (listed under Bcc). Remove anyone who should not receive it.
+            </Typography>
           )}
 
           <AttachmentContainer
