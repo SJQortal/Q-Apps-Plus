@@ -24,3 +24,31 @@ node e2e/screens.mjs   # screenshots of every screen at five sizes in four theme
 ```
 
 Publish zips are built from the monorepo root with `scripts/build-zip.sh Q-Share+`.
+
+## Merging this back into Q-Share
+
+Q-Share+ was imported into the monorepo with `git subtree`, so this folder's history still sits on top of Q-Share's own: all 31 commits of [Qortal/q-share](https://github.com/Qortal/q-share) `main` up to `9c1ca81`, with their original hashes, then the Q-Share+ commits. To take it into Q-Share with that history:
+
+```bash
+# In a clone of SJQortal/Q-Apps-Plus: this folder's history as a branch of its own
+git subtree split --prefix="apps/Q-Share+" origin/main -b q-share-plus
+# (use origin/q-share-plus/pass-1 instead of origin/main until PR #7 is merged)
+
+# In a clone of Qortal/q-share
+git fetch /path/to/Q-Apps-Plus q-share-plus
+git merge FETCH_HEAD
+```
+
+As of 2026-10-01 Q-Share's `main` has not moved since `9c1ca81`, so the merge is a fast-forward. Each commit is one change with a message that explains it; the full audit, the data contract and the test records are in [docs/apps/Q-Share+.md](https://github.com/SJQortal/Q-Apps-Plus/blob/main/docs/apps/Q-Share%2B.md).
+
+**Data:** shares, files and comments use the same services, identifiers and JSON shapes as Q-Share, and descriptions are stored in the Quill 1 markup Q-Share writes, so nothing needs migrating. Two kinds of data are new, and Q-Share ignores both: collections (DOCUMENT `qshare_collection_…`) and the optional Settings sync snapshot (DOCUMENT `qshareplus_settings`).
+
+**What is specific to the + build**, to change if it ships as Q-Share:
+
+- the app name in copied `qortal://APP/…` links: `PUBLISHED_APP_NAME` in `src/utils/qortalLinks.ts`;
+- the visible name: `index.html`, the header (`src/components/layout/Navbar/Navbar.tsx`), the welcome notice (`src/components/common/ConsentModal.tsx`), Settings → About and the What's new dialog;
+- the version and changelog: `package.json` (`qshare-plus`), `CHANGELOG.md` and `src/constants/changelog.ts`, which links to this repo;
+- browser storage keys starting with `qshareplus-` (theme, settings, share statistics) and the sync identifier above; renaming them means existing Q-Share+ users start with default settings;
+- `src/hub-theme/`, a copy of the monorepo's shared theme kit (`shared/hub-theme`), which would simply become part of the app.
+
+Removed from the original (listed in `CHANGELOG.md`): code carried over from Q-Tube that never ran (its video player and playlist screens), unused fonts, and the moment, react-quill, react-rnd, compressorjs and ts-key-enum dependencies.
