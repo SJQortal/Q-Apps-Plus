@@ -1191,7 +1191,9 @@ Overnight pass of 2026-09-30 → 10-01 (the qplus-app skill in overnight mode, r
 
 ## Done
 
-Branch `q-mail-plus/pass-1` (not yet a PR). Every commit builds except the last (WIP):
+Branch `q-mail-plus/pass-1`, PR [#15](https://github.com/SJQortal/Q-Apps-Plus/pull/15). Every commit builds and passes the tests.
+
+### Platform upgrade (2026-09-29/30)
 
 | Commit | Build | Main chunk |
 |---|---|---|
@@ -1203,7 +1205,24 @@ Branch `q-mail-plus/pass-1` (not yet a PR). Every commit builds except the last 
 | MUI 5.18 | ✅ | 1,646 kB |
 | React 19.3 + types 19 + Emotion 11.14 (tsc 0 errors) | ✅ | 1,726 kB |
 | joyride 3.2, ReadOnlySlate without slate-react (2 tests), unused deps removed, dead files excluded | ✅ | 1,544 kB (gzip 473 kB) |
-| **WIP:** MUI 9.4 installed, codemods run (v6 list-item/styled/sx-prop, v7 lab/input-label/grid, deprecations/all, v9 system-props; 35 files) | ❌ 7 tsc errors | – |
+| MUI 9.4 (codemods + 7 manual fixes; every MenuItem inside Menu/Select; icon check clean) | ✅ | 1,576 kB (gzip 482 kB) |
+| Drop `philliplm-react-modern-audio-player` (bundled React 18 internals → blank page on React 19; Q-Mail never rendered it); `qortalRequest` rejecting stub outside Hub | ✅ | 1,437 kB (gzip 443 kB) |
+
+### Redesign pass 1 (2026-10-01, overnight)
+
+| Step | What landed | Main chunk · tests |
+|---|---|---|
+| Test harness | `src/test/setup.ts` mocks `qortalRequest` and `fetch` per action/URL; Testing Library cleanup between tests | 17 tests |
+| Theme kit + Settings | `src/hub-theme` (synced copy), Hub 2.0 = "Q-Mail Classic" from `src/styles/theme.ts` + the `--qmail-*` variables (mapped onto `--qp-*` for the other three themes); boot snippet in `index.html`; full Settings page (Account with name switcher, Appearance, Mail, Sync, About with changelog dialog) opened over the mail page without unmounting it | 1,603 kB · 17 |
+| Layout shell | `src/layout/*`: rail · list · reading pane on desktop; list + reading at 600–899 px; one pane, bottom nav (5 items) and floating Compose below 600 px; full-screen composer and message with Back on phones; `useAppViewport` sizes the app to the Hub/GO iframe and the visual viewport (keyboard); loading/empty/error/"Fetching from peers…" states; old Navbar, qapp-lib sidebar and 343 lines of CSS removed | 1,409 kB · 30 |
+| Foundations | `src/utils/qdnSearch.ts` (in-flight merge + 90 s session cache + invalidation for every `/arbitrary/resources/search`), `src/hooks/usePolling.ts` (visibility pause, backoff, no overlap) | 1,409 kB · 40 |
+| A · data core | persistent read state per account (`qmail_read_state_<address>`, independent of the `threadV2` marker), unread counts per inbox/name/alias in the rail, bottom nav and `document.title`; archive/hide (`qmail_archived_<address>`, Archived view, additive `archived` map in `qmail_state_v1`); polling for every owned name through `usePolling`; all Mail searches through the cache; Bugs #1 #2 #9 #14(partly) #20; Settings → Sync ("Publish mail state now" with a confirmation that names the fee). First load for one name with mail = **4 searches** (was ≈20–30), 0 on a repeat within the TTL | 1,418 kB · 71 |
+| C · composer | Reply quotes the original in a Quill-1 `<blockquote>` with `Re:`; embedded reply history is stripped of its own history (payloads now grow linearly); Forward with `Fwd:`, an escaped header and the original attachments re-attached; Reply all over additive `to`/`cc` fields; a Drafts mailbox (same `qmail_compose_drafts_<address>` key, additive fields, thread-post drafts too); recipients by real recency with avatars and inline "name exists" validation through `src/utils/nameCache.ts`; Ctrl/Cmd+Enter sends; phone polish | 1,443 kB · 87 |
+| D · reader + attachments | every attachment opens in the app: images, text, audio, video and **PDF** (pdf.js 4.10 with the worker on the main thread, Torq's Hub trick; the 1.6 MB engine is a lazy chunk loaded only when a PDF opens); one decrypted-blob cache per session; attachment cards with size, type, progress and Download all; "Fetching from peers…" with retry in OpenMail and the cards; avatar cache (one `GET_QDN_RESOURCE_URL` per name per session, misses remembered, lazy per visible row); reader with real buttons, collapsed earlier messages, pane-driven layout; opening a message happens in the reading pane, not a modal | 1,428 kB + 27 kB preview chunk + 1,641 kB pdf.js chunk · 91 |
+| E · threads | group members and public keys from a paged cache (`/groups/members` with `limit=100`, no more `limit=0`, nameless members included); Threads as list + pane with unread marks per thread and group, paging beyond 60, empty/error states; thread screen with paged posts, polite polling (visibility-aware, backoff), reply-to-post quoting; thread searches through the cache; Bugs #13 #21(recipe) | 1,417 kB · 71 |
+| Integration | the four branches merged one at a time (two small conflicts), the composer's group keys from the shared cache, per-message avatar storms removed, Reply all / Forward wired, rail icons and unread-thread badges | **1,298 kB (gzip 398 kB) · 200 tests** |
+
+Checked in the preview (outside Hub, four themes): desktop 1280, 700 px and 390×844 before and after the shell; the Settings page; the phone composer with its footer. Hub Dev Mode checks: see Follow-ups (Phase 3).
 
 ## Follow-ups
 
