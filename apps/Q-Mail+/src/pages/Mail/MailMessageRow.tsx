@@ -20,6 +20,9 @@ import { RootState } from "../../state/store";
 import { base64ToUint8Array, uint8ArrayToObject } from "../../utils/toBase64";
 import { Box, CircularProgress, IconButton, Tooltip, useMediaQuery } from "@mui/material";
 import { parseSentRecipientFromIdentifier } from "./mailIdentifier";
+import { selectReadState } from "../../state/features/mailSlice";
+import { isMessageRead } from "../../utils/readState";
+import { UnreadDot } from "../../layout/states";
 
 const subjectDecryptCache = new Map<string, string>()
 let subjectDecryptQueue: Promise<void> = Promise.resolve()
@@ -95,6 +98,7 @@ export const MailMessageRow = ({
   const hashMapSavedSubjects = useSelector(
     (state: RootState) => state.mail.hashMapSavedSubjects
   );
+  const readState = useSelector(selectReadState)
   const subjectInHash = hashMapSavedSubjects[identifier]
   const data = hashMapMailMessages[identifier]
 
@@ -150,9 +154,9 @@ export const MailMessageRow = ({
   let isEncrypted = true;
   let hasAttachments = null
   let subject = ""
-  const isMarkedRead = Array.isArray(messageData?.generalData?.threadV2)
-    ? messageData.generalData.threadV2.length > 0
-    : false;
+  // The read store decides (src/utils/readState.ts); threadV2 is only the
+  // compatibility fallback inside isMessageRead, never emptied or injected.
+  const isMarkedRead = isMessageRead(messageData, readState)
   if(subjectInHashDecrypted !== null){
     subject = subjectInHashDecrypted || "- no subject"
     hasAttachments = hasAttachment || false
@@ -202,7 +206,7 @@ const name = useMemo(()=> {
     return formatFullTimestamp(messageData?.createdAt)
   }, [messageData?.createdAt])
 
-  const shouldBoldUnread = !isFromSent && isEncrypted && !isMarkedRead;
+  const shouldBoldUnread = !isFromSent && !isMarkedRead;
 
   const handleDeleteClick = useCallback(
     async (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -256,6 +260,7 @@ const name = useMemo(()=> {
           >
             {createdAtLabel}
           </MessageExtraDate>
+          {shouldBoldUnread && <UnreadDot />}
           {subject ? (
             <MailMessageRowInfoStatusRead
               sx={[{
@@ -360,6 +365,7 @@ const name = useMemo(()=> {
       <MailMessageRowProfile>
         <AvatarWrapper isAlias={!!alias} height="50px" user={name} fallback={alias || name}></AvatarWrapper>
         <MessageExtraInfo>
+          {shouldBoldUnread && <UnreadDot />}
           <MessageExtraName sx={[shouldBoldUnread ? {
             fontWeight: "900"
           } : {

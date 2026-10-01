@@ -136,6 +136,23 @@ export function FetchingFromPeers({ status, percentLoaded, onRetry, compact }: F
   );
 }
 
+/** The unread marker used by every list row (a dot plus weight, never colour alone). */
+export function UnreadDot({ label = 'Unread' }: { label?: string }) {
+  return (
+    <Box
+      role="img"
+      aria-label={label}
+      sx={(theme) => ({
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        backgroundColor: theme.palette.primary.main,
+        flexShrink: 0,
+      })}
+    />
+  );
+}
+
 export function LoadingBanner({ text }: { text: string }) {
   return (
     <Box

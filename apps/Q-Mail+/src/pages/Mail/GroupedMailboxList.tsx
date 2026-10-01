@@ -6,6 +6,10 @@ import { formatFullTimestamp } from "../../utils/time";
 import { MailMessageRow } from "./MailMessageRow";
 import { AvatarWrapper } from "./MailTable";
 import { MessagesContainer } from "./Mail-styles";
+import { useSelector } from "react-redux";
+import { selectReadState } from "../../state/features/mailSlice";
+import { isMessageRead } from "../../utils/readState";
+import { UnreadDot } from "../../layout/states";
 import {
   getSentRecipientDisplayLabel,
   getSentRecipientGroupKey,
@@ -56,11 +60,6 @@ const getMessageId = (message: any): string => {
   return String(value);
 };
 
-const isMessageMarkedRead = (message: any): boolean => {
-  const thread = message?.generalData?.threadV2;
-  return Array.isArray(thread) && thread.length > 0;
-};
-
 export const GroupedMailboxList = ({
   messages,
   mailboxType,
@@ -74,6 +73,9 @@ export const GroupedMailboxList = ({
   onArchive,
   onUnarchive,
 }: GroupedMailboxListProps) => {
+  // Read/unread comes from the read store (src/utils/readState.ts), never
+  // from generalData.threadV2, so a real reply chain is left alone (Bugs #5).
+  const readState = useSelector(selectReadState);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
     new Set()
   );
@@ -348,7 +350,7 @@ export const GroupedMailboxList = ({
           .map(getMessageId)
           .filter(Boolean) as string[];
         const groupHasUnread = group.messages.some(
-          message => !isMessageMarkedRead(message)
+          message => !isMessageRead(message, readState)
         );
         const selectedCount = groupMessageIds.filter(id =>
           selectedMessageIds.has(id)
@@ -361,6 +363,7 @@ export const GroupedMailboxList = ({
         return (
           <Box
             key={group.key}
+            data-group={group.key}
             sx={{
               width: "100%",
               display: "flex",
@@ -432,6 +435,7 @@ export const GroupedMailboxList = ({
                   user={group.label}
                   fallback={group.label}
                 />
+                {mailboxType !== "sent" && groupHasUnread && <UnreadDot />}
                 <Box
                   sx={{
                     display: "flex",
