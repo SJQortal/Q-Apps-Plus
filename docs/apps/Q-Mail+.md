@@ -1245,6 +1245,8 @@ Two parallel agents from `b2426c9` (main merged in, kit synced), merged one at a
 | before | 0 from the app | 0 | 5 | 150 | 314 | 6 rules (landmark-one-main ×71, aria-input-field-name ×10, image-alt ×10, scrollable-region-focusable ×6, button-name ×5, aria-dialog-name ×3) |
 | after | 0 | 0 | 0 | 0 | 20 (the kit's theme-card captions, 12 px) | 0 |
 
+Post-merge reruns (full matrix, then Hub 3.0 only) both stopped partway with Playwright's "browser has been closed" after 100+ clean captures: the snap Brave used as `QPLUS_CHROMIUM` hands off to the already-open Brave window. Rerun `QPLUS_CHROMIUM=/snap/bin/brave node scripts/screens.mjs Q-Mail+` with Brave closed (or point `QPLUS_CHROMIUM` at a Chromium that isn't running) to refresh the matrix on the final tree; the merges after the matrix touched the shell header, dialogs and lint only.
+
 Contrast computed from the built themes: rows, headers, chips, badges, active rail items, avatar initials and selected rows pass 4.5:1 in Hub 3.0 (dark and light), Q-Mail Classic, Black and White; the kit's `error.main` as text reads 3.5:1 in Hub 3.0 (kit follow-up). Q-Mail Classic's primary moved from the pale `#dce9ff` (unreadable as text) to `#39afff` / `#155f9f`.
 
 **Lint:** `npm run lint` added (eslint 9, the Q-Share+ config); 0 errors, 0 warnings.
