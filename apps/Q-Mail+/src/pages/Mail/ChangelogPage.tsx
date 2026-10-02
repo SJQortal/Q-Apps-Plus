@@ -9,6 +9,17 @@ type ChangelogEntry = {
 
 const changelogEntries: ChangelogEntry[] = [
   {
+    version: "1.0.0 (Q-Mail+)",
+    date: "October 2, 2026",
+    highlights: [
+      "The first Q-Mail+ release: the Hub 3.0 layout with a rail, message list and reading pane, one pane at a time on phones, four themes and a full Settings page.",
+      "Read state that survives reloads, unread counts, Archive, search across all mail with bodies on request, Reply with a quote, Reply all, Forward with attachments, Drafts, recipient suggestions with validation.",
+      "Attachments open in the app: images, text, audio, video and PDF, with Download all.",
+      "Group threads as list + pane with unread marks and paging; polite polling that pauses when the tab is hidden; 6 searches on first load instead of about 25.",
+      "Hub and GO fixes: quiet declines, publishing that waits for Hub and checks QDN before a retry, deleted or unavailable resources shown as such, safer message HTML.",
+    ],
+  },
+  {
     version: "v3.2.1",
     date: "May 28, 2026",
     highlights: [
