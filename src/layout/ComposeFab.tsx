@@ -2,6 +2,7 @@ import { Fab } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { BOTTOM_NAV_HEIGHT } from './BottomNav';
+import { LANDSCAPE_FRAME_MEDIA } from '../utils/hubFrame';
 
 const Floating = styled(Fab, { shouldForwardProp: (p) => p !== '$aboveNav' })<{ $aboveNav: boolean }>(
   ({ theme, $aboveNav }) => ({
@@ -12,6 +13,8 @@ const Floating = styled(Fab, { shouldForwardProp: (p) => p !== '$aboveNav' })<{ 
     boxShadow: theme.shadows[6],
     transition: 'transform 180ms ease, opacity 180ms ease',
     '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+    // A phone held sideways gives the app about 201 px in Hub: no floating button there (pitfall 3).
+    [`@media ${LANDSCAPE_FRAME_MEDIA}`]: { display: 'none' },
   })
 );
 
