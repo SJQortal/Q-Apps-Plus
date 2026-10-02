@@ -210,8 +210,9 @@ const earlierMessage = (identifier, user, createdAt) => ({
 
 const mailBody = (r, index, recipientName) => {
   const subject = SUBJECTS[index % SUBJECTS.length];
-  const hasFiles = index === 1; // m02: the four-attachment message
-  const isReply = subject.startsWith('Re:');
+  const hasFiles = index === 0; // m01: the four-attachment message the screens open
+  // m01 also carries one earlier message, so "Show earlier" renders in the reader.
+  const isReply = subject.startsWith('Re:') || index === 0;
   const earlierId = inboxId(r.name, OWNERS[r.name] || ADDRESS, `e${index}`);
   return {
     subject,
@@ -361,7 +362,7 @@ async function goTo(page, name) {
 
 async function openMessage(page) {
   await waitForInbox(page);
-  // The inbox groups by sender: expand Alice's group, then open m02 (the
+  // The inbox groups by sender: expand Alice's group, then open m01 (the
   // four-attachment message, whose subject is in the local cache).
   const group = page.getByRole('button', { name: /^Alice Wonder/ }).first();
   if ((await group.getAttribute('aria-expanded')) === 'false') await group.click({ timeout: 4000 });
