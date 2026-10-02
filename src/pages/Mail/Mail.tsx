@@ -76,6 +76,8 @@ import {
 import {
   MAIL_STATE_DOCUMENT_IDENTIFIER,
   MAIL_STATE_DOCUMENT_SERVICE,
+  mergeAliasReplyLinks,
+  mergeWatchedAliases,
   arePublishedStateEntriesEqual,
   buildPublishedMailStateDocument,
   mergePublishedStateEntries,
@@ -94,7 +96,11 @@ import {
   hasSentMailActivityForOwnedName,
   mergeNewRows,
 } from "../../utils/mailInbox";
-import { useAppShell } from "../../app-shell/AppShellContext";
+import {
+  useAppShell,
+  type PublishedAppearance,
+} from "../../app-shell/AppShellContext";
+import { useHubTheme } from "../../hub-theme";
 import { countUnreadMessages, hasThreadHistory } from "../../utils/readState";
 import type { StoredComposeDraft } from "./composeDrafts";
 import { invalidateThreadSearches } from "./threadData";
@@ -538,7 +544,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const { name: composeRouteName } = useParams();
   const { isShow, onOk, show } = useModal();
   const { user } = useSelector((state: RootState) => state.auth);
-  const { registerMailSync } = useAppShell();
+  const { registerMailSync, state: appShellState } = useAppShell();
+  const { uiTheme } = useHubTheme();
+  const textSize = appShellState.settings.textSize;
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [message, setMessage] = useState<any>(null);
@@ -666,6 +674,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
   );
   const readState = useSelector((state: RootState) => state.mail.readState);
   const archived = useSelector((state: RootState) => state.mail.archived);
+  // Appearance from the last loaded or published document (never auto-applied).
+  const [publishedAppearance, setPublishedAppearance] =
+    useState<PublishedAppearance | null>(null);
   const [publishedArchivedById, setPublishedArchivedById] =
     useState<ArchivedMap>({});
   const { Modal: LoadPublishedStateModal, showModal: showLoadPublishedStateModal } =
@@ -2377,6 +2388,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
           publishedEntries: publishedMailStateById,
           localEntries: localMailStateById,
           archived,
+          // Additive: this device's appearance and alias lists (§16).
+          settings: { uiTheme, textSize, watchedAliases, aliasReplyLinks },
         });
       const archivedToPublish: ArchivedMap = payload.archived || {};
       const encoded = await objectToBase64(payload);
@@ -2416,6 +2429,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       );
       setPublishedMailStateById(mergedStateEntries);
       setPublishedArchivedById(archivedToPublish);
+      setPublishedAppearance({ uiTheme, textSize });
     } catch (error: unknown) {
       // Declining Hub's publish dialog is the user's choice, not an error (pitfall 11).
       if (!isHubDecline(error)) {
@@ -2430,13 +2444,17 @@ export const Mail = ({ isFromTo }: MailProps) => {
       setIsPublishingMailState(false);
     }
   }, [
+    aliasReplyLinks,
     archived,
     dispatch,
     localMailStateById,
     ownedNameCandidates,
     publishedMailStateById,
+    textSize,
+    uiTheme,
     user?.address,
     user?.name,
+    watchedAliases,
   ]);
 
   // Settings → Sync uses the same publish path as the rail item.
@@ -2449,6 +2467,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       publishMailState: publishMailStateToQdn,
       isPublishing: isPublishingMailState,
       hasPendingChanges: hasPendingStateChanges || hasPendingArchivedChanges,
+      publishedAppearance,
     });
   }, [
     hasAuthenticatedIdentity,
@@ -2456,6 +2475,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     hasPendingStateChanges,
     isPublishingMailState,
     publishMailStateToQdn,
+    publishedAppearance,
     registerMailSync,
   ]);
   useEffect(() => {
@@ -2528,6 +2548,27 @@ export const Mail = ({ isFromTo }: MailProps) => {
       if (Object.keys(loadedArchived).length) {
         setPublishedArchivedById(loadedArchived);
         dispatch(applyPublishedArchived(loadedArchived));
+      }
+      // Additive settings: alias lists are unioned (local wins); the
+      // appearance is only remembered for Settings → Sync → Restore.
+      const loadedSettings = parsed.settings;
+      if (loadedSettings) {
+        if (loadedSettings.watchedAliases.length) {
+          setWatchedAliases(current =>
+            mergeWatchedAliases(current, loadedSettings.watchedAliases)
+          );
+        }
+        if (Object.keys(loadedSettings.aliasReplyLinks).length) {
+          setAliasReplyLinks(current =>
+            mergeAliasReplyLinks(current, loadedSettings.aliasReplyLinks)
+          );
+        }
+        if (loadedSettings.uiTheme || loadedSettings.textSize) {
+          setPublishedAppearance({
+            uiTheme: loadedSettings.uiTheme,
+            textSize: loadedSettings.textSize,
+          });
+        }
       }
       const normalizedPublishedStateById = parsed.messages;
 
@@ -2841,6 +2882,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   useEffect(() => {
     setPublishedMailStateById({});
     setPublishedArchivedById({});
+    setPublishedAppearance(null);
   }, [user?.address, user?.name]);
 
   useEffect(() => {
