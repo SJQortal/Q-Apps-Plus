@@ -15,6 +15,7 @@ import {
   hasInboxMailActivityForOwnedName,
   hasSentMailActivityForOwnedName,
   mergeNewRows,
+  withoutDeletedRows,
 } from './mailInbox'
 
 const ADDRESS = 'QAliceAddressXYZ123'
@@ -193,5 +194,15 @@ describe('new-mail poll', () => {
     const rows = await fetchRecentInboxMessagesForSavedAlias('shop')
     expect(rows.map((r) => r.id)).toEqual(['_mail_qortal_qmail_shop_mail_1'])
     expect(await fetchRecentInboxMessagesForSavedAlias('')).toEqual([])
+  })
+})
+
+describe('withoutDeletedRows', () => {
+  it('drops rows whose hash entry is marked deleted and returns the same array otherwise', () => {
+    const rows = [{ id: 'a' }, { id: 'b' }, { identifier: 'c' }]
+    expect(withoutDeletedRows(rows, {})).toBe(rows)
+    expect(withoutDeletedRows(rows, { a: { deleted: false }, z: { deleted: true } })).toBe(rows)
+    expect(withoutDeletedRows(rows, { b: { deleted: true }, c: { deleted: true } })).toEqual([{ id: 'a' }])
+    expect(withoutDeletedRows([], { a: { deleted: true } })).toEqual([])
   })
 })

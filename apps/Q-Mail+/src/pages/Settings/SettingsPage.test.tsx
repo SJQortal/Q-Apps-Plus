@@ -90,7 +90,9 @@ describe('SettingsPage', () => {
 
   it('publishes the mail state only after confirming, through the mail page\'s publish path', async () => {
     const publishMailState = vi.fn(async () => {})
-    renderSettings({ mailSync: { publishMailState, isPublishing: false, hasPendingChanges: true } })
+    renderSettings({
+      mailSync: { publishMailState, isPublishing: false, hasPendingChanges: true, publishedAppearance: null },
+    })
     expect(screen.getByText('Unpublished changes. Costs one QDN publish.')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
     expect(publishMailState).not.toHaveBeenCalled()
@@ -114,9 +116,42 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Open your mailbox first.')).toBeTruthy()
   })
 
-  it('offers Authenticate when signed out', () => {
+  it('restores the published appearance only when asked', () => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, '"hub30"')
+    const { controller } = renderSettings({
+      mailSync: {
+        publishMailState: vi.fn(async () => {}),
+        isPublishing: false,
+        hasPendingChanges: false,
+        publishedAppearance: { uiTheme: 'hub20', textSize: 'large' },
+      },
+    })
+    // Loading the document changes nothing by itself.
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('"hub30"')
+    expect(controller.setTextSize).not.toHaveBeenCalled()
+    expect(screen.getByText('Theme: Q-Mail Classic · Text size: large')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }))
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('"hub20"')
+    expect(document.documentElement.getAttribute('data-ui-theme')).toBe('hub20')
+    expect(controller.setTextSize).toHaveBeenCalledWith('large')
+  })
+
+  it('disables Restore when the published state has no appearance', () => {
+    renderSettings({
+      mailSync: {
+        publishMailState: vi.fn(async () => {}),
+        isPublishing: false,
+        hasPendingChanges: false,
+        publishedAppearance: null,
+      },
+    })
+    expect((screen.getByRole('button', { name: 'Restore' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('The published state carries no theme or text size yet.')).toBeTruthy()
+  })
+
+  it('offers Sign in when signed out', () => {
     const { value } = renderSettings({ user: null })
-    fireEvent.click(screen.getByRole('button', { name: 'Authenticate' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(value.authenticate).toHaveBeenCalled()
   })
 })

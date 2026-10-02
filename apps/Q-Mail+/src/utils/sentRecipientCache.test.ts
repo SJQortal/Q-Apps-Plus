@@ -48,6 +48,15 @@ describe('sentRecipientCache', () => {
     expect(qortalCalls('SEARCH_NAMES')).toHaveLength(1)
   })
 
+  it('sends a "+" in the prefix as %2B so q-apps.js does not turn it into a space', async () => {
+    mockQortalAction('GET_NAME_DATA', {})
+    mockQortalAction('SEARCH_NAMES', (request: any) =>
+      request.query === 'bob%2Bbuilder12345678' ? [{ name: 'bob+builder123456789', owner: 'QBuilderPLUS01' }] : []
+    )
+    expect(await resolveSentRecipientName('bob+builder12345678', 'PLUS01')).toBe('bob+builder123456789')
+    expect(qortalCalls('SEARCH_NAMES')[0].query).toBe('bob%2Bbuilder12345678')
+  })
+
   it('remembers a miss so the row never asks again', async () => {
     mockQortalAction('GET_NAME_DATA', {})
     mockQortalAction('SEARCH_NAMES', [])

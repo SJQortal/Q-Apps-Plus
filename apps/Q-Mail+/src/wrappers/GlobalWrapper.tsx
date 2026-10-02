@@ -50,25 +50,13 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
 
   const { user } = useSelector((state: RootState) => state.auth);
   useMailLocalState(user?.address);
-  useEffect(() => {
-    if (!user?.name) return;
-    getAvatar();
-  }, [user?.name]);
 
-  useEffect(() => {
-    qortalRequest({
-      action: "NOTIFICATION_MARK_SEEN",
-      notificationIds: ["q-mail-notification"],
-    }).catch(error => {
-      console.log({ error });
-    });
-  }, []);
-
-  const getAvatar = async () => {
+  const activeName = user?.name;
+  const getAvatar = useCallback(async () => {
     try {
-      let url = await qortalRequest({
+      const url = await qortalRequest({
         action: "GET_QDN_RESOURCE_URL",
-        name: user?.name,
+        name: activeName,
         service: "THUMBNAIL",
         identifier: "qortal_avatar",
       });
@@ -79,7 +67,21 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
     } catch (error) {
       console.error(error);
     }
-  };
+  }, [activeName]);
+
+  useEffect(() => {
+    if (!activeName) return;
+    void getAvatar();
+  }, [activeName, getAvatar]);
+
+  useEffect(() => {
+    qortalRequest({
+      action: "NOTIFICATION_MARK_SEEN",
+      notificationIds: ["q-mail-notification"],
+    }).catch(error => {
+      console.log({ error });
+    });
+  }, []);
 
   const isLoadingGlobal = useSelector(
     (state: RootState) => state.global.isLoadingGlobal
@@ -204,13 +206,13 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
   //     console.log({ error });
   //   }
   // }
-  const getLocalSubjects = async (name?: string) => {
+  const getLocalSubjects = useCallback(async (name?: string) => {
     try {
       const subjects = JSON.parse(
         localStorage.getItem(`qmail_persistance_${name}`) || "{}"
       );
       // Convert to an array of objects with identifier and all fields
-      let dataArray = Object.entries(subjects).map(([identifier, value]) => ({
+      const dataArray = Object.entries(subjects).map(([identifier, value]) => ({
         identifier,
         ...(value as DataEntry),
       }));
@@ -219,10 +221,10 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
       dataArray.sort((a, b) => b.timestamp - a.timestamp);
 
       // Slice the array to keep only the first 500 elements
-      let latest500 = dataArray.slice(0, 500);
+      const latest500 = dataArray.slice(0, 500);
 
       // Convert back to the original object format
-      let latest500Data: DataObject = {};
+      const latest500Data: DataObject = {};
       latest500.forEach(item => {
         const { identifier, ...rest } = item;
         latest500Data[identifier] = rest;
@@ -235,7 +237,7 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
     } catch (error) {
       localStorage.setItem(`qmail_persistance_${name}`, JSON.stringify({}));
     }
-  };
+  }, [dispatch]);
 
   const loadAccount = React.useCallback(async () => {
     const account = await qortalRequest({
@@ -305,7 +307,7 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
       return;
     }
     void getLocalSubjects(user.name);
-  }, [user?.name]);
+  }, [getLocalSubjects, user?.name]);
 
   const { controller: appShellController, state: appShellState } =
     useQMailAppShell({
@@ -339,7 +341,7 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
       dispatch(addUser({ ...user, name }));
       void getLocalSubjects(name);
     },
-    [dispatch, user]
+    [dispatch, getLocalSubjects, user]
   );
 
   const appShellValue = useMemo(

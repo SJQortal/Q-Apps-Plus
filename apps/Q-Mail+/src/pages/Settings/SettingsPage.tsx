@@ -25,8 +25,9 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CheckIcon from '@mui/icons-material/Check';
 import PersonOffOutlinedIcon from '@mui/icons-material/PersonOffOutlined';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
+import RestoreOutlinedIcon from '@mui/icons-material/RestoreOutlined';
 import useConfirmationModal from '../../hooks/useConfirmModal';
-import { ThemePicker, headerFill } from '../../hub-theme';
+import { ThemePicker, headerFill, themeOptions, useHubTheme } from '../../hub-theme';
 import { useAppShell } from '../../app-shell/AppShellContext';
 import { BlockedNamesModal } from '../../components/common/BlockedNamesModal/BlockedNamesModal';
 import {
@@ -128,6 +129,7 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, userAvatar, setActiveName, authenticate, controller, state, mailSync } = useAppShell();
+  const { setUiTheme, config: themeKitConfig } = useHubTheme();
   const [blockedOpen, setBlockedOpen] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const identityKey = user?.address || user?.name || '';
@@ -139,7 +141,7 @@ export function SettingsPage() {
 
   const { Modal: PublishStateModal, showModal: showPublishStateModal } = useConfirmationModal({
     title: 'Publish mail state?',
-    message: `This publishes your read state, subjects and archived list as an encrypted document (qmail_state_v1) under ${
+    message: `This publishes your read state, subjects, archived list, theme, text size and watched aliases as an encrypted document (qmail_state_v1) under ${
       user?.name || 'your name'
     }, so other devices can load it. It costs one QDN publish.`,
     confirmLabel: 'Publish',
@@ -157,6 +159,23 @@ export function SettingsPage() {
     }
   };
   const isPublishingState = Boolean(mailSync?.isPublishing) || isPublishingFromSettings;
+
+  // Appearance from the published document: shown, and applied only on click.
+  const publishedAppearance = mailSync?.publishedAppearance ?? null;
+  const publishedThemeName = publishedAppearance?.uiTheme
+    ? themeOptions(themeKitConfig.hub20).find((option) => option.id === publishedAppearance.uiTheme)?.name
+    : undefined;
+  const publishedAppearanceSummary = [
+    publishedThemeName ? `Theme: ${publishedThemeName}` : null,
+    publishedAppearance?.textSize ? `Text size: ${publishedAppearance.textSize}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const restoreAppearance = () => {
+    if (!publishedAppearance) return;
+    if (publishedAppearance.uiTheme) setUiTheme(publishedAppearance.uiTheme);
+    if (publishedAppearance.textSize) controller.setTextSize(publishedAppearance.textSize);
+  };
 
   const goBack = () => {
     const background = (location.state as { backgroundLocation?: Location } | null)?.backgroundLocation;
@@ -222,9 +241,9 @@ export function SettingsPage() {
               )}
             </>
           ) : (
-            <Row label="Not signed in" hint="Authenticate to read and send mail.">
+            <Row label="Not signed in" hint="Sign in to read and send mail.">
               <Button variant="contained" onClick={() => void authenticate()}>
-                Authenticate
+                Sign in
               </Button>
             </Row>
           )}
@@ -299,6 +318,27 @@ export function SettingsPage() {
               sx={{ minHeight: 44 }}
             >
               {isPublishingState ? 'Publishing…' : 'Publish'}
+            </Button>
+          </Row>
+          <Divider />
+          <Row
+            label="Restore appearance from the published state"
+            hint={
+              !isAuthenticated
+                ? 'Sign in to load the published state.'
+                : !mailSync
+                ? 'Open your mailbox to load the published state.'
+                : publishedAppearanceSummary || 'The published state carries no theme or text size yet.'
+            }
+          >
+            <Button
+              variant="outlined"
+              startIcon={<RestoreOutlinedIcon />}
+              onClick={restoreAppearance}
+              disabled={!isAuthenticated || !publishedAppearanceSummary}
+              sx={{ minHeight: 44 }}
+            >
+              Restore
             </Button>
           </Row>
           <Divider />

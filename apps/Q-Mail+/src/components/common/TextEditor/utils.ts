@@ -61,13 +61,3 @@ export function convertQortalLinks(sanitizedHtml: string): string {
   linkifyQortalText(doc.body);
   return doc.body.innerHTML;
 }
-
-/** The first `length` characters of text in a message body, parsed in an inert document (nothing loads or runs). */
-export function extractTextFromHTML(htmlString: unknown, length = 150): string {
-  if (typeof htmlString !== "string" || !htmlString) return "";
-  // Replace br tags and block-level tags with a space before parsing
-  const htmlWithSpaces = htmlString.replace(/<\/?(br|p|div|h[1-6]|ul|ol|li|blockquote)[^>]*>/gi, " ");
-  const doc = new DOMParser().parseFromString(`<body>${htmlWithSpaces}</body>`, "text/html");
-  const text = (doc.body.textContent || "").replace(/\s+/g, " ").trim();
-  return text.slice(0, length);
-}

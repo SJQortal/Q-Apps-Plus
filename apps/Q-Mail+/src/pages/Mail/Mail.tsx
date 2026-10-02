@@ -1,5 +1,4 @@
 import React, {
-  FC,
   useCallback,
   useEffect,
   useMemo,
@@ -12,18 +11,14 @@ import { RootState } from "../../state/store";
 
 
 import {
-  Avatar,
   Box,
   Button,
   Checkbox,
   FormControlLabel,
   Typography,
-  CircularProgress,
-  LinearProgress,
-  ButtonBase,
 } from "@mui/material";
 import { useFetchMail } from "../../hooks/useFetchMail";
-import { clearMessages, upsertMessages } from "../../state/features/mailSlice";
+import { clearMessages } from "../../state/features/mailSlice";
 import { setUserAvatarHash } from "../../state/features/globalSlice";
 import { setNotification } from "../../state/features/notificationsSlice";
 
@@ -31,11 +26,7 @@ import { useModal } from "../../components/common/useModal";
 import useConfirmationModal from "../../hooks/useConfirmModal";
 import { OpenMail } from "./OpenMail";
 import { MAIL_SERVICE_TYPE, THREAD_SERVICE_TYPE } from "../../constants/mail";
-import {
-  executeEvent,
-  subscribeToEvent,
-  unsubscribeFromEvent,
-} from "../../utils/events";
+import { executeEvent } from "../../utils/events";
 import { GroupedMailboxList } from "./GroupedMailboxList";
 import { MailboxSearchBar } from "./MailboxSearchBar";
 import { useMailboxSearch } from "./useMailboxSearch";
@@ -85,6 +76,8 @@ import {
 import {
   MAIL_STATE_DOCUMENT_IDENTIFIER,
   MAIL_STATE_DOCUMENT_SERVICE,
+  mergeAliasReplyLinks,
+  mergeWatchedAliases,
   arePublishedStateEntriesEqual,
   buildPublishedMailStateDocument,
   mergePublishedStateEntries,
@@ -102,13 +95,14 @@ import {
   hasInboxMailActivityForOwnedName,
   hasSentMailActivityForOwnedName,
   mergeNewRows,
+  withoutDeletedRows,
 } from "../../utils/mailInbox";
-import { useAppShell } from "../../app-shell/AppShellContext";
 import {
-  countUnreadMessages,
-  hasThreadHistory,
-  readIdsFromState,
-} from "../../utils/readState";
+  useAppShell,
+  type PublishedAppearance,
+} from "../../app-shell/AppShellContext";
+import { useHubTheme } from "../../hub-theme";
+import { countUnreadMessages, hasThreadHistory } from "../../utils/readState";
 import type { StoredComposeDraft } from "./composeDrafts";
 import { invalidateThreadSearches } from "./threadData";
 import { useThreadUnreadCounts } from "./threadUnread";
@@ -228,8 +222,6 @@ const parseSidebarInstanceNameFromItemId = (
 const parseSidebarGroupIdFromItemId = (itemId: string): string | null => {
   return parseSidebarInstanceNameFromItemId(itemId, THREAD_GROUP_ITEM_PREFIX);
 };
-
-const SIDEBAR_HOVER_CLOSE_DELAY_MS = 180;
 
 const getWatchedAliasStorageKey = (address: string): string => {
   return `qmail_watched_aliases_${address}`;
@@ -551,9 +543,11 @@ interface MailProps {
 
 export const Mail = ({ isFromTo }: MailProps) => {
   const { name: composeRouteName } = useParams();
-  const { isShow, onCancel, onOk, show } = useModal();
+  const { isShow, onOk, show } = useModal();
   const { user } = useSelector((state: RootState) => state.auth);
-  const { registerMailSync } = useAppShell();
+  const { registerMailSync, state: appShellState } = useAppShell();
+  const { uiTheme } = useHubTheme();
+  const textSize = appShellState.settings.textSize;
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [message, setMessage] = useState<any>(null);
@@ -609,8 +603,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const [railOpen, setRailOpen] = useState(false);
   const location = useLocation();
   useAppViewport();
-  // Kept in step with activeMailboxItem; the shell reads activeMailboxItem only.
-  const [mobileMode, setMobileMode] = useState("inbox");
   const [activeMailboxItem, setActiveMailboxItem] =
     useState<MailboxSidebarItemId>("inbox");
   const [composeMode, setComposeMode] = useState<ComposeMode>("standard");
@@ -628,7 +620,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const [composeRequireReplyAlias, setComposeRequireReplyAlias] =
     useState(false);
   const [composeDefaultReplyAlias, setComposeDefaultReplyAlias] = useState("");
-  const [isChangelogOpen, setIsChangelogOpen] = useState(false);
   const [isPublishingMailState, setIsPublishingMailState] = useState(false);
   const [publishedMailStateById, setPublishedMailStateById] = useState<
     Record<string, QMailPublishedStateEntry>
@@ -678,12 +669,28 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const hashMapMailMessages = useSelector(
     (state: RootState) => state.mail.hashMapMailMessages
   );
+  // Secondary-name rows whose body turned out to be the delete marker: the
+  // primary inbox drops them through removeMessages when a message is opened;
+  // these lists are filtered against the hash map instead.
+  const visibleCombinedAliasInboxMessages = useMemo(() => {
+    let next: typeof combinedAliasInboxMessages | null = null;
+    Object.entries(combinedAliasInboxMessages).forEach(([name, rows]) => {
+      const visible = withoutDeletedRows(rows, hashMapMailMessages);
+      if (visible === rows) return;
+      if (!next) next = { ...combinedAliasInboxMessages };
+      next[name] = visible;
+    });
+    return next || combinedAliasInboxMessages;
+  }, [combinedAliasInboxMessages, hashMapMailMessages]);
 
   const mailMessages = useSelector(
     (state: RootState) => state.mail.mailMessages
   );
   const readState = useSelector((state: RootState) => state.mail.readState);
   const archived = useSelector((state: RootState) => state.mail.archived);
+  // Appearance from the last loaded or published document (never auto-applied).
+  const [publishedAppearance, setPublishedAppearance] =
+    useState<PublishedAppearance | null>(null);
   const [publishedArchivedById, setPublishedArchivedById] =
     useState<ArchivedMap>({});
   const { Modal: LoadPublishedStateModal, showModal: showLoadPublishedStateModal } =
@@ -714,10 +721,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
       ),
     });
 
-  const userName = useMemo(() => {
-    if (!user?.name) return "";
-    return user.name;
-  }, [user]);
   const ownedNameCandidates = useMemo(() => {
     const accountNames = user?.names;
     const namesFromAccount = Array.isArray(accountNames)
@@ -828,14 +831,14 @@ export const Mail = ({ isFromTo }: MailProps) => {
     };
 
     appendMessages(mailMessages);
-    Object.values(combinedAliasInboxMessages).forEach(messages => {
+    Object.values(visibleCombinedAliasInboxMessages).forEach(messages => {
       appendMessages(messages);
     });
 
     return Array.from(mergedMessages.values()).sort((a, b) => {
       return Number(b?.createdAt || 0) - Number(a?.createdAt || 0);
     });
-  }, [combinedAliasInboxMessages, mailMessages]);
+  }, [visibleCombinedAliasInboxMessages, mailMessages]);
   const unreadCounts = useMemo<UnreadCounts>(() => {
     if (!hasAuthenticatedIdentity) return EMPTY_UNREAD_COUNTS;
     const byName: Record<string, number> = {};
@@ -843,7 +846,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       const messages =
         name.toLowerCase() === normalizedUserName
           ? mailMessages
-          : combinedAliasInboxMessages[name] || [];
+          : visibleCombinedAliasInboxMessages[name] || [];
       byName[name] = countUnreadMessages(messages, readState, archived);
     });
     const byAlias: Record<string, number> = {};
@@ -857,7 +860,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     return { inbox, byName, byAlias, aliases, total: inbox + aliases };
   }, [
     archived,
-    combinedAliasInboxMessages,
+    visibleCombinedAliasInboxMessages,
     combinedInboxMessages,
     hasAuthenticatedIdentity,
     mailMessages,
@@ -920,11 +923,11 @@ export const Mail = ({ isFromTo }: MailProps) => {
       return withoutArchived(mailMessages);
     }
     return withoutArchived(
-      combinedAliasInboxMessages[selectedInboxInstanceName] ?? []
+      visibleCombinedAliasInboxMessages[selectedInboxInstanceName] ?? []
     );
   }, [
     archived,
-    combinedAliasInboxMessages,
+    visibleCombinedAliasInboxMessages,
     combinedInboxMessages,
     mailMessages,
     normalizedUserName,
@@ -1161,7 +1164,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     to?: string
   ) => {
     try {
-      setIsChangelogOpen(false);
       const shouldAutoMarkAsRead =
         activeMailboxItem === "inbox" || activeMailboxItem === "aliases";
       const existingMessage: any = hashMapMailMessages[messageIdentifier];
@@ -1205,8 +1207,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
         }
         return;
       }
-    } catch (error) {
-    } finally {
+    } catch {
+      // Nothing to show: the message stays closed and the reader prompt is cleared.
+      setMailInfo(null);
     }
   };
 
@@ -1219,7 +1222,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
       const linkedReplyAlias = activeAliasInboxName
         ? aliasReplyLinks[activeAliasInboxName.toLowerCase()] || ""
         : "";
-      setIsChangelogOpen(false);
       setForwardInfo(null);
       setComposeReplyAll(Boolean(options?.replyAll));
       setReplyTo(messagePayload);
@@ -1233,14 +1235,12 @@ export const Mail = ({ isFromTo }: MailProps) => {
       setIsOpen(false);
       setMessage(null);
       setActiveMailboxItem("compose");
-      setMobileMode("compose");
     },
     [activeAliasInboxName, aliasReplyLinks]
   );
 
   const openForwardComposerFromMessage = useCallback(
     (forwardPayload: any) => {
-      setIsChangelogOpen(false);
       setReplyTo(null);
       setComposeReplyAll(false);
       // The reader may send ready-made HTML (string) or the message itself;
@@ -1267,7 +1267,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
       setIsOpen(false);
       setMessage(null);
       setActiveMailboxItem("compose");
-      setMobileMode("compose");
     },
     [activeAliasInboxName, message, user?.name]
   );
@@ -1290,7 +1289,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
           ? selectedAlias
           : user?.name || ownedNameCandidates[0] || "";
 
-      setIsChangelogOpen(false);
       setReplyTo(null);
       setComposeReplyAll(false);
       setForwardInfo(null);
@@ -1313,7 +1311,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
       setComposeDefaultReplyAlias("");
       setComposeMode("standard");
       setActiveMailboxItem("compose");
-      setMobileMode("compose");
     },
     [ownedNameCandidates, selectedAlias, user?.name]
   );
@@ -1323,7 +1320,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
   // thread-post draft opens its thread, where NewThread restores it.
   const handleOpenDraft = useCallback(
     (draftKey: string, draft: StoredComposeDraft) => {
-      setIsChangelogOpen(false);
       setIsOpen(false);
       setMessage(null);
 
@@ -1365,7 +1361,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
         );
         setIsThreadsSectionExpanded(true);
         setActiveMailboxItem("threads");
-        setMobileMode("threads");
         return;
       }
 
@@ -1393,7 +1388,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
       setComposeDefaultReplyAlias("");
       setComposeMode("standard");
       setActiveMailboxItem("compose");
-      setMobileMode("compose");
     },
     [dispatch, groupOptionsById, hashMapMailMessages]
   );
@@ -1415,6 +1409,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
       firstMount.current = true;
     }
     prevName.current = user.name;
+    // Keyed on the signed-in name on purpose (the guard above compares names);
+    // dispatch and getMessages are deliberately left out of the dependencies.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.name]);
 
   useEffect(() => {
@@ -1422,7 +1419,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
       return;
     }
 
-    setIsChangelogOpen(false);
     setReplyTo(null);
     setForwardInfo(null);
     setSelectedAlias(null);
@@ -1439,7 +1435,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     setComposeDefaultReplyAlias("");
     setComposeMode("standard");
     setActiveMailboxItem("compose");
-    setMobileMode("compose");
   }, [composeRouteName, hasAuthenticatedIdentity, isFromTo]);
 
   useEffect(() => {
@@ -1967,7 +1962,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     if (!hasAuthenticatedIdentity) {
       dispatch(
         setNotification({
-          msg: "Authenticate before running alias scan",
+          msg: "Sign in before running the alias scan",
           alertType: "error",
         })
       );
@@ -2407,6 +2402,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
           publishedEntries: publishedMailStateById,
           localEntries: localMailStateById,
           archived,
+          // Additive: this device's appearance and alias lists (§16).
+          settings: { uiTheme, textSize, watchedAliases, aliasReplyLinks },
         });
       const archivedToPublish: ArchivedMap = payload.archived || {};
       const encoded = await objectToBase64(payload);
@@ -2446,6 +2443,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       );
       setPublishedMailStateById(mergedStateEntries);
       setPublishedArchivedById(archivedToPublish);
+      setPublishedAppearance({ uiTheme, textSize });
     } catch (error: unknown) {
       // Declining Hub's publish dialog is the user's choice, not an error (pitfall 11).
       if (!isHubDecline(error)) {
@@ -2460,13 +2458,17 @@ export const Mail = ({ isFromTo }: MailProps) => {
       setIsPublishingMailState(false);
     }
   }, [
+    aliasReplyLinks,
     archived,
     dispatch,
     localMailStateById,
     ownedNameCandidates,
     publishedMailStateById,
+    textSize,
+    uiTheme,
     user?.address,
     user?.name,
+    watchedAliases,
   ]);
 
   // Settings → Sync uses the same publish path as the rail item.
@@ -2479,6 +2481,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       publishMailState: publishMailStateToQdn,
       isPublishing: isPublishingMailState,
       hasPendingChanges: hasPendingStateChanges || hasPendingArchivedChanges,
+      publishedAppearance,
     });
   }, [
     hasAuthenticatedIdentity,
@@ -2486,6 +2489,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     hasPendingStateChanges,
     isPublishingMailState,
     publishMailStateToQdn,
+    publishedAppearance,
     registerMailSync,
   ]);
   useEffect(() => {
@@ -2558,6 +2562,27 @@ export const Mail = ({ isFromTo }: MailProps) => {
       if (Object.keys(loadedArchived).length) {
         setPublishedArchivedById(loadedArchived);
         dispatch(applyPublishedArchived(loadedArchived));
+      }
+      // Additive settings: alias lists are unioned (local wins); the
+      // appearance is only remembered for Settings → Sync → Restore.
+      const loadedSettings = parsed.settings;
+      if (loadedSettings) {
+        if (loadedSettings.watchedAliases.length) {
+          setWatchedAliases(current =>
+            mergeWatchedAliases(current, loadedSettings.watchedAliases)
+          );
+        }
+        if (Object.keys(loadedSettings.aliasReplyLinks).length) {
+          setAliasReplyLinks(current =>
+            mergeAliasReplyLinks(current, loadedSettings.aliasReplyLinks)
+          );
+        }
+        if (loadedSettings.uiTheme || loadedSettings.textSize) {
+          setPublishedAppearance({
+            uiTheme: loadedSettings.uiTheme,
+            textSize: loadedSettings.textSize,
+          });
+        }
       }
       const normalizedPublishedStateById = parsed.messages;
 
@@ -2689,7 +2714,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
         setRailOpen(false);
       };
 
-      setIsChangelogOpen(false);
       if (itemId !== "compose") {
         setComposePrefill(null);
         setComposeReturnView("inbox");
@@ -2702,7 +2726,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
 
       if (itemId === "compose") {
         setActiveMailboxItem("compose");
-        setMobileMode("compose");
         setComposePrefill(null);
         setComposeReturnView("inbox");
         setComposeReturnGroupId(null);
@@ -2727,7 +2750,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
         if (!normalizedAliasInboxName) return;
 
         setActiveMailboxItem("compose");
-        setMobileMode("compose");
         setComposePrefill(null);
         setComposeReturnView("inbox");
         setComposeReturnGroupId(null);
@@ -2757,7 +2779,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
       );
       if (inboxInstanceName) {
         setActiveMailboxItem("inbox");
-        setMobileMode("inbox");
         setSelectedAlias(inboxInstanceName);
         setSelectedAliasScope("inbox");
         setSelectedGroup(null);
@@ -2774,7 +2795,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
       );
       if (aliasesInstanceName) {
         setActiveMailboxItem("aliases");
-        setMobileMode("aliases");
         setSelectedAlias(aliasesInstanceName);
         setSelectedAliasScope("aliases");
         setSelectedGroup(null);
@@ -2791,7 +2811,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
       );
       if (sentInstanceName) {
         setActiveMailboxItem("sent");
-        setMobileMode("sent");
         setSelectedAlias(sentInstanceName);
         setSelectedAliasScope("sent");
         setSelectedGroup(null);
@@ -2808,7 +2827,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
         if (!groupInfo) return;
         setIsThreadsSectionExpanded(true);
         setActiveMailboxItem("threads");
-        setMobileMode("threads");
         setSelectedAlias(null);
         setSelectedAliasScope(null);
         setSelectedGroup(groupInfo);
@@ -2822,7 +2840,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
       if (itemId === "threads") {
         setIsThreadsSectionExpanded(prev => !prev);
         setActiveMailboxItem("threads");
-        setMobileMode("threads");
         setSelectedAlias(null);
         setSelectedAliasScope(null);
         setSelectedGroup(null);
@@ -2835,7 +2852,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
 
       if (itemId === "aliases") {
         setActiveMailboxItem("aliases");
-        setMobileMode("aliases");
         setSelectedAlias(null);
         setSelectedAliasScope(null);
         setSelectedGroup(null);
@@ -2848,7 +2864,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
 
       if (itemId === ARCHIVED_ITEM_ID) {
         setActiveMailboxItem("archived");
-        setMobileMode("inbox");
         setSelectedAlias(null);
         setSelectedAliasScope(null);
         setSelectedGroup(null);
@@ -2861,7 +2876,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
 
       if (itemId === "inbox" || itemId === "sent" || itemId === "drafts") {
         setActiveMailboxItem(itemId);
-        setMobileMode(itemId);
         setSelectedAlias(null);
         setSelectedAliasScope(null);
         setSelectedGroup(null);
@@ -2882,6 +2896,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   useEffect(() => {
     setPublishedMailStateById({});
     setPublishedArchivedById({});
+    setPublishedAppearance(null);
   }, [user?.address, user?.name]);
 
   useEffect(() => {
@@ -2979,7 +2994,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     return ownedSentNames;
   }, [ownedSentNames, selectedSentInstanceName]);
 
-  const shouldRenderAliasInboxMailbox = Boolean(activeAliasInboxName);
   const isMailBootstrapLoading =
     isLoading || isLoadingCombinedAliasInbox || isLoadingQdnState;
 
@@ -3002,7 +3016,6 @@ export const Mail = ({ isFromTo }: MailProps) => {
     setComposeReplyAll(false);
     if (composeReturnView === "threads") {
       setActiveMailboxItem("threads");
-      setMobileMode("threads");
       invalidateThreadSearches(composeReturnGroupId || undefined);
       if (composeReturnGroupId) {
         const returnGroup = groupOptionsById.get(composeReturnGroupId);
@@ -3012,12 +3025,10 @@ export const Mail = ({ isFromTo }: MailProps) => {
       }
     } else if (shouldReturnToAliasInbox) {
       setActiveMailboxItem("aliases");
-      setMobileMode("aliases");
       setSelectedAlias(selectedAliasInboxName);
       setSelectedAliasScope("aliases");
     } else {
       setActiveMailboxItem("inbox");
-      setMobileMode("inbox");
       setSelectedAlias(null);
       setSelectedAliasScope(null);
     }
