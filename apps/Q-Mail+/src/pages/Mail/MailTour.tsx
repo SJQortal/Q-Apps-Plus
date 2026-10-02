@@ -3,11 +3,41 @@
  * (Compose, the mailboxes, Aliases) instead of react-joyride (UX #25,
  * Bugs #10). Seen once per browser: localStorage `tourStatus-qmail`
  * (the same key the original app used) is set when the tips finish or
- * are skipped. The disclaimer lives in ConsentModal only.
+ * are skipped. The disclaimer lives in ConsentModal only, and the tips
+ * wait until it has been shown and closed: both are first-run, and the
+ * first tip used to open on top of the welcome dialog in Hub.
  */
 import { useEffect, useLayoutEffect, useState } from "react";
 import { Box, Button, Popover, Typography } from "@mui/material";
 import { useLayoutMode } from "../../layout/useLayoutMode";
+import { hasConsented } from "../../components/modals/ConsentModal";
+
+/** The id ConsentModal gives its text (ResponsiveDialog `describedBy`): present while the dialog is open. */
+export const CONSENT_DESCRIPTION_ID = "qmail-consent-description";
+
+export function isConsentDialogOpen(root: ParentNode = document): boolean {
+  return Boolean(root.querySelector(`#${CONSENT_DESCRIPTION_ID}`));
+}
+
+/**
+ * True once the consent flag is set and the welcome dialog is gone. The
+ * flag is written when the dialog opens, so the DOM is watched too.
+ */
+export function useConsentSettled(): boolean {
+  const [settled, setSettled] = useState(() => hasConsented() && !isConsentDialogOpen());
+  useEffect(() => {
+    if (settled) return;
+    const check = () => {
+      if (hasConsented() && !isConsentDialogOpen()) setSettled(true);
+    };
+    check();
+    if (typeof MutationObserver === "undefined") return;
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [settled]);
+  return settled;
+}
 
 export const TOUR_STATUS_STORAGE_KEY = "tourStatus-qmail";
 export const TOUR_STATUS_DISMISSED = "dismissed";
@@ -73,20 +103,22 @@ export function MailTour({ run, onDone }: MailTourProps) {
   const isPhone = useLayoutMode() === "phone";
   const [index, setIndex] = useState(0);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const settled = useConsentSettled();
+  const active = run && settled;
   const step = TOUR_STEPS[index];
   const isLast = index === TOUR_STEPS.length - 1;
 
   // Find the anchor after the layout settled (the rail or the bottom nav).
   useLayoutEffect(() => {
-    if (!run) return;
+    if (!active) return;
     setAnchor(findTourAnchor(step));
-  }, [run, step]);
+  }, [active, step]);
 
   useEffect(() => {
-    if (run) setIndex(0);
-  }, [run]);
+    if (active) setIndex(0);
+  }, [active]);
 
-  if (!run || !step) return null;
+  if (!active || !step) return null;
 
   const finish = () => {
     setIndex(0);
