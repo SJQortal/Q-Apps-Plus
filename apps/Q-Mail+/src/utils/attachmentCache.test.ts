@@ -61,7 +61,7 @@ describe('attachmentCache', () => {
     expect(a).toBe(b)
     const c = await loadAttachment(ref('att1'))
     expect(c).toBe(a)
-    expect(getCachedAttachment('att1')).toBe(a)
+    expect(getCachedAttachment(ref('att1'))).toBe(a)
     expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(1)
     expect(qortalCalls('DECRYPT_DATA')).toHaveLength(1)
     expect(attachmentCacheStats()).toMatchObject({ loads: 1, merged: 1, cacheHits: 1, entries: 1, bytes: 5 })
@@ -106,11 +106,11 @@ describe('attachmentCache', () => {
     mockBytes('bbbb', 'ENC2')
     const b = await loadAttachment(ref('b'))
     expect(attachmentCacheStats().bytes).toBe(8)
-    getCachedAttachment('a') // a is now the most recently used
+    getCachedAttachment(ref('a')) // a is now the most recently used
     mockBytes('cccc', 'ENC3')
     await loadAttachment(ref('c'))
-    expect(getCachedAttachment('b')).toBeUndefined()
-    expect(getCachedAttachment('a')).toBe(a)
+    expect(getCachedAttachment(ref('b'))).toBeUndefined()
+    expect(getCachedAttachment(ref('a'))).toBe(a)
     expect(revoked).toEqual([b.url])
     expect(attachmentCacheStats()).toMatchObject({ entries: 2, bytes: 8, evictions: 1 })
     delete urlAny.createObjectURL
@@ -125,6 +125,56 @@ describe('attachmentCache', () => {
     const [call] = qortalCalls('SAVE_FILE')
     expect(call).toMatchObject({ action: 'SAVE_FILE', filename: 'cat.png', mimeType: 'image/png' })
     expect(call.blob).toBe(entry.blob)
+  })
+
+  it('a declined save prompt resolves false and is not an error; other failures throw their message', async () => {
+    mockBytes('hello')
+    const entry = await loadAttachment(ref('att2'))
+    for (const decline of ['User declined to save file', 'Benutzer hat das Speichern der Datei abgelehnt', '用户拒绝保存文件']) {
+      mockQortalAction('SAVE_FILE', () => {
+        throw decline
+      })
+      expect(await saveAttachment(entry, ref('att2'))).toBe(false)
+    }
+    mockQortalAction('SAVE_FILE', () => {
+      throw { error: 'Missing filename', message: 'Missing filename' }
+    })
+    await expect(saveAttachment(entry, ref('att2'))).rejects.toThrow('Missing filename')
+    mockQortalAction('SAVE_FILE', true)
+    expect(await saveAttachment(entry, ref('att2'))).toBe(true)
+  })
+
+  it('keys the cache by publisher name and identifier: another name under the same identifier is another file', async () => {
+    mockBytes('from alice')
+    const alice = await loadAttachment(ref('shared'))
+    mockBytes('from bob', 'ENC-BOB')
+    const bob = await loadAttachment(ref('shared', { name: 'bob' }))
+    expect(await alice.blob.text()).toBe('from alice')
+    expect(await bob.blob.text()).toBe('from bob')
+    expect(getCachedAttachment({ name: 'Alice', identifier: 'shared' })).toBe(alice)
+    expect(getCachedAttachment({ name: 'bob', identifier: 'shared' })).toBe(bob)
+    expect(attachmentCacheStats().entries).toBe(2)
+  })
+
+  it('reports a deleted attachment (a "D" body) and caches nothing', async () => {
+    mockQortalAction('FETCH_QDN_RESOURCE', () => btoa('D'))
+    await expect(loadAttachment(ref('gone'))).rejects.toMatchObject({ deleted: true, message: /removed by its sender/ })
+    expect(qortalCalls('DECRYPT_DATA')).toHaveLength(0)
+    expect(attachmentCacheStats().entries).toBe(0)
+  })
+
+  it('asks again at 2, 4, 8 and 16 s while the node has not got the data yet', async () => {
+    let calls = 0
+    mockQortalAction('FETCH_QDN_RESOURCE', () => {
+      calls += 1
+      if (calls < 3) throw { error: 1401, message: 'Data unavailable. Please try again later.' }
+      return 'ENC'
+    })
+    mockQortalAction('DECRYPT_DATA', btoa('late'))
+    const waits: number[] = []
+    const entry = await loadAttachment(ref('late'), { retries: 4, sleep: async (ms) => void waits.push(ms) })
+    expect(await entry.blob.text()).toBe('late')
+    expect(waits).toEqual([2000, 4000])
   })
 
   it('reads the status and asks Core to fetch with GET_QDN_RESOURCE_PROPERTIES', async () => {

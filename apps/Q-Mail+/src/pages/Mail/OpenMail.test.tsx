@@ -6,6 +6,7 @@ import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
 import { store } from '../../state/store'
 import { mockQortalAction, qortalCalls } from '../../test/setup'
 import { resetAttachmentCache } from '../../utils/attachmentCache'
+import { upsertMessages } from '../../state/features/mailSlice'
 import { OpenMail } from './OpenMail'
 
 const fileInfo = { identifier: '_mail_qortal_qmail_bob_abc123_mail_x1', name: 'alice', service: 'MAIL_PRIVATE', to: 'bob' }
@@ -89,6 +90,61 @@ describe('OpenMail', () => {
     await tick(0)
     expect(handleClose).toHaveBeenCalledTimes(1)
     expect(handleClose.mock.calls[0][0]).toMatchObject({ isValid: true })
+  })
+
+  it('says when the sender removed the message (a "D" body) and drops it from the inbox list', async () => {
+    mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'READY' })
+    mockQortalAction('FETCH_QDN_RESOURCE', () => btoa('D'))
+    store.dispatch(upsertMessages([{ id: fileInfo.identifier, user: 'alice', createdAt: 1 }, { id: 'other', user: 'carol', createdAt: 2 }]))
+    const handleClose = vi.fn()
+    wrap(<OpenMail open handleClose={handleClose} fileInfo={fileInfo} />)
+    await tick(0)
+    await tick(0)
+    expect(screen.getByText('This message was removed by its sender')).toBeTruthy()
+    expect(store.getState().mail.mailMessages.map((m: any) => m.id)).toEqual(['other'])
+    expect(store.getState().mail.hashMapMailMessages[fileInfo.identifier]).toMatchObject({ deleted: true })
+    expect(qortalCalls('DECRYPT_DATA')).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(handleClose).toHaveBeenCalledWith()
+  })
+
+  it('retries the fetch at 2, 4, 8 and 16 s, then shows the row\'s sender and date as not available', async () => {
+    mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'READY' })
+    mockQortalAction('FETCH_QDN_RESOURCE', () => {
+      throw { error: 1401, message: 'Data unavailable. Please try again later.' }
+    })
+    const handleClose = vi.fn()
+    wrap(<OpenMail open handleClose={handleClose} fileInfo={{ ...fileInfo, createdAt: 1700000000000 }} />)
+    await tick(0)
+    await tick(0)
+    expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(1)
+    expect(screen.queryByText('Not available on your node right now')).toBeNull()
+    await tick(2000)
+    expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(2)
+    await tick(4000)
+    await tick(8000)
+    await tick(16000)
+    await tick(0)
+    expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(5)
+    expect(screen.getByRole('status')).toBeTruthy()
+    expect(screen.getByText('Not available on your node right now')).toBeTruthy()
+    expect(screen.getByText(/From alice/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+    expect(handleClose).not.toHaveBeenCalled()
+  })
+
+  it('calls the message unavailable after three stalled status answers, not a bar that never ends', async () => {
+    mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'MISSING_DATA' })
+    mockQortalAction('GET_QDN_RESOURCE_PROPERTIES', {})
+    wrap(<OpenMail open handleClose={vi.fn()} fileInfo={fileInfo} />)
+    await tick(0)
+    expect(screen.getByText(/Not enough peers/)).toBeTruthy()
+    // The poll backs off on a stalled status: 5 s, then 10 s.
+    await tick(5600)
+    await tick(11200)
+    await tick(0)
+    expect(screen.getByText('Not available on your node right now')).toBeTruthy()
+    expect(qortalCalls('GET_QDN_RESOURCE_STATUS').length).toBeGreaterThanOrEqual(3)
   })
 
   it('reports an undecryptable message and lets the user cancel', async () => {

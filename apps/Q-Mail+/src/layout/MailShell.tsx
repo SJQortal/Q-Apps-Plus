@@ -15,10 +15,14 @@ import { styled } from '@mui/material/styles';
 import { appSurface, headerFill } from '../hub-theme';
 import type { LayoutMode } from './useLayoutMode';
 import { APP_HEIGHT_VAR } from './useAppViewport';
+import { LANDSCAPE_FRAME_MEDIA, useLandscapeFrame } from '../utils/hubFrame';
 
 export const RAIL_WIDTH = 240;
 export const LIST_WIDTH_DESKTOP = 380;
 export const LIST_WIDTH_MEDIUM = 300;
+/** Room the floating Compose button needs below a list so it never covers the last row (pitfall 6). */
+export const FAB_CLEARANCE = 88;
+export const LIST_CLEARANCE_VAR = '--qmail-list-clearance';
 
 const Frame = styled('div')(({ theme }) => ({
   position: 'relative',
@@ -67,13 +71,17 @@ const Pane = styled('section')({
   overflow: 'hidden',
 });
 
-const ListPane = styled(Pane, { shouldForwardProp: (p) => p !== '$mode' })<{ $mode: LayoutMode }>(
-  ({ theme, $mode }) => ({
-    flex: $mode === 'phone' ? 1 : '0 0 auto',
-    width: $mode === 'desktop' ? LIST_WIDTH_DESKTOP : $mode === 'medium' ? LIST_WIDTH_MEDIUM : '100%',
-    borderRight: $mode === 'phone' ? 'none' : `1px solid ${theme.palette.divider}`,
-  })
-);
+const ListPane = styled(Pane, { shouldForwardProp: (p) => p !== '$mode' && p !== '$fab' })<{
+  $mode: LayoutMode;
+  /** The floating button is over this pane: its scroller gets clearance (none in landscape, where the button hides). */
+  $fab: boolean;
+}>(({ theme, $mode, $fab }) => ({
+  flex: $mode === 'phone' ? 1 : '0 0 auto',
+  width: $mode === 'desktop' ? LIST_WIDTH_DESKTOP : $mode === 'medium' ? LIST_WIDTH_MEDIUM : '100%',
+  borderRight: $mode === 'phone' ? 'none' : `1px solid ${theme.palette.divider}`,
+  [LIST_CLEARANCE_VAR]: $fab ? `${FAB_CLEARANCE}px` : '0px',
+  [`@media ${LANDSCAPE_FRAME_MEDIA}`]: { [LIST_CLEARANCE_VAR]: '0px' },
+}));
 
 const ReadingPane = styled(Pane)({ flex: 1 });
 
@@ -84,9 +92,17 @@ const PhoneOverlay = styled(Pane)(({ theme }) => ({
   background: appSurface(theme),
 }));
 
-const WidePane = styled(Pane)({ flex: 1 });
+const WidePane = styled(Pane, { shouldForwardProp: (p) => p !== '$fab' })<{ $fab: boolean }>(({ $fab }) => ({
+  flex: 1,
+  [LIST_CLEARANCE_VAR]: $fab ? `${FAB_CLEARANCE}px` : '0px',
+  [`@media ${LANDSCAPE_FRAME_MEDIA}`]: { [LIST_CLEARANCE_VAR]: '0px' },
+}));
 
-/** The scrolling body of a pane; put a <PaneHeader> before it. */
+/**
+ * The scrolling body of a pane; put a <PaneHeader> before it. Its bottom
+ * padding is the pane's clearance for the floating button, so the last row
+ * can always scroll out from under it.
+ */
 export const PaneScroll = styled('div')({
   flex: 1,
   minHeight: 0,
@@ -94,6 +110,7 @@ export const PaneScroll = styled('div')({
   overflowX: 'hidden',
   WebkitOverflowScrolling: 'touch',
   overscrollBehavior: 'contain',
+  paddingBottom: `var(${LIST_CLEARANCE_VAR}, 0px)`,
 });
 
 export interface MailShellProps {
@@ -140,12 +157,19 @@ export function MailShell({
 }: MailShellProps) {
   const isPhone = mode === 'phone';
   const isDesktop = mode === 'desktop';
+  // A phone held sideways in Hub gives the medium layout about 201 px of
+  // height: list and reading pane side by side are useless, so it shows one
+  // at a time, the way a phone does, with the medium rail drawer and no
+  // phone chrome (pitfall 3).
+  const landscape = useLandscapeFrame();
+  const onePane = isPhone || (mode === 'medium' && landscape);
   const showWide = wide !== null && wide !== undefined;
-  const phoneShowsReading = isPhone && readingOpen && !showWide;
+  const phoneShowsReading = onePane && readingOpen && !showWide;
   const showPhoneChrome = isPhone && !phoneShowsReading && (!showWide || wideKeepsChrome);
+  const hasFab = showPhoneChrome && Boolean(fab);
 
   return (
-    <Frame data-layout-mode={mode}>
+    <Frame data-layout-mode={mode} data-one-pane={onePane ? 'true' : undefined}>
       {banner}
       <Body>
         {isDesktop ? (
@@ -161,15 +185,17 @@ export function MailShell({
         )}
         <Main>
           {showWide ? (
-            <WidePane aria-live="polite">{wide}</WidePane>
+            <WidePane aria-live="polite" $fab={hasFab}>
+              {wide}
+            </WidePane>
           ) : (
             <>
               {!phoneShowsReading && (
-                <ListPane $mode={mode} aria-label="Messages">
+                <ListPane $mode={onePane ? 'phone' : mode} $fab={hasFab} aria-label="Messages">
                   {list}
                 </ListPane>
               )}
-              {!isPhone && <ReadingPane aria-label="Reading pane">{reading ?? readingPlaceholder}</ReadingPane>}
+              {!onePane && <ReadingPane aria-label="Reading pane">{reading ?? readingPlaceholder}</ReadingPane>}
               {phoneShowsReading && <PhoneOverlay aria-label="Reading pane">{reading}</PhoneOverlay>}
             </>
           )}

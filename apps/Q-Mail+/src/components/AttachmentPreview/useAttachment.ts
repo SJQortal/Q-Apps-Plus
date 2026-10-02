@@ -6,6 +6,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  attachmentKey,
   getCachedAttachment,
   loadAttachment,
   saveAttachment,
@@ -23,9 +24,10 @@ export interface UseAttachmentOptions {
 
 export function useAttachment(ref: AttachmentRef | null | undefined, options: UseAttachmentOptions = {}) {
   const { auto = false } = options;
-  const identifier = ref?.identifier || '';
+  // The cache is keyed by publisher name + identifier (pitfall 15).
+  const identifier = ref?.identifier ? attachmentKey(ref) : '';
   const [started, setStarted] = useState<boolean>(auto);
-  const [entry, setEntry] = useState<CachedAttachment | null>(() => (identifier ? getCachedAttachment(identifier) || null : null));
+  const [entry, setEntry] = useState<CachedAttachment | null>(() => (ref?.identifier ? getCachedAttachment(ref) || null : null));
   const [loadError, setLoadError] = useState<string | null>(null);
   const [decrypting, setDecrypting] = useState(false);
   const [loadKey, setLoadKey] = useState(0);
@@ -34,7 +36,8 @@ export function useAttachment(ref: AttachmentRef | null | undefined, options: Us
 
   // A new attachment: pick up its cached bytes, or reset.
   useEffect(() => {
-    setEntry(identifier ? getCachedAttachment(identifier) || null : null);
+    const current = refRef.current;
+    setEntry(current?.identifier ? getCachedAttachment(current) || null : null);
     setLoadError(null);
     setDecrypting(false);
     setStarted(auto);
@@ -50,7 +53,8 @@ export function useAttachment(ref: AttachmentRef | null | undefined, options: Us
     let cancelled = false;
     setDecrypting(true);
     setLoadError(null);
-    loadAttachment(current)
+    // The node said READY, so a failed fetch is worth asking again (2/4/8/16 s).
+    loadAttachment(current, { retries: 4 })
       .then((loaded) => {
         if (cancelled) return;
         setEntry(loaded);
@@ -76,12 +80,13 @@ export function useAttachment(ref: AttachmentRef | null | undefined, options: Us
     else resource.retry();
   }, [resource]);
 
-  const save = useCallback(async () => {
+  /** Resolves false when the user declined Hub's save prompt (not an error). */
+  const save = useCallback(async (): Promise<boolean> => {
     const current = refRef.current;
     let target = entry;
     if (!target && current) target = await loadAttachment(current);
     if (!target) throw new Error('Nothing to save yet.');
-    await saveAttachment(target, current || undefined);
+    return saveAttachment(target, current || undefined);
   }, [entry]);
 
   const phase: AttachmentPhase = entry
