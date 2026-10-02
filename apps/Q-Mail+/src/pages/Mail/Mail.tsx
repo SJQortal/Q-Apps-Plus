@@ -1962,7 +1962,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     if (!hasAuthenticatedIdentity) {
       dispatch(
         setNotification({
-          msg: "Authenticate before running alias scan",
+          msg: "Sign in before running the alias scan",
           alertType: "error",
         })
       );
