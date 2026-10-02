@@ -95,6 +95,7 @@ import {
   hasInboxMailActivityForOwnedName,
   hasSentMailActivityForOwnedName,
   mergeNewRows,
+  withoutDeletedRows,
 } from "../../utils/mailInbox";
 import {
   useAppShell,
@@ -668,6 +669,19 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const hashMapMailMessages = useSelector(
     (state: RootState) => state.mail.hashMapMailMessages
   );
+  // Secondary-name rows whose body turned out to be the delete marker: the
+  // primary inbox drops them through removeMessages when a message is opened;
+  // these lists are filtered against the hash map instead.
+  const visibleCombinedAliasInboxMessages = useMemo(() => {
+    let next: typeof combinedAliasInboxMessages | null = null;
+    Object.entries(combinedAliasInboxMessages).forEach(([name, rows]) => {
+      const visible = withoutDeletedRows(rows, hashMapMailMessages);
+      if (visible === rows) return;
+      if (!next) next = { ...combinedAliasInboxMessages };
+      next[name] = visible;
+    });
+    return next || combinedAliasInboxMessages;
+  }, [combinedAliasInboxMessages, hashMapMailMessages]);
 
   const mailMessages = useSelector(
     (state: RootState) => state.mail.mailMessages
@@ -817,14 +831,14 @@ export const Mail = ({ isFromTo }: MailProps) => {
     };
 
     appendMessages(mailMessages);
-    Object.values(combinedAliasInboxMessages).forEach(messages => {
+    Object.values(visibleCombinedAliasInboxMessages).forEach(messages => {
       appendMessages(messages);
     });
 
     return Array.from(mergedMessages.values()).sort((a, b) => {
       return Number(b?.createdAt || 0) - Number(a?.createdAt || 0);
     });
-  }, [combinedAliasInboxMessages, mailMessages]);
+  }, [visibleCombinedAliasInboxMessages, mailMessages]);
   const unreadCounts = useMemo<UnreadCounts>(() => {
     if (!hasAuthenticatedIdentity) return EMPTY_UNREAD_COUNTS;
     const byName: Record<string, number> = {};
@@ -832,7 +846,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       const messages =
         name.toLowerCase() === normalizedUserName
           ? mailMessages
-          : combinedAliasInboxMessages[name] || [];
+          : visibleCombinedAliasInboxMessages[name] || [];
       byName[name] = countUnreadMessages(messages, readState, archived);
     });
     const byAlias: Record<string, number> = {};
@@ -846,7 +860,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     return { inbox, byName, byAlias, aliases, total: inbox + aliases };
   }, [
     archived,
-    combinedAliasInboxMessages,
+    visibleCombinedAliasInboxMessages,
     combinedInboxMessages,
     hasAuthenticatedIdentity,
     mailMessages,
@@ -909,11 +923,11 @@ export const Mail = ({ isFromTo }: MailProps) => {
       return withoutArchived(mailMessages);
     }
     return withoutArchived(
-      combinedAliasInboxMessages[selectedInboxInstanceName] ?? []
+      visibleCombinedAliasInboxMessages[selectedInboxInstanceName] ?? []
     );
   }, [
     archived,
-    combinedAliasInboxMessages,
+    visibleCombinedAliasInboxMessages,
     combinedInboxMessages,
     mailMessages,
     normalizedUserName,

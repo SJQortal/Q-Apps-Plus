@@ -6,7 +6,7 @@ import { HubThemeProvider } from '../../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
 import authReducer, { addUser } from '../../state/features/authSlice'
 import globalReducer from '../../state/features/globalSlice'
-import mailReducer, { archiveIds, setArchivedState } from '../../state/features/mailSlice'
+import mailReducer, { addToHashMapMail, archiveIds, setArchivedState } from '../../state/features/mailSlice'
 import notificationsReducer from '../../state/features/notificationsSlice'
 import blogReducer from '../../state/features/blogSlice'
 import { fetchedUrls, mockFetchRoute, mockQortalAction } from '../../test/setup'
@@ -131,5 +131,18 @@ describe('AliasMail', () => {
     await waitFor(() => expect(screen.queryByText('sender2')).toBeNull())
     expect(screen.getByText('sender1')).toBeTruthy()
     expect(onMessagesLoaded.mock.calls.at(-1)?.[1]).toHaveLength(2)
+  })
+
+  it('hides alias mail whose body turned out to be the delete marker', async () => {
+    const store = makeStore()
+    mockAliasInbox(2)
+    renderAlias(store, <AliasMail value="shop" onOpen={async () => {}} />)
+    await screen.findByText('sender2')
+    // fetchMail marks the hash entry when the opened body is "D".
+    act(() => {
+      store.dispatch(addToHashMapMail({ id: '_mail_qortal_qmail_shop_mail_2', user: 'sender2', deleted: true }))
+    })
+    await waitFor(() => expect(screen.queryByText('sender2')).toBeNull())
+    expect(screen.getByText('sender1')).toBeTruthy()
   })
 })
