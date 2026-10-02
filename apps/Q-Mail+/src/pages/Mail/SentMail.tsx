@@ -11,6 +11,7 @@ import { usePolling } from '../../hooks/usePolling'
 import { setNotification } from '../../state/features/notificationsSlice'
 import { objectToBase64 } from '../../utils/toBase64'
 import { parseSentRecipientFromIdentifier } from './mailIdentifier'
+import { searchNamesQuery } from '../../utils/nameCache'
 import {
   SENT_DELETED_TAG,
   SENT_DELETED_TITLE,
@@ -111,7 +112,7 @@ const resolveRecipientFromIdentifier = async (
 
   const searchResults = await qortalRequest({
     action: 'SEARCH_NAMES',
-    query: normalizedRecipientName,
+    query: searchNamesQuery(normalizedRecipientName),
     prefix: true,
     limit: 200,
     reverse: false,
