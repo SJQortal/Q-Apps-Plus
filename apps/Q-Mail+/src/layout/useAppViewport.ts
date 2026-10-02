@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { isEmbeddedFrame } from '../utils/hubFrame';
 
 /**
  * Sizes the app to the space it really has, instead of 100vh:
@@ -11,13 +12,7 @@ import { useEffect } from 'react';
  */
 export const APP_HEIGHT_VAR = '--qmail-app-height';
 
-export function isEmbeddedFrame(win: Window = window): boolean {
-  try {
-    return win.parent !== win;
-  } catch {
-    return true;
-  }
-}
+export { isEmbeddedFrame };
 
 export function appHeightValue(win: Window = window): string {
   const visual = win.visualViewport;
