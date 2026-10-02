@@ -8,7 +8,10 @@
  *   as `null`, so the row never asks again this session;
  * - `useLazyAvatarUrl` resolves only when the element is on screen
  *   (IntersectionObserver; immediately where it does not exist), and never
- *   per message resource on load.
+ *   per message resource on load. It also hands out no URL at all, known or
+ *   not, until the element has been in view: MUI's Avatar starts loading its
+ *   `src` on mount whatever `loading="lazy"` says, so a long list would
+ *   otherwise fetch every known avatar at once (docs/QORTAL.md pitfall 5).
  *
  * The Redux `userAvatarHash` is kept as a read-through: anything other code
  * stores there is primed here, and what resolves here is handed back to it.
@@ -123,14 +126,18 @@ export function resetAvatarCache(): void {
 export function useLazyAvatarUrl(name: string | undefined | null, node: Element | null, known?: unknown): string {
   const key = keyFor(name || '');
   const knownUrl = isAvatarUrl(known) ? known : '';
-  const [url, setUrl] = useState<string>(() => knownUrl || peekAvatarUrl(name) || '');
   const [visible, setVisible] = useState<boolean>(() => typeof IntersectionObserver === 'undefined');
+  // A known URL is handed out only once the element has been in view (see above).
+  const [url, setUrl] = useState<string>(() => (visible ? knownUrl || peekAvatarUrl(name) || '' : ''));
 
   useEffect(() => {
-    if (!node || typeof IntersectionObserver === 'undefined') {
+    if (typeof IntersectionObserver === 'undefined') {
       setVisible(true);
       return;
     }
+    // The ref callback sets `node` after the first render: wait for it rather
+    // than calling an element visible that has not been observed yet.
+    if (!node) return;
     let observer: IntersectionObserver | null = null;
     try {
       observer = new IntersectionObserver(
@@ -154,8 +161,12 @@ export function useLazyAvatarUrl(name: string | undefined | null, node: Element 
       setUrl('');
       return;
     }
+    if (knownUrl) primeAvatarUrl(key, knownUrl);
+    if (!visible) {
+      setUrl('');
+      return;
+    }
     if (knownUrl) {
-      primeAvatarUrl(key, knownUrl);
       setUrl(knownUrl);
       return;
     }
@@ -165,7 +176,6 @@ export function useLazyAvatarUrl(name: string | undefined | null, node: Element 
       return;
     }
     setUrl('');
-    if (!visible) return;
     let cancelled = false;
     void getAvatarUrl(name).then((resolved) => {
       if (!cancelled) setUrl(resolved || '');
