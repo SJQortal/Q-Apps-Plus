@@ -59,6 +59,8 @@ export interface MailMessageRowProps {
   context?: string;
   /** Terms to highlight in the name and subject. */
   highlightTerms?: string[];
+  /** "li" when the row sits directly inside a list (ul); the default "div" expects a wrapping li. */
+  component?: "div" | "li";
 }
 
 /** Splits `text` into plain and highlighted runs for the given terms. */
@@ -132,6 +134,7 @@ export const MailMessageRow = ({
   onToggleSelected,
   context,
   highlightTerms,
+  component = "div",
 }: MailMessageRowProps) => {
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const identifier: string = String(messageData?.id || messageData?.identifier || "");
@@ -243,6 +246,7 @@ export const MailMessageRow = ({
 
   return (
     <Box
+      component={component}
       data-message-row={identifier}
       sx={theme => ({
         display: "flex",
@@ -250,6 +254,7 @@ export const MailMessageRow = ({
         width: "100%",
         minWidth: 0,
         gap: 0.5,
+        listStyle: "none",
         borderBottom: `1px solid ${theme.palette.divider}`,
         backgroundColor: isOpen ? primarySoft(theme) : "transparent",
       })}

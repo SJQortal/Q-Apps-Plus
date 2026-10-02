@@ -76,7 +76,7 @@ export function BottomNav({ items, activeId, onSelect }: BottomNavProps) {
               invisible={!item.badge}
               max={99}
               aria-hidden
-              sx={{ '& .MuiBadge-badge': { fontSize: '0.75rem', fontWeight: 700, minWidth: 18, height: 18 } }}
+              sx={{ '& .MuiBadge-badge': { fontSize: '0.875rem', fontWeight: 700, minWidth: 20, height: 20 } }}
             >
               {item.icon}
             </Badge>
