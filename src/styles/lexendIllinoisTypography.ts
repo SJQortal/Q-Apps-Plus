@@ -25,7 +25,6 @@ function buildLexendIllinoisTypographyCss(
   options: EnsureTypographyStyleOptions = {}
 ): string {
   const {
-    includeTtfFallback = true,
     fontDisplay = 'swap',
     textSizeScale = {},
   } = options
