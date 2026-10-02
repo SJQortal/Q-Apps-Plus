@@ -1,52 +1,43 @@
-import React, {
-  useEffect,
-  useState,
-  useCallback,
-  useRef,
-  useMemo,
-} from "react";
+import React, { useEffect, useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import { addUser } from "../state/features/authSlice";
-import {
-  getAccountNames,
-  getPrimaryAccountName,
-  NameRecord,
-} from "../utils/qortalRequestFunctions";
 import NavBar from "../components/layout/Navbar/Navbar";
+import { BottomNav, BottomNavSpacer } from "../components/layout/BottomNav/BottomNav";
 import PageLoader from "../components/common/PageLoader";
+import { ErrorBoundary } from "../components/common/ErrorBoundary";
 import { RootState } from "../state/store";
 import { setUserAvatarHash } from "../state/features/globalSlice";
-import { VideoPlayerGlobal } from "../components/common/VideoPlayerGlobal";
-import { Rnd } from "react-rnd";
-import { RequestQueue } from "../utils/queue";
+import { queue } from "../utils/queue";
 import { EditFile } from "../components/EditFile/EditFile.tsx";
 import ConsentModal from "../components/common/ConsentModal";
 import { useIframe } from "../hooks/useIframe.tsx";
+import { useTrackInAppHistory } from "../hooks/useSafeBack";
+import { useUserAccount } from "../hooks/useUserAccount";
 
 interface Props {
   children: React.ReactNode;
-  setTheme: (val: string) => void;
 }
 
-let timer: number | null = null;
+// Kept for importers that still read the queue from here; the singleton lives in utils/queue.ts.
+export { queue };
 
-export const queue = new RequestQueue();
-
-const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
+/**
+ * The app shell: account lookup, the header, the phone bottom bar, the Edit
+ * dialog and the one-time consent dialog, with an error boundary around the
+ * page content.
+ */
+const GlobalWrapper: React.FC<Props> = ({ children }) => {
   useIframe();
+  useTrackInAppHistory();
   const dispatch = useDispatch();
-  const isDragging = useRef(false);
-  const [userAvatar, setUserAvatar] = useState<string>("");
   const user = useSelector((state: RootState) => state.auth.user);
-  const videoPlaying = useSelector(
-    (state: RootState) => state.global.videoPlaying
-  );
   const username = useMemo(() => {
     if (!user?.name) return "";
 
     return user.name;
   }, [user]);
+  const userAvatar = useSelector((state: RootState) => (username ? state.global.userAvatarHash[username] : "") || "");
   const getAvatar = React.useCallback(
     async (author: string) => {
       try {
@@ -57,7 +48,6 @@ const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
           identifier: "qortal_avatar",
         });
         if (url) {
-          setUserAvatar(url);
           dispatch(
             setUserAvatarHash({
               name: author,
@@ -87,58 +77,7 @@ const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
 
   const { isLoadingGlobal } = useSelector((state: RootState) => state.global);
 
-  async function getNameInfo(address: string) {
-    const response = await qortalRequest({
-      action: "GET_ACCOUNT_NAMES",
-      address: address,
-    });
-    const nameData = response;
-
-    if (nameData?.length > 0) {
-      return nameData[0].name;
-    } else {
-      return "";
-    }
-  }
-
-  const askForAccountInformation = React.useCallback(async () => {
-    try {
-      const account = await qortalRequest({
-        action: "GET_USER_ACCOUNT",
-      });
-
-      const names = await getAccountNames(account.address);
-      const primary = await getPrimaryAccountName(account.address);
-      dispatch(addUser({ ...account, name: primary, names }));
-    } catch (error) {
-      console.error(error);
-    }
-  }, [dispatch]);
-
-  React.useEffect(() => {
-    askForAccountInformation();
-  }, [askForAccountInformation]);
-
-  const onDragStart = () => {
-    timer = Date.now();
-    isDragging.current = true;
-  };
-
-  const handleStopDrag = async () => {
-    const time = Date.now();
-    if (timer && time - timer < 300) {
-      isDragging.current = false;
-    } else {
-      isDragging.current = true;
-    }
-  };
-  const onDragStop = () => {
-    handleStopDrag();
-  };
-
-  const checkIfDrag = useCallback(() => {
-    return isDragging.current;
-  }, []);
+  const { authenticate, authenticating } = useUserAccount();
 
   return (
     <>
@@ -146,42 +85,23 @@ const GlobalWrapper: React.FC<Props> = ({ children, setTheme }) => {
       <ConsentModal />
 
       <NavBar
-        setTheme={(val: string) => setTheme(val)}
         isAuthenticated={!!user?.name}
         userName={user?.name || ""}
         accountNames={user?.names || []}
         setActiveName={switchActiveName}
         userAvatar={userAvatar}
-        authenticate={askForAccountInformation}
+        authenticate={authenticate}
+        // No account yet and no request out: a decline or a late answer left the app signed out.
+        canSignIn={!user && !authenticating}
       />
       <EditFile />
 
-      <Rnd
-        onDragStart={onDragStart}
-        onDragStop={onDragStop}
-        style={{
-          display: videoPlaying ? "block" : "none",
-          position: "fixed",
-          height: "auto",
-          width: 350,
-          zIndex: 1000,
-          maxWidth: 800,
-        }}
-        default={{
-          x: 0,
-          y: 60,
-          width: 350,
-          height: "auto",
-        }}
-        // eslint-disable-next-line @typescript-eslint/no-empty-function
-        onDrag={() => {}}
-      >
-        {videoPlaying && (
-          <VideoPlayerGlobal checkIfDrag={checkIfDrag} element={videoPlaying} />
-        )}
-      </Rnd>
+      <main id="main">
+        <ErrorBoundary>{children}</ErrorBoundary>
+      </main>
 
-      {children}
+      <BottomNavSpacer />
+      <BottomNav />
     </>
   );
 };

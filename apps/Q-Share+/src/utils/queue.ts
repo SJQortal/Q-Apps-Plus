@@ -41,3 +41,6 @@ export class RequestQueue {
             });
     }
 }
+
+/** The app-wide queue for FETCH_QDN_RESOURCE bodies: five at a time. */
+export const queue = new RequestQueue(5);
