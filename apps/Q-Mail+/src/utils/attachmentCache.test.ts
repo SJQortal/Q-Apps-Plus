@@ -127,6 +127,23 @@ describe('attachmentCache', () => {
     expect(call.blob).toBe(entry.blob)
   })
 
+  it('a declined save prompt resolves false and is not an error; other failures throw their message', async () => {
+    mockBytes('hello')
+    const entry = await loadAttachment(ref('att2'))
+    for (const decline of ['User declined to save file', 'Benutzer hat das Speichern der Datei abgelehnt', '用户拒绝保存文件']) {
+      mockQortalAction('SAVE_FILE', () => {
+        throw decline
+      })
+      expect(await saveAttachment(entry, ref('att2'))).toBe(false)
+    }
+    mockQortalAction('SAVE_FILE', () => {
+      throw { error: 'Missing filename', message: 'Missing filename' }
+    })
+    await expect(saveAttachment(entry, ref('att2'))).rejects.toThrow('Missing filename')
+    mockQortalAction('SAVE_FILE', true)
+    expect(await saveAttachment(entry, ref('att2'))).toBe(true)
+  })
+
   it('reads the status and asks Core to fetch with GET_QDN_RESOURCE_PROPERTIES', async () => {
     mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'DOWNLOADING', percentLoaded: 10 })
     mockQortalAction('GET_QDN_RESOURCE_PROPERTIES', () => {

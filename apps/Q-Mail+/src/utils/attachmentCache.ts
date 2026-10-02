@@ -18,6 +18,7 @@ import {
   resolveMimeType,
   type AttachmentRef,
 } from './attachmentMeta';
+import { errorMessage, isHubDecline } from './hubErrors';
 
 export interface ResourceStatus {
   /** READY, DOWNLOADING, DOWNLOADED, BUILDING, MISSING_DATA, NOT_PUBLISHED, FAILED, … or '' when unknown. */
@@ -227,15 +228,33 @@ export function loadAttachment(ref: AttachmentRef): Promise<CachedAttachment> {
   return task;
 }
 
-/** Hand the bytes to Hub's save dialog (SAVE_FILE), as the original app does. */
-export async function saveAttachment(entry: CachedAttachment, ref?: Partial<AttachmentRef>): Promise<void> {
+/**
+ * Hand the bytes to Hub's save dialog (SAVE_FILE with a blob), as the original
+ * app does. Always a blob, never a `location` save: a mail attachment is
+ * encrypted to the recipient (ATTACHMENT_PRIVATE, DECRYPT_DATA), so Hub
+ * saving the resource by location would write the ciphertext. Desktop Hub
+ * saves a blob straight to Downloads; GO writes it to Documents/Qortal Go
+ * natively (Hub's showSaveFilePicker → saveBlobToMobileDocuments). The
+ * composer caps attachments at 40 MB, far under the 100 MB where Hub prefers
+ * a location save (docs/QORTAL.md pitfall 17).
+ *
+ * Resolves true when saved and false when the user declined Hub's prompt,
+ * which is their choice and never an error. Anything else throws.
+ */
+export async function saveAttachment(entry: CachedAttachment, ref?: Partial<AttachmentRef>): Promise<boolean> {
   const filename = ref ? attachmentDisplayName({ ...ref, filename: ref.filename || entry.filename }) : entry.filename;
-  await qortalRequest({
-    action: 'SAVE_FILE',
-    blob: entry.blob,
-    filename,
-    mimeType: entry.mimeType,
-  });
+  try {
+    await qortalRequest({
+      action: 'SAVE_FILE',
+      blob: entry.blob,
+      filename,
+      mimeType: entry.mimeType,
+    });
+    return true;
+  } catch (error) {
+    if (isHubDecline(error)) return false;
+    throw new Error(errorMessage(error, 'The file could not be saved.'));
+  }
 }
 
 export function setAttachmentCacheLimit(bytes: number): void {

@@ -16,6 +16,8 @@ export interface DownloadAllProgress {
   total: number;
   saved: number;
   failed: string[];
+  /** The user declined one of Hub's save prompts (or pressed Cancel): the rest were skipped, nothing failed. */
+  cancelled?: boolean;
 }
 
 const idle: DownloadAllProgress = { active: false, current: 0, total: 0, saved: 0, failed: [] };
@@ -68,13 +70,19 @@ export async function downloadAllSequential(
     try {
       await waitForResource(ref, { signal: options.signal, sleep: options.sleep });
       const entry = await loadAttachment(ref);
-      await saveAttachment(entry, ref);
+      const saved = await saveAttachment(entry, ref);
+      if (!saved) {
+        // Declining one of Hub's prompts means "stop": the rest are skipped, not failed.
+        progress.cancelled = true;
+        break;
+      }
       progress.saved += 1;
     } catch (error) {
       if (options.signal?.aborted) break;
       progress.failed.push(ref.originalFilename || ref.filename || ref.identifier);
     }
   }
+  if (options.signal?.aborted) progress.cancelled = true;
   progress.active = false;
   report();
   return progress;
