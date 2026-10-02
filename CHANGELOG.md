@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0 (Q-Mail+) - October 2, 2026
+
+The first release of **Q-Mail+**, Simon's "+" version of Q-Mail 3.2.1. It reads and writes the same QDN resources as Q-Mail (same services, identifiers and encryption), so mail shows up in both apps.
+
+- **Look:** the Hub 3.0 layout (rail · message list · reading pane on desktop; list + reading pane in narrow windows; one pane at a time with a bottom bar and a floating Compose on phones), four themes (Hub 3.0, Q-Mail Classic, Black, White) that follow Hub's light/dark switch, and a full Settings page (Account, Appearance, Mail, Sync, About).
+- **Mail:** read/unread state that survives a reload and can be published with the mail state; unread counts in the rail, bottom bar and window title; Archive (local, synced additively in the published state); search across inbox, archived, sent and alias inboxes with "Search message bodies" on request; Reply with a quote and `Re:`, Reply all (additive `to`/`cc` fields), Forward with `Fwd:` and the original attachments; a Drafts mailbox; recent recipients with avatars and inline name validation; Ctrl/Cmd+Enter sends.
+- **Attachments:** every kind opens in the app (images, text, audio, video and PDF through bundled pdf.js), with size and type, progress from peers, Download all, and one decrypted copy per session.
+- **Threads:** group threads as list + pane with unread marks, paging, reply-to-post quoting and a paged member/key cache (no more `limit=0`).
+- **Phone and GO:** 44 px targets, sheets and full-screen dialogs, a header that hides on scroll, the composer's Send above the keyboard, a compact landscape layout, Back that closes the open pane, desktop keyboard shortcuts with a `?` help dialog.
+- **Efficiency:** first load for one name is 6 searches (was about 20–30); every search is deduped and cached for the session; polling pauses while the tab is hidden and backs off; the initial script is 382 kB (was 1,576 kB), with the composer, reader, threads and pdf.js loading on demand.
+- **Hub & GO:** declines in Hub's 12 languages are quiet cancels, publishing waits as long as Hub does and checks QDN before a retry, deleted and not-yet-available resources are shown as such, message HTML is sanitised with DOMPurify 3.4 and links are built on the DOM.
+
+The entries below are Q-Mail's own changelog, kept for reference.
+
 ## 3.2.1 - May 28th 2026
 
 - **Fixed:** `/to/:name` links now open the composer automatically instead of landing in the inbox with a prefilled recipient (impact: users following mail-style deep links to start a message).

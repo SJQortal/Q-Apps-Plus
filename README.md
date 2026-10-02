@@ -21,3 +21,10 @@ npm run build      # tsc + vite build
 ```
 
 The theme kit in `src/hub-theme/` is a copy of `shared/hub-theme` in the monorepo. Never edit the copy; edit the shared kit and run `scripts/sync-theme.sh`.
+
+## Merging this back into Q-Mail
+
+- The upstream history is intact: the app was imported from [Qortal/q-mail](https://github.com/Qortal/q-mail) `main` at `ddf3aa9` with `git subtree`, and every + commit sits on top. `git log --oneline -- apps/Q-Mail+` shows the full series; `scripts/sync-upstream.sh --check` reports new upstream commits.
+- **Data notes:** nothing published changed shape. Direct mail JSON gains optional top-level `to` and `cc` arrays; the published mail state (`DOCUMENT_PRIVATE` / `qmail_state_v1`) gains optional top-level `archived` and `settings` maps; replies embed the previous message without its own `generalData` history. Readers of the original app ignore all of these. New local state lives under new `localStorage` keys (`qmail_read_state_*`, `qmail_archived_*`, `qmail-general-consent`); the original keys keep their shapes.
+- **Specific to the + build:** the theme kit copy in `src/hub-theme/` (synced from `shared/hub-theme`, never edited here), the Settings page, the layout shell in `src/layout/`, the `qortalRequest` stub outside Hub in `src/main.tsx`, and the screenshot check config in `e2e/`.
+- To merge back, cherry-pick the `Q-Mail+:` commits in order or diff `apps/Q-Mail+/src` against upstream `src`; the platform upgrade commits (React 19.3, MUI 9.4, react-quill-new) come first.
