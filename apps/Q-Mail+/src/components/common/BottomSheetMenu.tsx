@@ -3,8 +3,12 @@
  * (docs/DESIGN.md → Mobile → Dialogs: "Menus open as sheets"). Items are
  * 48 px tall on phones, 44 px on desktop, and the sheet closes with a swipe
  * down (SwipeableDrawer), the backdrop or Escape.
+ *
+ * Nothing mounts until the menu is first opened: SwipeableDrawer forces
+ * keepMounted, and one sheet per list row would add hundreds of DOM nodes
+ * to a page that never opened them (docs/QORTAL.md → Hub & GO pitfalls 4).
  */
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   Box,
   List,
@@ -42,6 +46,12 @@ const noop = () => {};
 
 export function BottomSheetMenu({ open, onClose, anchorEl, items, title, ariaLabel }: BottomSheetMenuProps) {
   const isPhone = useLayoutMode() === 'phone';
+  const [everOpened, setEverOpened] = useState(open);
+  useEffect(() => {
+    if (open) setEverOpened(true);
+  }, [open]);
+
+  if (!everOpened) return null;
 
   if (!isPhone) {
     return (
