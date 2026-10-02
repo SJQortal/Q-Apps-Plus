@@ -87,6 +87,35 @@ describe('AvatarWrapper', () => {
     expect(store.getState().global.userAvatarHash.grace).toBe('/grace.png')
   })
 
+  it('hands out no src, even a known URL, until the avatar scrolls into view (pitfall 5)', async () => {
+    let intersect: ((entries: { isIntersecting: boolean }[]) => void) | null = null
+    class FakeObserver {
+      constructor(cb: (entries: { isIntersecting: boolean }[]) => void) {
+        intersect = cb
+      }
+      observe() {}
+      disconnect() {}
+    }
+    const original = (globalThis as any).IntersectionObserver
+    ;(globalThis as any).IntersectionObserver = FakeObserver
+    try {
+      store.dispatch(setUserAvatarHash({ name: 'ivan', url: '/ivan.png' }))
+      wrap(<AvatarWrapper user="ivan" height="40px" fallback="ivan" />)
+      await flush()
+      // Off screen: the initial, no <img> and no request, though the URL is known.
+      expect(screen.getByText('I')).toBeTruthy()
+      expect(screen.queryByRole('img', { name: 'ivan' })).toBeNull()
+      expect(qortalCalls('GET_QDN_RESOURCE_URL')).toHaveLength(0)
+      await act(async () => {
+        intersect?.([{ isIntersecting: true }])
+      })
+      expect(screen.getByRole('img', { name: 'ivan' }).getAttribute('src')).toBe('/ivan.png')
+      expect(qortalCalls('GET_QDN_RESOURCE_URL')).toHaveLength(0)
+    } finally {
+      ;(globalThis as any).IntersectionObserver = original
+    }
+  })
+
   it('shows the initial for a name without an avatar and keeps the sentinel out of Redux', async () => {
     mockQortalAction('GET_QDN_RESOURCE_URL', AVATAR_MISS_SENTINEL)
     store.dispatch(setUserAvatarHash({ name: 'heidi', url: AVATAR_MISS_SENTINEL }))
