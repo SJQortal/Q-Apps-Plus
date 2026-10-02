@@ -115,28 +115,6 @@ export default tseslint.config(
     },
   },
   {
-    // Files the Hub & GO pitfalls pass (q-mail-plus/feat-pitfalls) is editing
-    // at the same time as this lint setup (2026-10-02). Their leftover unused
-    // imports, empty catch blocks and `let`s are tidied once that branch has
-    // merged, so the two branches never fight over the same lines. Remove this
-    // block then; nothing here hides a correctness rule.
-    files: [
-      'src/pages/Mail/Mail.tsx',
-      'src/wrappers/GlobalWrapper.tsx',
-      'src/utils/fetchMail.ts',
-      'src/components/common/TextEditor/utils.ts',
-      'src/components/common/MultiplePublish/MultiplePublish.tsx',
-    ],
-    linterOptions: { reportUnusedDisableDirectives: 'off' },
-    rules: {
-      '@typescript-eslint/no-unused-vars': 'off',
-      'react-hooks/exhaustive-deps': 'off',
-      'no-empty': 'off',
-      'no-var': 'off',
-      'prefer-const': 'off',
-    },
-  },
-  {
     files: ['**/*.test.{ts,tsx}', 'src/test/**'],
     languageOptions: { globals: { ...globals.node, ...globals.vitest } },
   }

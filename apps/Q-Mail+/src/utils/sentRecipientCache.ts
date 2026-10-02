@@ -13,7 +13,7 @@
  */
 import { useEffect, useState } from "react";
 import { parseSentRecipientFromIdentifier } from "../pages/Mail/mailIdentifier";
-import { lookupName } from "./nameCache";
+import { lookupName, searchNamesQuery } from "./nameCache";
 
 const resolved = new Map<string, string | null>();
 const inFlight = new Map<string, Promise<string | null>>();
@@ -44,7 +44,7 @@ async function resolveNow(prefix: string, suffix: string): Promise<string | null
     stats.searches += 1;
     const response = await qortalRequest({
       action: "SEARCH_NAMES",
-      query: prefix,
+      query: searchNamesQuery(prefix),
       prefix: true,
       limit: 10,
       reverse: false,
