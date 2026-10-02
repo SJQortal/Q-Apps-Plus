@@ -171,6 +171,12 @@ describe('new-mail poll', () => {
     expect(rows.map((r) => r.id)).toEqual([`_mail_qortal_qmail_alice_${SUFFIX}_mail_a`, '_mail_qortal_qmail_alice_mail_b'])
     expect(fetchedUrls(SEARCH)).toHaveLength(2)
     expect(fetchedUrls(SEARCH)[0]).toContain('limit=20')
+
+    // A second ask within the freshness window shares the answer: the same
+    // query is not sent twice on first load (one search, not two).
+    const again = await fetchRecentInboxMessagesForOwnedName('alice', ADDRESS)
+    expect(again.map((r) => r.id)).toEqual(rows.map((r) => r.id))
+    expect(fetchedUrls(SEARCH)).toHaveLength(2)
   })
 
   it('mergeNewRows prepends unknown rows and returns the same array when nothing is new', () => {

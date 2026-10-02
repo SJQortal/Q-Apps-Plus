@@ -371,9 +371,17 @@ export const fetchInboxMessagesForOwnedName = async (
 };
 
 /**
+ * A delta poll's search is fresh for this long: two paths asking for the
+ * newest 20 of the same name within a few seconds (the poll's tick and a
+ * probe, or two panes) share one answer instead of sending the same query
+ * twice, while a later tick still goes to the node.
+ */
+export const RECENT_SEARCH_TTL_MS = 5000;
+
+/**
  * The newest (up to 20 per query) inbox messages for an owned name, for the
- * poll. Always hits the node (TTL 0) but still merges with an identical search
- * in flight.
+ * poll. Goes to the node after RECENT_SEARCH_TTL_MS and merges with an
+ * identical search in flight.
  */
 export const fetchRecentInboxMessagesForOwnedName = async (
   name: string,
@@ -394,7 +402,7 @@ export const fetchRecentInboxMessagesForOwnedName = async (
       excludeblocked: "true",
     });
     try {
-      const responseData = await searchResources(params, { ttlMs: 0 });
+      const responseData = await searchResources(params, { ttlMs: RECENT_SEARCH_TTL_MS });
       allResources.push(
         ...responseData.filter((item: any) => {
           const identifier =
