@@ -9,8 +9,11 @@
  * The call shapes are the ones the original app uses (data contract §4, §6),
  * so nothing here changes what is read from QDN; it only reads it once.
  *
- * Cached blobs are keyed by identifier, capped in total bytes, evicted least
- * recently used first, and their object URLs revoked on eviction.
+ * Cached blobs are keyed by publisher name + identifier (another name can
+ * publish under the same identifier: docs/QORTAL.md pitfall 15), capped in
+ * total bytes, evicted least recently used first, and their object URLs
+ * revoked on eviction. A "D" body is the delete marker (pitfall 14), and a
+ * node that has not got the data yet is asked again at 2, 4, 8 and 16 s.
  */
 import { base64ToUint8Array } from './toBase64';
 import {
@@ -19,6 +22,7 @@ import {
   type AttachmentRef,
 } from './attachmentMeta';
 import { errorMessage, isHubDecline } from './hubErrors';
+import { NOT_YET_RETRY_DELAYS_MS, isDeletedBody, isNotYetAvailable } from './fetchMail';
 
 export interface ResourceStatus {
   /** READY, DOWNLOADING, DOWNLOADED, BUILDING, MISSING_DATA, NOT_PUBLISHED, FAILED, … or '' when unknown. */
@@ -30,6 +34,9 @@ export interface ResourceStatus {
 }
 
 export interface CachedAttachment {
+  /** Publisher name + identifier (see `attachmentKey`). */
+  key: string;
+  name: string;
   identifier: string;
   blob: Blob;
   /** Object URL for <img>, <audio>, <video>; revoked when the entry is evicted. */
@@ -46,9 +53,27 @@ let maxCacheBytes = DEFAULT_ATTACHMENT_CACHE_BYTES;
 let totalCacheBytes = 0;
 const cache = new Map<string, CachedAttachment>();
 const inFlight = new Map<string, Promise<CachedAttachment>>();
-/** MIME type / filename reported by GET_QDN_RESOURCE_PROPERTIES, per identifier. */
+/** MIME type / filename reported by GET_QDN_RESOURCE_PROPERTIES, per name + identifier. */
 const properties = new Map<string, { mimeType?: string; filename?: string }>();
 let stats = { loads: 0, cacheHits: 0, merged: 0, evictions: 0 };
+
+export type AttachmentKeyRef = Pick<AttachmentRef, 'name' | 'identifier'>;
+
+/** The cache key: the search row's publisher name (case-insensitive) and identifier. */
+export function attachmentKey(ref: AttachmentKeyRef): string {
+  return `${String(ref.name || '').trim().toLowerCase()}/${String(ref.identifier || '')}`;
+}
+
+/** Thrown by `loadAttachment` for a resource the sender removed. */
+export class AttachmentDeletedError extends Error {
+  readonly deleted = true;
+  constructor() {
+    super('This attachment was removed by its sender.');
+    this.name = 'AttachmentDeletedError';
+  }
+}
+
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 function createObjectUrl(blob: Blob): string {
   try {
@@ -124,7 +149,7 @@ export async function startResourceDownload(ref: Pick<AttachmentRef, 'name' | 's
       identifier: ref.identifier,
     });
     if (res && typeof res === 'object') {
-      properties.set(ref.identifier, {
+      properties.set(attachmentKey(ref), {
         mimeType: typeof res.mimeType === 'string' ? res.mimeType : undefined,
         filename: typeof res.filename === 'string' ? res.filename : undefined,
       });
@@ -134,13 +159,14 @@ export async function startResourceDownload(ref: Pick<AttachmentRef, 'name' | 's
   }
 }
 
-export function getCachedAttachment(identifier: string): CachedAttachment | undefined {
-  const hit = cache.get(identifier);
+export function getCachedAttachment(ref: AttachmentKeyRef): CachedAttachment | undefined {
+  const key = attachmentKey(ref);
+  const hit = cache.get(key);
   if (hit) {
     hit.lastUsed = Date.now();
     // Re-insert so Map order stays least-recently-used first.
-    cache.delete(identifier);
-    cache.set(identifier, hit);
+    cache.delete(key);
+    cache.set(key, hit);
   }
   return hit;
 }
@@ -160,15 +186,44 @@ function evictIfNeeded(incomingBytes: number): void {
 }
 
 function store(entry: CachedAttachment): void {
-  const existing = cache.get(entry.identifier);
+  const existing = cache.get(entry.key);
   if (existing) {
-    cache.delete(entry.identifier);
+    cache.delete(entry.key);
     totalCacheBytes -= existing.size;
     if (existing.url !== entry.url) revokeObjectUrl(existing.url);
   }
   evictIfNeeded(entry.size);
-  cache.set(entry.identifier, entry);
+  cache.set(entry.key, entry);
   totalCacheBytes += entry.size;
+}
+
+/**
+ * FETCH_QDN_RESOURCE base64, asked again at 2, 4, 8 and 16 s while the node
+ * says it has not got the data yet (`retries` of them; 0 = one try).
+ */
+async function fetchEncrypted(ref: AttachmentRef, retries: number, sleep: (ms: number) => Promise<void>): Promise<unknown> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await qortalRequest({
+        action: 'FETCH_QDN_RESOURCE',
+        name: ref.name,
+        service: ref.service,
+        identifier: ref.identifier,
+        encoding: 'base64',
+      });
+    } catch (error) {
+      if (attempt >= retries || !isNotYetAvailable(error)) throw error;
+      await sleep(NOT_YET_RETRY_DELAYS_MS[attempt]);
+      attempt += 1;
+    }
+  }
+}
+
+export interface LoadAttachmentOptions {
+  /** How many of NOT_YET_RETRY_DELAYS_MS to use when the node has not got the data yet (default 0). */
+  retries?: number;
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -177,26 +232,25 @@ function store(entry: CachedAttachment): void {
  * flight, and caches the result. Throws when the resource cannot be fetched
  * or decrypted.
  */
-export function loadAttachment(ref: AttachmentRef): Promise<CachedAttachment> {
-  const cached = getCachedAttachment(ref.identifier);
+export function loadAttachment(ref: AttachmentRef, options: LoadAttachmentOptions = {}): Promise<CachedAttachment> {
+  const key = attachmentKey(ref);
+  const cached = getCachedAttachment(ref);
   if (cached) {
     stats.cacheHits += 1;
     return Promise.resolve(cached);
   }
-  const running = inFlight.get(ref.identifier);
+  const running = inFlight.get(key);
   if (running) {
     stats.merged += 1;
     return running;
   }
+  const retries = Math.max(0, Math.min(options.retries ?? 0, NOT_YET_RETRY_DELAYS_MS.length));
   const task = (async () => {
     stats.loads += 1;
-    const encrypted = await qortalRequest({
-      action: 'FETCH_QDN_RESOURCE',
-      name: ref.name,
-      service: ref.service,
-      identifier: ref.identifier,
-      encoding: 'base64',
-    });
+    const encrypted = await fetchEncrypted(ref, retries, options.sleep ?? defaultSleep);
+    if (isDeletedBody(encrypted)) {
+      throw new AttachmentDeletedError();
+    }
     if (typeof encrypted !== 'string' || !encrypted) {
       throw new Error('The file could not be fetched from this node.');
     }
@@ -208,10 +262,12 @@ export function loadAttachment(ref: AttachmentRef): Promise<CachedAttachment> {
       throw new Error('This file could not be decrypted with your key.');
     }
     const bytes = base64ToUint8Array(decrypted);
-    const props = properties.get(ref.identifier);
+    const props = properties.get(key);
     const mimeType = resolveMimeType(ref, props?.mimeType);
     const blob = new Blob([bytes], { type: mimeType });
     const entry: CachedAttachment = {
+      key,
+      name: ref.name,
       identifier: ref.identifier,
       blob,
       url: createObjectUrl(blob),
@@ -223,8 +279,8 @@ export function loadAttachment(ref: AttachmentRef): Promise<CachedAttachment> {
     store(entry);
     return entry;
   })();
-  inFlight.set(ref.identifier, task);
-  task.finally(() => inFlight.delete(ref.identifier)).catch(() => undefined);
+  inFlight.set(key, task);
+  task.finally(() => inFlight.delete(key)).catch(() => undefined);
   return task;
 }
 
