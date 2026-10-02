@@ -102,6 +102,11 @@ const lightThemeOptions: ThemeOptions = {
     secondary: {
       main: '#1b74c2'
     },
+    // MUI's default red reads at 4.3:1 on these surfaces as text (error
+    // states, "Could not open"); one step deeper gives 4.9:1.
+    error: {
+      main: '#c62828'
+    },
     background: {
       default: '#e7f0ff',
       paper: '#f3f8ff'
@@ -151,6 +156,12 @@ const darkThemeOptions: ThemeOptions = {
     },
     secondary: {
       main: '#39afff'
+    },
+    // A red that reads as text on the navy (5.4:1) and carries dark text as
+    // a fill (5.4:1); MUI's default dark red managed neither (3.7:1).
+    error: {
+      main: '#ef5350',
+      contrastText: '#0b1220'
     },
 
     background: {

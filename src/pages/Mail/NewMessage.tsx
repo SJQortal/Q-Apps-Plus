@@ -2342,7 +2342,7 @@ export const NewMessage = ({
                       replyPreviewMode === "preview" ? "contained" : "text"
                     }
                     sx={[{
-                      minWidth: "unset",
+                      minWidth: 44,
                       minHeight: 44,
                       textTransform: "none"
                     }, replyPreviewMode === "preview" ? {
@@ -2362,7 +2362,7 @@ export const NewMessage = ({
                     size="small"
                     variant={replyPreviewMode === "full" ? "contained" : "text"}
                     sx={[{
-                      minWidth: "unset",
+                      minWidth: 44,
                       minHeight: 44,
                       textTransform: "none"
                     }, replyPreviewMode === "full" ? {
@@ -2381,7 +2381,7 @@ export const NewMessage = ({
                     onClick={() => setReplyPreviewMode("hidden")}
                     size="small"
                     sx={{
-                      minWidth: "unset",
+                      minWidth: 44,
                       minHeight: 44,
                       textTransform: "none",
                       color: "var(--qmail-compose-text)",
