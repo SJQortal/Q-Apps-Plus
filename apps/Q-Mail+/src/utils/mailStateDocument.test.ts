@@ -4,7 +4,10 @@ import {
   MAIL_STATE_DOCUMENT_SERVICE,
   arePublishedStateEntriesEqual,
   buildPublishedMailStateDocument,
+  mergeAliasReplyLinks,
   mergePublishedStateEntries,
+  mergeWatchedAliases,
+  normalizePublishedSettings,
   normalizePublishedStateEntry,
   parsePublishedMailStateDocument,
 } from './mailStateDocument'
@@ -73,6 +76,7 @@ describe('qmail_state_v1 document', () => {
     expect(parsePublishedMailStateDocument(original)).toEqual({
       messages: { keep: { read: true }, subjectOnly: { subject: 'S' } },
       archived: {},
+      settings: null,
     })
     const plus = { ...original, archived: { keep: { at: 3 }, bad: { at: 'x' } } }
     expect(parsePublishedMailStateDocument(plus)?.archived).toEqual({ keep: { at: 3 } })
@@ -81,6 +85,95 @@ describe('qmail_state_v1 document', () => {
     expect(parsePublishedMailStateDocument({ archived: { a: { at: 1 } } })).toEqual({
       messages: {},
       archived: { a: { at: 1 } },
+      settings: null,
     })
+  })
+
+  it('writes the additive settings object after archived, in the documented shape', () => {
+    const { document } = buildPublishedMailStateDocument({
+      ownerAddress: 'QAddr',
+      names: ['alice'],
+      publishedEntries: {},
+      localEntries: { m1: { read: true } },
+      archived: {},
+      settings: {
+        uiTheme: 'hub20',
+        textSize: 'large',
+        watchedAliases: ['Support', ' support ', 'Sales', ''],
+        aliasReplyLinks: { Support: 'alice-support', sales: ' ', '': 'x' },
+      },
+      now: 100,
+    })
+    expect(Object.keys(document)).toEqual([
+      'version',
+      'updatedAt',
+      'ownerAddress',
+      'names',
+      'messages',
+      'archived',
+      'settings',
+    ])
+    expect(document.settings).toEqual({
+      watchedAliases: ['Support', 'Sales'],
+      aliasReplyLinks: { support: 'alice-support' },
+      uiTheme: 'hub20',
+      textSize: 'large',
+    })
+    expect(Object.keys(document.settings!)).toEqual(['watchedAliases', 'aliasReplyLinks', 'uiTheme', 'textSize'])
+    // Without settings the document is exactly what it was before.
+    const { document: plain } = buildPublishedMailStateDocument({
+      ownerAddress: 'QAddr',
+      names: ['alice'],
+      publishedEntries: {},
+      localEntries: {},
+      archived: {},
+      now: 100,
+    })
+    expect(Object.keys(plain)).toEqual(['version', 'updatedAt', 'ownerAddress', 'names', 'messages', 'archived'])
+    expect('settings' in plain).toBe(false)
+  })
+
+  it('parses settings when present, keeps only known values, and ignores a missing or broken object', () => {
+    const base = { version: 1, updatedAt: 1, ownerAddress: 'Q', names: ['a'], messages: { m: { read: true } } }
+    expect(parsePublishedMailStateDocument(base)?.settings).toBeNull()
+    expect(parsePublishedMailStateDocument({ ...base, settings: 'nope' })?.settings).toBeNull()
+    expect(parsePublishedMailStateDocument({ ...base, settings: [] })?.settings).toBeNull()
+    expect(
+      parsePublishedMailStateDocument({
+        ...base,
+        settings: {
+          uiTheme: 'neon',
+          textSize: 'huge',
+          watchedAliases: ['a', 7, 'A', 'b'],
+          aliasReplyLinks: { A: 'reply-a', b: 3 },
+          future: true,
+        },
+      })?.settings
+    ).toEqual({ watchedAliases: ['a', 'b'], aliasReplyLinks: { a: 'reply-a' } })
+    expect(
+      parsePublishedMailStateDocument({ ...base, settings: { uiTheme: 'black', textSize: 'small' } })?.settings
+    ).toEqual({ uiTheme: 'black', textSize: 'small', watchedAliases: [], aliasReplyLinks: {} })
+    // A document that only carries settings is still usable.
+    expect(parsePublishedMailStateDocument({ settings: { watchedAliases: ['x'] } })).toEqual({
+      messages: {},
+      archived: {},
+      settings: { watchedAliases: ['x'], aliasReplyLinks: {} },
+    })
+    expect(normalizePublishedSettings(null)).toBeNull()
+  })
+
+  it('unions alias lists with the local side winning', () => {
+    const local = ['Support', 'sales']
+    expect(mergeWatchedAliases(local, ['SUPPORT', 'Sales'])).toBe(local)
+    expect(mergeWatchedAliases(local, ['Billing', 'support', 'billing'])).toEqual(['Support', 'sales', 'Billing'])
+    expect(mergeWatchedAliases([], ['A', 'a'])).toEqual(['A'])
+
+    const links = { support: 'alice-support' }
+    expect(mergeAliasReplyLinks(links, { support: 'other', SUPPORT: 'other2' })).toBe(links)
+    expect(mergeAliasReplyLinks(links, { Sales: 'alice-sales', support: 'other' })).toEqual({
+      support: 'alice-support',
+      sales: 'alice-sales',
+    })
+    expect(mergeAliasReplyLinks({}, { x: '' })).toEqual({})
   })
 })
