@@ -1,14 +1,11 @@
 import {
-  AppBar,
-  Button,
-  Toolbar,
   Typography,
   Box,
   TextField,
 } from "@mui/material";
 import { styled } from "@mui/system";
 
-export const InstanceContainer = styled(Box)(({ theme }) => ({
+export const InstanceContainer = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   width: "100%",
@@ -18,7 +15,7 @@ export const InstanceContainer = styled(Box)(({ theme }) => ({
   flexShrink: 0,
   justifyContent: "space-between",
 }));
-export const MailContainer = styled(Box)(({ theme }) => ({
+export const MailContainer = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   width: "100%",
@@ -26,7 +23,7 @@ export const MailContainer = styled(Box)(({ theme }) => ({
   overflow: "hidden",
 }));
 
-export const MailBody = styled(Box)(({ theme }) => ({
+export const MailBody = styled(Box)(() => ({
   display: "flex",
   flexDirection: "row",
   width: "100%",
@@ -35,13 +32,13 @@ export const MailBody = styled(Box)(({ theme }) => ({
   position: 'relative'
   // overflow: 'auto !important'
 }));
-export const MailBodyInner = styled(Box)(({ theme }) => ({
+export const MailBodyInner = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   width: "50%",
   height: "100%",
 }));
-export const MailBodyInnerHeader = styled(Box)(({ theme }) => ({
+export const MailBodyInnerHeader = styled(Box)(() => ({
   display: "flex",
   width: "100%",
   height: "25px",
@@ -81,7 +78,7 @@ export const MailBodyInnerScroll = styled(Box)`
     }
   }
 `;
-export const ComposeContainer = styled(Box)(({ theme }) => ({
+export const ComposeContainer = styled(Box)(() => ({
   display: "flex",
   width: "150px",
   alignItems: "center",
@@ -94,14 +91,14 @@ export const ComposeContainer = styled(Box)(({ theme }) => ({
     backgroundColor: "var(--qmail-shell-hover-strong)",
   },
 }));
-export const ComposeContainerBlank = styled(Box)(({ theme }) => ({
+export const ComposeContainerBlank = styled(Box)(() => ({
   display: "flex",
   width: "150px",
   alignItems: "center",
   gap: "7px",
   height: "100%",
 }));
-export const ComposeP = styled(Typography)(({ theme }) => ({
+export const ComposeP = styled(Typography)(() => ({
   fontSize: "0.9375rem",
   fontWeight: 500,
 }));
@@ -138,12 +135,12 @@ export const MailMessageRowInfoImg = styled("img")({
   filter: "var(--qmail-shell-icon-filter)",
 });
 
-export const SelectInstanceContainer = styled(Box)(({ theme }) => ({
+export const SelectInstanceContainer = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "17px",
 }));
-export const SelectInstanceContainerInner = styled(Box)(({ theme }) => ({
+export const SelectInstanceContainerInner = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "3px",
@@ -155,7 +152,7 @@ export const SelectInstanceContainerInner = styled(Box)(({ theme }) => ({
     background: "var(--qmail-shell-hover)",
   },
 }));
-export const SelectInstanceContainerFilterInner = styled(Box)(({ theme }) => ({
+export const SelectInstanceContainerFilterInner = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "3px",
@@ -165,18 +162,18 @@ export const SelectInstanceContainerFilterInner = styled(Box)(({ theme }) => ({
 }));
 
 
-export const InstanceLabel = styled(Typography)(({ theme }) => ({
+export const InstanceLabel = styled(Typography)(() => ({
   fontSize: "1rem",
   fontWeight: 500,
   color: "var(--qmail-shell-muted)",
 }));
 
-export const InstanceP = styled(Typography)(({ theme }) => ({
+export const InstanceP = styled(Typography)(() => ({
   fontSize: "1rem",
   fontWeight: 500,
 }));
 
-export const MailMessageRowContainer = styled(Box)(({ theme }) => ({
+export const MailMessageRowContainer = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   cursor: "pointer",
@@ -220,38 +217,38 @@ export const MailMessageRowInfo = styled(Box)(({ theme }) => ({
   },
 }));
 export const MailMessageRowInfoStatusNotDecrypted = styled(Typography)(
-  ({ theme }) => ({
+  () => ({
     fontSize: "1rem",
     fontWeight: 900,
     textTransform: "uppercase",
     paddingTop: "2px",
   })
 );
-export const MailMessageRowInfoStatusRead = styled(Typography)(({ theme }) => ({
+export const MailMessageRowInfoStatusRead = styled(Typography)(() => ({
   fontSize: "1rem",
   fontWeight: 300,
   minWidth: 0,
 }));
 
-export const MessageExtraInfo = styled(Box)(({ theme }) => ({
+export const MessageExtraInfo = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   gap: "2px",
   overflow: "hidden",
 }));
-export const MessageExtraName = styled(Typography)(({ theme }) => ({
+export const MessageExtraName = styled(Typography)(() => ({
   fontSize: "1rem",
   fontWeight: 900,
   whiteSpace: "nowrap",
   textOverflow: "ellipsis",
   overflow: "hidden",
 }));
-export const MessageExtraDate = styled(Typography)(({ theme }) => ({
+export const MessageExtraDate = styled(Typography)(() => ({
   fontSize: "0.9375rem",
   fontWeight: 500,
 }));
 
-export const MessagesContainer = styled(Box)(({ theme }) => ({
+export const MessagesContainer = styled(Box)(() => ({
   width: "100%",
   maxWidth: "100%",
   display: "flex",
@@ -313,7 +310,7 @@ export const InstanceListContainer = styled(Box)`
   }
 `;
 export const InstanceListContainerRowLabelContainer = styled(Box)(
-  ({ theme }) => ({
+  () => ({
     width: "100%",
     display: "flex",
     alignItems: "center",
@@ -321,7 +318,7 @@ export const InstanceListContainerRowLabelContainer = styled(Box)(
     height: "50px",
   })
 );
-export const InstanceListContainerRow = styled(Box)(({ theme }) => ({
+export const InstanceListContainerRow = styled(Box)(() => ({
   width: "100%",
   display: "flex",
   alignItems: "center",
@@ -334,26 +331,26 @@ export const InstanceListContainerRow = styled(Box)(({ theme }) => ({
   },
   flexShrink: 0,
 }));
-export const InstanceListContainerRowCheck = styled(Box)(({ theme }) => ({
+export const InstanceListContainerRowCheck = styled(Box)(() => ({
   width: "47px",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
 }));
-export const InstanceListContainerRowMain = styled(Box)(({ theme }) => ({
+export const InstanceListContainerRowMain = styled(Box)(() => ({
   display: "flex",
   justifyContent: "space-between",
   width: "100%",
   alignItems: "center",
   overflow: "hidden",
 }));
-export const CloseParent = styled(Box)(({ theme }) => ({
+export const CloseParent = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "20px",
 }));
 export const InstanceListContainerRowMainP = styled(Typography)(
-  ({ theme }) => ({
+  () => ({
     fontWeight: 500,
     fontSize: "1rem",
     textOverflow: "ellipsis",
@@ -420,7 +417,7 @@ export const NewMessageCloseImg = styled("img")({
   cursor: "pointer",
   filter: "var(--qmail-shell-icon-filter)",
 });
-export const NewMessageHeaderP = styled(Typography)(({ theme }) => ({
+export const NewMessageHeaderP = styled(Typography)(() => ({
   fontSize: "1.125rem",
   fontWeight: 600,
 }));
@@ -469,7 +466,7 @@ export const NewMessageAliasContainer = styled(Box)(({ theme }) => ({
     width: "100%",
   },
 }));
-export const AttachmentContainer = styled(Box)(({ theme }) => ({
+export const AttachmentContainer = styled(Box)(() => ({
   height: "36px",
   width: "100%",
   display: "flex",
@@ -651,13 +648,13 @@ export const MoreP = styled(Typography)`
   letter-spacing: -0.16px;
   white-space: nowrap;
 `;
-export const ThreadContainerFullWidth = styled(Box)(({ theme }) => ({
+export const ThreadContainerFullWidth = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   width: "100%",
   alignItems: "center",
 }));
-export const ThreadContainer = styled(Box)(({ theme }) => ({
+export const ThreadContainer = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   width: "1254px",
@@ -704,7 +701,7 @@ margin-bottom: 5px;
 height: 76px;
 align-items:center;
 `;
-export const ThreadInfoColumn = styled(Box)(({ theme }) => ({
+export const ThreadInfoColumn = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   width: "170px",
@@ -794,7 +791,7 @@ position: relative;
   background-color: var(--qmail-scroll-thumb-hover);
 }
 `
-export const CloseContainer = styled(Box)(({ theme }) => ({
+export const CloseContainer = styled(Box)(() => ({
   display: "flex",
   width: "50px",
   overflow: "hidden",

@@ -162,7 +162,7 @@ export function DraftsMailbox({ address, onOpenDraft }: DraftsMailboxProps) {
                       {describeDraftTarget(draft)}
                     </Typography>
                   </Ellipsis>
-                  <Typography component="span" variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+                  <Typography component="span" variant="caption" color="text.secondary" sx={{ flexShrink: 0, fontSize: "0.875rem" }}>
                     {draft.updatedAt ? formatTimestamp(draft.updatedAt) : ""}
                   </Typography>
                 </Line>
@@ -177,7 +177,7 @@ export function DraftsMailbox({ address, onOpenDraft }: DraftsMailboxProps) {
                       component="span"
                       variant="caption"
                       color="text.secondary"
-                      sx={{ display: "inline-flex", alignItems: "center", gap: 0.25, flexShrink: 0 }}
+                      sx={{ display: "inline-flex", alignItems: "center", gap: 0.25, flexShrink: 0, fontSize: "0.875rem" }}
                     >
                       <AttachFileIcon sx={{ fontSize: 14 }} />
                       {attachmentCount}
@@ -192,7 +192,7 @@ export function DraftsMailbox({ address, onOpenDraft }: DraftsMailboxProps) {
                   </Ellipsis>
                 )}
                 {draft.fromName && (
-                  <Typography component="span" variant="caption" color="text.secondary">
+                  <Typography component="span" variant="caption" color="text.secondary" sx={{ fontSize: "0.875rem" }}>
                     From {draft.fromName}
                   </Typography>
                 )}

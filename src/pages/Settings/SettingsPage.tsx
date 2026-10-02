@@ -46,6 +46,8 @@ const Page = styled('main')(({ theme }) => ({
   minHeight: '100%',
   width: '100%',
   color: theme.palette.text.primary,
+  // 44 px targets in every theme (Hub 2.0's MUI defaults are 37 px).
+  '& .MuiButton-root': { minHeight: 44 },
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
@@ -79,7 +81,7 @@ const SectionTitle = styled('h2')(({ theme }) => ({
   margin: 0,
   textTransform: 'uppercase',
   letterSpacing: '0.08em',
-  fontSize: '0.75rem',
+  fontSize: '0.875rem',
   fontWeight: 700,
   color: theme.palette.text.secondary,
   marginBottom: theme.spacing(1),
@@ -243,6 +245,7 @@ export function SettingsPage() {
                 if (value) controller.setTextSize(value);
               }}
               aria-label="Text size"
+              sx={{ '& .MuiToggleButton-root': { minHeight: 44, fontSize: '0.875rem' } }}
             >
               <ToggleButton value="small">Small</ToggleButton>
               <ToggleButton value="medium">Medium</ToggleButton>

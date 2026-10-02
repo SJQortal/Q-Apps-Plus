@@ -1717,7 +1717,7 @@ export const NewMessage = ({
                 minWidth: 0,
               }}
             >
-              <NewMessageInputLabelP sx={{ userSelect: "none" }}>
+              <NewMessageInputLabelP id="qmail-compose-from-label" sx={{ userSelect: "none" }}>
                 From:
               </NewMessageInputLabelP>
               <TextField
@@ -1744,6 +1744,7 @@ export const NewMessage = ({
 
                   select: {
                     disableUnderline: true,
+                    labelId: "qmail-compose-from-label",
                     MenuProps: {
                       slotProps: {
                         paper: {
@@ -1786,6 +1787,11 @@ export const NewMessage = ({
                   minWidth: 0,
                   "& .MuiAutocomplete-inputRoot": {
                     minWidth: 0,
+                  },
+                  // 44 px clear and open buttons (docs/DESIGN.md → Touch).
+                  "& .MuiAutocomplete-clearIndicator, & .MuiAutocomplete-popupIndicator": {
+                    width: 44,
+                    height: 44,
                   },
                 }}
                 loading={isDirectorySearchLoading}
@@ -2138,7 +2144,7 @@ export const NewMessage = ({
             }}
           >
             <input {...getInputProps()} />
-            <NewMessageAttachmentImg src={AttachmentSVG} />
+            <NewMessageAttachmentImg src={AttachmentSVG} alt="Attach files" />
           </AttachmentContainer>
 
           {attachments.map(({ file, extension, forwardKey }, index) => {
@@ -2336,7 +2342,8 @@ export const NewMessage = ({
                       replyPreviewMode === "preview" ? "contained" : "text"
                     }
                     sx={[{
-                      minWidth: "unset",
+                      minWidth: 44,
+                      minHeight: 44,
                       textTransform: "none"
                     }, replyPreviewMode === "preview" ? {
                       color: "var(--qmail-action-primary-text)"
@@ -2355,7 +2362,8 @@ export const NewMessage = ({
                     size="small"
                     variant={replyPreviewMode === "full" ? "contained" : "text"}
                     sx={[{
-                      minWidth: "unset",
+                      minWidth: 44,
+                      minHeight: 44,
                       textTransform: "none"
                     }, replyPreviewMode === "full" ? {
                       color: "var(--qmail-action-primary-text)"
@@ -2373,7 +2381,8 @@ export const NewMessage = ({
                     onClick={() => setReplyPreviewMode("hidden")}
                     size="small"
                     sx={{
-                      minWidth: "unset",
+                      minWidth: 44,
+                      minHeight: 44,
                       textTransform: "none",
                       color: "var(--qmail-compose-text)",
                       fontSize: "0.875rem",
@@ -2403,6 +2412,9 @@ export const NewMessage = ({
               </Typography>
               {replyPreviewMode !== "hidden" && (
                 <Box
+                  role="region"
+                  aria-label="Quoted original message"
+                  tabIndex={0}
                   sx={[{
                     overflowY: "auto",
                     pr: "0.25rem"
