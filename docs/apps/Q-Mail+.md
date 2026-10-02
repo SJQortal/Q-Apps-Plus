@@ -1249,6 +1249,8 @@ Contrast computed from the built themes: rows, headers, chips, badges, active ra
 
 **Lint:** `npm run lint` added (eslint 9, the Q-Share+ config); 0 errors, 0 warnings.
 
+**Leftovers pass (merge `99d5ef1`):** the lint exemption for the pitfalls files removed and its 26 findings fixed (dead `mobileMode`/`isChangelogOpen` state gone from Mail.tsx); **Settings sync**: the published state document gains an additive `settings` map (theme, text size, watched aliases, reply links); on load the alias lists are unioned into the local ones (local wins) and Settings → Sync offers "Restore appearance from the published state" (applied only on click); deleted ("D") mail is hidden from secondary-name and alias inboxes too; "Sign in" wording; `SEARCH_NAMES` queries keep a `+` (q-apps.js would turn it into a space). Tests 352 → 360; version 1.0.0; `scripts/build-zip.sh Q-Mail+` → `release/Q-Mail+.zip` (1.6 MB, 83 files, `index.html` at the root).
+
 ### Hub Dev Mode check (2026-10-01/02)
 
 Driven with `scripts/hub-cdp.mjs` on a test Hub at debug port 9223 (`Qortal-Hub --no-sandbox --remote-debugging-port=9223`), signed in as **Tester GO**, Dev Mode → Server → 127.0.0.1:5174 (the Vite dev server through the node's proxy on 12393). The original Q-Mail (`qortal://APP/Q-Mail`) ran in a second tab.
