@@ -1,7 +1,7 @@
 import { styled } from "@mui/system";
 import { Box } from "@mui/material";
 
-export const CategoryContainer = styled(Box)(({ theme }) => ({
+export const CategoryContainer = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   flexDirection: "row",

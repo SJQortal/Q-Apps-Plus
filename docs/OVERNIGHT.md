@@ -1,63 +1,82 @@
-# Running the redesign overnight in the cloud
+# Running the app sessions (one app per day)
 
-This is how to hand the apps to Fable in Claude Code on the web (claude.ai/code), so the work runs on cloud credits while you sleep. Every app pass starts with the **React 19.3 + MUI 9.4 upgrade** (docs/PLATFORM.md), then the redesign. **Q-Mintership+** gets a phased React rewrite instead.
+How the work actually runs since 2026-09-30: **one app per day, in a local Claude chat on Simon's desktop**, to the Q-Share+ standard. The rounds and the "done" checklist are in the `qplus-app` skill. This page covers the setup around them: folders, chats, Hub and the morning.
 
-## One-time setup (Simon)
+## Why local, one app at a time
 
-1. **The repo is on GitHub** at [SJQortal/Q-Apps-Plus](https://github.com/SJQortal/Q-Apps-Plus). Done.
-2. **GitHub is connected to Claude Code on the web.** Done: `Q-Apps-Plus` shows in the repo picker at [claude.ai/code](https://claude.ai/code).
-3. **Cloud environment: "Qortal Programmer".** Done. Network access is *Full* (Trusted would also do), with no environment variables and no setup script. Each session installs the apps it works on.
-4. **Model:** pick **Fable** when you start each session, or type `/model fable` as the first message.
-5. **GitHub rules.** Done: `main` only accepts pull requests, PRs merge as merge commits (squash/rebase off), and branches delete themselves after merging.
-6. **For Hub testing (local only):** Claude restarts Hub with its debug port, and you log in to the Tester GO account yourself with Dev Mode on (docs/HUB-TESTING.md). Computer use isn't needed, and the Linux app doesn't have it.
+- **Hub only works locally.** Only a local chat can test in Hub, and round 4 (the Hub check) found most of Q-Share+'s serious bugs.
+- **Cost is the same.** Cloud sessions now bill the same plan usage as local ones; the $250 cloud credit was used up on the first night.
+- **Parallel apps burn usage.** Eleven parallel sessions used it up in about an hour. One app with full attention got Q-Share+ to 1.0.0 in a day.
+- **Cloud is still fine for rounds 1–3** of an app, when the desktop is busy. Use the same day prompt and leave round 4 for a local chat.
 
-Cloud sessions load this repo's `CLAUDE.md`, the `qplus-app` skill and `.claude/settings.json`. They keep working after you close the browser. A session only stops early if it waits on a question, which is why the prompts below tell it not to ask.
+## Setup for an app
 
-## Recommended plan: pilot, then fan out
+1. **A folder of its own** (a git worktree), so chats on different apps never share a checkout. From the main checkout:
+   ```bash
+   git worktree add "../Q-Apps+-QMail" q-mail-plus/pass-1
+   ```
+   The name is `../Q-Apps+-<Short>`. Use the app's branch from docs/PROGRESS.md, or `git worktree add -b <slug>/pass-1 "../Q-Apps+-<Short>" origin/main` for a new one. The main checkout (`Q-Apps+`) stays on `main` for repo work.
+2. **Open the chat in that folder:** New → folder name → *Open folder…* → `Desktop/Q-Apps+-<Short>`.
+   - Pick no branch and leave the worktree option off. The folder already is the worktree.
+   - Choosing `Q-Apps+` together with the app's branch fails with "Commit or stash changes…", because git refuses a branch that's open in another folder.
+3. **Model and mode:** Fable (or Opus when Fable's weekly limit is used up), permission mode **auto**. Turn on **Ultracode** only when the prompt allows workflows.
+4. **Overnight:** keep the computer awake. If a chat stops at the 5-hour limit, open it after the reset and type "continue". Nothing is lost, because chats push after every commit.
+5. **Hub:** each chat starts its own test Hub (docs/HUB-TESTING.md). The first chat uses debug port 9222 and dev server 5173; a second chat at the same time uses 9223 and 5174. A test Hub opens signed in to the same account as the normal Hub.
 
-### Evening: pilot Names+ (about an hour, while you're around)
+## The day prompt
 
-> Use the qplus-app skill to do a full pass on **Names+** on a new branch `names-plus/pass-1`: platform upgrade to React 19.3 + MUI 9.4 first, then the redesign. Work only in `apps/Names+/`, `docs/apps/Names+.md`, and `shared/` if the kit or docs need a fix. Don't stop to ask questions. Make sensible calls and list open questions in the brief's Follow-ups. When done, push and open a PR titled "Names+: React 19.3 / MUI 9.4 + redesign pass 1".
+Fill in the `<…>` parts and delete the lines that don't apply. The skill has the details, so the prompt only says which app, which rounds and what Simon wants most.
 
-Then test it in Hub (a **local** session, following docs/HUB-TESTING.md), fix anything that turns up, and merge. Any kit or doc fixes land on `main` before the fan-out.
+```
+Local session for <App+>, rounds <1–4> of the qplus-app skill, to the Q-Share+ standard.
+[Ultracode: use workflows and parallel agents where they help, following the skill's "Working with parallel agents".]
+[Simon is asleep: don't stop to ask questions. Make sensible calls and list open questions in the brief's Follow-ups.]
 
-### Night: one cloud session per app, all in parallel
+Work ONLY in /home/simon-james/Desktop/Q-Apps+-<Short> (a git worktree on branch <slug>/pass-1). Never touch the other Q-Apps+ folders.
 
-For **Q-Node+, Q-Tube+, Q-Trade+, Q-Mail+, Q-Share+, Q-Support+, Q-Fund+ and Q-Shop+** (8 sessions), change the app name and the branch name each time (branch = lower-case app name with `-plus`, e.g. `q-tube-plus/pass-1`):
+Start with: git fetch origin main && git merge origin/main, then scripts/sync-theme.sh, then a green build, test and lint. main has shared fixes (theme kit, docs, scripts).
 
-> Use the qplus-app skill to do a full pass on **Q-Mail+** on a new branch `q-mail-plus/pass-1`: platform upgrade to React 19.3 + MUI 9.4 first (its own commit), then the redesign. Work only in `apps/Q-Mail+/` and `docs/apps/Q-Mail+.md`. Do not edit `shared/`, `docs/PROGRESS.md` or other apps. If the theme kit needs a change, work around it inside the app's own theme config and describe the needed kit change in Follow-ups. Don't stop to ask questions. Make sensible calls and list open questions in Follow-ups. When done, push and open a PR titled "Q-Mail+: React 19.3 / MUI 9.4 + redesign pass 1".
+Read the qplus-app skill, especially "Done means" and the rounds. Read docs/apps/Q-Share+.md as the worked example, and docs/apps/<App+>.md for where the last session stopped.
 
-For **Q-Mintership+** (1 session):
+Simon's priorities for <App+>:
+- <the features, layout changes and problems Simon cares about>
 
-> Use the qplus-app skill for **Q-Mintership+** on a new branch `q-mintership-plus/rewrite-phase-1`. Follow the Rewrite plan in `docs/apps/Q-Mintership+.md`: do phase 1 (scaffold, data layer, data contract, parity checklist) and, if time allows, phase 2 (read-only boards). Work only in `apps/Q-Mintership+/` and `docs/apps/Q-Mintership+.md`. Don't stop to ask questions; list open questions in Follow-ups. Open one PR per phase, titled "Q-Mintership+: React rewrite phase N".
+Hub check (round 4): your own test Hub with --remote-debugging-port=<9222>, and the dev server on port <5173> (docs/HUB-TESTING.md, scripts/hub-cdp.mjs). Read-only: ask Simon before anything that publishes, sends or spends QORT. [Overnight: skip those, and list them in Follow-ups.]
 
-Each session works in its own folder on its own branch, so the PRs don't conflict. All nine share your account's usage limits; if one pauses for the limit, reopen it later and say "continue".
+Git: only <slug>/pass-1 is pushed, after every commit. No Claude attribution lines.
+[Usage guard: check usage (get_usage) between workflows. If weekly all-models passes 60%, stop starting workflows and finish alone.]
 
-### Later: Q-Apps+ (the launcher)
+Finish:
+- Fill in Done and Follow-ups using the skill's brief template.
+- Set the version to 1.0.0, or what the skill's release rules say if the app is already published.
+- Run scripts/build-zip.sh <App+> from this folder.
+- Put a short summary at the top of the PR description.
+```
 
-Start this after the others are merged, since it presents them:
-
-> Use the qplus-app skill to build **Q-Apps+** from scratch on a new branch `q-apps-plus/first-version`, as described in `docs/apps/Q-Apps+.md`, on React 19.3 + MUI 9.4 with the Hub 3.0 kit. Read every other app's brief for names, taglines and what's new. Don't stop to ask questions. Push and open a PR titled "Q-Apps+: first version".
-
-### Following nights: Q-Mintership+ phases 3–5
-
-Continue with one session per phase (write flows → admin side → redesign), each starting from the merged previous phase.
+The Q-Mail+ prompt of 30 September is a filled-in example with a long feature list. It's in the conversation that started it.
 
 ## In the morning
 
-Type in the local Claude session, for example: **"build the zips"**. Claude then:
+Type **"build the zips"** in a local chat in the main checkout. Claude then:
 
-1. Runs `scripts/build-pr-zips.sh`. It checks each open app PR out in `.worktrees/`, builds it, and writes `release/<App+>.zip` plus `release/SUMMARY.md` (PR, branch, commit, build result, zip size).
-2. Tests the apps in Hub Dev Mode through the debug port (docs/HUB-TESTING.md): the four themes, phone width and the main read-only flows. Anything that publishes or spends QORT, Claude asks you first.
-3. Reports what each PR changed, including the open questions from each brief's **Follow-ups**.
+1. Runs `scripts/build-pr-zips.sh`, which builds every open app PR in `.worktrees/` and writes `release/<App+>.zip` plus `release/SUMMARY.md`.
+2. Summarises what each PR changed and the open questions from each brief's Follow-ups.
+3. On request, opens an app in a test Hub for Simon to try, using Dev Mode → **Zip** for the exact zip that will be published.
 
-Then you:
+## Release
 
-4. **Publish** `release/<App+>.zip` from Hub as `APP` under the matching name. Don't publish Q-Mintership+ until its parity checklist is complete.
-5. **Merge** the PRs you published with the **Merge** button. It makes a merge commit, and the branch deletes itself.
+1. Simon publishes `release/<App+>.zip` from Hub as `APP` under the app's name.
+2. The brief gets its **Published** line, with the version and commit.
+3. Simon merges the PR with the **Merge** button (a merge commit; the branch deletes itself).
+4. Then update docs/PROGRESS.md, and remove the app's folder when no chat needs it:
+   ```bash
+   git worktree remove "../Q-Apps+-<Short>"
+   ```
+5. Later updates bump the version (1.0.1, …) as the skill's release rules say.
 
 ## If something goes wrong
 
-- **A session stopped early:** open it again from claude.ai/code and say "continue". Its progress is in the app brief and the git log.
-- **Two PRs both changed the same shared file:** merge one, then ask the other session to `git merge main` and resolve the conflict.
-- **Upstream Qortal repos moved on:** run `scripts/sync-upstream.sh --check` to see what's new, then `scripts/sync-upstream.sh <App+>` to merge it.
+- **A chat stopped early:** open it and type "continue". Its progress is in the brief and the git log.
+- **A shared file changed on main:** in the app folder, `git fetch origin main && git merge origin/main`, then `scripts/sync-theme.sh` if the kit changed.
+- **Upstream Qortal repos moved on:** run `scripts/sync-upstream.sh --check`, then `scripts/sync-upstream.sh <App+>`.
+- **A test Hub was left running:** Ctrl+C in its terminal tab, or kill the process that has `--remote-debugging-port` in its command line. Simon's normal Hub has no such flag.

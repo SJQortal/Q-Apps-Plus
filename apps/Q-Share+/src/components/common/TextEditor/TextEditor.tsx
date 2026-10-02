@@ -1,38 +1,20 @@
-import React from "react";
-import ReactQuill, { Quill } from "react-quill";
-import "react-quill/dist/quill.snow.css";
-import ImageResize from "quill-image-resize-module-react";
+import { Suspense, lazy } from "react";
+import { Skeleton } from "@mui/material";
 
-Quill.register("modules/imageResize", ImageResize);
+// Quill is ~400 kB and only needed to write a description, so it loads when
+// the Share or Update dialog first shows the editor.
+const TextEditorQuill = lazy(() => import("./TextEditorQuill"));
 
-const modules = {
-  imageResize: {
-    parchment: Quill.import("parchment"),
-    modules: ["Resize", "DisplaySize"],
-  },
-  toolbar: [
-    ["bold", "italic", "underline", "strike"], // styled text
-    ["blockquote", "code-block"], // blocks
-    [{ header: 1 }, { header: 2 }], // custom button values
-    [{ list: "ordered" }, { list: "bullet" }], // lists
-    [{ script: "sub" }, { script: "super" }], // superscript/subscript
-    [{ indent: "-1" }, { indent: "+1" }], // outdent/indent
-    [{ direction: "rtl" }], // text direction
-    [{ size: ["small", false, "large", "huge"] }], // custom dropdown
-    [{ header: [1, 2, 3, 4, 5, 6, false] }], // custom button values
-    [{ color: [] }, { background: [] }], // dropdown with defaults
-    [{ font: [] }], // font family
-    [{ align: [] }], // text align
-    ["clean"], // remove formatting
-  ],
-};
-export const TextEditor = ({ inlineContent, setInlineContent }) => {
+export interface TextEditorProps {
+  inlineContent: string;
+  setInlineContent: (value: string) => void;
+  placeholder?: string;
+}
+
+export const TextEditor = (props: TextEditorProps) => {
   return (
-    <ReactQuill
-      theme="snow"
-      value={inlineContent}
-      onChange={setInlineContent}
-      modules={modules}
-    />
+    <Suspense fallback={<Skeleton variant="rounded" height={184} sx={{ width: "100%" }} />}>
+      <TextEditorQuill {...props} />
+    </Suspense>
   );
 };

@@ -1,7 +1,7 @@
 // Smoke test for the kit; run with scripts/check-theme-kit.sh <App+>.
 import { renderToString } from 'react-dom/server';
 import { Button } from '@mui/material';
-import { createAppTheme, tokensFromTheme, HubThemeProvider, ThemePicker, cssVariables, UI_THEME_IDS, type AppThemeConfig } from './index';
+import { createAppTheme, tokensFromTheme, HubThemeProvider, ThemePicker, cssVariables, hostModeFromMessage, UI_THEME_IDS, type AppThemeConfig } from './index';
 
 const config: AppThemeConfig = {
   hub20: { description: 'Original look', swatches: ['#111', '#222', '#39f', '#eee'], bootBackground: { light: '#fafafa', dark: '#121212' } },
@@ -24,3 +24,17 @@ const buttonHtml = renderToString(
 const gradients = (buttonHtml.match(/linear-gradient\(180deg, #8FB8F3/g) || []).length;
 if (gradients < 1) throw new Error('Hub 3.0 contained button is missing its gradient');
 console.log(`Button styles ok: gradient on contained primary (${gradients} style rules)`);
+
+// Hub's runtime light/dark switch: only THEME_CHANGED with a known mode counts.
+const messages: Array<[unknown, string | null]> = [
+  [{ action: 'THEME_CHANGED', theme: 'light', requestedHandler: 'UI' }, 'light'],
+  [{ action: 'THEME_CHANGED', theme: 'dark' }, 'dark'],
+  [{ action: 'THEME_CHANGED', theme: 'sepia' }, null],
+  [{ action: 'LANGUAGE_CHANGED', language: 'de' }, null],
+  ['THEME_CHANGED', null],
+  [null, null],
+];
+for (const [data, expected] of messages) {
+  if (hostModeFromMessage(data) !== expected) throw new Error(`hostModeFromMessage(${JSON.stringify(data)}) should be ${expected}`);
+}
+console.log(`Hub THEME_CHANGED messages ok (${messages.length} cases)`);

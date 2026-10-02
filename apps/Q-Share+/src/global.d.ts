@@ -13,14 +13,14 @@ interface QortalRequestOptions {
   metaData?: string
   encoding?: string
   includeMetadata?: boolean
-  limit?: numebr
+  limit?: number
   offset?: number
   reverse?: boolean
   resources?: any[]
   filename?: string
   list_name?: string
   item?: string
-  items?: strings[]
+  items?: string[]
   tag1?: string
   tag2?: string
   tag3?: string
@@ -38,6 +38,10 @@ interface QortalRequestOptions {
   query?: string
   excludeBlocked?: boolean
   exactMatchNames?: boolean
+  /** SAVE_FILE: let Hub fetch the file from the node itself instead of taking a blob. */
+  location?: { service: string; name: string; identifier?: string }
+  /** GET_QDN_RESOURCE_STATUS: ask the node to build a downloaded resource. */
+  build?: boolean
 }
 
 declare function qortalRequest(options: QortalRequestOptions): Promise<any>

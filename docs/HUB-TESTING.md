@@ -9,21 +9,42 @@ Cloud sessions can only build and unit-test. Real Qortal behaviour needs Hub: `q
 The Linux desktop app has no Computer use switch (checked 2026-09-29), so a local session controls Hub over the **Chrome DevTools Protocol** instead. That's the same mechanism as Chrome's developer tools.
 
 1. **Local node:** Hub must be connected to the local node (`localhost:12391`). Dev Mode refuses to run on a public node.
-2. **Quit Hub** (tray icon → Quit). Claude then starts it in the Terminal panel with the debug port:
+2. **Start a test Hub next to the normal one.** Claude starts a second Hub with a debug port in the Terminal panel; Simon's normal Hub keeps running:
    ```bash
    /home/simon-james/qortal-hub/Qortal-Hub --no-sandbox --remote-debugging-port=9222
    ```
-   The port listens on 127.0.0.1 only, but while it's open, programs on this machine can control Hub. Use it for test sessions only, and start Hub normally from the menu afterwards (Ctrl+C in that terminal tab stops it).
-3. **Log in and turn on Dev Mode.** Simon logs in to the **Tester GO** account; Claude never types passwords. Dev Mode is in Hub → Settings, and it stays on between restarts.
-4. **Drive Hub with `scripts/hub-cdp.mjs`:**
+   - **One test Hub per app chat.** The first uses debug port 9222 and dev server port 5173. A second chat working on another app at the same time uses 9223 and 5174, with `HUB_CDP_PORT=9223` set for the scripts.
+   - **Security:** the port listens on 127.0.0.1 only, but while it's open, programs on this machine can control that Hub. Close the test Hub when testing is done (Ctrl+C in its terminal tab, or kill its process).
+3. **Signed in, with Dev Mode on.** A test Hub opens signed in to the account the normal Hub uses (checked 2026-09-30 with Tester GO), and Dev Mode stays on between restarts.
+   - If it isn't signed in, Simon logs in. Claude never types passwords.
+   - Overnight sessions skip the Hub checks if the test Hub isn't signed in, and list them in Follow-ups.
+4. **Drive Hub with `scripts/hub-cdp.mjs`.** "12393" matches the app frame, served through the node's dev proxy:
    ```bash
-   node scripts/hub-cdp.mjs targets                       # Hub window + app iframes
-   node scripts/hub-cdp.mjs shot "Qortal Hub" hub.png     # screenshot (DPR 2.4: CSS px = image px / 2.4)
-   node scripts/hub-cdp.mjs click "Qortal Hub" 720 480    # click at CSS px
-   node scripts/hub-cdp.mjs type "Qortal Hub" "5173"      # type into the focused field
-   node scripts/hub-cdp.mjs eval "12393" "document.title" # run JS inside the app frame (read-only checks)
-   node scripts/hub-cdp.mjs console "12393" 10            # app console for 10 s (old entries replay first)
+   node scripts/hub-cdp.mjs targets                         # Hub window + app iframes
+   node scripts/hub-cdp.mjs shot "Qortal Hub" hub.jpg 0.5   # small JPEG of the window (PNG at full size without a scale)
+   node scripts/hub-cdp.mjs eval "12393" "document.title"   # run JS inside the app frame (read-only checks)
+   node scripts/hub-cdp.mjs console "12393" 10              # app console for 10 s (old entries replay first)
+   node scripts/hub-cdp.mjs size 390 844 --touch            # hold the app frame at 390×844 with phone touch (runs until Ctrl+C)
+   node scripts/hub-cdp.mjs tap 'button[aria-label="Menu"]' # touch tap on an element (or x,y in frame CSS px)
+   node scripts/hub-cdp.mjs swipe 200,150 200,500           # touch drag, e.g. pull-to-refresh
+   node scripts/hub-cdp.mjs requests 20 --reload            # log every qortalRequest for 20 s from a reload at "/"
+   node scripts/hub-cdp.mjs calls                           # the frame's direct Core fetches, grouped and counted
+   node scripts/hub-cdp.mjs click "Qortal Hub" 720 480      # mouse click on Hub's own UI (CSS px)
+   node scripts/hub-cdp.mjs type "Qortal Hub" "5173"        # type into the focused field
    ```
+   - Run `size` in the background, then check the sizes from the five-size list in docs/DESIGN.md → Mobile.
+   - Hub's own buttons (Dev Mode, Server, Add) are often easier to press with `eval "Qortal Hub"` and an element's `.click()` than by coordinates.
+
+### Lessons from the Q-Share+ session (2026-09-30)
+
+The `size`, `tap`, `swipe`, `requests` and `calls` commands above are built on these.
+
+- **Sizes without touching the window.** Electron has no `Browser.setWindowBounds`, but `Emulation.setDeviceMetricsOverride` on the Hub page works even while the window is minimised, and screenshots work while it is held. Hub zooms its page by 1.2 and re-applies that after resizes, so check the app frame's `innerWidth` and adjust. `mobile: true` makes the zoom flip back and forth; `mobile: false` plus touch emulation is stable.
+- **Touch lives in the app frame.** The app is an out-of-process iframe with its own CDP target. `pointer: coarse` / `hover: none` must be set there with `Emulation.setEmulatedMedia`, and any other session that detaches from that target (every `eval`) resets it, so re-apply it on a timer. Touch events sent to the page target land at the wrong offset and are dropped. Send them to the frame target, in the frame's own CSS px (`hub-cdp.mjs tap` and `swipe` do this; checked 2026-10-01 with a touch listener in the frame).
+- **Counting `qortalRequest`.** q-apps.js routes every request through `window.executeQortalRequestImmediate`; wrapping it from `Page.addScriptToEvaluateOnNewDocument` at `readystatechange` logs each action. `/arbitrary` fetches show in the frame's resource timings (raise the buffer with `performance.setResourceTimingBufferSize`).
+- **Dev proxy quirks.** Only `/` (and `*.html`) get q-apps.js injected, so reload at `/` and navigate with the app's router; a deep path loads without `qortalRequest`. Vite's HMR socket never connects through the proxy, so after new dependencies are optimised the page can load two copies of React ("Invalid hook call"): reload again, or restart Vite with `--force`. Core's proxy on 12393 can stop after Vite restarts; re-add the server in Dev Mode (Server → 127.0.0.1:5173 → Add) and close the dead tab.
+- **Hub dialogs.** Accept and Decline in Hub's request dialogs are plain `div`s with those texts. `SAVE_FILE` by `location` opens a native Save As dialog on desktop, which CDP can't reach, so test saves with small files and blobs.
+- **Deep links with `+`.** Hub never decodes the app name in `qortal://APP/<name>/…`; test with a published app whose name has `+` (e.g. `POS+`).
 
 ## Running an app in Hub
 
