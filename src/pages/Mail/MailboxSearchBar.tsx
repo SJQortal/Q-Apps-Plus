@@ -46,6 +46,17 @@ export function describeSearchStatus(status: MailboxSearchStatus, isLoadingScope
   return matches;
 }
 
+// 44 px, 14 px, and text.secondary when unselected: MUI's action.active
+// reads at 4.4:1 on Q-Mail Classic's light surface.
+const toggleSx = {
+  minHeight: 44,
+  px: 1.5,
+  fontSize: "0.875rem",
+  textTransform: "none",
+  color: "text.secondary",
+  "&.Mui-selected": { color: "text.primary" },
+} as const;
+
 export const MailboxSearchBar = ({
   value,
   onChange,
@@ -135,10 +146,10 @@ export const MailboxSearchBar = ({
               }}
               aria-label="Search scope"
             >
-              <ToggleButton value="mailbox" sx={{ minHeight: 40, textTransform: "none", px: 1.5 }}>
+              <ToggleButton value="mailbox" sx={toggleSx}>
                 This mailbox
               </ToggleButton>
-              <ToggleButton value="all" sx={{ minHeight: 40, textTransform: "none", px: 1.5 }}>
+              <ToggleButton value="all" sx={toggleSx}>
                 All mail
               </ToggleButton>
             </ToggleButtonGroup>
@@ -156,7 +167,7 @@ export const MailboxSearchBar = ({
               size="small"
               startIcon={<ManageSearchOutlinedIcon />}
               onClick={onSearchBodies}
-              sx={{ minHeight: 40, textTransform: "none" }}
+              sx={{ minHeight: 44, textTransform: "none" }}
             >
               Search message bodies ({nextBatch})
             </Button>
