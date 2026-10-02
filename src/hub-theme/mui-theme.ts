@@ -55,6 +55,9 @@ function paletteOptions(t: ThemeTokens): ThemeOptions['palette'] {
   const p = t.palette;
   return {
     mode: t.mode,
+    // Fills take black or white text only when it reads at 4.5:1 (DESIGN.md);
+    // explicit contrastText values in the tokens still win.
+    contrastThreshold: 4.5,
     primary: p.primary,
     secondary: { main: p.secondary },
     success: { main: p.success },

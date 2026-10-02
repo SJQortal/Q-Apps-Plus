@@ -12,7 +12,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { CssBaseline, GlobalStyles } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
-import { applyDocumentChrome, readHostMode, readStoredUiTheme, writeStoredUiTheme } from './boot';
+import { applyDocumentChrome, hostModeFromMessage, readHostMode, readStoredUiTheme, writeStoredUiTheme } from './boot';
 import { createAppTheme, tokensFromTheme, type AppThemeConfig } from './mui-theme';
 import { cssVariables, resolveMode, type ColorMode, type UiThemeId } from './tokens';
 
@@ -43,7 +43,7 @@ interface HubThemeProviderProps {
 
 export function HubThemeProvider({ storageKey, config, children }: HubThemeProviderProps) {
   const [uiTheme, setUiThemeState] = useState<UiThemeId>(() => readStoredUiTheme(storageKey));
-  const [hostMode] = useState<ColorMode>(readHostMode);
+  const [hostMode, setHostMode] = useState<ColorMode>(readHostMode);
   const mode = resolveMode(uiTheme, hostMode);
 
   const setUiTheme = useCallback(
@@ -62,6 +62,19 @@ export function HubThemeProvider({ storageKey, config, children }: HubThemeProvi
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, [storageKey]);
+
+  // Follow Hub's own light/dark switch while the app is open; Hub does not reload the app.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const next = hostModeFromMessage(event.data);
+      if (!next) return;
+      // A remount (e.g. after an error boundary) reads the injected value again.
+      (window as Window & { _qdnTheme?: string })._qdnTheme = next;
+      setHostMode(next);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
 
   const theme = useMemo(() => createAppTheme(uiTheme, hostMode, config), [uiTheme, hostMode, config]);
   const cssVars = useMemo(() => cssVariables(tokensFromTheme(theme)), [theme]);
