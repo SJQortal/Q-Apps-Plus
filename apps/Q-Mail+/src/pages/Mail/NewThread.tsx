@@ -1,40 +1,24 @@
-import React, { Dispatch, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReusableModal } from "../../components/modals/ReusableModal";
-import { Box, Button, Input, Typography, useTheme } from "@mui/material";
+import { Box, Button, Input, Typography } from "@mui/material";
 import { useLayoutMode } from "../../layout/useLayoutMode";
-import { BuilderButton } from "../CreatePost/CreatePost-styles";
-import EmailIcon from "@mui/icons-material/Email";
-import type { SlateNode as Descendant } from '../../components/editor/ReadOnlySlate'
 import ShortUniqueId from "short-unique-id";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
 import { useDropzone } from "react-dropzone";
-import AttachFileIcon from "@mui/icons-material/AttachFile";
 import CloseIcon from "@mui/icons-material/Close";
-import CreateIcon from "@mui/icons-material/Create";
 import { setNotification } from "../../state/features/notificationsSlice";
-import { useNavigate, useLocation } from "react-router-dom";
 import { extensionFromMimeType } from "../../utils/fileExtension";
 import ModalCloseSVG from "../../assets/svgs/ModalClose.svg";
 import AttachmentSVG from "../../assets/svgs/NewMessageAttachment.svg";
-import CreateThreadSVG from "../../assets/svgs/CreateThread.svg";
 
 
-import {
-  objectToBase64,
-  objectToUint8Array,
-  objectToUint8ArrayFromResponse,
-  processFileInChunks,
-  toBase64,
-  uint8ArrayToBase64,
-} from "../../utils/toBase64";
+import { objectToBase64, toBase64 } from "../../utils/toBase64";
 import {
   MAIL_ATTACHMENT_SERVICE_TYPE,
   MAIL_SERVICE_TYPE,
   THREAD_SERVICE_TYPE,
 } from "../../constants/mail";
-import ConfirmationModal from "../../components/common/ConfirmationModal";
-import useConfirmationModal from "../../hooks/useConfirmModal";
 import { subscribeToEvent, unsubscribeFromEvent } from "../../utils/events";
 import {
   AttachmentContainer,
@@ -42,7 +26,6 @@ import {
   InstanceFooter,
   InstanceListContainer,
   InstanceListHeader,
-  MoreImg,
   NewMessageAttachmentImg,
   NewMessageCloseImg,
   NewMessageHeaderP,
@@ -63,12 +46,6 @@ import {
   threadDraftKey,
   type StoredComposeDraft,
 } from "./composeDrafts";
-const initialValue: Descendant[] = [
-  {
-    type: "paragraph",
-    children: [{ text: "" }],
-  },
-];
 const uid = new ShortUniqueId();
 
 interface NewMessageProps {
@@ -85,22 +62,17 @@ const maxSize = 25 * 1024 * 1024; // 25 MB in bytes
 export const NewThread = ({
   groupInfo,
   members,
-  hideButton,
   currentThread,
   isMessage = false,
   messageCallback,
-  refreshLatestThreads,
   threadCallback
 }: NewMessageProps) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [value, setValue] = useState("");
-  const [title, setTitle] = useState<string>("");
   const [attachments, setAttachments] = useState<any[]>([]);
   const [subject, setSubject] = useState<string>("");
   const [threadTitle, setThreadTitle] = useState<string>("");
-  const [destinationName, setDestinationName] = useState("");
   const { user } = useSelector((state: RootState) => state.auth);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isOpenMultiplePublish, setIsOpenMultiplePublish] = useState(false);
   const [publishes, setPublishes] = useState<any>(null);
   const [callbackContent, setCallbackContent] = useState<any>(null);
@@ -199,15 +171,11 @@ export const NewThread = ({
   };
 
 
-  const theme = useTheme();
-
-  const navigate = useNavigate();
   const dispatch = useDispatch();
-  const location = useLocation();
   const { getRootProps, getInputProps } = useDropzone({
     maxSize,
     onDrop: acceptedFiles => {
-      let files: any[] = [];
+      const files: any[] = [];
       try {
         acceptedFiles.forEach(item => {
           const type = item?.type;
@@ -244,7 +212,7 @@ export const NewThread = ({
       }
       setAttachments(prev => [...prev, ...files]);
     },
-    onDropRejected: rejectedFiles => {
+    onDropRejected: () => {
       dispatch(
         setNotification({
           msg: "One of your files is over the 25mb limit",
@@ -254,9 +222,6 @@ export const NewThread = ({
     },
   });
 
-  const openModal = useCallback(() => {
-    setIsOpen(true);
-  }, []);
   const openModalFromEvent = useCallback(() => {
     if (isMessage) return;
     setIsOpen(true);
@@ -264,7 +229,6 @@ export const NewThread = ({
   const closeModal = () => {
     setAttachments([]);
     setSubject("");
-    setDestinationName("");
     setValue("");
     setIsOpen(false);
   };
@@ -419,8 +383,8 @@ export const NewThread = ({
           name,
         };
         const threadToBase64 = await objectToBase64(threadObject);
-        let identifierThread = `qortal_qmail_thread_group${groupInfo.id}_${idThread}`;
-        let requestBodyThread: any = {
+        const identifierThread = `qortal_qmail_thread_group${groupInfo.id}_${idThread}`;
+        const requestBodyThread: any = {
           name: name,
           service: THREAD_SERVICE_TYPE,
           data64: threadToBase64,
@@ -429,10 +393,10 @@ export const NewThread = ({
           action: "PUBLISH_QDN_RESOURCE",
         };
         const idMsg = uid();
-        let groupIndex = identifierThread.indexOf("group");
-        let result = identifierThread.substring(groupIndex);
-        let identifier = `qortal_qmail_thmsg_${result}_${idMsg}`;
-        let requestBody: any = {
+        const groupIndex = identifierThread.indexOf("group");
+        const result = identifierThread.substring(groupIndex);
+        const identifier = `qortal_qmail_thmsg_${result}_${idMsg}`;
+        const requestBody: any = {
           name: name,
           service: MAIL_SERVICE_TYPE,
           data64: messageToBase64,
@@ -482,10 +446,10 @@ export const NewThread = ({
         const idThread = currentThread.threadId;
         const messageToBase64 = await objectToBase64(mailObject);
         const idMsg = uid();
-        let groupIndex = idThread.indexOf("group");
-        let result = idThread.substring(groupIndex);
-        let identifier = `qortal_qmail_thmsg_${result}_${idMsg}`;
-        let requestBody: any = {
+        const groupIndex = idThread.indexOf("group");
+        const result = idThread.substring(groupIndex);
+        const identifier = `qortal_qmail_thmsg_${result}_${idMsg}`;
+        const requestBody: any = {
           name: name,
           service: MAIL_SERVICE_TYPE,
           data64: messageToBase64,
@@ -729,7 +693,7 @@ export const NewThread = ({
                     {!extension && (
                       <Typography
                         sx={{
-                          fontSize: "0.75rem",
+                          fontSize: "0.875rem",
                           fontWeight: "bold",
                           color: "var(--qmail-danger-text)",
                         }}

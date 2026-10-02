@@ -54,7 +54,7 @@ export function ShortcutsHelpDialog({ open, onClose }: ShortcutsHelpDialogProps)
               {entry.keys.map((key, index) => (
                 <span key={key}>
                   {index > 0 && entry.keys.length === 2 && entry.action === 'open' ? (
-                    <Typography component="span" variant="caption" color="text.secondary" sx={{ mx: 0.5 }}>
+                    <Typography component="span" variant="caption" color="text.secondary" sx={{ mx: 0.5, fontSize: '0.875rem' }}>
                       or
                     </Typography>
                   ) : null}

@@ -109,6 +109,9 @@ export function ResponsiveDialog({
       )}
       <DialogContent
         dividers={Boolean(title) && isPhone}
+        // A tab stop: when the content scrolls (the shortcuts list on a short
+        // desktop window), keyboard users can reach and scroll it.
+        tabIndex={0}
         sx={{
           display: 'flex',
           flexDirection: 'column',

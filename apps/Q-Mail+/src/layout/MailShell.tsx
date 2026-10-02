@@ -54,7 +54,7 @@ const RailColumn = styled('aside')(({ theme }) => ({
   borderRight: `1px solid ${theme.palette.divider}`,
 }));
 
-const Main = styled('div')({
+const Main = styled('main')({
   position: 'relative',
   display: 'flex',
   flex: 1,
@@ -178,7 +178,7 @@ export function MailShell({
           <Drawer
             open={railOpen}
             onClose={() => onRailOpenChange(false)}
-            slotProps={{ paper: { sx: { width: 'min(85vw, 320px)', display: 'flex', flexDirection: 'column' } } }}
+            slotProps={{ paper: { 'aria-label': 'Mailboxes menu', sx: { width: 'min(85vw, 320px)', display: 'flex', flexDirection: 'column' } } }}
           >
             {rail}
           </Drawer>

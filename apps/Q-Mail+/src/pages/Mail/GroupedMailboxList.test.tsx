@@ -166,7 +166,7 @@ describe('GroupedMailboxList states and rows', () => {
     fireEvent.click(header)
     expect(openMessage).toHaveBeenCalledTimes(1)
     expect(header.getAttribute('aria-expanded')).toBe('true')
-    const group = screen.getByRole('group', { name: 'Messages from bob' })
+    const group = screen.getByRole('list', { name: 'Messages from bob' })
     const rows = within(group).getAllByRole('button')
     expect(rows).toHaveLength(2)
 

@@ -192,20 +192,22 @@
   outline-offset: 1px;
 }
 
-/* Bigger targets on touch screens (docs/DESIGN.md → Touch). */
-@media (pointer: coarse) {
-  .qmail-toolbar.ql-toolbar.ql-snow button {
-    width: 36px;
-    height: 36px;
-    padding: 6px;
-  }
-  .qmail-toolbar.ql-toolbar.ql-snow .ql-picker-label {
-    min-height: 36px;
-    line-height: 36px;
-  }
-  .qmail-more-button {
-    min-height: 36px;
-  }
+/* 44 px targets on every pointer (docs/DESIGN.md → Touch): Hub desktop
+   windows are often touched too, and a mouse does not mind. */
+.qmail-toolbar.ql-toolbar.ql-snow button {
+  width: 44px;
+  height: 44px;
+  padding: 13px;
+}
+.qmail-toolbar.ql-toolbar.ql-snow .ql-picker-label {
+  min-height: 44px;
+  line-height: 44px;
+}
+.qmail-toolbar.ql-toolbar.ql-snow .qmail-more-button {
+  width: auto;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
 }
 
 @media (prefers-reduced-motion: reduce) {
