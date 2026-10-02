@@ -241,9 +241,9 @@ export function SettingsPage() {
               )}
             </>
           ) : (
-            <Row label="Not signed in" hint="Authenticate to read and send mail.">
+            <Row label="Not signed in" hint="Sign in to read and send mail.">
               <Button variant="contained" onClick={() => void authenticate()}>
-                Authenticate
+                Sign in
               </Button>
             </Row>
           )}

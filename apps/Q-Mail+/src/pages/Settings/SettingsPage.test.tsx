@@ -149,9 +149,9 @@ describe('SettingsPage', () => {
     expect(screen.getByText('The published state carries no theme or text size yet.')).toBeTruthy()
   })
 
-  it('offers Authenticate when signed out', () => {
+  it('offers Sign in when signed out', () => {
     const { value } = renderSettings({ user: null })
-    fireEvent.click(screen.getByRole('button', { name: 'Authenticate' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(value.authenticate).toHaveBeenCalled()
   })
 })
