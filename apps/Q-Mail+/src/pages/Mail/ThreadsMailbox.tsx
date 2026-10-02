@@ -296,7 +296,7 @@ export const ThreadsMailbox = ({
       <Typography
         variant="overline"
         component="h2"
-        sx={{ px: 2, pt: 1.5, pb: 0.5, color: "text.secondary", fontWeight: 600, letterSpacing: 1 }}
+        sx={{ px: 2, pt: 1.5, pb: 0.5, color: "text.secondary", fontWeight: 600, letterSpacing: 1, fontSize: "0.875rem" }}
       >
         Groups
       </Typography>
@@ -310,7 +310,14 @@ export const ThreadsMailbox = ({
             onClick={() => onSelectGroup?.(group)}
             sx={(theme) => ({ minHeight: 56, gap: 1.5, px: 2, borderBottom: `1px solid ${theme.palette.divider}` })}
           >
-            <Badge color="primary" badgeContent={unread} max={99} overlap="circular">
+            <Badge
+              color="primary"
+              badgeContent={unread}
+              max={99}
+              overlap="circular"
+              aria-hidden
+              sx={{ "& .MuiBadge-badge": { fontSize: "0.875rem", fontWeight: 700, minWidth: 20, height: 20 } }}
+            >
               <Avatar
                 src={groupAvatarUrlById?.[groupId] || undefined}
                 alt={group.name}
@@ -342,7 +349,7 @@ export const ThreadsMailbox = ({
       <Typography
         variant="overline"
         component="h2"
-        sx={{ px: 2, pt: 2, pb: 0.5, color: "text.secondary", fontWeight: 600, letterSpacing: 1 }}
+        sx={{ px: 2, pt: 2, pb: 0.5, color: "text.secondary", fontWeight: 600, letterSpacing: 1, fontSize: "0.875rem" }}
       >
         Recent threads
       </Typography>

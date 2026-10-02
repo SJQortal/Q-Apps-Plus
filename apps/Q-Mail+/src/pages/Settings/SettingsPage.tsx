@@ -79,7 +79,7 @@ const SectionTitle = styled('h2')(({ theme }) => ({
   margin: 0,
   textTransform: 'uppercase',
   letterSpacing: '0.08em',
-  fontSize: '0.75rem',
+  fontSize: '0.875rem',
   fontWeight: 700,
   color: theme.palette.text.secondary,
   marginBottom: theme.spacing(1),
@@ -243,6 +243,7 @@ export function SettingsPage() {
                 if (value) controller.setTextSize(value);
               }}
               aria-label="Text size"
+              sx={{ '& .MuiToggleButton-root': { minHeight: 44, fontSize: '0.875rem' } }}
             >
               <ToggleButton value="small">Small</ToggleButton>
               <ToggleButton value="medium">Medium</ToggleButton>
