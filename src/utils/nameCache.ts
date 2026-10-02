@@ -37,6 +37,17 @@ export function normalizeName(name: unknown): string {
 }
 
 /**
+ * The `query` for a SEARCH_NAMES request. Core's q-apps.js appends the raw
+ * string to `/names/search?query=`, so a "+" in a name (they are allowed)
+ * reaches the node as a space and the search misses. Only the "+" is encoded
+ * (as %2B); everything else is left exactly as q-apps.js has always sent it,
+ * so names with spaces, apostrophes or non-ASCII letters keep working.
+ */
+export function searchNamesQuery(name: string): string {
+  return name.replace(/\+/g, "%2B");
+}
+
+/**
  * Transport failures (q-apps.js's or Hub's timeout, a node that is down) are
  * not "name does not exist": rethrow them, cache nothing. Core answers an
  * unknown name with a 404 error body, which stays a miss.

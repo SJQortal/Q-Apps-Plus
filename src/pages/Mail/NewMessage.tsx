@@ -78,6 +78,7 @@ import {
   lookupPublicKey,
   peekName,
   resolveName,
+  searchNamesQuery,
 } from "../../utils/nameCache";
 import { AvatarWrapper } from "./MailTable";
 import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
@@ -490,7 +491,7 @@ export const NewMessage = ({
       try {
         const response = await qortalRequest({
           action: "SEARCH_NAMES",
-          query,
+          query: searchNamesQuery(query),
           prefix: true,
           limit: 30,
           reverse: false,

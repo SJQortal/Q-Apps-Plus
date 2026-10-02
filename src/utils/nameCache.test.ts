@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { mockQortalAction, qortalCalls } from '../test/setup'
-import { lookupName, nameCacheStats, nameExists, peekName, resetNameCache, resolveName } from './nameCache'
+import {
+  lookupName,
+  nameCacheStats,
+  nameExists,
+  peekName,
+  resetNameCache,
+  resolveName,
+  searchNamesQuery,
+} from './nameCache'
 
 describe('nameCache', () => {
   beforeEach(() => {
@@ -58,5 +66,12 @@ describe('nameCache', () => {
     expect(await resolveName('Nobody')).toBeNull()
     expect(await resolveName('NoKey')).toBeNull()
     expect(await nameExists('NoKey')).toBe(true)
+  })
+
+  it('encodes only the "+" in a SEARCH_NAMES query (q-apps.js would send it as a space)', () => {
+    expect(searchNamesQuery('bob+builder')).toBe('bob%2Bbuilder')
+    expect(searchNamesQuery('a+b+')).toBe('a%2Bb%2B')
+    expect(searchNamesQuery("Zoë Ångström & O'Neil/2")).toBe("Zoë Ångström & O'Neil/2")
+    expect(searchNamesQuery('')).toBe('')
   })
 })
