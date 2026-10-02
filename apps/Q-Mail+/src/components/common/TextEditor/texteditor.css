@@ -72,6 +72,20 @@
     transition: background-color 0.15s ease, color 0.15s ease;
   }
 
+  /* 44 px tap targets (docs/DESIGN.md → Mobile → Touch); the 18 px icon stays centred. */
+  .ql-toolbar.ql-snow button {
+    width: 44px;
+    height: 44px;
+    padding: 13px;
+  }
+
+  .ql-toolbar.ql-snow .qmail-more-button {
+    width: auto;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 12px;
+  }
+
   .ql-toolbar.ql-snow button:hover,
   .ql-toolbar.ql-snow .ql-picker-label:hover {
     background: var(--qmail-shell-hover);

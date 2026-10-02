@@ -35,7 +35,11 @@ export function MessageDate({ timestamp, color, asText }: { timestamp: number | 
           border: 0,
           padding: 0,
           margin: 0,
-          minHeight: 24,
+          // A 44 px target; the negative margin keeps the header's rhythm.
+          minHeight: 44,
+          my: "-10px",
+          display: "inline-flex",
+          alignItems: "center",
           cursor: "pointer",
           font: "inherit",
           fontSize: "0.875rem",

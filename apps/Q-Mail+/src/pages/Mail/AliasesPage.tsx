@@ -381,7 +381,7 @@ export const AliasesPage = ({
                 <Typography
                   sx={{
                     color: "var(--qmail-thread-subtle-text)",
-                    fontSize: "0.78rem",
+                    fontSize: "0.875rem",
                   }}
                 >
                   {hasMessages ? "Has messages" : "No messages detected yet"}
@@ -499,10 +499,13 @@ export const AliasesPage = ({
                   </Button>
                   <IconButton
                     size="small"
+                    aria-label={`Remove alias ${aliasName}`}
                     onClick={() => {
                       onRemoveAlias(aliasName);
                     }}
                     sx={{
+                      minWidth: 44,
+                      minHeight: 44,
                       color: "var(--qmail-thread-subtle-text)",
                       "&:hover": {
                         color: "var(--qmail-thread-text)",

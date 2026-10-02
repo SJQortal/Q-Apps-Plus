@@ -14,6 +14,7 @@ import { isAvatarUrl, useLazyAvatarUrl } from '../../utils/avatarCache'
 import { formatFullTimestamp } from '../../utils/time'
 import AliasAvatar from '../../assets/svgs/AliasAvatar.svg'
 import { AliasAvatarImg } from './Mail-styles'
+import { primarySoft } from '../../hub-theme'
 const tableCellFontSize = '16px'
 
 interface Data {
@@ -183,7 +184,19 @@ export const AvatarWrapper = ({ user, height, fallback, isAlias }: any) => {
   const label = fallback || user || ''
   const initial = typeof label === 'string' && label ? label.charAt(0).toUpperCase() : undefined
   return (
-    <Avatar ref={setNode} sx={{ width: height, height: height }} src={avatarLink || undefined} alt={label}>
+    <Avatar
+      ref={setNode}
+      sx={theme => ({
+        width: height,
+        height: height,
+        fontWeight: 700,
+        // MUI's default grey fallback reads below 4.5:1 in every theme.
+        bgcolor: primarySoft(theme),
+        color: theme.palette.primary.main,
+      })}
+      src={avatarLink || undefined}
+      alt={label}
+    >
       {initial}
     </Avatar>
   )

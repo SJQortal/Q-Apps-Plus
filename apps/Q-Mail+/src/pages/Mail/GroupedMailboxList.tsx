@@ -331,6 +331,11 @@ export const GroupedMailboxList = ({
         </Box>
       )}
 
+      <Box
+        component="ul"
+        aria-label={mailboxType === "sent" ? "Sent messages by recipient" : "Messages by sender"}
+        sx={{ listStyle: "none", m: 0, p: 0, width: "100%", minWidth: 0 }}
+      >
       {groupedMessages.map(group => {
         const isExpandableGroup = group.messages.length > 1;
         const isExpanded = Boolean(expandedGroups[group.key]);
@@ -356,7 +361,7 @@ export const GroupedMailboxList = ({
         if (!isExpandableGroup) {
           const messageId = getMessageId(latestMessage);
           return (
-            <Box key={group.key} data-group={group.key}>
+            <Box key={group.key} component="li" data-group={group.key}>
               <MailMessageRow
                 messageData={latestMessage}
                 openMessage={openMessage}
@@ -399,7 +404,7 @@ export const GroupedMailboxList = ({
         }`;
 
         return (
-          <Box key={group.key} data-group={group.key} sx={{ display: "flex", flexDirection: "column" }}>
+          <Box key={group.key} component="li" data-group={group.key} sx={{ display: "flex", flexDirection: "column" }}>
             <Box
               sx={theme => ({
                 display: "flex",
@@ -514,15 +519,16 @@ export const GroupedMailboxList = ({
             </Box>
             {isExpanded && (
               <Box
-                role="group"
-                aria-label={`Messages from ${group.label}`}
-                sx={{ display: "flex", flexDirection: "column", pl: { xs: 0, sm: 3 } }}
+                component="ul"
+                aria-label={mailboxType === "sent" ? `Messages to ${group.label}` : `Messages from ${group.label}`}
+                sx={{ listStyle: "none", m: 0, p: 0, pl: { xs: 0, sm: 3 }, display: "flex", flexDirection: "column" }}
               >
                 {group.messages.map(message => {
                   const messageId = getMessageId(message);
                   return (
                     <MailMessageRow
                       key={messageId}
+                      component="li"
                       messageData={message}
                       openMessage={openMessage}
                       isFromSent={mailboxType === "sent"}
@@ -551,6 +557,7 @@ export const GroupedMailboxList = ({
           </Box>
         );
       })}
+      </Box>
 
       {footer}
 
