@@ -39,12 +39,14 @@ export const SearchResultsList = ({ hits, terms, status, openedMessageId, onOpen
       >
         {hits.length} {hits.length === 1 ? "result" : "results"} across your mail
       </Typography>
+      <Box component="ul" aria-label="Search results" sx={{ listStyle: "none", m: 0, p: 0, width: "100%", minWidth: 0 }}>
       {hits.map(hit => {
         const ref = mailboxRefOf(hit);
         const id = toMessageId(hit);
         return (
           <MailMessageRow
             key={`${ref?.kind || "inbox"}:${ref?.alias || ref?.name || ""}:${id}`}
+            component="li"
             messageData={hit}
             openMessage={() => onOpen(hit)}
             isFromSent={ref?.kind === "sent"}
@@ -58,6 +60,7 @@ export const SearchResultsList = ({ hits, terms, status, openedMessageId, onOpen
           />
         );
       })}
+      </Box>
     </Box>
   );
 };

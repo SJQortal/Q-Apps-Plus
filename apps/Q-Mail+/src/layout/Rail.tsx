@@ -46,10 +46,10 @@ export const PUBLISH_STATE_ID = 'publish-mail-state';
 /** Above this many names the rail shows a filter box. */
 export const NAME_FILTER_THRESHOLD = 15;
 
-const SECTION_IDS = ['inbox', 'archived', 'aliases', 'sent', 'drafts', 'threads'] as const;
+type SectionId = 'inbox' | 'archived' | 'aliases' | 'sent' | 'drafts' | 'threads';
 const CHILD_PREFIXES = [INBOX_INSTANCE_PREFIX, ALIASES_INSTANCE_PREFIX, SENT_INSTANCE_PREFIX, THREAD_GROUP_PREFIX];
 
-const SECTION_ICONS: Record<(typeof SECTION_IDS)[number], ReactNode> = {
+const SECTION_ICONS: Record<SectionId, ReactNode> = {
   inbox: <InboxOutlinedIcon />,
   archived: <ArchiveOutlinedIcon />,
   aliases: <AlternateEmailOutlinedIcon />,
@@ -199,7 +199,7 @@ function renderBadge(text: string | undefined) {
       badgeContent={badge.value}
       max={99}
       aria-hidden
-      sx={{ mr: 1.5, '& .MuiBadge-badge': { fontSize: '0.75rem', fontWeight: 700, minWidth: 18, height: 18 } }}
+      sx={{ mr: 1.5, '& .MuiBadge-badge': { fontSize: '0.875rem', fontWeight: 700, minWidth: 20, height: 20 } }}
     />
   );
 }
@@ -216,7 +216,19 @@ function childAvatar(item: LeftSidebarItem, avatarUrlByName?: Map<string, string
   const groupId = item.id.startsWith(THREAD_GROUP_PREFIX) ? item.id.slice(THREAD_GROUP_PREFIX.length) : null;
   const url = groupId ? groupAvatarUrlById?.[groupId] : avatarUrlByName?.get(item.label.toLowerCase());
   return (
-    <Avatar src={url} alt="" sx={{ width: 24, height: 24, fontSize: '0.75rem', fontWeight: 600 }}>
+    <Avatar
+      src={url}
+      alt=""
+      sx={(theme) => ({
+        width: 24,
+        height: 24,
+        fontSize: '0.875rem',
+        fontWeight: 700,
+        // MUI's default grey fallback reads below 4.5:1 in every theme.
+        bgcolor: primarySoft(theme),
+        color: theme.palette.primary.main,
+      })}
+    >
       {item.label.charAt(0).toUpperCase()}
     </Avatar>
   );
@@ -282,12 +294,12 @@ export function Rail({
         <img src={theme.palette.mode === 'light' ? LogoLight : Logo} alt="" style={{ height: 32, width: 'auto' }} />
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography sx={{ fontWeight: 700, lineHeight: 1.1 }}>Q-Mail+</Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
             v{version}
           </Typography>
         </Box>
         {onClose && (
-          <IconButton onClick={onClose} aria-label="Close menu" size="small">
+          <IconButton onClick={onClose} aria-label="Close menu" sx={{ minWidth: 44, minHeight: 44 }}>
             <CloseIcon />
           </IconButton>
         )}
@@ -344,7 +356,7 @@ export function Rail({
           const active = item.id === activeItemId;
           const isThreads = item.id === 'threads';
           const expanded = isThreads ? item.badgeText === '-' : true;
-          const icon = SECTION_ICONS[item.id as (typeof SECTION_IDS)[number]] ?? null;
+          const icon = SECTION_ICONS[item.id as SectionId] ?? null;
           // The Threads row's "+"/"-" only means expanded; it is drawn as a chevron, never as text.
           const sectionItem = isThreads ? { ...item, label: 'Threads', badgeText: undefined } : item;
           return (
