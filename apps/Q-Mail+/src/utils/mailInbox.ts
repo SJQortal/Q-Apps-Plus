@@ -431,3 +431,23 @@ export const mergeNewRows = <T extends { id?: string }>(
   if (!fresh.length) return known;
   return [...fresh, ...known];
 };
+
+/**
+ * Drops rows whose decrypted hash entry carries `deleted: true`: the body was
+ * the "D" delete marker (fetchMail.ts marks it when the message is opened).
+ * The primary inbox drops such rows through `removeMessages`; secondary-name
+ * and alias lists are filtered with this. Returns the same array when nothing
+ * is deleted, so memos keep their references.
+ */
+export const withoutDeletedRows = <T extends { id?: string; identifier?: string }>(
+  rows: T[],
+  hashMap: Record<string, unknown>
+): T[] => {
+  const isDeleted = (row: T): boolean => {
+    const id = row?.id || row?.identifier;
+    if (!id) return false;
+    const entry = hashMap[id] as { deleted?: unknown } | undefined;
+    return entry?.deleted === true;
+  };
+  return rows.some(isDeleted) ? rows.filter(row => !isDeleted(row)) : rows;
+};
