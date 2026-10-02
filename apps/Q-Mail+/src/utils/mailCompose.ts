@@ -75,7 +75,7 @@ export function htmlToTextLines(html: unknown): string[] {
     .replace(/<[^>]*>/g, "");
   const lines = decodeHtmlEntities(withBreaks)
     .split("\n")
-    .map(line => line.replace(/ /g, " ").replace(/[ \t]+$/g, ""));
+    .map(line => line.replace(/\u00a0/g, " ").replace(/[ \t]+$/g, ""));
   // Quill wraps every block in <p>…</p>, so "</p>" adds one newline after the
   // text; a paragraph that was only "<br>" becomes two newlines in a row.
   // Collapse runs of three or more blank lines to one blank line.

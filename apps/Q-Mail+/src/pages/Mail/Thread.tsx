@@ -71,7 +71,7 @@ export const buildReplyQuoteHtml = (message: any): string => {
   const author = typeof message?.name === "string" && message.name ? message.name : "Unknown";
   const when = formatFullTimestamp(Number(message?.created || message?.createdAt) || 0);
   const text = postPlainText(message);
-  let excerpt = text.length > QUOTE_MAX_CHARS ? `${text.slice(0, QUOTE_MAX_CHARS).trimEnd()}…` : text;
+  const excerpt = text.length > QUOTE_MAX_CHARS ? `${text.slice(0, QUOTE_MAX_CHARS).trimEnd()}…` : text;
   const lines = excerpt
     .split(/\r?\n/)
     .map((line) => line.trim())
