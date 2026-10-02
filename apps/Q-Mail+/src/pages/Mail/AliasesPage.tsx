@@ -96,7 +96,7 @@ export const AliasesPage = ({
       >
         <Typography
           sx={{
-            color: "var(--qmail-thread-text)",
+            color: "text.primary",
             fontSize: "1.2rem",
             fontWeight: 700,
           }}
@@ -105,7 +105,7 @@ export const AliasesPage = ({
         </Typography>
         <Typography
           sx={{
-            color: "var(--qmail-thread-subtle-text)",
+            color: "text.secondary",
             fontSize: "0.95rem",
           }}
         >
@@ -119,10 +119,10 @@ export const AliasesPage = ({
           alignItems: "center",
           gap: "10px",
           flexWrap: "wrap",
-          border: "1px solid var(--qmail-shell-border)",
+          border: "1px solid", borderColor: "divider",
           borderRadius: "12px",
           padding: "12px",
-          backgroundColor: "var(--qmail-thread-card-bg)",
+          backgroundColor: "background.paper",
         }}
       >
         <TextField
@@ -144,7 +144,7 @@ export const AliasesPage = ({
             minWidth: "240px",
             flex: 1,
             "& .MuiInputBase-root": {
-              color: "var(--qmail-thread-text)",
+              color: "text.primary",
             },
           }}
         />
@@ -157,13 +157,14 @@ export const AliasesPage = ({
             setNewAliasInput("");
           }}
           sx={{
-            textTransform: "none",
-            borderColor: "var(--qmail-shell-border)",
-            color: "var(--qmail-thread-text)",
-            backgroundColor: "var(--qmail-shell-hover)",
+            minHeight: 44,
+                    textTransform: "none",
+            borderColor: "divider",
+            color: "text.primary",
+            backgroundColor: "action.hover",
             "&:hover": {
-              borderColor: "var(--qmail-shell-active-strong)",
-              backgroundColor: "var(--qmail-shell-hover-strong)",
+              borderColor: "primary.main",
+              backgroundColor: "action.selected",
             },
           }}
         >
@@ -176,10 +177,10 @@ export const AliasesPage = ({
           display: "flex",
           flexDirection: "column",
           gap: "10px",
-          border: "1px solid var(--qmail-shell-border)",
+          border: "1px solid", borderColor: "divider",
           borderRadius: "12px",
           padding: "12px",
-          backgroundColor: "var(--qmail-thread-card-bg)",
+          backgroundColor: "background.paper",
         }}
       >
         <Box
@@ -193,7 +194,7 @@ export const AliasesPage = ({
         >
           <Typography
             sx={{
-              color: "var(--qmail-thread-text)",
+              color: "text.primary",
               fontSize: "1rem",
               fontWeight: 650,
             }}
@@ -204,13 +205,14 @@ export const AliasesPage = ({
             variant="outlined"
             onClick={scanState.isRunning ? onCancelAliasScan : onRunAliasScan}
             sx={{
-              textTransform: "none",
-              borderColor: "var(--qmail-shell-border)",
-              color: "var(--qmail-thread-text)",
-              backgroundColor: "var(--qmail-shell-hover)",
+              minHeight: 44,
+                    textTransform: "none",
+              borderColor: "divider",
+              color: "text.primary",
+              backgroundColor: "action.hover",
               "&:hover": {
-                borderColor: "var(--qmail-shell-active-strong)",
-                backgroundColor: "var(--qmail-shell-hover-strong)",
+                borderColor: "primary.main",
+                backgroundColor: "action.selected",
               },
             }}
           >
@@ -225,7 +227,7 @@ export const AliasesPage = ({
         </Box>
         <Typography
           sx={{
-            color: "var(--qmail-thread-subtle-text)",
+            color: "text.secondary",
             fontSize: "0.9rem",
           }}
         >
@@ -235,7 +237,7 @@ export const AliasesPage = ({
         {hasScanCheckpoint && scanCheckpointTimestamp > 0 && (
           <Typography
             sx={{
-              color: "var(--qmail-thread-subtle-text)",
+              color: "text.secondary",
               fontSize: "0.8rem",
             }}
           >
@@ -264,7 +266,7 @@ export const AliasesPage = ({
               )}
               <Typography
                 sx={{
-                  color: "var(--qmail-thread-subtle-text)",
+                  color: "text.secondary",
                   fontSize: "0.85rem",
                 }}
               >
@@ -279,12 +281,12 @@ export const AliasesPage = ({
                   sx={{
                     borderRadius: "999px",
                     height: "7px",
-                    backgroundColor: "var(--qmail-shell-hover-strong)",
+                    backgroundColor: "action.selected",
                   }}
                 />
                 <Typography
                   sx={{
-                    color: "var(--qmail-thread-subtle-text)",
+                    color: "text.secondary",
                     fontSize: "0.8rem",
                   }}
                 >
@@ -306,7 +308,7 @@ export const AliasesPage = ({
       >
         <Typography
           sx={{
-            color: "var(--qmail-thread-text)",
+            color: "text.primary",
             fontSize: "1rem",
             fontWeight: 650,
           }}
@@ -320,7 +322,7 @@ export const AliasesPage = ({
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              color: "var(--qmail-thread-subtle-text)",
+              color: "text.secondary",
             }}
           >
             <CircularProgress size={16} />
@@ -331,7 +333,7 @@ export const AliasesPage = ({
         {sortedAliases.length === 0 && (
           <Typography
             sx={{
-              color: "var(--qmail-thread-subtle-text)",
+              color: "text.secondary",
               fontSize: "0.9rem",
             }}
           >
@@ -350,9 +352,9 @@ export const AliasesPage = ({
             <Box
               key={aliasName}
               sx={{
-                border: "1px solid var(--qmail-shell-border)",
+                border: "1px solid", borderColor: "divider",
                 borderRadius: "10px",
-                backgroundColor: "var(--qmail-thread-card-bg)",
+                backgroundColor: "background.paper",
                 display: "flex",
                 alignItems: "flex-start",
                 justifyContent: "space-between",
@@ -371,7 +373,7 @@ export const AliasesPage = ({
               >
                 <Typography
                   sx={{
-                    color: "var(--qmail-thread-text)",
+                    color: "text.primary",
                     fontSize: "0.98rem",
                     fontWeight: 600,
                   }}
@@ -380,7 +382,7 @@ export const AliasesPage = ({
                 </Typography>
                 <Typography
                   sx={{
-                    color: "var(--qmail-thread-subtle-text)",
+                    color: "text.secondary",
                     fontSize: "0.875rem",
                   }}
                 >
@@ -393,9 +395,9 @@ export const AliasesPage = ({
                     alignItems: "center",
                     gap: "6px"
                   }, linkedReplyAlias ? {
-                    color: "var(--qmail-shell-active-strong)"
+                    color: "primary.main"
                   } : {
-                    color: "var(--qmail-thread-subtle-text)"
+                    color: "text.secondary"
                   }]}
                 >
                   <LinkIcon sx={{ fontSize: "0.9rem" }} />
@@ -428,7 +430,7 @@ export const AliasesPage = ({
                   size="small"
                   sx={{
                     "& .MuiInputBase-root": {
-                      color: "var(--qmail-thread-text)",
+                      color: "text.primary",
                     },
                   }}
                 />
@@ -447,13 +449,14 @@ export const AliasesPage = ({
                       onOpenAlias(aliasName);
                     }}
                     sx={{
-                      textTransform: "none",
-                      borderColor: "var(--qmail-shell-border)",
-                      color: "var(--qmail-thread-text)",
-                      backgroundColor: "var(--qmail-shell-hover)",
+                      minHeight: 44,
+                    textTransform: "none",
+                      borderColor: "divider",
+                      color: "text.primary",
+                      backgroundColor: "action.hover",
                       "&:hover": {
-                        borderColor: "var(--qmail-shell-active-strong)",
-                        backgroundColor: "var(--qmail-shell-hover-strong)",
+                        borderColor: "primary.main",
+                        backgroundColor: "action.selected",
                       },
                     }}
                   >
@@ -472,9 +475,10 @@ export const AliasesPage = ({
                       }));
                     }}
                     sx={{
-                      textTransform: "none",
-                      borderColor: "var(--qmail-shell-border)",
-                      color: "var(--qmail-thread-text)",
+                      minHeight: 44,
+                    textTransform: "none",
+                      borderColor: "divider",
+                      color: "text.primary",
                     }}
                   >
                     Save Reply Alias
@@ -491,8 +495,9 @@ export const AliasesPage = ({
                       }));
                     }}
                     sx={{
-                      textTransform: "none",
-                      color: "var(--qmail-thread-subtle-text)",
+                      minHeight: 44,
+                    textTransform: "none",
+                      color: "text.secondary",
                     }}
                   >
                     Clear Link
@@ -506,9 +511,9 @@ export const AliasesPage = ({
                     sx={{
                       minWidth: 44,
                       minHeight: 44,
-                      color: "var(--qmail-thread-subtle-text)",
+                      color: "text.secondary",
                       "&:hover": {
-                        color: "var(--qmail-thread-text)",
+                        color: "text.primary",
                       },
                     }}
                   >

@@ -46,6 +46,8 @@ const Page = styled('main')(({ theme }) => ({
   minHeight: '100%',
   width: '100%',
   color: theme.palette.text.primary,
+  // 44 px targets in every theme (Hub 2.0's MUI defaults are 37 px).
+  '& .MuiButton-root': { minHeight: 44 },
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',

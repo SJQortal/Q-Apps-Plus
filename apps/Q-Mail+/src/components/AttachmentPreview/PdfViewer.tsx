@@ -441,6 +441,8 @@ export function PdfViewer({ data, title }: { data: ArrayBuffer; title: string })
           <Box
             ref={setStage}
             data-testid="pdf-preview-stage"
+            tabIndex={0}
+            aria-label={`${title}, page ${page} of ${numPages || 1}`}
             sx={{
               flex: 1,
               minHeight: 0,
