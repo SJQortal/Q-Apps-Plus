@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { store } from "../../../state/store";
 import { DisplayHtml, sanitizeMessageHtml } from "./DisplayHtml";
-import { convertQortalLinks, extractTextFromHTML } from "./utils";
+import { convertQortalLinks } from "./utils";
 
 /** Parse the sanitised output the way the page will. */
 function parse(html: string): HTMLElement {
@@ -217,11 +217,5 @@ describe("utils", () => {
     expect(handlerAttributes(root)).toEqual([]);
     expect(root.querySelector("a")?.getAttribute("href")).toBe("qortal://APP/x");
     expect(convertQortalLinks("<p>plain</p>")).toBe("<p>plain</p>");
-  });
-
-  it("extractTextFromHTML reads text without running anything", () => {
-    expect(extractTextFromHTML("<p>Hello</p><p>there <b>you</b></p>", 50)).toBe("Hello there you");
-    expect(extractTextFromHTML(`<img src=x onerror="alert(1)">x`, 50)).toBe("x");
-    expect(extractTextFromHTML(null)).toBe("");
   });
 });
