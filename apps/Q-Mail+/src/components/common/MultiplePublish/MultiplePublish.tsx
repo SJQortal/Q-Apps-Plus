@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Runs one PUBLISH_MULTIPLE_QDN_RESOURCES request and shows each resource's
  * outcome. Adapted from Q-Share+'s MultiplePublishAll and checked against
