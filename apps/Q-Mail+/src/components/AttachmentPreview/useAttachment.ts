@@ -76,12 +76,13 @@ export function useAttachment(ref: AttachmentRef | null | undefined, options: Us
     else resource.retry();
   }, [resource]);
 
-  const save = useCallback(async () => {
+  /** Resolves false when the user declined Hub's save prompt (not an error). */
+  const save = useCallback(async (): Promise<boolean> => {
     const current = refRef.current;
     let target = entry;
     if (!target && current) target = await loadAttachment(current);
     if (!target) throw new Error('Nothing to save yet.');
-    await saveAttachment(target, current || undefined);
+    return saveAttachment(target, current || undefined);
   }, [entry]);
 
   const phase: AttachmentPhase = entry

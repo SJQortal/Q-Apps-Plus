@@ -10,6 +10,7 @@ import { setNotification } from "../state/features/notificationsSlice";
 import { FetchingFromPeers } from "../layout/states";
 import { useAttachment } from "./AttachmentPreview/useAttachment";
 import type { AttachmentRef } from "../utils/attachmentMeta";
+import { errorMessage } from "../utils/hubErrors";
 
 interface IFileElement {
   title: string;
@@ -50,15 +51,10 @@ export default function FileElement({
       if (saving) return;
       setSaving(true);
       try {
+        // A declined Hub prompt resolves false and stays quiet (pitfall 11).
         await attachment.save();
-      } catch (error: any) {
-        const msg =
-          typeof error === "string"
-            ? error
-            : typeof error?.error === "string"
-              ? error.error
-              : error?.message || "The file could not be saved.";
-        dispatch(setNotification({ msg, alertType: "error" }));
+      } catch (error: unknown) {
+        dispatch(setNotification({ msg: errorMessage(error, "The file could not be saved."), alertType: "error" }));
       } finally {
         setSaving(false);
       }

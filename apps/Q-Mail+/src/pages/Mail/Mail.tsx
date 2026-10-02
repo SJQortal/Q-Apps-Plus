@@ -140,6 +140,7 @@ import { ListSkeleton } from "../../layout/states";
 import { TOUR_STATUS_DISMISSED, TOUR_STATUS_STORAGE_KEY } from "./MailTour";
 import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
 import { usePhoneBackClose } from "../../layout/usePhoneBackClose";
+import { errorMessage, isHubDecline } from "../../utils/hubErrors";
 
 // Lazy boundaries (docs/apps/Q-Mail+.md → Bundle §5): the composer (Quill,
 // react-dropzone), the reader (dompurify), threads, aliases, sent, drafts and
@@ -2445,17 +2446,16 @@ export const Mail = ({ isFromTo }: MailProps) => {
       );
       setPublishedMailStateById(mergedStateEntries);
       setPublishedArchivedById(archivedToPublish);
-    } catch (error: any) {
-      const messageText =
-        typeof error?.message === "string"
-          ? error.message
-          : "Failed to publish Q-Mail state";
-      dispatch(
-        setNotification({
-          msg: messageText,
-          alertType: "error",
-        })
-      );
+    } catch (error: unknown) {
+      // Declining Hub's publish dialog is the user's choice, not an error (pitfall 11).
+      if (!isHubDecline(error)) {
+        dispatch(
+          setNotification({
+            msg: errorMessage(error, "Failed to publish Q-Mail state"),
+            alertType: "error",
+          })
+        );
+      }
     } finally {
       setIsPublishingMailState(false);
     }
@@ -2607,7 +2607,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
               color: "var(--qmail-thread-text)",
             }}
           >
-            Authenticate to view {mailboxLabel}
+            Sign in to view {mailboxLabel}
           </Typography>
           <Typography
             sx={{
@@ -2615,7 +2615,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
               color: "var(--qmail-thread-subtle-text)",
             }}
           >
-            Sign in to load and manage your messages.
+            Hub asks you to confirm, then your mail loads here.
           </Typography>
           <Button
             variant="contained"
@@ -2636,7 +2636,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
               },
             }}
           >
-            Authenticate
+            Sign in
           </Button>
         </Box>
       );

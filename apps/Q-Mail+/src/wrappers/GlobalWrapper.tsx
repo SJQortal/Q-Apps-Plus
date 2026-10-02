@@ -26,6 +26,7 @@ import {
 import { subscribeToEvent, unsubscribeFromEvent } from "../utils/events";
 import { useMailLocalState } from "../hooks/useMailLocalState";
 import { usePolling } from "../hooks/usePolling";
+import { HUB_DIALOG_GRACE_MS, isAccountRefusal, isHubDecline, isHubTimeout } from "../utils/hubErrors";
 interface Props {
   children: React.ReactNode;
 }
@@ -236,19 +237,46 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
     }
   };
 
-  const askForAccountInformation = React.useCallback(async () => {
-    try {
-      let account = await qortalRequest({
-        action: "GET_USER_ACCOUNT",
-      });
-
-      const names = await getAccountNames(account.address);
-      const primary = await getPrimaryAccountName(account.address);
-      dispatch(addUser({ ...account, name: primary, names }));
-    } catch (error) {
-      console.error(error);
-    }
+  const loadAccount = React.useCallback(async () => {
+    const account = await qortalRequest({
+      action: "GET_USER_ACCOUNT",
+    });
+    const names = await getAccountNames(account.address);
+    const primary = await getPrimaryAccountName(account.address);
+    dispatch(addUser({ ...account, name: primary, names }));
   }, [dispatch]);
+
+  const accountRetryTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(accountRetryTimer.current), []);
+
+  /**
+   * Asks Hub for the signed-in account. Hub answers GET_USER_ACCOUNT with a
+   * timeout after 30 s (for example while Hub is locked) but leaves its
+   * Authenticate dialog up for 60 s and applies a late Accept, so after a
+   * timeout the request is made once more when the dialog is gone either way
+   * (docs/QORTAL.md pitfall 12). A decline, or Hub's one "Unable to get user
+   * account" answer, is the user's choice: the mail page keeps its Sign in
+   * prompt and nothing is logged as an error.
+   */
+  const askForAccountInformation = React.useCallback(async () => {
+    window.clearTimeout(accountRetryTimer.current);
+    accountRetryTimer.current = undefined;
+    const quiet = (error: unknown) => isHubDecline(error) || isAccountRefusal(error);
+    try {
+      await loadAccount();
+    } catch (error) {
+      if (isHubTimeout(error)) {
+        accountRetryTimer.current = window.setTimeout(() => {
+          accountRetryTimer.current = undefined;
+          loadAccount().catch(retryError => {
+            if (!quiet(retryError) && !isHubTimeout(retryError)) console.error(retryError);
+          });
+        }, HUB_DIALOG_GRACE_MS);
+      } else if (!quiet(error)) {
+        console.error(error);
+      }
+    }
+  }, [loadAccount]);
 
   React.useEffect(() => {
     if (!user?.address) {
