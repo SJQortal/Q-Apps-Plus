@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
-import { MailTour, TOUR_STEPS, findTourAnchor } from './MailTour'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { CONSENT_DESCRIPTION_ID, MailTour, TOUR_STEPS, findTourAnchor } from './MailTour'
+import { CONSENT_STORAGE_KEY } from '../../components/modals/ConsentModal'
 import { nextHiddenState, PANE_HEADER_HEIGHT } from '../../layout/PaneHeader'
 
 const fixtures: HTMLElement[] = []
@@ -11,11 +12,39 @@ function mount(html: string) {
   fixtures.push(node)
 }
 
+beforeEach(() => {
+  // The disclaimer has been shown and closed on this browser.
+  localStorage.setItem(CONSENT_STORAGE_KEY, 'true')
+})
+
 afterEach(() => {
   fixtures.splice(0).forEach((node) => node.remove())
 })
 
 describe('MailTour', () => {
+  it('waits until the welcome dialog has been shown and closed before the first tip', async () => {
+    localStorage.removeItem(CONSENT_STORAGE_KEY)
+    render(<MailTour run onDone={vi.fn()} />)
+    expect(screen.queryByText('Tip 1 of 3')).toBeNull()
+
+    // ConsentModal opens: it sets the flag and its text is in the DOM.
+    localStorage.setItem(CONSENT_STORAGE_KEY, 'true')
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    dialog.innerHTML = `<p id="${CONSENT_DESCRIPTION_ID}">disclaimer</p>`
+    await act(async () => {
+      document.body.appendChild(dialog)
+    })
+    fixtures.push(dialog)
+    expect(screen.queryByText('Tip 1 of 3')).toBeNull()
+
+    // The user taps Got it: the dialog leaves the DOM and the tips start.
+    await act(async () => {
+      dialog.remove()
+    })
+    await waitFor(() => expect(screen.getByText('Tip 1 of 3')).toBeTruthy())
+  })
+
   it('walks three tips anchored to the real controls and reports done at the end', () => {
     mount(`
       <button data-qapp-lib-sidebar-item="compose">Compose</button>
