@@ -295,11 +295,17 @@ export const mailSlice = createSlice({
           (item) => item.user !== username
         )
       }
+    },
+    /** Drops deleted messages (a "D" body) from the inbox list; their hash entries keep the `deleted` marker. */
+    removeMessages: (state, action: { payload: { ids: string[] } }) => {
+      const ids = new Set(action.payload.ids)
+      state.mailMessages = state.mailMessages.filter((item) => !ids.has(item?.id))
     }
   }
 })
 
 export const {
+  removeMessages,
   addPosts,
   updatePost,
   removePost,
