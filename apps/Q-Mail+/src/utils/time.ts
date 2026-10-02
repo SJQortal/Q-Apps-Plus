@@ -50,3 +50,34 @@ export function formatFullTimestamp(
 
   return moment(numericTimestamp).format("YYYY-MM-DD HH:mm:ss")
 }
+
+/**
+ * The short date for a list row (docs/DESIGN.md → UX #13): today → the time,
+ * the last six days → the weekday, this year → day and month, else the full
+ * date. Pair it with `formatFullTimestamp` in a `title` for the exact stamp.
+ */
+export function formatRelativeDate(
+  timestamp: number | string | undefined | null,
+  now: number = Date.now()
+): string {
+  const numericTimestamp = Number(timestamp)
+  if (!Number.isFinite(numericTimestamp) || numericTimestamp <= 0) {
+    return ""
+  }
+  const date = moment(numericTimestamp)
+  const reference = moment(now)
+  if (date.isSame(reference, 'day')) {
+    return date.format('LT')
+  }
+  const daysAgo = reference
+    .clone()
+    .startOf('day')
+    .diff(date.clone().startOf('day'), 'days')
+  if (daysAgo > 0 && daysAgo < 7) {
+    return date.format('ddd')
+  }
+  if (date.isSame(reference, 'year')) {
+    return date.format('D MMM')
+  }
+  return date.format('D MMM YYYY')
+}

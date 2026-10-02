@@ -1,43 +1,18 @@
+/**
+ * Legacy attachment row: the children are the label, a tap fetches the file
+ * (through the attachment cache) and a second tap saves it with SAVE_FILE.
+ * Kept for the older readers; the mail readers use AttachmentCard.
+ */
 import * as React from "react";
-import { styled, useTheme } from "@mui/material/styles";
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import { useDispatch, useSelector } from "react-redux";
-import { CircularProgress } from "@mui/material";
-import { MyContext } from "../wrappers/DownloadWrapper";
-import { RootState } from "../state/store";
+import { Box, ButtonBase, Button, CircularProgress, Typography } from "@mui/material";
+import { useDispatch } from "react-redux";
 import { setNotification } from "../state/features/notificationsSlice";
-import { base64ToUint8Array } from "../utils/toBase64";
+import { FetchingFromPeers } from "../layout/states";
+import { useAttachment } from "./AttachmentPreview/useAttachment";
+import type { AttachmentRef } from "../utils/attachmentMeta";
+import { errorMessage } from "../utils/hubErrors";
 
-
-const Widget = styled("div")(({ theme }) => ({
-  padding: 8,
-  borderRadius: 10,
-  maxWidth: 350,
-  position: "relative",
-  zIndex: 1,
-  backdropFilter: "blur(40px)",
-  background: "skyblue",
-  transition: "0.2s all",
-  "&:hover": {
-    opacity: 0.75,
-  },
-}));
-
-const CoverImage = styled("div")({
-  width: 40,
-  height: 40,
-  objectFit: "cover",
-  overflow: "hidden",
-  flexShrink: 0,
-  borderRadius: 8,
-  backgroundColor: "rgba(0,0,0,0.08)",
-  "& > img": {
-    width: "100%",
-  },
-});
-
-interface IAudioElement {
+interface IFileElement {
   title: string;
   description?: string;
   author?: string;
@@ -51,279 +26,94 @@ interface IAudioElement {
   mode?: string;
   otherUser?: string;
   customStyles?: any;
-  loadStyles?: any
+  loadStyles?: any;
 }
-
-interface CustomWindow extends Window {
-  showSaveFilePicker: any; // Replace 'any' with the appropriate type if you know it
-}
-
-const customWindow = window as unknown as CustomWindow;
 
 export default function FileElement({
-  title,
-  description,
-  author,
   fileInfo,
   children,
   mimeTypeSaved,
   disable,
   customStyles,
-  loadStyles = {}
-}: IAudioElement) {
-  const { downloadVideo } = React.useContext(MyContext);
-  const [startedDownload, setStartedDownload] = React.useState<boolean>(false)
-  const [isLoading, setIsLoading] = React.useState<boolean>(false);
-  const [downloadLoader, setDownloadLoader] = React.useState<any>(false);
-  const downloads  = useSelector((state: RootState) => state.global?.downloads);
-  const hasCommencedDownload = React.useRef(false);
+  loadStyles = {},
+}: IFileElement) {
   const dispatch = useDispatch();
-  const reDownload = React.useRef<boolean>(false)
-  const status = React.useRef<null | string>(null)
+  const [saving, setSaving] = React.useState(false);
+  const ref = React.useMemo<AttachmentRef | null>(() => {
+    if (!fileInfo?.identifier || !fileInfo?.name || !fileInfo?.service) return null;
+    return { ...fileInfo, type: fileInfo.type ?? mimeTypeSaved ?? fileInfo.mimeTypeSaved ?? null };
+  }, [fileInfo, mimeTypeSaved]);
+  const attachment = useAttachment(ref);
 
-  const isFetchingProperties = React.useRef<boolean>(false)
-  const download = React.useMemo(() => {
-    if (!downloads || !fileInfo?.identifier) return {};
-    const findDownload = downloads[fileInfo?.identifier];
-
-    if (!findDownload) return {};
-    return findDownload;
-  }, [downloads, fileInfo]);
-
-  const resourceStatus = React.useMemo(() => {
-    return download?.status || {};
-  }, [download]);
-
-  const handlePlay = async () => {
-    if (disable) return;
-    hasCommencedDownload.current = true;
-    setStartedDownload(true)
-    if (
-      resourceStatus?.status === "READY"
-    ) {
-      if (downloadLoader) return;
-     
-      setDownloadLoader(true);
-      let filename = download?.properties?.filename
-      let mimeType = download?.properties?.type
-
+  const handleClick = async () => {
+    if (disable || !ref) return;
+    if (attachment.phase === "ready") {
+      if (saving) return;
+      setSaving(true);
       try {
-        const { name, service, identifier } = fileInfo;
-
-        const res = await qortalRequest({
-          action: "GET_QDN_RESOURCE_PROPERTIES",
-          name: name,
-          service: service,
-          identifier: identifier,
-        });
-        filename = res?.filename || filename;
-        mimeType = res?.mimeType || mimeType || mimeTypeSaved;
-      } catch (error) {
-        
-      }
-      try {
-        const { name, service, identifier } = fileInfo;
-  
-          let resData = await qortalRequest({
-            action: 'FETCH_QDN_RESOURCE',
-            name: name,
-            service: service,
-            identifier: identifier,
-            encoding: 'base64'
-          })
-        
-          let requestEncryptBody: any = {
-            action: 'DECRYPT_DATA',
-            encryptedData: resData          }
-          const resDecrypt = await qortalRequest(requestEncryptBody)
-
-          if (!resDecrypt) throw new Error('Unable to decrypt file')
-          const decryptToUnit8Array = base64ToUint8Array(resDecrypt)
-          let blob = null
-          if (mimeType) {
-            blob = new Blob([decryptToUnit8Array], {
-              type: mimeType
-            })
-          } else {
-            blob = new Blob([decryptToUnit8Array])
-          }
-
-          if (!blob) throw new Error('Unable to build file into blob')
-          await qortalRequest({
-            action: 'SAVE_FILE',
-            blob,
-            filename:
-              download?.properties?.originalFilename ||
-              filename,
-            mimeType
-          })
-
-       //old
-          
-        // const url = `/arbitrary/${service}/${name}/${identifier}`;
-        // fetch(url)
-        //   .then(response => response.blob())
-        //   .then(async blob => {
-
-        //     await qortalRequest({
-        //       action: "SAVE_FILE",
-        //       blob,
-        //       filename: filename,
-        //       mimeType,
-        //     });
-        //   })
-        //   .catch(error => {
-        //     console.error("Error fetching the video:", error);
-        //   });
-      } catch (error: any) {
-        let notificationObj: any = null;
-        if (typeof error === "string") {
-          notificationObj = {
-            msg: error || "Failed to send message",
-            alertType: "error",
-          };
-        } else if (typeof error?.error === "string") {
-          notificationObj = {
-            msg: error?.error || "Failed to send message",
-            alertType: "error",
-          };
-        } else {
-          notificationObj = {
-            msg: error?.message || "Failed to send message",
-            alertType: "error",
-          };
-        }
-        if (!notificationObj) return;
-        dispatch(setNotification(notificationObj));
+        // A declined Hub prompt resolves false and stays quiet (pitfall 11).
+        await attachment.save();
+      } catch (error: unknown) {
+        dispatch(setNotification({ msg: errorMessage(error, "The file could not be saved."), alertType: "error" }));
       } finally {
-        setDownloadLoader(false);
+        setSaving(false);
       }
       return;
     }
-
-    const { name, service, identifier } = fileInfo;
-   
-    setIsLoading(true);
-    downloadVideo({
-      name,
-      service,
-      identifier,
-      properties: {
-        ...fileInfo,
-      },
-    });
+    if (attachment.phase === "error") {
+      attachment.retry();
+      return;
+    }
+    attachment.start();
   };
 
-  const refetch = React.useCallback(async () => {
-    if (!fileInfo) return
-    try {
-      const { name, service, identifier } = fileInfo;
-      isFetchingProperties.current = true
-      await qortalRequest({
-        action: 'GET_QDN_RESOURCE_PROPERTIES',
-        name,
-        service,
-        identifier
-      })
-      
-    } catch (error) {
-      
-    } finally {
-      isFetchingProperties.current = false
-    }
-   
-  }, [fileInfo])
-
-  const refetchInInterval = ()=> {
-    try {
-      const interval = setInterval(()=> {
-          if(status?.current === 'DOWNLOADED'){
-            refetch()
-          }
-          if(status?.current === 'READY'){
-            clearInterval(interval);
-          }
-         
-        }, 7500)
-    } catch (error) {
-      
-    }
-  }
-
-  React.useEffect(() => {
-    if(resourceStatus?.status){
-      status.current = resourceStatus?.status
-    }
-    if (
-      resourceStatus?.status === "READY" &&
-      download?.url &&
-      download?.properties?.filename &&
-      hasCommencedDownload.current
-    ) {
-      setIsLoading(false);
-      dispatch(
-        setNotification({
-          msg: "Download completed. Click to save file",
-          alertType: "info",
-        })
-      );
-    } else  if (
-      resourceStatus?.status === 'DOWNLOADED' &&
-      reDownload?.current === false
-    ) {
-      refetchInInterval()
-      reDownload.current = true
-    }
-  }, [resourceStatus, download]);
+  const stalled = attachment.status === "MISSING_DATA" || attachment.status === "FAILED";
 
   return (
-    <Box
-      onClick={handlePlay}
-      sx={{
-        width: "100%",
-        overflow: "hidden",
-        position: "relative",
-        cursor: "pointer",
-        ...(customStyles || {}),
-      }}
-    >
-      {children && (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            position: "relative",
-            gap: "7px",
-          }}
-        >
-          {children}{" "}
-          {((resourceStatus.status && resourceStatus?.status !== "READY") ||
-          isLoading) && startedDownload ? (
-            <>
-              <CircularProgress color="secondary" size={14} />
-              <Typography style={{
-                ...loadStyles
-              }} variant="body2">{`${Math.round(
-                resourceStatus?.percentLoaded || 0
-              ).toFixed(0)}% loaded`}</Typography>
-            </>
-          ) : resourceStatus?.status === "READY" ? (
-            <>
-              <Typography
-                sx={{
-                  fontSize: "0.875rem",
-                }}
-                style={{
-                  ...loadStyles
-                }}
-              >
-                Click to save
-              </Typography>
-              {downloadLoader && (
-                <CircularProgress color="secondary" size={14} />
-              )}
-            </>
-          ) : null}
+    <Box sx={[{ width: "100%", overflow: "hidden", position: "relative" }, customStyles || {}]}>
+      <ButtonBase
+        onClick={handleClick}
+        disabled={disable}
+        aria-label={attachment.phase === "ready" ? "Save file" : "Fetch file"}
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: "7px",
+          minHeight: 44,
+          borderRadius: 1,
+          px: 0.5,
+          textAlign: "left",
+          maxWidth: "100%",
+        }}
+      >
+        {children}
+        {attachment.phase === "ready" && (
+          <>
+            <Typography sx={{ fontSize: "0.875rem" }} style={{ ...loadStyles }} color="text.secondary">
+              {saving ? "Saving…" : "Tap to save"}
+            </Typography>
+            {saving && <CircularProgress color="secondary" size={14} />}
+          </>
+        )}
+      </ButtonBase>
+      {(attachment.phase === "fetching" || attachment.phase === "decrypting") && !stalled && (
+        <FetchingFromPeers
+          compact
+          status={attachment.phase === "decrypting" ? "BUILDING" : attachment.status}
+          percentLoaded={attachment.percent}
+        />
+      )}
+      {attachment.phase === "fetching" && stalled && (
+        <FetchingFromPeers compact status={attachment.status} onRetry={attachment.retry} />
+      )}
+      {attachment.phase === "error" && (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", px: 0.5 }}>
+          <Typography variant="body2" color="error.main">
+            {attachment.error || "This file could not be opened."}
+          </Typography>
+          <Button size="small" variant="outlined" onClick={attachment.retry} sx={{ minHeight: 36 }}>
+            Retry
+          </Button>
         </Box>
       )}
     </Box>

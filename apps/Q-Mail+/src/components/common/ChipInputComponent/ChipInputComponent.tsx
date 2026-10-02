@@ -1,120 +1,141 @@
-import React, { useState } from 'react';
-import Chip from '@mui/material/Chip';
-import TextField from '@mui/material/TextField';
-import { useDispatch } from 'react-redux';
-import { setNotification } from '../../../state/features/notificationsSlice';
-import { Input } from '@mui/material';
+import React, { useState } from "react";
+import { Box, Chip, CircularProgress, Input } from "@mui/material";
+import { useDispatch } from "react-redux";
+import { setNotification } from "../../../state/features/notificationsSlice";
+import { lookupName, lookupPublicKey } from "../../../utils/nameCache";
 
 export interface NameChip {
-    name: string;
-    publicKey: string;
-    address: string;
+  name: string;
+  publicKey: string;
+  address: string;
 }
-interface ChipInputComponent {
-    chips: NameChip[];
-    setChips: (val: NameChip[])=> void;
+interface ChipInputComponentProps {
+  chips: NameChip[];
+  setChips: (val: NameChip[]) => void;
+  placeholder?: string;
 }
 
-export const ChipInputComponent = ({chips, setChips}: ChipInputComponent) => {
-    const [inputValue, setInputValue] = useState<string>('');
-    const dispatch = useDispatch()
-    // Add chip on enter or onBlur
-    const handleAddChip = async () => {
-        try {
-            if(!inputValue) return
-            const recipientName = inputValue
-            const resName = await qortalRequest({
-              action: 'GET_NAME_DATA',
-              name: recipientName
-            })
-            if (!resName?.owner) throw new Error("Name cannot be found")
-      
-            const recipientAddress = resName.owner
-            const resAddress = await qortalRequest({
-              action: 'GET_ACCOUNT_DATA',
-              address: recipientAddress
-            })
-            if (!resAddress?.publicKey) throw new Error("Cannot retrieve public key of name")
-            const recipientPublicKey = resAddress.publicKey
-            if (inputValue && !chips.find((item)=> item?.name === inputValue)) {
-                setChips([...chips, {
-                    name: inputValue,
-                    publicKey: recipientPublicKey,
-                    address: recipientAddress
-                }]);
-                setInputValue('');
-            }
-        } catch (error:any) {
-            dispatch(
-                setNotification({
-                  msg: error?.message,
-                  alertType: 'error'
-                })
-              )
-        }
-       
-    };
+/**
+ * Bcc names as chips. Enter (or leaving the field) resolves the typed name
+ * through the name cache, so a name is looked up once per session.
+ */
+export const ChipInputComponent = ({
+  chips,
+  setChips,
+  placeholder = "Type a name and press Enter",
+}: ChipInputComponentProps) => {
+  const [inputValue, setInputValue] = useState<string>("");
+  const [isResolving, setIsResolving] = useState(false);
+  const dispatch = useDispatch();
 
-    // Remove chip
-    const handleDeleteChip = (chipToDelete: string) => () => {
-        setChips(chips.filter(chip => chip.name !== chipToDelete));
-    };
+  const handleAddChip = async () => {
+    const recipientName = inputValue.trim();
+    if (!recipientName || isResolving) return;
+    if (
+      chips.find(
+        item => item?.name?.toLowerCase() === recipientName.toLowerCase()
+      )
+    ) {
+      setInputValue("");
+      return;
+    }
+    setIsResolving(true);
+    try {
+      const lookup = await lookupName(recipientName);
+      if (lookup.status !== "found") throw new Error("Name cannot be found");
+      const publicKey = await lookupPublicKey(lookup.address);
+      if (!publicKey) throw new Error("Cannot retrieve public key of name");
+      setChips([
+        ...chips,
+        {
+          name: lookup.name,
+          publicKey,
+          address: lookup.address,
+        },
+      ]);
+      setInputValue("");
+    } catch (error: any) {
+      dispatch(
+        setNotification({
+          msg: error?.message || "Name cannot be found",
+          alertType: "error",
+        })
+      );
+    } finally {
+      setIsResolving(false);
+    }
+  };
 
-    return (
-        <div>
-            {chips.map((chip, index) => (
-                <Chip
-                    key={index}
-                    label={chip.name}
-                    onDelete={handleDeleteChip(chip.name)}
-                    sx={{
-                        color: 'var(--qmail-compose-text)',
-                        backgroundColor: 'var(--qmail-compose-button-bg)',
-                        border: '1px solid var(--qmail-compose-button-border)',
-                        '& .MuiChip-deleteIcon': {
-                            color: 'var(--qmail-compose-muted)' ,
-                            "&:hover": {
-                                color: 'var(--qmail-compose-text)'
-                            }
-                        }
-                    }}
-                />
-            ))}
-            {/* <TextField
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddChip()}
-                placeholder="Type and press enter..."
-            /> */}
-             <Input
-              id="standard-adornment-name"
-              value={inputValue}
-              onChange={(e) => {
-                setInputValue(e.target.value)
-              }}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddChip()}
-              disableUnderline
-              autoComplete='off'
-              autoCorrect='off'
-              placeholder="Type and press enter..."
-              sx={{
-                width: '100%',
-                color: 'var(--new-message-text)',
-                '& .MuiInput-input::placeholder': {
-                  color: 'var(--qmail-compose-placeholder) !important',
-                  fontSize: '1.25rem',
-                  fontStyle: 'normal',
-                  fontWeight: 400,
-                  lineHeight: '120%', // 24px
-                  letterSpacing: '0.15px',
-                  opacity: 1
-                },
-                '&:focus': {
-                  outline: 'none',
-                },
-                // Add any additional styles for the input here
-              }}
-            />
-        </div>
-    );
+  const handleDeleteChip = (chipToDelete: string) => () => {
+    setChips(chips.filter(chip => chip.name !== chipToDelete));
+  };
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: "6px",
+        width: "100%",
+        minWidth: 0,
+      }}
+    >
+      {chips.map(chip => (
+        <Chip
+          key={chip.name}
+          label={chip.name}
+          onDelete={handleDeleteChip(chip.name)}
+          sx={{
+            height: 32,
+            color: "var(--qmail-compose-text)",
+            backgroundColor: "var(--qmail-compose-button-bg)",
+            border: "1px solid var(--qmail-compose-button-border)",
+            "& .MuiChip-deleteIcon": {
+              color: "var(--qmail-compose-muted)",
+              "&:hover": {
+                color: "var(--qmail-compose-text)",
+              },
+            },
+          }}
+        />
+      ))}
+      <Input
+        value={inputValue}
+        onChange={e => {
+          setInputValue(e.target.value);
+        }}
+        onKeyDown={e => {
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            void handleAddChip();
+          }
+        }}
+        onBlur={() => {
+          if (inputValue.trim()) void handleAddChip();
+        }}
+        disableUnderline
+        autoComplete="off"
+        autoCorrect="off"
+        placeholder={placeholder}
+        inputProps={{ "aria-label": "Bcc name" }}
+        endAdornment={isResolving ? <CircularProgress size={14} /> : undefined}
+        sx={{
+          flex: 1,
+          minWidth: 160,
+          minHeight: 44,
+          color: "var(--new-message-text)",
+          "& .MuiInput-input::placeholder": {
+            color: "var(--qmail-compose-placeholder) !important",
+            fontSize: "1rem",
+            fontStyle: "normal",
+            fontWeight: 400,
+            lineHeight: "120%",
+            letterSpacing: "0.15px",
+            opacity: 1,
+          },
+        }}
+      />
+    </Box>
+  );
 };

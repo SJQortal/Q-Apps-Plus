@@ -1,403 +1,378 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+/**
+ * One message in a list (inbox, archived, sent, alias inbox, search results).
+ *
+ * - the row body is a real button (tap opens); the checkbox and the delete
+ *   button are their own targets next to it, so nothing propagates (UX #5);
+ * - unread = a dot plus weight, decided by the read store (Bugs #5);
+ * - relative date in the row, the full stamp in its `title`;
+ * - the avatar resolves lazily when the row is on screen (avatarCache);
+ * - a subject that was never decrypted reads "Locked · open to read", never
+ *   the ciphertext (Bugs #18, UX #27);
+ * - fluid widths, nothing under 14 px, colours from the theme (UX #12, #14, #26).
+ */
+import React, { useCallback, useMemo } from "react";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlineOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import AttachFileOutlinedIcon from "@mui/icons-material/AttachFileOutlined";
 import {
-  MailMessageRowContainer,
-  MailMessageRowInfo,
-  MailMessageRowInfoImg,
-  MailMessageRowInfoStatusNotDecrypted,
-  MailMessageRowInfoStatusRead,
-  MailMessageRowProfile,
-  MessageExtraDate,
-  MessageExtraInfo,
-  MessageExtraName,
-} from "./Mail-styles";
-import { AvatarWrapper } from "./MailTable";
-import { formatFullTimestamp } from "../../utils/time";
-import LockSVG from '../../assets/svgs/Lock.svg'
-import AttachmentSVG from '../../assets/svgs/Attachment.svg'
+  Box,
+  ButtonBase,
+  Checkbox,
+  Chip,
+  CircularProgress,
+  IconButton,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import { useSelector } from "react-redux";
 import { RootState } from "../../state/store";
-import { base64ToUint8Array, uint8ArrayToObject } from "../../utils/toBase64";
-import { Box, CircularProgress, IconButton, Tooltip, useMediaQuery } from "@mui/material";
-import { parseSentRecipientFromIdentifier } from "./mailIdentifier";
+import { AvatarWrapper } from "./MailTable";
+import { formatFullTimestamp, formatRelativeDate } from "../../utils/time";
+import { useSentRecipient } from "../../utils/sentRecipientCache";
+import { selectReadState } from "../../state/features/mailSlice";
+import { isMessageRead } from "../../utils/readState";
+import { UnreadDot } from "../../layout/states";
+import { useDecryptedSubject } from "../../utils/subjectCache";
+import { primarySoft } from "../../hub-theme";
 
-const subjectDecryptCache = new Map<string, string>()
-let subjectDecryptQueue: Promise<void> = Promise.resolve()
+export const LOCKED_SUBJECT_LABEL = "Locked · open to read";
+export const NO_SUBJECT_LABEL = "(no subject)";
 
-const decryptSubjectQueued = async (encryptedSubject: string): Promise<string> => {
-  if (!encryptedSubject) return ""
-  if (subjectDecryptCache.has(encryptedSubject)) {
-    return subjectDecryptCache.get(encryptedSubject) || ""
-  }
-
-  let resolved = ""
-  await new Promise<void>((resolve, reject) => {
-    subjectDecryptQueue = subjectDecryptQueue
-      .then(async () => {
-        const requestEncryptSubject: any = {
-          action: "DECRYPT_DATA",
-          encryptedData: encryptedSubject,
-        }
-        const resDecryptSubject = await qortalRequest(requestEncryptSubject)
-        const decryptToUnit8ArraySubject = base64ToUint8Array(resDecryptSubject)
-        const responseDataSubject = uint8ArrayToObject(decryptToUnit8ArraySubject)
-        resolved =
-          typeof responseDataSubject === "string"
-            ? responseDataSubject
-            : responseDataSubject !== null && responseDataSubject !== undefined
-              ? String(responseDataSubject)
-              : ""
-        subjectDecryptCache.set(encryptedSubject, resolved)
-        resolve()
-      })
-      .catch(error => {
-        reject(error)
-      })
-  })
-
-  return resolved
-}
-
-interface MailMessageRowProp {
+export interface MailMessageRowProps {
   messageData: any;
-  openMessage: (user: string, id: string, content: any, alias?: string) => void;
+  openMessage: (
+    user: string,
+    id: string,
+    content: any,
+    alias?: string
+  ) => void | Promise<void>;
   isOpen?: boolean;
-  isFromSent?: boolean
+  isFromSent?: boolean;
   onDeleteMessage?: (message: any) => void | boolean | Promise<void | boolean>;
   isDeleting?: boolean;
+  /** Inside an expanded sender group: one line, no avatar or name. */
   compact?: boolean;
-  useFullTimestamp?: boolean;
+  /** When given, a checkbox renders as its own tap target. */
+  selected?: boolean;
+  onToggleSelected?: () => void;
+  /** A small label after the subject, e.g. the mailbox a search hit lives in. */
+  context?: string;
+  /** Terms to highlight in the name and subject. */
+  highlightTerms?: string[];
+  /** "li" when the row sits directly inside a list (ul); the default "div" expects a wrapping li. */
+  component?: "div" | "li";
 }
+
+/** Splits `text` into plain and highlighted runs for the given terms. */
+export function highlightRuns(
+  text: string,
+  terms: string[] | undefined
+): Array<{ text: string; hit: boolean }> {
+  const cleanTerms = (terms || []).map(t => t.toLowerCase()).filter(Boolean);
+  if (!text || !cleanTerms.length) return [{ text, hit: false }];
+  const lower = text.toLowerCase();
+  const runs: Array<{ text: string; hit: boolean }> = [];
+  let index = 0;
+  while (index < text.length) {
+    let best = -1;
+    let bestLength = 0;
+    cleanTerms.forEach(term => {
+      const at = lower.indexOf(term, index);
+      if (at === -1) return;
+      if (best === -1 || at < best || (at === best && term.length > bestLength)) {
+        best = at;
+        bestLength = term.length;
+      }
+    });
+    if (best === -1) {
+      runs.push({ text: text.slice(index), hit: false });
+      break;
+    }
+    if (best > index) runs.push({ text: text.slice(index, best), hit: false });
+    runs.push({ text: text.slice(best, best + bestLength), hit: true });
+    index = best + bestLength;
+  }
+  return runs;
+}
+
+export function Highlight({ text, terms }: { text: string; terms?: string[] }) {
+  const runs = useMemo(() => highlightRuns(text, terms), [text, terms]);
+  if (runs.length === 1 && !runs[0].hit) return <>{text}</>;
+  return (
+    <>
+      {runs.map((run, i) =>
+        run.hit ? (
+          <Box
+            key={i}
+            component="mark"
+            sx={theme => ({
+              backgroundColor: primarySoft(theme),
+              color: "inherit",
+              borderRadius: "3px",
+              padding: "0 1px",
+            })}
+          >
+            {run.text}
+          </Box>
+        ) : (
+          <React.Fragment key={i}>{run.text}</React.Fragment>
+        )
+      )}
+    </>
+  );
+}
+
 export const MailMessageRow = ({
   messageData,
   openMessage,
-  isOpen,
-  isFromSent,
+  isOpen = false,
+  isFromSent = false,
   onDeleteMessage,
   isDeleting = false,
   compact = false,
-  useFullTimestamp = true,
-}: MailMessageRowProp) => {
-  const username = useSelector((state: RootState) => state.auth?.user?.name)
-  const [subjectInHashDecrypted, setSubjectInHashDecrypted] = useState<null | string>(null)
-  const [hasAttachment, setHasAttachment] = useState<null | boolean>(null)
-  const [sentToNameInfo, setSentToNameInfo] = useState({
-    name: ""
-  })
-    const isMobile = useMediaQuery("(max-width:950px)");
-  
-  const [alias, setAlias] = useState<null | string>(null)
-
-  const identifier = messageData?.id || messageData?.identifier
-  const hashMapMailMessages = useSelector(
-    (state: RootState) => state.mail.hashMapMailMessages
+  selected = false,
+  onToggleSelected,
+  context,
+  highlightTerms,
+  component = "div",
+}: MailMessageRowProps) => {
+  const username = useSelector((state: RootState) => state.auth?.user?.name);
+  const identifier: string = String(messageData?.id || messageData?.identifier || "");
+  const data: any = useSelector(
+    (state: RootState) => state.mail.hashMapMailMessages[identifier]
   );
-  const hashMapSavedSubjects = useSelector(
-    (state: RootState) => state.mail.hashMapSavedSubjects
+  const subjectInHash = useSelector(
+    (state: RootState) => state.mail.hashMapSavedSubjects[identifier]
   );
-  const subjectInHash = hashMapSavedSubjects[identifier]
-  const data = hashMapMailMessages[identifier]
+  const readState = useSelector(selectReadState);
 
-  useEffect(() => {
-    setSubjectInHashDecrypted(null)
-    setHasAttachment(null)
-    setAlias(null)
-    setSentToNameInfo({ name: "" })
-  }, [identifier])
+  // The read store decides (src/utils/readState.ts); threadV2 is only the
+  // compatibility fallback inside isMessageRead, never emptied or injected.
+  const isUnread = !isFromSent && !isMessageRead(messageData, readState);
+  const isDecrypted = Boolean(data && data?.isValid && !data?.unableToDecrypt);
 
-  const getSentToName = useCallback(async (id: string)=> {
-    try {
-      setAlias(null)
-      setSentToNameInfo({ name: "" })
-      const { recipientName, recipientAddress } =
-        parseSentRecipientFromIdentifier(id);
-      if(!recipientAddress && recipientName){
-        setAlias(recipientName)
-        return
-      }
-      if(!recipientName || !recipientAddress) return
-      setSentToNameInfo({ name: recipientName })
-      const response = await qortalRequest({
-        action: "SEARCH_NAMES",
-        query: recipientName,
-        prefix: true, 
-        limit: 10,
-        reverse: false
-      })
-      const normalizedRecipientAddress = recipientAddress.toLowerCase()
-      const findName = response?.find((item: any)=> {
-        const owner = typeof item?.owner === "string" ? item.owner.toLowerCase() : ""
-        const candidateName = typeof item?.name === "string" ? item.name.toLowerCase() : ""
-        return (
-          owner.endsWith(normalizedRecipientAddress) &&
-          candidateName.startsWith(recipientName.toLowerCase())
-        )
-      })
-      if(findName){
-        setSentToNameInfo({
-          name: findName.name
-        })
-      }
-    } catch (error) {
-      
-    }
-  }, [])
-  useEffect(()=> {
-    if(isFromSent && identifier){
-      getSentToName(identifier)
-    }
-  }, [isFromSent, identifier, getSentToName])
-  let isEncrypted = true;
-  let hasAttachments = null
-  let subject = ""
-  const isMarkedRead = Array.isArray(messageData?.generalData?.threadV2)
-    ? messageData.generalData.threadV2.length > 0
-    : false;
-  if(subjectInHashDecrypted !== null){
-    subject = subjectInHashDecrypted || "- no subject"
-    hasAttachments = hasAttachment || false
+  const savedSubject = useDecryptedSubject(
+    isDecrypted ? undefined : subjectInHash?.subject
+  );
+
+  let subject: string | null = null;
+  let hasAttachments: boolean | null = null;
+  if (isDecrypted) {
+    subject = typeof data?.subject === "string" ? data.subject : "";
+    hasAttachments = (data?.attachments || []).length > 0;
+  } else if (savedSubject !== null) {
+    subject = savedSubject;
+    hasAttachments = Boolean(subjectInHash?.attachments);
   }
-  if(data && data?.isValid && !data?.unableToDecrypt){
-      isEncrypted = false
-      subject = data?.subject || "- no subject"
-      hasAttachments = (data?.attachments || [])?.length > 0
-  }
+  const isLocked = subject === null;
 
+  // Sent rows: the recipient from the decrypted copy when we have it, else
+  // one cached lookup per (name prefix, address suffix) group (I4).
+  const decryptedRecipient =
+    isFromSent && isDecrypted && typeof data?.recipient === "string"
+      ? data.recipient.trim()
+      : "";
+  const sentRecipient = useSentRecipient(isFromSent ? identifier : "", decryptedRecipient);
+  const alias = sentRecipient.isAlias ? sentRecipient.name : null;
+  const name: string = isFromSent
+    ? sentRecipient.name
+    : typeof messageData?.user === "string"
+      ? messageData.user
+      : "";
+  const isAliasRecipient = isFromSent && sentRecipient.isAlias;
 
-const getSubjectFromHash = useCallback(async (subjectValue: string, hasAttachmentParam: boolean) => {
-  if(subjectValue === undefined || subjectValue === null) throw new Error('no subject')
-  if(subjectValue === ""){
-    setSubjectInHashDecrypted("")
-    setHasAttachment(hasAttachmentParam)
-    return
-  }
-  let decryptedSubject = ""
-  try {
-    decryptedSubject = await decryptSubjectQueued(subjectValue)
-  } catch (error) {
-    // Fallback for cases where stored subject may already be plaintext.
-    decryptedSubject = subjectValue
-  }
-  setSubjectInHashDecrypted(decryptedSubject)
-  setHasAttachment(hasAttachmentParam)
-}, [])
+  const createdAt = messageData?.createdAt;
+  const relativeDate = useMemo(() => formatRelativeDate(createdAt), [createdAt]);
+  const fullDate = useMemo(() => formatFullTimestamp(createdAt), [createdAt]);
 
-
-useEffect(()=> {
-  if(!isEncrypted) return
-
-  if(subjectInHashDecrypted !== null) return
-  if(!subjectInHash || subjectInHash?.subject === undefined || subjectInHash?.subject === null ) return
-  void getSubjectFromHash(subjectInHash?.subject, !!subjectInHash?.attachments)
-}, [isEncrypted, subjectInHashDecrypted, subjectInHash, getSubjectFromHash])
-
-const name = useMemo(()=> {
-  if(isFromSent){
-    return sentToNameInfo?.name || ""
-  }
-  return messageData?.user
-}, [sentToNameInfo, isFromSent, messageData])
-
-  const createdAtLabel = useMemo(() => {
-    return formatFullTimestamp(messageData?.createdAt)
-  }, [messageData?.createdAt])
-
-  const shouldBoldUnread = !isFromSent && isEncrypted && !isMarkedRead;
+  const open = useCallback(() => {
+    if (!identifier) return;
+    void openMessage(
+      messageData?.user,
+      identifier,
+      messageData,
+      isFromSent ? alias || name : username
+    );
+  }, [alias, identifier, isFromSent, messageData, name, openMessage, username]);
 
   const handleDeleteClick = useCallback(
     async (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.stopPropagation()
-      event.preventDefault()
-      if (!isFromSent || !onDeleteMessage || isDeleting) return
-      await onDeleteMessage(messageData)
+      event.stopPropagation();
+      event.preventDefault();
+      if (!isFromSent || !onDeleteMessage || isDeleting) return;
+      await onDeleteMessage(messageData);
     },
     [isDeleting, isFromSent, messageData, onDeleteMessage]
-  )
- 
-  if (compact) {
-    return (
-      <MailMessageRowContainer
-        sx={{
-          background: isOpen ? "var(--qmail-shell-hover-strong)" : "unset",
-          alignItems: "center",
-          borderRadius: "10px",
-          padding: "8px 12px",
-          outline: "1px solid var(--qmail-shell-border)",
-          marginTop: "0px",
-        }}
-        onClick={() => {
-          if (!identifier) return
-          openMessage(
-            messageData?.user,
-            identifier,
-            messageData,
-            isFromSent ? alias || name : username
-          )
-        }}
-      >
-        <MailMessageRowInfo
-          sx={{
-            width: "100%",
-            gap: "10px",
-          }}
-        >
-          <MessageExtraDate
-            sx={{
-              color: "var(--qmail-thread-muted)",
-              minWidth: {
-                xs: "unset",
-                md: "168px",
-              },
-              flexShrink: 0,
-            }}
-          >
-            {createdAtLabel}
-          </MessageExtraDate>
-          {subject ? (
-            <MailMessageRowInfoStatusRead
-              sx={{
-                fontWeight: shouldBoldUnread ? 600 : 300,
-                textOverflow: "ellipsis",
-                overflow: "hidden",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {subject}
-            </MailMessageRowInfoStatusRead>
-          ) : isEncrypted ? (
-            <MailMessageRowInfoStatusNotDecrypted
-              sx={{
-                fontWeight: shouldBoldUnread ? 900 : 300,
-              }}
-            >
-              ACCESS TO DECRYPT
-            </MailMessageRowInfoStatusNotDecrypted>
-          ) : null}
-        </MailMessageRowInfo>
-        {isFromSent && onDeleteMessage && (
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              flexShrink: 0,
-            }}
-          >
-            <Tooltip title="Delete sent message">
-              <span>
-                <IconButton
-                  size="small"
-                  onClick={handleDeleteClick}
-                  disabled={isDeleting}
-                  aria-label="Delete sent message"
-                  sx={{
-                    color: "var(--qmail-danger-text)",
-                    border: "1px solid var(--qmail-shell-border)",
-                    background: "var(--qmail-shell-hover)",
-                    "&:hover": {
-                      background: "var(--qmail-shell-hover-strong)",
-                    },
-                    "&.Mui-disabled": {
-                      color: "var(--qmail-shell-muted)",
-                      borderColor: "var(--qmail-shell-border)",
-                    },
-                  }}
-                >
-                  {isDeleting ? (
-                    <CircularProgress size={16} color="inherit" />
-                  ) : (
-                    <DeleteOutlineIcon fontSize="small" />
-                  )}
-                </IconButton>
-              </span>
-            </Tooltip>
-          </Box>
-        )}
-      </MailMessageRowContainer>
-    )
-  }
+  );
+
+  const subjectLabel = isLocked
+    ? LOCKED_SUBJECT_LABEL
+    : subject || NO_SUBJECT_LABEL;
+  const nameLabel = isFromSent ? `To: ${name || "…"}` : name || "Unknown sender";
+  const ariaLabel = `${isUnread ? "Unread. " : ""}${nameLabel}, ${subjectLabel}, ${fullDate}`;
+
+  const statusIcon = isLocked ? (
+    <LockOutlinedIcon
+      fontSize="inherit"
+      aria-label="Encrypted, not opened yet"
+      role="img"
+      sx={{ color: "text.secondary", fontSize: 16, flexShrink: 0 }}
+    />
+  ) : hasAttachments ? (
+    <AttachFileOutlinedIcon
+      fontSize="inherit"
+      aria-label="Has attachments"
+      role="img"
+      sx={{ color: "text.secondary", fontSize: 16, flexShrink: 0 }}
+    />
+  ) : null;
+
+  const dateNode = (
+    <Typography
+      component="time"
+      title={fullDate}
+      sx={{
+        flexShrink: 0,
+        fontSize: "0.875rem",
+        lineHeight: 1.3,
+        fontWeight: isUnread ? 600 : 400,
+        color: isUnread ? "primary.main" : "text.secondary",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {relativeDate}
+    </Typography>
+  );
 
   return (
-    <MailMessageRowContainer sx={{
-      background: isOpen ? 'var(--qmail-shell-hover-strong)' : 'unset',
-      flexDirection: isMobile ? 'column': 'row',
-      alignItems: isMobile ? 'flex-start' : 'center',
-      borderRadius: isMobile ? '10px' : "56px 5px 10px 56px",
-      padding: isMobile ? '5px' : 'center',
-      outline: isMobile ? '1px solid var(--qmail-shell-border)' : 'none',
-      marginTop: isMobile ? '10px' : '0px'
-    }} onClick={()=> {
-        if(!identifier) return
-        openMessage(messageData?.user, identifier, messageData, isFromSent ? (alias || name) : username)
-    }}>
-      <MailMessageRowProfile>
-        <AvatarWrapper isAlias={!!alias} height="50px" user={name} fallback={alias || name}></AvatarWrapper>
-        <MessageExtraInfo>
-          <MessageExtraName sx={{
-            fontWeight: shouldBoldUnread ? "900" : "300"
-          }}>{isFromSent ? "To: " : ""} {alias || name}</MessageExtraName>
-          <MessageExtraDate>{createdAtLabel}</MessageExtraDate>
-        </MessageExtraInfo>
-      </MailMessageRowProfile>
-      <MailMessageRowInfo>
-        {hasAttachments ?  <MailMessageRowInfoImg src={AttachmentSVG} /> : hasAttachments === false ? null : isEncrypted ?  <MailMessageRowInfoImg src={LockSVG} />   : null}
-       
-
-        {subject ? (
-          <MailMessageRowInfoStatusRead
-            sx={{
-              fontWeight: shouldBoldUnread ? 600 : 300,
-            }}
-          >
-            {subject}
-          </MailMessageRowInfoStatusRead>
-        )  : isEncrypted ? (
-          <MailMessageRowInfoStatusNotDecrypted
-            sx={{
-              fontWeight: shouldBoldUnread ? 900 : 300,
-            }}
-          >
-            ACCESS TO DECRYPT
-          </MailMessageRowInfoStatusNotDecrypted>
-        ) : null}
-      </MailMessageRowInfo>
-      {isFromSent && onDeleteMessage && (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            flexShrink: 0,
-          }}
-        >
-          <Tooltip title="Delete sent message">
-            <span>
-              <IconButton
-                size="small"
-                onClick={handleDeleteClick}
-                disabled={isDeleting}
-                aria-label="Delete sent message"
+    <Box
+      component={component}
+      data-message-row={identifier}
+      sx={theme => ({
+        display: "flex",
+        alignItems: "center",
+        width: "100%",
+        minWidth: 0,
+        gap: 0.5,
+        listStyle: "none",
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        backgroundColor: isOpen ? primarySoft(theme) : "transparent",
+      })}
+    >
+      {onToggleSelected && (
+        <Checkbox
+          checked={selected}
+          onChange={onToggleSelected}
+          slotProps={{ input: { "aria-label": `Select: ${subjectLabel}` } }}
+          sx={{ minWidth: 44, minHeight: 44, flexShrink: 0 }}
+        />
+      )}
+      <ButtonBase
+        onClick={open}
+        aria-label={ariaLabel}
+        aria-current={isOpen ? "true" : undefined}
+        sx={theme => ({
+          flex: 1,
+          minWidth: 0,
+          minHeight: compact ? 44 : 64,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-start",
+          textAlign: "left",
+          gap: 1.5,
+          px: onToggleSelected ? 1 : 2,
+          py: compact ? 0.5 : 1,
+          borderRadius: theme.shape.borderRadius,
+          transition: "background-color 150ms ease",
+          "&:hover": { backgroundColor: theme.palette.action.hover },
+          "&:focus-visible": {
+            outline: `2px solid ${theme.palette.primary.main}`,
+            outlineOffset: -2,
+          },
+          "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+        })}
+      >
+        {!compact && (
+          <Box sx={{ flexShrink: 0, display: "flex" }}>
+            <AvatarWrapper
+              isAlias={isAliasRecipient}
+              height="40px"
+              user={isAliasRecipient ? alias : name}
+              fallback={name || "?"}
+            />
+          </Box>
+        )}
+        <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0.25 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+            {isUnread && <UnreadDot />}
+            {compact && statusIcon}
+            <Typography
+              noWrap
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                fontSize: "1rem",
+                lineHeight: 1.3,
+                fontWeight: isUnread ? 700 : 500,
+                color: isLocked && compact ? "text.secondary" : "text.primary",
+                fontStyle: compact && (isLocked || !subject) ? "italic" : "normal",
+              }}
+            >
+              {compact ? (
+                <Highlight text={subjectLabel} terms={highlightTerms} />
+              ) : (
+                <Highlight text={nameLabel} terms={highlightTerms} />
+              )}
+            </Typography>
+            {dateNode}
+          </Box>
+          {!compact && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+              {statusIcon}
+              <Typography
+                noWrap
                 sx={{
-                  color: "var(--qmail-danger-text)",
-                  border: "1px solid var(--qmail-shell-border)",
-                  background: "var(--qmail-shell-hover)",
-                  "&:hover": {
-                    background: "var(--qmail-shell-hover-strong)",
-                  },
-                  "&.Mui-disabled": {
-                    color: "var(--qmail-shell-muted)",
-                    borderColor: "var(--qmail-shell-border)",
-                  },
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: "0.875rem",
+                  lineHeight: 1.35,
+                  fontWeight: isUnread ? 600 : 400,
+                  color: isUnread && !isLocked ? "text.primary" : "text.secondary",
+                  fontStyle: isLocked || !subject ? "italic" : "normal",
                 }}
               >
-                {isDeleting ? (
-                  <CircularProgress size={16} color="inherit" />
-                ) : (
-                  <DeleteOutlineIcon fontSize="small" />
-                )}
-              </IconButton>
-            </span>
-          </Tooltip>
+                <Highlight text={subjectLabel} terms={highlightTerms} />
+              </Typography>
+              {context && (
+                <Chip
+                  label={context}
+                  size="small"
+                  variant="outlined"
+                  sx={{ height: 22, fontSize: "0.8125rem", flexShrink: 0 }}
+                />
+              )}
+            </Box>
+          )}
         </Box>
+      </ButtonBase>
+      {isFromSent && onDeleteMessage && (
+        <Tooltip title="Delete sent message">
+          <span>
+            <IconButton
+              onClick={handleDeleteClick}
+              disabled={isDeleting}
+              aria-label="Delete sent message"
+              sx={{ minWidth: 44, minHeight: 44, color: "text.secondary" }}
+            >
+              {isDeleting ? (
+                <CircularProgress size={18} color="inherit" />
+              ) : (
+                <DeleteOutlineIcon fontSize="small" />
+              )}
+            </IconButton>
+          </span>
+        </Tooltip>
       )}
-    </MailMessageRowContainer>
+    </Box>
   );
 };

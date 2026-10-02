@@ -7,11 +7,14 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Paper from '@mui/material/Paper'
 import { Avatar, Box } from '@mui/material'
-import { useSelector } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
 import { RootState } from '../../state/store'
+import { setUserAvatarHash } from '../../state/features/globalSlice'
+import { isAvatarUrl, useLazyAvatarUrl } from '../../utils/avatarCache'
 import { formatFullTimestamp } from '../../utils/time'
 import AliasAvatar from '../../assets/svgs/AliasAvatar.svg'
 import { AliasAvatarImg } from './Mail-styles'
+import { primarySoft } from '../../hub-theme'
 const tableCellFontSize = '16px'
 
 interface Data {
@@ -157,21 +160,44 @@ export default function SimpleTable({
   )
 }
 
-export const AvatarWrapper = ({ user, height , fallback, isAlias}: any) => {
-  const userAvatarHash = useSelector(
-    (state: RootState) => state.global.userAvatarHash
-  )
-  const avatarLink = React.useMemo(() => {
-    if (!user || !userAvatarHash) return ''
-    const findUserAvatar = userAvatarHash[user]
-    if (!findUserAvatar) return ''
-    return findUserAvatar
-  }, [userAvatarHash, user])
+/**
+ * A name's avatar, resolved lazily: the Redux hash first (read-through, the
+ * miss sentinel filtered out), then the session avatar cache, and only when
+ * the avatar is on screen one GET_QDN_RESOURCE_URL per name per session.
+ * Resolved URLs are handed back to the Redux hash so older code keeps working.
+ */
+export const AvatarWrapper = ({ user, height, fallback, isAlias }: any) => {
+  const dispatch = useDispatch()
+  const hashUrl = useSelector((state: RootState) => (user ? state.global.userAvatarHash?.[user] : undefined))
+  const [node, setNode] = React.useState<Element | null>(null)
+  const avatarLink = useLazyAvatarUrl(isAlias ? '' : user, node, hashUrl)
 
-if(isAlias) return <AliasAvatarImg sx={{
-  width: height,
-  height: height
-}}  src={AliasAvatar}/>
-if(!fallback) return <Avatar  sx={{ width: height, height: height }} src={avatarLink} alt={user} />
-  return <Avatar  sx={{ width: height, height: height }} src={avatarLink} alt={fallback} >{fallback?.charAt(0)}</Avatar>
+  React.useEffect(() => {
+    if (!user || !avatarLink || isAvatarUrl(hashUrl)) return
+    dispatch(setUserAvatarHash({ name: user, url: avatarLink }))
+  }, [avatarLink, dispatch, hashUrl, user])
+
+  if (isAlias) return <AliasAvatarImg sx={{
+    width: height,
+    height: height
+  }} src={AliasAvatar} alt={fallback || user || 'Alias'} />
+  const label = fallback || user || ''
+  const initial = typeof label === 'string' && label ? label.charAt(0).toUpperCase() : undefined
+  return (
+    <Avatar
+      ref={setNode}
+      sx={theme => ({
+        width: height,
+        height: height,
+        fontWeight: 700,
+        // MUI's default grey fallback reads below 4.5:1 in every theme.
+        bgcolor: primarySoft(theme),
+        color: theme.palette.primary.main,
+      })}
+      src={avatarLink || undefined}
+      alt={label}
+    >
+      {initial}
+    </Avatar>
+  )
 }

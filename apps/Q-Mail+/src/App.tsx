@@ -1,59 +1,65 @@
-// @ts-nocheck
-
-import { useState } from 'react'
-import { Routes, Route } from 'react-router-dom'
-
-import { ThemeProvider } from '@mui/material/styles'
-import { CssBaseline } from '@mui/material'
-import { lightTheme, darkTheme } from './styles/theme'
-import { store } from './state/store'
+import { Suspense } from 'react'
+import { Box } from '@mui/material'
 import { Provider } from 'react-redux'
+import { Route, Routes, useLocation, type Location } from 'react-router-dom'
+import { HubThemeProvider } from './hub-theme'
+import { THEME_STORAGE_KEY, themeConfig } from './theme/qplus-theme'
+import { store } from './state/store'
 import GlobalWrapper from './wrappers/GlobalWrapper'
 import DownloadWrapper from './wrappers/DownloadWrapper'
 import Notification from './components/common/Notification/Notification'
 import { Mail } from './pages/Mail/Mail'
+import { SETTINGS_PATH } from './pages/Settings/settingsPath'
+import { lazyNamed } from './components/common/lazyNamed'
+import { ListSkeleton } from './layout/states'
 
-type ThemeMode = 'light' | 'dark'
+// Settings is a separate chunk: it is opened rarely and carries the theme
+// picker, the blocked-names dialog and the changelog.
+const SettingsPage = lazyNamed(() => import('./pages/Settings/SettingsPage'), 'SettingsPage')
 
-const normalizeTheme = (value?: string | null): ThemeMode | null => {
-  if (!value) return null
-  const theme = String(value).toLowerCase()
-  return theme === 'light' || theme === 'dark' ? (theme as ThemeMode) : null
-}
+type LocationState = { backgroundLocation?: Location } | null
 
-const getInitialTheme = (): ThemeMode => {
-  const qdnTheme = normalizeTheme(window?._qdnTheme)
-  if (qdnTheme) return qdnTheme
+/**
+ * Settings opens on top of the mail page without unmounting it, so the inbox
+ * keeps its loaded state (the "background location" pattern from React Router).
+ */
+function AppRoutes() {
+  const location = useLocation()
+  const state = location.state as LocationState
+  const isSettings = location.pathname === SETTINGS_PATH
+  const mailLocation = isSettings
+    ? state?.backgroundLocation ?? { ...location, pathname: '/' }
+    : location
 
-  try {
-    const params = new URLSearchParams(window.location.search)
-    const queryTheme = normalizeTheme(params.get('theme'))
-    if (queryTheme) return queryTheme
-  } catch {
-    /* ignore */
-  }
-
-  return 'dark'
+  return (
+    <>
+      <Box sx={{ display: isSettings ? 'none' : 'contents' }}>
+        <Routes location={mailLocation}>
+          <Route path="/" element={<Mail isFromTo={false} />} />
+          <Route path="/to/:name" element={<Mail isFromTo />} />
+          <Route path="*" element={<Mail isFromTo={false} />} />
+        </Routes>
+      </Box>
+      {isSettings && (
+        <Suspense fallback={<ListSkeleton rows={8} />}>
+          <SettingsPage />
+        </Suspense>
+      )}
+    </>
+  )
 }
 
 function App() {
-  const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme())
-
   return (
     <Provider store={store}>
-      <ThemeProvider theme={theme === 'light' ? lightTheme : darkTheme}>
+      <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
         <Notification />
         <DownloadWrapper>
-          <GlobalWrapper setTheme={setTheme}>
-            <CssBaseline />
-
-            <Routes>
-              <Route path="/" element={<Mail />} />
-              <Route path="/to/:name" element={<Mail isFromTo />} />
-            </Routes>
+          <GlobalWrapper>
+            <AppRoutes />
           </GlobalWrapper>
         </DownloadWrapper>
-      </ThemeProvider>
+      </HubThemeProvider>
     </Provider>
   )
 }

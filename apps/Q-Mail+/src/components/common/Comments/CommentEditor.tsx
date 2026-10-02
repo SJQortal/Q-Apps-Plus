@@ -154,19 +154,21 @@ export const CommentEditor = ({
         maxRows={4}
         variant="filled"
         value={value}
-        inputProps={{
-          maxLength: 200,
-          style: {
-            fontSize: '1rem'
-          }
-        }}
-        InputLabelProps={{ style: { fontSize: '1.125rem' } }}
         onChange={(e) => setValue(e.target.value)}
-      />
+        slotProps={{
+          htmlInput: {
+            maxLength: 200,
+            style: {
+              fontSize: '1rem'
+            }
+          },
+
+          inputLabel: { style: { fontSize: '1.125rem' } }
+        }} />
 
       <Button variant="contained" onClick={handleSubmit}>
         {isReply ? 'Submit reply' : isEdit ? 'Edit' : 'Submit comment'}
       </Button>
     </Box>
-  )
+  );
 }

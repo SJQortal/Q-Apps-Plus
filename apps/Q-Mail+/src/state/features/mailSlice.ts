@@ -1,11 +1,17 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
-import localForage from 'localforage'
+import { createSlice } from '@reduxjs/toolkit'
 import { RootState } from '../store'
-const favoritesLocal = localForage.createInstance({
-  name: 'q-blog-favorites'
-})
-const instanceCache = new Map<string, LocalForage>()
-
+import {
+  withMessagesRead,
+  withMessagesUnread,
+  withPublishedReadState,
+  type ReadStateMap,
+} from '../../utils/readState'
+import {
+  withArchived,
+  withPublishedArchived,
+  withUnarchived,
+  type ArchivedMap,
+} from '../../utils/archiveState'
 interface SavedSubject {
   timestamp: number;
   subject: string;
@@ -26,6 +32,13 @@ interface GlobalState {
   mailMessages: any[]
   hashMapMailMessages: Record<string, BlogPost>
   hashMapSavedSubjects : Record<string, SavedSubject>
+  /** Local read/unread state (src/utils/readState.ts), loaded per account address. */
+  readState: ReadStateMap
+  /** The address `readState` was loaded for ('' until loaded); persistence is gated on it. */
+  readStateAddress: string
+  /** Locally archived received mail (src/utils/archiveState.ts), loaded per account address. */
+  archived: ArchivedMap
+  archivedAddress: string
 }
 const initialState: GlobalState = {
   posts: [],
@@ -41,7 +54,11 @@ const initialState: GlobalState = {
   filterValue: '',
   mailMessages: [],
   hashMapMailMessages: {},
-  hashMapSavedSubjects: {}
+  hashMapSavedSubjects: {},
+  readState: {},
+  readStateAddress: '',
+  archived: {},
+  archivedAddress: ''
 }
 
 export interface BlogPost {
@@ -60,72 +77,6 @@ export interface BlogPost {
   subject?:string
   attachments?: any[]
 }
-
-export const removeFavorites = createAsyncThunk<
-  string,
-  string,
-  { state: RootState }
->('favorites/remove', async (id, thunkAPI) => {
-  const state = thunkAPI.getState() // Get the current state
-  const username = state?.auth?.user?.name // Access the user.name property
-  if (!username) return ''
-  let favoritesLocal = instanceCache.get(`q-blog-favorites-${username}`)
-  if (!favoritesLocal) {
-    favoritesLocal = localForage.createInstance({
-      name: `q-blog-favorites-${username}`
-    })
-  }
-  await favoritesLocal.removeItem(id)
-  return id
-})
-export const removeFavoritesArray = createAsyncThunk<
-  string[],
-  string[],
-  { state: RootState }
->('favorites/remove', async (ids, thunkAPI) => {
-  const state = thunkAPI.getState() // Get the current state
-  const username = state?.auth?.user?.name // Access the user.name property
-  if (!username || !ids.length) return []
-
-  let favoritesLocal = instanceCache.get(`q-blog-favorites-${username}`)
-  if (!favoritesLocal) {
-    favoritesLocal = localForage.createInstance({
-      name: `q-blog-favorites-${username}`
-    })
-  }
-  if (!favoritesLocal) return []
-
-  // Remove all items in parallel
-  await Promise.all(ids.map((id) => favoritesLocal?.removeItem(id)))
-
-  return ids
-})
-
-export const upsertFavorites = createAsyncThunk<
-  any[],
-  any[],
-  { state: RootState }
->('favorites/upsert', async (payload: any, thunkAPI) => {
-  const state = thunkAPI.getState() // Get the current state
-  const username = state?.auth?.user?.name // Access the user.name property
-  if (!username) return ''
-  let favoritesLocal = instanceCache.get(`q-blog-favorites-${username}`)
-  if (!favoritesLocal) {
-    favoritesLocal = localForage.createInstance({
-      name: `q-blog-favorites-${username}`
-    })
-  }
-  if (!favoritesLocal) {
-    return []
-  }
-  payload.forEach((favorite: BlogPost) => {
-    favoritesLocal?.setItem(favorite.id, {
-      user: favorite.user,
-      id: favorite.id
-    })
-  })
-  return payload
-})
 
 export const mailSlice = createSlice({
   name: 'blog',
@@ -205,6 +156,53 @@ export const mailSlice = createSlice({
     clearMessages: (state) => {
       state.mailMessages = [];
       state.hashMapMailMessages = {};
+    },
+    setReadState: (
+      state,
+      action: { payload: { address: string; entries: ReadStateMap } }
+    ) => {
+      state.readStateAddress = action.payload.address || ''
+      state.readState = action.payload.entries || {}
+    },
+    markRead: (state, action: { payload: { ids: string[]; at?: number } }) => {
+      state.readState = withMessagesRead(
+        state.readState,
+        action.payload.ids,
+        action.payload.at
+      )
+    },
+    markUnread: (state, action: { payload: { ids: string[] } }) => {
+      state.readState = withMessagesUnread(state.readState, action.payload.ids)
+    },
+    applyPublishedReadState: (
+      state,
+      action: { payload: { ids: string[]; at?: number } }
+    ) => {
+      state.readState = withPublishedReadState(
+        state.readState,
+        action.payload.ids,
+        action.payload.at
+      )
+    },
+    setArchivedState: (
+      state,
+      action: { payload: { address: string; entries: ArchivedMap } }
+    ) => {
+      state.archivedAddress = action.payload.address || ''
+      state.archived = action.payload.entries || {}
+    },
+    archiveIds: (state, action: { payload: { ids: string[]; at?: number } }) => {
+      state.archived = withArchived(
+        state.archived,
+        action.payload.ids,
+        action.payload.at
+      )
+    },
+    unarchiveIds: (state, action: { payload: { ids: string[] } }) => {
+      state.archived = withUnarchived(state.archived, action.payload.ids)
+    },
+    applyPublishedArchived: (state, action: { payload: ArchivedMap }) => {
+      state.archived = withPublishedArchived(state.archived, action.payload)
     },
     updateInHashMap: (state, action) => {
       const { id } = action.payload
@@ -293,52 +291,21 @@ export const mailSlice = createSlice({
       )
 
       if (state?.favoritesLocal) {
-        const ids = state.favoritesLocal
-          .filter((item) => item.user === username)
-          .map((user) => user?.user || '')
         state.favoritesLocal = state.favoritesLocal.filter(
           (item) => item.user !== username
         )
-
-        removeFavoritesArray(ids)
       }
+    },
+    /** Drops deleted messages (a "D" body) from the inbox list; their hash entries keep the `deleted` marker. */
+    removeMessages: (state, action: { payload: { ids: string[] } }) => {
+      const ids = new Set(action.payload.ids)
+      state.mailMessages = state.mailMessages.filter((item) => !ids.has(item?.id))
     }
-  },
-  extraReducers: (builder) => {
-    builder.addCase(removeFavorites.fulfilled, (state, action) => {
-      const idToDelete = action.payload
-      if (!idToDelete) return state
-      state.favorites = state.favorites.filter((item) => item.id !== idToDelete)
-      state.favoritesLocal = state?.favorites?.filter(
-        (item) => item.id !== idToDelete
-      )
-    }),
-      builder.addCase(upsertFavorites.fulfilled, (state, action) => {
-        ;(action.payload || []).forEach((favorite: BlogPost) => {
-          favoritesLocal.setItem(favorite.id, {
-            user: favorite.user,
-            id: favorite.id
-          })
-          const index = state.favorites.findIndex((p) => p.id === favorite.id)
-          if (index !== -1) {
-            state.favorites[index] = favorite
-          } else {
-            state.favorites.push(favorite)
-          }
-          const index2 = state?.favoritesLocal?.findIndex(
-            (p) => p.id === favorite.id
-          )
-          if (index2 !== -1) {
-            state.favorites[index] = favorite
-          } else {
-            state?.favoritesLocal?.push(favorite)
-          }
-        })
-      })
   }
 })
 
 export const {
+  removeMessages,
   addPosts,
   updatePost,
   removePost,
@@ -364,7 +331,22 @@ export const {
   upsertMessagesBeginning,
   addAllHashMapSubject,
   addToHashMapSubject,
-  clearMessages
+  clearMessages,
+  setReadState,
+  markRead,
+  markUnread,
+  applyPublishedReadState,
+  setArchivedState,
+  archiveIds,
+  unarchiveIds,
+  applyPublishedArchived
 } = mailSlice.actions
+
+export const selectReadState = (state: RootState): ReadStateMap =>
+  state.mail.readState
+export const selectReadStateAddress = (state: RootState): string =>
+  state.mail.readStateAddress
+export const selectArchived = (state: RootState): ArchivedMap =>
+  state.mail.archived
 
 export default mailSlice.reducer

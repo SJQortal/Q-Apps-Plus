@@ -20,7 +20,7 @@ const PageLoader: React.FC<PageLoaderProps> = ({
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        height: '100vh',
+        height: 'var(--qmail-app-height, 100dvh)',
         width: '100%',
         position: 'fixed',
         top: 0,

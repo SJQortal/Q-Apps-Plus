@@ -79,7 +79,7 @@ const BlogEditor: React.FC<MyComponentProps> = ({
   const isTextAlignmentActive = (editor: Editor, alignment: string) => {
     const [match] = Editor.nodes(editor, {
       match: (n) => {
-        return n?.textAlign === alignment?.replace(/^align-/, '')
+        return n?.textAlign === alignment?.replace(/^align-/, '');
       }
     })
     return !!match
