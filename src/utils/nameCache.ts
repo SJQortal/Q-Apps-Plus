@@ -12,6 +12,8 @@
  * looked up once, not three times.
  */
 
+import { errorMessage, isHubTimeout } from "./hubErrors";
+
 export interface ResolvedName {
   name: string;
   address: string;
@@ -34,18 +36,15 @@ export function normalizeName(name: unknown): string {
   return typeof name === "string" ? name.trim().toLowerCase() : "";
 }
 
-function errorText(error: unknown): string {
-  if (typeof error === "string") return error;
-  const anyError = error as any;
-  if (typeof anyError?.error === "string") return anyError.error;
-  if (typeof anyError?.message === "string") return anyError.message;
-  return "";
-}
-
-/** Transport failures are not "name does not exist": rethrow them, cache nothing. */
+/**
+ * Transport failures (q-apps.js's or Hub's timeout, a node that is down) are
+ * not "name does not exist": rethrow them, cache nothing. Core answers an
+ * unknown name with a 404 error body, which stays a miss.
+ */
 function isTransportError(error: unknown): boolean {
-  const text = errorText(error).toLowerCase();
-  return text.includes("timed out") || text.includes("network") || text.includes("failed to fetch");
+  if (isHubTimeout(error)) return true;
+  const text = errorMessage(error, "").toLowerCase();
+  return text.includes("network") || text.includes("failed to fetch");
 }
 
 /** Owner address of a registered name, or `missing`. Never throws for an unknown name. */

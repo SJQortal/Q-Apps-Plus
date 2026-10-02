@@ -4,18 +4,13 @@ import { useCallback, useEffect, useState, useRef } from "react";
 import { CircleSVG } from "../../../assets/svgs/CircleSVG";
 import { EmptyCircleSVG } from "../../../assets/svgs/EmptyCircleSVG";
 import { ResponsiveDialog } from "../ResponsiveDialog";
+import { errorMessage, isHubDecline, isHubTimeout } from "../../../utils/hubErrors";
 
 const getUnsuccessfulPublishes = (value: any) => {
   const unsuccessfulPublishes = value?.error?.unsuccessfulPublishes;
   return Array.isArray(unsuccessfulPublishes) ? unsuccessfulPublishes : [];
 };
 
-const getErrorMessage = (error: any) => {
-  if (typeof error === "string") return error;
-  if (typeof error?.error === "string") return error.error;
-  if (typeof error?.message === "string") return error.message;
-  return "";
-};
 
 interface Publish {
   resources: any[];
@@ -56,16 +51,16 @@ export const MultiplePublish = ({ publishes, isOpen, onSubmit, onError }: Multip
           return;
         }
         onSubmit();
-      } catch (error: any) {
-        const errorMessage = getErrorMessage(error);
+      } catch (error: unknown) {
         const unsuccessfulPublishes = getUnsuccessfulPublishes(error);
 
-        if (errorMessage.toLowerCase().includes("user declined")) {
+        // A decline in any of Hub's languages, or Hub's Cancel, is the user's choice: close quietly.
+        if (isHubDecline(error)) {
           onError();
           return;
         }
 
-        if (errorMessage.toLowerCase().includes("timed out")) {
+        if (isHubTimeout(error)) {
           onError("The request timed out");
           return;
         }
@@ -75,7 +70,7 @@ export const MultiplePublish = ({ publishes, isOpen, onSubmit, onError }: Multip
           return;
         }
 
-        onError(errorMessage || "Failed to publish resources");
+        onError(errorMessage(error, "Failed to publish resources"));
       } finally {
         setIsPublishing(false);
       }
