@@ -18,7 +18,7 @@ import { isArchivedId } from "../../utils/archiveState";
 import { usePolling } from "../../hooks/usePolling";
 import { LoadMoreSentinel } from "../../layout/states";
 import { ALIAS_PAGE_SIZE, fetchAliasInboxPage } from "../../utils/aliasInbox";
-import { fetchRecentInboxMessagesForOwnedName, mergeNewRows } from "../../utils/mailInbox";
+import { fetchRecentInboxMessagesForOwnedName, mergeNewRows, withoutDeletedRows } from "../../utils/mailInbox";
 import { GroupedMailboxList, type ListStatus } from "./GroupedMailboxList";
 import { useMailboxSearch, type MailboxSearchStatus } from "./useMailboxSearch";
 import { aliasIndexKey, publishMailIndex } from "./mailIndexStore";
@@ -147,9 +147,13 @@ export const AliasMail = ({
     { intervalMs: ALIAS_POLL_INTERVAL_MS, enabled }
   );
 
+  // Archived rows and rows whose body turned out to be the delete marker
+  // (hash entry `deleted`, see fetchMail.ts) stay out of the list.
   const visibleRows = useMemo(() => {
-    return rows.filter(row => !isArchivedId(archived, getRowId(row)));
-  }, [archived, rows]);
+    return withoutDeletedRows(rows, hashMapMailMessages).filter(
+      row => !isArchivedId(archived, getRowId(row))
+    );
+  }, [archived, hashMapMailMessages, rows]);
 
   useEffect(() => {
     if (!enabled || status === "idle" || status === "loading") return;
