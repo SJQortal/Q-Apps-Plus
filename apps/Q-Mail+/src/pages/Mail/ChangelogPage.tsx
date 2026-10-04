@@ -18,6 +18,7 @@ const changelogEntries: ChangelogEntry[] = [
       "Group threads as list + pane with unread marks and paging; polite polling that pauses when the tab is hidden; 6 searches on first load instead of about 25.",
       "Hub and GO fixes: quiet declines, publishing that waits for Hub and checks QDN before a retry, deleted or unavailable resources shown as such, safer message HTML.",
       "Since the first build: a visible Cc row, Archive and Mark unread in the reader, shortcuts from 600 px, faster opening, plain spaces in sent mail, a capped alias scan, a smaller Classic font, and security and review fixes.",
+      "Also since the first build: a searchable dropdown for the active mailbox, adjustable pane widths, opening another message while one is open, a full-width list when no message is open, group join links that work, a mail footer per name, and PDFs in Hub's own reader.",
     ],
   },
   {
