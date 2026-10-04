@@ -93,13 +93,11 @@ describe('a landscape frame (844×390 in Hub is 703×201 CSS px)', () => {
       onRailOpenChange: () => {},
       list: <div>the list</div>,
       reading: <div>the message</div>,
-      readingPlaceholder: <div>pick one</div>,
       bottomNav: <nav>bottom nav</nav>,
       fab: <button>fab</button>,
     }
     const { rerender } = wrap(<MailShell mode="medium" {...props} readingOpen={false} />)
     expect(screen.getByText('the list')).toBeTruthy()
-    expect(screen.queryByText('pick one')).toBeNull()
     expect(screen.queryByText('the message')).toBeNull()
     // Medium keeps its rail drawer and no phone chrome.
     expect(screen.queryByText('bottom nav')).toBeNull()

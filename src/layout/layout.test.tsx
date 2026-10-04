@@ -5,7 +5,7 @@ import { HubThemeProvider } from '../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../theme/qplus-theme'
 import { layoutModeForWidth } from './useLayoutMode'
 import { appHeightValue } from './useAppViewport'
-import { MailShell } from './MailShell'
+import { LIST_CONTAINER, MailShell } from './MailShell'
 import { BottomNav, badgeLabel } from './BottomNav'
 import { Rail, badgeFor, groupRailItems, NAME_FILTER_THRESHOLD } from './Rail'
 import { fetchingLabel } from './states'
@@ -65,7 +65,6 @@ describe('MailShell', () => {
     onRailOpenChange: () => {},
     list: <div>the list</div>,
     reading: <div>the message</div>,
-    readingPlaceholder: <div>pick one</div>,
     bottomNav: <nav>bottom nav</nav>,
     fab: <button>fab</button>,
   }
@@ -79,11 +78,40 @@ describe('MailShell', () => {
     expect(screen.queryByText('fab')).toBeNull()
   })
 
-  it('shows the placeholder when nothing is open and keeps the rail in a drawer on medium', () => {
+  it('keeps the rail in a drawer on medium, and with nothing open shows no reading pane', () => {
     wrap(<MailShell mode="medium" {...baseProps} reading={null} />)
     expect(screen.getByText('the list')).toBeTruthy()
-    expect(screen.getByText('pick one')).toBeTruthy()
+    expect(screen.queryByLabelText('Reading pane')).toBeNull()
     expect(screen.queryByText('rail content')).toBeNull()
+  })
+
+  it('lets the list take the full width until something opens, and again after it closes', () => {
+    const { rerender } = wrap(<MailShell mode="desktop" {...baseProps} reading={null} />)
+    const list = () => screen.getByLabelText('Messages')
+    expect(screen.queryByLabelText('Reading pane')).toBeNull()
+    expect(getComputedStyle(list()).flexGrow).toBe('1')
+    expect(getComputedStyle(list()).width).toBe('100%')
+    const again = (reading: React.ReactNode) =>
+      rerender(
+        <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+          <MailShell mode="desktop" {...baseProps} reading={reading} readingOpen={Boolean(reading)} />
+        </HubThemeProvider>
+      )
+    again(<div>the message</div>)
+    expect(screen.getByLabelText('Reading pane').textContent).toBe('the message')
+    expect(getComputedStyle(list()).flexGrow).toBe('0')
+    again(null)
+    expect(screen.queryByLabelText('Reading pane')).toBeNull()
+    expect(getComputedStyle(list()).flexGrow).toBe('1')
+  })
+
+  it('makes the list pane a size container, so rows can lay out as columns when it is wide', () => {
+    wrap(<MailShell mode="desktop" {...baseProps} reading={null} />)
+    const css = Array.from(document.querySelectorAll('style'))
+      .map((s) => s.textContent || '')
+      .join('\n')
+    expect(css).toMatch(new RegExp(`container-name:${LIST_CONTAINER}`))
+    expect(css).toMatch(/container-type:inline-size/)
   })
 
   it('on a phone shows the list with nav and FAB, then only the message when one is open', () => {

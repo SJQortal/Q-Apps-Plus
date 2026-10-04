@@ -42,7 +42,7 @@ import { BottomNav } from "../../layout/BottomNav";
 import { ComposeFab } from "../../layout/ComposeFab";
 import { useLandscapeFrame } from "../../utils/hubFrame";
 import { PaneHeader } from "../../layout/PaneHeader";
-import { EmptyState, LoadingBanner } from "../../layout/states";
+import { LoadingBanner } from "../../layout/states";
 import { useLayoutMode } from "../../layout/useLayoutMode";
 import { useAppViewport } from "../../layout/useAppViewport";
 import { SETTINGS_PATH } from "../Settings/settingsPath";
@@ -53,7 +53,6 @@ import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
 import AlternateEmailOutlinedIcon from "@mui/icons-material/AlternateEmailOutlined";
 import MenuIcon from "@mui/icons-material/Menu";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
-import MailOutlineIcon from "@mui/icons-material/MailOutlined";
 import { IconButton } from "@mui/material";
 import {
   applyPublishedArchived,
@@ -3295,16 +3294,6 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     </>
   ) : null;
 
-  const readingPlaceholder = (
-    <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <EmptyState
-        icon={<MailOutlineIcon />}
-        title={isThreadsView ? "Select a thread" : "Select a message"}
-        hint={isThreadsView ? "Threads you open show up here." : "Messages you open show up here."}
-      />
-    </Box>
-  );
-
   // ---- thread reading pane (group threads open like a message) --------------
   const threadReadingPane =
     isThreadsView && currentThread && hasAuthenticatedIdentity ? (
@@ -3529,7 +3518,6 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       }
       list={listPane}
       reading={threadReadingPane ?? readingPane}
-      readingPlaceholder={readingPlaceholder}
       readingOpen={isReadingOpen || isOpeningMessage || isThreadReadingOpen}
       wide={wide}
       wideKeepsChrome={wideKeepsChrome}
