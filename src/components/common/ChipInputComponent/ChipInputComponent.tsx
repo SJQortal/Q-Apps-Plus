@@ -1,6 +1,7 @@
 import React, { useId, useState } from "react";
 import { Box, Chip, CircularProgress, Input, Typography } from "@mui/material";
 import { lookupName, lookupPublicKey } from "../../../utils/nameCache";
+import { NameText } from "../NameText";
 
 export interface NameChip {
   name: string;
@@ -37,7 +38,7 @@ export const ChipInputComponent = ({
 }: ChipInputComponentProps) => {
   const [inputValue, setInputValueState] = useState<string>("");
   const [isResolving, setIsResolving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<React.ReactNode>(null);
   const errorId = useId();
 
   const setInputValue = (next: string) => {
@@ -54,7 +55,11 @@ export const ChipInputComponent = ({
       return;
     }
     if (excludeNames.some(other => normalize(other) === normalize(recipientName))) {
-      setError(`${recipientName} is already a recipient`);
+      setError(
+        <>
+          <NameText name={recipientName} /> is already a recipient
+        </>
+      );
       return;
     }
     setIsResolving(true);
@@ -67,7 +72,11 @@ export const ChipInputComponent = ({
       }
       const publicKey = await lookupPublicKey(lookup.address);
       if (!publicKey) {
-        setError(`${lookup.name} has no public key yet, so mail to them cannot be encrypted`);
+        setError(
+          <>
+            <NameText name={lookup.name} /> has no public key yet, so mail to them cannot be encrypted
+          </>
+        );
         return;
       }
       setChips([
@@ -105,7 +114,7 @@ export const ChipInputComponent = ({
         {chips.map(chip => (
           <Chip
             key={chip.name}
-            label={chip.name}
+            label={<NameText name={chip.name} />}
             onDelete={handleDeleteChip(chip.name)}
             sx={{
               height: 32,

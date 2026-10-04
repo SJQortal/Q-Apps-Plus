@@ -87,6 +87,9 @@ import {
   searchDirectoryNames,
 } from "../../utils/nameCache";
 import { AvatarWrapper } from "./MailTable";
+import { HIDDEN_CHARACTERS_TITLE, NameText, strikeNameSx } from "../../components/common/NameText";
+import { hasInvisibleCharacters } from "../../utils/invisibleCharacters";
+import type { Theme } from "@mui/material/styles";
 import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlined";
@@ -118,6 +121,9 @@ const aliasToggleSx = {
   color: "var(--qmail-compose-muted)",
   "&:hover": { color: "var(--qmail-compose-text)" },
 } as const;
+
+/** NameText's strike for a field's own text (the To and alias fields). */
+const strikeInputSx = (theme: Theme) => ({ "& .MuiInputBase-input": strikeNameSx(theme) });
 
 type ComposeTargetType = "name" | "group";
 type PendingPublishType = "mail" | "thread";
@@ -651,6 +657,10 @@ export const NewMessage = ({
     [resolveComposeTarget]
   );
   const isGroupTarget = resolvedTarget?.type === "group";
+  // A typed or picked name hiding invisible characters is struck in the
+  // field itself, as NameText does elsewhere (never a group).
+  const strikeToInput = !isGroupTarget && hasInvisibleCharacters(destinationName);
+  const strikeAliasInput = hasInvisibleCharacters(aliasValue);
   const allowAliasAndBcc = !isGroupTarget;
 
   useEffect(() => {
@@ -1904,7 +1914,7 @@ export const NewMessage = ({
                 {fromOptions.map(nameOption => {
                   return (
                     <MenuItem key={nameOption} value={nameOption}>
-                      {nameOption}
+                      <NameText name={nameOption} />
                     </MenuItem>
                   );
                 })}
@@ -1991,25 +2001,32 @@ export const NewMessage = ({
                       {...params}
                       variant="standard"
                       placeholder="Type a name or joined group"
-                      sx={{
-                        width: "100%",
-                        color: "var(--new-message-text)",
-                        "& .MuiInputBase-root": {
+                      sx={[
+                        {
+                          width: "100%",
                           color: "var(--new-message-text)",
+                          "& .MuiInputBase-root": {
+                            color: "var(--new-message-text)",
+                          },
+                          "& .MuiInputBase-input::placeholder": {
+                            color: "var(--qmail-compose-placeholder)",
+                            fontSize: "1rem",
+                            opacity: 1,
+                          },
                         },
-                        "& .MuiInputBase-input::placeholder": {
-                          color: "var(--qmail-compose-placeholder)",
-                          fontSize: "1rem",
-                          opacity: 1,
-                        },
-                      }}
+                        strikeToInput && strikeInputSx,
+                      ]}
                       slotProps={{
                         ...params.slotProps,
 
                         input: {
                           ...params.slotProps.input,
                           disableUnderline: true,
-                        }
+                        },
+                        htmlInput: {
+                          ...params.slotProps.htmlInput,
+                          title: strikeToInput ? HIDDEN_CHARACTERS_TITLE : undefined,
+                        },
                       }}
                     />
                   );
@@ -2073,7 +2090,11 @@ export const NewMessage = ({
                               minWidth: 0,
                             }}
                           >
-                            {option.label}
+                            {option.targetType === "group" ? (
+                              option.label
+                            ) : (
+                              <NameText name={option.label} />
+                            )}
                           </Typography>
                         </Box>
                         <Typography
@@ -2168,9 +2189,9 @@ export const NewMessage = ({
                 {isGroupTarget
                   ? "Group selected: this will publish a new thread. Subject is used as thread title."
                   : recipientCheck?.status === "missing"
-                  ? `"${recipientCheck.name}" is not a registered name`
+                  ? <>&quot;<NameText name={recipientCheck.name} />&quot; is not a registered name</>
                   : recipientCheck?.status === "found"
-                  ? `${recipientCheck.name} is a registered name`
+                  ? <><NameText name={recipientCheck.name} /> is a registered name</>
                   : recipientCheck?.status === "checking"
                   ? "Checking the name…"
                   : "Type to search joined groups and registered names."}
@@ -2204,20 +2225,26 @@ export const NewMessage = ({
                   disableUnderline
                   autoComplete="off"
                   autoCorrect="off"
-                  inputProps={{ "aria-describedby": "qmail-compose-alias-help" }}
-                  sx={{
-                    width: "100%",
-                    color: "var(--new-message-text)",
-                    "& .MuiInput-input::placeholder": {
-                      color: "var(--qmail-compose-placeholder) !important",
-                      fontSize: "1.25rem",
-                      fontStyle: "normal",
-                      fontWeight: 400,
-                      lineHeight: "120%",
-                      letterSpacing: "0.15px",
-                      opacity: 1,
-                    },
+                  inputProps={{
+                    "aria-describedby": "qmail-compose-alias-help",
+                    title: strikeAliasInput ? HIDDEN_CHARACTERS_TITLE : undefined,
                   }}
+                  sx={[
+                    {
+                      width: "100%",
+                      color: "var(--new-message-text)",
+                      "& .MuiInput-input::placeholder": {
+                        color: "var(--qmail-compose-placeholder) !important",
+                        fontSize: "1.25rem",
+                        fontStyle: "normal",
+                        fontWeight: 400,
+                        lineHeight: "120%",
+                        letterSpacing: "0.15px",
+                        opacity: 1,
+                      },
+                    },
+                    strikeAliasInput && strikeInputSx,
+                  ]}
                 />
               </NewMessageAliasContainer>
             </NewMessageInputRow>
@@ -2526,7 +2553,7 @@ export const NewMessage = ({
                     color: "var(--qmail-compose-text)",
                   }}
                 >
-                  Replying to {replyTo?.user || "Unknown sender"}
+                  Replying to {replyTo?.user ? <NameText name={replyTo.user} /> : "Unknown sender"}
                 </Typography>
                 <Box
                   sx={{
