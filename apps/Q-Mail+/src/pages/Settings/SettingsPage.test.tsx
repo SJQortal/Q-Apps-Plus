@@ -66,10 +66,32 @@ describe('SettingsPage', () => {
 
   it('switches the active name and text size', () => {
     const { value, controller } = renderSettings()
-    fireEvent.click(screen.getByRole('radio', { name: 'alice-work' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Active mailbox: alice. Change' }))
+    // Two names: no search field, the active name first and checked.
+    expect(screen.queryByRole('textbox', { name: 'Find one of your names' })).toBeNull()
+    expect(screen.getAllByRole('menuitemradio').map((r) => r.getAttribute('aria-label'))).toEqual(['alice', 'alice-work'])
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'alice-work' }))
     expect(value.setActiveName).toHaveBeenCalledWith('alice-work')
     fireEvent.click(screen.getByRole('button', { name: 'Large' }))
     expect(controller.setTextSize).toHaveBeenCalledWith('large')
+  })
+
+  it('lists 86 names in a searchable dropdown instead of 86 chips', () => {
+    const names = Array.from({ length: 86 }, (_, i) => ({ name: i === 0 ? 'Simon James' : `Name ${String(i).padStart(2, '0')}` }))
+    names.push({ name: 'Biohackers Corner' }, { name: 'BHC Card' })
+    const { value } = renderSettings({ user: { address: 'QAddress1', name: 'Simon James', names } })
+    // Nothing listed until the dropdown opens.
+    expect(screen.queryAllByRole('radio', { name: /^Name / })).toHaveLength(0)
+    expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0)
+    expect(screen.getByText('Active mailbox · 88 names')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Active mailbox: Simon James. Change' }))
+    const field = screen.getByRole('textbox', { name: 'Find one of your names' })
+    expect(screen.getAllByRole('menuitemradio')[0].getAttribute('aria-label')).toBe('Simon James')
+    fireEvent.change(field, { target: { value: 'bhc' } })
+    expect(screen.getAllByRole('menuitemradio').map((r) => r.getAttribute('aria-label'))).toEqual(['BHC Card'])
+    expect(screen.getByRole('status').textContent).toBe('1 of 88 names matches.')
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(value.setActiveName).toHaveBeenCalledWith('BHC Card')
   })
 
   it('opens the changelog dialog from About', () => {
