@@ -56,7 +56,7 @@ describe('mail footer storage', () => {
     expect(listener).toHaveBeenCalledTimes(1)
   })
 
-  it('applies a published footer only when this device has none', () => {
+  it('applies a published footer only when this device has never set one', () => {
     const published = { default: 'From QDN', byName: {}, inReplies: false }
     expect(applyPublishedFooter(address, emptyMailFooter())).toBe(false)
     expect(applyPublishedFooter(address, published)).toBe(true)
@@ -65,10 +65,20 @@ describe('mail footer storage', () => {
     writeMailFooter(address, { default: 'Mine', byName: {}, inReplies: true })
     expect(applyPublishedFooter(address, { ...published, default: 'Other' })).toBe(false)
     expect(readMailFooter(address)).toEqual({ default: 'Mine', byName: {}, inReplies: true })
-    // A switch alone is not a footer: still counts as empty.
+  })
+
+  it('keeps a cleared footer cleared: the published one does not come back', () => {
+    const published = { default: 'From QDN', byName: { Bob: 'Bob' }, inReplies: true }
+    writeMailFooter(address, { default: 'Mine', byName: {}, inReplies: true })
+    // Settings → Footer emptied: the key stays, holding an empty footer.
+    writeMailFooter(address, { default: '', byName: {}, inReplies: true })
+    expect(applyPublishedFooter(address, published)).toBe(false)
+    expect(isMailFooterEmpty(readMailFooter(address))).toBe(true)
+    // The switch alone set on this device also counts as a local choice.
     localStorage.clear()
     writeMailFooter(address, { default: '', byName: {}, inReplies: false })
-    expect(applyPublishedFooter(address, published)).toBe(true)
+    expect(applyPublishedFooter(address, published)).toBe(false)
+    expect(readMailFooter(address)).toEqual({ default: '', byName: {}, inReplies: false })
   })
 })
 

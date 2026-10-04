@@ -115,15 +115,24 @@ export const writeMailFooter = (
 };
 
 /**
- * The published footer, applied only when this device has none: a local
- * footer is never overwritten silently. Returns true when it was applied.
+ * The published footer, applied only when this device has never set one: a
+ * local footer is never overwritten silently. "Set" means the storage key
+ * exists, because writeMailFooter stores it even when the footer is cleared,
+ * so a deliberately deleted footer stays deleted (and a publish then sends no
+ * footer). Returns true when it was applied.
  */
 export const applyPublishedFooter = (
   address: string | null | undefined,
   published: MailFooterSettings | null | undefined
 ): boolean => {
   if (!address || isMailFooterEmpty(published)) return false;
-  if (!isMailFooterEmpty(readMailFooter(address))) return false;
+  const key = mailFooterStorageKey(address);
+  if (!key) return false;
+  try {
+    if (localStorage.getItem(key) !== null) return false;
+  } catch {
+    return false;
+  }
   writeMailFooter(address, published as MailFooterSettings);
   return true;
 };
