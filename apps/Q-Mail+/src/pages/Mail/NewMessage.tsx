@@ -77,7 +77,7 @@ import {
   lookupPublicKey,
   peekName,
   resolveName,
-  searchNamesQuery,
+  searchDirectoryNames,
 } from "../../utils/nameCache";
 import { AvatarWrapper } from "./MailTable";
 import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
@@ -541,25 +541,10 @@ export const NewMessage = ({
     const timeout = window.setTimeout(async () => {
       setIsDirectorySearchLoading(true);
       try {
-        const response = await qortalRequest({
-          action: "SEARCH_NAMES",
-          query: searchNamesQuery(query),
-          prefix: true,
-          limit: 30,
-          reverse: false,
-        });
+        // Cached for the session (nameCache): reopening the composer or
+        // typing a name again costs no request.
+        const names = await searchDirectoryNames(query, 30);
         if (cancelled) return;
-        if (!Array.isArray(response)) {
-          setDirectoryNameOptions([]);
-          return;
-        }
-        const names = dedupeStrings(
-          response
-            .map((item: any) => {
-              return typeof item?.name === "string" ? item.name.trim() : "";
-            })
-            .filter(Boolean)
-        );
         setDirectoryNameOptions(names);
       } catch {
         if (!cancelled) {
