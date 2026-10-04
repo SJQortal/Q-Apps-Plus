@@ -31,6 +31,7 @@ import { RootState } from "../../state/store";
 import { setNotification } from "../../state/features/notificationsSlice";
 import ReadOnlySlate from "../../components/editor/ReadOnlySlate";
 import { AvatarWrapper } from "./MailTable";
+import { NameText } from "../../components/common/NameText";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
 import { ShowMessageV2Replies } from "./ShowMessageV2Replies";
 import { updateMessageDetails } from "../../utils/helpers";
@@ -206,11 +207,11 @@ export const ShowMessageV2 = ({
           <AvatarWrapper height="48px" user={message?.user} fallback={message?.user} />
           <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, gap: 0.25 }}>
             <Typography component="p" noWrap sx={{ fontSize: "1rem", fontWeight: 700, lineHeight: 1.3 }}>
-              {message?.user}
+              <NameText name={message?.user} />
             </Typography>
             {recipient && (
               <Typography variant="body2" color="text.secondary" noWrap>
-                to {recipient}
+                to {typeof recipient === "string" ? <NameText name={recipient} /> : recipient}
               </Typography>
             )}
             <MessageDate timestamp={message?.createdAt} />
@@ -253,9 +254,14 @@ export const ShowMessageV2 = ({
             startIcon={showEarlier ? <ExpandLessOutlinedIcon /> : <ExpandMoreOutlinedIcon />}
             sx={{ alignSelf: "flex-start", minHeight: 44, textTransform: "none", color: theme.palette.text.secondary }}
           >
-            {showEarlier
-              ? "Hide earlier"
-              : `Show earlier · ${earlier.length} message${earlier.length === 1 ? "" : "s"} included by ${message?.user || "the sender"}`}
+            {showEarlier ? (
+              "Hide earlier"
+            ) : (
+              <>
+                {`Show earlier · ${earlier.length} message${earlier.length === 1 ? "" : "s"} included by `}
+                {message?.user ? <NameText name={message.user} /> : "the sender"}
+              </>
+            )}
           </Button>
           {showEarlier &&
             earlier.map((entry: any, index: number) => (

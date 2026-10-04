@@ -11,6 +11,8 @@ import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
 import { AttachmentList } from "../../components/AttachmentPreview/AttachmentList";
 import { MessageDate } from "./MessageDate";
+import { NameText } from "../../components/common/NameText";
+import { firstVisibleChar } from "../../utils/invisibleCharacters";
 
 export const ShowMessageV2Replies = ({
   message,
@@ -60,12 +62,12 @@ export const ShowMessageV2Replies = ({
         }}
       >
         <Avatar aria-hidden sx={{ width: 36, height: 36, fontSize: "1rem" }}>
-          {sender.charAt(0).toUpperCase()}
+          {(firstVisibleChar(sender) || "?").toUpperCase()}
         </Avatar>
         <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
           <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, minWidth: 0 }}>
             <Typography noWrap sx={{ fontWeight: 700, fontSize: "0.95rem", minWidth: 0 }}>
-              {sender}
+              <NameText name={sender} />
             </Typography>
             <Box sx={{ flexShrink: 0 }}>
               <MessageDate timestamp={message?.createdAt} asText />
@@ -75,7 +77,13 @@ export const ShowMessageV2Replies = ({
             {subject}
           </Typography>
           <Typography noWrap variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
-            {quotedBy ? `Quoted by ${quotedBy}` : "Quoted"}
+            {quotedBy ? (
+              <>
+                Quoted by <NameText name={quotedBy} />
+              </>
+            ) : (
+              "Quoted"
+            )}
           </Typography>
         </Box>
         <ExpandMoreOutlinedIcon sx={{ transition: "transform 150ms ease", transform: isExpanded ? "rotate(180deg)" : "none", "@media (prefers-reduced-motion: reduce)": { transition: "none" } }} />
