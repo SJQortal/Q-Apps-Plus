@@ -1443,6 +1443,29 @@ Simon asked for names containing "⠀" (U+2800 BRAILLE PATTERN BLANK) to be cros
 
 Commits (`git log --oneline 9f24e6b..HEAD`): `957a3e4` NameText, `d9eaa00` lists and threads, `527fd78` reader, `d369bd8` rail, pane headers and Aliases, `e772a46` composer, `88c1100` Settings, `e71fc37` blocked names. After review: `1b2696f` member chips, `02be18b` inbox empty hint, `076516c` delete-draft dialog, `9f8a5f1` Cc/Bcc error, `93bab24` reply alias field, `95cec15` unblock error, `cf81713` toasts, `3666e47` aria-labels, `9f97fd2` colour and thickness tests, `0a0a33b` ZWJ and NFKC cases, `745ae81` brief, `df75064` screenshot mocks. Tests: 87 files, 693 tests.
 
+### Composer help and From avatars (2026-10-04, late)
+
+Simon asked for two things in the composer: hovering over "Send to alias", "Cc" and "Bcc" should explain clearly what they mean, and the From list should show a small avatar next to each name that has one.
+
+- **What the three controls really do,** checked in `buildDirectMailPublishRequest` and §3, §8, §17 before writing any text:
+  - The To copy uses the name form, or the alias form when an alias is set. Cc and Bcc copies use the name form and share the To copy's send id.
+  - Every copy is encrypted once to the To, Cc and Bcc keys.
+  - Every copy carries the Cc names in `cc`. Bcc names are never written into the mail.
+  - An alias message gets no Cc or Bcc copies.
+- **Tooltips:** each button has a tooltip on hover, on keyboard focus and on a long press (500 ms), which describes the button without renaming it. The texts are `COMPOSE_TOGGLE_HELP` in `NewMessage.tsx`. The Bcc tooltip says plainly that each Bcc copy is a public QDN record under the sender's name, labelled with the Bcc name and sharing the send id.
+- **Help lines:** the Bcc row gained a help line like the Cc row's, and both are linked to their fields with `aria-describedby`.
+- **Alias + Bcc (found while checking):** with an alias filled in, Send skipped the Bcc copies but kept the Bcc keys in `publicKeys`, the same as upstream, and said nothing. Cc with an alias was already refused. Bcc is now refused the same way, with "Bcc is not sent with an alias: remove the Bcc names, or send without the alias". The publish request itself is unchanged.
+- **From avatars:** each name shows its avatar (24 px) in the list and in the chosen value, only when it has one: no letter circle and no gap. `NameAvatar` gained a `fallback` prop ("letter", "space", "none"). Avatars load only for rows on screen, from the session cache, and the closed field asks for one.
+- **From with many names:** with more than 15 names, From is the searchable name switcher that Settings and the Footer picker use, so Simon's 86 names can be searched. The chosen value is the same string as before, so drafts, the footer and sending are unchanged.
+- **Accessibility:** axe's "region" rule flagged the mailboxes resize handle at 1280 since round 5, because it sat between `<aside>` and `<main>`. It now opens `<main>`; it resizes from the drag distance, so its place doesn't matter. The To suggestions and the new tooltips were portals at the end of `<body>`. They now render inside the composer, with fixed positioning so the pane can't clip them. The screenshots show the tooltip and the suggestion list whole.
+
+- **Screenshot run** (Playwright's Chromium, 24 screens, 4 themes, 5 sizes): light mode 472 captures with 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 small targets, 0 small text and 0 axe violations. Dark mode had the same zeros on 452 captures, except two screens:
+  - **Settings, small text:** the 2 hits were the hidden label copies MUI puts in an outlined field's legend (12 px, opacity 0), first seen with the Footer panel. `screens.mjs` now skips invisible text (`64f10ae`, a `Repo:` commit).
+  - **attachment-pdf:** the screen still clicked the old "Open spec-sheet.pdf" button. It now captures the Q-Share+-style card after Open PDF, and a new `attachment-pdf-viewer` screen plays a Hub without the reader, so the card opens the bundled pdf.js viewer (`389b733`).
+  - Both screens were rerun in all 4 themes in dark mode: 60 captures, all zeros.
+
+Commits: `227f33a` tooltips, `ee619db` Bcc help line, `45d95d6` NameAvatar fallback, `788529d` From avatars, `18c7c27` searchable From above 15 names, merged in `1637bab`; then `21f6ce7` alias + Bcc refused, `b00d0b6` resize handle inside `<main>`, `5554a06` popups inside the composer, `64f10ae` and `389b733` screenshot check. Tests: 90 files, 716 tests. Not checked in Hub yet.
+
 ## Follow-ups
 
 **For Simon on his own account.** The round 5 Hub checks already ran on your account (read-only, nothing published or sent): the 86-name switcher and its search, the avatars after a switch, pane widths, switching between messages, the full-width list, Mugician's join link (declined), the footer at 1440 and 390 (all cleared again), mail 1's PDF in Hub's reader and in the in-app viewer, and the Q-Share+ comparison. Left for you, in Q-Mail+ and the original Q-Mail:
