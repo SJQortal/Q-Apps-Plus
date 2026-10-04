@@ -8,6 +8,7 @@ import { addUser } from '../../state/features/authSlice'
 import { resetAvatarCache } from '../../utils/avatarCache'
 import { ShowMessageV2 } from './ShowMessageV2'
 import { escapeHtmlText, relativeMailDate } from './readerTime'
+import { mailDateTime } from './MessageDate'
 
 const now = Date.now()
 const message = {
@@ -49,6 +50,15 @@ describe('readerTime', () => {
     expect(relativeMailDate(undefined)).toBe('')
     expect(escapeHtmlText('<b>&"x"')).toBe('&lt;b&gt;&amp;&quot;x&quot;')
   })
+
+  it('gives <time> a machine-readable datetime, and none for a bad timestamp', () => {
+    expect(mailDateTime(1700000000000)).toBe('2023-11-14T22:13:20.000Z')
+    expect(mailDateTime('1700000000000')).toBe('2023-11-14T22:13:20.000Z')
+    expect(mailDateTime(undefined)).toBeUndefined()
+    expect(mailDateTime('soon')).toBeUndefined()
+    expect(mailDateTime(0)).toBeUndefined()
+    expect(mailDateTime(1e20)).toBeUndefined()
+  })
 })
 
 describe('ShowMessageV2', () => {
@@ -61,10 +71,14 @@ describe('ShowMessageV2', () => {
     const setReplyTo = vi.fn()
     const onReplyAll = vi.fn()
     wrap(<ShowMessageV2 message={message} setReplyTo={setReplyTo} setForwardInfo={vi.fn()} onReplyAll={onReplyAll} onClose={vi.fn()} />)
-    expect(screen.getByRole('heading', { level: 2, name: 'alice' })).toBeTruthy()
+    expect(screen.getByText('alice', { selector: 'p' })).toBeTruthy()
     expect(screen.getByText('to bob')).toBeTruthy()
-    expect(screen.getByRole('heading', { level: 1, name: 'Lunch <plan>' })).toBeTruthy()
+    // One h1 per view (the PaneHeader's): the subject is the pane's h2, the only heading here.
+    expect(screen.queryAllByRole('heading', { level: 1 })).toHaveLength(0)
+    expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual(['Lunch <plan>'])
+    expect(screen.getByRole('heading', { level: 2, name: 'Lunch <plan>' })).toBeTruthy()
     expect(screen.getByText('5 min ago')).toBeTruthy()
+    expect(screen.getByText('5 min ago').closest('time')?.getAttribute('datetime')).toBe(new Date(message.createdAt).toISOString())
     fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
     expect(setReplyTo).toHaveBeenCalledWith(message)
     fireEvent.click(screen.getByRole('button', { name: 'Reply all' }))
