@@ -78,6 +78,12 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('dialog', { name: "What's new" })).toBeTruthy()
   })
 
+  it('does not show the local-only rating control in About', () => {
+    renderSettings()
+    expect(screen.queryByText('Rate this app')).toBeNull()
+    expect(screen.queryByRole('radio', { name: /Star/ })).toBeNull()
+  })
+
   it('saves the "always fetch and apply" preference under the existing key', () => {
     renderSettings()
     const toggle = screen.getByRole('switch', { name: 'Always fetch and apply published mail state' })
