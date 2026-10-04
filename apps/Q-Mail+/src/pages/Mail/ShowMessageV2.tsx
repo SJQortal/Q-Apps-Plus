@@ -201,18 +201,25 @@ export const ShowMessageV2 = ({ setIsOpen, message, setReplyTo, alias, setForwar
       </Box>
 
       {earlier.length > 0 && (
-        <Box component="section" aria-label="Earlier messages" sx={{ width: "100%", mt: 3, px: compact ? 1.5 : 2.5, pb: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+        <Box component="section" aria-label={message?.user ? `Earlier messages included by ${message.user}` : "Earlier messages included by the sender"} sx={{ width: "100%", mt: 3, px: compact ? 1.5 : 2.5, pb: 2, display: "flex", flexDirection: "column", gap: 1 }}>
           <Button
             onClick={() => setShowEarlier((v) => !v)}
             aria-expanded={showEarlier}
             startIcon={showEarlier ? <ExpandLessOutlinedIcon /> : <ExpandMoreOutlinedIcon />}
             sx={{ alignSelf: "flex-start", minHeight: 44, textTransform: "none", color: theme.palette.text.secondary }}
           >
-            {showEarlier ? "Hide earlier" : `Show earlier · ${earlier.length} message${earlier.length === 1 ? "" : "s"} in this conversation`}
+            {showEarlier
+              ? "Hide earlier"
+              : `Show earlier · ${earlier.length} message${earlier.length === 1 ? "" : "s"} included by ${message?.user || "the sender"}`}
           </Button>
           {showEarlier &&
             earlier.map((entry: any, index: number) => (
-              <ShowMessageV2Replies key={entry.data?.id || entry.reference?.identifier || index} message={entry.data} defaultExpanded={index === earlier.length - 1} />
+              <ShowMessageV2Replies
+                key={entry.data?.id || entry.reference?.identifier || index}
+                message={entry.data}
+                quotedBy={message?.user}
+                defaultExpanded={index === earlier.length - 1}
+              />
             ))}
         </Box>
       )}
