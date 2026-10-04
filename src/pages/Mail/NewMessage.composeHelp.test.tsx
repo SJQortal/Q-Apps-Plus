@@ -1,10 +1,11 @@
 /**
  * "Send to alias", "Cc" and "Bcc" say what they do: a tooltip on hover,
  * keyboard focus or a long press, describing the button (its name stays
- * short).
+ * short), and help lines under the opened Cc and Bcc rows, linked to their
+ * fields.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { MemoryRouter } from 'react-router-dom'
 import { HubThemeProvider } from '../../hub-theme'
@@ -102,5 +103,48 @@ describe('Compose: what Send to alias, Cc and Bcc mean', () => {
     const tooltip = await screen.findByRole('tooltip', {}, { timeout: 2000 })
     expect(tooltip.textContent).toBe(COMPOSE_TOGGLE_HELP.bcc)
     fireEvent.touchEnd(button)
+  })
+
+  it('shows a help line under the Bcc row, linked to its field, like the Cc row', async () => {
+    renderComposer()
+    fireEvent.click(screen.getByRole('button', { name: 'Bcc' }))
+    const bccHelp = screen.getByText(/Bcc names are not listed in the mail/)
+    expect(bccHelp.textContent).toBe(
+      "Bcc names are not listed in the mail, but each Bcc copy is a public QDN record labelled with its recipient's name."
+    )
+    expect(bccHelp.id).toBe('qmail-compose-bcc-help')
+    const bccField = screen.getByRole('textbox', { name: 'Bcc name' })
+    expect(bccField.getAttribute('aria-describedby')).toBe('qmail-compose-bcc-help')
+    // The Bcc toggle is gone once its row is open.
+    expect(screen.queryByRole('button', { name: 'Bcc' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cc' }))
+    const ccHelp = screen.getByText('Cc names are visible to every recipient.')
+    expect(screen.getByRole('textbox', { name: 'Cc name' }).getAttribute('aria-describedby')).toBe(ccHelp.id)
+  })
+
+  it('says under Bcc that an alias message sends no Bcc copies', async () => {
+    renderComposer()
+    fireEvent.click(screen.getByRole('button', { name: 'Bcc' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send to alias' }))
+    fireEvent.change(screen.getByPlaceholderText("The recipient's alias inbox"), { target: { value: 'bob-box' } })
+    await waitFor(() =>
+      expect(screen.getByText(/Bcc names are not listed in the mail/).textContent).toMatch(
+        /With an alias, no Bcc copies are sent\.$/
+      )
+    )
+  })
+
+  it('keeps a problem with a typed Bcc name in the description too', async () => {
+    mockQortalAction('GET_NAME_DATA', () => {
+      throw new Error('Name does not exist')
+    })
+    renderComposer()
+    fireEvent.click(screen.getByRole('button', { name: 'Bcc' }))
+    const bccField = screen.getByRole('textbox', { name: 'Bcc name' })
+    fireEvent.change(bccField, { target: { value: 'nobody' } })
+    fireEvent.keyDown(bccField, { key: 'Enter' })
+    const problem = await screen.findByRole('alert')
+    expect(bccField.getAttribute('aria-describedby')).toBe(`qmail-compose-bcc-help ${problem.id}`)
   })
 })
