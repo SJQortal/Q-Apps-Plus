@@ -13,8 +13,6 @@ import { RootState } from "../../state/store";
 import {
   Box,
   Button,
-  Checkbox,
-  FormControlLabel,
   Typography,
 } from "@mui/material";
 import { useFetchMail } from "../../hooks/useFetchMail";
@@ -36,10 +34,7 @@ import {
   objectToBase64,
   uint8ArrayToObject,
 } from "../../utils/toBase64";
-import {
-  readAutoApplyQdnState,
-  writeAutoApplyQdnState,
-} from "../../utils/qdnStatePreference";
+import { readAutoApplyQdnState } from "../../utils/qdnStatePreference";
 import { formatFullTimestamp } from "../../utils/time";
 import type { LeftSidebarItem } from "@qortal/qapp-lib/left-sidebar/core";
 import { MailShell, PaneScroll } from "../../layout/MailShell";
@@ -140,6 +135,10 @@ import { TOUR_STATUS_DISMISSED, TOUR_STATUS_STORAGE_KEY } from "./MailTour";
 import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
 import { usePhoneBackClose } from "../../layout/usePhoneBackClose";
 import { errorMessage, isHubDecline } from "../../utils/hubErrors";
+import {
+  loadPublishedStateDocument,
+  publishedStateSearchParams,
+} from "./publishedStateLoad";
 
 // Lazy boundaries (docs/apps/Q-Mail+.md → Bundle §5): the composer (Quill,
 // react-dropzone), the reader (dompurify), threads, aliases, sent, drafts and
@@ -656,11 +655,6 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     Record<string, string>
   >({});
   const hasPromptedForPublishedMailStateRef = useRef<string | null>(null);
-  const [rememberQdnStatePreferenceOnLoad, setRememberQdnStatePreferenceOnLoad] =
-    useState(false);
-  // Mirrors the checkbox so the load prompt (awaited inside a callback created
-  // before the user ticked it) reads the current value (Bugs #2).
-  const rememberQdnStatePreferenceRef = useRef(false);
   // True once this session has read the published state document (or
   // published one): a publish before that must fetch and merge it first.
   const hasReadPublishedStateRef = useRef(false);
@@ -721,28 +715,9 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     useConfirmationModal({
       title: "Load published QDN state?",
       message:
-        "Q-Mail found a published mailbox state for this account. Keep fetching it in the background and apply it when the download finishes?",
+        "Q-Mail found a published mailbox state for this account. Keep fetching it in the background and apply it when the download finishes? To load it without asking, turn on Settings → Sync → \"Always fetch and apply published mail state\".",
       confirmLabel: "Load state",
       cancelLabel: "Not now",
-      children: (
-        <FormControlLabel
-          sx={{
-            alignItems: "flex-start",
-            marginLeft: "-9px",
-            marginTop: "4px",
-          }}
-          control={
-            <Checkbox
-              checked={rememberQdnStatePreferenceOnLoad}
-              onChange={(_, checked) => {
-                rememberQdnStatePreferenceRef.current = checked;
-                setRememberQdnStatePreferenceOnLoad(checked);
-              }}
-            />
-          }
-          label="Always fetch and apply QDN state"
-        />
-      ),
     });
 
   const ownedNameCandidates = useMemo(() => {
@@ -2577,46 +2552,37 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     const shouldAutoApplyQdnState = readAutoApplyQdnState(qdnIdentity);
     setIsLoadingQdnState(true);
     try {
-      const fetchPromise = qortalRequest({
-        action: "FETCH_QDN_RESOURCE",
-        name: user.name,
-        service: MAIL_STATE_DOCUMENT_SERVICE,
-        identifier: MAIL_STATE_DOCUMENT_IDENTIFIER,
-        encoding: "base64",
-      });
-
-      void fetchPromise.catch(() => undefined);
-
-      if (!shouldAutoApplyQdnState) {
-        const searchParams = new URLSearchParams({
-          mode: "ALL",
-          service: MAIL_STATE_DOCUMENT_SERVICE,
-          identifier: MAIL_STATE_DOCUMENT_IDENTIFIER,
-          name: user.name,
-          exactmatchnames: "true",
-          limit: "1",
-          includemetadata: "false",
-          reverse: "true",
-          excludeblocked: "true",
-        });
-        const searchData = await searchResources(searchParams);
-        if (!searchData.length) {
-          // Nothing published yet: a publish has nothing to merge.
-          hasReadPublishedStateRef.current = true;
-          return;
-        }
-
-        const shouldLoad = await showLoadPublishedStateModal();
-        if (!shouldLoad) {
-          return;
-        }
-
-        if (rememberQdnStatePreferenceRef.current) {
-          writeAutoApplyQdnState(qdnIdentity, true);
-        }
+      // Search first (limit 1), fetch only when found: an account with no
+      // state document no longer gets a 404 on every load.
+      const ownerName = user.name;
+      const loaded = await loadPublishedStateDocument(
+        {
+          autoApply: shouldAutoApplyQdnState,
+          search: params => searchResources(params),
+          fetchDocument: () =>
+            qortalRequest({
+              action: "FETCH_QDN_RESOURCE",
+              name: ownerName,
+              service: MAIL_STATE_DOCUMENT_SERVICE,
+              identifier: MAIL_STATE_DOCUMENT_IDENTIFIER,
+              encoding: "base64",
+            }),
+          confirm: showLoadPublishedStateModal,
+        },
+        publishedStateSearchParams(
+          ownerName,
+          MAIL_STATE_DOCUMENT_SERVICE,
+          MAIL_STATE_DOCUMENT_IDENTIFIER
+        )
+      );
+      if (loaded.status === "none") {
+        // Nothing published yet: a publish has nothing to merge.
+        hasReadPublishedStateRef.current = true;
+        return;
       }
+      if (loaded.status !== "loaded") return;
 
-      const encodedResource = await fetchPromise;
+      const encodedResource = loaded.encoded;
       if (!encodedResource) return;
 
       let decodedObject: any = null;
@@ -2976,11 +2942,6 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     setPublishedMailStateById({});
     setPublishedArchivedById({});
     setPublishedAppearance(null);
-  }, [user?.address, user?.name]);
-
-  useEffect(() => {
-    rememberQdnStatePreferenceRef.current = false;
-    setRememberQdnStatePreferenceOnLoad(false);
   }, [user?.address, user?.name]);
 
   // Loaded document → read store (only ids with no local decision, see readState.ts).
