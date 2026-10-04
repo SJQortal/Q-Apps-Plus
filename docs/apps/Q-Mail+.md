@@ -1415,6 +1415,19 @@ Group avatars 694 and 659 were each requested twice at the same moment. The per-
 | Kit | in sync | in sync |
 | dist | 3.6 MB | 3.6 MB |
 
+### Impostor names (2026-10-04, late)
+
+Simon asked for names containing "⠀" (U+2800 BRAILLE PATTERN BLANK) to be struck through, as Hub does: impostors register a dev's name plus a hidden character. Q-Mail+ now uses Hub's rule and Hub's look everywhere it shows a name or an alias.
+
+- **Rule:** `src/utils/invisibleCharacters.ts` copies Qortal-Hub's `hasInvisibleCharacters` exactly: NFKC first, then the same character class (U+00AD, U+034F, U+061C, U+115F/1160, U+17B4/17B5, U+180B–180E, U+2000–200F, U+2028–202F, U+205F–206F, U+2800, U+3164, U+FEFF, U+FFA0). Only names and aliases are tested, never addresses or group names.
+- **Look:** `NameText` draws a matching name with a 2px line-through in the theme's `palette.error.main`, as Hub does. It also adds a tooltip and a screen-reader note (", name has hidden characters"). Ordinary names render as plain text with no extra element. The name itself is never changed, so sending, identifiers and search stay byte-for-byte the same.
+- **Where:** mailbox rows, sender and recipient groups, threads, the reader, the rail, pane headers, empty hints, Aliases (including the reply alias field), the composer (To, alias, Cc/Bcc chips and their errors), drafts and the delete-draft dialog, a group's member chips, Settings, blocked names and their errors, and toasts. A toast lists its names in the new `names` field of `setNotification`, which holds plain strings, so redux keeps no React nodes.
+- **Spoken names:** an aria-label replaces the element's content, which hides NameText's note. `spokenName()` adds the same note inside aria-labels that carry a name: mailbox rows, rail rows and Compose as, the name switcher, drafts, sender groups, reply headers, Remove alias and Unblock.
+- **Kept the same as Hub on purpose:** U+200D ZERO WIDTH JOINER is in Hub's range, so a name with a joined emoji such as a family emoji is struck, in Hub as well. NFKC turns U+00A0, U+2000–200A and U+202F into plain spaces, so names containing them are not struck, in Hub either. `invisibleCharacters.test.ts` records both cases. Don't "fix" them into a difference from Hub.
+- **Not checked yet:** in Hub or GO with a real impostor name.
+
+Commits: `957a3e4`, `d9eaa00`, `527fd78`, `d369bd8`, `e772a46`, `88c1100`, `e71fc37`. After review: `1b2696f` member chips, `02be18b` inbox empty hint, `076516c` delete-draft dialog, `9f8a5f1` Cc/Bcc error, `93bab24` reply alias field, `95cec15` unblock error, `cf81713` toasts, `3666e47` aria-labels, `9f97fd2` colour and thickness tests, `0a0a33b` ZWJ and NFKC cases. Tests: 87 files, 693 tests.
+
 ## Follow-ups
 
 **For Simon on his own account.** The round 5 Hub checks already ran on your account (read-only, nothing published or sent): the 86-name switcher and its search, the avatars after a switch, pane widths, switching between messages, the full-width list, Mugician's join link (declined), the footer at 1440 and 390 (all cleared again), mail 1's PDF in Hub's reader and in the in-app viewer, and the Q-Share+ comparison. Left for you, in Q-Mail+ and the original Q-Mail:
