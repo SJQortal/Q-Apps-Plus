@@ -134,6 +134,37 @@ describe('ThreadsMailbox', () => {
     expect(onOpenThread.mock.calls[0][0].lastActivity).toBe(5_000)
   })
 
+  it('does not search again every minute for the header of a recently active older thread', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    try {
+      const oldId = 'qortal_qmail_thread_group1_old'
+      mockFetchRoute(new RegExp(`identifier=${oldId}`), [header('1', 'old', 'An older thread', 500)])
+      mockGroup('1', 20, [post('1', 'old', 'm1', 9_000)])
+      renderThreads(<ThreadsMailbox groups={[groups[0]]} onOpenThread={() => {}} selectedGroup={groups[0]} />)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      expect(screen.getByText('An older thread')).toBeTruthy()
+      expect(fetchedUrls('/arbitrary/resources/search').filter((url) => url.includes(`identifier=${oldId}`))).toHaveLength(1)
+      // Two poll ticks later the header was not searched again.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000)
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120_000)
+      })
+      expect(fetchedUrls('/arbitrary/resources/search').filter((url) => url.includes('query=qortal_qmail_thmsg_group1&')).length).toBeGreaterThan(1)
+      expect(fetchedUrls('/arbitrary/resources/search').filter((url) => url.includes(`identifier=${oldId}`))).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+      vi.restoreAllMocks()
+    }
+  })
+
   it('shows unread from the viewed store and clears it once a thread was opened', async () => {
     mockGroup('1', 2, [post('1', 't1', 'm1', 9_000)])
     saveThreadViewed('alice', '1', 'qortal_qmail_thread_group1_t0', 8_000) // opened after its creation (1000)
