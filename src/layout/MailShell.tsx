@@ -185,7 +185,9 @@ export function MailShell({
         )}
         <Main>
           {showWide ? (
-            <WidePane aria-live="polite" $fab={hasFab}>
+            <WidePane $fab={hasFab}>
+              {/* Not a live region: every keystroke in the composer and every row of a
+                  page would be read out. Views and forms carry their own status regions. */}
               {wide}
             </WidePane>
           ) : (
