@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { TextEditor } from './TextEditor'
+import { paletteColorName } from './pickerA11y'
 
 describe('TextEditor toolbar', () => {
   it('mounts Quill on our two-row toolbar and keeps the rare controls behind More', () => {
@@ -34,5 +35,27 @@ describe('TextEditor toolbar', () => {
     expect(ids).toHaveLength(2)
     expect(new Set(ids).size).toBe(2)
     expect(container.querySelectorAll('.ql-editor')).toHaveLength(2)
+  })
+
+  it('names the colour, highlight and alignment pickers and every option', async () => {
+    const { container } = render(<TextEditor inlineContent="" setInlineContent={vi.fn()} />)
+    for (const name of ['Text size', 'Heading level', 'Text color', 'Highlight color', 'Font family', 'Alignment']) {
+      const label = Array.from(container.querySelectorAll('.ql-picker-label')).find((el) =>
+        (el.getAttribute('aria-label') || '').startsWith(name)
+      )
+      expect(label, name).toBeTruthy()
+    }
+    const colorItems = container.querySelectorAll('.ql-color .ql-picker-item')
+    expect(colorItems).toHaveLength(35)
+    expect(colorItems[1].getAttribute('aria-label')).toBe('Red')
+    expect(colorItems[8].getAttribute('aria-label')).toBe('Pale red')
+    expect(Array.from(colorItems).every((item) => item.getAttribute('aria-label'))).toBe(true)
+    const alignItems = Array.from(container.querySelectorAll('.ql-align .ql-picker-item')).map((i) => i.getAttribute('aria-label'))
+    expect(alignItems).toEqual(['Align left', 'Align centre', 'Align right', 'Justify'])
+    // Space opens a picker as Enter does.
+    const alignLabel = container.querySelector('.ql-align .ql-picker-label') as HTMLElement
+    fireEvent.keyDown(alignLabel, { key: ' ' })
+    expect(alignLabel.getAttribute('aria-expanded')).toBe('true')
+    expect(paletteColorName(34)).toBe('Deep purple')
   })
 })

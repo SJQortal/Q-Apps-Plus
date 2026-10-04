@@ -2,6 +2,7 @@ import React, { useId, useMemo, useRef, useState } from "react";
 import ReactQuill from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
 import './texteditor.css'
+import { watchQuillPickers } from './pickerA11y'
 
 interface TextEditorProps {
   inlineContent: string
@@ -65,6 +66,13 @@ export const TextEditor = ({
         container: `#${toolbarId}`,
       },
     };
+  }, [toolbarId]);
+
+  // Quill's pickers come without accessible names; add them (pickerA11y.ts).
+  React.useEffect(() => {
+    const toolbar = document.getElementById(toolbarId);
+    if (!toolbar) return;
+    return watchQuillPickers(toolbar);
   }, [toolbarId]);
 
   React.useEffect(() => {
