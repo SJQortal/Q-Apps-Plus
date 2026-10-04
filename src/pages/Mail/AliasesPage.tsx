@@ -12,7 +12,8 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import LinkIcon from "@mui/icons-material/Link";
 import { formatFullTimestamp } from "../../utils/time";
-import { NameText } from "../../components/common/NameText";
+import { HIDDEN_CHARACTERS_TITLE, NameText, strikeInputSx } from "../../components/common/NameText";
+import { hasInvisibleCharacters } from "../../utils/invisibleCharacters";
 import { ALIAS_SCAN_MAX_PAGES, ALIAS_SCAN_PAGE_SIZE, aliasScanButtonLabel } from "./aliasScan";
 
 interface AliasScanState {
@@ -383,6 +384,7 @@ export const AliasesPage = ({
             editingReplyAliasByName[aliasName] !== undefined
               ? editingReplyAliasByName[aliasName]
               : linkedReplyAlias;
+          const strikeReplyAlias = hasInvisibleCharacters(replyAliasDraft);
           return (
             <Box
               key={aliasName}
@@ -467,11 +469,19 @@ export const AliasesPage = ({
                   }}
                   placeholder="Optional reply alias for this inbox"
                   size="small"
-                  sx={{
-                    "& .MuiInputBase-root": {
-                      color: "text.primary",
+                  slotProps={{
+                    htmlInput: {
+                      title: strikeReplyAlias ? HIDDEN_CHARACTERS_TITLE : undefined,
                     },
                   }}
+                  sx={[
+                    {
+                      "& .MuiInputBase-root": {
+                        color: "text.primary",
+                      },
+                    },
+                    strikeReplyAlias && strikeInputSx,
+                  ]}
                 />
                 <Stack
                   direction="row"
