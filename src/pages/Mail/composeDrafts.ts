@@ -4,7 +4,7 @@
  * Storage key and shape are the original app's: `qmail_compose_drafts_<address>`
  * holds `{ [draftKey]: StoredComposeDraft }`, keyed `"<from>::<to>"` for a new
  * mail. Everything added here is additive: a reply draft gets its own key
- * (`…::reply:<id>`), a thread post `thread::<groupId>::<threadId|new>`, and
+ * (`…::reply:<id>`, and `…::replyall:<id>` for Reply all), a thread post `thread::<groupId>::<threadId|new>`, and
  * the optional fields below. Readers that know only the old fields keep
  * working; the sanitiser keeps unknown keys out and known ones typed.
  */
@@ -43,6 +43,9 @@ export interface StoredComposeDraft {
   /** Additive: the message a reply draft answers. */
   replyTo?: DraftReplyReference | null;
   replyAll?: boolean;
+  /** Additive: visible Cc names (each gets its own copy, like Bcc). */
+  ccNames?: NameChip[];
+  showCC?: boolean;
   /** Additive, thread posts: where the post belongs. */
   groupId?: string;
   groupName?: string;
@@ -63,9 +66,15 @@ export const getComposeDraftsStorageKey = (address: string): string =>
 
 const normalize = (value: string): string => value.trim().toLowerCase();
 
-export const composeDraftKey = (fromName: string, toName: string, replyToId?: string | null): string => {
+export const composeDraftKey = (
+  fromName: string,
+  toName: string,
+  replyToId?: string | null,
+  replyAll = false
+): string => {
   const base = `${normalize(fromName)}::${normalize(toName)}`;
-  return replyToId ? `${base}::reply:${replyToId}` : base;
+  if (!replyToId) return base;
+  return `${base}::${replyAll ? "replyall" : "reply"}:${replyToId}`;
 };
 
 export const threadDraftKey = (groupId: string | number, threadId?: string | null): string =>
@@ -88,6 +97,23 @@ function sanitizeAttachments(value: unknown): DraftAttachmentMeta[] | undefined 
     })
     .filter((item): item is DraftAttachmentMeta => Boolean(item));
   return items.length ? items : undefined;
+}
+
+function sanitizeNameChips(value: unknown): NameChip[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const chips = value.filter(
+    (item: any): item is NameChip =>
+      Boolean(item) &&
+      typeof item.name === "string" &&
+      Boolean(item.name.trim()) &&
+      typeof item.publicKey === "string" &&
+      Boolean(item.publicKey) &&
+      typeof item.address === "string" &&
+      Boolean(item.address)
+  );
+  return chips.length
+    ? chips.map(item => ({ name: item.name, publicKey: item.publicKey, address: item.address }))
+    : undefined;
 }
 
 function sanitizeReplyTo(value: unknown): DraftReplyReference | null | undefined {
@@ -133,6 +159,9 @@ export function sanitizeComposeDraft(value: unknown): StoredComposeDraft | null 
   const replyTo = sanitizeReplyTo(draft.replyTo);
   if (replyTo !== undefined) sanitized.replyTo = replyTo;
   if (draft.replyAll) sanitized.replyAll = true;
+  const ccNames = sanitizeNameChips(draft.ccNames);
+  if (ccNames) sanitized.ccNames = ccNames;
+  if (draft.showCC) sanitized.showCC = true;
   if (typeof draft.groupId === "string" && draft.groupId.trim()) sanitized.groupId = draft.groupId.trim();
   if (typeof draft.groupName === "string" && draft.groupName.trim()) sanitized.groupName = draft.groupName.trim();
   if (typeof draft.threadId === "string" && draft.threadId.trim()) sanitized.threadId = draft.threadId.trim();
@@ -141,7 +170,7 @@ export function sanitizeComposeDraft(value: unknown): StoredComposeDraft | null 
 }
 
 const THREAD_KEY_PATTERN = /^thread::(\d+)::(new|qortal_qmail_thread_group\S+)$/;
-const REPLY_KEY_PATTERN = /::reply:(.+)$/;
+const REPLY_KEY_PATTERN = /::reply(all)?:(.+)$/;
 
 /**
  * The original Q-Mail rewrites every entry of the shared map with only its
@@ -160,8 +189,11 @@ export function withRoutingFromKey(key: string, draft: StoredComposeDraft): Stor
     return restored;
   }
   const reply = REPLY_KEY_PATTERN.exec(key);
-  if (reply && draft.replyTo === undefined && draft.kind !== "thread") {
-    return { ...draft, replyTo: { id: reply[1], user: draft.toName } };
+  if (reply && draft.kind !== "thread") {
+    let restored = draft;
+    if (draft.replyTo === undefined) restored = { ...restored, replyTo: { id: reply[2], user: draft.toName } };
+    if (reply[1] && !draft.replyAll) restored = { ...restored, replyAll: true };
+    return restored;
   }
   return draft;
 }
@@ -261,4 +293,49 @@ export function subscribeToComposeDrafts(listener: () => void): () => void {
     window.removeEventListener(COMPOSE_DRAFTS_CHANGED_EVENT, listener);
     window.removeEventListener("storage", onStorage);
   };
+}
+
+export interface ComposerContentInput {
+  subject: string;
+  /** The subject the composer started with ("Re: …", "Fwd: …", a prefill). */
+  initialSubject: string;
+  value: string;
+  /** The body the composer started with, as the editor normalised it. */
+  initialValue: string;
+  aliasValue: string;
+  attachmentCount: number;
+  bccNames: { name: string }[];
+  ccNames: { name: string }[];
+  /** Cc names Reply all filled in by itself. */
+  initialCcNames: string[];
+  /** Visible text of an HTML body. */
+  textOf: (html: string) => string;
+}
+
+const sameNameSet = (chips: { name: string }[], names: string[]): boolean => {
+  const a = new Set(chips.map(chip => normalize(chip?.name || "")).filter(Boolean));
+  const b = new Set(names.map(normalize).filter(Boolean));
+  if (a.size !== b.size) return false;
+  for (const name of a) if (!b.has(name)) return false;
+  return true;
+};
+
+/**
+ * Whether the composer holds something the user wrote, which is what makes
+ * a draft worth saving and Discard worth confirming. What the composer
+ * filled in by itself (the reply quote or forward header, the Re:/Fwd:
+ * subject, Reply all's Cc names) does not count.
+ */
+export function hasComposerContent(input: ComposerContentInput): boolean {
+  const subjectChanged = Boolean(input.subject.trim()) && input.subject !== input.initialSubject;
+  const bodyChanged = input.value !== input.initialValue && Boolean(input.textOf(input.value).trim());
+  const ccChanged = input.ccNames.length > 0 && !sameNameSet(input.ccNames, input.initialCcNames);
+  return Boolean(
+    subjectChanged ||
+      bodyChanged ||
+      ccChanged ||
+      input.aliasValue.trim() ||
+      input.bccNames.length ||
+      input.attachmentCount
+  );
 }

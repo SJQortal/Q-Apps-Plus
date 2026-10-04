@@ -73,7 +73,7 @@ export function describeDraftTarget(draft: StoredComposeDraft): string {
     const where = draft.groupName || draft.toName;
     return draft.threadId ? `Post in ${where}` : `New thread in ${where}`;
   }
-  if (draft.replyTo?.id) return `Reply to ${draft.toName}`;
+  if (draft.replyTo?.id) return `${draft.replyAll ? "Reply all" : "Reply"} to ${draft.toName}`;
   return `To ${draft.toName}`;
 }
 

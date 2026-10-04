@@ -5,7 +5,10 @@
  * - `lookupName(name)`  → GET_NAME_DATA once per name per session
  *                         (a miss is remembered for 30 s);
  * - `resolveName(name)` → the above plus GET_ACCOUNT_DATA once per address;
- * - identical lookups in flight share one promise.
+ * - identical lookups in flight share one promise;
+ * - `searchDirectoryNames(query)` → SEARCH_NAMES (prefix) once per query per
+ *                         session, answered from a shorter query's complete
+ *                         result when there is one.
  *
  * The composer uses it for inline "is this a registered name?" validation,
  * for Bcc chips, for reply-all and at send time, so a name the user typed is
@@ -30,7 +33,10 @@ const names = new Map<string, { at: number; value: NameLookup }>();
 const keys = new Map<string, string>();
 const inFlightNames = new Map<string, Promise<NameLookup>>();
 const inFlightKeys = new Map<string, Promise<string>>();
-let stats = { nameRequests: 0, keyRequests: 0, hits: 0 };
+const searches = new Map<string, { names: string[]; complete: boolean }>();
+const inFlightSearches = new Map<string, Promise<string[]>>();
+const MAX_SEARCHES = 300;
+let stats = { nameRequests: 0, keyRequests: 0, searchRequests: 0, hits: 0 };
 
 export function normalizeName(name: unknown): string {
   return typeof name === "string" ? name.trim().toLowerCase() : "";
@@ -145,8 +151,77 @@ export function peekName(name: string): NameLookup | undefined {
   return cached.value;
 }
 
+const searchKey = (query: string, limit: number) => `${limit}:${query}`;
+
+/**
+ * Registered names starting with `query` (case-insensitive), for the
+ * composer's To/Cc suggestions: one SEARCH_NAMES per query per session,
+ * identical searches in flight merged. When a shorter query already came back
+ * with fewer than `limit` names, that list is complete, so a longer query is
+ * answered by filtering it, with no request. Failures are not cached.
+ */
+export function searchDirectoryNames(query: string, limit = 30): Promise<string[]> {
+  const normalized = normalizeName(query);
+  if (!normalized) return Promise.resolve([]);
+  const key = searchKey(normalized, limit);
+
+  const cached = searches.get(key);
+  if (cached) {
+    stats.hits += 1;
+    return Promise.resolve(cached.names);
+  }
+  for (let length = normalized.length - 1; length >= 1; length -= 1) {
+    const shorter = searches.get(searchKey(normalized.slice(0, length), limit));
+    if (shorter?.complete) {
+      stats.hits += 1;
+      const names = shorter.names.filter(name => normalizeName(name).startsWith(normalized));
+      remember(key, { names, complete: true });
+      return Promise.resolve(names);
+    }
+  }
+
+  const running = inFlightSearches.get(key);
+  if (running) return running;
+
+  const request = (async () => {
+    stats.searchRequests += 1;
+    const response = await qortalRequest({
+      action: "SEARCH_NAMES",
+      query: searchNamesQuery(normalized),
+      prefix: true,
+      limit,
+      reverse: false,
+    });
+    const seen = new Set<string>();
+    const names: string[] = [];
+    (Array.isArray(response) ? response : []).forEach((item: any) => {
+      const name = typeof item?.name === "string" ? item.name.trim() : "";
+      const nameKey = normalizeName(name);
+      if (!name || seen.has(nameKey)) return;
+      seen.add(nameKey);
+      names.push(name);
+    });
+    const complete = Array.isArray(response) && response.length < limit;
+    remember(key, { names, complete });
+    return names;
+  })();
+
+  inFlightSearches.set(key, request);
+  return request.finally(() => {
+    inFlightSearches.delete(key);
+  });
+}
+
+function remember(key: string, value: { names: string[]; complete: boolean }) {
+  searches.set(key, value);
+  if (searches.size > MAX_SEARCHES) {
+    const oldest = searches.keys().next().value;
+    if (oldest !== undefined) searches.delete(oldest);
+  }
+}
+
 export function nameCacheStats() {
-  return { ...stats, names: names.size, keys: keys.size };
+  return { ...stats, names: names.size, keys: keys.size, searches: searches.size };
 }
 
 export function resetNameCache(): void {
@@ -154,5 +229,7 @@ export function resetNameCache(): void {
   keys.clear();
   inFlightNames.clear();
   inFlightKeys.clear();
-  stats = { nameRequests: 0, keyRequests: 0, hits: 0 };
+  searches.clear();
+  inFlightSearches.clear();
+  stats = { nameRequests: 0, keyRequests: 0, searchRequests: 0, hits: 0 };
 }

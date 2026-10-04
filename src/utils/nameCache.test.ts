@@ -7,6 +7,7 @@ import {
   peekName,
   resetNameCache,
   resolveName,
+  searchDirectoryNames,
   searchNamesQuery,
 } from './nameCache'
 
@@ -73,5 +74,59 @@ describe('nameCache', () => {
     expect(searchNamesQuery('a+b+')).toBe('a%2Bb%2B')
     expect(searchNamesQuery("Zoë Ångström & O'Neil/2")).toBe("Zoë Ångström & O'Neil/2")
     expect(searchNamesQuery('')).toBe('')
+  })
+
+  describe('searchDirectoryNames (To suggestions)', () => {
+    const directory = ['Alice', 'alicia', 'Alfred', 'Bob', 'bob+builder']
+    beforeEach(() => {
+      mockQortalAction('SEARCH_NAMES', (request: any) => {
+        const query = decodeURIComponent(request.query).toLowerCase()
+        return directory
+          .filter(name => name.toLowerCase().startsWith(query))
+          .slice(0, request.limit)
+          .map(name => ({ name, owner: `Q${name}` }))
+      })
+    })
+
+    it('asks once per query for the session, whatever the case, and merges searches in flight', async () => {
+      const [a, b] = await Promise.all([searchDirectoryNames('Ali'), searchDirectoryNames('ali')])
+      expect(a).toEqual(['Alice', 'alicia'])
+      expect(b).toEqual(a)
+      expect(await searchDirectoryNames(' ALI ')).toEqual(['Alice', 'alicia'])
+      expect(qortalCalls('SEARCH_NAMES')).toHaveLength(1)
+      expect(qortalCalls('SEARCH_NAMES')[0]).toEqual({
+        action: 'SEARCH_NAMES',
+        query: 'ali',
+        prefix: true,
+        limit: 30,
+        reverse: false,
+      })
+      expect(nameCacheStats().searchRequests).toBe(1)
+    })
+
+    it('answers a longer query from a shorter complete one, without a request', async () => {
+      expect(await searchDirectoryNames('al')).toEqual(['Alice', 'alicia', 'Alfred'])
+      expect(await searchDirectoryNames('alic')).toEqual(['Alice', 'alicia'])
+      expect(await searchDirectoryNames('alfz')).toEqual([])
+      expect(qortalCalls('SEARCH_NAMES')).toHaveLength(1)
+    })
+
+    it('asks again when the shorter result was cut at the limit', async () => {
+      expect(await searchDirectoryNames('al', 2)).toEqual(['Alice', 'alicia'])
+      expect(await searchDirectoryNames('alf', 2)).toEqual(['Alfred'])
+      expect(qortalCalls('SEARCH_NAMES')).toHaveLength(2)
+    })
+
+    it('encodes "+" and does not cache a failure', async () => {
+      expect(await searchDirectoryNames('bob+')).toEqual(['bob+builder'])
+      expect(qortalCalls('SEARCH_NAMES')[0].query).toBe('bob%2B')
+      mockQortalAction('SEARCH_NAMES', () => {
+        throw new Error('Request timed out')
+      })
+      await expect(searchDirectoryNames('carl')).rejects.toThrow('timed out')
+      mockQortalAction('SEARCH_NAMES', [{ name: 'Carl' }])
+      expect(await searchDirectoryNames('carl')).toEqual(['Carl'])
+      expect(await searchDirectoryNames('')).toEqual([])
+    })
   })
 })

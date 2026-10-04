@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   aliasMailIdentifier,
   buildDirectMailObject,
+  buildDirectMailPublishRequest,
   buildForwardHeaderHtml,
   buildReplyQuoteHtml,
   buildReplyThreadV2,
@@ -14,6 +15,7 @@ import {
   replyAllRecipients,
   sortNamesByRecency,
   stripEmbeddedHistory,
+  uniqueCopyRecipients,
   withSubjectPrefix,
 } from './mailCompose'
 
@@ -265,5 +267,111 @@ describe('replyAllRecipients', () => {
   })
   it('works for mail from the original app (no to/cc)', () => {
     expect(replyAllRecipients({ user: 'Ali' }, ['Me'])).toEqual({ to: 'Ali', others: [] })
+  })
+})
+
+describe('buildDirectMailPublishRequest (the whole publish, binding §3/§4)', () => {
+  // A readable stand-in for objectToBase64: the test decodes it back.
+  const encode = async (value: any) => `json:${JSON.stringify(value)}`
+  const decode = (data64: string) => JSON.parse(data64.slice(5))
+  const to = { name: 'Bob', address: 'QBOBaddr111111', publicKey: 'pkBob' }
+  const carl = { name: 'Carl', address: 'QCARLaddr22222', publicKey: 'pkCarl' }
+  const dana = { name: 'averyveryverylongname-dana', address: 'QDANAaddr33333', publicKey: 'pkDana' }
+  const eve = { name: 'Eve', address: 'QEVEaddr444444', publicKey: 'pkEve' }
+  const attachment = { name: 'Me', service: 'ATTACHMENT_PRIVATE', identifier: 'attachments_qmail_a_b', data64: 'AAA', filename: 'a.txt', originalFilename: 'x.txt', type: 'text/plain', size: 3 }
+  const mail = {
+    subject: 'Hello',
+    createdAt: 1700000000000,
+    attachments: [{ identifier: 'attachments_qmail_a_b', name: 'Me', service: 'ATTACHMENT_PRIVATE' }],
+    textContentV2: '<p>Hi all</p>',
+  }
+
+  it('To, two Cc and one Bcc: order, identifiers, keys and the JSON of every copy', async () => {
+    const request = await buildDirectMailPublishRequest({
+      senderName: 'Me',
+      service: 'MAIL_PRIVATE',
+      sendId: 'SEND1',
+      to,
+      cc: [carl, dana],
+      bcc: [eve],
+      attachmentPublishes: [attachment],
+      mail,
+      encode,
+    })
+    expect(request.action).toBe('PUBLISH_MULTIPLE_QDN_RESOURCES')
+    expect(request.encrypt).toBe(true)
+    expect(request.publicKeys).toEqual(['pkBob', 'pkCarl', 'pkDana', 'pkEve'])
+    expect(request.resources[0]).toBe(attachment)
+    expect(request.resources.slice(1).map(r => r.identifier)).toEqual([
+      '_mail_qortal_qmail_Bob_111111_mail_SEND1',
+      '_mail_qortal_qmail_Carl_r22222_mail_SEND1',
+      '_mail_qortal_qmail_averyveryverylongnam_r33333_mail_SEND1',
+      '_mail_qortal_qmail_Eve_444444_mail_SEND1',
+    ])
+    request.resources.slice(1).forEach(resource => {
+      expect(Object.keys(resource).sort()).toEqual(['action', 'data64', 'identifier', 'name', 'service'])
+      expect(resource.action).toBe('PUBLISH_QDN_RESOURCE')
+      expect(resource.name).toBe('Me')
+      expect(resource.service).toBe('MAIL_PRIVATE')
+    })
+    const copies = request.resources.slice(1).map(r => decode(r.data64))
+    expect(copies.map(c => c.recipient)).toEqual(['Bob', 'Carl', 'averyveryverylongname-dana', 'Eve'])
+    copies.forEach(copy => {
+      expect(copy).toEqual({
+        subject: 'Hello',
+        createdAt: 1700000000000,
+        version: 1,
+        attachments: mail.attachments,
+        textContentV2: '<p>Hi all</p>',
+        generalData: { thread: [], threadV2: [] },
+        recipient: copy.recipient,
+        to: ['Bob'],
+        cc: ['Carl', 'averyveryverylongname-dana'],
+      })
+      // A Bcc name appears only as the recipient of its own copy.
+      if (copy.recipient !== 'Eve') expect(JSON.stringify(copy)).not.toContain('Eve')
+    })
+  })
+
+  it('no Cc and no Bcc is exactly the single-copy publish of before', async () => {
+    const request = await buildDirectMailPublishRequest({
+      senderName: 'Me', service: 'MAIL_PRIVATE', sendId: 'S', to, mail, encode,
+    })
+    expect(request.publicKeys).toEqual(['pkBob'])
+    expect(request.resources).toHaveLength(1)
+    expect(decode(request.resources[0].data64)).toMatchObject({ recipient: 'Bob', to: ['Bob'], cc: [] })
+  })
+
+  it('drops repeats: To in Cc, Cc in Bcc, a name twice', async () => {
+    const request = await buildDirectMailPublishRequest({
+      senderName: 'Me', service: 'MAIL_PRIVATE', sendId: 'S', to,
+      cc: [{ ...to, name: 'bob' }, carl, { ...carl, name: ' CARL ' }],
+      bcc: [carl, eve],
+      mail, encode,
+    })
+    expect(request.publicKeys).toEqual(['pkBob', 'pkCarl', 'pkEve'])
+    expect(request.resources.map(r => decode(r.data64).recipient)).toEqual(['Bob', 'Carl', 'Eve'])
+    expect(decode(request.resources[2].data64).cc).toEqual(['Carl'])
+    expect(uniqueCopyRecipients(to, [], [eve, eve]).bcc).toEqual([eve])
+  })
+
+  it('an alias send goes to the alias inbox only: no copies, no Cc names, Bcc keys kept', async () => {
+    const request = await buildDirectMailPublishRequest({
+      senderName: 'Me', service: 'MAIL_PRIVATE', sendId: 'S', to, aliasValue: 'secret box',
+      cc: [carl], bcc: [eve], mail, encode,
+    })
+    expect(request.resources.map(r => r.identifier)).toEqual(['_mail_qortal_qmail_secret box_mail_S'])
+    expect(decode(request.resources[0].data64)).toMatchObject({ recipient: 'Bob', to: ['Bob'], cc: [] })
+    expect(request.publicKeys).toEqual(['pkBob', 'pkEve'])
+  })
+
+  it('a reply carries the history in every copy', async () => {
+    const request = await buildDirectMailPublishRequest({
+      senderName: 'Me', service: 'MAIL_PRIVATE', sendId: 'S', to, cc: [carl],
+      mail: { ...mail, replyTo: original }, encode,
+    })
+    request.resources.forEach(resource => {
+      expect(decode(resource.data64).generalData.threadV2).toHaveLength(2)
+    })
   })
 })
