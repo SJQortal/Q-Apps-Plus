@@ -69,6 +69,24 @@ describe('OpenMail', () => {
     expect(store.getState().mail.hashMapMailMessages[fileInfo.identifier]?.subject).toBe('Hi')
   })
 
+  it('opens a message already on the node in about half a second when Core first says DOWNLOADED', async () => {
+    const answers = [{ status: 'DOWNLOADED' }, { status: 'READY' }]
+    let i = 0
+    mockQortalAction('GET_QDN_RESOURCE_STATUS', () => answers[Math.min(i++, answers.length - 1)])
+    mockQortalAction('GET_QDN_RESOURCE_PROPERTIES', {})
+    mockQortalAction('FETCH_QDN_RESOURCE', 'ENC')
+    mockQortalAction('DECRYPT_DATA', btoa(JSON.stringify(mailJson)))
+    const handleClose = vi.fn()
+    wrap(<OpenMail open handleClose={handleClose} fileInfo={fileInfo} />)
+    await tick(0)
+    expect(handleClose).not.toHaveBeenCalled()
+    await tick(500)
+    await tick(0)
+    expect(qortalCalls('GET_QDN_RESOURCE_STATUS')).toHaveLength(2)
+    expect(handleClose).toHaveBeenCalledTimes(1)
+    expect(handleClose.mock.calls[0][0]).toMatchObject({ isValid: true, subject: 'Hi' })
+  })
+
   it('shows an error with Retry instead of spinning when the fetch throws (Bugs #3), and Cancel resolves with nothing', async () => {
     mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'READY' })
     let fail = true

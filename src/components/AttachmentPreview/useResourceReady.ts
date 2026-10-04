@@ -8,10 +8,14 @@
  *   or when the status is MISSING_DATA/FAILED (so a message whose sender is
  *   offline costs one call every 40 s, not every 5 s, and nothing leaks on
  *   unmount: Bugs #4 and #6);
+ * - while Core reports DOWNLOADED or BUILDING (the file is on the node and
+ *   only being assembled, which takes well under a second), it re-checks
+ *   quickly: after 0.5 s, then 1 s, and only then falls back to the 5 s poll
+ *   (a message already on the node opened in ~0.5 s instead of 5.4 s);
  * - `retry()` asks Core again and resumes a fast poll.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { usePolling } from '../../hooks/usePolling';
+import { isDocumentVisible, usePolling } from '../../hooks/usePolling';
 import {
   fetchResourceStatus,
   isStalledStatus,
@@ -41,7 +45,14 @@ export interface UseResourceReadyOptions {
 
 export const RESOURCE_POLL_MS = 5000;
 export const RESOURCE_POLL_MAX_MS = 40000;
+/** Quick re-checks while the resource is DOWNLOADED/BUILDING, before the normal poll. */
+export const RESOURCE_SETTLING_DELAYS_MS: readonly number[] = [500, 1000];
 const DEFAULT_MAX_FAILURES = 6;
+
+/** The file is on the node and Core is assembling it: READY is moments away. */
+export function isSettlingStatus(status: string | null | undefined): boolean {
+  return status === 'DOWNLOADED' || status === 'BUILDING';
+}
 
 const idle: ResourceReadyState = { phase: 'idle', status: null, error: null };
 
@@ -49,6 +60,8 @@ export function useResourceReady(ref: ResourceRef | null | undefined, options: U
   const { enabled = true, intervalMs = RESOURCE_POLL_MS, maxIntervalMs = RESOURCE_POLL_MAX_MS, maxFailures = DEFAULT_MAX_FAILURES } = options;
   const [state, setState] = useState<ResourceReadyState>(idle);
   const [runKey, setRunKey] = useState(0);
+  // Index into RESOURCE_SETTLING_DELAYS_MS; reset by every initial check.
+  const [settleStep, setSettleStep] = useState(0);
   const failuresRef = useRef(0);
   const aliveRef = useRef(true);
   const key = ref ? `${ref.name}/${ref.service}/${ref.identifier}` : '';
@@ -82,6 +95,7 @@ export function useResourceReady(ref: ResourceRef | null | undefined, options: U
     }
     let cancelled = false;
     failuresRef.current = 0;
+    setSettleStep(0);
     setState((prev) => ({ phase: 'checking', status: prev.status, error: null }));
     void (async () => {
       try {
@@ -108,6 +122,40 @@ export function useResourceReady(ref: ResourceRef | null | undefined, options: U
   const refRef = useRef(ref);
   refRef.current = ref;
 
+  // Quick re-checks while Core assembles a file it already has.
+  const settling =
+    enabled &&
+    Boolean(ref) &&
+    state.phase === 'waiting' &&
+    isSettlingStatus(state.status?.status) &&
+    settleStep < RESOURCE_SETTLING_DELAYS_MS.length;
+
+  useEffect(() => {
+    if (!settling) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        const current = refRef.current;
+        // Hidden tab or no resource: hand over to the poll, which waits for visibility.
+        if (current && isDocumentVisible()) {
+          try {
+            const status = await fetchResourceStatus(current);
+            if (cancelled) return;
+            failuresRef.current = 0;
+            applyStatus(status);
+          } catch {
+            /* the normal poll takes over and counts failures */
+          }
+        }
+        if (!cancelled) setSettleStep((step) => step + 1);
+      })();
+    }, RESOURCE_SETTLING_DELAYS_MS[settleStep]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [settling, settleStep, key, runKey, applyStatus]);
+
   usePolling(
     async () => {
       const current = refRef.current;
@@ -126,7 +174,7 @@ export function useResourceReady(ref: ResourceRef | null | undefined, options: U
         throw error;
       }
     },
-    { intervalMs, maxIntervalMs, enabled: enabled && Boolean(ref) && state.phase === 'waiting' }
+    { intervalMs, maxIntervalMs, enabled: enabled && Boolean(ref) && state.phase === 'waiting' && !settling }
   );
 
   const retry = useCallback(() => {
