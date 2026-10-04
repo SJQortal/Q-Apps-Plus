@@ -62,6 +62,8 @@ const Notification = () => {
     setOpen(false)
   }
 
+  const severity: Severity = current?.severity || 'info'
+
   return (
     <Snackbar
       key={current?.key}
@@ -78,11 +80,22 @@ const Notification = () => {
       }}
     >
       <Alert
-        severity={current?.severity || 'info'}
+        severity={severity}
         variant="filled"
         onClose={() => setOpen(false)}
-        role={current?.severity === 'error' ? 'alert' : 'status'}
-        sx={{ width: '100%', maxWidth: 480, fontSize: '0.9375rem', alignItems: 'center' }}
+        role={severity === 'error' ? 'alert' : 'status'}
+        // MUI fills a dark-mode Alert with palette.<severity>.dark but picks
+        // its text against .main, which fails contrast for Hub 3.0's green;
+        // fill with .main so the theme's contrastText is the one that reads.
+        sx={{
+          width: '100%',
+          maxWidth: 480,
+          fontSize: '0.9375rem',
+          alignItems: 'center',
+          bgcolor: `${severity}.main`,
+          color: `${severity}.contrastText`,
+        }}
+        slotProps={{ closeButton: { sx: { minWidth: 44, minHeight: 44 } } }}
       >
         {current?.message}
       </Alert>
