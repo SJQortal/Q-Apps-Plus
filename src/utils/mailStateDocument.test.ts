@@ -6,6 +6,7 @@ import {
   buildPublishedMailStateDocument,
   mergeAliasReplyLinks,
   mergePublishedStateEntries,
+  mergeRemoteStateIntoPublishBase,
   mergeWatchedAliases,
   normalizePublishedSettings,
   normalizePublishedStateEntry,
@@ -175,5 +176,42 @@ describe('qmail_state_v1 document', () => {
       sales: 'alice-sales',
     })
     expect(mergeAliasReplyLinks({}, { x: '' })).toEqual({})
+  })
+})
+
+describe('mergeRemoteStateIntoPublishBase', () => {
+  const base = {
+    publishedEntries: {},
+    archived: { b1: { at: 50 } },
+    watchedAliases: ['bob'],
+    aliasReplyLinks: {},
+  }
+
+  it('keeps what other devices published when this one never loaded it', () => {
+    const remote = {
+      messages: { m1: { read: true, subject: 'Hi' } },
+      archived: { a1: { at: 10 }, b1: { at: 1 } },
+      settings: { watchedAliases: ['alice'], aliasReplyLinks: { alice: 'alice-reply' } },
+    }
+    const merged = mergeRemoteStateIntoPublishBase(base, remote)
+    expect(merged.publishedEntries).toEqual({ m1: { read: true, subject: 'Hi' } })
+    // Local archive entries win; ids only the document knows are kept.
+    expect(merged.archived).toEqual({ b1: { at: 50 }, a1: { at: 10 } })
+    expect(merged.watchedAliases).toEqual(['bob', 'alice'])
+    expect(merged.aliasReplyLinks).toEqual({ alice: 'alice-reply' })
+    const { document } = buildPublishedMailStateDocument({
+      ownerAddress: 'Qx',
+      names: ['bob'],
+      publishedEntries: merged.publishedEntries,
+      localEntries: {},
+      archived: merged.archived,
+      now: 5,
+    })
+    expect(document.messages.m1).toEqual({ read: true, subject: 'Hi' })
+    expect(Object.keys(document.archived!)).toEqual(['b1', 'a1'])
+  })
+
+  it('changes nothing when there is no published document', () => {
+    expect(mergeRemoteStateIntoPublishBase(base, null)).toBe(base)
   })
 })

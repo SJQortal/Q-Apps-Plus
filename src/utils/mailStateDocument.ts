@@ -14,6 +14,7 @@
  */
 import {
   normalizeArchivedMap,
+  withPublishedArchived,
   type ArchivedMap,
 } from "./archiveState";
 import { isUiThemeId, type UiThemeId } from "../hub-theme/tokens";
@@ -267,4 +268,46 @@ export const parsePublishedMailStateDocument = (
     }
   );
   return { messages, archived, settings };
+};
+
+export interface PublishBaseInput {
+  /** What was loaded or published this session (empty when nothing was). */
+  publishedEntries: Record<string, QMailPublishedStateEntry>;
+  archived: ArchivedMap;
+  watchedAliases: string[];
+  aliasReplyLinks: Record<string, string>;
+}
+
+/**
+ * Fold the document already on QDN into the base of a publish, so a device
+ * that never loaded it cannot wipe what other devices published. Messages are
+ * merged per id, archived ids and alias lists are unioned, and local values
+ * win. `remote` null means there is no document yet.
+ */
+export const mergeRemoteStateIntoPublishBase = (
+  base: PublishBaseInput,
+  remote: ParsedPublishedState | null
+): PublishBaseInput => {
+  if (!remote) return base;
+  const publishedEntries: Record<string, QMailPublishedStateEntry> = {
+    ...remote.messages,
+  };
+  Object.entries(base.publishedEntries).forEach(([identifier, entry]) => {
+    publishedEntries[identifier] = mergePublishedStateEntries(
+      publishedEntries[identifier],
+      entry
+    );
+  });
+  return {
+    publishedEntries,
+    archived: withPublishedArchived(base.archived, remote.archived),
+    watchedAliases: mergeWatchedAliases(
+      base.watchedAliases,
+      remote.settings?.watchedAliases || []
+    ),
+    aliasReplyLinks: mergeAliasReplyLinks(
+      base.aliasReplyLinks,
+      remote.settings?.aliasReplyLinks || {}
+    ),
+  };
 };
