@@ -2315,6 +2315,7 @@ export const NewMessage = ({
                     ...bccNames.map(chip => chip.name),
                   ]}
                   onPendingChange={setCcPending}
+                  describedBy="qmail-compose-cc-help"
                 />
               </NewMessageAliasContainer>
             </NewMessageInputRow>
@@ -2353,9 +2354,23 @@ export const NewMessage = ({
                     ...ccNames.map(chip => chip.name),
                   ]}
                   onPendingChange={setBccPending}
+                  describedBy="qmail-compose-bcc-help"
                 />
               </NewMessageAliasContainer>
             </NewMessageInputRow>
+          )}
+          {allowAliasAndBcc && showBCC && (
+            <Typography
+              id="qmail-compose-bcc-help"
+              sx={{
+                fontSize: "0.875rem",
+                color: "var(--qmail-compose-muted)",
+                mt: "-0.4rem",
+              }}
+            >
+              Bcc names are not listed in the mail, but each Bcc copy is a public QDN record labelled with its recipient's name.
+              {aliasValue ? " With an alias, no Bcc copies are sent." : ""}
+            </Typography>
           )}
 
           {/* Mail order: From, To, alias, Cc, Bcc, then Subject. */}
