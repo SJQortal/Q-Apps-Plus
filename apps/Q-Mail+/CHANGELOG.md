@@ -22,6 +22,7 @@ The first release of **Q-Mail+**, Simon's "+" version of Q-Mail 3.2.1. It reads 
   - Classic's font is 83% smaller.
   - The rating control is hidden.
   - A screen that fails to load offers Reload instead of a blank app.
+  - Messages and files that are on your node but not yet assembled no longer hang on "Preparing…".
   - Security fixes for messages from other users: thread posts are sanitised, authors come from the publisher, links in old mail follow the link policy, and Forward only re-sends real attachments.
   - Fixes from a whole-app review.
 
