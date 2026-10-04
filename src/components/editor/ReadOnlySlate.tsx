@@ -7,7 +7,8 @@
  * bold, italic, underline and link marks.
  */
 import React from 'react'
-import { linkPolicy } from '../common/TextEditor/DisplayHtml'
+import { linkPolicy, useMessageLinkClick } from '../common/TextEditor/DisplayHtml'
+import { describeQortalLink, parseQortalLink } from '../../utils/qortalLinks'
 
 type SlateText = {
   text: string
@@ -42,7 +43,8 @@ const nodeText = (nodes: SlateNode[] | undefined): string =>
 
 /**
  * A sender-written link, through the same policy as HTML bodies
- * (DisplayHtml.linkPolicy): qortal:// links stay links; web, mail and phone
+ * (DisplayHtml.linkPolicy): qortal:// links stay links, opened through Hub
+ * on click (DisplayHtml.useMessageLinkClick); web, mail and phone
  * links can't open in Hub, so they show as text with their target; anything
  * else (relative, same-origin, data:) is plain text, because it would load
  * another page, such as another Q-App, inside the Q-Mail+ frame.
@@ -50,8 +52,10 @@ const nodeText = (nodes: SlateNode[] | undefined): string =>
 const renderLink = (href: string | undefined, children: React.ReactNode, text: string, key?: React.Key) => {
   const decision = linkPolicy(typeof href === 'string' ? href : '')
   if (decision.kind === 'qortal') {
+    const target = parseQortalLink(decision.href)
+    if (!target || target.kind === 'invalid') return <React.Fragment key={key}>{children}</React.Fragment>
     return (
-      <a key={key} href={decision.href}>
+      <a key={key} href={decision.href} title={describeQortalLink(target)}>
         {children}
       </a>
     )
@@ -119,8 +123,13 @@ const renderNodes = (nodes: SlateNode[] | undefined, mode?: string): React.React
   })
 
 const ReadOnlySlate = ({ content, mode }: ReadOnlySlateProps) => {
+  const onLinkClick = useMessageLinkClick()
   if (!Array.isArray(content)) return null
-  return <div className="slate-readonly">{renderNodes(content as SlateNode[], mode)}</div>
+  return (
+    <div className="slate-readonly" onClick={onLinkClick}>
+      {renderNodes(content as SlateNode[], mode)}
+    </div>
+  )
 }
 
 export default ReadOnlySlate
