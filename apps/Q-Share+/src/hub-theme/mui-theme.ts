@@ -2,7 +2,15 @@
  * MUI themes for the four Q-Apps+ looks. Targets MUI 9; also works on MUI 5 and 7.
  * Ported from Torq's src/styles/theme/theme.ts.
  */
-import { alpha, createTheme, type Theme, type ThemeOptions } from '@mui/material/styles';
+import {
+  alpha,
+  createTheme,
+  decomposeColor,
+  getContrastRatio,
+  recomposeColor,
+  type Theme,
+  type ThemeOptions,
+} from '@mui/material/styles';
 import {
   HUB_BLUE,
   sharedThemeTokens,
@@ -69,6 +77,42 @@ function paletteOptions(t: ThemeTokens): ThemeOptions['palette'] {
   };
 }
 
+/** `color` painted over a solid `base`, as one solid colour (alpha flattened). */
+function flatten(color: string, base: string): string {
+  const c = decomposeColor(color);
+  const a = c.values[3] ?? 1;
+  if (a >= 1 || c.type.startsWith('hsl')) return color;
+  const b = decomposeColor(base);
+  const mix = [0, 1, 2].map((i) => Math.round(c.values[i] * a + b.values[i] * (1 - a)));
+  return recomposeColor({ type: 'rgb', values: [mix[0], mix[1], mix[2]] });
+}
+
+/**
+ * Colours for an Avatar with no image (MUI's `colorDefault`: a letter on a grey
+ * disc). MUI paints the page colour on grey 400/600, which read at 1.3:1 to
+ * 4.2:1 in the Q-Apps+ themes. The kit uses the theme's secondary-text grey as
+ * the disc and the paper colour as the letter, and falls back to black or white
+ * when that pair would read below 4.5:1 (possible in an app's Hub 2.0 palette).
+ */
+export function avatarDefaultColors(theme: Theme): { background: string; color: string } {
+  const p = theme.palette;
+  const paper = flatten(p.background.paper, p.mode === 'dark' ? p.common.black : p.common.white);
+  const background = flatten(p.text.secondary, paper);
+  if (getContrastRatio(paper, background) >= 4.5) return { background, color: paper };
+  const black = getContrastRatio(p.common.black, background);
+  const white = getContrastRatio(p.common.white, background);
+  return { background, color: black >= white ? p.common.black : p.common.white };
+}
+
+const AVATAR_OVERRIDE: NonNullable<ThemeOptions['components']>['MuiAvatar'] = {
+  styleOverrides: {
+    colorDefault: ({ theme }) => {
+      const { background, color } = avatarDefaultColors(theme as Theme);
+      return { backgroundColor: background, color };
+    },
+  },
+};
+
 function componentOverrides(t: ThemeTokens): ThemeOptions['components'] {
   const dark = t.mode === 'dark';
   const { palette: p, shape: s, chrome: c } = t;
@@ -78,6 +122,7 @@ function componentOverrides(t: ThemeTokens): ThemeOptions['components'] {
       MuiCssBaseline: {
         styleOverrides: { body: { backgroundImage: c.appGradient, backgroundRepeat: 'no-repeat' } },
       },
+      MuiAvatar: AVATAR_OVERRIDE,
       MuiPaper: { styleOverrides: { root: { backgroundImage: 'none' } } },
       MuiDialog: {
         styleOverrides: { paper: { backgroundImage: 'none', borderRadius: s.dialog } },
@@ -132,6 +177,7 @@ function componentOverrides(t: ThemeTokens): ThemeOptions['components'] {
   const border = `1px solid ${p.divider}`;
   return {
     MuiCssBaseline: { styleOverrides: { body: { backgroundColor: p.background.default } } },
+    MuiAvatar: AVATAR_OVERRIDE,
     MuiPaper: { styleOverrides: { root: { backgroundImage: 'none' } } },
     MuiDialog: {
       styleOverrides: {
@@ -208,7 +254,12 @@ function deriveChrome(theme: Theme, hub20: Hub20Config, mode: ColorMode): Chrome
 function hub20Theme(hostMode: ColorMode, config: AppThemeConfig): Theme {
   const options = config.hub20Options(hostMode);
   const base = createTheme(options);
-  return createTheme(options, { qplus: { id: 'hub20', ...deriveChrome(base, config.hub20, hostMode) } });
+  // The readable default avatar applies to Hub 2.0 too, unless the app styles it itself.
+  const avatar = options.components?.MuiAvatar ? {} : { components: { MuiAvatar: AVATAR_OVERRIDE } };
+  return createTheme(options, {
+    ...avatar,
+    qplus: { id: 'hub20', ...deriveChrome(base, config.hub20, hostMode) },
+  });
 }
 
 /** Build the MUI theme for a Q-Apps+ look. `hostMode` is the light/dark mode Hub passed in. */

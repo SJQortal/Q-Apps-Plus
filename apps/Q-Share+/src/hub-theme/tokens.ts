@@ -106,7 +106,9 @@ const HUB30: Record<ColorMode, Omit<ThemeTokens, 'id' | 'mode'>> = {
       },
       secondary: HUB_BLUE.hover,
       success: 'rgb(94, 176, 73)',
-      error: 'rgb(177, 70, 70)',
+      // Readable as text (4.5:1 or more) on the page, paper and elevated
+      // surfaces; Torq's rgb(177, 70, 70) read at 3.5:1 and 3:1 there.
+      error: 'rgb(224, 108, 108)',
       background: { default: '#0E0F14', paper: '#1D1F27', surface: '#1B1D24', elevated: '#23262F' },
       text: { primary: 'rgb(244, 247, 251)', secondary: '#989BA7' },
       divider: '#23262F',
@@ -142,7 +144,9 @@ const HUB30: Record<ColorMode, Omit<ThemeTokens, 'id' | 'mode'>> = {
       },
       secondary: '#2A56A5',
       success: 'rgb(94, 176, 73)',
-      error: 'rgb(177, 70, 70)',
+      // One step deeper than Torq's rgb(177, 70, 70), which read at 3.8:1 as
+      // text on the warm page background.
+      error: 'rgb(158, 43, 43)',
       background: { default: '#DDD6CA', paper: '#F6F2EA', surface: '#EEE7DC', elevated: '#E2D9CB' },
       text: { primary: 'rgba(21, 26, 35, 0.94)', secondary: '#4A525E' },
       divider: 'rgba(28, 36, 52, 0.12)',
