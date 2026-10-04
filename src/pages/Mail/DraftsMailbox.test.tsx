@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { HubThemeProvider } from '../../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
 import { DraftsMailbox, describeDraftTarget } from './DraftsMailbox'
+import { IMPOSTOR, isStruck, nameElement } from '../../test/hiddenNames'
 import { listComposeDrafts, saveComposeDraft, type StoredComposeDraft } from './composeDrafts'
 
 const address = 'QADDR'
@@ -72,5 +73,16 @@ describe('DraftsMailbox', () => {
       expect(listComposeDrafts(address)).toHaveLength(0)
     })
     expect(await screen.findByText('No drafts')).toBeTruthy()
+  })
+
+  it('strikes an impostor recipient in the row and in the delete dialog', async () => {
+    saveComposeDraft(address, 'me::imp', draft({ toName: IMPOSTOR }))
+    renderDrafts()
+    const row = screen.getByRole('button', { name: /^Open draft/ })
+    expect(isStruck(nameElement(row, IMPOSTOR))).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete draft: Hello' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog.textContent).toMatch(/"Hello" \(To Simon.James.*\)\s*will be removed from this device\./)
+    expect(isStruck(nameElement(dialog, IMPOSTOR))).toBe(true)
   })
 })

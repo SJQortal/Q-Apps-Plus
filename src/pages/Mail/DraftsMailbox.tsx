@@ -118,11 +118,14 @@ export function DraftsMailbox({ address, onOpenDraft }: DraftsMailboxProps) {
 
   const { Modal, showModal } = useConfirmationModal({
     title: "Delete draft?",
-    message: pendingDelete
-      ? `"${pendingDelete.draft.subject.trim() || "(no subject)"}" (${describeDraftTarget(
-          pendingDelete.draft
-        )}) will be removed from this device.`
-      : "",
+    message: pendingDelete ? (
+      <>
+        &quot;{pendingDelete.draft.subject.trim() || "(no subject)"}&quot; (<DraftTarget draft={pendingDelete.draft} />)
+        will be removed from this device.
+      </>
+    ) : (
+      ""
+    ),
     confirmLabel: "Delete",
     destructive: true,
   });
