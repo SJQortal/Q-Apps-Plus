@@ -43,7 +43,11 @@ interface DataObject {
 const GlobalWrapper: React.FC<Props> = ({ children }) => {
   const dispatch = useDispatch();
 
-  const [userAvatar, setUserAvatar] = useState<string>("");
+  // The avatar URL together with the name it belongs to. Right after a name
+  // switch the old name's URL must not pass for the new name's: the name
+  // switcher primes the avatar cache with it, and POS+ then showed Simon
+  // James's picture for the rest of the session.
+  const [avatarFor, setAvatarFor] = useState<{ name: string; url: string }>({ name: "", url: "" });
   const [mailSync, setMailSync] = useState<MailSyncState | null>(null);
   const registerMailSync = useCallback((sync: MailSyncState | null) => {
     setMailSync(sync);
@@ -53,13 +57,14 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
   useMailLocalState(user?.address);
 
   const activeName = user?.name;
+  const userAvatar = activeName && avatarFor.name === activeName ? avatarFor.url : "";
   // Through the session avatar cache, so the owned-name loop in Mail.tsx
   // shares this one GET_QDN_RESOURCE_URL instead of asking again.
   useEffect(() => {
     if (!activeName) return;
     let cancelled = false;
     void getAvatarUrl(activeName).then(url => {
-      if (!cancelled) setUserAvatar(url || "");
+      if (!cancelled) setAvatarFor({ name: activeName, url: url || "" });
     });
     return () => {
       cancelled = true;
