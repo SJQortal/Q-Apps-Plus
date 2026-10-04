@@ -12,6 +12,19 @@ The first release of **Q-Mail+**, Simon's "+" version of Q-Mail 3.2.1. It reads 
 - **Efficiency:** first load for one name is 6 searches (was about 20–30); every search is deduped and cached for the session; polling pauses while the tab is hidden and backs off; the initial script is 382 kB (was 1,576 kB), with the composer, reader, threads and pdf.js loading on demand.
 - **Hub & GO:** declines in Hub's 12 languages are quiet cancels, publishing waits as long as Hub does and checks QDN before a retry, deleted and not-yet-available resources are shown as such, message HTML is sanitised with DOMPurify 3.4 and links are built on the DOM.
 
+- **Since the first build of 1.0.0:**
+  - A visible Cc row: Reply all fills it, and Cc names are visible to every recipient.
+  - Archive and Mark unread in the reader.
+  - Keyboard shortcuts from 600 px wide.
+  - Messages already on your node open in about half a second.
+  - Mail bodies are published with plain spaces.
+  - The alias scan reads at most 500 resources per run and remembers where it stopped.
+  - Classic's font is 83% smaller.
+  - The rating control is hidden.
+  - A screen that fails to load offers Reload instead of a blank app.
+  - Security fixes for messages from other users: thread posts are sanitised, authors come from the publisher, links in old mail follow the link policy, and Forward only re-sends real attachments.
+  - Fixes from a whole-app review.
+
 The entries below are Q-Mail's own changelog, kept for reference.
 
 ## 3.2.1 - May 28th 2026
