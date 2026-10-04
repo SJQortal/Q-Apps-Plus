@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { fetchedUrls, mockFetchRoute } from '../../test/setup'
+import { resetSearchCache, searchResources } from '../../utils/qdnSearch'
+import { resetThreadDataCache, threadActivitySearchParams, threadHeaderSearchParams } from './threadData'
 import {
   countUnread,
   isThreadUnread,
+  useThreadUnreadCounts,
   readViewedThreads,
   saveThreadViewed,
   viewedThreadKey,
@@ -60,5 +65,47 @@ describe('viewed-thread store', () => {
     saveThreadViewed('alice', '2', 'qortal_qmail_thread_group2_t', 7)
     document.removeEventListener('qmail:thread-viewed', onViewed)
     expect(detail).toEqual({ username: 'alice', key: 'qmail_threads_2_qortal_qmail_thread_group2_t' })
+  })
+})
+
+describe('useThreadUnreadCounts', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const tick = async (ms: number) => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms)
+    })
+  }
+
+  it('reuses searches an open view made under a minute ago, and backs off while nothing changes', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    resetSearchCache()
+    resetThreadDataCache()
+    mockFetchRoute('/arbitrary/resources/search?', [])
+    const groups = [{ id: '1', name: 'Devs' }]
+    renderHook(() => useThreadUnreadCounts(groups, 'alice'))
+    await tick(0)
+    expect(fetchedUrls('/arbitrary/resources/search')).toHaveLength(2)
+
+    // An open Threads view refreshed both searches 30 s before the tick.
+    await tick(90_000)
+    await act(async () => {
+      await searchResources(threadHeaderSearchParams('1'), { force: true })
+      await searchResources(threadActivitySearchParams('1'), { force: true })
+    })
+    expect(fetchedUrls('/arbitrary/resources/search')).toHaveLength(4)
+    await tick(30_000)
+    // The 120 s tick took those answers instead of searching again.
+    expect(fetchedUrls('/arbitrary/resources/search')).toHaveLength(4)
+
+    // Nothing changed, so the next tick waits 240 s, not 120 s.
+    await tick(120_000)
+    expect(fetchedUrls('/arbitrary/resources/search')).toHaveLength(4)
+    await tick(120_000)
+    expect(fetchedUrls('/arbitrary/resources/search')).toHaveLength(6)
+    vi.restoreAllMocks()
   })
 })
