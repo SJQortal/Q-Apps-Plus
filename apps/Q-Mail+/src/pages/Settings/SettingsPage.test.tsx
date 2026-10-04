@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { HubThemeProvider } from '../../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
 import { AppShellContext, type AppShellContextValue } from '../../app-shell/AppShellContext'
+import { writeMailFooter } from '../../utils/mailFooter'
 import { APP_VERSION, SettingsPage } from './SettingsPage'
 
 function renderSettings(overrides: Partial<AppShellContextValue> = {}) {
@@ -159,6 +160,59 @@ describe('SettingsPage', () => {
     const { value } = renderSettings({ user: null })
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(value.authenticate).toHaveBeenCalled()
+  })
+})
+
+describe('SettingsPage footer', () => {
+  const storedFooter = () => JSON.parse(window.localStorage.getItem('qmail_footer_QAddress1') || 'null')
+
+  beforeEach(() => window.localStorage.clear())
+
+  it('saves a multi-line footer and the replies switch under qmail_footer_<address>', () => {
+    renderSettings()
+    const field = screen.getByRole('textbox', { name: 'Default footer' })
+    fireEvent.change(field, { target: { value: 'Simon\nqortal://APP/Q-Mail+\n' } })
+    // The field keeps what was typed; storage keeps the normalised text.
+    expect((field as HTMLTextAreaElement).value).toBe('Simon\nqortal://APP/Q-Mail+\n')
+    expect(storedFooter()).toEqual({ default: 'Simon\nqortal://APP/Q-Mail+', byName: {}, inReplies: true })
+    const toggle = screen.getByRole('switch', { name: 'Add the footer to replies and forwards' })
+    expect((toggle as HTMLInputElement).checked).toBe(true)
+    fireEvent.click(toggle)
+    expect(storedFooter().inReplies).toBe(false)
+  })
+
+  it('edits a per-name footer; a name without one uses the default', async () => {
+    window.localStorage.setItem(
+      'qmail_footer_QAddress1',
+      JSON.stringify({ default: 'Default text', byName: {}, inReplies: true })
+    )
+    renderSettings()
+    expect((screen.getByRole('textbox', { name: 'Default footer' }) as HTMLTextAreaElement).value).toBe('Default text')
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Footer for' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'alice-work (uses the default)' }))
+    const field = screen.getByRole('textbox', { name: 'Footer for alice-work' })
+    expect((field as HTMLTextAreaElement).value).toBe('')
+    expect(screen.getByText('alice-work uses the default footer.')).toBeTruthy()
+    fireEvent.change(field, { target: { value: 'Work footer' } })
+    expect(storedFooter()).toEqual({ default: 'Default text', byName: { 'alice-work': 'Work footer' }, inReplies: true })
+    fireEvent.change(field, { target: { value: '' } })
+    expect(storedFooter().byName).toEqual({})
+  })
+
+  it('shows a single field without a name picker for one name, and reloads a footer loaded from QDN', () => {
+    renderSettings({ user: { address: 'QAddress1', name: 'alice', names: [{ name: 'alice' }] } })
+    expect(screen.queryByRole('combobox', { name: 'Footer for' })).toBeNull()
+    const field = screen.getByRole('textbox', { name: 'Footer' }) as HTMLTextAreaElement
+    expect(field.value).toBe('')
+    act(() => {
+      writeMailFooter('QAddress1', { default: 'From another device', byName: {}, inReplies: true })
+    })
+    expect(field.value).toBe('From another device')
+  })
+
+  it('disables the footer when signed out', () => {
+    renderSettings({ user: null })
+    expect((screen.getByRole('textbox', { name: 'Footer' }) as HTMLTextAreaElement).disabled).toBe(true)
   })
 })
 

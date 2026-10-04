@@ -36,6 +36,7 @@ import {
 } from '../../utils/qdnStatePreference';
 import packageJson from '../../../package.json';
 import { ChangelogDialog } from './ChangelogDialog';
+import { FooterSettings } from './FooterSettings';
 import { SETTINGS_PATH } from './settingsPath';
 
 export { SETTINGS_PATH };
@@ -147,7 +148,7 @@ export function SettingsPage() {
 
   const { Modal: PublishStateModal, showModal: showPublishStateModal } = useConfirmationModal({
     title: 'Publish mail state?',
-    message: `This publishes your read state, subjects, archived list, theme, text size and watched aliases as an encrypted document (qmail_state_v1) under ${
+    message: `This publishes your read state, subjects, archived list, theme, text size, watched aliases and footer as an encrypted document (qmail_state_v1) under ${
       user?.name || 'your name'
     }, so other devices can load it. It costs one QDN publish.`,
     confirmLabel: 'Publish',
@@ -303,6 +304,8 @@ export function SettingsPage() {
               Manage
             </Button>
           </Row>
+          <Divider />
+          <FooterSettings address={user?.address || ''} names={names.map((entry) => entry.name)} />
         </Section>
 
         <Section title="Sync">
