@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { HubThemeProvider } from '../../hub-theme'
+import { act, render, screen } from '@testing-library/react'
+import { useTheme } from '@mui/material/styles'
+import { HubThemeProvider, useHubTheme, type UiThemeId } from '../../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
 import { HIDDEN_CHARACTERS_SR, HIDDEN_CHARACTERS_TITLE, NameText } from './NameText'
 
@@ -59,4 +60,32 @@ describe('NameText', () => {
     expect(struck(el)).toBe(true)
     expect(getComputedStyle(el).fontWeight).toBe('700')
   })
+
+  it.each<UiThemeId>(['hub30', 'hub20', 'black', 'white'])(
+    "uses Hub's 2px line in the %s theme's error colour",
+    async (id) => {
+      const seen: { errorMain?: string; setUiTheme?: (id: UiThemeId) => void } = {}
+      function Probe() {
+        seen.errorMain = useTheme().palette.error.main
+        seen.setUiTheme = useHubTheme().setUiTheme
+        return null
+      }
+      wrap(
+        <>
+          <Probe />
+          <NameText name={`Simon${BLANK}James`} data-testid="n" />
+          <span data-testid="ref" />
+        </>
+      )
+      await act(async () => seen.setUiTheme!(id))
+      const el = screen.getByTestId('n')
+      const style = getComputedStyle(el)
+      expect(style.textDecorationThickness).toBe('2px')
+      // The theme's own error colour, normalised the same way as the strike's.
+      const ref = screen.getByTestId('ref')
+      ref.style.color = seen.errorMain!
+      expect(style.textDecorationColor).toBe(getComputedStyle(ref).color)
+      expect(style.textDecorationColor).not.toBe('')
+    }
+  )
 })
