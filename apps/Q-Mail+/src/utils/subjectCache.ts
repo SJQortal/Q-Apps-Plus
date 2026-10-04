@@ -94,7 +94,11 @@ export function resetSubjectCache(): void {
  * The decrypted subject for a saved (encrypted) subject: `null` while unknown,
  * "" for no subject or a failed decrypt, else the text.
  */
-export function useDecryptedSubject(encrypted: string | undefined | null): string | null {
+export function useDecryptedSubject(
+  encrypted: string | undefined | null,
+  /** False until the row is on screen: a known subject still shows, nothing is decrypted. */
+  enabled = true
+): string | null {
   const [subject, setSubject] = useState<string | null>(() => {
     if (encrypted === undefined || encrypted === null) return null;
     const known = peekDecryptedSubject(encrypted);
@@ -112,6 +116,7 @@ export function useDecryptedSubject(encrypted: string | undefined | null): strin
       return;
     }
     setSubject(null);
+    if (!enabled) return;
     let cancelled = false;
     void decryptSubject(encrypted).then(value => {
       if (!cancelled) setSubject(value);
@@ -119,7 +124,7 @@ export function useDecryptedSubject(encrypted: string | undefined | null): strin
     return () => {
       cancelled = true;
     };
-  }, [encrypted]);
+  }, [enabled, encrypted]);
 
   return subject;
 }

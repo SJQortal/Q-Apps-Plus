@@ -108,7 +108,12 @@ export interface SentRecipient {
  * The recipient of a sent identifier for display. `known` is the decrypted
  * `recipient` when the message was opened; it wins and costs nothing.
  */
-export function useSentRecipient(identifier: string, known?: string): SentRecipient {
+export function useSentRecipient(
+  identifier: string,
+  known?: string,
+  /** False until the row is on screen: a cached name still shows, nothing is looked up. */
+  enabled = true
+): SentRecipient {
   const { recipientName, recipientAddress } = parseSentRecipientFromIdentifier(identifier || "");
   const prefix = recipientName || "";
   const suffix = recipientAddress || "";
@@ -125,6 +130,7 @@ export function useSentRecipient(identifier: string, known?: string): SentRecipi
       setResolvedName(peeked);
       return;
     }
+    if (!enabled) return;
     let cancelled = false;
     void resolveSentRecipientName(prefix, suffix).then(name => {
       if (!cancelled) setResolvedName(name);
@@ -132,7 +138,7 @@ export function useSentRecipient(identifier: string, known?: string): SentRecipi
     return () => {
       cancelled = true;
     };
-  }, [knownName, prefix, suffix]);
+  }, [enabled, knownName, prefix, suffix]);
 
   if (knownName) return { name: knownName, isAlias: false, isExact: true };
   if (isAlias) return { name: prefix, isAlias: true, isExact: true };

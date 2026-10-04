@@ -61,6 +61,21 @@ describe('useMailboxSearch', () => {
     vi.useRealTimers()
   })
 
+  it('decrypts saved subjects the rows have not shown yet once a query is typed, not before', async () => {
+    const store = makeStore()
+    mockQortalAction('DECRYPT_DATA', (request: any) => (request.encryptedData === 'enc-m9' ? encode('Quarterly report') : encode('')))
+    store.dispatch(addToHashMapSubject({ id: 'm9', subject: 'enc-m9', attachments: false, timestamp: 1 }))
+    const messages = [message('m8', 'alice', 2), message('m9', 'carol', 1)]
+    const { result, rerender } = renderHook(
+      ({ query }) => useMailboxSearch({ messages, query, mailboxType: 'inbox', username: 'alice', debounceMs: 0 }),
+      { initialProps: { query: '' }, wrapper: wrapperFor(store) }
+    )
+    expect(qortalCalls('DECRYPT_DATA')).toHaveLength(0)
+    rerender({ query: 'quarterly' })
+    await waitFor(() => expect(result.current.results.map((m: any) => m.id)).toEqual(['m9']))
+    expect(qortalCalls('DECRYPT_DATA')).toHaveLength(1)
+  })
+
   it('matches sender, saved subject and metadata at once, 300 ms after the last key, with no decrypt', () => {
     vi.useFakeTimers()
     const store = makeStore()
