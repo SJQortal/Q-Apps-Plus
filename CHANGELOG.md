@@ -32,6 +32,7 @@ The first release of **Q-Mail+**, Simon's "+" version of Q-Mail 3.2.1. It reads 
   - qortal:// links in mail open through Hub, so a group join link asks Hub to join the group.
   - A mail footer: one for all names or one per name, added to new mail and (if you like) to replies and forwards.
   - PDF attachments open in Hub's own PDF reader, as in Q-Share+, with the built-in viewer as a fallback.
+  - Names with hidden characters, often used to imitate someone, are crossed out, as in Hub.
 
 The entries below are Q-Mail's own changelog, kept for reference.
 
