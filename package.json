@@ -17,7 +17,6 @@
     "@mui/material": "^9.4.0",
     "@reduxjs/toolkit": "^2.13.0",
     "dompurify": "^3.4.16",
-    "moment": "^2.29.4",
     "pdfjs-dist": "^4.10.38",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
