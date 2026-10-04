@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, render, screen } from '@testing-library/react'
 import { HubThemeProvider } from '../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../theme/qplus-theme'
 import { LANDSCAPE_FRAME_MEDIA, isLandscapeFrame } from '../utils/hubFrame'
@@ -59,6 +59,31 @@ describe('a landscape frame (844×390 in Hub is 703×201 CSS px)', () => {
     // Hide-on-scroll measures from the compact height.
     expect(nextHiddenState(false, 0, 50, PANE_HEADER_HEIGHT_COMPACT)).toBe(true)
     expect(nextHiddenState(false, 0, 50, PANE_HEADER_HEIGHT)).toBe(false)
+  })
+
+  it('hides the header when a scroller nested in the next sibling (the composer form) scrolls down', async () => {
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+      cb(0)
+      return 1
+    })
+    try {
+      wrap(
+        <div>
+          <PaneHeader title="New message" />
+          <div>
+            <div data-pane-scroll data-testid="form" />
+          </div>
+        </div>
+      )
+      const form = screen.getByTestId('form')
+      Object.defineProperty(form, 'scrollTop', { value: 200, configurable: true })
+      await act(async () => {
+        form.dispatchEvent(new Event('scroll'))
+      })
+      expect(screen.getByRole('banner').getAttribute('data-hidden')).toBe('true')
+    } finally {
+      raf.mockRestore()
+    }
   })
 
   it('shows the medium layout one pane at a time: the list, or the message when one is open', () => {
