@@ -3127,7 +3127,17 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
           emptyHint={
             hasSearchQuery
               ? "Try fewer words, or search message bodies."
-              : `Mail sent to ${selectedInboxInstanceName || user?.name || "you"} shows up here.`
+              : (
+                  <>
+                    Mail sent to{" "}
+                    {selectedInboxInstanceName || user?.name ? (
+                      <NameText name={selectedInboxInstanceName || user?.name} />
+                    ) : (
+                      "you"
+                    )}{" "}
+                    shows up here.
+                  </>
+                )
           }
           emptyAction={
             hasSearchQuery ? undefined : (
