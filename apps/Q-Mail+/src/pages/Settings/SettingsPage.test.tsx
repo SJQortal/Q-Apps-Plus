@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { HubThemeProvider } from '../../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
 import { AppShellContext, type AppShellContextValue } from '../../app-shell/AppShellContext'
@@ -153,5 +153,53 @@ describe('SettingsPage', () => {
     const { value } = renderSettings({ user: null })
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(value.authenticate).toHaveBeenCalled()
+  })
+})
+
+describe('SettingsPage Back to mail', () => {
+  it('replaces the Settings entry, so Back afterwards does not reopen Settings', async () => {
+    let navigateTo: ReturnType<typeof useNavigate> | null = null
+    let pathname = ''
+    function Probe() {
+      navigateTo = useNavigate()
+      pathname = useLocation().pathname
+      return null
+    }
+    const value = {
+      user: { address: 'QAddress1', name: 'alice', names: [{ name: 'alice' }] },
+      userAvatar: '',
+      setActiveName: vi.fn(),
+      authenticate: vi.fn(async () => {}),
+      mailSync: null,
+      registerMailSync: vi.fn(),
+      controller: { setTextSize: vi.fn(), setAuthOnStartup: vi.fn(), submitRating: vi.fn(), authenticate: vi.fn() },
+      state: {
+        ui: { menuOpen: false, busy: false, error: null },
+        auth: { authenticated: true, identity: { name: 'alice' } },
+        settings: { textSize: 'medium', authOnStartup: true, themeMode: 'hub', resolvedTheme: 'dark' },
+        rating: { enabled: true, average: null, count: 0, userVote: null, loading: false },
+      },
+    } as unknown as AppShellContextValue
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+          <AppShellContext.Provider value={value}>
+            <Probe />
+            <Routes>
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="*" element={<p>mail</p>} />
+            </Routes>
+          </AppShellContext.Provider>
+        </HubThemeProvider>
+      </MemoryRouter>
+    )
+    // Mail opens Settings with the mail location as background (Mail.openSettings).
+    act(() => navigateTo!('/settings', { state: { backgroundLocation: { pathname: '/', search: '', hash: '' } } }))
+    fireEvent.click(screen.getAllByRole('button', { name: /Back to mail/ })[0])
+    expect(pathname).toBe('/')
+    act(() => navigateTo!(-1))
+    // One step back is the original mail entry, not Settings again.
+    expect(pathname).toBe('/')
+    expect(screen.queryByRole('heading', { name: 'Account' })).toBeNull()
   })
 })
