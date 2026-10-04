@@ -17,6 +17,7 @@ import {
   LinearProgress,
   MenuItem,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import { useLayoutMode } from "../../layout/useLayoutMode";
@@ -88,6 +89,8 @@ import {
 } from "../../utils/nameCache";
 import { AvatarWrapper } from "./MailTable";
 import { HIDDEN_CHARACTERS_TITLE, NameText, strikeInputSx } from "../../components/common/NameText";
+import { NameAvatar } from "../../components/common/NameAvatar";
+import { NAME_SEARCH_THRESHOLD, NameSwitcher } from "../../components/common/NameSwitcher";
 import { hasInvisibleCharacters } from "../../utils/invisibleCharacters";
 import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
@@ -120,6 +123,31 @@ const aliasToggleSx = {
   color: "var(--qmail-compose-muted)",
   "&:hover": { color: "var(--qmail-compose-text)" },
 } as const;
+
+/**
+ * What "Send to alias", "Cc" and "Bcc" do, on hover, keyboard focus or a long
+ * press. Checked against the send path (buildDirectMailPublishRequest, data
+ * contract §3, §8, §17): every copy of a send shares one send id, is a public
+ * record under the From name labelled with its recipient's name (or the
+ * alias), and is encrypted to To, Cc and Bcc alike; the mail lists To and Cc,
+ * never Bcc; an alias message gets no Cc or Bcc copies.
+ */
+export const COMPOSE_TOGGLE_HELP = {
+  alias:
+    "Sends to an alias inbox the recipient told you about, not to their name inbox, so the public QDN record shows the alias, not their name. It is still encrypted to the recipient, and you stay the sender.",
+  cc: "Each Cc name gets its own encrypted copy. Everyone who gets the mail can see the Cc names.",
+  bcc: "Each Bcc name gets its own encrypted copy, and the mail doesn't list Bcc names. But each copy is a public QDN record under your name, labelled with that name and sharing one send id with the other copies.",
+} as const;
+
+/** Those tooltips describe their button (describeChild), in 14 px text, and open on a long press on touch. */
+const composeToggleTooltipProps = {
+  describeChild: true,
+  enterTouchDelay: 500,
+  leaveTouchDelay: 6000,
+  slotProps: {
+    tooltip: { sx: { fontSize: "0.875rem", fontWeight: 400, lineHeight: 1.45, maxWidth: 320 } },
+  },
+};
 
 type ComposeTargetType = "name" | "group";
 type PendingPublishType = "mail" | "thread";
@@ -352,6 +380,8 @@ export const NewMessage = ({
   const { name } = useParams();
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
+  // Avatar URLs other screens already loaded: From reuses them instead of asking again.
+  const userAvatarHash = useSelector((state: RootState) => state.global.userAvatarHash);
 
   const [publishes, setPublishes] = useState<any>(null);
   const [isOpenMultiplePublish, setIsOpenMultiplePublish] = useState(false);
@@ -1870,6 +1900,19 @@ export const NewMessage = ({
               <NewMessageInputLabelP id="qmail-compose-from-label" sx={{ userSelect: "none" }}>
                 From:
               </NewMessageInputLabelP>
+              {fromOptions.length > NAME_SEARCH_THRESHOLD ? (
+                // Above 15 names (Simon has 86) From is the searchable
+                // switcher Settings uses, avatars loading as rows scroll in.
+                <NameSwitcher
+                  names={fromOptions}
+                  activeName={fromName || null}
+                  activeAvatar={userAvatarHash?.[fromName]}
+                  onPick={setFromName}
+                  label="From"
+                  title="Send from"
+                  avatarFallback="none"
+                />
+              ) : (
               <TextField
                 select
                 value={fromName}
@@ -1895,6 +1938,25 @@ export const NewMessage = ({
                   select: {
                     disableUnderline: true,
                     labelId: "qmail-compose-from-label",
+                    // The picture only for a name that has one: no letter, no gap.
+                    renderValue: selected => {
+                      const selectedName = String(selected ?? "");
+                      return (
+                        <Box component="span" sx={{ display: "flex", alignItems: "center", minWidth: 0 }}>
+                          <NameAvatar
+                            key={selectedName}
+                            name={selectedName}
+                            size={22}
+                            known={userAvatarHash?.[selectedName]}
+                            fallback="none"
+                            gap={8}
+                          />
+                          <Box component="span" sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                            <NameText name={selectedName} />
+                          </Box>
+                        </Box>
+                      );
+                    },
                     MenuProps: {
                       slotProps: {
                         paper: {
@@ -1910,12 +1972,20 @@ export const NewMessage = ({
                 }}>
                 {fromOptions.map(nameOption => {
                   return (
-                    <MenuItem key={nameOption} value={nameOption}>
+                    <MenuItem key={nameOption} value={nameOption} sx={{ minHeight: 44, gap: "10px" }}>
+                      {/* An empty slot for a name without a picture, so the names line up. */}
+                      <NameAvatar
+                        name={nameOption}
+                        size={24}
+                        known={userAvatarHash?.[nameOption]}
+                        fallback="space"
+                      />
                       <NameText name={nameOption} />
                     </MenuItem>
                   );
                 })}
               </TextField>
+              )}
             </NewMessageAliasContainer>
           </NewMessageInputRow>
 
@@ -2116,34 +2186,40 @@ export const NewMessage = ({
                 }}
               >
                 {!showAlias && !requireSenderAlias && (
-                  <Button
-                    variant="text"
-                    size="small"
-                    onClick={() => setShowAlias(true)}
-                    sx={aliasToggleSx}
-                  >
-                    Send to alias
-                  </Button>
+                  <Tooltip title={COMPOSE_TOGGLE_HELP.alias} {...composeToggleTooltipProps}>
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={() => setShowAlias(true)}
+                      sx={aliasToggleSx}
+                    >
+                      Send to alias
+                    </Button>
+                  </Tooltip>
                 )}
                 {!showCC && (
-                  <Button
-                    variant="text"
-                    size="small"
-                    onClick={() => setShowCC(true)}
-                    sx={aliasToggleSx}
-                  >
-                    Cc
-                  </Button>
+                  <Tooltip title={COMPOSE_TOGGLE_HELP.cc} {...composeToggleTooltipProps}>
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={() => setShowCC(true)}
+                      sx={aliasToggleSx}
+                    >
+                      Cc
+                    </Button>
+                  </Tooltip>
                 )}
                 {!showBCC && (
-                  <Button
-                    variant="text"
-                    size="small"
-                    onClick={() => setShowBCC(true)}
-                    sx={aliasToggleSx}
-                  >
-                    Bcc
-                  </Button>
+                  <Tooltip title={COMPOSE_TOGGLE_HELP.bcc} {...composeToggleTooltipProps}>
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={() => setShowBCC(true)}
+                      sx={aliasToggleSx}
+                    >
+                      Bcc
+                    </Button>
+                  </Tooltip>
                 )}
               </NewMessageAliasContainer>
             )}
@@ -2280,6 +2356,7 @@ export const NewMessage = ({
                     ...bccNames.map(chip => chip.name),
                   ]}
                   onPendingChange={setCcPending}
+                  describedBy="qmail-compose-cc-help"
                 />
               </NewMessageAliasContainer>
             </NewMessageInputRow>
@@ -2318,9 +2395,23 @@ export const NewMessage = ({
                     ...ccNames.map(chip => chip.name),
                   ]}
                   onPendingChange={setBccPending}
+                  describedBy="qmail-compose-bcc-help"
                 />
               </NewMessageAliasContainer>
             </NewMessageInputRow>
+          )}
+          {allowAliasAndBcc && showBCC && (
+            <Typography
+              id="qmail-compose-bcc-help"
+              sx={{
+                fontSize: "0.875rem",
+                color: "var(--qmail-compose-muted)",
+                mt: "-0.4rem",
+              }}
+            >
+              Bcc names are not listed in the mail, but each Bcc copy is a public QDN record labelled with its recipient's name.
+              {aliasValue ? " With an alias, no Bcc copies are sent." : ""}
+            </Typography>
           )}
 
           {/* Mail order: From, To, alias, Cc, Bcc, then Subject. */}

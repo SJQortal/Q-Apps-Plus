@@ -18,6 +18,8 @@ interface ChipInputComponentProps {
   excludeNames?: string[];
   /** Text typed but not yet added as a chip, so Send can wait for it. */
   onPendingChange?: (pending: string) => void;
+  /** The id of the help line under the field (the Cc and Bcc rows'), for aria-describedby. */
+  describedBy?: string;
 }
 
 const normalize = (value: string) => value.trim().toLowerCase();
@@ -35,6 +37,7 @@ export const ChipInputComponent = ({
   inputLabel = "Bcc name",
   excludeNames = [],
   onPendingChange,
+  describedBy,
 }: ChipInputComponentProps) => {
   const [inputValue, setInputValueState] = useState<string>("");
   const [isResolving, setIsResolving] = useState(false);
@@ -157,7 +160,7 @@ export const ChipInputComponent = ({
           inputProps={{
             "aria-label": inputLabel,
             "aria-invalid": error ? true : undefined,
-            "aria-describedby": error ? errorId : undefined,
+            "aria-describedby": [describedBy, error ? errorId : ""].filter(Boolean).join(" ") || undefined,
           }}
           endAdornment={isResolving ? <CircularProgress size={14} aria-label="Checking the name" /> : undefined}
           sx={{
