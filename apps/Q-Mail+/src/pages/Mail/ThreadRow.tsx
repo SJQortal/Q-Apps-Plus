@@ -69,7 +69,7 @@ export function ThreadRow({ thread, unread = false, selected = false, context, o
         variant="body2"
         color={unread ? "primary.main" : "text.secondary"}
         title={formatFullTimestamp(when)}
-        sx={{ flexShrink: 0, fontSize: "0.8125rem", fontWeight: unread ? 600 : 400 }}
+        sx={{ flexShrink: 0, fontSize: "0.875rem", fontWeight: unread ? 600 : 400 }}
       >
         {when ? formatEmailDate(when) : ""}
       </Typography>
