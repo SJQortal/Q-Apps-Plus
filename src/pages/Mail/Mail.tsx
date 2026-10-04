@@ -46,6 +46,7 @@ import { MailShell, PaneScroll } from "../../layout/MailShell";
 import { Rail } from "../../layout/Rail";
 import { BottomNav } from "../../layout/BottomNav";
 import { ComposeFab } from "../../layout/ComposeFab";
+import { useLandscapeFrame } from "../../utils/hubFrame";
 import { PaneHeader } from "../../layout/PaneHeader";
 import { EmptyState, LoadingBanner } from "../../layout/states";
 import { useLayoutMode } from "../../layout/useLayoutMode";
@@ -613,6 +614,11 @@ export const Mail = ({ isFromTo }: MailProps) => {
   };
   const layoutMode = useLayoutMode();
   const isMobile = layoutMode === "phone";
+  // One pane at a time: phones, and the medium layout in a landscape Hub
+  // frame (703x201), the same rule as MailShell. The reading pane then needs
+  // its own Back bar and hardware Back must close it.
+  const landscapeFrame = useLandscapeFrame();
+  const isOnePane = isMobile || (layoutMode === "medium" && landscapeFrame);
   const [railOpen, setRailOpen] = useState(false);
   const location = useLocation();
   useAppViewport();
@@ -3495,7 +3501,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   const isOpeningMessage = Boolean(mailInfo) && isShow;
   const readingPane = isReadingOpen ? (
     <>
-      {isMobile && (
+      {isOnePane && (
         <PaneHeader
           title={message?.subject || "Message"}
           subtitle={message?.user}
@@ -3525,7 +3531,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     </>
   ) : isOpeningMessage ? (
     <>
-      {isMobile && (
+      {isOnePane && (
         <PaneHeader
           title="Opening message"
           subtitle={mailInfo?.name}
@@ -3567,7 +3573,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
 
   // Hardware / browser Back on phones closes the open sub-pane (GO's back
   // button then works) instead of leaving the app.
-  const phoneSubPaneKey = !isMobile
+  const phoneSubPaneKey = !isOnePane
     ? null
     : isComposeView
     ? "compose"
@@ -3583,7 +3589,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     ? "alias-inbox"
     : null;
   usePhoneBackClose({
-    enabled: isMobile,
+    enabled: isOnePane,
     activeKey: phoneSubPaneKey,
     onBack: () => {
       if (phoneSubPaneKey === "compose") handleComposerClose();
