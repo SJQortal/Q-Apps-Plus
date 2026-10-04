@@ -4,7 +4,7 @@ import ConfirmationModal from "../components/common/ConfirmationModal";
 type ConfirmationModalContent = {
   open: boolean;
   title: string;
-  message: string;
+  message: ReactNode;
   children?: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
@@ -13,7 +13,7 @@ type ConfirmationModalContent = {
 
 type UseConfirmationModalProps = {
   title: string;
-  message: string;
+  message: ReactNode;
   children?: ReactNode;
   /** The verb on the confirming button (defaults to "Confirm"). */
   confirmLabel?: string;

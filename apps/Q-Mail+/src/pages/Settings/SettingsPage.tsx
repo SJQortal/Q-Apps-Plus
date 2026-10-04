@@ -27,6 +27,8 @@ import useConfirmationModal from '../../hooks/useConfirmModal';
 import { ThemePicker, headerFill, themeOptions, useHubTheme } from '../../hub-theme';
 import { useAppShell } from '../../app-shell/AppShellContext';
 import { NameSwitcher } from '../../components/common/NameSwitcher';
+import { NameText } from '../../components/common/NameText';
+import { firstVisibleChar } from '../../utils/invisibleCharacters';
 import { BlockedNamesModal } from '../../components/common/BlockedNamesModal/BlockedNamesModal';
 import {
   readAutoApplyQdnState,
@@ -147,9 +149,13 @@ export function SettingsPage() {
 
   const { Modal: PublishStateModal, showModal: showPublishStateModal } = useConfirmationModal({
     title: 'Publish mail state?',
-    message: `This publishes your read state, subjects, archived list, theme, text size, watched aliases and footer as an encrypted document (qmail_state_v1) under ${
-      user?.name || 'your name'
-    }, so other devices can load it. It costs one QDN publish.`,
+    message: (
+      <>
+        This publishes your read state, subjects, archived list, theme, text size, watched aliases and footer as an
+        encrypted document (qmail_state_v1) under {user?.name ? <NameText name={user.name} /> : 'your name'}, so
+        other devices can load it. It costs one QDN publish.
+      </>
+    ),
     confirmLabel: 'Publish',
   });
   const [isPublishingFromSettings, setIsPublishingFromSettings] = useState(false);
@@ -211,11 +217,11 @@ export function SettingsPage() {
             <>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Avatar src={userAvatar || undefined} alt="" sx={{ width: 44, height: 44 }}>
-                  {activeName?.[0]?.toUpperCase() || '?'}
+                  {firstVisibleChar(activeName).toUpperCase() || '?'}
                 </Avatar>
                 <Box sx={{ minWidth: 0 }}>
                   <Typography sx={{ fontWeight: 600 }} noWrap>
-                    {activeName || 'No name registered'}
+                    {activeName ? <NameText name={activeName} /> : 'No name registered'}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" noWrap>
                     {user?.address}

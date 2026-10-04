@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, FormControlLabel, MenuItem, Switch, TextField, Typography } from '@mui/material';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import { NAME_SEARCH_THRESHOLD, NameSwitcher, type NameSwitcherLeadRow } from '../../components/common/NameSwitcher';
+import { NameText } from '../../components/common/NameText';
 import {
   MAIL_FOOTER_CHANGED_EVENT,
   MAIL_FOOTER_MAX_LENGTH,
@@ -126,7 +127,15 @@ export function FooterSettings({ address, names }: FooterSettingsProps) {
     setTarget(nextTarget);
     setText(textFor(footer, nextTarget));
   };
-  const fieldLabel = target ? `Footer for ${target}` : hasSeveralNames ? 'Default footer' : 'Footer';
+  const fieldLabel = target ? (
+    <>
+      Footer for <NameText name={target} />
+    </>
+  ) : hasSeveralNames ? (
+    'Default footer'
+  ) : (
+    'Footer'
+  );
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -171,7 +180,8 @@ export function FooterSettings({ address, names }: FooterSettingsProps) {
           </MenuItem>
           {sortedNames.map((name) => (
             <MenuItem key={name} value={name} sx={{ minHeight: 44 }}>
-              {ownFooterOf(footer, name).trim() ? name : `${name} (uses the default)`}
+              <NameText name={name} />
+              {ownFooterOf(footer, name).trim() ? '' : ' (uses the default)'}
             </MenuItem>
           ))}
         </TextField>
@@ -194,7 +204,11 @@ export function FooterSettings({ address, names }: FooterSettingsProps) {
           disabled
             ? 'Sign in to set a footer.'
             : target && !text.trim()
-            ? `${target} uses the default footer.`
+            ? (
+              <>
+                <NameText name={target} /> uses the default footer.
+              </>
+            )
             : `${text.length} / ${MAIL_FOOTER_MAX_LENGTH}`
         }
         slotProps={{

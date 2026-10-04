@@ -37,6 +37,7 @@ import { useLayoutMode } from '../../layout/useLayoutMode';
 import { useLandscapeFrame } from '../../utils/hubFrame';
 import { ResponsiveDialog } from './ResponsiveDialog';
 import { NameAvatar } from './NameAvatar';
+import { NameText } from './NameText';
 
 /** Above this many names the list gets a search field. */
 export const NAME_SEARCH_THRESHOLD = 15;
@@ -347,17 +348,19 @@ export function NameSwitcherList({
               </ListItemIcon>
               <ListItemText
                 primary={
-                  q
-                    ? highlightParts(name, q).map((part, i) =>
-                        part.match ? (
-                          <Box key={i} component="span" sx={{ color: 'primary.main', fontWeight: 700 }}>
-                            {part.text}
-                          </Box>
-                        ) : (
-                          <span key={i}>{part.text}</span>
+                  <NameText name={name}>
+                    {q
+                      ? highlightParts(name, q).map((part, i) =>
+                          part.match ? (
+                            <Box key={i} component="span" sx={{ color: 'primary.main', fontWeight: 700 }}>
+                              {part.text}
+                            </Box>
+                          ) : (
+                            <span key={i}>{part.text}</span>
+                          )
                         )
-                      )
-                    : name
+                      : name}
+                  </NameText>
                 }
                 secondary={secondary}
                 slotProps={{ primary: { noWrap: true }, secondary: { noWrap: true } }}
@@ -437,7 +440,7 @@ export function NameSwitcher({
         }}
       >
         <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {shownName || 'Choose a name'}
+          {activeName ? <NameText name={activeName} /> : shownName || 'Choose a name'}
         </Box>
       </Button>
       {useSheet ? (

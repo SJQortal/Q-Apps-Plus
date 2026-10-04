@@ -5,7 +5,7 @@ import { ResponsiveDialog } from './ResponsiveDialog'
 export interface ModalProps {
   open: boolean
   title: string
-  message: string
+  message: React.ReactNode
   children?: React.ReactNode
   handleConfirm: () => void
   handleCancel: () => void
