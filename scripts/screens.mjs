@@ -221,7 +221,7 @@ try {
             return !name && !b.getAttribute('aria-labelledby');
           }).length;
           const small = [...document.querySelectorAll('button')].filter((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && (r.width < 40 || r.height < 40); }).length;
-          const smallText = [...document.querySelectorAll('p, span, li, a, button, h1, h2, h3, h4, div')].filter((el) => { if (!el.textContent?.trim() || el.children.length) return false; const s = parseFloat(getComputedStyle(el).fontSize); return s > 0 && s < 13; }).length;
+          const smallText = [...document.querySelectorAll('p, span, li, a, button, h1, h2, h3, h4, div')].filter((el) => { if (!el.textContent?.trim() || el.children.length) return false; const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || cs.opacity === '0' || el.closest('legend')) return false; const s = parseFloat(cs.fontSize); return s > 0 && s < 13; }).length;
           return { overflowX, unlabeled, small, smallText, calls: (window.__calls || []).length, actions: (window.__calls || []).reduce((m, a) => { const k = a.split(':')[0]; m[k] = (m[k] || 0) + 1; return m; }, {}) };
         });
         const searches = page.__fetches.filter((u) => u.includes('/resources/search')).length;
