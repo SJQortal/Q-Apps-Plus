@@ -1176,14 +1176,18 @@ export const Mail = ({ isFromTo }: MailProps) => {
     user: string,
     messageIdentifier: string,
     content: any,
-    to?: string
+    to?: string,
+    // Set by callers that switch mailbox in the same click (search hits):
+    // the mailbox state is not applied yet, so it can't decide.
+    options?: { autoMarkRead?: boolean }
   ) => {
     // A newer open supersedes any opener still waiting on peers.
     cancelPendingOpenRef.current();
     const request = openRequestRef.current;
     try {
       const shouldAutoMarkAsRead =
-        activeMailboxItem === "inbox" || activeMailboxItem === "aliases";
+        options?.autoMarkRead ??
+        (activeMailboxItem === "inbox" || activeMailboxItem === "aliases");
       const existingMessage: any = hashMapMailMessages[messageIdentifier];
       if (
         existingMessage &&
@@ -3421,7 +3425,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
         typeof decrypted?.recipient === "string" && decrypted.recipient.trim()
           ? decrypted.recipient.trim()
           : getSentRecipientDisplayLabel(id);
-      void openMessage(hit?.user, id, hit, recipient);
+      void openMessage(hit?.user, id, hit, recipient, { autoMarkRead: false });
       return;
     }
     if (ref?.kind === "alias" && ref.alias) {
@@ -3431,7 +3435,10 @@ export const Mail = ({ isFromTo }: MailProps) => {
     } else {
       onSelectSidebarItem("inbox");
     }
-    void openMessage(hit?.user, id, hit);
+    // Inbox and alias hits are marked read, as a normal open there is.
+    void openMessage(hit?.user, id, hit, undefined, {
+      autoMarkRead: ref?.kind !== "archived",
+    });
   };
 
   const searchPlaceholder = isSentViewActive
