@@ -64,7 +64,7 @@ export function EmptyState({ icon, title, hint, action }: EmptyStateProps) {
 
 interface ErrorStateProps {
   title?: string;
-  message?: string;
+  message?: ReactNode;
   onRetry?: () => void;
 }
 
