@@ -165,6 +165,8 @@ export interface NameSwitcherListProps {
   leadRow?: NameSwitcherLeadRow;
   /** A second line under a name (e.g. "Own footer"); none when it returns nothing. */
   secondaryText?: (name: string) => string | undefined;
+  /** "none": a name without an avatar shows no letter, only an empty slot (Compose's From). */
+  avatarFallback?: 'letter' | 'none';
 }
 
 /** The list itself, with its search field above NAME_SEARCH_THRESHOLD names. */
@@ -179,6 +181,7 @@ export function NameSwitcherList({
   compact = false,
   leadRow,
   secondaryText,
+  avatarFallback = 'letter',
 }: NameSwitcherListProps) {
   const [query, setQuery] = useState('');
   // The order is set when the list opens: a pick must not reshuffle the rows
@@ -344,7 +347,12 @@ export function NameSwitcherList({
               sx={ROW_SX}
             >
               <ListItemIcon sx={LEAD_SX}>
-                <NameAvatar name={name} size={32} known={active ? activeAvatar : undefined} />
+                <NameAvatar
+                  name={name}
+                  size={32}
+                  known={active ? activeAvatar : undefined}
+                  fallback={avatarFallback === 'none' ? 'space' : 'letter'}
+                />
               </ListItemIcon>
               <ListItemText
                 primary={
@@ -385,6 +393,8 @@ export interface NameSwitcherProps {
   title?: string;
   leadRow?: NameSwitcherLeadRow;
   secondaryText?: (name: string) => string | undefined;
+  /** "none": no letter for a name without an avatar, on the button or in the list. */
+  avatarFallback?: 'letter' | 'none';
 }
 
 /**
@@ -400,6 +410,7 @@ export function NameSwitcher({
   title: titleProp,
   leadRow,
   secondaryText,
+  avatarFallback = 'letter',
 }: NameSwitcherProps) {
   const isPhone = useLayoutMode() === 'phone';
   const landscape = useLandscapeFrame();
@@ -424,7 +435,13 @@ export function NameSwitcher({
         aria-expanded={open}
         aria-label={`${label}: ${activeName ? spokenName(activeName) : shownName || 'none'}. Change`}
         onClick={(event) => setAnchor(event.currentTarget)}
-        startIcon={leadPicked ? leadRow!.icon : <NameAvatar name={activeName || '?'} size={28} known={activeAvatar} />}
+        startIcon={
+          leadPicked ? (
+            leadRow!.icon
+          ) : avatarFallback === 'none' ? undefined : (
+            <NameAvatar name={activeName || '?'} size={28} known={activeAvatar} />
+          )
+        }
         endIcon={<ExpandMoreIcon />}
         sx={{
           minHeight: 44,
@@ -439,6 +456,10 @@ export function NameSwitcher({
           '& .MuiButton-endIcon': { ml: 'auto', pl: 1 },
         }}
       >
+        {!leadPicked && avatarFallback === 'none' && activeName && (
+          // No startIcon: its margins would leave a gap when there is no picture.
+          <NameAvatar key={activeName} name={activeName} size={24} known={activeAvatar} fallback="none" gap={8} />
+        )}
         <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {activeName ? <NameText name={activeName} /> : shownName || 'Choose a name'}
         </Box>
@@ -454,6 +475,7 @@ export function NameSwitcher({
             compact={landscape}
             leadRow={leadRow}
             secondaryText={secondaryText}
+            avatarFallback={avatarFallback}
           />
         </ResponsiveDialog>
       ) : (
@@ -479,6 +501,7 @@ export function NameSwitcher({
               onPick={pick}
               leadRow={leadRow}
               secondaryText={secondaryText}
+              avatarFallback={avatarFallback}
               autoFocus
               maxListHeight="max(144px, min(420px, calc(var(--qmail-app-height, 100dvh) - 240px)))"
             />
