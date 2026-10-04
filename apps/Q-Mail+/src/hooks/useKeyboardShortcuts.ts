@@ -24,7 +24,11 @@ export type ShortcutAction =
   | 'goAliases'
   | 'showHelp';
 
-export type ShortcutHandlers = Partial<Record<ShortcutAction, () => void>>;
+/**
+ * A handler returns false when it did nothing (for example "open" while a
+ * message is already open); the key is then left to the browser.
+ */
+export type ShortcutHandlers = Partial<Record<ShortcutAction, () => boolean | void>>;
 
 /** For the help dialog: keys as shown, and what they do. */
 export const SHORTCUT_HELP: ReadonlyArray<{ keys: string[]; label: string; action: ShortcutAction }> = [
@@ -113,6 +117,20 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return Boolean(element.closest('[contenteditable=""], [contenteditable="true"], .ql-editor, [role="textbox"]'));
 }
 
+const ACTIVATABLE_SELECTOR =
+  'button, a[href], summary, label, [role="button"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], [role="checkbox"], [role="radio"], [role="switch"], [role="combobox"]';
+
+/**
+ * True when the key would activate the focused control (Enter or Space on a
+ * button, link, tab...). Those keys must reach the browser, or the control's
+ * own click never fires. Letter shortcuts still work on these controls.
+ */
+export function isActivationKeyOnControl(key: string, target: EventTarget | null): boolean {
+  if (key !== 'Enter' && key !== ' ') return false;
+  if (!target || typeof (target as Element).closest !== 'function') return false;
+  return Boolean((target as Element).closest(ACTIVATABLE_SELECTOR));
+}
+
 /** True while a dialog, drawer or menu is open (shortcuts would act behind it). */
 export function isOverlayOpen(doc: Document = document): boolean {
   return Boolean(doc.querySelector('[role="dialog"], [role="menu"], .MuiDrawer-root.MuiModal-root'));
@@ -140,6 +158,7 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers, { enabled }: Op
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat) return;
       if (isTypingTarget(event.target)) return;
+      if (isActivationKeyOnControl(event.key, event.target)) return;
       const helpOpen = Boolean(document.querySelector('[data-qmail-shortcuts-help]'));
       // Inside the help dialog only Escape (handled by the dialog) and ? matter.
       if (isOverlayOpen() && !(helpOpen && event.key === '?')) {
@@ -156,8 +175,7 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers, { enabled }: Op
       if (!action) return;
       const handler = handlersRef.current[action];
       if (!handler) return;
-      event.preventDefault();
-      handler();
+      if (handler() !== false) event.preventDefault();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => {

@@ -108,4 +108,34 @@ describe('useKeyboardShortcuts', () => {
     fireEvent.keyDown(window, { key: 'c' })
     expect(compose).not.toHaveBeenCalled()
   })
+
+  it('leaves Enter on a focused button to the browser, but letter shortcuts still work there', () => {
+    const open = vi.fn()
+    const next = vi.fn()
+    const click = vi.fn()
+    render(
+      <>
+        <Harness handlers={{ open, next }} />
+        <button type="button" onClick={click}>
+          Row
+        </button>
+      </>
+    )
+    const button = document.querySelector('button')!
+    button.focus()
+    // fireEvent returns false when the event was default-prevented.
+    expect(fireEvent.keyDown(button, { key: 'Enter' })).toBe(true)
+    expect(open).not.toHaveBeenCalled()
+    fireEvent.keyDown(button, { key: 'j' })
+    expect(next).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not swallow a key when the handler did nothing', () => {
+    const open = vi.fn(() => false)
+    const compose = vi.fn()
+    render(<Harness handlers={{ open, compose }} />)
+    expect(fireEvent.keyDown(window, { key: 'o' })).toBe(true)
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(fireEvent.keyDown(window, { key: 'c' })).toBe(false)
+  })
 })
