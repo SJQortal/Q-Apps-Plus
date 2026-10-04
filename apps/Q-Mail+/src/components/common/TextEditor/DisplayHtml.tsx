@@ -228,18 +228,30 @@ export function copyTarget(href: string): { kind: CopyKind; text: string } | nul
  *   href left (Quill stores qortal: links as about:blank) becomes text too,
  *   so a qortal:// URL in it is linkified afterwards.
  */
+export type LinkDecision =
+  | { kind: "qortal"; href: string }
+  | { kind: "copy"; copy: { kind: CopyKind; text: string } }
+  | { kind: "text" };
+
+/** The link policy below as a pure decision, shared with the legacy Slate renderer. */
+export function linkPolicy(href: string): LinkDecision {
+  if (/^qortal:\/\//i.test(href)) return { kind: "qortal", href: `qortal://${href.slice("qortal://".length)}` };
+  const target = copyTarget(href);
+  return target ? { kind: "copy", copy: target } : { kind: "text" };
+}
+
 function settleLinks(root: ParentNode): void {
   root.querySelectorAll("a").forEach((a) => {
-    const href = a.getAttribute("href") ?? "";
-    if (/^qortal:\/\//i.test(href)) {
-      a.setAttribute("href", `qortal://${href.slice("qortal://".length)}`);
+    const decision = linkPolicy(a.getAttribute("href") ?? "");
+    if (decision.kind === "qortal") {
+      a.setAttribute("href", decision.href);
       return;
     }
-    const target = copyTarget(href);
-    if (!target) {
+    if (decision.kind === "text") {
       a.replaceWith(...a.childNodes);
       return;
     }
+    const target = decision.copy;
     if (target.kind === "web") a.setAttribute("href", target.text);
     a.setAttribute("data-copy-link", "");
     a.setAttribute("title", COPY_TEXT[target.kind].title);
