@@ -148,3 +148,21 @@ describe('the floating button never covers the last row', () => {
     expect(css).toContain(`${LIST_CLEARANCE_VAR}:88px`)
   })
 })
+
+describe('the wide pane', () => {
+  it('is not a live region, so typing in the composer is not read out again', () => {
+    render(
+      <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+        <MailShell
+          mode="desktop"
+          rail={<div>rail</div>}
+          railOpen={false}
+          onRailOpenChange={() => {}}
+          list={<div>list</div>}
+          wide={<div data-testid="wide">composer</div>}
+        />
+      </HubThemeProvider>
+    )
+    expect(screen.getByTestId('wide').closest('[aria-live]')).toBeNull()
+  })
+})
