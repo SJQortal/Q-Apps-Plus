@@ -34,7 +34,18 @@ export function ChangelogDialog({ open, onClose }: ChangelogDialogProps) {
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-      <DialogContent dividers sx={{ p: { xs: 1, sm: 2 } }}>
+      {/* The list scrolls, so keyboard users must be able to reach it (axe
+          "scrollable-region-focusable"): focusable, named, with a visible ring. */}
+      <DialogContent
+        dividers
+        tabIndex={0}
+        role="region"
+        aria-label="Changelog"
+        sx={{
+          p: { xs: 1, sm: 2 },
+          '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
+        }}
+      >
         {open && (
           <Suspense fallback={<ListSkeleton rows={5} />}>
             <ChangelogPage />
