@@ -181,6 +181,21 @@ export const arePublishedStateEntriesEqual = (
   );
 };
 
+/**
+ * True when the published entry already carries everything the local one
+ * says. The document cannot express "unread" (read is OR-merged), so a local
+ * unread over a published read counts as published; a local read, or a
+ * subject the document lacks, does not.
+ */
+export const isLocalEntryPublished = (
+  local: QMailPublishedStateEntry | null | undefined,
+  published: QMailPublishedStateEntry | null | undefined
+): boolean => {
+  const l = normalizePublishedStateEntry(local);
+  const p = normalizePublishedStateEntry(published);
+  return (!l.read || Boolean(p.read)) && (!l.subject || l.subject === (p.subject || ""));
+};
+
 export interface BuildPublishedStateInput {
   ownerAddress: string;
   names: string[];

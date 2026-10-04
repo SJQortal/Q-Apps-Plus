@@ -4,6 +4,7 @@ import {
   MAIL_STATE_DOCUMENT_SERVICE,
   arePublishedStateEntriesEqual,
   buildPublishedMailStateDocument,
+  isLocalEntryPublished,
   mergeAliasReplyLinks,
   mergePublishedStateEntries,
   mergeRemoteStateIntoPublishBase,
@@ -213,5 +214,30 @@ describe('mergeRemoteStateIntoPublishBase', () => {
 
   it('changes nothing when there is no published document', () => {
     expect(mergeRemoteStateIntoPublishBase(base, null)).toBe(base)
+  })
+})
+
+describe('isLocalEntryPublished', () => {
+  it('treats a local unread over a published read as in sync, even after a publish', () => {
+    const published = { read: true, subject: 'Hi', updatedAt: 1 }
+    const localUnread = { subject: 'Hi' }
+    expect(isLocalEntryPublished(localUnread, published)).toBe(true)
+    // Publishing OR-merges read, so the published entry stays read and still counts as in sync.
+    const { mergedEntries } = buildPublishedMailStateDocument({
+      ownerAddress: 'Qx',
+      names: [],
+      publishedEntries: { m: published },
+      localEntries: { m: localUnread },
+      archived: {},
+      now: 2,
+    })
+    expect(isLocalEntryPublished(localUnread, mergedEntries.m)).toBe(true)
+  })
+
+  it('still reports a local read or a new subject the document lacks', () => {
+    expect(isLocalEntryPublished({ read: true }, { subject: 'Hi' })).toBe(false)
+    expect(isLocalEntryPublished({ subject: 'New' }, { read: true, subject: 'Old' })).toBe(false)
+    expect(isLocalEntryPublished({ read: true, subject: 'Hi' }, undefined)).toBe(false)
+    expect(isLocalEntryPublished({ read: true, subject: 'Hi' }, { read: true, subject: 'Hi' })).toBe(true)
   })
 })

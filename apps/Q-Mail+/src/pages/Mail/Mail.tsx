@@ -78,8 +78,8 @@ import {
   MAIL_STATE_DOCUMENT_SERVICE,
   mergeAliasReplyLinks,
   mergeWatchedAliases,
-  arePublishedStateEntriesEqual,
   buildPublishedMailStateDocument,
+  isLocalEntryPublished,
   mergePublishedStateEntries,
   mergeRemoteStateIntoPublishBase,
   parsePublishedMailStateDocument,
@@ -2337,7 +2337,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
 
   const hasPendingStateChanges = useMemo(() => {
     return Object.keys(localMailStateById).some(identifier => {
-      return !arePublishedStateEntriesEqual(
+      return !isLocalEntryPublished(
         localMailStateById[identifier],
         publishedMailStateById[identifier]
       );
