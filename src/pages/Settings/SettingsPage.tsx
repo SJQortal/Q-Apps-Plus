@@ -123,7 +123,8 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
           </Typography>
         )}
       </Box>
-      {children}
+      {/* The label shrinks and wraps; the control keeps its width (at 390 a squeezed button pushed its icon outside its border). */}
+      <Box sx={{ flexShrink: 0, display: 'flex' }}>{children}</Box>
     </Box>
   );
 }
