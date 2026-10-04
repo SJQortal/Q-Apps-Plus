@@ -94,7 +94,10 @@ export const GroupMail = ({
           const known = firstPage.threads.find((thread) => thread.identifier === threadId);
           if (known) return known;
           try {
-            return await fetchThreadHeader(group, threadId, options);
+            // Never forced: a header does not change once published, so one
+            // already seen comes from memory and a new one costs one search
+            // (cached 90 s). Refresh and publish clear these searches anyway.
+            return await fetchThreadHeader(group, threadId);
           } catch {
             return null;
           }
