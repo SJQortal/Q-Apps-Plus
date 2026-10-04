@@ -156,4 +156,39 @@ describe('GlobalWrapper: own avatar', () => {
     await expect(getAvatarUrl('alice')).resolves.toBe('/arbitrary/THUMBNAIL/alice/qortal_avatar')
     expect(qortalCalls('GET_QDN_RESOURCE_URL')).toHaveLength(1)
   })
+
+  it("never hands out the old name's avatar as the new active name's", async () => {
+    mockQortalAction('GET_ACCOUNT_NAMES', [
+      { name: 'alice', owner: 'Q1' },
+      { name: 'bob', owner: 'Q1' },
+    ])
+    let releaseBob: () => void = () => {}
+    const bobAsked = new Promise<void>((resolve) => (releaseBob = resolve))
+    mockQortalAction('GET_QDN_RESOURCE_URL', async (request: { name: string }) => {
+      if (request.name === 'bob') await bobAsked
+      return `/arbitrary/THUMBNAIL/${request.name}/qortal_avatar`
+    })
+    const seen: string[] = []
+    let switchTo: (name: string) => void = () => {}
+    function SwitchProbe() {
+      const { userAvatar, setActiveName, user } = useContext(AppShellContext)!
+      switchTo = setActiveName
+      seen.push(`${user?.name ?? ''}=${userAvatar}`)
+      return null
+    }
+    render(
+      <Provider store={makeStore()}>
+        <GlobalWrapper>
+          <SwitchProbe />
+        </GlobalWrapper>
+      </Provider>
+    )
+    await waitFor(() => expect(seen).toContain('alice=/arbitrary/THUMBNAIL/alice/qortal_avatar'))
+
+    act(() => switchTo('bob'))
+    expect(seen.at(-1)).toBe('bob=')
+    await act(async () => releaseBob())
+    await waitFor(() => expect(seen.at(-1)).toBe('bob=/arbitrary/THUMBNAIL/bob/qortal_avatar'))
+    expect(seen).not.toContain('bob=/arbitrary/THUMBNAIL/alice/qortal_avatar')
+  })
 })
