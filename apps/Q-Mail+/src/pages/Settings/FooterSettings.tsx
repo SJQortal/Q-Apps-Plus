@@ -3,9 +3,15 @@
  * messages (and, with the switch on, to replies and forwards), with an
  * optional footer per name for accounts with several. Saved as you type in
  * `qmail_footer_<address>` (src/utils/mailFooter.ts).
+ *
+ * The "Footer for" picker lists the names A to Z. Up to NAME_SEARCH_THRESHOLD
+ * names it is a plain select; above that (Simon has 86) it is the searchable
+ * NameSwitcher, a popover or a full-screen sheet on phones.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, FormControlLabel, MenuItem, Switch, TextField, Typography } from '@mui/material';
+import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
+import { NAME_SEARCH_THRESHOLD, NameSwitcher, type NameSwitcherLeadRow } from '../../components/common/NameSwitcher';
 import {
   MAIL_FOOTER_CHANGED_EVENT,
   MAIL_FOOTER_MAX_LENGTH,
@@ -41,6 +47,34 @@ const withFooterText = (footer: MailFooterSettings, target: string, text: string
 
 const textFor = (footer: MailFooterSettings, target: string) =>
   target ? ownFooterOf(footer, target) : footer.default;
+
+const DEFAULT_TARGET_LABEL = 'All names (default)';
+
+const DEFAULT_TARGET_ROW: NameSwitcherLeadRow = {
+  label: DEFAULT_TARGET_LABEL,
+  icon: (
+    <Box
+      component="span"
+      aria-hidden
+      sx={{
+        width: 28,
+        height: 28,
+        borderRadius: '50%',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: 'action.selected',
+        color: 'text.secondary',
+      }}
+    >
+      <GroupsOutlinedIcon sx={{ fontSize: 18 }} />
+    </Box>
+  ),
+};
+
+/** Names A to Z, ignoring case and accents, without duplicates or blanks. */
+export const sortFooterNames = (names: string[]): string[] =>
+  [...new Set(names.filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
 export function FooterSettings({ address, names }: FooterSettingsProps) {
   const [footer, setFooter] = useState<MailFooterSettings>(() => readMailFooter(address));
@@ -84,8 +118,14 @@ export function FooterSettings({ address, names }: FooterSettingsProps) {
     }
   };
 
+  const sortedNames = useMemo(() => sortFooterNames(names), [names]);
   const disabled = !address;
-  const hasSeveralNames = names.length > 1;
+  const hasSeveralNames = sortedNames.length > 1;
+  const searchable = sortedNames.length > NAME_SEARCH_THRESHOLD;
+  const pickTarget = (nextTarget: string) => {
+    setTarget(nextTarget);
+    setText(textFor(footer, nextTarget));
+  };
   const fieldLabel = target ? `Footer for ${target}` : hasSeveralNames ? 'Default footer' : 'Footer';
 
   return (
@@ -99,23 +139,37 @@ export function FooterSettings({ address, names }: FooterSettingsProps) {
           them.
         </Typography>
       </Box>
-      {hasSeveralNames && (
+      {hasSeveralNames && searchable && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Footer for · {sortedNames.length} names
+          </Typography>
+          {disabled ? null : (
+            <NameSwitcher
+              names={sortedNames}
+              activeName={target}
+              onPick={pickTarget}
+              label="Footer for"
+              title="Footer for"
+              leadRow={DEFAULT_TARGET_ROW}
+              secondaryText={(name) => (ownFooterOf(footer, name).trim() ? 'Own footer' : undefined)}
+            />
+          )}
+        </Box>
+      )}
+      {hasSeveralNames && !searchable && (
         <TextField
           select
           label="Footer for"
           value={target}
           disabled={disabled}
-          onChange={(event) => {
-            const nextTarget = event.target.value;
-            setTarget(nextTarget);
-            setText(textFor(footer, nextTarget));
-          }}
+          onChange={(event) => pickTarget(event.target.value)}
           fullWidth
         >
           <MenuItem value="" sx={{ minHeight: 44 }}>
-            All names (default)
+            {DEFAULT_TARGET_LABEL}
           </MenuItem>
-          {names.map((name) => (
+          {sortedNames.map((name) => (
             <MenuItem key={name} value={name} sx={{ minHeight: 44 }}>
               {ownFooterOf(footer, name).trim() ? name : `${name} (uses the default)`}
             </MenuItem>
