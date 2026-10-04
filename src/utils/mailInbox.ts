@@ -67,17 +67,25 @@ export const hasGroupThreadActivity = async (
   const normalizedGroupId = normalizeId(groupId);
   if (!normalizedGroupId) return false;
 
+  // Exactly the first header page the Threads views and the unread badges
+  // fetch next (threadHeaderSearchParams), so this probe is that page: one
+  // search shared in flight or from the cache, not an extra one.
   const params = new URLSearchParams({
     mode: "ALL",
     service: THREAD_SERVICE_TYPE,
     query: `qortal_qmail_thread_group${normalizedGroupId}`,
-    limit: "1",
-    includemetadata: "false",
+    limit: "20",
+    includemetadata: "true",
+    offset: "0",
     reverse: "true",
     excludeblocked: "true",
   });
-
-  return fetchHasMailResources(params);
+  // The substring query also matches groups 10-19 and 100+.
+  const prefix = `qortal_qmail_thread_group${normalizedGroupId}_`;
+  return fetchHasMailResources(
+    params,
+    item => typeof item?.identifier === "string" && item.identifier.startsWith(prefix)
+  );
 };
 
 export const fetchGroupAvatarPublisherName = async (
@@ -241,20 +249,29 @@ export const getOwnedNameInboxQueries = (
   ];
 };
 
+/**
+ * True when an owned name has received mail. Each probe is exactly page 1 of
+ * the index fetch that follows (fetchInboxMessagesForOwnedName, or for the
+ * primary name's by-address query useFetchMail's getAllMailMessages), so the
+ * probe and the fetch share one search instead of costing two.
+ */
 export const hasInboxMailActivityForOwnedName = async (
   name: string,
-  ownerAddress: string
+  ownerAddress: string,
+  { isPrimary = false }: { isPrimary?: boolean } = {}
 ): Promise<boolean> => {
   const queries = getOwnedNameInboxQueries(name, ownerAddress);
   if (!queries.length) return false;
 
-  for (const queryConfig of queries) {
+  for (const [index, queryConfig] of queries.entries()) {
+    const primaryIndexPage = isPrimary && index === 0;
     const params = new URLSearchParams({
       mode: "ALL",
       service: MAIL_SERVICE_TYPE,
       query: queryConfig.query,
-      limit: "20",
-      includemetadata: "false",
+      limit: "200",
+      includemetadata: primaryIndexPage ? "false" : "true",
+      offset: "0",
       reverse: "true",
       excludeblocked: "true",
     });

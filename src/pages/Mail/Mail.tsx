@@ -1570,7 +1570,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
 
       for (const accountName of ownedNameCandidates) {
         const [hasInboxMail, hasSentMail] = await Promise.all([
-          hasInboxMailActivityForOwnedName(accountName, user.address),
+          hasInboxMailActivityForOwnedName(accountName, user.address, {
+            isPrimary: accountName === user.name,
+          }),
           hasSentMailActivityForOwnedName(accountName),
         ]);
 
