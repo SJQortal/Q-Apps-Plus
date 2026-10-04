@@ -84,10 +84,14 @@ export const AliasesPage = ({
     return new Set(aliasesWithMessages.map(aliasName => aliasName.toLowerCase()));
   }, [aliasesWithMessages]);
 
+  // Pages read out of the per-run cap; a run that reached the end of the
+  // index before the cap is finished, so the bar fills.
+  const scanFinished = !scanState.isRunning && Boolean(scanState.paging?.complete);
   const scanProgressValue = useMemo(() => {
+    if (scanFinished) return 100;
     if (!scanState.totalCount) return 0;
     return Math.min(100, Math.round((scanState.scannedCount / scanState.totalCount) * 100));
-  }, [scanState.scannedCount, scanState.totalCount]);
+  }, [scanFinished, scanState.scannedCount, scanState.totalCount]);
 
   const maxPages = scanState.paging?.maxPages || ALIAS_SCAN_MAX_PAGES;
   const maxResourcesPerRun = maxPages * ALIAS_SCAN_PAGE_SIZE;
@@ -301,6 +305,8 @@ export const AliasesPage = ({
                 <LinearProgress
                   variant="determinate"
                   value={scanProgressValue}
+                  aria-label="Alias scan progress"
+                  aria-describedby="qmail-alias-scan-progress"
                   sx={{
                     borderRadius: "999px",
                     height: "7px",
@@ -308,6 +314,7 @@ export const AliasesPage = ({
                   }}
                 />
                 <Typography
+                  id="qmail-alias-scan-progress"
                   data-testid="alias-scan-progress"
                   sx={{
                     color: "text.secondary",
