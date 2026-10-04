@@ -42,7 +42,7 @@ import {
   NameChip,
 } from "../../components/common/ChipInputComponent/ChipInputComponent";
 import { TextEditor } from "../../components/common/TextEditor/TextEditor";
-import { toQuill1Html } from "../../components/common/TextEditor/quillHtml";
+import { toPublishedMailHtml } from "../../components/common/TextEditor/quillHtml";
 import {
   AttachmentContainer,
   ComposeContainer,
@@ -63,11 +63,9 @@ import { formatFullTimestamp } from "../../utils/time";
 import { extractTextFromSlate } from "../../utils/extractTextFromSlate";
 import { CreateThreadIcon } from "../../assets/svgs/CreateThreadIcon";
 import {
-  aliasMailIdentifier,
-  buildDirectMailObject,
+  buildDirectMailPublishRequest,
   buildForwardHtml,
   buildReplyQuoteHtml,
-  directMailIdentifier,
   messageBodyLines,
   recipientActivityByName,
   replyAllRecipients,
@@ -79,7 +77,7 @@ import {
   lookupPublicKey,
   peekName,
   resolveName,
-  searchNamesQuery,
+  searchDirectoryNames,
 } from "../../utils/nameCache";
 import { AvatarWrapper } from "./MailTable";
 import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
@@ -89,6 +87,7 @@ import {
   composeDraftKey,
   createComposeDraftId,
   deleteComposeDraft,
+  hasComposerContent,
   readComposeDrafts,
   saveComposeDraft,
   type StoredComposeDraft,
@@ -266,6 +265,12 @@ interface NewMessageProps {
 
 const normalizeValue = (value: string): string => value.trim().toLowerCase();
 
+// Stable defaults: a fresh [] per render would re-run every memo and effect
+// that depends on these (the recipient check then re-renders forever).
+const NO_NAMES: string[] = [];
+const NO_GROUPS: JoinedGroupOption[] = [];
+const NO_MESSAGES: any[] = [];
+
 const dedupeStrings = (values: string[]): string[] => {
   const deduped = new Map<string, string>();
   values.forEach(value => {
@@ -310,6 +315,8 @@ const draftFieldsOf = (draft: StoredComposeDraft) => ({
   showAlias: Boolean(draft.showAlias || draft.aliasValue),
   showBCC: Boolean(draft.showBCC && draft.bccNames?.length),
   bccNames: Array.isArray(draft.bccNames) ? draft.bccNames : [],
+  showCC: Boolean(draft.ccNames?.length),
+  ccNames: Array.isArray(draft.ccNames) ? draft.ccNames : [],
 });
 
 export const NewMessage = ({
@@ -325,10 +332,10 @@ export const NewMessage = ({
   forwardInfo,
   inlineMode = false,
   onRequestClose,
-  ownedNames = [],
-  joinedGroups = [],
-  priorityRecipientNames = [],
-  recentInboxMessages = [],
+  ownedNames = NO_NAMES,
+  joinedGroups = NO_GROUPS,
+  priorityRecipientNames = NO_NAMES,
+  recentInboxMessages = NO_MESSAGES,
   openedMessagesById,
   composePrefill = null,
   onThreadPublished,
@@ -363,6 +370,13 @@ export const NewMessage = ({
   const [showAlias, setShowAlias] = useState<boolean>(false);
   const [showBCC, setShowBCC] = useState<boolean>(false);
   const [bccNames, setBccNames] = useState<NameChip[]>([]);
+  // Visible Cc: each name gets its own copy (like Bcc) and is listed in the
+  // additive `cc` field of every copy.
+  const [showCC, setShowCC] = useState<boolean>(false);
+  const [ccNames, setCcNames] = useState<NameChip[]>([]);
+  // Names typed into Cc/Bcc but not added yet: Send waits for them.
+  const [ccPending, setCcPending] = useState("");
+  const [bccPending, setBccPending] = useState("");
   const [replyPreviewMode, setReplyPreviewMode] = useState<
     "preview" | "full" | "hidden"
   >("preview");
@@ -392,6 +406,15 @@ export const NewMessage = ({
   // wrote", so it is neither saved as a draft nor guarded on Discard.
   const initialValueRef = useRef("");
   const initialSubjectRef = useRef("");
+  // Quill normalises the starting HTML (and reports it as an "api" change),
+  // so the baseline follows the editor until the body is really written:
+  // the first user edit, or a stored draft being loaded, freezes it.
+  const bodyBaselineFrozenRef = useRef(false);
+  // A stored draft was loaded into this composer: Reply all must not add
+  // its names back over the draft's own Cc list.
+  const hydratedDraftRef = useRef(false);
+  // Cc names Reply all filled in by itself (not something the user wrote).
+  const initialCcRef = useRef<string[]>([]);
   // A draft opened from the Drafts mailbox: its stored key (deleted once the
   // composer saves under a different key) and, while it is being applied, the
   // draft itself so the reply/forward initialisers do not overwrite it.
@@ -518,25 +541,10 @@ export const NewMessage = ({
     const timeout = window.setTimeout(async () => {
       setIsDirectorySearchLoading(true);
       try {
-        const response = await qortalRequest({
-          action: "SEARCH_NAMES",
-          query: searchNamesQuery(query),
-          prefix: true,
-          limit: 30,
-          reverse: false,
-        });
+        // Cached for the session (nameCache): reopening the composer or
+        // typing a name again costs no request.
+        const names = await searchDirectoryNames(query, 30);
         if (cancelled) return;
-        if (!Array.isArray(response)) {
-          setDirectoryNameOptions([]);
-          return;
-        }
-        const names = dedupeStrings(
-          response
-            .map((item: any) => {
-              return typeof item?.name === "string" ? item.name.trim() : "";
-            })
-            .filter(Boolean)
-        );
         setDirectoryNameOptions(names);
       } catch {
         if (!cancelled) {
@@ -673,10 +681,11 @@ export const NewMessage = ({
       return null;
     const targetName = resolvedTarget.label.trim();
     if (!targetName) return null;
-    // A reply keeps its own draft; a new mail to the same name keeps the old key.
+    // A reply keeps its own draft, Reply all another one; a new mail to the
+    // same name keeps the old key.
     const replyToId = typeof replyTo?.id === "string" ? replyTo.id : "";
-    return composeDraftKey(senderName, targetName, replyToId);
-  }, [fromName, replyTo?.id, resolvedTarget, user?.address]);
+    return composeDraftKey(senderName, targetName, replyToId, replyAll);
+  }, [fromName, replyAll, replyTo?.id, resolvedTarget, user?.address]);
 
   useEffect(() => {
     if (allowAliasAndBcc) return;
@@ -684,6 +693,8 @@ export const NewMessage = ({
     setShowBCC(false);
     setAliasValue("");
     setBccNames([]);
+    setShowCC(false);
+    setCcNames([]);
   }, [allowAliasAndBcc]);
 
   useEffect(() => {
@@ -786,6 +797,10 @@ export const NewMessage = ({
     setSelectedTargetOption(null);
     setDirectoryNameOptions([]);
     setBccNames([]);
+    setCcNames([]);
+    setShowCC(false);
+    setCcPending("");
+    setBccPending("");
     setShowAlias(false);
     setShowBCC(false);
     setValue("");
@@ -795,6 +810,9 @@ export const NewMessage = ({
     setPendingPublishType("mail");
     initialValueRef.current = "";
     initialSubjectRef.current = "";
+    bodyBaselineFrozenRef.current = false;
+    hydratedDraftRef.current = false;
+    initialCcRef.current = [];
     pendingDraftRef.current = null;
     skipNextDraftHydrationRef.current = false;
     setDraftSavedAt(null);
@@ -889,6 +907,8 @@ export const NewMessage = ({
       pendingDraftRef.current = storedDraft;
       skipNextDraftHydrationRef.current = true;
       isHydratingDraftRef.current = true;
+      bodyBaselineFrozenRef.current = true;
+      hydratedDraftRef.current = true;
       const fields = draftFieldsOf(storedDraft);
       setSubject(fields.subject);
       setValue(fields.value);
@@ -896,6 +916,8 @@ export const NewMessage = ({
       setShowAlias(fields.showAlias);
       setShowBCC(fields.showBCC);
       setBccNames(fields.bccNames);
+      setShowCC(fields.showCC);
+      setCcNames(fields.ccNames);
       setDraftSavedAt(storedDraft.updatedAt || null);
       window.setTimeout(() => {
         pendingDraftRef.current = null;
@@ -991,6 +1013,8 @@ export const NewMessage = ({
         return;
       }
       setSubject(nextSubject);
+      bodyBaselineFrozenRef.current = false;
+      hydratedDraftRef.current = false;
       // Start the editor with the quoted original (Quill 1 markup, so the
       // original app renders it too). A stored draft for this reply, if any,
       // replaces it when the draft key resolves.
@@ -1005,7 +1029,7 @@ export const NewMessage = ({
   }, [replyTo]);
 
   // Reply all: everyone from the original's to/cc (minus our own names and
-  // the sender) becomes a Bcc chip, i.e. a separate encrypted copy.
+  // the sender) goes into Cc: a separate encrypted copy each, listed in `cc`.
   useEffect(() => {
     if (!replyTo || !replyAll) return;
     const { others } = replyAllRecipients(replyTo, [
@@ -1015,7 +1039,7 @@ export const NewMessage = ({
     if (!others.length) return;
 
     let cancelled = false;
-    setShowBCC(true);
+    setShowCC(true);
     void (async () => {
       const resolved = await Promise.all(
         others.map(async nameToAdd => {
@@ -1026,7 +1050,8 @@ export const NewMessage = ({
           }
         })
       );
-      if (cancelled) return;
+      // A stored draft of this Reply all keeps its own Cc list.
+      if (cancelled || hydratedDraftRef.current) return;
       const missing = others.filter((_, index) => !resolved[index]);
       const chips: NameChip[] = resolved
         .filter((item): item is NonNullable<typeof item> => Boolean(item))
@@ -1035,12 +1060,14 @@ export const NewMessage = ({
           publicKey: item.publicKey,
           address: item.address,
         }));
-      setBccNames(prev => {
+      setCcNames(prev => {
         const known = new Set(prev.map(chip => normalizeValue(chip.name)));
-        return [
+        const next = [
           ...prev,
           ...chips.filter(chip => !known.has(normalizeValue(chip.name))),
         ];
+        initialCcRef.current = next.map(chip => chip.name);
+        return next;
       });
       if (missing.length) {
         dispatch(
@@ -1074,6 +1101,7 @@ export const NewMessage = ({
       const html = info.html || "";
       setValue(html);
       initialValueRef.current = html;
+      bodyBaselineFrozenRef.current = false;
       return;
     }
 
@@ -1091,6 +1119,7 @@ export const NewMessage = ({
     );
     setValue(html);
     initialValueRef.current = html;
+    bodyBaselineFrozenRef.current = false;
 
     // Re-attach the original files: fetched and decrypted here, re-published
     // encrypted to the new recipient on Send.
@@ -1129,6 +1158,8 @@ export const NewMessage = ({
     if (!storedDraft) return;
 
     isHydratingDraftRef.current = true;
+    bodyBaselineFrozenRef.current = true;
+    hydratedDraftRef.current = true;
     const fields = draftFieldsOf(storedDraft);
     setSubject(fields.subject);
     setValue(fields.value);
@@ -1136,11 +1167,32 @@ export const NewMessage = ({
     setShowAlias(fields.showAlias);
     setShowBCC(fields.showBCC);
     setBccNames(fields.bccNames);
+    setShowCC(fields.showCC);
+    setCcNames(fields.ccNames);
     setDraftSavedAt(storedDraft.updatedAt || null);
     window.setTimeout(() => {
       isHydratingDraftRef.current = false;
     }, 0);
   }, [activeDraftKey, user?.address]);
+
+  // Something the user wrote (not the quote, the Re: subject or Reply all's
+  // own Cc names): only that is saved as a draft or guarded on Discard.
+  const composerHasContent = useCallback(
+    () =>
+      hasComposerContent({
+        subject,
+        initialSubject: initialSubjectRef.current,
+        value,
+        initialValue: initialValueRef.current,
+        aliasValue,
+        attachmentCount: attachments.length,
+        bccNames,
+        ccNames,
+        initialCcNames: initialCcRef.current,
+        textOf: stripHtmlTags,
+      }),
+    [aliasValue, attachments.length, bccNames, ccNames, subject, value]
+  );
 
   useEffect(() => {
     if (!activeDraftKey || !user?.address || isHydratingDraftRef.current)
@@ -1152,19 +1204,7 @@ export const NewMessage = ({
         resolvedTarget?.type === "name" ? resolvedTarget.label.trim() : "";
       if (!fromNameValue || !toNameValue) return;
 
-      const subjectChanged =
-        subject.trim() && subject !== initialSubjectRef.current;
-      const bodyChanged =
-        value !== initialValueRef.current && stripHtmlTags(value).trim();
-      const hasDraftContent = Boolean(
-        subjectChanged ||
-          bodyChanged ||
-          aliasValue.trim() ||
-          bccNames.length ||
-          attachments.length
-      );
-
-      if (!hasDraftContent) {
+      if (!composerHasContent()) {
         clearStoredDraft(activeDraftKey);
         return;
       }
@@ -1183,6 +1223,10 @@ export const NewMessage = ({
         updatedAt,
         kind: "mail",
       };
+      if (ccNames.length) {
+        draft.ccNames = ccNames;
+        draft.showCC = true;
+      }
       // Additive fields: attachment names only (bytes are never stored), and
       // which message a reply answers so the Drafts list can reopen it.
       if (attachments.length) {
@@ -1219,7 +1263,9 @@ export const NewMessage = ({
     aliasValue,
     attachments,
     bccNames,
+    ccNames,
     clearStoredDraft,
+    composerHasContent,
     fromName,
     replyAll,
     replyTo,
@@ -1396,6 +1442,17 @@ export const NewMessage = ({
     ) {
       errorMsg = "The recipient's alias cannot be the same as yours";
     }
+    if (allowAliasAndBcc && aliasValue && ccNames.length) {
+      errorMsg =
+        "Cc is not sent with an alias: remove the Cc names, or send without the alias";
+    }
+    const pendingCc = allowAliasAndBcc && showCC ? ccPending : "";
+    const pendingBcc = allowAliasAndBcc && showBCC ? bccPending : "";
+    if (pendingCc || pendingBcc) {
+      errorMsg = `Press Enter to add "${pendingCc || pendingBcc}" to ${
+        pendingCc ? "Cc" : "Bcc"
+      }, or clear it`;
+    }
     if (noExtension.length > 0) {
       errorMsg =
         "One of your attachments has no file extension (for example .png or .pdf)";
@@ -1427,7 +1484,7 @@ export const NewMessage = ({
         publishes: attachmentPublishes,
         references: attachmentReferences,
       } = await buildAttachmentPayloads(senderName);
-      const composedMessageBody = toQuill1Html(value);
+      const composedMessageBody = toPublishedMailHtml(value);
 
       if (!target) return;
 
@@ -1538,70 +1595,36 @@ export const NewMessage = ({
         throw new Error("Cannot retrieve recipient public key");
       }
 
-      const bccPublicKeys = bccNames.map(item => item.publicKey);
-      const sendId = uid();
-      const createdAt = Date.now();
-      // Binding JSON shape (data contract §3a) plus the additive to/cc fields;
+      // Binding request shape (data contract §3, §4): attachments, the To
+      // copy, one copy per Cc and per Bcc name under one sendId, encrypted to
+      // all of them; the additive `cc` names the Cc list in every copy, and
       // the embedded reply history is stripped of its own history (Bugs #12).
-      const mailObject: any = buildDirectMailObject({
-        subject,
-        createdAt,
-        attachments: attachmentReferences,
-        textContentV2: composedMessageBody,
-        recipient: recipientName,
-        replyTo: isReply ? replyTo : undefined,
+      const request = await buildDirectMailPublishRequest({
+        senderName,
         service: MAIL_SERVICE_TYPE,
+        sendId: uid(),
+        to: {
+          name: recipientName,
+          address: recipientAddress,
+          publicKey: recipientPublicKey,
+        },
+        cc: allowAliasAndBcc ? ccNames : [],
+        bcc: allowAliasAndBcc ? bccNames : [],
+        aliasValue: allowAliasAndBcc ? aliasValue : "",
+        attachmentPublishes,
+        mail: {
+          subject,
+          createdAt: Date.now(),
+          attachments: attachmentReferences,
+          textContentV2: composedMessageBody,
+          replyTo: isReply ? replyTo : undefined,
+        },
+        encode: objectToBase64,
       });
-
-      const mailPostToBase64 = await objectToBase64(mailObject);
-      let identifier = directMailIdentifier(
-        recipientName,
-        recipientAddress,
-        sendId
-      );
-
-      if (aliasValue) {
-        identifier = aliasMailIdentifier(aliasValue, sendId);
-      }
-
-      const primaryMailPublish = {
-        action: "PUBLISH_QDN_RESOURCE",
-        name: senderName,
-        service: MAIL_SERVICE_TYPE,
-        data64: mailPostToBase64,
-        identifier,
-      };
-      const mailPublishes = [primaryMailPublish];
-
-      if (!aliasValue) {
-        for (const element of bccNames) {
-          const copyMailObject = structuredClone(mailObject);
-          copyMailObject.recipient = element.name;
-          const bccMailToBase64 = await objectToBase64(copyMailObject);
-          const bccIdentifier = directMailIdentifier(
-            element.name,
-            element.address,
-            sendId
-          );
-
-          mailPublishes.push({
-            action: "PUBLISH_QDN_RESOURCE",
-            name: senderName,
-            service: MAIL_SERVICE_TYPE,
-            data64: bccMailToBase64,
-            identifier: bccIdentifier,
-          });
-        }
-      }
 
       setPendingPublishType("mail");
       setThreadPublishResult(null);
-      setPublishes({
-        action: "PUBLISH_MULTIPLE_QDN_RESOURCES",
-        resources: [...attachmentPublishes, ...mailPublishes],
-        encrypt: true,
-        publicKeys: [recipientPublicKey, ...bccPublicKeys],
-      });
+      setPublishes(request);
       setIsOpenMultiplePublish(true);
     } catch (error: any) {
       setIsOpenMultiplePublish(false);
@@ -1690,23 +1713,9 @@ export const NewMessage = ({
     if (ok) completeThreadPublish();
   };
 
-  const hasUserContent = () => {
-    const subjectChanged =
-      subject.trim() && subject !== initialSubjectRef.current;
-    const bodyChanged =
-      value !== initialValueRef.current && stripHtmlTags(value).trim();
-    return Boolean(
-      subjectChanged ||
-        bodyChanged ||
-        attachments.length ||
-        bccNames.length ||
-        aliasValue.trim()
-    );
-  };
-
   // Discard asks only when there is something to lose.
   const requestDiscard = async () => {
-    if (hasUserContent()) {
+    if (composerHasContent()) {
       const confirmed = await showDiscardModal();
       if (!confirmed) return;
     }
@@ -2018,6 +2027,16 @@ export const NewMessage = ({
                     Send to alias
                   </Button>
                 )}
+                {!showCC && (
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={() => setShowCC(true)}
+                    sx={aliasToggleSx}
+                  >
+                    Cc
+                  </Button>
+                )}
                 {!showBCC && (
                   <Button
                     variant="text"
@@ -2161,10 +2180,48 @@ export const NewMessage = ({
             >
               {requireSenderAlias
                 ? "Replies from an alias inbox are sent under an alias of your own, so the other side keeps writing to the alias. It must differ from the inbox's alias."
-                : "The message is delivered to the alias inbox named here instead of the recipient's name inbox; it is still encrypted to the recipient, and you stay the sender. Bcc copies are not sent with an alias."}
+                : "The message is delivered to the alias inbox named here instead of the recipient's name inbox; it is still encrypted to the recipient, and you stay the sender. Cc and Bcc copies are not sent with an alias."}
             </Typography>
           )}
 
+          {allowAliasAndBcc && showCC && (
+            <NewMessageInputRow>
+              <NewMessageAliasContainer
+                sx={{
+                  width: "100%",
+                  flex: 1,
+                  minWidth: 0,
+                }}
+              >
+                <NewMessageInputLabelP>Cc:</NewMessageInputLabelP>
+                <ChipInputComponent
+                  chips={ccNames}
+                  setChips={setCcNames}
+                  inputLabel="Cc name"
+                  excludeNames={[
+                    resolvedTarget?.type === "name" ? resolvedTarget.label : "",
+                    ...bccNames.map(chip => chip.name),
+                  ]}
+                  onPendingChange={setCcPending}
+                />
+              </NewMessageAliasContainer>
+            </NewMessageInputRow>
+          )}
+          {allowAliasAndBcc && showCC && (
+            <Typography
+              id="qmail-compose-cc-help"
+              sx={{
+                fontSize: "0.875rem",
+                color: "var(--qmail-compose-muted)",
+                mt: "-0.4rem",
+              }}
+            >
+              Cc names are visible to every recipient.
+              {replyAll && replyTo
+                ? " Reply all put the other people on the original here; remove anyone who should not get a copy."
+                : ""}
+            </Typography>
+          )}
           {allowAliasAndBcc && showBCC && (
             <NewMessageInputRow>
               <NewMessageAliasContainer
@@ -2175,20 +2232,18 @@ export const NewMessage = ({
                 }}
               >
                 <NewMessageInputLabelP>Bcc:</NewMessageInputLabelP>
-                <ChipInputComponent chips={bccNames} setChips={setBccNames} />
+                <ChipInputComponent
+                  chips={bccNames}
+                  setChips={setBccNames}
+                  inputLabel="Bcc name"
+                  excludeNames={[
+                    resolvedTarget?.type === "name" ? resolvedTarget.label : "",
+                    ...ccNames.map(chip => chip.name),
+                  ]}
+                  onPendingChange={setBccPending}
+                />
               </NewMessageAliasContainer>
             </NewMessageInputRow>
-          )}
-          {allowAliasAndBcc && replyAll && replyTo && (
-            <Typography
-              sx={{
-                fontSize: "0.875rem",
-                color: "var(--qmail-compose-muted)",
-              }}
-            >
-              Reply all: the other people on the original get their own copy
-              (listed under Bcc). Remove anyone who should not receive it.
-            </Typography>
           )}
 
           <AttachmentContainer
@@ -2520,7 +2575,13 @@ export const NewMessage = ({
             <TextEditor
               className="qmail-compose-editor"
               inlineContent={value}
-              setInlineContent={(val: any) => {
+              setInlineContent={(val: string, source?: string) => {
+                if (source === "user") {
+                  bodyBaselineFrozenRef.current = true;
+                } else if (!bodyBaselineFrozenRef.current) {
+                  // Quill's own rewrite of the starting content.
+                  initialValueRef.current = val;
+                }
                 setValue(val);
               }}
               placeholder={

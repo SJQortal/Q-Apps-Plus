@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { TextEditor } from './TextEditor'
 import { paletteColorName } from './pickerA11y'
+import Quill from 'quill'
 
 describe('TextEditor toolbar', () => {
   it('mounts Quill on our two-row toolbar and keeps the rare controls behind More', () => {
@@ -57,5 +58,16 @@ describe('TextEditor toolbar', () => {
     fireEvent.keyDown(alignLabel, { key: ' ' })
     expect(alignLabel.getAttribute('aria-expanded')).toBe('true')
     expect(paletteColorName(34)).toBe('Deep purple')
+  })
+
+  it('hands over the editor HTML with plain spaces and says who changed it', () => {
+    const onChange = vi.fn()
+    const { container } = render(<TextEditor inlineContent="<p>hi</p>" setInlineContent={onChange} />)
+    const quill = Quill.find(container.querySelector('.ql-container') as HTMLElement) as Quill
+    onChange.mockClear()
+    quill.insertText(quill.getLength() - 1, ' there, friend', 'user')
+    const [html, source] = onChange.mock.calls.at(-1)!
+    expect(html).toBe('<p>hi there, friend</p>')
+    expect(source).toBe('user')
   })
 })

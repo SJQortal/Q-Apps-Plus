@@ -34,7 +34,7 @@ import {
 } from "./Mail-styles";
 import { Spacer } from "../../components/common/Spacer";
 import { TextEditor } from "../../components/common/TextEditor/TextEditor";
-import { toQuill1Html } from "../../components/common/TextEditor/quillHtml";
+import { toPublishedMailHtml } from "../../components/common/TextEditor/quillHtml";
 import { SendNewMessage } from "../../assets/svgs/SendNewMessage";
 import { formatBytes } from "../../utils/displaySize";
 import { CreateThreadIcon } from "../../assets/svgs/CreateThreadIcon";
@@ -310,7 +310,7 @@ export const NewThread = ({
       createdAt: Date.now(),
       version: 1,
       attachments,
-      textContentV2: toQuill1Html(value),
+      textContentV2: toPublishedMailHtml(value),
       name,
       threadOwner: currentThread?.threadData?.name || name,
     };

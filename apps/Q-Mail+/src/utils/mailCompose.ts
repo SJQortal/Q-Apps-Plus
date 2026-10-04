@@ -8,7 +8,8 @@
  * - `generalData.threadV2[].data` keeps `user/createdAt/subject/attachments/
  *   textContentV2` (and every other top-level field) but loses its own
  *   `generalData`, so payloads stop growing geometrically (Bugs #12);
- * - `to` / `cc` are additive top-level fields the original app ignores.
+ * - `to` / `cc` are additive top-level fields the original app ignores (it
+ *   reads `recipient`); Bcc names never appear in any JSON.
  */
 
 export type SubjectPrefix = "Re" | "Fwd";
@@ -316,13 +317,15 @@ export interface DirectMailPayloadInput {
   attachments: any[];
   textContentV2: string;
   recipient: string;
+  /** Additive: the visible Cc names (written into every copy). */
+  cc?: string[];
   replyTo?: any;
   service: string;
 }
 
 /**
  * The decrypted JSON of a direct mail (§3a) plus the additive `to` / `cc`.
- * `cc` is always empty for now: BCC copies must stay hidden.
+ * `to` is the To name, `cc` the visible Cc names; Bcc names are never listed.
  */
 export function buildDirectMailObject(input: DirectMailPayloadInput): Record<string, any> {
   const mailObject: Record<string, any> = {
@@ -337,10 +340,117 @@ export function buildDirectMailObject(input: DirectMailPayloadInput): Record<str
     },
     recipient: input.recipient,
     to: [input.recipient],
-    cc: [],
+    cc: Array.isArray(input.cc) ? [...input.cc] : [],
   };
   if (input.replyTo?.id) {
     mailObject.generalData.threadV2 = buildReplyThreadV2(input.replyTo, input.service);
   }
   return mailObject;
+}
+
+/** A resolved recipient: registered name, owner address, public key. */
+export interface MailRecipientKey {
+  name: string;
+  address: string;
+  publicKey: string;
+}
+
+/**
+ * Cc and Bcc lists without repeats: a name already in To (or earlier in Cc)
+ * is dropped, so no two copies share an identifier and nobody is in Bcc and
+ * Cc at once (Cc wins, since it is the visible one).
+ */
+export function uniqueCopyRecipients(
+  to: Pick<MailRecipientKey, "name">,
+  cc: MailRecipientKey[] = [],
+  bcc: MailRecipientKey[] = []
+): { cc: MailRecipientKey[]; bcc: MailRecipientKey[] } {
+  const seen = new Set<string>([normalize(to?.name)]);
+  const keep = (list: MailRecipientKey[]) =>
+    list.filter(item => {
+      const key = normalize(item?.name);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  const uniqueCc = keep(cc);
+  const uniqueBcc = keep(bcc);
+  return { cc: uniqueCc, bcc: uniqueBcc };
+}
+
+export interface DirectMailPublishInput {
+  senderName: string;
+  /** MAIL_PRIVATE. */
+  service: string;
+  /** One id shared by every copy of this send. */
+  sendId: string;
+  to: MailRecipientKey;
+  cc?: MailRecipientKey[];
+  bcc?: MailRecipientKey[];
+  /** Deliver to this alias inbox instead (no Cc/Bcc copies, §8). */
+  aliasValue?: string;
+  /** ATTACHMENT_PRIVATE publishes, sent first in the same batch. */
+  attachmentPublishes?: any[];
+  mail: Omit<DirectMailPayloadInput, "recipient" | "cc" | "service">;
+  /** objectToBase64. */
+  encode: (value: any) => Promise<string>;
+}
+
+/**
+ * The whole `PUBLISH_MULTIPLE_QDN_RESOURCES` request of a direct mail
+ * (binding, data contract §3, §4): attachments, the To copy, one copy per Cc
+ * name, then one per Bcc name, all under the same `sendId`, each a
+ * MAIL_PRIVATE resource addressed to its own name (`recipient`), encrypted
+ * once to `[to, ...cc, ...bcc]`. Every copy lists the Cc names in `cc`.
+ *
+ * With an alias the mail goes to the alias inbox only: no Cc or Bcc copies
+ * and no Cc names; Bcc keys stay in `publicKeys`, as they always have.
+ */
+export async function buildDirectMailPublishRequest(input: DirectMailPublishInput): Promise<{
+  action: "PUBLISH_MULTIPLE_QDN_RESOURCES";
+  resources: any[];
+  encrypt: true;
+  publicKeys: string[];
+}> {
+  const alias = typeof input.aliasValue === "string" && input.aliasValue ? input.aliasValue : "";
+  const unique = uniqueCopyRecipients(input.to, input.cc, input.bcc);
+  const cc = alias ? [] : unique.cc;
+  const bcc = unique.bcc;
+
+  const mailObject = buildDirectMailObject({
+    ...input.mail,
+    recipient: input.to.name,
+    cc: cc.map(item => item.name),
+    service: input.service,
+  });
+
+  const publish = async (recipient: string, identifier: string) => ({
+    action: "PUBLISH_QDN_RESOURCE",
+    name: input.senderName,
+    service: input.service,
+    data64: await input.encode({ ...mailObject, recipient }),
+    identifier,
+  });
+
+  const resources: any[] = [...(input.attachmentPublishes || [])];
+  resources.push(
+    await publish(
+      input.to.name,
+      alias
+        ? aliasMailIdentifier(alias, input.sendId)
+        : directMailIdentifier(input.to.name, input.to.address, input.sendId)
+    )
+  );
+  if (!alias) {
+    for (const copy of [...cc, ...bcc]) {
+      resources.push(await publish(copy.name, directMailIdentifier(copy.name, copy.address, input.sendId)));
+    }
+  }
+
+  return {
+    action: "PUBLISH_MULTIPLE_QDN_RESOURCES",
+    resources,
+    encrypt: true,
+    publicKeys: [input.to.publicKey, ...cc.map(item => item.publicKey), ...bcc.map(item => item.publicKey)],
+  };
 }
