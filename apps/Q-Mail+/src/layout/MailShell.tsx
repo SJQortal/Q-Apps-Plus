@@ -230,21 +230,9 @@ export function MailShell({
       {banner}
       <Body>
         {isDesktop ? (
-          <>
-            <RailColumn id={railId} aria-label="Mailboxes" style={{ width: railWidth }}>
-              {rail}
-            </RailColumn>
-            <PaneResizer
-              label="Resize the mailboxes column"
-              controls={railId}
-              value={railWidth}
-              min={PANE_LIMITS.railMin}
-              max={PANE_LIMITS.railMax}
-              onChange={(width) => paneWidths.preview('rail', width)}
-              onCommit={(width) => paneWidths.commit('rail', width)}
-              onReset={() => paneWidths.reset('rail')}
-            />
-          </>
+          <RailColumn id={railId} aria-label="Mailboxes" style={{ width: railWidth }}>
+            {rail}
+          </RailColumn>
         ) : (
           <Drawer
             open={railOpen}
@@ -255,6 +243,21 @@ export function MailShell({
           </Drawer>
         )}
         <Main ref={mainRef}>
+          {/* The rail's handle opens <main> rather than sitting between the two
+              landmarks, so no content is outside a region (axe "region"). It
+              resizes from the drag distance, so where it sits doesn't matter. */}
+          {isDesktop && (
+            <PaneResizer
+              label="Resize the mailboxes column"
+              controls={railId}
+              value={railWidth}
+              min={PANE_LIMITS.railMin}
+              max={PANE_LIMITS.railMax}
+              onChange={(width) => paneWidths.preview('rail', width)}
+              onCommit={(width) => paneWidths.commit('rail', width)}
+              onReset={() => paneWidths.reset('rail')}
+            />
+          )}
           {showWide ? (
             <WidePane $fab={hasFab}>
               {/* Not a live region: every keystroke in the composer and every row of a
