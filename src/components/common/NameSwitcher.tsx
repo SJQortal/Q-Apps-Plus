@@ -37,7 +37,7 @@ import { useLayoutMode } from '../../layout/useLayoutMode';
 import { useLandscapeFrame } from '../../utils/hubFrame';
 import { ResponsiveDialog } from './ResponsiveDialog';
 import { NameAvatar } from './NameAvatar';
-import { NameText } from './NameText';
+import { NameText, spokenName } from './NameText';
 
 /** Above this many names the list gets a search field. */
 export const NAME_SEARCH_THRESHOLD = 15;
@@ -339,7 +339,7 @@ export function NameSwitcherList({
               aria-checked={active}
               selected={active}
               // The highlight splits the text into spans; the label keeps the name whole.
-              aria-label={secondary ? `${name}, ${secondary}` : name}
+              aria-label={secondary ? `${spokenName(name)}, ${secondary}` : spokenName(name)}
               onClick={() => onPick(name)}
               sx={ROW_SX}
             >
@@ -422,7 +422,7 @@ export function NameSwitcher({
         color="inherit"
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`${label}: ${shownName || 'none'}. Change`}
+        aria-label={`${label}: ${activeName ? spokenName(activeName) : shownName || 'none'}. Change`}
         onClick={(event) => setAnchor(event.currentTarget)}
         startIcon={leadPicked ? leadRow!.icon : <NameAvatar name={activeName || '?'} size={28} known={activeAvatar} />}
         endIcon={<ExpandMoreIcon />}

@@ -4,6 +4,7 @@ import { HubThemeProvider } from '../../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
 import { DraftsMailbox, describeDraftTarget } from './DraftsMailbox'
 import { IMPOSTOR, isStruck, nameElement } from '../../test/hiddenNames'
+import { HIDDEN_CHARACTERS_SR } from '../../components/common/NameText'
 import { listComposeDrafts, saveComposeDraft, type StoredComposeDraft } from './composeDrafts'
 
 const address = 'QADDR'
@@ -80,6 +81,7 @@ describe('DraftsMailbox', () => {
     renderDrafts()
     const row = screen.getByRole('button', { name: /^Open draft/ })
     expect(isStruck(nameElement(row, IMPOSTOR))).toBe(true)
+    expect(row.getAttribute('aria-label')).toBe(`Open draft: Hello, To ${IMPOSTOR}${HIDDEN_CHARACTERS_SR}`)
     fireEvent.click(screen.getByRole('button', { name: 'Delete draft: Hello' }))
     const dialog = await screen.findByRole('dialog')
     expect(dialog.textContent).toMatch(/"Hello" \(To Simon.James.*\)\s*will be removed from this device\./)

@@ -39,7 +39,7 @@ import { UnreadDot } from "../../layout/states";
 import { useDecryptedSubject } from "../../utils/subjectCache";
 import { primarySoft } from "../../hub-theme";
 import { LIST_CONTAINER } from "../../layout/MailShell";
-import { NameText } from "../../components/common/NameText";
+import { NameText, spokenName } from "../../components/common/NameText";
 
 export const LOCKED_SUBJECT_LABEL = "Locked · open to read";
 /** The list width from which a row lays out as columns (the list pane is the container). */
@@ -224,7 +224,8 @@ export const MailMessageRow = ({
     ? LOCKED_SUBJECT_LABEL
     : subject || NO_SUBJECT_LABEL;
   const nameLabel = isFromSent ? `To: ${name || "…"}` : name || "Unknown sender";
-  const ariaLabel = `${isUnread ? "Unread. " : ""}${nameLabel}, ${subjectLabel}, ${fullDate}`;
+  const spokenLabel = isFromSent ? `To: ${name ? spokenName(name) : "…"}` : name ? spokenName(name) : "Unknown sender";
+  const ariaLabel = `${isUnread ? "Unread. " : ""}${spokenLabel}, ${subjectLabel}, ${fullDate}`;
 
   const statusIcon = isLocked ? (
     <LockOutlinedIcon

@@ -12,7 +12,7 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import LinkIcon from "@mui/icons-material/Link";
 import { formatFullTimestamp } from "../../utils/time";
-import { HIDDEN_CHARACTERS_TITLE, NameText, strikeInputSx } from "../../components/common/NameText";
+import { HIDDEN_CHARACTERS_TITLE, NameText, spokenName, strikeInputSx } from "../../components/common/NameText";
 import { hasInvisibleCharacters } from "../../utils/invisibleCharacters";
 import { ALIAS_SCAN_MAX_PAGES, ALIAS_SCAN_PAGE_SIZE, aliasScanButtonLabel } from "./aliasScan";
 
@@ -553,7 +553,7 @@ export const AliasesPage = ({
                   </Button>
                   <IconButton
                     size="small"
-                    aria-label={`Remove alias ${aliasName}`}
+                    aria-label={`Remove alias ${spokenName(aliasName)}`}
                     onClick={() => {
                       onRemoveAlias(aliasName);
                     }}
