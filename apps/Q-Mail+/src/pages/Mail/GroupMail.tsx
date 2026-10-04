@@ -10,6 +10,7 @@ import { RootState } from "../../state/store";
 import { EmptyState, ErrorState, ListSkeleton } from "../../layout/states";
 import { usePolling } from "../../hooks/usePolling";
 import { useGroupMemberCount, useGroupMembers } from "../../hooks/useGroupMembers";
+import { NameText } from "../../components/common/NameText";
 import { NewThreadButton } from "./NewThreadButton";
 import { ThreadRow } from "./ThreadRow";
 import {
@@ -31,6 +32,20 @@ const RECENT_LIMIT = 20;
 
 const listSignature = (threads: ThreadSummary[]): string =>
   threads.map((thread) => `${thread.identifier}@${lastActivityOf(thread)}`).join("|");
+
+/** A group's members as chips; impostor names are struck, as in Hub. */
+export function GroupMemberChips({ names, unnamedCount }: { names: string[]; unnamedCount: number }) {
+  return (
+    <>
+      {names.map((name) => (
+        <Chip key={name} label={<NameText name={name} />} size="small" variant="outlined" />
+      ))}
+      {unnamedCount > 0 && (
+        <Chip label={`${unnamedCount} without a name`} size="small" variant="outlined" sx={{ color: "text.secondary" }} />
+      )}
+    </>
+  );
+}
 
 interface GroupMailProps {
   groupInfo: GroupOption;
@@ -242,12 +257,7 @@ export const GroupMail = ({
       </Button>
       <Collapse in={showMembers} unmountOnExit>
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, px: 2, pb: 1.5 }}>
-          {namedMembers.map((name) => (
-            <Chip key={name} label={name} size="small" variant="outlined" />
-          ))}
-          {unnamedCount > 0 && (
-            <Chip label={`${unnamedCount} without a name`} size="small" variant="outlined" sx={{ color: "text.secondary" }} />
-          )}
+          <GroupMemberChips names={namedMembers} unnamedCount={unnamedCount} />
           {!members.length && !isLoadingMembers && (
             <Typography variant="body2" color="text.secondary">
               No members found.

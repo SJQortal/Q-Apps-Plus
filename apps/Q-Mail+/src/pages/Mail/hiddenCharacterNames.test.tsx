@@ -21,6 +21,7 @@ import { BLANK, IMPOSTOR, REAL, isStruck, nameElement, struckNames } from '../..
 import { MailMessageRow } from './MailMessageRow'
 import { GroupedMailboxList } from './GroupedMailboxList'
 import { ThreadRow } from './ThreadRow'
+import { GroupMemberChips } from './GroupMail'
 import { ShowMessageV2 } from './ShowMessageV2'
 import { ShowMessageV2Replies } from './ShowMessageV2Replies'
 import { ShowMessage } from './ShowMessageWithoutModal'
@@ -129,6 +130,16 @@ describe('threads', () => {
     const thread = { identifier: 't1', threadOwner: IMPOSTOR, threadData: { title: 'Plans', name: IMPOSTOR } } as any
     const { container } = wrap(<ThreadRow thread={thread} onOpen={() => {}} />)
     expect(isStruck(nameElement(container, IMPOSTOR))).toBe(true)
+  })
+})
+
+describe('group members', () => {
+  it('strikes an impostor member chip next to the real one', () => {
+    const { container } = wrap(<GroupMemberChips names={[REAL, IMPOSTOR]} unnamedCount={2} />)
+    expect(struckNames(container)).toEqual([IMPOSTOR])
+    expect(isStruck(nameElement(container, IMPOSTOR))).toBe(true)
+    expect(isStruck(nameElement(container, REAL))).toBe(false)
+    expect(screen.getByText('2 without a name')).toBeTruthy()
   })
 })
 
