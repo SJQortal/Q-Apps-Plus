@@ -43,6 +43,9 @@ export interface StoredComposeDraft {
   /** Additive: the message a reply draft answers. */
   replyTo?: DraftReplyReference | null;
   replyAll?: boolean;
+  /** Additive: visible Cc names (each gets its own copy, like Bcc). */
+  ccNames?: NameChip[];
+  showCC?: boolean;
   /** Additive, thread posts: where the post belongs. */
   groupId?: string;
   groupName?: string;
@@ -90,6 +93,23 @@ function sanitizeAttachments(value: unknown): DraftAttachmentMeta[] | undefined 
   return items.length ? items : undefined;
 }
 
+function sanitizeNameChips(value: unknown): NameChip[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const chips = value.filter(
+    (item: any): item is NameChip =>
+      Boolean(item) &&
+      typeof item.name === "string" &&
+      Boolean(item.name.trim()) &&
+      typeof item.publicKey === "string" &&
+      Boolean(item.publicKey) &&
+      typeof item.address === "string" &&
+      Boolean(item.address)
+  );
+  return chips.length
+    ? chips.map(item => ({ name: item.name, publicKey: item.publicKey, address: item.address }))
+    : undefined;
+}
+
 function sanitizeReplyTo(value: unknown): DraftReplyReference | null | undefined {
   if (value === null) return null;
   if (!value || typeof value !== "object") return undefined;
@@ -133,6 +153,9 @@ export function sanitizeComposeDraft(value: unknown): StoredComposeDraft | null 
   const replyTo = sanitizeReplyTo(draft.replyTo);
   if (replyTo !== undefined) sanitized.replyTo = replyTo;
   if (draft.replyAll) sanitized.replyAll = true;
+  const ccNames = sanitizeNameChips(draft.ccNames);
+  if (ccNames) sanitized.ccNames = ccNames;
+  if (draft.showCC) sanitized.showCC = true;
   if (typeof draft.groupId === "string" && draft.groupId.trim()) sanitized.groupId = draft.groupId.trim();
   if (typeof draft.groupName === "string" && draft.groupName.trim()) sanitized.groupName = draft.groupName.trim();
   if (typeof draft.threadId === "string" && draft.threadId.trim()) sanitized.threadId = draft.threadId.trim();
