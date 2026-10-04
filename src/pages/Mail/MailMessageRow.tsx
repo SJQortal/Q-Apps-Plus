@@ -39,6 +39,7 @@ import { UnreadDot } from "../../layout/states";
 import { useDecryptedSubject } from "../../utils/subjectCache";
 import { primarySoft } from "../../hub-theme";
 import { LIST_CONTAINER } from "../../layout/MailShell";
+import { NameText } from "../../components/common/NameText";
 
 export const LOCKED_SUBJECT_LABEL = "Locked · open to read";
 /** The list width from which a row lays out as columns (the list pane is the container). */
@@ -66,7 +67,7 @@ export interface MailMessageRowProps {
   selected?: boolean;
   onToggleSelected?: () => void;
   /** A small label after the subject, e.g. the mailbox a search hit lives in. */
-  context?: string;
+  context?: React.ReactNode;
   /** Terms to highlight in the name and subject. */
   highlightTerms?: string[];
   /** "li" when the row sits directly inside a list (ul); the default "div" expects a wrapping li. */
@@ -358,6 +359,13 @@ export const MailMessageRow = ({
             >
               {compact ? (
                 <Highlight text={subjectLabel} terms={highlightTerms} />
+              ) : name ? (
+                <>
+                  {isFromSent && <Highlight text="To: " terms={highlightTerms} />}
+                  <NameText name={name}>
+                    <Highlight text={name} terms={highlightTerms} />
+                  </NameText>
+                </>
               ) : (
                 <Highlight text={nameLabel} terms={highlightTerms} />
               )}

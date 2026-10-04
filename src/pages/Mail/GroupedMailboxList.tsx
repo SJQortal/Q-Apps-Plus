@@ -20,6 +20,7 @@ import { useSelector } from "react-redux";
 import { formatFullTimestamp, formatRelativeDate } from "../../utils/time";
 import { MailMessageRow } from "./MailMessageRow";
 import { AvatarWrapper } from "./MailTable";
+import { NameText } from "../../components/common/NameText";
 import {
   getSentRecipientDisplayLabel,
   getSentRecipientGroupKey,
@@ -58,7 +59,7 @@ interface GroupedMailboxListProps {
   status?: ListStatus;
   emptyIcon?: ReactNode;
   emptyTitle?: string;
-  emptyHint?: string;
+  emptyHint?: React.ReactNode;
   emptyAction?: ReactNode;
   errorMessage?: string;
   onRetry?: () => void;
@@ -150,7 +151,11 @@ function SentGroupLabel({ identifier, known }: { identifier: string; known?: str
   const [node, setNode] = useState<HTMLSpanElement | null>(null);
   const inView = useInView(node);
   const recipient = useSentRecipient(identifier, known, inView);
-  return <span ref={setNode}>To: {recipient.name}</span>;
+  return (
+    <span ref={setNode}>
+      To: <NameText name={recipient.name} />
+    </span>
+  );
 }
 
 export const GroupedMailboxList = ({
@@ -479,8 +484,10 @@ export const GroupedMailboxList = ({
                           identifier={getMessageId(latestMessage)}
                           known={decryptedRecipient}
                         />
-                      ) : (
+                      ) : group.key === "sender:unknown" ? (
                         label
+                      ) : (
+                        <NameText name={group.label} />
                       )}
                     </Typography>
                     <Typography

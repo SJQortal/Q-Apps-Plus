@@ -8,8 +8,22 @@ import SearchOffOutlinedIcon from "@mui/icons-material/SearchOffOutlined";
 import { Box, Typography } from "@mui/material";
 import { EmptyState, ListSkeleton } from "../../layout/states";
 import { MailMessageRow } from "./MailMessageRow";
-import { mailboxLabel, mailboxRefOf, toMessageId } from "./mailSearch";
+import { mailboxLabel, mailboxRefOf, toMessageId, type MailboxRef } from "./mailSearch";
 import type { ListStatus } from "./GroupedMailboxList";
+import { NameText } from "../../components/common/NameText";
+
+/** mailboxLabel on screen, the owned name or alias drawn by NameText. */
+function MailboxLabel({ mailbox }: { mailbox: MailboxRef | undefined }) {
+  const label = mailboxLabel(mailbox);
+  const name = mailbox?.kind === "alias" ? mailbox.alias : mailbox?.kind === "archived" ? "" : mailbox?.name;
+  if (!name || !label.endsWith(name)) return <>{label}</>;
+  return (
+    <>
+      {label.slice(0, label.length - name.length)}
+      <NameText name={name} />
+    </>
+  );
+}
 
 interface SearchResultsListProps {
   hits: any[];
@@ -50,7 +64,7 @@ export const SearchResultsList = ({ hits, terms, status, openedMessageId, onOpen
             messageData={hit}
             openMessage={() => onOpen(hit)}
             isFromSent={ref?.kind === "sent"}
-            context={mailboxLabel(ref)}
+            context={ref ? <MailboxLabel mailbox={ref} /> : undefined}
             highlightTerms={terms}
             isOpen={
               openedMessageId !== null &&

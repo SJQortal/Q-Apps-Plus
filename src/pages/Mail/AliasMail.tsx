@@ -22,6 +22,7 @@ import { fetchRecentInboxMessagesForOwnedName, mergeNewRows, withoutDeletedRows 
 import { GroupedMailboxList, type ListStatus } from "./GroupedMailboxList";
 import { useMailboxSearch, type MailboxSearchStatus } from "./useMailboxSearch";
 import { aliasIndexKey, publishMailIndex } from "./mailIndexStore";
+import { NameText } from "../../components/common/NameText";
 
 export const ALIAS_POLL_INTERVAL_MS = 30_000;
 
@@ -217,7 +218,12 @@ export const AliasMail = ({
       emptyHint={
         hasQuery
           ? "Try fewer words, or search message bodies."
-          : `Mail addressed to ${alias} shows up here. Give the alias to people who should reach you this way.`
+          : (
+            <>
+              Mail addressed to <NameText name={alias} /> shows up here. Give the alias to people who should
+              reach you this way.
+            </>
+          )
       }
       footer={footer}
     />

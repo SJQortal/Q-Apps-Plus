@@ -32,6 +32,15 @@ describe('NameText', () => {
     expect(el.textContent).toBe('Simon James')
   })
 
+  it('adds no element around an ordinary name unless it is styled', () => {
+    wrap(
+      <p data-testid="p">
+        To: <NameText name="Simon James" />
+      </p>
+    )
+    expect(screen.getByTestId('p').innerHTML).toBe('To: Simon James')
+  })
+
   it('does not strike an address (callers pass names only)', () => {
     // An address has no invisible characters, so even a wrong call is harmless.
     wrap(<NameText name="QbpZL12lh1mXhN5YqPmEq6G4h3ws4R2mDR" data-testid="n" />)

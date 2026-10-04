@@ -47,7 +47,7 @@ export function ListSkeleton({ rows = 6 }: { rows?: number }) {
 interface EmptyStateProps {
   icon?: ReactNode;
   title: string;
-  hint?: string;
+  hint?: ReactNode;
   action?: ReactNode;
 }
 

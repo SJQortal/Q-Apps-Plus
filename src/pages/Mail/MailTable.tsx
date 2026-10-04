@@ -11,6 +11,8 @@ import { useDispatch, useSelector } from 'react-redux'
 import { RootState } from '../../state/store'
 import { setUserAvatarHash } from '../../state/features/globalSlice'
 import { isAvatarUrl, useLazyAvatarUrl } from '../../utils/avatarCache'
+import { firstVisibleChar } from '../../utils/invisibleCharacters'
+import { NameText } from '../../components/common/NameText'
 import { formatFullTimestamp } from '../../utils/time'
 import AliasAvatar from '../../assets/svgs/AliasAvatar.svg'
 import { AliasAvatarImg } from './Mail-styles'
@@ -111,7 +113,7 @@ function rowContent(_index: number, row: Data, openMessage: any) {
                 }}
               >
                 <AvatarWrapper user={row?.user}></AvatarWrapper>
-                {row[column.dataKey]}
+                <NameText name={row?.user} />
               </Box>
             )}
             {column.dataKey !== 'user' && (
@@ -182,7 +184,7 @@ export const AvatarWrapper = ({ user, height, fallback, isAlias }: any) => {
     height: height
   }} src={AliasAvatar} alt={fallback || user || 'Alias'} />
   const label = fallback || user || ''
-  const initial = typeof label === 'string' && label ? label.charAt(0).toUpperCase() : undefined
+  const initial = (typeof label === 'string' && firstVisibleChar(label).toUpperCase()) || undefined
   return (
     <Avatar
       ref={setNode}
