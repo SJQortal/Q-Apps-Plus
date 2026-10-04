@@ -1105,6 +1105,7 @@ export const NewMessage = ({
             msg: `Could not add to Reply all (name not found or no public key): ${missing.join(
               ", "
             )}`,
+            names: missing,
             alertType: "error",
           })
         );
