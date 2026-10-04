@@ -42,6 +42,7 @@ import { BottomNav } from "../../layout/BottomNav";
 import { ComposeFab } from "../../layout/ComposeFab";
 import { useLandscapeFrame } from "../../utils/hubFrame";
 import { PaneHeader } from "../../layout/PaneHeader";
+import { NameText } from "../../components/common/NameText";
 import { LoadingBanner } from "../../layout/states";
 import { useLayoutMode } from "../../layout/useLayoutMode";
 import { useAppViewport } from "../../layout/useAppViewport";
@@ -2964,13 +2965,16 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
   } as const;
 
   // ---- list pane -----------------------------------------------------------
-  let listTitle = "Inbox";
-  let listSubtitle: string | undefined = user?.name || undefined;
+  // Names in the pane headers go through NameText (impostor names struck).
+  const asName = (value: string | null | undefined): React.ReactNode =>
+    value ? <NameText name={value} /> : undefined;
+  let listTitle: React.ReactNode = "Inbox";
+  let listSubtitle: React.ReactNode = asName(user?.name);
   let listBack: (() => void) | undefined;
   let listBody: React.ReactNode;
   if (isSentViewActive) {
-    listTitle = selectedSentInstanceName || "Sent";
-    listSubtitle = selectedSentInstanceName ? "Sent" : user?.name || undefined;
+    listTitle = asName(selectedSentInstanceName) || "Sent";
+    listSubtitle = selectedSentInstanceName ? "Sent" : asName(user?.name);
     listBody = hasAuthenticatedIdentity ? (
       <SentMail
         instanceNames={sentInstanceNamesForCurrentView}
@@ -2985,7 +2989,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       renderAuthenticationPrompt("Sent")
     );
   } else if (isAliasesViewActive && activeAliasInboxName) {
-    listTitle = activeAliasInboxName;
+    listTitle = asName(activeAliasInboxName);
     listSubtitle = "Alias inbox";
     listBack = () => {
       setSelectedAlias(null);
@@ -3010,7 +3014,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     );
   } else if (isArchivedViewActive) {
     listTitle = "Archived";
-    listSubtitle = user?.name || undefined;
+    listSubtitle = asName(user?.name);
     listBack = () => {
       onSelectSidebarItem("inbox");
     };
@@ -3093,8 +3097,8 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       renderAuthenticationPrompt("Inbox")
     );
   } else {
-    listTitle = selectedInboxInstanceName || "Inbox";
-    listSubtitle = selectedInboxInstanceName ? "Inbox" : user?.name || undefined;
+    listTitle = asName(selectedInboxInstanceName) || "Inbox";
+    listSubtitle = selectedInboxInstanceName ? "Inbox" : asName(user?.name);
     listBody = hasAuthenticatedIdentity ? (
       <>
         <GroupedMailboxList
@@ -3254,7 +3258,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       {isOnePane && (
         <PaneHeader
           title="Opening message"
-          subtitle={mailInfo?.name}
+          subtitle={asName(mailInfo?.name)}
           onBack={() => onOk(undefined)}
           backLabel="Back to messages"
         />
@@ -3270,7 +3274,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       {isOnePane && (
         <PaneHeader
           title={message?.subject || "Message"}
-          subtitle={message?.user}
+          subtitle={asName(message?.user)}
           onBack={closeOpenMessage}
           backLabel="Back to messages"
         />
@@ -3367,7 +3371,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       <>
         <PaneHeader
           title={composeTitle}
-          subtitle={composeRecipientAlias || undefined}
+          subtitle={asName(composeRecipientAlias)}
           onBack={handleComposerClose}
           backLabel="Close composer"
         />

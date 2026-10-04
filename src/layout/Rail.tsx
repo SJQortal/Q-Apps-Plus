@@ -35,6 +35,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import type { LeftSidebarItem } from '@qortal/qapp-lib/left-sidebar/core';
 import { primarySoft } from '../hub-theme';
 import { SHORT_FRAME_MEDIA } from '../utils/hubFrame';
+import { firstVisibleChar } from '../utils/invisibleCharacters';
+import { NameText } from '../components/common/NameText';
 import Logo from '../assets/svgs/Logo.svg';
 import LogoLight from '../assets/svgs/LogoLight.svg';
 
@@ -241,7 +243,7 @@ function childAvatar(item: LeftSidebarItem, avatarUrlByName?: Map<string, string
         color: theme.palette.primary.main,
       })}
     >
-      {item.label.charAt(0).toUpperCase()}
+      {firstVisibleChar(item.label).toUpperCase()}
     </Avatar>
   );
 }
@@ -292,8 +294,12 @@ export function Rail({
       >
         {childAvatar(child, avatarUrlByName, groupAvatarUrlById)}
         <Label>
-          {child.label}
-          {child.secondaryLabel && <Secondary>↩ {child.secondaryLabel}</Secondary>}
+          {child.id.startsWith(THREAD_GROUP_PREFIX) ? child.label : <NameText name={child.label} />}
+          {child.secondaryLabel && (
+            <Secondary>
+              ↩ <NameText name={child.secondaryLabel} />
+            </Secondary>
+          )}
         </Label>
         {renderBadge(child.badgeText)}
       </Row>
@@ -339,7 +345,9 @@ export function Rail({
             onClick={() => select(aliasCompose.id)}
             sx={{ minHeight: 44, justifyContent: 'flex-start' }}
           >
-            <Label>Compose as {aliasCompose.secondaryLabel}</Label>
+            <Label>
+              Compose as <NameText name={aliasCompose.secondaryLabel} />
+            </Label>
           </Button>
         </Tooltip>
       )}

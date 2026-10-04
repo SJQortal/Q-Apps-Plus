@@ -12,6 +12,7 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import LinkIcon from "@mui/icons-material/Link";
 import { formatFullTimestamp } from "../../utils/time";
+import { NameText } from "../../components/common/NameText";
 import { ALIAS_SCAN_MAX_PAGES, ALIAS_SCAN_PAGE_SIZE, aliasScanButtonLabel } from "./aliasScan";
 
 interface AliasScanState {
@@ -412,7 +413,7 @@ export const AliasesPage = ({
                     fontWeight: 600,
                   }}
                 >
-                  {aliasName}
+                  <NameText name={aliasName} />
                 </Typography>
                 <Typography
                   sx={{
@@ -435,9 +436,13 @@ export const AliasesPage = ({
                   }]}
                 >
                   <LinkIcon sx={{ fontSize: "0.9rem" }} />
-                  {linkedReplyAlias
-                    ? `Reply alias linked: ${linkedReplyAlias}`
-                    : "No reply alias linked"}
+                  {linkedReplyAlias ? (
+                    <span>
+                      Reply alias linked: <NameText name={linkedReplyAlias} />
+                    </span>
+                  ) : (
+                    "No reply alias linked"
+                  )}
                 </Typography>
               </Box>
               <Box

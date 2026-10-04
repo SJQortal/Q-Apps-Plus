@@ -24,6 +24,8 @@ import { ThreadRow } from './ThreadRow'
 import { ShowMessageV2 } from './ShowMessageV2'
 import { ShowMessageV2Replies } from './ShowMessageV2Replies'
 import { ShowMessage } from './ShowMessageWithoutModal'
+import { AliasesPage } from './AliasesPage'
+import { Rail } from '../../layout/Rail'
 
 function makeStore() {
   const store = configureStore({
@@ -127,5 +129,48 @@ describe('threads', () => {
     const thread = { identifier: 't1', threadOwner: IMPOSTOR, threadData: { title: 'Plans', name: IMPOSTOR } } as any
     const { container } = wrap(<ThreadRow thread={thread} onOpen={() => {}} />)
     expect(isStruck(nameElement(container, IMPOSTOR))).toBe(true)
+  })
+})
+
+describe('rail and aliases', () => {
+  it('strikes an impostor own name, alias and reply alias in the rail, never a group', () => {
+    const items = [
+      { id: 'compose', label: 'Compose' },
+      { id: 'alias-compose', label: 'Alias Compose', secondaryLabel: IMPOSTOR },
+      { id: 'inbox', label: 'Inbox' },
+      { id: 'inbox-instance:x', label: IMPOSTOR },
+      { id: 'inbox-instance:y', label: REAL },
+      { id: 'aliases', label: 'Aliases' },
+      { id: 'aliases-instance:z', label: 'shop', secondaryLabel: IMPOSTOR },
+      { id: 'threads', label: 'Q-Mail Threads', badgeText: '-' },
+      { id: `threads-group:7`, label: `Devs${BLANK}` },
+    ]
+    const { container } = wrap(<Rail items={items} activeItemId="inbox" onSelect={() => {}} onOpenSettings={() => {}} version="1.0.0" />)
+    expect(struckNames(container)).toEqual([IMPOSTOR, IMPOSTOR, IMPOSTOR])
+    // The row's accessible name is the name itself, unchanged.
+    expect(screen.getByRole('button', { name: IMPOSTOR })).toBeTruthy()
+    expect(screen.getByRole('button', { name: REAL })).toBeTruthy()
+  })
+
+  it('strikes an impostor saved alias and its linked reply alias', () => {
+    const { container } = wrap(
+      <AliasesPage
+        aliases={[IMPOSTOR, REAL]}
+        aliasesWithMessages={[]}
+        replyAliasLinks={{ [REAL.toLowerCase()]: IMPOSTOR }}
+        onOpenAlias={() => {}}
+        onAddAlias={() => {}}
+        onRemoveAlias={() => {}}
+        onSetReplyAlias={() => {}}
+        onClearReplyAlias={() => {}}
+        onRunAliasScan={() => {}}
+        onCancelAliasScan={() => {}}
+        hasScanCheckpoint={false}
+        scanCheckpointTimestamp={0}
+        scanState={{ isRunning: false, phase: 'idle', scannedCount: 0, totalCount: 0, discoveredCount: 0, statusMessage: '' } as any}
+      />
+    )
+    expect(struckNames(container)).toEqual([IMPOSTOR, IMPOSTOR])
+    expect(screen.getByText(/^Reply alias linked:/)).toBeTruthy()
   })
 })
