@@ -135,6 +135,56 @@ describe('qmail_state_v1 document', () => {
     expect('settings' in plain).toBe(false)
   })
 
+  it('writes the footer last in settings, in the exact stored shape, and leaves it out when empty', () => {
+    const settings = {
+      uiTheme: 'black' as const,
+      textSize: 'medium' as const,
+      watchedAliases: [],
+      aliasReplyLinks: {},
+      footer: { default: 'Simon\r\nqortal://APP/Q-Mail+ \n', byName: { Work: 'Work line', Home: '' }, inReplies: false },
+    }
+    const { document } = buildPublishedMailStateDocument({
+      ownerAddress: 'QAddr',
+      names: ['alice'],
+      publishedEntries: {},
+      localEntries: {},
+      archived: {},
+      settings,
+      now: 100,
+    })
+    expect(Object.keys(document.settings!)).toEqual(['watchedAliases', 'aliasReplyLinks', 'uiTheme', 'textSize', 'footer'])
+    expect(JSON.parse(JSON.stringify(document.settings!.footer))).toEqual({
+      default: 'Simon\nqortal://APP/Q-Mail+',
+      byName: { Work: 'Work line' },
+      inReplies: false,
+    })
+    const { document: noFooter } = buildPublishedMailStateDocument({
+      ownerAddress: 'QAddr',
+      names: ['alice'],
+      publishedEntries: {},
+      localEntries: {},
+      archived: {},
+      settings: { ...settings, footer: { default: ' ', byName: {}, inReplies: true } },
+      now: 100,
+    })
+    expect('footer' in noFooter.settings!).toBe(false)
+  })
+
+  it('parses a footer when present and keeps a document without one as before', () => {
+    const base = { version: 1, updatedAt: 1, ownerAddress: 'Q', names: ['a'], messages: { m: { read: true } } }
+    expect(
+      parsePublishedMailStateDocument({ ...base, settings: { footer: { default: 'Hi', byName: { b: 'B' } } } })?.settings
+    ).toEqual({ watchedAliases: [], aliasReplyLinks: {}, footer: { default: 'Hi', byName: { b: 'B' }, inReplies: true } })
+    expect(parsePublishedMailStateDocument({ ...base, settings: { footer: 'nope' } })?.settings).toEqual({
+      watchedAliases: [],
+      aliasReplyLinks: {},
+    })
+    expect(parsePublishedMailStateDocument({ ...base, settings: { footer: { default: '' } } })?.settings).toEqual({
+      watchedAliases: [],
+      aliasReplyLinks: {},
+    })
+  })
+
   it('parses settings when present, keeps only known values, and ignores a missing or broken object', () => {
     const base = { version: 1, updatedAt: 1, ownerAddress: 'Q', names: ['a'], messages: { m: { read: true } } }
     expect(parsePublishedMailStateDocument(base)?.settings).toBeNull()

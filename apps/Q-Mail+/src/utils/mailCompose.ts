@@ -125,6 +125,8 @@ export interface QuoteOptions {
   lines: string[];
   /** Keep at most this many quoted lines (default 400). */
   maxLines?: number;
+  /** The footer block (src/utils/mailFooter.ts), placed above the quote. */
+  footerBlock?: string;
 }
 
 /** Quill 1 blockquotes: one per line, inline text only, `<br>` for empty lines. */
@@ -142,14 +144,14 @@ export function quoteLinesToHtml(lines: string[], maxLines = 400): string {
 
 /**
  * The editor's starting content for a reply: an empty paragraph to type in,
- * the "On …, X wrote:" line and the original body as a quote.
+ * the footer (if any), the "On …, X wrote:" line and the original body as a quote.
  */
-export function buildReplyQuoteHtml({ sender, sentAt, lines, maxLines }: QuoteOptions): string {
+export function buildReplyQuoteHtml({ sender, sentAt, lines, maxLines, footerBlock = "" }: QuoteOptions): string {
   const who = escapeHtml(sender || "Unknown sender");
   const when = escapeHtml(sentAt || "");
   const intro = when ? `On ${when}, ${who} wrote:` : `${who} wrote:`;
   const body = lines.length ? quoteLinesToHtml(lines, maxLines) : "<blockquote>- no message body -</blockquote>";
-  return `<p><br></p><p>${intro}</p>${body}`;
+  return `<p><br></p>${footerBlock}<p>${intro}</p>${body}`;
 }
 
 export interface ForwardHeader {
@@ -172,9 +174,9 @@ export function buildForwardHeaderHtml({ from, sentAt, subject, to }: ForwardHea
   return parts.join("");
 }
 
-/** A forward's starting content: the header, then the original body as a quote. */
-export function buildForwardHtml(header: ForwardHeader, lines: string[]): string {
-  return `<p><br></p>${buildForwardHeaderHtml(header)}${quoteLinesToHtml(lines)}`;
+/** A forward's starting content: the footer (if any), the header, then the original body as a quote. */
+export function buildForwardHtml(header: ForwardHeader, lines: string[], footerBlock = ""): string {
+  return `<p><br></p>${footerBlock}${buildForwardHeaderHtml(header)}${quoteLinesToHtml(lines)}`;
 }
 
 export interface ThreadReference {
