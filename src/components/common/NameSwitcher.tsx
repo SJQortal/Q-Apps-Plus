@@ -14,7 +14,7 @@
  * Enter in the field picks the first match, Escape clears the query and then
  * closes. Adapted from Q-Share+'s NameSwitcher (never imported across apps).
  */
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import {
   Box,
   Button,
@@ -123,6 +123,17 @@ export function matchCountText(total: number, shown: number, query: string): str
   return shown === 1 ? `1 of ${total} names matches.` : `${shown} of ${total} names match.`;
 }
 
+/**
+ * A row above the names that is not a name (Settings → Footer's "All names
+ * (default)"). Picking it calls onPick(''), and it is checked while the
+ * active name is empty. Hidden while a search query is typed.
+ */
+export interface NameSwitcherLeadRow {
+  label: string;
+  /** Shown in the avatar column (and on the button while it is picked). */
+  icon: ReactNode;
+}
+
 export interface NameSwitcherListProps {
   /** Every name the account owns. */
   names: string[];
@@ -136,6 +147,10 @@ export interface NameSwitcherListProps {
   maxListHeight?: number | string;
   /** Fill the parent's height, the list scrolling under a fixed search field (the phone sheet). */
   fill?: boolean;
+  /** A row above the names, picked as ''. */
+  leadRow?: NameSwitcherLeadRow;
+  /** A second line under a name (e.g. "Own footer"); none when it returns nothing. */
+  secondaryText?: (name: string) => string | undefined;
 }
 
 /** The list itself, with its search field above NAME_SEARCH_THRESHOLD names. */
@@ -147,6 +162,8 @@ export function NameSwitcherList({
   autoFocus = false,
   maxListHeight,
   fill = false,
+  leadRow,
+  secondaryText,
 }: NameSwitcherListProps) {
   const [query, setQuery] = useState('');
   // The order is set when the list opens: a pick must not reshuffle the rows
@@ -283,8 +300,23 @@ export function NameSwitcherList({
           py: 0.5,
         }}
       >
+        {leadRow && !q && (
+          <MenuItem
+            role="menuitemradio"
+            aria-checked={!activeName}
+            selected={!activeName}
+            aria-label={leadRow.label}
+            onClick={() => onPick('')}
+            sx={ROW_SX}
+          >
+            <ListItemIcon sx={LEAD_SX}>{leadRow.icon}</ListItemIcon>
+            <ListItemText primary={leadRow.label} slotProps={{ primary: { noWrap: true } }} />
+            {!activeName && <CheckIcon fontSize="small" sx={{ color: 'primary.main', ml: 1, flexShrink: 0 }} />}
+          </MenuItem>
+        )}
         {shown.map((name) => {
           const active = name === activeName;
+          const secondary = secondaryText?.(name) || undefined;
           return (
             <MenuItem
               key={name}
@@ -292,7 +324,7 @@ export function NameSwitcherList({
               aria-checked={active}
               selected={active}
               // The highlight splits the text into spans; the label keeps the name whole.
-              aria-label={name}
+              aria-label={secondary ? `${name}, ${secondary}` : name}
               onClick={() => onPick(name)}
               sx={ROW_SX}
             >
@@ -313,7 +345,8 @@ export function NameSwitcherList({
                       )
                     : name
                 }
-                slotProps={{ primary: { noWrap: true } }}
+                secondary={secondary}
+                slotProps={{ primary: { noWrap: true }, secondary: { noWrap: true } }}
               />
               {active && <CheckIcon fontSize="small" sx={{ color: 'primary.main', ml: 1, flexShrink: 0 }} />}
             </MenuItem>
@@ -331,13 +364,26 @@ export interface NameSwitcherProps {
   onPick: (name: string) => void;
   /** What the names are, for the button's accessible name and the sheet's title. */
   label?: string;
+  /** The sheet's or popover's title, when "Switch <label>" does not read well. */
+  title?: string;
+  leadRow?: NameSwitcherLeadRow;
+  secondaryText?: (name: string) => string | undefined;
 }
 
 /**
  * The dropdown: a button with the active name and its avatar that opens the
  * list in a popover, or in a full-screen sheet on phones.
  */
-export function NameSwitcher({ names, activeName, activeAvatar, onPick, label = 'Active mailbox' }: NameSwitcherProps) {
+export function NameSwitcher({
+  names,
+  activeName,
+  activeAvatar,
+  onPick,
+  label = 'Active mailbox',
+  title: titleProp,
+  leadRow,
+  secondaryText,
+}: NameSwitcherProps) {
   const isPhone = useLayoutMode() === 'phone';
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const open = Boolean(anchor);
@@ -346,7 +392,9 @@ export function NameSwitcher({ names, activeName, activeAvatar, onPick, label = 
     close();
     if (name !== activeName) onPick(name);
   };
-  const title = `Switch ${label.toLowerCase()}`;
+  const title = titleProp || `Switch ${label.toLowerCase()}`;
+  const leadPicked = Boolean(leadRow && !activeName);
+  const shownName = activeName || (leadPicked ? leadRow!.label : '');
 
   return (
     <>
@@ -355,9 +403,9 @@ export function NameSwitcher({ names, activeName, activeAvatar, onPick, label = 
         color="inherit"
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`${label}: ${activeName || 'none'}. Change`}
+        aria-label={`${label}: ${shownName || 'none'}. Change`}
         onClick={(event) => setAnchor(event.currentTarget)}
-        startIcon={<NameAvatar name={activeName || '?'} size={28} known={activeAvatar} />}
+        startIcon={leadPicked ? leadRow!.icon : <NameAvatar name={activeName || '?'} size={28} known={activeAvatar} />}
         endIcon={<ExpandMoreIcon />}
         sx={{
           minHeight: 44,
@@ -373,7 +421,7 @@ export function NameSwitcher({ names, activeName, activeAvatar, onPick, label = 
         }}
       >
         <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {activeName || 'Choose a name'}
+          {shownName || 'Choose a name'}
         </Box>
       </Button>
       {isPhone ? (
@@ -384,6 +432,8 @@ export function NameSwitcher({ names, activeName, activeAvatar, onPick, label = 
             activeAvatar={activeAvatar}
             onPick={pick}
             fill
+            leadRow={leadRow}
+            secondaryText={secondaryText}
           />
         </ResponsiveDialog>
       ) : (
@@ -407,6 +457,8 @@ export function NameSwitcher({ names, activeName, activeAvatar, onPick, label = 
               activeName={activeName}
               activeAvatar={activeAvatar}
               onPick={pick}
+              leadRow={leadRow}
+              secondaryText={secondaryText}
               autoFocus
               maxListHeight="max(144px, min(420px, calc(var(--qmail-app-height, 100dvh) - 240px)))"
             />
