@@ -39,6 +39,21 @@ describe('hasInvisibleCharacters (Qortal Hub rule)', () => {
   ])('leaves a name with %s alone', (_label, name) => {
     expect(hasInvisibleCharacters(name)).toBe(false)
   })
+
+  // Hub parity, kept on purpose: U+200D ZERO WIDTH JOINER is in Hub's range
+  // (U+2000-U+200F), so a name with a joined emoji (family, profession) is
+  // struck in Hub and here. Don't "fix" this into a difference from Hub.
+  it('flags a joined (ZWJ) emoji sequence, exactly as Hub does', () => {
+    const family = `${String.fromCodePoint(0x1f468)}${ch(0x200d)}${String.fromCodePoint(0x1f469)}${ch(0x200d)}${String.fromCodePoint(0x1f467)} Family`
+    expect(hasInvisibleCharacters(family)).toBe(true)
+    expect(firstVisibleChar(family)).toBe(String.fromCodePoint(0x1f468))
+  })
+
+  it('leaves U+2000-U+200A spaces alone, as NFKC makes them plain spaces (as in Hub)', () => {
+    for (let code = 0x2000; code <= 0x200a; code++) {
+      expect(hasInvisibleCharacters(`alice${ch(code)}bob`)).toBe(false)
+    }
+  })
 })
 
 describe('firstVisibleChar', () => {
