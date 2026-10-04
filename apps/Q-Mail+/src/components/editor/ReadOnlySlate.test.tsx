@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { render } from '@testing-library/react'
+import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { Provider } from 'react-redux'
+import { store } from '../../state/store'
+import { mockQortalAction, qortalCalls } from '../../test/setup'
 import ReadOnlySlate from './ReadOnlySlate'
+
+const render = (ui: ReactElement) => rtlRender(<Provider store={store}>{ui}</Provider>)
 
 describe('ReadOnlySlate (legacy textContent renderer)', () => {
   it('renders the old Slate mail format with marks and blocks', () => {
@@ -21,7 +27,7 @@ describe('ReadOnlySlate (legacy textContent renderer)', () => {
     expect(html).toContain('<h2 class="h2">')
     expect(html).toContain('<blockquote><span>quoted</span></blockquote>')
     expect(html).toContain('<pre class="code-block"><code><div><span>x = 1</span></div></code></pre>')
-    expect(html).toContain('<a href="qortal://APP/Q-Tube"><span>tube</span></a>')
+    expect(html).toContain('<a href="qortal://APP/Q-Tube" title="Open Q-Tube in a new tab"><span>tube</span></a>')
     // Web links can't open in Hub: shown as text with their target.
     expect(html).toContain('<span title="https://qortal.org/">site (https://qortal.org/)</span>')
   })
@@ -47,5 +53,32 @@ describe('ReadOnlySlate (legacy textContent renderer)', () => {
     const hrefs = Array.from(container.querySelectorAll('a')).map((a) => a.getAttribute('href'))
     expect(hrefs).toEqual(['qortal://APP/Q-Tube'])
     expect(container.textContent).toContain('View invoice')
+  })
+
+  it('opens a qortal:// link through Hub on click, and a join link asks Hub to join', async () => {
+    mockQortalAction('OPEN_NEW_TAB', true)
+    mockQortalAction('JOIN_GROUP', {})
+    const content = [
+      {
+        type: 'paragraph',
+        children: [
+          { type: 'link', url: 'qortal://APP/Q-Share+/share/Alice%20Smith/qshare_file_x', children: [{ text: 'file' }] },
+          { text: 'join', link: 'qortal://use-group/action-join/groupid-1176' },
+          { type: 'link', url: 'qortal://APP/../Evil', children: [{ text: 'evil' }] },
+        ],
+      },
+    ]
+    render(<ReadOnlySlate content={content} />)
+    expect(screen.queryByRole('link', { name: 'evil' })).toBeNull()
+    const file = new MouseEvent('click', { bubbles: true, cancelable: true })
+    screen.getByRole('link', { name: 'file' }).dispatchEvent(file)
+    expect(file.defaultPrevented).toBe(true)
+    fireEvent.click(screen.getByRole('link', { name: 'join' }))
+    await waitFor(() =>
+      expect(qortalCalls()).toEqual([
+        { action: 'OPEN_NEW_TAB', qortalLink: 'qortal://APP/Q-Share+/share/Alice%20Smith/qshare_file_x' },
+        { action: 'JOIN_GROUP', groupId: 1176 },
+      ])
+    )
   })
 })

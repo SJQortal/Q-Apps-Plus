@@ -1,6 +1,9 @@
+import { stripTrailingPunctuation } from "../../../utils/qortalLinks";
+
 /**
  * A qortal:// URL typed as plain text. It ends at whitespace, a comma (as
  * upstream did), or any character that could close an HTML attribute.
+ * Sentence punctuation at its end is left out when it is linked.
  */
 const QORTAL_URL = /qortal:\/\/[^\s,<>"'`]+/g;
 
@@ -35,13 +38,16 @@ export function linkifyQortalText(root: Node): void {
     let last = 0;
     for (const match of value.matchAll(QORTAL_URL)) {
       const start = match.index ?? 0;
+      // "Join qortal://APP/Q-Tube." links Q-Tube, not "Q-Tube.".
+      const url = stripTrailingPunctuation(match[0]);
+      if (url.length <= "qortal://".length) continue;
       if (start > last) pieces.append(value.slice(last, start));
       const a = doc.createElement("a");
-      a.setAttribute("href", match[0]);
+      a.setAttribute("href", url);
       a.setAttribute("class", "qortal-link");
-      a.textContent = match[0];
+      a.textContent = url;
       pieces.append(a);
-      last = start + match[0].length;
+      last = start + url.length;
     }
     if (last === 0) continue;
     if (last < value.length) pieces.append(value.slice(last));

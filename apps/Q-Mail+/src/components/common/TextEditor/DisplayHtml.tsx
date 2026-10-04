@@ -8,7 +8,7 @@
  * nodes (links, colours) and the result is serialised once at the end.
  * Nothing is ever pasted into an HTML string.
  */
-import { useMemo, type MouseEvent } from "react";
+import { useCallback, useMemo, type MouseEvent } from "react";
 import { useDispatch } from "react-redux";
 import DOMPurify from "dompurify";
 import { Box, styled } from "@mui/material";
@@ -16,6 +16,7 @@ import { linkifyQortalText } from "./utils";
 import { toQuill1Html } from "./quillHtml";
 import { copyText } from "../GlobalContextMenu/GlobalContextMenu";
 import { setNotification } from "../../../state/features/notificationsSlice";
+import { describeQortalLink, openQortalLink, parseQortalLink } from "../../../utils/qortalLinks";
 
 const Body = styled(Box)(({ theme }) => ({
   display: "block",
@@ -217,7 +218,8 @@ export function copyTarget(href: string): { kind: CopyKind; text: string } | nul
 /**
  * Decides what each link in a body may do:
  *
- * - qortal:// links stay; q-apps.js routes them, but only the lower-case scheme.
+ * - qortal:// links stay, with the lower-case scheme, and the app opens them
+ *   through Hub on click (utils/qortalLinks.ts); q-apps.js never sees them.
  * - Web, mail and phone links are marked, and DisplayHtml copies them on
  *   click instead: Core's q-apps.js swallows clicks on http(s) links in
  *   every Q-App, Hub can't open web pages, and Hub's frame sandbox (no
@@ -238,6 +240,23 @@ export function linkPolicy(href: string): LinkDecision {
   if (/^qortal:\/\//i.test(href)) return { kind: "qortal", href: `qortal://${href.slice("qortal://".length)}` };
   const target = copyTarget(href);
   return target ? { kind: "copy", copy: target } : { kind: "text" };
+}
+
+/**
+ * Gives each qortal:// link a title saying what it does (the sender's title
+ * could say anything), and turns one that can't open into its text.
+ */
+function describeQortalLinks(root: ParentNode): void {
+  root.querySelectorAll("a").forEach((a) => {
+    const target = parseQortalLink(a.getAttribute("href"));
+    if (!target) return;
+    if (target.kind === "invalid") {
+      a.replaceWith(...a.childNodes);
+      return;
+    }
+    a.setAttribute("title", describeQortalLink(target));
+    a.removeAttribute("target");
+  });
 }
 
 function settleLinks(root: ParentNode): void {
@@ -280,34 +299,61 @@ export function sanitizeMessageHtml(html: string | null | undefined): string {
   dropInlineColours(fragment);
   settleLinks(fragment);
   linkifyQortalText(fragment);
+  describeQortalLinks(fragment);
   // Serialise in DOMPurify's inert document, so nothing loads before render.
   const box = fragment.ownerDocument.createElement("div");
   box.append(fragment);
   return box.innerHTML;
 }
 
-export const DisplayHtml = ({ html, textColor }: { html?: string | null; textColor?: string }) => {
+/**
+ * The click handler for a message body (HTML or legacy Slate):
+ *
+ * - a qortal:// link opens through Hub (utils/qortalLinks.ts). The default
+ *   and the bubble to the document are stopped first, so Core's q-apps.js
+ *   never sees it: on a link it can't parse, such as a use-group join link,
+ *   it throws before its own preventDefault and the frame navigates to a
+ *   blank error page.
+ * - a web, mail or phone link copies its target instead.
+ */
+export function useMessageLinkClick(): (event: MouseEvent<HTMLElement>) => void {
   const dispatch = useDispatch();
-  const cleanContent = useMemo(() => sanitizeMessageHtml(html), [html]);
+  return useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!link) return;
+      const href = link.getAttribute("href") ?? "";
+      if (/^\s*qortal:/i.test(href)) {
+        event.preventDefault();
+        event.stopPropagation();
+        void openQortalLink(href, { copy: copyText }).then((outcome) => {
+          if (outcome) dispatch(setNotification(outcome));
+        });
+        return;
+      }
+      const target = link.hasAttribute("data-copy-link") ? copyTarget(href) : null;
+      if (!target) return;
+      event.preventDefault();
+      const messages = COPY_TEXT[target.kind];
+      void copyText(target.text).then((copied) =>
+        dispatch(
+          setNotification(
+            copied ? { msg: messages.copied, alertType: "success" } : { msg: messages.failed(target.text), alertType: "error" }
+          )
+        )
+      );
+    },
+    [dispatch]
+  );
+}
 
-  // qortal:// links keep their default: q-apps.js routes them in Hub.
-  const copyLink = async (event: MouseEvent<HTMLDivElement>) => {
-    const link = event.target instanceof Element ? event.target.closest("a[data-copy-link]") : null;
-    const target = link ? copyTarget(link.getAttribute("href") ?? "") : null;
-    if (!target) return;
-    event.preventDefault();
-    const messages = COPY_TEXT[target.kind];
-    const copied = await copyText(target.text);
-    dispatch(
-      setNotification(
-        copied ? { msg: messages.copied, alertType: "success" } : { msg: messages.failed(target.text), alertType: "error" }
-      )
-    );
-  };
+export const DisplayHtml = ({ html, textColor }: { html?: string | null; textColor?: string }) => {
+  const cleanContent = useMemo(() => sanitizeMessageHtml(html), [html]);
+  const onLinkClick = useMessageLinkClick();
 
   if (!cleanContent) return null;
   return (
-    <Body sx={textColor ? { color: textColor } : undefined} onClick={copyLink}>
+    <Body sx={textColor ? { color: textColor } : undefined} onClick={onLinkClick}>
       <div className="ql-editor-display" dangerouslySetInnerHTML={{ __html: cleanContent }} />
     </Body>
   );
