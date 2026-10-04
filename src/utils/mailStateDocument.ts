@@ -8,7 +8,7 @@
  *
  * Q-Mail+ adds two top-level keys, which the original app ignores (it only
  * reads `messages`): the map `archived: { "<id>": { at } }` and the object
- * `settings: { uiTheme, textSize, watchedAliases, aliasReplyLinks }`.
+ * `settings: { uiTheme, textSize, watchedAliases, aliasReplyLinks, footer? }`.
  * Per-entry extras are not allowed: the original's normaliser drops them on
  * load.
  */
@@ -18,6 +18,11 @@ import {
   type ArchivedMap,
 } from "./archiveState";
 import { isUiThemeId, type UiThemeId } from "../hub-theme/tokens";
+import {
+  isMailFooterEmpty,
+  normalizeMailFooter,
+  type MailFooterSettings,
+} from "./mailFooter";
 
 export const MAIL_STATE_DOCUMENT_SERVICE = "DOCUMENT_PRIVATE";
 export const MAIL_STATE_DOCUMENT_IDENTIFIER = "qmail_state_v1";
@@ -34,13 +39,16 @@ const TEXT_SIZES: readonly MailStateTextSize[] = ["small", "medium", "large"];
 /**
  * Additive (Q-Mail+ only): the device's appearance and alias lists at publish
  * time. Appearance is only ever applied on request (Settings → Sync →
- * Restore); the alias lists are unioned into the local ones on load.
+ * Restore); the alias lists are unioned into the local ones on load; the
+ * footer is applied on load only when the device has none.
  */
 export interface QMailPublishedSettings {
   uiTheme?: UiThemeId;
   textSize?: MailStateTextSize;
   watchedAliases: string[];
   aliasReplyLinks: Record<string, string>;
+  /** The mail footer (`qmail_footer_<address>`); omitted when there is no text. */
+  footer?: MailFooterSettings;
 }
 
 export interface QMailPublishedStateDocument {
@@ -89,7 +97,7 @@ export const normalizeAliasReplyLinks = (
 
 /**
  * Accepts any value and keeps only what Q-Mail+ wrote: a known theme id, one
- * of the three text sizes, and the two alias lists. Returns null when the
+ * of the three text sizes, the two alias lists and a footer with text. Returns null when the
  * value is not an object (a document from the original app has no settings).
  */
 export const normalizePublishedSettings = (
@@ -108,6 +116,8 @@ export const normalizePublishedSettings = (
   ) {
     settings.textSize = raw.textSize as MailStateTextSize;
   }
+  const footer = normalizeMailFooter(raw.footer);
+  if (footer && !isMailFooterEmpty(footer)) settings.footer = footer;
   return settings;
 };
 
