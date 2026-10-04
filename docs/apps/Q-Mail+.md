@@ -509,6 +509,14 @@ Configured as `rating: { enabled: true, pollName: "app-library-APP-rating-qmails
 
 **Observed quirks worth carrying into the plan (not contract changes):** primary inbox has no publisher/identifier-prefix check (`useFetchMail.tsx:280-313`); secondary-name and alias inboxes drop legacy non-`_mail_` identifiers (`Mail.tsx:819-836`, `AliasMail.tsx:121-135`); the sent regex breaks on names/aliases containing `_` (`mailIdentifier.ts:6`); thread search is a substring match without trailing `_` (`GroupMail.tsx:141`); tombstones are not hidden in the recipient's inbox; `typeof null === "object"` lets `generalData: null` pass validation; thread messages are never validated; search ignores Slate `textContent`; avatars are fetched eagerly per message; replies embed the full previous object and can carry the local read marker.
 
+#### 17. Additive data written by Q-Mail+ 1.0.0 (2026-10-04)
+
+- **Direct mail JSON** gains `to: [recipient]` and `cc: [Cc names]` beside the binding `recipient`. Every To/Cc/Bcc name still gets its own copy with the binding identifier `_mail_qortal_qmail_<name.slice(0,20)>_<address.slice(-6)>_mail_<sameSendId>` and `recipient` = that name, all in one `PUBLISH_MULTIPLE_QDN_RESOURCES {resources, encrypt:true, publicKeys:[to, ...cc, ...bcc]}`. Bcc names never appear in any JSON. The original Q-Mail reads `recipient` and ignores `to`/`cc`, so every copy opens there. Pinned by tests in `src/utils/mailCompose.test.ts`.
+- **Bodies** are published through `toPublishedMailHtml()` (`src/components/common/TextEditor/quillHtml.ts`): the Quill 1 shape with plain spaces. Quill 2's `getSemanticHTML()` had turned every space into `&nbsp;`; runs of 2+ spaces keep one `&nbsp;` as Quill 1 does, and `<pre>` keeps plain spaces.
+- **Replies** embed the previous message without its own `generalData` history (since round 2).
+- **`qmail_state_v1`** gains top-level `archived` and `settings` maps (§10); the `messages` map is unchanged.
+- **localStorage** (new keys or fields, all local): `qmail_read_state_<address>`, `qmail_archived_<address>`, `qmail-general-consent`, compose-draft keys `…::reply:<id>` and `…::replyall:<id>` with optional `ccNames`/`showCC`, and `qmail_alias_scan_checkpoint_<address>` gains `intervals` and `complete` (an old value reads as a finished scan) plus a per-address set of scanned identifiers (capped at 3000).
+
 ### Qortal call inventory
 
 Scope: files reachable from `src/main.tsx`. Service constants: `MAIL_SERVICE_TYPE = MAIL_PRIVATE`, `THREAD_SERVICE_TYPE = MAIL`, `MAIL_ATTACHMENT_SERVICE_TYPE = ATTACHMENT_PRIVATE` (`src/constants/mail.ts:1-4`). Every claim was independently verified; the four that were refuted are corrected in place and marked **(corrected)**.
@@ -1265,21 +1273,61 @@ Driven with `scripts/hub-cdp.mjs` on a test Hub at debug port 9223 (`Qortal-Hub 
 - **Console:** only the dev proxy's HMR socket failure and a 404 for the account's missing `qmail_state_v1` document (expected).
 - **Not checked in Hub (needs mail or a phone):** opening a message, attachments and the PDF viewer, Reply/Forward flows, the composer's Send above GO's keyboard, GO's hardware Back, pull-to-refresh, the alias scan, publishing (read-only session).
 
+### Round 4 (2026-10-04): review, Simon's answers, leftovers, screenshot rerun, Hub check
+
+**Whole-diff review** (six dimensions: correctness, data compatibility, efficiency, mobile/UX, accessibility, security; 66 agents): 38 findings, 37 after dedupe, **35 confirmed** by skeptics (three per high-severity finding), 2 refuted. One agent fixed them one commit each (`28952dc` … `d80d187`, 34 commits; the 35th was a duplicate). The serious ones:
+
+- **Data:** publishing the mail state before the published document had loaded would have wiped other devices' archived map, alias lists and read entries; drafts written by Q-Mail+ could turn into direct mail to a group's name in the original app; a new thread's header could be dropped while its posts were published; thread paging used the filtered count as the next offset, so older threads never loaded.
+- **Security:** group-thread posts rendered legacy `htmlContent` with bare DOMPurify instead of the app's sanitiser; a thread post's author and date came from the decrypted body, so any name could post as anyone; legacy Slate links had no link policy; Forward would decrypt and re-send any resource an attachment reference named; embedded reply history was shown as authentic messages (including as "You").
+- **Keyboard and focus:** desktop shortcuts swallowed Enter on every focused button and stayed live behind Settings and the first-run tips.
+- **Efficiency:** opening a group looked up every member's name and key just to count them; every decrypt repeated `GET_NAME_DATA` + `GET_ACCOUNT_DATA`; the thread pollers never backed off; mailbox rows decrypted subjects and resolved recipients off screen.
+- **Landscape and phones:** the mailboxes drawer showed no mailboxes in a landscape frame; the attachment preview left 16 px for the file; the composer left 77 px; the floating Compose sat 76 px too high; Settings' Back pushed a new history entry.
+
+**Early Hub smoke check with real mail** (Tester GO, Simon's test message): the message opened in both apps with the same subject and body; Reply/Reply all/Forward, read state, archive and search behaved. It found the `&nbsp;` bug before any mail was sent, a 5.4 s first open of a message already on the node, reply drafts saved on open, and archive/unread reachable only through checkboxes; all fixed below.
+
+**Simon's answers and the leftovers** (six agents in worktrees on disjoint files, merged one at a time, every merge green; 0 dropped):
+
+| Item | Result | Commit |
+|---|---|---|
+| FU 2: delete dead code | 85 files and 14,825 lines gone: 57 of the 60 `tsconfig` excludes (3 were live tests, now type-checked), the named legacy files, and 22 files only they imported (import graph walked from `main.tsx` and every test first); `tsconfig` exclude list and eslint ignores removed | `7a39311` |
+| FU 3: visible Cc row | Cc row like To (names checked), Reply all fills Cc, note "Cc names are visible to every recipient", one copy per Cc name, additive `cc` field; publish request pinned by tests | `81bcf11`, `2a14fd6` |
+| FU 4: unarchive across devices | left as is (union) | — |
+| FU 5: local-only rating | hidden in Settings → About (code kept) | `9f7394f` |
+| FU 6: Classic blue | kept (`#39afff` / `#155f9f`) | — |
+| FU 7: shortcuts | from 600 px wide; off on phones and touch-only devices | `b897bfe` |
+| FU 8: Classic's Roboto | subset WOFF2, Latin + Latin Extended, 400 and 500: 336,904 → 57,584 bytes (−83%) | `46fd613` |
+| FU 9: shared fixes | kit: default avatar letter 4.5:1+ in every theme (e.g. Hub 3.0 light 1.30 → 7.07, White 1.88 → 5.44), ThemePicker captions 14 px, Hub 3.0 `error.main` readable as text; `hub-cdp.mjs shot` raises Hub first and times out stuck commands; `screens.mjs` writes one report per theme set and mode | `6e0a67c`, `49e4037`, `052c1fe` |
+| FU 10: load-state prompt | its own checkbox removed; the prompt points to Settings → Sync, the only control; the state document is searched before it is fetched (no more 404 per load) | `68ddff6` |
+| Bug #19 | sent identifiers parse names containing `_` (and spaces, `+`, `'`, `.`, `|`); the format written is unchanged | `c24fb3c` |
+| Bug #15 | stable keys (MailTable rows by message id) | `3ff649c` |
+| N9 alias scan | 50 per page, at most 10 pages (500 resources) per run, newest first, 15-minute session cache, a checkpoint of walked stretches, "Scan more", candidates decrypted once (remembered per address) | `cae8fe0` |
+| `moment` | replaced by `Intl.DateTimeFormat`, package removed | `7ae58bc` |
+| `extractTextFromHTML` | already removed in round 3 | — |
+| `&nbsp;` in sent bodies | published bodies use plain spaces (`toPublishedMailHtml`) | `d39082a` |
+| Slow first open | re-checks at 0.5 s and 1 s while DOWNLOADED/BUILDING: about 0.5 s instead of 5.4 s | `a40ae1f` |
+| Reader actions | Archive / Move to inbox and Mark unread in the reader's action row | `2ef2c12` |
+| Reply drafts | saved only once the user writes; Reply and Reply all keep separate drafts | `416f28c` |
+| Calls | the composer's name directory search is cached for the session; the own avatar URL is fetched once | `9ad6f3f`, `884c985` |
+| A blank app after a failed chunk | an error boundary shows "Reload" and a failed chunk is retried once (found in Hub) | `e5a424e` |
+
+**Screenshot rerun** (Playwright's own Chromium 1243, not Brave; 23 screens incl. compose with To/Cc/Bcc, Reply all and the alias scan; 103 captures per theme × mode): hub30 dark, hub20 dark, Black, White, hub30 light and hub20 light all at **0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 small targets, 0 small text, 0 axe violations**. The run found and fixed: the reply card squeezed to a sliver, Subject above Cc/Bcc, a success toast below 4.5:1 with a small close button, and an unnamed progress bar.
+
+**Numbers now:** main chunk 388 kB (gzip 125 kB), dist 3.6 MB (fonts included), 72 test files and 510 tests, lint clean, kit in sync.
+
+**Hub check with test sends:** in progress (see the Hub section below once it is filled in).
+
 ## Follow-ups
+
+**17:30 checklist:** being written by the Hub test with sends (in progress).
+
+**Simon's answers (2026-10-04), all done:** 1 test mail: one message arrived without attachments; the attachment checks ran with test sends from Tester Hub (see Round 4) · 2 dead code deleted · 3 Cc row added · 4 unarchive left as is · 5 rating hidden · 6 Classic blue kept · 7 shortcuts from 600 px · 8 Roboto as subset WOFF2 · 9 kit and script fixes made · 10 the prompt's checkbox removed.
 
 **Questions for Simon**
 
-1. **Hub check with real mail.** Tester GO has no mail, so opening a message, the attachment cards, the PDF viewer, Reply/Forward and the delete-sent sheet were only exercised by the unit tests and the screenshot check. Could you send a test mail with a PDF, an image and a text file to Tester GO from another name (and reply once), then run the Hub round on those screens? The alias scan and publishing (mail state, sending) also need a real run.
-2. **Delete the dead files?** The 55 Q-Blog files in `tsconfig.json` → `exclude`, plus `src/pages/Mail/ShowMessage.tsx`, `MailThread*.tsx`, `LazyLoad.tsx`, `DownloadTaskManager.tsx`, `blogIdformats.ts`, `fetchPosts.ts` (ignored by eslint, import graph verified) can go.
-3. **`cc` is always `[]`:** should the composer have a visible Cc row (names in `cc` are readable by every recipient of that copy)?
-4. **Unarchive across devices:** the published `archived` map is a union on load, so unarchiving on one device does not unarchive on another; a removal would need a schema addition. OK as is?
-5. **Ratings:** the Settings → About rating control is local-only (the upstream adapter never called Qortal). Keep, hide, or wire a real poll (`app-library-APP-rating-qmails`)?
-6. **Q-Mail Classic colours:** the pale `#dce9ff` primary could not be read as text, so Classic now uses `#39afff` (dark) / `#155f9f` (light) for primary; still "the original look" for you?
-7. **Keyboard shortcuts** work at ≥ 900 px only; should they also work in Hub's usual 600–899 px window?
-8. **Roboto ttf** (337 kB) still ships for Classic; convert to a subset woff2 or drop Roboto from Classic?
-9. **Theme kit (Repo commits):** ThemePicker captions are 12 px (the 20 "small text" findings), `error.main` as text reads 3.5:1 in Hub 3.0, and MUI's default avatar colour fails contrast in every theme; a `MuiAvatar` override in `shared/hub-theme/mui-theme.ts` would fix all apps. `scripts/hub-cdp.mjs shot` should `Page.bringToFront` first (captures hang while the window is behind); `scripts/screens.mjs` writes one `report.json`, so parallel theme runs clobber it.
-10. **The load-state prompt** keeps its own "Always fetch and apply" checkbox (now working) next to the Settings → Sync switch; keep both?
+1. **Cc in the reader:** mail from Q-Mail+ now carries `cc`, but the reader only shows "to <recipient>". Show a Cc line (additive, from the `cc` field)?
+2. **Cc autocomplete:** only To has directory suggestions; Cc and Bcc names are typed and checked. Add suggestions there too?
+3. **Closing a reply on desktop** also closes the open message ("Select a message"). Keep the message open behind the composer instead?
+4. **`blogSlice`** stays registered because the `BlogPost` type and 8 tests use it; removing it is a small refactor with no user-visible change. Do it in the next pass?
+5. **Orphaned assets** nothing imports (old PNG logos and 18 old SVG icons in `src/assets`) were not on the approved list, so they stay. Delete them too?
 
-**Still open from the audit** (next pass): Bug #19 (names containing `_` break the sent-identifier regex), Bug #15 (missing React keys in a few thread lists), the alias scan is still a whole-network page walk (N9), `moment` still rides in the time chunk (60 kB; `utils/time.ts`, `readerTime.ts`), `blogSlice` stays registered for type imports, keyboard j/k and e/u act on the inbox and archived lists only, the "All mail" search covers what is loaded for aliases and sent, the thread unread hook polls every 120 s (one cached search per group), `@types/dompurify` is gone but `extractTextFromHTML` in `TextEditor/utils.ts` has no callers, the Back stack grows by one router entry per opened pane (same trade-off as Q-Share+), React Compiler lint rules are off (92 findings, mostly upstream setState-in-effect code), the final whole-diff review workflow was cut short by the usage guard (two of five reviewers reported; nothing confirmed yet) and should be rerun once, and GO on a real phone (keyboard, hardware Back, pull-to-refresh) is Simon's check.
-
-**Earlier items (2026-09-29/30):** `quill-image-resize-module-react` was dropped (Quill 1 only; no toolbar image button); check Quill 2 mail (bullet list, numbered list, code block, and the reply `<blockquote>`) in the original Q-Mail with a real message; `tsconfig` target ES2022 (Chromium ≥ 117); nothing on upstream `feature/version-2` needs porting (verified).
+**Next pass:** the attach control is an image inside a `role=presentation` drop zone rather than a labelled button; `MailTable.tsx`'s `SimpleTable` default export is dead; `hub-cdp.mjs tap` lands about 124 px high in the app frame (the frame's top offset in Hub's page); GO on a real phone (keyboard, hardware Back, pull-to-refresh); the React Compiler lint rules stay off (mostly upstream setState-in-effect code).
