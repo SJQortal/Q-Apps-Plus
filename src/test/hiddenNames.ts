@@ -23,3 +23,9 @@ export const isStruck = (el: Element) =>
   getComputedStyle(el).textDecorationLine === 'line-through' &&
   el.getAttribute('title') === HIDDEN_CHARACTERS_TITLE &&
   (el.textContent || '').endsWith(HIDDEN_CHARACTERS_SR)
+
+/** The names struck through in `container`, without the screen-reader note. */
+export const struckNames = (container: ParentNode) =>
+  Array.from(container.querySelectorAll('[data-hidden-characters]')).map((el) =>
+    (el.textContent || '').replace(HIDDEN_CHARACTERS_SR, '')
+  )

@@ -5,6 +5,7 @@ import { AttachmentList } from "../../components/AttachmentPreview/AttachmentLis
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
 import { formatEmailDate, formatFullTimestamp } from "../../utils/time";
 import { ThreadAvatar } from "./ThreadAvatar";
+import { NameText } from "../../components/common/NameText";
 
 interface ShowMessageProps {
   message: any;
@@ -38,7 +39,7 @@ export const ShowMessage = ({ message, onReply }: ShowMessageProps) => {
         <ThreadAvatar name={name} size={40} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography noWrap sx={{ fontWeight: 700, fontSize: "1rem" }}>
-            {name || "Unknown"}
+            {name ? <NameText name={name} /> : "Unknown"}
           </Typography>
           <Typography variant="body2" color="text.secondary" title={formatFullTimestamp(postedAt)}>
             {postedAt ? formatEmailDate(postedAt) : "-"}

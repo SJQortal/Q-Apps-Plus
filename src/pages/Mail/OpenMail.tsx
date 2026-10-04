@@ -25,6 +25,7 @@ import { addToHashMapMail, removeMessages } from "../../state/features/mailSlice
 import { EmptyState, ErrorState, FetchingFromPeers } from "../../layout/states";
 import { useResourceReady } from "../../components/AttachmentPreview/useResourceReady";
 import { exactMailDate } from "./readerTime";
+import { NameText } from "../../components/common/NameText";
 
 interface OpenMailProps {
   open: boolean;
@@ -155,7 +156,11 @@ const OpenMailForMessage = ({ open, handleClose, fileInfo }: OpenMailProps) => {
 
   const stalled = resource.status?.status === "MISSING_DATA" || resource.status?.status === "FAILED";
   const resourceStatus = resource.phase === "ready" ? "BUILDING" : resource.status?.status;
-  const sender = fileInfo?.name ? `From ${fileInfo.name}` : "";
+  const sender = fileInfo?.name ? (
+    <>
+      From <NameText name={fileInfo.name} />
+    </>
+  ) : null;
   const sentAt = exactMailDate(fileInfo?.createdAt);
   const rowTitle = typeof fileInfo?.title === "string" && fileInfo.title.trim() ? fileInfo.title.trim() : "";
 

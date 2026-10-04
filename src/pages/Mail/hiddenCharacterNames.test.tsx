@@ -17,10 +17,13 @@ import blogReducer from '../../state/features/blogSlice'
 import { mockQortalAction } from '../../test/setup'
 import { resetAvatarCache } from '../../utils/avatarCache'
 import { resetSubjectCache } from '../../utils/subjectCache'
-import { BLANK, IMPOSTOR, REAL, isStruck, nameElement } from '../../test/hiddenNames'
+import { BLANK, IMPOSTOR, REAL, isStruck, nameElement, struckNames } from '../../test/hiddenNames'
 import { MailMessageRow } from './MailMessageRow'
 import { GroupedMailboxList } from './GroupedMailboxList'
 import { ThreadRow } from './ThreadRow'
+import { ShowMessageV2 } from './ShowMessageV2'
+import { ShowMessageV2Replies } from './ShowMessageV2Replies'
+import { ShowMessage } from './ShowMessageWithoutModal'
 
 function makeStore() {
   const store = configureStore({
@@ -81,6 +84,41 @@ describe('mailbox rows', () => {
     expect(isStruck(nameElement(container, REAL))).toBe(false)
     const letters = Array.from(container.querySelectorAll('.MuiAvatar-root')).map((el) => el.textContent)
     expect(letters).toEqual(['S', 'S'])
+  })
+})
+
+describe('reader', () => {
+  it('strikes an impostor sender, not a real recipient', () => {
+    const { container } = wrap(
+      <ShowMessageV2 message={{ id: 'x', user: IMPOSTOR, recipient: REAL, subject: 'Hi', createdAt: 1_000 }} />
+    )
+    expect(isStruck(nameElement(container, IMPOSTOR))).toBe(true)
+    expect(struckNames(container)).toEqual([IMPOSTOR])
+    expect(screen.getByText(`to ${REAL}`)).toBeTruthy()
+  })
+
+  it('strikes the recipient when it is the impostor', () => {
+    const { container } = wrap(
+      <ShowMessageV2 message={{ id: 'x', user: REAL, recipient: IMPOSTOR, subject: 'Hi', createdAt: 1_000 }} />
+    )
+    expect(isStruck(nameElement(container, IMPOSTOR))).toBe(true)
+    expect(struckNames(container)).toEqual([IMPOSTOR])
+  })
+
+  it('strikes the sender of a quoted earlier message and who quoted it', () => {
+    const { container } = wrap(
+      <ShowMessageV2Replies message={{ id: 'q', user: IMPOSTOR, subject: 'Old', createdAt: 1_000 }} quotedBy={IMPOSTOR} />
+    )
+    const struck = Array.from(container.querySelectorAll('[data-hidden-characters]'))
+    expect(struck).toHaveLength(2)
+    expect(struck.every(isStruck)).toBe(true)
+    expect(container.querySelector('.MuiAvatar-root')?.textContent).toBe('S')
+  })
+
+  it('strikes a group thread post author', () => {
+    const { container } = wrap(<ShowMessage message={{ name: IMPOSTOR, created: 1_000, textContentV2: '<p>hi</p>' }} />)
+    expect(isStruck(nameElement(container, IMPOSTOR))).toBe(true)
+    expect(screen.getByRole('article', { name: `Post by ${IMPOSTOR}` })).toBeTruthy()
   })
 })
 
