@@ -1314,11 +1314,40 @@ Driven with `scripts/hub-cdp.mjs` on a test Hub at debug port 9223 (`Qortal-Hub 
 
 **Numbers now:** main chunk 388 kB (gzip 125 kB), dist 3.6 MB (fonts included), 72 test files and 510 tests, lint clean, kit in sync.
 
-**Hub check with test sends:** in progress (see the Hub section below once it is filled in).
+**Hub check (round 4, 2026-10-04)**, test Hub on debug port 9223 signed in as Tester GO, the dev server on 5174 through the node's proxy, `scripts/hub-cdp.mjs`. The original Q-Mail ran in a second tab.
+
+- **Real mail:** Tester GO's only message (from Simon James, no attachments) shows the same subject, body and date in both apps. The original's "to:" line is empty; Q-Mail+ shows "to Tester GO".
+- **Checked and OK:** inbox, reader, Reply (To, `Re:`, reply card, quote), Reply all (Cc stays empty because the original had no Cc), Forward (`Fwd:`, header, quote); closing an untouched composer leaves no draft; Archive → Archived → Move to inbox; Mark unread (row and rail badge); search by subject and by body word, plus the "No matches" state; a watched alias "qmailplus-test" (rail entry, empty alias inbox, "Compose as"); Settings; Tester Hub's empty Sent.
+- **Sizes and themes:** all four themes at 1440×900, 700×900, 390×844 touch and 360×740 touch on Settings, inbox and reader; 844×390 touch in Hub 3.0 and White. Every combination had 0 sideways overflow and only 44 px+ targets. Portrait phones show the bottom bar and floating Compose; landscape is compact with neither. Hub light gives Hub 3.0 light, and switching back works.
+- **Calls on first load:** 9 `qortalRequest` (2 `QDN_RESOURCE_DISPLAYED`, `NOTIFICATION_MARK_SEEN`, `GET_USER_ACCOUNT`, `GET_ACCOUNT_NAMES`, `GET_PRIMARY_NAME`, 2 avatar URLs, 1 `DECRYPT_DATA`) and 11 Core fetches (5 searches with limits 200/20/20/1/20, 2 status, 2 thumbnails, `/names/address`, `/groups/member`). No `limit=0`, no storms; the state-document 404 is gone.
+- **Found and fixed:** a failed code-split chunk unmounted the whole app and left Hub showing an empty frame; it now shows "Reload" and retries the chunk once (`e5a424e`).
+- **Not done: the test sends and the checks that need them.** Simon allowed a few test mails from the second test account, Tester Hub, to Tester GO, his own name and his secondary names. When the test Hubs were restarted for the sends, both opened on the wallet lock screen (they had opened signed in earlier the same day), and agents never type passwords. Nothing was sent or published. The 17:30 checklist at the top of Follow-ups lists what is left.
+- **Expected identifiers for those sends,** checked against the owners on the node: `_mail_qortal_qmail_Tester GO_v89BrC_mail_<id>`, `…_Simon James_YcyQyH_…`, `…_POS+_YcyQyH_…`, `…_MA's_YcyQyH_…`, `…_Custom Node on Qorta_YcyQyH_…` (cut at 20 characters), `…_biohackerscorner.com_YcyQyH_…` and the alias form `_mail_qortal_qmail_qmailplus-test_mail_<id>`.
 
 ## Follow-ups
 
-**17:30 checklist:** being written by the Hub test with sends (in progress).
+**17:30 checklist (the last open Hub checks)**
+
+1. **Unlock the test Hubs.** Start Hub with `--remote-debugging-port=9223` and unlock Tester GO, plus a second one with `--remote-debugging-port=9224` and unlock Tester Hub. Then tell the session to continue. Hub ignores `--user-data-dir`, so the second Hub shares your normal Hub's saved accounts.
+2. **Sends** (by you, or by the session with your OK), all from Tester Hub through Q-Mail+:
+   1. To Tester GO, Cc Simon James: lists, a code block, `qortal://APP/Q-Tube`, a long line, and a PDF, a PNG and a TXT attached.
+   2. To Simon James, Cc POS+, MA's, "Custom Node on Qortal GO | GUIDE" and biohackerscorner.com: five copies.
+   3. To Tester GO with the alias "qmailplus-test".
+   4. Mail 1 forwarded from Tester Hub's Sent to Simon James.
+3. **On Tester GO**, in Q-Mail+ and the original Q-Mail:
+   - mails 1 and 3 arrive with the same subject, body and attachments;
+   - normal word wrapping, with no `&nbsp;` between words;
+   - the PNG and TXT previews, and the **PDF in the in-app viewer in Hub**;
+   - Download all up to Hub's save prompt (then Decline);
+   - Reply all fills Cc with Simon James (composer only);
+   - Forward re-attaches the three files (composer only);
+   - the alias inbox shows mail 3.
+4. **On Tester Hub:** Sent groups mails 1, 2 and 4 by recipient with the right names, and the delete-sent sheet opens (Cancel).
+5. **On your own account**, in both apps:
+   - the five copies of mail 2 under each name;
+   - the multi-name inbox with your 86 names (avatars, the name search above 15 names);
+   - the Cc line on mail 1;
+   - the forward's attachments.
 
 **Simon's answers (2026-10-04), all done:** 1 test mail: one message arrived without attachments; the attachment checks ran with test sends from Tester Hub (see Round 4) · 2 dead code deleted · 3 Cc row added · 4 unarchive left as is · 5 rating hidden · 6 Classic blue kept · 7 shortcuts from 600 px · 8 Roboto as subset WOFF2 · 9 kit and script fixes made · 10 the prompt's checkbox removed.
 
