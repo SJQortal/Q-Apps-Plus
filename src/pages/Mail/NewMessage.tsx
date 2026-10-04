@@ -217,6 +217,23 @@ const attachmentReferencesOf = (message: any): AttachmentReference[] => {
   });
 };
 
+/**
+ * Whether a forwarded message's attachment reference may be fetched,
+ * decrypted and re-sent: it must be a mail attachment (ATTACHMENT_PRIVATE,
+ * data contract §6) published by the message's own sender, whom `user`
+ * names from the search row. The body is the sender's to write, so without
+ * this a reference could point at any resource the user can decrypt (their
+ * private state document, their other mail) and Forward would send it on.
+ */
+export const isForwardableAttachment = (reference: AttachmentReference, messagePublisher: unknown): boolean => {
+  const publisher = typeof messagePublisher === "string" ? messagePublisher.trim().toLowerCase() : "";
+  return (
+    Boolean(publisher) &&
+    reference.service === MAIL_ATTACHMENT_SERVICE_TYPE &&
+    reference.name.trim().toLowerCase() === publisher
+  );
+};
+
 const extensionOfFile = (file: File): string | null => {
   const fromName = file.name.includes(".") ? file.name.split(".").pop() || "" : "";
   if (fromName) return fromName;
@@ -384,6 +401,9 @@ export const NewMessage = ({
   const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
   // Attachments of a forwarded message being fetched and decrypted so they
   // can be re-published, encrypted, to the new recipient.
+  // Attachment references of a forwarded message that are not its sender's
+  // mail attachments: shown, never fetched (isForwardableAttachment).
+  const [refusedForwardAttachments, setRefusedForwardAttachments] = useState<string[]>([]);
   const [forwardAttachmentJobs, setForwardAttachmentJobs] = useState<
     ForwardAttachmentJob[]
   >([]);
@@ -1041,6 +1061,7 @@ export const NewMessage = ({
   }, [replyAll, replyTo?.id]);
 
   useEffect(() => {
+    setRefusedForwardAttachments([]);
     if (!forwardInfo) return;
     setIsOpen(true);
     lastLoadedDraftKeyRef.current = null;
@@ -1075,7 +1096,14 @@ export const NewMessage = ({
     // encrypted to the new recipient on Send.
     cancelForwardAttachmentJobs();
     setAttachments(prev => prev.filter(item => !item?.forwardKey));
-    attachmentReferencesOf(source).forEach(startForwardAttachmentJob);
+    const references = attachmentReferencesOf(source);
+    const forwardable = references.filter(reference => isForwardableAttachment(reference, source.user));
+    setRefusedForwardAttachments(
+      references
+        .filter(reference => !forwardable.includes(reference))
+        .map(reference => reference.originalFilename || reference.filename || reference.identifier)
+    );
+    forwardable.forEach(startForwardAttachmentJob);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forwardInfo]);
 
@@ -2227,6 +2255,15 @@ export const NewMessage = ({
               </Box>
             );
           })}
+
+          {refusedForwardAttachments.map((label, index) => (
+            <Typography
+              key={`refused-${index}`}
+              sx={{ fontSize: "1rem", overflowWrap: "anywhere", color: "var(--qmail-compose-muted)" }}
+            >
+              {label} · Attachment not available to forward
+            </Typography>
+          ))}
 
           {forwardAttachmentJobs.map(job => {
             const label =
