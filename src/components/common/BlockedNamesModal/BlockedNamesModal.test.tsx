@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { mockQortalAction, qortalCalls } from '../../../test/setup'
 import { BlockedNamesModal, PUBLIC_NODE_TEXT } from './BlockedNamesModal'
-import { IMPOSTOR, REAL, struckNames } from '../../../test/hiddenNames'
+import { IMPOSTOR, REAL, isStruck, nameElement, struckNames } from '../../../test/hiddenNames'
 
 const PUBLIC_NODE = {
   error: 'This action cannot be done through a public node',
@@ -94,5 +94,20 @@ describe('BlockedNamesModal and names with hidden characters', () => {
       fireEvent.click(screen.getByRole('button', { name: `Unblock ${IMPOSTOR}` }))
     })
     expect(qortalCalls('DELETE_LIST_ITEM')[0]).toMatchObject({ item: IMPOSTOR })
+  })
+
+  it('strikes the name in a failed-unblock error that has no message of its own', async () => {
+    mockQortalAction('GET_LIST_ITEMS', [IMPOSTOR, REAL])
+    mockQortalAction('DELETE_LIST_ITEM', () => {
+      throw {}
+    })
+    render(<BlockedNamesModal open onClose={() => {}} />)
+    await screen.findByText(REAL)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: `Unblock ${IMPOSTOR}` }))
+    })
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toMatch(/^Could not unblock Simon.James/)
+    expect(isStruck(nameElement(alert, IMPOSTOR))).toBe(true)
   })
 })

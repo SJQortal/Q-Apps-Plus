@@ -24,7 +24,7 @@ export const PUBLIC_NODE_TEXT = 'Not available on a public node'
 /** Settings → Blocked names: the Qortal `blockedNames` list, with Remove per name. */
 export const BlockedNamesModal: React.FC<PostModalProps> = ({ open, onClose }) => {
   const [blockedNames, setBlockedNames] = useState<string[] | null>(null)
-  const [error, setError] = useState<string>('')
+  const [error, setError] = useState<React.ReactNode>('')
   const [unavailable, setUnavailable] = useState<Unavailable>(null)
   const [removing, setRemoving] = useState<string>('')
 
@@ -63,7 +63,14 @@ export const BlockedNamesModal: React.FC<PostModalProps> = ({ open, onClose }) =
     } catch (err: unknown) {
       // A decline keeps the name in the list quietly; a public node can't change lists at all.
       if (isPublicNodeRefusal(err)) setUnavailable('public-node')
-      else if (!isHubDecline(err)) setError(errorMessage(err, `Could not unblock ${name}`))
+      else if (!isHubDecline(err))
+        setError(
+          errorMessage(err, '') || (
+            <>
+              Could not unblock <NameText name={name} />
+            </>
+          )
+        )
     } finally {
       setRemoving('')
     }
