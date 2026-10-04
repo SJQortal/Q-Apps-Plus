@@ -68,6 +68,37 @@ describe('AttachmentPreviewDialog', () => {
     expect(qortalCalls('DECRYPT_DATA')).toHaveLength(3)
   })
 
+  it('goes full screen with one compact bar in a landscape Hub frame', async () => {
+    const original = window.matchMedia
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: query.includes('max-height: 500px') && query.includes('min-width: 600px'),
+        media: query,
+        onchange: null,
+        addListener() {},
+        removeListener() {},
+        addEventListener() {},
+        removeEventListener() {},
+        dispatchEvent() {
+          return false
+        },
+      }),
+    })
+    try {
+      wrap(<AttachmentPreviewDialog open attachments={attachments} index={0} onClose={() => {}} />)
+      await screen.findByAltText('cat.png')
+      const paper = document.querySelector('.MuiDialog-paper')!
+      expect(paper.className).toContain('MuiDialog-paperFullScreen')
+      expect(document.querySelector('.MuiDialogActions-root')).toBeNull()
+      // Save and Close sit in the title bar instead.
+      expect(screen.getByRole('button', { name: 'Close preview' })).toBeTruthy()
+    } finally {
+      Object.defineProperty(window, 'matchMedia', { writable: true, configurable: true, value: original })
+    }
+  })
+
   it('saves the current attachment with SAVE_FILE', async () => {
     wrap(<AttachmentPreviewDialog open attachments={attachments} index={2} onClose={() => {}} />)
     await screen.findByText('This kind of file opens outside Q-Mail.')

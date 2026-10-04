@@ -1,5 +1,6 @@
 /**
- * The attachment viewer: full-screen on phones, a large dialog elsewhere.
+ * The attachment viewer: full-screen on phones and in a landscape Hub frame,
+ * a large dialog elsewhere.
  * Shows one attachment of a message at a time with Previous/Next (buttons,
  * arrow keys, swipe), Save and Close. Bytes come from the session cache
  * (useAttachment), so re-opening costs no Qortal calls.
@@ -16,6 +17,7 @@ import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import { useDispatch } from 'react-redux';
 import { setNotification } from '../../state/features/notificationsSlice';
 import { useLayoutMode } from '../../layout/useLayoutMode';
+import { useLandscapeFrame } from '../../utils/hubFrame';
 import { ErrorState, FetchingFromPeers } from '../../layout/states';
 import { attachmentDisplayName, attachmentKind, attachmentSizeHint, formatFileSize, type AttachmentRef } from '../../utils/attachmentMeta';
 import { prefetchPdfJsWorker } from '../../utils/pdf/pdfJsHub';
@@ -63,6 +65,11 @@ export function AttachmentPreviewDialog({ open, attachments, index, onIndexChang
   const theme = useTheme();
   const dispatch = useDispatch();
   const phone = useLayoutMode() === 'phone';
+  // A landscape Hub frame (703x201 for a phone held sideways) is too short
+  // for a centred dialog with a title and an actions row: lay it out as on
+  // phones, full screen with one compact bar.
+  const landscape = useLandscapeFrame();
+  const compact = phone || landscape;
   const [current, setCurrent] = useState(index);
   const [saving, setSaving] = useState(false);
   const [stageNode, setStageNode] = useState<HTMLDivElement | null>(null);
@@ -190,19 +197,25 @@ export function AttachmentPreviewDialog({ open, attachments, index, onIndexChang
       onClose={onClose}
       fullWidth
       maxWidth="lg"
-      fullScreen={phone}
+      fullScreen={compact}
       aria-labelledby="attachment-preview-title"
-      slotProps={{ paper: { sx: phone ? undefined : { height: 'calc(100% - 64px)' } } }}
+      slotProps={{ paper: { sx: compact ? undefined : { height: 'calc(100% - 64px)' } } }}
     >
       <DialogTitle
         id="attachment-preview-title"
-        sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: phone ? 0.75 : 1.5, pl: phone ? 2 : 3, pr: phone ? 0.5 : 2 }}
+        sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: landscape ? 0.25 : phone ? 0.75 : 1.5, pl: compact ? 2 : 3, pr: compact ? 0.5 : 2 }}
       >
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography component="span" noWrap sx={{ display: 'block', fontWeight: 700, fontSize: phone ? '1rem' : '1.1rem' }}>
+          <Typography component="span" noWrap sx={{ display: 'block', fontWeight: 700, fontSize: compact ? '1rem' : '1.1rem' }}>
             {name}
+            {/* In a landscape frame the subtitle shares the name's line, so the bar stays one row. */}
+            {landscape && subtitle && (
+              <Typography component="span" variant="body2" color="text.secondary" sx={{ fontWeight: 400 }}>
+                {` · ${subtitle}`}
+              </Typography>
+            )}
           </Typography>
-          {subtitle && (
+          {subtitle && !landscape && (
             <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block' }}>
               {subtitle}
             </Typography>
@@ -218,7 +231,7 @@ export function AttachmentPreviewDialog({ open, attachments, index, onIndexChang
             </IconButton>
           </>
         )}
-        {phone && (
+        {compact && (
           <>
             <IconButton aria-label="Save" title="Save" onClick={() => void save()} disabled={saving || !entry} sx={{ minWidth: 44, minHeight: 44 }}>
               <DownloadOutlinedIcon />
@@ -231,11 +244,11 @@ export function AttachmentPreviewDialog({ open, attachments, index, onIndexChang
       </DialogTitle>
       <DialogContent
         ref={setStageNode}
-        sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', px: phone ? 1 : 3, pb: phone ? 1 : 2, pt: 0 }}
+        sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', px: compact ? 1 : 3, pb: compact ? 1 : 2, pt: 0 }}
       >
         {body}
       </DialogContent>
-      {!phone && (
+      {!compact && (
         <DialogActions>
           <Button onClick={() => void save()} disabled={saving || !entry} startIcon={<DownloadOutlinedIcon />} sx={{ minHeight: 44 }}>
             {saving ? 'Saving…' : 'Save'}
