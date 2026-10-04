@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   GROUP_MEMBERS_MAX_AGE_MS,
+  getGroupMemberAddresses,
   getGroupMembers,
+  peekGroupMemberCount,
   peekGroupMembers,
   toMembersByName,
   type GroupMember,
@@ -71,4 +73,39 @@ export function useGroupMembers(groupId: string | number | null | undefined, ena
     error,
     refresh: () => load(true),
   };
+}
+
+/**
+ * How many members a group has, from the member pages alone: no name or
+ * public-key lookups (those wait until the list is shown or a post is sent).
+ * `null` until known.
+ */
+export function useGroupMemberCount(groupId: string | number | null | undefined): number | null {
+  const normalizedGroupId = String(groupId ?? '').trim();
+  const [count, setCount] = useState<number | null>(() =>
+    normalizedGroupId ? peekGroupMemberCount(normalizedGroupId) : null
+  );
+
+  const load = useCallback(async () => {
+    if (!normalizedGroupId) return;
+    try {
+      const members = await getGroupMemberAddresses(normalizedGroupId);
+      setCount(members.length);
+    } catch {
+      // Keep what is shown; the next refresh tries again.
+    }
+  }, [normalizedGroupId]);
+
+  useEffect(() => {
+    setCount(normalizedGroupId ? peekGroupMemberCount(normalizedGroupId) : null);
+    void load();
+  }, [load, normalizedGroupId]);
+
+  usePolling(load, {
+    intervalMs: GROUP_MEMBERS_MAX_AGE_MS,
+    enabled: Boolean(normalizedGroupId),
+    maxIntervalMs: GROUP_MEMBERS_MAX_AGE_MS * 4,
+  });
+
+  return count;
 }
