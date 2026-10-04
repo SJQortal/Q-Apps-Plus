@@ -1,5 +1,4 @@
 import { Box, Button, Paper, Typography } from "@mui/material";
-import DOMPurify from "dompurify";
 import ReplyOutlinedIcon from "@mui/icons-material/ReplyOutlined";
 import ReadOnlySlate from "../../components/editor/ReadOnlySlate";
 import { AttachmentList } from "../../components/AttachmentPreview/AttachmentList";
@@ -17,7 +16,6 @@ interface ShowMessageProps {
 export const ShowMessage = ({ message, onReply }: ShowMessageProps) => {
   const name = typeof message?.name === "string" ? message.name : "";
   const postedAt = Number(message?.created || message?.createdAt) || 0;
-  const cleanHTML = typeof message?.htmlContent === "string" && message.htmlContent ? DOMPurify.sanitize(message.htmlContent) : "";
   const attachments: any[] = Array.isArray(message?.attachments) ? message.attachments : [];
 
   return (
@@ -58,7 +56,8 @@ export const ShowMessage = ({ message, onReply }: ShowMessageProps) => {
       >
         {message?.textContent && <ReadOnlySlate content={message.textContent} mode="mail" />}
         {typeof message?.textContentV2 === "string" && message.textContentV2 && <DisplayHtml html={message.textContentV2} />}
-        {cleanHTML && <div dangerouslySetInnerHTML={{ __html: cleanHTML }} />}
+        {/* Legacy htmlContent goes through the same sanitiser and link policy as every body. */}
+        {typeof message?.htmlContent === "string" && message.htmlContent && <DisplayHtml html={message.htmlContent} />}
       </Box>
 
       {attachments.length > 0 && (
