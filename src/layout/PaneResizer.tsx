@@ -8,7 +8,10 @@
  * - keyboard: ←/→ by 16 px (Shift: 64 px), End to the widest, Home or a
  *   double-click back to the default;
  * - pointer events with capture, so a fast drag never loses the handle,
- *   and no text selection while dragging.
+ *   and no text selection while dragging;
+ * - not shown on touch-only screens (no fine pointer): an 8 px strip is far
+ *   under the 44 px target, and its touch-action:none would swallow a swipe
+ *   that starts on the list's edge. The panes keep their saved widths there.
  *
  * The pane to the left of the handle is the one that changes width.
  */
@@ -17,6 +20,8 @@ import { styled } from '@mui/material/styles';
 
 export const RESIZE_STEP = 16;
 export const RESIZE_BIG_STEP = 64;
+/** Screens with no mouse or trackpad at all: the handle is hidden there. */
+export const TOUCH_ONLY_MEDIA = '@media not all and (any-pointer: fine)';
 
 const Handle = styled('div')(({ theme }) => ({
   position: 'relative',
@@ -58,6 +63,9 @@ const Handle = styled('div')(({ theme }) => ({
   },
   '@media (prefers-reduced-motion: reduce)': {
     '&::after, &::before': { transition: 'none' },
+  },
+  [TOUCH_ONLY_MEDIA]: {
+    display: 'none',
   },
 }));
 
