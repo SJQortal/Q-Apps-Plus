@@ -1417,16 +1417,31 @@ Group avatars 694 and 659 were each requested twice at the same moment. The per-
 
 ### Impostor names (2026-10-04, late)
 
-Simon asked for names containing "⠀" (U+2800 BRAILLE PATTERN BLANK) to be struck through, as Hub does: impostors register a dev's name plus a hidden character. Q-Mail+ now uses Hub's rule and Hub's look everywhere it shows a name or an alias.
+Simon asked for names containing "⠀" (U+2800 BRAILLE PATTERN BLANK) to be crossed out, as Hub does. Impostors register a dev's name plus a hidden character. Q-Mail+ now uses Hub's rule and Hub's look everywhere it shows a name or an alias.
 
-- **Rule:** `src/utils/invisibleCharacters.ts` copies Qortal-Hub's `hasInvisibleCharacters` exactly: NFKC first, then the same character class (U+00AD, U+034F, U+061C, U+115F/1160, U+17B4/17B5, U+180B–180E, U+2000–200F, U+2028–202F, U+205F–206F, U+2800, U+3164, U+FEFF, U+FFA0). Only names and aliases are tested, never addresses or group names.
-- **Look:** `NameText` draws a matching name with a 2px line-through in the theme's `palette.error.main`, as Hub does. It also adds a tooltip and a screen-reader note (", name has hidden characters"). Ordinary names render as plain text with no extra element. The name itself is never changed, so sending, identifiers and search stay byte-for-byte the same.
-- **Where:** mailbox rows, sender and recipient groups, threads, the reader, the rail, pane headers, empty hints, Aliases (including the reply alias field), the composer (To, alias, Cc/Bcc chips and their errors), drafts and the delete-draft dialog, a group's member chips, Settings, blocked names and their errors, and toasts. A toast lists its names in the new `names` field of `setNotification`, which holds plain strings, so redux keeps no React nodes.
-- **Spoken names:** an aria-label replaces the element's content, which hides NameText's note. `spokenName()` adds the same note inside aria-labels that carry a name: mailbox rows, rail rows and Compose as, the name switcher, drafts, sender groups, reply headers, Remove alias and Unblock.
+- **Hub's rule:** Qortal-Hub's `src/utils/hasInvisibleCharacters.ts`, used in `DirectsSidebar.tsx` and `UserLookup.tsx`. It NFKC-normalises the name, then tests U+00AD, U+034F, U+061C, U+115F/1160, U+17B4/17B5, U+180B–180E, U+2000–200F, U+2028–202F, U+205F–206F, U+2800, U+3164, U+FEFF and U+FFA0. A matching name gets a 2px line-through in `palette.error.main`. Hub adds no text.
+- **Rule in Q-Mail+:** `src/utils/invisibleCharacters.ts` copies it exactly. Only names and aliases are tested, never addresses or group names. The one change is where the `eslint-disable-next-line` comment sits, so lint passes.
+- **Look:** `src/components/common/NameText.tsx` draws the same 2px line-through in the theme's error colour, with no hex. A struck name also gets a tooltip ("This name has hidden characters and may imitate another name.") and a screen-reader note (", name has hidden characters"). Ordinary names render as plain text with no extra element. The name itself is never changed, so sending, identifiers and search stay byte-for-byte the same.
+- **Avatar letter:** `firstVisibleChar` skips spaces and hidden characters, so an impostor never gets a blank avatar.
+- **Spoken names:** an aria-label replaces an element's content and hides NameText's note. `spokenName()` adds the same note inside aria-labels that carry a name.
 - **Kept the same as Hub on purpose:** U+200D ZERO WIDTH JOINER is in Hub's range, so a name with a joined emoji such as a family emoji is struck, in Hub as well. NFKC turns U+00A0, U+2000–200A and U+202F into plain spaces, so names containing them are not struck, in Hub either. `invisibleCharacters.test.ts` records both cases. Don't "fix" them into a difference from Hub.
+
+| Area | Where a name is struck |
+|---|---|
+| Lists | mailbox rows (sender, or "To:" in Sent, highlight kept), sender and recipient groups, search results, threads, drafts |
+| Reader | From and To lines, the phone top bar, reply headers |
+| Shell | rail rows, pane headers, Compose as, the name switcher, empty hints |
+| Composer | To and its suggestions, the alias, Cc/Bcc chips and the not-registered error |
+| Aliases | alias list, the reply alias field (struck input with tooltip), Remove alias |
+| Groups | a group's member chips |
+| Settings | Account, Footer, blocked names, Unblock and the could-not-unblock error |
+| Dialogs and toasts | the delete-draft dialog; toasts list their names in a new `names` field of `setNotification` (plain strings, so redux keeps no React nodes) |
+
+- **Review:** a review of the first 7 commits found 8 missed sites and one medium issue. All are fixed: member chips, the empty inbox hint, the delete-draft dialog, the Cc/Bcc error, the reply alias field, the unblock error, toasts, and aria-labels that hid the note. Tests now check the 2px strike in each theme's error colour, so 1px or the primary colour fails. The empty inbox hint has no test, because no test renders the whole Mail page.
+- **Visual check:** the screenshot mocks gained a real "Simon James" and a fake "Simon⠀James", plus two screens (`impostor-open`, `compose-names`). Inbox, reader and composer suggestions were checked in all 4 themes, dark and light, at all 5 sizes. The fake name is struck in the error colour everywhere, and the real one nowhere. Long subjects still end in "…" at 360 px. 100 captures per mode, with 0 console errors, 0 sideways overflow, 0 unlabelled buttons and 0 small targets. The app needed no fix.
 - **Not checked yet:** in Hub or GO with a real impostor name.
 
-Commits: `957a3e4`, `d9eaa00`, `527fd78`, `d369bd8`, `e772a46`, `88c1100`, `e71fc37`. After review: `1b2696f` member chips, `02be18b` inbox empty hint, `076516c` delete-draft dialog, `9f8a5f1` Cc/Bcc error, `93bab24` reply alias field, `95cec15` unblock error, `cf81713` toasts, `3666e47` aria-labels, `9f97fd2` colour and thickness tests, `0a0a33b` ZWJ and NFKC cases. Tests: 87 files, 693 tests.
+Commits (`git log --oneline 9f24e6b..HEAD`): `957a3e4` NameText, `d9eaa00` lists and threads, `527fd78` reader, `d369bd8` rail, pane headers and Aliases, `e772a46` composer, `88c1100` Settings, `e71fc37` blocked names. After review: `1b2696f` member chips, `02be18b` inbox empty hint, `076516c` delete-draft dialog, `9f8a5f1` Cc/Bcc error, `93bab24` reply alias field, `95cec15` unblock error, `cf81713` toasts, `3666e47` aria-labels, `9f97fd2` colour and thickness tests, `0a0a33b` ZWJ and NFKC cases, `745ae81` brief, `df75064` screenshot mocks. Tests: 87 files, 693 tests.
 
 ## Follow-ups
 
@@ -1452,5 +1467,6 @@ Commits: `957a3e4`, `d9eaa00`, `527fd78`, `d369bd8`, `e772a46`, `88c1100`, `e71f
 - **Duplicate group avatars:** avatars for groups 694 and 659 were requested twice at the same moment; the in-flight merge misses them.
 - **Load-state prompt per name:** switching the active mailbox away and back asks "Load published QDN state?" again; Settings says it asks once per sign-in.
 - **Compose's From** is a plain 86-item select with no search, unlike the Settings and Footer pickers.
+- **Impostor names in the other + apps:** Q-Share+ and the rest should cross out names with hidden characters the same way (Hub's rule, 2px line-through in the error colour). Not done here, because each app stands alone; copy `invisibleCharacters.ts` and `NameText` into each app on its own pass.
 
 Also: the attach control is an image inside a `role=presentation` drop zone rather than a labelled button; `MailTable.tsx`'s `SimpleTable` default export is dead; `hub-cdp.mjs tap` lands about 124 px high in the app frame (the frame's top offset in Hub's page; a separate repo task in `scripts/`); GO on a real phone (keyboard, hardware Back, pull-to-refresh); the React Compiler lint rules stay off (mostly upstream setState-in-effect code).
