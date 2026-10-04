@@ -9,17 +9,24 @@
  * placeholder: the list takes the whole main area, and the reading pane
  * appears beside it when a message or thread opens.
  *
+ * On desktop (and medium while two panes show) the borders between rail,
+ * list and reading pane can be dragged or moved with the keyboard
+ * (PaneResizer); the widths are saved per account (usePaneWidths). Never on
+ * phones or in the landscape one-pane mode.
+ *
  * A `wide` view (composer, group threads, aliases, changelog) takes the place
  * of list + reading. The shell owns no mail state: Mail.tsx decides what goes
  * in each slot.
  */
-import type { ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Drawer } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { appSurface, headerFill } from '../hub-theme';
 import type { LayoutMode } from './useLayoutMode';
 import { APP_HEIGHT_VAR } from './useAppViewport';
 import { LANDSCAPE_FRAME_MEDIA, useLandscapeFrame } from '../utils/hubFrame';
+import { PaneResizer } from './PaneResizer';
+import { PANE_LIMITS, clampListWidth, clampRailWidth, listWidthBounds, usePaneWidths } from './usePaneWidths';
 
 export const RAIL_WIDTH = 240;
 export const LIST_WIDTH_DESKTOP = 380;
@@ -49,8 +56,8 @@ const Body = styled('div')({
   width: '100%',
 });
 
+/** Its width comes from the `style` prop (resizable), so a drag adds no CSS rules. */
 const RailColumn = styled('aside')(({ theme }) => ({
-  width: RAIL_WIDTH,
   flexShrink: 0,
   display: 'flex',
   flexDirection: 'column',
@@ -84,8 +91,9 @@ const ListPane = styled(Pane, { shouldForwardProp: (p) => p !== '$mode' && p !==
   /** Nothing is open beside it: the list takes the whole main area. */
   $full: boolean;
 }>(({ theme, $mode, $fab, $full }) => ({
+  // Beside a reading pane the width comes from the `style` prop (resizable).
   flex: $mode === 'phone' || $full ? 1 : '0 0 auto',
-  width: $mode === 'phone' || $full ? '100%' : $mode === 'desktop' ? LIST_WIDTH_DESKTOP : LIST_WIDTH_MEDIUM,
+  ...($mode === 'phone' || $full ? { width: '100%' } : {}),
   borderRight: $mode === 'phone' || $full ? 'none' : `1px solid ${theme.palette.divider}`,
   containerType: 'inline-size',
   containerName: LIST_CONTAINER,
@@ -146,6 +154,31 @@ export interface MailShellProps {
   wideKeepsChrome?: boolean;
   /** Rendered once, outside the panes (dialogs, tours). */
   overlays?: ReactNode;
+  /** The signed-in address: pane widths are saved per account. Empty: kept for the session only. */
+  paneWidthsAccount?: string;
+}
+
+/** The rendered width of an element, kept up to date; null until it has been laid out. */
+function useElementWidth<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null);
+  const [width, setWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const measure = () => {
+      const next = node.getBoundingClientRect().width;
+      setWidth(next > 0 ? Math.round(next) : null);
+    };
+    measure();
+    if (typeof ResizeObserver === 'function') {
+      const observer = new ResizeObserver(measure);
+      observer.observe(node);
+      return () => observer.disconnect();
+    }
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+  return [ref, width] as const;
 }
 
 export function MailShell({
@@ -162,6 +195,7 @@ export function MailShell({
   wide,
   wideKeepsChrome = false,
   overlays,
+  paneWidthsAccount = '',
 }: MailShellProps) {
   const isPhone = mode === 'phone';
   const isDesktop = mode === 'desktop';
@@ -178,12 +212,39 @@ export function MailShell({
   const showPhoneChrome = isPhone && !phoneShowsReading && (!showWide || wideKeepsChrome);
   const hasFab = showPhoneChrome && Boolean(fab);
 
+  // Resizable panes (desktop, and medium while two panes show).
+  const paneWidths = usePaneWidths(paneWidthsAccount);
+  const [mainRef, mainWidth] = useElementWidth<HTMLElement>();
+  const railId = useId();
+  const listId = useId();
+  const railWidth = clampRailWidth(paneWidths.widths.rail ?? RAIL_WIDTH);
+  const listBounds = listWidthBounds(mainWidth);
+  const listWidth = clampListWidth(
+    paneWidths.widths.list ?? (isDesktop ? LIST_WIDTH_DESKTOP : LIST_WIDTH_MEDIUM),
+    mainWidth
+  );
+  const listResizable = twoPanes && !showWide;
+
   return (
     <Frame data-layout-mode={mode} data-one-pane={onePane ? 'true' : undefined}>
       {banner}
       <Body>
         {isDesktop ? (
-          <RailColumn aria-label="Mailboxes">{rail}</RailColumn>
+          <>
+            <RailColumn id={railId} aria-label="Mailboxes" style={{ width: railWidth }}>
+              {rail}
+            </RailColumn>
+            <PaneResizer
+              label="Resize the mailboxes column"
+              controls={railId}
+              value={railWidth}
+              min={PANE_LIMITS.railMin}
+              max={PANE_LIMITS.railMax}
+              onChange={(width) => paneWidths.preview('rail', width)}
+              onCommit={(width) => paneWidths.commit('rail', width)}
+              onReset={() => paneWidths.reset('rail')}
+            />
+          </>
         ) : (
           <Drawer
             open={railOpen}
@@ -193,7 +254,7 @@ export function MailShell({
             {rail}
           </Drawer>
         )}
-        <Main>
+        <Main ref={mainRef}>
           {showWide ? (
             <WidePane $fab={hasFab}>
               {/* Not a live region: every keystroke in the composer and every row of a
@@ -203,9 +264,28 @@ export function MailShell({
           ) : (
             <>
               {!phoneShowsReading && (
-                <ListPane $mode={onePane ? 'phone' : mode} $full={!onePane && !twoPanes} $fab={hasFab} aria-label="Messages">
+                <ListPane
+                  id={listId}
+                  $mode={onePane ? 'phone' : mode}
+                  $full={!onePane && !twoPanes}
+                  $fab={hasFab}
+                  aria-label="Messages"
+                  style={listResizable ? { width: listWidth } : undefined}
+                >
                   {list}
                 </ListPane>
+              )}
+              {listResizable && (
+                <PaneResizer
+                  label="Resize the message list"
+                  controls={listId}
+                  value={listWidth}
+                  min={listBounds.min}
+                  max={listBounds.max}
+                  onChange={(width) => paneWidths.preview('list', width)}
+                  onCommit={(width) => paneWidths.commit('list', width)}
+                  onReset={() => paneWidths.reset('list')}
+                />
               )}
               {twoPanes && <ReadingPane aria-label="Reading pane">{reading}</ReadingPane>}
               {phoneShowsReading && <PhoneOverlay aria-label="Reading pane">{reading}</PhoneOverlay>}

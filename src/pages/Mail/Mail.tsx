@@ -3521,6 +3521,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       readingOpen={isReadingOpen || isOpeningMessage || isThreadReadingOpen}
       wide={wide}
       wideKeepsChrome={wideKeepsChrome}
+      paneWidthsAccount={typeof user?.address === "string" ? user.address : ""}
       overlays={
         <>
           <LoadPublishedStateModal />

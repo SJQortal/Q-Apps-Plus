@@ -110,6 +110,8 @@ describe('a landscape frame (844×390 in Hub is 703×201 CSS px)', () => {
     expect(screen.getByText('the message')).toBeTruthy()
     expect(screen.queryByText('the list')).toBeNull()
     expect(screen.getByLabelText('Reading pane')).toBeTruthy()
+    // One pane at a time: nothing to resize.
+    expect(screen.queryAllByRole('separator')).toHaveLength(0)
   })
 
   it('places the floating button 16 px above the pane edge, not a nav height higher', () => {
