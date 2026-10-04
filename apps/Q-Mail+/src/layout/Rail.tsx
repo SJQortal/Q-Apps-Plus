@@ -34,6 +34,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import type { LeftSidebarItem } from '@qortal/qapp-lib/left-sidebar/core';
 import { primarySoft } from '../hub-theme';
+import { SHORT_FRAME_MEDIA } from '../utils/hubFrame';
 import Logo from '../assets/svgs/Logo.svg';
 import LogoLight from '../assets/svgs/LogoLight.svg';
 
@@ -93,6 +94,13 @@ const Root = styled('div')(({ theme }) => ({
   minHeight: 0,
   padding: theme.spacing(1.5, 1.25),
   gap: theme.spacing(1),
+  // In a short frame (a phone held sideways: 201 px in Hub) the brand,
+  // Compose and footer alone fill the height and the list would get 0 px,
+  // so the whole rail scrolls as one column instead.
+  [`@media ${SHORT_FRAME_MEDIA}`]: {
+    overflowY: 'auto',
+    overscrollBehavior: 'contain',
+  },
 }));
 
 const Brand = styled('div')(({ theme }) => ({
@@ -111,6 +119,10 @@ const Scroll = styled('nav')({
   display: 'flex',
   flexDirection: 'column',
   gap: 2,
+  [`@media ${SHORT_FRAME_MEDIA}`]: {
+    flex: 'none',
+    overflowY: 'visible',
+  },
 });
 
 const Row = styled(ButtonBase, { shouldForwardProp: (p) => p !== '$active' && p !== '$child' })<{
