@@ -33,6 +33,9 @@ The first release of **Q-Mail+**, Simon's "+" version of Q-Mail 3.2.1. It reads 
   - A mail footer: one for all names or one per name, added to new mail and (if you like) to replies and forwards.
   - PDF attachments open in Hub's own PDF reader, as in Q-Share+, with the built-in viewer as a fallback.
   - Names with hidden characters, often used to imitate someone, are crossed out, as in Hub.
+  - "Send to alias", "Cc" and "Bcc" explain what they do when you hover over them, reach them with the keyboard or long-press them.
+  - From shows each name's avatar when it has one, and becomes searchable when you have more than 15 names.
+  - An alias message with Bcc names is refused with a message, as Cc already was, instead of quietly dropping the Bcc copies.
 
 The entries below are Q-Mail's own changelog, kept for reference.
 
