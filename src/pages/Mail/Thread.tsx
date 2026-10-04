@@ -144,7 +144,20 @@ export const Thread = ({ currentThread, groupInfo, closeThread, members, backLab
         const decryptRequest: any = { action: "DECRYPT_DATA", encryptedData: messageRes };
         const resDecrypt = await qortalRequest(decryptRequest);
         const decoded = uint8ArrayToObject(base64ToUint8Array(resDecrypt));
-        dispatch(addToHashMapMail({ ...row, ...(decoded || {}), id: row.identifier }));
+        // The body is the sender's to write, so who and when come from the
+        // search row (the publisher on chain), never from the body (pitfall 15).
+        dispatch(
+          addToHashMapMail({
+            ...row,
+            ...(decoded || {}),
+            name: row.name,
+            created: row.created,
+            updated: row.updated,
+            identifier: row.identifier,
+            service: row.service,
+            id: row.identifier,
+          })
+        );
       } catch {
         /* stays a skeleton; the next poll or reopen tries again */
       }

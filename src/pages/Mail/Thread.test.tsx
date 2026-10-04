@@ -170,4 +170,22 @@ describe('reply quote', () => {
     expect(many.match(/<blockquote>/g)).toHaveLength(1 + 6 + 1)
     expect(buildReplyQuoteHtml({ name: 'bob' })).toContain('- no message body -')
   })
+
+  it('shows the publisher from the search row, not a name or date the body claims', async () => {
+    mockFetchRoute(/^\/arbitrary\/resources\/search\?.*query=qortal_qmail_thmsg_group1_t1&/, [row('m9', 5_000, 'eve')])
+    mockQortalAction('FETCH_QDN_RESOURCE', (request: Record<string, any>) => `enc:${request.identifier}`)
+    mockQortalAction('DECRYPT_DATA', () =>
+      btoa(JSON.stringify({ textContentV2: '<p>New payment address</p>', createdAt: 1, created: 1, version: 1, attachments: [], name: 'GroupAdmin' }))
+    )
+    render(
+      <Provider store={makeStore()}>
+        <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+          <Thread currentThread={currentThread} groupInfo={groupInfo} closeThread={() => {}} />
+        </HubThemeProvider>
+      </Provider>
+    )
+    await waitFor(() => expect(screen.getByText('New payment address')).toBeTruthy())
+    expect(screen.getByRole('article', { name: 'Post by eve' })).toBeTruthy()
+    expect(screen.queryByRole('article', { name: 'Post by GroupAdmin' })).toBeNull()
+  })
 })
