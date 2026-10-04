@@ -5,21 +5,21 @@
  */
 import { fetchAliasInboxPage } from "../../utils/aliasInbox";
 import { fetchSentIndex, readDeletedSentIdsForNames } from "../../utils/sentIndex";
-import { aliasIndexKey, getMailIndex, publishMailIndex, SENT_INDEX_KEY } from "./mailIndexStore";
+import { aliasIndexKey, getMailIndex, publishMailIndex, sentIndexKey } from "./mailIndexStore";
 
 /** How much of each alias inbox the cross-mailbox search loads on its own. */
 export const ALIAS_SEARCH_PAGE = 100;
 
 const inFlight = new Map<string, Promise<any[]>>();
 
-function once(key: string, load: () => Promise<any[]>): Promise<any[]> {
+function once(key: string, load: () => Promise<any[]>, walked = false): Promise<any[]> {
   const known = getMailIndex(key);
   if (known) return Promise.resolve(known);
   const running = inFlight.get(key);
   if (running) return running;
   const task = load()
     .then(rows => {
-      publishMailIndex(key, rows);
+      publishMailIndex(key, rows, walked ? { walkedAt: Date.now() } : undefined);
       return rows;
     })
     .finally(() => inFlight.delete(key));
@@ -30,7 +30,8 @@ function once(key: string, load: () => Promise<any[]>): Promise<any[]> {
 export function ensureSentIndex(names: string[]): Promise<any[]> {
   const cleaned = names.map(name => name.trim()).filter(Boolean);
   if (!cleaned.length) return Promise.resolve([]);
-  return once(SENT_INDEX_KEY, () => fetchSentIndex(cleaned, readDeletedSentIdsForNames(cleaned)));
+  // Keyed by these names: only an index of exactly them counts as complete.
+  return once(sentIndexKey(cleaned), () => fetchSentIndex(cleaned, readDeletedSentIdsForNames(cleaned)), true);
 }
 
 export function ensureAliasIndex(alias: string, ownerAddress: string): Promise<any[]> {
