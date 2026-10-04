@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { renderHook, waitFor } from '@testing-library/react'
 import { mockQortalAction, qortalCalls } from '../test/setup'
 import { resetNameCache } from './nameCache'
 import {
@@ -6,6 +7,7 @@ import {
   resetSentRecipientCache,
   resolveSentRecipientName,
   sentRecipientCacheStats,
+  useSentRecipient,
 } from './sentRecipientCache'
 
 describe('sentRecipientCache', () => {
@@ -64,5 +66,49 @@ describe('sentRecipientCache', () => {
     expect(await resolveSentRecipientName('ghost', 'ZZZZZZ')).toBeNull()
     expect(peekSentRecipientName('ghost', 'ZZZZZZ')).toBeNull()
     expect(qortalCalls('SEARCH_NAMES')).toHaveLength(1)
+  })
+
+  describe('names with "_" and other punctuation (Bug #19)', () => {
+    it('resolves "x_y_z" from its whole prefix, not from "x"', async () => {
+      mockQortalAction('GET_NAME_DATA', (request: any) =>
+        request.name === 'x_y_z' ? { name: 'x_y_z', owner: 'QOwnerOfXyz9ABCDEF' } : {}
+      )
+      mockQortalAction('SEARCH_NAMES', [])
+      const { result } = renderHook(() => useSentRecipient('_mail_qortal_qmail_x_y_z_ABCDEF_mail_id1'))
+      await waitFor(() => expect(result.current.isExact).toBe(true))
+      expect(result.current).toEqual({ name: 'x_y_z', isAlias: false, isExact: true })
+      expect(qortalCalls('GET_NAME_DATA').map((call: any) => call.name)).toEqual(['x_y_z'])
+      expect(qortalCalls('SEARCH_NAMES')).toHaveLength(0)
+    })
+
+    it('resolves a truncated long name with "|" and spaces through one prefix search', async () => {
+      mockQortalAction('GET_NAME_DATA', {})
+      mockQortalAction('SEARCH_NAMES', [
+        { name: 'Custom Node on Qortal GO | GUIDE', owner: 'QGuideOwner0GUIDE1' },
+      ])
+      const { result } = renderHook(() =>
+        useSentRecipient('_mail_qortal_qmail_Custom Node on Qorta_GUIDE1_mail_id2')
+      )
+      expect(result.current.name).toBe('Custom Node on Qorta')
+      await waitFor(() => expect(result.current.name).toBe('Custom Node on Qortal GO | GUIDE'))
+      expect(qortalCalls('GET_NAME_DATA')[0].name).toBe('Custom Node on Qorta')
+    })
+
+    it('treats alias mail to "a_b" as an alias and looks nothing up', () => {
+      const { result } = renderHook(() => useSentRecipient('_mail_qortal_qmail_a_b_mail_id3'))
+      expect(result.current).toEqual({ name: 'a_b', isAlias: true, isExact: true })
+      const { result: apostrophe } = renderHook(() => useSentRecipient("_mail_qortal_qmail_MA's_mail_id4"))
+      expect(apostrophe.current).toEqual({ name: "MA's", isAlias: true, isExact: true })
+      expect(qortalCalls('GET_NAME_DATA')).toHaveLength(0)
+    })
+
+    it('keeps "POS+" groups apart from "POS"', async () => {
+      mockQortalAction('GET_NAME_DATA', (request: any) =>
+        request.name === 'POS+' ? { name: 'POS+', owner: 'QPlusOwner00PLUS22' } : { name: 'POS', owner: 'QPosOwner000POS333' }
+      )
+      expect(await resolveSentRecipientName('POS+', 'PLUS22')).toBe('POS+')
+      expect(await resolveSentRecipientName('POS', 'POS333')).toBe('POS')
+      expect(peekSentRecipientName('POS+', 'PLUS22')).toBe('POS+')
+    })
   })
 })
