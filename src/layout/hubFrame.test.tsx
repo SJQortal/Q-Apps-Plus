@@ -89,6 +89,13 @@ describe('a landscape frame (844×390 in Hub is 703×201 CSS px)', () => {
     expect(screen.getByLabelText('Reading pane')).toBeTruthy()
   })
 
+  it('places the floating button 16 px above the pane edge, not a nav height higher', () => {
+    wrap(<ComposeFab onClick={() => {}} />)
+    const button = screen.getByRole('button', { name: 'Compose' })
+    // Main already ends above the bottom nav; FAB_CLEARANCE (88 px) assumes 16 px.
+    expect(getComputedStyle(button).bottom).toBe('16px')
+  })
+
   it('hides the floating button through its media query', () => {
     wrap(<ComposeFab onClick={() => {}} />)
     const css = Array.from(document.querySelectorAll('style'))
