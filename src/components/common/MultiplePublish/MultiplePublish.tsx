@@ -60,12 +60,14 @@ interface MultiplePublishProps {
   onSubmit: () => void;
   /**
    * The user declined or cancelled in Hub (no message), or closed the dialog
-   * before everything was on QDN (a message that says what happened).
+   * before everything was on QDN (a message that says what happened, and
+   * each row's last known state by identifier: Hub may still be publishing
+   * the ones that are not "failed").
    */
-  onError: (message?: string) => void;
+  onError: (message?: string, detail?: { states: Record<string, ResourceState> }) => void;
 }
 
-type ResourceState = "waiting" | "checking" | "done" | "failed" | "missing" | "unknown";
+export type ResourceState = "waiting" | "checking" | "done" | "failed" | "missing" | "unknown";
 type Phase = "publishing" | "checking" | "settled";
 
 /** Hub's own limit per resource; the app waits as long as Hub does. */
@@ -463,10 +465,12 @@ export const MultiplePublish = ({ publishes, isOpen, onSubmit, onError }: Multip
 
   const close = () => {
     const left = total - doneCount;
+    const states = Object.fromEntries(resources.map((r) => [r.identifier, stateOf(r.identifier)]));
     onError(
       doneCount === 0
         ? "Nothing was published"
-        : `${doneCount} of ${total} published; ${left} ${left === 1 ? "item is" : "items are"} not on QDN`
+        : `${doneCount} of ${total} published; ${left} ${left === 1 ? "item is" : "items are"} not on QDN`,
+      { states }
     );
   };
   // The identifiers, payloads, encrypt and publicKeys of the subset are the caller's, untouched.
