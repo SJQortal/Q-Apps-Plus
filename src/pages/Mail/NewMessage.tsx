@@ -17,6 +17,7 @@ import {
   LinearProgress,
   MenuItem,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import { useLayoutMode } from "../../layout/useLayoutMode";
@@ -121,6 +122,31 @@ const aliasToggleSx = {
   color: "var(--qmail-compose-muted)",
   "&:hover": { color: "var(--qmail-compose-text)" },
 } as const;
+
+/**
+ * What "Send to alias", "Cc" and "Bcc" do, on hover, keyboard focus or a long
+ * press. Checked against the send path (buildDirectMailPublishRequest, data
+ * contract §3, §8, §17): every copy of a send shares one send id, is a public
+ * record under the From name labelled with its recipient's name (or the
+ * alias), and is encrypted to To, Cc and Bcc alike; the mail lists To and Cc,
+ * never Bcc; an alias message gets no Cc or Bcc copies.
+ */
+export const COMPOSE_TOGGLE_HELP = {
+  alias:
+    "Sends to an alias inbox the recipient told you about, not to their name inbox, so the public QDN record shows the alias, not their name. It is still encrypted to the recipient, and you stay the sender.",
+  cc: "Each Cc name gets its own encrypted copy. Everyone who gets the mail can see the Cc names.",
+  bcc: "Each Bcc name gets its own encrypted copy, and the mail doesn't list Bcc names. But each copy is a public QDN record under your name, labelled with that name and sharing one send id with the other copies.",
+} as const;
+
+/** Those tooltips describe their button (describeChild), in 14 px text, and open on a long press on touch. */
+const composeToggleTooltipProps = {
+  describeChild: true,
+  enterTouchDelay: 500,
+  leaveTouchDelay: 6000,
+  slotProps: {
+    tooltip: { sx: { fontSize: "0.875rem", fontWeight: 400, lineHeight: 1.45, maxWidth: 320 } },
+  },
+};
 
 /** NameText's strike for a field's own text (the To and alias fields). */
 const strikeInputSx = (theme: Theme) => ({ "& .MuiInputBase-input": strikeNameSx(theme) });
@@ -2119,34 +2145,40 @@ export const NewMessage = ({
                 }}
               >
                 {!showAlias && !requireSenderAlias && (
-                  <Button
-                    variant="text"
-                    size="small"
-                    onClick={() => setShowAlias(true)}
-                    sx={aliasToggleSx}
-                  >
-                    Send to alias
-                  </Button>
+                  <Tooltip title={COMPOSE_TOGGLE_HELP.alias} {...composeToggleTooltipProps}>
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={() => setShowAlias(true)}
+                      sx={aliasToggleSx}
+                    >
+                      Send to alias
+                    </Button>
+                  </Tooltip>
                 )}
                 {!showCC && (
-                  <Button
-                    variant="text"
-                    size="small"
-                    onClick={() => setShowCC(true)}
-                    sx={aliasToggleSx}
-                  >
-                    Cc
-                  </Button>
+                  <Tooltip title={COMPOSE_TOGGLE_HELP.cc} {...composeToggleTooltipProps}>
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={() => setShowCC(true)}
+                      sx={aliasToggleSx}
+                    >
+                      Cc
+                    </Button>
+                  </Tooltip>
                 )}
                 {!showBCC && (
-                  <Button
-                    variant="text"
-                    size="small"
-                    onClick={() => setShowBCC(true)}
-                    sx={aliasToggleSx}
-                  >
-                    Bcc
-                  </Button>
+                  <Tooltip title={COMPOSE_TOGGLE_HELP.bcc} {...composeToggleTooltipProps}>
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={() => setShowBCC(true)}
+                      sx={aliasToggleSx}
+                    >
+                      Bcc
+                    </Button>
+                  </Tooltip>
                 )}
               </NewMessageAliasContainer>
             )}
