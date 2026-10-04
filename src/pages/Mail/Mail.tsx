@@ -104,7 +104,6 @@ import { countUnreadMessages, hasThreadHistory } from "../../utils/readState";
 import type { StoredComposeDraft } from "./composeDrafts";
 import { invalidateThreadSearches } from "./threadData";
 import { useThreadUnreadCounts } from "./threadUnread";
-import { openerInfoFor } from "./openerInfo";
 import { getAvatarUrl } from "../../utils/avatarCache";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import {
@@ -150,6 +149,7 @@ import {
   publishedStateSearchParams,
 } from "./publishedStateLoad";
 import { useShortcutsAvailable } from "../../hooks/useKeyboardShortcuts";
+import { createOpenMessage, readingViewFor } from "./messageOpener";
 
 // Lazy boundaries (docs/apps/Q-Mail+.md → Bundle §5): the composer (Quill,
 // react-dropzone), the reader (dompurify), threads, aliases, sent, drafts and
@@ -1112,64 +1112,20 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     }
   );
 
-  const openMessage = async (
-    user: string,
-    messageIdentifier: string,
-    content: any,
-    to?: string,
-    // Set by callers that switch mailbox in the same click (search hits):
-    // the mailbox state is not applied yet, so it can't decide.
-    options?: { autoMarkRead?: boolean }
-  ) => {
-    // A newer open supersedes any opener still waiting on peers.
-    cancelPendingOpenRef.current();
-    const request = openRequestRef.current;
-    try {
-      const shouldAutoMarkAsRead =
-        options?.autoMarkRead ??
-        (activeMailboxItem === "inbox" || activeMailboxItem === "aliases");
-      const existingMessage: any = hashMapMailMessages[messageIdentifier];
-      if (
-        existingMessage &&
-        existingMessage.isValid &&
-        !existingMessage.unableToDecrypt
-      ) {
-        setMessage(existingMessage);
-        setIsOpen(true);
-        if (shouldAutoMarkAsRead) {
-          void markMessagesAsReadRef.current?.([
-            {
-              id: messageIdentifier,
-              identifier: messageIdentifier,
-              user,
-            },
-          ]);
-        }
-        return;
-      }
-      setMailInfo(openerInfoFor(messageIdentifier, user, to, content));
-      const res: any = await show();
-      if (request !== openRequestRef.current) return;
-      setMailInfo(null);
-      if (res && res.isValid && !res.unableToDecrypt) {
-        setMessage(res);
-        setIsOpen(true);
-        if (shouldAutoMarkAsRead) {
-          void markMessagesAsReadRef.current?.([
-            {
-              id: messageIdentifier,
-              identifier: messageIdentifier,
-              user,
-            },
-          ]);
-        }
-        return;
-      }
-    } catch {
-      // Nothing to show: the message stays closed and the reader prompt is cleared.
-      if (request === openRequestRef.current) setMailInfo(null);
-    }
-  };
+  // Any row opens at once, also while another message is shown or still
+  // opening: the newer open supersedes the older one (messageOpener.ts).
+  const openMessage = createOpenMessage({
+    cached: identifier => hashMapMailMessages[identifier],
+    cancelPending: () => cancelPendingOpenRef.current(),
+    requestRef: openRequestRef,
+    setMessage,
+    setIsOpen,
+    setMailInfo,
+    show,
+    markRead: rows => void markMessagesAsReadRef.current?.(rows),
+    autoMarkReadByDefault:
+      activeMailboxItem === "inbox" || activeMailboxItem === "aliases",
+  });
 
   // Reply all: the composer also addresses everyone in the original's
   // additive `to`/`cc` fields (as separate Bcc-style copies).
@@ -3285,7 +3241,26 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     closeOpenMessage();
     dispatch(setNotification({ msg: "Marked unread", alertType: "success" }));
   };
-  const readingPane = isReadingOpen ? (
+  // The opener wins: a click on another row replaces the message shown
+  // (messageOpener.ts), so any row opens at once.
+  const readingView = readingViewFor({ isOpeningMessage, isReadingOpen });
+  const readingPane = readingView === "opening" ? (
+    <>
+      {isOnePane && (
+        <PaneHeader
+          title="Opening message"
+          subtitle={mailInfo?.name}
+          onBack={() => onOk(undefined)}
+          backLabel="Back to messages"
+        />
+      )}
+      <PaneScroll>
+        <Box sx={centeredColumnSx}>
+          <OpenMail open={isShow} handleClose={onOk} fileInfo={mailInfo} />
+        </Box>
+      </PaneScroll>
+    </>
+  ) : readingView === "message" ? (
     <>
       {isOnePane && (
         <PaneHeader
@@ -3315,22 +3290,6 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
             onMarkUnread={readerCanMarkUnread ? readerMarkUnread : undefined}
           />
           </React.Suspense>
-        </Box>
-      </PaneScroll>
-    </>
-  ) : isOpeningMessage ? (
-    <>
-      {isOnePane && (
-        <PaneHeader
-          title="Opening message"
-          subtitle={mailInfo?.name}
-          onBack={() => onOk(undefined)}
-          backLabel="Back to messages"
-        />
-      )}
-      <PaneScroll>
-        <Box sx={centeredColumnSx}>
-          <OpenMail open={isShow} handleClose={onOk} fileInfo={mailInfo} />
         </Box>
       </PaneScroll>
     </>
