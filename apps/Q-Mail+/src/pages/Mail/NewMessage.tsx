@@ -89,6 +89,7 @@ import {
 } from "../../utils/nameCache";
 import { AvatarWrapper } from "./MailTable";
 import { HIDDEN_CHARACTERS_TITLE, NameText, strikeNameSx } from "../../components/common/NameText";
+import { NameAvatar } from "../../components/common/NameAvatar";
 import { hasInvisibleCharacters } from "../../utils/invisibleCharacters";
 import type { Theme } from "@mui/material/styles";
 import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
@@ -382,6 +383,8 @@ export const NewMessage = ({
   const { name } = useParams();
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
+  // Avatar URLs other screens already loaded: From reuses them instead of asking again.
+  const userAvatarHash = useSelector((state: RootState) => state.global.userAvatarHash);
 
   const [publishes, setPublishes] = useState<any>(null);
   const [isOpenMultiplePublish, setIsOpenMultiplePublish] = useState(false);
@@ -1924,6 +1927,25 @@ export const NewMessage = ({
                   select: {
                     disableUnderline: true,
                     labelId: "qmail-compose-from-label",
+                    // The picture only for a name that has one: no letter, no gap.
+                    renderValue: selected => {
+                      const selectedName = String(selected ?? "");
+                      return (
+                        <Box component="span" sx={{ display: "flex", alignItems: "center", minWidth: 0 }}>
+                          <NameAvatar
+                            key={selectedName}
+                            name={selectedName}
+                            size={22}
+                            known={userAvatarHash?.[selectedName]}
+                            fallback="none"
+                            gap={8}
+                          />
+                          <Box component="span" sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                            <NameText name={selectedName} />
+                          </Box>
+                        </Box>
+                      );
+                    },
                     MenuProps: {
                       slotProps: {
                         paper: {
@@ -1939,7 +1961,14 @@ export const NewMessage = ({
                 }}>
                 {fromOptions.map(nameOption => {
                   return (
-                    <MenuItem key={nameOption} value={nameOption}>
+                    <MenuItem key={nameOption} value={nameOption} sx={{ minHeight: 44, gap: "10px" }}>
+                      {/* An empty slot for a name without a picture, so the names line up. */}
+                      <NameAvatar
+                        name={nameOption}
+                        size={24}
+                        known={userAvatarHash?.[nameOption]}
+                        fallback="space"
+                      />
                       <NameText name={nameOption} />
                     </MenuItem>
                   );
