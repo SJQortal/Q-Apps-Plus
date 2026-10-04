@@ -8,7 +8,7 @@
  * A thread is unread when it was never opened, or when its newest known
  * activity is later than the last time it was opened.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePolling } from "../../hooks/usePolling";
 import {
   applyActivity,
@@ -105,10 +105,15 @@ export interface ThreadUnreadCounts {
   isLoading: boolean;
 }
 
+/** How old a search answer a poll tick still accepts (below the 120 s base). */
+export const THREAD_UNREAD_POLL_TTL_MS = 60_000;
+
 /**
- * Unread thread counts per group for the rail badges. Uses the same cached
- * searches as the Threads overview (first header page + activity per group),
- * so it costs nothing extra while that view is open, and refreshes politely.
+ * Unread thread counts per group for the rail badges. Uses the same searches
+ * as the Threads overview (first header page + activity per group). A poll
+ * tick accepts answers up to a minute old, so it reuses what an open Threads
+ * or group view fetched instead of searching again, and it backs off while
+ * nothing changes.
  *
  * Wire-up hint for Mail.tsx: `const { byGroup } = useThreadUnreadCounts(groupOptionsWithThreads, user?.name)`
  * then `badgeText: byGroup[group.id] ? String(byGroup[group.id]) : undefined` on the
@@ -123,31 +128,50 @@ export function useThreadUnreadCounts(
   const [threadsByGroup, setThreadsByGroup] = useState<Record<string, ThreadSummary[]>>({});
   const [isLoading, setIsLoading] = useState(false);
   const groupKey = groups.map((group) => normalizeGroupId(group.id)).filter(Boolean).join(",");
+  const threadsByGroupRef = useRef<Record<string, ThreadSummary[]>>({});
+  const signatureRef = useRef("");
 
+  /** Resolves to true when the counts' inputs changed (false backs the poll off). */
   const load = useCallback(
-    async (force: boolean) => {
+    async (poll: boolean) => {
       if (!enabled || !groupKey) {
+        threadsByGroupRef.current = {};
+        signatureRef.current = "";
         setThreadsByGroup({});
         return false;
       }
       setIsLoading(true);
       try {
+        const options = poll ? { ttlMs: THREAD_UNREAD_POLL_TTL_MS } : undefined;
+        let failures = 0;
         const results = await Promise.all(
           groups.map(async (group) => {
             const groupId = normalizeGroupId(group.id);
             try {
               const [page, activity] = await Promise.all([
-                fetchThreadPage(group, {}, force ? { force: true } : undefined),
-                fetchGroupActivity(groupId, force ? { force: true } : undefined),
+                fetchThreadPage(group, {}, options),
+                fetchGroupActivity(groupId, options),
               ]);
               return [groupId, applyActivity(page.threads, activity)] as const;
             } catch {
-              return [groupId, []] as const;
+              failures += 1;
+              // Keep the last answer: a failed tick must not wipe the badges.
+              return [groupId, threadsByGroupRef.current[groupId] ?? []] as const;
             }
           })
         );
-        setThreadsByGroup(Object.fromEntries(results));
-        return true;
+        const next = Object.fromEntries(results);
+        const signature = results
+          .map(([groupId, threads]) =>
+            `${groupId}:${threads.map((thread) => `${thread.identifier}@${thread.lastActivity ?? thread.created ?? 0}`).join(",")}`
+          )
+          .join("|");
+        const changed = signature !== signatureRef.current;
+        signatureRef.current = signature;
+        threadsByGroupRef.current = next;
+        if (changed) setThreadsByGroup(next);
+        if (failures === results.length) return false;
+        return changed;
       } finally {
         setIsLoading(false);
       }
