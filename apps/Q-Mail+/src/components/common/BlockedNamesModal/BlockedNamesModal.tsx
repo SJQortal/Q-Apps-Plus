@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Button, List, ListItem, ListItemText, Typography } from '@mui/material'
 import { ResponsiveDialog } from '../ResponsiveDialog'
-import { NameText } from '../NameText'
+import { NameText, spokenName } from '../NameText'
 import { EmptyState, ErrorState, ListSkeleton } from '../../../layout/states'
 import { errorMessage, isHubDecline, isPublicNodeRefusal } from '../../../utils/hubErrors'
 
@@ -131,7 +131,7 @@ export const BlockedNamesModal: React.FC<PostModalProps> = ({ open, onClose }) =
                     size="small"
                     disabled={removing === name}
                     onClick={() => removeFromBlockList(name)}
-                    aria-label={`Unblock ${name}`}
+                    aria-label={`Unblock ${spokenName(name)}`}
                     sx={{ minHeight: 44 }}
                   >
                     Unblock

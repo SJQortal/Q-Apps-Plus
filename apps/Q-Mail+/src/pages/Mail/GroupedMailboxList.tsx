@@ -20,7 +20,7 @@ import { useSelector } from "react-redux";
 import { formatFullTimestamp, formatRelativeDate } from "../../utils/time";
 import { MailMessageRow } from "./MailMessageRow";
 import { AvatarWrapper } from "./MailTable";
-import { NameText } from "../../components/common/NameText";
+import { NameText, spokenName } from "../../components/common/NameText";
 import {
   getSentRecipientDisplayLabel,
   getSentRecipientGroupKey,
@@ -408,6 +408,8 @@ export const GroupedMailboxList = ({
                 .find(Boolean)
             : "";
         const label = mailboxType === "sent" ? `To: ${decryptedRecipient || group.label}` : group.label;
+        // Received groups are labelled by the sender's name.
+        const spokenGroup = mailboxType === "sent" || group.key === "sender:unknown" ? group.label : spokenName(group.label);
         const summary = `${group.messages.length} messages${
           groupHasUnread ? ` · ${unreadCount} unread` : ""
         }`;
@@ -427,7 +429,7 @@ export const GroupedMailboxList = ({
                   checked={isGroupChecked}
                   indeterminate={isGroupIndeterminate}
                   onChange={() => handleToggleAll(group.key)}
-                  slotProps={{ input: { "aria-label": `Select all from ${group.label}` } }}
+                  slotProps={{ input: { "aria-label": `Select all from ${spokenGroup}` } }}
                   sx={checkboxSx}
                 />
               )}
@@ -531,7 +533,7 @@ export const GroupedMailboxList = ({
             {isExpanded && (
               <Box
                 component="ul"
-                aria-label={mailboxType === "sent" ? `Messages to ${group.label}` : `Messages from ${group.label}`}
+                aria-label={mailboxType === "sent" ? `Messages to ${group.label}` : `Messages from ${spokenGroup}`}
                 sx={{ listStyle: "none", m: 0, p: 0, pl: { xs: 0, sm: 3 }, display: "flex", flexDirection: "column" }}
               >
                 {group.messages.map(message => {

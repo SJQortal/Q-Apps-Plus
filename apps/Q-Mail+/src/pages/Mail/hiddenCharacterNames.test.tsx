@@ -27,7 +27,7 @@ import { ShowMessageV2Replies } from './ShowMessageV2Replies'
 import { ShowMessage } from './ShowMessageWithoutModal'
 import { AliasesPage } from './AliasesPage'
 import { Rail } from '../../layout/Rail'
-import { HIDDEN_CHARACTERS_TITLE } from '../../components/common/NameText'
+import { HIDDEN_CHARACTERS_SR, HIDDEN_CHARACTERS_TITLE } from '../../components/common/NameText'
 
 function makeStore() {
   const store = configureStore({
@@ -63,8 +63,10 @@ describe('mailbox rows', () => {
       <MailMessageRow messageData={{ id: 'm1', user: sender, createdAt: 1_000 }} openMessage={() => {}} />
     )
     expect(isStruck(nameElement(container, sender))).toBe(struck)
-    // The row's own label keeps the name exactly as it is.
-    expect(screen.getByRole('button', { name: new RegExp(`^Unread. ${sender},`) })).toBeTruthy()
+    // The row's own label keeps the name exactly as it is, plus the spoken
+    // note for an impostor (the aria-label would hide NameText's own).
+    const label = screen.getByRole('button', { name: new RegExp(`^Unread. ${sender},`) }).getAttribute('aria-label')
+    expect(label?.startsWith(`Unread. ${sender}${struck ? HIDDEN_CHARACTERS_SR : ''}, `)).toBe(true)
   })
 
   it('a search hit keeps its highlight inside the struck name', () => {
@@ -159,9 +161,12 @@ describe('rail and aliases', () => {
     ]
     const { container } = wrap(<Rail items={items} activeItemId="inbox" onSelect={() => {}} onOpenSettings={() => {}} version="1.0.0" />)
     expect(struckNames(container)).toEqual([IMPOSTOR, IMPOSTOR, IMPOSTOR])
-    // The row's accessible name is the name itself, unchanged.
-    expect(screen.getByRole('button', { name: IMPOSTOR })).toBeTruthy()
+    // A row's accessible name is the name itself plus the spoken note (an
+    // aria-label hides NameText's own); a real name and a group get none.
+    expect(screen.getByRole('button', { name: `${IMPOSTOR}${HIDDEN_CHARACTERS_SR}` })).toBeTruthy()
     expect(screen.getByRole('button', { name: REAL })).toBeTruthy()
+    expect(screen.getByRole('button', { name: `Devs${BLANK}` })).toBeTruthy()
+    expect(screen.getByRole('button', { name: `Compose as ${IMPOSTOR}${HIDDEN_CHARACTERS_SR}` })).toBeTruthy()
   })
 
   it('strikes an impostor saved alias and its linked reply alias', () => {

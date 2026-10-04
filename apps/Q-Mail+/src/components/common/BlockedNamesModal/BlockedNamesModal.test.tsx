@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { mockQortalAction, qortalCalls } from '../../../test/setup'
 import { BlockedNamesModal, PUBLIC_NODE_TEXT } from './BlockedNamesModal'
+import { HIDDEN_CHARACTERS_SR } from '../NameText'
 import { IMPOSTOR, REAL, isStruck, nameElement, struckNames } from '../../../test/hiddenNames'
 
 const PUBLIC_NODE = {
@@ -91,7 +92,7 @@ describe('BlockedNamesModal and names with hidden characters', () => {
     await screen.findByText(REAL)
     expect(struckNames(document.body)).toEqual([IMPOSTOR])
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: `Unblock ${IMPOSTOR}` }))
+      fireEvent.click(screen.getByRole('button', { name: `Unblock ${IMPOSTOR}${HIDDEN_CHARACTERS_SR}` }))
     })
     expect(qortalCalls('DELETE_LIST_ITEM')[0]).toMatchObject({ item: IMPOSTOR })
   })
@@ -104,7 +105,7 @@ describe('BlockedNamesModal and names with hidden characters', () => {
     render(<BlockedNamesModal open onClose={() => {}} />)
     await screen.findByText(REAL)
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: `Unblock ${IMPOSTOR}` }))
+      fireEvent.click(screen.getByRole('button', { name: `Unblock ${IMPOSTOR}${HIDDEN_CHARACTERS_SR}` }))
     })
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toMatch(/^Could not unblock Simon.James/)

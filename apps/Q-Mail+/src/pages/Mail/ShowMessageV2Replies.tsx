@@ -11,7 +11,7 @@ import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
 import { AttachmentList } from "../../components/AttachmentPreview/AttachmentList";
 import { MessageDate } from "./MessageDate";
-import { NameText } from "../../components/common/NameText";
+import { NameText, spokenName } from "../../components/common/NameText";
 import { firstVisibleChar } from "../../utils/invisibleCharacters";
 
 export const ShowMessageV2Replies = ({
@@ -47,7 +47,7 @@ export const ShowMessageV2Replies = ({
       <ButtonBase
         onClick={() => setIsExpanded((prev) => !prev)}
         aria-expanded={isExpanded}
-        aria-label={`${isExpanded ? "Collapse" : "Expand"} message from ${message?.user || "unknown"}`}
+        aria-label={`${isExpanded ? "Collapse" : "Expand"} message from ${message?.user ? spokenName(message.user) : "unknown"}`}
         sx={{
           width: "100%",
           display: "flex",

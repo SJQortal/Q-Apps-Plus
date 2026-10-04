@@ -292,7 +292,8 @@ describe('NameSwitcher and names with hidden characters', () => {
     const names = [...many, IMPOSTOR]
     wrap(<NameSwitcherList names={names} activeName="peggy" onPick={() => {}} />)
     fireEvent.change(search(), { target: { value: 'simon' } })
-    const fake = screen.getByRole('menuitemradio', { name: IMPOSTOR })
+    // The row's label keeps the name whole and adds the spoken note, which an aria-label would otherwise hide.
+    const fake = screen.getByRole('menuitemradio', { name: `${IMPOSTOR}${HIDDEN_CHARACTERS_SR}` })
     const real = screen.getByRole('menuitemradio', { name: REAL })
     const struck = fake.querySelector('[data-hidden-characters]') as HTMLElement
     expect(isStruck(struck)).toBe(true)
@@ -304,6 +305,7 @@ describe('NameSwitcher and names with hidden characters', () => {
   it('strikes an impostor active name on the button, with a visible avatar letter', () => {
     wrap(<NameSwitcher names={[IMPOSTOR, 'alice']} activeName={`${BLANK}${IMPOSTOR}`} onPick={() => {}} />)
     const button = screen.getByRole('button', { name: /Change$/ })
+    expect(button.getAttribute('aria-label')).toBe(`Active mailbox: ${BLANK}${IMPOSTOR}${HIDDEN_CHARACTERS_SR}. Change`)
     expect(struckNames(button)).toEqual([`${BLANK}${IMPOSTOR}`])
     expect(button.querySelector('[data-letter]')?.getAttribute('data-letter')).toBe('S')
   })

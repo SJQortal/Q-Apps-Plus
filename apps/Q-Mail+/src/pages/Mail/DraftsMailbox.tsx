@@ -15,7 +15,7 @@ import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
 import useConfirmationModal from "../../hooks/useConfirmModal";
 import { EmptyState } from "../../layout/states";
 import { formatTimestamp } from "../../utils/time";
-import { NameText } from "../../components/common/NameText";
+import { NameText, spokenName } from "../../components/common/NameText";
 import {
   deleteComposeDraft,
   draftSnippet,
@@ -69,13 +69,13 @@ const Ellipsis = styled("span")({
   whiteSpace: "nowrap",
 });
 
-export function describeDraftTarget(draft: StoredComposeDraft): string {
+export function describeDraftTarget(draft: StoredComposeDraft, nameOf: (name: string) => string = name => name): string {
   if (draft.kind === "thread") {
     const where = draft.groupName || draft.toName;
     return draft.threadId ? `Post in ${where}` : `New thread in ${where}`;
   }
-  if (draft.replyTo?.id) return `${draft.replyAll ? "Reply all" : "Reply"} to ${draft.toName}`;
-  return `To ${draft.toName}`;
+  if (draft.replyTo?.id) return `${draft.replyAll ? "Reply all" : "Reply"} to ${nameOf(draft.toName)}`;
+  return `To ${nameOf(draft.toName)}`;
 }
 
 /** describeDraftTarget on screen: the name drawn by NameText (thread drafts name a group). */
@@ -167,7 +167,7 @@ export function DraftsMailbox({ address, onOpenDraft }: DraftsMailboxProps) {
             <Row key={key}>
               <Open
                 onClick={() => onOpenDraft(key, draft)}
-                aria-label={`Open draft: ${subject}, ${describeDraftTarget(draft)}`}
+                aria-label={`Open draft: ${subject}, ${describeDraftTarget(draft, spokenName)}`}
               >
                 <Line>
                   {draft.kind === "thread" && (

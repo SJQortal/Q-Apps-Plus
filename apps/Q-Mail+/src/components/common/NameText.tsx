@@ -20,6 +20,16 @@ import { hasInvisibleCharacters } from '../../utils/invisibleCharacters';
 export const HIDDEN_CHARACTERS_TITLE = 'This name has hidden characters and may imitate another name.';
 export const HIDDEN_CHARACTERS_SR = ', name has hidden characters';
 
+/**
+ * A name for an aria-label or other spoken text: an aria-label replaces the
+ * content, so NameText's screen-reader note is lost there and U+2800 is not
+ * spoken. This adds the same note to an impostor name; others come back as is.
+ */
+export function spokenName(name: string | null | undefined): string {
+  const text = name ?? '';
+  return typeof name === 'string' && hasInvisibleCharacters(name) ? `${text}${HIDDEN_CHARACTERS_SR}` : text;
+}
+
 /** Qortal Hub's style for these names (DirectsSidebar, UserLookup, …). */
 export const strikeNameSx = (theme: Theme) => ({
   textDecorationLine: 'line-through',

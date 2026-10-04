@@ -36,7 +36,7 @@ import type { LeftSidebarItem } from '@qortal/qapp-lib/left-sidebar/core';
 import { primarySoft } from '../hub-theme';
 import { SHORT_FRAME_MEDIA } from '../utils/hubFrame';
 import { firstVisibleChar } from '../utils/invisibleCharacters';
-import { NameText } from '../components/common/NameText';
+import { NameText, spokenName } from '../components/common/NameText';
 import Logo from '../assets/svgs/Logo.svg';
 import LogoLight from '../assets/svgs/LogoLight.svg';
 
@@ -220,7 +220,10 @@ function renderBadge(text: string | undefined) {
 
 /** The accessible name of a row: its label plus the unread count when it has one. */
 export function rowAriaLabel(item: LeftSidebarItem): string {
-  const base = item.ariaLabel || item.label;
+  // Child rows other than groups are names (own names, aliases), so they get
+  // NameText's spoken note too; groups and sections are left as they are.
+  const isName = CHILD_PREFIXES.some((prefix) => item.id.startsWith(prefix)) && !item.id.startsWith(THREAD_GROUP_PREFIX);
+  const base = item.ariaLabel || (isName ? spokenName(item.label) : item.label);
   const badge = badgeFor(item.badgeText);
   if (badge?.kind === 'count') return `${base}, ${badge.value} unread`;
   return base;
@@ -339,6 +342,7 @@ export function Rail({
       {aliasCompose && (
         <Tooltip title={`Compose as ${aliasCompose.secondaryLabel ?? ''}`}>
           <Button
+            aria-label={`Compose as ${spokenName(aliasCompose.secondaryLabel)}`}
             variant="outlined"
             fullWidth
             startIcon={<ReplyOutlinedIcon />}
