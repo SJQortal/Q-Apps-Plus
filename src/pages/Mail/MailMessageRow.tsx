@@ -10,7 +10,8 @@
  *   the ciphertext (Bugs #18, UX #27);
  * - fluid widths, nothing under 14 px, colours from the theme (UX #12, #14, #26).
  */
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
+import { useInView } from "../../hooks/useInView";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import AttachFileOutlinedIcon from "@mui/icons-material/AttachFileOutlined";
@@ -151,8 +152,12 @@ export const MailMessageRow = ({
   const isUnread = !isFromSent && !isMessageRead(messageData, readState);
   const isDecrypted = Boolean(data && data?.isValid && !data?.unableToDecrypt);
 
+  // Hub requests for this row wait until it is on screen.
+  const [rowNode, setRowNode] = useState<HTMLElement | null>(null);
+  const inView = useInView(rowNode);
   const savedSubject = useDecryptedSubject(
-    isDecrypted ? undefined : subjectInHash?.subject
+    isDecrypted ? undefined : subjectInHash?.subject,
+    inView
   );
 
   let subject: string | null = null;
@@ -172,7 +177,7 @@ export const MailMessageRow = ({
     isFromSent && isDecrypted && typeof data?.recipient === "string"
       ? data.recipient.trim()
       : "";
-  const sentRecipient = useSentRecipient(isFromSent ? identifier : "", decryptedRecipient);
+  const sentRecipient = useSentRecipient(isFromSent ? identifier : "", decryptedRecipient, inView);
   const alias = sentRecipient.isAlias ? sentRecipient.name : null;
   const name: string = isFromSent
     ? sentRecipient.name
@@ -246,6 +251,7 @@ export const MailMessageRow = ({
 
   return (
     <Box
+      ref={setRowNode}
       component={component}
       data-message-row={identifier}
       sx={theme => ({

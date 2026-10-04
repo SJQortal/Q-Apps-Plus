@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { configureStore } from '@reduxjs/toolkit'
 import { HubThemeProvider } from '../../hub-theme'
@@ -197,5 +197,34 @@ describe('GroupedMailboxList states and rows', () => {
     // The exact stamp is on the date's title, the row shows a short one.
     const time = screen.getByTitle(/^1970-/)
     expect(time.textContent).not.toMatch(/^\d{4}-/)
+  })
+
+  it('decrypts a saved subject only once its row is on screen', async () => {
+    const store = makeStore()
+    const intersect: ((entries: { isIntersecting: boolean }[]) => void)[] = []
+    class FakeObserver {
+      constructor(cb: (entries: { isIntersecting: boolean }[]) => void) {
+        intersect.push(cb)
+      }
+      observe() {}
+      disconnect() {}
+    }
+    const original = (globalThis as any).IntersectionObserver
+    ;(globalThis as any).IntersectionObserver = FakeObserver
+    try {
+      mockQortalAction('DECRYPT_DATA', () => btoa(JSON.stringify('Hello there')))
+      store.dispatch(addToHashMapSubject({ id: 'f1', subject: 'Q2lwaGVydGV4dA==', attachments: false }))
+      renderList(store, <GroupedMailboxList messages={[fresh]} mailboxType="inbox" openMessage={() => {}} />)
+      await act(async () => {})
+      expect(screen.getByText(LOCKED_SUBJECT_LABEL)).toBeTruthy()
+      expect(qortalCalls('DECRYPT_DATA')).toHaveLength(0)
+      await act(async () => {
+        intersect.forEach((cb) => cb([{ isIntersecting: true }]))
+      })
+      await screen.findByText('Hello there')
+      expect(qortalCalls('DECRYPT_DATA')).toHaveLength(1)
+    } finally {
+      ;(globalThis as any).IntersectionObserver = original
+    }
   })
 })

@@ -8,6 +8,7 @@
  * a next action; the list itself shows as soon as there are rows.
  */
 import React, { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useInView } from "../../hooks/useInView";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import CheckIcon from "@mui/icons-material/Check";
 import MarkEmailUnreadOutlinedIcon from "@mui/icons-material/MarkEmailUnreadOutlined";
@@ -145,8 +146,11 @@ const checkboxSx = { minWidth: 44, minHeight: 44, flexShrink: 0 } as const;
 
 /** "To: <name>" for a sent group: the decrypted recipient of any opened message, else one cached lookup. */
 function SentGroupLabel({ identifier, known }: { identifier: string; known?: string }) {
-  const recipient = useSentRecipient(identifier, known);
-  return <>To: {recipient.name}</>;
+  // The lookup waits until the group is on screen.
+  const [node, setNode] = useState<HTMLSpanElement | null>(null);
+  const inView = useInView(node);
+  const recipient = useSentRecipient(identifier, known, inView);
+  return <span ref={setNode}>To: {recipient.name}</span>;
 }
 
 export const GroupedMailboxList = ({

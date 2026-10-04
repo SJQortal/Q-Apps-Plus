@@ -17,7 +17,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { addToHashMapMail } from "../../state/features/mailSlice";
 import { RootState } from "../../state/store";
 import { fetchAndEvaluateMail } from "../../utils/fetchMail";
-import { peekDecryptedSubject, subscribeSubjects } from "../../utils/subjectCache";
+import { decryptSubject, peekDecryptedSubject, subscribeSubjects } from "../../utils/subjectCache";
 import {
   buildFullSearchText,
   buildMetaSearchText,
@@ -126,7 +126,7 @@ export const useMailboxSearch = ({
     return () => clearTimeout(timer);
   }, [debounceMs, query]);
 
-  // Subjects decrypt lazily as rows render; fold them in without a storm.
+  // Subjects decrypt lazily (rows on screen, or the search below); fold them in without a storm.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const unsubscribe = subscribeSubjects(() => {
@@ -188,6 +188,10 @@ export const useMailboxSearch = ({
       } else {
         const saved = savedSubjects?.[messageId]?.subject;
         const subject = typeof saved === "string" ? peekDecryptedSubject(saved) : undefined;
+        // Rows decrypt saved subjects only once on screen, so a search
+        // decrypts the rest itself (one at a time, once per session); the
+        // subject subscription re-runs this match as they arrive.
+        if (typeof saved === "string" && saved && subject === undefined) void decryptSubject(saved);
         text = buildMetaSearchText(message, type, subject);
         isComplete = false;
       }
