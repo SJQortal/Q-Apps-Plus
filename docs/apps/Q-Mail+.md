@@ -1369,7 +1369,7 @@ Simon tried the app on his main account: 86 names and about 177 messages in the 
 - Join link: Core's q-apps.js crashes in `extractComponents` on `qortal://use-group/…` links and the frame navigates away (the original app too). The app now stops the click and asks Hub itself.
 - Join link, second cause: Hub declares `const qortalRequest`, which is not a window property, so `main.tsx` put its "outside Hub" stub on `window` and the link helper picked the stub.
 
-**Review** of the round's diff: 3 reviewers, 10 findings, 6 confirmed and 4 refuted. The fixes, one commit each:
+**Review** of the round's diff: 3 reviewers, 10 findings, 6 confirmed and 4 refuted. Two of the confirmed findings were the same footer bug, so there are five fixes, one commit each:
 
 | Commit | Fix |
 |---|---|
