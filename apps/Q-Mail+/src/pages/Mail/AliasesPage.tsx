@@ -12,6 +12,7 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import LinkIcon from "@mui/icons-material/Link";
 import { formatFullTimestamp } from "../../utils/time";
+import { ALIAS_SCAN_MAX_PAGES, ALIAS_SCAN_PAGE_SIZE, aliasScanButtonLabel } from "./aliasScan";
 
 interface AliasScanState {
   isRunning: boolean;
@@ -21,6 +22,18 @@ interface AliasScanState {
   totalCount: number;
   discoveredCount: number;
   statusMessage: string;
+  /** N9: the capped run. `scannedCount`/`totalCount` are pages fetched / the page cap. */
+  paging?: AliasScanPaging;
+}
+
+export interface AliasScanPaging {
+  resourcesWalked: number;
+  candidatesChecked: number;
+  maxPages: number;
+  /** The whole index has been walked; a run only checks new mail. */
+  complete: boolean;
+  /** The last run stopped at the page cap. */
+  stoppedAtCap: boolean;
 }
 
 interface AliasesPageProps {
@@ -75,6 +88,9 @@ export const AliasesPage = ({
     if (!scanState.totalCount) return 0;
     return Math.min(100, Math.round((scanState.scannedCount / scanState.totalCount) * 100));
   }, [scanState.scannedCount, scanState.totalCount]);
+
+  const maxPages = scanState.paging?.maxPages || ALIAS_SCAN_MAX_PAGES;
+  const maxResourcesPerRun = maxPages * ALIAS_SCAN_PAGE_SIZE;
 
   return (
     <Box
@@ -216,13 +232,14 @@ export const AliasesPage = ({
               },
             }}
           >
-            {scanState.isRunning
-              ? scanState.isCancelRequested
-                ? "Cancel Requested"
-                : "Cancel Scan"
-              : hasScanCheckpoint
-              ? "Resume Scan"
-              : "Alias Scan"}
+            {aliasScanButtonLabel(
+              {
+                isRunning: scanState.isRunning,
+                isCancelRequested: scanState.isCancelRequested,
+                complete: scanState.paging?.complete,
+              },
+              hasScanCheckpoint
+            )}
           </Button>
         </Box>
         <Typography
@@ -231,17 +248,23 @@ export const AliasesPage = ({
             fontSize: "0.9rem",
           }}
         >
-          Full scan checks Q-Mail resources, skips owned names, and attempts decryption to discover
-          previously used aliases.
+          Reads the network&apos;s Q-Mail resources newest first, up to {maxResourcesPerRun} per run
+          ({maxPages} pages of {ALIAS_SCAN_PAGE_SIZE}). It skips mail to your names and mail it already checked, and tries
+          to decrypt the rest to discover aliases people used to write to you.
         </Typography>
-        {hasScanCheckpoint && scanCheckpointTimestamp > 0 && (
+        {hasScanCheckpoint && (
           <Typography
+            data-testid="alias-scan-coverage"
             sx={{
               color: "text.secondary",
               fontSize: "0.875rem",
             }}
           >
-            Last checkpoint: {formatFullTimestamp(scanCheckpointTimestamp)}
+            {scanState.paging?.complete
+              ? "All Q-Mail resources have been scanned. The next run only checks new mail."
+              : "Older mail has not been scanned yet. Scan more to continue where the last run stopped."}
+            {scanCheckpointTimestamp > 0 &&
+              ` Newest scanned: ${formatFullTimestamp(scanCheckpointTimestamp)}.`}
           </Typography>
         )}
         {(scanState.isRunning || scanState.statusMessage) && (
@@ -285,13 +308,17 @@ export const AliasesPage = ({
                   }}
                 />
                 <Typography
+                  data-testid="alias-scan-progress"
                   sx={{
                     color: "text.secondary",
                     fontSize: "0.875rem",
                   }}
                 >
-                  Scanned {scanState.scannedCount}/{scanState.totalCount} • Discovered{" "}
-                  {scanState.discoveredCount}
+                  Page {scanState.scannedCount} of {scanState.totalCount}
+                  {scanState.paging
+                    ? ` • ${scanState.paging.resourcesWalked} resources read • ${scanState.paging.candidatesChecked} checked`
+                    : ""}
+                  {` • ${scanState.discoveredCount} discovered`}
                 </Typography>
               </>
             )}

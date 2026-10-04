@@ -30,7 +30,6 @@ import { executeEvent } from "../../utils/events";
 import { GroupedMailboxList } from "./GroupedMailboxList";
 import { MailboxSearchBar } from "./MailboxSearchBar";
 import { useMailboxSearch } from "./useMailboxSearch";
-import { parseSentRecipientFromIdentifier } from "./mailIdentifier";
 import {
   base64ToUint8Array,
   objectToBase64,
@@ -140,6 +139,17 @@ import { TOUR_STATUS_DISMISSED, TOUR_STATUS_STORAGE_KEY } from "./MailTour";
 import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
 import { usePhoneBackClose } from "../../layout/usePhoneBackClose";
 import { errorMessage, isHubDecline } from "../../utils/hubErrors";
+import {
+  ALIAS_SCAN_MAX_PAGES,
+  ALIAS_SCAN_SEARCH_TTL_MS,
+  aliasScanSearchParams,
+  readAliasScanCheckpointFromStorage,
+  readAliasScanSeenFromStorage,
+  runAliasScanPass,
+  writeAliasScanCheckpointToStorage,
+  writeAliasScanSeenToStorage,
+  type AliasScanCheckpoint,
+} from "./aliasScan";
 
 // Lazy boundaries (docs/apps/Q-Mail+.md → Bundle §5): the composer (Quill,
 // react-dropzone), the reader (dompurify), threads, aliases, sent, drafts and
@@ -307,67 +317,6 @@ const writeAliasReplyLinksToStorage = (
   } catch {
     // Ignore storage failures.
   }
-};
-
-interface AliasScanCheckpoint {
-  lastProcessedTimestamp: number;
-  lastProcessedIdentifier: string;
-  updatedAt: number;
-}
-
-const getAliasScanCheckpointStorageKey = (address: string): string => {
-  return `qmail_alias_scan_checkpoint_${address}`;
-};
-
-const readAliasScanCheckpointFromStorage = (
-  address: string
-): AliasScanCheckpoint | null => {
-  try {
-    const raw = localStorage.getItem(getAliasScanCheckpointStorageKey(address));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    const lastProcessedTimestamp = Number(parsed?.lastProcessedTimestamp || 0);
-    const lastProcessedIdentifier =
-      typeof parsed?.lastProcessedIdentifier === "string"
-        ? parsed.lastProcessedIdentifier
-        : "";
-    const updatedAt = Number(parsed?.updatedAt || 0);
-    if (
-      !Number.isFinite(lastProcessedTimestamp) ||
-      lastProcessedTimestamp < 0
-    ) {
-      return null;
-    }
-    return {
-      lastProcessedTimestamp,
-      lastProcessedIdentifier,
-      updatedAt: Number.isFinite(updatedAt) ? updatedAt : 0,
-    };
-  } catch {
-    return null;
-  }
-};
-
-const writeAliasScanCheckpointToStorage = (
-  address: string,
-  checkpoint: AliasScanCheckpoint
-): void => {
-  try {
-    localStorage.setItem(
-      getAliasScanCheckpointStorageKey(address),
-      JSON.stringify(checkpoint)
-    );
-  } catch {
-    // Ignore storage failures.
-  }
-};
-
-const getMailResourceEffectiveTimestamp = (resource: any): number => {
-  const updated = Number(resource?.updated || 0);
-  if (Number.isFinite(updated) && updated > 0) return updated;
-  const created = Number(resource?.created || 0);
-  if (Number.isFinite(created) && created > 0) return created;
-  return 0;
 };
 
 const sortOwnedNamesForDisplay = (
@@ -580,11 +529,17 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
   const [aliasScanStatusMessage, setAliasScanStatusMessage] = useState("");
   const [aliasScanCheckpointTimestamp, setAliasScanCheckpointTimestamp] =
     useState(0);
-  const [aliasScanCheckpointIdentifier, setAliasScanCheckpointIdentifier] =
-    useState("");
   const [isAliasScanCancelRequested, setIsAliasScanCancelRequested] =
     useState(false);
   const aliasScanCancelRequestedRef = useRef(false);
+  // N9: the capped scan's counters for this run and whether the whole index has been walked.
+  const [aliasScanPaging, setAliasScanPaging] = useState({
+    resourcesWalked: 0,
+    candidatesChecked: 0,
+    maxPages: ALIAS_SCAN_MAX_PAGES,
+    complete: false,
+    stoppedAtCap: false,
+  });
   const [ownedInboxNames, setOwnedInboxNames] = useState<string[]>([]);
   const [ownedSentNames, setOwnedSentNames] = useState<string[]>([]);
   const [run, setRun] = useState(false);
@@ -1499,7 +1454,6 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
   useEffect(() => {
     if (!watchedAliasOwnerAddress) {
       setAliasScanCheckpointTimestamp(0);
-      setAliasScanCheckpointIdentifier("");
       setIsAliasScanCancelRequested(false);
       aliasScanCancelRequestedRef.current = false;
       return;
@@ -1508,7 +1462,11 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       watchedAliasOwnerAddress
     );
     setAliasScanCheckpointTimestamp(checkpoint?.lastProcessedTimestamp || 0);
-    setAliasScanCheckpointIdentifier(checkpoint?.lastProcessedIdentifier || "");
+    setAliasScanPaging(previous => ({
+      ...previous,
+      complete: Boolean(checkpoint?.complete),
+      stoppedAtCap: false,
+    }));
     setIsAliasScanCancelRequested(false);
     aliasScanCancelRequestedRef.current = false;
   }, [watchedAliasOwnerAddress]);
@@ -1961,21 +1919,13 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
   }, []);
 
   const persistAliasScanCheckpoint = useCallback(
-    (lastProcessedTimestamp: number, lastProcessedIdentifier: string) => {
-      if (!watchedAliasOwnerAddress) return;
-      const safeTimestamp = Number(lastProcessedTimestamp || 0);
-      if (!Number.isFinite(safeTimestamp) || safeTimestamp < 0) return;
-      const checkpoint: AliasScanCheckpoint = {
-        lastProcessedTimestamp: safeTimestamp,
-        lastProcessedIdentifier:
-          typeof lastProcessedIdentifier === "string"
-            ? lastProcessedIdentifier
-            : "",
-        updatedAt: Date.now(),
-      };
-      writeAliasScanCheckpointToStorage(watchedAliasOwnerAddress, checkpoint);
-      setAliasScanCheckpointTimestamp(checkpoint.lastProcessedTimestamp);
-      setAliasScanCheckpointIdentifier(checkpoint.lastProcessedIdentifier);
+    (ownerAddress: string, checkpoint: AliasScanCheckpoint, seen: string[]) => {
+      if (!ownerAddress) return;
+      writeAliasScanCheckpointToStorage(ownerAddress, checkpoint);
+      writeAliasScanSeenToStorage(ownerAddress, seen);
+      if (ownerAddress === watchedAliasOwnerAddress) {
+        setAliasScanCheckpointTimestamp(checkpoint.lastProcessedTimestamp);
+      }
     },
     [watchedAliasOwnerAddress]
   );
@@ -1987,6 +1937,12 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     setAliasScanStatusMessage("Cancel requested... finishing current item.");
   }, [isAliasScanRunning]);
 
+  /**
+   * N9: one capped run (50 per page, ALIAS_SCAN_MAX_PAGES pages), newest
+   * first, from the stored checkpoint; "Scan more" simply runs it again.
+   * Pages are cached for the session; only candidates never fetched before
+   * are fetched and decrypted (aliasScan.ts).
+   */
   const runAliasScan = useCallback(async () => {
     if (!hasAuthenticatedIdentity) {
       dispatch(
@@ -2010,185 +1966,52 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       return;
     }
 
-    type AliasScanCandidateResource = {
-      name: string;
-      identifier: string;
-      recipientHint: string;
-      effectiveTimestamp: number;
-    };
-
-    const checkpointTimestamp = Number(aliasScanCheckpointTimestamp || 0);
-    const checkpointIdentifier = aliasScanCheckpointIdentifier || "";
+    const ownerAddress = watchedAliasOwnerAddress;
+    const checkpoint = readAliasScanCheckpointFromStorage(ownerAddress);
     const ownedNameSet = new Set(
       ownedNameCandidates.map(name => name.trim().toLowerCase()).filter(Boolean)
+    );
+    const knownAliases = new Set(
+      watchedAliases.map(aliasName => aliasName.trim().toLowerCase()).filter(Boolean)
     );
 
     aliasScanCancelRequestedRef.current = false;
     setIsAliasScanCancelRequested(false);
     setIsAliasScanRunning(true);
-    setAliasScanPhase("collecting");
+    setAliasScanPhase("scanning");
     setAliasScanScannedCount(0);
-    setAliasScanTotalCount(0);
+    setAliasScanTotalCount(ALIAS_SCAN_MAX_PAGES);
     setAliasScanDiscoveredCount(0);
+    setAliasScanPaging(previous => ({
+      ...previous,
+      resourcesWalked: 0,
+      candidatesChecked: 0,
+      maxPages: ALIAS_SCAN_MAX_PAGES,
+      stoppedAtCap: false,
+    }));
     setAliasScanStatusMessage(
-      checkpointTimestamp > 0
-        ? `Resuming from ${formatFullTimestamp(checkpointTimestamp)}...`
-        : "Collecting Q-Mail resources..."
+      checkpoint && checkpoint.lastProcessedTimestamp > 0
+        ? `Checking mail since ${formatFullTimestamp(checkpoint.lastProcessedTimestamp)}, then older mail...`
+        : "Reading the newest Q-Mail resources..."
     );
 
     try {
-      const pageSize = 200;
-      let offset = 0;
-      let hasMore = true;
-      const candidateResources: AliasScanCandidateResource[] = [];
-      const candidateMap = new Set<string>();
-
-      while (hasMore) {
-        if (aliasScanCancelRequestedRef.current) {
-          const canceledMessage = "Alias scan canceled.";
-          setAliasScanStatusMessage(canceledMessage);
-          dispatch(
-            setNotification({
-              msg: canceledMessage,
-              alertType: "info",
-            })
-          );
-          return;
-        }
-
-        const params = new URLSearchParams({
-          mode: "ALL",
-          service: MAIL_SERVICE_TYPE,
-          query: "qortal_qmail_",
-          limit: String(pageSize),
-          includemetadata: "false",
-          offset: String(offset),
-          reverse: "true",
-          excludeblocked: "true",
-        });
-
-        const responseData = await searchResources(params, { ttlMs: 0 });
-        if (responseData.length === 0) {
-          break;
-        }
-
-        responseData.forEach((resource: any) => {
-          const identifier =
-            typeof resource?.identifier === "string"
-              ? resource.identifier.trim()
-              : "";
-          const resourceName =
-            typeof resource?.name === "string" ? resource.name.trim() : "";
-          if (!identifier || !resourceName) return;
-
-          const { recipientName, recipientAddress } =
-            parseSentRecipientFromIdentifier(identifier);
-          if (recipientAddress) return;
-          const normalizedRecipientName =
-            typeof recipientName === "string"
-              ? recipientName.trim().toLowerCase()
-              : "";
-          if (!normalizedRecipientName) return;
-          if (ownedNameSet.has(normalizedRecipientName)) return;
-          const effectiveTimestamp =
-            getMailResourceEffectiveTimestamp(resource);
-          if (!effectiveTimestamp) return;
-          const isAfterCheckpoint =
-            effectiveTimestamp > checkpointTimestamp ||
-            (effectiveTimestamp === checkpointTimestamp &&
-              identifier > checkpointIdentifier);
-          if (!isAfterCheckpoint) return;
-
-          const dedupeKey = `${resourceName}|${identifier}`;
-          if (candidateMap.has(dedupeKey)) return;
-          candidateMap.add(dedupeKey);
-
-          candidateResources.push({
-            name: resourceName,
-            identifier,
-            recipientHint: recipientName || "",
-            effectiveTimestamp,
-          });
-        });
-
-        setAliasScanStatusMessage(
-          `Collected ${candidateResources.length} candidate messages...`
-        );
-
-        if (responseData.length < pageSize) {
-          hasMore = false;
-        } else {
-          offset += responseData.length;
-        }
-      }
-
-      if (aliasScanCancelRequestedRef.current) {
-        const canceledMessage = "Alias scan canceled.";
-        setAliasScanStatusMessage(canceledMessage);
-        dispatch(
-          setNotification({
-            msg: canceledMessage,
-            alertType: "info",
-          })
-        );
-        return;
-      }
-
-      const sortedCandidates = [...candidateResources].sort((a, b) => {
-        if (a.effectiveTimestamp !== b.effectiveTimestamp) {
-          return a.effectiveTimestamp - b.effectiveTimestamp;
-        }
-        return a.identifier.localeCompare(b.identifier);
-      });
-
-      setAliasScanPhase("scanning");
-      setAliasScanTotalCount(sortedCandidates.length);
-      if (sortedCandidates.length === 0) {
-        const emptyMessage =
-          checkpointTimestamp > 0
-            ? "Alias scan finished: no new messages since last checkpoint"
-            : "Alias scan finished: no candidate messages found";
-        setAliasScanStatusMessage(emptyMessage);
-        dispatch(
-          setNotification({
-            msg: emptyMessage,
-            alertType: "info",
-          })
-        );
-        return;
-      }
-
-      const existingAliasMap = new Map<string, string>();
-      watchedAliases.forEach(aliasName => {
-        const normalizedAlias = aliasName.trim().toLowerCase();
-        if (!normalizedAlias || existingAliasMap.has(normalizedAlias)) return;
-        existingAliasMap.set(normalizedAlias, aliasName);
-      });
-
-      const discoveredAliasMap = new Map<string, string>();
-      for (let index = 0; index < sortedCandidates.length; index += 1) {
-        if (aliasScanCancelRequestedRef.current) {
-          const cancelMessage = `Alias scan canceled at ${index}/${sortedCandidates.length}. Resume later to continue.`;
-          setAliasScanStatusMessage(cancelMessage);
-          dispatch(
-            setNotification({
-              msg: cancelMessage,
-              alertType: "info",
-            })
-          );
-          return;
-        }
-
-        const resource = sortedCandidates[index];
-        const candidateNames = new Map<string, string>();
-        let didDecrypt = false;
-
-        try {
+      const result = await runAliasScanPass({
+        checkpoint,
+        seen: readAliasScanSeenFromStorage(ownerAddress),
+        ownedNames: ownedNameSet,
+        knownAliases,
+        maxPages: ALIAS_SCAN_MAX_PAGES,
+        search: (offset, limit) =>
+          searchResources(aliasScanSearchParams(offset, limit), {
+            ttlMs: ALIAS_SCAN_SEARCH_TTL_MS,
+          }),
+        inspect: async candidate => {
           const encryptedData = await qortalRequest({
             action: "FETCH_QDN_RESOURCE",
-            name: resource.name,
+            name: candidate.name,
             service: MAIL_SERVICE_TYPE,
-            identifier: resource.identifier,
+            identifier: candidate.identifier,
             encoding: "base64",
           });
           const decryptRequestBody: any = {
@@ -2196,60 +2019,32 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
             encryptedData,
           };
           const decryptedData = await qortalRequest(decryptRequestBody);
-          didDecrypt = true;
-          const uint8ArrayMessage = base64ToUint8Array(decryptedData);
-          const decodedMessage = uint8ArrayToObject(uint8ArrayMessage);
+          return uint8ArrayToObject(base64ToUint8Array(decryptedData));
+        },
+        isCancelled: () => aliasScanCancelRequestedRef.current,
+        onProgress: progress => {
+          setAliasScanScannedCount(progress.pagesFetched);
+          setAliasScanDiscoveredCount(progress.discovered);
+          setAliasScanPaging(previous => ({
+            ...previous,
+            resourcesWalked: progress.resourcesWalked,
+            candidatesChecked: progress.candidatesChecked,
+          }));
+          setAliasScanStatusMessage(
+            `Page ${progress.pagesFetched} of ${progress.maxPages}: ${progress.resourcesWalked} resources read, ${progress.candidatesChecked} alias messages checked`
+          );
+        },
+        onCheckpoint: (nextCheckpoint, seen) =>
+          persistAliasScanCheckpoint(ownerAddress, nextCheckpoint, seen),
+      });
 
-          if (typeof decodedMessage?.recipient === "string") {
-            const recipientFromBody = decodedMessage.recipient.trim();
-            const normalizedRecipientFromBody = recipientFromBody.toLowerCase();
-            if (
-              recipientFromBody &&
-              !ownedNameSet.has(normalizedRecipientFromBody)
-            ) {
-              candidateNames.set(
-                normalizedRecipientFromBody,
-                recipientFromBody
-              );
-            }
-          }
-          if (typeof decodedMessage?.to === "string") {
-            const toFromBody = decodedMessage.to.trim();
-            const normalizedToFromBody = toFromBody.toLowerCase();
-            if (toFromBody && !ownedNameSet.has(normalizedToFromBody)) {
-              candidateNames.set(normalizedToFromBody, toFromBody);
-            }
-          }
-        } catch {
-          // Ignore undecryptable/unavailable resources. We still persist checkpoint.
-        }
+      setAliasScanPaging(previous => ({
+        ...previous,
+        complete: result.checkpoint.complete,
+        stoppedAtCap: result.stoppedBy === "cap",
+      }));
 
-        if (didDecrypt && candidateNames.size === 0) {
-          const recipientHint = resource.recipientHint.trim();
-          const normalizedRecipientHint = recipientHint.toLowerCase();
-          if (recipientHint && !ownedNameSet.has(normalizedRecipientHint)) {
-            candidateNames.set(normalizedRecipientHint, recipientHint);
-          }
-        }
-
-        candidateNames.forEach((displayName, normalizedName) => {
-          if (existingAliasMap.has(normalizedName)) return;
-          if (discoveredAliasMap.has(normalizedName)) return;
-          discoveredAliasMap.set(normalizedName, displayName);
-        });
-        persistAliasScanCheckpoint(
-          resource.effectiveTimestamp,
-          resource.identifier
-        );
-
-        setAliasScanScannedCount(index + 1);
-        setAliasScanDiscoveredCount(discoveredAliasMap.size);
-        setAliasScanStatusMessage(
-          `Scanning messages... ${index + 1}/${sortedCandidates.length}`
-        );
-      }
-
-      const newlyDiscoveredAliases = Array.from(discoveredAliasMap.values());
+      const newlyDiscoveredAliases = Array.from(result.discoveredAliases.values());
       if (newlyDiscoveredAliases.length > 0) {
         setWatchedAliases(previous => {
           const deduped = new Map<string, string>();
@@ -2264,15 +2059,21 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
         });
       }
 
-      const completionMessage =
+      const found =
         newlyDiscoveredAliases.length > 0
-          ? `Alias scan complete: found ${newlyDiscoveredAliases.length} new aliases`
-          : "Alias scan complete: no new aliases found";
+          ? `found ${newlyDiscoveredAliases.length} new ${newlyDiscoveredAliases.length === 1 ? "alias" : "aliases"}`
+          : "no new aliases";
+      const completionMessage =
+        result.stoppedBy === "cancel"
+          ? `Alias scan canceled: ${found}. Scan more to continue.`
+          : result.stoppedBy === "cap"
+          ? `Read ${result.resourcesWalked} resources (the limit for one run): ${found}. Scan more to continue with older mail.`
+          : `Alias scan complete: ${found}.`;
       setAliasScanStatusMessage(completionMessage);
       dispatch(
         setNotification({
           msg: completionMessage,
-          alertType: "success",
+          alertType: result.stoppedBy === "cancel" ? "info" : "success",
         })
       );
     } catch (error: any) {
@@ -2294,8 +2095,6 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       aliasScanCancelRequestedRef.current = false;
     }
   }, [
-    aliasScanCheckpointIdentifier,
-    aliasScanCheckpointTimestamp,
     dispatch,
     hasAuthenticatedIdentity,
     isAliasScanRunning,
@@ -3722,6 +3521,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
                   totalCount: aliasScanTotalCount,
                   discoveredCount: aliasScanDiscoveredCount,
                   statusMessage: aliasScanStatusMessage,
+                  paging: aliasScanPaging,
                 }}
               />
               </React.Suspense>
