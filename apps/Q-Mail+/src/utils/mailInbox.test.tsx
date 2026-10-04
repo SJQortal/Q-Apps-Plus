@@ -8,10 +8,12 @@ import globalReducer from '../state/features/globalSlice'
 import mailReducer, { upsertMessages } from '../state/features/mailSlice'
 import { useFetchMail } from '../hooks/useFetchMail'
 import { resetSearchCache, searchResources } from './qdnSearch'
+import { fetchThreadPage, resetThreadDataCache } from '../pages/Mail/threadData'
 import {
   fetchRecentInboxMessagesForOwnedName,
   fetchRecentInboxMessagesForSavedAlias,
   getOwnedNameInboxQueries,
+  hasGroupThreadActivity,
   hasInboxMailActivityForOwnedName,
   hasSentMailActivityForOwnedName,
   mergeNewRows,
@@ -73,7 +75,10 @@ describe('first load for one name', () => {
     await act(async () => {
       await Promise.all([
         api!.getAllMailMessages('alice', ADDRESS),
-        Promise.all([hasInboxMailActivityForOwnedName('alice', ADDRESS), hasSentMailActivityForOwnedName('alice')]),
+        Promise.all([
+          hasInboxMailActivityForOwnedName('alice', ADDRESS, { isPrimary: true }),
+          hasSentMailActivityForOwnedName('alice'),
+        ]),
         searchResources({
           mode: 'ALL',
           service: 'DOCUMENT_PRIVATE',
@@ -88,7 +93,8 @@ describe('first load for one name', () => {
       ])
     })
 
-    expect(fetchedUrls(SEARCH)).toHaveLength(4)
+    // The primary name's inbox probe is page 1 of the index fetch: one search, not two.
+    expect(fetchedUrls(SEARCH)).toHaveLength(3)
     expect(store.getState().mail.mailMessages.map((m: any) => m.id)).toEqual([
       `_mail_qortal_qmail_alice_${SUFFIX}_mail_m1`,
       `_mail_qortal_qmail_alice_${SUFFIX}_mail_m2`,
@@ -101,12 +107,12 @@ describe('first load for one name', () => {
     // Switching away and back within the TTL (Bugs #9): served from the cache.
     await act(async () => {
       await api!.getAllMailMessages('alice', ADDRESS)
-      await hasInboxMailActivityForOwnedName('alice', ADDRESS)
+      await hasInboxMailActivityForOwnedName('alice', ADDRESS, { isPrimary: true })
     })
-    expect(fetchedUrls(SEARCH)).toHaveLength(4)
+    expect(fetchedUrls(SEARCH)).toHaveLength(3)
   })
 
-  it('costs 6 searches when the name has no mail (both inbox and both sent probes miss)', async () => {
+  it('costs 5 searches when the name has no mail (the by-address probe is the index page; alias and both sent probes miss)', async () => {
     mockFetchRoute(SEARCH, [])
     const store = makeStore()
     render(
@@ -117,12 +123,12 @@ describe('first load for one name', () => {
     await act(async () => {
       await Promise.all([
         api!.getAllMailMessages('alice', ADDRESS),
-        hasInboxMailActivityForOwnedName('alice', ADDRESS),
+        hasInboxMailActivityForOwnedName('alice', ADDRESS, { isPrimary: true }),
         hasSentMailActivityForOwnedName('alice'),
         searchResources({ service: 'DOCUMENT_PRIVATE', identifier: 'qmail_state_v1', name: 'alice', limit: '1' }),
       ])
     })
-    expect(fetchedUrls(SEARCH)).toHaveLength(6)
+    expect(fetchedUrls(SEARCH)).toHaveLength(5)
   })
 })
 
@@ -204,5 +210,21 @@ describe('withoutDeletedRows', () => {
     expect(withoutDeletedRows(rows, { a: { deleted: false }, z: { deleted: true } })).toBe(rows)
     expect(withoutDeletedRows(rows, { b: { deleted: true }, c: { deleted: true } })).toEqual([{ id: 'a' }])
     expect(withoutDeletedRows([], { a: { deleted: true } })).toEqual([])
+  })
+})
+
+describe('group thread probe', () => {
+  beforeEach(() => {
+    resetSearchCache()
+    resetThreadDataCache()
+  })
+
+  it('is the first header page the thread views fetch next, and ignores groups 10-19', async () => {
+    mockFetchRoute(SEARCH, [
+      { name: 'bob', service: 'MAIL', identifier: 'qortal_qmail_thread_group10_x', created: 2, metadata: { description: 'Other' } },
+    ])
+    await expect(hasGroupThreadActivity('1')).resolves.toBe(false)
+    await fetchThreadPage({ id: '1', name: 'Devs' })
+    expect(fetchedUrls(SEARCH)).toHaveLength(1)
   })
 })
