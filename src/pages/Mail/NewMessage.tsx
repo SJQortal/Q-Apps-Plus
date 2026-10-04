@@ -73,6 +73,13 @@ import {
   withSubjectPrefix,
 } from "../../utils/mailCompose";
 import {
+  buildNewMessageBody,
+  footerBlockFor,
+  readMailFooter,
+  swapFooterInBody,
+  type FooterKind,
+} from "../../utils/mailFooter";
+import {
   lookupName,
   lookupPublicKey,
   peekName,
@@ -422,6 +429,12 @@ export const NewMessage = ({
   const pendingDraftRef = useRef<StoredComposeDraft | null>(null);
   const skipNextDraftHydrationRef = useRef(false);
   const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
+  // The footer the composer inserted (src/utils/mailFooter.ts) and for which
+  // From name, so changing From swaps it while it is still as inserted.
+  // null: nothing tracked (a stored draft, or a footer the user edited).
+  const footerRef = useRef<{ block: string; name: string; kind: FooterKind } | null>(null);
+  const footerContextRef = useRef({ value, fromName, address: "" });
+  footerContextRef.current = { value, fromName, address: user?.address || "" };
   // Attachments of a forwarded message being fetched and decrypted so they
   // can be re-published, encrypted, to the new recipient.
   // Attachment references of a forwarded message that are not its sender's
@@ -815,6 +828,7 @@ export const NewMessage = ({
     initialCcRef.current = [];
     pendingDraftRef.current = null;
     skipNextDraftHydrationRef.current = false;
+    footerRef.current = null;
     setDraftSavedAt(null);
     setComposeError(null);
   }, [cancelForwardAttachmentJobs]);
@@ -1010,6 +1024,7 @@ export const NewMessage = ({
       if (pendingDraftRef.current) {
         // A stored reply draft is being opened: keep its subject and body.
         initialValueRef.current = "";
+        footerRef.current = null;
         return;
       }
       setSubject(nextSubject);
@@ -1018,10 +1033,19 @@ export const NewMessage = ({
       // Start the editor with the quoted original (Quill 1 markup, so the
       // original app renders it too). A stored draft for this reply, if any,
       // replaces it when the draft key resolves.
+      const { fromName: footerName, address: footerAddress } =
+        footerContextRef.current;
+      const footerBlock = footerBlockFor(
+        readMailFooter(footerAddress),
+        footerName,
+        "reply"
+      );
+      footerRef.current = { block: footerBlock, name: footerName, kind: "reply" };
       const quoteHtml = buildReplyQuoteHtml({
         sender: replyTo?.user,
         sentAt: formatFullTimestamp(replyTo?.createdAt),
         lines: messageBodyLines(replyTo, extractTextFromSlate),
+        footerBlock,
       });
       setValue(quoteHtml);
       initialValueRef.current = quoteHtml;
@@ -1099,6 +1123,7 @@ export const NewMessage = ({
     if (!source || typeof source !== "object") {
       // An older caller sent ready-made HTML: use it as is.
       const html = info.html || "";
+      footerRef.current = null;
       setValue(html);
       initialValueRef.current = html;
       bodyBaselineFrozenRef.current = false;
@@ -1108,6 +1133,14 @@ export const NewMessage = ({
     const nextSubject = withSubjectPrefix(source.subject, "Fwd");
     setSubject(nextSubject);
     initialSubjectRef.current = nextSubject;
+    const { fromName: footerName, address: footerAddress } =
+      footerContextRef.current;
+    const footerBlock = footerBlockFor(
+      readMailFooter(footerAddress),
+      footerName,
+      "forward"
+    );
+    footerRef.current = { block: footerBlock, name: footerName, kind: "forward" };
     const html = buildForwardHtml(
       {
         from: source.user,
@@ -1115,7 +1148,8 @@ export const NewMessage = ({
         subject: typeof source.subject === "string" ? source.subject : "",
         to: info.to || source.recipient || user?.name || "",
       },
-      messageBodyLines(source, extractTextFromSlate)
+      messageBodyLines(source, extractTextFromSlate),
+      footerBlock
     );
     setValue(html);
     initialValueRef.current = html;
@@ -1135,6 +1169,51 @@ export const NewMessage = ({
     forwardable.forEach(startForwardAttachmentJob);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forwardInfo]);
+
+  // A new message starts with a line to type on, then the footer.
+  useEffect(() => {
+    if (!isOpen || replyTo || forwardInfo) return;
+    if (value !== "" && value !== "<p><br></p>") return;
+    if (footerRef.current || pendingDraftRef.current || hydratedDraftRef.current)
+      return;
+    const footerBlock = footerBlockFor(
+      readMailFooter(user?.address),
+      fromName,
+      "new"
+    );
+    footerRef.current = { block: footerBlock, name: fromName, kind: "new" };
+    if (!footerBlock) return;
+    const body = buildNewMessageBody(footerBlock);
+    setValue(body);
+    initialValueRef.current = body;
+    bodyBaselineFrozenRef.current = false;
+  }, [forwardInfo, fromName, isOpen, replyTo, user?.address, value]);
+
+  // Changing From swaps the footer for that name's, unless it was edited.
+  useEffect(() => {
+    const tracked = footerRef.current;
+    if (!tracked || normalizeValue(tracked.name) === normalizeValue(fromName))
+      return;
+    const { value: body, address } = footerContextRef.current;
+    const nextBlock = footerBlockFor(readMailFooter(address), fromName, tracked.kind);
+    const untouched = body === initialValueRef.current;
+    const next = swapFooterInBody(body, tracked.block, nextBlock, tracked.kind, untouched);
+    if (next === null) {
+      footerRef.current = null;
+      return;
+    }
+    footerRef.current = { block: nextBlock, name: fromName, kind: tracked.kind };
+    if (next === body) return;
+    if (untouched) {
+      initialValueRef.current = next;
+      bodyBaselineFrozenRef.current = false;
+    } else {
+      initialValueRef.current =
+        swapFooterInBody(initialValueRef.current, tracked.block, nextBlock, tracked.kind, false) ??
+        initialValueRef.current;
+    }
+    setValue(next);
+  }, [fromName]);
 
   const replyBodyText = useMemo(() => {
     if (!replyTo) return "";
@@ -1160,6 +1239,7 @@ export const NewMessage = ({
     isHydratingDraftRef.current = true;
     bodyBaselineFrozenRef.current = true;
     hydratedDraftRef.current = true;
+    footerRef.current = null;
     const fields = draftFieldsOf(storedDraft);
     setSubject(fields.subject);
     setValue(fields.value);
