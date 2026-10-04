@@ -8,6 +8,8 @@ import { mockQortalAction, qortalCalls } from '../../test/setup'
 import { resetAttachmentCache } from '../../utils/attachmentCache'
 import { upsertMessages } from '../../state/features/mailSlice'
 import { OpenMail } from './OpenMail'
+import { openerInfoFor } from './openerInfo'
+import { exactMailDate } from './readerTime'
 
 const fileInfo = { identifier: '_mail_qortal_qmail_bob_abc123_mail_x1', name: 'alice', service: 'MAIL_PRIVATE', to: 'bob' }
 
@@ -141,7 +143,10 @@ describe('OpenMail', () => {
       throw { error: 1401, message: 'Data unavailable. Please try again later.' }
     })
     const handleClose = vi.fn()
-    wrap(<OpenMail open handleClose={handleClose} fileInfo={{ ...fileInfo, createdAt: 1700000000000 }} />)
+    // Built the way Mail builds it from the clicked row.
+    const row = { id: fileInfo.identifier, user: 'alice', createdAt: 1700000000000, title: 'Invoice' }
+    const info = openerInfoFor(fileInfo.identifier, 'alice', 'bob', row)
+    wrap(<OpenMail open handleClose={handleClose} fileInfo={info} />)
     await tick(0)
     await tick(0)
     expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(1)
@@ -155,7 +160,8 @@ describe('OpenMail', () => {
     expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(5)
     expect(screen.getByRole('status')).toBeTruthy()
     expect(screen.getByText('Not available on your node right now')).toBeTruthy()
-    expect(screen.getByText(/From alice/)).toBeTruthy()
+    expect(screen.getByText(`From alice · ${exactMailDate(1700000000000)}`)).toBeTruthy()
+    expect(screen.getByText('Invoice')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
     expect(handleClose).not.toHaveBeenCalled()
   })

@@ -109,6 +109,7 @@ import { countUnreadMessages, hasThreadHistory } from "../../utils/readState";
 import type { StoredComposeDraft } from "./composeDrafts";
 import { invalidateThreadSearches } from "./threadData";
 import { useThreadUnreadCounts } from "./threadUnread";
+import { openerInfoFor } from "./openerInfo";
 import { getAvatarUrl } from "../../utils/avatarCache";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import {
@@ -1207,12 +1208,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
         }
         return;
       }
-      setMailInfo({
-        identifier: messageIdentifier,
-        name: user,
-        service: MAIL_SERVICE_TYPE,
-        to,
-      });
+      setMailInfo(openerInfoFor(messageIdentifier, user, to, content));
       const res: any = await show();
       if (request !== openRequestRef.current) return;
       setMailInfo(null);
