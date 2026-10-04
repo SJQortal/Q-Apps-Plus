@@ -179,7 +179,9 @@ export function SettingsPage() {
 
   const goBack = () => {
     const background = (location.state as { backgroundLocation?: Location } | null)?.backgroundLocation;
-    navigate(background ?? '/');
+    // Replace the Settings entry rather than push mail on top of it, so
+    // hardware Back afterwards does not bring Settings back (pitfall 8).
+    navigate(background ?? '/', { replace: true });
   };
 
   const names = user?.names ?? [];
