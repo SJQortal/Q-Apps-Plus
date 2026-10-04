@@ -8,13 +8,11 @@ import {
   Avatar,
   Box,
   Button,
-  Chip,
   Divider,
   FormControlLabel,
   IconButton,
   Link,
   Rating,
-  Stack,
   Switch,
   ToggleButton,
   ToggleButtonGroup,
@@ -22,13 +20,13 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import CheckIcon from '@mui/icons-material/Check';
 import PersonOffOutlinedIcon from '@mui/icons-material/PersonOffOutlined';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import RestoreOutlinedIcon from '@mui/icons-material/RestoreOutlined';
 import useConfirmationModal from '../../hooks/useConfirmModal';
 import { ThemePicker, headerFill, themeOptions, useHubTheme } from '../../hub-theme';
 import { useAppShell } from '../../app-shell/AppShellContext';
+import { NameSwitcher } from '../../components/common/NameSwitcher';
 import { BlockedNamesModal } from '../../components/common/BlockedNamesModal/BlockedNamesModal';
 import {
   readAutoApplyQdnState,
@@ -223,29 +221,17 @@ export function SettingsPage() {
                 </Box>
               </Box>
               {names.length > 1 && (
-                <>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
                   <Typography variant="body2" color="text.secondary">
-                    Active mailbox
+                    Active mailbox · {names.length} names
                   </Typography>
-                  <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }} role="radiogroup" aria-label="Active name">
-                    {names.map((entry) => {
-                      const selected = entry.name === activeName;
-                      return (
-                        <Chip
-                          key={entry.name}
-                          label={entry.name}
-                          icon={selected ? <CheckIcon /> : undefined}
-                          color={selected ? 'primary' : 'default'}
-                          variant={selected ? 'filled' : 'outlined'}
-                          onClick={() => setActiveName(entry.name)}
-                          role="radio"
-                          aria-checked={selected}
-                          sx={{ minHeight: 36 }}
-                        />
-                      );
-                    })}
-                  </Stack>
-                </>
+                  <NameSwitcher
+                    names={names.map((entry) => entry.name)}
+                    activeName={activeName || null}
+                    activeAvatar={userAvatar || undefined}
+                    onPick={setActiveName}
+                  />
+                </Box>
               )}
             </>
           ) : (
