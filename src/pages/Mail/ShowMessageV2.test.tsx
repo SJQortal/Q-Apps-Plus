@@ -101,7 +101,9 @@ describe('ShowMessageV2', () => {
     fireEvent.click(toggle)
     const articles = screen.getAllByRole('article', { name: /Lunch/ }).filter((a) => a.getAttribute('aria-label') !== 'Lunch <plan>')
     expect(articles.map((a) => a.getAttribute('aria-label'))).toEqual(['alice: Lunch', 'bob: Re: Lunch'])
-    expect(screen.getByText('You')).toBeTruthy()
+    // Entries come from the sender's body: quoted, never styled as the viewer's own.
+    expect(screen.queryByText('You')).toBeNull()
+    expect(screen.getAllByText(/^Quoted by /)).toHaveLength(2)
     // the newest earlier message is open by default, the older one collapsed
     expect(screen.getByText('second')).toBeTruthy()
     expect(screen.queryByText('first')).toBeNull()
