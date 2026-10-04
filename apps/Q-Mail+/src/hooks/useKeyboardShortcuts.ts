@@ -131,9 +131,11 @@ export function isActivationKeyOnControl(key: string, target: EventTarget | null
   return Boolean((target as Element).closest(ACTIVATABLE_SELECTOR));
 }
 
-/** True while a dialog, drawer or menu is open (shortcuts would act behind it). */
+/** True while a dialog, drawer, menu or the first-run tip is open (shortcuts would act behind it). */
 export function isOverlayOpen(doc: Document = document): boolean {
-  return Boolean(doc.querySelector('[role="dialog"], [role="menu"], .MuiDrawer-root.MuiModal-root'));
+  return Boolean(
+    doc.querySelector('[role="dialog"], [role="menu"], .MuiDrawer-root.MuiModal-root, [data-qmail-tour-step]')
+  );
 }
 
 interface Options {
