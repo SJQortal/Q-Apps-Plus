@@ -6,7 +6,8 @@
  * accents and matching anywhere in the name, with a match count.
  *
  * Desktop and medium layouts show the list in a popover under the button;
- * phones (< 600 px) in a full-screen sheet. Avatars load only for rows that
+ * phones (< 600 px) and landscape frames (Hub's 703×201 at 844×390, where a
+ * popover would scroll around a scrolling list) in a full-screen sheet. Avatars load only for rows that
  * scroll into view (NameAvatar → useLazyAvatarUrl).
  *
  * Keyboard: typing filters (from the field, or from a row: the key goes to the
@@ -33,6 +34,7 @@ import ClearIcon from '@mui/icons-material/Clear';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SearchIcon from '@mui/icons-material/Search';
 import { useLayoutMode } from '../../layout/useLayoutMode';
+import { useLandscapeFrame } from '../../utils/hubFrame';
 import { ResponsiveDialog } from './ResponsiveDialog';
 import { NameAvatar } from './NameAvatar';
 
@@ -40,6 +42,15 @@ import { NameAvatar } from './NameAvatar';
 export const NAME_SEARCH_THRESHOLD = 15;
 
 const ROW_SX = { minHeight: 48 } as const;
+/** Out of sight, still read out (the live match count in a short frame). */
+const VISUALLY_HIDDEN_SX = {
+  position: 'absolute',
+  width: '1px',
+  height: '1px',
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+} as const;
 /** 32 px avatars in MenuItem's icon column. */
 const LEAD_SX = { minWidth: 0, width: 36, mr: 1.5, justifyContent: 'center' } as const;
 
@@ -147,6 +158,8 @@ export interface NameSwitcherListProps {
   maxListHeight?: number | string;
   /** Fill the parent's height, the list scrolling under a fixed search field (the phone sheet). */
   fill?: boolean;
+  /** A short frame: tighter padding, and the match count only for screen readers. */
+  compact?: boolean;
   /** A row above the names, picked as ''. */
   leadRow?: NameSwitcherLeadRow;
   /** A second line under a name (e.g. "Own footer"); none when it returns nothing. */
@@ -162,6 +175,7 @@ export function NameSwitcherList({
   autoFocus = false,
   maxListHeight,
   fill = false,
+  compact = false,
   leadRow,
   secondaryText,
 }: NameSwitcherListProps) {
@@ -227,7 +241,7 @@ export function NameSwitcherList({
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, ...(fill ? { flex: 1 } : {}) }}>
       {searchable && (
-        <Box sx={{ px: 1.5, pt: 1.5, pb: 0.5 }}>
+        <Box sx={{ px: 1.5, pt: compact ? 0.75 : 1.5, pb: 0.5 }}>
           <TextField
             inputRef={searchRef}
             size="small"
@@ -280,7 +294,7 @@ export function NameSwitcherList({
             aria-atomic="true"
             variant="body2"
             color="text.secondary"
-            sx={{ px: 0.5, pt: 0.75 }}
+            sx={compact ? VISUALLY_HIDDEN_SX : { px: 0.5, pt: 0.75 }}
           >
             {matchCountText(total, shown.length, query)}
           </Typography>
@@ -385,6 +399,8 @@ export function NameSwitcher({
   secondaryText,
 }: NameSwitcherProps) {
   const isPhone = useLayoutMode() === 'phone';
+  const landscape = useLandscapeFrame();
+  const useSheet = isPhone || landscape;
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const open = Boolean(anchor);
   const close = () => setAnchor(null);
@@ -424,14 +440,15 @@ export function NameSwitcher({
           {shownName || 'Choose a name'}
         </Box>
       </Button>
-      {isPhone ? (
-        <ResponsiveDialog open={open} onClose={close} title={title} flush>
+      {useSheet ? (
+        <ResponsiveDialog open={open} onClose={close} title={title} flush fullScreen>
           <NameSwitcherList
             names={names}
             activeName={activeName}
             activeAvatar={activeAvatar}
             onPick={pick}
             fill
+            compact={landscape}
             leadRow={leadRow}
             secondaryText={secondaryText}
           />
