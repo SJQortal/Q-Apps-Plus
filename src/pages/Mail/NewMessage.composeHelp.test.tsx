@@ -123,14 +123,31 @@ describe('Compose: what Send to alias, Cc and Bcc mean', () => {
     expect(screen.getByRole('textbox', { name: 'Cc name' }).getAttribute('aria-describedby')).toBe(ccHelp.id)
   })
 
-  it('says under Bcc that an alias message sends no Bcc copies', async () => {
+  it('says under Bcc that Bcc cannot be used with an alias', async () => {
     renderComposer()
     fireEvent.click(screen.getByRole('button', { name: 'Bcc' }))
     fireEvent.click(screen.getByRole('button', { name: 'Send to alias' }))
     fireEvent.change(screen.getByPlaceholderText("The recipient's alias inbox"), { target: { value: 'bob-box' } })
     await waitFor(() =>
       expect(screen.getByText(/Bcc names are not listed in the mail/).textContent).toMatch(
-        /With an alias, no Bcc copies are sent\.$/
+        /Bcc can't be used with an alias: remove the Bcc names, or send without the alias\.$/
+      )
+    )
+  })
+
+  it('refuses to send an alias message with Bcc names instead of dropping them quietly', async () => {
+    renderComposer()
+    fireEvent.click(screen.getByRole('button', { name: 'Bcc' }))
+    const bccField = screen.getByRole('textbox', { name: 'Bcc name' })
+    fireEvent.change(bccField, { target: { value: 'carol' } })
+    fireEvent.keyDown(bccField, { key: 'Enter' })
+    await screen.findByText('carol')
+    fireEvent.click(screen.getByRole('button', { name: 'Send to alias' }))
+    fireEvent.change(screen.getByPlaceholderText("The recipient's alias inbox"), { target: { value: 'bob-box' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send Message' }))
+    await waitFor(() =>
+      expect(store.getState().notifications.alertTypes.alertError).toBe(
+        'Bcc is not sent with an alias: remove the Bcc names, or send without the alias'
       )
     )
   })
