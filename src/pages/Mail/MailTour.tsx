@@ -123,6 +123,12 @@ export function MailTour({ run, onDone }: MailTourProps) {
   const finish = () => {
     setIndex(0);
     onDone();
+    // The tip opened on first load, with nothing focused before it: put focus
+    // on what it pointed at, so keyboard and screen-reader users keep a place.
+    const target = anchor;
+    window.requestAnimationFrame(() => {
+      if (target?.isConnected) target.focus();
+    });
   };
 
   return (
@@ -139,21 +145,24 @@ export function MailTour({ run, onDone }: MailTourProps) {
       }
       onClose={finish}
       disableRestoreFocus
-      aria-labelledby="qmail-tour-title"
       slotProps={{
         paper: {
           sx: { maxWidth: 320, m: 1, p: 2, display: "flex", flexDirection: "column", gap: 1 },
           "data-qmail-tour-step": step.id,
+          // The Popover root is role=presentation; the tip itself is the dialog.
+          role: "dialog",
+          "aria-labelledby": "qmail-tour-title",
+          "aria-describedby": "qmail-tour-progress qmail-tour-body",
         } as any,
       }}
     >
-      <Typography variant="caption" color="text.secondary">
+      <Typography id="qmail-tour-progress" variant="caption" color="text.secondary">
         Tip {index + 1} of {TOUR_STEPS.length}
       </Typography>
       <Typography id="qmail-tour-title" sx={{ fontWeight: 700, fontSize: "1.05rem" }}>
         {step.title}
       </Typography>
-      <Typography variant="body2">{step.body}</Typography>
+      <Typography id="qmail-tour-body" variant="body2">{step.body}</Typography>
       <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1, mt: 0.5 }}>
         {!isLast && (
           <Button variant="text" color="inherit" onClick={finish} sx={{ minHeight: 44 }}>

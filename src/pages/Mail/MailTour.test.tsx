@@ -1,8 +1,10 @@
+import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { CONSENT_DESCRIPTION_ID, MailTour, TOUR_STEPS, findTourAnchor } from './MailTour'
 import { CONSENT_STORAGE_KEY } from '../../components/modals/ConsentModal'
 import { nextHiddenState, PANE_HEADER_HEIGHT } from '../../layout/PaneHeader'
+import { isOverlayOpen } from '../../hooks/useKeyboardShortcuts'
 
 const fixtures: HTMLElement[] = []
 function mount(html: string) {
@@ -63,6 +65,22 @@ describe('MailTour', () => {
     expect(screen.queryByRole('button', { name: 'Skip' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     expect(onDone).toHaveBeenCalledTimes(1)
+  })
+
+  it('is a labelled dialog that blocks shortcuts, and hands focus to its anchor when done', async () => {
+    mount(`<button data-qapp-lib-sidebar-item="compose">Compose</button>`)
+    function Host() {
+      const [run, setRun] = React.useState(true)
+      return <MailTour run={run} onDone={() => setRun(false)} />
+    }
+    render(<Host />)
+    const dialog = screen.getByRole('dialog', { name: TOUR_STEPS[0].title })
+    expect(dialog.getAttribute('aria-describedby')).toBe('qmail-tour-progress qmail-tour-body')
+    expect(document.getElementById('qmail-tour-body')?.textContent).toBe(TOUR_STEPS[0].body)
+    expect(isOverlayOpen()).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
+    await waitFor(() => expect(document.activeElement?.textContent).toBe('Compose'))
+    expect(isOverlayOpen()).toBe(false)
   })
 
   it('can be skipped from the first tip, and still shows without an anchor', () => {
