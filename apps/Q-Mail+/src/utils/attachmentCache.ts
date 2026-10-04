@@ -131,6 +131,10 @@ export async function fetchResourceStatus(ref: Pick<AttachmentRef, 'name' | 'ser
     name: ref.name,
     service: ref.service,
     identifier: ref.identifier,
+    // Core only assembles a resource it has already downloaded when asked to:
+    // without build:true a DOWNLOADED message or file can stay "Preparing…"
+    // for good (seen in Hub on 2026-10-04 with a freshly sent message).
+    build: true,
   });
   return normalizeStatus(res);
 }

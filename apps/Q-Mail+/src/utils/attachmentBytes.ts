@@ -77,6 +77,7 @@ async function readStatus(reference: AttachmentReference): Promise<AttachmentFet
   try {
     const status = await qortalRequest({
       action: "GET_QDN_RESOURCE_STATUS",
+      build: true,
       name: reference.name,
       service: reference.service,
       identifier: reference.identifier,

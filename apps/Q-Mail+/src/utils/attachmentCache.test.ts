@@ -185,7 +185,7 @@ describe('attachmentCache', () => {
     expect(await fetchResourceStatus(ref('s'))).toMatchObject({ status: 'DOWNLOADING', percentLoaded: 10 })
     await expect(startResourceDownload(ref('s'))).resolves.toBeUndefined()
     expect(qortalCalls('GET_QDN_RESOURCE_STATUS')).toEqual([
-      { action: 'GET_QDN_RESOURCE_STATUS', name: 'alice', service: 'ATTACHMENT_PRIVATE', identifier: 's' },
+      { action: 'GET_QDN_RESOURCE_STATUS', name: 'alice', service: 'ATTACHMENT_PRIVATE', identifier: 's', build: true },
     ])
     expect(qortalCalls('GET_QDN_RESOURCE_PROPERTIES')).toHaveLength(1)
   })
