@@ -5,6 +5,10 @@
  *   medium   | list | reading |          (rail in a drawer)
  *   phone    | list |  or  | reading |   (one pane; bottom nav; floating Compose)
  *
+ * With nothing open there is no reading pane and no "Select a message"
+ * placeholder: the list takes the whole main area, and the reading pane
+ * appears beside it when a message or thread opens.
+ *
  * A `wide` view (composer, group threads, aliases, changelog) takes the place
  * of list + reading. The shell owns no mail state: Mail.tsx decides what goes
  * in each slot.
@@ -23,6 +27,8 @@ export const LIST_WIDTH_MEDIUM = 300;
 /** Room the floating Compose button needs below a list so it never covers the last row (pitfall 6). */
 export const FAB_CLEARANCE = 88;
 export const LIST_CLEARANCE_VAR = '--qmail-list-clearance';
+/** Container name of the list pane: rows lay out in columns when it is wide (MailMessageRow). */
+export const LIST_CONTAINER = 'qmail-list';
 
 const Frame = styled('div')(({ theme }) => ({
   position: 'relative',
@@ -71,14 +77,18 @@ const Pane = styled('section')({
   overflow: 'hidden',
 });
 
-const ListPane = styled(Pane, { shouldForwardProp: (p) => p !== '$mode' && p !== '$fab' })<{
+const ListPane = styled(Pane, { shouldForwardProp: (p) => p !== '$mode' && p !== '$fab' && p !== '$full' })<{
   $mode: LayoutMode;
   /** The floating button is over this pane: its scroller gets clearance (none in landscape, where the button hides). */
   $fab: boolean;
-}>(({ theme, $mode, $fab }) => ({
-  flex: $mode === 'phone' ? 1 : '0 0 auto',
-  width: $mode === 'desktop' ? LIST_WIDTH_DESKTOP : $mode === 'medium' ? LIST_WIDTH_MEDIUM : '100%',
-  borderRight: $mode === 'phone' ? 'none' : `1px solid ${theme.palette.divider}`,
+  /** Nothing is open beside it: the list takes the whole main area. */
+  $full: boolean;
+}>(({ theme, $mode, $fab, $full }) => ({
+  flex: $mode === 'phone' || $full ? 1 : '0 0 auto',
+  width: $mode === 'phone' || $full ? '100%' : $mode === 'desktop' ? LIST_WIDTH_DESKTOP : LIST_WIDTH_MEDIUM,
+  borderRight: $mode === 'phone' || $full ? 'none' : `1px solid ${theme.palette.divider}`,
+  containerType: 'inline-size',
+  containerName: LIST_CONTAINER,
   [LIST_CLEARANCE_VAR]: $fab ? `${FAB_CLEARANCE}px` : '0px',
   [`@media ${LANDSCAPE_FRAME_MEDIA}`]: { [LIST_CLEARANCE_VAR]: '0px' },
 }));
@@ -126,9 +136,8 @@ export interface MailShellProps {
   /** Sticky strip above the panes, e.g. a loading banner. */
   banner?: ReactNode;
   list: ReactNode;
-  /** Reading pane content; null shows `readingPlaceholder`. */
+  /** Reading pane content. Null: no reading pane, the list takes the full width (one-pane layouts: the list). */
   reading?: ReactNode | null;
-  readingPlaceholder?: ReactNode;
   /** On phones: show the reading pane full-screen instead of the list. */
   readingOpen?: boolean;
   /** Replaces list + reading (composer, threads of a group, aliases page…). */
@@ -149,7 +158,6 @@ export function MailShell({
   banner,
   list,
   reading,
-  readingPlaceholder,
   readingOpen = false,
   wide,
   wideKeepsChrome = false,
@@ -164,6 +172,8 @@ export function MailShell({
   const landscape = useLandscapeFrame();
   const onePane = isPhone || (mode === 'medium' && landscape);
   const showWide = wide !== null && wide !== undefined;
+  const hasReading = reading !== null && reading !== undefined;
+  const twoPanes = !onePane && hasReading;
   const phoneShowsReading = onePane && readingOpen && !showWide;
   const showPhoneChrome = isPhone && !phoneShowsReading && (!showWide || wideKeepsChrome);
   const hasFab = showPhoneChrome && Boolean(fab);
@@ -193,11 +203,11 @@ export function MailShell({
           ) : (
             <>
               {!phoneShowsReading && (
-                <ListPane $mode={onePane ? 'phone' : mode} $fab={hasFab} aria-label="Messages">
+                <ListPane $mode={onePane ? 'phone' : mode} $full={!onePane && !twoPanes} $fab={hasFab} aria-label="Messages">
                   {list}
                 </ListPane>
               )}
-              {!onePane && <ReadingPane aria-label="Reading pane">{reading ?? readingPlaceholder}</ReadingPane>}
+              {twoPanes && <ReadingPane aria-label="Reading pane">{reading}</ReadingPane>}
               {phoneShowsReading && <PhoneOverlay aria-label="Reading pane">{reading}</PhoneOverlay>}
             </>
           )}
