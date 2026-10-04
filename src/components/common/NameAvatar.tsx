@@ -1,0 +1,50 @@
+/**
+ * A registered name's avatar (its `qortal_avatar` thumbnail) for name lists
+ * such as the name switcher. It asks Qortal only once the avatar is on
+ * screen, and only once per name per session (useLazyAvatarUrl, the shared
+ * avatar cache). Until then, and for a name without one, it shows the name's
+ * first letter.
+ *
+ * Hidden from screen readers: the name beside it says it. The letter is drawn
+ * by CSS, so it stays out of the row's text: a menu's type-to-jump matches
+ * "carol", not "Ccarol".
+ */
+import { useState } from 'react';
+import { Avatar } from '@mui/material';
+import { primarySoft } from '../../hub-theme';
+import { useLazyAvatarUrl } from '../../utils/avatarCache';
+
+export interface NameAvatarProps {
+  name: string;
+  size: number;
+  /** A URL already loaded elsewhere (the signed-in name's header avatar). */
+  known?: string;
+}
+
+export function NameAvatar({ name, size, known }: NameAvatarProps) {
+  const [node, setNode] = useState<Element | null>(null);
+  const url = useLazyAvatarUrl(name, node, known);
+  const letter = Array.from(name.trim())[0]?.toUpperCase() ?? '';
+
+  return (
+    <Avatar
+      ref={setNode}
+      aria-hidden
+      src={url || undefined}
+      alt=""
+      sx={(theme) => ({
+        width: size,
+        height: size,
+        fontSize: Math.round(size * 0.45),
+        fontWeight: 700,
+        // MUI's default grey fallback reads below 4.5:1 in every theme.
+        bgcolor: primarySoft(theme),
+        color: theme.palette.primary.main,
+        '& > span[data-letter]::before': { content: 'attr(data-letter)' },
+      })}
+    >
+      {/* Always a child: without one MUI draws its generic person icon. */}
+      <span data-letter={letter} />
+    </Avatar>
+  );
+}
