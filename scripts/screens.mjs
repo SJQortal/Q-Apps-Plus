@@ -13,8 +13,11 @@
  * The app describes itself in apps/<App+>/e2e/screens.config.mjs (see
  * apps/Q-Share+/e2e/screens.config.mjs): its name, theme storage key, mock
  * qortalRequest answers, Core routes and screens. Nothing here publishes or
- * touches a node. Captures and report.json land in apps/<App+>/e2e/shots/
- * (git-ignored).
+ * touches a node. Captures land in apps/<App+>/e2e/shots/ (git-ignored), and
+ * the report beside them as report-<themes>-<mode>.json: report-all-dark.json
+ * for the default run, report-hub30,black-light.json for `--themes hub30,black
+ * --mode light`. Runs with different themes or modes can go side by side
+ * without overwriting each other's report.
  *
  * Needs Playwright: a global `playwright`, or `playwright-core` plus a
  * Chromium-based browser in QPLUS_CHROMIUM (e.g. /snap/bin/brave).
@@ -272,7 +275,13 @@ lines.push(AXE_SOURCE ? `axe rules violated: ${byRule.size}` : 'axe: skipped');
 for (const [id, e] of [...byRule.entries()].sort((a, b) => b[1].nodes - a[1].nodes)) {
   lines.push(`axe ${id} (${e.impact}) nodes=${e.nodes} on ${e.screens.size} captures, e.g. ${[...e.screens][0]} ${JSON.stringify(e.sample)}`);
 }
-writeFileSync(path.join(shots, 'report.json'), JSON.stringify(report, null, 1));
+// One report per theme set and mode (nothing in the repo reads a fixed
+// report.json, so none is written).
+const ALL_THEMES = ['hub30', 'hub20', 'black', 'white'];
+const themeTag = themes.length === ALL_THEMES.length && ALL_THEMES.every((t) => themes.includes(t)) ? 'all' : themes.join(',');
+const reportFile = path.join(shots, `report-${themeTag}-${MODE}.json`);
+writeFileSync(reportFile, JSON.stringify(report, null, 1));
+lines.push(`Report: ${path.relative(root, reportFile)}`);
 console.log(lines.join('\n'));
 // The preview server's pipes would otherwise keep the process alive.
 process.exit(bad.length || byRule.size ? 2 : 0);
