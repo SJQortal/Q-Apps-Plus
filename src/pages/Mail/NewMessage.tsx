@@ -264,6 +264,12 @@ interface NewMessageProps {
 
 const normalizeValue = (value: string): string => value.trim().toLowerCase();
 
+// Stable defaults: a fresh [] per render would re-run every memo and effect
+// that depends on these (the recipient check then re-renders forever).
+const NO_NAMES: string[] = [];
+const NO_GROUPS: JoinedGroupOption[] = [];
+const NO_MESSAGES: any[] = [];
+
 const dedupeStrings = (values: string[]): string[] => {
   const deduped = new Map<string, string>();
   values.forEach(value => {
@@ -325,10 +331,10 @@ export const NewMessage = ({
   forwardInfo,
   inlineMode = false,
   onRequestClose,
-  ownedNames = [],
-  joinedGroups = [],
-  priorityRecipientNames = [],
-  recentInboxMessages = [],
+  ownedNames = NO_NAMES,
+  joinedGroups = NO_GROUPS,
+  priorityRecipientNames = NO_NAMES,
+  recentInboxMessages = NO_MESSAGES,
   openedMessagesById,
   composePrefill = null,
   onThreadPublished,
