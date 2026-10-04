@@ -252,4 +252,35 @@ describe('NameSwitcher (the dropdown)', () => {
       window.matchMedia = original
     }
   })
+
+  it('opens a full-screen sheet, not a popover, in a landscape frame (703×201 in Hub)', () => {
+    const original = window.matchMedia
+    // Medium layout (neither phone nor desktop width), but a short, wide frame.
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('max-height: 500px'),
+      media: query,
+      onchange: null,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia
+    try {
+      const onPick = vi.fn()
+      wrap(<NameSwitcher names={many} activeName="peggy" onPick={onPick} />)
+      fireEvent.click(screen.getByRole('button', { name: /Active mailbox/ }))
+      const dialog = screen.getByRole('dialog', { name: 'Switch active mailbox' })
+      expect(dialog.className).toContain('MuiDialog-paperFullScreen')
+      expect(document.querySelector('.MuiPopover-paper')).toBeNull()
+      // The count stays a live region for screen readers, out of the short frame's way.
+      expect(getComputedStyle(screen.getByRole('status')).position).toBe('absolute')
+      expect(within(dialog).getByRole('button', { name: 'Close' })).toBeTruthy()
+      fireEvent.change(search(), { target: { value: 'oliv' } })
+      fireEvent.click(within(dialog).getByRole('menuitemradio', { name: 'olivia' }))
+      expect(onPick).toHaveBeenCalledWith('olivia')
+    } finally {
+      window.matchMedia = original
+    }
+  })
 })

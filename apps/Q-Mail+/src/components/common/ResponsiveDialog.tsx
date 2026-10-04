@@ -1,7 +1,9 @@
 /**
  * The one dialog frame for Q-Mail+ (docs/DESIGN.md → Mobile → Dialogs):
  * a centred MUI Dialog on medium and desktop layouts, full-screen under
- * 600 px, with 44 px actions, the focus trap left on and a labelled title.
+ * 600 px (or whenever `fullScreen` asks), with 44 px actions, the focus trap
+ * left on and a labelled title. A full-screen sheet in a landscape frame gets
+ * a compact title bar, so its content keeps most of the 201 px height.
  */
 import type { ReactNode } from 'react';
 import {
@@ -14,6 +16,7 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { useLayoutMode } from '../../layout/useLayoutMode';
+import { useLandscapeFrame } from '../../utils/hubFrame';
 
 export interface ResponsiveDialogProps {
   open: boolean;
@@ -31,6 +34,8 @@ export interface ResponsiveDialogProps {
   fullWidth?: boolean;
   /** Remove the content padding (for pages that bring their own layout). */
   flush?: boolean;
+  /** Full screen on every layout, not just phones (a long list in a short frame). */
+  fullScreen?: boolean;
   /** Extra styles for the paper on medium/desktop, e.g. a fixed height. */
   paperSx?: Record<string, unknown>;
   titleId?: string;
@@ -50,11 +55,13 @@ export function ResponsiveDialog({
   maxWidth = 'sm',
   fullWidth = true,
   flush = false,
+  fullScreen = false,
   paperSx,
   titleId,
   className,
 }: ResponsiveDialogProps) {
-  const isPhone = useLayoutMode() === 'phone';
+  const isPhone = useLayoutMode() === 'phone' || fullScreen;
+  const compactTitle = useLandscapeFrame() && isPhone;
   const id = titleId || `qmail-dialog-${nextId++}`;
   const closeInTitle = showClose ?? (isPhone && Boolean(onClose));
 
@@ -95,6 +102,7 @@ export function ResponsiveDialog({
             alignItems: 'center',
             gap: 1,
             pr: closeInTitle ? 1 : 3,
+            ...(compactTitle ? { py: 0.5 } : {}),
             fontSize: '1.125rem',
             fontWeight: 700,
           }}
