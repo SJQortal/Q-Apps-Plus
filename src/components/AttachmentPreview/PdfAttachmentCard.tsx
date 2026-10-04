@@ -254,7 +254,8 @@ export function PdfAttachmentCard({ attachment, onOpenInApp, compact }: PdfAttac
           minWidth: 0,
         }}
       >
-        <Box sx={{ flex: '1 1 160px', minWidth: 0, display: 'flex' }}>{download}</Box>
+        {/* The 160px basis is a width for the row layout; in the phone column it would become a 160px-tall button. */}
+        <Box sx={{ flex: phone ? '0 0 auto' : '1 1 160px', minWidth: 0, display: 'flex' }}>{download}</Box>
         {open}
       </Box>
     </Box>
