@@ -9,7 +9,7 @@ import SortIcon from "@mui/icons-material/Sort";
 import { RootState } from "../../state/store";
 import { EmptyState, ErrorState, ListSkeleton } from "../../layout/states";
 import { usePolling } from "../../hooks/usePolling";
-import { useGroupMembers } from "../../hooks/useGroupMembers";
+import { useGroupMemberCount, useGroupMembers } from "../../hooks/useGroupMembers";
 import { NewThreadButton } from "./NewThreadButton";
 import { ThreadRow } from "./ThreadRow";
 import {
@@ -58,8 +58,11 @@ export const GroupMail = ({
   const groupId = normalizeGroupId(groupInfo?.id);
   const group = useMemo<GroupOption>(() => ({ id: groupId, name: groupInfo?.name || "" }), [groupId, groupInfo?.name]);
   const viewed = useViewedThreads(user?.name);
-  const { members, isLoading: isLoadingMembers } = useGroupMembers(groupId);
   const [showMembers, setShowMembers] = useState(false);
+  // The count needs only the member pages; names (and keys) are looked up
+  // once the list is opened.
+  const memberCount = useGroupMemberCount(groupId);
+  const { members, isLoading: isLoadingMembers } = useGroupMembers(groupId, showMembers);
 
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -228,9 +231,11 @@ export const GroupMail = ({
         aria-expanded={showMembers}
         sx={{ minHeight: 44, px: 2, textTransform: "none", color: "text.secondary", justifyContent: "flex-start", width: "100%" }}
       >
-        {isLoadingMembers && !members.length
-          ? "Loading members…"
-          : `${members.length} ${members.length === 1 ? "member" : "members"}`}
+        {(() => {
+          const shown = members.length || memberCount;
+          if (shown === null || (isLoadingMembers && !shown)) return "Loading members…";
+          return `${shown} ${shown === 1 ? "member" : "members"}`;
+        })()}
       </Button>
       <Collapse in={showMembers} unmountOnExit>
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, px: 2, pb: 1.5 }}>

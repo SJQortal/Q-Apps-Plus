@@ -45,6 +45,13 @@ export const LOOKUP_CONCURRENCY = 6;
 
 const groupCache = new Map<string, GroupMembersResult>();
 const groupInFlight = new Map<string, Promise<GroupMembersResult>>();
+// Addresses only (no name or key lookups): enough for a member count.
+const addressCache = new Map<string, { members: RawMember[]; fetchedAt: number }>();
+const addressInFlight = new Map<string, Promise<RawMember[]>>();
+// Accounts with no public key on chain, until when they are not asked again.
+const keylessUntil = new Map<string, number>();
+/** How long an account without a public key is not looked up again. */
+export const KEYLESS_RECHECK_MS = GROUP_MEMBERS_MAX_AGE_MS;
 const nameByAddress = new Map<string, string>();
 const nameInFlight = new Map<string, Promise<string>>();
 const publicKeyByAddress = new Map<string, string>();
@@ -81,6 +88,7 @@ export async function resolveNameForAddress(address: string): Promise<string> {
 export async function resolvePublicKeyForAddress(address: string): Promise<string> {
   const cached = publicKeyByAddress.get(address);
   if (cached) return cached;
+  if ((keylessUntil.get(address) ?? 0) > Date.now()) return '';
   const running = publicKeyInFlight.get(address);
   if (running) return running;
   const request = (async () => {
@@ -88,8 +96,10 @@ export async function resolvePublicKeyForAddress(address: string): Promise<strin
     try {
       const account = await qortalRequest({ action: 'GET_ACCOUNT_DATA', address });
       const publicKey = typeof account?.publicKey === 'string' ? account.publicKey : '';
-      // Only remember answers; an empty key may fill in once the account is on chain.
+      // An empty key may fill in once the account is on chain, so it is
+      // only remembered for a while.
       if (publicKey) publicKeyByAddress.set(address, publicKey);
+      else keylessUntil.set(address, Date.now() + KEYLESS_RECHECK_MS);
       return publicKey;
     } catch {
       return '';
@@ -155,6 +165,47 @@ export async function fetchGroupMemberAddresses(groupId: string, signal?: AbortS
   return all;
 }
 
+/**
+ * A group's member addresses, cached like the full list (10 minutes, one
+ * request in flight per group). Costs only the member pages: no name or key
+ * lookups, so it is what a member count should use.
+ */
+export async function getGroupMemberAddresses(
+  groupIdInput: string | number,
+  options: GetGroupMembersOptions = {}
+): Promise<RawMember[]> {
+  const groupId = normalizeGroupId(groupIdInput);
+  if (!groupId) return [];
+  const maxAge = options.maxAgeMs ?? GROUP_MEMBERS_MAX_AGE_MS;
+  if (!options.force) {
+    const hit = addressCache.get(groupId);
+    if (hit && Date.now() - hit.fetchedAt < maxAge) return hit.members;
+  }
+  const running = addressInFlight.get(groupId);
+  if (running) return running;
+  const request = (async () => {
+    const members = await fetchGroupMemberAddresses(groupId, options.signal);
+    addressCache.set(groupId, { members, fetchedAt: Date.now() });
+    return members;
+  })();
+  addressInFlight.set(groupId, request);
+  try {
+    return await request;
+  } finally {
+    addressInFlight.delete(groupId);
+  }
+}
+
+/** A cached member count without fetching (null when none or stale). */
+export function peekGroupMemberCount(groupIdInput: string | number, maxAgeMs = GROUP_MEMBERS_MAX_AGE_MS): number | null {
+  const groupId = normalizeGroupId(groupIdInput);
+  const full = groupCache.get(groupId);
+  if (full && Date.now() - full.fetchedAt < maxAgeMs) return full.members.length;
+  const hit = addressCache.get(groupId);
+  if (!hit || Date.now() - hit.fetchedAt >= maxAgeMs) return null;
+  return hit.members.length;
+}
+
 export interface GetGroupMembersOptions {
   /** Ignore a cached list and fetch again. */
   force?: boolean;
@@ -184,7 +235,7 @@ export async function getGroupMembers(
 
   const request = (async () => {
     stats.groupFetches += 1;
-    const raw = await fetchGroupMemberAddresses(groupId, options.signal);
+    const raw = await getGroupMemberAddresses(groupId, options);
     const members = await mapWithConcurrency(raw, LOOKUP_CONCURRENCY, async (item): Promise<GroupMember> => {
       const address = item.member as string;
       const [name, publicKey] = await Promise.all([
@@ -247,9 +298,11 @@ export function memberNames(members: GroupMember[]): string[] {
 export function invalidateGroupMembers(groupId?: string | number): void {
   if (groupId === undefined) {
     groupCache.clear();
+    addressCache.clear();
     return;
   }
   groupCache.delete(normalizeGroupId(groupId));
+  addressCache.delete(normalizeGroupId(groupId));
 }
 
 export function groupMembersStats() {
@@ -259,6 +312,9 @@ export function groupMembersStats() {
 export function resetGroupMembersCache(): void {
   groupCache.clear();
   groupInFlight.clear();
+  addressCache.clear();
+  addressInFlight.clear();
+  keylessUntil.clear();
   nameByAddress.clear();
   nameInFlight.clear();
   publicKeyByAddress.clear();

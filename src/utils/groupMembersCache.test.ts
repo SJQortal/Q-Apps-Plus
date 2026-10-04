@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { fetchedUrls, mockFetchRoute, mockQortalAction, qortalCalls } from '../test/setup'
 import {
   GROUP_MEMBERS_PAGE_SIZE,
+  getGroupMemberAddresses,
   getGroupMembers,
   getGroupPublicKeys,
+  peekGroupMemberCount,
   groupMembersStats,
   invalidateGroupMembers,
   memberNames,
@@ -117,5 +119,28 @@ describe('groupMembersCache', () => {
     mockFetchRoute('/groups/members/9?', { error: 'nope' }, { status: 500 })
     await expect(getGroupMembers('9')).rejects.toThrow(/group members/)
     expect(peekGroupMembers('9')).toBeNull()
+  })
+
+  it('counts members from the member pages alone, and the full list reuses those pages', async () => {
+    mockMemberPages('9', 150)
+    mockNamesFor({})
+    const addresses = await getGroupMemberAddresses('9')
+    expect(addresses).toHaveLength(150)
+    expect(peekGroupMemberCount('9')).toBe(150)
+    expect(qortalCalls('GET_ACCOUNT_DATA')).toHaveLength(0)
+    expect(fetchedUrls('/names/address')).toHaveLength(0)
+    await getGroupMembers('9')
+    // No second walk of the member pages.
+    expect(fetchedUrls('/groups/members/9')).toHaveLength(2)
+  })
+
+  it('does not ask again for an account without a public key on every refresh', async () => {
+    mockMemberPages('8', 2)
+    mockNamesFor({})
+    mockQortalAction('GET_ACCOUNT_DATA', () => ({ publicKey: '' }))
+    await getGroupMembers('8')
+    expect(qortalCalls('GET_ACCOUNT_DATA')).toHaveLength(2)
+    await getGroupMembers('8', { force: true })
+    expect(qortalCalls('GET_ACCOUNT_DATA')).toHaveLength(2)
   })
 })
