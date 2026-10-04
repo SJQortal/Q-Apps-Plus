@@ -148,7 +148,7 @@ export default function SimpleTable({
           <TableHead>{fixedHeaderContent()}</TableHead>
           <TableBody>
             {data.map((row, index) => (
-              <TableRow key={index}>
+              <TableRow key={row?.id || index}>
                 {rowContent(index, row, openMessage)}
               </TableRow>
             ))}
