@@ -69,6 +69,8 @@ export const GroupMail = ({
   const [sortAnchorEl, setSortAnchorEl] = useState<null | HTMLElement>(null);
   const generation = useRef(0);
   const lastSignature = useRef("");
+  // Raw rows paged so far (other groups' rows included), the next offset.
+  const rawOffset = useRef(0);
   const mode: ThreadFilterMode = (threadFilterOptions as readonly string[]).includes(filterMode)
     ? (filterMode as ThreadFilterMode)
     : "Recently active";
@@ -126,6 +128,7 @@ export const GroupMail = ({
           if (run !== generation.current) return;
           const list = applyActivity(page.threads, activity);
           lastSignature.current = listSignature(list);
+          rawOffset.current = page.rawCount;
           setThreads(list);
           setHasMore(page.hasMore);
         }
@@ -142,6 +145,7 @@ export const GroupMail = ({
   useEffect(() => {
     setThreads([]);
     setHasMore(false);
+    rawOffset.current = 0;
     void load(false);
   }, [load]);
 
@@ -160,10 +164,11 @@ export const GroupMail = ({
     setIsLoadingMore(true);
     try {
       const [page, activity] = await Promise.all([
-        fetchThreadPage(group, { offset: threads.length, reverse: mode === "Newest" }),
+        fetchThreadPage(group, { offset: rawOffset.current, reverse: mode === "Newest" }),
         fetchGroupActivity(groupId),
       ]);
       if (run !== generation.current) return;
+      rawOffset.current += page.rawCount;
       setThreads((current) => {
         const known = new Set(current.map((thread) => thread.identifier));
         return [...current, ...applyActivity(page.threads.filter((thread) => !known.has(thread.identifier)), activity)];
@@ -174,7 +179,7 @@ export const GroupMail = ({
     } finally {
       setIsLoadingMore(false);
     }
-  }, [group, groupId, hasMore, mode, threads.length]);
+  }, [group, groupId, hasMore, mode]);
 
   const namedMembers = useMemo(() => members.filter((member) => member.name).map((member) => member.name), [members]);
   const unnamedCount = members.length - namedMembers.length;

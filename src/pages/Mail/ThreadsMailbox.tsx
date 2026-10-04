@@ -128,7 +128,8 @@ export const ThreadsMailbox = ({
         const isRefresh = offset === 0 && Boolean(previous);
         return {
           threads,
-          offset: isRefresh ? Math.max(previous?.offset ?? 0, page.threads.length) : offset + page.threads.length,
+          // By raw rows, so a page of other groups' rows still moves on.
+          offset: isRefresh ? Math.max(previous?.offset ?? 0, page.rawCount) : offset + page.rawCount,
           hasMore: isRefresh ? Boolean(previous?.hasMore) || page.hasMore : page.hasMore,
           error: null,
         };
