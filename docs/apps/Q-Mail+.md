@@ -412,6 +412,8 @@ Readers only require `identifier`, `name`, `service` (`FileElement.tsx:111, 204,
 
 Fetch chain: `FileElement` click → `downloadVideo` context → `GET_QDN_RESOURCE_PROPERTIES` + `GET_QDN_RESOURCE_URL`, then `GET_QDN_RESOURCE_STATUS` every 5 s until `READY` (`src/wrappers/DownloadWrapper.tsx:44-194`); on `READY` (second click): `GET_QDN_RESOURCE_PROPERTIES` for `filename`/`mimeType` (`:113-120`), `FETCH_QDN_RESOURCE` base64 (`:127-133`), `DECRYPT_DATA {encryptedData}` (`:135-138`), `new Blob([bytes],{type})` (`:141-149`), `SAVE_FILE {blob, filename: originalFilename || filename, mimeType}` (`src/components/FileElement.tsx:152-159`). The `GET_QDN_RESOURCE_URL` result is stored but never used as a `src`; bytes always come via `FETCH_QDN_RESOURCE` + `DECRYPT_DATA`.
 
+**Q-Mail+ PDF preview (round 5):** a PDF attachment gets Q-Share+'s file card (icon, name, "PDF · size", Download → Save, Open PDF). Open PDF fetches and decrypts the attachment once (`FETCH_QDN_RESOURCE` + `DECRYPT_DATA`, session cache), checks the `%PDF-` header, and sends `SHOW_PDF_READER {blob}` with the decrypted bytes typed `application/pdf` (`src/utils/pdf/hubPdfReader.ts`). Hub hands the Blob to its own pdf.js viewer in memory: nothing is uploaded, written or published, and no QDN reference leaves the app. If Hub does not answer in 5 s (an older Hub, or no Hub), the bundled pdf.js viewer opens instead for the rest of the session. Files over 100 MB are saved, not opened. No data format changes.
+
 #### 7. Group threads
 Thread header (service `MAIL`, unencrypted, single `PUBLISH_QDN_RESOURCE` sent immediately with `await qortalRequest` outside the later multiple-publish batch): `{action:"PUBLISH_QDN_RESOURCE", name: senderName, service:"MAIL", data64, identifier: "qortal_qmail_thread_group<groupId>_<threadToken>", description: threadTitle.slice(0,200)}` (`NewMessage.tsx:1120-1128`; `NewThread.tsx:319-326,343`). No `encrypt`/`publicKeys` keys. JSON `{ title: string, groupId: string, createdAt: number, name: string }` (`NewMessage.tsx:1113-1118`; `NewThread.tsx:311-316`; `NewMessage` writes `groupId` as a string, `NewThread` as whatever the API returned, and every consumer interpolates it). Readers take the title from resource `metadata.description` first and only `FETCH_QDN_RESOURCE` the JSON (`.title`) when description is empty (`src/pages/Mail/GroupMail.tsx:166-201, 309-338`; `src/pages/Mail/ThreadsMailbox.tsx:37-59`; GroupMail uses truthiness, ThreadsMailbox trims; on fallback failure GroupMail drops the thread, ThreadsMailbox shows "Untitled thread" `:97`). `groupId`/`createdAt`/`name` in the JSON are ignored; the thread's group and owner come from the identifier and resource `name`. Titles longer than 200 chars show truncated via the metadata path.
 
@@ -515,9 +517,11 @@ Configured as `rating: { enabled: true, pollName: "app-library-APP-rating-qmails
 - **Direct mail JSON** gains `to: [recipient]` and `cc: [Cc names]` beside the binding `recipient`. Every To/Cc/Bcc name still gets its own copy with the binding identifier `_mail_qortal_qmail_<name.slice(0,20)>_<address.slice(-6)>_mail_<sameSendId>` and `recipient` = that name, all in one `PUBLISH_MULTIPLE_QDN_RESOURCES {resources, encrypt:true, publicKeys:[to, ...cc, ...bcc]}`. Bcc names never appear in any JSON. The original Q-Mail reads `recipient` and ignores `to`/`cc`, so every copy opens there. Pinned by tests in `src/utils/mailCompose.test.ts`.
 - **Bodies** are published through `toPublishedMailHtml()` (`src/components/common/TextEditor/quillHtml.ts`): the Quill 1 shape with plain spaces. Quill 2's `getSemanticHTML()` had turned every space into `&nbsp;`; runs of 2+ spaces keep one `&nbsp;` as Quill 1 does, and `<pre>` keeps plain spaces.
 - **Replies** embed the previous message without its own `generalData` history (since round 2).
-- **`qmail_state_v1`** gains top-level `archived` and `settings` maps (§10); the `messages` map is unchanged. `settings.footer` was added by feat-footer.
+- **`qmail_state_v1`** gains top-level `archived` and `settings` maps (§10); the `messages` map is unchanged. Since round 5, `settings.footer` = `{ default, byName, inReplies }`, written only when there is footer text. It is applied on load, and before a publish that never loaded the document, only when this device has no `qmail_footer_<address>` key; a local footer, even a cleared one, is never replaced (`d55e763`).
 - **Footer** (feat-footer): Settings → Mail → Footer. The composer writes it into the body as Quill 1 paragraphs (one escaped `<p>` per line, `<p><br></p>` for a blank one): a new message is `<p><br></p>` + footer; a reply or forward (switch on) is `<p><br></p>` + footer + `<p><br></p>` + the "X wrote:" line or forward header + quote. It reaches the recipient only inside `textContentV2`, so the mail format is unchanged. Settings' "Footer for" picker lists the names A to Z, as a plain select up to 15 names and as the searchable NameSwitcher (an "All names (default)" row first, "Own footer" under names that have one) above that. Changing From swaps it for that name's footer only while it is exactly as inserted; drafts keep what the user has. Pinned by `mailFooter.test.ts`, `mailCompose.test.ts` and `NewMessage.footer.test.tsx`.
 - **localStorage** (new keys or fields, all local): `qmail_read_state_<address>`, `qmail_archived_<address>`, `qmail-general-consent`, compose-draft keys `…::reply:<id>` and `…::replyall:<id>` with optional `ccNames`/`showCC`, and `qmail_alias_scan_checkpoint_<address>` gains `intervals` and `complete` (an old value reads as a finished scan) plus a per-address set of scanned identifiers (capped at 3000).
+- **localStorage, round 5:** `qmail_footer_<address>` = `{ default, byName: {"<name>": text}, inReplies }` (plain text with `\n`; the key is kept when the footer is emptied, which is how a cleared footer stays cleared), and `qmail_pane_widths_<address>` = `{ rail?, list? }` in px (only widths the user dragged; `src/layout/usePaneWidths.ts`). Both are local only and new; the original app never reads them.
+- **PDF preview** (round 5) adds no data: `SHOW_PDF_READER {blob}` gets the decrypted bytes locally (§6).
 
 ### Qortal call inventory
 
@@ -1244,7 +1248,7 @@ Before → after (platform baseline `43d9236` → merged redesign `e69a2fe`): in
 
 Two parallel agents from `b2426c9` (main merged in, kit synced), merged one at a time; then a leftovers pass.
 
-**Hub & GO pitfalls (docs/QORTAL.md), one commit each:** 1 light/dark: kit in sync (THEME_CHANGED handled by the kit) · 2 sticky headers: no `overflow-x` on html/body · 3 frame height: `src/utils/hubFrame.ts`; in a landscape frame the pane header is a 48 px bar, the floating Compose is hidden and the medium layout shows one pane at a time · 4 sheets: `BottomSheetMenu` mounts on first open · 5 avatars: `useLazyAvatarUrl` hands out no `src` until the row is in view (a real bug: it marked rows visible before the ref existed) · 6 overlaps: toasts above the bottom bar and left of the FAB; lists get 88 px clearance under it · 7 deep links: see Follow-ups · 8 Back: `usePhoneBackClose` rebuilt on the router's history, zero `window.history` calls · 9 unusual names: every direct fetch encodes; `SEARCH_NAMES` with `+` handled in the leftovers pass · 10 publishing: `MultiplePublish` waits as long as Hub (resources × 30 min), shows `PUBLISH_STATUS` per item, checks QDN by name + identifier after a timeout before offering Retry · 11 declines: `src/utils/hubErrors.ts` (12 languages) → quiet cancels everywhere · 12 account: `GET_USER_ACCOUNT` retried once after 35 s, then "Sign in" · 13 public nodes: Blocked names shows "Not available on a public node" · 14 resources: "D" bodies = deleted (said so, dropped), 2/4/8/16 s retries, then "Not available on your node right now" with sender and date · 15 trust: caches keyed by name + identifier, the search row wins over the body · 16 PDFs: bundled pdf.js with the worker on the main thread (round 1) · 17 saves: always `SAVE_FILE` with a blob (an ATTACHMENT_PRIVATE location save would write ciphertext; the composer caps attachments at 40 MB) · 18 user HTML: DOMPurify 3.4, qortal links built with a TreeWalker over the sanitised fragment, inline colours dropped, web links shown as text with Copy. Tests 266 → 352.
+**Hub & GO pitfalls (docs/QORTAL.md), one commit each:** 1 light/dark: kit in sync (THEME_CHANGED handled by the kit) · 2 sticky headers: no `overflow-x` on html/body · 3 frame height: `src/utils/hubFrame.ts`; in a landscape frame the pane header is a 48 px bar, the floating Compose is hidden and the medium layout shows one pane at a time · 4 sheets: `BottomSheetMenu` mounts on first open · 5 avatars: `useLazyAvatarUrl` hands out no `src` until the row is in view (a real bug: it marked rows visible before the ref existed) · 6 overlaps: toasts above the bottom bar and left of the FAB; lists get 88 px clearance under it · 7 deep links: see Follow-ups · 8 Back: `usePhoneBackClose` rebuilt on the router's history, zero `window.history` calls · 9 unusual names: every direct fetch encodes; `SEARCH_NAMES` with `+` handled in the leftovers pass · 10 publishing: `MultiplePublish` waits as long as Hub (resources × 30 min), shows `PUBLISH_STATUS` per item, checks QDN by name + identifier after a timeout before offering Retry · 11 declines: `src/utils/hubErrors.ts` (12 languages) → quiet cancels everywhere · 12 account: `GET_USER_ACCOUNT` retried once after 35 s, then "Sign in" · 13 public nodes: Blocked names shows "Not available on a public node" · 14 resources: "D" bodies = deleted (said so, dropped), 2/4/8/16 s retries, then "Not available on your node right now" with sender and date · 15 trust: caches keyed by name + identifier, the search row wins over the body · 16 PDFs: bundled pdf.js with the worker on the main thread (round 1); since round 5 "Open PDF" uses Hub's own reader first: `SHOW_PDF_READER {blob}` gets the decrypted bytes on this device (nothing is uploaded or published), and the bundled pdf.js viewer is the fallback where Hub has no reader · 17 saves: always `SAVE_FILE` with a blob (an ATTACHMENT_PRIVATE location save would write ciphertext; the composer caps attachments at 40 MB) · 18 user HTML: DOMPurify 3.4, qortal links built with a TreeWalker over the sanitised fragment, inline colours dropped, web links shown as text with Copy. Tests 266 → 352.
 
 **Audit against Hub's source** (read-only, `Qortal GO/Qortal-Hub` + Core's `q-apps.js`): q-apps.js answers `GET_ACCOUNT_DATA`, `GET_ACCOUNT_NAMES`, `SEARCH_NAMES` (raw `&query=`), `GET_NAME_DATA`, `GET_QDN_RESOURCE_URL/STATUS/PROPERTIES` and `FETCH_QDN_RESOURCE` itself; everything else goes to Hub, which gives each request 30 s except `PUBLISH_MULTIPLE` (resources × 30 min) and `PUBLISH_QDN_RESOURCE` (1 h), dedupes identical read-only requests in flight, and rejects with `{ error, message }`. Those limits and texts are what `hubErrors.ts` and `MultiplePublish` now follow.
 
@@ -1345,13 +1349,80 @@ Driven with `scripts/hub-cdp.mjs` on a test Hub at debug port 9223 (`Qortal-Hub 
   - the delete-sent sheet (Cancel only);
   - archive and read state on mail 1 (checked on Simon's message earlier).
 
+### Round 5 (2026-10-04, evening): Simon's requests on his own account
+
+Simon tried the app on his main account: 86 names and about 177 messages in the combined inbox. He asked for seven things. The work came in five branches, merged one at a time: `193a1c8` links, `3df1a03` names, `5725fe2` layout, `763fbb7` footer, `c803631` PDF.
+
+| Item | What changed | Commits |
+|---|---|---|
+| Name switcher | Settings → Account → Active mailbox is a dropdown. Above 15 names it is a searchable popover on desktop and a full-screen sheet on phones and in landscape frames. A newly chosen name never shows the previous name's avatar. | `79aeb82`, `8a4f308`, `1e49dc5` |
+| Adjustable panes | The borders between rail, list and reading pane can be dragged or moved with the keyboard. Rail 180–360 px, list 260 px up to 60 % of the main area, reading pane at least 360 px. Widths are saved per account. The handle is hidden on touch-only screens. | `75ecf44`, `9a2098b` |
+| Switching messages | Any row opens while another message is shown or still opening. The newer open wins and the row highlight follows it. | `1cf3eec` |
+| No "Select a message" | With nothing open the list takes the full width. The reading pane appears when a message opens. | `b6da4f8` |
+| Group-join link | `qortal://` links in every reader open through Hub: `JOIN_GROUP` for use-group links, a new Hub tab for apps and resources. A link that can't open becomes text. | `76b24af`, `9101ab0`, `2cc2cb8` |
+| Mail footer | Settings → Mail → Footer: a default footer, one per name, and a switch for replies and forwards. The composer adds it to new mail, replies and forwards, and From swaps it while it is unedited. It is published in `settings.footer` (§10, §17). | `62d036a`, `a31a1e1`, `750ffb7`, `1fd2ad9`, `ffd1459`, `3cb88ba`, `d55e763`, `37bfa06`, `376c827` |
+| PDF preview | PDF attachments get Q-Share+'s file card. Open PDF hands the decrypted bytes to Hub's own reader (`SHOW_PDF_READER {blob}`, nothing uploaded); the bundled pdf.js viewer is the fallback. On phones the Save button is one row tall. | `05e3c41`, `3955caf`, `75fc9ac` |
+| Other | A paging test got 20 s under full-suite load; Settings row buttons no longer shrink under long labels (found in the Hub check). | `4b32aae`, `5071fe0` |
+
+**Causes:**
+- Switching: while a message was shown, the reader kept the reading pane, so OpenMail never mounted and nothing was fetched.
+- Join link: Core's q-apps.js crashes in `extractComponents` on `qortal://use-group/…` links and the frame navigates away (the original app too). The app now stops the click and asks Hub itself.
+- Join link, second cause: Hub declares `const qortalRequest`, which is not a window property, so `main.tsx` put its "outside Hub" stub on `window` and the link helper picked the stub.
+
+**Review** of the round's diff: 3 reviewers, 10 findings, 6 confirmed and 4 refuted. The fixes, one commit each:
+
+| Commit | Fix |
+|---|---|
+| `d55e763` | a cleared footer stays cleared; the published state no longer refills it |
+| `37bfa06` | the footer is inserted with Quill's whitespace, so a From change can swap it |
+| `376c827` | the footer's name picker is A to Z and searchable above 15 names |
+| `1e49dc5` | the name switcher is a full-screen sheet in landscape frames |
+| `9a2098b` | the pane resize handle is hidden on touch-only screens |
+
+**Hub check on Simon's account (earlier, round 5):** test Hub on port 9223 signed in as Simon James, dev server in Dev Mode. The switcher lists 86 names and "pos" finds 3. Both panes drag and keep their widths. Switching between messages works, including from a decrypted one to a locked one. Mugician's join link opens Hub's "Confirm joining the group" dialog; it was declined. It found the avatar bug (POS+ showed Simon James's picture), fixed in `8a4f308`.
+
+**Hub check on Simon's account (this evening):** same Hub, never locked. "Load published QDN state?" was answered "Not now" each time. The frame's localStorage was saved first and matched exactly at the end (0 differing keys).
+
+| Check | Result |
+|---|---|
+| PDF preview | "Q-Mail+ test 1" (PDF 683 B, PNG 12 KB, TXT 67 B) found by search. Open PDF opens Hub's reader with the page drawn in under 2.5 s; Exit closes it. Download then reads Save, as in Q-Share+. Hub's save prompt was declined and the app showed no error. PNG and TXT previews open; the in-app pdf.js viewer still works. "Fwd: Q-Mail+ test 1" is not in Simon's mail (0 matches in 349 subjects). |
+| Q-Share+ comparison | Share "HR Newsletter 967" (438 KB PDF): the same card layout. Hub's reader opened on page 1 of 4 after about 9 s (first download), then Download read Save. Only difference: Q-Mail+ also offers the in-app viewer. |
+| PDF at 390×844 touch | Hub's reader in about 0.5 s. The Save/Download button was 160 px tall; fixed in `75fc9ac`, now 48 px. |
+| Footer | Saved as you type. New mail: an empty line, then the footer. Reply: the footer above the "On … wrote:" quote. A POS+ footer set through the "Footer for" picker (popover at 1440, full-screen sheet at 390); From = POS+ swaps it in and back. An edited footer survives From changes. Every composer was discarded and no draft was left. Both footers cleared: after a reload the footer stays empty (`d55e763` holds). No overflow at 390 touch. |
+| Switching | Decrypted Mugician → locked TFreedman decrypts and opens in about 0.7 s. |
+| Name switcher | "pos" finds 3 of 86; POS+ and back works. Landscape 844×390 touch: a full-screen sheet with 6 names visible. |
+| Panes | At 1440 rail 260 → 320 and list 306 → 406, saved. At 1024×768 touch and 390 touch the handle is hidden. No message open: full-width list; Mark unread closes back to it. |
+| Join link | `qortal://use-group/action-join/groupid-1176` opens Hub's "Confirm joining the group: Q-Builder Test Users" (0.01 QORT fee). DECLINE pressed. |
+| Settings at 390 | Publish and Restore were squeezed to 79 px with icons outside the border; fixed in `5071fe0` (109 px and 111 px, no overflow). |
+
+**Calls on Simon's first load** (`requests 20 --reload`, about 31 s):
+
+| Kind | Count |
+|---|---|
+| `qortalRequest` | 46: 21 `FETCH_QDN_RESOURCE` (19 group-thread MAIL + `qmail_state_v1`), 18 `GET_QDN_RESOURCE_URL`, 1 `DECRYPT_DATA`, account and name calls |
+| `/arbitrary/resources/search` | 408, most in the first 3 s: 170 inbox queries with limit 200 (2 per owned name), 86 + 84 sent probes with limit 20, 45 MAIL thread searches |
+| Other Core fetches | 20 MAIL, 16 status, 5 THUMBNAIL |
+
+Group avatars 694 and 659 were each requested twice at the same moment. The per-name probes are the same in the original app; merging them is the next speed fix (Follow-ups).
+
+**Numbers now:**
+
+| | Round 4 | Round 5 |
+|---|---|---|
+| Main chunk | 388 kB (gzip 125 kB) | 394 kB (gzip 126 kB) |
+| Test files · tests | 72 · 510 | 83 · 632 |
+| Lint | clean | clean |
+| Kit | in sync | in sync |
+| dist | 3.6 MB | 3.6 MB |
+
 ## Follow-ups
 
-**For Simon on his own account** (mails 2 and 4 can only be decrypted by you), in Q-Mail+ and the original Q-Mail:
-1. the five copies of "Q-Mail+ test 2" under Simon James, POS+, MA's, "Custom Node on Qortal GO | GUIDE" and biohackerscorner.com;
-2. mail 1's Cc (you are in Cc: Reply all from your side should list Tester GO);
-3. the forward ("Fwd: Q-Mail+ test 1…") with its three attachments, including the PDF viewer;
-4. the multi-name inbox with your 86 names: avatars and the name search above 15 names.
+**For Simon on his own account.** The round 5 Hub checks already ran on your account (read-only, nothing published or sent): the 86-name switcher and its search, the avatars after a switch, pane widths, switching between messages, the full-width list, Mugician's join link (declined), the footer at 1440 and 390 (all cleared again), mail 1's PDF in Hub's reader and in the in-app viewer, and the Q-Share+ comparison. Left for you, in Q-Mail+ and the original Q-Mail:
+1. **The footer for real:** set yours, send one mail, and check it in the original app.
+2. **GO on a phone:** Open PDF in Hub's reader, the footer in the composer above the keyboard, and the name sheet.
+3. **The five copies of "Q-Mail+ test 2"** under Simon James, POS+, MA's, "Custom Node on Qortal GO | GUIDE" and biohackerscorner.com.
+4. **Mail 1's Cc:** Reply all from your side should list Tester GO.
+5. **The forward:** "Fwd: Q-Mail+ test 1" did not show in your mail this evening (0 matches for "Fwd" in This mailbox and All mail, 349 subjects), although Tester Hub published it to Simon James in round 4. Check whether it arrives in the original app.
 
 **Simon's answers (2026-10-04), all done:** 1 test mail: one message arrived without attachments; the attachment checks ran with test sends from Tester Hub (see Round 4) · 2 dead code deleted · 3 Cc row added · 4 unarchive left as is · 5 rating hidden · 6 Classic blue kept · 7 shortcuts from 600 px · 8 Roboto as subset WOFF2 · 9 kit and script fixes made · 10 the prompt's checkbox removed.
 
@@ -1359,8 +1430,14 @@ Driven with `scripts/hub-cdp.mjs` on a test Hub at debug port 9223 (`Qortal-Hub 
 
 1. **Cc in the reader:** mail from Q-Mail+ now carries `cc`, but the reader only shows "to <recipient>". Show a Cc line (additive, from the `cc` field)?
 2. **Cc autocomplete:** only To has directory suggestions; Cc and Bcc names are typed and checked. Add suggestions there too?
-3. **Closing a reply on desktop** also closes the open message ("Select a message"). Keep the message open behind the composer instead?
+3. **Closing a reply** goes back to the full-width list; the message you replied to is not reopened. Reopen it beside the list instead?
 4. **`blogSlice`** stays registered because the `BlogPost` type and 8 tests use it; removing it is a small refactor with no user-visible change. Do it in the next pass?
 5. **Orphaned assets** nothing imports (old PNG logos and 18 old SVG icons in `src/assets`) were not on the approved list, so they stay. Delete them too?
 
-**Next pass:** the attach control is an image inside a `role=presentation` drop zone rather than a labelled button; `MailTable.tsx`'s `SimpleTable` default export is dead; `hub-cdp.mjs tap` lands about 124 px high in the app frame (the frame's top offset in Hub's page); GO on a real phone (keyboard, hardware Back, pull-to-refresh); the React Compiler lint rules stay off (mostly upstream setState-in-effect code).
+**Next pass:**
+- **Merge the per-name probes (next speed fix).** On Simon's account a first load sends about 400 `/arbitrary/resources/search`, almost all the inbox and sent probe per owned name (I4/I5, the same in the original): 170 inbox queries and 86 + 84 sent probes in the first 3 s. One query per kind with several `name=` params, or probing only names that have mail, would cut most of them.
+- **Duplicate group avatars:** avatars for groups 694 and 659 were requested twice at the same moment; the in-flight merge misses them.
+- **Load-state prompt per name:** switching the active mailbox away and back asks "Load published QDN state?" again; Settings says it asks once per sign-in.
+- **Compose's From** is a plain 86-item select with no search, unlike the Settings and Footer pickers.
+
+Also: the attach control is an image inside a `role=presentation` drop zone rather than a labelled button; `MailTable.tsx`'s `SimpleTable` default export is dead; `hub-cdp.mjs tap` lands about 124 px high in the app frame (the frame's top offset in Hub's page; a separate repo task in `scripts/`); GO on a real phone (keyboard, hardware Back, pull-to-refresh); the React Compiler lint rules stay off (mostly upstream setState-in-effect code).
