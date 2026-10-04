@@ -7,7 +7,9 @@
  * account "Tester GO" that also owns "bob+builder"; an inbox of 30
  * MAIL_PRIVATE rows from four senders (one with a "+", one non-ASCII), some
  * with a cached subject, some locked (DECRYPT_DATA throws); one message with
- * four attachments (PNG, text, a valid one-page PDF, WAV); a watched alias
+ * four attachments (PNG, text, a valid one-page PDF, WAV) and two Cc names
+ * (Reply all fills Cc); 51 qortal_qmail_ rows, so the paged alias
+ * scan reads two pages; a watched alias
  * with mail; sent rows for both owned names (plus a tombstone that must stay
  * hidden); a group with threads and posts; a draft, archived ids and read
  * state in localStorage. Every publish and save is declined, so nothing can
@@ -229,8 +231,10 @@ const mailBody = (r, index, recipientName) => {
         : [],
     },
     recipient: recipientName,
-    to: recipientName,
-    cc: [],
+    // m01 went to two more people in Cc (the + app's additive to/cc fields),
+    // so Reply all fills the composer's Cc row.
+    to: hasFiles ? [recipientName] : recipientName,
+    cc: hasFiles ? [ZOE, MARCUS] : [],
   };
 };
 
@@ -368,6 +372,10 @@ async function openMessage(page) {
   if ((await group.getAttribute('aria-expanded')) === 'false') await group.click({ timeout: 4000 });
   await page.getByRole('button', { name: /Photos, notes and the spec/ }).first().click({ timeout: 4000 });
   await page.waitForSelector('article', { timeout: 8000 }).catch(() => {});
+  // Playwright's tap leaves a mouse pointer where the row was, over the
+  // reader's Archive / Mark unread icons, and their hover tooltips would open;
+  // a real phone has no pointer there.
+  await page.mouse.move(1, 1);
   await page.waitForTimeout(300);
 }
 
@@ -552,6 +560,18 @@ export default {
     },
     { key: 'aliases', path: '/', after: async (page) => { await goTo(page, /^Aliases/); await page.waitForSelector(`text=${ALIAS}`, { timeout: 8000 }).catch(() => {}); } },
     {
+      // One capped run of the paged alias scan: page progress and coverage.
+      key: 'alias-scan',
+      path: '/',
+      after: async (page) => {
+        await goTo(page, /^Aliases/);
+        await page.getByRole('button', { name: /^(Start alias scan|Scan more|Check new mail)$/ }).first().click({ timeout: 8000 });
+        await page.waitForSelector('[data-testid=alias-scan-coverage]', { timeout: 10000 }).catch(() => {});
+        await page.getByRole('button', { name: /^(Scan more|Check new mail)$/ }).first().waitFor({ timeout: 10000 }).catch(() => {});
+        await page.waitForTimeout(300);
+      },
+    },
+    {
       key: 'alias-inbox',
       path: '/',
       after: async (page) => {
@@ -573,7 +593,24 @@ export default {
         await page.waitForTimeout(300);
       },
     },
-    { key: 'compose', path: '/', after: async (page) => { await goTo(page, /^Compose$/); await page.waitForSelector('.ql-editor', { timeout: 8000 }).catch(() => {}); } },
+    {
+      // To, Cc and Bcc open, with a name checked into Cc.
+      key: 'compose',
+      path: '/',
+      after: async (page) => {
+        await goTo(page, /^Compose$/);
+        await page.waitForSelector('.ql-editor', { timeout: 8000 }).catch(() => {});
+        await page.getByPlaceholder('Type a name or joined group').first().fill(ALICE);
+        await page.keyboard.press('Escape');
+        await page.getByRole('button', { name: /^Cc$/ }).first().click({ timeout: 4000 });
+        await page.getByRole('button', { name: /^Bcc$/ }).first().click({ timeout: 4000 });
+        const cc = page.getByRole('textbox', { name: 'Cc name' }).first();
+        await cc.fill(ZOE);
+        await cc.press('Enter');
+        await page.getByRole('button', { name: new RegExp(ZOE) }).first().waitFor({ timeout: 4000 }).catch(() => {});
+        await page.waitForTimeout(300);
+      },
+    },
     {
       key: 'reply',
       path: '/',
@@ -581,6 +618,18 @@ export default {
         await openMessage(page);
         await page.getByRole('button', { name: /^Reply$/ }).first().click({ timeout: 4000 });
         await page.waitForSelector('.ql-editor', { timeout: 8000 }).catch(() => {});
+      },
+    },
+    {
+      // m01 has two Cc names: Reply all puts them in the composer's Cc row.
+      key: 'reply-all',
+      path: '/',
+      after: async (page) => {
+        await openMessage(page);
+        await page.getByRole('button', { name: /^Reply all$/ }).first().click({ timeout: 4000 });
+        await page.waitForSelector('.ql-editor', { timeout: 8000 }).catch(() => {});
+        await page.getByRole('button', { name: new RegExp(MARCUS) }).first().waitFor({ timeout: 4000 }).catch(() => {});
+        await page.waitForTimeout(300);
       },
     },
     { key: 'attachment-image', path: '/', overlay: true, after: async (page) => { await openAttachment(page, /^Open coast-photo\.png/); await page.waitForSelector('[role=dialog] img', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(300); } },
