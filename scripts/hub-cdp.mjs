@@ -3,6 +3,7 @@
 // + apps in Hub Dev Mode from a local session (no Computer use needed).
 // Hub must be started with --remote-debugging-port=9222 (docs/HUB-TESTING.md).
 // Set HUB_CDP_PORT to use another port (one Hub instance per app being tested).
+// Each DevTools command fails after 30 s; set HUB_CDP_TIMEOUT (ms) to change that.
 //
 //   node scripts/hub-cdp.mjs targets                       list Hub windows and app iframes
 //   node scripts/hub-cdp.mjs shot [match] [file] [scale]   screenshot a Hub window (.jpg = small JPEG; scale e.g. 0.5)
@@ -24,6 +25,8 @@
 import { writeFileSync } from 'node:fs';
 
 const PORT = process.env.HUB_CDP_PORT || 9222;
+// Milliseconds to wait for each DevTools command before giving up.
+const SEND_TIMEOUT = Number(process.env.HUB_CDP_TIMEOUT) || 30000;
 const argv = process.argv.slice(2);
 const flag = (name) => {
   const i = argv.indexOf(`--${name}`);
@@ -76,16 +79,31 @@ function connect(target) {
     }
   };
   const ready = new Promise((resolve, reject) => {
-    ws.onopen = resolve;
-    ws.onerror = () => reject(new Error('WebSocket connection failed'));
+    const timer = setTimeout(() => reject(new Error(`WebSocket did not open within ${SEND_TIMEOUT} ms`)), SEND_TIMEOUT);
+    ws.onopen = () => (clearTimeout(timer), resolve());
+    ws.onerror = () => (clearTimeout(timer), reject(new Error('WebSocket connection failed')));
+  });
+  // A closed socket fails whatever is still waiting instead of leaving it hanging.
+  ws.addEventListener('close', () => {
+    for (const { reject } of pending.values()) reject(new Error('DevTools connection closed'));
+    pending.clear();
   });
   return {
     ready,
     closed: new Promise((resolve) => ws.addEventListener('close', resolve)),
+    // Every command errors out after SEND_TIMEOUT ms: some (captureScreenshot
+    // while Hub's window is behind others) otherwise never answer.
     send: (method, params = {}) =>
       new Promise((resolve, reject) => {
         const n = ++id;
-        pending.set(n, { resolve, reject });
+        const timer = setTimeout(() => {
+          pending.delete(n);
+          reject(new Error(`${method} got no answer within ${SEND_TIMEOUT} ms (set HUB_CDP_TIMEOUT to wait longer)`));
+        }, SEND_TIMEOUT);
+        pending.set(n, {
+          resolve: (v) => (clearTimeout(timer), resolve(v)),
+          reject: (e) => (clearTimeout(timer), reject(e)),
+        });
         ws.send(JSON.stringify({ id: n, method, params }));
       }),
     on: (fn) => listeners.push(fn),
@@ -140,6 +158,10 @@ if (cmd === 'targets') {
   const t = pick(targets, match, ['page']);
   const c = connect(t);
   await c.ready;
+  // Chromium never answers captureScreenshot while Hub's window is behind
+  // other windows, so raise it first.
+  await c.send('Page.enable');
+  await c.send('Page.bringToFront');
   const jpeg = /\.jpe?g$/i.test(file);
   const params = jpeg ? { format: 'jpeg', quality: 70 } : { format: 'png' };
   if (scale) {
