@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { HubThemeProvider } from '../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../theme/qplus-theme'
-import { PaneResizer, RESIZE_BIG_STEP, RESIZE_STEP, clampWidth } from './PaneResizer'
+import { PaneResizer, RESIZE_BIG_STEP, RESIZE_STEP, TOUCH_ONLY_MEDIA, clampWidth } from './PaneResizer'
 
 function setup(value = 300, min = 260, max = 500) {
   const onChange = vi.fn()
@@ -35,6 +35,17 @@ describe('PaneResizer', () => {
     expect(handle.getAttribute('aria-valuemax')).toBe('500')
     expect(handle.getAttribute('aria-controls')).toBe('list')
     expect(handle.tabIndex).toBe(0)
+  })
+
+  it('is hidden on touch-only screens, where an 8 px strip is no tap target', () => {
+    const { handle } = setup()
+    const media = TOUCH_ONLY_MEDIA.replace('@media ', '')
+    const css = Array.from(document.querySelectorAll('style'))
+      .map((style) => style.textContent || '')
+      .join('\n')
+    const handleClass = Array.from(handle.classList).find((name) => css.includes(`.${name}`))
+    expect(handleClass).toBeTruthy()
+    expect(css).toContain(`@media ${media}{.${handleClass}{display:none;}}`)
   })
 
   it('moves with the arrow keys, further with Shift, clamped to its limits', () => {
