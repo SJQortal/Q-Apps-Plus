@@ -42,6 +42,12 @@ export { SETTINGS_PATH };
 export const APP_VERSION: string = packageJson.version;
 const UPSTREAM_URL = 'https://github.com/Qortal/q-mail';
 const SOURCE_URL = 'https://github.com/SJQortal/Q-Apps-Plus';
+/**
+ * The rating adapter is local-only (upstream never called Qortal), so a vote
+ * here reached nobody. The control stays in the code, hidden, until a real
+ * poll is wired (brief → Follow-ups 5).
+ */
+const SHOW_RATING: boolean = false;
 
 const Page = styled('main')(({ theme }) => ({
   minHeight: '100%',
@@ -372,7 +378,7 @@ export function SettingsPage() {
               What's new
             </Button>
           </Row>
-          {state.rating.enabled && (
+          {SHOW_RATING && state.rating.enabled && (
             <Row label="Rate this app">
               <Rating
                 value={state.rating.userVote ?? 0}

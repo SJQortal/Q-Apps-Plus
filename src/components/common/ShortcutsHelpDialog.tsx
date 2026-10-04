@@ -1,5 +1,5 @@
 /**
- * The "?" dialog: every desktop keyboard shortcut (src/hooks/useKeyboardShortcuts.ts).
+ * The "?" dialog: every keyboard shortcut (src/hooks/useKeyboardShortcuts.ts).
  */
 import { Box, Button, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
@@ -42,7 +42,8 @@ export function ShortcutsHelpDialog({ open, onClose }: ShortcutsHelpDialogProps)
     >
       <Box data-qmail-shortcuts-help="" sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-          Work while no text field has focus. Two-key sequences are typed one after the other.
+          Work while no text field has focus, in a window at least 600 px wide with a keyboard (not on phones or
+          touch-only screens). Two-key sequences are typed one after the other.
         </Typography>
         {SHORTCUT_HELP.map((entry) => (
           <Box

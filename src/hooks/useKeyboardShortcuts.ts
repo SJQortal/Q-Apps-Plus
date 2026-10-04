@@ -2,9 +2,31 @@
  * Desktop keyboard shortcuts (N6). Pure key resolution (`resolveShortcut`)
  * plus a hook that listens on window. Shortcuts are ignored while a text
  * field, the editor or a dialog has focus, when a modifier is held, and
- * below the desktop layout (the caller passes `enabled`).
+ * where there is no keyboard to speak of: phones (< 600 px) and touch-only
+ * devices (`useShortcutsAvailable`, which the caller folds into `enabled`).
  */
 import { useEffect, useRef } from 'react';
+import { useMediaQuery } from '@mui/material';
+
+/**
+ * Shortcuts work from the medium layout up (Hub's usual 600–899 px window
+ * included); below that is the phone layout.
+ */
+export const SHORTCUTS_MIN_WIDTH = 600;
+/** A device whose main input is a finger: no hover, coarse pointer. */
+export const TOUCH_ONLY_QUERY = '(hover: none) and (pointer: coarse)';
+
+/** Pure rule behind `useShortcutsAvailable`. */
+export function shortcutsAvailableFor({ wideEnough, touchOnly }: { wideEnough: boolean; touchOnly: boolean }): boolean {
+  return wideEnough && !touchOnly;
+}
+
+/** True when keyboard shortcuts make sense: ≥ 600 px wide and not a touch-only device. */
+export function useShortcutsAvailable(): boolean {
+  const wideEnough = useMediaQuery(`(min-width:${SHORTCUTS_MIN_WIDTH}px)`, { noSsr: true });
+  const touchOnly = useMediaQuery(TOUCH_ONLY_QUERY, { noSsr: true });
+  return shortcutsAvailableFor({ wideEnough, touchOnly });
+}
 
 export type ShortcutAction =
   | 'compose'
