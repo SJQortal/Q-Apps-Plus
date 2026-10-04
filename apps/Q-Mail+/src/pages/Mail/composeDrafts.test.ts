@@ -12,6 +12,7 @@ import {
   subscribeToComposeDrafts,
   threadDraftKey,
 } from './composeDrafts'
+import { describeDraftTarget } from './DraftsMailbox'
 
 const address = 'QADDR'
 
@@ -101,5 +102,76 @@ describe('composeDrafts storage', () => {
     expect(draftSnippet('<p>hello <b>world</b></p><p>&amp; more</p>')).toBe('hello world & more')
     expect(draftSnippet('x'.repeat(200), 10)).toBe('xxxxxxxxxx…')
     expect(draftSnippet(undefined)).toBe('')
+  })
+})
+
+describe('drafts after the original app rewrites the map', () => {
+  // The original keeps only these ten fields of every entry when it saves.
+  const originalRewrite = () => {
+    const key = getComposeDraftsStorageKey(address)
+    const parsed = JSON.parse(localStorage.getItem(key) || '{}')
+    const rewritten: Record<string, any> = {}
+    Object.entries(parsed).forEach(([k, d]: [string, any]) => {
+      rewritten[k] = {
+        draftId: d.draftId,
+        fromName: d.fromName,
+        toName: d.toName,
+        subject: d.subject,
+        value: d.value,
+        aliasValue: d.aliasValue,
+        showAlias: d.showAlias,
+        showBCC: d.showBCC,
+        bccNames: d.bccNames,
+        updatedAt: d.updatedAt,
+      }
+    })
+    localStorage.setItem(key, JSON.stringify(rewritten))
+  }
+
+  it('keeps thread posts as thread posts and replies as replies, rebuilt from the key', () => {
+    const threadId = 'qortal_qmail_thread_group7_tok1'
+    saveComposeDraft(address, threadDraftKey('7', threadId), {
+      ...base,
+      toName: 'Qortal Devs',
+      kind: 'thread',
+      groupId: '7',
+      groupName: 'Qortal Devs',
+      threadId,
+      threadTitle: 'Roadmap',
+    })
+    saveComposeDraft(address, threadDraftKey('7', null), {
+      ...base,
+      toName: 'Qortal Devs',
+      subject: 'New idea',
+      kind: 'thread',
+      groupId: '7',
+      groupName: 'Qortal Devs',
+      threadId: null,
+      threadTitle: 'New idea',
+    })
+    saveComposeDraft(address, composeDraftKey('Me', 'bob', 'mail-1'), {
+      ...base,
+      toName: 'bob',
+      replyTo: { id: 'mail-1', user: 'bob' },
+    })
+    originalRewrite()
+    const drafts = readComposeDrafts(address)
+    const post = drafts[threadDraftKey('7', threadId)]
+    expect(post).toMatchObject({ kind: 'thread', groupId: '7', groupName: 'Qortal Devs', threadId })
+    expect(describeDraftTarget(post)).toBe('Post in Qortal Devs')
+    const fresh = drafts[threadDraftKey('7', null)]
+    expect(fresh).toMatchObject({ kind: 'thread', groupId: '7', threadId: null, threadTitle: 'New idea' })
+    expect(describeDraftTarget(fresh)).toBe('New thread in Qortal Devs')
+    const reply = drafts[composeDraftKey('Me', 'bob', 'mail-1')]
+    expect(reply.replyTo).toEqual({ id: 'mail-1', user: 'bob' })
+    expect(describeDraftTarget(reply)).toBe('Reply to bob')
+  })
+
+  it('leaves a plain mail draft as mail', () => {
+    saveComposeDraft(address, composeDraftKey('thread', 'bob'), { ...base, fromName: 'thread', toName: 'bob' })
+    originalRewrite()
+    const draft = readComposeDrafts(address)[composeDraftKey('thread', 'bob')]
+    expect(draft.kind).toBeUndefined()
+    expect(draft.replyTo).toBeUndefined()
   })
 })

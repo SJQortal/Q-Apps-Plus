@@ -140,6 +140,32 @@ export function sanitizeComposeDraft(value: unknown): StoredComposeDraft | null 
   return sanitized;
 }
 
+const THREAD_KEY_PATTERN = /^thread::(\d+)::(new|qortal_qmail_thread_group\S+)$/;
+const REPLY_KEY_PATTERN = /::reply:(.+)$/;
+
+/**
+ * The original Q-Mail rewrites every entry of the shared map with only its
+ * ten base fields whenever it saves a draft, which strips `kind`, `groupId`,
+ * `threadId` and `replyTo`. The map key survives, so the routing is rebuilt
+ * from it: a thread post must never reopen as direct mail to the group's name.
+ */
+export function withRoutingFromKey(key: string, draft: StoredComposeDraft): StoredComposeDraft {
+  const thread = THREAD_KEY_PATTERN.exec(key);
+  if (thread) {
+    const restored: StoredComposeDraft = { ...draft, kind: "thread" };
+    if (!restored.groupId) restored.groupId = thread[1];
+    if (!restored.groupName) restored.groupName = draft.toName;
+    if (restored.threadId === undefined) restored.threadId = thread[2] === "new" ? null : thread[2];
+    if (restored.threadTitle === undefined && thread[2] === "new") restored.threadTitle = draft.subject;
+    return restored;
+  }
+  const reply = REPLY_KEY_PATTERN.exec(key);
+  if (reply && draft.replyTo === undefined && draft.kind !== "thread") {
+    return { ...draft, replyTo: { id: reply[1], user: draft.toName } };
+  }
+  return draft;
+}
+
 export function readComposeDrafts(address: string): Record<string, StoredComposeDraft> {
   try {
     const raw = localStorage.getItem(getComposeDraftsStorageKey(address));
@@ -150,7 +176,7 @@ export function readComposeDrafts(address: string): Record<string, StoredCompose
     Object.entries(parsed).forEach(([key, value]) => {
       if (!key) return;
       const draft = sanitizeComposeDraft(value);
-      if (draft) sanitized[key] = draft;
+      if (draft) sanitized[key] = withRoutingFromKey(key, draft);
     });
     return sanitized;
   } catch {
