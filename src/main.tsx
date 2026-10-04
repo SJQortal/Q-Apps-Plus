@@ -11,12 +11,16 @@ import { ensureLexendIllinoisTypographyStyle } from './styles/lexendIllinoisTypo
 // Hub and GO inject qortalRequest. Outside them (npm run dev, vite preview,
 // a plain browser) every call rejects with a clear error instead of throwing
 // a ReferenceError that unmounts the whole app.
+// Test the bare names: q-apps.js declares them with top-level `const`, a
+// global binding that is not a window property, so `window.qortalRequest`
+// is undefined even inside Hub (and a stub there would answer every
+// `window.`/`globalThis.` caller with this error).
 const w = window as unknown as Record<string, unknown>
-if (typeof w.qortalRequest !== 'function') {
+if (typeof qortalRequest !== 'function') {
   const notInHub = () =>
     Promise.reject(new Error('qortalRequest is only available inside Qortal Hub or GO'))
   w.qortalRequest = notInHub
-  if (typeof w.qortalRequestWithTimeout !== 'function') w.qortalRequestWithTimeout = notInHub
+  if (typeof qortalRequestWithTimeout !== 'function') w.qortalRequestWithTimeout = notInHub
 }
 
 if (typeof global === 'undefined') {

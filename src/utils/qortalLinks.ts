@@ -158,8 +158,9 @@ const pending = new Set<string>();
 
 function hubRequest(deps: OpenLinkDeps): QortalRequest | null {
   if (deps.request) return deps.request;
-  const injected = (globalThis as unknown as { qortalRequest?: QortalRequest }).qortalRequest;
-  return typeof injected === "function" ? injected : null;
+  // The bare name, not globalThis.qortalRequest: Hub's q-apps.js declares it
+  // with a top-level const, which never becomes a window property.
+  return typeof qortalRequest === "function" ? (qortalRequest as unknown as QortalRequest) : null;
 }
 
 async function copyWithNote(link: string, note: string, deps: OpenLinkDeps): Promise<LinkOutcome> {
