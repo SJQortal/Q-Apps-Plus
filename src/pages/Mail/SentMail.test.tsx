@@ -9,7 +9,7 @@ import globalReducer from '../../state/features/globalSlice'
 import mailReducer, { addToHashMapMail } from '../../state/features/mailSlice'
 import notificationsReducer from '../../state/features/notificationsSlice'
 import blogReducer from '../../state/features/blogSlice'
-import { fetchedUrls, mockFetchRoute, mockQortalAction, qortalCalls } from '../../test/setup'
+import { fetchMock, fetchedUrls, mockFetchRoute, mockQortalAction, qortalCalls } from '../../test/setup'
 import { resetSearchCache } from '../../utils/qdnSearch'
 import { resetSubjectCache } from '../../utils/subjectCache'
 import { resetNameCache } from '../../utils/nameCache'
@@ -129,5 +129,45 @@ describe('SentMail', () => {
     await screen.findByText('No sent mail yet')
     fireEvent.click(screen.getByRole('button', { name: 'Compose' }))
     expect(onCompose).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the mailbox the user switched to when the earlier, slower load finishes last', async () => {
+    const store = makeStore()
+    mockQortalAction('GET_NAME_DATA', (request: any) => ({ name: request.name, owner: `Q${request.name}` }))
+    mockQortalAction('SEARCH_NAMES', [])
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation(async (input: any) => {
+      const url = String(input)
+      const isLegacy = !url.includes('query=_mail_')
+      if (url.includes('name=alice&')) {
+        await gate
+        const rows = isLegacy ? [] : [{ identifier: '_mail_qortal_qmail_bob_bbb111_mail_1', name: 'alice', created: 1_001 }]
+        return new Response(JSON.stringify(rows), { status: 200 })
+      }
+      const rows = isLegacy ? [] : [{ identifier: '_mail_qortal_qmail_dave_ddd444_mail_2', name: 'carl', created: 1_002 }]
+      return new Response(JSON.stringify(rows), { status: 200 })
+    })
+    try {
+      const view = renderSent(store, <SentMail instanceNames={['alice', 'carl']} onOpen={async () => {}} />)
+      view.rerender(
+        <Provider store={store}>
+          <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+            <SentMail instanceNames={['carl']} onOpen={async () => {}} />
+          </HubThemeProvider>
+        </Provider>
+      )
+      await screen.findByText('To: dave')
+      release()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(screen.queryByText('To: bob')).toBeNull()
+      expect(screen.getByText('To: dave')).toBeTruthy()
+      expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull()
+    } finally {
+      fetchMock.mockImplementation(original)
+    }
   })
 })
