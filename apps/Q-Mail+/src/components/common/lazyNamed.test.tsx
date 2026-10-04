@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Suspense } from 'react'
+import { Suspense, type ComponentType } from 'react'
 import { render, screen } from '@testing-library/react'
 import { lazyNamed, preloadOnIdle } from './lazyNamed'
 
@@ -18,6 +18,22 @@ describe('lazyNamed', () => {
     expect(screen.getByText('loading')).toBeTruthy()
     expect(await screen.findByText('hello from the chunk')).toBeTruthy()
     expect(loader).toHaveBeenCalledTimes(1)
+  })
+
+  it('tries a failed chunk load once more before giving up', async () => {
+    const Hello = () => <p>loaded on the second try</p>
+    const loader = vi
+      .fn<() => Promise<{ Hello: ComponentType }>>()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch dynamically imported module'))
+      .mockResolvedValue({ Hello })
+    const Lazy = lazyNamed(loader, 'Hello', 0)
+    render(
+      <Suspense fallback={<p>loading</p>}>
+        <Lazy />
+      </Suspense>
+    )
+    expect(await screen.findByText('loaded on the second try')).toBeTruthy()
+    expect(loader).toHaveBeenCalledTimes(2)
   })
 })
 

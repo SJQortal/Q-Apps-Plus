@@ -12,10 +12,19 @@ type ModuleLoader<M> = () => Promise<M>;
 
 export function lazyNamed<M, K extends keyof M>(
   loader: ModuleLoader<M>,
-  exportName: K
+  exportName: K,
+  /** A failed chunk load is tried once more after this delay (React.lazy keeps a failure for good). */
+  retryDelayMs = 800
 ): LazyExoticComponent<M[K] extends ComponentType<any> ? M[K] : never> {
+  const load = (): Promise<M> =>
+    loader().catch(
+      () =>
+        new Promise<M>((resolve, reject) => {
+          setTimeout(() => loader().then(resolve, reject), retryDelayMs);
+        })
+    );
   return lazy(() =>
-    loader().then((module) => ({ default: module[exportName] as any }))
+    load().then((module) => ({ default: module[exportName] as any }))
   ) as LazyExoticComponent<any>;
 }
 
