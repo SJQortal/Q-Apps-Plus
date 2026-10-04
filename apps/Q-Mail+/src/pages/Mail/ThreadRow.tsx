@@ -1,6 +1,7 @@
 import { Box, ListItemButton, Typography } from "@mui/material";
 import { formatEmailDate, formatFullTimestamp } from "../../utils/time";
 import { ThreadAvatar } from "./ThreadAvatar";
+import { NameText } from "../../components/common/NameText";
 import { lastActivityOf, type ThreadSummary } from "./threadData";
 
 interface ThreadRowProps {
@@ -17,8 +18,16 @@ export function ThreadRow({ thread, unread = false, selected = false, context, o
   const title = thread.threadData?.title || "Untitled thread";
   const owner = thread.threadData?.name || thread.threadOwner || "Unknown";
   const when = lastActivityOf(thread);
-  const by = thread.lastPostBy && thread.lastPostBy !== owner ? `${thread.lastPostBy} replied` : `by ${owner}`;
-  const second = context ? `${context} · ${by}` : by;
+  const replied = Boolean(thread.lastPostBy && thread.lastPostBy !== owner);
+  const by = replied ? (
+    <>
+      <NameText name={thread.lastPostBy} /> replied
+    </>
+  ) : (
+    <>
+      by <NameText name={owner} />
+    </>
+  );
   const count = thread.postCount ? ` · ${thread.postCount} ${thread.postCount === 1 ? "post" : "posts"}` : "";
 
   return (
@@ -61,7 +70,8 @@ export function ThreadRow({ thread, unread = false, selected = false, context, o
           </Typography>
         </Box>
         <Typography noWrap variant="body2" color="text.secondary" sx={{ fontSize: "0.875rem" }}>
-          {second}
+          {context ? `${context} · ` : ""}
+          {by}
           {count}
         </Typography>
       </Box>

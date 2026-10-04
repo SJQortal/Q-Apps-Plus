@@ -4,8 +4,9 @@
  * Names hiding invisible characters (hasInvisibleCharacters, Qortal Hub's
  * rule) are impostors' copies of a real name, so they are struck through in
  * the theme's error colour, exactly as Hub does, with a tooltip and a
- * screen-reader note. Other names render as a plain inline span, so the
- * parent's typography, truncation and ellipsis keep working.
+ * screen-reader note, in an inline span, so the parent's typography,
+ * truncation and ellipsis keep working. Other names render as plain text
+ * (or a span when given sx, className, a component or other props).
  *
  * Only for names: never pass an address. The name itself is never changed.
  * `children` replaces the visible text (search highlighting) while `name`
@@ -48,10 +49,14 @@ export type NameTextProps = Omit<BoxProps, 'children' | 'component'> & {
 
 export function NameText({ name, children, sx, component = 'span', ...rest }: NameTextProps) {
   const text = children ?? name ?? '';
-  const unsafe = !!name && hasInvisibleCharacters(name);
+  // Older rows can carry a non-string here; only a string is ever tested.
+  const unsafe = typeof name === 'string' && hasInvisibleCharacters(name);
   const sxList = Array.isArray(sx) ? sx : sx ? [sx] : [];
 
   if (!unsafe) {
+    // An ordinary name adds no element unless the caller styles it, so the
+    // DOM (and text matching on it) stays exactly as before.
+    if (!sx && component === 'span' && Object.keys(rest).length === 0) return <>{text}</>;
     return (
       <Box component={component} sx={sxList as SxProps<Theme>} {...rest}>
         {text}

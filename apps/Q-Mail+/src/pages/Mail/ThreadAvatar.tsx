@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { Avatar } from "@mui/material";
 import { RootState } from "../../state/store";
 import { setUserAvatarHash } from "../../state/features/globalSlice";
+import { firstVisibleChar } from "../../utils/invisibleCharacters";
 
 const attempted = new Set<string>();
 const inFlight = new Map<string, Promise<string>>();
@@ -102,7 +103,7 @@ export function ThreadAvatar({ name, size = 40 }: ThreadAvatarProps) {
         flexShrink: 0,
       })}
     >
-      {(name || "?").charAt(0).toUpperCase()}
+      {(firstVisibleChar(name) || "?").toUpperCase()}
     </Avatar>
   );
 }

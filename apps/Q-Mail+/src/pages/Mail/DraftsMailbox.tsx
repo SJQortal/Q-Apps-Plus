@@ -15,6 +15,7 @@ import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
 import useConfirmationModal from "../../hooks/useConfirmModal";
 import { EmptyState } from "../../layout/states";
 import { formatTimestamp } from "../../utils/time";
+import { NameText } from "../../components/common/NameText";
 import {
   deleteComposeDraft,
   draftSnippet,
@@ -75,6 +76,18 @@ export function describeDraftTarget(draft: StoredComposeDraft): string {
   }
   if (draft.replyTo?.id) return `${draft.replyAll ? "Reply all" : "Reply"} to ${draft.toName}`;
   return `To ${draft.toName}`;
+}
+
+/** describeDraftTarget on screen: the name drawn by NameText (thread drafts name a group). */
+function DraftTarget({ draft }: { draft: StoredComposeDraft }) {
+  if (draft.kind === "thread") return <>{describeDraftTarget(draft)}</>;
+  const lead = draft.replyTo?.id ? `${draft.replyAll ? "Reply all" : "Reply"} to ` : "To ";
+  return (
+    <>
+      {lead}
+      <NameText name={draft.toName} />
+    </>
+  );
 }
 
 /** Live count of drafts for a badge. */
@@ -159,7 +172,7 @@ export function DraftsMailbox({ address, onOpenDraft }: DraftsMailboxProps) {
                   )}
                   <Ellipsis>
                     <Typography component="span" sx={{ fontWeight: 650, fontSize: "0.95rem" }}>
-                      {describeDraftTarget(draft)}
+                      <DraftTarget draft={draft} />
                     </Typography>
                   </Ellipsis>
                   <Typography component="span" variant="caption" color="text.secondary" sx={{ flexShrink: 0, fontSize: "0.875rem" }}>
@@ -193,7 +206,7 @@ export function DraftsMailbox({ address, onOpenDraft }: DraftsMailboxProps) {
                 )}
                 {draft.fromName && (
                   <Typography component="span" variant="caption" color="text.secondary" sx={{ fontSize: "0.875rem" }}>
-                    From {draft.fromName}
+                    From <NameText name={draft.fromName} />
                   </Typography>
                 )}
               </Open>
