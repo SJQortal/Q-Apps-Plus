@@ -81,9 +81,12 @@ import {
   arePublishedStateEntriesEqual,
   buildPublishedMailStateDocument,
   mergePublishedStateEntries,
+  mergeRemoteStateIntoPublishBase,
   parsePublishedMailStateDocument,
+  type ParsedPublishedState,
   type QMailPublishedStateEntry,
 } from "../../utils/mailStateDocument";
+import { readPublishedMailStateFromQdn } from "../../utils/publishedMailStateRemote";
 import { usePolling } from "../../hooks/usePolling";
 import { invalidateSearches, searchResources } from "../../utils/qdnSearch";
 import {
@@ -640,6 +643,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
   // Mirrors the checkbox so the load prompt (awaited inside a callback created
   // before the user ticked it) reads the current value (Bugs #2).
   const rememberQdnStatePreferenceRef = useRef(false);
+  // True once this session has read the published state document (or
+  // published one): a publish before that must fetch and merge it first.
+  const hasReadPublishedStateRef = useRef(false);
   const markMessagesAsReadRef = useRef<
     ((messages: any[]) => void | Promise<void>) | null
   >(null);
@@ -2395,15 +2401,58 @@ export const Mail = ({ isFromTo }: MailProps) => {
     if (!user?.name || !user?.address) return;
     try {
       setIsPublishingMailState(true);
+      let base = {
+        publishedEntries: publishedMailStateById,
+        archived,
+        watchedAliases,
+        aliasReplyLinks,
+      };
+      if (!hasReadPublishedStateRef.current) {
+        // Never loaded this session (declined, or still waiting on peers):
+        // merge what other devices published instead of replacing it.
+        let remote: ParsedPublishedState | null = null;
+        try {
+          remote = await readPublishedMailStateFromQdn(user.name);
+        } catch {
+          dispatch(
+            setNotification({
+              msg: "Couldn't read your published Q-Mail state, so publishing now would overwrite it. Try again when it has loaded.",
+              alertType: "error",
+            })
+          );
+          return;
+        }
+        base = mergeRemoteStateIntoPublishBase(base, remote);
+        if (remote) {
+          if (Object.keys(remote.archived).length) {
+            dispatch(applyPublishedArchived(remote.archived));
+          }
+          if (base.watchedAliases !== watchedAliases) {
+            setWatchedAliases(current =>
+              mergeWatchedAliases(current, base.watchedAliases)
+            );
+          }
+          if (base.aliasReplyLinks !== aliasReplyLinks) {
+            setAliasReplyLinks(current =>
+              mergeAliasReplyLinks(current, base.aliasReplyLinks)
+            );
+          }
+        }
+      }
       const { document: payload, mergedEntries: mergedStateEntries } =
         buildPublishedMailStateDocument({
           ownerAddress: user.address,
           names: ownedNameCandidates,
-          publishedEntries: publishedMailStateById,
+          publishedEntries: base.publishedEntries,
           localEntries: localMailStateById,
-          archived,
+          archived: base.archived,
           // Additive: this device's appearance and alias lists (§16).
-          settings: { uiTheme, textSize, watchedAliases, aliasReplyLinks },
+          settings: {
+            uiTheme,
+            textSize,
+            watchedAliases: base.watchedAliases,
+            aliasReplyLinks: base.aliasReplyLinks,
+          },
         });
       const archivedToPublish: ArchivedMap = payload.archived || {};
       const encoded = await objectToBase64(payload);
@@ -2441,6 +2490,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
           alertType: "success",
         })
       );
+      hasReadPublishedStateRef.current = true;
       setPublishedMailStateById(mergedStateEntries);
       setPublishedArchivedById(archivedToPublish);
       setPublishedAppearance({ uiTheme, textSize });
@@ -2528,6 +2578,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
         });
         const searchData = await searchResources(searchParams);
         if (!searchData.length) {
+          // Nothing published yet: a publish has nothing to merge.
+          hasReadPublishedStateRef.current = true;
           return;
         }
 
@@ -2557,6 +2609,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       }
 
       const parsed = parsePublishedMailStateDocument(decodedObject);
+      hasReadPublishedStateRef.current = true;
       if (!parsed) return;
       const loadedArchived = parsed.archived;
       if (Object.keys(loadedArchived).length) {
@@ -2894,6 +2947,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   );
 
   useEffect(() => {
+    hasReadPublishedStateRef.current = false;
     setPublishedMailStateById({});
     setPublishedArchivedById({});
     setPublishedAppearance(null);
