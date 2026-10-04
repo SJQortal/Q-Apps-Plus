@@ -2402,12 +2402,14 @@ export const NewMessage = ({
           })}
         </Box>
 
+        {/* The pane scrolls, not this column: neither it nor the reply card
+            may shrink below its content, or the card collapses under the
+            editor's minimum height and its buttons spill over the toolbar. */}
         <Box
           sx={{
             display: "flex",
             flexDirection: "column",
-            flex: 1,
-            minHeight: 0,
+            flex: "1 0 auto",
             gap: "0.75rem",
           }}
         >
@@ -2420,7 +2422,7 @@ export const NewMessage = ({
                 display: "flex",
                 flexDirection: "column",
                 gap: "0.6rem",
-                minHeight: 0
+                flexShrink: 0
               }, isMobile ? {
                 padding: "0.8rem"
               } : {
