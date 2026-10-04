@@ -6,6 +6,12 @@
  * are skipped. The disclaimer lives in ConsentModal only, and the tips
  * wait until it has been shown and closed: both are first-run, and the
  * first tip used to open on top of the welcome dialog in Hub.
+ *
+ * A tip anchors only to a control that is in the layout (a non-empty
+ * box): at first load in Hub the rail is still settling, and anchoring to
+ * an element with no box made MUI warn "anchorEl prop … invalid" four
+ * times. The tip waits for the control (re-checked every 100 ms) and,
+ * after 1.5 s without one, shows centred near the top instead.
  */
 import { useEffect, useLayoutEffect, useState } from "react";
 import { Box, Button, Popover, Typography } from "@mui/material";
@@ -86,10 +92,27 @@ export const TOUR_STEPS: TourStep[] = [
   },
 ];
 
-export function findTourAnchor(step: TourStep, root: ParentNode = document): HTMLElement | null {
+/** How long a tip waits for its control to be laid out before it shows unanchored. */
+export const TOUR_ANCHOR_WAIT_MS = 1500;
+export const TOUR_ANCHOR_RETRY_MS = 100;
+
+/** True when the element is in the document and has a box (MUI's own anchor check). */
+export function isInLayout(element: Element | null | undefined): element is HTMLElement {
+  if (!element || !element.isConnected) return false;
+  const box = element.getBoundingClientRect();
+  return !(box.top === 0 && box.left === 0 && box.right === 0 && box.bottom === 0);
+}
+
+export function findTourAnchor(
+  step: TourStep,
+  root: ParentNode = document,
+  options: { requireLayout?: boolean } = {}
+): HTMLElement | null {
   for (const selector of step.selectors) {
-    const element = root.querySelector<HTMLElement>(selector);
-    if (element) return element;
+    const elements = root.querySelectorAll<HTMLElement>(selector);
+    for (const element of Array.from(elements)) {
+      if (!options.requireLayout || isInLayout(element)) return element;
+    }
   }
   return null;
 }
@@ -102,23 +125,49 @@ interface MailTourProps {
 export function MailTour({ run, onDone }: MailTourProps) {
   const isPhone = useLayoutMode() === "phone";
   const [index, setIndex] = useState(0);
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  // null while the tip waits for its control; anchor null = show unanchored.
+  const [placement, setPlacement] = useState<{ stepId: string; anchor: HTMLElement | null } | null>(null);
+  const anchor = placement?.anchor ?? null;
   const settled = useConsentSettled();
   const active = run && settled;
   const step = TOUR_STEPS[index];
   const isLast = index === TOUR_STEPS.length - 1;
 
-  // Find the anchor after the layout settled (the rail or the bottom nav).
+  // Find a laid-out anchor (the rail or the bottom nav), waiting briefly for
+  // the layout to settle; the previous tip stays put meanwhile.
   useLayoutEffect(() => {
-    if (!active) return;
-    setAnchor(findTourAnchor(step));
+    if (!active || !step) {
+      setPlacement(null);
+      return;
+    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let waited = 0;
+    const attempt = () => {
+      if (cancelled) return;
+      const element = findTourAnchor(step, document, { requireLayout: true });
+      if (element || waited >= TOUR_ANCHOR_WAIT_MS) {
+        setPlacement({ stepId: step.id, anchor: element });
+        return;
+      }
+      waited += TOUR_ANCHOR_RETRY_MS;
+      timer = setTimeout(attempt, TOUR_ANCHOR_RETRY_MS);
+    };
+    attempt();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [active, step]);
 
   useEffect(() => {
     if (active) setIndex(0);
   }, [active]);
 
-  if (!active || !step) return null;
+  if (!active || !step || !placement) return null;
+  // A control that left the layout since (a resize swapped the rail for the
+  // bottom bar) is not handed to MUI either.
+  const liveAnchor = isInLayout(anchor) ? anchor : null;
 
   const finish = () => {
     setIndex(0);
@@ -134,9 +183,9 @@ export function MailTour({ run, onDone }: MailTourProps) {
   return (
     <Popover
       open
-      anchorEl={anchor ?? undefined}
-      anchorReference={anchor ? "anchorEl" : "anchorPosition"}
-      anchorPosition={anchor ? undefined : { top: 96, left: Math.round((window.innerWidth || 360) / 2) }}
+      anchorEl={liveAnchor ?? undefined}
+      anchorReference={liveAnchor ? "anchorEl" : "anchorPosition"}
+      anchorPosition={liveAnchor ? undefined : { top: 96, left: Math.round((window.innerWidth || 360) / 2) }}
       anchorOrigin={
         isPhone ? { vertical: "top", horizontal: "center" } : { vertical: "center", horizontal: "right" }
       }

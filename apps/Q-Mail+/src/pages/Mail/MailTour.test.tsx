@@ -1,17 +1,27 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { CONSENT_DESCRIPTION_ID, MailTour, TOUR_STEPS, findTourAnchor } from './MailTour'
+import { CONSENT_DESCRIPTION_ID, MailTour, TOUR_ANCHOR_WAIT_MS, TOUR_STEPS, findTourAnchor, isInLayout } from './MailTour'
 import { CONSENT_STORAGE_KEY } from '../../components/modals/ConsentModal'
 import { nextHiddenState, PANE_HEADER_HEIGHT } from '../../layout/PaneHeader'
 import { isOverlayOpen } from '../../hooks/useKeyboardShortcuts'
 
 const fixtures: HTMLElement[] = []
-function mount(html: string) {
+
+/** jsdom has no layout: give an element the box a browser would. */
+function layOut(element: Element) {
+  element.getBoundingClientRect = () =>
+    ({ top: 10, left: 10, right: 110, bottom: 54, width: 100, height: 44, x: 10, y: 10, toJSON: () => ({}) }) as DOMRect
+}
+
+/** Mounts the controls; laid out (with a box) unless `laidOut` is false. */
+function mount(html: string, laidOut = true) {
   const node = document.createElement('div')
   node.innerHTML = html
   document.body.appendChild(node)
   fixtures.push(node)
+  if (laidOut) node.querySelectorAll('*').forEach(layOut)
+  return node
 }
 
 beforeEach(() => {
@@ -25,6 +35,7 @@ afterEach(() => {
 
 describe('MailTour', () => {
   it('waits until the welcome dialog has been shown and closed before the first tip', async () => {
+    mount(`<button data-qapp-lib-sidebar-item="compose">Compose</button>`)
     localStorage.removeItem(CONSENT_STORAGE_KEY)
     render(<MailTour run onDone={vi.fn()} />)
     expect(screen.queryByText('Tip 1 of 3')).toBeNull()
@@ -83,12 +94,66 @@ describe('MailTour', () => {
     expect(isOverlayOpen()).toBe(false)
   })
 
-  it('can be skipped from the first tip, and still shows without an anchor', () => {
-    const onDone = vi.fn()
-    render(<MailTour run onDone={onDone} />)
-    expect(screen.getByText('Write a message')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
-    expect(onDone).toHaveBeenCalledTimes(1)
+  it('can be skipped from the first tip, and still shows without an anchor after a short wait', async () => {
+    vi.useFakeTimers()
+    try {
+      const onDone = vi.fn()
+      render(<MailTour run onDone={onDone} />)
+      expect(screen.queryByText('Write a message')).toBeNull()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(TOUR_ANCHOR_WAIT_MS)
+      })
+      expect(screen.getByText('Write a message')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
+      expect(onDone).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('anchors only once its control is in the layout (no MUI "anchorEl invalid" warnings at first load)', async () => {
+    vi.useFakeTimers()
+    try {
+      const node = mount(`<button data-qapp-lib-sidebar-item="compose">Compose</button>`, false)
+      const compose = node.querySelector('button')!
+      function Host() {
+        const [run, setRun] = React.useState(true)
+        return <MailTour run={run} onDone={() => setRun(false)} />
+      }
+      render(<Host />)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300)
+      })
+      // The control exists but has no box yet: no tip, nothing handed to MUI.
+      expect(screen.queryByText('Tip 1 of 3')).toBeNull()
+      layOut(compose)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100)
+      })
+      expect(screen.getByText('Tip 1 of 3')).toBeTruthy()
+      // It anchored to the control: Skip hands focus to it.
+      fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50)
+      })
+      expect(document.activeElement).toBe(compose)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('skips candidates with no box when it needs a laid-out anchor', () => {
+    const node = mount(
+      `<button data-qmail-tour="compose">Rail compose</button><button aria-label="Open mailboxes menu">Menu</button>`,
+      false
+    )
+    const menu = node.querySelector<HTMLElement>('[aria-label="Open mailboxes menu"]')!
+    layOut(menu)
+    expect(isInLayout(node.querySelector('[data-qmail-tour="compose"]'))).toBe(false)
+    expect(isInLayout(menu)).toBe(true)
+    expect(isInLayout(null)).toBe(false)
+    expect(findTourAnchor(TOUR_STEPS[0])?.textContent).toBe('Rail compose')
+    expect(findTourAnchor(TOUR_STEPS[0], document, { requireLayout: true })).toBe(menu)
   })
 
   it('prefers the rail, then the phone chrome, for each step', () => {
