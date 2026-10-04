@@ -3443,6 +3443,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
                       msg: didAdd
                         ? `Alias saved: ${aliasName}`
                         : "Alias is already saved or invalid",
+                      names: didAdd ? [aliasName] : undefined,
                       alertType: didAdd ? "success" : "info",
                     })
                   );
@@ -3457,6 +3458,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
                       msg: didSet
                         ? `Reply alias linked for ${aliasName}`
                         : "Reply alias is invalid or matches the inbox alias",
+                      names: didSet ? [aliasName] : undefined,
                       alertType: didSet ? "success" : "info",
                     })
                   );

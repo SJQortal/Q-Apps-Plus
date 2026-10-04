@@ -7,14 +7,18 @@
  * floating Compose button, so it never covers either (docs/QORTAL.md →
  * Hub & GO pitfalls 6); in a landscape frame, where neither shows, it drops
  * to the bottom edge.
+ *
+ * Names a message quotes (the payload's `names`) are drawn by NameText, so an
+ * impostor name is struck in a toast too.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Alert, Snackbar, useMediaQuery, useTheme } from '@mui/material'
 import { removeNotification } from '../../../state/features/notificationsSlice'
 import { RootState } from '../../../state/store'
 import { BOTTOM_NAV_HEIGHT } from '../../../layout/BottomNav'
 import { LANDSCAPE_FRAME_MEDIA } from '../../../utils/hubFrame'
+import { NameText } from '../NameText'
 
 /** Width the floating button needs at the right edge: 56 px button, 16 px gutter, 16 px gap. */
 export const FAB_GUTTER = 88
@@ -25,30 +29,63 @@ interface Toast {
   key: number
   severity: Severity
   message: string
+  names: string[]
 }
 
 const AUTO_HIDE_MS: Record<Severity, number> = { success: 4000, error: 6000, info: 2500 }
 
 let nextKey = 1
 
+/** `message` with each of `names` in it drawn by NameText (the earliest, then the longest, match first). */
+export function withNames(message: string, names: string[] = []): ReactNode {
+  const list = names.filter(Boolean)
+  if (!list.length) return message
+  const parts: ReactNode[] = []
+  let rest = message
+  while (rest) {
+    let at = -1
+    let hit = ''
+    for (const name of list) {
+      const index = rest.indexOf(name)
+      if (index === -1) continue
+      if (at === -1 || index < at || (index === at && name.length > hit.length)) {
+        at = index
+        hit = name
+      }
+    }
+    if (at === -1) {
+      parts.push(rest)
+      break
+    }
+    if (at > 0) parts.push(rest.slice(0, at))
+    parts.push(<NameText key={parts.length} name={hit} />)
+    rest = rest.slice(at + hit.length)
+  }
+  return <>{parts}</>
+}
+
 const Notification = () => {
   const dispatch = useDispatch()
   const theme = useTheme()
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'))
-  const { alertTypes } = useSelector((state: RootState) => state.notifications)
+  const { alertTypes, alertNames } = useSelector((state: RootState) => state.notifications)
   const [queue, setQueue] = useState<Toast[]>([])
   const [current, setCurrent] = useState<Toast | null>(null)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
     const incoming: Toast[] = []
-    if (alertTypes.alertError) incoming.push({ key: nextKey++, severity: 'error', message: alertTypes.alertError })
-    if (alertTypes.alertSuccess) incoming.push({ key: nextKey++, severity: 'success', message: alertTypes.alertSuccess })
-    if (alertTypes.alertInfo) incoming.push({ key: nextKey++, severity: 'info', message: alertTypes.alertInfo })
+    const names = (key: keyof typeof alertTypes) => alertNames?.[key] || []
+    if (alertTypes.alertError)
+      incoming.push({ key: nextKey++, severity: 'error', message: alertTypes.alertError, names: names('alertError') })
+    if (alertTypes.alertSuccess)
+      incoming.push({ key: nextKey++, severity: 'success', message: alertTypes.alertSuccess, names: names('alertSuccess') })
+    if (alertTypes.alertInfo)
+      incoming.push({ key: nextKey++, severity: 'info', message: alertTypes.alertInfo, names: names('alertInfo') })
     if (!incoming.length) return
     setQueue((previous) => [...previous, ...incoming])
     dispatch(removeNotification())
-  }, [alertTypes.alertError, alertTypes.alertInfo, alertTypes.alertSuccess, dispatch])
+  }, [alertTypes.alertError, alertTypes.alertInfo, alertTypes.alertSuccess, alertNames, dispatch])
 
   useEffect(() => {
     if (current || !queue.length) return
@@ -97,7 +134,7 @@ const Notification = () => {
         }}
         slotProps={{ closeButton: { sx: { minWidth: 44, minHeight: 44 } } }}
       >
-        {current?.message}
+        {current ? withNames(current.message, current.names) : null}
       </Alert>
     </Snackbar>
   )
