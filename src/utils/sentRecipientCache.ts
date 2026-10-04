@@ -2,7 +2,10 @@
  * Recipient names for sent mail (I4). A sent identifier only carries the
  * first 20 characters of the recipient's name and the last 6 of their
  * address (`_mail_qortal_qmail_<name20>_<addr6>_mail_<id>`), or the alias
- * for alias mail. The real name comes from the decrypted message
+ * for alias mail. Names and aliases may contain `_`, spaces, `+`, `'`, `.`
+ * or `|`; `parseSentRecipientFromIdentifier` anchors on the `_mail_<id>`
+ * tail and the 6-character suffix, so the prefix here is the whole name
+ * part (Bug #19). The real name comes from the decrypted message
  * (`recipient`) when the user has opened it; otherwise it is resolved once
  * per (prefix, suffix) group per session, never once per row:
  *
