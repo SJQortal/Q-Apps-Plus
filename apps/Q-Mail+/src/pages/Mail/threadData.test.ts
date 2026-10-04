@@ -113,6 +113,17 @@ describe('fetching', () => {
     expect(page.hasMore).toBe(true)
   })
 
+  it('reports the raw row count, so a page of other groups\' rows still moves the offset on', async () => {
+    mockFetchRoute(
+      '/arbitrary/resources/search?',
+      Array.from({ length: 20 }, (_, i) => ({ ...header(`t${i}`, `T${i}`), identifier: `qortal_qmail_thread_group10_t${i}` }))
+    )
+    const page = await fetchThreadPage(group)
+    expect(page.threads).toHaveLength(0)
+    expect(page.rawCount).toBe(20)
+    expect(page.hasMore).toBe(true)
+  })
+
   it('answers a header lookup from memory once a list loaded it', async () => {
     mockFetchRoute('/arbitrary/resources/search?', [header('t1', 'First thread')])
     await fetchThreadPage(group)

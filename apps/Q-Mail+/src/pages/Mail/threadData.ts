@@ -211,6 +211,12 @@ export interface ThreadPage {
   threads: ThreadSummary[];
   /** True when the page was full, so another page may exist. */
   hasMore: boolean;
+  /**
+   * Rows the node returned, before other groups' rows were dropped (the
+   * substring query for group 1 also matches 10-19 and 100+). The next
+   * page's offset moves by this, never by `threads.length`.
+   */
+  rawCount: number;
 }
 
 /** One page of a group's thread headers (20 per page, newest first unless `reverse` is false). */
@@ -221,12 +227,13 @@ export async function fetchThreadPage(
 ): Promise<ThreadPage> {
   const groupId = normalizeGroupId(group?.id);
   const groupName = typeof group?.name === "string" ? group.name.trim() : "";
-  if (!groupId) return { threads: [], hasMore: false };
+  if (!groupId) return { threads: [], hasMore: false, rawCount: 0 };
   const rows = await searchResources<any>(threadHeaderSearchParams(groupId, { limit, offset, reverse }), options);
   const summaries = await Promise.all(rows.map((row) => summarizeThreadResource(row, groupId, groupName)));
   return {
     threads: summaries.filter(Boolean) as ThreadSummary[],
     hasMore: rows.length >= limit,
+    rawCount: rows.length,
   };
 }
 
