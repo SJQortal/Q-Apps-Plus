@@ -139,6 +139,7 @@ import {
   loadPublishedStateDocument,
   publishedStateSearchParams,
 } from "./publishedStateLoad";
+import { useShortcutsAvailable } from "../../hooks/useKeyboardShortcuts";
 
 // Lazy boundaries (docs/apps/Q-Mail+.md → Bundle §5): the composer (Quill,
 // react-dropzone), the reader (dompurify), threads, aliases, sent, drafts and
@@ -3089,7 +3090,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
   const isComposeView = activeMailboxItem === "compose";
   const isThreadsView = activeMailboxItem === "threads";
 
-  // ---- keyboard shortcuts (desktop only; src/hooks/useKeyboardShortcuts.ts)
+  // ---- keyboard shortcuts (≥ 600 px, not touch-only; src/hooks/useKeyboardShortcuts.ts)
   // j/k move through the list the pane shows (the inbox search results or
   // the archived list) by opening the next/previous message in the reading
   // pane; the other lists live in their own components.
@@ -3113,6 +3114,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     const next = shortcutList[nextIndex];
     if (next) openMessageFromList(next);
   };
+  const keyboardShortcutsAvailable = useShortcutsAvailable();
   useKeyboardShortcuts(
     {
       compose: () => {
@@ -3175,7 +3177,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       showHelp: () => setShortcutsHelpOpen(open => !open),
     },
     // Off while Settings covers the page: keys must not act on the hidden mailbox.
-    { enabled: isDesktopLayout && hasAuthenticatedIdentity && !isHidden }
+    { enabled: keyboardShortcutsAvailable && hasAuthenticatedIdentity && !isHidden }
   );
 
   const menuButton = !isDesktopLayout ? (
