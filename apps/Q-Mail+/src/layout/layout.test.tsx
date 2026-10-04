@@ -5,7 +5,8 @@ import { HubThemeProvider } from '../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../theme/qplus-theme'
 import { layoutModeForWidth } from './useLayoutMode'
 import { appHeightValue } from './useAppViewport'
-import { MailShell } from './MailShell'
+import { LIST_CONTAINER, LIST_WIDTH_DESKTOP, MailShell, RAIL_WIDTH } from './MailShell'
+import { paneWidthsKey, readPaneWidths } from './usePaneWidths'
 import { BottomNav, badgeLabel } from './BottomNav'
 import { Rail, badgeFor, groupRailItems, NAME_FILTER_THRESHOLD } from './Rail'
 import { fetchingLabel } from './states'
@@ -65,7 +66,6 @@ describe('MailShell', () => {
     onRailOpenChange: () => {},
     list: <div>the list</div>,
     reading: <div>the message</div>,
-    readingPlaceholder: <div>pick one</div>,
     bottomNav: <nav>bottom nav</nav>,
     fab: <button>fab</button>,
   }
@@ -79,11 +79,90 @@ describe('MailShell', () => {
     expect(screen.queryByText('fab')).toBeNull()
   })
 
-  it('shows the placeholder when nothing is open and keeps the rail in a drawer on medium', () => {
+  it('keeps the rail in a drawer on medium, and with nothing open shows no reading pane', () => {
     wrap(<MailShell mode="medium" {...baseProps} reading={null} />)
     expect(screen.getByText('the list')).toBeTruthy()
-    expect(screen.getByText('pick one')).toBeTruthy()
+    expect(screen.queryByLabelText('Reading pane')).toBeNull()
     expect(screen.queryByText('rail content')).toBeNull()
+  })
+
+  it('lets the list take the full width until something opens, and again after it closes', () => {
+    const { rerender } = wrap(<MailShell mode="desktop" {...baseProps} reading={null} />)
+    const list = () => screen.getByLabelText('Messages')
+    expect(screen.queryByLabelText('Reading pane')).toBeNull()
+    expect(getComputedStyle(list()).flexGrow).toBe('1')
+    expect(getComputedStyle(list()).width).toBe('100%')
+    const again = (reading: React.ReactNode) =>
+      rerender(
+        <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+          <MailShell mode="desktop" {...baseProps} reading={reading} readingOpen={Boolean(reading)} />
+        </HubThemeProvider>
+      )
+    again(<div>the message</div>)
+    expect(screen.getByLabelText('Reading pane').textContent).toBe('the message')
+    expect(getComputedStyle(list()).flexGrow).toBe('0')
+    again(null)
+    expect(screen.queryByLabelText('Reading pane')).toBeNull()
+    expect(getComputedStyle(list()).flexGrow).toBe('1')
+  })
+
+  it('offers resize handles between rail | list | reading on desktop, list | reading on medium, none on phones', () => {
+    const shell = (mode: 'desktop' | 'medium' | 'phone', reading: React.ReactNode) => (
+      <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+        <MailShell mode={mode} {...baseProps} reading={reading} readingOpen={Boolean(reading)} />
+      </HubThemeProvider>
+    )
+    const handles = () => screen.queryAllByRole('separator').map((h) => h.getAttribute('aria-label'))
+    const { rerender } = render(shell('desktop', <div>the message</div>))
+    expect(handles()).toEqual(['Resize the mailboxes column', 'Resize the message list'])
+    // Nothing open: the list is full width, only the rail resizes.
+    rerender(shell('desktop', null))
+    expect(handles()).toEqual(['Resize the mailboxes column'])
+    rerender(shell('medium', <div>the message</div>))
+    expect(handles()).toEqual(['Resize the message list'])
+    rerender(shell('phone', <div>the message</div>))
+    expect(handles()).toEqual([])
+    rerender(shell('phone', null))
+    expect(handles()).toEqual([])
+  })
+
+  it('restores the saved widths of the account and saves keyboard resizes', () => {
+    window.localStorage.setItem(paneWidthsKey('QAlice'), JSON.stringify({ rail: 300, list: 420 }))
+    wrap(<MailShell mode="desktop" {...baseProps} readingOpen paneWidthsAccount="QAlice" />)
+    const rail = screen.getByRole('separator', { name: 'Resize the mailboxes column' })
+    const list = screen.getByRole('separator', { name: 'Resize the message list' })
+    expect(screen.getByLabelText('Mailboxes').style.width).toBe('300px')
+    expect(screen.getByLabelText('Messages').style.width).toBe('420px')
+    expect(rail.getAttribute('aria-valuenow')).toBe('300')
+    expect(rail.getAttribute('aria-valuemin')).toBe('180')
+    expect(rail.getAttribute('aria-valuemax')).toBe('360')
+    expect(list.getAttribute('aria-valuemin')).toBe('260')
+    expect(list.getAttribute('aria-controls')).toBe(screen.getByLabelText('Messages').id)
+
+    fireEvent.keyDown(list, { key: 'ArrowRight', shiftKey: true })
+    expect(screen.getByLabelText('Messages').style.width).toBe('484px')
+    expect(readPaneWidths('QAlice')).toEqual({ rail: 300, list: 484 })
+    fireEvent.keyDown(rail, { key: 'ArrowRight', shiftKey: true })
+    expect(screen.getByLabelText('Mailboxes').style.width).toBe('360px')
+    // Home: back to the default, and forgotten.
+    fireEvent.keyDown(rail, { key: 'Home' })
+    expect(screen.getByLabelText('Mailboxes').style.width).toBe(`${RAIL_WIDTH}px`)
+    expect(readPaneWidths('QAlice')).toEqual({ list: 484 })
+  })
+
+  it('uses the default widths when nothing is saved', () => {
+    wrap(<MailShell mode="desktop" {...baseProps} readingOpen paneWidthsAccount="QBob" />)
+    expect(screen.getByLabelText('Mailboxes').style.width).toBe(`${RAIL_WIDTH}px`)
+    expect(screen.getByLabelText('Messages').style.width).toBe(`${LIST_WIDTH_DESKTOP}px`)
+  })
+
+  it('makes the list pane a size container, so rows can lay out as columns when it is wide', () => {
+    wrap(<MailShell mode="desktop" {...baseProps} reading={null} />)
+    const css = Array.from(document.querySelectorAll('style'))
+      .map((s) => s.textContent || '')
+      .join('\n')
+    expect(css).toMatch(new RegExp(`container-name:${LIST_CONTAINER}`))
+    expect(css).toMatch(/container-type:inline-size/)
   })
 
   it('on a phone shows the list with nav and FAB, then only the message when one is open', () => {
