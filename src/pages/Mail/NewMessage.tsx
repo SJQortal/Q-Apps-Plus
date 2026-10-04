@@ -90,6 +90,7 @@ import {
 import { AvatarWrapper } from "./MailTable";
 import { HIDDEN_CHARACTERS_TITLE, NameText, strikeNameSx } from "../../components/common/NameText";
 import { NameAvatar } from "../../components/common/NameAvatar";
+import { NAME_SEARCH_THRESHOLD, NameSwitcher } from "../../components/common/NameSwitcher";
 import { hasInvisibleCharacters } from "../../utils/invisibleCharacters";
 import type { Theme } from "@mui/material/styles";
 import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
@@ -1902,6 +1903,19 @@ export const NewMessage = ({
               <NewMessageInputLabelP id="qmail-compose-from-label" sx={{ userSelect: "none" }}>
                 From:
               </NewMessageInputLabelP>
+              {fromOptions.length > NAME_SEARCH_THRESHOLD ? (
+                // Above 15 names (Simon has 86) From is the searchable
+                // switcher Settings uses, avatars loading as rows scroll in.
+                <NameSwitcher
+                  names={fromOptions}
+                  activeName={fromName || null}
+                  activeAvatar={userAvatarHash?.[fromName]}
+                  onPick={setFromName}
+                  label="From"
+                  title="Send from"
+                  avatarFallback="none"
+                />
+              ) : (
               <TextField
                 select
                 value={fromName}
@@ -1974,6 +1988,7 @@ export const NewMessage = ({
                   );
                 })}
               </TextField>
+              )}
             </NewMessageAliasContainer>
           </NewMessageInputRow>
 
