@@ -1,14 +1,16 @@
 /**
  * The attachments of a message as cards, with "Download all" when there are
- * several, and the preview dialog they open.
+ * several, and the preview dialog they open. PDFs get Q-Share+'s file card
+ * with "Open PDF" (Hub's reader); the dialog's pdf.js viewer is its fallback.
  */
 import { useMemo, useState } from 'react';
 import { Box, Button, LinearProgress, Typography } from '@mui/material';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import { useDispatch } from 'react-redux';
 import { setNotification } from '../../state/features/notificationsSlice';
-import type { AttachmentRef } from '../../utils/attachmentMeta';
+import { attachmentKind, type AttachmentRef } from '../../utils/attachmentMeta';
 import { AttachmentCard } from './AttachmentCard';
+import { PdfAttachmentCard } from './PdfAttachmentCard';
 import { AttachmentPreview } from './index';
 import { useDownloadAll } from './useDownloadAll';
 
@@ -50,12 +52,18 @@ export function AttachmentList({ attachments, compact, hideDownloadAll }: Attach
         sx={{
           display: 'grid',
           gap: 1,
+          // A PDF card is taller: its neighbours keep their own height.
+          alignItems: 'start',
           gridTemplateColumns: compact ? '1fr' : { xs: '1fr', md: list.length > 1 ? 'repeat(2, minmax(0, 1fr))' : '1fr' },
         }}
       >
-        {list.map((attachment, index) => (
-          <AttachmentCard key={`${attachment.identifier}-${index}`} attachment={attachment} compact={compact} onOpen={() => setOpenIndex(index)} />
-        ))}
+        {list.map((attachment, index) =>
+          attachmentKind(attachment) === 'pdf' ? (
+            <PdfAttachmentCard key={`${attachment.identifier}-${index}`} attachment={attachment} compact={compact} onOpenInApp={() => setOpenIndex(index)} />
+          ) : (
+            <AttachmentCard key={`${attachment.identifier}-${index}`} attachment={attachment} compact={compact} onOpen={() => setOpenIndex(index)} />
+          )
+        )}
       </Box>
       {list.length > 1 && !hideDownloadAll && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
