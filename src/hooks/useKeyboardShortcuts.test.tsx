@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render } from '@testing-library/react'
+import { fireEvent, render, renderHook } from '@testing-library/react'
 import {
   SHORTCUT_HELP,
+  SHORTCUTS_MIN_WIDTH,
+  TOUCH_ONLY_QUERY,
   isTypingTarget,
   resolveShortcut,
+  shortcutsAvailableFor,
   useKeyboardShortcuts,
+  useShortcutsAvailable,
   type ShortcutHandlers,
 } from './useKeyboardShortcuts'
 
@@ -94,7 +98,7 @@ describe('useKeyboardShortcuts', () => {
     expect(replyAll).toHaveBeenCalledTimes(1)
   })
 
-  it('does nothing while a dialog is open or when disabled (below the desktop layout)', () => {
+  it('does nothing while a dialog is open or when disabled (phone width or touch-only)', () => {
     const compose = vi.fn()
     const { unmount } = render(<Harness handlers={{ compose }} />)
     const dialog = document.createElement('div')
@@ -137,5 +141,54 @@ describe('useKeyboardShortcuts', () => {
     expect(fireEvent.keyDown(window, { key: 'o' })).toBe(true)
     expect(open).toHaveBeenCalledTimes(1)
     expect(fireEvent.keyDown(window, { key: 'c' })).toBe(false)
+  })
+})
+
+describe('shortcuts availability', () => {
+  const originalMatchMedia = window.matchMedia
+
+  function mockMedia(width: number, touchOnly: boolean) {
+    window.matchMedia = ((query: string) => {
+      const min = /\(min-width:\s*(\d+(?:\.\d+)?)px\)/.exec(query)
+      const matches = min ? width >= Number(min[1]) : query === TOUCH_ONLY_QUERY ? touchOnly : false
+      return {
+        matches,
+        media: query,
+        onchange: null,
+        addListener() {},
+        removeListener() {},
+        addEventListener() {},
+        removeEventListener() {},
+        dispatchEvent: () => false,
+      }
+    }) as typeof window.matchMedia
+  }
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia
+  })
+
+  it('needs at least 600 px and a device that is not touch-only', () => {
+    expect(SHORTCUTS_MIN_WIDTH).toBe(600)
+    expect(shortcutsAvailableFor({ wideEnough: true, touchOnly: false })).toBe(true)
+    expect(shortcutsAvailableFor({ wideEnough: false, touchOnly: false })).toBe(false)
+    expect(shortcutsAvailableFor({ wideEnough: true, touchOnly: true })).toBe(false)
+  })
+
+  it('is on in the medium layout (Hub 600–899 px) and on desktop, off on phones and touch-only screens', () => {
+    const cases: Array<[number, boolean, boolean]> = [
+      [1440, false, true],
+      [700, false, true],
+      [600, false, true],
+      [599, false, false],
+      [390, false, false],
+      [1024, true, false],
+    ]
+    for (const [width, touchOnly, expected] of cases) {
+      mockMedia(width, touchOnly)
+      const { result, unmount } = renderHook(() => useShortcutsAvailable())
+      expect([width, touchOnly, result.current]).toEqual([width, touchOnly, expected])
+      unmount()
+    }
   })
 })
