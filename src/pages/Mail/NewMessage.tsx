@@ -42,7 +42,7 @@ import {
   NameChip,
 } from "../../components/common/ChipInputComponent/ChipInputComponent";
 import { TextEditor } from "../../components/common/TextEditor/TextEditor";
-import { toQuill1Html } from "../../components/common/TextEditor/quillHtml";
+import { toPublishedMailHtml } from "../../components/common/TextEditor/quillHtml";
 import {
   AttachmentContainer,
   ComposeContainer,
@@ -1427,7 +1427,7 @@ export const NewMessage = ({
         publishes: attachmentPublishes,
         references: attachmentReferences,
       } = await buildAttachmentPayloads(senderName);
-      const composedMessageBody = toQuill1Html(value);
+      const composedMessageBody = toPublishedMailHtml(value);
 
       if (!target) return;
 

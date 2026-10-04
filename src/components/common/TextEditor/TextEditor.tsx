@@ -6,7 +6,13 @@ import { watchQuillPickers } from './pickerA11y'
 
 interface TextEditorProps {
   inlineContent: string
-  setInlineContent: (value: string) => void
+  /**
+   * The editor's HTML (its own markup, `root.innerHTML`, with plain spaces;
+   * `toPublishedMailHtml` turns it into the Quill 1 shape before publishing)
+   * and who changed it: "user" for typing and toolbar use, "api" when a new
+   * `inlineContent` was loaded and Quill normalised it.
+   */
+  setInlineContent: (value: string, source?: string) => void
   className?: string
   placeholder?: string
   autoFocus?: boolean
@@ -179,7 +185,11 @@ export const TextEditor = ({
         ref={quillRef}
         theme="snow"
         value={inlineContent}
-        onChange={setInlineContent}
+        onChange={(html, _delta, source) => setInlineContent(html, source)}
+        // Quill 2's getSemanticHTML() writes every space as &nbsp; and an
+        // empty line as <p></p>; the editor's own HTML is what Quill 1 (the
+        // original Q-Mail) publishes, plus list/code markup quillHtml.ts maps.
+        useSemanticHTML={false}
         modules={modules}
         placeholder={placeholder}
       />
