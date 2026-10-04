@@ -2098,33 +2098,6 @@ export const NewMessage = ({
             </Box>
           )}
 
-          <NewMessageInputRow sx={{ width: "100%" }}>
-            <Input
-              id="standard-adornment-name"
-              value={subject}
-              onChange={e => {
-                setSubject(e.target.value);
-              }}
-              placeholder="Subject"
-              disableUnderline
-              autoComplete="off"
-              autoCorrect="off"
-              sx={{
-                width: "100%",
-                color: "var(--new-message-text)",
-                "& .MuiInput-input::placeholder": {
-                  color: "var(--qmail-compose-placeholder) !important",
-                  fontSize: "1.25rem",
-                  fontStyle: "normal",
-                  fontWeight: 400,
-                  lineHeight: "120%",
-                  letterSpacing: "0.15px",
-                  opacity: 1,
-                },
-              }}
-            />
-          </NewMessageInputRow>
-
           {allowAliasAndBcc && (requireSenderAlias || showAlias) && (
             <NewMessageInputRow>
               <NewMessageAliasContainer
@@ -2245,6 +2218,34 @@ export const NewMessage = ({
               </NewMessageAliasContainer>
             </NewMessageInputRow>
           )}
+
+          {/* Mail order: From, To, alias, Cc, Bcc, then Subject. */}
+          <NewMessageInputRow sx={{ width: "100%" }}>
+            <Input
+              id="standard-adornment-name"
+              value={subject}
+              onChange={e => {
+                setSubject(e.target.value);
+              }}
+              placeholder="Subject"
+              disableUnderline
+              autoComplete="off"
+              autoCorrect="off"
+              sx={{
+                width: "100%",
+                color: "var(--new-message-text)",
+                "& .MuiInput-input::placeholder": {
+                  color: "var(--qmail-compose-placeholder) !important",
+                  fontSize: "1.25rem",
+                  fontStyle: "normal",
+                  fontWeight: 400,
+                  lineHeight: "120%",
+                  letterSpacing: "0.15px",
+                  opacity: 1,
+                },
+              }}
+            />
+          </NewMessageInputRow>
 
           <AttachmentContainer
             {...getRootProps()}
