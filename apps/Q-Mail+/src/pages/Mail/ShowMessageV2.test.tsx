@@ -113,6 +113,52 @@ describe('ShowMessageV2', () => {
     expect(screen.queryByText('second')).toBeNull()
   })
 
+  it('offers Archive and Mark unread as labelled buttons in a wide pane, with the e / u shortcuts', () => {
+    const onArchive = vi.fn()
+    const onMarkUnread = vi.fn()
+    wrap(<ShowMessageV2 message={message} onArchive={onArchive} onMarkUnread={onMarkUnread} />)
+    const archive = screen.getByRole('button', { name: 'Archive' })
+    const unread = screen.getByRole('button', { name: 'Mark unread' })
+    expect(archive.textContent).toBe('Archive')
+    expect(archive.getAttribute('aria-keyshortcuts')).toBe('e')
+    expect(unread.getAttribute('aria-keyshortcuts')).toBe('u')
+    fireEvent.click(archive)
+    expect(onArchive).toHaveBeenCalledWith(message)
+    fireEvent.click(unread)
+    expect(onMarkUnread).toHaveBeenCalledWith(message)
+  })
+
+  it('reads "Move to inbox" for an archived message and hides both actions when not offered', () => {
+    const onArchive = vi.fn()
+    const { unmount } = wrap(<ShowMessageV2 message={message} onArchive={onArchive} archived />)
+    fireEvent.click(screen.getByRole('button', { name: 'Move to inbox' }))
+    expect(onArchive).toHaveBeenCalledWith(message)
+    expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull()
+    unmount()
+    wrap(<ShowMessageV2 message={message} />)
+    expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Move to inbox' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Mark unread' })).toBeNull()
+  })
+
+  it('uses 44 px icon buttons with aria-labels in a phone-width pane', () => {
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(390)
+    try {
+      const onArchive = vi.fn()
+      wrap(<ShowMessageV2 message={message} onArchive={onArchive} onMarkUnread={vi.fn()} />)
+      const archive = screen.getByRole('button', { name: 'Archive' })
+      expect(archive.textContent).toBe('')
+      expect(archive.getAttribute('aria-keyshortcuts')).toBe('e')
+      expect(getComputedStyle(archive).minWidth).toBe('44px')
+      expect(getComputedStyle(archive).minHeight).toBe('44px')
+      expect(screen.getByRole('button', { name: 'Mark unread' }).textContent).toBe('')
+      fireEvent.click(archive)
+      expect(onArchive).toHaveBeenCalledWith(message)
+    } finally {
+      width.mockRestore()
+    }
+  })
+
   it('renders the body with images constrained to the pane width', () => {
     wrap(<ShowMessageV2 message={message} />)
     const img = document.querySelector('.ql-editor-display img') as HTMLImageElement
