@@ -79,11 +79,24 @@ function useHideOnScroll(enabled: boolean, headerHeight: number) {
       setHidden(false);
       return;
     }
-    const scroller = headerRef.current?.nextElementSibling as HTMLElement | null;
-    if (!scroller) return;
-    let previousTop = scroller.scrollTop;
+    const next = headerRef.current?.nextElementSibling as HTMLElement | null;
+    if (!next) return;
+    // The scroller is the next sibling (a PaneScroll), or an element marked
+    // data-pane-scroll inside it (the composer's form, which may mount later
+    // from a lazy chunk). Scroll events don't bubble, but they do pass the
+    // capture phase, so one capturing listener on the sibling sees both.
+    const isPaneScroller = (target: EventTarget | null): target is HTMLElement =>
+      target === next || (target instanceof HTMLElement && target.hasAttribute('data-pane-scroll') && next.contains(target));
+    let previousTop = 0;
+    let lastScroller: HTMLElement | null = null;
     let frame = 0;
-    const onScroll = () => {
+    const onScroll = (event: Event) => {
+      const scroller = event.target;
+      if (!isPaneScroller(scroller)) return;
+      if (scroller !== lastScroller) {
+        lastScroller = scroller;
+        previousTop = 0;
+      }
       if (frame) return;
       frame = window.requestAnimationFrame(() => {
         frame = 0;
@@ -92,9 +105,9 @@ function useHideOnScroll(enabled: boolean, headerHeight: number) {
         previousTop = top;
       });
     };
-    scroller.addEventListener('scroll', onScroll, { passive: true });
+    next.addEventListener('scroll', onScroll, { passive: true, capture: true });
     return () => {
-      scroller.removeEventListener('scroll', onScroll);
+      next.removeEventListener('scroll', onScroll, { capture: true });
       if (frame) window.cancelAnimationFrame(frame);
       setHidden(false);
     };

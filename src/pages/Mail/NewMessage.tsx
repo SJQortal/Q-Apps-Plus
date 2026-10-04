@@ -20,6 +20,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useLayoutMode } from "../../layout/useLayoutMode";
+import { SHORT_FRAME_MEDIA, useLandscapeFrame } from "../../utils/hubFrame";
 import ShortUniqueId from "short-unique-id";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
@@ -348,8 +349,11 @@ export const NewMessage = ({
   const [replyPreviewMode, setReplyPreviewMode] = useState<
     "preview" | "full" | "hidden"
   >("preview");
-  // The shell decides the layout; "phone" also covers narrow Hub panes.
-  const isMobile = useLayoutMode() === "phone";
+  // The shell decides the layout; "phone" also covers narrow Hub panes. A
+  // landscape Hub frame (703x201) is far too short for the desktop spacing,
+  // so it gets the compact one too.
+  const landscapeFrame = useLandscapeFrame();
+  const isMobile = useLayoutMode() === "phone" || landscapeFrame;
   const isHydratingDraftRef = useRef(false);
   // A clear, inline error for the current send attempt (next to the toast).
   const [composeError, setComposeError] = useState<{
@@ -1703,6 +1707,7 @@ export const NewMessage = ({
   const composerContent = (
     <>
       <InstanceListContainer
+        data-pane-scroll
         sx={[{
           backgroundColor: "var(--qmail-compose-surface)",
           flex: 1,
@@ -2470,6 +2475,9 @@ export const NewMessage = ({
               minHeight: "15rem"
             } : {
               minHeight: "18rem"
+            }, {
+              // A short frame (landscape, or the keyboard up) can't spare 15rem.
+              [`@media ${SHORT_FRAME_MEDIA}`]: { minHeight: "6rem" }
             }]}
           >
             <TextEditor
@@ -2538,7 +2546,7 @@ export const NewMessage = ({
               textTransform: "none",
               borderColor: "var(--qmail-shell-border)",
               color: "var(--qmail-compose-text)",
-              minHeight: "2.9rem",
+              minHeight: 44,
               px: "1rem",
               borderRadius: "0.85rem",
             }}

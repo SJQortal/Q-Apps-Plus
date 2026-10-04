@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ReusableModal } from "../../components/modals/ReusableModal";
 import { Box, Button, Input, Typography } from "@mui/material";
 import { useLayoutMode } from "../../layout/useLayoutMode";
+import { useLandscapeFrame } from "../../utils/hubFrame";
 import ShortUniqueId from "short-unique-id";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
@@ -76,7 +77,9 @@ export const NewThread = ({
   const [isOpenMultiplePublish, setIsOpenMultiplePublish] = useState(false);
   const [publishes, setPublishes] = useState<any>(null);
   const [callbackContent, setCallbackContent] = useState<any>(null);
-  const isMobile = useLayoutMode() === "phone";
+  // Compact on phones and in a landscape Hub frame (703x201), as NewMessage.
+  const landscapeFrame = useLandscapeFrame();
+  const isMobile = useLayoutMode() === "phone" || landscapeFrame;
   const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
   // The MAIL thread header goes out after the post batch succeeds (Bugs #21).
   const pendingThreadHeaderRef = useRef<any>(null);
