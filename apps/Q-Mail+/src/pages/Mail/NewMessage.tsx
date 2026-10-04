@@ -1559,9 +1559,18 @@ export const NewMessage = ({
     ) {
       errorMsg = "The recipient's alias cannot be the same as yours";
     }
-    if (allowAliasAndBcc && aliasValue && ccNames.length) {
-      errorMsg =
-        "Cc is not sent with an alias: remove the Cc names, or send without the alias";
+    if (allowAliasAndBcc && aliasValue && (ccNames.length || bccNames.length)) {
+      // An alias message goes to the alias inbox only (§8): Cc and Bcc copies
+      // are never sent, so say so instead of dropping those names quietly.
+      const kinds =
+        ccNames.length && bccNames.length
+          ? "Cc and Bcc are"
+          : ccNames.length
+          ? "Cc is"
+          : "Bcc is";
+      errorMsg = `${kinds} not sent with an alias: remove the ${
+        ccNames.length && bccNames.length ? "Cc and Bcc" : ccNames.length ? "Cc" : "Bcc"
+      } names, or send without the alias`;
     }
     const pendingCc = allowAliasAndBcc && showCC ? ccPending : "";
     const pendingBcc = allowAliasAndBcc && showBCC ? bccPending : "";
@@ -2410,7 +2419,7 @@ export const NewMessage = ({
               }}
             >
               Bcc names are not listed in the mail, but each Bcc copy is a public QDN record labelled with its recipient's name.
-              {aliasValue ? " With an alias, no Bcc copies are sent." : ""}
+              {aliasValue ? " Bcc can't be used with an alias: remove the Bcc names, or send without the alias." : ""}
             </Typography>
           )}
 
