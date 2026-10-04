@@ -146,6 +146,9 @@ const composeToggleTooltipProps = {
   leaveTouchDelay: 6000,
   slotProps: {
     tooltip: { sx: { fontSize: "0.875rem", fontWeight: 400, lineHeight: 1.45, maxWidth: 320 } },
+    // Inside the composer's region, not a portal at the end of <body> (axe
+    // "region"); fixed positioning keeps the pane from clipping it.
+    popper: { disablePortal: true, popperOptions: { strategy: "fixed" as const } },
   },
 };
 
@@ -2024,6 +2027,16 @@ export const NewMessage = ({
                   },
                 }}
                 loading={isDirectorySearchLoading}
+                // Keep the suggestion list inside the composer's region (it sits in
+                // <main> or the compose dialog) instead of a portal at the end of
+                // <body>, where axe flags it as content outside every landmark.
+                // Fixed positioning keeps it from being clipped by the pane.
+                slotProps={{
+                  popper: {
+                    disablePortal: true,
+                    popperOptions: { strategy: "fixed" },
+                  },
+                }}
                 options={targetOptions}
                 filterOptions={options => options}
                 value={selectedTargetOption}
