@@ -4,6 +4,8 @@ import { Provider } from "react-redux";
 import { store } from "../../../state/store";
 import { DisplayHtml, sanitizeMessageHtml } from "./DisplayHtml";
 import { convertQortalLinks } from "./utils";
+import { mockQortalAction, qortalCalls } from "../../../test/setup";
+import { removeNotification } from "../../../state/features/notificationsSlice";
 
 /** Parse the sanitised output the way the page will. */
 function parse(html: string): HTMLElement {
@@ -48,7 +50,7 @@ describe("sanitizeMessageHtml: stored XSS through qortal:// text", () => {
     const links = root.querySelectorAll("a");
     expect(links.length).toBe(1);
     expect(links[0].getAttribute("href")).toBe("qortal://APP/x");
-    expect(Array.from(links[0].attributes).map((a) => a.name).sort()).toEqual(["class", "href"]);
+    expect(Array.from(links[0].attributes).map((a) => a.name).sort()).toEqual(["class", "href", "title"]);
     // The rest of the text is still shown, as text.
     expect(root.textContent).toBe(new DOMParser().parseFromString(payload, "text/html").body.textContent);
   });
@@ -75,6 +77,33 @@ describe("sanitizeMessageHtml: stored XSS through qortal:// text", () => {
     const links = root.querySelectorAll("a");
     expect(links.length).toBe(1);
     expect(links[0].getAttribute("href")).toBe("qortal://APP/Q-Mail/to/alice");
+  });
+
+  it("leaves sentence punctuation after a qortal:// URL out of the link", () => {
+    const root = parse("<p>Join qortal://use-group/action-join/groupid-1176. Or (qortal://APP/Q-Tube)!</p>");
+    expect(Array.from(root.querySelectorAll("a")).map((a) => a.getAttribute("href"))).toEqual([
+      "qortal://use-group/action-join/groupid-1176",
+      "qortal://APP/Q-Tube",
+    ]);
+    expect(root.textContent).toBe("Join qortal://use-group/action-join/groupid-1176. Or (qortal://APP/Q-Tube)!");
+  });
+
+  it("titles each qortal:// link with what it does, over the sender's title", () => {
+    const root = parse(
+      `<p><a href="qortal://APP/Q-Tube" title="Free QORT">tube</a> qortal://use-group/action-join/groupid-7 ` +
+        `qortal://APP/Simon%20James</p>`
+    );
+    expect(Array.from(root.querySelectorAll("a")).map((a) => a.getAttribute("title"))).toEqual([
+      "Open Q-Tube in a new tab",
+      "Join group 7 (Hub asks first)",
+      "Open Simon James in a new tab",
+    ]);
+  });
+
+  it("turns a qortal:// link that can't open into its text", () => {
+    const root = parse(`<p><a href="qortal://APP/../Evil">see</a> and <a href="qortal://bad service/x">this</a></p>`);
+    expect(root.querySelector("a")).toBeNull();
+    expect(root.textContent).toBe("see and this");
   });
 
   it("leaves qortal:// text in code alone", () => {
@@ -188,13 +217,66 @@ describe("DisplayHtml", () => {
     );
   });
 
-  it("leaves qortal:// link clicks to q-apps.js", () => {
+  it("opens a qortal:// app link in a new Hub tab, and q-apps.js never sees the click", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    mockQortalAction("OPEN_NEW_TAB", true);
     renderBody(html);
-    fireEvent.click(screen.getByText("Q-Tube"));
-    expect(prevented).toBe(false);
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+    screen.getByText("Q-Tube").dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(prevented).toBeNull();
+    await waitFor(() => expect(qortalCalls("OPEN_NEW_TAB")).toEqual([{ action: "OPEN_NEW_TAB", qortalLink: "qortal://APP/Q-Tube" }]));
     expect(writeText).not.toHaveBeenCalled();
+  });
+
+  // Mugician's "Q-Builder Test Users" mail, textContentV2 exactly as stored:
+  // the sender's Quill wrote the qortal: href as about:blank.
+  const mugician =
+    `<p><a href="about:blank" rel="noopener noreferrer" target="_blank">qortal://use-group/action-join/groupid-1176</a></p>` +
+    `<p><br></p><p>built a Little something and all group members can publish Apps at no extra cost. Would be glad to get your feedback</p>`;
+
+  it("asks Hub to join the group from Mugician's join link (no frame navigation)", async () => {
+    store.dispatch(removeNotification());
+    mockQortalAction("JOIN_GROUP", { signature: "x" });
+    renderBody(mugician);
+    const link = screen.getByRole("link", { name: "qortal://use-group/action-join/groupid-1176" });
+    expect(link.getAttribute("href")).toBe("qortal://use-group/action-join/groupid-1176");
+    expect(link.getAttribute("title")).toBe("Join group 1176 (Hub asks first)");
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+    link.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(prevented).toBeNull();
+    await waitFor(() => expect(qortalCalls("JOIN_GROUP")).toEqual([{ action: "JOIN_GROUP", groupId: 1176 }]));
+    await waitFor(() =>
+      expect(store.getState().notifications.alertTypes.alertSuccess).toMatch(/^Join request for group 1176 sent/)
+    );
+  });
+
+  it("stays quiet when the user declines Hub's join dialog", async () => {
+    store.dispatch(removeNotification());
+    mockQortalAction("JOIN_GROUP", () => {
+      throw { error: "User declined to join group", message: "User declined to join group" };
+    });
+    renderBody(mugician);
+    fireEvent.click(screen.getByRole("link", { name: /groupid-1176/ }));
+    await waitFor(() => expect(qortalCalls("JOIN_GROUP")).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const alerts = store.getState().notifications.alertTypes;
+    expect([alerts.alertSuccess, alerts.alertError, alerts.alertInfo]).toEqual(["", "", ""]);
+  });
+
+  it("copies a group calendar link, which Hub opens only from its chat", async () => {
+    store.dispatch(removeNotification());
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const link = "qortal://use-group/action-calendar/groupid-5/eventid-0b0e8f3c-5a3d-4c6f-9e2a-1f2b3c4d5e6f";
+    renderBody(`<p>${link}</p>`);
+    fireEvent.click(screen.getByRole("link"));
+    expect(prevented).toBeNull();
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(link));
+    await waitFor(() => expect(store.getState().notifications.alertTypes.alertInfo).toMatch(/group chat\. Link copied\.$/));
+    expect(qortalCalls()).toEqual([]);
   });
 
   it("renders the payload without event handlers", () => {
