@@ -544,9 +544,11 @@ export const buildSidebarItems = ({
 
 interface MailProps {
   isFromTo: boolean;
+  /** True while Settings covers the (still mounted) mail page. */
+  isHidden?: boolean;
 }
 
-export const Mail = ({ isFromTo }: MailProps) => {
+export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
   const { name: composeRouteName } = useParams();
   const { isShow, onOk, show } = useModal();
   const { user } = useSelector((state: RootState) => state.auth);
@@ -3211,7 +3213,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
       goAliases: () => onSelectSidebarItem("aliases"),
       showHelp: () => setShortcutsHelpOpen(open => !open),
     },
-    { enabled: isDesktopLayout && hasAuthenticatedIdentity }
+    // Off while Settings covers the page: keys must not act on the hidden mailbox.
+    { enabled: isDesktopLayout && hasAuthenticatedIdentity && !isHidden }
   );
 
   const menuButton = !isDesktopLayout ? (

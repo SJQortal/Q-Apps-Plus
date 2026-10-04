@@ -35,9 +35,10 @@ function AppRoutes() {
     <>
       <Box sx={{ display: isSettings ? 'none' : 'contents' }}>
         <Routes location={mailLocation}>
-          <Route path="/" element={<Mail isFromTo={false} />} />
-          <Route path="/to/:name" element={<Mail isFromTo />} />
-          <Route path="*" element={<Mail isFromTo={false} />} />
+          {/* Mail stays mounted under Settings; isHidden turns its keyboard shortcuts off. */}
+          <Route path="/" element={<Mail isFromTo={false} isHidden={isSettings} />} />
+          <Route path="/to/:name" element={<Mail isFromTo isHidden={isSettings} />} />
+          <Route path="*" element={<Mail isFromTo={false} isHidden={isSettings} />} />
         </Routes>
       </Box>
       {isSettings && (
