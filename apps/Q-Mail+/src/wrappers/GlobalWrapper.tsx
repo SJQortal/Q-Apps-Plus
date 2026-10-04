@@ -27,6 +27,7 @@ import { subscribeToEvent, unsubscribeFromEvent } from "../utils/events";
 import { useMailLocalState } from "../hooks/useMailLocalState";
 import { usePolling } from "../hooks/usePolling";
 import { HUB_DIALOG_GRACE_MS, isAccountRefusal, isHubDecline, isHubTimeout } from "../utils/hubErrors";
+import { getAvatarUrl } from "../utils/avatarCache";
 interface Props {
   children: React.ReactNode;
 }
@@ -52,27 +53,18 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
   useMailLocalState(user?.address);
 
   const activeName = user?.name;
-  const getAvatar = useCallback(async () => {
-    try {
-      const url = await qortalRequest({
-        action: "GET_QDN_RESOURCE_URL",
-        name: activeName,
-        service: "THUMBNAIL",
-        identifier: "qortal_avatar",
-      });
-
-      if (url === "Resource does not exist") return;
-
-      setUserAvatar(url);
-    } catch (error) {
-      console.error(error);
-    }
-  }, [activeName]);
-
+  // Through the session avatar cache, so the owned-name loop in Mail.tsx
+  // shares this one GET_QDN_RESOURCE_URL instead of asking again.
   useEffect(() => {
     if (!activeName) return;
-    void getAvatar();
-  }, [activeName, getAvatar]);
+    let cancelled = false;
+    void getAvatarUrl(activeName).then(url => {
+      if (!cancelled) setUserAvatar(url || "");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeName]);
 
   useEffect(() => {
     qortalRequest({

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, render } from '@testing-library/react'
+import { useContext } from 'react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { configureStore } from '@reduxjs/toolkit'
 import notificationsReducer from '../state/features/notificationsSlice'
@@ -9,6 +10,8 @@ import blogReducer from '../state/features/blogSlice'
 import mailReducer from '../state/features/mailSlice'
 import { mockFetchRoute, mockQortalAction, qortalCalls } from '../test/setup'
 import { HUB_DIALOG_GRACE_MS } from '../utils/hubErrors'
+import { getAvatarUrl, resetAvatarCache } from '../utils/avatarCache'
+import { AppShellContext } from '../app-shell/AppShellContext'
 import GlobalWrapper from './GlobalWrapper'
 
 function makeStore() {
@@ -115,5 +118,42 @@ describe('GlobalWrapper: GET_USER_ACCOUNT', () => {
     })
     expect(qortalCalls('GET_USER_ACCOUNT')).toHaveLength(1)
     expect(errors).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('GlobalWrapper: own avatar', () => {
+  beforeEach(() => {
+    resetAvatarCache()
+    localStorage.setItem('qmail-general-consent', 'true')
+    mockQortalAction('NOTIFICATION_MARK_SEEN', true)
+    mockQortalAction('GET_ACCOUNT_NAMES', [{ name: 'alice', owner: 'Q1' }])
+    mockQortalAction('GET_PRIMARY_NAME', 'alice')
+    mockQortalAction('GET_USER_ACCOUNT', { address: 'Q1', publicKey: 'pk' })
+    mockQortalAction('GET_QDN_RESOURCE_URL', '/arbitrary/THUMBNAIL/alice/qortal_avatar')
+    mockFetchRoute('/groups/member/', [])
+  })
+  afterEach(() => {
+    resetAvatarCache()
+  })
+
+  function AvatarProbe() {
+    const { userAvatar } = useContext(AppShellContext)!
+    return <span data-testid="own-avatar">{userAvatar}</span>
+  }
+
+  it('resolves through the session avatar cache, so the owned-name loop asks no second time', async () => {
+    render(
+      <Provider store={makeStore()}>
+        <GlobalWrapper>
+          <AvatarProbe />
+        </GlobalWrapper>
+      </Provider>
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('own-avatar').textContent).toBe('/arbitrary/THUMBNAIL/alice/qortal_avatar')
+    )
+    // Mail.tsx's owned-name loop asks for the same name: answered from the cache.
+    await expect(getAvatarUrl('alice')).resolves.toBe('/arbitrary/THUMBNAIL/alice/qortal_avatar')
+    expect(qortalCalls('GET_QDN_RESOURCE_URL')).toHaveLength(1)
   })
 })
