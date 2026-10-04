@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { mockQortalAction, qortalCalls } from '../../../test/setup'
 import { BlockedNamesModal, PUBLIC_NODE_TEXT } from './BlockedNamesModal'
+import { IMPOSTOR, REAL, struckNames } from '../../../test/hiddenNames'
 
 const PUBLIC_NODE = {
   error: 'This action cannot be done through a public node',
@@ -79,5 +80,19 @@ describe('BlockedNamesModal', () => {
     render(<BlockedNamesModal open onClose={onClose} />)
     expect(await screen.findByText('Could not load the list')).toBeTruthy()
     expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy()
+  })
+})
+
+describe('BlockedNamesModal and names with hidden characters', () => {
+  it('strikes a blocked impostor name and unblocks it byte-for-byte', async () => {
+    mockQortalAction('GET_LIST_ITEMS', [IMPOSTOR, REAL])
+    mockQortalAction('DELETE_LIST_ITEM', true)
+    render(<BlockedNamesModal open onClose={() => {}} />)
+    await screen.findByText(REAL)
+    expect(struckNames(document.body)).toEqual([IMPOSTOR])
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: `Unblock ${IMPOSTOR}` }))
+    })
+    expect(qortalCalls('DELETE_LIST_ITEM')[0]).toMatchObject({ item: IMPOSTOR })
   })
 })

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Button, List, ListItem, ListItemText, Typography } from '@mui/material'
 import { ResponsiveDialog } from '../ResponsiveDialog'
+import { NameText } from '../NameText'
 import { EmptyState, ErrorState, ListSkeleton } from '../../../layout/states'
 import { errorMessage, isHubDecline, isPublicNodeRefusal } from '../../../utils/hubErrors'
 
@@ -130,7 +131,7 @@ export const BlockedNamesModal: React.FC<PostModalProps> = ({ open, onClose }) =
                   </Button>
                 }
               >
-                <ListItemText primary={name} slotProps={{ primary: { sx: { overflowWrap: 'anywhere', pr: 10 } } }} />
+                <ListItemText primary={<NameText name={name} />} slotProps={{ primary: { sx: { overflowWrap: 'anywhere', pr: 10 } } }} />
               </ListItem>
             ))}
           </List>
