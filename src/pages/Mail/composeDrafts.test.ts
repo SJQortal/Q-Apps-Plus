@@ -5,6 +5,7 @@ import {
   deleteComposeDraft,
   draftSnippet,
   getComposeDraftsStorageKey,
+  hasComposerContent,
   listComposeDrafts,
   readComposeDrafts,
   saveComposeDraft,
@@ -49,6 +50,8 @@ describe('composeDrafts storage', () => {
   it('keys: new mail, reply and thread post are distinct', () => {
     expect(composeDraftKey(' Me', 'YOU ')).toBe('me::you')
     expect(composeDraftKey('Me', 'You', 'abc')).toBe('me::you::reply:abc')
+    expect(composeDraftKey('Me', 'You', 'abc', true)).toBe('me::you::replyall:abc')
+    expect(composeDraftKey('Me', 'You', null, true)).toBe('me::you')
     expect(threadDraftKey(12, null)).toBe('thread::12::new')
     expect(threadDraftKey('12', 'qortal_qmail_thread_group12_tok')).toBe('thread::12::qortal_qmail_thread_group12_tok')
   })
@@ -176,7 +179,21 @@ describe('drafts after the original app rewrites the map', () => {
     expect(describeDraftTarget(fresh)).toBe('New thread in Qortal Devs')
     const reply = drafts[composeDraftKey('Me', 'bob', 'mail-1')]
     expect(reply.replyTo).toEqual({ id: 'mail-1', user: 'bob' })
+    expect(reply.replyAll).toBeUndefined()
     expect(describeDraftTarget(reply)).toBe('Reply to bob')
+  })
+
+  it('keeps a Reply all draft as Reply all, rebuilt from its own key', () => {
+    saveComposeDraft(address, composeDraftKey('Me', 'bob', 'mail-2', true), {
+      ...base,
+      toName: 'bob',
+      replyTo: { id: 'mail-2', user: 'bob' },
+      replyAll: true,
+    })
+    originalRewrite()
+    const replyAll = readComposeDrafts(address)[composeDraftKey('Me', 'bob', 'mail-2', true)]
+    expect(replyAll).toMatchObject({ replyTo: { id: 'mail-2', user: 'bob' }, replyAll: true })
+    expect(describeDraftTarget(replyAll)).toBe('Reply all to bob')
   })
 
   it('leaves a plain mail draft as mail', () => {
@@ -185,5 +202,44 @@ describe('drafts after the original app rewrites the map', () => {
     const draft = readComposeDrafts(address)[composeDraftKey('thread', 'bob')]
     expect(draft.kind).toBeUndefined()
     expect(draft.replyTo).toBeUndefined()
+  })
+})
+
+describe('hasComposerContent (what makes a draft and a Discard warning)', () => {
+  const textOf = (html: string) => html.replace(/<[^>]*>/g, '')
+  const quote = '<p><br></p><p>On 1 Oct, Ali wrote:</p><blockquote>hi</blockquote>'
+  const opened = {
+    subject: 'Re: hi',
+    initialSubject: 'Re: hi',
+    value: quote,
+    initialValue: quote,
+    aliasValue: '',
+    attachmentCount: 0,
+    bccNames: [],
+    ccNames: [{ name: 'Carl' }, { name: 'Dana' }],
+    initialCcNames: ['Carl', 'Dana'],
+    textOf,
+  }
+
+  it('a freshly opened Reply all (quote, Re: subject, auto Cc) is not content', () => {
+    expect(hasComposerContent(opened)).toBe(false)
+    expect(hasComposerContent({ ...opened, ccNames: [{ name: 'dana' }, { name: 'carl' }] })).toBe(false)
+  })
+
+  it('typing, a new subject, changing Cc, Bcc, an alias or a file is content', () => {
+    expect(hasComposerContent({ ...opened, value: `<p>Thanks!</p>${quote.slice(11)}` })).toBe(true)
+    expect(hasComposerContent({ ...opened, subject: 'Re: hi again' })).toBe(true)
+    expect(hasComposerContent({ ...opened, ccNames: [{ name: 'Carl' }] })).toBe(true)
+    expect(hasComposerContent({ ...opened, ccNames: [...opened.ccNames, { name: 'Eve' }] })).toBe(true)
+    expect(hasComposerContent({ ...opened, bccNames: [{ name: 'Eve' }] })).toBe(true)
+    expect(hasComposerContent({ ...opened, aliasValue: 'box' })).toBe(true)
+    expect(hasComposerContent({ ...opened, attachmentCount: 1 })).toBe(true)
+  })
+
+  it('an emptied body or a cleared subject is nothing to keep', () => {
+    expect(hasComposerContent({ ...opened, value: '<p><br></p>' })).toBe(false)
+    expect(hasComposerContent({ ...opened, subject: '  ' })).toBe(false)
+    // Removing every auto Cc is not something written either.
+    expect(hasComposerContent({ ...opened, ccNames: [] })).toBe(false)
   })
 })

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { MemoryRouter } from 'react-router-dom'
 import Quill from 'quill'
@@ -10,6 +10,7 @@ import { addUser } from '../../state/features/authSlice'
 import { mockQortalAction } from '../../test/setup'
 import { resetNameCache } from '../../utils/nameCache'
 import { NewMessage } from './NewMessage'
+import { getComposeDraftsStorageKey } from './composeDrafts'
 
 const address = 'QmeAddress'
 const original = {
@@ -24,7 +25,11 @@ const original = {
   generalData: { thread: [], threadV2: [] },
 }
 
+const storedDrafts = () => JSON.parse(localStorage.getItem(getComposeDraftsStorageKey(address)) || '{}')
+const wait = (ms: number) => act(() => new Promise(resolve => setTimeout(resolve, ms)))
+
 function renderComposer(props: { replyAll?: boolean; onRequestClose?: () => void } = {}) {
+  const setReplyTo = vi.fn()
   const utils = render(
     <Provider store={store}>
       <MemoryRouter>
@@ -34,10 +39,11 @@ function renderComposer(props: { replyAll?: boolean; onRequestClose?: () => void
             hideButton
             replyTo={original}
             replyAll={props.replyAll}
-            setReplyTo={vi.fn()}
+            setReplyTo={setReplyTo}
             setForwardInfo={vi.fn()}
             forwardInfo={null}
             onRequestClose={props.onRequestClose}
+            ownedNames={['me']}
           />
         </HubThemeProvider>
       </MemoryRouter>
@@ -47,7 +53,7 @@ function renderComposer(props: { replyAll?: boolean; onRequestClose?: () => void
   return { ...utils, quill }
 }
 
-describe('NewMessage', () => {
+describe('NewMessage replies and drafts', () => {
   beforeEach(() => {
     localStorage.clear()
     resetNameCache()
@@ -57,9 +63,61 @@ describe('NewMessage', () => {
     mockQortalAction('SEARCH_NAMES', [])
   })
 
-  it('opens a reply with the default props (no render loop) and quotes the original', async () => {
+  it('opens a reply (no render loop) and quotes the original', async () => {
     const { quill } = renderComposer()
     await waitFor(() => expect(quill().getText()).toContain('alice wrote:'))
     expect(quill().getText()).toContain('See you at noon')
+  })
+
+  it('opening Reply saves nothing until the user writes, then saves under the reply key', async () => {
+    const { quill } = renderComposer()
+    await waitFor(() => expect(quill().getText()).toContain('alice wrote:'))
+    await wait(500)
+    expect(storedDrafts()).toEqual({})
+
+    act(() => {
+      quill().insertText(0, 'Sounds good', 'user')
+    })
+    await waitFor(() => expect(Object.keys(storedDrafts())).toEqual(['me::alice::reply:msg1']))
+    expect(storedDrafts()['me::alice::reply:msg1'].value).toContain('Sounds good')
+  })
+
+  it('opening Reply all fills Cc by itself, saves nothing, and Discard does not ask', async () => {
+    const onRequestClose = vi.fn()
+    const { quill } = renderComposer({ replyAll: true, onRequestClose })
+    await waitFor(() => expect(screen.getByText('carl')).toBeTruthy())
+    expect(screen.getByText('dana')).toBeTruthy()
+    expect(screen.getByText(/Cc names are visible to every recipient/)).toBeTruthy()
+    expect(quill().getText()).toContain('alice wrote:')
+    await wait(500)
+    expect(storedDrafts()).toEqual({})
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    await waitFor(() => expect(onRequestClose).toHaveBeenCalled())
+    expect(screen.queryByText('Discard this message?')).toBeNull()
+  })
+
+  it('Reply all keeps its own draft key, apart from Reply', async () => {
+    const { quill } = renderComposer({ replyAll: true })
+    await waitFor(() => expect(screen.getByText('carl')).toBeTruthy())
+    act(() => {
+      quill().insertText(0, 'To everyone', 'user')
+    })
+    await waitFor(() => expect(Object.keys(storedDrafts())).toEqual(['me::alice::replyall:msg1']))
+    const draft = storedDrafts()['me::alice::replyall:msg1']
+    expect(draft.replyAll).toBe(true)
+    expect(draft.ccNames.map((chip: any) => chip.name)).toEqual(['carl', 'dana'])
+  })
+
+  it('Discard asks once something was written', async () => {
+    const onRequestClose = vi.fn()
+    const { quill } = renderComposer({ onRequestClose })
+    await waitFor(() => expect(quill().getText()).toContain('alice wrote:'))
+    act(() => {
+      quill().insertText(0, 'Hi', 'user')
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    expect(await screen.findByText('Discard this message?')).toBeTruthy()
+    expect(onRequestClose).not.toHaveBeenCalled()
   })
 })
