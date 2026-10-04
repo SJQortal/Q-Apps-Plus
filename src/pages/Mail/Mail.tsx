@@ -3502,6 +3502,27 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
   // A message still being fetched/decrypted shows in the reading pane too
   // (shared FetchingFromPeers state, full-screen on phones), not in a modal.
   const isOpeningMessage = Boolean(mailInfo) && isShow;
+  // Archive / Move to inbox and Mark unread from the reader, where the list
+  // offers them: the reader closes (on phones, back to the list) and a toast
+  // says where the message went. The e / u shortcuts stay as they are.
+  const readerCanArchive = isInboxViewActive || isArchivedViewActive || isAliasesViewActive;
+  const readerCanMarkUnread = readerCanArchive;
+  const readerArchive = (target: any) => {
+    if (isArchivedViewActive) unarchiveMessages([target]);
+    else archiveMessages([target]);
+    closeOpenMessage();
+    dispatch(
+      setNotification({
+        msg: isArchivedViewActive ? "Moved to inbox" : "Archived. Find it under Archived.",
+        alertType: "success",
+      })
+    );
+  };
+  const readerMarkUnread = (target: any) => {
+    void markMessagesAsUnread([target]);
+    closeOpenMessage();
+    dispatch(setNotification({ msg: "Marked unread", alertType: "success" }));
+  };
   const readingPane = isReadingOpen ? (
     <>
       {isOnePane && (
@@ -3527,6 +3548,9 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
             onForward={info => openForwardComposerFromMessage(info.message)}
             alias={activeAliasInboxName}
             onClose={closeOpenMessage}
+            onArchive={readerCanArchive ? readerArchive : undefined}
+            archived={isArchivedViewActive}
+            onMarkUnread={readerCanMarkUnread ? readerMarkUnread : undefined}
           />
           </React.Suspense>
         </Box>
