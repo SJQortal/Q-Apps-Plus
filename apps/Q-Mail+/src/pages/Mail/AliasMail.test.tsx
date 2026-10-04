@@ -91,7 +91,8 @@ describe('AliasMail', () => {
     expect(onMessagesLoaded.mock.calls.at(-1)?.[1]).toHaveLength(70)
     // The last page was short: no more to load.
     expect(screen.queryByRole('button', { name: 'Load older messages' })).toBeNull()
-  })
+    // Renders 70 rows: about 1 s alone, but over 5 s when the full suite loads every worker.
+  }, 20_000)
 
   it('shows an empty state naming the alias', async () => {
     const store = makeStore()
