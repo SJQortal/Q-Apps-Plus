@@ -108,6 +108,12 @@ export function AttachmentPreviewDialog({ open, attachments, index, onIndexChang
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
       if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      // Native media controls seek with the arrows (keys from their shadow
+      // DOM arrive with the <audio>/<video> itself as the target).
+      if (target instanceof Element && target.closest('audio, video')) return;
+      // A zoomed image pans with the arrows; only a fitted one swaps files.
+      const imageStage = stageNode?.querySelector<HTMLElement>('[data-image-stage]');
+      if (imageStage && imageStage.scrollWidth > imageStage.clientWidth + 1) return;
       if (event.key === 'ArrowRight' && canNext) go(1);
       else if (event.key === 'ArrowLeft' && canPrev) go(-1);
       else return;
@@ -115,7 +121,7 @@ export function AttachmentPreviewDialog({ open, attachments, index, onIndexChang
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, kind, canNext, canPrev, go]);
+  }, [open, kind, canNext, canPrev, go, stageNode]);
 
   // Swipe between attachments on the non-zoomable viewers (images handle their own).
   useReaderGestures(kind === 'image' || kind === 'pdf' ? null : stageNode, {

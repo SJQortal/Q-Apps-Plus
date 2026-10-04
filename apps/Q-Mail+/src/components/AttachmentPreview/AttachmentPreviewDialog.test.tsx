@@ -99,6 +99,28 @@ describe('AttachmentPreviewDialog', () => {
     }
   })
 
+  it('leaves the arrow keys to media controls and to a zoomed image', async () => {
+    const onIndexChange = vi.fn()
+    wrap(<AttachmentPreviewDialog open attachments={attachments} index={0} onClose={() => {}} onIndexChange={onIndexChange} />)
+    await screen.findByAltText('cat.png')
+    // A key from a <video>'s controls seeks; it must not swap the file.
+    const video = document.createElement('video')
+    document.body.appendChild(video)
+    fireEvent.keyDown(video, { key: 'ArrowRight' })
+    expect(onIndexChange).not.toHaveBeenCalled()
+    video.remove()
+    // A zoomed image pans.
+    const stage = screen.getByRole('region', { name: 'Image cat.png' })
+    Object.defineProperty(stage, 'scrollWidth', { value: 900, configurable: true })
+    Object.defineProperty(stage, 'clientWidth', { value: 400, configurable: true })
+    expect(fireEvent.keyDown(stage, { key: 'ArrowRight' })).toBe(true)
+    expect(onIndexChange).not.toHaveBeenCalled()
+    // Fitted again: the arrow goes to the next file.
+    Object.defineProperty(stage, 'scrollWidth', { value: 400, configurable: true })
+    fireEvent.keyDown(window, { key: 'ArrowRight' })
+    expect(onIndexChange).toHaveBeenCalledWith(1)
+  })
+
   it('saves the current attachment with SAVE_FILE', async () => {
     wrap(<AttachmentPreviewDialog open attachments={attachments} index={2} onClose={() => {}} />)
     await screen.findByText('This kind of file opens outside Q-Mail.')

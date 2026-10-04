@@ -99,6 +99,11 @@ export function ImageViewer({ src, alt, onSwipe }: { src: string; alt: string; o
       <Box
         ref={setStage}
         data-testid="image-preview-stage"
+        data-image-stage
+        // Focusable, so keyboard users can pan a zoomed image with the arrows.
+        tabIndex={0}
+        role="region"
+        aria-label={`Image ${alt}`}
         sx={{
           flex: 1,
           minHeight: 0,
