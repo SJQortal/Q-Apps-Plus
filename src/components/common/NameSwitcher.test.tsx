@@ -5,6 +5,8 @@ import { HubThemeProvider } from '../../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
 import { qortalCalls, mockQortalAction } from '../../test/setup'
 import { resetAvatarCache } from '../../utils/avatarCache'
+import { BLANK, IMPOSTOR, REAL, isStruck, struckNames } from '../../test/hiddenNames'
+import { HIDDEN_CHARACTERS_SR } from './NameText'
 import {
   NAME_SEARCH_THRESHOLD,
   NameSwitcher,
@@ -282,5 +284,34 @@ describe('NameSwitcher (the dropdown)', () => {
     } finally {
       window.matchMedia = original
     }
+  })
+})
+
+describe('NameSwitcher and names with hidden characters', () => {
+  it('strikes an impostor row, keeps its search highlight and its label, and leaves the real name alone', () => {
+    const names = [...many, IMPOSTOR]
+    wrap(<NameSwitcherList names={names} activeName="peggy" onPick={() => {}} />)
+    fireEvent.change(search(), { target: { value: 'simon' } })
+    const fake = screen.getByRole('menuitemradio', { name: IMPOSTOR })
+    const real = screen.getByRole('menuitemradio', { name: REAL })
+    const struck = fake.querySelector('[data-hidden-characters]') as HTMLElement
+    expect(isStruck(struck)).toBe(true)
+    expect(struck.textContent).toBe(`${IMPOSTOR}${HIDDEN_CHARACTERS_SR}`)
+    expect(within(struck).getByText('Simon')).toBeTruthy() // the highlighted match
+    expect(real.querySelector('[data-hidden-characters]')).toBeNull()
+  })
+
+  it('strikes an impostor active name on the button, with a visible avatar letter', () => {
+    wrap(<NameSwitcher names={[IMPOSTOR, 'alice']} activeName={`${BLANK}${IMPOSTOR}`} onPick={() => {}} />)
+    const button = screen.getByRole('button', { name: /Change$/ })
+    expect(struckNames(button)).toEqual([`${BLANK}${IMPOSTOR}`])
+    expect(button.querySelector('[data-letter]')?.getAttribute('data-letter')).toBe('S')
+  })
+
+  it('leaves a real active name as plain text', () => {
+    wrap(<NameSwitcher names={[REAL, 'alice']} activeName={REAL} onPick={() => {}} />)
+    const button = screen.getByRole('button', { name: /Change$/ })
+    expect(struckNames(button)).toEqual([])
+    expect(button.textContent).toContain(REAL)
   })
 })

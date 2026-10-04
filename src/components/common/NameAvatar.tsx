@@ -13,6 +13,7 @@ import { useState } from 'react';
 import { Avatar } from '@mui/material';
 import { primarySoft } from '../../hub-theme';
 import { useLazyAvatarUrl } from '../../utils/avatarCache';
+import { firstVisibleChar } from '../../utils/invisibleCharacters';
 
 export interface NameAvatarProps {
   name: string;
@@ -24,7 +25,7 @@ export interface NameAvatarProps {
 export function NameAvatar({ name, size, known }: NameAvatarProps) {
   const [node, setNode] = useState<Element | null>(null);
   const url = useLazyAvatarUrl(name, node, known);
-  const letter = Array.from(name.trim())[0]?.toUpperCase() ?? '';
+  const letter = firstVisibleChar(name).toUpperCase();
 
   return (
     <Avatar

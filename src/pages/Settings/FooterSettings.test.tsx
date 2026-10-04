@@ -5,6 +5,7 @@ import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
 import { mockQortalAction } from '../../test/setup'
 import { resetAvatarCache } from '../../utils/avatarCache'
 import { FooterSettings, sortFooterNames } from './FooterSettings'
+import { IMPOSTOR, isStruck, struckNames } from '../../test/hiddenNames'
 
 const address = 'QFooterPicker'
 /** 20 names, unsorted as GET_ACCOUNT_NAMES returns them: more than the search threshold. */
@@ -70,5 +71,18 @@ describe('FooterSettings name picker', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Footer for: peggy. Change' }))
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'All names (default)' }))
     expect((screen.getByRole('textbox', { name: 'Default footer' }) as HTMLTextAreaElement).value).toBe('Default text')
+  })
+})
+
+describe('FooterSettings and names with hidden characters', () => {
+  it('strikes an impostor name in the "Footer for" picker, the field label and the hint', async () => {
+    wrap(['zed', IMPOSTOR])
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Footer for' }))
+    const options = await screen.findAllByRole('option')
+    const fake = options.find((o) => o.textContent?.startsWith('Simon'))!
+    expect(isStruck(fake.querySelector('[data-hidden-characters]')!)).toBe(true)
+    expect(options.find((o) => o.textContent?.startsWith('zed'))!.querySelector('[data-hidden-characters]')).toBeNull()
+    fireEvent.click(fake)
+    expect(struckNames(document.body).filter((name) => name === IMPOSTOR).length).toBeGreaterThanOrEqual(3)
   })
 })
