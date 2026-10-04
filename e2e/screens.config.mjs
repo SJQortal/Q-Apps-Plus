@@ -517,7 +517,12 @@ export default {
         }
         case 'ENCRYPT_DATA': return 'ENCSUBJ:' + p.data64;
         case 'GET_LIST_ITEMS': return [];
-        case 'ADD_LIST_ITEMS': case 'DELETE_LIST_ITEM': case 'NOTIFICATION_MARK_SEEN': case 'SHOW_PDF_READER': return true;
+        case 'SHOW_PDF_READER':
+          // A screen sets window.__noPdfReader to play an older Hub or GO without
+          // Hub's reader, so the card falls back to the bundled pdf.js viewer.
+          if (window.__noPdfReader) throw { error: 'Unknown action: SHOW_PDF_READER' };
+          return true;
+        case 'ADD_LIST_ITEMS': case 'DELETE_LIST_ITEM': case 'NOTIFICATION_MARK_SEEN': return true;
         case 'PUBLISH_QDN_RESOURCE': case 'PUBLISH_MULTIPLE_QDN_RESOURCES': case 'SAVE_FILE': case 'SEND_COIN': return decline();
         default: return null;
       }
@@ -682,7 +687,11 @@ export default {
       },
     },
     { key: 'attachment-image', path: '/', overlay: true, after: async (page) => { await openAttachment(page, /^Open coast-photo\.png/); await page.waitForSelector('[role=dialog] img', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(300); } },
-    { key: 'attachment-pdf', path: '/', overlay: true, after: async (page) => { await openAttachment(page, /^Open spec-sheet\.pdf/); await page.waitForSelector('[role=dialog] canvas', { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(600); } },
+    // The PDF card, as in Q-Share+: Open PDF hands the decrypted file to Hub's
+    // own reader (answered by the mock), then Download turns into Save.
+    { key: 'attachment-pdf', path: '/', after: async (page) => { await openMessage(page); await page.getByRole('button', { name: /^Open PDF spec-sheet\.pdf/ }).first().click({ timeout: 4000 }); await page.getByRole('button', { name: /^Save spec-sheet\.pdf/ }).first().waitFor({ timeout: 8000 }).catch(() => {}); await page.waitForTimeout(400); } },
+    // Without Hub's reader (older Hub, GO) the same button opens the bundled viewer.
+    { key: 'attachment-pdf-viewer', path: '/', overlay: true, after: async (page) => { await openMessage(page); await page.evaluate(() => { window.__noPdfReader = true; }); await page.getByRole('button', { name: /^Open PDF spec-sheet\.pdf/ }).first().click({ timeout: 4000 }); await page.waitForSelector('[role=dialog] canvas', { timeout: 15000 }).catch(() => {}); await page.waitForTimeout(600); } },
     {
       key: 'search-all',
       path: '/',
