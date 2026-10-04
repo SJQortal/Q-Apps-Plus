@@ -3074,37 +3074,51 @@ export const Mail = ({ isFromTo }: MailProps) => {
   };
   useKeyboardShortcuts(
     {
-      compose: () => onSelectSidebarItem("compose"),
+      compose: () => {
+        // Already composing: "c" must not drop the reply or forward context.
+        if (isComposeView) return false;
+        onSelectSidebarItem("compose");
+      },
       reply: () => {
-        if (isReadingOpen) openReplyComposerFromMessage(message);
+        if (!isReadingOpen) return false;
+        openReplyComposerFromMessage(message);
       },
       replyAll: () => {
-        if (isReadingOpen) openReplyComposerFromMessage(message, { replyAll: true });
+        if (!isReadingOpen) return false;
+        openReplyComposerFromMessage(message, { replyAll: true });
       },
       forward: () => {
-        if (isReadingOpen) openForwardComposerFromMessage(message);
+        if (!isReadingOpen) return false;
+        openForwardComposerFromMessage(message);
       },
       archive: () => {
-        if (!isReadingOpen || !(isInboxViewActive || isArchivedViewActive)) return;
+        if (!isReadingOpen || !(isInboxViewActive || isArchivedViewActive)) return false;
         if (isArchivedViewActive) unarchiveMessages([message]);
         else archiveMessages([message]);
         closeOpenMessage();
       },
       markUnread: () => {
-        if (isReadingOpen) {
-          void markMessagesAsUnread([message]);
-          closeOpenMessage();
-        }
+        if (!isReadingOpen) return false;
+        void markMessagesAsUnread([message]);
+        closeOpenMessage();
       },
-      next: () => openAdjacentMessage(1),
-      previous: () => openAdjacentMessage(-1),
+      next: () => {
+        if (!shortcutList.length) return false;
+        openAdjacentMessage(1);
+      },
+      previous: () => {
+        if (!shortcutList.length) return false;
+        openAdjacentMessage(-1);
+      },
       open: () => {
-        if (!isReadingOpen && shortcutList.length) openMessageFromList(shortcutList[0]);
+        if (isReadingOpen || !shortcutList.length) return false;
+        openMessageFromList(shortcutList[0]);
       },
       close: () => {
         if (shortcutsHelpOpen) setShortcutsHelpOpen(false);
         else if (isComposeView) handleComposerClose();
         else if (isReadingOpen) closeOpenMessage();
+        else return false;
       },
       focusSearch: () => {
         const input = document.querySelector<HTMLInputElement>(
