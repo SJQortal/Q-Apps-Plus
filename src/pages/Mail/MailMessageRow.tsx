@@ -354,7 +354,7 @@ export const MailMessageRow = ({
                   label={context}
                   size="small"
                   variant="outlined"
-                  sx={{ height: 22, fontSize: "0.8125rem", flexShrink: 0 }}
+                  sx={{ height: 24, fontSize: "0.875rem", flexShrink: 0 }}
                 />
               )}
             </Box>

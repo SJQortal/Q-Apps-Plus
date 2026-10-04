@@ -238,7 +238,7 @@ export const AliasesPage = ({
           <Typography
             sx={{
               color: "text.secondary",
-              fontSize: "0.8rem",
+              fontSize: "0.875rem",
             }}
           >
             Last checkpoint: {formatFullTimestamp(scanCheckpointTimestamp)}
@@ -267,7 +267,7 @@ export const AliasesPage = ({
               <Typography
                 sx={{
                   color: "text.secondary",
-                  fontSize: "0.85rem",
+                  fontSize: "0.875rem",
                 }}
               >
                 {scanState.statusMessage}
@@ -287,7 +287,7 @@ export const AliasesPage = ({
                 <Typography
                   sx={{
                     color: "text.secondary",
-                    fontSize: "0.8rem",
+                    fontSize: "0.875rem",
                   }}
                 >
                   Scanned {scanState.scannedCount}/{scanState.totalCount} • Discovered{" "}
@@ -326,7 +326,7 @@ export const AliasesPage = ({
             }}
           >
             <CircularProgress size={16} />
-            <Typography sx={{ fontSize: "0.85rem" }}>Checking alias activity...</Typography>
+            <Typography sx={{ fontSize: "0.875rem" }}>Checking alias activity...</Typography>
           </Box>
         )}
 
@@ -390,7 +390,7 @@ export const AliasesPage = ({
                 </Typography>
                 <Typography
                   sx={[{
-                    fontSize: "0.78rem",
+                    fontSize: "0.875rem",
                     display: "flex",
                     alignItems: "center",
                     gap: "6px"
