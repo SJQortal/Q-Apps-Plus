@@ -87,9 +87,8 @@ import {
   searchDirectoryNames,
 } from "../../utils/nameCache";
 import { AvatarWrapper } from "./MailTable";
-import { HIDDEN_CHARACTERS_TITLE, NameText, strikeNameSx } from "../../components/common/NameText";
+import { HIDDEN_CHARACTERS_TITLE, NameText, strikeInputSx } from "../../components/common/NameText";
 import { hasInvisibleCharacters } from "../../utils/invisibleCharacters";
-import type { Theme } from "@mui/material/styles";
 import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlined";
@@ -121,9 +120,6 @@ const aliasToggleSx = {
   color: "var(--qmail-compose-muted)",
   "&:hover": { color: "var(--qmail-compose-text)" },
 } as const;
-
-/** NameText's strike for a field's own text (the To and alias fields). */
-const strikeInputSx = (theme: Theme) => ({ "& .MuiInputBase-input": strikeNameSx(theme) });
 
 type ComposeTargetType = "name" | "group";
 type PendingPublishType = "mail" | "thread";

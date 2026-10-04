@@ -4,7 +4,7 @@
  * exactly as Qortal Hub does (NameText). Ordinary names are left alone.
  */
 import { beforeEach, describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { configureStore } from '@reduxjs/toolkit'
 import { HubThemeProvider } from '../../hub-theme'
@@ -27,6 +27,7 @@ import { ShowMessageV2Replies } from './ShowMessageV2Replies'
 import { ShowMessage } from './ShowMessageWithoutModal'
 import { AliasesPage } from './AliasesPage'
 import { Rail } from '../../layout/Rail'
+import { HIDDEN_CHARACTERS_TITLE } from '../../components/common/NameText'
 
 function makeStore() {
   const store = configureStore({
@@ -183,5 +184,13 @@ describe('rail and aliases', () => {
     )
     expect(struckNames(container)).toEqual([IMPOSTOR, IMPOSTOR])
     expect(screen.getByText(/^Reply alias linked:/)).toBeTruthy()
+    // The reply alias field under it shows the same alias struck, with the tooltip.
+    const field = screen.getByDisplayValue(IMPOSTOR)
+    expect(getComputedStyle(field).textDecorationLine).toBe('line-through')
+    expect(field.getAttribute('title')).toBe(HIDDEN_CHARACTERS_TITLE)
+    // Cleared or ordinary text is not struck.
+    fireEvent.change(field, { target: { value: REAL } })
+    expect(getComputedStyle(field).textDecorationLine).not.toBe('line-through')
+    expect(field.hasAttribute('title')).toBe(false)
   })
 })

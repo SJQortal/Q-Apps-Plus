@@ -27,6 +27,9 @@ export const strikeNameSx = (theme: Theme) => ({
   textDecorationColor: theme.palette.error.main,
 });
 
+/** The same strike for a text field's own text (To, alias and reply alias fields). */
+export const strikeInputSx = (theme: Theme) => ({ '& .MuiInputBase-input': strikeNameSx(theme) });
+
 /** MUI's visuallyHidden, inline so the kit needs no @mui/utils import. */
 const srOnly = {
   border: 0,
