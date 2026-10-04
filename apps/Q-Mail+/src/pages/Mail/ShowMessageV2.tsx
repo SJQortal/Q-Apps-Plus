@@ -1,16 +1,20 @@
 /**
  * The message reader: header (avatar, sender, recipient, date), subject,
- * action row (Reply, Reply all, Forward, Save all), attachments, body, and
+ * action row (Reply, Reply all, Forward, Save all, and Archive / Move to
+ * inbox and Mark unread when the caller offers them), attachments, body, and
  * the earlier messages of the conversation collapsed with a count.
  *
  * Layout follows the pane's own width (ResizeObserver), not a viewport
  * query, so a 700 px Hub pane and a phone both get the compact form.
  *
  * Props stay compatible with Mail.tsx (message, setReplyTo, setForwardInfo,
- * alias, onClose, setIsOpen); onReplyAll and onForward are optional extras.
+ * alias, onClose, setIsOpen); onReplyAll, onForward, onArchive and
+ * onMarkUnread are optional extras. Archive and Mark unread are labelled
+ * buttons in a wide pane and 44 px icon buttons with aria-labels in a
+ * compact one (phones); they carry aria-keyshortcuts for the e / u keys.
  */
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Box, Button, IconButton, Typography, useTheme } from "@mui/material";
+import { Box, Button, IconButton, Tooltip, Typography, useTheme } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ReplyOutlinedIcon from "@mui/icons-material/ReplyOutlined";
 import ReplyAllOutlinedIcon from "@mui/icons-material/ReplyAllOutlined";
@@ -18,6 +22,9 @@ import ForwardOutlinedIcon from "@mui/icons-material/ForwardOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import ExpandLessOutlinedIcon from "@mui/icons-material/ExpandLessOutlined";
+import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
+import UnarchiveOutlinedIcon from "@mui/icons-material/UnarchiveOutlined";
+import MarkEmailUnreadOutlinedIcon from "@mui/icons-material/MarkEmailUnreadOutlined";
 import DOMPurify from "dompurify";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
@@ -64,9 +71,27 @@ export interface ShowMessageV2Props {
   onReplyAll?: (message: any) => void;
   /** Optional: richer forward hand-off; when absent, setForwardInfo(html) is called. */
   onForward?: (info: { html: string; subject: string; attachments: any[]; message: any }) => void;
+  /** Optional: shows Archive (or Move to inbox when `archived`); the caller closes the reader. */
+  onArchive?: (message: any) => void;
+  /** The message is in Archived: the archive action reads "Move to inbox". */
+  archived?: boolean;
+  /** Optional: shows Mark unread; the caller closes the reader. */
+  onMarkUnread?: (message: any) => void;
 }
 
-export const ShowMessageV2 = ({ setIsOpen, message, setReplyTo, alias, setForwardInfo, onClose, onReplyAll, onForward }: ShowMessageV2Props) => {
+export const ShowMessageV2 = ({
+  setIsOpen,
+  message,
+  setReplyTo,
+  alias,
+  setForwardInfo,
+  onClose,
+  onReplyAll,
+  onForward,
+  onArchive,
+  archived = false,
+  onMarkUnread,
+}: ShowMessageV2Props) => {
   const theme = useTheme();
   const dispatch = useDispatch();
   const username = useSelector((state: RootState) => state.auth?.user?.name);
@@ -129,6 +154,23 @@ export const ShowMessageV2 = ({ setIsOpen, message, setReplyTo, alias, setForwar
   const cleanHTML = message?.htmlContent ? DOMPurify.sanitize(message.htmlContent) : "";
 
   const actionSx = { minHeight: 44, textTransform: "none" as const, flexShrink: 0 };
+  const iconActionSx = { minWidth: 44, minHeight: 44, flexShrink: 0 };
+  const archiveLabel = archived ? "Move to inbox" : "Archive";
+  const archiveIcon = archived ? <UnarchiveOutlinedIcon /> : <ArchiveOutlinedIcon />;
+  // Wide pane: labelled buttons. Compact (phones): icon buttons with a label
+  // for screen readers and a tooltip on long-press.
+  const sideAction = (label: string, icon: React.ReactNode, onClick: () => void, shortcut: string) =>
+    compact ? (
+      <Tooltip key={label} title={label} enterTouchDelay={500}>
+        <IconButton aria-label={label} aria-keyshortcuts={shortcut} onClick={onClick} sx={iconActionSx}>
+          {icon}
+        </IconButton>
+      </Tooltip>
+    ) : (
+      <Button key={label} variant="outlined" startIcon={icon} aria-keyshortcuts={shortcut} onClick={onClick} sx={actionSx}>
+        {label}
+      </Button>
+    );
   const actions = (
     <Box role="group" aria-label="Message actions" sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
       <Button variant="outlined" startIcon={<ReplyOutlinedIcon />} onClick={handleReply} disabled={!setReplyTo} sx={actionSx}>
@@ -152,6 +194,8 @@ export const ShowMessageV2 = ({ setIsOpen, message, setReplyTo, alias, setForwar
           {downloadAll.progress.active ? `Saving ${downloadAll.progress.current} of ${downloadAll.progress.total}… Cancel` : `Save all (${attachments.length})`}
         </Button>
       )}
+      {onArchive && sideAction(archiveLabel, archiveIcon, () => onArchive(message), "e")}
+      {onMarkUnread && sideAction("Mark unread", <MarkEmailUnreadOutlinedIcon />, () => onMarkUnread(message), "u")}
     </Box>
   );
 
@@ -161,7 +205,7 @@ export const ShowMessageV2 = ({ setIsOpen, message, setReplyTo, alias, setForwar
         <Box component="header" sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, minWidth: 0 }}>
           <AvatarWrapper height="48px" user={message?.user} fallback={message?.user} />
           <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, gap: 0.25 }}>
-            <Typography component="h2" noWrap sx={{ fontSize: "1rem", fontWeight: 700, lineHeight: 1.3 }}>
+            <Typography component="p" noWrap sx={{ fontSize: "1rem", fontWeight: 700, lineHeight: 1.3 }}>
               {message?.user}
             </Typography>
             {recipient && (
@@ -176,7 +220,8 @@ export const ShowMessageV2 = ({ setIsOpen, message, setReplyTo, alias, setForwar
           </IconButton>
         </Box>
 
-        <Typography component="h1" sx={{ fontSize: compact ? "1.15rem" : "1.3rem", fontWeight: 600, lineHeight: 1.3, wordBreak: "break-word" }}>
+        {/* h2: the view's one h1 is the PaneHeader's (the list's, or the phone reader's). */}
+        <Typography component="h2" sx={{ fontSize: compact ? "1.15rem" : "1.3rem", fontWeight: 600, lineHeight: 1.3, wordBreak: "break-word" }}>
           {subject}
         </Typography>
 

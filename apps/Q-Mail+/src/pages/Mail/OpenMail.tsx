@@ -1,7 +1,8 @@
 /**
  * Opens a message that is not decrypted yet, inside the reading pane: waits
  * for the MAIL_PRIVATE resource to be READY (useResourceReady: one status
- * call, then a polite 5 s poll while Core fetches from peers), shows the
+ * call, quick 0.5 s / 1 s re-checks while Core builds a file it already has,
+ * then a polite 5 s poll while Core fetches from peers), shows the
  * shared FetchingFromPeers state with progress, then fetchAndEvaluateMail,
  * and resolves the caller's modal promise with the decrypted message
  * exactly as the old dialog did (handleClose(message) on success,
