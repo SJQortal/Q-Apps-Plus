@@ -20,7 +20,7 @@ import {
   readDeletedSentIds,
   writeDeletedSentIds,
 } from '../../utils/sentIndex'
-import { SENT_INDEX_KEY, publishMailIndex } from './mailIndexStore'
+import { getMailIndex, getMailIndexWalkedAt, publishMailIndex, sentIndexKey } from './mailIndexStore'
 
 interface SentMailProps {
   instanceName?: string | null
@@ -46,6 +46,8 @@ interface ResolvedRecipientInfo {
   publicKey: string
 }
 
+/** How long a stored full walk of the sent index is reused on a return to Sent. */
+export const SENT_FULL_WALK_MAX_AGE_MS = 10 * 60_000
 export const SENT_POLL_INTERVAL_MS = 30_000
 
 const toStringOrEmpty = (value: any): string => {
@@ -200,6 +202,9 @@ export const SentMail = ({
     return Array.from(deduped.values());
   }, [instanceName, instanceNames, user?.name]);
   const hasActiveInstances = activeInstanceNames.length > 0;
+  const indexKey = useMemo(() => sentIndexKey(activeInstanceNames), [activeInstanceNames])
+  // The index key whose rows `mailMessages` holds (set once a load succeeds).
+  const loadedKeyRef = useRef('')
 
   const [mailMessages, setMailMessages] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -265,10 +270,14 @@ export const SentMail = ({
     onSearchStatus?.(searchStatus)
   }, [onSearchStatus, searchStatus])
 
-  // Share the index with the cross-mailbox search.
+  // Share the index (under these names only) with the cross-mailbox search
+  // and the next visit to Sent, once it is really loaded: never the empty
+  // list a mount starts with.
   useEffect(() => {
-    if (hasActiveInstances) publishMailIndex(SENT_INDEX_KEY, mailMessages)
-  }, [hasActiveInstances, mailMessages])
+    if (hasActiveInstances && indexKey && loadedKeyRef.current === indexKey) {
+      publishMailIndex(indexKey, mailMessages)
+    }
+  }, [hasActiveInstances, indexKey, mailMessages])
 
   const markDeletedLocally = useCallback(
     (messageIdentifier: string, senderName?: string | null) => {
@@ -333,6 +342,8 @@ export const SentMail = ({
           silent ? { ttlMs: 0 } : undefined
         )
         if (loadIdRef.current !== loadId) return
+        loadedKeyRef.current = indexKey
+        publishMailIndex(indexKey, dedupedMessages, { walkedAt: Date.now() })
         setMailMessages(dedupedMessages)
       } catch (error) {
         if (!silent && loadIdRef.current === loadId) {
@@ -344,45 +355,65 @@ export const SentMail = ({
         }
       }
     },
-    [activeInstanceNames, hasActiveInstances]
+    [activeInstanceNames, hasActiveInstances, indexKey]
   )
-
-  useEffect(() => {
-    if (!hasActiveInstances) {
-      loadIdRef.current += 1
-      setMailMessages([])
-      return
-    }
-
-    setMailMessages([])
-    void fetchSentIndexes()
-  }, [fetchSentIndexes, hasActiveInstances])
 
   const mailMessagesRef = useRef<any[]>([])
   useEffect(() => {
     mailMessagesRef.current = mailMessages
   }, [mailMessages])
 
+  // Newest 20 per name and query, cut at the first known id, merged in
+  // front. Resolves to whether anything new arrived.
+  const applySentDelta = useCallback(async (): Promise<boolean> => {
+    if (!hasActiveInstances) return false
+    const loadId = loadIdRef.current
+    const known = new Set(mailMessagesRef.current.map(message => toStringOrEmpty(message?.id)))
+    const fresh = await fetchSentDelta(activeInstanceNames, known, deletedMessageIdsRef.current)
+    // A load started meanwhile (another mailbox, or a refresh) owns the list.
+    if (loadIdRef.current !== loadId) return true
+    if (!fresh.length) return false
+    setMailMessages(previous => {
+      const knownNow = new Set(previous.map(message => toStringOrEmpty(message?.id)))
+      const additions = fresh.filter(row => !knownNow.has(row.id))
+      return additions.length ? [...additions, ...previous] : previous
+    })
+    return true
+  }, [activeInstanceNames, hasActiveInstances])
+
+  useEffect(() => {
+    if (!hasActiveInstances) {
+      loadIdRef.current += 1
+      loadedKeyRef.current = ''
+      setMailMessages([])
+      return
+    }
+
+    // Back on Sent soon after a full walk of these names: show that index at
+    // once and fetch only what is new. Deletions made elsewhere are picked up
+    // by the next full walk, at most SENT_FULL_WALK_MAX_AGE_MS later.
+    const stored = getMailIndex(indexKey)
+    const walked = getMailIndexWalkedAt(indexKey)
+    if (stored && walked && Date.now() - walked < SENT_FULL_WALK_MAX_AGE_MS) {
+      loadIdRef.current += 1
+      loadedKeyRef.current = indexKey
+      mailMessagesRef.current = stored
+      setMailMessages(stored)
+      setIsLoading(false)
+      setLoadError(null)
+      void applySentDelta().catch(() => undefined)
+      return
+    }
+
+    loadedKeyRef.current = ''
+    setMailMessages([])
+    void fetchSentIndexes()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchSentIndexes, hasActiveInstances])
+
   // Polite delta poll (docs/QORTAL.md rule 7): newest 20 per name and query,
   // cut at the first known id, merged in front; `false` backs off.
-  usePolling(
-    async () => {
-      if (!hasActiveInstances) return
-      const loadId = loadIdRef.current
-      const known = new Set(mailMessagesRef.current.map(message => toStringOrEmpty(message?.id)))
-      const fresh = await fetchSentDelta(activeInstanceNames, known, deletedMessageIdsRef.current)
-      // A load started meanwhile (another mailbox, or a refresh) owns the list.
-      if (loadIdRef.current !== loadId) return true
-      if (!fresh.length) return false
-      setMailMessages(previous => {
-        const knownNow = new Set(previous.map(message => toStringOrEmpty(message?.id)))
-        const additions = fresh.filter(row => !knownNow.has(row.id))
-        return additions.length ? [...additions, ...previous] : previous
-      })
-      return true
-    },
-    { intervalMs: SENT_POLL_INTERVAL_MS, enabled: hasActiveInstances }
-  )
+  usePolling(applySentDelta, { intervalMs: SENT_POLL_INTERVAL_MS, enabled: hasActiveInstances })
 
   const openMessage = useCallback(
     async (messageUser: string, messageIdentifier: string, content: any, to?: string) => {

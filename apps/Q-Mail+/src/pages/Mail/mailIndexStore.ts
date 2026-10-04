@@ -6,11 +6,22 @@
  */
 import { useSyncExternalStore } from "react";
 
-export const SENT_INDEX_KEY = "sent";
+/**
+ * The sent index of exactly these names (order and case ignored). Keyed by
+ * names so a single name's Sent view never stands in for "All mail".
+ */
+export const sentIndexKey = (names: string[]): string => {
+  const normalized = Array.from(
+    new Set(names.map(name => String(name || "").trim().toLowerCase()).filter(Boolean))
+  ).sort();
+  return normalized.length ? `sent:${normalized.join(",")}` : "";
+};
 export const aliasIndexKey = (alias: string): string =>
   `alias:${String(alias || "").trim().toLowerCase()}`;
 
 const indexes = new Map<string, any[]>();
+// When each index was last built by a full walk (ms epoch).
+const walkedAt = new Map<string, number>();
 const listeners = new Set<() => void>();
 let version = 0;
 
@@ -19,11 +30,18 @@ function notify() {
   listeners.forEach(listener => listener());
 }
 
-export function publishMailIndex(key: string, rows: any[]): void {
+/** `walkedAt`: set when `rows` come from a full walk (not a delta or an edit). */
+export function publishMailIndex(key: string, rows: any[], options?: { walkedAt?: number }): void {
   if (!key) return;
+  if (options?.walkedAt) walkedAt.set(key, options.walkedAt);
   if (indexes.get(key) === rows) return;
   indexes.set(key, rows);
   notify();
+}
+
+/** When the index under `key` was last built by a full walk, if ever. */
+export function getMailIndexWalkedAt(key: string): number | undefined {
+  return walkedAt.get(key);
 }
 
 export function getMailIndex(key: string): any[] | undefined {
@@ -36,6 +54,7 @@ export function hasMailIndex(key: string): boolean {
 
 export function resetMailIndexStore(): void {
   indexes.clear();
+  walkedAt.clear();
   notify();
 }
 

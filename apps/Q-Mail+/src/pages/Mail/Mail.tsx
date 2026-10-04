@@ -113,7 +113,7 @@ import { openerInfoFor } from "./openerInfo";
 import { getAvatarUrl } from "../../utils/avatarCache";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import {
-  SENT_INDEX_KEY,
+  sentIndexKey,
   aliasIndexKey,
   getMailIndex,
   useMailIndex,
@@ -1014,7 +1014,12 @@ export const Mail = ({ isFromTo }: MailProps) => {
       bodyLimit: bodySearchLimit,
     });
 
-  const sentIndexForSearch = useMailIndex(SENT_INDEX_KEY);
+  // The names "All mail" searches the sent mail of (the Sent view's "all names").
+  const allMailSentNames = useMemo(
+    () => (ownedSentNames.length ? ownedSentNames : user?.name ? [user.name] : []),
+    [ownedSentNames, user?.name]
+  );
+  const sentIndexForSearch = useMailIndex(sentIndexKey(allMailSentNames));
   const mailIndexVersion = useMailIndexVersion();
   const allMailRows = useMemo(() => {
     if (!isAllMailSearch) return [];
@@ -1069,13 +1074,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
     let cancelled = false;
     setIsLoadingAllMail(true);
     const address = user.address;
-    const sentNames = ownedSentNames.length
-      ? ownedSentNames
-      : user?.name
-        ? [user.name]
-        : [];
     Promise.all([
-      ensureSentIndex(sentNames),
+      ensureSentIndex(allMailSentNames),
       ...watchedAliases.map(alias => ensureAliasIndex(alias, address)),
     ])
       .catch(() => undefined)
@@ -1085,7 +1085,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
     return () => {
       cancelled = true;
     };
-  }, [isAllMailSearch, ownedSentNames, user?.address, user?.name, watchedAliases]);
+  }, [allMailSentNames, isAllMailSearch, user?.address, watchedAliases]);
 
   const activeSearchStatus: MailboxSearchStatus = isAllMailSearch
     ? allMailStatus

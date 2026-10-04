@@ -14,7 +14,7 @@ import { resetSearchCache } from '../../utils/qdnSearch'
 import { resetSubjectCache } from '../../utils/subjectCache'
 import { resetNameCache } from '../../utils/nameCache'
 import { resetSentRecipientCache } from '../../utils/sentRecipientCache'
-import { getMailIndex, resetMailIndexStore, SENT_INDEX_KEY } from './mailIndexStore'
+import { getMailIndex, resetMailIndexStore, sentIndexKey } from './mailIndexStore'
 import { SentMail } from './SentMail'
 
 const SEARCH = '/arbitrary/resources/search?'
@@ -76,7 +76,7 @@ describe('SentMail', () => {
     // Two recipient groups → two lookups, never one per row, never SEARCH_NAMES for short names.
     await waitFor(() => expect(qortalCalls('GET_NAME_DATA')).toHaveLength(2))
     expect(qortalCalls('SEARCH_NAMES')).toHaveLength(0)
-    expect(getMailIndex(SENT_INDEX_KEY)).toHaveLength(3)
+    expect(getMailIndex(sentIndexKey(['alice']))).toHaveLength(3)
     // Bob's group collapses two messages.
     expect(screen.getByRole('button', { name: /To: bobby.*2 messages/ })).toBeTruthy()
   })
@@ -169,5 +169,40 @@ describe('SentMail', () => {
     } finally {
       fetchMock.mockImplementation(original)
     }
+  })
+
+  it('shows the stored index at once on a return to Sent and fetches only what is new', async () => {
+    const store = makeStore()
+    mockFetchRoute(/limit=20&.*query=_mail_qortal_qmail_/, [sentTo('erin', 'eee555', 9), sentTo('bob', 'bbb111', 3)])
+    mockFetchRoute(/query=_mail_qortal_qmail_/, [sentTo('bob', 'bbb111', 3)])
+    mockFetchRoute(/query=qortal_qmail_&/, [])
+    mockQortalAction('GET_NAME_DATA', (request: any) => ({ name: request.name, owner: `Q${request.name}` }))
+    mockQortalAction('SEARCH_NAMES', [])
+    const first = renderSent(store, <SentMail instanceNames={['alice']} onOpen={async () => {}} />)
+    await screen.findByText('To: bob')
+    const walk = fetchedUrls(SEARCH).length
+    expect(walk).toBe(2)
+    first.unmount()
+
+    renderSent(store, <SentMail instanceNames={['alice']} onOpen={async () => {}} />)
+    // No loading state and no empty flash: the stored rows show straight away.
+    expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull()
+    expect(screen.getByText('To: bob')).toBeTruthy()
+    await screen.findByText('To: erin')
+    const delta = fetchedUrls(SEARCH).slice(walk)
+    expect(delta).toHaveLength(2)
+    expect(delta.every((url) => url.includes('limit=20'))).toBe(true)
+  })
+
+  it('keeps a single name\'s Sent view out of the all-names index', async () => {
+    const store = makeStore()
+    mockFetchRoute(/query=_mail_qortal_qmail_/, [sentTo('bob', 'bbb111', 3)])
+    mockFetchRoute(/query=qortal_qmail_&/, [])
+    mockQortalAction('GET_NAME_DATA', (request: any) => ({ name: request.name, owner: `Q${request.name}` }))
+    mockQortalAction('SEARCH_NAMES', [])
+    renderSent(store, <SentMail instanceNames={['alice']} onOpen={async () => {}} />)
+    await screen.findByText('To: bob')
+    expect(getMailIndex(sentIndexKey(['alice']))).toHaveLength(1)
+    expect(getMailIndex(sentIndexKey(['alice', 'alice2']))).toBeUndefined()
   })
 })
