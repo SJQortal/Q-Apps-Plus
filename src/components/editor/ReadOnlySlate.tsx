@@ -7,6 +7,7 @@
  * bold, italic, underline and link marks.
  */
 import React from 'react'
+import { linkPolicy } from '../common/TextEditor/DisplayHtml'
 
 type SlateText = {
   text: string
@@ -34,13 +35,46 @@ interface ReadOnlySlateProps {
 const isText = (node: SlateNode): node is SlateText =>
   typeof (node as SlateText).text === 'string'
 
+const nodeText = (nodes: SlateNode[] | undefined): string =>
+  (Array.isArray(nodes) ? nodes : [])
+    .map((node) => (!node || typeof node !== 'object' ? '' : isText(node) ? node.text : nodeText(node.children)))
+    .join('')
+
+/**
+ * A sender-written link, through the same policy as HTML bodies
+ * (DisplayHtml.linkPolicy): qortal:// links stay links; web, mail and phone
+ * links can't open in Hub, so they show as text with their target; anything
+ * else (relative, same-origin, data:) is plain text, because it would load
+ * another page, such as another Q-App, inside the Q-Mail+ frame.
+ */
+const renderLink = (href: string | undefined, children: React.ReactNode, text: string, key?: React.Key) => {
+  const decision = linkPolicy(typeof href === 'string' ? href : '')
+  if (decision.kind === 'qortal') {
+    return (
+      <a key={key} href={decision.href}>
+        {children}
+      </a>
+    )
+  }
+  if (decision.kind === 'copy') {
+    const target = decision.copy.text
+    return (
+      <span key={key} title={target}>
+        {children}
+        {text.includes(target) ? null : ` (${target})`}
+      </span>
+    )
+  }
+  return <React.Fragment key={key}>{children}</React.Fragment>
+}
+
 const renderLeaf = (leaf: SlateText, key: React.Key) => {
   let el: React.ReactNode = leaf.text
   if (leaf.bold) el = <strong>{el}</strong>
   if (leaf.italic) el = <em>{el}</em>
   if (leaf.underline) el = <u>{el}</u>
   if (leaf.code) el = <code>{el}</code>
-  if (leaf.link) el = <a href={leaf.link}>{el}</a>
+  if (leaf.link) el = renderLink(leaf.link, el, leaf.text)
   return <span key={key}>{el}</span>
 }
 
@@ -74,11 +108,7 @@ const renderNodes = (nodes: SlateNode[] | undefined, mode?: string): React.React
       case 'code-line':
         return <div key={index}>{children}</div>
       case 'link':
-        return (
-          <a key={index} href={node.url}>
-            {children}
-          </a>
-        )
+        return renderLink(node.url, children, nodeText(node.children), index)
       default:
         return (
           <p key={index} className={`paragraph${mode ? `-${mode}` : ''}`} style={style}>
