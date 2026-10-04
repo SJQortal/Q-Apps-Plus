@@ -81,6 +81,7 @@ import {
   type QMailPublishedStateEntry,
 } from "../../utils/mailStateDocument";
 import { readPublishedMailStateFromQdn } from "../../utils/publishedMailStateRemote";
+import { applyPublishedFooter, readMailFooter } from "../../utils/mailFooter";
 import { usePolling } from "../../hooks/usePolling";
 import { invalidateSearches, searchResources } from "../../utils/qdnSearch";
 import {
@@ -2177,6 +2178,8 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
         }
         base = mergeRemoteStateIntoPublishBase(base, remote);
         if (remote) {
+          // A footer only fills an empty one here, then is published below.
+          applyPublishedFooter(user.address, remote.settings?.footer);
           if (Object.keys(remote.archived).length) {
             dispatch(applyPublishedArchived(remote.archived));
           }
@@ -2199,12 +2202,13 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
           publishedEntries: base.publishedEntries,
           localEntries: localMailStateById,
           archived: base.archived,
-          // Additive: this device's appearance and alias lists (§16).
+          // Additive: this device's appearance, alias lists and footer (§16).
           settings: {
             uiTheme,
             textSize,
             watchedAliases: base.watchedAliases,
             aliasReplyLinks: base.aliasReplyLinks,
+            footer: readMailFooter(user.address),
           },
         });
       const archivedToPublish: ArchivedMap = payload.archived || {};
@@ -2364,6 +2368,8 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       // appearance is only remembered for Settings → Sync → Restore.
       const loadedSettings = parsed.settings;
       if (loadedSettings) {
+        // The footer fills an empty one only; a local footer is never replaced.
+        applyPublishedFooter(user?.address, loadedSettings.footer);
         if (loadedSettings.watchedAliases.length) {
           setWatchedAliases(current =>
             mergeWatchedAliases(current, loadedSettings.watchedAliases)
