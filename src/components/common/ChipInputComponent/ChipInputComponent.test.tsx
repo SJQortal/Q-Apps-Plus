@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { mockQortalAction, qortalCalls } from '../../../test/setup'
 import { resetNameCache } from '../../../utils/nameCache'
+import { IMPOSTOR, isStruck, nameElement } from '../../../test/hiddenNames'
 import { ChipInputComponent, type NameChip } from './ChipInputComponent'
 
 function Harness({ onPending, exclude = [] }: { onPending?: (v: string) => void; exclude?: string[] }) {
@@ -62,6 +63,14 @@ describe('ChipInputComponent (Cc / Bcc names)', () => {
     // Typing clears the message.
     fireEvent.change(input, { target: { value: 'c' } })
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('strikes an unregistered impostor-style name in the inline error', async () => {
+    render(<Harness />)
+    add(IMPOSTOR)
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toMatch(/^"Simon.James.*" is not a registered name$/)
+    expect(isStruck(nameElement(alert, IMPOSTOR))).toBe(true)
   })
 
   it('refuses a name that is already a recipient elsewhere, without a lookup', async () => {

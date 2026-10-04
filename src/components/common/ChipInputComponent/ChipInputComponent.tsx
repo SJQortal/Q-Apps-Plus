@@ -67,7 +67,11 @@ export const ChipInputComponent = ({
     try {
       const lookup = await lookupName(recipientName);
       if (lookup.status !== "found") {
-        setError(`"${recipientName}" is not a registered name`);
+        setError(
+          <>
+            &quot;<NameText name={recipientName} />&quot; is not a registered name
+          </>
+        );
         return;
       }
       const publicKey = await lookupPublicKey(lookup.address);
