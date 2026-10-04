@@ -8,12 +8,18 @@
  * MAIL_PRIVATE rows from four senders (one with a "+", one non-ASCII), some
  * with a cached subject, some locked (DECRYPT_DATA throws); one message with
  * four attachments (PNG, text, a valid one-page PDF, WAV) and two Cc names
- * (Reply all fills Cc); 51 qortal_qmail_ rows, so the paged alias
+ * (Reply all fills Cc); 53 qortal_qmail_ rows, so the paged alias
  * scan reads two pages; a watched alias
  * with mail; sent rows for both owned names (plus a tombstone that must stay
  * hidden); a group with threads and posts; a draft, archived ids and read
  * state in localStorage. Every publish and save is declined, so nothing can
  * be sent or spent.
+ *
+ * Impostor names: "Simon James" and an impostor's copy, "Simon\u2800James"
+ * (U+2800 BRAILLE PATTERN BLANK, which Hub strikes through), each send one
+ * recent inbox message and both come back from SEARCH_NAMES, so the inbox,
+ * the reader (impostor-open) and the composer's suggestions (compose-names)
+ * show the strike next to the real name.
  *
  * Encryption is mocked end to end: FETCH_QDN_RESOURCE answers a token that
  * names the resource, DECRYPT_DATA turns the token into the base64 body the
@@ -31,6 +37,11 @@ const ZOE_ADDRESS = 'QZoeAngstrom33333333333333333Zo3e1A';
 const MARCUS = "Marcus O'Neil";
 const MARCUS_ADDRESS = 'QMarcusONeil44444444444444444M4rcus';
 const NAMELESS_ADDRESS = 'QNoNameMember5555555555555555NoNm3x';
+const SIMON = 'Simon James';
+const SIMON_ADDRESS = 'QSimonJames666666666666666666S1m0nJ';
+// An impostor's copy of the name above: the space is U+2800 BRAILLE PATTERN BLANK.
+const IMPOSTOR = 'Simon\u2800James';
+const IMPOSTOR_ADDRESS = 'QImpostor77777777777777777777Imp0st';
 const GROUP_ID = 7;
 const GROUP_NAME = 'Qortal Builders';
 
@@ -40,6 +51,8 @@ const OWNERS = {
   [ALICE]: ALICE_ADDRESS,
   [ZOE]: ZOE_ADDRESS,
   [MARCUS]: MARCUS_ADDRESS,
+  [SIMON]: SIMON_ADDRESS,
+  [IMPOSTOR]: IMPOSTOR_ADDRESS,
 };
 const suffix = (address) => address.slice(-6);
 const now = Date.now();
@@ -144,6 +157,11 @@ const INBOX = Array.from({ length: 30 }, (_, i) => {
   const n = String(i + 1).padStart(2, '0');
   return row(SENDERS[i % 4], 'MAIL_PRIVATE', inboxId(NAME, ADDRESS, `m${n}`), now - i * 5 * HOUR - (i % 3) * 600_000);
 });
+// The real name and the impostor's copy, each with one recent message.
+const LOOKALIKE_INBOX = [
+  row(SIMON, 'MAIL_PRIVATE', inboxId(NAME, ADDRESS, 'sj1'), now - 0.5 * HOUR),
+  row(IMPOSTOR, 'MAIL_PRIVATE', inboxId(NAME, ADDRESS, 'im1'), now - 0.25 * HOUR),
+];
 const SECOND_INBOX = [
   row(ALICE, 'MAIL_PRIVATE', inboxId(SECOND, ADDRESS, 'b01'), now - 2 * HOUR),
   row(ZOE, 'MAIL_PRIVATE', inboxId(SECOND, ADDRESS, 'b02'), now - 30 * HOUR),
@@ -187,7 +205,7 @@ const POSTS = [
 ];
 const POST_ROWS = POSTS.map((p) => row(p.name, 'MAIL_PRIVATE', p.id, p.created));
 const THUMB_ROWS = [row(ALICE, 'THUMBNAIL', `qortal_group_avatar_${GROUP_ID}`, now - 500 * HOUR)];
-const ALL_ROWS = [...INBOX, ...SECOND_INBOX, ...ALIAS_INBOX, ...SENT, ...THREAD_ROWS, ...POST_ROWS, ...THUMB_ROWS];
+const ALL_ROWS = [...INBOX, ...LOOKALIKE_INBOX, ...SECOND_INBOX, ...ALIAS_INBOX, ...SENT, ...THREAD_ROWS, ...POST_ROWS, ...THUMB_ROWS];
 
 // ---- decrypted bodies (data contract §3a, §7) ------------------------------
 const BODY_HTML =
@@ -244,6 +262,13 @@ INBOX.forEach((r, i) => {
 });
 SECOND_INBOX.forEach((r, i) => {
   BODIES[r.identifier] = mailBody(r, i + 3, SECOND);
+});
+LOOKALIKE_INBOX.forEach((r, i) => {
+  BODIES[r.identifier] = {
+    ...mailBody(r, i + 5, NAME),
+    subject: ['Q-Mail+ test build is ready', 'Urgent: confirm your wallet for the airdrop'][i],
+    textContentV2: `<p>Message from ${r.name}.</p>`,
+  };
 });
 ALIAS_INBOX.forEach((r, i) => {
   BODIES[r.identifier] = { ...mailBody(r, i + 5, ALIAS), recipient: NAME, to: ALIAS };
@@ -375,6 +400,16 @@ async function openMessage(page) {
   // Playwright's tap leaves a mouse pointer where the row was, over the
   // reader's Archive / Mark unread icons, and their hover tooltips would open;
   // a real phone has no pointer there.
+  await page.mouse.move(1, 1);
+  await page.waitForTimeout(300);
+}
+
+/** Open the impostor's message: the reader's From line carries the strike. */
+async function openImpostorMessage(page) {
+  await waitForInbox(page);
+  // One message, so the sender has a row of its own (locked until opened).
+  await page.getByRole('button', { name: new RegExp(IMPOSTOR) }).first().click({ timeout: 4000 });
+  await page.waitForSelector('article', { timeout: 8000 }).catch(() => {});
   await page.mouse.move(1, 1);
   await page.waitForTimeout(300);
 }
@@ -545,6 +580,7 @@ export default {
   screens: [
     { key: 'inbox', path: '/', after: waitForInbox },
     { key: 'inbox-open', path: '/', after: openMessage },
+    { key: 'impostor-open', path: '/', after: openImpostorMessage },
     { key: 'archived', path: '/', after: async (page) => { await goTo(page, /^Archived/); await waitForInbox(page); } },
     { key: 'sent', path: '/', after: async (page) => { await goTo(page, /^Sent/); await page.waitForSelector('text=To:', { timeout: 8000 }).catch(() => {}); } },
     {
@@ -608,6 +644,19 @@ export default {
         await cc.fill(ZOE);
         await cc.press('Enter');
         await page.getByRole('button', { name: new RegExp(ZOE) }).first().waitFor({ timeout: 4000 }).catch(() => {});
+        await page.waitForTimeout(300);
+      },
+    },
+    {
+      // The To suggestions for "Simon": the real name and the struck impostor.
+      key: 'compose-names',
+      path: '/',
+      overlay: true,
+      after: async (page) => {
+        await goTo(page, /^Compose$/);
+        await page.waitForSelector('.ql-editor', { timeout: 8000 }).catch(() => {});
+        await page.getByPlaceholder('Type a name or joined group').first().fill('Simon');
+        await page.getByRole('option', { name: new RegExp(IMPOSTOR) }).first().waitFor({ timeout: 4000 }).catch(() => {});
         await page.waitForTimeout(300);
       },
     },
