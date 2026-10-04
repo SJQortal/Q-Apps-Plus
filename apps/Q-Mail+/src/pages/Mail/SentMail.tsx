@@ -310,10 +310,16 @@ export const SentMail = ({
     [deletingMessageIds]
   )
 
+  // Every load (and a switch of names) gets a number: only the latest one
+  // may set the list, so a slower fetch for the previous mailbox can't
+  // replace the one the user switched to.
+  const loadIdRef = useRef(0)
+
   const fetchSentIndexes = useCallback(
     async (options?: { silent?: boolean }) => {
       if (!hasActiveInstances) return
 
+      const loadId = ++loadIdRef.current
       const silent = Boolean(options?.silent)
       if (!silent) {
         setIsLoading(true)
@@ -326,13 +332,14 @@ export const SentMail = ({
           deletedMessageIdsRef.current,
           silent ? { ttlMs: 0 } : undefined
         )
+        if (loadIdRef.current !== loadId) return
         setMailMessages(dedupedMessages)
       } catch (error) {
-        if (!silent) {
+        if (!silent && loadIdRef.current === loadId) {
           setLoadError(toErrorMessage(error, "Couldn't reach the node."))
         }
       } finally {
-        if (!silent) {
+        if (loadIdRef.current === loadId) {
           setIsLoading(false)
         }
       }
@@ -342,6 +349,7 @@ export const SentMail = ({
 
   useEffect(() => {
     if (!hasActiveInstances) {
+      loadIdRef.current += 1
       setMailMessages([])
       return
     }
@@ -360,8 +368,11 @@ export const SentMail = ({
   usePolling(
     async () => {
       if (!hasActiveInstances) return
+      const loadId = loadIdRef.current
       const known = new Set(mailMessagesRef.current.map(message => toStringOrEmpty(message?.id)))
       const fresh = await fetchSentDelta(activeInstanceNames, known, deletedMessageIdsRef.current)
+      // A load started meanwhile (another mailbox, or a refresh) owns the list.
+      if (loadIdRef.current !== loadId) return true
       if (!fresh.length) return false
       setMailMessages(previous => {
         const knownNow = new Set(previous.map(message => toStringOrEmpty(message?.id)))
