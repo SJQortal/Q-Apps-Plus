@@ -99,6 +99,39 @@ async function evaluate(c, expression) {
   return r.result.value;
 }
 
+// Where a frame's viewport sits in the Hub window, in CSS px. Hub nests the
+// app's iframe in an about:srcdoc iframe below its top bar, so the offset adds
+// up every iframe element from the frame's owner to the top, then repeats for
+// each out-of-process parent target.
+const OWNER_OFFSET = `function () {
+  let x = 0, y = 0;
+  for (let el = this; el; el = el.ownerDocument.defaultView.frameElement) {
+    const b = el.getBoundingClientRect();
+    const s = el.ownerDocument.defaultView.getComputedStyle(el);
+    x += b.x + el.clientLeft + parseFloat(s.paddingLeft);
+    y += b.y + el.clientTop + parseFloat(s.paddingTop);
+  }
+  return [x, y];
+}`;
+
+async function frameOffset(targets, frame) {
+  let [x, y] = [0, 0];
+  for (let t = frame; t.parentId; ) {
+    const parent = targets.find((p) => p.id === t.parentId);
+    if (!parent) break;
+    const c = connect(parent);
+    await c.ready;
+    const { backendNodeId } = await c.send('DOM.getFrameOwner', { frameId: t.id });
+    const { object } = await c.send('DOM.resolveNode', { backendNodeId });
+    const { result } = await c.send('Runtime.callFunctionOn', { objectId: object.objectId, functionDeclaration: OWNER_OFFSET, returnByValue: true });
+    c.close();
+    x += result.value[0];
+    y += result.value[1];
+    t = parent;
+  }
+  return [x, y];
+}
+
 const PHONE_MEDIA = [
   { name: 'hover', value: 'none' },
   { name: 'any-hover', value: 'none' },
@@ -245,9 +278,12 @@ if (cmd === 'targets') {
   process.on('SIGTERM', release);
   setInterval(() => {}, 1 << 30);
 } else if (cmd === 'tap' || cmd === 'swipe') {
-  // Touch input goes to the app frame's own target, in the frame's own CSS px
-  // (sent to the page target, it lands at the wrong offset and is dropped).
-  const frame = connect(appFrame(targets));
+  // Touch input goes to the app frame's own target, but Chromium reads its
+  // coordinates in the Hub window's viewport, so frame CSS px are moved by
+  // where the frame sits in Hub (about 124 px down, below Hub's top bar).
+  // (Sent to the page target, even window coordinates land too high.)
+  const target = appFrame(targets);
+  const frame = connect(target);
   await frame.ready;
   let points;
   if (cmd === 'tap' && !/^[\d.]+,[\d.]+$/.test(args[0] ?? '')) {
@@ -261,13 +297,16 @@ if (cmd === 'targets') {
   } else {
     points = args.slice(0, cmd === 'tap' ? 1 : 2).map(parsePoint);
   }
-  const toPoint = ([x, y]) => ({ x, y });
+  // Measured after the selector's scrollIntoView, in case that scrolled Hub too.
+  const [ox, oy] = await frameOffset(targets, target);
+  const toPoint = ([x, y]) => ({ x: x + ox, y: y + oy });
   await frame.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
   const touch = (type, pts) => frame.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(toPoint) });
+  const at = `in the app frame (frame at ${Math.round(ox)},${Math.round(oy)} in Hub)`;
   if (cmd === 'tap') {
     await touch('touchStart', points);
     await touch('touchEnd', []);
-    console.log(`Tapped ${points[0].map(Math.round).join(',')} in the app frame`);
+    console.log(`Tapped ${points[0].map(Math.round).join(',')} ${at}`);
   } else {
     const [[x1, y1], [x2, y2]] = points;
     await touch('touchStart', [[x1, y1]]);
@@ -276,7 +315,7 @@ if (cmd === 'targets') {
       await new Promise((r) => setTimeout(r, 25));
     }
     await touch('touchEnd', []);
-    console.log(`Swiped ${x1},${y1} → ${x2},${y2} in the app frame`);
+    console.log(`Swiped ${x1},${y1} → ${x2},${y2} ${at}`);
   }
   frame.close();
 } else if (cmd === 'requests') {
