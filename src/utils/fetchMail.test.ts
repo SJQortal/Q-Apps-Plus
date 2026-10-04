@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { mockQortalAction, qortalCalls } from '../test/setup'
 import { NOT_YET_RETRY_DELAYS_MS, fetchAndEvaluateMail, isDeletedBody, isNotYetAvailable } from './fetchMail'
+import { resetNameCache } from './nameCache'
 
 const row = { user: 'alice', messageIdentifier: '_mail_qortal_qmail_bob_abc123_mail_x1', content: { createdAt: 5, user: 'alice', id: 'row' }, otherUser: 'alice' }
 const mailJson = { subject: 'Hi', createdAt: 1700000000000, version: 1, attachments: [], textContentV2: '<p>hello</p>', generalData: { threadV2: [] }, recipient: 'bob' }
 
 describe('fetchAndEvaluateMail', () => {
   beforeEach(() => {
+    resetNameCache()
     mockQortalAction('GET_NAME_DATA', { owner: 'Qalice' })
     mockQortalAction('GET_ACCOUNT_DATA', { publicKey: 'PKalice' })
     mockQortalAction('ENCRYPT_DATA', 'encrypted-subject')
@@ -18,6 +20,16 @@ describe('fetchAndEvaluateMail', () => {
     const res = await fetchAndEvaluateMail(row, undefined, 'bob')
     expect(res).toMatchObject({ isValid: true, user: 'alice', id: row.messageIdentifier, subject: 'Hi' })
     expect(res.name).toBe('mallory') // kept as data, never as the publisher
+  })
+
+  it('looks up the sender\'s name and key once for several messages from them', async () => {
+    mockQortalAction('FETCH_QDN_RESOURCE', 'ENC')
+    mockQortalAction('DECRYPT_DATA', btoa(JSON.stringify(mailJson)))
+    await fetchAndEvaluateMail(row, undefined, 'bob')
+    await fetchAndEvaluateMail({ ...row, messageIdentifier: '_mail_qortal_qmail_bob_abc123_mail_x2' }, undefined, 'bob')
+    expect(qortalCalls('GET_NAME_DATA')).toHaveLength(1)
+    expect(qortalCalls('GET_ACCOUNT_DATA')).toHaveLength(1)
+    expect(qortalCalls('DECRYPT_DATA')[1]).toEqual({ action: 'DECRYPT_DATA', encryptedData: 'ENC', publicKey: 'PKalice' })
   })
 
   it.each(['D', btoa('D'), btoa('D\n'), 'Cg=='])('reports a deleted resource for body %s and fetches nothing else', async (body) => {

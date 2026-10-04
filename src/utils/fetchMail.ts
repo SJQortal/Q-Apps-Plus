@@ -1,6 +1,7 @@
 import { MAIL_SERVICE_TYPE } from '../constants/mail'
 import { checkStructureMailMessages } from './checkStructure'
 import { errorMessage } from './hubErrors'
+import { resolveName } from './nameCache'
 import {
   base64ToUint8Array,
   objectToBase64,
@@ -113,19 +114,12 @@ export const fetchAndEvaluateMail = async (
         if (saveToHash) saveToHash(obj)
         return obj
       }
-      const resName = await qortalRequest({
-        action: 'GET_NAME_DATA',
-        name: otherUser
-      })
-      if (!resName?.owner) return obj
-
-      const recipientAddress = resName.owner
-      const resAddress = await qortalRequest({
-        action: 'GET_ACCOUNT_DATA',
-        address: recipientAddress
-      })
-      if (!resAddress?.publicKey) return obj
-      const recipientPublicKey = resAddress.publicKey
+      // The other party's key through the session name cache: one
+      // GET_NAME_DATA per name and one GET_ACCOUNT_DATA per address, not one
+      // pair per message. Transport errors still throw (caught below).
+      const resolved = await resolveName(otherUser)
+      if (!resolved) return obj
+      const recipientPublicKey = resolved.publicKey
       const requestEncryptBody: any = {
         action: 'DECRYPT_DATA',
         encryptedData: base64,
