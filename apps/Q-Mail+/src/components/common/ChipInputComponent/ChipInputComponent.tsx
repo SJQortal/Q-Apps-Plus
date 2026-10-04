@@ -1,7 +1,5 @@
-import React, { useState } from "react";
-import { Box, Chip, CircularProgress, Input } from "@mui/material";
-import { useDispatch } from "react-redux";
-import { setNotification } from "../../../state/features/notificationsSlice";
+import React, { useId, useState } from "react";
+import { Box, Chip, CircularProgress, Input, Typography } from "@mui/material";
 import { lookupName, lookupPublicKey } from "../../../utils/nameCache";
 
 export interface NameChip {
@@ -13,38 +11,65 @@ interface ChipInputComponentProps {
   chips: NameChip[];
   setChips: (val: NameChip[]) => void;
   placeholder?: string;
+  /** Accessible name of the text field, e.g. "Cc name". */
+  inputLabel?: string;
+  /** Names that are already recipients elsewhere (To, the other list). */
+  excludeNames?: string[];
+  /** Text typed but not yet added as a chip, so Send can wait for it. */
+  onPendingChange?: (pending: string) => void;
 }
 
+const normalize = (value: string) => value.trim().toLowerCase();
+
 /**
- * Bcc names as chips. Enter (or leaving the field) resolves the typed name
- * through the name cache, so a name is looked up once per session.
+ * Cc or Bcc names as chips. Enter, a comma or leaving the field checks the
+ * typed name through the name cache (registered name + public key, once per
+ * session, the same check as To) and shows a problem inline, next to the
+ * field, instead of a toast.
  */
 export const ChipInputComponent = ({
   chips,
   setChips,
   placeholder = "Type a name and press Enter",
+  inputLabel = "Bcc name",
+  excludeNames = [],
+  onPendingChange,
 }: ChipInputComponentProps) => {
-  const [inputValue, setInputValue] = useState<string>("");
+  const [inputValue, setInputValueState] = useState<string>("");
   const [isResolving, setIsResolving] = useState(false);
-  const dispatch = useDispatch();
+  const [error, setError] = useState<string | null>(null);
+  const errorId = useId();
+
+  const setInputValue = (next: string) => {
+    setInputValueState(next);
+    onPendingChange?.(next.trim());
+  };
 
   const handleAddChip = async () => {
     const recipientName = inputValue.trim();
     if (!recipientName || isResolving) return;
-    if (
-      chips.find(
-        item => item?.name?.toLowerCase() === recipientName.toLowerCase()
-      )
-    ) {
+    if (chips.some(item => normalize(item?.name || "") === normalize(recipientName))) {
       setInputValue("");
+      setError(null);
+      return;
+    }
+    if (excludeNames.some(other => normalize(other) === normalize(recipientName))) {
+      setError(`${recipientName} is already a recipient`);
       return;
     }
     setIsResolving(true);
+    setError(null);
     try {
       const lookup = await lookupName(recipientName);
-      if (lookup.status !== "found") throw new Error("Name cannot be found");
+      if (lookup.status !== "found") {
+        setError(`"${recipientName}" is not a registered name`);
+        return;
+      }
       const publicKey = await lookupPublicKey(lookup.address);
-      if (!publicKey) throw new Error("Cannot retrieve public key of name");
+      if (!publicKey) {
+        setError(`${lookup.name} has no public key yet, so mail to them cannot be encrypted`);
+        return;
+      }
       setChips([
         ...chips,
         {
@@ -54,13 +79,8 @@ export const ChipInputComponent = ({
         },
       ]);
       setInputValue("");
-    } catch (error: any) {
-      dispatch(
-        setNotification({
-          msg: error?.message || "Name cannot be found",
-          alertType: "error",
-        })
-      );
+    } catch {
+      setError("The name could not be checked. Check your connection and try again.");
     } finally {
       setIsResolving(false);
     }
@@ -71,71 +91,88 @@ export const ChipInputComponent = ({
   };
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "center",
-        gap: "6px",
-        width: "100%",
-        minWidth: 0,
-      }}
-    >
-      {chips.map(chip => (
-        <Chip
-          key={chip.name}
-          label={chip.name}
-          onDelete={handleDeleteChip(chip.name)}
-          sx={{
-            height: 32,
-            color: "var(--qmail-compose-text)",
-            backgroundColor: "var(--qmail-compose-button-bg)",
-            border: "1px solid var(--qmail-compose-button-border)",
-            "& .MuiChip-deleteIcon": {
-              color: "var(--qmail-compose-muted)",
-              "&:hover": {
-                color: "var(--qmail-compose-text)",
+    <Box sx={{ display: "flex", flexDirection: "column", width: "100%", minWidth: 0 }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: "6px",
+          width: "100%",
+          minWidth: 0,
+        }}
+      >
+        {chips.map(chip => (
+          <Chip
+            key={chip.name}
+            label={chip.name}
+            onDelete={handleDeleteChip(chip.name)}
+            sx={{
+              height: 32,
+              fontSize: "0.875rem",
+              color: "var(--qmail-compose-text)",
+              backgroundColor: "var(--qmail-compose-button-bg)",
+              border: "1px solid var(--qmail-compose-button-border)",
+              "& .MuiChip-deleteIcon": {
+                color: "var(--qmail-compose-muted)",
+                "&:hover": {
+                  color: "var(--qmail-compose-text)",
+                },
               },
+            }}
+          />
+        ))}
+        <Input
+          value={inputValue}
+          onChange={e => {
+            setInputValue(e.target.value);
+            if (error) setError(null);
+          }}
+          onKeyDown={e => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              void handleAddChip();
+            }
+          }}
+          onBlur={() => {
+            if (inputValue.trim()) void handleAddChip();
+          }}
+          disableUnderline
+          autoComplete="off"
+          autoCorrect="off"
+          placeholder={placeholder}
+          inputProps={{
+            "aria-label": inputLabel,
+            "aria-invalid": error ? true : undefined,
+            "aria-describedby": error ? errorId : undefined,
+          }}
+          endAdornment={isResolving ? <CircularProgress size={14} aria-label="Checking the name" /> : undefined}
+          sx={{
+            flex: 1,
+            minWidth: 160,
+            minHeight: 44,
+            color: "var(--new-message-text)",
+            "& .MuiInput-input::placeholder": {
+              color: "var(--qmail-compose-placeholder) !important",
+              fontSize: "1rem",
+              fontStyle: "normal",
+              fontWeight: 400,
+              lineHeight: "120%",
+              letterSpacing: "0.15px",
+              opacity: 1,
             },
           }}
         />
-      ))}
-      <Input
-        value={inputValue}
-        onChange={e => {
-          setInputValue(e.target.value);
-        }}
-        onKeyDown={e => {
-          if (e.key === "Enter" || e.key === ",") {
-            e.preventDefault();
-            void handleAddChip();
-          }
-        }}
-        onBlur={() => {
-          if (inputValue.trim()) void handleAddChip();
-        }}
-        disableUnderline
-        autoComplete="off"
-        autoCorrect="off"
-        placeholder={placeholder}
-        inputProps={{ "aria-label": "Bcc name" }}
-        endAdornment={isResolving ? <CircularProgress size={14} /> : undefined}
-        sx={{
-          flex: 1,
-          minWidth: 160,
-          minHeight: 44,
-          color: "var(--new-message-text)",
-          "& .MuiInput-input::placeholder": {
-            color: "var(--qmail-compose-placeholder) !important",
-            fontSize: "1rem",
-            fontStyle: "normal",
-            fontWeight: 400,
-            lineHeight: "120%",
-            letterSpacing: "0.15px",
-            opacity: 1,
-          },
-        }}
-      />
+      </Box>
+      {error && (
+        <Typography
+          id={errorId}
+          role="alert"
+          sx={{ fontSize: "0.875rem", color: "var(--qmail-danger-text)" }}
+        >
+          {error}
+        </Typography>
+      )}
     </Box>
   );
 };

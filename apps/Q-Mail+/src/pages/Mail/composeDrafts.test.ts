@@ -81,6 +81,18 @@ describe('composeDrafts storage', () => {
     expect(sanitizeComposeDraft({ ...base, replyTo: null })?.replyTo).toBeNull()
   })
 
+  it('round-trips Cc chips and drops broken ones', () => {
+    const carl = { name: 'Carl', publicKey: 'pk', address: 'QC' }
+    const draft = sanitizeComposeDraft({
+      ...base,
+      showCC: true,
+      ccNames: [carl, { name: 'NoKey', address: 'QX' }, null, { ...carl, extra: 1 }],
+    })
+    expect(draft?.ccNames).toEqual([carl, carl])
+    expect(draft?.showCC).toBe(true)
+    expect(sanitizeComposeDraft({ ...base, ccNames: [{ name: 'x' }] })).toEqual(base)
+  })
+
   it('saves, lists newest first, deletes, and announces every change', () => {
     const listener = vi.fn()
     const unsubscribe = subscribeToComposeDrafts(listener)
