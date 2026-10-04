@@ -34,7 +34,7 @@ const HUB_TIMEOUT = {
 
 const qdnRows = (ids: string[]) => ids.map((identifier) => ({ name: "alice", service: "x", identifier, created: 1 }));
 
-function mount(props: Partial<{ onSubmit: () => void; onError: (m?: string) => void }> = {}) {
+function mount(props: Partial<{ onSubmit: () => void; onError: (m?: string, d?: any) => void }> = {}) {
   const onSubmit = props.onSubmit ?? vi.fn();
   const onError = props.onError ?? vi.fn();
   render(<MultiplePublish publishes={publishes} isOpen onSubmit={onSubmit} onError={onError} />);
@@ -111,7 +111,9 @@ describe("MultiplePublish", () => {
     expect(screen.getByRole("button", { name: "Retry missing" })).toBeTruthy();
     expect(onSubmit).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(onError).toHaveBeenCalledWith("1 of 2 published; 1 item is not on QDN");
+    expect(onError).toHaveBeenCalledWith("1 of 2 published; 1 item is not on QDN", {
+      states: { attachments_qmail_a1_b2: "done", _mail_qortal_qmail_bob_abcdef_mail_x1y2z3: "missing" },
+    });
   });
 
   it("closes quietly when the user declines in Hub, in any language", async () => {

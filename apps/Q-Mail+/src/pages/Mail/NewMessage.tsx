@@ -359,7 +359,12 @@ export const NewMessage = ({
   // The MAIL thread header is published only after the message batch
   // succeeds, so declining or failing the batch leaves no empty thread
   // behind (Bugs #21).
-  const pendingThreadHeaderRef = useRef<any>(null);
+  const pendingThreadHeaderRef = useRef<{
+    groupId: string;
+    threadToken: string;
+    messageIdentifier: string;
+    request: any;
+  } | null>(null);
   const lastLoadedDraftKeyRef = useRef<string | null>(null);
   // What the composer started with (the reply quote, the forward header, a
   // prefilled subject). Content equal to this is not "something the user
@@ -1408,10 +1413,20 @@ export const NewMessage = ({
         }
 
         const createdAt = Date.now();
-        const threadToken = uid();
+        // A header still unpublished from an earlier Send to this group (the
+        // dialog was closed while Hub might still be publishing the post):
+        // reuse its identifiers, so this Send fills in the missing pieces
+        // instead of starting a second thread.
+        const unfinished =
+          pendingThreadHeaderRef.current?.groupId === groupId
+            ? pendingThreadHeaderRef.current
+            : null;
+        const threadToken = unfinished?.threadToken || uid();
         const threadTitle = subject.trim();
         const threadIdentifier = `qortal_qmail_thread_group${groupId}_${threadToken}`;
-        const messageIdentifier = `qortal_qmail_thmsg_group${groupId}_${threadToken}_${uid()}`;
+        const messageIdentifier =
+          unfinished?.messageIdentifier ||
+          `qortal_qmail_thmsg_group${groupId}_${threadToken}_${uid()}`;
 
         const threadObject = {
           title: threadTitle,
@@ -1429,7 +1444,12 @@ export const NewMessage = ({
           description: threadTitle.slice(0, 200),
         };
         // Published after the message batch succeeds (see onSubmit).
-        pendingThreadHeaderRef.current = threadPublishRequest;
+        pendingThreadHeaderRef.current = {
+          groupId,
+          threadToken,
+          messageIdentifier,
+          request: threadPublishRequest,
+        };
 
         const threadMessageObject = {
           subject: threadTitle,
@@ -1556,7 +1576,7 @@ export const NewMessage = ({
       setPublishes(null);
       setPendingPublishType("mail");
       setThreadPublishResult(null);
-      pendingThreadHeaderRef.current = null;
+      // An unfinished thread header is kept: its post may already be on QDN.
 
       const message =
         typeof error === "string"
@@ -1589,7 +1609,7 @@ export const NewMessage = ({
     const header = pendingThreadHeaderRef.current;
     if (!header) return true;
     try {
-      await qortalRequest(header);
+      await qortalRequest(header.request);
       pendingThreadHeaderRef.current = null;
       return true;
     } catch (error: any) {
@@ -2668,11 +2688,32 @@ export const NewMessage = ({
       {isOpenMultiplePublish && (
         <MultiplePublish
           isOpen={isOpenMultiplePublish}
-          onError={messageNotification => {
+          onError={(messageNotification, detail) => {
+            const header = pendingThreadHeaderRef.current;
+            const postState =
+              header && pendingPublishType === "thread"
+                ? detail?.states?.[header.messageIdentifier]
+                : undefined;
             setIsOpenMultiplePublish(false);
             setPublishes(null);
             setPendingPublishType("mail");
-            setThreadPublishResult(null);
+            if (!messageNotification) {
+              // Declined or cancelled in Hub: nothing of the batch stays.
+              pendingThreadHeaderRef.current = null;
+              setThreadPublishResult(null);
+            } else if (postState && postState !== "failed") {
+              // The post is on QDN, or Hub may still be publishing it: the
+              // thread is listed only once its header is out, so offer it.
+              setComposeError({
+                text:
+                  postState === "done"
+                    ? "Your post is on QDN, but the thread's title record was not published, so the thread is not listed yet. Retry to publish it."
+                    : "Your post may still reach QDN, but the thread's title record was not published, so the thread would not be listed. Retry to publish it, or Send again to retry the post in the same thread.",
+                retry: "thread-header",
+              });
+            } else {
+              setThreadPublishResult(null);
+            }
             if (messageNotification) {
               dispatch(
                 setNotification({
