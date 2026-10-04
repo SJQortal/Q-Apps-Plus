@@ -87,6 +87,7 @@ import {
   composeDraftKey,
   createComposeDraftId,
   deleteComposeDraft,
+  hasComposerContent,
   readComposeDrafts,
   saveComposeDraft,
   type StoredComposeDraft,
@@ -405,6 +406,15 @@ export const NewMessage = ({
   // wrote", so it is neither saved as a draft nor guarded on Discard.
   const initialValueRef = useRef("");
   const initialSubjectRef = useRef("");
+  // Quill normalises the starting HTML (and reports it as an "api" change),
+  // so the baseline follows the editor until the body is really written:
+  // the first user edit, or a stored draft being loaded, freezes it.
+  const bodyBaselineFrozenRef = useRef(false);
+  // A stored draft was loaded into this composer: Reply all must not add
+  // its names back over the draft's own Cc list.
+  const hydratedDraftRef = useRef(false);
+  // Cc names Reply all filled in by itself (not something the user wrote).
+  const initialCcRef = useRef<string[]>([]);
   // A draft opened from the Drafts mailbox: its stored key (deleted once the
   // composer saves under a different key) and, while it is being applied, the
   // draft itself so the reply/forward initialisers do not overwrite it.
@@ -686,10 +696,11 @@ export const NewMessage = ({
       return null;
     const targetName = resolvedTarget.label.trim();
     if (!targetName) return null;
-    // A reply keeps its own draft; a new mail to the same name keeps the old key.
+    // A reply keeps its own draft, Reply all another one; a new mail to the
+    // same name keeps the old key.
     const replyToId = typeof replyTo?.id === "string" ? replyTo.id : "";
-    return composeDraftKey(senderName, targetName, replyToId);
-  }, [fromName, replyTo?.id, resolvedTarget, user?.address]);
+    return composeDraftKey(senderName, targetName, replyToId, replyAll);
+  }, [fromName, replyAll, replyTo?.id, resolvedTarget, user?.address]);
 
   useEffect(() => {
     if (allowAliasAndBcc) return;
@@ -814,6 +825,9 @@ export const NewMessage = ({
     setPendingPublishType("mail");
     initialValueRef.current = "";
     initialSubjectRef.current = "";
+    bodyBaselineFrozenRef.current = false;
+    hydratedDraftRef.current = false;
+    initialCcRef.current = [];
     pendingDraftRef.current = null;
     skipNextDraftHydrationRef.current = false;
     setDraftSavedAt(null);
@@ -908,6 +922,8 @@ export const NewMessage = ({
       pendingDraftRef.current = storedDraft;
       skipNextDraftHydrationRef.current = true;
       isHydratingDraftRef.current = true;
+      bodyBaselineFrozenRef.current = true;
+      hydratedDraftRef.current = true;
       const fields = draftFieldsOf(storedDraft);
       setSubject(fields.subject);
       setValue(fields.value);
@@ -1012,6 +1028,8 @@ export const NewMessage = ({
         return;
       }
       setSubject(nextSubject);
+      bodyBaselineFrozenRef.current = false;
+      hydratedDraftRef.current = false;
       // Start the editor with the quoted original (Quill 1 markup, so the
       // original app renders it too). A stored draft for this reply, if any,
       // replaces it when the draft key resolves.
@@ -1047,7 +1065,8 @@ export const NewMessage = ({
           }
         })
       );
-      if (cancelled) return;
+      // A stored draft of this Reply all keeps its own Cc list.
+      if (cancelled || hydratedDraftRef.current) return;
       const missing = others.filter((_, index) => !resolved[index]);
       const chips: NameChip[] = resolved
         .filter((item): item is NonNullable<typeof item> => Boolean(item))
@@ -1058,10 +1077,12 @@ export const NewMessage = ({
         }));
       setCcNames(prev => {
         const known = new Set(prev.map(chip => normalizeValue(chip.name)));
-        return [
+        const next = [
           ...prev,
           ...chips.filter(chip => !known.has(normalizeValue(chip.name))),
         ];
+        initialCcRef.current = next.map(chip => chip.name);
+        return next;
       });
       if (missing.length) {
         dispatch(
@@ -1095,6 +1116,7 @@ export const NewMessage = ({
       const html = info.html || "";
       setValue(html);
       initialValueRef.current = html;
+      bodyBaselineFrozenRef.current = false;
       return;
     }
 
@@ -1112,6 +1134,7 @@ export const NewMessage = ({
     );
     setValue(html);
     initialValueRef.current = html;
+    bodyBaselineFrozenRef.current = false;
 
     // Re-attach the original files: fetched and decrypted here, re-published
     // encrypted to the new recipient on Send.
@@ -1150,6 +1173,8 @@ export const NewMessage = ({
     if (!storedDraft) return;
 
     isHydratingDraftRef.current = true;
+    bodyBaselineFrozenRef.current = true;
+    hydratedDraftRef.current = true;
     const fields = draftFieldsOf(storedDraft);
     setSubject(fields.subject);
     setValue(fields.value);
@@ -1165,6 +1190,25 @@ export const NewMessage = ({
     }, 0);
   }, [activeDraftKey, user?.address]);
 
+  // Something the user wrote (not the quote, the Re: subject or Reply all's
+  // own Cc names): only that is saved as a draft or guarded on Discard.
+  const composerHasContent = useCallback(
+    () =>
+      hasComposerContent({
+        subject,
+        initialSubject: initialSubjectRef.current,
+        value,
+        initialValue: initialValueRef.current,
+        aliasValue,
+        attachmentCount: attachments.length,
+        bccNames,
+        ccNames,
+        initialCcNames: initialCcRef.current,
+        textOf: stripHtmlTags,
+      }),
+    [aliasValue, attachments.length, bccNames, ccNames, subject, value]
+  );
+
   useEffect(() => {
     if (!activeDraftKey || !user?.address || isHydratingDraftRef.current)
       return;
@@ -1175,20 +1219,7 @@ export const NewMessage = ({
         resolvedTarget?.type === "name" ? resolvedTarget.label.trim() : "";
       if (!fromNameValue || !toNameValue) return;
 
-      const subjectChanged =
-        subject.trim() && subject !== initialSubjectRef.current;
-      const bodyChanged =
-        value !== initialValueRef.current && stripHtmlTags(value).trim();
-      const hasDraftContent = Boolean(
-        subjectChanged ||
-          bodyChanged ||
-          aliasValue.trim() ||
-          bccNames.length ||
-          ccNames.length ||
-          attachments.length
-      );
-
-      if (!hasDraftContent) {
+      if (!composerHasContent()) {
         clearStoredDraft(activeDraftKey);
         return;
       }
@@ -1249,6 +1280,7 @@ export const NewMessage = ({
     bccNames,
     ccNames,
     clearStoredDraft,
+    composerHasContent,
     fromName,
     replyAll,
     replyTo,
@@ -1696,24 +1728,9 @@ export const NewMessage = ({
     if (ok) completeThreadPublish();
   };
 
-  const hasUserContent = () => {
-    const subjectChanged =
-      subject.trim() && subject !== initialSubjectRef.current;
-    const bodyChanged =
-      value !== initialValueRef.current && stripHtmlTags(value).trim();
-    return Boolean(
-      subjectChanged ||
-        bodyChanged ||
-        attachments.length ||
-        bccNames.length ||
-        ccNames.length ||
-        aliasValue.trim()
-    );
-  };
-
   // Discard asks only when there is something to lose.
   const requestDiscard = async () => {
-    if (hasUserContent()) {
+    if (composerHasContent()) {
       const confirmed = await showDiscardModal();
       if (!confirmed) return;
     }
@@ -2573,7 +2590,13 @@ export const NewMessage = ({
             <TextEditor
               className="qmail-compose-editor"
               inlineContent={value}
-              setInlineContent={(val: any) => {
+              setInlineContent={(val: string, source?: string) => {
+                if (source === "user") {
+                  bodyBaselineFrozenRef.current = true;
+                } else if (!bodyBaselineFrozenRef.current) {
+                  // Quill's own rewrite of the starting content.
+                  initialValueRef.current = val;
+                }
                 setValue(val);
               }}
               placeholder={
