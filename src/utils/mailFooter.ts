@@ -160,12 +160,28 @@ export const footerTextForName = (
 const escapeFooterText = (text: string): string =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+/**
+ * A line's whitespace as Quill's clipboard (matchText) leaves it when the
+ * HTML is loaded into the editor: tabs and other whitespace become spaces,
+ * runs of spaces collapse to one, the line's leading and trailing space go,
+ * then non-breaking spaces become plain ones. Inserting the line already in
+ * that form keeps the body Quill reports back equal to the inserted block.
+ */
+const quillLineText = (line: string): string =>
+  line
+    .replace(/[^\S\u00a0]/g, " ")
+    .replace(/ {2,}/g, " ")
+    .replace(/^ /, "")
+    .replace(/ $/, "")
+    .replace(/\u00a0/g, " ");
+
 /** Plain text → Quill 1 paragraphs, one `<p>` per line, `<p><br></p>` for a blank one. */
 export const footerTextToHtml = (text: unknown): string => {
   const normalized = normalizeFooterText(text);
   if (!normalized) return "";
   return normalized
     .split("\n")
+    .map(quillLineText)
     .map(line => (line ? `<p>${escapeFooterText(line)}</p>` : "<p><br></p>"))
     .join("");
 };

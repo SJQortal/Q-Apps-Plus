@@ -108,6 +108,16 @@ describe('mail footer text', () => {
     expect(footerTextForName(footer, '')).toBe('Default')
   })
 
+  it("normalises a line's whitespace the way Quill reports it back, so the footer can be swapped", () => {
+    expect(footerTextToHtml('A  |\tB')).toBe('<p>A | B</p>')
+    expect(footerTextToHtml('Simon James  |  qortal://APP/Q-Mail+\n  indented\n\u00a0nbsp')).toBe(
+      '<p>Simon James | qortal://APP/Q-Mail+</p><p>indented</p><p> nbsp</p>'
+    )
+    const block = footerBlockFor({ default: 'Main  |  link', byName: { Bob: 'Bob' }, inReplies: true }, 'Main', 'new')
+    const body = `<p>Hi</p><p>Main | link</p>`
+    expect(swapFooterInBody(body, block, '<p>Bob</p>', 'new', false)).toBe('<p>Hi</p><p>Bob</p>')
+  })
+
   it('turns text into Quill 1 paragraphs, escaped as the editor serialises, links left as text', () => {
     expect(footerTextToHtml('')).toBe('')
     expect(footerTextToHtml('Simon & "Co" <me>\n\nqortal://APP/Q-Mail+')).toBe(
