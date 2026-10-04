@@ -108,6 +108,33 @@ describe('OpenMail', () => {
     expect(handleClose).toHaveBeenCalledWith()
   })
 
+  it('starts over for the next message instead of keeping the last one\'s outcome', async () => {
+    const other = { ...fileInfo, identifier: '_mail_qortal_qmail_bob_abc123_mail_x2' }
+    mockQortalAction('GET_QDN_RESOURCE_STATUS', (req: Record<string, any>) =>
+      req.identifier === fileInfo.identifier ? { status: 'READY' } : { status: 'MISSING_DATA' }
+    )
+    mockQortalAction('GET_QDN_RESOURCE_PROPERTIES', {})
+    mockQortalAction('FETCH_QDN_RESOURCE', () => btoa('D'))
+    const view = wrap(<OpenMail open handleClose={vi.fn()} fileInfo={fileInfo} />)
+    await tick(0)
+    await tick(0)
+    expect(screen.getByText('This message was removed by its sender')).toBeTruthy()
+    view.rerender(
+      <Provider store={store}>
+        <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+          <OpenMail open handleClose={vi.fn()} fileInfo={other} />
+        </HubThemeProvider>
+      </Provider>
+    )
+    await tick(0)
+    expect(screen.queryByText('This message was removed by its sender')).toBeNull()
+    expect(screen.getByText(/Not enough peers/)).toBeTruthy()
+    await tick(5600)
+    await tick(11200)
+    await tick(0)
+    expect(screen.getByText('Not available on your node right now')).toBeTruthy()
+  })
+
   it('retries the fetch at 2, 4, 8 and 16 s, then shows the row\'s sender and date as not available', async () => {
     mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'READY' })
     mockQortalAction('FETCH_QDN_RESOURCE', () => {

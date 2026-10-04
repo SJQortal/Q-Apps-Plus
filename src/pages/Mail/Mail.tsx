@@ -601,6 +601,15 @@ export const Mail = ({ isFromTo }: MailProps) => {
   >({});
   const [isLoadingGroupInstances, setIsLoadingGroupInstances] = useState(false);
   const [mailInfo, setMailInfo] = useState<any>(null);
+  // Each open request gets a number; a superseded one may not open or clear
+  // anything when its opener finally settles.
+  const openRequestRef = useRef(0);
+  const cancelPendingOpenRef = useRef<() => void>(() => undefined);
+  cancelPendingOpenRef.current = () => {
+    openRequestRef.current += 1;
+    if (isShow) onOk(undefined);
+    setMailInfo(null);
+  };
   const layoutMode = useLayoutMode();
   const isMobile = layoutMode === "phone";
   const [railOpen, setRailOpen] = useState(false);
@@ -1169,6 +1178,9 @@ export const Mail = ({ isFromTo }: MailProps) => {
     content: any,
     to?: string
   ) => {
+    // A newer open supersedes any opener still waiting on peers.
+    cancelPendingOpenRef.current();
+    const request = openRequestRef.current;
     try {
       const shouldAutoMarkAsRead =
         activeMailboxItem === "inbox" || activeMailboxItem === "aliases";
@@ -1198,6 +1210,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
         to,
       });
       const res: any = await show();
+      if (request !== openRequestRef.current) return;
       setMailInfo(null);
       if (res && res.isValid && !res.unableToDecrypt) {
         setMessage(res);
@@ -1215,7 +1228,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
       }
     } catch {
       // Nothing to show: the message stays closed and the reader prompt is cleared.
-      setMailInfo(null);
+      if (request === openRequestRef.current) setMailInfo(null);
     }
   };
 
@@ -2766,6 +2779,8 @@ export const Mail = ({ isFromTo }: MailProps) => {
       const closeSidebarIfTransient = () => {
         setRailOpen(false);
       };
+      // Switching view drops an opener that is still waiting on peers.
+      cancelPendingOpenRef.current();
 
       if (itemId !== "compose") {
         setComposePrefill(null);
@@ -3056,6 +3071,7 @@ export const Mail = ({ isFromTo }: MailProps) => {
   }, [location, navigate]);
 
   const closeOpenMessage = useCallback(() => {
+    cancelPendingOpenRef.current();
     setIsOpen(false);
     setMessage(null);
   }, []);

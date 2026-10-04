@@ -46,7 +46,15 @@ export const FETCH_RETRIES = 4;
 
 export const NOT_AVAILABLE_TITLE = "Not available on your node right now";
 
-export const OpenMail = ({ open, handleClose, fileInfo }: OpenMailProps) => {
+/**
+ * One opener per message: a new message remounts it, so the last message's
+ * outcome (removed, undecryptable) and resource state never carry over.
+ */
+export const OpenMail = (props: OpenMailProps) => (
+  <OpenMailForMessage key={props.fileInfo?.identifier || ""} {...props} />
+);
+
+const OpenMailForMessage = ({ open, handleClose, fileInfo }: OpenMailProps) => {
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const dispatch = useDispatch();
   const [phase, setPhase] = React.useState<OpenPhase>("waiting");
