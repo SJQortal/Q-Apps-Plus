@@ -205,7 +205,7 @@ export const ShowMessageV2 = ({
         <Box component="header" sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, minWidth: 0 }}>
           <AvatarWrapper height="48px" user={message?.user} fallback={message?.user} />
           <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, gap: 0.25 }}>
-            <Typography component="h2" noWrap sx={{ fontSize: "1rem", fontWeight: 700, lineHeight: 1.3 }}>
+            <Typography component="p" noWrap sx={{ fontSize: "1rem", fontWeight: 700, lineHeight: 1.3 }}>
               {message?.user}
             </Typography>
             {recipient && (
@@ -220,7 +220,8 @@ export const ShowMessageV2 = ({
           </IconButton>
         </Box>
 
-        <Typography component="h1" sx={{ fontSize: compact ? "1.15rem" : "1.3rem", fontWeight: 600, lineHeight: 1.3, wordBreak: "break-word" }}>
+        {/* h2: the view's one h1 is the PaneHeader's (the list's, or the phone reader's). */}
+        <Typography component="h2" sx={{ fontSize: compact ? "1.15rem" : "1.3rem", fontWeight: 600, lineHeight: 1.3, wordBreak: "break-word" }}>
           {subject}
         </Typography>
 
