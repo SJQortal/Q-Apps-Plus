@@ -88,10 +88,12 @@ export const NameSelector = ({
           <Avatar
             src={`/arbitrary/THUMBNAIL/${encodeURIComponent(nameItem.name)}/qortal_avatar`}
             alt={`${nameItem.name}'s avatar`}
-            imgProps={{
-              onError: (e) => {
-                e.currentTarget.src = '';
-              },
+            slotProps={{
+              img: {
+                onError: (e) => {
+                  e.currentTarget.src = '';
+                },
+              }
             }}
           >
             {nameItem.name?.charAt(0).toUpperCase()}

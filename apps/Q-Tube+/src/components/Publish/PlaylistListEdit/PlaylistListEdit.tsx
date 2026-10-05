@@ -1,7 +1,7 @@
 import AddIcon from '@mui/icons-material/Add';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import {
   Box,
   Button,
@@ -419,7 +419,7 @@ export const PlaylistListEdit = ({
                   label={t('core:publish.my_videos', {
                     postProcess: 'capitalizeFirstChar',
                   })}
-                  componentsProps={{
+                  slotProps={{
                     typography: { sx: { fontSize: '14px' } },
                   }}
                 />
@@ -429,7 +429,7 @@ export const PlaylistListEdit = ({
                   label={t('core:publish.all_videos', {
                     postProcess: 'capitalizeFirstChar',
                   })}
-                  componentsProps={{
+                  slotProps={{
                     typography: { sx: { fontSize: '14px' } },
                   }}
                 />

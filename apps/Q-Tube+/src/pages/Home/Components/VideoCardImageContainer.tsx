@@ -9,8 +9,8 @@ export const VideoCardImageContainer = ({
 }) => {
   const [currentImage, setCurrentImage] = useState(videoImage);
   const [nextImage, setNextImage] = useState(null);
-  const intervalRef = useRef(null);
-  const fadeRef = useRef(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fadeRef = useRef<HTMLDivElement | null>(null);
 
   const startPreview = () => {
     let frameIndex = 0;
@@ -35,7 +35,8 @@ export const VideoCardImageContainer = ({
   };
 
   const stopPreview = () => {
-    clearInterval(intervalRef.current);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
     setNextImage(null);
     setCurrentImage(videoImage);
     if (fadeRef.current) {

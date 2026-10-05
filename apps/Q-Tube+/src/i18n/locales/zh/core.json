@@ -79,7 +79,8 @@
     "subscriptions": "订阅",
     "watched_videos": "已观看视频",
     "bookmarks": "收藏",
-    "your_channel": "你的频道"
+    "your_channel": "你的频道",
+    "settings": "Settings"
   },
   "filters": {
     "most_recent": "最新",
@@ -153,5 +154,30 @@
     "publish_failed": "频道描述发布失败",
     "description_deleted": "频道描述已删除",
     "delete_failed": "频道描述删除失败"
+  },
+  "settings": {
+    "account": "Account",
+    "appearance": "Appearance",
+    "privacy": "Privacy",
+    "about": "About",
+    "no_name": "No Qortal name yet",
+    "not_signed_in": "Not signed in",
+    "names_count": "{{count}} registered names",
+    "switch_name": "Switch name",
+    "address": "Address",
+    "copy_address": "Copy address",
+    "copied": "Copied",
+    "blocked_names": "Blocked names",
+    "blocked_names_hint": "Videos and comments from these names are hidden",
+    "changelog": "What's new in this version",
+    "upstream": "The original Q-Tube",
+    "source": "Q-Tube+ source code",
+    "about_blurb": "Q-Tube+ is a faster, redesigned Q-Tube. It reads and writes the same videos, playlists, comments and super likes on QDN, so both apps show the same content.",
+    "whats_new": "What's new in Q-Tube+",
+    "you_are_on": "You are on Q-Tube+ {{version}}",
+    "latest": "Latest",
+    "show_less": "Show less",
+    "show_all_changes": "Show all changes",
+    "close": "Close"
   }
 }
