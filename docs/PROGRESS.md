@@ -6,8 +6,8 @@ Order: one app per day, with Q-Share+ as the reference. Q-Apps+ comes last becau
 
 | App | Branch · PR | Rounds done | Published | Next |
 |---|---|---|---|---|
-| Q-Share+ | merged (#7) | 1–5, release | **1.0.0** (2026-09-30); 1.0.1 on main | publish 1.0.1; the GO phone checks in its brief |
-| Q-Mail+ | `q-mail-plus/pass-1` · #15 | 1 (upgrade, harness, kit, Settings, audit); 2 started (layout shell), stopped 1 Oct 09:57 | – | finish round 2, then rounds 3–4 |
+| Q-Share+ | merged (#7); 1.0.1 in #17 (`Desktop/Q-Apps+-QShare`) | 1–5, release | **1.0.0** (2026-09-30) | 1.0.1: notifications (#17), then publish; the GO phone checks in its brief |
+| Q-Mail+ | merged (#15) | 1–5, release | **1.0.0** (2026-10-05, `a128d290`) | the GO phone checks and leftovers in its brief's Follow-ups, as 1.0.1 |
 | Names+ | `names-plus/pass-1` · #5 | 1 checkpoint (29 Sep cloud night) | – | rounds 1–4 |
 | Q-Tube+ | `q-tube-plus/pass-1` · #6 | 1 checkpoint | – | rounds 1–4 (keep the vendored qapp-core 1.0.80) |
 | Q-Shop+ | `q-shop-plus/pass-1` · #8 | 1 checkpoint | – | replace the audio player that blanks React 19, then rounds 1–4 |
@@ -18,4 +18,12 @@ Order: one app per day, with Q-Share+ as the reference. Q-Apps+ comes last becau
 | Q-Mintership+ | `q-mintership-plus/rewrite-phase-1` (no PR) | rewrite phase 1 in progress | – | phases 1–5 of the rewrite plan; publish only at parity |
 | Q-Apps+ | `q-apps-plus/first-version` (no PR) | brief and plan | – | after the others |
 
-Shared work: theme kit (`shared/hub-theme`), Hub & GO pitfalls (docs/QORTAL.md), Hub test commands (`scripts/hub-cdp.mjs`), screenshot check (`scripts/screens.mjs`). Planned: a shared parts kit extracted from Q-Share+ (`shared/qplus-kit/`).
+Shared work:
+- theme kit (`shared/hub-theme`);
+- Hub & GO pitfalls (docs/QORTAL.md);
+- Hub test commands (`scripts/hub-cdp.mjs`; tap and swipe measure the app frame's real position since #18);
+- screenshot check (`scripts/screens.mjs`).
+
+Planned: a shared parts kit extracted from Q-Share+ and Q-Mail+ (`shared/qplus-kit/`).
+
+For the Qortal devs: `q-share-plus/for-upstream` and `q-mail-plus/for-upstream` hold each app's history on top of the upstream repo, ready to fast-forward it (see each app's README).
