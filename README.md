@@ -27,4 +27,11 @@ The theme kit in `src/hub-theme/` is a copy of `shared/hub-theme` in the monorep
 - The upstream history is intact: the app was imported from [Qortal/q-mail](https://github.com/Qortal/q-mail) `main` at `ddf3aa9` with `git subtree`, and every + commit sits on top. `git log --oneline -- apps/Q-Mail+` shows the full series; `scripts/sync-upstream.sh --check` reports new upstream commits.
 - **Data notes:** nothing published changed shape. Direct mail JSON gains optional top-level `to` and `cc` arrays; the published mail state (`DOCUMENT_PRIVATE` / `qmail_state_v1`) gains optional top-level `archived` and `settings` maps; replies embed the previous message without its own `generalData` history. Readers of the original app ignore all of these. New local state lives under new `localStorage` keys (`qmail_read_state_*`, `qmail_archived_*`, `qmail-general-consent`); the original keys keep their shapes.
 - **Specific to the + build:** the theme kit copy in `src/hub-theme/` (synced from `shared/hub-theme`, never edited here), the Settings page, the layout shell in `src/layout/`, the `qortalRequest` stub outside Hub in `src/main.tsx`, and the screenshot check config in `e2e/`.
-- To merge back, cherry-pick the `Q-Mail+:` commits in order or diff `apps/Q-Mail+/src` against upstream `src`; the platform upgrade commits (React 19.3, MUI 9.4, react-quill-new) come first.
+- **Ready-made branch:** [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) is this folder's history as a repository of its own, split at the published 1.0.0. It sits on top of Qortal/q-mail `main` up to `ddf3aa9`, with the original commit hashes, so the merge is a fast-forward while upstream hasn't moved. In a clone of Qortal/q-mail:
+
+  ```bash
+  git fetch https://github.com/SJQortal/Q-Apps-Plus.git q-mail-plus/for-upstream
+  git merge FETCH_HEAD
+  ```
+
+  To include later changes, split it again in a clone of SJQortal/Q-Apps-Plus with `git subtree split --prefix="apps/Q-Mail+" origin/main -b q-mail-plus`. The platform upgrade commits (React 19.3, MUI 9.4, react-quill-new) come first in the series.
