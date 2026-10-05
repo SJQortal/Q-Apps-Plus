@@ -1,5 +1,55 @@
 # Changelog
 
+## 1.0.0 (Q-Mail+) - October 4, 2026
+
+The first release of **Q-Mail+**, Simon's "+" version of Q-Mail 3.2.1. It reads and writes the same QDN resources as Q-Mail (same services, identifiers and encryption), so your mail shows up in both apps, and mail sent from either one opens in the other.
+
+**Look and layout**
+- The Hub 3.0 layout: mailboxes, message list and message side by side on desktop; list and message in narrower windows; one pane at a time on phones, with a bottom bar and a floating Compose; a compact layout on a phone held sideways.
+- Drag the borders between the mailboxes, the list and the message to set their widths; they are remembered. With no message open, the list uses the whole width.
+- Four themes (Hub 3.0, Q-Mail Classic, Black and White) that follow Hub's light/dark switch, and a full Settings page (Account, Appearance, Mail, Sync, About).
+
+**Reading mail**
+- Read and unread state that survives a reload and can be published with your mail state; unread counts in the mailboxes, the bottom bar and the window title.
+- Archive and Mark unread, from the list or from the open message.
+- Search across the inbox, Archived, Sent and alias inboxes, with message bodies on request.
+- Messages already on your node open in about half a second, and mail or files that are on your node but not yet assembled open instead of waiting on "Preparing…".
+- `qortal://` links open through Hub, so a group join link asks Hub to join the group.
+- Names with hidden characters, often used to imitate someone, are crossed out, as in Hub.
+
+**Writing mail**
+- Reply with a quote and `Re:`, Reply all, and Forward with `Fwd:` and the original attachments; a Drafts mailbox; Ctrl/Cmd+Enter sends.
+- A Cc row: Reply all fills it, and Cc names are visible to every recipient.
+- "Send to alias", "Cc" and "Bcc" explain what they do when you hover over them, reach them with the keyboard or long-press them.
+- Recipient suggestions with avatars, and every name is checked before sending.
+- From shows each of your names with its avatar, and is searchable when you have more than 15 names.
+- A mail footer (Settings → Mail): one for all your names or one per name, added to new mail and, if you like, to replies and forwards.
+- An alias message can't carry Cc or Bcc names; Q-Mail+ now says so instead of quietly dropping the Bcc copies.
+
+**Attachments**
+- Every kind opens in the app: images, text, audio, video and PDF, with size, type, progress from peers and Download all.
+- PDFs open in Hub's own PDF reader, as in Q-Share+, with the built-in viewer as a fallback.
+
+**Names, aliases and threads**
+- Settings → Account: the active mailbox is a dropdown, with search when you have more than 15 names.
+- The alias scan reads at most 500 resources per run and remembers where it stopped.
+- Group threads as list and pane, with unread marks, paging and reply-to-post quoting.
+
+**Phones and GO**
+- 44 px touch targets, sheets and full-screen dialogs, a header that hides on scroll, Send above the keyboard, and Back that closes the open pane.
+- Keyboard shortcuts on screens 600 px and wider, with a `?` help dialog.
+
+**Speed**
+- First load for one name takes 6 searches instead of about 25; searches are merged and cached for the session; polling pauses while the tab is hidden and backs off.
+- The first download is 395 kB instead of 1,576 kB, with the composer, reader, threads and the PDF viewer loading on demand; Classic's font is 83% smaller.
+
+**Hub, GO and safety**
+- Declining a Hub prompt, in any of Hub's 12 languages, quietly cancels; publishing waits as long as Hub does and checks QDN before a retry; deleted and not-yet-available mail shows as such; a screen that fails to load offers Reload instead of a blank app.
+- Other people's messages are handled more safely: message HTML is sanitised with DOMPurify 3.4, thread posts are sanitised and show their real publisher as author, links in old mail follow the same rules, and Forward only re-sends real attachments.
+- The local-only rating in Settings → About is hidden.
+
+The entries below are Q-Mail's own changelog, kept for reference.
+
 ## 3.2.1 - May 28th 2026
 
 - **Fixed:** `/to/:name` links now open the composer automatically instead of landing in the inbox with a prefilled recipient (impact: users following mail-style deep links to start a message).

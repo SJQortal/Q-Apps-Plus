@@ -1,7 +1,8 @@
 // Smoke test for the kit; run with scripts/check-theme-kit.sh <App+>.
 import { renderToString } from 'react-dom/server';
-import { Button } from '@mui/material';
-import { createAppTheme, tokensFromTheme, HubThemeProvider, ThemePicker, cssVariables, hostModeFromMessage, UI_THEME_IDS, type AppThemeConfig } from './index';
+import { Avatar, Button } from '@mui/material';
+import { ThemeProvider, getContrastRatio } from '@mui/material/styles';
+import { avatarDefaultColors, createAppTheme, tokensFromTheme, HubThemeProvider, ThemePicker, cssVariables, hostModeFromMessage, UI_THEME_IDS, type AppThemeConfig } from './index';
 
 const config: AppThemeConfig = {
   hub20: { description: 'Original look', swatches: ['#111', '#222', '#39f', '#eee'], bootBackground: { light: '#fafafa', dark: '#121212' } },
@@ -24,6 +25,26 @@ const buttonHtml = renderToString(
 const gradients = (buttonHtml.match(/linear-gradient\(180deg, #8FB8F3/g) || []).length;
 if (gradients < 1) throw new Error('Hub 3.0 contained button is missing its gradient');
 console.log(`Button styles ok: gradient on contained primary (${gradients} style rules)`);
+
+// The default avatar (a letter on a grey disc) reads at 4.5:1 in every theme, and the
+// theme's override reaches the rendered styles. Hub 3.0's error red reads as text.
+for (const id of UI_THEME_IDS) for (const mode of ['light', 'dark'] as const) {
+  const t = createAppTheme(id, mode, config);
+  const a = avatarDefaultColors(t);
+  const ratio = getContrastRatio(a.color, a.background);
+  if (ratio < 4.5) throw new Error(`avatar ${id}/${mode} reads at ${ratio.toFixed(2)}:1`);
+  const avatarHtml = renderToString(<ThemeProvider theme={t}><Avatar>S</Avatar></ThemeProvider>);
+  if (!avatarHtml.includes(`background-color:${a.background}`)) throw new Error(`avatar ${id}/${mode} override not applied`);
+  if (id === 'hub30') {
+    for (const bg of [t.palette.background.default, t.palette.background.paper]) {
+      const r = getContrastRatio(t.palette.error.main, bg);
+      if (r < 4.5) throw new Error(`hub30/${mode} error.main reads at ${r.toFixed(2)}:1 on ${bg}`);
+    }
+  }
+}
+console.log('Avatar and error contrast ok (4.5:1 in every theme)');
+const captionHtml = renderToString(<HubThemeProvider storageKey="smoke-ui-theme" config={config}><ThemePicker /></HubThemeProvider>);
+if (/font-size:0\.75rem/.test(captionHtml)) throw new Error('ThemePicker still renders 12 px captions');
 
 // Hub's runtime light/dark switch: only THEME_CHANGED with a known mode counts.
 const messages: Array<[unknown, string | null]> = [

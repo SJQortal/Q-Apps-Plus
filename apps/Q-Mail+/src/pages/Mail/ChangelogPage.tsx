@@ -9,6 +9,23 @@ type ChangelogEntry = {
 
 const changelogEntries: ChangelogEntry[] = [
   {
+    version: "1.0.0 (Q-Mail+)",
+    date: "October 4, 2026",
+    highlights: [
+      "The first Q-Mail+ release. It reads and writes the same mail as Q-Mail, so your mail shows up in both apps.",
+      "The Hub 3.0 layout with mailboxes, message list and message side by side, borders you can drag to set their widths, one pane at a time on phones, four themes and a full Settings page.",
+      "Read state that survives reloads, unread counts, Archive and Mark unread, and search across all your mail, with message bodies on request.",
+      "Reply with a quote, Reply all with a Cc row, Forward with attachments, Drafts, and recipient suggestions with avatars and name checks.",
+      "Send to alias, Cc and Bcc explain what they do when you hover over them, focus them or long-press them; From shows your names with their avatars and is searchable above 15 names.",
+      "A mail footer in Settings → Mail, for all your names or one per name.",
+      "Attachments open in the app; PDFs open in Hub's own PDF reader, as in Q-Share+.",
+      "qortal:// links open through Hub, so group join links work; names with hidden characters, often used to imitate someone, are crossed out, as in Hub.",
+      "The active mailbox is a dropdown with search above 15 names; group threads as list and pane with unread marks and paging.",
+      "Faster: 6 searches on first load instead of about 25, messages on your node open in about half a second, and a first download of 395 kB instead of 1,576 kB.",
+      "Made for phones and GO: 44 px targets, full-screen sheets, Send above the keyboard and Back that closes the open pane; quiet declines and safer message HTML.",
+    ],
+  },
+  {
     version: "v3.2.1",
     date: "May 28, 2026",
     highlights: [
@@ -143,10 +160,12 @@ export const ChangelogPage = () => {
       }}
     >
       <Typography
+        component="h2"
         sx={{
           fontSize: "1.5rem",
           fontWeight: 700,
           color: "var(--qmail-thread-text)",
+          m: 0,
         }}
       >
         Changelog
@@ -157,7 +176,9 @@ export const ChangelogPage = () => {
           sx={{
             border: "1px solid var(--qmail-shell-border)",
             borderRadius: "10px",
-            backgroundColor: "var(--qmail-shell-active)",
+            // A plain card: the dates' secondary text keeps 4.5:1 on it in every
+            // theme (on the old active-row tint it fell short in Hub 3.0 dark).
+            backgroundColor: "transparent",
             padding: "14px 16px",
             display: "flex",
             flexDirection: "column",
@@ -165,9 +186,11 @@ export const ChangelogPage = () => {
           }}
         >
           <Typography
+            component="h3"
             sx={{
               fontSize: "1rem",
               fontWeight: 700,
+              m: 0,
             }}
           >
             {entry.version}
@@ -175,7 +198,7 @@ export const ChangelogPage = () => {
           <Typography
             sx={{
               fontSize: "0.875rem",
-              color: "var(--qmail-message-meta)",
+              color: "text.secondary",
             }}
           >
             {entry.date}

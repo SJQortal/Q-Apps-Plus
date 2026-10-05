@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "baseUrl": ".",
-    "target": "es2020",
+    "target": "ES2022",
     "useDefineForClassFields": true,
     "allowJs": false,
     "skipLibCheck": true,
@@ -12,12 +12,16 @@
     "module": "ESNext",
     "moduleResolution": "Node",
     "paths": {
-      "@qortal/qapp-lib/*": ["src/qapp-lib/*"]
+      "@qortal/qapp-lib/*": [
+        "src/qapp-lib/*"
+      ]
     },
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src"],
+  "include": [
+    "src"
+  ]
 }

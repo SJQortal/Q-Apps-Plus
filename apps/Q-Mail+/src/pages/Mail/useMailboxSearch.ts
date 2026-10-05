@@ -1,22 +1,46 @@
+/**
+ * Search over a list of mail rows (N8, Bugs #23, UX #21).
+ *
+ * Phase 1 is instant and free: it matches what is already known for every
+ * row (sender/recipient, the decrypted subject from the hash map or the
+ * saved-subject cache, QDN metadata title/description, and the full text of
+ * messages that were decrypted earlier). It runs 300 ms after the last key.
+ *
+ * Phase 2 is explicit: `bodyLimit` says how many rows that have never been
+ * decrypted may be fetched and decrypted for this query (newest first, three
+ * at a time). The bar raises it in steps when the user presses "Search
+ * message bodies", so typing never starts a decrypt storm. Decrypted results
+ * go into the Redux hash map, so the search warms the reader too.
+ */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { addToHashMapMail } from "../../state/features/mailSlice";
+import { RootState } from "../../state/store";
 import { fetchAndEvaluateMail } from "../../utils/fetchMail";
-import { extractTextFromSlate } from "../../utils/extractTextFromSlate";
+import { decryptSubject, peekDecryptedSubject, subscribeSubjects } from "../../utils/subjectCache";
 import {
-  getSentRecipientDisplayLabel,
-  parseSentRecipientFromIdentifier,
-} from "./mailIdentifier";
-
-type MailboxType = "inbox" | "sent";
+  buildFullSearchText,
+  buildMetaSearchText,
+  getDecryptCandidates,
+  getSearchTerms,
+  includesAllTerms,
+  mailboxRefOf,
+  mailboxTypeForRef,
+  toMessageId,
+  type MailboxType,
+} from "./mailSearch";
 
 interface UseMailboxSearchArgs {
   messages: any[];
   query: string;
-  mailboxType: MailboxType;
+  /** The mailbox the rows belong to; rows tagged for the cross-mailbox search override it. */
+  mailboxType?: MailboxType;
   username?: string;
-  hashMapMailMessages: Record<string, any>;
+  hashMapMailMessages?: Record<string, any>;
   enabled?: boolean;
+  /** How many never-decrypted rows may be decrypted for the current query (0 = none). */
+  bodyLimit?: number;
+  debounceMs?: number;
 }
 
 interface SearchCacheEntry {
@@ -25,143 +49,100 @@ interface SearchCacheEntry {
 }
 
 export interface MailboxSearchStatus {
+  /** A body scan is running. */
   active: boolean;
+  /** Nothing is pending and no scan runs. */
   complete: boolean;
+  /** Rows matched against their full text (decrypted). */
   scanned: number;
   total: number;
   matches: number;
+  /** Rows whose body has not been searched (never decrypted). */
+  pending: number;
+  /** More rows remain than `bodyLimit` allowed this time. */
+  capped: boolean;
+  /** The terms of the debounced query (empty = no search). */
+  terms: string[];
+  /** Progress of the running body scan. */
+  scanProgress: { done: number; of: number } | null;
 }
 
-const SEARCH_CONCURRENCY = 3;
+export const SEARCH_CONCURRENCY = 3;
+export const SEARCH_DEBOUNCE_MS = 300;
+export const BODY_SEARCH_STEP = 40;
 
-const toMessageId = (message: any): string => {
-  return String(message?.id || message?.identifier || "");
-};
+export const idleSearchStatus = (total = 0): MailboxSearchStatus => ({
+  active: false,
+  complete: true,
+  scanned: total,
+  total,
+  matches: total,
+  pending: 0,
+  capped: false,
+  terms: [],
+  scanProgress: null,
+});
 
-const normalizeSearchText = (value: string): string => {
-  return value.toLowerCase().trim();
-};
-
-const getTerms = (query: string): string[] => {
-  return normalizeSearchText(query)
-    .split(/\s+/)
-    .map(item => item.trim())
-    .filter(Boolean);
-};
-
-const includesAllTerms = (haystack: string, terms: string[]): boolean => {
-  if (!terms.length) return true;
-  return terms.every(term => haystack.includes(term));
-};
-
-const extractBodyText = (decryptedMessage: any): string => {
-  const body = decryptedMessage?.textContentV2;
-  if (typeof body === "string") {
-    return body;
-  }
-  if (Array.isArray(body)) {
-    return extractTextFromSlate(body);
-  }
-  return "";
-};
-
-const getOtherPartyText = (message: any, mailboxType: MailboxType): string => {
-  if (mailboxType === "inbox") {
-    return typeof message?.user === "string" ? message.user : "";
-  }
-
-  const identifier = toMessageId(message);
-  const { recipientName, recipientAddress } =
-    parseSentRecipientFromIdentifier(identifier);
-  const recipientLabel = getSentRecipientDisplayLabel(identifier);
-  const senderName = typeof message?.user === "string" ? message.user : "";
-
-  return [
-    recipientLabel,
-    recipientName || "",
-    recipientAddress ? `address ${recipientAddress}` : "",
-    senderName,
-  ]
-    .join(" ")
-    .trim();
-};
-
-const buildSearchText = (
-  message: any,
-  mailboxType: MailboxType,
-  decryptedMessage?: any
-): string => {
-  const subject =
-    typeof decryptedMessage?.subject === "string"
-      ? decryptedMessage.subject
-      : "";
-  const body = decryptedMessage ? extractBodyText(decryptedMessage) : "";
-  const title = typeof message?.title === "string" ? message.title : "";
-  const description =
-    typeof message?.description === "string" ? message.description : "";
-
-  const combined = [
-    getOtherPartyText(message, mailboxType),
-    subject,
-    body,
-    title,
-    description,
-  ]
-    .join(" ")
-    .trim();
-
-  return normalizeSearchText(combined);
-};
-
-const getDecryptCandidates = (
-  message: any,
-  mailboxType: MailboxType
-): string[] => {
-  const candidates: string[] = [];
-
-  if (mailboxType === "sent") {
-    const identifier = toMessageId(message);
-    const { recipientName } = parseSentRecipientFromIdentifier(identifier);
-    if (recipientName) {
-      candidates.push(recipientName);
-    }
-  }
-
-  if (typeof message?.user === "string" && message.user.trim()) {
-    candidates.push(message.user.trim());
-  }
-
-  return Array.from(new Set(candidates.filter(Boolean)));
+const isDecryptedCopy = (candidate: any): boolean => {
+  return Boolean(candidate?.isValid && !candidate?.unableToDecrypt);
 };
 
 export const useMailboxSearch = ({
   messages,
   query,
-  mailboxType,
+  mailboxType = "inbox",
   username,
   hashMapMailMessages,
   enabled = true,
+  bodyLimit = 0,
+  debounceMs = SEARCH_DEBOUNCE_MS,
 }: UseMailboxSearchArgs) => {
   const dispatch = useDispatch();
+  const storeHashMap = useSelector((state: RootState) => state.mail.hashMapMailMessages);
+  const savedSubjects = useSelector((state: RootState) => state.mail.hashMapSavedSubjects);
+  const hashMap = hashMapMailMessages || storeHashMap;
+
   const runIdRef = useRef(0);
   const cacheRef = useRef<Map<string, SearchCacheEntry>>(new Map());
-  const hashMapRef = useRef(hashMapMailMessages);
+  const hashMapRef = useRef(hashMap);
+  const decryptedForQueryRef = useRef<{ query: string; count: number }>({ query: "", count: 0 });
   const [results, setResults] = useState<any[]>(messages);
-  const [status, setStatus] = useState<MailboxSearchStatus>({
-    active: false,
-    complete: true,
-    scanned: 0,
-    total: messages.length,
-    matches: messages.length,
-  });
+  const [status, setStatus] = useState<MailboxSearchStatus>(() => idleSearchStatus(messages.length));
+  const [debouncedQuery, setDebouncedQuery] = useState(query.trim());
+  const [subjectsVersion, setSubjectsVersion] = useState(0);
 
   useEffect(() => {
-    hashMapRef.current = hashMapMailMessages;
-  }, [hashMapMailMessages]);
+    hashMapRef.current = hashMap;
+  }, [hashMap]);
 
-  const terms = useMemo(() => {
-    return getTerms(query);
-  }, [query]);
+  // 300 ms after the last keystroke (clearing is immediate).
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setDebouncedQuery("");
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedQuery(trimmed), debounceMs);
+    return () => clearTimeout(timer);
+  }, [debounceMs, query]);
+
+  // Subjects decrypt lazily (rows on screen, or the search below); fold them in without a storm.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = subscribeSubjects(() => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        setSubjectsVersion(v => v + 1);
+      }, 250);
+    });
+    return () => {
+      unsubscribe();
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
+
+  const terms = useMemo(() => getSearchTerms(debouncedQuery), [debouncedQuery]);
 
   useEffect(() => {
     const total = messages.length;
@@ -169,181 +150,153 @@ export const useMailboxSearch = ({
 
     if (!enabled || !terms.length) {
       setResults(messages);
-      setStatus({
-        active: false,
-        complete: true,
-        scanned: total,
-        total,
-        matches: total,
-      });
-      return () => {
-        if (runIdRef.current === runId) {
-          runIdRef.current += 1;
-        }
-      };
+      setStatus(idleSearchStatus(total));
+      return;
     }
+
+    if (decryptedForQueryRef.current.query !== debouncedQuery) {
+      decryptedForQueryRef.current = { query: debouncedQuery, count: 0 };
+    }
+
+    const typeOf = (message: any): MailboxType => {
+      const ref = mailboxRefOf(message);
+      return ref ? mailboxTypeForRef(ref) : mailboxType;
+    };
 
     const matchedIds = new Set<string>();
     const pendingMessages: any[] = [];
     let scanned = 0;
 
-    const applyState = (isComplete: boolean) => {
-      const nextMessages = messages.filter(message => {
-        const id = toMessageId(message);
-        return matchedIds.has(id);
-      });
-
-      setResults(nextMessages);
-      setStatus({
-        active: !isComplete,
-        complete: isComplete,
-        scanned,
-        total,
-        matches: matchedIds.size,
-      });
-    };
-
     messages.forEach(message => {
       const messageId = toMessageId(message);
       if (!messageId) return;
-
+      const type = typeOf(message);
       const cached = cacheRef.current.get(messageId);
       const knownDecrypted = hashMapRef.current[messageId];
-      const hasKnownDecrypted =
-        knownDecrypted?.isValid && !knownDecrypted?.unableToDecrypt;
 
-      let text = cached?.text || buildSearchText(message, mailboxType);
-      let isComplete = Boolean(cached?.isComplete);
-
-      if (!isComplete && hasKnownDecrypted) {
-        text = buildSearchText(message, mailboxType, knownDecrypted);
+      let text: string;
+      let isComplete: boolean;
+      if (cached?.isComplete) {
+        text = cached.text;
         isComplete = true;
-      }
-
-      cacheRef.current.set(messageId, {
-        text,
-        isComplete,
-      });
-
-      if (includesAllTerms(text, terms)) {
-        matchedIds.add(messageId);
-      }
-
-      if (isComplete) {
-        scanned += 1;
+      } else if (isDecryptedCopy(knownDecrypted)) {
+        text = buildFullSearchText(message, type, knownDecrypted);
+        isComplete = true;
+      } else if (isDecryptedCopy(message)) {
+        text = buildFullSearchText(message, type, message);
+        isComplete = true;
       } else {
-        pendingMessages.push(message);
+        const saved = savedSubjects?.[messageId]?.subject;
+        const subject = typeof saved === "string" ? peekDecryptedSubject(saved) : undefined;
+        // Rows decrypt saved subjects only once on screen, so a search
+        // decrypts the rest itself (one at a time, once per session); the
+        // subject subscription re-runs this match as they arrive.
+        if (typeof saved === "string" && saved && subject === undefined) void decryptSubject(saved);
+        text = buildMetaSearchText(message, type, subject);
+        isComplete = false;
       }
+      cacheRef.current.set(messageId, { text, isComplete });
+
+      if (includesAllTerms(text, terms)) matchedIds.add(messageId);
+      if (isComplete) scanned += 1;
+      else pendingMessages.push(message);
     });
 
-    applyState(pendingMessages.length === 0);
+    const allowed = Math.max(0, bodyLimit - decryptedForQueryRef.current.count);
+    const toDecrypt = pendingMessages.slice(0, allowed);
+    const capped = pendingMessages.length > toDecrypt.length;
+    let done = 0;
 
-    if (!pendingMessages.length) {
-      return () => {
-        if (runIdRef.current === runId) {
-          runIdRef.current += 1;
-        }
-      };
-    }
+    const applyState = (active: boolean) => {
+      setResults(messages.filter(message => matchedIds.has(toMessageId(message))));
+      const pending = pendingMessages.length - done;
+      setStatus({
+        active,
+        complete: !active && pending === 0,
+        scanned,
+        total,
+        matches: matchedIds.size,
+        pending,
+        capped: active ? capped : pending > 0,
+        terms,
+        scanProgress: active ? { done, of: toDecrypt.length } : null,
+      });
+    };
+
+    applyState(toDecrypt.length > 0);
+    if (!toDecrypt.length) return;
 
     const resolveMessage = async (message: any): Promise<SearchCacheEntry> => {
       const messageId = toMessageId(message);
+      const type = typeOf(message);
       const knownDecrypted = hashMapRef.current[messageId];
-      const hasKnownDecrypted =
-        knownDecrypted?.isValid && !knownDecrypted?.unableToDecrypt;
-
-      if (hasKnownDecrypted) {
-        const text = buildSearchText(message, mailboxType, knownDecrypted);
-        return {
-          text,
-          isComplete: true,
-        };
+      if (isDecryptedCopy(knownDecrypted)) {
+        return { text: buildFullSearchText(message, type, knownDecrypted), isComplete: true };
       }
-
-      const decryptCandidates = getDecryptCandidates(message, mailboxType);
       let decryptedPayload: any = null;
-
-      for (const otherUser of decryptCandidates) {
+      for (const otherUser of getDecryptCandidates(message, type)) {
         try {
           const result = await fetchAndEvaluateMail(
-            {
-              user: message?.user,
-              messageIdentifier: messageId,
-              content: message,
-              otherUser,
-            },
+            { user: message?.user, messageIdentifier: messageId, content: message, otherUser },
             undefined,
             username
           );
-
-          if (result?.id) {
-            dispatch(addToHashMapMail(result));
-          }
-
-          if (result?.isValid && !result?.unableToDecrypt) {
+          if (result?.id) dispatch(addToHashMapMail(result));
+          if (isDecryptedCopy(result)) {
             decryptedPayload = result;
             break;
           }
-        } catch (error) {
-          // Continue with fallback match text if decryption fails for this candidate.
+        } catch {
+          // Try the next candidate; the row keeps its metadata text.
         }
       }
-
       return {
-        text: buildSearchText(message, mailboxType, decryptedPayload || undefined),
+        text: buildFullSearchText(message, type, decryptedPayload || undefined),
         isComplete: true,
       };
     };
 
     let queueIndex = 0;
-    const workerCount = Math.min(SEARCH_CONCURRENCY, pendingMessages.length);
-
     const worker = async () => {
-      while (true) {
-        if (runIdRef.current !== runId) return;
-
-        const nextIndex = queueIndex;
-        queueIndex += 1;
-
-        if (nextIndex >= pendingMessages.length) {
-          return;
-        }
-
-        const message = pendingMessages[nextIndex];
+      while (runIdRef.current === runId) {
+        const nextIndex = queueIndex++;
+        if (nextIndex >= toDecrypt.length) return;
+        const message = toDecrypt[nextIndex];
         const messageId = toMessageId(message);
-        if (!messageId) continue;
-
         const resolved = await resolveMessage(message);
-
         if (runIdRef.current !== runId) return;
-
         cacheRef.current.set(messageId, resolved);
+        decryptedForQueryRef.current.count += 1;
+        done += 1;
         scanned += 1;
-
-        if (includesAllTerms(resolved.text, terms)) {
-          matchedIds.add(messageId);
-        }
-
-        applyState(scanned >= total);
+        if (includesAllTerms(resolved.text, terms)) matchedIds.add(messageId);
+        else matchedIds.delete(messageId);
+        applyState(done < toDecrypt.length);
       }
     };
 
-    void Promise.all(Array.from({ length: workerCount }, () => worker())).then(
-      () => {
-        if (runIdRef.current !== runId) return;
-        applyState(true);
-      }
-    );
+    void Promise.all(
+      Array.from({ length: Math.min(SEARCH_CONCURRENCY, toDecrypt.length) }, () => worker())
+    ).then(() => {
+      if (runIdRef.current === runId) applyState(false);
+    });
 
     return () => {
-      if (runIdRef.current === runId) {
-        runIdRef.current += 1;
-      }
+      if (runIdRef.current === runId) runIdRef.current += 1;
     };
-  }, [dispatch, enabled, mailboxType, messages, terms, username]);
+    // savedSubjects/subjectsVersion: re-run when more subjects are known.
+  }, [
+    bodyLimit,
+    debouncedQuery,
+    dispatch,
+    enabled,
+    mailboxType,
+    messages,
+    savedSubjects,
+    subjectsVersion,
+    terms,
+    username,
+  ]);
 
-  return {
-    results,
-    status,
-  };
+  return { results, status, terms };
 };

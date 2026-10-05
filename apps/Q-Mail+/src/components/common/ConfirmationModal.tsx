@@ -1,59 +1,64 @@
 import React from 'react'
-import {
-  Box,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  Button
-} from '@mui/material'
+import { Box, Button, DialogContentText } from '@mui/material'
+import { ResponsiveDialog } from './ResponsiveDialog'
 
 export interface ModalProps {
   open: boolean
   title: string
-  message: string
+  message: React.ReactNode
   children?: React.ReactNode
   handleConfirm: () => void
   handleCancel: () => void
+  /** The verb on the confirming button, e.g. "Delete", "Publish", "Load state". */
+  confirmLabel?: string
+  cancelLabel?: string
+  /** Colours the confirming button as a destructive action. */
+  destructive?: boolean
 }
 
+/**
+ * A yes/no question (docs/DESIGN.md → Dialogs: "confirm anything that
+ * publishes, spends QORT or deletes"). Full-screen on phones, 44 px actions.
+ */
 const ConfirmationModal: React.FC<ModalProps> = ({
   open,
   title,
   message,
   children,
   handleConfirm,
-  handleCancel
+  handleCancel,
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  destructive = false
 }) => {
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
       onClose={handleCancel}
-      aria-labelledby="alert-dialog-title"
-      aria-describedby="alert-dialog-description"
+      title={title}
+      describedBy="qmail-confirm-description"
+      maxWidth="xs"
+      actions={
+        <>
+          <Button variant="outlined" color="inherit" onClick={handleCancel}>
+            {cancelLabel}
+          </Button>
+          <Button
+            variant="contained"
+            color={destructive ? 'error' : 'primary'}
+            onClick={handleConfirm}
+            autoFocus
+          >
+            {confirmLabel}
+          </Button>
+        </>
+      }
     >
-      <DialogTitle id="alert-dialog-title">{title}</DialogTitle>
-      <DialogContent>
-        <DialogContentText id="alert-dialog-description">
-          {message}
-        </DialogContentText>
-        {children && <Box sx={{ mt: 2 }}>{children}</Box>}
-      </DialogContent>
-      <DialogActions>
-        <Button variant="contained" onClick={handleCancel} color="primary">
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleConfirm}
-          color="primary"
-          autoFocus
-        >
-          Proceed
-        </Button>
-      </DialogActions>
-    </Dialog>
+      <DialogContentText id="qmail-confirm-description" sx={{ fontSize: '1rem' }}>
+        {message}
+      </DialogContentText>
+      {children && <Box sx={{ mt: 2 }}>{children}</Box>}
+    </ResponsiveDialog>
   )
 }
 

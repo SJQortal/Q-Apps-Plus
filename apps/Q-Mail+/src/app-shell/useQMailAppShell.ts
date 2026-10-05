@@ -11,6 +11,7 @@ import type {
 } from '@qortal/qapp-lib/app-shell/core';
 import { useAppShellController, useAppShellState } from '@qortal/qapp-lib/app-shell/react';
 import packageJson from '../../package.json';
+import { errorMessage, isAccountRefusal, isHubDecline } from '../utils/hubErrors';
 
 type AuthIdentity = {
   address?: string;
@@ -33,52 +34,32 @@ declare const qortalRequest: (
   request: Record<string, unknown>
 ) => Promise<unknown>;
 
-function extractErrorMessage(value: unknown, depth = 0): string | null {
-  if (depth > 4) {
-    return null;
+/** Thrown for a request the user declined in Hub: the shell logs nothing for it. */
+export class HubDeclinedError extends Error {
+  constructor(action: unknown) {
+    super(typeof action === 'string' ? `${action} was declined` : 'Request was declined');
+    this.name = 'HubDeclinedError';
   }
-  if (value instanceof Error) {
-    return value.message || null;
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return trimmed || null;
-  }
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const nested = extractErrorMessage(entry, depth + 1);
-      if (nested) {
-        return nested;
-      }
-    }
-    return null;
-  }
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-  const record = value as Record<string, unknown>;
-  const keys = ['message', 'errorMessage', 'error', 'details', 'description', 'info'];
-  for (const key of keys) {
-    const nested = extractErrorMessage(record[key], depth + 1);
-    if (nested) {
-      return nested;
-    }
-  }
-  return null;
 }
 
+/**
+ * Normalises what Hub rejects with (a string, `{error}`, `{message}`) into an
+ * Error, and marks declines in any of Hub's languages so the shell treats
+ * them as a cancel rather than an error (docs/QORTAL.md pitfall 11).
+ */
 async function qortalRequestSafe(
   request: Record<string, unknown>
 ): Promise<unknown> {
   try {
     return await qortalRequest(request);
   } catch (error) {
-    const message =
-      extractErrorMessage(error) ||
-      (typeof request.action === 'string'
-        ? `${request.action} request was declined`
-        : 'Request was declined');
-    throw new Error(message);
+    if (isHubDecline(error)) throw new HubDeclinedError(request.action);
+    throw new Error(
+      errorMessage(
+        error,
+        typeof request.action === 'string' ? `${request.action} request failed` : 'Request failed'
+      )
+    );
   }
 }
 
@@ -117,11 +98,13 @@ export const useQMailAppShell = (
         storage: {
           prefix: '',
         },
+        // The theme kit (src/hub-theme) owns <html data-theme> and reads
+        // Hub's _qdnTheme itself, so the app-shell writes to spare keys.
         theme: {
           root: document.documentElement,
-          datasetKey: 'theme',
-          themeDataKey: '_qdnTheme',
-          themeEventName: 'THEME_CHANGED',
+          datasetKey: 'hostTheme',
+          themeDataKey: '_qmailHostTheme',
+          themeEventName: 'qmail:host-theme-changed',
         },
       }),
     []
@@ -150,6 +133,8 @@ export const useQMailAppShell = (
           themeChangeRef.current(resolvedTheme);
         },
         onError: ({ phase, message }) => {
+          // A declined Hub dialog (Authenticate, a list) is a cancel, not an error.
+          if (/was declined$/.test(message) || isHubDecline(message) || isAccountRefusal(message)) return;
           console.warn(`[qmail-shell:${phase}] ${message}`);
         },
       },

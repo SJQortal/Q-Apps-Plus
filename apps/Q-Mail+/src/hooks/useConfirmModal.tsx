@@ -4,14 +4,21 @@ import ConfirmationModal from "../components/common/ConfirmationModal";
 type ConfirmationModalContent = {
   open: boolean;
   title: string;
-  message: string;
+  message: ReactNode;
   children?: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
 };
 
 type UseConfirmationModalProps = {
   title: string;
-  message: string;
+  message: ReactNode;
   children?: ReactNode;
+  /** The verb on the confirming button (defaults to "Confirm"). */
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
 };
 
 const useConfirmationModal = (props: UseConfirmationModalProps) => {
@@ -19,16 +26,12 @@ const useConfirmationModal = (props: UseConfirmationModalProps) => {
   const resolvePromiseRef = useRef<((value: boolean) => void) | null>(null);
   const modalContentRef = useRef<ConfirmationModalContent>({
     open: false,
-    title: props.title,
-    message: props.message,
-    children: props.children,
+    ...props,
   });
 
   modalContentRef.current = {
     open: isModalOpen,
-    title: props.title,
-    message: props.message,
-    children: props.children,
+    ...props,
   };
 
   const handleUserAction = useCallback((userConfirmed: boolean) => {
@@ -45,13 +48,17 @@ const useConfirmationModal = (props: UseConfirmationModalProps) => {
   }, []);
 
   const Modal = useCallback(() => {
-    const { open, title, message, children } = modalContentRef.current;
+    const { open, title, message, children, confirmLabel, cancelLabel, destructive } =
+      modalContentRef.current;
     return (
       <ConfirmationModal
         open={open}
         title={title}
         message={message}
         children={children}
+        confirmLabel={confirmLabel}
+        cancelLabel={cancelLabel}
+        destructive={destructive}
         handleConfirm={() => handleUserAction(true)}
         handleCancel={() => handleUserAction(false)}
       />

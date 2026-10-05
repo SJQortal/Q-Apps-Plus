@@ -1,14 +1,104 @@
 import { MAIL_SERVICE_TYPE } from '../constants/mail'
-import { checkStructure, checkStructureMailMessages } from './checkStructure'
-import { extractTextFromSlate } from './extractTextFromSlate'
+import { checkStructureMailMessages } from './checkStructure'
+import { errorMessage } from './hubErrors'
+import { resolveName } from './nameCache'
 import {
   base64ToUint8Array,
   objectToBase64,
-  objectToUint8ArrayFromResponse,
   uint8ArrayToObject
 } from './toBase64'
 
-export const fetchAndEvaluateMail = async (data: any, saveToHash?: (val: any)=> void, username?: string) => {
+/**
+ * Backoff for a resource the node has not got yet: 2, 4, 8 and 16 s
+ * (docs/QORTAL.md → Hub & GO pitfalls 14). Four retries, then the caller
+ * says "Not available on your node right now".
+ */
+export const NOT_YET_RETRY_DELAYS_MS = [2000, 4000, 8000, 16000]
+
+export interface FetchMailOptions {
+  /** How many of NOT_YET_RETRY_DELAYS_MS to use when the node has not got the data yet (default 0: one try). */
+  retries?: number
+  sleep?: (ms: number) => Promise<void>
+}
+
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+/**
+ * The node answered, but without the data: it is still fetching from peers
+ * (Core's 404 "Data unavailable", a 1401 error, or q-apps.js's own timeout
+ * while the fetch blocks). Worth trying again shortly; anything else is not.
+ */
+export function isNotYetAvailable(error: unknown): boolean {
+  const text = errorMessage(error, '').toLowerCase()
+  const code = (error as { error?: unknown } | null)?.error
+  if (code === 1401 || code === 404) return true
+  return /data unavailable|not (yet )?downloaded|unavailable|404|timed out|failed to fetch|network/.test(text)
+}
+
+/**
+ * True for the body Core serves for a deleted resource: the delete marker
+ * Hub and qapp-core publish is "D" (some tools "\n"). With `encoding: base64`
+ * it arrives encoded, so both forms are checked (pitfall 14).
+ */
+export function isDeletedBody(body: unknown): boolean {
+  if (typeof body !== 'string') return false
+  const raw = body.trim()
+  if (raw === 'D') return true
+  if (!raw || raw.length > 8) return false
+  try {
+    const decoded = atob(raw).trim()
+    return decoded === 'D' || decoded === ''
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Fetches and decrypts one MAIL_PRIVATE message (the original app's exact
+ * call shapes: FETCH_QDN_RESOURCE base64 → GET_NAME_DATA/GET_ACCOUNT_DATA
+ * for the other party → DECRYPT_DATA), saves the encrypted subject locally
+ * and resolves the message object. It never throws; the object says what
+ * happened:
+ *
+ * - `isValid: true` with the decrypted fields;
+ * - `unableToDecrypt: true` when it was not encrypted to this key;
+ * - `deleted: true` when the sender removed it (a "D" body);
+ * - `fetchError` (+ `notAvailable: true` once the retries are used up) when
+ *   the node could not provide it.
+ *
+ * The search row's `user` and `id` always win over anything the body claims
+ * (pitfall 15): another name can publish under the same identifier, and a
+ * body can name a different publisher.
+ */
+export const fetchAndEvaluateMail = async (
+  data: any,
+  saveToHash?: (val: any) => void,
+  username?: string,
+  options: FetchMailOptions = {}
+) => {
+  const retries = Math.max(0, Math.min(options.retries ?? 0, NOT_YET_RETRY_DELAYS_MS.length))
+  const sleep = options.sleep ?? defaultSleep
+
+  const fetchBody = async (user: string, messageIdentifier: string): Promise<string> => {
+    let attempt = 0
+    for (;;) {
+      try {
+        const res = await qortalRequest({
+          action: 'FETCH_QDN_RESOURCE',
+          name: user,
+          service: MAIL_SERVICE_TYPE,
+          identifier: messageIdentifier,
+          encoding: 'base64'
+        })
+        return res
+      } catch (error) {
+        if (attempt >= retries || !isNotYetAvailable(error)) throw error
+        await sleep(NOT_YET_RETRY_DELAYS_MS[attempt])
+        attempt += 1
+      }
+    }
+  }
+
   const getBlogPost = async () => {
     const { user, messageIdentifier, content, otherUser } = data
     let obj: any = {
@@ -17,55 +107,40 @@ export const fetchAndEvaluateMail = async (data: any, saveToHash?: (val: any)=> 
     }
 
     try {
-      // throw new Error('hello')
       if (!user || !messageIdentifier) return obj
-      const url = `/arbitrary/${MAIL_SERVICE_TYPE}/${user}/${messageIdentifier}`
-      let res = await qortalRequest({
-        action: 'FETCH_QDN_RESOURCE',
-        name: user,
-        service: MAIL_SERVICE_TYPE,
-        identifier: messageIdentifier,
-        encoding: 'base64'
-      })
-      const base64 = res
-      const resName = await qortalRequest({
-        action: 'GET_NAME_DATA',
-        name: otherUser
-      })
-      if (!resName?.owner) return obj
-
-      const recipientAddress = resName.owner
-      const resAddress = await qortalRequest({
-        action: 'GET_ACCOUNT_DATA',
-        address: recipientAddress
-      })
-      if (!resAddress?.publicKey) return obj
-      const recipientPublicKey = resAddress.publicKey
-      let requestEncryptBody: any = {
+      const base64 = await fetchBody(user, messageIdentifier)
+      if (isDeletedBody(base64)) {
+        obj = { ...obj, deleted: true, id: messageIdentifier, user }
+        if (saveToHash) saveToHash(obj)
+        return obj
+      }
+      // The other party's key through the session name cache: one
+      // GET_NAME_DATA per name and one GET_ACCOUNT_DATA per address, not one
+      // pair per message. Transport errors still throw (caught below).
+      const resolved = await resolveName(otherUser)
+      if (!resolved) return obj
+      const recipientPublicKey = resolved.publicKey
+      const requestEncryptBody: any = {
         action: 'DECRYPT_DATA',
         encryptedData: base64,
         publicKey: recipientPublicKey
       }
-      let unableToDecrypt = true
       let resDecrypt = null
       try {
-         resDecrypt = await qortalRequest(requestEncryptBody)
-         unableToDecrypt = false
-         
+        resDecrypt = await qortalRequest(requestEncryptBody)
       } catch (error) {
-        
+        // Not encrypted to this key: reported below.
       }
-      if (!resDecrypt){
+      if (!resDecrypt) {
         obj = {
           ...obj,
           unableToDecrypt: true,
-            id: messageIdentifier,
-            user
+          id: messageIdentifier,
+          user
         }
-        if(saveToHash){
+        if (saveToHash) {
           saveToHash(obj)
         }
-       
         return obj
       }
       const decryptToUnit8Array = base64ToUint8Array(resDecrypt)
@@ -74,6 +149,7 @@ export const fetchAndEvaluateMail = async (data: any, saveToHash?: (val: any)=> 
         obj = {
           ...content,
           ...responseData,
+          // The row's publisher and identifier, never the body's.
           user,
           title: responseData.title,
           createdAt: responseData.createdAt,
@@ -82,44 +158,50 @@ export const fetchAndEvaluateMail = async (data: any, saveToHash?: (val: any)=> 
         }
 
         try {
-          const encryptData = async (data: any)=> {
-            const dataToBase64 =  await objectToBase64(data)
+          const encryptData = async (data: any) => {
+            const dataToBase64 = await objectToBase64(data)
 
             const res = await qortalRequest({
-              "action": "ENCRYPT_DATA",
+              action: 'ENCRYPT_DATA',
               data64: dataToBase64
             })
-            if(res) return res
-            else return ""
+            if (res) return res
+            else return ''
           }
-          if(username){
-            const subjects = JSON.parse(localStorage.getItem(`qmail_persistance_${username}`) || "{}")
-            if(!subjects[messageIdentifier]){
+          if (username) {
+            const subjects = JSON.parse(localStorage.getItem(`qmail_persistance_${username}`) || '{}')
+            if (!subjects[messageIdentifier]) {
               const copySubjects = structuredClone(subjects)
-              let subject = obj?.subject || ""
-              if(subject){
+              let subject = obj?.subject || ''
+              if (subject) {
                 subject = await encryptData(subject)
               }
               copySubjects[messageIdentifier] = {
-               timestamp: Date.now(),
-               subject: subject || "",
-               attachments: obj?.attachments?.length > 0 ? true : false
+                timestamp: Date.now(),
+                subject: subject || '',
+                attachments: obj?.attachments?.length > 0 ? true : false
               }
               localStorage.setItem(`qmail_persistance_${username}`, JSON.stringify(copySubjects))
             }
-           
           }
-      
         } catch (error) {
-          console.log({error})
+          console.log({ error })
         }
       }
-      if(saveToHash){
+      if (saveToHash) {
         saveToHash(obj)
       }
       return obj
     } catch (error) {
-      console.log({ error })
+      // Bugs #3: a thrown FETCH/GET_NAME_DATA/GET_ACCOUNT_DATA used to resolve
+      // `undefined` and leave the open-message dialog spinning for ever.
+      const notYet = isNotYetAvailable(error)
+      return {
+        ...obj,
+        isValid: false,
+        fetchError: errorMessage(error, 'The message could not be fetched.'),
+        notAvailable: notYet
+      }
     }
   }
 

@@ -1,36 +1,50 @@
-import React, { ReactNode } from 'react'
+import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Box } from '@mui/material';
+import { ErrorState } from '../../layout/states';
 
-interface ErrorBoundaryProps {
-  children: ReactNode
-  fallback: ReactNode
+interface Props {
+  children: ReactNode;
+  /** Called by the Reload button; defaults to reloading the app frame. */
+  onReload?: () => void;
 }
 
-interface ErrorBoundaryState {
-  hasError: boolean
+interface State {
+  hasError: boolean;
 }
 
-class ErrorBoundary extends React.Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
-  state: ErrorBoundaryState = {
-    hasError: false
+/**
+ * Catches render errors and failed code-split chunks below it, so one bad
+ * screen shows a message with a Reload button instead of blanking the whole
+ * app (found in the Hub check: a chunk that failed to load left an empty
+ * frame with no way back). The error still goes to the console.
+ */
+export class ErrorBoundary extends Component<Props, State> {
+  state: State = { hasError: false };
+
+  static getDerivedStateFromError(): State {
+    return { hasError: true };
   }
 
-  static getDerivedStateFromError(_: Error): ErrorBoundaryState {
-    return { hasError: true }
+  componentDidCatch(error: unknown, info: ErrorInfo): void {
+    console.error('Q-Mail+ could not show this screen:', error, info.componentStack);
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    // You can log the error and errorInfo here, for example, to an error reporting service.
-    console.error('Error caught in ErrorBoundary:', error, errorInfo)
-  }
+  private reload = () => {
+    if (this.props.onReload) this.props.onReload();
+    else window.location.reload();
+  };
 
-  render(): React.ReactNode {
-    if (this.state.hasError) return this.props.fallback
-
-    return this.props.children
+  render(): ReactNode {
+    if (this.state.hasError) {
+      return (
+        <Box sx={{ minHeight: '100%', bgcolor: 'background.default' }}>
+          <ErrorState
+            message="This part of Q-Mail+ could not be shown. Reloading usually fixes it; your mail is safe on QDN."
+            onRetry={this.reload}
+          />
+        </Box>
+      );
+    }
+    return this.props.children;
   }
 }
-
-export default ErrorBoundary

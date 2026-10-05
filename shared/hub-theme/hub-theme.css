@@ -10,7 +10,7 @@
   --qp-on-primary: rgba(10, 18, 30, 0.92);
   --qp-secondary: #6FA3F0;
   --qp-success: rgb(94, 176, 73);
-  --qp-error: rgb(177, 70, 70);
+  --qp-error: rgb(224, 108, 108);
   --qp-bg: #0E0F14;
   --qp-paper: #1D1F27;
   --qp-surface: #1B1D24;
@@ -45,7 +45,7 @@
   --qp-on-primary: #FFFFFF;
   --qp-secondary: #2A56A5;
   --qp-success: rgb(94, 176, 73);
-  --qp-error: rgb(177, 70, 70);
+  --qp-error: rgb(158, 43, 43);
   --qp-bg: #DDD6CA;
   --qp-paper: #F6F2EA;
   --qp-surface: #EEE7DC;
