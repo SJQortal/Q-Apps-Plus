@@ -19,7 +19,6 @@ export const AddReviewContainer = styled(Box)(({ theme }) => ({
 
 export const AddReviewDescription = styled(TextareaAutosize)(({ theme }) => ({
   width: "100%",
-  fontFamily: "Karla",
   fontSize: "18px",
   fontWeight: 300,
   lineHeight: "1.5",
@@ -30,7 +29,6 @@ export const AddReviewDescription = styled(TextareaAutosize)(({ theme }) => ({
   resize: "none",
   "& placeholder": {
     color: theme.palette.mode === "light" ? "#808183" : "#edeef0",
-    fontFamily: "Karla",
     fontSize: "18px",
     letterSpacing: "0px"
   },

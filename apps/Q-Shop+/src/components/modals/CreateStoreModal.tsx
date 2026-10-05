@@ -232,7 +232,7 @@ const CreateStoreModal: React.FC<CreateStoreModalProps> = ({
           value={storeIdentifier}
           onChange={handleInputChangeId}
           fullWidth
-          inputProps={{ maxLength: 25 }}
+          slotProps={{ htmlInput: { maxLength: 25 } }}
           required
           variant="filled"
         />
@@ -245,7 +245,7 @@ const CreateStoreModal: React.FC<CreateStoreModalProps> = ({
           fullWidth
           required
           variant="filled"
-          inputProps={{ maxLength: 50 }}
+          slotProps={{ htmlInput: { maxLength: 50 } }}
         />
 
         <CustomInputField
@@ -294,7 +294,7 @@ const CreateStoreModal: React.FC<CreateStoreModalProps> = ({
             variant="filled"
           />
           <Tooltip
-            TransitionComponent={Zoom}
+            slots={{ transition: Zoom }}
             placement="top"
             arrow={true}
             title="Import your QORT Wallet Address from your current account"
@@ -323,10 +323,12 @@ const CreateStoreModal: React.FC<CreateStoreModalProps> = ({
             variant="filled"
           />
           <Tooltip
-            TransitionComponent={Zoom}
             placement="top"
             arrow={true}
             title="Import your ARRR Wallet Address from your current account"
+            slots={{
+              transition: Zoom
+            }}
           >
             <IconButton disableFocusRipple={true} disableRipple={true} onClick={()=> importAddress('ARRR')}>
               <DownloadArrrWalletIcon
@@ -349,7 +351,7 @@ const CreateStoreModal: React.FC<CreateStoreModalProps> = ({
             if (e.target.textContent === "QORT") return;
             handleChipSelect(value as string[]);
           }}
-          renderTags={(values: any) =>
+          renderValue={(values: any) =>
             values.map((value: string) => {
               return (
                 <FiltersChip

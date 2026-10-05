@@ -184,12 +184,20 @@ export const StoreReviews: FC<StoreReviewsProps> = ({
         <Grid
           container
           direction={"row"}
-          flexWrap={"nowrap"}
-          rowGap={2}
           style={{ columnGap: "30px" }}
-        >
+          sx={{
+            flexWrap: "nowrap",
+            rowGap: 2
+          }}>
           {averageStoreRating && (
-            <Grid item xs={12} sm={2} justifyContent={"center"}>
+            <Grid
+              size={{
+                xs: 12,
+                sm: 2
+              }}
+              sx={{
+                justifyContent: "center"
+              }}>
               <AverageReviewContainer>
                 <ReviewsFont>Average Review</ReviewsFont>
                 <AverageReviewNumber>
@@ -208,11 +216,11 @@ export const StoreReviews: FC<StoreReviewsProps> = ({
             </Grid>
           )}
           <Grid
-            item
-            xs={12}
-            sm={averageStoreRating ? 10 : 12}
             style={{ position: "relative" }}
-          >
+            size={{
+              xs: 12,
+              sm: averageStoreRating ? 10 : 12
+            }}>
             <StoreReviewsContainer>
               {storeReviews.length === 0 && hasFetched ? (
                 <ReviewsFont>No reviews yet</ReviewsFont>

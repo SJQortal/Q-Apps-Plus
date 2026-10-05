@@ -1,20 +1,13 @@
-import { createTheme } from "@mui/material/styles";
+import type { ThemeOptions } from "@mui/material/styles";
 
-const commonThemeOptions = {
+// Q-Shop's original look. The + app shows it as the "Q-Shop Classic" (Hub 2.0)
+// theme through the hub-theme kit; the other three themes come from the kit.
+
+const commonThemeOptions: ThemeOptions = {
   typography: {
-    fontFamily: [
-      "Cambon Light",
-      "Raleway, sans-serif",
-      "Karla",
-      "Merriweather Sans",
-      "Montserrat",
-      "Proxima Nova",
-      "Oxygen",
-      "Catamaran",
-      "Cairo",
-      "Arial",
-      "Figtree"
-    ].join(","),
+    // Raleway was hard-coded on most of the original components, so it is the
+    // base font here; Cambon Light and Karla are the other two the app shipped.
+    fontFamily: ["Raleway", "Cambon Light", "Karla", "Arial", "sans-serif"].join(","),
     h1: {
       fontSize: "2rem",
       fontWeight: 600,
@@ -87,7 +80,7 @@ const commonThemeOptions = {
   },
 };
 
-const lightTheme = createTheme({
+const lightThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: "light",
@@ -175,9 +168,8 @@ const lightTheme = createTheme({
       },
     },
   },
-});
-
-const darkTheme = createTheme({
+};
+const darkThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: "dark",
@@ -265,6 +257,5 @@ const darkTheme = createTheme({
       },
     },
   },
-});
-
-export { lightTheme, darkTheme };
+};
+export { lightThemeOptions, darkThemeOptions };

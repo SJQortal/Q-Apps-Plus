@@ -1,7 +1,8 @@
 import React, { useRef, useState } from "react";
 import { RootState } from "../../../state/store";
 import { useSelector } from "react-redux";
-import { Box, Popover, useTheme } from "@mui/material";
+import { Box, IconButton, Popover, useTheme } from "@mui/material";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import { useNavigate } from "react-router-dom";
 import {
@@ -18,8 +19,6 @@ import {
   DropdownText,
   AuthenticateButton,
   NavbarName,
-  LightModeIcon,
-  DarkModeIcon,
   ThemeSelectRow,
   QShopLogoContainer,
   StoreManagerIcon,
@@ -40,7 +39,6 @@ interface Props {
   userAvatar: string;
   authenticate: () => void;
   hasAttemptedToFetchShopInitial: boolean;
-  setTheme: (val: string) => void;
   displayDownloadGatewayModalFunc: () => void;
 }
 
@@ -50,7 +48,6 @@ const NavBar: React.FC<Props> = ({
   userAvatar,
   authenticate,
   hasAttemptedToFetchShopInitial,
-  setTheme,
   displayDownloadGatewayModalFunc
 }) => {
   const navigate = useNavigate();
@@ -96,21 +93,6 @@ const NavBar: React.FC<Props> = ({
   return (
     <CustomAppBar position="sticky" elevation={2}>
       <ThemeSelectRow>
-        {theme.palette.mode === "dark" ? (
-          <LightModeIcon
-            onClickFunc={() => setTheme("light")}
-            color="white"
-            height="22"
-            width="22"
-          />
-        ) : (
-          <DarkModeIcon
-            onClickFunc={() => setTheme("dark")}
-            color="black"
-            height="22"
-            width="22"
-          />
-        )}
         <QShopLogoContainer
           src={theme.palette.mode === "dark" ? QShopLogoLight : QShopLogo}
           alt="QShop Logo"
@@ -191,6 +173,13 @@ const NavBar: React.FC<Props> = ({
             </AvatarContainer>
           </>
         )}
+        <IconButton
+          aria-label="Settings"
+          onClick={() => navigate("/settings")}
+          sx={{ color: theme.palette.text.primary }}
+        >
+          <SettingsOutlinedIcon />
+        </IconButton>
         <Popover
           id={"store-manager-popover"}
           open={openStoreManagerDropdown}
@@ -246,6 +235,15 @@ const NavBar: React.FC<Props> = ({
           >
             <OrdersSVG color={"#f9ff34"} height={"22"} width={"22"} />
             <DropdownText>My Orders</DropdownText>
+          </DropdownContainer>
+          <DropdownContainer
+            onClick={() => {
+              handleCloseUserDropdown();
+              navigate("/settings");
+            }}
+          >
+            <SettingsOutlinedIcon sx={{ color: theme.palette.text.secondary }} />
+            <DropdownText>Settings</DropdownText>
           </DropdownContainer>
           <DropdownContainer
             onClick={() => {

@@ -34,13 +34,11 @@ export const ShowOrderTitle = styled("a")(({ theme }) => ({
   display: "flex",
   gap: "5px",
   alignItems: "center",
-  fontFamily: "Merriweather Sans, sans-serif",
   letterSpacing: "0px",
   fontSize: "21px",
 }));
 
 export const CustomSelect = styled(Select)(({ theme }) => ({
-  fontFamily: "Karla",
   fontSize: "18px",
   fontWeight: 300,
   letterSpacing: 0,
@@ -53,7 +51,6 @@ export const CustomSelect = styled(Select)(({ theme }) => ({
 }));
 
 export const UpdateStatusButton = styled(Button)(({ theme }) => ({
-  fontFamily: "Karla",
   fontSize: "16px",
   letterSpacing: 0,
   fontWeight: 300,
@@ -69,7 +66,6 @@ export const UpdateStatusButton = styled(Button)(({ theme }) => ({
 
 export const ShowOrderDateCreated = styled(Box)(({ theme }) => ({
   fontSize: "16px",
-  fontFamily: "Raleway",
   fontWeight: "400",
   lineHeight: "1.4",
   letterSpacing: "0.2px",
@@ -130,7 +126,6 @@ export const OrderStatusCard = styled(Box)(({ theme }) => ({
   padding: "5px 10px",
   borderRadius: "5px",
   color: "black",
-  fontFamily: "Raleway",
   fontSize: "18px",
   userSelect: "none",
 }));
@@ -138,7 +133,6 @@ export const OrderStatusCard = styled(Box)(({ theme }) => ({
 export const OrderStatusNote = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
-  fontFamily: "Raleway",
   fontSize: "18px",
   maxWidth: "300px",
   maxHeight: "500px",
@@ -199,7 +193,6 @@ export const OrderTitleCol = styled(Box)(({ theme }) => ({
 }));
 
 export const OrderTitle = styled(Typography)(({ theme }) => ({
-  fontFamily: "Karla",
   letterSpacing: "0px",
   fontSize: "20px",
   fontWeight: 300,
@@ -210,7 +203,6 @@ export const OrderTitle = styled(Typography)(({ theme }) => ({
 }));
 
 export const OrderId = styled(Typography)(({ theme }) => ({
-  fontFamily: "Raleway",
   letterSpacing: "0px",
   fontSize: "15px",
   opacity: 0.9,
@@ -248,13 +240,11 @@ export const TotalCostCol = styled(Box)(({ theme }) => ({
 }));
 
 export const TotalCostFont = styled(Typography)(({ theme }) => ({
-  fontFamily: "Montserrat",
   fontSize: "18px",
   fontWeight: 500,
 }));
 
 export const DetailsFont = styled(Typography)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "16px",
   fontWeight: 400,
 }));
@@ -296,7 +286,6 @@ export const DetailsCard = styled(Box)(({ theme }) => ({
   borderRadius: "10px",
   boxShadow: "0px 0px 10px 0px rgba(0,0,0,0.1)",
   backgroundColor: theme.palette.background.paper,
-  fontFamily: "Karla",
   fontSize: "19px",
   fontWeight: 300,
   color: theme.palette.text.primary,
@@ -358,6 +347,5 @@ export const CloseButtonRow = styled(Box)(({ theme }) => ({
 }));
 
 export const CloseButton = styled(Button)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "15px",
 }));

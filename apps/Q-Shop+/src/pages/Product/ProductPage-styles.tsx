@@ -24,7 +24,6 @@ export const ProductNotFound = styled(Box)(({ theme }) => ({
   top: "50px",
   left: "50%",
   transform: "translateX(-50%)",
-  fontFamily: "Raleway",
   fontSize: "22px",
   color: theme.palette.text.primary,
   userSelect: "none",
@@ -39,12 +38,10 @@ export const ProductDetailsContainer = styled(Box)(({ theme }) => ({
 }));
 
 export const ProductTitle = styled(Typography)(({ theme }) => ({
-  fontFamily: "Merriweather Sans, sans-serif",
   color: theme.palette.text.primary,
 }));
 
 export const ProductDescription = styled(Typography)(({ theme }) => ({
-  fontFamily: "Karla",
   letterSpacing: 0,
   color: theme.palette.text.primary,
   fontWeight: 400,
@@ -60,7 +57,6 @@ export const ProductPriceRow = styled(Box)({
 export const ProductPrice = styled(Typography)(({ theme }) => ({
   display: "flex",
   gap: "5px",
-  fontFamily: "Karla",
   fontSize: "24px",
   letterSpacing: 0,
   lineHeight: "28px",
@@ -73,7 +69,6 @@ export const AddToCartButton = styled(Button)(({ theme }) => ({
   alignItems: "center",
   padding: "4px 12px",
   width: "300px",
-  fontFamily: "Raleway",
   fontSize: "18px",
   color: "#ffffff",
   backgroundColor: theme.palette.secondary.main,
@@ -92,7 +87,6 @@ export const UnavailableButton = styled(Button)(({ theme }) => ({
   alignItems: "center",
   padding: "4px 12px",
   width: "300px",
-  fontFamily: "Raleway",
   fontSize: "18px",
   color: "#ffffff",
   backgroundColor: "#da2d2d",
@@ -113,7 +107,6 @@ export const BackToStoreButton = styled(Button)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   padding: "2px 12px",
-  fontFamily: "Raleway",
   fontSize: "15px",
   gap: "3px",
   color: "#ffffff",
