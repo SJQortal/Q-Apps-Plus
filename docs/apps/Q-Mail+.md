@@ -2,7 +2,9 @@
 
 Encrypted mail between Qortal names, with threads, attachments and group mail.
 
-**Published:** not yet. **Version on the branch:** 1.0.0 (PR [#15](https://github.com/SJQortal/Q-Apps-Plus/pull/15)).
+**Published:** `1.0.0` on 2026-10-05, as the QDN `APP` resource `Q-Mail+`, built from commit `b4700647`. Checked on 2026-10-05: the live `index.html` references the same 50 content-hashed files as a fresh build of that commit and as `release/Q-Mail+.zip`.
+
+**Version on the branch:** `1.0.0` (published). The next published update is `1.0.1`. The branch [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) holds this app's history, ready to merge into Qortal/q-mail (README).
 
 ## Baseline at import
 
