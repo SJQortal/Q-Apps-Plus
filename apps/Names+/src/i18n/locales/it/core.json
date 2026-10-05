@@ -1,7 +1,9 @@
 {
   "header": {
     "my_names": "i miei nomi",
-    "market": "nomi in vendita"
+    "market": "nomi in vendita",
+    "settings": "settings",
+    "navigation": "navigation"
   },
   "inputs": {
     "filter_names": "filtra nomi"
@@ -19,7 +21,9 @@
     "continue": "continua",
     "publish": "pubblica",
     "buy": "acquista",
-    "choose_image": "scegli immagine"
+    "choose_image": "scegli immagine",
+    "retry": "riprova",
+    "confirm_buy": "compra per {{price}} QORT"
   },
   "new_name": {
     "choose_name": "scegli un nome",
@@ -31,7 +35,9 @@
       "success": "nome registrato con successo",
       "error": "impossibile registrare il nome",
       "loading": "registrazione del nome... attendere"
-    }
+    },
+    "name_too_short": "i nomi devono avere almeno {{min}} caratteri",
+    "name_too_long": "i nomi possono avere al massimo {{max}} caratteri"
   },
   "tables": {
     "name": "nome",
@@ -41,7 +47,8 @@
     "responses": {
       "loading": "aggiornamento del nome... attendere",
       "success": "nome aggiornato con successo",
-      "error": "impossibile aggiornare il nome"
+      "error": "impossibile aggiornare il nome",
+      "error_primary": "impossibile aggiornare il nome principale finché possiedi altri nomi"
     },
     "title": "attenzione durante l'aggiornamento del nome",
     "choose_name": "scegli un nuovo nome",
@@ -58,7 +65,9 @@
       "error3": "prezzo non valido"
     },
     "title": "vendere nome",
-    "choose_price": "scegli il prezzo di vendita"
+    "choose_price": "scegli il prezzo di vendita",
+    "fee": "commissione per l’annuncio: {{fee}} QORT",
+    "price_hint": "l’acquirente paga questo importo in QORT"
   },
   "cancel_name": {
     "responses": {
@@ -91,6 +100,61 @@
       "loading": "tentativo di acquisto del nome... attendere",
       "success": "nome acquistato con successo",
       "error": "impossibile acquistare il nome"
-    }
+    },
+    "sort": {
+      "name": "nome",
+      "price": "prezzo",
+      "length": "lunghezza",
+      "newest": "più recenti"
+    },
+    "sort_by": "ordina per",
+    "empty": "al momento nessun nome è in vendita",
+    "empty_filter": "nessun nome in vendita corrisponde a “{{filter}}”",
+    "error": "impossibile caricare i nomi in vendita",
+    "buy_title": "compra {{name}}",
+    "price": "prezzo",
+    "fee": "commissione di transazione",
+    "total": "totale",
+    "balance": "il tuo saldo",
+    "insufficient": "QORT insufficienti per questo acquisto",
+    "buy_confirm": "Qortal ti chiederà di confermare il pagamento",
+    "count_one": "{{count}} nome in vendita",
+    "count_other": "{{count}} nomi in vendita"
+  },
+  "settings": {
+    "account": "account",
+    "appearance": "appearance",
+    "about": "about",
+    "no_primary_name": "no primary name yet",
+    "not_signed_in": "not signed in",
+    "names_count_one": "{{count}} name",
+    "names_count_other": "{{count}} names",
+    "address": "address",
+    "copy_address": "copy address",
+    "copied": "copied",
+    "changelog": "what's new",
+    "upstream": "original app: Qortal/names",
+    "source": "source code: SJQortal/Q-Apps-Plus",
+    "about_blurb": "Names+ is Simon's version of the official Qortal Names app. It reads and writes the same names, sales and avatars, so anything you do here shows up in the original app too."
+  },
+  "names": {
+    "primary": "principale",
+    "for_sale": "in vendita",
+    "pending": "in sospeso",
+    "empty_title": "ancora nessun nome",
+    "empty_hint": "registra un nome per pubblicare su QDN e usarlo in tutte le Q-App",
+    "empty_filter": "nessun nome corrisponde a “{{filter}}”",
+    "error": "impossibile caricare i tuoi nomi",
+    "more_actions": "altre azioni",
+    "sign_in": "accedi a Qortal per vedere i tuoi nomi"
+  },
+  "pending": {
+    "title": "transazioni in sospeso",
+    "REGISTER_NAME": "registrazione di {{name}}",
+    "UPDATE_NAME": "rinomina di {{name}} in {{newName}}",
+    "SELL_NAME": "messa in vendita di {{name}}",
+    "CANCEL_SELL_NAME": "rimozione di {{name}} dalla vendita",
+    "BUY_NAME": "acquisto di {{name}}",
+    "hint": "confermata con il prossimo blocco, di solito entro uno o due minuti"
   }
 }
