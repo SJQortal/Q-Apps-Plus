@@ -51,8 +51,9 @@ An app is ready for Simon to publish when all of this is true, and the brief rec
 2. **Baseline.** Work on the app's branch (CLAUDE.md → Git). Run `cd "apps/<App+>" && npm ci && npm run build`, then record the dist size and the biggest chunk. If the baseline fails, fix only what's needed to build, in its own commit.
 3. **Platform upgrade.** Follow "How each app upgrades" in docs/PLATFORM.md: dependencies, codemods, `scripts/check-mui-icons.sh <App+>`, type errors. Commit it on its own (`<App+>: upgrade to React 19.3 and MUI 9.4`). **Then open the app in a browser or Hub before going on.** A green build isn't enough: React 19 has blanked apps at runtime (an audio player in Q-Shop+).
 4. **Harness.** vitest + jsdom + a `qortalRequest` mock that answers by action (docs/QORTAL.md → Testing).
-5. **Theme kit + Settings.** Run `mkdir "apps/<App+>/src/hub-theme" && scripts/sync-theme.sh`, then follow the kit README. Never edit the copied files. Build Hub 2.0 from the app's old theme. If the kit needs a change, make it in `shared/hub-theme` and commit it as `Repo: …`.
-6. **Audit.** Read the whole app, not a sample, and fill in the brief's Audit:
+5. **One place for + specifics.** Keep the app's name, the name used in copied `qortal://APP/…` links, the storage prefix, the settings-sync identifier and the repo links in one module (e.g. `src/constants/plus.ts`), so the upstream "Ship as" commit stays small (docs/RELEASE.md).
+6. **Theme kit + Settings.** Run `mkdir "apps/<App+>/src/hub-theme" && scripts/sync-theme.sh`, then follow the kit README. Never edit the copied files. Build Hub 2.0 from the app's old theme. If the kit needs a change, make it in `shared/hub-theme` and commit it as `Repo: …`.
+7. **Audit.** Read the whole app, not a sample, and fill in the brief's Audit:
    - architecture map;
    - **data contract** (binding; finish it before any data change);
    - Qortal call inventory: every `limit: 0`, poll, N+1 and uncached repeat, plus the searches on first load;
@@ -61,10 +62,10 @@ An app is ready for Simon to publish when all of this is true, and the brief rec
    - bugs, with file:line;
    - missing features.
    Rank each finding by user impact × effort.
-7. **Plan.** Write the rounds you intend into the brief's Plan. Defer anything risky (money, names or encryption code; major rewrites) to Follow-ups with a reason. Don't stop for approval.
-8. **Efficiency and layout.** Do the top efficiency fixes with measured numbers, then the Hub 3.0 layout of the main screens, mobile-first.
+8. **Plan.** Write the rounds you intend into the brief's Plan. Defer anything risky (money, names or encryption code; major rewrites) to Follow-ups with a reason. Don't stop for approval.
+9. **Efficiency and layout.** Do the top efficiency fixes with measured numbers, then the Hub 3.0 layout of the main screens, mobile-first.
 
-Q-Mintership+ is rewritten instead: follow the phased Rewrite plan in its brief instead of steps 3 and 8. Each session does one phase and ends with a working app and a PR.
+Q-Mintership+ is rewritten instead: follow the phased Rewrite plan in its brief instead of steps 3 and 9. Each session does one phase and ends with a working app and a PR.
 
 ## Round 2: features and the phone shell
 
@@ -108,15 +109,18 @@ Simon tries the app in Hub and asks for changes. Build them, check them in Hub a
 
 ## Release
 
-1. Simon publishes `release/<App+>.zip` (from `scripts/build-zip.sh <App+>`) as `APP` under the app's name.
-2. Then add the **Published** line to the top of the brief, e.g. `Published: 1.0.0 on 2026-10-02, built from commit abc1234`.
+The full pipeline is in docs/RELEASE.md. An app is published as `<App>+` on QDN (the testground), tested with the community, and offered to its original Qortal repo as a PR once it has proven itself.
+
+1. Simon publishes `release/<App+>.zip` (from `scripts/build-zip.sh <App+>`) as `APP` under the app's + name.
+2. Check that the live bundle matches the commit: the files referenced from `index.html` on the node versus a fresh build. Then add the **Published** line to the top of the brief, e.g. `Published: 1.0.0 on 2026-10-02, built from commit abc1234`, and merge the PR (a merge commit).
 3. Version rules:
    - Every + app has its own series: the first published release is `1.0.0`, and each later published update bumps the last number (`1.0.1`, …). Simon may pick `1.1.0`.
    - Never use suffixes like `-plus.1`.
    - Bump only after the current version is published; until then, add to its changelog entry.
    - Keep `package.json`, Settings → About and the changelog in step.
-4. **README:** add a "Merging this back into <Original>" section like Q-Share+'s: the subtree history, how to merge, the data notes, and what is specific to the + build. Optionally, offer a `<slug>/for-upstream` branch made with `git subtree split`.
-5. Simon merges the PR (merge commit). Never force-push; Q-Share+'s one history rewrite had Simon's explicit OK.
+4. **Community testing:** log what people report in the brief's **Community feedback** section, and fix it in 1.0.x releases.
+5. **Upstream PR** (when Simon calls it ready): `scripts/upstream-pr.sh <App+>`, then the "Ship as <Original>" commit and the PR text from `docs/templates/upstream-pr.md`, including the Maintenance note. Simon approves the text before anything is posted.
+6. Never force-push a shared branch. The history clean-ups of Q-Share+ and Q-Mail+ had Simon's explicit OK, and `upstream-pr.sh` cleans new branches without needing one.
 
 ## Working with parallel agents
 

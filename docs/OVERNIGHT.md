@@ -65,6 +65,8 @@ Type **"build the zips"** in a local chat in the main checkout. Claude then:
 
 ## Release
 
+The stages after a build (testground on QDN, community testing, upstream PR) are in docs/RELEASE.md. The steps for one published version:
+
 1. Simon publishes `release/<App+>.zip` from Hub as `APP` under the app's name.
 2. The brief gets its **Published** line, with the version and commit.
 3. Simon merges the PR with the **Merge** button (a merge commit; the branch deletes itself).
