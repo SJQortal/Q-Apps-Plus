@@ -21,6 +21,12 @@
  * the reader (impostor-open) and the composer's suggestions (compose-names)
  * show the strike next to the real name.
  *
+ * Reference-only history (1.0.1 replies): Simon James's message carries six
+ * threadV2 references and no copies (earlier-refs): one not sent to us (a
+ * locked id), our own deleted sent message (the tombstone), one the node
+ * can't fetch, and three that load, so "Show earlier" shows every state and
+ * "Show 1 older".
+ *
  * Encryption is mocked end to end: FETCH_QDN_RESOURCE answers a token that
  * names the resource, DECRYPT_DATA turns the token into the base64 body the
  * app expects (UTF-8 JSON for mail, raw bytes for attachments), and
@@ -270,6 +276,16 @@ LOOKALIKE_INBOX.forEach((r, i) => {
     textContentV2: `<p>Message from ${r.name}.</p>`,
   };
 });
+// A 1.0.1 reply: references only, oldest first (earlier-refs).
+const historyRef = (name, identifier) => ({ reference: { identifier, name, service: 'MAIL_PRIVATE' } });
+BODIES[LOOKALIKE_INBOX[0].identifier].generalData.threadV2 = [
+  historyRef(SECOND, inboxId(NAME, ADDRESS, 'm02')),
+  historyRef(MARCUS, inboxId(NAME, ADDRESS, 'm04')), // locked: not sent to us
+  historyRef(NAME, inboxId(ALICE, ALICE_ADDRESS, 's09')), // our deleted sent message (tombstone)
+  historyRef(SIMON, inboxId(NAME, ADDRESS, 'gone')), // the node can't fetch it
+  historyRef(ZOE, inboxId(NAME, ADDRESS, 'm03')),
+  historyRef(NAME, inboxId(ALICE, ALICE_ADDRESS, 's02')), // our own reply, sent by us
+];
 ALIAS_INBOX.forEach((r, i) => {
   BODIES[r.identifier] = { ...mailBody(r, i + 5, ALIAS), recipient: NAME, to: ALIAS };
 });
@@ -497,6 +513,7 @@ export default {
         case 'GET_QDN_RESOURCE_PROPERTIES': return PROPS[p.identifier] || { filename: 'file.bin', mimeType: 'application/octet-stream' };
         case 'FETCH_QDN_RESOURCE': {
           if (p.service === 'DOCUMENT_PRIVATE') throw { error: 'Resource does not exist' };
+          if (String(p.identifier).endsWith('_mail_gone')) throw { error: 'Resource does not exist' };
           if (p.service === 'MAIL' && p.encoding !== 'base64') return BODIES[p.identifier] || null; // thread header JSON
           return 'ENCRES:' + p.service + ':' + p.identifier;
         }
@@ -684,6 +701,22 @@ export default {
         await page.waitForSelector('.ql-editor', { timeout: 8000 }).catch(() => {});
         await page.getByRole('button', { name: new RegExp(MARCUS) }).first().waitFor({ timeout: 4000 }).catch(() => {});
         await page.waitForTimeout(300);
+      },
+    },
+    {
+      // A 1.0.1 reply: its earlier messages load by reference on Show earlier.
+      key: 'earlier-refs',
+      path: '/',
+      after: async (page) => {
+        await waitForInbox(page);
+        await page.getByRole('button', { name: new RegExp(SIMON) }).first().click({ timeout: 4000 });
+        await page.waitForSelector('article', { timeout: 8000 }).catch(() => {});
+        await page.getByRole('button', { name: /^Show earlier/ }).first().click({ timeout: 4000 });
+        await page.getByText('This message could not be loaded.').first().waitFor({ timeout: 8000 }).catch(() => {});
+        await page.getByText('Sent message 2 to').first().waitFor({ timeout: 8000 }).catch(() => {});
+        await page.getByRole('button', { name: /^Show 1 older/ }).first().scrollIntoViewIfNeeded().catch(() => {});
+        await page.mouse.move(1, 1);
+        await page.waitForTimeout(400);
       },
     },
     { key: 'attachment-image', path: '/', overlay: true, after: async (page) => { await openAttachment(page, /^Open coast-photo\.png/); await page.waitForSelector('[role=dialog] img', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(300); } },
