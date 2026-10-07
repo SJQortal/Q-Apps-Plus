@@ -1,15 +1,18 @@
 /**
  * Pure helpers for the composer: subject prefixes, the forward header and
- * its quote, the embedded reply history and reply-all recipients. A reply's
- * body is only what the user writes (and the footer): the original is not
- * quoted into it (1.0.1), so long conversations don't snowball.
+ * its quote, a reply's history references and reply-all recipients.
+ *
+ * Nothing from earlier messages travels in a reply (1.0.1, on Qortal DEV's
+ * advice): the body is only what the user writes (and the footer), and
+ * `generalData.threadV2` holds `{ reference }` entries without `data`, so a
+ * reply stays the same size however long the conversation gets.
  *
  * Everything that reaches QDN keeps the shape the original Q-Mail reads
  * (docs/apps/Q-Mail+.md → Data contract §3a, §15, §16):
  * - a forward's quote is Quill 1 markup: one `<blockquote>` per line, inline text only;
- * - `generalData.threadV2[].data` keeps `user/createdAt/subject/attachments/
- *   textContentV2` (and every other top-level field) but loses its own
- *   `generalData`, so payloads stop growing geometrically (Bugs #12);
+ * - `threadV2[].reference` keeps its `{ identifier, name, service }` shape;
+ *   the original app skips entries without `data`, so it shows the reply on
+ *   its own, and the Q-Mail+ reader fetches them (pages/Mail/earlierMessages.ts);
  * - `to` / `cc` are additive top-level fields the original app ignores (it
  *   reads `recipient`); Bcc names never appear in any JSON.
  */
@@ -167,47 +170,62 @@ export interface ThreadReference {
 
 export interface ThreadEntry {
   reference: ThreadReference;
-  data: any;
+  /** Only in history written by the original app or Q-Mail+ 1.0.0. */
+  data?: any;
 }
+
+/** A reply references at most this many earlier messages, the newest (about 2.5 KB). */
+export const REPLY_HISTORY_MAX_REFERENCES = 20;
 
 /** Local read-marker entries that `Mail.tsx` injects into list copies (§10). */
 export function isLocalReadMarkerEntry(entry: any): boolean {
   return Boolean(entry?.data?.markedAsReadLocally);
 }
 
+const referenceText = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+
 /**
- * A message as it is embedded in a reply's history: every top-level field the
- * readers use stays, its own `generalData` goes. Readers only need
- * `user/createdAt/subject/attachments/textContentV2` (and `id` as a React key).
+ * Where an earlier message lives: the entry's own reference, or for an
+ * embedded copy without one, the copy's `id` and `user` (the identifier and
+ * publisher fetchAndEvaluateMail sets). Null when neither says.
  */
-export function stripEmbeddedHistory(message: any): any {
-  if (!message || typeof message !== "object") return message;
-  const { generalData: _generalData, ...rest } = message;
-  return rest;
+function referenceOfEntry(entry: any, service: string): ThreadReference | null {
+  const raw = entry?.reference;
+  const fromReference = {
+    identifier: referenceText(raw?.identifier),
+    name: referenceText(raw?.name),
+    service: referenceText(raw?.service) || service,
+  };
+  if (fromReference.identifier && fromReference.name) {
+    return fromReference.service === service ? fromReference : null;
+  }
+  const identifier = referenceText(entry?.data?.id);
+  const name = referenceText(entry?.data?.user);
+  return identifier && name ? { identifier, name, service } : null;
 }
 
 /**
- * The `generalData.threadV2` of a reply: the replied-to message's own history
- * (minus local read markers, each entry stripped of nested history) plus the
- * replied-to message itself. Same order and `reference` shape as before.
+ * The `generalData.threadV2` of a reply: references only, oldest first, to
+ * the replied-to message's own history (minus local read markers and
+ * repeats) and then the replied-to message itself, the newest
+ * REPLY_HISTORY_MAX_REFERENCES of them. Embedded copies are not carried on.
  */
 export function buildReplyThreadV2(replyTo: any, service: string): ThreadEntry[] {
   const previous: any[] = Array.isArray(replyTo?.generalData?.threadV2) ? replyTo.generalData.threadV2 : [];
-  const kept: ThreadEntry[] = previous
-    .filter(entry => entry && typeof entry === "object" && !isLocalReadMarkerEntry(entry))
-    .map(entry => ({
-      reference: entry.reference,
-      data: stripEmbeddedHistory(entry.data),
-    }));
-  kept.push({
-    reference: {
-      identifier: replyTo?.id,
-      name: replyTo?.user,
-      service,
-    },
-    data: stripEmbeddedHistory(replyTo),
+  const own: ThreadReference = { identifier: replyTo?.id, name: replyTo?.user, service };
+  const keyOf = (reference: ThreadReference) => `${reference.name.toLowerCase()}|${reference.identifier}`;
+  const ownKey = typeof own.identifier === "string" && typeof own.name === "string" ? keyOf(own) : "";
+  const seen = new Set<string>([ownKey]);
+  const references: ThreadReference[] = [];
+  previous.forEach(entry => {
+    if (!entry || typeof entry !== "object" || isLocalReadMarkerEntry(entry)) return;
+    const reference = referenceOfEntry(entry, service);
+    if (!reference || seen.has(keyOf(reference))) return;
+    seen.add(keyOf(reference));
+    references.push(reference);
   });
-  return kept;
+  references.push(own);
+  return references.slice(-REPLY_HISTORY_MAX_REFERENCES).map(reference => ({ reference }));
 }
 
 const normalize = (value: unknown): string => (typeof value === "string" ? value.trim().toLowerCase() : "");

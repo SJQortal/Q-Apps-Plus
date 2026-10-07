@@ -67,7 +67,7 @@ describe('NewMessage replies and drafts', () => {
     const { quill } = renderComposer()
     const original = await screen.findByRole('region', { name: 'Original message' })
     expect(original.textContent).toContain('See you at noon')
-    expect(screen.getByText(/not quoted in your reply/)).toBeTruthy()
+    expect(screen.getByText(/links to this message instead of copying it/)).toBeTruthy()
     await wait(50)
     expect(quill().getText().trim()).toBe('')
     expect(quill().root.innerHTML).not.toContain('blockquote')

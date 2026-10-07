@@ -2741,8 +2741,8 @@ export const NewMessage = ({
                   color: "var(--qmail-compose-muted)",
                 }}
               >
-                Shown here for context only: it is not quoted in your
-                reply.
+                Shown here for context only. Your reply links to this
+                message instead of copying it, so it stays small.
               </Typography>
               {replyPreviewMode !== "hidden" && (
                 <Box
