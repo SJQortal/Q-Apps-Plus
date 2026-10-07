@@ -11,6 +11,7 @@ import { mockQortalAction } from '../../test/setup'
 import { resetNameCache } from '../../utils/nameCache'
 import { NewMessage } from './NewMessage'
 import { getComposeDraftsStorageKey } from './composeDrafts'
+import { readerMailDate } from './readerTime'
 
 const address = 'QmeAddress'
 const original = {
@@ -65,8 +66,10 @@ describe('NewMessage replies and drafts', () => {
 
   it('opens a reply (no render loop): the original shows above the editor, the body starts empty', async () => {
     const { quill } = renderComposer()
-    const original = await screen.findByRole('region', { name: 'Original message' })
-    expect(original.textContent).toContain('See you at noon')
+    const context = await screen.findByRole('region', { name: 'Original message' })
+    expect(context.textContent).toContain('See you at noon')
+    // the same date as the reader: weekday, date and time
+    expect(screen.getByText(new RegExp(`^${readerMailDate(original.createdAt)} • Lunch$`))).toBeTruthy()
     expect(screen.getByText(/links to this message instead of copying it/)).toBeTruthy()
     await wait(50)
     expect(quill().getText().trim()).toBe('')

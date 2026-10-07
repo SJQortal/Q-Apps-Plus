@@ -61,6 +61,7 @@ import AttachmentSVG from "../../assets/svgs/NewMessageAttachment.svg";
 import { SendNewMessage } from "../../assets/svgs/SendNewMessage";
 import { formatBytes } from "../../utils/displaySize";
 import { formatFullTimestamp } from "../../utils/time";
+import { readerMailDate } from "./readerTime";
 import { extractTextFromSlate } from "../../utils/extractTextFromSlate";
 import { CreateThreadIcon } from "../../assets/svgs/CreateThreadIcon";
 import {
@@ -2732,7 +2733,7 @@ export const NewMessage = ({
                   color: "var(--qmail-compose-muted)",
                 }}
               >
-                {formatFullTimestamp(replyTo?.createdAt)} •{" "}
+                {readerMailDate(replyTo?.createdAt)} •{" "}
                 {replyTo?.subject || "- no subject -"}
               </Typography>
               <Typography
