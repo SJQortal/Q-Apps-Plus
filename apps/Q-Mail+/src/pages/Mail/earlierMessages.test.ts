@@ -137,6 +137,21 @@ describe('loadEarlierMessage', () => {
     expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(2)
   })
 
+  it('reports a sent message its sender deleted (the Q-Mail tombstone) as deleted', async () => {
+    mockQortalAction('FETCH_QDN_RESOURCE', 'ENC')
+    mockQortalAction('DECRYPT_DATA', btoa(JSON.stringify({
+      subject: '__qmail_deleted__',
+      createdAt: 5,
+      version: 1,
+      attachments: [],
+      textContentV2: '',
+      generalData: { deleted: true, deletedAt: 5, thread: [], threadV2: [] },
+      recipient: 'bob',
+    })))
+    expect(await loadEarlierMessage(reference)).toEqual({ status: 'deleted' })
+    expect(cachedEarlierMessage(reference, { [reference.identifier]: { isValid: true, user: 'alice', subject: '__qmail_deleted__' } })).toBeNull()
+  })
+
   it('says "unavailable" after the retries and tries again next time', async () => {
     mockQortalAction('FETCH_QDN_RESOURCE', () => {
       throw { error: 1401, message: 'Data unavailable. Please try again later.' }

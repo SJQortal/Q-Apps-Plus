@@ -22,6 +22,7 @@
 import { MAIL_SERVICE_TYPE } from "../../constants/mail";
 import { fetchAndEvaluateMail, type FetchMailOptions } from "../../utils/fetchMail";
 import { isLocalReadMarkerEntry } from "../../utils/mailCompose";
+import { SENT_DELETED_TITLE } from "../../utils/sentIndex";
 import { parseSentRecipientFromIdentifier } from "./mailIdentifier";
 
 /** How many earlier messages "Show earlier" opens with, and each "Show older" adds. */
@@ -123,10 +124,18 @@ export function earlierWindow(entries: EarlierEntry[], count: number): { visible
 export const needsFetch = (entry: EarlierEntry): entry is EarlierEntry & { reference: EarlierReference } =>
   Boolean(entry.reference && !entry.data);
 
+/**
+ * The tombstone Q-Mail publishes over a sent message its sender deleted
+ * (data contract §11): it decrypts, with subject `__qmail_deleted__`,
+ * `generalData.deleted` and no body.
+ */
+export const isTombstoneMessage = (message: any): boolean =>
+  message?.subject === SENT_DELETED_TITLE || message?.generalData?.deleted === true;
+
 /** A decrypted copy from the session cache, only if it is this publisher's (pitfall 15). */
 export function cachedEarlierMessage(reference: EarlierReference, hashMap: Record<string, any> | undefined): any | null {
   const cached = hashMap?.[reference.identifier];
-  if (!cached?.isValid || cached.unableToDecrypt) return null;
+  if (!cached?.isValid || cached.unableToDecrypt || isTombstoneMessage(cached)) return null;
   if (text(cached.user).toLowerCase() !== reference.name.toLowerCase()) return null;
   return cached;
 }
@@ -224,7 +233,7 @@ async function fetchEarlierMessage(reference: EarlierReference, options: LoadEar
       undefined,
       { retries: options.retries ?? EARLIER_FETCH_RETRIES, sleep: options.sleep }
     );
-    if (res?.deleted) {
+    if (res?.deleted || (res?.isValid && isTombstoneMessage(res))) {
       outcome = { status: "deleted" };
       break;
     }
