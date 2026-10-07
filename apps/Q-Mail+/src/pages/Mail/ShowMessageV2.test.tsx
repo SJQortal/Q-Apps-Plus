@@ -11,7 +11,7 @@ import { resetNameCache } from '../../utils/nameCache'
 import { mockQortalAction, qortalCalls } from '../../test/setup'
 import { resetEarlierMessagesCache } from './earlierMessages'
 import { ShowMessageV2 } from './ShowMessageV2'
-import { escapeHtmlText, relativeMailDate } from './readerTime'
+import { escapeHtmlText, exactMailDate, readerMailDate } from './readerTime'
 import { mailDateTime } from './MessageDate'
 
 const now = Date.now()
@@ -47,11 +47,10 @@ function wrap(ui: React.ReactElement) {
 }
 
 describe('readerTime', () => {
-  it('formats relative dates and escapes HTML', () => {
-    expect(relativeMailDate(now - 10_000, now)).toBe('Just now')
-    expect(relativeMailDate(now - 5 * 60_000, now)).toBe('5 min ago')
-    expect(relativeMailDate(now - 400 * 24 * 3600_000, now)).toMatch(/\d{4}$/)
-    expect(relativeMailDate(undefined)).toBe('')
+  it('formats exact reader dates and escapes HTML', () => {
+    expect(readerMailDate(now - 5 * 60_000, now)).toMatch(/^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}, \d{2}:\d{2}$/)
+    expect(readerMailDate(now - 400 * 24 * 3600_000, now)).toMatch(/ \d{4}, \d{2}:\d{2}$/)
+    expect(readerMailDate(undefined)).toBe('')
     expect(escapeHtmlText('<b>&"x"')).toBe('&lt;b&gt;&amp;&quot;x&quot;')
   })
 
@@ -81,17 +80,19 @@ describe('ShowMessageV2', () => {
     expect(screen.queryAllByRole('heading', { level: 1 })).toHaveLength(0)
     expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual(['Lunch <plan>'])
     expect(screen.getByRole('heading', { level: 2, name: 'Lunch <plan>' })).toBeTruthy()
-    expect(screen.getByText('5 min ago')).toBeTruthy()
-    expect(screen.getByText('5 min ago').closest('time')?.getAttribute('datetime')).toBe(new Date(message.createdAt).toISOString())
+    const shortDate = readerMailDate(message.createdAt)
+    expect(screen.getByText(shortDate)).toBeTruthy()
+    expect(screen.getByText(shortDate).closest('time')?.getAttribute('datetime')).toBe(new Date(message.createdAt).toISOString())
+    expect(screen.getByRole('button', { name: `Sent ${shortDate}. Show the full date` })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
     expect(setReplyTo).toHaveBeenCalledWith(message)
     fireEvent.click(screen.getByRole('button', { name: 'Reply all' }))
     expect(onReplyAll).toHaveBeenCalledWith(message)
     expect(screen.getByRole('button', { name: 'Save all (2)' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Close message' })).toBeTruthy()
-    // the date toggles to the exact form on tap
-    fireEvent.click(screen.getByText('5 min ago'))
-    expect(screen.getByText(/\d{4}, \d{2}:\d{2}:\d{2}$/)).toBeTruthy()
+    // the date toggles to the full form, with seconds, on tap
+    fireEvent.click(screen.getByText(shortDate))
+    expect(screen.getByText(exactMailDate(message.createdAt))).toBeTruthy()
   })
 
   it('escapes the forward header and hands attachments to onForward when given', () => {

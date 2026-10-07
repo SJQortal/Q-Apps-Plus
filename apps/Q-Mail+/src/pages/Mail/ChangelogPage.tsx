@@ -16,6 +16,7 @@ const changelogEntries: ChangelogEntry[] = [
       "A reply carries links to the last 20 earlier messages instead of copies of them, so a long conversation no longer makes each reply bigger (the 50th reply was about 570 KB in 1.0.0).",
       "Show earlier loads the earlier messages from QDN, five at a time; messages you already opened appear at once, and deleted or unavailable ones say so.",
       "Mail that carries copies of earlier messages (from Q-Mail or Q-Mail+ 1.0.0) shows them as before; Q-Mail opens the new replies without their earlier messages.",
+      "An open message shows its weekday, date and time (\"Sun 2 Aug, 08:58\"), with the year when it isn't this year.",
     ],
   },
   {

@@ -1,35 +1,30 @@
 import { describe, expect, it } from 'vitest'
-import { exactMailDate, relativeMailDate } from './readerTime'
+import { exactMailDate, readerMailDate } from './readerTime'
 
 const at = (y: number, m: number, d: number, h = 0, min = 0, s = 0) => new Date(y, m - 1, d, h, min, s).getTime()
 
 // Wednesday 30 September 2026, 15:30 local time.
 const now = at(2026, 9, 30, 15, 30)
 
-describe('relativeMailDate', () => {
-  it('counts minutes, then hours within today', () => {
-    expect(relativeMailDate(now - 10_000, now)).toBe('Just now')
-    expect(relativeMailDate(now + 120_000, now)).toBe('Just now')
-    expect(relativeMailDate(now - 59 * 60_000, now)).toBe('59 min ago')
-    expect(relativeMailDate(at(2026, 9, 30, 9, 0), now)).toBe('6 h ago')
+describe('readerMailDate', () => {
+  it('gives the weekday, day, month and time, also for mail from today', () => {
+    expect(readerMailDate(now - 10_000, now)).toBe('Wed 30 Sep, 15:29')
+    expect(readerMailDate(at(2026, 9, 30, 9, 0), now)).toBe('Wed 30 Sep, 09:00')
+    expect(readerMailDate(at(2026, 9, 29, 23, 10), now)).toBe('Tue 29 Sep, 23:10')
+    expect(readerMailDate(at(2026, 8, 2, 8, 58), now)).toBe('Sun 2 Aug, 08:58')
+    expect(readerMailDate(String(at(2026, 1, 5, 7, 5)), now)).toBe('Mon 5 Jan, 07:05')
   })
 
-  it('says Yesterday with the time, then the weekday within a week', () => {
-    expect(relativeMailDate(at(2026, 9, 29, 23, 10), now)).toBe('Yesterday 23:10')
-    expect(relativeMailDate(at(2026, 9, 29, 7, 5), now)).toBe('Yesterday 07:05')
-    expect(relativeMailDate(at(2026, 9, 24, 16, 0), now)).toBe('Thu 16:00')
-  })
-
-  it('shows day and month this year, and the year before that', () => {
-    expect(relativeMailDate(at(2026, 9, 23, 15, 0), now)).toBe('23 Sep')
-    expect(relativeMailDate(at(2026, 1, 5, 12, 0), now)).toBe('5 Jan')
-    expect(relativeMailDate(at(2025, 12, 31, 12, 0), now)).toBe('31 Dec 2025')
+  it('adds the year when it is not this year', () => {
+    expect(readerMailDate(at(2025, 12, 31, 23, 59), now)).toBe('Wed 31 Dec 2025, 23:59')
+    expect(readerMailDate(at(2025, 5, 11, 14, 3), now)).toBe('Sun 11 May 2025, 14:03')
+    expect(readerMailDate(at(2027, 1, 1, 0, 0), now)).toBe('Fri 1 Jan 2027, 00:00')
   })
 
   it('is empty for missing or invalid stamps', () => {
-    expect(relativeMailDate(undefined, now)).toBe('')
-    expect(relativeMailDate('x', now)).toBe('')
-    expect(relativeMailDate(0, now)).toBe('')
+    expect(readerMailDate(undefined, now)).toBe('')
+    expect(readerMailDate('x', now)).toBe('')
+    expect(readerMailDate(0, now)).toBe('')
   })
 })
 

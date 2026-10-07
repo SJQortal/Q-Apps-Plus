@@ -1,29 +1,17 @@
 /**
- * Dates for the reader: a short relative form for the header and the exact
- * timestamp behind a tap, hover or long-press.
+ * Dates for the reader: the weekday, day, month and time in the header and
+ * on each earlier message (the year too when it isn't this year), and the
+ * full timestamp with seconds behind a tap, hover or long-press.
  */
-import { formatDatePattern, isSameLocalDay, minutesBetween } from "../../utils/time";
+import { formatDatePattern } from "../../utils/time";
 
-const HOUR = 3_600_000;
-const DAY = 24 * HOUR;
-
-export function relativeMailDate(timestamp: number | string | undefined | null, now: number = Date.now()): string {
+/** "Sun 2 Aug, 08:58", or "Thu 11 May 2025, 14:03" in another year (local time). */
+export function readerMailDate(timestamp: number | string | undefined | null, now: number = Date.now()): string {
   const n = Number(timestamp);
   if (!Number.isFinite(n) || n <= 0) return "";
   const then = new Date(n);
-  const ref = new Date(now);
-  const minutes = minutesBetween(n, now);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.trunc((now - n) / HOUR);
-  if (hours < 24 && isSameLocalDay(then, ref)) return `${hours} h ago`;
-  const yesterday = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - 1);
-  if (isSameLocalDay(then, yesterday)) return `Yesterday ${formatDatePattern(then, "HH:mm")}`;
-  // Elapsed days, ignoring a daylight-saving shift in between.
-  const zoneShift = (ref.getTimezoneOffset() - then.getTimezoneOffset()) * 60_000;
-  if (Math.trunc((now - n - zoneShift) / DAY) < 7) return formatDatePattern(then, "ddd HH:mm");
-  if (then.getFullYear() === ref.getFullYear()) return formatDatePattern(then, "D MMM");
-  return formatDatePattern(then, "D MMM YYYY");
+  const sameYear = then.getFullYear() === new Date(now).getFullYear();
+  return formatDatePattern(then, sameYear ? "ddd D MMM, HH:mm" : "ddd D MMM YYYY, HH:mm");
 }
 
 export function exactMailDate(timestamp: number | string | undefined | null): string {

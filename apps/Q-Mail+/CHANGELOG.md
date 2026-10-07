@@ -9,6 +9,9 @@
 - Mail that carries copies of earlier messages (from Q-Mail, or from Q-Mail+ 1.0.0) shows them as before, marked as quoted.
 - Q-Mail opens these replies without their earlier messages.
 
+**Dates**
+- An open message, and each earlier message under it, shows the weekday, date and time, like "Sun 2 Aug, 08:58", with the year when it isn't this year ("Sun 11 May 2025, 14:03"). A tap or hover still shows the full date with seconds.
+
 ## 1.0.0 (Q-Mail+) - October 4, 2026
 
 The first release of **Q-Mail+**, Simon's "+" version of Q-Mail 3.2.1. It reads and writes the same QDN resources as Q-Mail (same services, identifiers and encryption), so your mail shows up in both apps, and mail sent from either one opens in the other.
