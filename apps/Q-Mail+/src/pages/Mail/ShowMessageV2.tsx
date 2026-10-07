@@ -7,6 +7,11 @@
  * Layout follows the pane's own width (ResizeObserver), not a viewport
  * query, so a 700 px Hub pane and a phone both get the compact form.
  *
+ * Earlier messages come from generalData.threadV2 through
+ * useEarlierMessages: embedded copies show at once, reference-only entries
+ * (Q-Mail+ 1.0.1 replies) are fetched from QDN when "Show earlier" opens,
+ * the newest EARLIER_PAGE_SIZE first, with "Show older" for the rest.
+ *
  * Props stay compatible with Mail.tsx (message, setReplyTo, setForwardInfo,
  * alias, onClose, setIsOpen); onReplyAll, onForward, onArchive and
  * onMarkUnread are optional extras. Archive and Mark unread are labelled
@@ -33,7 +38,9 @@ import ReadOnlySlate from "../../components/editor/ReadOnlySlate";
 import { AvatarWrapper } from "./MailTable";
 import { NameText } from "../../components/common/NameText";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
-import { ShowMessageV2Replies } from "./ShowMessageV2Replies";
+import { EarlierMessagePlaceholder, ShowMessageV2Replies } from "./ShowMessageV2Replies";
+import { useEarlierMessages } from "./useEarlierMessages";
+import { EARLIER_PAGE_SIZE } from "./earlierMessages";
 import { updateMessageDetails } from "../../utils/helpers";
 import { AttachmentList, usableAttachments } from "../../components/AttachmentPreview/AttachmentList";
 import { useDownloadAll } from "../../components/AttachmentPreview/useDownloadAll";
@@ -103,12 +110,7 @@ export const ShowMessageV2 = ({
   const attachments = useMemo(() => usableAttachments(message?.attachments), [message?.attachments]);
   const downloadAll = useDownloadAll(attachments);
 
-  const earlier = useMemo(() => {
-    const thread = Array.isArray(message?.generalData?.threadV2) ? message.generalData.threadV2 : [];
-    return thread
-      .filter((entry: any) => entry?.data && !entry.data.markedAsReadLocally && (entry.data.user || entry.data.subject || entry.data.textContentV2))
-      .sort((a: any, b: any) => (Number(a.data?.createdAt) || 0) - (Number(b.data?.createdAt) || 0));
-  }, [message?.generalData?.threadV2]);
+  const earlier = useEarlierMessages(message, showEarlier);
 
   useEffect(() => {
     setShowEarlier(false);
@@ -246,32 +248,42 @@ export const ShowMessageV2 = ({
         </Box>
       </Box>
 
-      {earlier.length > 0 && (
-        <Box component="section" aria-label={message?.user ? `Earlier messages included by ${message.user}` : "Earlier messages included by the sender"} sx={{ width: "100%", mt: 3, px: compact ? 1.5 : 2.5, pb: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+      {earlier.total > 0 && (
+        <Box component="section" aria-label="Earlier messages in this conversation" sx={{ width: "100%", mt: 3, px: compact ? 1.5 : 2.5, pb: 2, display: "flex", flexDirection: "column", gap: 1 }}>
           <Button
             onClick={() => setShowEarlier((v) => !v)}
             aria-expanded={showEarlier}
             startIcon={showEarlier ? <ExpandLessOutlinedIcon /> : <ExpandMoreOutlinedIcon />}
             sx={{ alignSelf: "flex-start", minHeight: 44, textTransform: "none", color: theme.palette.text.secondary }}
           >
-            {showEarlier ? (
-              "Hide earlier"
-            ) : (
-              <>
-                {`Show earlier · ${earlier.length} message${earlier.length === 1 ? "" : "s"} included by `}
-                {message?.user ? <NameText name={message.user} /> : "the sender"}
-              </>
-            )}
+            {showEarlier ? "Hide earlier" : `Show earlier · ${earlier.total} message${earlier.total === 1 ? "" : "s"}`}
           </Button>
+          {showEarlier && earlier.hidden > 0 && (
+            <Button
+              onClick={earlier.showOlder}
+              sx={{ alignSelf: "flex-start", minHeight: 44, textTransform: "none" }}
+            >
+              {`Show ${Math.min(EARLIER_PAGE_SIZE, earlier.hidden)} older · ${earlier.hidden} more`}
+            </Button>
+          )}
           {showEarlier &&
-            earlier.map((entry: any, index: number) => (
-              <ShowMessageV2Replies
-                key={entry.data?.id || entry.reference?.identifier || index}
-                message={entry.data}
-                quotedBy={message?.user}
-                defaultExpanded={index === earlier.length - 1}
-              />
-            ))}
+            earlier.items.map(({ entry, load }, index) => {
+              const newest = index === earlier.items.length - 1;
+              if (!load) {
+                return <ShowMessageV2Replies key={entry.key} message={entry.data} quotedBy={message?.user} defaultExpanded={newest} />;
+              }
+              if (load.status === "loaded") {
+                return <ShowMessageV2Replies key={entry.key} message={load.message} verified defaultExpanded={newest} />;
+              }
+              return (
+                <EarlierMessagePlaceholder
+                  key={entry.key}
+                  name={entry.reference?.name || "Unknown"}
+                  status={load.status}
+                  onRetry={() => earlier.retry(entry.key)}
+                />
+              );
+            })}
         </Box>
       )}
     </Box>

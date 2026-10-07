@@ -5,7 +5,11 @@ import { HubThemeProvider } from '../../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
 import { store } from '../../state/store'
 import { addUser } from '../../state/features/authSlice'
+import { addToHashMapMail, clearMessages } from '../../state/features/mailSlice'
 import { resetAvatarCache } from '../../utils/avatarCache'
+import { resetNameCache } from '../../utils/nameCache'
+import { mockQortalAction, qortalCalls } from '../../test/setup'
+import { resetEarlierMessagesCache } from './earlierMessages'
 import { ShowMessageV2 } from './ShowMessageV2'
 import { escapeHtmlText, relativeMailDate } from './readerTime'
 import { mailDateTime } from './MessageDate'
@@ -178,5 +182,86 @@ describe('ShowMessageV2', () => {
     const img = document.querySelector('.ql-editor-display img') as HTMLImageElement
     expect(img).toBeTruthy()
     expect(getComputedStyle(img).maxWidth).toBe('100%')
+  })
+})
+
+describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
+  const mailJson = (subject: string, createdAt: number) =>
+    btoa(JSON.stringify({ subject, createdAt, version: 1, attachments: [], textContentV2: `<p>${subject} body</p>`, generalData: { thread: [], threadV2: [] } }))
+  const reply = (count: number) => ({
+    id: 'reply',
+    user: 'alice',
+    recipient: 'bob',
+    subject: 'Re: Plan',
+    createdAt: now,
+    textContentV2: '<p>latest</p>',
+    attachments: [],
+    generalData: {
+      thread: [],
+      threadV2: Array.from({ length: count }, (_, i) => ({
+        reference: { identifier: `m${i}`, name: i % 2 ? 'bob' : 'alice', service: 'MAIL_PRIVATE' },
+      })),
+    },
+  })
+
+  beforeEach(() => {
+    resetAvatarCache()
+    resetNameCache()
+    resetEarlierMessagesCache()
+    store.dispatch(clearMessages())
+    store.dispatch(addUser({ name: 'bob', address: 'Qbob' } as any))
+    mockQortalAction('GET_NAME_DATA', (request: any) => ({ owner: `Q${request.name}` }))
+    mockQortalAction('GET_ACCOUNT_DATA', { publicKey: 'PK' })
+    mockQortalAction('GET_QDN_RESOURCE_URL', '')
+    mockQortalAction('FETCH_QDN_RESOURCE', (request: any) => (request.identifier === 'm2' ? 'D' : `ENC:${request.identifier}`))
+    mockQortalAction('DECRYPT_DATA', (request: any) => {
+      const id = String(request.encryptedData).slice(4)
+      if (id === 'm1') throw new Error('Unable to decrypt')
+      return mailJson(`Message ${id}`, 1000 + Number(id.slice(1)))
+    })
+  })
+
+  it('fetches nothing until Show earlier, then the newest five, verified, with the newest open', async () => {
+    wrap(<ShowMessageV2 message={reply(7)} />)
+    expect(screen.getByRole('button', { name: 'Show earlier · 7 messages' })).toBeTruthy()
+    expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 7 messages' }))
+    expect(await screen.findByText('Message m6 body')).toBeTruthy()
+    await screen.findByRole('article', { name: 'alice: Message m4' })
+    expect(qortalCalls('FETCH_QDN_RESOURCE').map(request => request.identifier).sort()).toEqual(['m2', 'm3', 'm4', 'm5', 'm6'])
+    expect(qortalCalls('ENCRYPT_DATA')).toHaveLength(0)
+    // fetched under the publisher's name: no "Quoted by" note
+    expect(screen.queryByText(/^Quoted by /)).toBeNull()
+    expect(screen.getByText('The sender deleted this message.')).toBeTruthy()
+    expect(screen.queryByText('Message m5 body')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 older · 2 more' }))
+    expect(await screen.findByText('This message was not sent to you, so it can\'t be opened.')).toBeTruthy()
+    await screen.findByRole('article', { name: 'alice: Message m0' })
+    expect(screen.queryByRole('button', { name: /older/ })).toBeNull()
+    expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(7)
+  })
+
+  it('uses a message already decrypted this session without asking Qortal', async () => {
+    store.dispatch(addToHashMapMail({ id: 'm0', user: 'alice', isValid: true, subject: 'Opened before', createdAt: 5, textContentV2: '<p>cached</p>', attachments: [] }))
+    wrap(<ShowMessageV2 message={reply(1)} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 1 message' }))
+    expect(await screen.findByText('cached')).toBeTruthy()
+    expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(0)
+  })
+
+  it('offers Retry when the node has not got a message yet', async () => {
+    let available = false
+    mockQortalAction('FETCH_QDN_RESOURCE', () => {
+      if (!available) throw new Error('Unable to decrypt: some other failure')
+      return 'ENC:m0'
+    })
+    wrap(<ShowMessageV2 message={reply(1)} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 1 message' }))
+    expect(await screen.findByText('This message could not be loaded.')).toBeTruthy()
+    available = true
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByText('Message m0 body')).toBeTruthy()
   })
 })
