@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.1 (Q-Mail+) - October 7, 2026
+
+**Replies stay small** (on advice from Qortal DEV)
+- A reply no longer quotes the message you answer. That message shows above the editor for context (Preview, Full or Hide) and is not copied into your reply. The footer now ends a reply, as it ends a new message.
+- A reply no longer carries copies of the earlier messages either, only links to the last 20. In 1.0.0, a conversation's 50th reply weighed about 570 KB; now every reply stays near the size of a new message.
+- In an open message, "Show earlier" loads the earlier messages from QDN five at a time, with "Show older" for more. Messages you have already opened appear at once. A message that was deleted, wasn't sent to you, or isn't on your node yet says so, and the last can be retried.
+- Mail that carries copies of earlier messages (from Q-Mail, or from Q-Mail+ 1.0.0) shows them as before, marked as quoted.
+- Q-Mail opens these replies without their earlier messages.
+
 ## 1.0.0 (Q-Mail+) - October 4, 2026
 
 The first release of **Q-Mail+**, Simon's "+" version of Q-Mail 3.2.1. It reads and writes the same QDN resources as Q-Mail (same services, identifiers and encryption), so your mail shows up in both apps, and mail sent from either one opens in the other.

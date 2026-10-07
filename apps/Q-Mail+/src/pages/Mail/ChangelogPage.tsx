@@ -9,6 +9,16 @@ type ChangelogEntry = {
 
 const changelogEntries: ChangelogEntry[] = [
   {
+    version: "1.0.1 (Q-Mail+)",
+    date: "October 7, 2026",
+    highlights: [
+      "Replies stay small, on advice from Qortal DEV: a reply no longer quotes the message you answer, which shows above the editor for context instead.",
+      "A reply carries links to the last 20 earlier messages instead of copies of them, so a long conversation no longer makes each reply bigger (the 50th reply was about 570 KB in 1.0.0).",
+      "Show earlier loads the earlier messages from QDN, five at a time; messages you already opened appear at once, and deleted or unavailable ones say so.",
+      "Mail that carries copies of earlier messages (from Q-Mail or Q-Mail+ 1.0.0) shows them as before; Q-Mail opens the new replies without their earlier messages.",
+    ],
+  },
+  {
     version: "1.0.0 (Q-Mail+)",
     date: "October 4, 2026",
     highlights: [
