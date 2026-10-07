@@ -63,15 +63,19 @@ describe('NewMessage replies and drafts', () => {
     mockQortalAction('SEARCH_NAMES', [])
   })
 
-  it('opens a reply (no render loop) and quotes the original', async () => {
+  it('opens a reply (no render loop): the original shows above the editor, the body starts empty', async () => {
     const { quill } = renderComposer()
-    await waitFor(() => expect(quill().getText()).toContain('alice wrote:'))
-    expect(quill().getText()).toContain('See you at noon')
+    const original = await screen.findByRole('region', { name: 'Original message' })
+    expect(original.textContent).toContain('See you at noon')
+    expect(screen.getByText(/not quoted in your reply/)).toBeTruthy()
+    await wait(50)
+    expect(quill().getText().trim()).toBe('')
+    expect(quill().root.innerHTML).not.toContain('blockquote')
   })
 
   it('opening Reply saves nothing until the user writes, then saves under the reply key', async () => {
     const { quill } = renderComposer()
-    await waitFor(() => expect(quill().getText()).toContain('alice wrote:'))
+    await screen.findByRole('region', { name: 'Original message' })
     await wait(500)
     expect(storedDrafts()).toEqual({})
 
@@ -88,7 +92,7 @@ describe('NewMessage replies and drafts', () => {
     await waitFor(() => expect(screen.getByText('carl')).toBeTruthy())
     expect(screen.getByText('dana')).toBeTruthy()
     expect(screen.getByText(/Cc names are visible to every recipient/)).toBeTruthy()
-    expect(quill().getText()).toContain('alice wrote:')
+    expect(quill().getText().trim()).toBe('')
     await wait(500)
     expect(storedDrafts()).toEqual({})
 
@@ -112,7 +116,7 @@ describe('NewMessage replies and drafts', () => {
   it('Discard asks once something was written', async () => {
     const onRequestClose = vi.fn()
     const { quill } = renderComposer({ onRequestClose })
-    await waitFor(() => expect(quill().getText()).toContain('alice wrote:'))
+    await screen.findByRole('region', { name: 'Original message' })
     act(() => {
       quill().insertText(0, 'Hi', 'user')
     })

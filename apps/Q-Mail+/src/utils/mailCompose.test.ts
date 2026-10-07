@@ -5,7 +5,6 @@ import {
   buildDirectMailPublishRequest,
   buildForwardHeaderHtml,
   buildForwardHtml,
-  buildReplyQuoteHtml,
   buildReplyThreadV2,
   directMailIdentifier,
   escapeHtml,
@@ -112,7 +111,7 @@ describe('messageBodyLines', () => {
   })
 })
 
-describe('quoteLinesToHtml / buildReplyQuoteHtml', () => {
+describe('quoteLinesToHtml (forwards)', () => {
   it('emits one Quill 1 blockquote per line with escaped text', () => {
     expect(quoteLinesToHtml(['a <b>', '', 'c'])).toBe(
       '<blockquote>a &lt;b&gt;</blockquote><blockquote><br></blockquote><blockquote>c</blockquote>'
@@ -121,13 +120,6 @@ describe('quoteLinesToHtml / buildReplyQuoteHtml', () => {
   it('caps very long quotes', () => {
     const html = quoteLinesToHtml(['1', '2', '3'], 2)
     expect(html).toBe('<blockquote>1</blockquote><blockquote>2</blockquote><blockquote>[…]</blockquote>')
-  })
-  it('starts with an empty paragraph to type in, then the intro and the quote', () => {
-    const html = buildReplyQuoteHtml({ sender: 'Ali <x>', sentAt: '2026-10-01 10:00:00', lines: ['hello'] })
-    expect(html).toBe(
-      '<p><br></p><p>On 2026-10-01 10:00:00, Ali &lt;x&gt; wrote:</p><blockquote>hello</blockquote>'
-    )
-    expect(buildReplyQuoteHtml({ lines: [] })).toContain('- no message body -')
   })
 })
 
@@ -141,16 +133,9 @@ describe('the footer in the published body (textContentV2)', () => {
     expect(toPublishedMailHtml(`<p>Hello</p>${footerHtml}`)).toBe(`<p>Hello</p>${footerHtml}`)
   })
 
-  it('a reply: the footer and a blank line above "X wrote:" and the quote', () => {
-    const html = buildReplyQuoteHtml({
-      sender: 'Ali',
-      sentAt: 'today',
-      lines: ['hello'],
-      footerBlock: footerBlockFor(footer, 'Work', 'reply'),
-    })
-    expect(toPublishedMailHtml(html)).toBe(
-      '<p><br></p><p>Simon at work</p><p><br></p><p>On today, Ali wrote:</p><blockquote>hello</blockquote>'
-    )
+  it('a reply: a line to type on, then the footer, and no quote of the original', () => {
+    const body = buildNewMessageBody(footerBlockFor(footer, 'Work', 'reply'))
+    expect(toPublishedMailHtml(body)).toBe('<p><br></p><p>Simon at work</p>')
   })
 
   it('a forward: the footer and a blank line above the forward header', () => {
@@ -167,9 +152,7 @@ describe('the footer in the published body (textContentV2)', () => {
   it('no footer when it is empty or switched off for replies: the bodies are exactly as before', () => {
     const empty = { default: '', byName: {}, inReplies: true }
     expect(buildNewMessageBody(footerBlockFor(empty, 'simon', 'new'))).toBe('')
-    expect(
-      buildReplyQuoteHtml({ sender: 'Ali', lines: ['x'], footerBlock: footerBlockFor({ ...footer, inReplies: false }, 'simon', 'reply') })
-    ).toBe('<p><br></p><p>Ali wrote:</p><blockquote>x</blockquote>')
+    expect(buildNewMessageBody(footerBlockFor({ ...footer, inReplies: false }, 'simon', 'reply'))).toBe('')
     expect(buildForwardHtml({ from: 'Ali', subject: 'S', to: 'Me' }, ['x'], footerBlockFor(empty, 'simon', 'forward'))).toBe(
       buildForwardHtml({ from: 'Ali', subject: 'S', to: 'Me' }, ['x'])
     )

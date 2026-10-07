@@ -1,6 +1,8 @@
 /**
  * The mail footer (a signature): plain text the composer adds under a new
- * message and, when the switch is on, above the quote of a reply or forward.
+ * message and, when the switch is on, under a reply or above the header of a
+ * forward. A reply carries no quote of the original (1.0.1), so its footer
+ * sits at the end of the body exactly like a new message's.
  *
  * Stored per account in localStorage, `qmail_footer_<address>`:
  *   { default: string, byName: { "<name>": string }, inReplies: boolean }
@@ -186,10 +188,13 @@ export const footerTextToHtml = (text: unknown): string => {
     .join("");
 };
 
+/** Only a forward has something under its footer: the forwarded message. */
+const footerHasContentBelow = (kind: FooterKind): boolean => kind === "forward";
+
 /**
  * What the composer inserts for this name: the footer paragraphs, and for a
- * reply or forward a blank line after them (before "X wrote:" / the forward
- * header). "" when there is no footer, or replies are switched off.
+ * forward a blank line after them (before the forward header). "" when there
+ * is no footer, or replies and forwards are switched off.
  */
 export const footerBlockFor = (
   footer: MailFooterSettings,
@@ -199,10 +204,10 @@ export const footerBlockFor = (
   if (kind !== "new" && !footer.inReplies) return "";
   const html = footerTextToHtml(footerTextForName(footer, name));
   if (!html) return "";
-  return kind === "new" ? html : `${html}<p><br></p>`;
+  return footerHasContentBelow(kind) ? `${html}<p><br></p>` : html;
 };
 
-/** A new message's starting body: a line to type on, then the footer ("" without one). */
+/** A new message's or a reply's starting body: a line to type on, then the footer ("" without one). */
 export const buildNewMessageBody = (footerBlock: string): string =>
   footerBlock ? `<p><br></p>${footerBlock}` : "";
 
@@ -224,14 +229,14 @@ export const swapFooterInBody = (
   if (oldBlock === newBlock) return body;
   if (!oldBlock) {
     if (!untouched) return null;
-    if (kind === "new") {
+    if (!footerHasContentBelow(kind)) {
       if (body && body !== EMPTY_LINE) return null;
       return buildNewMessageBody(newBlock);
     }
     if (!body.startsWith(EMPTY_LINE)) return null;
     return `${EMPTY_LINE}${newBlock}${body.slice(EMPTY_LINE.length)}`;
   }
-  if (kind === "new") {
+  if (!footerHasContentBelow(kind)) {
     if (!body.endsWith(oldBlock)) return null;
     return `${body.slice(0, body.length - oldBlock.length)}${newBlock}`;
   }

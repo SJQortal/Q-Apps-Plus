@@ -66,7 +66,6 @@ import { CreateThreadIcon } from "../../assets/svgs/CreateThreadIcon";
 import {
   buildDirectMailPublishRequest,
   buildForwardHtml,
-  buildReplyQuoteHtml,
   messageBodyLines,
   recipientActivityByName,
   replyAllRecipients,
@@ -443,7 +442,7 @@ export const NewMessage = ({
     request: any;
   } | null>(null);
   const lastLoadedDraftKeyRef = useRef<string | null>(null);
-  // What the composer started with (the reply quote, the forward header, a
+  // What the composer started with (the footer, the forward header, a
   // prefilled subject). Content equal to this is not "something the user
   // wrote", so it is neither saved as a draft nor guarded on Discard.
   const initialValueRef = useRef("");
@@ -1069,9 +1068,11 @@ export const NewMessage = ({
       setSubject(nextSubject);
       bodyBaselineFrozenRef.current = false;
       hydratedDraftRef.current = false;
-      // Start the editor with the quoted original (Quill 1 markup, so the
-      // original app renders it too). A stored draft for this reply, if any,
-      // replaces it when the draft key resolves.
+      // A reply starts like a new message: a line to type on, then the
+      // footer. The original is shown above the editor for context and is
+      // not copied into the body, so a long conversation does not make each
+      // reply bigger than the last (Qortal DEV's advice, 1.0.1). A stored
+      // draft for this reply, if any, replaces it when the draft key resolves.
       const { fromName: footerName, address: footerAddress } =
         footerContextRef.current;
       const footerBlock = footerBlockFor(
@@ -1080,14 +1081,9 @@ export const NewMessage = ({
         "reply"
       );
       footerRef.current = { block: footerBlock, name: footerName, kind: "reply" };
-      const quoteHtml = buildReplyQuoteHtml({
-        sender: replyTo?.user,
-        sentAt: formatFullTimestamp(replyTo?.createdAt),
-        lines: messageBodyLines(replyTo, extractTextFromSlate),
-        footerBlock,
-      });
-      setValue(quoteHtml);
-      initialValueRef.current = quoteHtml;
+      const body = buildNewMessageBody(footerBlock);
+      setValue(body);
+      initialValueRef.current = body;
     }
   }, [replyTo]);
 
@@ -1295,7 +1291,7 @@ export const NewMessage = ({
     }, 0);
   }, [activeDraftKey, user?.address]);
 
-  // Something the user wrote (not the quote, the Re: subject or Reply all's
+  // Something the user wrote (not the footer, the Re: subject or Reply all's
   // own Cc names): only that is saved as a draft or guarded on Discard.
   const composerHasContent = useCallback(
     () =>
@@ -2745,13 +2741,13 @@ export const NewMessage = ({
                   color: "var(--qmail-compose-muted)",
                 }}
               >
-                The original is quoted in your reply below, and the message
-                itself travels with the reply as thread history.
+                Shown here for context only: it is not quoted in your
+                reply.
               </Typography>
               {replyPreviewMode !== "hidden" && (
                 <Box
                   role="region"
-                  aria-label="Quoted original message"
+                  aria-label="Original message"
                   tabIndex={0}
                   sx={[{
                     overflowY: "auto",

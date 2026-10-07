@@ -1,10 +1,12 @@
 /**
- * Pure helpers for the composer: subject prefixes, the quoted reply block,
- * the forward header, the embedded reply history and reply-all recipients.
+ * Pure helpers for the composer: subject prefixes, the forward header and
+ * its quote, the embedded reply history and reply-all recipients. A reply's
+ * body is only what the user writes (and the footer): the original is not
+ * quoted into it (1.0.1), so long conversations don't snowball.
  *
  * Everything that reaches QDN keeps the shape the original Q-Mail reads
  * (docs/apps/Q-Mail+.md → Data contract §3a, §15, §16):
- * - the quote is Quill 1 markup: one `<blockquote>` per line, inline text only;
+ * - a forward's quote is Quill 1 markup: one `<blockquote>` per line, inline text only;
  * - `generalData.threadV2[].data` keeps `user/createdAt/subject/attachments/
  *   textContentV2` (and every other top-level field) but loses its own
  *   `generalData`, so payloads stop growing geometrically (Bugs #12);
@@ -119,16 +121,6 @@ export function messageBodyLines(
   return [];
 }
 
-export interface QuoteOptions {
-  sender?: string;
-  sentAt?: string;
-  lines: string[];
-  /** Keep at most this many quoted lines (default 400). */
-  maxLines?: number;
-  /** The footer block (src/utils/mailFooter.ts), placed above the quote. */
-  footerBlock?: string;
-}
-
 /** Quill 1 blockquotes: one per line, inline text only, `<br>` for empty lines. */
 export function quoteLinesToHtml(lines: string[], maxLines = 400): string {
   const kept = lines.slice(0, maxLines);
@@ -140,18 +132,6 @@ export function quoteLinesToHtml(lines: string[], maxLines = 400): string {
     quoted.push("<blockquote>[…]</blockquote>");
   }
   return quoted.join("");
-}
-
-/**
- * The editor's starting content for a reply: an empty paragraph to type in,
- * the footer (if any), the "On …, X wrote:" line and the original body as a quote.
- */
-export function buildReplyQuoteHtml({ sender, sentAt, lines, maxLines, footerBlock = "" }: QuoteOptions): string {
-  const who = escapeHtml(sender || "Unknown sender");
-  const when = escapeHtml(sentAt || "");
-  const intro = when ? `On ${when}, ${who} wrote:` : `${who} wrote:`;
-  const body = lines.length ? quoteLinesToHtml(lines, maxLines) : "<blockquote>- no message body -</blockquote>";
-  return `<p><br></p>${footerBlock}<p>${intro}</p>${body}`;
 }
 
 export interface ForwardHeader {
