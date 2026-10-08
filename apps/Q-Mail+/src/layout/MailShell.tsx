@@ -26,6 +26,7 @@ import type { LayoutMode } from './useLayoutMode';
 import { APP_HEIGHT_VAR } from './useAppViewport';
 import { LANDSCAPE_FRAME_MEDIA, useLandscapeFrame } from '../utils/hubFrame';
 import { PaneResizer } from './PaneResizer';
+import { OverlayBackClose } from './OverlayBackClose';
 import { PANE_LIMITS, clampListWidth, clampRailWidth, listWidthBounds, usePaneWidths } from './usePaneWidths';
 
 export const RAIL_WIDTH = 240;
@@ -234,6 +235,9 @@ export function MailShell({
             {rail}
           </RailColumn>
         ) : (
+          <>
+          {/* Back closes the mailboxes menu first (phones). */}
+          <OverlayBackClose open={railOpen} onClose={() => onRailOpenChange(false)} enabled={onePane} />
           <Drawer
             open={railOpen}
             onClose={() => onRailOpenChange(false)}
@@ -241,6 +245,7 @@ export function MailShell({
           >
             {rail}
           </Drawer>
+          </>
         )}
         <Main ref={mainRef}>
           {/* The rail's handle opens <main> rather than sitting between the two

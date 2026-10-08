@@ -27,6 +27,7 @@ import { TextViewer } from './TextViewer';
 import { SaveCard } from './SaveCard';
 import { PdfViewer } from './PdfViewer';
 import { useReaderGestures } from './useReaderGestures';
+import { OverlayBackClose } from '../../layout/OverlayBackClose';
 
 export interface AttachmentPreviewProps {
   open: boolean;
@@ -37,7 +38,8 @@ export interface AttachmentPreviewProps {
   onClose: () => void;
 }
 
-function PdfFromBlob({ blob, title }: { blob: Blob; title: string }) {
+/** A PDF from bytes already here (a fetched attachment, or a file being attached). */
+export function PdfFromBlob({ blob, title }: { blob: Blob; title: string }) {
   const [data, setData] = useState<ArrayBuffer | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -198,6 +200,9 @@ export function AttachmentPreviewDialog({ open, attachments, index, onIndexChang
   const subtitle = [count > 1 ? `${current + 1} of ${count}` : '', sizeLabel].filter(Boolean).join(' · ');
 
   return (
+    <>
+    {/* Full screen on a phone: Back closes the preview, not the message under it. */}
+    <OverlayBackClose open={open} onClose={onClose} enabled={compact} />
     <Dialog
       open={open}
       onClose={onClose}
@@ -265,6 +270,7 @@ export function AttachmentPreviewDialog({ open, attachments, index, onIndexChang
         </DialogActions>
       )}
     </Dialog>
+    </>
   );
 }
 
