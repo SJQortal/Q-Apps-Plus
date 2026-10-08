@@ -1570,6 +1570,21 @@ Simon answered the five questions before going to sleep. He asked for exact date
 | `be93c94a` | **The limit:** a reply links its newest **10** earlier messages, 1,251 bytes, so a reply levels off at 1.8 KB. With walking back, 10 reaches the whole conversation, gives two pages of five before any walking, and its overlapping links survive a deleted message. |
 | `e45125fd` | **Reply from the right name:** a reply starts from the own name the mail was sent to (`replyFromOwnName`). Mail to POS+ is answered as POS+, not as the active name (found during the test sends). |
 | `2845bf68` | An unused import in `NewMessage.groups.test.tsx` had made `npm run lint` fail from `afafe461` on. The lint check had been read through `tail -1`, which hides the summary; it now checks the exit code. |
+| `aa355c7c` | **One search for all owned names** (`mailInbox.ts`). Sent: one paged search per kind for up to 50 names at a time (Core takes repeated `name` params) replaces two searches per name. Inbox: one paged search for the address suffix (`_YcyQyH_mail_`) finds every name with by-address mail; names without it keep their alias-form probe, four at a time. Same row and identifier tests as before. A merged search that fails or reaches 10 pages leaves its names to the per-name probes. |
+| `09667e4a` | The screenshot mock filters by every `name` param, as Core does. |
+| `94810299` | Each group's avatar is asked once per session; a running request is shared. Groups 694 and 659 used to be asked twice at the same moment. |
+| `e3ca4aca` | **One search for every group's threads** (`groupsWithThreadActivity`) replaces one per joined group. The network held 157 thread headers in 34 groups. Same identifier test; per-group probes as the fallback. |
+| `1625a319` | The inbox poll backs off to every 2 minutes at most (was 5), so new mail shows within 2 minutes. |
+
+**First load on Simon's account** (88 names, 43 groups; from a reload with the resource-timing buffer at 5,000; the inbox, Sent and Threads lists were compared after each step):
+
+| | Searches | Of which per-name / per-group probes | Inbox names · Sent names · thread groups |
+|---|---|---|---|
+| Start of the night | 413 | 186 inbox + 173 sent + 43 thread | 6 · 3 · 5 |
+| `aa355c7c` | 163 | 1 address + 4 sent (merged) + 92 alias + 43 thread | the same 6 · 3 (+ POS+ from the test sends) · 5 |
+| `e3ca4aca` | **126** | 1 + 4 + 92 + 6 thread | the same |
+
+The inbox showed the same 174 messages for Simon James. The 82 alias-form probes are what is left; that form has no address in the identifier, so it can't be merged.
 
 **Real sends on Simon's account (with his OK):** POS+ → Simon James "Q-Mail+ 1.0.1 test: replies that link" (`LCE3da`, 832 bytes on QDN), Simon James's reply (`oc2cGt`, 896 bytes) and POS+'s reply (`7xe3Ig`, 1,024 bytes). Hub showed **0.01 QORT** per publish, 0.03 QORT in all; nothing else was sent or published.
 - *Published JSON:* each reply body is only its own text. Reply 2's `threadV2` is `[{ reference: LCE3da/POS+ }]`. Reply 3's is `[LCE3da/POS+, oc2cGt/Simon James]`, oldest first, with no `data` (551 bytes of JSON).
