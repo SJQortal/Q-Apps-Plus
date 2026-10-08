@@ -369,11 +369,10 @@ const chunked = <T,>(items: T[], size: number): T[][] => {
 const readPages = async (
   build: (offset: number) => URLSearchParams,
   onRows: (rows: any[]) => void,
-  done: () => boolean,
-  maxPages: number = MERGED_PROBE_MAX_PAGES
+  done: () => boolean
 ): Promise<boolean> => {
   let offset = 0;
-  for (let page = 0; page < maxPages; page += 1) {
+  for (let page = 0; page < MERGED_PROBE_MAX_PAGES; page += 1) {
     const rows = await searchResources(build(offset));
     onRows(rows);
     if (rows.length < MERGED_PAGE_SIZE || done()) return true;
@@ -494,11 +493,13 @@ export const ownedNamesWithAddressMail = async (
 const THREAD_HEADER_GROUP = /^qortal_qmail_thread_group(\d+)_/;
 
 /**
- * Pages the merged thread probe reads. It reads every group's headers, not
- * only the user's, so it stops early: past 600 headers (157 on the whole
- * network on 2026-10-08) the groups it has not found are probed one by one.
+ * Pages the merged thread probe may read (2,000 headers; the whole network
+ * held 157 on 2026-10-08). It reads every group's headers, not only the
+ * user's, so it also stops as soon as probing the groups it has not found,
+ * one search each, can cost no more than the pages it may still read: a
+ * user in few groups on a big network gets the per-group probes at once.
  */
-export const THREAD_PROBE_MAX_PAGES = 3;
+export const THREAD_PROBE_MAX_PAGES = 10;
 
 /**
  * Which of the given groups have at least one thread, from one paged search
@@ -515,8 +516,9 @@ export const groupsWithThreadActivity = async (
   const found = new Set<string>();
   if (!wanted.size) return { found, settled: true };
   try {
-    const settled = await readPages(
-      offset =>
+    let offset = 0;
+    for (let page = 1; page <= THREAD_PROBE_MAX_PAGES; page += 1) {
+      const rows = await searchResources(
         new URLSearchParams({
           mode: "ALL",
           service: THREAD_SERVICE_TYPE,
@@ -526,17 +528,20 @@ export const groupsWithThreadActivity = async (
           includemetadata: "false",
           reverse: "true",
           excludeblocked: "true",
-        }),
-      rows =>
-        rows.forEach(item => {
-          const identifier = typeof item?.identifier === "string" ? item.identifier : "";
-          const groupId = THREAD_HEADER_GROUP.exec(identifier)?.[1];
-          if (groupId && wanted.has(groupId)) found.add(groupId);
-        }),
-      () => found.size === wanted.size,
-      THREAD_PROBE_MAX_PAGES
-    );
-    return { found, settled };
+        })
+      );
+      rows.forEach(item => {
+        const identifier = typeof item?.identifier === "string" ? item.identifier : "";
+        const groupId = THREAD_HEADER_GROUP.exec(identifier)?.[1];
+        if (groupId && wanted.has(groupId)) found.add(groupId);
+      });
+      // Every header read, or every group found: settled.
+      if (rows.length < MERGED_PAGE_SIZE || found.size === wanted.size) return { found, settled: true };
+      // Probing the rest now costs no more than the pages still allowed.
+      if (wanted.size - found.size <= THREAD_PROBE_MAX_PAGES - page) return { found, settled: false };
+      offset += rows.length;
+    }
+    return { found, settled: false };
   } catch {
     return { found, settled: false };
   }

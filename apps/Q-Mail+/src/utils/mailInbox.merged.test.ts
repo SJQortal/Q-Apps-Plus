@@ -199,13 +199,38 @@ describe('groupsWithThreadActivity', () => {
     expect(paramsOf(searches()[0]).get('service')).toBe('MAIL')
   })
 
-  it('stops after THREAD_PROBE_MAX_PAGES of other groups\' headers', async () => {
+  it('pages on while that is cheaper than probing the groups not found, up to THREAD_PROBE_MAX_PAGES', async () => {
+    // Full pages of other groups' headers: a big network.
     const page = Array.from({ length: 200 }, (_, i) => ({ name: 'x', identifier: `qortal_qmail_thread_group5000_t${i}` }))
     mockFetchRoute(/query=qortal_qmail_thread_group&/, page)
-    const { found, settled } = await groupsWithThreadActivity([7])
+    const many = Array.from({ length: 20 }, (_, i) => 100 + i)
+    const result = await groupsWithThreadActivity(many)
+    expect(result.settled).toBe(false)
+    expect(searches()).toHaveLength(THREAD_PROBE_MAX_PAGES)
+  })
+
+  it('stops paging at once for a few groups, whose probes cost less than more pages', async () => {
+    const page = Array.from({ length: 200 }, (_, i) => ({ name: 'x', identifier: `qortal_qmail_thread_group5000_t${i}` }))
+    mockFetchRoute(/query=qortal_qmail_thread_group&/, page)
+    const { found, settled } = await groupsWithThreadActivity([7, 8, 9])
     expect(settled).toBe(false)
     expect(found.size).toBe(0)
-    expect(searches()).toHaveLength(THREAD_PROBE_MAX_PAGES)
+    expect(searches()).toHaveLength(1)
+  })
+
+  it('settles when the headers run out, however many groups are left', async () => {
+    // The network has 200 + 3 headers: page 2 is short (the first matching route answers).
+    mockFetchRoute(/offset=200&query=qortal_qmail_thread_group&/, [
+      { name: 'a', identifier: 'qortal_qmail_thread_group101_x' },
+      { name: 'b', identifier: 'qortal_qmail_thread_group5000_y' },
+      { name: 'c', identifier: 'qortal_qmail_thread_group5000_z' },
+    ])
+    mockFetchRoute(/query=qortal_qmail_thread_group&/, Array.from({ length: 200 }, (_, i) => ({ name: 'x', identifier: `qortal_qmail_thread_group5000_t${i}` })))
+    const many = Array.from({ length: 20 }, (_, i) => 100 + i)
+    const { found, settled } = await groupsWithThreadActivity(many)
+    expect(settled).toBe(true)
+    expect([...found]).toEqual(['101'])
+    expect(searches()).toHaveLength(2)
   })
 
   it('then probes only the groups it has not found, one search each', async () => {
