@@ -4,7 +4,7 @@ Encrypted mail between Qortal names, with threads, attachments and group mail.
 
 **Published:** `1.0.0` on 2026-10-05, as the QDN `APP` resource `Q-Mail+`, built from commit `a128d290`. Checked on 2026-10-05: the live `index.html` references the same 50 content-hashed files as a fresh build of that commit and as `release/Q-Mail+.zip`.
 
-**Version on the branch:** `1.0.0` (published). The next published update is `1.0.1`. The branch [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) holds this app's history, ready to merge into Qortal/q-mail (README).
+**Version on the branch:** `1.0.1` (not published yet; branch `q-mail-plus/1.0.1`). Replies carry nothing from earlier messages, on Qortal DEV's advice, and the reader shows exact dates (Done → 1.0.1). The branch [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) holds this app's history, ready to merge into Qortal/q-mail (README).
 
 ## Baseline at import
 
@@ -1493,7 +1493,85 @@ With Simon's one-off OK, the branch was rewritten and force-pushed once before m
 - All 237 commits kept their files (every tree identical), authors, dates, order and the rest of their messages.
 - Only the hashes changed, and the hashes quoted in this brief are current. The published 1.0.0 is `a128d290` (was `b4700647`).
 
+### 1.0.1 (2026-10-07/08): replies that don't grow, exact dates
+
+Community testing of the published 1.0.0 (docs/RELEASE.md stage 3). Two requests, both in **Community feedback** below: Qortal DEV's warning about replies that keep growing, and Simon's request for exact dates in the reader.
+
+**Replies (data contract §18).** 1.0.0 quoted the original into every reply's body *and* embedded the earlier messages in `generalData.threadV2`, so a reply carried the conversation twice and grew quadratically. Simon chose "references only" (asked in the session, options: cap at 10 copies, keep full history, references only).
+
+| Commit | Change |
+|---|---|
+| `78bab6c2` | A reply starts like a new message (a line to type on, then the footer). The original stays above the editor as context (Preview / Full / Hide), as in Q-Mail 3.1. The reply footer now ends the body; forwards keep it above the forwarded message. |
+| `441e5412` | The reader loads earlier messages by reference (`earlierMessages.ts`, `useEarlierMessages.ts`). Nothing is fetched until "Show earlier", then the newest 5, with "Show older" for 5 more. Copies already decrypted this session come from the cache. Everything else uses the original call shapes, at most 2 fetches at a time; repeat fetches are merged and outcomes kept for the session. There is no `ENCRYPT_DATA`, and nothing is written to the inbox cache or the published state. A fetched message shows its publisher's avatar and no "Quoted by". Deleted, not-sent-to-you, not-on-node and failed messages say so, the last two with Retry. Embedded copies show as before. |
+| `a175d066` | `threadV2` holds `{ reference }` entries without `data`: the newest 20, oldest first. A reply's history stays under about 2.5 KB. |
+| `713a171a` | A reference to a sent message its sender deleted (Q-Mail's encrypted tombstone, §11) shows as deleted, not as a card titled `__qmail_deleted__`. Found in the Hub check. |
+| `604ca799` | Importing the tombstone title from `sentIndex.ts` had pulled the Sent view into the main chunk (395 → 507 kB); found in the screenshot build. |
+| `ff94da8a` | Screenshot fixture and the `earlier-refs` screen: a 1.0.1 reply with six references covering every state. |
+| `e49b088f`, `4c4f7f65` | Review fixes (below). |
+
+**Dates.** `b8d9f94c`: the reader's header and every earlier message show the weekday, date and time, with the year when it isn't this year ("Sun 2 Aug, 08:58", "Mon 5 Aug 2024, 15:05"). A tap, hover or long-press shows the full date with seconds. `591dc742`: the reply composer's "Replying to" box uses the same form instead of "2024-08-05 15:05:09". List rows keep their compact dates.
+
+**Version.** `ec12cc47`: package.json and the lockfile's root (so Settings → About), CHANGELOG.md, the in-app changelog, and the README's data notes.
+
+**Sizes,** measured with the app's own builders (400-character replies, unencrypted JSON; table in §18): reply #20 went from 95.3 KB (1.0.0) to 2.9 KB, and reply #50 from 569 KB to 3.1 KB. For comparison, the original app's nesting reaches 5 MB at reply #14. Real data: Qortal Seth's fourth message in a thread to Simon is 27,952 bytes on QDN for a 915-character body. 26.3 KB of its 27.5 KB of JSON is embedded history, nested 0, 1 and 2 deep.
+
+**Hub check** (Simon's Hub, GO 3.0.3 build, debug port 9222, signed in as Simon James; Dev Mode → Server 127.0.0.1:5173; read-only):
+- *How it was driven:* `scripts/hub-cdp.mjs` (eval, shot, size, requests). "Load published QDN state?" was answered "Not now" each time. The app's welcome notice and first-run tour were dismissed (local flags only). The frame's localStorage was saved first and restored at the end: 0 differing keys.
+- *Loader through Hub's real FETCH/DECRYPT,* run in the frame on real references:
+  - 5 inbox messages loaded in 17 ms – 1.8 s.
+  - Qortal Seth's three references (two sent by Simon James) decrypted to the same subject and body as the copies embedded in his reply.
+  - Mail between two other names gives "not sent to you" after 1.2 s.
+  - A missing identifier gives "Not available on your node right now" after 6 s.
+- *The reader with a 1.0.1-style reply:* Hermes Trismegistus's real reply "Regarding LunQ", with its `threadV2` turned into references in the frame's memory (what a 1.0.1 reply carries; nothing was sent):
+  - No calls before the tap. "Show earlier" then made 2 `FETCH_QDN_RESOURCE` + 2 `DECRYPT_DATA`, two at a time, with no `ENCRYPT_DATA` and no name lookups.
+  - Both messages showed real avatars and no "Quoted by"; reopening made 0 calls. Same result at 700 after a reload, and at 1440.
+  - With references swapped to the error cases at 390×844 touch, "not sent to you" and "Not available…" (Retry 71×44) show beside a loaded message.
+  - The unmodified reply shows its embedded copies as "Quoted by Hermes Trismegistus", with 0 calls.
+- *Composer:*
+  - Reply on that message opens with an empty editor (`<p><br></p>`), the original in the context box and "Re: Regarding  LunQ".
+  - A dry run of the publish payload in the frame (`buildDirectMailObject`, nothing published) gave 3 references and 648 bytes of JSON. The same reply in the original app's shape is 6,322 bytes.
+  - Discard closed without asking and left no draft.
+- *Sizes:* 1440, 700, 390×844 touch, 360×740 touch and 844×390 touch: no sideways overflow, targets 44 px or more, dates whole beside truncated names.
+- *Dates with real mail:* "Sun 2 Aug, 08:58" (header), "Sat 1 Aug, 15:44" and "15:53" (earlier messages), and piranhapariah's "Mon 5 Aug 2024, 15:05" (opened through the mailbox search).
+- *Console:* only the 404s of the deliberate missing-identifier probe and Vite's HMR socket through the dev proxy.
+- *Not checked:* Hub's light/dark switch (the change only uses theme colours; the screenshot check ran both modes), GO on a phone, and a real 1.0.1 reply sent and read in both apps (needs a send: Follow-ups 1).
+
+**Screenshot check** (`scripts/screens.mjs`, 4 themes × 5 sizes): `earlier-refs` (new), `reply`, `reply-all`, `inbox-open` and `impostor-open` in dark and light gave 200 captures. `earlier-refs` ran again after the wording fix (40 captures). Every capture had 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 small targets, 0 small text and 0 axe violations.
+
+**Review** of the whole 1.0.1 diff by dimension (correctness, data compatibility, efficiency, mobile/UX, accessibility, security). Each finding was checked against the code before fixing:
+- `e49b088f` (efficiency): the reader subscribed to the whole decrypted-message cache and re-rendered whenever any message decrypted, for example during a body search. It now selects only the copies on screen. A Profiler test fails with the old subscription.
+- `4c4f7f65` (UX): "Show 1 older · 1 more" said it twice; it now reads "Show 2 older messages" or "Show 5 older messages (12 left)".
+- Accepted: a crafted reference can make the viewer's node fetch another name's `MAIL_PRIVATE` resource after a tap, the same exposure as opening any mail. Earlier messages are fetched without status polling, so a slow first download ends in "Not available…" with Retry.
+- Checked and fine:
+  - the original app with reference-only entries (§18);
+  - reference shape and order, with self-references, read markers and repeats dropped;
+  - old 1.0.0 reply drafts keep their quote, since they are the user's text;
+  - fetched bodies go through the same sanitising `DisplayHtml`;
+  - group-thread "reply to post" prefills at most 400 characters and 6 lines, so it can't snowball.
+
+| | 1.0.0 | 1.0.1 |
+|---|---|---|
+| Main chunk | 395.0 kB (gzip 126.9 kB) | 394.7 kB (gzip 126.7 kB) |
+| Test files · tests | 90 · 716 | 91 · 734 |
+| Lint · kit | clean · in sync | clean · in sync |
+| Reply #20 / #50 (400-char replies) | 95.3 KB / 569 KB | 2.9 KB / 3.1 KB |
+
+## Community feedback
+
+- **2026-10-07, Qortal DEV (via Simon):** messages with the reply built in keep growing and eventually get very large in long threads, which is why it was removed from Q-Mail. Suggestion: keep showing the previous message, but don't include it in the reply. **Done in 1.0.1:** no quote in the body, and `threadV2` holds references only (§18, Done → 1.0.1). Simon chose references only over capping or keeping the copies. Worth telling the DEV: the original app's own `threadV2` still embeds `data: replyTo` *with* its history, so it doubles with every reply (5 MB at reply #14 with 400-character replies). Q-Mail+ has stripped that since 1.0.0 and now sends references.
+- **2026-10-07, Simon:** the open message's date should be exact: weekday, date and time, plus the year when it isn't this year. **Done in 1.0.1** (`b8d9f94c`, `591dc742`).
+
 ## Follow-ups
+
+**1.0.1, for Simon**
+
+1. **One real reply** (needs your OK; nothing was sent this session): reply from Q-Mail+ 1.0.1 inside an existing conversation, for example between two of your names or to Tester GO. Then open it in Q-Mail+ ("Show earlier" should load the earlier messages) and in the original Q-Mail (it should show the reply alone, with no error).
+2. **Tell Qortal DEV?** The original app's `threadV2` embeds `data: replyTo` with its nested history, so it doubles with each reply (Community feedback). The fix upstream is a one-line strip of `generalData`, or references as here.
+3. **The 20-reference cap:** keep it? A reply references the newest 20 earlier messages (about 2.5 KB). Older ones stay in the mailbox but aren't reachable from that reply.
+4. **Group threads:** "reply to post" still prefills a short excerpt of the post (at most 400 characters and 6 lines, editable, so it can't snowball). Keep it, or drop it to match mail?
+5. **List dates:** rows keep compact dates ("Mon", "26 Sep", "11:40 PM"). Want the reader's exact form there too, or in the row's tooltip?
+
+Next-pass ideas from 1.0.1: when the 20 references run out, walk further back through the oldest loaded message's own references; poll the resource status before fetching an earlier message, as the opener does, for big or slow ones.
 
 **For Simon on his own account.** The round 5 Hub checks already ran on your account (read-only, nothing published or sent): the 86-name switcher and its search, the avatars after a switch, pane widths, switching between messages, the full-width list, Mugician's join link (declined), the footer at 1440 and 390 (all cleared again), mail 1's PDF in Hub's reader and in the in-app viewer, and the Q-Share+ comparison. Left for you, in Q-Mail+ and the original Q-Mail:
 1. **The footer for real:** set yours, send one mail, and check it in the original app.
