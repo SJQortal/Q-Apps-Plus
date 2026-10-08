@@ -140,36 +140,24 @@ describe('fetchGroupAvatarUrl', () => {
     expect(searches()).toHaveLength(1)
   })
 
-  it('tries a failed lookup again after a wait, and keeps the answer', async () => {
-    mockFetchRoute(/service=THUMBNAIL/, [{ name: 'alice', identifier: 'qortal_group_avatar_694' }])
-    let calls = 0
-    mockQortalAction('GET_QDN_RESOURCE_URL', () => {
-      calls += 1
-      if (calls === 1) throw new Error('Request timed out')
-      return '/arbitrary/THUMBNAIL/alice/qortal_group_avatar_694'
-    })
-    expect(await fetchGroupAvatarUrl(694, [0])).toBe('/arbitrary/THUMBNAIL/alice/qortal_group_avatar_694')
-    expect(await fetchGroupAvatarUrl(694, [0])).toBe('/arbitrary/THUMBNAIL/alice/qortal_group_avatar_694')
-    expect(qortalCalls('GET_QDN_RESOURCE_URL')).toHaveLength(2)
-  })
-
-  it('answers null, not "no avatar", when every try failed, and asks afresh next time', async () => {
+  it('answers null, not "no avatar", when the lookup fails, and asks afresh next time', async () => {
     mockFetchRoute(/service=THUMBNAIL/, [{ name: 'alice', identifier: 'qortal_group_avatar_694' }])
     let up = false
     mockQortalAction('GET_QDN_RESOURCE_URL', () => {
       if (!up) throw new Error('Request timed out')
       return '/arbitrary/THUMBNAIL/alice/qortal_group_avatar_694'
     })
-    expect(await fetchGroupAvatarUrl(694, [0, 0])).toBeNull()
-    expect(qortalCalls('GET_QDN_RESOURCE_URL')).toHaveLength(3)
+    expect(await fetchGroupAvatarUrl(694)).toBeNull()
     up = true
-    expect(await fetchGroupAvatarUrl(694, [0, 0])).toBe('/arbitrary/THUMBNAIL/alice/qortal_group_avatar_694')
+    expect(await fetchGroupAvatarUrl(694)).toBe('/arbitrary/THUMBNAIL/alice/qortal_group_avatar_694')
+    expect(await fetchGroupAvatarUrl(694)).toBe('/arbitrary/THUMBNAIL/alice/qortal_group_avatar_694')
+    expect(qortalCalls('GET_QDN_RESOURCE_URL')).toHaveLength(2)
   })
 
   it('treats a failed search the same way', async () => {
     mockFetchRoute(/service=THUMBNAIL/, 'busy', { status: 503 })
-    expect(await fetchGroupAvatarUrl(7, [])).toBeNull()
-    expect(await fetchGroupAvatarUrl(7, [])).toBeNull()
+    expect(await fetchGroupAvatarUrl(7)).toBeNull()
+    expect(await fetchGroupAvatarUrl(7)).toBeNull()
     expect(searches()).toHaveLength(2)
   })
 

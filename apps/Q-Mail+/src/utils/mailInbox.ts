@@ -127,26 +127,20 @@ export const resetGroupAvatarCache = (): void => {
   groupAvatarUrls.clear();
 };
 
-/** After a failed group avatar lookup, ask again after these waits, then give up for this call. */
-export const GROUP_AVATAR_RETRY_DELAYS_MS = [5_000, 20_000];
-
 /**
  * A group's avatar URL ("" when it has none), asked once per group per
  * session: calls for the same group while one is running share it. The
  * Threads loop re-ran while a request was out and asked twice (groups 694
- * and 659 on Simon's account). A failed lookup is asked again after each of
- * `retryDelaysMs`; if it still fails the answer is null (unknown, not "no
- * avatar") and nothing is kept, so a later call asks afresh.
+ * and 659 on Simon's account). A lookup that fails answers null (unknown,
+ * not "no avatar") and is not kept, so the next call asks afresh; when to
+ * ask again is up to the caller (useGroupAvatarUrls).
  */
-export const fetchGroupAvatarUrl = (
-  groupId: string | number,
-  retryDelaysMs: number[] = GROUP_AVATAR_RETRY_DELAYS_MS
-): Promise<string | null> => {
+export const fetchGroupAvatarUrl = (groupId: string | number): Promise<string | null> => {
   const normalizedGroupId = normalizeId(groupId);
   if (!normalizedGroupId) return Promise.resolve("");
   const known = groupAvatarUrls.get(normalizedGroupId);
   if (known) return known;
-  const request = askGroupAvatarUrlWithRetries(normalizedGroupId, retryDelaysMs);
+  const request = askGroupAvatarUrl(normalizedGroupId).catch(() => null);
   groupAvatarUrls.set(normalizedGroupId, request);
   // Attached first, so it runs before any caller sees the null.
   void request.then(url => {
@@ -155,18 +149,7 @@ export const fetchGroupAvatarUrl = (
   return request;
 };
 
-const askGroupAvatarUrlWithRetries = async (normalizedGroupId: string, retryDelaysMs: number[]): Promise<string | null> => {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await askGroupAvatarUrl(normalizedGroupId);
-    } catch {
-      if (attempt >= retryDelaysMs.length) return null;
-      await new Promise(resolve => setTimeout(resolve, retryDelaysMs[attempt]));
-    }
-  }
-};
-
-/** Throws when Qortal could not answer, so the caller does not remember it. */
+/** Throws when Qortal could not answer (fetchGroupAvatarUrl makes that null). */
 const askGroupAvatarUrl = async (normalizedGroupId: string): Promise<string> => {
   const publisherName = await groupAvatarPublisher(normalizedGroupId);
   if (!publisherName) return "";
