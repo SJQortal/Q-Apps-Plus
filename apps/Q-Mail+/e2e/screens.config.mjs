@@ -25,7 +25,7 @@
  * threadV2 references and no copies (earlier-refs): one not sent to us (a
  * locked id), our own deleted sent message (the tombstone), one the node
  * can't fetch, and three that load, so "Show earlier" shows every state and
- * "Show 1 older".
+ * "Show 1 older message".
  *
  * Encryption is mocked end to end: FETCH_QDN_RESOURCE answers a token that
  * names the resource, DECRYPT_DATA turns the token into the base64 body the
@@ -714,7 +714,7 @@ export default {
         await page.getByRole('button', { name: /^Show earlier/ }).first().click({ timeout: 4000 });
         await page.getByText('This message could not be loaded.').first().waitFor({ timeout: 8000 }).catch(() => {});
         await page.getByText('Sent message 2 to').first().waitFor({ timeout: 8000 }).catch(() => {});
-        await page.getByRole('button', { name: /^Show 1 older/ }).first().scrollIntoViewIfNeeded().catch(() => {});
+        await page.getByRole('button', { name: /^Show 1 older message/ }).first().scrollIntoViewIfNeeded().catch(() => {});
         await page.mouse.move(1, 1);
         await page.waitForTimeout(400);
       },

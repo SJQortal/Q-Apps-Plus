@@ -46,6 +46,13 @@ import { AttachmentList, usableAttachments } from "../../components/AttachmentPr
 import { useDownloadAll } from "../../components/AttachmentPreview/useDownloadAll";
 import { MessageDate } from "./MessageDate";
 
+/** "Show 2 older messages", or "Show 5 older messages (7 left)" when more are hidden than a page. */
+export function olderLabel(hidden: number): string {
+  const next = Math.min(EARLIER_PAGE_SIZE, hidden);
+  const label = `Show ${next} older message${next === 1 ? "" : "s"}`;
+  return hidden > next ? `${label} (${hidden} left)` : label;
+}
+
 /** Below this pane width the reader stacks (subject under the header, wrapped actions). */
 export const READER_COMPACT_WIDTH = 600;
 
@@ -263,7 +270,7 @@ export const ShowMessageV2 = ({
               onClick={earlier.showOlder}
               sx={{ alignSelf: "flex-start", minHeight: 44, textTransform: "none" }}
             >
-              {`Show ${Math.min(EARLIER_PAGE_SIZE, earlier.hidden)} older · ${earlier.hidden} more`}
+              {olderLabel(earlier.hidden)}
             </Button>
           )}
           {showEarlier &&

@@ -11,7 +11,7 @@ import { resetAvatarCache } from '../../utils/avatarCache'
 import { resetNameCache } from '../../utils/nameCache'
 import { mockQortalAction, qortalCalls } from '../../test/setup'
 import { resetEarlierMessagesCache } from './earlierMessages'
-import { ShowMessageV2 } from './ShowMessageV2'
+import { ShowMessageV2, olderLabel } from './ShowMessageV2'
 import { escapeHtmlText, exactMailDate, readerMailDate } from './readerTime'
 import { mailDateTime } from './MessageDate'
 
@@ -238,11 +238,17 @@ describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
     expect(screen.getByText('The sender deleted this message.')).toBeTruthy()
     expect(screen.queryByText('Message m5 body')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show 2 older · 2 more' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 older messages' }))
     expect(await screen.findByText('This message was not sent to you, so it can\'t be opened.')).toBeTruthy()
     await screen.findByRole('article', { name: 'alice: Message m0' })
     expect(screen.queryByRole('button', { name: /older/ })).toBeNull()
     expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(7)
+  })
+
+  it('words the Show older button by what is left', () => {
+    expect(olderLabel(1)).toBe('Show 1 older message')
+    expect(olderLabel(5)).toBe('Show 5 older messages')
+    expect(olderLabel(12)).toBe('Show 5 older messages (12 left)')
   })
 
   it('does not re-render the reader when other messages are decrypted', async () => {
