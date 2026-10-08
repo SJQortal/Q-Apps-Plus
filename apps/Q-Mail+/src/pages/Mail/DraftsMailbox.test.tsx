@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { Provider } from 'react-redux'
 import { HubThemeProvider } from '../../hub-theme'
+import { store } from '../../state/store'
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
 import { DraftsMailbox, describeDraftTarget } from './DraftsMailbox'
 import { IMPOSTOR, isStruck, nameElement } from '../../test/hiddenNames'
@@ -25,9 +27,11 @@ const draft = (overrides: Partial<StoredComposeDraft>): StoredComposeDraft => ({
 
 function renderDrafts(onOpenDraft = vi.fn(), hideThreadDrafts = false) {
   render(
-    <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
-      <DraftsMailbox address={address} onOpenDraft={onOpenDraft} hideThreadDrafts={hideThreadDrafts} />
-    </HubThemeProvider>
+    <Provider store={store}>
+      <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+        <DraftsMailbox address={address} onOpenDraft={onOpenDraft} hideThreadDrafts={hideThreadDrafts} />
+      </HubThemeProvider>
+    </Provider>
   )
   return onOpenDraft
 }

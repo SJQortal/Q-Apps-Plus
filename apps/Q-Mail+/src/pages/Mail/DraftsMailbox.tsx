@@ -6,7 +6,7 @@
  * composer saves.
  */
 import { useCallback, useEffect, useState } from "react";
-import { Box, ButtonBase, IconButton, Typography } from "@mui/material";
+import { Avatar, Box, ButtonBase, IconButton, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import DraftsOutlinedIcon from "@mui/icons-material/DraftsOutlined";
@@ -16,6 +16,8 @@ import useConfirmationModal from "../../hooks/useConfirmModal";
 import { EmptyState } from "../../layout/states";
 import { MailListDate } from "./MailListDate";
 import { NameText, spokenName } from "../../components/common/NameText";
+import { AvatarWrapper } from "./MailTable";
+import { primarySoft } from "../../hub-theme";
 import {
   deleteComposeDraft,
   draftSnippet,
@@ -172,52 +174,74 @@ export function DraftsMailbox({ address, onOpenDraft, hideThreadDrafts = false }
                 onClick={() => onOpenDraft(key, draft)}
                 aria-label={`Open draft: ${subject}, ${describeDraftTarget(draft, spokenName)}`}
               >
-                {/* Spans, not divs: this is inside a button. The day sits over the time beside the first two lines. */}
-                <Box component="span" sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-                  <Box component="span" sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
-                    <Line>
-                      {draft.kind === "thread" && (
-                        <ForumOutlinedIcon sx={{ fontSize: 18, color: "text.secondary" }} />
-                      )}
-                      <Ellipsis>
-                        <Typography component="span" sx={{ fontWeight: 650, fontSize: "0.95rem" }}>
-                          <DraftTarget draft={draft} />
-                        </Typography>
-                      </Ellipsis>
-                    </Line>
-                    <Line>
-                      <Ellipsis>
-                        <Typography component="span" sx={{ fontSize: "0.95rem" }}>
-                          {subject}
-                        </Typography>
-                      </Ellipsis>
-                      {attachmentCount > 0 && (
-                        <Typography
-                          component="span"
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ display: "inline-flex", alignItems: "center", gap: 0.25, flexShrink: 0, fontSize: "0.875rem" }}
-                        >
-                          <AttachFileIcon sx={{ fontSize: 14 }} />
-                          {attachmentCount}
-                        </Typography>
-                      )}
-                    </Line>
+                {/* Spans, not divs: this is inside a button. Laid out like a message row:
+                    the recipient's avatar, who it's to with the date, subject and text, from. */}
+                <Box component="span" sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, minWidth: 0 }}>
+                  <Box component="span" aria-hidden sx={{ flexShrink: 0, display: "flex", pt: 0.25 }}>
+                    {draft.kind === "thread" ? (
+                      <Avatar sx={theme => ({ width: 40, height: 40, bgcolor: primarySoft(theme), color: theme.palette.primary.main })}>
+                        <ForumOutlinedIcon fontSize="small" />
+                      </Avatar>
+                    ) : (
+                      <AvatarWrapper height="40px" user={draft.toName} fallback={draft.toName || "?"} />
+                    )}
                   </Box>
-                  <MailListDate timestamp={draft.updatedAt} detailPrefix="Saved " stacked />
+                  <Box component="span" sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
+                    <Box component="span" sx={{ display: "flex", alignItems: "flex-start", gap: 1, minWidth: 0 }}>
+                      <Box component="span" sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
+                        <Line>
+                          <Ellipsis>
+                            <Typography component="span" sx={{ fontWeight: 650, fontSize: "1rem" }}>
+                              <DraftTarget draft={draft} />
+                            </Typography>
+                          </Ellipsis>
+                        </Line>
+                        <Line>
+                          <Ellipsis>
+                            <Typography component="span" sx={{ fontSize: "0.9375rem", fontWeight: 500 }}>
+                              {subject}
+                            </Typography>
+                            {snippet && (
+                              <Typography component="span" sx={{ fontSize: "0.9375rem", color: "text.secondary" }}>
+                                {" — "}
+                                {snippet}
+                              </Typography>
+                            )}
+                          </Ellipsis>
+                        </Line>
+                      </Box>
+                      <MailListDate timestamp={draft.updatedAt} detailPrefix="Saved " stacked />
+                    </Box>
+                    {(draft.fromName || attachmentCount > 0) && (
+                      <Line>
+                        {draft.fromName && (
+                          <Typography
+                            component="span"
+                            color="text.secondary"
+                            sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, minWidth: 0, fontSize: "0.875rem" }}
+                          >
+                            <Box component="span" aria-hidden sx={{ display: "inline-flex", flexShrink: 0 }}>
+                              <AvatarWrapper height="18px" user={draft.fromName} fallback={draft.fromName} />
+                            </Box>
+                            <Ellipsis>
+                              From <NameText name={draft.fromName} />
+                            </Ellipsis>
+                          </Typography>
+                        )}
+                        {attachmentCount > 0 && (
+                          <Typography
+                            component="span"
+                            color="text.secondary"
+                            sx={{ display: "inline-flex", alignItems: "center", gap: 0.25, flexShrink: 0, fontSize: "0.875rem" }}
+                          >
+                            <AttachFileIcon sx={{ fontSize: 15 }} />
+                            {attachmentCount} {attachmentCount === 1 ? "file" : "files"}
+                          </Typography>
+                        )}
+                      </Line>
+                    )}
+                  </Box>
                 </Box>
-                {snippet && (
-                  <Ellipsis>
-                    <Typography component="span" variant="body2" color="text.secondary">
-                      {snippet}
-                    </Typography>
-                  </Ellipsis>
-                )}
-                {draft.fromName && (
-                  <Typography component="span" variant="caption" color="text.secondary" sx={{ fontSize: "0.875rem" }}>
-                    From <NameText name={draft.fromName} />
-                  </Typography>
-                )}
               </Open>
               <IconButton
                 aria-label={`Delete draft: ${subject}`}
