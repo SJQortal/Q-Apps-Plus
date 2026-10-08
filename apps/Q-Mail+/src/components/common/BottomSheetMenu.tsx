@@ -12,6 +12,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import {
   Box,
   List,
+  ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
@@ -36,6 +37,8 @@ export interface BottomSheetMenuProps {
   onClose: () => void;
   /** Anchor for the desktop Menu; ignored for the phone sheet. */
   anchorEl: HTMLElement | null;
+  /** Instead of `anchorEl`: the point the desktop Menu opens at (a right click). */
+  anchorPosition?: { top: number; left: number } | null;
   items: SheetMenuItem[];
   /** Shown above the items on phones. */
   title?: ReactNode;
@@ -44,7 +47,7 @@ export interface BottomSheetMenuProps {
 
 const noop = () => {};
 
-export function BottomSheetMenu({ open, onClose, anchorEl, items, title, ariaLabel }: BottomSheetMenuProps) {
+export function BottomSheetMenu({ open, onClose, anchorEl, anchorPosition, items, title, ariaLabel }: BottomSheetMenuProps) {
   const isPhone = useLayoutMode() === 'phone';
   const [everOpened, setEverOpened] = useState(open);
   useEffect(() => {
@@ -56,10 +59,14 @@ export function BottomSheetMenu({ open, onClose, anchorEl, items, title, ariaLab
   if (!isPhone) {
     return (
       <Menu
-        anchorEl={anchorEl}
-        open={open && Boolean(anchorEl)}
+        {...(anchorPosition
+          ? { anchorReference: 'anchorPosition' as const, anchorPosition }
+          : { anchorEl })}
+        open={open && Boolean(anchorPosition || anchorEl)}
         onClose={onClose}
-        slotProps={{ list: { 'aria-label': ariaLabel } as any }}
+        // A named dialog around the menu, as Q-Share+'s account menu: the
+        // popup's content then sits in a region (axe "region").
+        slotProps={{ paper: { role: 'dialog', 'aria-label': ariaLabel } as any, list: { 'aria-label': ariaLabel } as any }}
       >
         {items.map((item) => (
           <MenuItem
@@ -89,6 +96,8 @@ export function BottomSheetMenu({ open, onClose, anchorEl, items, title, ariaLab
       disableSwipeToOpen
       slotProps={{
         paper: {
+          role: 'dialog',
+          'aria-label': ariaLabel,
           sx: (theme) => ({
             borderTopLeftRadius: 16,
             borderTopRightRadius: 16,
@@ -124,22 +133,23 @@ export function BottomSheetMenu({ open, onClose, anchorEl, items, title, ariaLab
       )}
       <List aria-label={ariaLabel} sx={{ pb: 1 }}>
         {items.map((item) => (
-          <ListItemButton
-            key={item.id}
-            selected={item.selected}
-            disabled={item.disabled}
-            onClick={() => {
-              onClose();
-              item.onSelect();
-            }}
-            sx={{ minHeight: 48, px: 2.5 }}
-          >
-            {item.icon && <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>}
-            <ListItemText
-              primary={item.label}
-              slotProps={{ primary: { sx: { fontSize: '1rem', fontWeight: item.selected ? 600 : 400 } } }}
-            />
-          </ListItemButton>
+          <ListItem key={item.id} disablePadding>
+            <ListItemButton
+              selected={item.selected}
+              disabled={item.disabled}
+              onClick={() => {
+                onClose();
+                item.onSelect();
+              }}
+              sx={{ minHeight: 48, px: 2.5 }}
+            >
+              {item.icon && <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>}
+              <ListItemText
+                primary={item.label}
+                slotProps={{ primary: { sx: { fontSize: '1rem', fontWeight: item.selected ? 600 : 400 } } }}
+              />
+            </ListItemButton>
+          </ListItem>
         ))}
       </List>
     </SwipeableDrawer>
