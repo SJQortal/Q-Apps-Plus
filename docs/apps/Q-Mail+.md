@@ -4,7 +4,7 @@ Encrypted mail between Qortal names, with threads, attachments and group mail.
 
 **Published:** `1.0.0` on 2026-10-05, as the QDN `APP` resource `Q-Mail+`, built from commit `a128d290`. Checked on 2026-10-05: the live `index.html` references the same 50 content-hashed files as a fresh build of that commit and as `release/Q-Mail+.zip`.
 
-**Version on the branch:** `1.0.1` (not published yet; branch `q-mail-plus/1.0.1`). Replies carry nothing from earlier messages, on Qortal DEV's advice, and the reader shows exact dates (Done → 1.0.1). The branch [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) holds this app's history, ready to merge into Qortal/q-mail (README).
+**Version on the branch:** `1.0.1` (not published yet; branch `q-mail-plus/1.0.1`). Replies carry nothing from earlier messages, on Qortal DEV's advice; the reader and every list show exact dates; group threads can be hidden; the first load makes 126 searches instead of 413 on Simon's account; three independent reviews' findings (9, then 7 and 3 in the fixes) are fixed (Done → 1.0.1, Overnight, Review of 1.0.1). The branch [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) holds this app's history, ready to merge into Qortal/q-mail (README).
 
 ## Baseline at import
 
@@ -1614,6 +1614,46 @@ The setting was switched back on afterwards; the rail followed live, without a r
 - Simon's published `archived` map (177 messages archived on 2026-10-05 at 14:56) was applied in the dev frame at some point that evening, most likely by "Load state" on one of those prompts. It came from his own state document, last published on 2026-10-05 at 20:09; nothing was published tonight, and no Hub request was left pending.
 - Also measured: the inbox's new-mail poll backs off to 5 minutes while nothing is new, so test mail took up to 5 minutes to appear.
 
+### Review of 1.0.1 (2026-10-08, overnight)
+
+An independent review read the whole 1.0.1 diff (`c9270508..ffe9ed33`) by dimension, ran the touched tests (121 passing) and confirmed each finding with a throwaway test before reporting it. It found the data format compatible with Q-Mail as §18 describes, two medium bugs and seven small ones. All nine are fixed, one commit each, with a test that fails on the old code.
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | **Medium.** Our own earlier mail to a name longer than 20 characters, or to an alias, never loaded: the recipient cut from the identifier resolved to nothing, and the loader gave up before trying the publisher. | `ffe9ed33`: every key is tried until one decrypts; only "loaded", "deleted" and "not on the node" stop the search. |
+| 2 | **Medium.** A crafted message could blank the whole app: a `createdAt` above 8.64e15 made Intl throw during render, and an object `subject` or `recipient` was rendered as is. A reply's references can pull such a message in on "Show earlier", and the only error boundary was the app's own. | `fa931fb6`: `stamp()` refuses timestamps that make an invalid Date; subject and recipient are used only when they are strings (reader, earlier cards, phone title, the composer's context line); each earlier card and the reader fail in place ("This message could not be shown"), and opening another message clears it. |
+| 3 | Switching messages with "Show earlier" open fetched the next message's earlier messages: the reader is reused, and the section was closed by an effect after the loader had seen it open. | `3ace707a`: the section records which message it is open for. |
+| 4 | A copy found by walking back was "Quoted by" the open message's sender. | `59b4c5c1`: it names the publisher of the message that carried it. |
+| 5 | The Cc line was one line with the list in a hover title, so a long list couldn't be read on a phone. | `57299276`: it wraps; five or more names show three and "and N more" (a 44 px button). |
+| 6 | Focus fell to the page when Retry or the last "Show older" disappeared. | `f592fd82`: each earlier message has a focusable place in the list; focus moves there (ring for keyboard focus only). |
+| 7 | A failed group avatar lookup was remembered as "no avatar" for the session. | `12b1be43`: failures are dropped from the session cache. Not enough on its own (second review, 1). |
+| 8 | With storage blocked, the "Show group threads" switch flipped back on. | `6402f86c`: the choice is kept in memory for the session. |
+| 9 | The merged thread probe reads every group's headers and could read 10 pages (2,000) before probing every group one by one. | `fe94b9cb`: the fallback probes only groups not found yet, four at a time. Its 3-page cap was revised (second review, 7). |
+
+**A second review** read the fixes (`ffe9ed33..fe94b9cb`), confirmed each finding with a throwaway test, and found two more medium bugs and five small points. All are fixed:
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | **Medium.** `12b1be43` changed only the session cache: the mailbox stored `""` for a failed avatar lookup and never asked that group again. | `1820f241`: the lookup answers null (unknown) on failure and the mailbox (now `useGroupAvatarUrls`, three groups at a time) stores only real answers. Its retries were reworked after the third review (1). |
+| 2 | **Medium.** After `3ace707a`, going back to a message whose earlier message had failed showed it on "Loading message" for good, with no Retry: the loader's record of what it had started was only replaced while the section was open. | `d6b0fe24`: the record starts afresh for every message, and each message opens with Show earlier and the Cc list closed. |
+| 3 | The Cc "and N more" button lost focus when pressed, and its spoken name ("Show all 5 Cc names") didn't contain its visible words (WCAG 2.5.3). | `83468d9a`: focus moves to the Cc line; the name is "and 2 more Cc names". `8f22e1f1`: the screens' long Cc name is a registered name, so Reply all shows no warning. |
+| 4 | An error boundary cleared its error in the update that brought it, so a broken message was drawn twice more. | `966bef0a`: it clears only on a key change after the error. |
+| 5 | With both new boundaries taken out, every test still passed. | `0fb324f3`: the reader's boundary moves to `ReaderErrorBoundary`, tested; an earlier card that throws is tested in its place. |
+| 6 | An earlier message's focus place was a plain div. | `45f7616f`: a group named "Earlier message from <name>". |
+| 7 | With the 3-page cap, past 600 headers every group not found cost a search, mostly groups without threads (about 38 of Simon's 43). | `242e7aaf`: up to 10 pages again, stopping early only when probing the groups not found costs no more than the pages left. |
+
+**A third review** read those fixes (`fe94b9cb..7d5c6a86`) and found one more medium bug and two small points, all fixed:
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | **Medium.** Every avatar that arrived restarted the hook's run from the top of the missing list, so a failing group started a new round of three tries each time and held a worker through its waits. With three failing groups ahead of twenty good ones (measured), the good avatars took 108 s and the failing groups were asked 45 times. | `5f6290e7`: the run restarts only when the list of groups changes; every group is asked once first, then the failed ones again after 5 s and 20 s, outside the workers. Measured in the new test: the good avatars show at once, and each failing group is asked 3 times in all. |
+| 2 | Nothing tested that Mail.tsx draws the reader inside its boundary. | `5278c554`: a structural test reads Mail.tsx (one `ShowMessageV2`, inside `ReaderErrorBoundary`). |
+| 3 | A loading or failed earlier message was named twice ("Earlier message from alice", group and card). | `bab6b170`: the card keeps its status text without a label. `e3e93f0f`: the probe's notes name its early stop. |
+
+**Checked in Hub after the fixes** (Simon's account, read-only): the 3-mail test chain opens with "Show earlier · 2 messages", both shown from the session cache with no requests; switching to the 01:09 reply with the section open leaves it closed ("Show earlier · 1 message", collapsed) and sends nothing; at 390×844 touch the reader shows no focus ring after taps. A first load from a reload made 127 searches (126 overnight; one poll apart), with one merged thread search as before. After the second and third reviews' fixes the Threads list shows the avatars of groups 709, 694 and 659 and initials for the two groups without one, as before. The "Load published QDN state?" prompt that hot reloads bring back was answered "Not now" each time.
+
+**Screenshot check after the fixes:** every screen at 5 sizes × 4 themes after the second review's fixes (`242e7aaf`), 532 captures in dark mode and 532 in light; then, after the third review's, `earlier-refs`, `threads`, `group` and `inbox` again in both modes (160 captures). All gave 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 small targets and 0 axe violations. The Cc fixture now has five names, one of them long and registered, so `inbox-open` shows "and 2 more" and `reply-all` fills all five without a warning.
+
 ## Community feedback
 
 - **2026-10-07, Qortal DEV (via Simon):** messages with the reply built in keep growing and eventually get very large in long threads, which is why it was removed from Q-Mail. Suggestion: keep showing the previous message, but don't include it in the reply. **Done in 1.0.1:** no quote in the body, and `threadV2` holds references only (§18, Done → 1.0.1). Simon chose references only over capping or keeping the copies. Worth telling the DEV: the original app's own `threadV2` still embeds `data: replyTo` *with* its history, so it doubles with every reply (5 MB at reply #14 with 400-character replies). Q-Mail+ has stripped that since 1.0.0 and now sends references.
@@ -1649,16 +1689,16 @@ Next-pass ideas from 1.0.1: poll the resource status before fetching an earlier 
 
 **Questions for Simon**
 
-1. **Cc in the reader:** mail from Q-Mail+ now carries `cc`, but the reader only shows "to <recipient>". Show a Cc line (additive, from the `cc` field)?
+1. ~~**Cc in the reader**~~: done in 1.0.1 (`40d6d2f6`, `57299276`): a "cc …" line under the recipient.
 2. **Cc autocomplete:** only To has directory suggestions; Cc and Bcc names are typed and checked. Add suggestions there too?
 3. **Closing a reply** goes back to the full-width list; the message you replied to is not reopened. Reopen it beside the list instead?
 4. **`blogSlice`** stays registered because the `BlogPost` type and 8 tests use it; removing it is a small refactor with no user-visible change. Do it in the next pass?
 5. **Orphaned assets** nothing imports (old PNG logos and 18 old SVG icons in `src/assets`) were not on the approved list, so they stay. Delete them too?
 
 **Next pass:**
-- **Merge the per-name probes (next speed fix).** On Simon's account a first load sends about 400 `/arbitrary/resources/search`, almost all the inbox and sent probe per owned name (I4/I5, the same in the original): 170 inbox queries and 86 + 84 sent probes in the first 3 s. One query per kind with several `name=` params, or probing only names that have mail, would cut most of them.
-- **Duplicate group avatars:** avatars for groups 694 and 659 were requested twice at the same moment; the in-flight merge misses them.
-- **Load-state prompt per name:** switching the active mailbox away and back asks "Load published QDN state?" again; Settings says it asks once per sign-in.
+- ~~**Merge the per-name probes**~~: done in 1.0.1 (`aa355c7c`, `e3ca4aca`): 413 → 126 searches on Simon's account. The 82 alias-form probes are what is left (no address in that identifier, so they can't be merged).
+- ~~**Duplicate group avatars**~~: done in 1.0.1 (`94810299`, `12b1be43`).
+- ~~**Load-state prompt per name**~~: done in 1.0.1 (`a83b2ae4`): once per name per session.
 - **Impostor names in the other + apps:** Q-Share+ and the rest should cross out names with hidden characters the same way (Hub's rule, 2px line-through in the error colour). Not done here, because each app stands alone; copy `invisibleCharacters.ts` and `NameText` into each app on its own pass.
 
 Also: the attach control is an image inside a `role=presentation` drop zone rather than a labelled button; `MailTable.tsx`'s `SimpleTable` default export is dead; `hub-cdp.mjs tap` lands about 124 px high in the app frame (the frame's top offset in Hub's page; a separate repo task in `scripts/`); GO on a real phone (keyboard, hardware Back, pull-to-refresh); the React Compiler lint rules stay off (mostly upstream setState-in-effect code).
