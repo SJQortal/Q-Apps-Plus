@@ -44,6 +44,11 @@ function OverlayBackCloseInRouter({ open, onClose, enabled = true }: OverlayBack
   const onCloseRef = useRef(onClose);
   const locationRef = useRef(location);
   const pushed = useRef(false);
+  // Set once our own entry has been seen as the current location. Until
+  // then a POP is not Back: an overlay that mounts open pushes its entry in
+  // the same pass in which it still sees the previous one (often the app's
+  // first, a POP), and took that for Back, closing at once.
+  const sawOwnEntry = useRef(false);
   useEffect(() => {
     onCloseRef.current = onClose;
     locationRef.current = location;
@@ -57,9 +62,11 @@ function OverlayBackCloseInRouter({ open, onClose, enabled = true }: OverlayBack
     const path = current.pathname + current.search + current.hash;
     if (active && !pushed.current) {
       pushed.current = true;
+      sawOwnEntry.current = false;
       navigate(path, { state: { ...stateObject(current.state), [OVERLAY_STATE_KEY]: id } });
     } else if (!active && pushed.current) {
       pushed.current = false;
+      sawOwnEntry.current = false;
       if (stateObject(current.state)[OVERLAY_STATE_KEY] === id) {
         navigate(path, { replace: true, state: withoutOverlay(current.state) });
       }
@@ -81,11 +88,15 @@ function OverlayBackCloseInRouter({ open, onClose, enabled = true }: OverlayBack
 
   // Back popped our entry: close.
   useEffect(() => {
-    if (!pushed.current || navigationType !== 'POP') return;
-    if (stateObject(location.state)[OVERLAY_STATE_KEY] !== id) {
-      pushed.current = false;
-      onCloseRef.current();
+    if (!pushed.current) return;
+    if (stateObject(location.state)[OVERLAY_STATE_KEY] === id) {
+      sawOwnEntry.current = true;
+      return;
     }
+    if (!sawOwnEntry.current || navigationType !== 'POP') return;
+    pushed.current = false;
+    sawOwnEntry.current = false;
+    onCloseRef.current();
   }, [location, navigationType, id]);
 
   return null;

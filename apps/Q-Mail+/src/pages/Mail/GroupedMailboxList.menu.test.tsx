@@ -5,6 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Provider } from 'react-redux'
+import { MemoryRouter } from 'react-router-dom'
 import { configureStore } from '@reduxjs/toolkit'
 import { HubThemeProvider } from '../../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
@@ -154,6 +155,42 @@ describe('GroupedMailboxList menus', () => {
     fireEvent.contextMenu(header, { clientX: 40, clientY: 40 })
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Archive all' }))
     expect((await screen.findByRole('status')).textContent).toContain('2 archived')
+  })
+
+  it('on a phone, inside the app\'s router, the sheet stays open (Back handling must not close it)', async () => {
+    const original = window.matchMedia
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('max-width'),
+      media: query,
+      onchange: null,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent: () => false,
+    })) as any
+    try {
+      const store = configureStore({
+        reducer: { auth: authReducer, global: globalReducer, mail: mailReducer, notifications: notificationsReducer, blog: blogReducer },
+        middleware: (getDefault) => getDefault({ serializableCheck: false }),
+      })
+      store.dispatch(addUser({ address: 'QAlice', publicKey: 'PK', name: 'alice' }))
+      render(
+        <MemoryRouter>
+          <Provider store={store}>
+            <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+              <GroupedMailboxList messages={[carol]} mailboxType="inbox" openMessage={() => {}} onArchive={() => {}} />
+            </HubThemeProvider>
+          </Provider>
+        </MemoryRouter>
+      )
+      fireEvent.contextMenu(document.querySelector('[data-message-row="c1"] button') as HTMLElement, { clientX: 40, clientY: 40 })
+      expect(await screen.findByRole('dialog', { name: /^Actions for carol/ })).toBeTruthy()
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      expect(screen.getByRole('dialog', { name: /^Actions for carol/ })).toBeTruthy()
+    } finally {
+      window.matchMedia = original
+    }
   })
 
   it('sent rows: forward and delete, no reply', async () => {

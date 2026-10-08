@@ -55,6 +55,24 @@ describe('OverlayBackClose', () => {
     expect(lastState === null || (lastState as any)[OVERLAY_STATE_KEY] === undefined).toBe(true)
   })
 
+  it('an overlay that mounts open stays open, and Back still closes it', () => {
+    const onClose = vi.fn()
+    let back: ReturnType<typeof useNavigate> = () => {}
+    function Mounted() {
+      back = useNavigate()
+      return <OverlayBackClose open onClose={onClose} />
+    }
+    render(
+      // The app's first entry is a POP, as on a real load.
+      <MemoryRouter initialEntries={['/']}>
+        <Mounted />
+      </MemoryRouter>
+    )
+    expect(onClose).not.toHaveBeenCalled()
+    act(() => back(-1))
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('does nothing outside a router', () => {
     expect(() => render(<OverlayBackClose open onClose={() => {}} />)).not.toThrow()
   })
