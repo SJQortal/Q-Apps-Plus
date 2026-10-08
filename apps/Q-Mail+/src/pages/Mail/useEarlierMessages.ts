@@ -6,7 +6,7 @@
  * by EARLIER_PAGE_SIZE with `showOlder`.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSelector } from "react-redux";
+import { shallowEqual, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
 import {
   EARLIER_PAGE_SIZE,
@@ -26,8 +26,9 @@ export interface EarlierItem {
   load: EarlierLoad | null;
 }
 
+const NO_CACHED: Record<string, any> = {};
+
 export function useEarlierMessages(message: any, open: boolean) {
-  const hashMap = useSelector((state: RootState) => state.mail.hashMapMailMessages);
   const user = useSelector((state: RootState) => state.auth?.user);
   const ownNames = useMemo(
     () => [user?.name, ...(Array.isArray(user?.names) ? user.names.map(item => item?.name) : [])].filter(
@@ -57,6 +58,19 @@ export function useEarlierMessages(message: any, open: boolean) {
   }
 
   const { visible, hidden } = useMemo(() => earlierWindow(entries, count), [entries, count]);
+
+  // Only the decrypted copies of the references on screen, so the reader
+  // does not re-render whenever any other message is decrypted (a search).
+  const visibleRefIds = visible.filter(needsFetch).map(entry => entry.reference.identifier);
+  const hashMap = useSelector((state: RootState) => {
+    if (!open || !visibleRefIds.length) return NO_CACHED;
+    const all = state.mail.hashMapMailMessages;
+    const picked: Record<string, any> = {};
+    visibleRefIds.forEach(id => {
+      if (all[id]) picked[id] = all[id];
+    });
+    return picked;
+  }, shallowEqual);
 
   const loadOf = useCallback(
     (entry: EarlierEntry): EarlierLoad | null => {

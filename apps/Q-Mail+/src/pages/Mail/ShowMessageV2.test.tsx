@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { Profiler } from 'react'
 import { Provider } from 'react-redux'
 import { HubThemeProvider } from '../../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
@@ -242,6 +243,23 @@ describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
     await screen.findByRole('article', { name: 'alice: Message m0' })
     expect(screen.queryByRole('button', { name: /older/ })).toBeNull()
     expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(7)
+  })
+
+  it('does not re-render the reader when other messages are decrypted', async () => {
+    let commits = 0
+    const message = reply(1)
+    wrap(
+      <Profiler id="reader" onRender={() => { commits += 1 }}>
+        <ShowMessageV2 message={message} />
+      </Profiler>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 1 message' }))
+    await screen.findByText('Message m0 body')
+    const before = commits
+    act(() => {
+      store.dispatch(addToHashMapMail({ id: 'unrelated', user: 'carol', isValid: true, subject: 'x', createdAt: 1 }))
+    })
+    expect(commits).toBe(before)
   })
 
   it('uses a message already decrypted this session without asking Qortal', async () => {
