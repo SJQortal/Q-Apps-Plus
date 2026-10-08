@@ -7,8 +7,8 @@
  * account "Tester GO" that also owns "bob+builder"; an inbox of 30
  * MAIL_PRIVATE rows from four senders (one with a "+", one non-ASCII), some
  * with a cached subject, some locked (DECRYPT_DATA throws); one message with
- * four attachments (PNG, text, a valid one-page PDF, WAV) and two Cc names
- * (Reply all fills Cc); 53 qortal_qmail_ rows, so the paged alias
+ * four attachments (PNG, text, a valid one-page PDF, WAV) and five Cc names,
+ * one long (the reader folds them; Reply all fills Cc); 53 qortal_qmail_ rows, so the paged alias
  * scan reads two pages; a watched alias
  * with mail; sent rows for both owned names (plus a tombstone that must stay
  * hidden); a group with threads and posts; a draft, archived ids and read
@@ -48,6 +48,9 @@ const SIMON_ADDRESS = 'QSimonJames666666666666666666S1m0nJ';
 // An impostor's copy of the name above: the space is U+2800 BRAILLE PATTERN BLANK.
 const IMPOSTOR = 'Simon\u2800James';
 const IMPOSTOR_ADDRESS = 'QImpostor77777777777777777777Imp0st';
+// A long registered name (25 characters) among the Cc names.
+const LONG_NAME = 'Custom Node on Qortal Hub';
+const LONG_ADDRESS = 'QCustomNodeQortalHub88888888CuNoQH';
 const GROUP_ID = 7;
 const GROUP_NAME = 'Qortal Builders';
 
@@ -59,6 +62,7 @@ const OWNERS = {
   [MARCUS]: MARCUS_ADDRESS,
   [SIMON]: SIMON_ADDRESS,
   [IMPOSTOR]: IMPOSTOR_ADDRESS,
+  [LONG_NAME]: LONG_ADDRESS,
 };
 const suffix = (address) => address.slice(-6);
 const now = Date.now();
@@ -259,7 +263,7 @@ const mailBody = (r, index, recipientName) => {
     // so Reply all fills the composer's Cc row.
     to: hasFiles ? [recipientName] : recipientName,
     // Five Cc names, one long: the reader folds them into "and 2 more".
-    cc: hasFiles ? [ZOE, MARCUS, SECOND, SIMON, 'Custom Node on Qortal Hub'] : [],
+    cc: hasFiles ? [ZOE, MARCUS, SECOND, SIMON, LONG_NAME] : [],
   };
 };
 
@@ -694,7 +698,7 @@ export default {
       },
     },
     {
-      // m01 has two Cc names: Reply all puts them in the composer's Cc row.
+      // m01 has five Cc names: Reply all puts them in the composer's Cc row.
       key: 'reply-all',
       path: '/',
       after: async (page) => {
