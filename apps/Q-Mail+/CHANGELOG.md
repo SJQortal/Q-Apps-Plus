@@ -6,7 +6,8 @@
 - A reply no longer quotes the message you answer. That message shows above the editor for context (Preview, Full or Hide) and is not copied into your reply. The footer now ends a reply, as it ends a new message.
 - A reply no longer carries copies of the earlier messages either, only links to the last 10. In 1.0.0, a conversation's 50th reply weighed about 570 KB; now every reply stays under 2 KB, the size of a new message.
 - In an open message, "Show earlier" loads the earlier messages from QDN five at a time, with "Show older" for more, all the way back to the start of the conversation: each earlier message leads to the ones before it. Messages you have already opened appear at once. A message that was deleted, wasn't sent to you, or isn't on your node yet says so, and the last can be retried.
-- Mail that carries copies of earlier messages (from Q-Mail, or from Q-Mail+ 1.0.0) shows them as before, marked as quoted.
+- Earlier messages run from the newest, right under the message, back to the oldest, with "Show older" at the bottom.
+- Mail that carries copies of earlier messages (from Q-Mail, or from Q-Mail+ 1.0.0) shows them as before, marked as quoted, now with the sender's avatar.
 - Q-Mail opens these replies without their earlier messages.
 
 **Replies**
@@ -17,6 +18,11 @@
 - Right-click a message in the inbox, Archived, an alias inbox or Sent, or press and hold it on a phone, for a menu: Open, Reply, Reply all, Forward, Mark as read or unread, Archive or Move to inbox, Select, and Delete in Sent. On a phone the menu opens as a sheet from the bottom. The keyboard's menu key (or Shift+F10) opens it too.
 - A sender's group has one as well: show its messages, mark them all read or unread, archive them all, or select them all.
 - Reply and Forward work on a message you haven't opened yet: it opens first.
+
+**Names under Inbox**
+- The names under Inbox, Aliases and Sent fold away with the arrow beside the mailbox; the mailbox itself still opens with a click. Remembered on this device.
+- Right-click a name under Inbox, or press and hold it, and choose "Hide from the list". Settings → Mail lists hidden names to show them again; their mail stays in the Inbox.
+- Settings → Mail → "Hide names with nothing in the inbox" leaves out names whose mail is all archived, until new mail arrives for them.
 
 **Faster with many names**
 - The first load asks the node once for all your names, and once for all your groups' threads, instead of name by name and group by group: on an account with 88 names and 43 groups, 126 searches instead of 413.
