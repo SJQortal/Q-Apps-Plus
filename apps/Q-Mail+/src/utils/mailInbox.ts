@@ -489,8 +489,9 @@ export const THREAD_PROBE_MAX_PAGES = 10;
  * for every thread header instead of one search per group (Simon's 43 groups:
  * 1 search; the whole network held 157 headers in 34 groups on 2026-10-08).
  * Same identifier test as hasGroupThreadActivity. `settled` is false when a
- * page failed or THREAD_PROBE_MAX_PAGES was reached; `found` still holds the
- * groups seen by then (groupIdsWithThreads probes the rest).
+ * page failed, when THREAD_PROBE_MAX_PAGES was reached, or when it stopped
+ * early because probing the groups not found was cheaper; `found` still
+ * holds the groups seen by then (groupIdsWithThreads probes the rest).
  */
 export const groupsWithThreadActivity = async (
   groupIds: Array<string | number>
