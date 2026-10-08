@@ -138,6 +138,27 @@ describe('fetchGroupAvatarUrl', () => {
     expect(searches()).toHaveLength(1)
   })
 
+  it('asks again after a failed lookup instead of hiding the avatar all session', async () => {
+    mockFetchRoute(/service=THUMBNAIL/, [{ name: 'alice', identifier: 'qortal_group_avatar_694' }])
+    let up = false
+    mockQortalAction('GET_QDN_RESOURCE_URL', () => {
+      if (!up) throw new Error('Request timed out')
+      return '/arbitrary/THUMBNAIL/alice/qortal_group_avatar_694'
+    })
+    expect(await fetchGroupAvatarUrl(694)).toBe('')
+    up = true
+    expect(await fetchGroupAvatarUrl(694)).toBe('/arbitrary/THUMBNAIL/alice/qortal_group_avatar_694')
+    expect(await fetchGroupAvatarUrl(694)).toBe('/arbitrary/THUMBNAIL/alice/qortal_group_avatar_694')
+    expect(qortalCalls('GET_QDN_RESOURCE_URL')).toHaveLength(2)
+  })
+
+  it('asks again after a failed search', async () => {
+    mockFetchRoute(/service=THUMBNAIL/, 'busy', { status: 503 })
+    expect(await fetchGroupAvatarUrl(7)).toBe('')
+    expect(await fetchGroupAvatarUrl(7)).toBe('')
+    expect(searches()).toHaveLength(2)
+  })
+
   it('remembers a group without an avatar too', async () => {
     mockFetchRoute(/service=THUMBNAIL/, [])
     expect(await fetchGroupAvatarUrl(7)).toBe('')

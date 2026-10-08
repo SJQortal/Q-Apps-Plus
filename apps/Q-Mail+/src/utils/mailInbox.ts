@@ -88,6 +88,25 @@ export const hasGroupThreadActivity = async (
   );
 };
 
+/** The publisher of a group's avatar, or null when it has none. Throws when the search fails. */
+const groupAvatarPublisher = async (normalizedGroupId: string): Promise<string | null> => {
+  const params = new URLSearchParams({
+    mode: "ALL",
+    service: "THUMBNAIL",
+    identifier: `qortal_group_avatar_${normalizedGroupId}`,
+    limit: "1",
+    reverse: "true",
+    excludeblocked: "true",
+  });
+  const responseData = await searchResources(params);
+  if (!responseData.length) return null;
+  const publisherName =
+    typeof responseData[0]?.name === "string"
+      ? responseData[0].name.trim()
+      : "";
+  return publisherName || null;
+};
+
 export const fetchGroupAvatarPublisherName = async (
   groupId: string | number
 ): Promise<string | null> => {
@@ -95,21 +114,7 @@ export const fetchGroupAvatarPublisherName = async (
   if (!normalizedGroupId) return null;
 
   try {
-    const params = new URLSearchParams({
-      mode: "ALL",
-      service: "THUMBNAIL",
-      identifier: `qortal_group_avatar_${normalizedGroupId}`,
-      limit: "1",
-      reverse: "true",
-      excludeblocked: "true",
-    });
-    const responseData = await searchResources(params);
-    if (!responseData.length) return null;
-    const publisherName =
-      typeof responseData[0]?.name === "string"
-        ? responseData[0].name.trim()
-        : "";
-    return publisherName || null;
+    return await groupAvatarPublisher(normalizedGroupId);
   } catch {
     return null;
   }
@@ -126,38 +131,39 @@ export const resetGroupAvatarCache = (): void => {
  * A group's avatar URL ("" when it has none), asked once per group per
  * session: calls for the same group while one is running share it. The
  * Threads loop re-ran while a request was out and asked twice (groups 694
- * and 659 on Simon's account).
+ * and 659 on Simon's account). An answer is kept; a failed lookup is not,
+ * so the next call asks again instead of showing no avatar all session.
  */
 export const fetchGroupAvatarUrl = (groupId: string | number): Promise<string> => {
   const normalizedGroupId = normalizeId(groupId);
   if (!normalizedGroupId) return Promise.resolve("");
   const known = groupAvatarUrls.get(normalizedGroupId);
   if (known) return known;
-  const request = askGroupAvatarUrl(normalizedGroupId);
+  const request: Promise<string> = askGroupAvatarUrl(normalizedGroupId).catch(() => {
+    if (groupAvatarUrls.get(normalizedGroupId) === request) groupAvatarUrls.delete(normalizedGroupId);
+    return "";
+  });
   groupAvatarUrls.set(normalizedGroupId, request);
   return request;
 };
 
+/** Throws when Qortal could not answer, so the caller does not remember it. */
 const askGroupAvatarUrl = async (normalizedGroupId: string): Promise<string> => {
-  const publisherName = await fetchGroupAvatarPublisherName(normalizedGroupId);
+  const publisherName = await groupAvatarPublisher(normalizedGroupId);
   if (!publisherName) return "";
 
-  try {
-    const avatarUrl = await qortalRequest({
-      action: "GET_QDN_RESOURCE_URL",
-      name: publisherName,
-      service: "THUMBNAIL",
-      identifier: `qortal_group_avatar_${normalizedGroupId}`,
-    });
-    if (typeof avatarUrl !== "string") return "";
-    const normalizedUrl = avatarUrl.trim();
-    if (!normalizedUrl || normalizedUrl === "Resource does not exist") {
-      return "";
-    }
-    return normalizedUrl;
-  } catch {
+  const avatarUrl = await qortalRequest({
+    action: "GET_QDN_RESOURCE_URL",
+    name: publisherName,
+    service: "THUMBNAIL",
+    identifier: `qortal_group_avatar_${normalizedGroupId}`,
+  });
+  if (typeof avatarUrl !== "string") return "";
+  const normalizedUrl = avatarUrl.trim();
+  if (!normalizedUrl || normalizedUrl === "Resource does not exist") {
     return "";
   }
+  return normalizedUrl;
 };
 
 export const isDeletedSentResourceInSearch = (item: any): boolean => {
