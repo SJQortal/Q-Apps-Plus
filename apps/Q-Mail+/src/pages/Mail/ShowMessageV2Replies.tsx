@@ -53,7 +53,7 @@ export const ShowMessageV2Replies = ({
   const cardSx = useCardSx();
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const sender = typeof message?.user === "string" && message.user ? message.user : "Unknown";
-  const subject = message?.subject || "(no subject)";
+  const subject = typeof message?.subject === "string" && message.subject ? message.subject : "(no subject)";
 
   return (
     <Box
@@ -175,6 +175,18 @@ export const EarlierMessagePlaceholder = ({
           Retry
         </Button>
       )}
+    </Box>
+  );
+};
+
+/** In place of an earlier message that cannot be drawn (ErrorBoundary fallback). */
+export const EarlierMessageUnreadable = () => {
+  const cardSx = useCardSx();
+  return (
+    <Box role="status" sx={{ ...cardSx, px: 1.5, py: 1.5, minHeight: 56, display: "flex", alignItems: "center" }}>
+      <Typography variant="body2" color="text.secondary">
+        This earlier message could not be shown.
+      </Typography>
     </Box>
   );
 };

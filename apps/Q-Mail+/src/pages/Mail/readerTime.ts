@@ -10,9 +10,15 @@ import { calendarDaysBetween, formatDatePattern } from "../../utils/time";
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
+/**
+ * A usable timestamp, or null. Beyond ±8.64e15 ms a Date is invalid and Intl
+ * throws while formatting it, which would take the screen down (a crafted
+ * `createdAt` in a message is enough), so those are refused here.
+ */
 const stamp = (timestamp: number | string | undefined | null): number | null => {
   const n = Number(timestamp);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Number.isNaN(new Date(n).getTime()) ? null : n;
 };
 
 /** The two halves of readerMailDate: { day: "Sun 2 Aug" or "Thu 11 May 2025", time: "08:58" }. */
@@ -38,8 +44,8 @@ export function readerMailDate(timestamp: number | string | undefined | null, no
 
 /** "Sunday, 2 August 2026, 08:58:20": the full timestamp, local time. */
 export function exactMailDate(timestamp: number | string | undefined | null): string {
-  const n = Number(timestamp);
-  if (!Number.isFinite(n) || n <= 0) return "";
+  const n = stamp(timestamp);
+  if (n === null) return "";
   return formatDatePattern(new Date(n), "dddd, D MMMM YYYY, HH:mm:ss");
 }
 

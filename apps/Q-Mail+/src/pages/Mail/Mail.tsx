@@ -135,7 +135,8 @@ import {
 } from "./mailSearch";
 import { getSentRecipientDisplayLabel } from "./mailIdentifier";
 import { lazyNamed, preloadOnIdle } from "../../components/common/lazyNamed";
-import { ListSkeleton } from "../../layout/states";
+import { ErrorState, ListSkeleton } from "../../layout/states";
+import { ErrorBoundary } from "../../components/common/ErrorBoundary";
 import { TOUR_STATUS_DISMISSED, TOUR_STATUS_STORAGE_KEY } from "./MailTour";
 import { useKeyboardShortcuts, type ShortcutAction } from "../../hooks/useKeyboardShortcuts";
 import { usePhoneBackClose } from "../../layout/usePhoneBackClose";
@@ -3355,14 +3356,25 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     <>
       {isOnePane && (
         <PaneHeader
-          title={message?.subject || "Message"}
-          subtitle={asName(message?.user)}
+          title={typeof message?.subject === "string" && message.subject ? message.subject : "Message"}
+          subtitle={typeof message?.user === "string" ? asName(message.user) : undefined}
           onBack={closeOpenMessage}
           backLabel="Back to messages"
         />
       )}
       <PaneScroll>
         <Box sx={centeredColumnSx}>
+          {/* A message that cannot be drawn takes down the reader, not the mailbox. */}
+          <ErrorBoundary
+            resetKey={`${message?.user || ""}|${message?.id || ""}`}
+            fallback={
+              <ErrorState
+                title="This message could not be shown"
+                message="Something in it can't be displayed. Open another message, or reload Q-Mail+ if none will open."
+                onRetry={() => window.location.reload()}
+              />
+            }
+          >
           <React.Suspense fallback={<ListSkeleton rows={4} />}>
           <ShowMessageV2
             isOpen={isOpen}
@@ -3381,6 +3393,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
             onMarkUnread={readerCanMarkUnread ? readerMarkUnread : undefined}
           />
           </React.Suspense>
+          </ErrorBoundary>
         </Box>
       </PaneScroll>
     </>

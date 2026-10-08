@@ -27,6 +27,32 @@ describe('ErrorBoundary', () => {
     error.mockRestore()
   })
 
+  it('with a fallback, shows it in place and clears the error for a new resetKey', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const Card = ({ broken }: { broken: boolean }) => {
+      if (broken) throw new Error('Objects are not valid as a React child')
+      return <p>card</p>
+    }
+    const view = (key: string, broken: boolean) => (
+      <div>
+        <p>mailbox</p>
+        <ErrorBoundary resetKey={key} fallback={<p>This message could not be shown</p>}>
+          <Card broken={broken} />
+        </ErrorBoundary>
+      </div>
+    )
+    const { rerender } = render(view('a', true))
+    expect(screen.getByText('This message could not be shown')).toBeTruthy()
+    expect(screen.getByText('mailbox')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+    // The same message stays on its fallback; another one renders again.
+    rerender(view('a', false))
+    expect(screen.getByText('This message could not be shown')).toBeTruthy()
+    rerender(view('b', false))
+    expect(screen.getByText('card')).toBeTruthy()
+    error.mockRestore()
+  })
+
   it('renders its children when nothing fails', () => {
     render(
       <ErrorBoundary>

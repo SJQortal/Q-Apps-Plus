@@ -41,7 +41,8 @@ import ReadOnlySlate from "../../components/editor/ReadOnlySlate";
 import { AvatarWrapper } from "./MailTable";
 import { NameText } from "../../components/common/NameText";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
-import { EarlierMessagePlaceholder, ShowMessageV2Replies } from "./ShowMessageV2Replies";
+import { EarlierMessagePlaceholder, EarlierMessageUnreadable, ShowMessageV2Replies } from "./ShowMessageV2Replies";
+import { ErrorBoundary } from "../../components/common/ErrorBoundary";
 import { useEarlierMessages } from "./useEarlierMessages";
 import { EARLIER_PAGE_SIZE } from "./earlierMessages";
 import { updateMessageDetails } from "../../utils/helpers";
@@ -165,15 +166,21 @@ export const ShowMessageV2 = ({
   // The To of the send. Every copy of a Q-Mail+ send carries it in `to`
   // (§17), while `recipient` names the copy's own target, a Cc or Bcc name
   // on those copies; mail from the original app has only `recipient`.
-  const recipient =
+  // Strings only: a decrypted body can hold anything, and an object here
+  // would break the whole reader.
+  const recipient: string | undefined =
     Array.isArray(message?.to) && typeof message.to[0] === "string" && message.to[0].trim()
       ? message.to[0]
-      : message?.recipient || (typeof message?.to === "string" ? message.to : undefined);
+      : typeof message?.recipient === "string" && message.recipient.trim()
+        ? message.recipient
+        : typeof message?.to === "string" && message.to.trim()
+          ? message.to
+          : undefined;
   // Cc names Q-Mail+ writes into every copy (data contract §17); Bcc never.
   const ccNames: string[] = Array.isArray(message?.cc)
     ? Array.from(new Set(message.cc.filter((name: unknown): name is string => typeof name === "string" && name.trim().length > 0)))
     : [];
-  const subject = message?.subject || "(no subject)";
+  const subject = typeof message?.subject === "string" && message.subject ? message.subject : "(no subject)";
   const cleanHTML = message?.htmlContent ? DOMPurify.sanitize(message.htmlContent) : "";
 
   const actionSx = { minHeight: 44, textTransform: "none" as const, flexShrink: 0 };
@@ -233,7 +240,7 @@ export const ShowMessageV2 = ({
             </Typography>
             {recipient && (
               <Typography variant="body2" color="text.secondary" noWrap>
-                to {typeof recipient === "string" ? <NameText name={recipient} /> : recipient}
+                to <NameText name={recipient} />
               </Typography>
             )}
             {ccNames.length > 0 && (
@@ -300,19 +307,22 @@ export const ShowMessageV2 = ({
           {showEarlier &&
             earlier.items.map(({ entry, load }, index) => {
               const newest = index === earlier.items.length - 1;
-              if (!load) {
-                return <ShowMessageV2Replies key={entry.key} message={entry.data} quotedBy={message?.user} defaultExpanded={newest} />;
-              }
-              if (load.status === "loaded") {
-                return <ShowMessageV2Replies key={entry.key} message={load.message} verified defaultExpanded={newest} />;
-              }
-              return (
+              const card = !load ? (
+                <ShowMessageV2Replies message={entry.data} quotedBy={message?.user} defaultExpanded={newest} />
+              ) : load.status === "loaded" ? (
+                <ShowMessageV2Replies message={load.message} verified defaultExpanded={newest} />
+              ) : (
                 <EarlierMessagePlaceholder
-                  key={entry.key}
                   name={entry.reference?.name || "Unknown"}
                   status={load.status}
                   onRetry={() => earlier.retry(entry.key)}
                 />
+              );
+              // One earlier message that cannot be drawn says so in its place.
+              return (
+                <ErrorBoundary key={entry.key} fallback={<EarlierMessageUnreadable />}>
+                  {card}
+                </ErrorBoundary>
               );
             })}
         </Box>

@@ -26,6 +26,19 @@ describe('readerMailDate', () => {
     expect(readerMailDate('x', now)).toBe('')
     expect(readerMailDate(0, now)).toBe('')
   })
+
+  it('refuses a stamp past the last valid date instead of throwing (a crafted createdAt)', () => {
+    // Finite and above 0, but beyond 8.64e15 ms Intl throws "Invalid time value".
+    for (const big of [1e16, '1e16', 8.64e15 + 1]) {
+      expect(readerMailDateParts(big, now)).toBeNull()
+      expect(readerMailDate(big, now)).toBe('')
+      expect(exactMailDate(big)).toBe('')
+      expect(spokenMailDate(big, now)).toBe('')
+      expect(mailDateAge(big, now)).toBe('')
+      expect(mailDateDetail(big, now)).toBe('')
+    }
+    expect(readerMailDate(8.64e15, now)).toMatch(/ 275760, /)
+  })
 })
 
 describe('exactMailDate', () => {

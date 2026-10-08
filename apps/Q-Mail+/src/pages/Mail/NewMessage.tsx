@@ -2754,7 +2754,7 @@ export const NewMessage = ({
                 }}
               >
                 {readerMailDate(replyTo?.createdAt)} •{" "}
-                {replyTo?.subject || "- no subject -"}
+                {typeof replyTo?.subject === "string" && replyTo.subject ? replyTo.subject : "- no subject -"}
               </Typography>
               <Typography
                 sx={{

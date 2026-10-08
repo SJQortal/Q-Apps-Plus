@@ -103,6 +103,14 @@ describe('ShowMessageV2', () => {
     expect(screen.getByText((_, el) => el?.textContent === 'cc dana' && el.tagName === 'P')).toBeTruthy()
   })
 
+  it('shows a crafted message with an object subject and recipient and an impossible date', () => {
+    wrap(<ShowMessageV2 message={{ ...message, subject: { a: 1 }, recipient: { b: 2 }, to: [{ c: 3 }], createdAt: 1e16, generalData: { thread: [], threadV2: [] } }} />)
+    expect(screen.getByRole('heading', { level: 2, name: '(no subject)' })).toBeTruthy()
+    expect(screen.queryByText(/^to /)).toBeNull()
+    expect(document.querySelector('time')).toBeNull()
+    expect(screen.getByText('noon')).toBeTruthy()
+  })
+
   it('shows the Cc names under the recipient, and no Cc line without them', () => {
     const { unmount } = wrap(<ShowMessageV2 message={{ ...message, cc: ['carl', 'dana', 'carl', 7, ''] }} />)
     expect(screen.getByText((_, el) => el?.textContent === 'cc carl, dana' && el.tagName === 'P')).toBeTruthy()
@@ -319,6 +327,17 @@ describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 1 message' }))
     expect(await screen.findByText('cached')).toBeTruthy()
     expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(0)
+  })
+
+  it('shows a crafted earlier message (object subject, impossible date) without taking the reader down', async () => {
+    mockQortalAction('DECRYPT_DATA', () =>
+      btoa(JSON.stringify({ subject: { a: 1 }, createdAt: 1e16, version: 1, attachments: [], textContentV2: '<p>odd body</p>', generalData: { thread: [], threadV2: [] } }))
+    )
+    wrap(<ShowMessageV2 message={reply(1)} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 1 message' }))
+    expect(await screen.findByText('odd body')).toBeTruthy()
+    expect(screen.getByRole('article', { name: 'alice: (no subject)' })).toBeTruthy()
+    expect(screen.getByText('latest')).toBeTruthy()
   })
 
   it('offers Retry when the node has not got a message yet', async () => {
