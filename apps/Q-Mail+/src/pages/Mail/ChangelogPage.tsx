@@ -19,6 +19,7 @@ const changelogEntries: ChangelogEntry[] = [
       "An open message shows its weekday, date and time (\"Sun 2 Aug, 08:58\"), with the year when it isn't this year.",
       "Every message list shows the same date; hover over it, or tap it on a phone, for the full date and how long ago.",
       "Settings → Mail → Show group threads: hide group threads, and nothing about them is loaded.",
+      "Right-click a message, or press and hold it on a phone, for Open, Reply, Forward, Mark read or unread, Archive and Select; sender groups have a menu too.",
       "A reply comes from the name the mail was sent to, not the active name; an open message shows its Cc names, a long list folded into \"and 2 more\".",
       "Faster first load with many names and groups: one search for all of them instead of one each (126 searches instead of 413 with 88 names and 43 groups).",
       "Fixes: new mail shows within 2 minutes; the published-state question comes once per name per session; group avatars load once; Publish Q-Mail State asks first.",

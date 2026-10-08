@@ -13,6 +13,11 @@
 - A reply comes from the name the mail was sent to: mail to one of your other names is answered as that name, not as the active one.
 - An open message shows its Cc names under the recipient ("cc Alice, Bob"), for mail written with Cc in Q-Mail+. A long list shows the first three names and "and 2 more", which shows the rest, so every name can be read on a phone.
 
+**Right click and long press**
+- Right-click a message in the inbox, Archived, an alias inbox or Sent, or press and hold it on a phone, for a menu: Open, Reply, Reply all, Forward, Mark as read or unread, Archive or Move to inbox, Select, and Delete in Sent. On a phone the menu opens as a sheet from the bottom. The keyboard's menu key (or Shift+F10) opens it too.
+- A sender's group has one as well: show its messages, mark them all read or unread, archive them all, or select them all.
+- Reply and Forward work on a message you haven't opened yet: it opens first.
+
 **Faster with many names**
 - The first load asks the node once for all your names, and once for all your groups' threads, instead of name by name and group by group: on an account with 88 names and 43 groups, 126 searches instead of 413.
 
