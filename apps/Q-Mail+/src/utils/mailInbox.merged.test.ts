@@ -1,16 +1,18 @@
 /**
  * The merged probes (one search for many names) find the same names as the
  * per-name probes they replace, and fall back to those probes when a merged
- * search fails or reaches its page cap.
+ * search fails or reaches its page cap. Group avatars are asked once per group.
  */
 import { beforeEach, describe, expect, it } from 'vitest'
-import { fetchedUrls, mockFetchRoute } from '../test/setup'
+import { fetchedUrls, mockFetchRoute, mockQortalAction, qortalCalls } from '../test/setup'
 import { resetSearchCache } from './qdnSearch'
 import {
   MERGED_PROBE_MAX_PAGES,
+  fetchGroupAvatarUrl,
   mapWithConcurrency,
   ownedNamesWithAddressMail,
   ownedNamesWithSentMail,
+  resetGroupAvatarCache,
 } from './mailInbox'
 
 const ADDRESS = 'QOwnerAddressABCDEF'
@@ -115,5 +117,31 @@ describe('mapWithConcurrency', () => {
     expect(out).toEqual([50, 10, 40, 20, 30])
     expect(peak).toBe(2)
     expect(await mapWithConcurrency([], 4, async (n: number) => n)).toEqual([])
+  })
+})
+
+describe('fetchGroupAvatarUrl', () => {
+  beforeEach(() => {
+    resetSearchCache()
+    resetGroupAvatarCache()
+  })
+
+  it('asks once per group, also when two callers ask at the same moment', async () => {
+    mockFetchRoute(/service=THUMBNAIL/, [{ name: 'alice', identifier: 'qortal_group_avatar_694' }])
+    mockQortalAction('GET_QDN_RESOURCE_URL', '/arbitrary/THUMBNAIL/alice/qortal_group_avatar_694')
+    const [a, b] = await Promise.all([fetchGroupAvatarUrl(694), fetchGroupAvatarUrl('694')])
+    expect(a).toBe('/arbitrary/THUMBNAIL/alice/qortal_group_avatar_694')
+    expect(b).toBe(a)
+    expect(await fetchGroupAvatarUrl(694)).toBe(a)
+    expect(qortalCalls('GET_QDN_RESOURCE_URL')).toHaveLength(1)
+    expect(searches()).toHaveLength(1)
+  })
+
+  it('remembers a group without an avatar too', async () => {
+    mockFetchRoute(/service=THUMBNAIL/, [])
+    expect(await fetchGroupAvatarUrl(7)).toBe('')
+    expect(await fetchGroupAvatarUrl(7)).toBe('')
+    expect(searches()).toHaveLength(1)
+    expect(qortalCalls('GET_QDN_RESOURCE_URL')).toHaveLength(0)
   })
 })

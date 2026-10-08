@@ -115,12 +115,30 @@ export const fetchGroupAvatarPublisherName = async (
   }
 };
 
-export const fetchGroupAvatarUrl = async (
-  groupId: string | number
-): Promise<string> => {
-  const normalizedGroupId = normalizeId(groupId);
-  if (!normalizedGroupId) return "";
+const groupAvatarUrls = new Map<string, Promise<string>>();
 
+/** Tests only: forget the group avatar answers of this session. */
+export const resetGroupAvatarCache = (): void => {
+  groupAvatarUrls.clear();
+};
+
+/**
+ * A group's avatar URL ("" when it has none), asked once per group per
+ * session: calls for the same group while one is running share it. The
+ * Threads loop re-ran while a request was out and asked twice (groups 694
+ * and 659 on Simon's account).
+ */
+export const fetchGroupAvatarUrl = (groupId: string | number): Promise<string> => {
+  const normalizedGroupId = normalizeId(groupId);
+  if (!normalizedGroupId) return Promise.resolve("");
+  const known = groupAvatarUrls.get(normalizedGroupId);
+  if (known) return known;
+  const request = askGroupAvatarUrl(normalizedGroupId);
+  groupAvatarUrls.set(normalizedGroupId, request);
+  return request;
+};
+
+const askGroupAvatarUrl = async (normalizedGroupId: string): Promise<string> => {
   const publisherName = await fetchGroupAvatarPublisherName(normalizedGroupId);
   if (!publisherName) return "";
 
