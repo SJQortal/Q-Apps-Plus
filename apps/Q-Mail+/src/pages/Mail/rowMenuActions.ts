@@ -16,7 +16,8 @@ export type RowMenuActionId =
   | "deselect"
   | "delete"
   | "expand"
-  | "collapse";
+  | "collapse"
+  | "hide";
 
 export interface RowMenuAction {
   id: RowMenuActionId;

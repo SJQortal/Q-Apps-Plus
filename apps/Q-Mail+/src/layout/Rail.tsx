@@ -4,7 +4,7 @@
  * Settings. It renders the same `LeftSidebarItem[]` model that Mail.tsx builds
  * (`buildSidebarItems`), so the item ids and the select handler are unchanged.
  */
-import { useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import {
   Avatar,
   Badge,
@@ -37,6 +37,7 @@ import { primarySoft } from '../hub-theme';
 import { SHORT_FRAME_MEDIA } from '../utils/hubFrame';
 import { firstVisibleChar } from '../utils/invisibleCharacters';
 import { NameText, spokenName } from '../components/common/NameText';
+import { useRowMenu } from '../pages/Mail/useRowMenu';
 import Logo from '../assets/svgs/Logo.svg';
 import LogoLight from '../assets/svgs/LogoLight.svg';
 
@@ -192,6 +193,38 @@ export interface RailProps {
   version: string;
   /** In a drawer: show a close button and call this. */
   onClose?: () => void;
+  /** A name's menu under Inbox offers "Hide from the list" (Settings → Mail shows it again). */
+  onHideInboxName?: (name: string) => void;
+}
+
+/** Sections whose names fold away behind a chevron; Threads folds on its own row. */
+const COLLAPSIBLE: ReadonlyArray<string> = ['inbox', 'aliases', 'sent'];
+export const RAIL_COLLAPSED_STORAGE_KEY = 'qmail_rail_collapsed_sections';
+
+const readCollapsed = (): string[] => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RAIL_COLLAPSED_STORAGE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => COLLAPSIBLE.includes(id)) : [];
+  } catch {
+    return [];
+  }
+};
+
+/** Which sections are folded, remembered on this device. */
+function useCollapsedSections(): [Set<string>, (id: string) => void] {
+  const [collapsed, setCollapsed] = useState<string[]>(readCollapsed);
+  const toggle = useCallback((id: string) => {
+    setCollapsed((previous) => {
+      const next = previous.includes(id) ? previous.filter((entry) => entry !== id) : [...previous, id];
+      try {
+        localStorage.setItem(RAIL_COLLAPSED_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Storage blocked: folded for this session.
+      }
+      return next;
+    });
+  }, []);
+  return [useMemo(() => new Set(collapsed), [collapsed]), toggle];
 }
 
 /** A count badge ("99+" past 99) for numeric badge text, else the text itself (e.g. "!"). */
@@ -260,9 +293,13 @@ export function Rail({
   onOpenSettings,
   version,
   onClose,
+  onHideInboxName,
 }: RailProps) {
   const theme = useTheme();
   const [nameFilter, setNameFilter] = useState('');
+  const [collapsed, toggleCollapsed] = useCollapsedSections();
+  // A name's menu under Inbox (right click, long press).
+  const nameMenu = useRowMenu<LeftSidebarItem>();
   const { compose, aliasCompose, sections, publishState } = useMemo(() => groupRailItems(items), [items]);
   const nameCount = useMemo(
     () => items.filter((i) => i.id.startsWith(INBOX_INSTANCE_PREFIX)).length,
@@ -284,12 +321,14 @@ export function Rail({
     if (child.hidden) return null;
     if (filter && !child.id.startsWith(THREAD_GROUP_PREFIX) && !child.label.toLowerCase().includes(filter)) return null;
     const active = child.id === activeItemId;
+    const hasMenu = Boolean(onHideInboxName) && child.id.startsWith(INBOX_INSTANCE_PREFIX);
     return (
       <Row
         key={child.id}
         $child
         $active={active}
         disabled={child.disabled}
+        {...(hasMenu ? nameMenu.triggerFor(child) : {})}
         onClick={() => select(child.id)}
         data-qapp-lib-sidebar-item={child.id}
         aria-current={active ? 'page' : undefined}
@@ -383,27 +422,57 @@ export function Rail({
           const icon = SECTION_ICONS[item.id as SectionId] ?? null;
           // The Threads row's "+"/"-" only means expanded; it is drawn as a chevron, never as text.
           const sectionItem = isThreads ? { ...item, label: 'Threads', badgeText: undefined } : item;
+          // Inbox, Aliases and Sent fold their names behind a chevron of their
+          // own, so the row itself still opens the mailbox. A name filter shows all.
+          const foldable = COLLAPSIBLE.includes(item.id) && children.length > 0;
+          const folded = foldable && collapsed.has(item.id) && !filter;
+          const row = (
+            <Row
+              $active={active}
+              disabled={item.disabled}
+              onClick={() => select(item.id)}
+              data-qapp-lib-sidebar-item={item.id}
+              aria-current={active ? 'page' : undefined}
+              aria-expanded={isThreads ? expanded : undefined}
+              aria-label={rowAriaLabel(sectionItem)}
+            >
+              {icon}
+              <Label>{sectionItem.label}</Label>
+              {renderBadge(sectionItem.badgeText)}
+              {isThreads && children.length > 0 && (expanded ? <ExpandMoreIcon /> : <ChevronRightIcon />)}
+            </Row>
+          );
           return (
             <Box key={item.id} sx={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <Row
-                $active={active}
-                disabled={item.disabled}
-                onClick={() => select(item.id)}
-                data-qapp-lib-sidebar-item={item.id}
-                aria-current={active ? 'page' : undefined}
-                aria-expanded={isThreads ? expanded : undefined}
-                aria-label={rowAriaLabel(sectionItem)}
-              >
-                {icon}
-                <Label>{sectionItem.label}</Label>
-                {renderBadge(sectionItem.badgeText)}
-                {isThreads && children.length > 0 && (expanded ? <ExpandMoreIcon /> : <ChevronRightIcon />)}
-              </Row>
-              {children.map(renderChild)}
+              {foldable ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                  {row}
+                  <IconButton
+                    onClick={() => toggleCollapsed(item.id)}
+                    aria-expanded={!folded}
+                    aria-label={`${folded ? 'Show' : 'Hide'} the names under ${sectionItem.label}`}
+                    sx={{ minWidth: 40, minHeight: 44, borderRadius: 1, color: 'text.secondary', flexShrink: 0 }}
+                  >
+                    {folded ? <ChevronRightIcon /> : <ExpandMoreIcon />}
+                  </IconButton>
+                </Box>
+              ) : (
+                row
+              )}
+              {!folded && children.map(renderChild)}
             </Box>
           );
         })}
       </Scroll>
+
+      {nameMenu.renderMenu((child) => ({
+        title: <NameText name={child.label} />,
+        ariaLabel: 'Name actions',
+        actions: [
+          { id: 'open', label: 'Open', onSelect: () => select(child.id) },
+          { id: 'hide', label: 'Hide from the list', onSelect: () => onHideInboxName?.(child.label) },
+        ],
+      }))}
 
       <Footer>
         {publishState && (

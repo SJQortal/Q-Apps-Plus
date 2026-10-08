@@ -103,11 +103,12 @@ import {
   type PublishedAppearance,
 } from "../../app-shell/AppShellContext";
 import { useHubTheme } from "../../hub-theme";
-import { countUnreadMessages, hasThreadHistory } from "../../utils/readState";
+import { countUnreadMessages, getMailMessageId, hasThreadHistory } from "../../utils/readState";
 import type { StoredComposeDraft } from "./composeDrafts";
 import { invalidateThreadSearches } from "./threadData";
 import { useThreadUnreadCounts } from "./threadUnread";
 import { useShowGroupThreads } from "../../utils/threadsPreference";
+import { setInboxNameHidden, useInboxNamesPreference, visibleInboxNames } from "../../utils/inboxNamesPreference";
 import { useGroupAvatarUrls } from "./useGroupAvatarUrls";
 import { PUBLISH_STATE_TITLE, PublishStateMessage } from "../../components/common/PublishStateMessage";
 import { getAvatarUrl } from "../../utils/avatarCache";
@@ -745,9 +746,23 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     : null;
   const selectedSentInstanceName =
     isSentViewActive && selectedAliasScope === "sent" ? selectedAlias : null;
+  // Names hidden by hand, or with nothing left in their inbox when that is on
+  // (Settings → Mail); their mail stays in the combined Inbox.
+  const inboxNamesPreference = useInboxNamesPreference(user?.address);
   const inboxSidebarNames = useMemo(() => {
-    return sortOwnedNamesForDisplay([...ownedInboxNames], user?.name);
-  }, [ownedInboxNames, user?.name]);
+    // Only another name's own inbox, once loaded, can be known to be empty.
+    const isEmpty = (name: string) => {
+      if (name.toLowerCase() === normalizedUserName) return false;
+      const rows = visibleCombinedAliasInboxMessages[name];
+      return Array.isArray(rows) && !rows.some(row => !Object.prototype.hasOwnProperty.call(archived, getMailMessageId(row)));
+    };
+    return visibleInboxNames(
+      sortOwnedNamesForDisplay([...ownedInboxNames], user?.name),
+      inboxNamesPreference,
+      isEmpty,
+      selectedInboxInstanceName
+    );
+  }, [archived, inboxNamesPreference, normalizedUserName, ownedInboxNames, selectedInboxInstanceName, user?.name, visibleCombinedAliasInboxMessages]);
   const aliasSidebarNames = useMemo(() => {
     return [...watchedAliases].sort((a, b) => {
       return a.localeCompare(b, undefined, { sensitivity: "base" });
@@ -3528,6 +3543,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       onOpenSettings={openSettings}
       version={packageJson.version}
       onClose={isDesktopLayout ? undefined : () => setRailOpen(false)}
+      onHideInboxName={name => setInboxNameHidden(user?.address, name, true)}
     />
   );
 

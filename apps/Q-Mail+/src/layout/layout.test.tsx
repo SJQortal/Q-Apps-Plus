@@ -231,6 +231,34 @@ describe('Rail', () => {
     expect(grouped.sections[3].children.map((c) => c.label)).toEqual(['Devs'])
   })
 
+  it('folds the names under Inbox behind a chevron, remembered, while Inbox still opens the inbox', () => {
+    localStorage.clear()
+    const onSelect = vi.fn()
+    const view = wrap(<Rail items={items} activeItemId="inbox" onSelect={onSelect} onOpenSettings={() => {}} version="1.0.0" />)
+    const fold = screen.getByRole('button', { name: 'Hide the names under Inbox' })
+    expect(fold.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(fold)
+    expect(screen.queryByRole('button', { name: 'alice' })).toBeNull()
+    expect(onSelect).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Inbox' }))
+    expect(onSelect).toHaveBeenCalledWith('inbox')
+    // Remembered on this device.
+    view.unmount()
+    wrap(<Rail items={items} activeItemId="inbox" onSelect={() => {}} onOpenSettings={() => {}} version="1.0.0" />)
+    expect(screen.queryByRole('button', { name: 'alice' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Show the names under Inbox' }))
+    expect(screen.getByRole('button', { name: 'alice' })).toBeTruthy()
+  })
+
+  it("a name's menu under Inbox hides it from the list", async () => {
+    localStorage.clear()
+    const onHide = vi.fn()
+    wrap(<Rail items={items} activeItemId="inbox" onSelect={() => {}} onOpenSettings={() => {}} version="1.0.0" onHideInboxName={onHide} />)
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'bob' }), { clientX: 20, clientY: 20 })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Hide from the list' }))
+    expect(onHide).toHaveBeenCalledWith('bob')
+  })
+
   it('renders the model and forwards selections', () => {
     const onSelect = vi.fn()
     const onOpenSettings = vi.fn()

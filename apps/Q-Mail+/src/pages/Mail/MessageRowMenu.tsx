@@ -20,6 +20,7 @@ import CheckBoxOutlineBlankOutlinedIcon from "@mui/icons-material/CheckBoxOutlin
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import UnfoldMoreOutlinedIcon from "@mui/icons-material/UnfoldMoreOutlined";
 import UnfoldLessOutlinedIcon from "@mui/icons-material/UnfoldLessOutlined";
+import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
 import { BottomSheetMenu } from "../../components/common/BottomSheetMenu";
 import type { MenuPoint } from "../../hooks/useContextMenuTrigger";
 import type { RowMenuAction, RowMenuActionId } from "./rowMenuActions";
@@ -38,6 +39,7 @@ const ICONS: Record<RowMenuActionId, ReactNode> = {
   delete: <DeleteOutlineIcon fontSize="small" />,
   expand: <UnfoldMoreOutlinedIcon fontSize="small" />,
   collapse: <UnfoldLessOutlinedIcon fontSize="small" />,
+  hide: <VisibilityOffOutlinedIcon fontSize="small" />,
 };
 
 export interface MessageRowMenuProps {

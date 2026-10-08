@@ -39,6 +39,7 @@ import packageJson from '../../../package.json';
 import { ChangelogDialog } from './ChangelogDialog';
 import { PUBLISH_STATE_TITLE, PublishStateMessage } from '../../components/common/PublishStateMessage';
 import { FooterSettings } from './FooterSettings';
+import { InboxNamesSettings } from './InboxNamesSettings';
 import { SETTINGS_PATH } from './settingsPath';
 
 export { SETTINGS_PATH };
@@ -305,6 +306,7 @@ export function SettingsPage() {
               />
             }
           />
+          <InboxNamesSettings address={user?.address || ''} names={names.map((entry) => entry.name)} />
           <Row label="Blocked names" hint="Mail from blocked names is hidden.">
             <Button
               variant="outlined"
