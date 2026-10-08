@@ -21,7 +21,7 @@
  * buttons in a wide pane and 44 px icon buttons with aria-labels in a
  * compact one (phones); they carry aria-keyshortcuts for the e / u keys.
  */
-import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, IconButton, Tooltip, Typography, useTheme } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ReplyOutlinedIcon from "@mui/icons-material/ReplyOutlined";
@@ -130,6 +130,23 @@ export const ShowMessageV2 = ({
   const downloadAll = useDownloadAll(attachments);
 
   const earlier = useEarlierMessages(message, showEarlier);
+
+  // Focus follows the earlier messages: a pressed Retry, or a "Show older"
+  // that goes away when nothing older is left, would otherwise leave focus on
+  // nothing (the page's body). It moves to the message's place in the list,
+  // which stays while that message loads.
+  const earlierItemEls = useRef(new Map<string, HTMLElement>());
+  const focusOldestEarlier = useRef(false);
+  useEffect(() => {
+    if (!focusOldestEarlier.current) return;
+    focusOldestEarlier.current = false;
+    const oldest = earlier.items[0];
+    if (oldest) earlierItemEls.current.get(oldest.entry.key)?.focus();
+  });
+  const showOlderEarlier = () => {
+    if (earlier.hidden <= EARLIER_PAGE_SIZE) focusOldestEarlier.current = true;
+    earlier.showOlder();
+  };
 
   const handleClose = () => {
     if (typeof onClose === "function") {
@@ -336,7 +353,7 @@ export const ShowMessageV2 = ({
           </Button>
           {showEarlier && earlier.hidden > 0 && (
             <Button
-              onClick={earlier.showOlder}
+              onClick={showOlderEarlier}
               sx={{ alignSelf: "flex-start", minHeight: 44, textTransform: "none" }}
             >
               {olderLabel(earlier.hidden)}
@@ -353,14 +370,30 @@ export const ShowMessageV2 = ({
                 <EarlierMessagePlaceholder
                   name={entry.reference?.name || "Unknown"}
                   status={load.status}
-                  onRetry={() => earlier.retry(entry.key)}
+                  onRetry={() => {
+                    earlierItemEls.current.get(entry.key)?.focus();
+                    earlier.retry(entry.key);
+                  }}
                 />
               );
-              // One earlier message that cannot be drawn says so in its place.
               return (
-                <ErrorBoundary key={entry.key} fallback={<EarlierMessageUnreadable />}>
-                  {card}
-                </ErrorBoundary>
+                <Box
+                  key={entry.key}
+                  ref={(el: HTMLElement | null) => {
+                    if (el) earlierItemEls.current.set(entry.key, el);
+                    else earlierItemEls.current.delete(entry.key);
+                  }}
+                  tabIndex={-1}
+                  data-earlier-item=""
+                  sx={{
+                    borderRadius: 1,
+                    "&:focus": { outline: "none" },
+                    "&:focus-visible": { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
+                  }}
+                >
+                  {/* One earlier message that cannot be drawn says so in its place. */}
+                  <ErrorBoundary fallback={<EarlierMessageUnreadable />}>{card}</ErrorBoundary>
+                </Box>
               );
             })}
         </Box>

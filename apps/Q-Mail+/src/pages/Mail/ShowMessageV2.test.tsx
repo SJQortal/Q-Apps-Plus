@@ -408,5 +408,22 @@ describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
     available = true
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(await screen.findByText('Message m0 body')).toBeTruthy()
+    // Focus stayed with the message's place while Retry went away.
+    const focused = document.activeElement as HTMLElement
+    expect(focused.hasAttribute('data-earlier-item')).toBe(true)
+    expect(focused.textContent).toContain('Message m0 body')
+  })
+
+  it('moves focus to the oldest message when Show older goes away', async () => {
+    wrap(<ShowMessageV2 message={reply(7)} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 7 messages' }))
+    const older = await screen.findByRole('button', { name: 'Show 2 older messages' })
+    older.focus()
+    fireEvent.click(older)
+    await screen.findByRole('article', { name: 'alice: Message m0' })
+    expect(screen.queryByRole('button', { name: /older message/ })).toBeNull()
+    const focused = document.activeElement as HTMLElement
+    expect(focused.hasAttribute('data-earlier-item')).toBe(true)
+    expect(focused.querySelector('[role="article"], article')?.getAttribute('aria-label')).toBe('alice: Message m0')
   })
 })
