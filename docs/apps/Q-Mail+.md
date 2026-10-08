@@ -1575,6 +1575,9 @@ Simon answered the five questions before going to sleep. He asked for exact date
 | `94810299` | Each group's avatar is asked once per session; a running request is shared. Groups 694 and 659 used to be asked twice at the same moment. |
 | `e3ca4aca` | **One search for every group's threads** (`groupsWithThreadActivity`) replaces one per joined group. The network held 157 thread headers in 34 groups. Same identifier test; per-group probes as the fallback. |
 | `1625a319` | The inbox poll backs off to every 2 minutes at most (was 5), so new mail shows within 2 minutes. |
+| `a83b2ae4` | **The published-state question comes once per name per session** (`publishedStatePlan`). "Not now" stays no, a name without a document is not searched again, and "Load state" reloads without asking when the name comes back (Follow-ups: "Load-state prompt per name"). Checked in Hub: Simon James → POS+ → Simon James after "Not now" brought no prompt. |
+| `2498f734` | **The rail's "Publish Q-Mail State" asks first** (audit UX #4), with the same question as Settings → Sync (`PublishStateMessage`). Checked in Hub: Cancel leaves no Hub request. |
+| `40d6d2f6`, `ce9ff29b` | **The reader shows the Cc names** ("cc POS+, MA's, …", Follow-ups question 1) and names the To of the send on every copy (`to[0]`, falling back to `recipient`). The copy delivered to a Cc name used to say "to" that name. Checked on Tester Hub's "Q-Mail+ test 2: copies to five names": "to Simon James · cc POS+, MA's, Custom Node on Qortal GO \| GUIDE, biohackerscorner.com". |
 
 **First load on Simon's account** (88 names, 43 groups; from a reload with the resource-timing buffer at 5,000; the inbox, Sent and Threads lists were compared after each step):
 
