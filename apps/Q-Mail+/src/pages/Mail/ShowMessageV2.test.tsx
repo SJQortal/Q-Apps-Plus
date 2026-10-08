@@ -153,13 +153,13 @@ describe('ShowMessageV2', () => {
     expect(setForwardInfo).toHaveBeenCalledTimes(1)
   })
 
-  it('collapses earlier messages with a count, ignoring the local read marker, and expands in order', () => {
+  it('collapses earlier messages with a count, ignoring the local read marker, and lists them newest first', () => {
     wrap(<ShowMessageV2 message={message} />)
     const toggle = screen.getByRole('button', { name: /Show earlier · 2 messages/ })
     expect(screen.queryByText('Re: Lunch')).toBeNull()
     fireEvent.click(toggle)
     const articles = screen.getAllByRole('article', { name: /Lunch/ }).filter((a) => a.getAttribute('aria-label') !== 'Lunch <plan>')
-    expect(articles.map((a) => a.getAttribute('aria-label'))).toEqual(['alice: Lunch', 'bob: Re: Lunch'])
+    expect(articles.map((a) => a.getAttribute('aria-label'))).toEqual(['bob: Re: Lunch', 'alice: Lunch'])
     // Entries come from the sender's body: quoted, never styled as the viewer's own.
     expect(screen.queryByText('You')).toBeNull()
     expect(screen.getAllByText(/^Quoted by /)).toHaveLength(2)
@@ -277,7 +277,11 @@ describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
     expect(screen.getByText('The sender deleted this message.')).toBeTruthy()
     expect(screen.queryByText('Message m5 body')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show 2 older messages' }))
+    // "Show older" sits below the cards, after the oldest one shown.
+    const older = screen.getByRole('button', { name: 'Show 2 older messages' })
+    const items = Array.from(document.querySelectorAll('[data-earlier-item]'))
+    expect(items[items.length - 1].compareDocumentPosition(older) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.click(older)
     expect(await screen.findByText('This message was not sent to you, so it can\'t be opened.')).toBeTruthy()
     await screen.findByRole('article', { name: 'alice: Message m0' })
     expect(screen.queryByRole('button', { name: /older/ })).toBeNull()
@@ -309,7 +313,8 @@ describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Show 5 older messages' }))
     await screen.findByRole('article', { name: 'alice: Message m0' })
     const order = screen.getAllByRole('article').map((a) => a.getAttribute('aria-label')).filter((label) => /^alice: Message m\d$/.test(label || ''))
-    expect(order).toEqual(ids(0, 9).map((id) => `alice: Message ${id}`))
+    // Newest first, down to the start of the conversation.
+    expect(order).toEqual(ids(0, 9).reverse().map((id) => `alice: Message ${id}`))
     expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(10)
     expect(screen.queryByRole('button', { name: /older message/ })).toBeNull()
   })

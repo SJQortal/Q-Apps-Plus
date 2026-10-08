@@ -13,13 +13,12 @@
  * or says why it can't be shown.
  */
 import { useState } from "react";
-import { Avatar, Box, Button, ButtonBase, CircularProgress, Typography, useTheme } from "@mui/material";
+import { Box, Button, ButtonBase, CircularProgress, Typography, useTheme } from "@mui/material";
 import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
 import { AttachmentList } from "../../components/AttachmentPreview/AttachmentList";
 import { MessageDate } from "./MessageDate";
 import { NameText, spokenName } from "../../components/common/NameText";
-import { firstVisibleChar } from "../../utils/invisibleCharacters";
 import { AvatarWrapper } from "./MailTable";
 import type { EarlierLoad } from "./earlierMessages";
 
@@ -79,15 +78,10 @@ export const ShowMessageV2Replies = ({
           "&:focus-visible": { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
         }}
       >
-        {verified ? (
-          <Box aria-hidden sx={{ display: "flex", flexShrink: 0 }}>
-            <AvatarWrapper height="36px" user={sender} fallback={sender} />
-          </Box>
-        ) : (
-          <Avatar aria-hidden sx={{ width: 36, height: 36, fontSize: "1rem" }}>
-            {(firstVisibleChar(sender) || "?").toUpperCase()}
-          </Avatar>
-        )}
+        {/* The named sender's avatar, quoted copies too: "Quoted by" still says the content is unverified. */}
+        <Box aria-hidden sx={{ display: "flex", flexShrink: 0 }}>
+          <AvatarWrapper height="36px" user={sender} fallback={sender} />
+        </Box>
         <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
           <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, minWidth: 0 }}>
             <Typography noWrap sx={{ fontWeight: 700, fontSize: "0.95rem", minWidth: 0 }}>

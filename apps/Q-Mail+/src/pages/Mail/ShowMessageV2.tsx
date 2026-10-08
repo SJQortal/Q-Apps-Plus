@@ -376,17 +376,10 @@ export const ShowMessageV2 = ({
           >
             {showEarlier ? "Hide earlier" : `Show earlier · ${earlier.total} message${earlier.total === 1 ? "" : "s"}`}
           </Button>
-          {showEarlier && earlier.hidden > 0 && (
-            <Button
-              onClick={showOlderEarlier}
-              sx={{ alignSelf: "flex-start", minHeight: 44, textTransform: "none" }}
-            >
-              {olderLabel(earlier.hidden)}
-            </Button>
-          )}
+          {/* Newest first, right under the message; older ones further down, then "Show older". */}
           {showEarlier &&
-            earlier.items.map(({ entry, load }, index) => {
-              const newest = index === earlier.items.length - 1;
+            [...earlier.items].reverse().map(({ entry, load }, index) => {
+              const newest = index === 0;
               const card = !load ? (
                 <ShowMessageV2Replies message={entry.data} quotedBy={entry.quotedBy || message?.user} defaultExpanded={newest} />
               ) : load.status === "loaded" ? (
@@ -425,6 +418,14 @@ export const ShowMessageV2 = ({
                 </Box>
               );
             })}
+          {showEarlier && earlier.hidden > 0 && (
+            <Button
+              onClick={showOlderEarlier}
+              sx={{ alignSelf: "flex-start", minHeight: 44, textTransform: "none" }}
+            >
+              {olderLabel(earlier.hidden)}
+            </Button>
+          )}
         </Box>
       )}
     </Box>
