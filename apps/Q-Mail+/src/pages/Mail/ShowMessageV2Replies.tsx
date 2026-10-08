@@ -44,7 +44,7 @@ export const ShowMessageV2Replies = ({
 }: {
   message: any;
   defaultExpanded?: boolean;
-  /** Who included this entry in their message (the current message's sender). */
+  /** Who included this entry in their message (the open message's sender, or the earlier message it came from). */
   quotedBy?: string;
   /** Fetched from QDN under its publisher's name, not quoted. */
   verified?: boolean;

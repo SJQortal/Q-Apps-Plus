@@ -96,6 +96,21 @@ describe('extendEarlierEntries (walking back)', () => {
     expect(walked[0].data).toEqual({ id: 'm0', user: 'alice', subject: 'first' })
   })
 
+  it('credits a copy found in another message to that message\'s publisher', () => {
+    const base = earlierEntriesOf(replyWith(refs('erin', ['m2'])))
+    const m2 = {
+      id: 'm2',
+      user: 'erin',
+      generalData: { threadV2: [{ ...ref('dave', 'm1'), data: { id: 'm1', user: 'dave', subject: 'first' } }, ref('dave', 'm0')] },
+    }
+    const walked = extendEarlierEntries(base, [{ key: 'erin|m2', message: m2, publisher: 'erin' }])
+    expect(walked.map((entry) => [entry.key, entry.quotedBy])).toEqual([
+      ['dave|m1', 'erin'],
+      ['dave|m0', undefined], // a reference: fetched and verified, nobody quoted it
+      ['erin|m2', undefined],
+    ])
+  })
+
   it('stops at a safety bound', () => {
     const base = earlierEntriesOf(replyWith(refs('bob', ['last'])))
     const huge = { id: 'last', user: 'bob', generalData: { threadV2: refs('bob', Array.from({ length: 800 }, (_, i) => `m${i}`)) } }

@@ -46,6 +46,12 @@ export interface EarlierEntry {
   reference: EarlierReference | null;
   /** The copy the sender embedded, if any. */
   data: any | null;
+  /**
+   * Who published the copy in `data`, when it came from another earlier
+   * message (walking back) rather than the open one; the reader names them
+   * as the one who quoted it.
+   */
+  quotedBy?: string;
 }
 
 export type EarlierLoad =
@@ -119,6 +125,8 @@ export function earlierEntriesOf(message: any): EarlierEntry[] {
 export interface EarlierSource {
   key: string;
   message: any;
+  /** Who published the bytes it was read from: its own publisher when fetched, else whoever quoted it. */
+  publisher?: string;
 }
 
 /**
@@ -152,7 +160,8 @@ export function extendEarlierEntries(
         continue;
       }
       const at = list.findIndex(item => item.key === anchor);
-      list.splice(at < 0 ? 0 : at, 0, entry);
+      // A copy embedded in the source was quoted by the source's publisher.
+      list.splice(at < 0 ? 0 : at, 0, entry.data && source.publisher ? { ...entry, quotedBy: source.publisher } : entry);
       known.add(entry.key);
       anchor = entry.key;
     }

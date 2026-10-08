@@ -309,7 +309,7 @@ export const ShowMessageV2 = ({
             earlier.items.map(({ entry, load }, index) => {
               const newest = index === earlier.items.length - 1;
               const card = !load ? (
-                <ShowMessageV2Replies message={entry.data} quotedBy={message?.user} defaultExpanded={newest} />
+                <ShowMessageV2Replies message={entry.data} quotedBy={entry.quotedBy || message?.user} defaultExpanded={newest} />
               ) : load.status === "loaded" ? (
                 <ShowMessageV2Replies message={load.message} verified defaultExpanded={newest} />
               ) : (

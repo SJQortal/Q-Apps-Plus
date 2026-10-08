@@ -81,8 +81,9 @@ export function useEarlierMessages(message: any, open: boolean) {
     let list = baseEntries;
     for (let round = 0; round < WALK_ROUNDS; round += 1) {
       const sources: EarlierSource[] = list.flatMap(entry => {
-        const known = entry.data ?? fetchedMessage(entry);
-        return known ? [{ key: entry.key, message: known }] : [];
+        if (entry.data) return [{ key: entry.key, message: entry.data, publisher: entry.quotedBy ?? messageUser }];
+        const fetched = fetchedMessage(entry);
+        return fetched ? [{ key: entry.key, message: fetched, publisher: entry.reference?.name }] : [];
       });
       const next = extendEarlierEntries(list, sources, exclude);
       if (next.length === list.length) break;

@@ -318,6 +318,28 @@ describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
     expect(qortalCalls('FETCH_QDN_RESOURCE').map((request) => request.identifier).sort()).toEqual(['m3', 'm4'])
   })
 
+  it('names who quoted a copy found by walking back: the earlier message\'s sender, not the open one\'s', async () => {
+    // carol's open reply links erin's m2; erin's m2 (fetched) embedded dave's m1.
+    mockQortalAction('FETCH_QDN_RESOURCE', (request: any) => `ENC:${request.identifier}`)
+    mockQortalAction('DECRYPT_DATA', () =>
+      btoa(JSON.stringify({
+        subject: 'Message m2',
+        createdAt: 2000,
+        version: 1,
+        attachments: [],
+        textContentV2: '<p>Message m2 body</p>',
+        generalData: { thread: [], threadV2: [{ reference: { identifier: 'm1', name: 'dave', service: 'MAIL_PRIVATE' }, data: { id: 'm1', user: 'dave', subject: 'Message m1', createdAt: 1000, textContentV2: '<p>first</p>' } }] },
+      }))
+    )
+    const open = { ...reply(0), user: 'carol', generalData: { thread: [], threadV2: [{ reference: { identifier: 'm2', name: 'erin', service: 'MAIL_PRIVATE' } }] } }
+    wrap(<ShowMessageV2 message={open} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 1 message' }))
+    expect(await screen.findByText('Message m2 body')).toBeTruthy()
+    const m1 = await screen.findByRole('article', { name: 'dave: Message m1' })
+    expect(m1.getAttribute('aria-description')).toBe('Quoted by erin, not verified')
+    expect(screen.queryByText(/Quoted by carol/)).toBeNull()
+  })
+
   it('words the Show older button by what is left', () => {
     expect(olderLabel(1)).toBe('Show 1 older message')
     expect(olderLabel(5)).toBe('Show 5 older messages')
