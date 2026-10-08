@@ -245,6 +245,36 @@ describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
     expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(7)
   })
 
+  it('walks back through the earlier messages\' own links to the start of the conversation', async () => {
+    // The open reply links m5..m9 (a 1.0.1 reply links its newest ten); m5 linked m0..m4.
+    const ids = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => `m${from + i}`)
+    const refOf = (id: string) => ({ reference: { identifier: id, name: 'alice', service: 'MAIL_PRIVATE' } })
+    mockQortalAction('FETCH_QDN_RESOURCE', (request: any) => `ENC:${request.identifier}`)
+    mockQortalAction('DECRYPT_DATA', (request: any) => {
+      const id = String(request.encryptedData).slice(4)
+      const n = Number(id.slice(1))
+      return btoa(JSON.stringify({
+        subject: `Message ${id}`,
+        createdAt: 1000 + n,
+        version: 1,
+        attachments: [],
+        textContentV2: `<p>Message ${id} body</p>`,
+        generalData: { thread: [], threadV2: id === 'm5' ? ids(0, 4).map(refOf) : [] },
+      }))
+    })
+    const message = { ...reply(0), generalData: { thread: [], threadV2: ids(5, 9).map(refOf) } }
+    wrap(<ShowMessageV2 message={message} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 5 messages' }))
+    expect(await screen.findByText('Message m9 body')).toBeTruthy()
+    // m5 arrives and leads further back.
+    fireEvent.click(await screen.findByRole('button', { name: 'Show 5 older messages' }))
+    await screen.findByRole('article', { name: 'alice: Message m0' })
+    const order = screen.getAllByRole('article').map((a) => a.getAttribute('aria-label')).filter((label) => /^alice: Message m\d$/.test(label || ''))
+    expect(order).toEqual(ids(0, 9).map((id) => `alice: Message ${id}`))
+    expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(10)
+    expect(screen.queryByRole('button', { name: /older message/ })).toBeNull()
+  })
+
   it('words the Show older button by what is left', () => {
     expect(olderLabel(1)).toBe('Show 1 older message')
     expect(olderLabel(5)).toBe('Show 5 older messages')

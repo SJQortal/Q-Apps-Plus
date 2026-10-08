@@ -7,6 +7,7 @@ import {
   decryptCandidates,
   earlierEntriesOf,
   earlierWindow,
+  extendEarlierEntries,
   loadEarlierMessage,
   needsFetch,
   resetEarlierMessagesCache,
@@ -59,6 +60,48 @@ describe('earlierEntriesOf', () => {
     const entries = earlierEntriesOf({ generalData: { threadV2: [{ data: { user: 'bob', subject: 'old' } }] } })
     expect(entries).toEqual([{ key: 'embedded:0', reference: null, data: { user: 'bob', subject: 'old' } }])
     expect(earlierEntriesOf({})).toEqual([])
+  })
+})
+
+describe('extendEarlierEntries (walking back)', () => {
+  const refs = (name: string, ids: string[]) => ids.map((id) => ref(name, id))
+  const replyWith = (thread: any[]) => ({ id: 'x', user: 'z', generalData: { threadV2: thread } })
+
+  it('adds the references a known message lists, before it, in its order', () => {
+    // The open reply links m5..m9; m5 itself linked m0..m4.
+    const base = earlierEntriesOf(replyWith(refs('bob', ['m5', 'm6', 'm7', 'm8', 'm9'])))
+    const m5 = { id: 'm5', user: 'bob', generalData: { threadV2: refs('bob', ['m0', 'm1', 'm2', 'm3', 'm4']) } }
+    const walked = extendEarlierEntries(base, [{ key: 'bob|m5', message: m5 }])
+    expect(walked.map((entry) => entry.reference?.identifier)).toEqual(['m0', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9'])
+  })
+
+  it('places what it finds between the entries it already has, and adds nothing twice', () => {
+    const base = earlierEntriesOf(replyWith(refs('bob', ['a', 'c', 'e'])))
+    // e lists a..d: b and d are new and land in their places.
+    const e = { id: 'e', user: 'bob', generalData: { threadV2: refs('bob', ['a', 'b', 'c', 'd']) } }
+    const once = extendEarlierEntries(base, [{ key: 'bob|e', message: e }])
+    expect(once.map((entry) => entry.reference?.identifier)).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(extendEarlierEntries(once, [{ key: 'bob|e', message: e }])).toHaveLength(5)
+  })
+
+  it('never adds the open message, and keeps embedded copies as copies', () => {
+    const base = earlierEntriesOf(replyWith(refs('bob', ['m1'])))
+    const m1 = {
+      id: 'm1',
+      user: 'bob',
+      generalData: { threadV2: [{ ...ref('alice', 'm0'), data: { id: 'm0', user: 'alice', subject: 'first' } }, ref('z', 'x')] },
+    }
+    const walked = extendEarlierEntries(base, [{ key: 'bob|m1', message: m1 }], ['z|x'])
+    expect(walked.map((entry) => entry.key)).toEqual(['alice|m0', 'bob|m1'])
+    expect(walked[0].data).toEqual({ id: 'm0', user: 'alice', subject: 'first' })
+  })
+
+  it('stops at a safety bound', () => {
+    const base = earlierEntriesOf(replyWith(refs('bob', ['last'])))
+    const huge = { id: 'last', user: 'bob', generalData: { threadV2: refs('bob', Array.from({ length: 800 }, (_, i) => `m${i}`)) } }
+    const walked = extendEarlierEntries(base, [{ key: 'bob|last', message: huge }])
+    expect(walked).toHaveLength(500)
+    expect(walked[walked.length - 1].key).toBe('bob|last')
   })
 })
 

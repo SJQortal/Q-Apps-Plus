@@ -30,6 +30,8 @@ export const EARLIER_PAGE_SIZE = 5;
 export const EARLIER_FETCH_CONCURRENCY = 2;
 /** Not-yet-available retries per fetch (2 s and 4 s), then "Not available" with Retry. */
 export const EARLIER_FETCH_RETRIES = 2;
+/** Walking back stops after this many earlier messages (a safety bound, far beyond a real conversation). */
+export const EARLIER_MAX_ENTRIES = 500;
 
 export interface EarlierReference {
   name: string;
@@ -111,6 +113,51 @@ export function earlierEntriesOf(message: any): EarlierEntry[] {
     return [...entries].sort((a, b) => Number(a.data.createdAt) - Number(b.data.createdAt));
   }
   return entries;
+}
+
+/** A message the reader already has (an embedded copy or a fetched one), by its entry key. */
+export interface EarlierSource {
+  key: string;
+  message: any;
+}
+
+/**
+ * Walking back: a reply links only its newest earlier messages
+ * (REPLY_HISTORY_MAX_REFERENCES), but each earlier message links its own
+ * predecessors, so the ones the reader already has lead further back.
+ * Returns `entries` plus the references found in those messages that are
+ * not listed yet, each placed before the next one its message lists after
+ * it (or before that message itself), so conversation order holds.
+ * `exclude` holds keys never to add (the open message). At most
+ * EARLIER_MAX_ENTRIES are kept, the newest.
+ */
+export function extendEarlierEntries(
+  entries: EarlierEntry[],
+  sources: EarlierSource[],
+  exclude: Iterable<string> = []
+): EarlierEntry[] {
+  const list = entries.slice();
+  const known = new Set<string>([...list.map(entry => entry.key), ...exclude]);
+  for (const source of sources) {
+    if (list.length >= EARLIER_MAX_ENTRIES) break;
+    const listed = earlierEntriesOf(source.message).filter(entry => entry.reference);
+    if (!listed.some(entry => !known.has(entry.key))) continue;
+    // From the newest back: each new entry goes before the entry that
+    // follows it in the source's own list (or before the source).
+    let anchor = source.key;
+    for (let i = listed.length - 1; i >= 0; i -= 1) {
+      const entry = listed[i];
+      if (known.has(entry.key)) {
+        if (list.some(item => item.key === entry.key)) anchor = entry.key;
+        continue;
+      }
+      const at = list.findIndex(item => item.key === anchor);
+      list.splice(at < 0 ? 0 : at, 0, entry);
+      known.add(entry.key);
+      anchor = entry.key;
+    }
+  }
+  return list.length > EARLIER_MAX_ENTRIES ? list.slice(list.length - EARLIER_MAX_ENTRIES) : list;
 }
 
 /** The newest `count` entries (the ones on screen) and how many older ones are hidden. */
