@@ -56,3 +56,15 @@ describe('buildSidebarItems unread badges', () => {
     expect(items['aliases-instance:shop'].badgeText).toBeUndefined()
   })
 })
+
+describe('buildSidebarItems without group threads (Settings)', () => {
+  it('leaves the Threads section and its groups out, and keeps everything else', () => {
+    const shown = buildSidebarItems({ ...base, isThreadsSectionExpanded: true })
+    const hidden = buildSidebarItems({ ...base, isThreadsSectionExpanded: true, showThreads: false })
+    expect(shown.some((item) => item.id === 'threads')).toBe(true)
+    expect(hidden.some((item) => item.id === 'threads' || item.id.startsWith('threads-group:'))).toBe(false)
+    expect(hidden.map((item) => item.id)).toEqual(
+      shown.filter((item) => item.id !== 'threads' && !item.id.startsWith('threads-group:')).map((item) => item.id)
+    )
+  })
+})

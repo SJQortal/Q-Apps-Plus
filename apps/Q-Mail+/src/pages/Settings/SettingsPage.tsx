@@ -34,6 +34,7 @@ import {
   readAutoApplyQdnState,
   writeAutoApplyQdnState,
 } from '../../utils/qdnStatePreference';
+import { useShowGroupThreads, writeShowGroupThreads } from '../../utils/threadsPreference';
 import packageJson from '../../../package.json';
 import { ChangelogDialog } from './ChangelogDialog';
 import { FooterSettings } from './FooterSettings';
@@ -142,6 +143,7 @@ export function SettingsPage() {
   const [changelogOpen, setChangelogOpen] = useState(false);
   const identityKey = user?.address || user?.name || '';
   const [autoApplyQdnState, setAutoApplyQdnState] = useState(() => readAutoApplyQdnState(identityKey));
+  const showGroupThreads = useShowGroupThreads(user?.address);
 
   useEffect(() => {
     setAutoApplyQdnState(readAutoApplyQdnState(identityKey));
@@ -284,6 +286,27 @@ export function SettingsPage() {
               <Switch
                 checked={state.settings.authOnStartup}
                 onChange={(event) => controller.setAuthOnStartup(event.target.checked)}
+              />
+            }
+          />
+          <FormControlLabel
+            sx={{ m: 0, justifyContent: 'space-between', minHeight: 44, gap: 2 }}
+            labelPlacement="start"
+            disabled={!user?.address}
+            label={
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 500 }}>Show group threads</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Threads in your groups, in the mailboxes and the bottom bar. Off, nothing about threads is shown or
+                  loaded; your thread drafts are kept for when you turn it on again.
+                </Typography>
+              </Box>
+            }
+            control={
+              <Switch
+                checked={showGroupThreads}
+                onChange={(event) => writeShowGroupThreads(user?.address, event.target.checked)}
+                slotProps={{ input: { 'aria-label': 'Show group threads' } }}
               />
             }
           />

@@ -4,7 +4,7 @@
 import { Box, Button, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { ResponsiveDialog } from './ResponsiveDialog';
-import { SHORTCUT_HELP } from '../../hooks/useKeyboardShortcuts';
+import { SHORTCUT_HELP, type ShortcutAction } from '../../hooks/useKeyboardShortcuts';
 
 const Key = styled('kbd')(({ theme }) => ({
   display: 'inline-block',
@@ -25,9 +25,11 @@ const Key = styled('kbd')(({ theme }) => ({
 interface ShortcutsHelpDialogProps {
   open: boolean;
   onClose: () => void;
+  /** Shortcuts that do nothing right now, e.g. Go to Threads while threads are hidden. */
+  hiddenActions?: ShortcutAction[];
 }
 
-export function ShortcutsHelpDialog({ open, onClose }: ShortcutsHelpDialogProps) {
+export function ShortcutsHelpDialog({ open, onClose, hiddenActions }: ShortcutsHelpDialogProps) {
   return (
     <ResponsiveDialog
       open={open}
@@ -45,7 +47,7 @@ export function ShortcutsHelpDialog({ open, onClose }: ShortcutsHelpDialogProps)
           Work while no text field has focus, in a window at least 600 px wide with a keyboard (not on phones or
           touch-only screens). Two-key sequences are typed one after the other.
         </Typography>
-        {SHORTCUT_HELP.map((entry) => (
+        {SHORTCUT_HELP.filter((entry) => !hiddenActions?.includes(entry.action)).map((entry) => (
           <Box
             key={entry.action}
             sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, minHeight: 32 }}

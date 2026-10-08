@@ -104,10 +104,13 @@ export function useComposeDraftCount(address: string): number {
 export interface DraftsMailboxProps {
   address: string;
   onOpenDraft: (key: string, draft: StoredComposeDraft) => void;
+  /** Group threads are hidden (Settings): thread drafts stay stored but out of the list. */
+  hideThreadDrafts?: boolean;
 }
 
-export function DraftsMailbox({ address, onOpenDraft }: DraftsMailboxProps) {
-  const [drafts, setDrafts] = useState<ComposeDraftListItem[]>(() => listComposeDrafts(address));
+export function DraftsMailbox({ address, onOpenDraft, hideThreadDrafts = false }: DraftsMailboxProps) {
+  const [allDrafts, setDrafts] = useState<ComposeDraftListItem[]>(() => listComposeDrafts(address));
+  const drafts = hideThreadDrafts ? allDrafts.filter(item => item.draft.kind !== "thread") : allDrafts;
   const [pendingDelete, setPendingDelete] = useState<ComposeDraftListItem | null>(null);
 
   useEffect(() => {

@@ -105,6 +105,7 @@ import { countUnreadMessages, hasThreadHistory } from "../../utils/readState";
 import type { StoredComposeDraft } from "./composeDrafts";
 import { invalidateThreadSearches } from "./threadData";
 import { useThreadUnreadCounts } from "./threadUnread";
+import { useShowGroupThreads } from "../../utils/threadsPreference";
 import { getAvatarUrl } from "../../utils/avatarCache";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import {
@@ -131,7 +132,7 @@ import { getSentRecipientDisplayLabel } from "./mailIdentifier";
 import { lazyNamed, preloadOnIdle } from "../../components/common/lazyNamed";
 import { ListSkeleton } from "../../layout/states";
 import { TOUR_STATUS_DISMISSED, TOUR_STATUS_STORAGE_KEY } from "./MailTour";
-import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
+import { useKeyboardShortcuts, type ShortcutAction } from "../../hooks/useKeyboardShortcuts";
 import { usePhoneBackClose } from "../../layout/usePhoneBackClose";
 import { errorMessage, isHubDecline } from "../../utils/hubErrors";
 import {
@@ -190,6 +191,8 @@ const INBOX_INSTANCE_ITEM_PREFIX = "inbox-instance:";
 const ALIASES_INSTANCE_ITEM_PREFIX = "aliases-instance:";
 const SENT_INSTANCE_ITEM_PREFIX = "sent-instance:";
 const THREAD_GROUP_ITEM_PREFIX = "threads-group:";
+/** Shortcuts left out of the "?" list while group threads are hidden. */
+const HIDDEN_WITHOUT_THREADS: ShortcutAction[] = ["goThreads"];
 const ALIAS_COMPOSE_ITEM_ID = "alias-compose";
 const PUBLISH_STATE_ITEM_ID = "publish-mail-state";
 const ARCHIVED_ITEM_ID = "archived";
@@ -377,6 +380,8 @@ interface BuildSidebarItemsInput {
   sentNames: string[];
   threadGroups: Array<{ id: string | number; name: string }>;
   isThreadsSectionExpanded: boolean;
+  /** Settings → Mail → Show group threads (default on); off leaves the Threads section out. */
+  showThreads?: boolean;
   selectedAliasInboxName?: string | null;
   primaryName?: string | null;
   canPublishState?: boolean;
@@ -400,6 +405,7 @@ export const buildSidebarItems = ({
   sentNames,
   threadGroups,
   isThreadsSectionExpanded,
+  showThreads = true,
   selectedAliasInboxName,
   primaryName,
   canPublishState,
@@ -460,26 +466,28 @@ export const buildSidebarItems = ({
   });
   items.push({ id: "drafts", label: "Drafts" });
 
-  items.push({
-    id: "threads",
-    label: "Q-Mail Threads",
-    badgeText: isThreadsSectionExpanded ? "-" : "+",
-  });
-  [...threadGroups]
-    .sort((a, b) => {
-      return String(a.name).localeCompare(String(b.name), undefined, {
-        sensitivity: "base",
-      });
-    })
-    .forEach(group => {
-      const unreadThreads = threadUnreadByGroup?.[String(group.id)] || 0;
-      items.push({
-        id: createThreadGroupItemId(group.id),
-        label: group.name,
-        hidden: !isThreadsSectionExpanded,
-        badgeText: unreadThreads > 0 ? formatUnreadBadge(unreadThreads) : undefined,
-      });
+  if (showThreads) {
+    items.push({
+      id: "threads",
+      label: "Q-Mail Threads",
+      badgeText: isThreadsSectionExpanded ? "-" : "+",
     });
+    [...threadGroups]
+      .sort((a, b) => {
+        return String(a.name).localeCompare(String(b.name), undefined, {
+          sensitivity: "base",
+        });
+      })
+      .forEach(group => {
+        const unreadThreads = threadUnreadByGroup?.[String(group.id)] || 0;
+        items.push({
+          id: createThreadGroupItemId(group.id),
+          label: group.name,
+          hidden: !isThreadsSectionExpanded,
+          badgeText: unreadThreads > 0 ? formatUnreadBadge(unreadThreads) : undefined,
+        });
+      });
+  }
   if (canPublishState) {
     items.push({
       id: PUBLISH_STATE_ITEM_ID,
@@ -502,6 +510,8 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
   const { name: composeRouteName } = useParams();
   const { isShow, onOk, show } = useModal();
   const { user } = useSelector((state: RootState) => state.auth);
+  // Settings → Mail → Show group threads: off, nothing about threads is shown or fetched.
+  const showGroupThreads = useShowGroupThreads(user?.address);
   const { registerMailSync, state: appShellState } = useAppShell();
   const { uiTheme } = useHubTheme();
   const textSize = appShellState.settings.textSize;
@@ -1589,7 +1599,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
   }, [watchedAliases]);
 
   useEffect(() => {
-    if (!hasAuthenticatedIdentity || !memberGroupOptions.length) {
+    if (!hasAuthenticatedIdentity || !showGroupThreads || !memberGroupOptions.length) {
       setGroupOptionsWithThreads([]);
       setIsLoadingGroupInstances(false);
       return;
@@ -1625,7 +1635,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     return () => {
       cancelled = true;
     };
-  }, [hasAuthenticatedIdentity, memberGroupOptions]);
+  }, [hasAuthenticatedIdentity, memberGroupOptions, showGroupThreads]);
 
   useEffect(() => {
     if (!selectedGroup || isLoadingGroupInstances) return;
@@ -2476,7 +2486,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
   const { byGroup: threadUnreadByGroup } = useThreadUnreadCounts(
     groupOptionsWithThreads,
     user?.name,
-    { enabled: hasAuthenticatedIdentity }
+    { enabled: hasAuthenticatedIdentity && showGroupThreads }
   );
   const sidebarItems = useMemo(() => {
     return buildSidebarItems({
@@ -2486,6 +2496,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       sentNames: hasAuthenticatedIdentity ? ownedSentNames : [],
       threadGroups: hasAuthenticatedIdentity ? groupOptionsWithThreads : [],
       isThreadsSectionExpanded,
+      showThreads: showGroupThreads,
       selectedAliasInboxName: hasAuthenticatedIdentity
         ? selectedAliasInboxName
         : null,
@@ -2509,6 +2520,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     isPublishingMailState,
     ownedSentNames,
     selectedAliasInboxName,
+    showGroupThreads,
     unreadCounts,
     user?.name,
   ]);
@@ -2851,6 +2863,14 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
   const isComposeView = activeMailboxItem === "compose";
   const isThreadsView = activeMailboxItem === "threads";
 
+  // Hiding group threads (Settings) while they are on screen goes back to the inbox.
+  useEffect(() => {
+    if (showGroupThreads || activeMailboxItem !== "threads") return;
+    setActiveMailboxItem("inbox");
+    setSelectedGroup(null);
+    setCurrentThread(null);
+  }, [activeMailboxItem, showGroupThreads]);
+
   // ---- keyboard shortcuts (≥ 600 px, not touch-only; src/hooks/useKeyboardShortcuts.ts)
   // j/k move through the list the pane shows (the inbox search results or
   // the archived list) by opening the next/previous message in the reading
@@ -2933,7 +2953,10 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       },
       goInbox: () => onSelectSidebarItem("inbox"),
       goSent: () => onSelectSidebarItem("sent"),
-      goThreads: () => onSelectSidebarItem("threads"),
+      goThreads: () => {
+        if (!showGroupThreads) return false;
+        onSelectSidebarItem("threads");
+      },
       goAliases: () => onSelectSidebarItem("aliases"),
       showHelp: () => setShortcutsHelpOpen(open => !open),
     },
@@ -3092,6 +3115,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       <DraftsMailbox
         address={user?.address || ""}
         onOpenDraft={handleOpenDraft}
+        hideThreadDrafts={!showGroupThreads}
       />
     ) : (
       renderAuthenticationPrompt("Inbox")
@@ -3401,6 +3425,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
             inlineMode
             ownedNames={ownedNameCandidates}
             joinedGroups={memberGroupOptions}
+            offerGroups={showGroupThreads}
             priorityRecipientNames={composePriorityRecipientNames}
             recentInboxMessages={combinedInboxMessages}
             openedMessagesById={hashMapMailMessages}
@@ -3510,7 +3535,9 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       items={[
         { id: "inbox", label: "Inbox", icon: <InboxOutlinedIcon />, badge: unreadCounts.inbox || undefined },
         { id: "sent", label: "Sent", icon: <SendOutlinedIcon /> },
-        { id: "threads", label: "Threads", icon: <ForumOutlinedIcon />, badge: Object.values(threadUnreadByGroup || {}).reduce((sum, n) => sum + (n || 0), 0) || undefined },
+        ...(showGroupThreads
+          ? [{ id: "threads", label: "Threads", icon: <ForumOutlinedIcon />, badge: Object.values(threadUnreadByGroup || {}).reduce((sum, n) => sum + (n || 0), 0) || undefined }]
+          : []),
         { id: "aliases", label: "Aliases", icon: <AlternateEmailOutlinedIcon />, badge: unreadCounts.aliases || undefined },
         { id: "menu", label: "Menu", icon: <MenuIcon /> },
       ]}
@@ -3552,6 +3579,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
               <ShortcutsHelpDialog
                 open={shortcutsHelpOpen}
                 onClose={() => setShortcutsHelpOpen(false)}
+                hiddenActions={showGroupThreads ? undefined : HIDDEN_WITHOUT_THREADS}
               />
             </React.Suspense>
           )}

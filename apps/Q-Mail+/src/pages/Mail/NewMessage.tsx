@@ -295,6 +295,12 @@ interface NewMessageProps {
   onRequestClose?: () => void;
   ownedNames?: string[];
   joinedGroups?: JoinedGroupOption[];
+  /**
+   * Offer joined groups as targets (a new group thread). Off while group
+   * threads are hidden (Settings): no group suggestions and no typed name
+   * taken for a group; a group target the composer was opened with still works.
+   */
+  offerGroups?: boolean;
   priorityRecipientNames?: string[];
   /** Inbox rows and opened messages, to order "Recent" names by last contact. */
   recentInboxMessages?: any[];
@@ -374,6 +380,7 @@ export const NewMessage = ({
   onRequestClose,
   ownedNames = NO_NAMES,
   joinedGroups = NO_GROUPS,
+  offerGroups = true,
   priorityRecipientNames = NO_NAMES,
   recentInboxMessages = NO_MESSAGES,
   openedMessagesById,
@@ -561,6 +568,7 @@ export const NewMessage = ({
   }, [knownRecipientNameOptions]);
 
   const joinedGroupTargetOptions = useMemo(() => {
+    if (!offerGroups) return [];
     return joinedGroupOptions.map(group => {
       return {
         id: `group:${String(group.id).trim()}`,
@@ -571,7 +579,7 @@ export const NewMessage = ({
         groupId: String(group.id).trim(),
       };
     });
-  }, [joinedGroupOptions]);
+  }, [joinedGroupOptions, offerGroups]);
 
   const normalizedDestination = useMemo(() => {
     return normalizeValue(destinationName);
@@ -664,9 +672,11 @@ export const NewMessage = ({
       };
     }
 
-    const matchingJoinedGroup = joinedGroupOptions.find(group => {
-      return normalizeValue(group.name) === normalizedInput;
-    });
+    const matchingJoinedGroup = offerGroups
+      ? joinedGroupOptions.find(group => {
+          return normalizeValue(group.name) === normalizedInput;
+        })
+      : undefined;
     if (matchingJoinedGroup) {
       return {
         type: "group",
@@ -679,7 +689,7 @@ export const NewMessage = ({
       type: "name",
       label: destinationName.trim(),
     };
-  }, [destinationName, joinedGroupOptions, selectedTargetOption]);
+  }, [destinationName, joinedGroupOptions, offerGroups, selectedTargetOption]);
 
   const resolvedTarget = useMemo(
     () => resolveComposeTarget(),
@@ -2086,7 +2096,7 @@ export const NewMessage = ({
                     <TextField
                       {...params}
                       variant="standard"
-                      placeholder="Type a name or joined group"
+                      placeholder={offerGroups ? "Type a name or joined group" : "Type a name"}
                       sx={[
                         {
                           width: "100%",
@@ -2286,7 +2296,9 @@ export const NewMessage = ({
                   ? <><NameText name={recipientCheck.name} /> is a registered name</>
                   : recipientCheck?.status === "checking"
                   ? "Checking the name…"
-                  : "Type to search joined groups and registered names."}
+                  : offerGroups
+                  ? "Type to search joined groups and registered names."
+                  : "Type to search registered names."}
               </Typography>
             </Box>
           )}
