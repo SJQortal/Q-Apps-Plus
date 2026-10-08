@@ -39,7 +39,7 @@ import { RootState } from "../../state/store";
 import { setNotification } from "../../state/features/notificationsSlice";
 import ReadOnlySlate from "../../components/editor/ReadOnlySlate";
 import { AvatarWrapper } from "./MailTable";
-import { NameText, srOnly } from "../../components/common/NameText";
+import { NameText, spokenName, srOnly } from "../../components/common/NameText";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
 import { EarlierMessagePlaceholder, EarlierMessageUnreadable, ShowMessageV2Replies } from "./ShowMessageV2Replies";
 import { ErrorBoundary } from "../../components/common/ErrorBoundary";
@@ -409,6 +409,10 @@ export const ShowMessageV2 = ({
                     else earlierItemEls.current.delete(entry.key);
                   }}
                   tabIndex={-1}
+                  role="group"
+                  aria-label={`Earlier message from ${spokenName(
+                    entry.reference?.name || (typeof entry.data?.user === "string" ? entry.data.user : "") || "Unknown"
+                  )}`}
                   data-earlier-item=""
                   sx={{
                     borderRadius: 1,

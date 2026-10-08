@@ -442,7 +442,7 @@ describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
     expect(await screen.findByText('Message m0 body')).toBeTruthy()
     // Focus stayed with the message's place while Retry went away.
     const focused = document.activeElement as HTMLElement
-    expect(focused.hasAttribute('data-earlier-item')).toBe(true)
+    expect(focused).toBe(screen.getByRole('group', { name: 'Earlier message from alice' }))
     expect(focused.textContent).toContain('Message m0 body')
   })
 
