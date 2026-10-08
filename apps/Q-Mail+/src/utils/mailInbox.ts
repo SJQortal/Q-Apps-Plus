@@ -315,12 +315,15 @@ export const hasInboxMailActivityForOwnedName = async (
 export const mapWithConcurrency = async <T, R>(
   items: T[],
   limit: number,
-  fn: (item: T, index: number) => Promise<R>
+  fn: (item: T, index: number) => Promise<R>,
+  /** Checked before each item: true stops taking new ones (the caller was cancelled). */
+  shouldStop?: () => boolean
 ): Promise<R[]> => {
   const results = new Array<R>(items.length);
   let next = 0;
   const worker = async () => {
     while (next < items.length) {
+      if (shouldStop?.()) return;
       const index = next;
       next += 1;
       results[index] = await fn(items[index], index);
@@ -381,8 +384,7 @@ export const ownedNamesWithSentMail = async (names: string[]): Promise<Set<strin
   ];
   for (const config of configs) {
     for (const chunk of chunked(owned.filter(name => !found.has(lower(name))), NAMES_PER_SEARCH)) {
-      const wanted = new Set(chunk.map(lower));
-      const build = (offset: number) => {
+      const build = (namesNow: string[], offset: number) => {
         const params = new URLSearchParams({
           mode: "ALL",
           service: MAIL_SERVICE_TYPE,
@@ -395,32 +397,61 @@ export const ownedNamesWithSentMail = async (names: string[]): Promise<Set<strin
           excludeblocked: "true",
         });
         if (config.identifier) params.set("identifier", config.identifier);
-        chunk.forEach(name => params.append("name", name));
+        namesNow.forEach(name => params.append("name", name));
         return params;
       };
+      // A name found is dropped from the search, which starts again without
+      // it: one name with thousands of sent messages no longer fills every
+      // page (up to MERGED_PROBE_MAX_PAGES pages in all per chunk).
+      let remaining = chunk.filter(name => !found.has(lower(name)));
+      let pages = 0;
+      let complete = false;
       try {
-        const complete = await readPages(
-          build,
-          rows =>
+        while (remaining.length && pages < MERGED_PROBE_MAX_PAGES) {
+          const wanted = new Set(remaining.map(lower));
+          let offset = 0;
+          let foundNew = false;
+          let short = false;
+          while (pages < MERGED_PROBE_MAX_PAGES) {
+            const rows = await searchResources(build(remaining, offset));
+            pages += 1;
             rows.forEach(item => {
               const itemName = lower(item?.name);
               const identifier = typeof item?.identifier === "string" ? item.identifier : "";
-              if (wanted.has(itemName) && isSentMailIdentifier(identifier) && !isDeletedSentResourceInSearch(item)) {
+              if (wanted.has(itemName) && !found.has(itemName) && isSentMailIdentifier(identifier) && !isDeletedSentResourceInSearch(item)) {
                 found.add(itemName);
+                foundNew = true;
               }
-            }),
-          () => chunk.every(name => found.has(lower(name)))
-        );
-        if (!complete) chunk.forEach(name => unsettled.add(name));
+            });
+            if (rows.length < MERGED_PAGE_SIZE) {
+              short = true;
+              break;
+            }
+            if (foundNew) break;
+            offset += rows.length;
+          }
+          // Every row of the names still searched was read: those not found have none.
+          if (short) {
+            complete = true;
+            break;
+          }
+          remaining = remaining.filter(name => !found.has(lower(name)));
+          if (!remaining.length) complete = true;
+        }
+        if (!complete) remaining.forEach(name => unsettled.add(name));
       } catch {
-        chunk.forEach(name => unsettled.add(name));
+        chunk.forEach(name => {
+          if (!found.has(lower(name))) unsettled.add(name);
+        });
       }
     }
   }
-  for (const name of unsettled) {
-    if (found.has(lower(name))) continue;
-    if (await hasSentMailActivityForOwnedName(name)) found.add(lower(name));
-  }
+  // Names a merged search could not settle get the per-name probe, four at a time.
+  const open = [...unsettled].filter(name => !found.has(lower(name)));
+  const active = await mapWithConcurrency(open, 4, async name => ((await hasSentMailActivityForOwnedName(name)) ? lower(name) : ""));
+  active.forEach(name => {
+    if (name) found.add(name);
+  });
   return found;
 };
 

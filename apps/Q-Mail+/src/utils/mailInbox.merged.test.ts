@@ -60,7 +60,23 @@ describe('ownedNamesWithSentMail', () => {
     const found = await ownedNamesWithSentMail(['Alice', 'Bob'])
     expect([...found]).toEqual(['bob'])
     const perName = searches().filter((url) => paramsOf(url).getAll('name').length === 1)
-    expect(perName.map((url) => paramsOf(url).get('name'))).toEqual(['Alice', 'Alice', 'Bob'])
+    // Four at a time now, so the order may interleave.
+    expect(perName.map((url) => paramsOf(url).get('name')).sort()).toEqual(['Alice', 'Alice', 'Bob'])
+  })
+
+  it('drops a name from the search once found, so a prolific sender does not fill every page', async () => {
+    // Page 1 for Alice+Bob is full of Alice's sent mail; then Bob alone has none.
+    const alicePage = Array.from({ length: 200 }, (_, i) => ({ name: 'Alice', identifier: `_mail_qortal_qmail_zed_${SUFFIX}_mail_a${i}`, metadata: {} }))
+    mockFetchRoute(/name=Alice&name=Bob/, alicePage)
+    mockFetchRoute(/arbitrary\/resources\/search/, [])
+    const found = await ownedNamesWithSentMail(['Alice', 'Bob'])
+    expect([...found]).toEqual(['alice'])
+    const merged = searches().filter((url) => paramsOf(url).get('query') === '_mail_qortal_qmail_')
+    // Alice+Bob once, then Bob alone from offset 0 (settled by a short page): no paging through Alice's mail.
+    expect(merged.map((url) => [paramsOf(url).getAll('name').join('+'), paramsOf(url).get('offset')])).toEqual([
+      ['Alice+Bob', '0'],
+      ['Bob', '0'],
+    ])
   })
 })
 
