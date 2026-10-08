@@ -1671,10 +1671,47 @@ From Simon's screenshot of an archived conversation with Juan Qortal:
 - **Earlier messages newest first** (`8b4432be`): under the open message they run from the newest (open) down to the oldest, with "Show older" at the bottom, so reading on goes back in time. Quoted copies (Q-Mail or 1.0.0 mail) showed a letter instead of the sender's avatar; they show the avatar now, and "Quoted by" still marks them unverified.
 - **Names under Inbox:** the names under Inbox, Aliases and Sent fold behind a chevron of their own (the section row still opens the mailbox), remembered on this device (`qmail_rail_collapsed_sections`). A name under Inbox can be hidden from its menu (right click, long press: "Hide from the list"); Settings → Mail lists hidden names with Show. "Hide names with nothing in the inbox" (off by default) leaves out another name whose inbox has loaded with every message archived. Per account, local only (`qmail_hidden_inbox_names_<address>`, `qmail_hide_empty_inbox_names_<address>`); a hidden name's mail stays in the combined Inbox, and the name being viewed never hides (`utils/inboxNamesPreference.ts`).
 
+### Attachments from the list, composer tiles, smoother folding (2026-10-08, Simon's requests)
+
+- **Attachments from a list row:** a paperclip button on rows known to have attachments, and "Attachments" in every row's menu (rows not decrypted yet included). `RowAttachmentsDialog` (own chunk) uses the session's decrypted copy, or fetches and decrypts the message through the earlier-messages loader (retries, session cache); it does not open the message, mark it read or add it to `hashMapMailMessages`. Same cards as the reader (Open, Save, Save all).
+- **PDF card:** Download and Open PDF side by side in the name's row; under the name when the card is narrow, sharing one row on phones.
+- **Composer:** "Attach files" is an outlined button (the old control was an image in a drop zone, a known accessibility gap); the row is the drop zone and lights up while dragging. Attached files are tiles in a grid (two per row on a phone) with image thumbnails, size, "forwarded" and a missing-extension warning; a tap previews the local file (`LocalAttachmentPreview`, own chunk: images, text, PDF, audio, video; other kinds say there is no preview). Nothing is fetched or published by a preview. Not changed: the group-thread composer's attach control.
+- **Motion:** names under the mailboxes, sender groups, the earlier-messages section and each earlier message fold with MUI `Collapse` (200 ms, 0 with `prefers-reduced-motion`: `hooks/useReducedMotion.ts`); the chevrons rotate. "Hide from the list" is optimistic: the name folds away at once and the mailboxes' heavier update runs after, in a transition; a snackbar offers Undo (also mid-fold).
+
+### Full review pass (2026-10-08, afternoon)
+
+Simon asked for one more pass over everything: no bugs, smooth, friendly. Four independent reviewers read the whole 1.0.1 diff (`c9270508..` with the uncommitted work), one per dimension, each verifying findings with throwaway tests before reporting. All findings below were confirmed and fixed; each fix has a test.
+
+**Correctness and data compatibility:** nothing changes what is published; reference-only replies open in every upstream branch's reader. One low bug: a name hidden while viewed, then shown again in Settings, stayed invisible in the rail until a reload. Fixed in `c8392fe1` (the reviewer's own repro tests pass).
+
+**User experience (10 findings):**
+1. Back during a full-screen preview (phone/GO) closed the composer under it, files and all. `715aaf86`: `OverlayBackClose` gives full-screen dialogs, the attachment previews, the phone menu sheet and the mailboxes drawer their own router entry (never `window.history`).
+2. Files dropped on the editor: Quill 2's uploader put PNG/JPEG inline as base64 and ignored other files. `2ae894ee`: a drop on the editor attaches (with a "Drop to attach" overlay); pasted images stay inline, as in the original Q-Mail (same react-quill-new).
+3. "No file extension" from the MIME type blocked Send for .apk/.odp or empty types. `2ae894ee`: name first, then type, as the publish path does (`composeFiles.ts`).
+4. Undo did not unhide the name being viewed. `c8392fe1`.
+5. Archive from a menu was silent. `88b66201`: "Archived" / "N archived" with Undo (row menu, group menu, selection bar; also when the list is then empty), focus to the next row.
+6. Menu items were 36 px from 600 px (MUI's own breakpoint rule). `88b66201`: 44 px.
+7. The 300 px list of a 700 px window cut subjects to three letters. `88b66201`: group rows stack their date and lose the indent; rows drop the avatar below 340 px.
+8. Composer tiles pushed the editor off a phone. `2ae894ee`: one sideways-scrolling row of smaller tiles on phones.
+9. "Attachments" on a locked row could be a dead end. `88b66201`: "Open message" opens it from the copy just decrypted (no second fetch); the dialog shows the real subject.
+10. The padded list date took a fifth of a row's tap area. `3848d141`: the date itself only.
+Polish: chevron 44 px with a gap; labels frozen while a menu fades out; "or drop files here" only with a mouse; one wording for "not sent to you"; "40 MB"; Settings → Mail can hide a name too (`c100645e`).
+
+**Accessibility (7):** the Undo toast failed contrast in every theme (1.5–2.9:1) and was hard to reach → `UndoSnackbar` (paper colours, `role=status`, Undo takes focus, focus returns to the next row); removing actions left focus on `<body>` (archive, hide, a tile's remove) → focus moves to the neighbour; the phone sheet had no way out but an action → Cancel; tile warnings weren't read → `aria-describedby`; "Show older" focus → the first message it brought in; an unnamed spinner → `aria-hidden`; fold buttons 44 px with a steady name, menus named "Actions for <name>" once.
+
+**Efficiency (5):** folded rail rows stayed mounted (30 group avatars loaded with Threads folded; rail DOM 404 → 952 elements) → `unmountOnExit` and a memoised rail; a Tooltip and a `matchMedia` per list date (300 rows mounted in 119 ms instead of 20) → the Tooltip mounts on first hover or tap (`3848d141`); closed row menus stayed mounted on phones with document listeners → unmounted after closing; the merged sent probe could read 11 pages and then 98 names one by one for one prolific sender → found names drop out and the search restarts, fallbacks four at a time (`33e905b9`); probes kept running after cancel → `mapWithConcurrency` takes a stop check.
+
+**Deferred, with reasons (Follow-ups):** the 2-minute poll cap makes idle polling 2.5× heavier than 5 minutes (one merged `_<suffix>_mail_` poll would cover every name's by-address mail; a bigger change to the poller); `fetchEarlierMessage` fetches the body again for each decrypt key it tries; the thread probe saves only the searches for groups without threads (the unread badges still read page 1 of each active group's headers: 43 → 6 thread searches on Simon's account, as measured).
+
+**Bundle:** the main file reads 373 kB (395 kB at 1.0.0), but most of the difference is Rollup moving ~19 kB of shared code into a small chunk the mail shell loads at startup anyway, so the startup download is about the same. Not claimed as a saving.
+
+**Checks:** 109 test files, 847 tests; lint, types and the theme check pass; each commit was verified in a scratch worktree before it was made.
+
 ## Community feedback
 
 - **2026-10-07, Qortal DEV (via Simon):** messages with the reply built in keep growing and eventually get very large in long threads, which is why it was removed from Q-Mail. Suggestion: keep showing the previous message, but don't include it in the reply. **Done in 1.0.1:** no quote in the body, and `threadV2` holds references only (§18, Done → 1.0.1). Simon chose references only over capping or keeping the copies. Worth telling the DEV: the original app's own `threadV2` still embeds `data: replyTo` *with* its history, so it doubles with every reply (5 MB at reply #14 with 400-character replies). Q-Mail+ has stripped that since 1.0.0 and now sends references.
 - **2026-10-07, Simon:** the open message's date should be exact: weekday, date and time, plus the year when it isn't this year. **Done in 1.0.1** (`b8d9f94c`, `591dc742`).
+- **2026-10-08, Simon (late morning):** attachments openable from the list without opening the mail; the PDF buttons in one row; composer attachments in rows with a preview and a nicer attach control; hiding a name smoother and optimistic, with smooth animations throughout. **Done in 1.0.1** (Done → Attachments from the list, composer tiles, smoother folding).
 - **2026-10-08, Simon (morning):** earlier messages newest first, with avatars; names under Inbox hideable (by hand, or when all their mail is archived) and the section collapsible. **Done in 1.0.1** (Done → Earlier messages order, names under Inbox).
 - **2026-10-08, Simon (morning):** right click, and long press on phones. **Done in 1.0.1** (Done → Right click and long press).
 - **2026-10-08, Simon:** exact dates in the inbox, the archive and every list, with more detail on hover and on a tap on phones; the earlier-messages limit left to the overnight session; group threads hideable in Settings. **Done in 1.0.1** (Done → Overnight).
@@ -1695,7 +1732,7 @@ From Simon's screenshot of an archived conversation with Juan Qortal:
 6. **The test mails:** "Q-Mail+ 1.0.1 test: replies that link" (3 messages) sit in the inboxes of Simon James and POS+. Archive them when you like.
 7. **The dev frame's archive:** your published archive (177 messages from 2026-10-05) is applied in the Dev Mode frame (127.0.0.1:12393); your real app isn't affected. Was that you pressing "Load state" before bed?
 
-Next-pass ideas from 1.0.1: poll the resource status before fetching an earlier message, as the opener does, for big or slow ones.
+Next-pass ideas from 1.0.1: poll the resource status before fetching an earlier message, as the opener does, for big or slow ones; one merged `_<suffix>_mail_` search in the inbox poll instead of one per name (idle polling is 1 + 2N searches per tick since the cap went to 2 minutes); fetch an earlier message's body once and try each decrypt key on it; a menu for "All mail" search results, thread rows and drafts; an exit animation when a row is archived.
 
 **For Simon on his own account.** The round 5 Hub checks already ran on your account (read-only, nothing published or sent): the 86-name switcher and its search, the avatars after a switch, pane widths, switching between messages, the full-width list, Mugician's join link (declined), the footer at 1440 and 390 (all cleared again), mail 1's PDF in Hub's reader and in the in-app viewer, and the Q-Share+ comparison. Left for you, in Q-Mail+ and the original Q-Mail:
 1. **The footer for real:** set yours, send one mail, and check it in the original app.
