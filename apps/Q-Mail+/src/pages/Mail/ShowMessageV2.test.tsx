@@ -115,10 +115,12 @@ describe('ShowMessageV2', () => {
     const cc = ['carl', 'dana', 'erin', 'fay', 'gus', 'Custom Node on Qortal Hub']
     const ccLine = () => screen.getByText((_, el) => el?.tagName === 'P' && /^cc /.test(el.textContent || ''))
     const { unmount } = wrap(<ShowMessageV2 message={{ ...message, cc }} />)
-    expect(ccLine().textContent).toBe('cc carl, dana, erin and 3 more')
-    fireEvent.click(screen.getByRole('button', { name: 'Show all 6 Cc names' }))
+    expect(ccLine().textContent).toBe('cc carl, dana, erin and 3 more Cc names')
+    fireEvent.click(screen.getByRole('button', { name: 'and 3 more Cc names' }))
     expect(ccLine().textContent).toBe(`cc ${cc.join(', ')}`)
     expect(screen.queryByRole('button', { name: /Cc names/ })).toBeNull()
+    // Focus moved to the line the button left.
+    expect(document.activeElement).toBe(ccLine())
     unmount()
     // Four names are all shown: "and 1 more" would save nothing.
     wrap(<ShowMessageV2 message={{ ...message, cc: cc.slice(0, 4) }} />)

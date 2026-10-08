@@ -39,7 +39,7 @@ import { RootState } from "../../state/store";
 import { setNotification } from "../../state/features/notificationsSlice";
 import ReadOnlySlate from "../../components/editor/ReadOnlySlate";
 import { AvatarWrapper } from "./MailTable";
-import { NameText } from "../../components/common/NameText";
+import { NameText, srOnly } from "../../components/common/NameText";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
 import { EarlierMessagePlaceholder, EarlierMessageUnreadable, ShowMessageV2Replies } from "./ShowMessageV2Replies";
 import { ErrorBoundary } from "../../components/common/ErrorBoundary";
@@ -213,6 +213,8 @@ export const ShowMessageV2 = ({
   // rest. The line wraps, so every name is readable on a phone (no hover).
   const ccShown = ccOpenFor === messageKey || ccNames.length <= CC_NAMES_SHOWN + 1 ? ccNames : ccNames.slice(0, CC_NAMES_SHOWN);
   const ccMore = ccNames.length - ccShown.length;
+  // "and N more" goes away when pressed: focus moves to the whole line.
+  const ccLineRef = useRef<HTMLParagraphElement | null>(null);
   const subject = typeof message?.subject === "string" && message.subject ? message.subject : "(no subject)";
   const cleanHTML = message?.htmlContent ? DOMPurify.sanitize(message.htmlContent) : "";
 
@@ -277,7 +279,17 @@ export const ShowMessageV2 = ({
               </Typography>
             )}
             {ccNames.length > 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+              <Typography
+                ref={ccLineRef}
+                tabIndex={-1}
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  overflowWrap: "anywhere",
+                  "&:focus": { outline: "none" },
+                  "&:focus-visible": { outline: `2px solid ${theme.palette.primary.main}`, borderRadius: 1 },
+                }}
+              >
                 cc{" "}
                 {ccShown.map((name, index) => (
                   <React.Fragment key={name}>
@@ -291,8 +303,10 @@ export const ShowMessageV2 = ({
                     <Box
                       component="button"
                       type="button"
-                      onClick={() => setCcOpenFor(messageKey)}
-                      aria-label={`Show all ${ccNames.length} Cc names`}
+                      onClick={() => {
+                        ccLineRef.current?.focus();
+                        setCcOpenFor(messageKey);
+                      }}
                       sx={{
                         background: "none",
                         border: 0,
@@ -310,7 +324,11 @@ export const ShowMessageV2 = ({
                         "&:focus-visible": { outline: (theme) => `2px solid ${theme.palette.primary.main}`, borderRadius: 1 },
                       }}
                     >
-                      and {ccMore} more
+                      {/* Spoken "and 2 more Cc names": the name keeps the visible words (WCAG 2.5.3). */}
+                      {`and ${ccMore} more `}
+                      <Box component="span" sx={srOnly}>
+                        Cc names
+                      </Box>
                     </Box>
                   </>
                 )}
