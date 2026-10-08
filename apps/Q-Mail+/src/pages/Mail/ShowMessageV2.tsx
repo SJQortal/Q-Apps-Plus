@@ -21,7 +21,7 @@
  * buttons in a wide pane and 44 px icon buttons with aria-labels in a
  * compact one (phones); they carry aria-keyshortcuts for the e / u keys.
  */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, IconButton, Tooltip, Typography, useTheme } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ReplyOutlinedIcon from "@mui/icons-material/ReplyOutlined";
@@ -116,16 +116,17 @@ export const ShowMessageV2 = ({
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const [rootRef, width] = useElementWidth<HTMLDivElement>();
   const compact = width > 0 && width < READER_COMPACT_WIDTH;
-  const [showEarlier, setShowEarlier] = useState(false);
+  // "Show earlier" belongs to the message it was opened on. The reader is
+  // reused for the next message, so the section is closed for it in that same
+  // render, before the loader could start on its history.
+  const messageKey = `${message?.user || ""}|${message?.id || ""}`;
+  const [earlierOpenFor, setEarlierOpenFor] = useState<string | null>(null);
+  const showEarlier = earlierOpenFor === messageKey;
 
   const attachments = useMemo(() => usableAttachments(message?.attachments), [message?.attachments]);
   const downloadAll = useDownloadAll(attachments);
 
   const earlier = useEarlierMessages(message, showEarlier);
-
-  useEffect(() => {
-    setShowEarlier(false);
-  }, [message?.id]);
 
   const handleClose = () => {
     if (typeof onClose === "function") {
@@ -289,7 +290,7 @@ export const ShowMessageV2 = ({
       {earlier.total > 0 && (
         <Box component="section" aria-label="Earlier messages in this conversation" sx={{ width: "100%", mt: 3, px: compact ? 1.5 : 2.5, pb: 2, display: "flex", flexDirection: "column", gap: 1 }}>
           <Button
-            onClick={() => setShowEarlier((v) => !v)}
+            onClick={() => setEarlierOpenFor(showEarlier ? null : messageKey)}
             aria-expanded={showEarlier}
             startIcon={showEarlier ? <ExpandLessOutlinedIcon /> : <ExpandMoreOutlinedIcon />}
             sx={{ alignSelf: "flex-start", minHeight: 44, textTransform: "none", color: theme.palette.text.secondary }}

@@ -298,6 +298,26 @@ describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
     expect(screen.queryByRole('button', { name: /older message/ })).toBeNull()
   })
 
+  it('closes Show earlier for the next message without fetching its history', async () => {
+    const refOf = (id: string) => ({ reference: { identifier: id, name: 'alice', service: 'MAIL_PRIVATE' } })
+    const withRefs = (id: string, refs: string[]) => ({ ...reply(0), id, generalData: { thread: [], threadV2: refs.map(refOf) } })
+    const { rerender } = wrap(<ShowMessageV2 message={withRefs('A', ['m3', 'm4'])} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 2 messages' }))
+    expect(await screen.findByText('Message m4 body')).toBeTruthy()
+    await screen.findByRole('article', { name: 'alice: Message m3' })
+    // The reader is reused for the next message (Mail.tsx gives it no key).
+    rerender(
+      <Provider store={store}>
+        <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+          <ShowMessageV2 message={withRefs('B', ['m5', 'm6', 'm0'])} />
+        </HubThemeProvider>
+      </Provider>
+    )
+    expect(screen.getByRole('button', { name: 'Show earlier · 3 messages' }).getAttribute('aria-expanded')).toBe('false')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(qortalCalls('FETCH_QDN_RESOURCE').map((request) => request.identifier).sort()).toEqual(['m3', 'm4'])
+  })
+
   it('words the Show older button by what is left', () => {
     expect(olderLabel(1)).toBe('Show 1 older message')
     expect(olderLabel(5)).toBe('Show 5 older messages')
