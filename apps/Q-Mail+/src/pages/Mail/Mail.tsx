@@ -110,6 +110,7 @@ import type { StoredComposeDraft } from "./composeDrafts";
 import { invalidateThreadSearches } from "./threadData";
 import { useThreadUnreadCounts } from "./threadUnread";
 import { useShowGroupThreads } from "../../utils/threadsPreference";
+import { PUBLISH_STATE_TITLE, PublishStateMessage } from "../../components/common/PublishStateMessage";
 import { getAvatarUrl } from "../../utils/avatarCache";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import {
@@ -687,6 +688,11 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     useState<PublishedAppearance | null>(null);
   const [publishedArchivedById, setPublishedArchivedById] =
     useState<ArchivedMap>({});
+  const { Modal: PublishStateConfirmModal, showModal: confirmPublishState } = useConfirmationModal({
+    title: PUBLISH_STATE_TITLE,
+    message: <PublishStateMessage name={user?.name} />,
+    confirmLabel: "Publish",
+  });
   const { Modal: LoadPublishedStateModal, showModal: showLoadPublishedStateModal } =
     useConfirmationModal({
       title: "Load published QDN state?",
@@ -2624,8 +2630,11 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       }
 
       if (itemId === PUBLISH_STATE_ITEM_ID) {
-        void publishMailStateToQdn();
         closeSidebarIfTransient();
+        // The same question as Settings → Sync: say what is published first.
+        void confirmPublishState().then(confirmed => {
+          if (confirmed) void publishMailStateToQdn();
+        });
         return;
       }
 
@@ -2743,6 +2752,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     },
     [
       aliasReplyLinks,
+      confirmPublishState,
       groupOptionsById,
       publishMailStateToQdn,
       selectedAliasInboxName,
@@ -3612,6 +3622,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       overlays={
         <>
           <LoadPublishedStateModal />
+          <PublishStateConfirmModal />
           {shortcutsHelpOpen && (
             <React.Suspense fallback={null}>
               <ShortcutsHelpDialog

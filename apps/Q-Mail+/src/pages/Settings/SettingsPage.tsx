@@ -37,6 +37,7 @@ import {
 import { useShowGroupThreads, writeShowGroupThreads } from '../../utils/threadsPreference';
 import packageJson from '../../../package.json';
 import { ChangelogDialog } from './ChangelogDialog';
+import { PUBLISH_STATE_TITLE, PublishStateMessage } from '../../components/common/PublishStateMessage';
 import { FooterSettings } from './FooterSettings';
 import { SETTINGS_PATH } from './settingsPath';
 
@@ -150,14 +151,8 @@ export function SettingsPage() {
   }, [identityKey]);
 
   const { Modal: PublishStateModal, showModal: showPublishStateModal } = useConfirmationModal({
-    title: 'Publish mail state?',
-    message: (
-      <>
-        This publishes your read state, subjects, archived list, theme, text size, watched aliases and footer as an
-        encrypted document (qmail_state_v1) under {user?.name ? <NameText name={user.name} /> : 'your name'}, so
-        other devices can load it. It costs one QDN publish.
-      </>
-    ),
+    title: PUBLISH_STATE_TITLE,
+    message: <PublishStateMessage name={user?.name} />,
     confirmLabel: 'Publish',
   });
   const [isPublishingFromSettings, setIsPublishingFromSettings] = useState(false);
