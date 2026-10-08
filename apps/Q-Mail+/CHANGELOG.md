@@ -11,6 +11,7 @@
 
 **Dates**
 - An open message, and each earlier message under it, shows the weekday, date and time, like "Sun 2 Aug, 08:58", with the year when it isn't this year ("Sun 11 May 2025, 14:03"). A tap or hover still shows the full date with seconds.
+- Every message list shows the same date: inbox, archive, sent, alias inboxes, search results, sender groups, threads and drafts. On a phone the day sits above the time, so names keep their room. Hover over a date, or tap it on a phone, to see the full date and how long ago it was.
 
 ## 1.0.0 (Q-Mail+) - October 4, 2026
 

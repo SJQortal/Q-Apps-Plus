@@ -1,13 +1,13 @@
 /**
  * A message date: weekday, day, month and time (and the year when it isn't
- * this year) by default, the full timestamp with seconds on tap, hover or
- * long-press (MUI Tooltip handles the touch long-press). The <time> element
+ * this year) by default; the full timestamp with seconds on a tap, and with
+ * how long ago on hover or long-press (MUI Tooltip handles the long-press). The <time> element
  * always carries a machine-readable `dateTime` (ISO 8601), from
  * `mailDateTime`, which list rows can use for theirs too.
  */
 import { useState } from "react";
 import { Tooltip, Typography } from "@mui/material";
-import { exactMailDate, readerMailDate } from "./readerTime";
+import { exactMailDate, mailDateDetail, readerMailDate } from "./readerTime";
 
 /** ISO 8601 for a <time dateTime>, or undefined for a missing or invalid timestamp. */
 export function mailDateTime(timestamp: number | string | undefined | null): string | undefined {
@@ -21,13 +21,14 @@ export function MessageDate({ timestamp, color, asText }: { timestamp: number | 
   const [exact, setExact] = useState(false);
   const short = readerMailDate(timestamp);
   const full = exactMailDate(timestamp);
+  const detail = mailDateDetail(timestamp);
   const dateTime = mailDateTime(timestamp);
   if (!short || !dateTime) return null;
   if (asText) {
     // Inside another button (a collapsed reply header): no nested button, the
     // exact time is on the tooltip (hover, or long-press on touch).
     return (
-      <Tooltip title={full} enterTouchDelay={500} leaveTouchDelay={3000}>
+      <Tooltip title={detail} enterTouchDelay={500} leaveTouchDelay={3000}>
         <Typography component="span" variant="body2" sx={{ color: color || "text.secondary", fontSize: "0.875rem" }}>
           <time dateTime={dateTime}>{short}</time>
         </Typography>
@@ -35,7 +36,7 @@ export function MessageDate({ timestamp, color, asText }: { timestamp: number | 
     );
   }
   return (
-    <Tooltip title={exact ? "Show the short date" : full} enterTouchDelay={500} leaveTouchDelay={3000}>
+    <Tooltip title={exact ? "Show the short date" : detail} enterTouchDelay={500} leaveTouchDelay={3000}>
       <Typography
         component="button"
         type="button"

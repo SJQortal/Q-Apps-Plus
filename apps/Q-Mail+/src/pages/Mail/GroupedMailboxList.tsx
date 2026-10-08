@@ -17,8 +17,8 @@ import UnarchiveOutlinedIcon from "@mui/icons-material/UnarchiveOutlined";
 import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
 import { Box, Button, ButtonBase, Checkbox, Typography } from "@mui/material";
 import { useSelector } from "react-redux";
-import { formatFullTimestamp, formatRelativeDate } from "../../utils/time";
-import { MailMessageRow } from "./MailMessageRow";
+import { MailListDate } from "./MailListDate";
+import { MailMessageRow, WIDE_ROW_QUERY } from "./MailMessageRow";
 import { AvatarWrapper } from "./MailTable";
 import { NameText, spokenName } from "../../components/common/NameText";
 import {
@@ -394,8 +394,6 @@ export const GroupedMailboxList = ({
           );
         }
 
-        const relativeDate = formatRelativeDate(latestMessage?.createdAt);
-        const fullDate = formatFullTimestamp(latestMessage?.createdAt);
         const decryptedRecipient =
           mailboxType === "sent"
             ? group.messages
@@ -438,7 +436,6 @@ export const GroupedMailboxList = ({
                   setExpandedGroups(prev => ({ ...prev, [group.key]: !prev[group.key] }))
                 }
                 aria-expanded={isExpanded}
-                title={`Latest ${fullDate}. ${isExpanded ? "Collapse" : "Expand"} ${label}`}
                 sx={theme => ({
                   flex: 1,
                   minWidth: 0,
@@ -492,19 +489,6 @@ export const GroupedMailboxList = ({
                         <NameText name={group.label} />
                       )}
                     </Typography>
-                    <Typography
-                      component="time"
-                      title={fullDate}
-                      sx={{
-                        flexShrink: 0,
-                        fontSize: "0.875rem",
-                        fontWeight: groupHasUnread ? 600 : 400,
-                        color: groupHasUnread ? "primary.main" : "text.secondary",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {relativeDate}
-                    </Typography>
                   </Box>
                   <Typography
                     noWrap
@@ -518,6 +502,13 @@ export const GroupedMailboxList = ({
                     {summary}
                   </Typography>
                 </Box>
+                <MailListDate
+                  timestamp={latestMessage?.createdAt}
+                  emphasis={groupHasUnread}
+                  detailPrefix="Latest: "
+                  stacked
+                  inlineFrom={WIDE_ROW_QUERY}
+                />
                 <ExpandMoreIcon
                   aria-hidden
                   sx={{

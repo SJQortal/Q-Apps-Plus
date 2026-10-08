@@ -3,7 +3,7 @@ import ReplyOutlinedIcon from "@mui/icons-material/ReplyOutlined";
 import ReadOnlySlate from "../../components/editor/ReadOnlySlate";
 import { AttachmentList } from "../../components/AttachmentPreview/AttachmentList";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
-import { formatEmailDate, formatFullTimestamp } from "../../utils/time";
+import { MessageDate } from "./MessageDate";
 import { ThreadAvatar } from "./ThreadAvatar";
 import { NameText } from "../../components/common/NameText";
 
@@ -41,9 +41,13 @@ export const ShowMessage = ({ message, onReply }: ShowMessageProps) => {
           <Typography noWrap sx={{ fontWeight: 700, fontSize: "1rem" }}>
             {name ? <NameText name={name} /> : "Unknown"}
           </Typography>
-          <Typography variant="body2" color="text.secondary" title={formatFullTimestamp(postedAt)}>
-            {postedAt ? formatEmailDate(postedAt) : "-"}
-          </Typography>
+          {postedAt ? (
+            <MessageDate timestamp={postedAt} />
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              -
+            </Typography>
+          )}
         </Box>
       </Box>
 

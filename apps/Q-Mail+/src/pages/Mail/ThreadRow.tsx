@@ -1,5 +1,5 @@
 import { Box, ListItemButton, Typography } from "@mui/material";
-import { formatEmailDate, formatFullTimestamp } from "../../utils/time";
+import { MailListDate } from "./MailListDate";
 import { ThreadAvatar } from "./ThreadAvatar";
 import { NameText } from "../../components/common/NameText";
 import { lastActivityOf, type ThreadSummary } from "./threadData";
@@ -75,14 +75,7 @@ export function ThreadRow({ thread, unread = false, selected = false, context, o
           {count}
         </Typography>
       </Box>
-      <Typography
-        variant="body2"
-        color={unread ? "primary.main" : "text.secondary"}
-        title={formatFullTimestamp(when)}
-        sx={{ flexShrink: 0, fontSize: "0.875rem", fontWeight: unread ? 600 : 400 }}
-      >
-        {when ? formatEmailDate(when) : ""}
-      </Typography>
+      <MailListDate timestamp={when} emphasis={unread} detailPrefix="Last activity: " stacked />
     </ListItemButton>
   );
 }

@@ -4,7 +4,8 @@
  * - the row body is a real button (tap opens); the checkbox and the delete
  *   button are their own targets next to it, so nothing propagates (UX #5);
  * - unread = a dot plus weight, decided by the read store (Bugs #5);
- * - relative date in the row, the full stamp in its `title`;
+ * - the date as in the reader (weekday, date, time), its detail on hover or,
+ *   on touch screens, on a tap of the date (MailListDate);
  * - the avatar resolves lazily when the row is on screen (avatarCache);
  * - a subject that was never decrypted reads "Locked · open to read", never
  *   the ciphertext (Bugs #18, UX #27);
@@ -31,7 +32,8 @@ import {
 import { useSelector } from "react-redux";
 import { RootState } from "../../state/store";
 import { AvatarWrapper } from "./MailTable";
-import { formatFullTimestamp, formatRelativeDate } from "../../utils/time";
+import { MailListDate } from "./MailListDate";
+import { spokenMailDate } from "./readerTime";
 import { useSentRecipient } from "../../utils/sentRecipientCache";
 import { selectReadState } from "../../state/features/mailSlice";
 import { isMessageRead } from "../../utils/readState";
@@ -44,7 +46,9 @@ import { NameText, spokenName } from "../../components/common/NameText";
 export const LOCKED_SUBJECT_LABEL = "Locked · open to read";
 /** The list width from which a row lays out as columns (the list pane is the container). */
 export const WIDE_ROW_MIN_WIDTH = 720;
-const WIDE = `@container ${LIST_CONTAINER} (min-width: ${WIDE_ROW_MIN_WIDTH}px)`;
+/** The container query of a wide list, where rows read as one line of columns. */
+export const WIDE_ROW_QUERY = `@container ${LIST_CONTAINER} (min-width: ${WIDE_ROW_MIN_WIDTH}px)`;
+const WIDE = WIDE_ROW_QUERY;
 /** Column order in a wide row; the DOM (and the row's label) keep the two-line order. */
 const wideOrder = (order: number) => ({ [WIDE]: { order } });
 export const NO_SUBJECT_LABEL = "(no subject)";
@@ -197,8 +201,7 @@ export const MailMessageRow = ({
   const isAliasRecipient = isFromSent && sentRecipient.isAlias;
 
   const createdAt = messageData?.createdAt;
-  const relativeDate = useMemo(() => formatRelativeDate(createdAt), [createdAt]);
-  const fullDate = useMemo(() => formatFullTimestamp(createdAt), [createdAt]);
+  const spokenDate = useMemo(() => spokenMailDate(createdAt), [createdAt]);
 
   const open = useCallback(() => {
     if (!identifier) return;
@@ -225,7 +228,7 @@ export const MailMessageRow = ({
     : subject || NO_SUBJECT_LABEL;
   const nameLabel = isFromSent ? `To: ${name || "…"}` : name || "Unknown sender";
   const spokenLabel = isFromSent ? `To: ${name ? spokenName(name) : "…"}` : name ? spokenName(name) : "Unknown sender";
-  const ariaLabel = `${isUnread ? "Unread. " : ""}${spokenLabel}, ${subjectLabel}, ${fullDate}`;
+  const ariaLabel = `${isUnread ? "Unread. " : ""}${spokenLabel}, ${subjectLabel}${spokenDate ? `, ${spokenDate}` : ""}`;
 
   const statusIcon = isLocked ? (
     <LockOutlinedIcon
@@ -243,22 +246,12 @@ export const MailMessageRow = ({
     />
   ) : null;
 
-  const dateNode = (
-    <Typography
-      component="time"
-      title={fullDate}
-      sx={{
-        flexShrink: 0,
-        fontSize: "0.875rem",
-        lineHeight: 1.3,
-        fontWeight: isUnread ? 600 : 400,
-        color: isUnread ? "primary.main" : "text.secondary",
-        whiteSpace: "nowrap",
-        ...(compact ? {} : wideOrder(5)),
-      }}
-    >
-      {relativeDate}
-    </Typography>
+  // Beside two lines the day sits over the time, so name and subject keep
+  // their room on a phone; one line (compact, or a wide row) keeps it inline.
+  const dateNode = compact ? (
+    <MailListDate timestamp={createdAt} emphasis={isUnread} />
+  ) : (
+    <MailListDate timestamp={createdAt} emphasis={isUnread} stacked inlineFrom={WIDE} sx={wideOrder(5)} />
   );
 
   return (
@@ -325,82 +318,83 @@ export const MailMessageRow = ({
             flex: 1,
             minWidth: 0,
             display: "flex",
-            flexDirection: "column",
-            gap: 0.25,
+            alignItems: "center",
+            gap: 1,
             ...(compact
               ? {}
               : {
                   [WIDE]: {
-                    flexDirection: "row",
-                    alignItems: "center",
                     gap: theme.spacing(1.5),
-                    // Both lines' items become this row's columns.
-                    "& > [data-row-line]": { display: "contents" },
+                    // Both lines' items and the date become this row's columns.
+                    "& > [data-row-text], & [data-row-line]": { display: "contents" },
                   },
                 }),
           })}
         >
-          <Box data-row-line sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-            {isUnread && <UnreadDot />}
-            {compact && statusIcon}
-            <Typography
-              noWrap
-              sx={{
-                flex: 1,
-                minWidth: 0,
-                fontSize: "1rem",
-                lineHeight: 1.3,
-                fontWeight: isUnread ? 700 : 500,
-                color: isLocked && compact ? "text.secondary" : "text.primary",
-                fontStyle: compact && (isLocked || !subject) ? "italic" : "normal",
-                ...(compact
-                  ? {}
-                  : { [WIDE]: { order: 1, flex: "0 0 clamp(160px, 24%, 260px)" } }),
-              }}
-            >
-              {compact ? (
-                <Highlight text={subjectLabel} terms={highlightTerms} />
-              ) : name ? (
-                <>
-                  {isFromSent && <Highlight text="To: " terms={highlightTerms} />}
-                  <NameText name={name}>
-                    <Highlight text={name} terms={highlightTerms} />
-                  </NameText>
-                </>
-              ) : (
-                <Highlight text={nameLabel} terms={highlightTerms} />
-              )}
-            </Typography>
-            {dateNode}
-          </Box>
-          {!compact && (
-            <Box data-row-line sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
-              {statusIcon}
+          <Box data-row-text sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0.25 }}>
+            <Box data-row-line sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+              {isUnread && <UnreadDot />}
+              {compact && statusIcon}
               <Typography
                 noWrap
                 sx={{
                   flex: 1,
                   minWidth: 0,
-                  fontSize: "0.875rem",
-                  lineHeight: 1.35,
-                  fontWeight: isUnread ? 600 : 400,
-                  color: isUnread && !isLocked ? "text.primary" : "text.secondary",
-                  fontStyle: isLocked || !subject ? "italic" : "normal",
-                  ...wideOrder(3),
+                  fontSize: "1rem",
+                  lineHeight: 1.3,
+                  fontWeight: isUnread ? 700 : 500,
+                  color: isLocked && compact ? "text.secondary" : "text.primary",
+                  fontStyle: compact && (isLocked || !subject) ? "italic" : "normal",
+                  ...(compact
+                    ? {}
+                    : { [WIDE]: { order: 1, flex: "0 0 clamp(160px, 24%, 260px)" } }),
                 }}
               >
-                <Highlight text={subjectLabel} terms={highlightTerms} />
+                {compact ? (
+                  <Highlight text={subjectLabel} terms={highlightTerms} />
+                ) : name ? (
+                  <>
+                    {isFromSent && <Highlight text="To: " terms={highlightTerms} />}
+                    <NameText name={name}>
+                      <Highlight text={name} terms={highlightTerms} />
+                    </NameText>
+                  </>
+                ) : (
+                  <Highlight text={nameLabel} terms={highlightTerms} />
+                )}
               </Typography>
-              {context && (
-                <Chip
-                  label={context}
-                  size="small"
-                  variant="outlined"
-                  sx={{ height: 24, fontSize: "0.875rem", flexShrink: 0, ...wideOrder(4) }}
-                />
-              )}
+              {compact && dateNode}
             </Box>
-          )}
+            {!compact && (
+              <Box data-row-line sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+                {statusIcon}
+                <Typography
+                  noWrap
+                  sx={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontSize: "0.875rem",
+                    lineHeight: 1.35,
+                    fontWeight: isUnread ? 600 : 400,
+                    color: isUnread && !isLocked ? "text.primary" : "text.secondary",
+                    fontStyle: isLocked || !subject ? "italic" : "normal",
+                    ...wideOrder(3),
+                  }}
+                >
+                  <Highlight text={subjectLabel} terms={highlightTerms} />
+                </Typography>
+                {context && (
+                  <Chip
+                    label={context}
+                    size="small"
+                    variant="outlined"
+                    sx={{ height: 24, fontSize: "0.875rem", flexShrink: 0, ...wideOrder(4) }}
+                  />
+                )}
+              </Box>
+            )}
+          </Box>
+          {!compact && dateNode}
         </Box>
       </ButtonBase>
       {isFromSent && onDeleteMessage && (

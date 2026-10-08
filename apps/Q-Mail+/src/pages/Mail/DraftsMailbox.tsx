@@ -14,7 +14,7 @@ import AttachFileIcon from "@mui/icons-material/AttachFile";
 import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
 import useConfirmationModal from "../../hooks/useConfirmModal";
 import { EmptyState } from "../../layout/states";
-import { formatTimestamp } from "../../utils/time";
+import { MailListDate } from "./MailListDate";
 import { NameText, spokenName } from "../../components/common/NameText";
 import {
   deleteComposeDraft,
@@ -169,37 +169,40 @@ export function DraftsMailbox({ address, onOpenDraft }: DraftsMailboxProps) {
                 onClick={() => onOpenDraft(key, draft)}
                 aria-label={`Open draft: ${subject}, ${describeDraftTarget(draft, spokenName)}`}
               >
-                <Line>
-                  {draft.kind === "thread" && (
-                    <ForumOutlinedIcon sx={{ fontSize: 18, color: "text.secondary" }} />
-                  )}
-                  <Ellipsis>
-                    <Typography component="span" sx={{ fontWeight: 650, fontSize: "0.95rem" }}>
-                      <DraftTarget draft={draft} />
-                    </Typography>
-                  </Ellipsis>
-                  <Typography component="span" variant="caption" color="text.secondary" sx={{ flexShrink: 0, fontSize: "0.875rem" }}>
-                    {draft.updatedAt ? formatTimestamp(draft.updatedAt) : ""}
-                  </Typography>
-                </Line>
-                <Line>
-                  <Ellipsis>
-                    <Typography component="span" sx={{ fontSize: "0.95rem" }}>
-                      {subject}
-                    </Typography>
-                  </Ellipsis>
-                  {attachmentCount > 0 && (
-                    <Typography
-                      component="span"
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: "inline-flex", alignItems: "center", gap: 0.25, flexShrink: 0, fontSize: "0.875rem" }}
-                    >
-                      <AttachFileIcon sx={{ fontSize: 14 }} />
-                      {attachmentCount}
-                    </Typography>
-                  )}
-                </Line>
+                {/* Spans, not divs: this is inside a button. The day sits over the time beside the first two lines. */}
+                <Box component="span" sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+                  <Box component="span" sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
+                    <Line>
+                      {draft.kind === "thread" && (
+                        <ForumOutlinedIcon sx={{ fontSize: 18, color: "text.secondary" }} />
+                      )}
+                      <Ellipsis>
+                        <Typography component="span" sx={{ fontWeight: 650, fontSize: "0.95rem" }}>
+                          <DraftTarget draft={draft} />
+                        </Typography>
+                      </Ellipsis>
+                    </Line>
+                    <Line>
+                      <Ellipsis>
+                        <Typography component="span" sx={{ fontSize: "0.95rem" }}>
+                          {subject}
+                        </Typography>
+                      </Ellipsis>
+                      {attachmentCount > 0 && (
+                        <Typography
+                          component="span"
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: "inline-flex", alignItems: "center", gap: 0.25, flexShrink: 0, fontSize: "0.875rem" }}
+                        >
+                          <AttachFileIcon sx={{ fontSize: 14 }} />
+                          {attachmentCount}
+                        </Typography>
+                      )}
+                    </Line>
+                  </Box>
+                  <MailListDate timestamp={draft.updatedAt} detailPrefix="Saved " stacked />
+                </Box>
                 {snippet && (
                   <Ellipsis>
                     <Typography component="span" variant="body2" color="text.secondary">
