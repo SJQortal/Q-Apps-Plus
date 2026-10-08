@@ -1707,6 +1707,14 @@ Polish: chevron 44 px with a gap; labels frozen while a menu fades out; "or drop
 
 **Checks:** 109 test files, 847 tests; lint, types and the theme check pass; each commit was verified in a scratch worktree before it was made.
 
+### Attachment chips, unread in blue, Drafts, a phone overlay fix (2026-10-08, Simon's requests)
+
+- **Overlay regression (`583e5299`):** the Back handling from the review pass (`OverlayBackClose`) closed overlays that mount already open, the phone row-menu sheet and attachment previews among them, in the same render (a stale POP from the router). It was in the 12:19 test zip only; the screenshot check caught it (the phone row-menu capture had no sheet). The overlay now closes on a POP only after it has seen its own entry; regression tests pin both cases.
+- **Attachment chips (`a322d343`, `68cadaaf`):** a row shows its first two files beside the subject with short names (`shortFileName`, 18 characters with the extension kept) and "+N"; a click opens the row's attachments dialog. Hidden below 480 px of list width, where the paperclip stays. The names come from the decrypted message or from the subject cache: `qmail_persistance_<name>` entries gain `attachmentNames` (up to 8 names, encrypted with the subject's key, newline-joined), added for new entries and backfilled for old ones when the inbox loads them. Local only; nothing published changes. Screen readers hear the names in the row's label instead of the chips.
+- **Rows:** on wide lists the name column is `0 1 auto` with a cap (`clamp(160px, 24%, 260px)`), so the subject follows the name instead of starting at a fixed column; the date sits at the end. Unread senders are `primary.main` and bold, in rows and group headers.
+- **Drafts (`ca48e92c`):** rows like the inbox: the recipient's avatar (the forum avatar for thread drafts), "To <name>" and the date, subject — start of the text, and the From name with an 18 px avatar and the file count.
+- **Checks:** 852 tests; targeted screens (row-menu, row-attachments, attachment-image, compose-attachment-preview, inbox, drafts) on `ca48e92c`, then the full run (below).
+
 ## Community feedback
 
 - **2026-10-07, Qortal DEV (via Simon):** messages with the reply built in keep growing and eventually get very large in long threads, which is why it was removed from Q-Mail. Suggestion: keep showing the previous message, but don't include it in the reply. **Done in 1.0.1:** no quote in the body, and `threadV2` holds references only (§18, Done → 1.0.1). Simon chose references only over capping or keeping the copies. Worth telling the DEV: the original app's own `threadV2` still embeds `data: replyTo` *with* its history, so it doubles with every reply (5 MB at reply #14 with 400-character replies). Q-Mail+ has stripped that since 1.0.0 and now sends references.
