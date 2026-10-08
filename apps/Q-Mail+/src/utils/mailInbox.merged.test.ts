@@ -8,7 +8,9 @@ import { fetchedUrls, mockFetchRoute, mockQortalAction, qortalCalls } from '../t
 import { resetSearchCache } from './qdnSearch'
 import {
   MERGED_PROBE_MAX_PAGES,
+  THREAD_PROBE_MAX_PAGES,
   fetchGroupAvatarUrl,
+  groupIdsWithThreads,
   groupsWithThreadActivity,
   mapWithConcurrency,
   ownedNamesWithAddressMail,
@@ -183,6 +185,31 @@ describe('groupsWithThreadActivity', () => {
     expect([...found].sort()).toEqual(['7', '709'])
     expect(searches()).toHaveLength(1)
     expect(paramsOf(searches()[0]).get('service')).toBe('MAIL')
+  })
+
+  it('stops after THREAD_PROBE_MAX_PAGES of other groups\' headers', async () => {
+    const page = Array.from({ length: 200 }, (_, i) => ({ name: 'x', identifier: `qortal_qmail_thread_group5000_t${i}` }))
+    mockFetchRoute(/query=qortal_qmail_thread_group&/, page)
+    const { found, settled } = await groupsWithThreadActivity([7])
+    expect(settled).toBe(false)
+    expect(found.size).toBe(0)
+    expect(searches()).toHaveLength(THREAD_PROBE_MAX_PAGES)
+  })
+
+  it('then probes only the groups it has not found, one search each', async () => {
+    const page = [
+      { name: 'a', identifier: 'qortal_qmail_thread_group7_tok1' },
+      ...Array.from({ length: 199 }, (_, i) => ({ name: 'x', identifier: `qortal_qmail_thread_group5000_t${i}` })),
+    ]
+    mockFetchRoute(/query=qortal_qmail_thread_group&/, page)
+    mockFetchRoute(/query=qortal_qmail_thread_group709&/, [{ name: 'b', identifier: 'qortal_qmail_thread_group709_tok2' }])
+    mockFetchRoute(/query=qortal_qmail_thread_group8&/, [{ name: 'c', identifier: 'qortal_qmail_thread_group80_tok3' }])
+    const found = await groupIdsWithThreads([7, '709', 8])
+    expect([...found].sort()).toEqual(['7', '709'])
+    const perGroup = searches()
+      .map((url) => paramsOf(url).get('query'))
+      .filter((query) => query !== 'qortal_qmail_thread_group')
+    expect(perGroup.sort()).toEqual(['qortal_qmail_thread_group709', 'qortal_qmail_thread_group8'])
   })
 
   it('asks nothing without groups, and is unsettled when the search fails', async () => {

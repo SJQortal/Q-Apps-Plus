@@ -350,10 +350,11 @@ const chunked = <T,>(items: T[], size: number): T[][] => {
 const readPages = async (
   build: (offset: number) => URLSearchParams,
   onRows: (rows: any[]) => void,
-  done: () => boolean
+  done: () => boolean,
+  maxPages: number = MERGED_PROBE_MAX_PAGES
 ): Promise<boolean> => {
   let offset = 0;
-  for (let page = 0; page < MERGED_PROBE_MAX_PAGES; page += 1) {
+  for (let page = 0; page < maxPages; page += 1) {
     const rows = await searchResources(build(offset));
     onRows(rows);
     if (rows.length < MERGED_PAGE_SIZE || done()) return true;
@@ -474,11 +475,19 @@ export const ownedNamesWithAddressMail = async (
 const THREAD_HEADER_GROUP = /^qortal_qmail_thread_group(\d+)_/;
 
 /**
+ * Pages the merged thread probe reads. It reads every group's headers, not
+ * only the user's, so it stops early: past 600 headers (157 on the whole
+ * network on 2026-10-08) the groups it has not found are probed one by one.
+ */
+export const THREAD_PROBE_MAX_PAGES = 3;
+
+/**
  * Which of the given groups have at least one thread, from one paged search
  * for every thread header instead of one search per group (Simon's 43 groups:
  * 1 search; the whole network held 157 headers in 34 groups on 2026-10-08).
  * Same identifier test as hasGroupThreadActivity. `settled` is false when a
- * page failed or the cap was reached: the caller then probes each group.
+ * page failed or THREAD_PROBE_MAX_PAGES was reached; `found` still holds the
+ * groups seen by then (groupIdsWithThreads probes the rest).
  */
 export const groupsWithThreadActivity = async (
   groupIds: Array<string | number>
@@ -505,12 +514,29 @@ export const groupsWithThreadActivity = async (
           const groupId = THREAD_HEADER_GROUP.exec(identifier)?.[1];
           if (groupId && wanted.has(groupId)) found.add(groupId);
         }),
-      () => found.size === wanted.size
+      () => found.size === wanted.size,
+      THREAD_PROBE_MAX_PAGES
     );
     return { found, settled };
   } catch {
     return { found, settled: false };
   }
+};
+
+/**
+ * The given groups that have threads: the merged probe, then, if it could
+ * not settle, the per-group probe for the groups it has not found yet, four
+ * at a time.
+ */
+export const groupIdsWithThreads = async (groupIds: Array<string | number>): Promise<Set<string>> => {
+  const merged = await groupsWithThreadActivity(groupIds);
+  if (merged.settled) return merged.found;
+  const rest = Array.from(new Set(groupIds.map(normalizeId).filter(Boolean))).filter(id => !merged.found.has(id));
+  const active = await mapWithConcurrency(rest, 4, async id => ((await hasGroupThreadActivity(id)) ? id : ""));
+  active.forEach(id => {
+    if (id) merged.found.add(id);
+  });
+  return merged.found;
 };
 
 /**

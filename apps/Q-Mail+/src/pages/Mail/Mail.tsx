@@ -90,8 +90,7 @@ import {
   fetchInboxMessagesForOwnedName,
   fetchRecentInboxMessagesForOwnedName,
   fetchRecentInboxMessagesForSavedAlias,
-  groupsWithThreadActivity,
-  hasGroupThreadActivity,
+  groupIdsWithThreads,
   hasInboxMailActivityForOwnedName,
   hasAliasFormInboxMail,
   mapWithConcurrency,
@@ -1637,29 +1636,10 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       setIsLoadingGroupInstances(true);
       try {
         // One search for every thread header instead of one per group; if it
-        // could not settle, each group is probed as before.
-        const merged = await groupsWithThreadActivity(memberGroupOptions.map(group => group.id));
+        // could not settle, the groups it has not found are probed one by one.
+        const withThreads = await groupIdsWithThreads(memberGroupOptions.map(group => group.id));
         if (cancelled) return;
-        const results = merged.settled
-          ? memberGroupOptions.map(group => ({
-              group,
-              hasThreads: merged.found.has(String(group.id).trim()),
-            }))
-          : await Promise.all(
-              memberGroupOptions.map(async group => {
-                const hasThreads = await hasGroupThreadActivity(group.id);
-                return {
-                  group,
-                  hasThreads,
-                };
-              })
-            );
-
-        if (cancelled) return;
-        const filteredGroups = results
-          .filter(result => result.hasThreads)
-          .map(result => result.group);
-        setGroupOptionsWithThreads(filteredGroups);
+        setGroupOptionsWithThreads(memberGroupOptions.filter(group => withThreads.has(String(group.id).trim())));
       } finally {
         if (!cancelled) {
           setIsLoadingGroupInstances(false);
