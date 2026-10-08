@@ -3,7 +3,7 @@
  * away while group threads are hidden in Settings (offerGroups).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { Provider } from 'react-redux'
 import { MemoryRouter } from 'react-router-dom'
 import { HubThemeProvider } from '../../hub-theme'
