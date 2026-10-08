@@ -96,6 +96,13 @@ describe('ShowMessageV2', () => {
     expect(screen.getByText(exactMailDate(message.createdAt))).toBeTruthy()
   })
 
+  it('names the To of the send on every copy, not the copy\'s own recipient', () => {
+    // The copy delivered to a Cc name: recipient is that name, to is the To.
+    wrap(<ShowMessageV2 message={{ ...message, recipient: 'dana', to: ['bob'], cc: ['dana'] }} />)
+    expect(screen.getByText('to bob')).toBeTruthy()
+    expect(screen.getByText((_, el) => el?.textContent === 'cc dana' && el.tagName === 'P')).toBeTruthy()
+  })
+
   it('shows the Cc names under the recipient, and no Cc line without them', () => {
     const { unmount } = wrap(<ShowMessageV2 message={{ ...message, cc: ['carl', 'dana', 'carl', 7, ''] }} />)
     expect(screen.getByText((_, el) => el?.textContent === 'cc carl, dana' && el.tagName === 'P')).toBeTruthy()

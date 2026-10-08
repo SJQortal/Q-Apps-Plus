@@ -162,7 +162,13 @@ export const ShowMessageV2 = ({
     }
   };
 
-  const recipient = message?.recipient || message?.to;
+  // The To of the send. Every copy of a Q-Mail+ send carries it in `to`
+  // (§17), while `recipient` names the copy's own target, a Cc or Bcc name
+  // on those copies; mail from the original app has only `recipient`.
+  const recipient =
+    Array.isArray(message?.to) && typeof message.to[0] === "string" && message.to[0].trim()
+      ? message.to[0]
+      : message?.recipient || (typeof message?.to === "string" ? message.to : undefined);
   // Cc names Q-Mail+ writes into every copy (data contract §17); Bcc never.
   const ccNames: string[] = Array.isArray(message?.cc)
     ? Array.from(new Set(message.cc.filter((name: unknown): name is string => typeof name === "string" && name.trim().length > 0)))
