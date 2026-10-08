@@ -134,8 +134,8 @@ import {
 } from "./mailSearch";
 import { getSentRecipientDisplayLabel } from "./mailIdentifier";
 import { lazyNamed, preloadOnIdle } from "../../components/common/lazyNamed";
-import { ErrorState, ListSkeleton } from "../../layout/states";
-import { ErrorBoundary } from "../../components/common/ErrorBoundary";
+import { ListSkeleton } from "../../layout/states";
+import { ReaderErrorBoundary } from "./ReaderErrorBoundary";
 import { TOUR_STATUS_DISMISSED, TOUR_STATUS_STORAGE_KEY } from "./MailTour";
 import { useKeyboardShortcuts, type ShortcutAction } from "../../hooks/useKeyboardShortcuts";
 import { usePhoneBackClose } from "../../layout/usePhoneBackClose";
@@ -3307,16 +3307,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       <PaneScroll>
         <Box sx={centeredColumnSx}>
           {/* A message that cannot be drawn takes down the reader, not the mailbox. */}
-          <ErrorBoundary
-            resetKey={`${message?.user || ""}|${message?.id || ""}`}
-            fallback={
-              <ErrorState
-                title="This message could not be shown"
-                message="Something in it can't be displayed. Open another message, or reload Q-Mail+ if none will open."
-                onRetry={() => window.location.reload()}
-              />
-            }
-          >
+          <ReaderErrorBoundary messageKey={`${message?.user || ""}|${message?.id || ""}`}>
           <React.Suspense fallback={<ListSkeleton rows={4} />}>
           <ShowMessageV2
             isOpen={isOpen}
@@ -3335,7 +3326,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
             onMarkUnread={readerCanMarkUnread ? readerMarkUnread : undefined}
           />
           </React.Suspense>
-          </ErrorBoundary>
+          </ReaderErrorBoundary>
         </Box>
       </PaneScroll>
     </>
