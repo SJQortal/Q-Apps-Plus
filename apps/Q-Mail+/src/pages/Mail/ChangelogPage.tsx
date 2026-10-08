@@ -21,6 +21,7 @@ const changelogEntries: ChangelogEntry[] = [
       "Settings → Mail → Show group threads: hide group threads, and nothing about them is loaded.",
       "A reply comes from the name the mail was sent to, not the active name.",
       "Faster first load with many names and groups: one search for all of them instead of one each (126 searches instead of 413 with 88 names and 43 groups).",
+      "Fixes: new mail shows within 2 minutes; the published-state question comes once per name per session; group avatars load once.",
     ],
   },
   {

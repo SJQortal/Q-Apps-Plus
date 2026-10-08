@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  decisionOf,
   loadPublishedStateDocument,
+  publishedStatePlan,
   publishedStateSearchParams,
 } from "./publishedStateLoad";
 
@@ -78,3 +80,23 @@ describe("loadPublishedStateDocument", () => {
     expect(ask.fetchDocument).not.toHaveBeenCalled();
   });
 });
+
+describe('publishedStatePlan (once per name per session)', () => {
+  it('asks the first time, and remembers the answer for that name', () => {
+    expect(publishedStatePlan(undefined, false)).toBe('ask')
+    expect(publishedStatePlan('loaded', false)).toBe('load')
+    expect(publishedStatePlan('declined', false)).toBe('skip')
+    expect(publishedStatePlan('none', false)).toBe('skip')
+  })
+
+  it('loads without asking when auto-apply is on, unless the user said no this session', () => {
+    expect(publishedStatePlan(undefined, true)).toBe('load')
+    expect(publishedStatePlan('declined', true)).toBe('skip')
+  })
+
+  it('records what a load settled', () => {
+    expect(decisionOf({ status: 'loaded', encoded: 'x' })).toBe('loaded')
+    expect(decisionOf({ status: 'declined' })).toBe('declined')
+    expect(decisionOf({ status: 'none' })).toBe('none')
+  })
+})

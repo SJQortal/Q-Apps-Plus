@@ -151,8 +151,11 @@ import {
   type AliasScanCheckpoint,
 } from "./aliasScan";
 import {
+  decisionOf,
   loadPublishedStateDocument,
+  publishedStatePlan,
   publishedStateSearchParams,
+  type PublishedStateDecision,
 } from "./publishedStateLoad";
 import { useShortcutsAvailable } from "../../hooks/useKeyboardShortcuts";
 import { createOpenMessage, readingViewFor } from "./messageOpener";
@@ -626,6 +629,8 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     Record<string, string>
   >({});
   const hasPromptedForPublishedMailStateRef = useRef<string | null>(null);
+  // Per name, this session: what the user decided about its published state.
+  const publishedStateDecisionsRef = useRef(new Map<string, PublishedStateDecision>());
   // True once this session has read the published state document (or
   // published one): a publish before that must fetch and merge it first.
   const hasReadPublishedStateRef = useRef(false);
@@ -2343,7 +2348,15 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
   const loadPublishedMailStateFromQdn = useCallback(async () => {
     if (!user?.name) return;
     const qdnIdentity = user?.address || user?.name || "";
-    const shouldAutoApplyQdnState = readAutoApplyQdnState(qdnIdentity);
+    // Asked once per name per session: "Not now" stays no, "Load state" loads
+    // again without asking when this name comes back (publishedStatePlan).
+    const decisionKey = `${user.name}:${user.address || ""}`;
+    const plan = publishedStatePlan(
+      publishedStateDecisionsRef.current.get(decisionKey),
+      readAutoApplyQdnState(qdnIdentity)
+    );
+    if (plan === "skip") return;
+    const shouldAutoApplyQdnState = plan === "load";
     setIsLoadingQdnState(true);
     try {
       // Search first (limit 1), fetch only when found: an account with no
@@ -2369,6 +2382,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
           MAIL_STATE_DOCUMENT_IDENTIFIER
         )
       );
+      publishedStateDecisionsRef.current.set(decisionKey, decisionOf(loaded));
       if (loaded.status === "none") {
         // Nothing published yet: a publish has nothing to merge.
         hasReadPublishedStateRef.current = true;

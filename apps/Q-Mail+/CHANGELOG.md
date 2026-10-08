@@ -22,6 +22,11 @@
 - An open message, and each earlier message under it, shows the weekday, date and time, like "Sun 2 Aug, 08:58", with the year when it isn't this year ("Sun 11 May 2025, 14:03"). A tap or hover still shows the full date with seconds.
 - Every message list shows the same date: inbox, archive, sent, alias inboxes, search results, sender groups, threads and drafts. On a phone the day sits above the time, so names keep their room. Hover over a date, or tap it on a phone, to see the full date and how long ago it was.
 
+**Fixes**
+- New mail shows within 2 minutes; while nothing new arrived it could take 5.
+- Switching the active mailbox to another name and back no longer asks about the published state again: Q-Mail+ asks once per name per session, and loads it again by itself if you chose "Load state".
+- Each group's avatar is loaded once instead of twice.
+
 ## 1.0.0 (Q-Mail+) - October 4, 2026
 
 The first release of **Q-Mail+**, Simon's "+" version of Q-Mail 3.2.1. It reads and writes the same QDN resources as Q-Mail (same services, identifiers and encryption), so your mail shows up in both apps, and mail sent from either one opens in the other.
