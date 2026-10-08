@@ -22,7 +22,7 @@
  * compact one (phones); they carry aria-keyshortcuts for the e / u keys.
  */
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Box, Button, IconButton, Tooltip, Typography, useTheme } from "@mui/material";
+import { Box, Button, Collapse, IconButton, Tooltip, Typography, useTheme } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ReplyOutlinedIcon from "@mui/icons-material/ReplyOutlined";
 import ReplyAllOutlinedIcon from "@mui/icons-material/ReplyAllOutlined";
@@ -44,6 +44,7 @@ import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
 import { EarlierMessagePlaceholder, EarlierMessageUnreadable, ShowMessageV2Replies } from "./ShowMessageV2Replies";
 import { ErrorBoundary } from "../../components/common/ErrorBoundary";
 import { useEarlierMessages } from "./useEarlierMessages";
+import { useFoldTimeout } from "../../hooks/useReducedMotion";
 import { EARLIER_PAGE_SIZE } from "./earlierMessages";
 import { updateMessageDetails } from "../../utils/helpers";
 import { AttachmentList, usableAttachments } from "../../components/AttachmentPreview/AttachmentList";
@@ -138,21 +139,26 @@ export const ShowMessageV2 = ({
   const downloadAll = useDownloadAll(attachments);
 
   const earlier = useEarlierMessages(message, showEarlier);
+  const foldTimeout = useFoldTimeout();
 
-  // Focus follows the earlier messages: a pressed Retry, or a "Show older"
-  // that goes away when nothing older is left, would otherwise leave focus on
-  // nothing (the page's body). It moves to the message's place in the list,
-  // which stays while that message loads.
+  // Focus follows the earlier messages: a pressed Retry leaves focus on the
+  // message's place in the list (which stays while it loads), and "Show
+  // older" moves it to the first message it brought in, just under the ones
+  // shown before, rather than leaving it on the button (or on the page, once
+  // the button goes away).
   const earlierItemEls = useRef(new Map<string, HTMLElement>());
-  const focusOldestEarlier = useRef(false);
+  // How many were shown when "Show older" was pressed, until the next render.
+  const shownBeforeOlder = useRef<number | null>(null);
   useEffect(() => {
-    if (!focusOldestEarlier.current) return;
-    focusOldestEarlier.current = false;
-    const oldest = earlier.items[0];
-    if (oldest) earlierItemEls.current.get(oldest.entry.key)?.focus();
+    const before = shownBeforeOlder.current;
+    if (before === null || earlier.items.length <= before) return;
+    shownBeforeOlder.current = null;
+    // Newest first on screen: the first new one is at display place `before`.
+    const firstNew = earlier.items[earlier.items.length - 1 - before];
+    if (firstNew) earlierItemEls.current.get(firstNew.entry.key)?.focus();
   });
   const showOlderEarlier = () => {
-    if (earlier.hidden <= EARLIER_PAGE_SIZE) focusOldestEarlier.current = true;
+    shownBeforeOlder.current = earlier.items.length;
     earlier.showOlder();
   };
 
@@ -376,9 +382,16 @@ export const ShowMessageV2 = ({
           >
             {showEarlier ? "Hide earlier" : `Show earlier · ${earlier.total} message${earlier.total === 1 ? "" : "s"}`}
           </Button>
-          {/* Newest first, right under the message; older ones further down, then "Show older". */}
-          {showEarlier &&
-            [...earlier.items].reverse().map(({ entry, load }, index) => {
+          {/* Newest first, right under the message; older ones further down, then "Show older".
+              It folds open and shut; a new message gets a fresh one (key), closed. */}
+          <Collapse
+            key={messageKey}
+            in={showEarlier}
+            timeout={foldTimeout}
+            unmountOnExit
+            sx={{ "& .MuiCollapse-wrapperInner": { display: "flex", flexDirection: "column", gap: 1 } }}
+          >
+          {[...earlier.items].reverse().map(({ entry, load }, index) => {
               const newest = index === 0;
               const card = !load ? (
                 <ShowMessageV2Replies message={entry.data} quotedBy={entry.quotedBy || message?.user} defaultExpanded={newest} />
@@ -418,7 +431,7 @@ export const ShowMessageV2 = ({
                 </Box>
               );
             })}
-          {showEarlier && earlier.hidden > 0 && (
+          {earlier.hidden > 0 && (
             <Button
               onClick={showOlderEarlier}
               sx={{ alignSelf: "flex-start", minHeight: 44, textTransform: "none" }}
@@ -426,6 +439,7 @@ export const ShowMessageV2 = ({
               {olderLabel(earlier.hidden)}
             </Button>
           )}
+          </Collapse>
         </Box>
       )}
     </Box>

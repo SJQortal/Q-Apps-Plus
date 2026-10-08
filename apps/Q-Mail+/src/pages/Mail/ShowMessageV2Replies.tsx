@@ -13,7 +13,7 @@
  * or says why it can't be shown.
  */
 import { useState } from "react";
-import { Box, Button, ButtonBase, CircularProgress, Typography, useTheme } from "@mui/material";
+import { Box, Button, ButtonBase, CircularProgress, Collapse, Typography, useTheme } from "@mui/material";
 import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
 import { AttachmentList } from "../../components/AttachmentPreview/AttachmentList";
@@ -21,6 +21,7 @@ import { MessageDate } from "./MessageDate";
 import { NameText, spokenName } from "../../components/common/NameText";
 import { AvatarWrapper } from "./MailTable";
 import type { EarlierLoad } from "./earlierMessages";
+import { useFoldTimeout } from "../../hooks/useReducedMotion";
 
 const useCardSx = () => {
   const theme = useTheme();
@@ -51,6 +52,7 @@ export const ShowMessageV2Replies = ({
   const theme = useTheme();
   const cardSx = useCardSx();
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const foldTimeout = useFoldTimeout();
   const sender = typeof message?.user === "string" && message.user ? message.user : "Unknown";
   const subject = typeof message?.subject === "string" && message.subject ? message.subject : "(no subject)";
 
@@ -108,7 +110,7 @@ export const ShowMessageV2Replies = ({
         </Box>
         <ExpandMoreOutlinedIcon sx={{ transition: "transform 150ms ease", transform: isExpanded ? "rotate(180deg)" : "none", "@media (prefers-reduced-motion: reduce)": { transition: "none" } }} />
       </ButtonBase>
-      {isExpanded && (
+      <Collapse in={isExpanded} timeout={foldTimeout} unmountOnExit>
         <Box sx={{ px: 1.5, pb: 1.5, display: "flex", flexDirection: "column", gap: 1.5, minWidth: 0 }}>
           {Array.isArray(message?.attachments) && message.attachments.length > 0 && <AttachmentList attachments={message.attachments} compact />}
           {message?.textContentV2 ? (
@@ -119,7 +121,7 @@ export const ShowMessageV2Replies = ({
             </Typography>
           )}
         </Box>
-      )}
+      </Collapse>
     </Box>
   );
 };

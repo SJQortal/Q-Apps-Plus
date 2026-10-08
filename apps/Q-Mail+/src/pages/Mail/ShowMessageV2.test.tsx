@@ -153,7 +153,7 @@ describe('ShowMessageV2', () => {
     expect(setForwardInfo).toHaveBeenCalledTimes(1)
   })
 
-  it('collapses earlier messages with a count, ignoring the local read marker, and lists them newest first', () => {
+  it('collapses earlier messages with a count, ignoring the local read marker, and lists them newest first', async () => {
     wrap(<ShowMessageV2 message={message} />)
     const toggle = screen.getByRole('button', { name: /Show earlier · 2 messages/ })
     expect(screen.queryByText('Re: Lunch')).toBeNull()
@@ -169,7 +169,8 @@ describe('ShowMessageV2', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Expand message from alice' }))
     expect(screen.getByText('first')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Hide earlier' }))
-    expect(screen.queryByText('second')).toBeNull()
+    // It folds shut (an animation), then the earlier messages are gone.
+    await vi.waitFor(() => expect(screen.queryByText('second')).toBeNull())
   })
 
   it('offers Archive and Mark unread as labelled buttons in a wide pane, with the e / u shortcuts', () => {
@@ -451,7 +452,7 @@ describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
     expect(focused.textContent).toContain('Message m0 body')
   })
 
-  it('moves focus to the oldest message when Show older goes away', async () => {
+  it('moves focus to the first message Show older brought in, just under those shown before', async () => {
     wrap(<ShowMessageV2 message={reply(7)} />)
     fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 7 messages' }))
     const older = await screen.findByRole('button', { name: 'Show 2 older messages' })
@@ -459,8 +460,11 @@ describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
     fireEvent.click(older)
     await screen.findByRole('article', { name: 'alice: Message m0' })
     expect(screen.queryByRole('button', { name: /older message/ })).toBeNull()
-    const focused = document.activeElement as HTMLElement
-    expect(focused.hasAttribute('data-earlier-item')).toBe(true)
-    expect(focused.querySelector('[role="article"], article')?.getAttribute('aria-label')).toBe('alice: Message m0')
+    // m6..m2 were shown; m1 (bob's) is the first new one, newest first.
+    await vi.waitFor(() => {
+      const places = Array.from(document.querySelectorAll('[data-earlier-item]'))
+      expect(places.indexOf(document.activeElement as Element)).toBe(5)
+    })
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Earlier message from bob')
   })
 })
