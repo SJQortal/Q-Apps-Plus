@@ -14,6 +14,7 @@ import {
   quoteLinesToHtml,
   recipientActivityByName,
   replyAllRecipients,
+  replyFromOwnName,
   sortNamesByRecency,
   uniqueCopyRecipients,
   withSubjectPrefix,
@@ -314,6 +315,21 @@ describe('identifiers (binding)', () => {
       '_mail_qortal_qmail_averyveryverylongnam_XYZ123_mail_sid'
     )
     expect(aliasMailIdentifier('my alias_x', 'sid')).toBe('_mail_qortal_qmail_my alias_x_mail_sid')
+  })
+})
+
+describe('replyFromOwnName', () => {
+  it('replies from the own name the mail was sent to, spelt as we own it', () => {
+    const own = ['Simon James', 'POS+', 'MA\'s']
+    expect(replyFromOwnName({ user: 'Ali', recipient: 'pos+' }, own)).toBe('POS+')
+    expect(replyFromOwnName({ user: 'Ali', recipient: 'Simon James' }, own)).toBe('Simon James')
+  })
+  it('is null for mail to someone else, without a recipient, or to a name we no longer own', () => {
+    const own = ['Simon James', 'POS+']
+    expect(replyFromOwnName({ user: 'POS+', recipient: 'Ali' }, own)).toBeNull()
+    expect(replyFromOwnName({ user: 'Ali' }, own)).toBeNull()
+    expect(replyFromOwnName({ user: 'Ali', recipient: 'Sold Name' }, own)).toBeNull()
+    expect(replyFromOwnName(null, own)).toBeNull()
   })
 })
 

@@ -297,6 +297,17 @@ export function recipientActivityByName(
   return activity;
 }
 
+/**
+ * The name to reply from: the one of our own names the message was sent to
+ * (its `recipient`), spelt as in `ownNames`; null when it went to none of
+ * them (mail we sent, alias mail, a name we no longer own).
+ */
+export function replyFromOwnName(message: any, ownNames: string[]): string | null {
+  const recipient = normalize(message?.recipient);
+  if (!recipient) return null;
+  return ownNames.find(name => normalize(name) === recipient) ?? null;
+}
+
 /** Names ordered by last contact (newest first); names never seen go last, A–Z. */
 export function sortNamesByRecency(names: string[], activity: Map<string, number>): string[] {
   return [...names].sort((a, b) => {

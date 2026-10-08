@@ -70,6 +70,7 @@ import {
   messageBodyLines,
   recipientActivityByName,
   replyAllRecipients,
+  replyFromOwnName,
   sortNamesByRecency,
   withSubjectPrefix,
 } from "../../utils/mailCompose";
@@ -1070,6 +1071,10 @@ export const NewMessage = ({
       setReplyPreviewMode("preview");
       const nextSubject = withSubjectPrefix(replyTo?.subject, "Re");
       initialSubjectRef.current = nextSubject;
+      // Answer as the name the mail was sent to (mail to POS+ is answered as
+      // POS+, not as the active name). A stored draft keeps its own From.
+      const sentToOwnName = replyFromOwnName(replyTo, fromOptions);
+      if (sentToOwnName && !pendingDraftRef.current) setFromName(sentToOwnName);
       if (pendingDraftRef.current) {
         // A stored reply draft is being opened: keep its subject and body.
         initialValueRef.current = "";
@@ -1096,6 +1101,9 @@ export const NewMessage = ({
       setValue(body);
       initialValueRef.current = body;
     }
+    // Only a new reply sets the composer up: a change of the owned names
+    // later must not reset what the user has written.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [replyTo]);
 
   // Reply all: everyone from the original's to/cc (minus our own names and

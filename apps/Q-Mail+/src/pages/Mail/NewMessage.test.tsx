@@ -29,7 +29,7 @@ const original = {
 const storedDrafts = () => JSON.parse(localStorage.getItem(getComposeDraftsStorageKey(address)) || '{}')
 const wait = (ms: number) => act(() => new Promise(resolve => setTimeout(resolve, ms)))
 
-function renderComposer(props: { replyAll?: boolean; onRequestClose?: () => void } = {}) {
+function renderComposer(props: { replyAll?: boolean; onRequestClose?: () => void; replyTo?: any; ownedNames?: string[] } = {}) {
   const setReplyTo = vi.fn()
   const utils = render(
     <Provider store={store}>
@@ -38,13 +38,13 @@ function renderComposer(props: { replyAll?: boolean; onRequestClose?: () => void
           <NewMessage
             inlineMode
             hideButton
-            replyTo={original}
+            replyTo={props.replyTo ?? original}
             replyAll={props.replyAll}
             setReplyTo={setReplyTo}
             setForwardInfo={vi.fn()}
             forwardInfo={null}
             onRequestClose={props.onRequestClose}
-            ownedNames={['me']}
+            ownedNames={props.ownedNames ?? ['me']}
           />
         </HubThemeProvider>
       </MemoryRouter>
@@ -74,6 +74,18 @@ describe('NewMessage replies and drafts', () => {
     await wait(50)
     expect(quill().getText().trim()).toBe('')
     expect(quill().root.innerHTML).not.toContain('blockquote')
+  })
+
+  it('answers from the own name the mail was sent to, not the active name', async () => {
+    renderComposer({ replyTo: { ...original, recipient: 'work' }, ownedNames: ['me', 'work'] })
+    await screen.findByRole('region', { name: 'Original message' })
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /From/ }).textContent).toContain('work'))
+  })
+
+  it('keeps the active name for mail that went to none of ours', async () => {
+    renderComposer({ replyTo: { ...original, recipient: 'someone-else' }, ownedNames: ['me', 'work'] })
+    await screen.findByRole('region', { name: 'Original message' })
+    expect(screen.getByRole('combobox', { name: /From/ }).textContent).toContain('me')
   })
 
   it('opening Reply saves nothing until the user writes, then saves under the reply key', async () => {
