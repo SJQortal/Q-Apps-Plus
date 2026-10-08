@@ -126,10 +126,15 @@ export function useEarlierMessages(message: any, open: boolean) {
   }, []);
 
   const startedRef = useRef<{ forKey: string; keys: Set<string> }>({ forKey: messageKey, keys: new Set() });
+  // A new message starts afresh, open or not, like `loads` above: what was
+  // started for the last one must not keep this one's entries from loading
+  // (a failed entry would show "Loading message" for good on the way back).
+  useEffect(() => {
+    if (startedRef.current.forKey !== messageKey) startedRef.current = { forKey: messageKey, keys: new Set() };
+  }, [messageKey]);
   const visibleKeys = visible.map(entry => entry.key).join("\n");
   useEffect(() => {
     if (!open) return;
-    if (startedRef.current.forKey !== messageKey) startedRef.current = { forKey: messageKey, keys: new Set() };
     const started = startedRef.current;
     // Newest first: the reader opens the newest earlier message.
     const pending = visible.filter(needsFetch).filter(entry => !started.keys.has(entry.key)).reverse();

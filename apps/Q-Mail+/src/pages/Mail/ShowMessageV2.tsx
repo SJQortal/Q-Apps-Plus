@@ -121,9 +121,17 @@ export const ShowMessageV2 = ({
   const compact = width > 0 && width < READER_COMPACT_WIDTH;
   // "Show earlier" belongs to the message it was opened on. The reader is
   // reused for the next message, so the section is closed for it in that same
-  // render, before the loader could start on its history.
+  // render, before the loader could start on its history. Each message opens
+  // with it closed, also on the way back to one that had it open.
   const messageKey = `${message?.user || ""}|${message?.id || ""}`;
   const [earlierOpenFor, setEarlierOpenFor] = useState<string | null>(null);
+  const [ccOpenFor, setCcOpenFor] = useState<string | null>(null);
+  const [shownKey, setShownKey] = useState(messageKey);
+  if (shownKey !== messageKey) {
+    setShownKey(messageKey);
+    setEarlierOpenFor(null);
+    setCcOpenFor(null);
+  }
   const showEarlier = earlierOpenFor === messageKey;
 
   const attachments = useMemo(() => usableAttachments(message?.attachments), [message?.attachments]);
@@ -203,7 +211,6 @@ export const ShowMessageV2 = ({
     : [];
   // A long Cc list shows its first names and "and N more", which shows the
   // rest. The line wraps, so every name is readable on a phone (no hover).
-  const [ccOpenFor, setCcOpenFor] = useState<string | null>(null);
   const ccShown = ccOpenFor === messageKey || ccNames.length <= CC_NAMES_SHOWN + 1 ? ccNames : ccNames.slice(0, CC_NAMES_SHOWN);
   const ccMore = ccNames.length - ccShown.length;
   const subject = typeof message?.subject === "string" && message.subject ? message.subject : "(no subject)";

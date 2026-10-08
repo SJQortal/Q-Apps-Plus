@@ -354,6 +354,36 @@ describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
     expect(screen.queryByText(/Quoted by carol/)).toBeNull()
   })
 
+  it('on the way back to a message, a failed earlier message can load again', async () => {
+    let up = false
+    mockQortalAction('FETCH_QDN_RESOURCE', (request: any) => {
+      if (request.identifier === 'm0' && !up) throw new Error('Unable to decrypt: some other failure')
+      return `ENC:${request.identifier}`
+    })
+    const refOf = (id: string) => ({ reference: { identifier: id, name: 'alice', service: 'MAIL_PRIVATE' } })
+    const withRefs = (id: string, refs: string[]) => ({ ...reply(0), id, generalData: { thread: [], threadV2: refs.map(refOf) } })
+    const reader = (message: any) => (
+      <Provider store={store}>
+        <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+          <ShowMessageV2 message={message} />
+        </HubThemeProvider>
+      </Provider>
+    )
+    const a = withRefs('A', ['m0', 'm3'])
+    const { rerender } = render(reader(a))
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 2 messages' }))
+    expect(await screen.findByText('This message could not be loaded.')).toBeTruthy()
+    rerender(reader(withRefs('B', ['m4'])))
+    up = true
+    rerender(reader(a))
+    // Closed again on the way back, and opening it fetches the failed one anew.
+    const show = screen.getByRole('button', { name: 'Show earlier · 2 messages' })
+    expect(show.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(show)
+    expect(await screen.findByRole('article', { name: 'alice: Message m0' })).toBeTruthy()
+    expect(screen.queryByText('Loading message')).toBeNull()
+  })
+
   it('words the Show older button by what is left', () => {
     expect(olderLabel(1)).toBe('Show 1 older message')
     expect(olderLabel(5)).toBe('Show 5 older messages')
