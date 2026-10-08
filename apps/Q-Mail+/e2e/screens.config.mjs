@@ -738,6 +738,19 @@ export default {
       },
     },
     { key: 'settings', path: '/settings', after: async (page) => page.waitForSelector('text=Appearance', { timeout: 8000 }).catch(() => {}) },
+    {
+      // Settings → Mail → Show group threads off, then back to mail: no Threads
+      // in the rail or the bottom bar (four items on phones).
+      key: 'threads-hidden',
+      path: '/settings',
+      after: async (page) => {
+        await page.waitForSelector('text=Appearance', { timeout: 8000 }).catch(() => {});
+        await page.getByRole('switch', { name: 'Show group threads' }).first().click({ timeout: 4000 });
+        await page.getByRole('button', { name: 'Back to mail' }).first().click({ timeout: 4000 });
+        await waitForInbox(page);
+        await page.waitForTimeout(300);
+      },
+    },
     { key: 'whats-new', path: '/settings', overlay: true, after: async (page) => { await page.waitForSelector('text=Appearance', { timeout: 8000 }).catch(() => {}); await page.getByRole('button', { name: "What's new" }).first().click({ timeout: 4000 }); await page.waitForSelector('text=The first Q-Mail+ release', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(300); } },
     { key: 'menu', path: '/', mobileOnly: true, overlay: true, after: async (page) => { await waitForInbox(page); await page.getByRole('button', { name: 'Open mailboxes menu' }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
     {

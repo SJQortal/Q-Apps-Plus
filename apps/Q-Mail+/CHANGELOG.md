@@ -9,6 +9,9 @@
 - Mail that carries copies of earlier messages (from Q-Mail, or from Q-Mail+ 1.0.0) shows them as before, marked as quoted.
 - Q-Mail opens these replies without their earlier messages.
 
+**Group threads**
+- Settings → Mail → "Show group threads" hides group threads: the Threads section and the bottom bar's Threads item go away, and nothing about threads is loaded, which makes the first load lighter for anyone in many groups. Your thread drafts are kept for when you turn it on again.
+
 **Dates**
 - An open message, and each earlier message under it, shows the weekday, date and time, like "Sun 2 Aug, 08:58", with the year when it isn't this year ("Sun 11 May 2025, 14:03"). A tap or hover still shows the full date with seconds.
 - Every message list shows the same date: inbox, archive, sent, alias inboxes, search results, sender groups, threads and drafts. On a phone the day sits above the time, so names keep their room. Hover over a date, or tap it on a phone, to see the full date and how long ago it was.

@@ -18,6 +18,7 @@ const changelogEntries: ChangelogEntry[] = [
       "Mail that carries copies of earlier messages (from Q-Mail or Q-Mail+ 1.0.0) shows them as before; Q-Mail opens the new replies without their earlier messages.",
       "An open message shows its weekday, date and time (\"Sun 2 Aug, 08:58\"), with the year when it isn't this year.",
       "Every message list shows the same date; hover over it, or tap it on a phone, for the full date and how long ago.",
+      "Settings → Mail → Show group threads: hide group threads, and nothing about them is loaded.",
     ],
   },
   {
