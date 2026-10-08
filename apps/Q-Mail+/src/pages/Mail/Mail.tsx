@@ -1514,20 +1514,26 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       // Names with no by-address mail still get the alias-form probe, a few
       // at a time; if the merged inbox search failed, each name gets the full
       // probe as before.
-      const [addressMail, sentMail] = await Promise.all([
-        ownedNamesWithAddressMail(ownedNameCandidates, address),
-        ownedNamesWithSentMail(ownedNameCandidates),
-      ]);
+      // The sent probe runs alongside: the inbox names don't wait for it.
+      const sentMailPromise = ownedNamesWithSentMail(ownedNameCandidates);
+      const addressMail = await ownedNamesWithAddressMail(ownedNameCandidates, address);
       if (canceled) return;
-      const hasInboxMail = await mapWithConcurrency(ownedNameCandidates, 4, async accountName => {
-        if (addressMail.found.has(accountName.trim().toLowerCase())) return true;
-        if (!addressMail.settled) {
-          return hasInboxMailActivityForOwnedName(accountName, address, {
-            isPrimary: accountName === user.name,
-          });
-        }
-        return hasAliasFormInboxMail(accountName, address);
-      });
+      const hasInboxMail = await mapWithConcurrency(
+        ownedNameCandidates,
+        4,
+        async accountName => {
+          if (addressMail.found.has(accountName.trim().toLowerCase())) return true;
+          if (!addressMail.settled) {
+            return hasInboxMailActivityForOwnedName(accountName, address, {
+              isPrimary: accountName === user.name,
+            });
+          }
+          return hasAliasFormInboxMail(accountName, address);
+        },
+        // Signed out or switched account meanwhile: no more probes.
+        () => canceled
+      );
+      const sentMail = await sentMailPromise;
       if (canceled) return;
       ownedNameCandidates.forEach((accountName, index) => {
         if (hasInboxMail[index]) inboxNamesWithMail.push(accountName);
@@ -2817,6 +2823,16 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
   const isMailBootstrapLoading =
     isLoading || isLoadingCombinedAliasInbox || isLoadingQdnState;
 
+  // Stable callbacks for the (memoised) rail.
+  const closeRail = useCallback(() => setRailOpen(false), []);
+  const hideInboxName = useCallback(
+    (name: string) => setInboxNameHidden(user?.address, name, true),
+    [user?.address]
+  );
+  const showInboxName = useCallback(
+    (name: string) => setInboxNameHidden(user?.address, name, false),
+    [user?.address]
+  );
   const openSettings = useCallback(() => {
     navigate(SETTINGS_PATH, { state: { backgroundLocation: location } });
   }, [location, navigate]);
@@ -3035,6 +3051,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
         onMarkAsRead={markMessagesAsRead}
         onMarkAsUnread={markMessagesAsUnread}
         onArchive={archiveMessages}
+        onUndoArchive={unarchiveMessages}
         onReply={openReplyComposerFromMessage}
         onForward={openForwardComposerFromMessage}
         searchQuery={inboxSearchQuery}
@@ -3060,6 +3077,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
         onMarkAsRead={markMessagesAsRead}
         onMarkAsUnread={markMessagesAsUnread}
         onUnarchive={unarchiveMessages}
+        onUndoUnarchive={archiveMessages}
         onReply={openReplyComposerFromMessage}
         onForward={openForwardComposerFromMessage}
         status={isLoading && !archivedForList.length ? "loading" : "ready"}
@@ -3145,6 +3163,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
           onMarkAsRead={markMessagesAsRead}
           onMarkAsUnread={markMessagesAsUnread}
           onArchive={archiveMessages}
+          onUndoArchive={unarchiveMessages}
           onReply={openReplyComposerFromMessage}
           onForward={openForwardComposerFromMessage}
           highlightTerms={inboxSearchStatus.terms}
@@ -3542,8 +3561,9 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       groupAvatarUrlById={groupAvatarUrlById}
       onOpenSettings={openSettings}
       version={packageJson.version}
-      onClose={isDesktopLayout ? undefined : () => setRailOpen(false)}
-      onHideInboxName={name => setInboxNameHidden(user?.address, name, true)}
+      onClose={isDesktopLayout ? undefined : closeRail}
+      onHideInboxName={hideInboxName}
+      onShowInboxName={showInboxName}
     />
   );
 

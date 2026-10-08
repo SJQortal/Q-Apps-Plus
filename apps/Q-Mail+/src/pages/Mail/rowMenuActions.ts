@@ -17,7 +17,8 @@ export type RowMenuActionId =
   | "delete"
   | "expand"
   | "collapse"
-  | "hide";
+  | "hide"
+  | "attachments";
 
 export interface RowMenuAction {
   id: RowMenuActionId;
@@ -33,6 +34,8 @@ export interface MessageRowActionInput {
   /** Reply and Reply all; received mail only. */
   reply?: (replyAll: boolean) => void;
   forward?: () => void;
+  /** The message's attachments, without opening it. */
+  attachments?: () => void;
   markRead?: () => void;
   markUnread?: () => void;
   archive?: () => void;
@@ -50,6 +53,7 @@ export function messageRowActions(input: MessageRowActionInput): RowMenuAction[]
     actions.push({ id: "replyAll", label: "Reply all", onSelect: () => reply(true) });
   }
   if (input.forward) actions.push({ id: "forward", label: "Forward", onSelect: input.forward });
+  if (input.attachments) actions.push({ id: "attachments", label: "Attachments", onSelect: input.attachments });
   if (!input.isFromSent) {
     if (input.isUnread && input.markRead) actions.push({ id: "markRead", label: "Mark as read", onSelect: input.markRead });
     if (!input.isUnread && input.markUnread) actions.push({ id: "markUnread", label: "Mark as unread", onSelect: input.markUnread });

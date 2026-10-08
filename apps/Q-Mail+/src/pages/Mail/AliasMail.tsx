@@ -37,6 +37,8 @@ interface AliasMailProps {
   onMarkAsRead?: (messages: any[]) => void | Promise<void>;
   onMarkAsUnread?: (messages: any[]) => void | Promise<void>;
   onArchive?: (messages: any[]) => void | Promise<void>;
+  /** Undo for an archive from the list (moves them back to the inbox). */
+  onUndoArchive?: (messages: any[]) => unknown;
   /** Reply / Reply all and Forward from a row's menu. */
   onReply?: (message: any, options?: { replyAll?: boolean }) => void;
   onForward?: (message: any) => void;
@@ -62,6 +64,7 @@ export const AliasMail = ({
   onMarkAsRead,
   onMarkAsUnread,
   onArchive,
+  onUndoArchive,
   onReply,
   onForward,
   searchQuery = "",
@@ -213,6 +216,7 @@ export const AliasMail = ({
       onMarkAsRead={onMarkAsRead}
       onMarkAsUnread={onMarkAsUnread}
       onArchive={onArchive}
+      onUndoArchive={onUndoArchive}
       onReply={onReply}
       onForward={onForward}
       status={status}

@@ -43,6 +43,7 @@ import { primarySoft } from "../../hub-theme";
 import { LIST_CONTAINER } from "../../layout/MailShell";
 import { NameText, spokenName } from "../../components/common/NameText";
 import { useRowMenu } from "./useRowMenu";
+import { lazyNamed } from "../../components/common/lazyNamed";
 import { messageRowActions } from "./rowMenuActions";
 import { isOpenableMessage } from "./messageOpener";
 
@@ -52,8 +53,14 @@ export const WIDE_ROW_MIN_WIDTH = 720;
 /** The container query of a wide list, where rows read as one line of columns. */
 export const WIDE_ROW_QUERY = `@container ${LIST_CONTAINER} (min-width: ${WIDE_ROW_MIN_WIDTH}px)`;
 const WIDE = WIDE_ROW_QUERY;
+/** A list with room for an indent and one-line dates in a sender group's rows. */
+export const ROOMY_LIST_QUERY = `@container ${LIST_CONTAINER} (min-width: 480px)`;
+/** A list too narrow for avatars (the 300 px list of a 700 px window): names get their room. */
+export const NARROW_LIST_QUERY = `@container ${LIST_CONTAINER} (max-width: 339.98px)`;
 /** Column order in a wide row; the DOM (and the row's label) keep the two-line order. */
 const wideOrder = (order: number) => ({ [WIDE]: { order } });
+const RowAttachmentsDialog = lazyNamed(() => import("./RowAttachmentsDialog"), "RowAttachmentsDialog");
+
 export const NO_SUBJECT_LABEL = "(no subject)";
 
 export interface MailMessageRowProps {
@@ -264,6 +271,7 @@ export const MailMessageRow = ({
   const spokenLabel = isFromSent ? `To: ${name ? spokenName(name) : "…"}` : name ? spokenName(name) : "Unknown sender";
   const ariaLabel = `${isUnread ? "Unread. " : ""}${spokenLabel}, ${subjectLabel}${spokenDate ? `, ${spokenDate}` : ""}`;
 
+  // A message with attachments has a paperclip button at the row's end instead.
   const statusIcon = isLocked ? (
     <LockOutlinedIcon
       fontSize="inherit"
@@ -271,19 +279,18 @@ export const MailMessageRow = ({
       role="img"
       sx={{ color: "text.secondary", fontSize: 16, flexShrink: 0, ...(compact ? {} : wideOrder(2)) }}
     />
-  ) : hasAttachments ? (
-    <AttachFileOutlinedIcon
-      fontSize="inherit"
-      aria-label="Has attachments"
-      role="img"
-      sx={{ color: "text.secondary", fontSize: 16, flexShrink: 0, ...(compact ? {} : wideOrder(2)) }}
-    />
   ) : null;
+
+  // The attachments without opening the message (its own chunk, loaded on first use).
+  const [attachmentsDialog, setAttachmentsDialog] = useState<"closed" | "open" | "closing">("closed");
+  const showAttachments = useCallback(() => setAttachmentsDialog("open"), []);
+  const canShowAttachments = Boolean(identifier) && typeof messageData?.user === "string" && Boolean(messageData.user);
 
   // Beside two lines the day sits over the time, so name and subject keep
   // their room on a phone; one line (compact, or a wide row) keeps it inline.
   const dateNode = compact ? (
-    <MailListDate timestamp={createdAt} emphasis={isUnread} />
+    // In a narrow list the date stacks here too, or the subject keeps three letters.
+    <MailListDate timestamp={createdAt} emphasis={isUnread} stacked inlineFrom={ROOMY_LIST_QUERY} />
   ) : (
     <MailListDate timestamp={createdAt} emphasis={isUnread} stacked inlineFrom={WIDE} sx={wideOrder(5)} />
   );
@@ -342,7 +349,7 @@ export const MailMessageRow = ({
         })}
       >
         {!compact && (
-          <Box sx={{ flexShrink: 0, display: "flex" }}>
+          <Box sx={{ flexShrink: 0, display: "flex", [NARROW_LIST_QUERY]: { display: "none" } }}>
             <AvatarWrapper
               isAlias={isAliasRecipient}
               height="40px"
@@ -435,6 +442,17 @@ export const MailMessageRow = ({
           {!compact && dateNode}
         </Box>
       </ButtonBase>
+      {hasAttachments && canShowAttachments && (
+        <Tooltip title="Attachments">
+          <IconButton
+            onClick={showAttachments}
+            aria-label={`Attachments: ${subjectLabel}`}
+            sx={{ minWidth: 44, minHeight: 44, color: "text.secondary", flexShrink: 0 }}
+          >
+            <AttachFileOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      )}
       {isFromSent && onDeleteMessage && (
         <Tooltip title="Delete sent message">
           <span>
@@ -463,7 +481,7 @@ export const MailMessageRow = ({
       ) : (
         nameLabel
       ),
-      ariaLabel: "Message actions",
+      ariaLabel: `Actions for ${spokenLabel}: ${subjectLabel}`,
       actions: messageRowActions({
         isFromSent,
         isUnread,
@@ -471,6 +489,7 @@ export const MailMessageRow = ({
         open,
         reply: onReply ? replyAll => withOpened(opened => onReply(opened, { replyAll }))() : undefined,
         forward: onForward ? withOpened(onForward) : undefined,
+        attachments: canShowAttachments && hasAttachments !== false ? showAttachments : undefined,
         markRead: onlyThis(onMarkAsRead),
         markUnread: onlyThis(onMarkAsUnread),
         archive: onlyThis(onArchive),
@@ -479,6 +498,18 @@ export const MailMessageRow = ({
         remove: isFromSent && onDeleteMessage && !isDeleting ? () => void onDeleteMessage(messageData) : undefined,
       }),
     }))}
+    {attachmentsDialog !== "closed" && (
+      <React.Suspense fallback={null}>
+        <RowAttachmentsDialog
+          open={attachmentsDialog === "open"}
+          onClose={() => setAttachmentsDialog("closing")}
+          publisher={messageData.user}
+          identifier={identifier}
+          subject={subjectLabel}
+          onOpenMessage={open}
+        />
+      </React.Suspense>
+    )}
     </>
   );
 };

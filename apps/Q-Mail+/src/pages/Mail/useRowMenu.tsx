@@ -37,12 +37,31 @@ export function useRowMenu<T = undefined>() {
     },
   });
 
+  // Gone once the close transition ends: no closed menu stays mounted per row
+  // (a phone sheet keeps touch listeners on the document while mounted).
+  const unmount = useCallback(() => setMenu(previous => (previous && !previous.open ? null : previous)), []);
+  // While it fades out the menu keeps the items it opened with: an action
+  // that changes the row (Mark as read) must not flip the label on the way out.
+  const shown = useRef<RowMenuContent | null>(null);
+
   const renderMenu = (content: (subject: T) => RowMenuContent): ReactNode => {
-    if (!menu) return null;
-    const { actions, title, ariaLabel } = content(menu.subject);
+    if (!menu) {
+      shown.current = null;
+      return null;
+    }
+    if (menu.open || !shown.current) shown.current = content(menu.subject);
+    const { actions, title, ariaLabel } = shown.current;
     return (
       <Suspense fallback={null}>
-        <MessageRowMenu open={menu.open} point={menu.point} onClose={close} actions={actions} title={title} ariaLabel={ariaLabel} />
+        <MessageRowMenu
+          open={menu.open}
+          point={menu.point}
+          onClose={close}
+          onExited={unmount}
+          actions={actions}
+          title={title}
+          ariaLabel={ariaLabel}
+        />
       </Suspense>
     );
   };

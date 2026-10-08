@@ -63,7 +63,8 @@ describe('GroupedMailboxList menus', () => {
       />
     )
     fireEvent.contextMenu(screen.getByRole('button', { name: /^Unread\. carol/ }), { clientX: 40, clientY: 40 })
-    expect(await menuItems()).toEqual(['Open', 'Reply', 'Reply all', 'Forward', 'Mark as read', 'Archive', 'Select'])
+    // Not decrypted yet, so it may have attachments: "Attachments" opens it to see.
+    expect(await menuItems()).toEqual(['Open', 'Reply', 'Reply all', 'Forward', 'Attachments', 'Mark as read', 'Archive', 'Select'])
     fireEvent.click(screen.getByRole('menuitem', { name: 'Archive' }))
     expect(onArchive).toHaveBeenCalledWith([carol])
   })
@@ -119,12 +120,40 @@ describe('GroupedMailboxList menus', () => {
       const impostor = { id: 'i1', user: 'Simon\u2800James', createdAt: 500 }
       renderList(<GroupedMailboxList messages={[impostor]} mailboxType="inbox" openMessage={() => {}} onArchive={() => {}} />)
       fireEvent.contextMenu(document.querySelector('[data-message-row="i1"] button') as HTMLElement, { clientX: 40, clientY: 40 })
-      const sheet = await screen.findByRole('dialog', { name: 'Message actions' })
+      const sheet = await screen.findByRole('dialog', { name: /^Actions for Simon/ })
       expect(sheet.querySelector('h2')?.textContent).toContain(HIDDEN_CHARACTERS_SR)
       expect(screen.getByRole('button', { name: 'Archive' })).toBeTruthy()
+      // A way out without a swipe or a Back gesture.
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      await vi.waitFor(() => expect(screen.queryByRole('dialog', { name: /^Actions for Simon/ })).toBeNull())
     } finally {
       window.matchMedia = original
     }
+  })
+
+  it('archiving from a row says so with Undo, which puts it back, also when the list is now empty', async () => {
+    const onArchive = vi.fn()
+    const onUndoArchive = vi.fn()
+    renderList(
+      <GroupedMailboxList messages={[carol]} mailboxType="inbox" openMessage={() => {}} onArchive={onArchive} onUndoArchive={onUndoArchive} />
+    )
+    fireEvent.contextMenu(screen.getByRole('button', { name: /carol/ }), { clientX: 40, clientY: 40 })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Archive' }))
+    expect(onArchive).toHaveBeenCalledWith([carol])
+    const status = await screen.findByRole('status')
+    expect(status.textContent).toContain('Archived')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(onUndoArchive).toHaveBeenCalledWith([carol])
+  })
+
+  it('"Archive all" on a group counts what it archived', async () => {
+    renderList(
+      <GroupedMailboxList messages={[bob1, bob2, carol]} mailboxType="inbox" openMessage={() => {}} onArchive={() => {}} onUndoArchive={() => {}} />
+    )
+    const header = document.querySelector('[data-group="sender:bob"] button[aria-expanded]') as HTMLElement
+    fireEvent.contextMenu(header, { clientX: 40, clientY: 40 })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Archive all' }))
+    expect((await screen.findByRole('status')).textContent).toContain('2 archived')
   })
 
   it('sent rows: forward and delete, no reply', async () => {
@@ -132,6 +161,6 @@ describe('GroupedMailboxList menus', () => {
       <GroupedMailboxList messages={[carol]} mailboxType="sent" openMessage={() => {}} onReply={() => {}} onForward={() => {}} onDeleteMessage={() => {}} />
     )
     fireEvent.contextMenu(document.querySelector('[data-message-row="c1"] button') as HTMLElement, { clientX: 40, clientY: 40 })
-    expect(await menuItems()).toEqual(['Open', 'Forward', 'Delete sent message'])
+    expect(await menuItems()).toEqual(['Open', 'Forward', 'Attachments', 'Delete sent message'])
   })
 })

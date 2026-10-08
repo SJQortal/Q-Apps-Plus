@@ -21,6 +21,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import UnfoldMoreOutlinedIcon from "@mui/icons-material/UnfoldMoreOutlined";
 import UnfoldLessOutlinedIcon from "@mui/icons-material/UnfoldLessOutlined";
 import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
+import AttachFileOutlinedIcon from "@mui/icons-material/AttachFileOutlined";
 import { BottomSheetMenu } from "../../components/common/BottomSheetMenu";
 import type { MenuPoint } from "../../hooks/useContextMenuTrigger";
 import type { RowMenuAction, RowMenuActionId } from "./rowMenuActions";
@@ -40,6 +41,7 @@ const ICONS: Record<RowMenuActionId, ReactNode> = {
   expand: <UnfoldMoreOutlinedIcon fontSize="small" />,
   collapse: <UnfoldLessOutlinedIcon fontSize="small" />,
   hide: <VisibilityOffOutlinedIcon fontSize="small" />,
+  attachments: <AttachFileOutlinedIcon fontSize="small" />,
 };
 
 export interface MessageRowMenuProps {
@@ -50,13 +52,15 @@ export interface MessageRowMenuProps {
   /** Above the items on phones: whose message, or whose group. */
   title?: ReactNode;
   ariaLabel: string;
+  onExited?: () => void;
 }
 
-export function MessageRowMenu({ open, point, onClose, actions, title, ariaLabel }: MessageRowMenuProps) {
+export function MessageRowMenu({ open, point, onClose, onExited, actions, title, ariaLabel }: MessageRowMenuProps) {
   return (
     <BottomSheetMenu
       open={open}
       onClose={onClose}
+      onExited={onExited}
       anchorEl={null}
       anchorPosition={point}
       title={title}

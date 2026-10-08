@@ -658,6 +658,35 @@ export default {
       },
     },
     {
+      // Files being attached, as tiles in rows (a photo, a long-named text file, a PDF).
+      key: 'compose-attachments',
+      path: '/',
+      after: async (page) => {
+        await goTo(page, /^Compose$/);
+        await page.waitForSelector('.ql-editor', { timeout: 8000 }).catch(() => {});
+        await page.locator('input[type=file]').first().setInputFiles([
+          { name: 'harbour-photo.png', mimeType: 'image/png', buffer: PNG },
+          { name: 'meeting notes for the Qortal builders call.txt', mimeType: 'text/plain', buffer: Buffer.from('Agenda: Q-Mail+ 1.0.1') },
+          { name: 'spec-sheet.pdf', mimeType: 'application/pdf', buffer: Buffer.from(makePdf('Spec sheet')) },
+        ]);
+        await page.getByRole('list', { name: 'Attachments' }).waitFor({ timeout: 4000 }).catch(() => {});
+        await page.waitForTimeout(300);
+      },
+    },
+    {
+      key: 'compose-attachment-preview',
+      path: '/',
+      overlay: true,
+      after: async (page) => {
+        await goTo(page, /^Compose$/);
+        await page.waitForSelector('.ql-editor', { timeout: 8000 }).catch(() => {});
+        await page.locator('input[type=file]').first().setInputFiles([{ name: 'harbour-photo.png', mimeType: 'image/png', buffer: PNG }]);
+        await page.getByRole('button', { name: 'Preview harbour-photo.png' }).click({ timeout: 4000 });
+        await page.waitForSelector('[role=dialog] img', { timeout: 4000 }).catch(() => {});
+        await page.waitForTimeout(300);
+      },
+    },
+    {
       // To, Cc and Bcc open, with a name checked into Cc.
       key: 'compose',
       path: '/',
@@ -769,6 +798,26 @@ export default {
         await row.click({ button: 'right', position: { x: 60, y: 20 }, timeout: 4000 });
         await page.getByRole('menuitem').first().waitFor({ timeout: 3000 }).catch(() => {});
         await page.getByRole('button', { name: 'Archive' }).first().waitFor({ timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(400);
+      },
+    },
+    {
+      // A row's attachments without opening it: the paperclip, else "Attachments" in the row's menu.
+      key: 'row-attachments',
+      path: '/',
+      overlay: true,
+      after: async (page) => {
+        await waitForInbox(page);
+        const clip = page.getByRole('button', { name: /^Attachments: / }).first();
+        const hasClip = await clip.waitFor({ timeout: 3000 }).then(() => true, () => false);
+        if (hasClip) {
+          await clip.click({ timeout: 4000 });
+        } else {
+          await page.locator('[data-message-row] button').first().click({ button: 'right', position: { x: 60, y: 20 }, timeout: 4000 });
+          // A menu item from 600 px, a button in the phone sheet.
+          await page.getByRole('menuitem', { name: 'Attachments' }).or(page.getByRole('button', { name: 'Attachments', exact: true })).first().click({ timeout: 3000 });
+        }
+        await page.getByText('coast-photo.png').first().waitFor({ timeout: 8000 }).catch(() => {});
         await page.waitForTimeout(400);
       },
     },
