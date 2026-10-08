@@ -92,7 +92,10 @@ import {
   fetchRecentInboxMessagesForSavedAlias,
   hasGroupThreadActivity,
   hasInboxMailActivityForOwnedName,
-  hasSentMailActivityForOwnedName,
+  hasAliasFormInboxMail,
+  mapWithConcurrency,
+  ownedNamesWithAddressMail,
+  ownedNamesWithSentMail,
   mergeNewRows,
   withoutDeletedRows,
 } from "../../utils/mailInbox";
@@ -1476,25 +1479,33 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
 
       const inboxNamesWithMail: string[] = [];
       const sentNamesWithMail: string[] = [];
+      const address = user.address;
 
-      for (const accountName of ownedNameCandidates) {
-        const [hasInboxMail, hasSentMail] = await Promise.all([
-          hasInboxMailActivityForOwnedName(accountName, user.address, {
-            isPrimary: accountName === user.name,
-          }),
-          hasSentMailActivityForOwnedName(accountName),
-        ]);
-
-        if (canceled) return;
-        if (hasInboxMail) {
-          inboxNamesWithMail.push(accountName);
-        }
-        if (hasSentMail) {
-          sentNamesWithMail.push(accountName);
-        }
-      }
-
+      // One paged search for every name's by-address inbox mail and one per
+      // kind for sent mail (mailInbox.ts), instead of up to four searches per
+      // name: on an 88-name account about 175 searches instead of about 350.
+      // Names with no by-address mail still get the alias-form probe, a few
+      // at a time; if the merged inbox search failed, each name gets the full
+      // probe as before.
+      const [addressMail, sentMail] = await Promise.all([
+        ownedNamesWithAddressMail(ownedNameCandidates, address),
+        ownedNamesWithSentMail(ownedNameCandidates),
+      ]);
       if (canceled) return;
+      const hasInboxMail = await mapWithConcurrency(ownedNameCandidates, 4, async accountName => {
+        if (addressMail.found.has(accountName.trim().toLowerCase())) return true;
+        if (!addressMail.settled) {
+          return hasInboxMailActivityForOwnedName(accountName, address, {
+            isPrimary: accountName === user.name,
+          });
+        }
+        return hasAliasFormInboxMail(accountName, address);
+      });
+      if (canceled) return;
+      ownedNameCandidates.forEach((accountName, index) => {
+        if (hasInboxMail[index]) inboxNamesWithMail.push(accountName);
+        if (sentMail.has(accountName.trim().toLowerCase())) sentNamesWithMail.push(accountName);
+      });
       const sortedInboxNames = sortOwnedNamesForDisplay(
         inboxNamesWithMail,
         user?.name

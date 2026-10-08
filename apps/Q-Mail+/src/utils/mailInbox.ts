@@ -285,6 +285,191 @@ export const hasInboxMailActivityForOwnedName = async (
   return false;
 };
 
+/** `fn` over `items`, at most `limit` at a time; results in input order. */
+export const mapWithConcurrency = async <T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> => {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await fn(items[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
+  return results;
+};
+
+/** Names per merged search: Core takes repeated `name` params; 50 keeps the URL far below its limit. */
+export const NAMES_PER_SEARCH = 50;
+/** Pages a merged probe reads; names it has not settled by then are probed one by one. */
+export const MERGED_PROBE_MAX_PAGES = 10;
+const MERGED_PAGE_SIZE = 200;
+
+const lower = (value: unknown): string => (typeof value === "string" ? value.trim().toLowerCase() : "");
+
+const chunked = <T,>(items: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+};
+
+/**
+ * Pages one search until it runs out, `done()` says enough, or the page cap.
+ * Resolves true when the search was read to the end (or `done`), false when
+ * it stopped at the cap; throws when a page fails.
+ */
+const readPages = async (
+  build: (offset: number) => URLSearchParams,
+  onRows: (rows: any[]) => void,
+  done: () => boolean
+): Promise<boolean> => {
+  let offset = 0;
+  for (let page = 0; page < MERGED_PROBE_MAX_PAGES; page += 1) {
+    const rows = await searchResources(build(offset));
+    onRows(rows);
+    if (rows.length < MERGED_PAGE_SIZE || done()) return true;
+    offset += rows.length;
+  }
+  return false;
+};
+
+/**
+ * Which owned names have sent mail, with one paged search per kind for up to
+ * NAMES_PER_SEARCH names instead of two searches per name (88 names: about 2
+ * searches instead of 176). Same queries and row test as
+ * hasSentMailActivityForOwnedName; a name a merged search could not settle
+ * (a failed page, or the page cap) gets that per-name probe. Lowercased names.
+ */
+export const ownedNamesWithSentMail = async (names: string[]): Promise<Set<string>> => {
+  const owned = Array.from(new Set(names.map(name => (typeof name === "string" ? name.trim() : "")).filter(Boolean)));
+  const found = new Set<string>();
+  const unsettled = new Set<string>();
+  const configs: Array<{ query: string; identifier?: string }> = [
+    { query: "_mail_qortal_qmail_", identifier: "_mail_" },
+    { query: "qortal_qmail_" },
+  ];
+  for (const config of configs) {
+    for (const chunk of chunked(owned.filter(name => !found.has(lower(name))), NAMES_PER_SEARCH)) {
+      const wanted = new Set(chunk.map(lower));
+      const build = (offset: number) => {
+        const params = new URLSearchParams({
+          mode: "ALL",
+          service: MAIL_SERVICE_TYPE,
+          query: config.query,
+          exactmatchnames: "true",
+          limit: String(MERGED_PAGE_SIZE),
+          offset: String(offset),
+          includemetadata: "true",
+          reverse: "true",
+          excludeblocked: "true",
+        });
+        if (config.identifier) params.set("identifier", config.identifier);
+        chunk.forEach(name => params.append("name", name));
+        return params;
+      };
+      try {
+        const complete = await readPages(
+          build,
+          rows =>
+            rows.forEach(item => {
+              const itemName = lower(item?.name);
+              const identifier = typeof item?.identifier === "string" ? item.identifier : "";
+              if (wanted.has(itemName) && isSentMailIdentifier(identifier) && !isDeletedSentResourceInSearch(item)) {
+                found.add(itemName);
+              }
+            }),
+          () => chunk.every(name => found.has(lower(name)))
+        );
+        if (!complete) chunk.forEach(name => unsettled.add(name));
+      } catch {
+        chunk.forEach(name => unsettled.add(name));
+      }
+    }
+  }
+  for (const name of unsettled) {
+    if (found.has(lower(name))) continue;
+    if (await hasSentMailActivityForOwnedName(name)) found.add(lower(name));
+  }
+  return found;
+};
+
+/**
+ * Which owned names have mail addressed to them in the by-address form
+ * (`_mail_qortal_qmail_<name.slice(0,20)>_<address.slice(-6)>_mail_…`), from
+ * one paged search for the address suffix instead of one per name. Same
+ * identifier test as the first query of getOwnedNameInboxQueries. `settled`
+ * is false when a page failed or the cap was reached: the caller then probes
+ * each name as before. Lowercased names.
+ */
+export const ownedNamesWithAddressMail = async (
+  names: string[],
+  ownerAddress: string
+): Promise<{ found: Set<string>; settled: boolean }> => {
+  const found = new Set<string>();
+  const address = typeof ownerAddress === "string" ? ownerAddress.trim() : "";
+  const suffix = address.slice(-6);
+  if (!suffix) return { found, settled: false };
+  const matchers = names
+    .map(name => ({ name: lower(name), query: getOwnedNameInboxQueries(name, address)[0] }))
+    .filter(entry => entry.name && entry.query);
+  try {
+    const settled = await readPages(
+      offset =>
+        new URLSearchParams({
+          mode: "ALL",
+          service: MAIL_SERVICE_TYPE,
+          query: `_${suffix}_mail_`,
+          limit: String(MERGED_PAGE_SIZE),
+          offset: String(offset),
+          includemetadata: "false",
+          reverse: "true",
+          excludeblocked: "true",
+        }),
+      rows =>
+        rows.forEach(item => {
+          const identifier = typeof item?.identifier === "string" ? item.identifier : "";
+          if (!identifier) return;
+          matchers.forEach(entry => {
+            if (!found.has(entry.name) && entry.query.matches(identifier)) found.add(entry.name);
+          });
+        }),
+      () => matchers.every(entry => found.has(entry.name))
+    );
+    return { found, settled };
+  } catch {
+    return { found, settled: false };
+  }
+};
+
+/**
+ * The alias-form inbox probe alone (`qortal_qmail_<name>_mail_`), exactly
+ * page 1 of fetchInboxMessagesForOwnedName's second query, so the two share
+ * one search.
+ */
+export const hasAliasFormInboxMail = async (name: string, ownerAddress: string): Promise<boolean> => {
+  const aliasQuery = getOwnedNameInboxQueries(name, ownerAddress)[1];
+  if (!aliasQuery) return false;
+  const params = new URLSearchParams({
+    mode: "ALL",
+    service: MAIL_SERVICE_TYPE,
+    query: aliasQuery.query,
+    limit: "200",
+    includemetadata: "true",
+    offset: "0",
+    reverse: "true",
+    excludeblocked: "true",
+  });
+  return fetchHasMailResources(params, item => {
+    const identifier = typeof item?.identifier === "string" ? item.identifier : "";
+    return Boolean(identifier) && aliasQuery.matches(identifier);
+  });
+};
+
 /** The latest (up to 20) messages sent to a watched alias; also the "has mail?" probe. */
 export const fetchRecentInboxMessagesForSavedAlias = async (
   aliasName: string,

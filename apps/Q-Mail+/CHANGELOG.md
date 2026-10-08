@@ -12,6 +12,9 @@
 **Replies**
 - A reply comes from the name the mail was sent to: mail to one of your other names is answered as that name, not as the active one.
 
+**Faster with many names**
+- The first load asks the node once for all your names instead of name by name: on an account with 88 names, 163 searches instead of 413.
+
 **Group threads**
 - Settings → Mail → "Show group threads" hides group threads: the Threads section and the bottom bar's Threads item go away, and nothing about threads is loaded, which makes the first load lighter for anyone in many groups. Your thread drafts are kept for when you turn it on again.
 
