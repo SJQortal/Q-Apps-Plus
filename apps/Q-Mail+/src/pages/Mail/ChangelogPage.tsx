@@ -20,7 +20,7 @@ const changelogEntries: ChangelogEntry[] = [
       "Every message list shows the same date; hover over it, or tap it on a phone, for the full date and how long ago.",
       "Settings → Mail → Show group threads: hide group threads, and nothing about them is loaded.",
       "A reply comes from the name the mail was sent to, not the active name.",
-      "Faster first load with many names: one search for all of them instead of one per name (163 searches instead of 413 with 88 names).",
+      "Faster first load with many names and groups: one search for all of them instead of one each (126 searches instead of 413 with 88 names and 43 groups).",
     ],
   },
   {

@@ -9,6 +9,7 @@ import { resetSearchCache } from './qdnSearch'
 import {
   MERGED_PROBE_MAX_PAGES,
   fetchGroupAvatarUrl,
+  groupsWithThreadActivity,
   mapWithConcurrency,
   ownedNamesWithAddressMail,
   ownedNamesWithSentMail,
@@ -143,5 +144,30 @@ describe('fetchGroupAvatarUrl', () => {
     expect(await fetchGroupAvatarUrl(7)).toBe('')
     expect(searches()).toHaveLength(1)
     expect(qortalCalls('GET_QDN_RESOURCE_URL')).toHaveLength(0)
+  })
+})
+
+describe('groupsWithThreadActivity', () => {
+  beforeEach(() => resetSearchCache())
+
+  it('finds the groups with threads in one search, with the per-group identifier test', async () => {
+    mockFetchRoute(/query=qortal_qmail_thread_group/, [
+      { name: 'a', identifier: 'qortal_qmail_thread_group7_tok1' },
+      { name: 'b', identifier: 'qortal_qmail_thread_group70_tok2' },
+      { name: 'c', identifier: 'qortal_qmail_thread_group709_tok3' },
+      { name: 'd', identifier: 'qortal_qmail_thread_group7' }, // no token: not a header
+    ])
+    const { found, settled } = await groupsWithThreadActivity([7, '709', 8, ' 694 '])
+    expect(settled).toBe(true)
+    expect([...found].sort()).toEqual(['7', '709'])
+    expect(searches()).toHaveLength(1)
+    expect(paramsOf(searches()[0]).get('service')).toBe('MAIL')
+  })
+
+  it('asks nothing without groups, and is unsettled when the search fails', async () => {
+    expect(await groupsWithThreadActivity([])).toEqual({ found: new Set(), settled: true })
+    expect(searches()).toHaveLength(0)
+    mockFetchRoute(/query=qortal_qmail_thread_group/, '{"error":1}', { status: 500 })
+    expect((await groupsWithThreadActivity([7])).settled).toBe(false)
   })
 })

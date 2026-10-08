@@ -464,6 +464,49 @@ export const ownedNamesWithAddressMail = async (
   }
 };
 
+/** A thread header's group id: `qortal_qmail_thread_group<id>_<token>`. */
+const THREAD_HEADER_GROUP = /^qortal_qmail_thread_group(\d+)_/;
+
+/**
+ * Which of the given groups have at least one thread, from one paged search
+ * for every thread header instead of one search per group (Simon's 43 groups:
+ * 1 search; the whole network held 157 headers in 34 groups on 2026-10-08).
+ * Same identifier test as hasGroupThreadActivity. `settled` is false when a
+ * page failed or the cap was reached: the caller then probes each group.
+ */
+export const groupsWithThreadActivity = async (
+  groupIds: Array<string | number>
+): Promise<{ found: Set<string>; settled: boolean }> => {
+  const wanted = new Set(groupIds.map(normalizeId).filter(Boolean));
+  const found = new Set<string>();
+  if (!wanted.size) return { found, settled: true };
+  try {
+    const settled = await readPages(
+      offset =>
+        new URLSearchParams({
+          mode: "ALL",
+          service: THREAD_SERVICE_TYPE,
+          query: "qortal_qmail_thread_group",
+          limit: String(MERGED_PAGE_SIZE),
+          offset: String(offset),
+          includemetadata: "false",
+          reverse: "true",
+          excludeblocked: "true",
+        }),
+      rows =>
+        rows.forEach(item => {
+          const identifier = typeof item?.identifier === "string" ? item.identifier : "";
+          const groupId = THREAD_HEADER_GROUP.exec(identifier)?.[1];
+          if (groupId && wanted.has(groupId)) found.add(groupId);
+        }),
+      () => found.size === wanted.size
+    );
+    return { found, settled };
+  } catch {
+    return { found, settled: false };
+  }
+};
+
 /**
  * The alias-form inbox probe alone (`qortal_qmail_<name>_mail_`), exactly
  * page 1 of fetchInboxMessagesForOwnedName's second query, so the two share
