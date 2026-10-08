@@ -552,12 +552,13 @@ export default {
     const sp = url.searchParams;
     if (p.endsWith('/resources/search')) {
       const service = sp.get('service');
-      const name = sp.get('name');
+      // Core takes several names (the merged probes send all owned names).
+      const names = sp.getAll('name');
       const ident = (sp.get('identifier') || '').toLowerCase();
       const query = (sp.get('query') || '').toLowerCase();
       let list = ALL_ROWS.filter((r) => {
         if (service && r.service !== service) return false;
-        if (name && r.name !== name) return false;
+        if (names.length && !names.includes(r.name)) return false;
         if (ident && !r.identifier.toLowerCase().includes(ident)) return false;
         if (query) {
           const hay = [r.identifier, r.name, r.metadata?.title || '', r.metadata?.description || ''].join('\n').toLowerCase();
