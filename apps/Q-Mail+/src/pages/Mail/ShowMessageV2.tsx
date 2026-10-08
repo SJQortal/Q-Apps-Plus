@@ -57,6 +57,9 @@ export function olderLabel(hidden: number): string {
   return hidden > next ? `${label} (${hidden} left)` : label;
 }
 
+/** A Cc list longer than this (by more than one) shows these names and "and N more". */
+export const CC_NAMES_SHOWN = 3;
+
 /** Below this pane width the reader stacks (subject under the header, wrapped actions). */
 export const READER_COMPACT_WIDTH = 600;
 
@@ -181,6 +184,11 @@ export const ShowMessageV2 = ({
   const ccNames: string[] = Array.isArray(message?.cc)
     ? Array.from(new Set(message.cc.filter((name: unknown): name is string => typeof name === "string" && name.trim().length > 0)))
     : [];
+  // A long Cc list shows its first names and "and N more", which shows the
+  // rest. The line wraps, so every name is readable on a phone (no hover).
+  const [ccOpenFor, setCcOpenFor] = useState<string | null>(null);
+  const ccShown = ccOpenFor === messageKey || ccNames.length <= CC_NAMES_SHOWN + 1 ? ccNames : ccNames.slice(0, CC_NAMES_SHOWN);
+  const ccMore = ccNames.length - ccShown.length;
   const subject = typeof message?.subject === "string" && message.subject ? message.subject : "(no subject)";
   const cleanHTML = message?.htmlContent ? DOMPurify.sanitize(message.htmlContent) : "";
 
@@ -245,14 +253,43 @@ export const ShowMessageV2 = ({
               </Typography>
             )}
             {ccNames.length > 0 && (
-              <Typography variant="body2" color="text.secondary" noWrap title={`cc ${ccNames.join(", ")}`}>
+              <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
                 cc{" "}
-                {ccNames.map((name, index) => (
+                {ccShown.map((name, index) => (
                   <React.Fragment key={name}>
                     {index > 0 && ", "}
                     <NameText name={name} />
                   </React.Fragment>
                 ))}
+                {ccMore > 0 && (
+                  <>
+                    {" "}
+                    <Box
+                      component="button"
+                      type="button"
+                      onClick={() => setCcOpenFor(messageKey)}
+                      aria-label={`Show all ${ccNames.length} Cc names`}
+                      sx={{
+                        background: "none",
+                        border: 0,
+                        p: 0,
+                        // A 44 px target that keeps the line's height.
+                        minHeight: 44,
+                        my: "-12px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        verticalAlign: "baseline",
+                        font: "inherit",
+                        color: "primary.main",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        "&:focus-visible": { outline: (theme) => `2px solid ${theme.palette.primary.main}`, borderRadius: 1 },
+                      }}
+                    >
+                      and {ccMore} more
+                    </Box>
+                  </>
+                )}
               </Typography>
             )}
             <MessageDate timestamp={message?.createdAt} />

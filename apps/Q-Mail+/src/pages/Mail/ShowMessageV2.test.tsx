@@ -111,6 +111,20 @@ describe('ShowMessageV2', () => {
     expect(screen.getByText('noon')).toBeTruthy()
   })
 
+  it('folds a long Cc list into "and N more", which shows every name', () => {
+    const cc = ['carl', 'dana', 'erin', 'fay', 'gus', 'Custom Node on Qortal Hub']
+    const ccLine = () => screen.getByText((_, el) => el?.tagName === 'P' && /^cc /.test(el.textContent || ''))
+    const { unmount } = wrap(<ShowMessageV2 message={{ ...message, cc }} />)
+    expect(ccLine().textContent).toBe('cc carl, dana, erin and 3 more')
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 6 Cc names' }))
+    expect(ccLine().textContent).toBe(`cc ${cc.join(', ')}`)
+    expect(screen.queryByRole('button', { name: /Cc names/ })).toBeNull()
+    unmount()
+    // Four names are all shown: "and 1 more" would save nothing.
+    wrap(<ShowMessageV2 message={{ ...message, cc: cc.slice(0, 4) }} />)
+    expect(ccLine().textContent).toBe('cc carl, dana, erin, fay')
+  })
+
   it('shows the Cc names under the recipient, and no Cc line without them', () => {
     const { unmount } = wrap(<ShowMessageV2 message={{ ...message, cc: ['carl', 'dana', 'carl', 7, ''] }} />)
     expect(screen.getByText((_, el) => el?.textContent === 'cc carl, dana' && el.tagName === 'P')).toBeTruthy()

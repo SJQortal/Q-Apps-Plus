@@ -258,7 +258,8 @@ const mailBody = (r, index, recipientName) => {
     // m01 went to two more people in Cc (the + app's additive to/cc fields),
     // so Reply all fills the composer's Cc row.
     to: hasFiles ? [recipientName] : recipientName,
-    cc: hasFiles ? [ZOE, MARCUS] : [],
+    // Five Cc names, one long: the reader folds them into "and 2 more".
+    cc: hasFiles ? [ZOE, MARCUS, SECOND, SIMON, 'Custom Node on Qortal Hub'] : [],
   };
 };
 
