@@ -1620,6 +1620,10 @@ The setting was switched back on afterwards; the rail followed live, without a r
 - **2026-10-07, Simon:** the open message's date should be exact: weekday, date and time, plus the year when it isn't this year. **Done in 1.0.1** (`b8d9f94c`, `591dc742`).
 - **2026-10-08, Simon:** exact dates in the inbox, the archive and every list, with more detail on hover and on a tap on phones; the earlier-messages limit left to the overnight session; group threads hideable in Settings. **Done in 1.0.1** (Done → Overnight).
 
+**A reply for Qortal DEV**, if Simon wants one (draft, his to edit):
+
+> Thanks, good catch. Q-Mail+ 1.0.1 no longer puts the previous message in the reply: the body is only what you write, and the original shows above the editor for context, as in Q-Mail 3.1. The history in `generalData.threadV2` is now references only, `{ reference: { identifier, name, service } }` with no `data`, the newest 10. The reader fetches and decrypts those messages when you tap "Show earlier", and walks back through their own references to the start of the conversation. A reply stays under 2 KB however long the thread gets; with quote plus copies, the 50th reply was about 570 KB. Q-Mail 3.2.1 opens these replies fine; it just doesn't show the earlier messages, because it skips `threadV2` entries without `data`. One thing you may want in Q-Mail itself: its replies embed `data: replyTo` including that message's own `threadV2`, so the history doubles with every reply (about 5 MB at reply 14 with 400-character replies). Dropping `generalData` from the copy, or switching to references, fixes it.
+
 ## Follow-ups
 
 **1.0.1, for Simon** (your answers of 2026-10-08 are in Done → Overnight)
