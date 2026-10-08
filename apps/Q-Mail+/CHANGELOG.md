@@ -4,8 +4,8 @@
 
 **Replies stay small** (on advice from Qortal DEV)
 - A reply no longer quotes the message you answer. That message shows above the editor for context (Preview, Full or Hide) and is not copied into your reply. The footer now ends a reply, as it ends a new message.
-- A reply no longer carries copies of the earlier messages either, only links to the last 20. In 1.0.0, a conversation's 50th reply weighed about 570 KB; now every reply stays near the size of a new message.
-- In an open message, "Show earlier" loads the earlier messages from QDN five at a time, with "Show older" for more. Messages you have already opened appear at once. A message that was deleted, wasn't sent to you, or isn't on your node yet says so, and the last can be retried.
+- A reply no longer carries copies of the earlier messages either, only links to the last 10. In 1.0.0, a conversation's 50th reply weighed about 570 KB; now every reply stays under 2 KB, the size of a new message.
+- In an open message, "Show earlier" loads the earlier messages from QDN five at a time, with "Show older" for more, all the way back to the start of the conversation: each earlier message leads to the ones before it. Messages you have already opened appear at once. A message that was deleted, wasn't sent to you, or isn't on your node yet says so, and the last can be retried.
 - Mail that carries copies of earlier messages (from Q-Mail, or from Q-Mail+ 1.0.0) shows them as before, marked as quoted.
 - Q-Mail opens these replies without their earlier messages.
 

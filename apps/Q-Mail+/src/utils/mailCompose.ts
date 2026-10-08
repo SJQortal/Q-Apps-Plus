@@ -174,8 +174,14 @@ export interface ThreadEntry {
   data?: any;
 }
 
-/** A reply references at most this many earlier messages, the newest (about 2.5 KB). */
-export const REPLY_HISTORY_MAX_REFERENCES = 20;
+/**
+ * A reply references at most this many earlier messages, the newest (about
+ * 1.3 KB). The reader walks further back through those messages' own
+ * references (pages/Mail/earlierMessages.ts → extendEarlierEntries), so the
+ * whole conversation stays reachable; overlapping links mean one deleted
+ * message does not break the walk.
+ */
+export const REPLY_HISTORY_MAX_REFERENCES = 10;
 
 /** Local read-marker entries that `Mail.tsx` injects into list copies (§10). */
 export function isLocalReadMarkerEntry(entry: any): boolean {

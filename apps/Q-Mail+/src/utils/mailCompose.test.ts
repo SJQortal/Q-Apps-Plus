@@ -236,8 +236,9 @@ describe('reply history: references only (1.0.1)', () => {
       generalData: { threadV2: Array.from({ length: 30 }, (_, i) => ({ reference: { identifier: `m${i}`, name: 'Bob', service: 'MAIL_PRIVATE' } })) },
     }
     const thread = buildReplyThreadV2(replyTo, 'MAIL_PRIVATE')
+    expect(REPLY_HISTORY_MAX_REFERENCES).toBe(10)
     expect(thread).toHaveLength(REPLY_HISTORY_MAX_REFERENCES)
-    expect(thread[0].reference.identifier).toBe('m11')
+    expect(thread[0].reference.identifier).toBe('m21')
     expect(thread[thread.length - 1].reference).toEqual({ identifier: 'last', name: 'Ali', service: 'MAIL_PRIVATE' })
   })
 
@@ -260,7 +261,7 @@ describe('reply history: references only (1.0.1)', () => {
     }
     // Only references grow, until the cap: then not at all.
     expect(sizes[49]).toBe(sizes[39])
-    expect(sizes[49]).toBeLessThan(5000)
+    expect(sizes[49]).toBeLessThan(3000)
     expect(JSON.stringify(message)).not.toContain('reply 1 ')
   })
 })
