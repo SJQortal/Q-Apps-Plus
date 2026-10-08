@@ -23,6 +23,7 @@ const changelogEntries: ChangelogEntry[] = [
       "The names under Inbox, Aliases and Sent fold away; names under Inbox can be hidden from their menu, or hidden while their inbox is empty (Settings → Mail).",
       "Earlier messages run newest first, with the senders' avatars.",
       "Attachments open or save from the list, without opening the message; in the composer they show as tiles you can preview before sending.",
+      "A message's files show beside its subject in the list, with short names; unread senders are blue; drafts show avatars, like the inbox.",
       "Folding and hiding are smooth: names fold away with Undo, groups and earlier messages fold open and shut.",
       "On a phone, Back closes a preview, sheet or dialog first; archiving from a list has Undo; files dropped on the text are attached.",
       "A reply comes from the name the mail was sent to, not the active name; an open message shows its Cc names, a long list folded into \"and 2 more\".",

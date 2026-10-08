@@ -26,6 +26,12 @@
 - Files dropped on the message text are attached too (pictures used to land inside the text, and other files were ignored). Pasting a picture still puts it in the text.
 - A file whose type the browser doesn't know (an .apk, an .odp) is no longer flagged "No file extension" when its name has one, so it can be sent.
 - From a message's attachments in the list, "Open message" opens it at once.
+- In a list, a message's files show beside its subject with short names (two, then "+3"), so you can see what's there; a click opens them. Mail that arrived before this version shows them once the inbox loads it again.
+
+**Lists and drafts**
+- Unread mail stands out more: the sender's name is blue as well as bold, in the list and in sender groups.
+- On a wide screen the subject follows the name closely instead of starting halfway across the row.
+- Drafts look like the inbox: the recipient's avatar, "To" and the date, the subject with the start of the text, and the name it goes from, with its files counted.
 
 **Names under Inbox**
 - The names under Inbox, Aliases and Sent fold away with the arrow beside the mailbox; the mailbox itself still opens with a click. Remembered on this device.
