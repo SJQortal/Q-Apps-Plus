@@ -12,6 +12,9 @@
  * (Q-Mail+ 1.0.1 replies) are fetched from QDN when "Show earlier" opens,
  * the newest EARLIER_PAGE_SIZE first, with "Show older" for the rest.
  *
+ * The header names the recipient ("to …") and, for mail written with Cc
+ * names (Q-Mail+'s additive `cc`), a "cc …" line.
+ *
  * Props stay compatible with Mail.tsx (message, setReplyTo, setForwardInfo,
  * alias, onClose, setIsOpen); onReplyAll, onForward, onArchive and
  * onMarkUnread are optional extras. Archive and Mark unread are labelled
@@ -160,6 +163,10 @@ export const ShowMessageV2 = ({
   };
 
   const recipient = message?.recipient || message?.to;
+  // Cc names Q-Mail+ writes into every copy (data contract §17); Bcc never.
+  const ccNames: string[] = Array.isArray(message?.cc)
+    ? Array.from(new Set(message.cc.filter((name: unknown): name is string => typeof name === "string" && name.trim().length > 0)))
+    : [];
   const subject = message?.subject || "(no subject)";
   const cleanHTML = message?.htmlContent ? DOMPurify.sanitize(message.htmlContent) : "";
 
@@ -221,6 +228,17 @@ export const ShowMessageV2 = ({
             {recipient && (
               <Typography variant="body2" color="text.secondary" noWrap>
                 to {typeof recipient === "string" ? <NameText name={recipient} /> : recipient}
+              </Typography>
+            )}
+            {ccNames.length > 0 && (
+              <Typography variant="body2" color="text.secondary" noWrap title={`cc ${ccNames.join(", ")}`}>
+                cc{" "}
+                {ccNames.map((name, index) => (
+                  <React.Fragment key={name}>
+                    {index > 0 && ", "}
+                    <NameText name={name} />
+                  </React.Fragment>
+                ))}
               </Typography>
             )}
             <MessageDate timestamp={message?.createdAt} />

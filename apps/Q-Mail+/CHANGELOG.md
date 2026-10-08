@@ -11,6 +11,7 @@
 
 **Replies**
 - A reply comes from the name the mail was sent to: mail to one of your other names is answered as that name, not as the active one.
+- An open message shows its Cc names under the recipient ("cc Alice, Bob"), for mail written with Cc in Q-Mail+.
 
 **Faster with many names**
 - The first load asks the node once for all your names, and once for all your groups' threads, instead of name by name and group by group: on an account with 88 names and 43 groups, 126 searches instead of 413.

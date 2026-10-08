@@ -96,6 +96,14 @@ describe('ShowMessageV2', () => {
     expect(screen.getByText(exactMailDate(message.createdAt))).toBeTruthy()
   })
 
+  it('shows the Cc names under the recipient, and no Cc line without them', () => {
+    const { unmount } = wrap(<ShowMessageV2 message={{ ...message, cc: ['carl', 'dana', 'carl', 7, ''] }} />)
+    expect(screen.getByText((_, el) => el?.textContent === 'cc carl, dana' && el.tagName === 'P')).toBeTruthy()
+    unmount()
+    wrap(<ShowMessageV2 message={message} />)
+    expect(screen.queryByText(/^cc /)).toBeNull()
+  })
+
   it('escapes the forward header and hands attachments to onForward when given', () => {
     const setForwardInfo = vi.fn()
     const { unmount } = wrap(<ShowMessageV2 message={message} setForwardInfo={setForwardInfo} />)
