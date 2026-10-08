@@ -13,6 +13,17 @@ const wrap = () =>
   )
 
 describe('InboxNamesSettings', () => {
+  it('hides a name chosen here, for keyboards without a menu key', async () => {
+    localStorage.clear()
+    resetInboxNamesSession()
+    wrap()
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Name' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'POS+' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+    expect(readHiddenInboxNames('QA')).toEqual(['pos+'])
+    expect(screen.getByRole('button', { name: 'Show POS+ again' })).toBeTruthy()
+  })
+
   beforeEach(() => {
     localStorage.clear()
     resetInboxNamesSession()
