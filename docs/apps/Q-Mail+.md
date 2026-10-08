@@ -1665,10 +1665,17 @@ Simon asked for right click, and long press on phones. Additive and local: no ne
 
 Not given a menu: "All mail" search results (a reply there switches mailbox in the same click, so its alias context needs more care), thread rows and drafts. Candidates for later.
 
+### Earlier messages order, names under Inbox (2026-10-08, Simon's requests)
+
+From Simon's screenshot of an archived conversation with Juan Qortal:
+- **Earlier messages newest first** (`8b4432be`): under the open message they run from the newest (open) down to the oldest, with "Show older" at the bottom, so reading on goes back in time. Quoted copies (Q-Mail or 1.0.0 mail) showed a letter instead of the sender's avatar; they show the avatar now, and "Quoted by" still marks them unverified.
+- **Names under Inbox:** the names under Inbox, Aliases and Sent fold behind a chevron of their own (the section row still opens the mailbox), remembered on this device (`qmail_rail_collapsed_sections`). A name under Inbox can be hidden from its menu (right click, long press: "Hide from the list"); Settings → Mail lists hidden names with Show. "Hide names with nothing in the inbox" (off by default) leaves out another name whose inbox has loaded with every message archived. Per account, local only (`qmail_hidden_inbox_names_<address>`, `qmail_hide_empty_inbox_names_<address>`); a hidden name's mail stays in the combined Inbox, and the name being viewed never hides (`utils/inboxNamesPreference.ts`).
+
 ## Community feedback
 
 - **2026-10-07, Qortal DEV (via Simon):** messages with the reply built in keep growing and eventually get very large in long threads, which is why it was removed from Q-Mail. Suggestion: keep showing the previous message, but don't include it in the reply. **Done in 1.0.1:** no quote in the body, and `threadV2` holds references only (§18, Done → 1.0.1). Simon chose references only over capping or keeping the copies. Worth telling the DEV: the original app's own `threadV2` still embeds `data: replyTo` *with* its history, so it doubles with every reply (5 MB at reply #14 with 400-character replies). Q-Mail+ has stripped that since 1.0.0 and now sends references.
 - **2026-10-07, Simon:** the open message's date should be exact: weekday, date and time, plus the year when it isn't this year. **Done in 1.0.1** (`b8d9f94c`, `591dc742`).
+- **2026-10-08, Simon (morning):** earlier messages newest first, with avatars; names under Inbox hideable (by hand, or when all their mail is archived) and the section collapsible. **Done in 1.0.1** (Done → Earlier messages order, names under Inbox).
 - **2026-10-08, Simon (morning):** right click, and long press on phones. **Done in 1.0.1** (Done → Right click and long press).
 - **2026-10-08, Simon:** exact dates in the inbox, the archive and every list, with more detail on hover and on a tap on phones; the earlier-messages limit left to the overnight session; group threads hideable in Settings. **Done in 1.0.1** (Done → Overnight).
 
