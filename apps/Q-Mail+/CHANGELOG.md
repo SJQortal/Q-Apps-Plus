@@ -34,7 +34,7 @@
 - After Retry, or the last "Show older", keyboard focus stays on the earlier messages instead of jumping to the top of the page.
 - A group avatar that failed to load is tried again later instead of staying blank until a reload.
 - Hiding group threads holds for the session where the browser blocks storage.
-- On a network with many group threads, the first load stops reading other groups' threads sooner and then checks only your remaining groups.
+- With many group threads on the network, the first load takes the cheaper way to find which of your groups have threads, and checks one by one only the groups it hasn't found yet.
 
 ## 1.0.0 (Q-Mail+) - October 4, 2026
 
