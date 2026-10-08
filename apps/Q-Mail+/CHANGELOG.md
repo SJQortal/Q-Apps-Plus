@@ -19,13 +19,23 @@
 - A sender's group has one as well: show its messages, mark them all read or unread, archive them all, or select them all.
 - Reply and Forward work on a message you haven't opened yet: it opens first.
 
+**Attachments**
+- A message with attachments has a paperclip in the list: its files open or save from there, without opening the message (and without marking it read). "Attachments" in a message's menu does the same, also for one you haven't opened yet.
+- A PDF's Download and Open PDF sit side by side, beside its name.
+- In both composers (new mail and new group threads), "Attach files" is a real button (or drop files on it), and attached files show as tiles in rows, with a thumbnail for images; on a phone they sit in one row that scrolls sideways, so the text stays in view. Tap one to preview it before you send.
+- Files dropped on the message text are attached too (pictures used to land inside the text, and other files were ignored). Pasting a picture still puts it in the text.
+- A file whose type the browser doesn't know (an .apk, an .odp) is no longer flagged "No file extension" when its name has one, so it can be sent.
+- From a message's attachments in the list, "Open message" opens it at once.
+
 **Names under Inbox**
 - The names under Inbox, Aliases and Sent fold away with the arrow beside the mailbox; the mailbox itself still opens with a click. Remembered on this device.
-- Right-click a name under Inbox, or press and hold it, and choose "Hide from the list". Settings → Mail lists hidden names to show them again; their mail stays in the Inbox.
+- Right-click a name under Inbox, or press and hold it, and choose "Hide from the list": it folds away at once, with Undo. Settings → Mail can hide a name too, and lists hidden names to show them again; their mail stays in the Inbox.
+- The mailboxes' names, sender groups, earlier messages and their texts fold open and shut smoothly, or at once with the system's reduce-motion setting.
 - Settings → Mail → "Hide names with nothing in the inbox" leaves out names whose mail is all archived, until new mail arrives for them.
 
 **Faster with many names**
 - The first load asks the node once for all your names, and once for all your groups' threads, instead of name by name and group by group: on an account with 88 names and 43 groups, 126 searches instead of 413.
+- Long lists draw faster: a date's detail is prepared when you first hover or tap it, and a folded Threads list loads no group pictures.
 
 **Group threads**
 - Settings → Mail → "Show group threads" hides group threads: the Threads section and the bottom bar's Threads item go away, and nothing about threads is loaded, which makes the first load lighter for anyone in many groups. Your thread drafts are kept for when you turn it on again.
@@ -46,6 +56,10 @@
 - A group avatar that failed to load is tried again later instead of staying blank until a reload.
 - Hiding group threads holds for the session where the browser blocks storage.
 - With many group threads on the network, the first load takes the cheaper way to find which of your groups have threads, and checks one by one only the groups it hasn't found yet.
+- On a phone, Back closes an open preview, sheet or dialog first: Back in an attachment preview used to close the message, or the composer with its attachments.
+- Archiving or moving mail from a list (a message's menu, a group's menu or the selection bar) says so, with Undo.
+- Menus: 44 px items on every screen, Cancel at the bottom of a phone's sheet, and a tap on a list date shows its detail only on the date itself; a tap beside it opens the message.
+- In a narrow list (a small window), names and subjects keep their room: a group's messages stack their dates, and the avatars step aside.
 
 ## 1.0.0 (Q-Mail+) - October 4, 2026
 
