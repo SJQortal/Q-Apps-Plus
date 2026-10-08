@@ -37,6 +37,27 @@ function renderList(store: ReturnType<typeof makeStore>, openMessage: (...args: 
   )
 }
 
+describe('attachment chips beside the subject', () => {
+  beforeEach(() => {
+    resetSubjectCache()
+    resetEarlierMessagesCache()
+    mockQortalAction('GET_QDN_RESOURCE_URL', 'Resource does not exist')
+  })
+
+  it('show short names, are read in the row label, and open the attachments', async () => {
+    const store = makeStore()
+    const second = { ...attachment, identifier: 'att2', originalFilename: 'Screenshot 2026-10-02 at 9.38.07 PM.png' }
+    const third = { ...attachment, identifier: 'att3', originalFilename: 'notes.md' }
+    store.dispatch(addToHashMapMail({ id: 'c1', user: 'carol', isValid: true, subject: 'Plans', createdAt: 1_000, attachments: [attachment, second, third] }))
+    renderList(store)
+    const chips = document.querySelector('[data-attachment-chips]') as HTMLElement
+    expect(chips.textContent).toBe('plan.txtScreenshot 20….png+1')
+    expect(screen.getByRole('button', { name: /^(Unread\. )?carol, Plans, attachments: plan\.txt, Screenshot 2026-10-02 at 9\.38\.07 PM\.png, notes\.md/ })).toBeTruthy()
+    fireEvent.click(chips)
+    expect(await screen.findByText('plan.txt', { selector: 'p' })).toBeTruthy()
+  })
+})
+
 describe('attachments from a list row', () => {
   beforeEach(() => {
     resetSubjectCache()
@@ -49,7 +70,7 @@ describe('attachments from a list row', () => {
     store.dispatch(addToHashMapMail({ id: 'c1', user: 'carol', isValid: true, subject: 'Plans', createdAt: 1_000, attachments: [attachment] }))
     renderList(store)
     fireEvent.click(screen.getByRole('button', { name: 'Attachments: Plans' }))
-    expect(await screen.findByText('plan.txt')).toBeTruthy()
+    expect(await screen.findByText('plan.txt', { selector: 'p' })).toBeTruthy()
     expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(0)
     // Not marked read.
     expect(store.getState().mail.readState.c1).toBeUndefined()

@@ -28,6 +28,7 @@ import {
   IconButton,
   Tooltip,
   Typography,
+  type Theme,
 } from "@mui/material";
 import { useSelector } from "react-redux";
 import { RootState } from "../../state/store";
@@ -46,6 +47,8 @@ import { useRowMenu } from "./useRowMenu";
 import { lazyNamed } from "../../components/common/lazyNamed";
 import { messageRowActions } from "./rowMenuActions";
 import { isOpenableMessage } from "./messageOpener";
+import { AttachmentIcon } from "../../components/AttachmentPreview/AttachmentIcon";
+import { attachmentDisplayName, attachmentKind } from "../../utils/attachmentMeta";
 
 export const LOCKED_SUBJECT_LABEL = "Locked · open to read";
 /** The list width from which a row lays out as columns (the list pane is the container). */
@@ -159,6 +162,82 @@ export function Highlight({ text, terms }: { text: string; terms?: string[] }) {
   );
 }
 
+/** "Screenshot 2026-10…png": a short name that keeps the extension. */
+export function shortFileName(name: string, max = 18): string {
+  if (name.length <= max) return name;
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 && name.length - dot <= 6 ? name.slice(dot) : "";
+  return `${name.slice(0, Math.max(1, max - ext.length - 1))}…${ext}`;
+}
+
+const ATTACHMENT_CHIPS_SHOWN = 2;
+
+/**
+ * The attachments' names beside the subject (where the list has room), so
+ * you see what's there. A click shows them (the row's attachments dialog)
+ * without opening the message; keyboards use the paperclip button, and the
+ * row's own label reads the names.
+ */
+function AttachmentChips({ names, onOpen }: { names: string[]; onOpen: () => void }) {
+  const shown = names.slice(0, ATTACHMENT_CHIPS_SHOWN);
+  const more = names.length - shown.length;
+  const stop = (event: React.SyntheticEvent) => event.stopPropagation();
+  const chipSx = (theme: Theme) => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 0.5,
+    height: 24,
+    px: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: 170,
+    borderRadius: 999,
+    border: `1px solid ${theme.palette.divider}`,
+    color: theme.palette.text.secondary,
+    fontSize: "0.8125rem",
+    whiteSpace: "nowrap" as const,
+    overflow: "hidden",
+    cursor: "pointer",
+    "&:hover": { backgroundColor: theme.palette.action.hover, color: theme.palette.text.primary },
+  });
+  return (
+    <Box
+      aria-hidden
+      data-attachment-chips=""
+      onMouseDown={stop}
+      onTouchStart={stop}
+      onClick={event => {
+        event.stopPropagation();
+        event.preventDefault();
+        onOpen();
+      }}
+      sx={{
+        display: "none",
+        [ROOMY_LIST_QUERY]: { display: "inline-flex" },
+        alignItems: "center",
+        gap: 0.5,
+        minWidth: 0,
+        flexShrink: 1,
+        ...wideOrder(3),
+      }}
+    >
+      {shown.map((name, index) => (
+        <Box key={`${name}-${index}`} component="span" title={name} sx={chipSx}>
+          <AttachmentIcon kind={attachmentKind({ originalFilename: name })} sx={{ fontSize: 14, flexShrink: 0 }} />
+          <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+            {shortFileName(name)}
+          </Box>
+        </Box>
+      ))}
+      {more > 0 && (
+        <Box component="span" sx={[chipSx, { flexShrink: 0 }]}>
+          +{more}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 export const MailMessageRow = ({
   messageData,
   openMessage,
@@ -212,6 +291,18 @@ export const MailMessageRow = ({
     hasAttachments = Boolean(subjectInHash?.attachments);
   }
   const isLocked = subject === null;
+
+  // The attachments' names: from the decrypted message, else from the
+  // subject cache (encrypted like the subject, decrypted once on screen).
+  const savedNames = useDecryptedSubject(
+    isDecrypted ? undefined : subjectInHash?.attachmentNames,
+    inView && !isDecrypted && Boolean(subjectInHash?.attachmentNames)
+  );
+  const attachmentNames: string[] = isDecrypted
+    ? (Array.isArray(data?.attachments) ? data.attachments : []).map((item: any) => attachmentDisplayName(item)).filter(Boolean)
+    : savedNames
+      ? savedNames.split("\n").filter(Boolean)
+      : [];
 
   // Sent rows: the recipient from the decrypted copy when we have it, else
   // one cached lookup per (name prefix, address suffix) group (I4).
@@ -269,7 +360,8 @@ export const MailMessageRow = ({
     : subject || NO_SUBJECT_LABEL;
   const nameLabel = isFromSent ? `To: ${name || "…"}` : name || "Unknown sender";
   const spokenLabel = isFromSent ? `To: ${name ? spokenName(name) : "…"}` : name ? spokenName(name) : "Unknown sender";
-  const ariaLabel = `${isUnread ? "Unread. " : ""}${spokenLabel}, ${subjectLabel}${spokenDate ? `, ${spokenDate}` : ""}`;
+  const spokenAttachments = attachmentNames.length ? `, attachments: ${attachmentNames.join(", ")}` : "";
+  const ariaLabel = `${isUnread ? "Unread. " : ""}${spokenLabel}, ${subjectLabel}${spokenAttachments}${spokenDate ? `, ${spokenDate}` : ""}`;
 
   // A message with attachments has a paperclip button at the row's end instead.
   const statusIcon = isLocked ? (
@@ -290,9 +382,9 @@ export const MailMessageRow = ({
   // their room on a phone; one line (compact, or a wide row) keeps it inline.
   const dateNode = compact ? (
     // In a narrow list the date stacks here too, or the subject keeps three letters.
-    <MailListDate timestamp={createdAt} emphasis={isUnread} stacked inlineFrom={ROOMY_LIST_QUERY} />
+    <MailListDate timestamp={createdAt} emphasis={isUnread} stacked inlineFrom={ROOMY_LIST_QUERY} sx={{ ml: "auto" }} />
   ) : (
-    <MailListDate timestamp={createdAt} emphasis={isUnread} stacked inlineFrom={WIDE} sx={wideOrder(5)} />
+    <MailListDate timestamp={createdAt} emphasis={isUnread} stacked inlineFrom={WIDE} sx={{ [WIDE]: { order: 5, ml: "auto" } }} />
   );
 
   return (
@@ -383,16 +475,19 @@ export const MailMessageRow = ({
               <Typography
                 noWrap
                 sx={{
-                  flex: 1,
+                  // A compact row's subject leaves room for its attachments right after it.
+                  flex: compact && attachmentNames.length ? "0 1 auto" : 1,
                   minWidth: 0,
                   fontSize: "1rem",
                   lineHeight: 1.3,
                   fontWeight: isUnread ? 700 : 500,
-                  color: isLocked && compact ? "text.secondary" : "text.primary",
+                  // Unread reads blue (the theme's primary), read in the text colour.
+                  color: isUnread ? "primary.main" : isLocked && compact ? "text.secondary" : "text.primary",
                   fontStyle: compact && (isLocked || !subject) ? "italic" : "normal",
                   ...(compact
                     ? {}
-                    : { [WIDE]: { order: 1, flex: "0 0 clamp(160px, 24%, 260px)" } }),
+                    : // A wide row: the subject follows the name, not a fixed column away.
+                      { [WIDE]: { order: 1, flex: "0 1 auto", maxWidth: "clamp(160px, 24%, 260px)" } }),
                 }}
               >
                 {compact ? (
@@ -408,6 +503,9 @@ export const MailMessageRow = ({
                   <Highlight text={nameLabel} terms={highlightTerms} />
                 )}
               </Typography>
+              {compact && attachmentNames.length > 0 && (
+                <AttachmentChips names={attachmentNames} onOpen={showAttachments} />
+              )}
               {compact && dateNode}
             </Box>
             {!compact && (
@@ -416,7 +514,7 @@ export const MailMessageRow = ({
                 <Typography
                   noWrap
                   sx={{
-                    flex: 1,
+                    flex: attachmentNames.length ? "0 1 auto" : 1,
                     minWidth: 0,
                     fontSize: "0.875rem",
                     lineHeight: 1.35,
@@ -428,6 +526,7 @@ export const MailMessageRow = ({
                 >
                   <Highlight text={subjectLabel} terms={highlightTerms} />
                 </Typography>
+                {attachmentNames.length > 0 && <AttachmentChips names={attachmentNames} onOpen={showAttachments} />}
                 {context && (
                   <Chip
                     label={context}

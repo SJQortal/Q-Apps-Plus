@@ -589,6 +589,8 @@ export const GroupedMailboxList = ({
                         fontSize: "1rem",
                         lineHeight: 1.3,
                         fontWeight: groupHasUnread ? 700 : 500,
+                        // Unread reads blue, as a message row does.
+                        color: groupHasUnread ? "primary.main" : "text.primary",
                       }}
                     >
                       {mailboxType === "sent" ? (
