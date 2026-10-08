@@ -1557,22 +1557,64 @@ Community testing of the published 1.0.0 (docs/RELEASE.md stage 3). Two requests
 | Lint · kit | clean · in sync | clean · in sync |
 | Reply #20 / #50 (400-char replies) | 95.3 KB / 569 KB | 2.9 KB / 3.1 KB |
 
+### Overnight (2026-10-08): Simon's answers, list dates, hiding threads, real sends
+
+Simon answered the five questions before going to sleep. He asked for exact dates in every list, a switch to hide group threads, and the earlier-messages limit chosen by me. He also allowed test mails from and to Simon James, his test accounts and his own secondary names. Everything joins 1.0.1, which is not published yet.
+
+| Commit | Change |
+|---|---|
+| `bad1cfd4` | **List dates.** Every list (inbox, archive, sent, alias inboxes, search results, sender groups, threads, drafts) and thread posts use the reader's form: "Thu 8 Oct, 00:25", with the year when it isn't this year. Beside a row's two lines the day sits over the time (`MailListDate stacked`), because at 360 px a one-line date had cut names to "Alice …". Wide lists and one-line rows keep it on one line (`inlineFrom` = the wide-row container query). Hover shows the detail: the full date with seconds and how long ago ("1 month ago"). On a touch screen a tap on the date shows the detail for 4 s and does not open the row. Row labels for screen readers spell the date out ("Thursday 8 October, 01:03"). |
+| `5c354fa8` | The old date formatters, now unused, are gone. |
+| `afafe461`, `c0065818` | **Hide group threads:** Settings → Mail → "Show group threads", per account on this device (`qmail_show_threads_<address>`, stored only while off; nothing published). Off: no Threads in the rail or the bottom bar, no per-group activity searches and no unread polling, no groups offered in the composer, thread drafts kept but out of Drafts, and "g t" out of the shortcuts. |
+| `5c7eb48e` | **Walking back:** the reader adds the references found in the earlier messages it has as older entries behind "Show older", so the whole conversation is reachable from any reply. |
+| `be93c94a` | **The limit:** a reply links its newest **10** earlier messages, 1,251 bytes, so a reply levels off at 1.8 KB. With walking back, 10 reaches the whole conversation, gives two pages of five before any walking, and its overlapping links survive a deleted message. |
+| `e45125fd` | **Reply from the right name:** a reply starts from the own name the mail was sent to (`replyFromOwnName`). Mail to POS+ is answered as POS+, not as the active name (found during the test sends). |
+| `2845bf68` | An unused import in `NewMessage.groups.test.tsx` had made `npm run lint` fail from `afafe461` on. The lint check had been read through `tail -1`, which hides the summary; it now checks the exit code. |
+
+**Real sends on Simon's account (with his OK):** POS+ → Simon James "Q-Mail+ 1.0.1 test: replies that link" (`LCE3da`, 832 bytes on QDN), Simon James's reply (`oc2cGt`, 896 bytes) and POS+'s reply (`7xe3Ig`, 1,024 bytes). Hub showed **0.01 QORT** per publish, 0.03 QORT in all; nothing else was sent or published.
+- *Published JSON:* each reply body is only its own text. Reply 2's `threadV2` is `[{ reference: LCE3da/POS+ }]`. Reply 3's is `[LCE3da/POS+, oc2cGt/Simon James]`, oldest first, with no `data` (551 bytes of JSON).
+- *Q-Mail+, after a fresh reload:* reply 3's "Show earlier · 2 messages" made 2 `FETCH_QDN_RESOURCE` (in parallel), 1 `GET_NAME_DATA` and 2 `DECRYPT_DATA`, with no `ENCRYPT_DATA`. It showed message 1 (POS+) and reply 2 (Simon James) with their real avatars.
+- *The original Q-Mail 3.2.1* (`qortal://APP/Q-Mail`, closed again afterwards): it lists the POS+ group, and reply 3 opens with sender, "to: Simon James", date, subject and body, no earlier messages and no console error.
+
+**Hiding threads, measured on Simon's account** (first load from a reload, resource-timing buffer 5,000):
+
+| First load | Threads shown | Threads hidden |
+|---|---|---|
+| `/arbitrary/resources/search` | 413 (43 thread searches) | 360 (0) |
+| `FETCH_QDN_RESOURCE` | 21 (20 thread headers + the state document) | 1 |
+| `GET_QDN_RESOURCE_URL` | 14 | 9 |
+
+The setting was switched back on afterwards; the rail followed live, without a reload.
+
+**Screenshot check:**
+- The list screens (`inbox`, `archived`, `sent`, `drafts`, `threads`, `group`, `search-all`, `alias-inbox`, `inbox-open`) were checked at 5 sizes. The new `threads-hidden` screen (the switch turned off in Settings, then the inbox) was checked as well.
+- All gave 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 small targets and 0 axe violations.
+- At 390 the names fit beside the stacked dates ("Alice Wonder", "Marcus O'Neil"). The bottom bar has 4 items with threads hidden.
+
+**Found on the way:**
+- Vite's hot reload reaches the Dev Mode frame directly, so every code edit re-mounted the mail page and brought back the "Load published QDN state?" prompt in Simon's Hub.
+- Simon's published `archived` map (177 messages archived on 2026-10-05 at 14:56) was applied in the dev frame at some point that evening, most likely by "Load state" on one of those prompts. It came from his own state document, last published on 2026-10-05 at 20:09; nothing was published tonight, and no Hub request was left pending.
+- Also measured: the inbox's new-mail poll backs off to 5 minutes while nothing is new, so test mail took up to 5 minutes to appear.
+
 ## Community feedback
 
 - **2026-10-07, Qortal DEV (via Simon):** messages with the reply built in keep growing and eventually get very large in long threads, which is why it was removed from Q-Mail. Suggestion: keep showing the previous message, but don't include it in the reply. **Done in 1.0.1:** no quote in the body, and `threadV2` holds references only (§18, Done → 1.0.1). Simon chose references only over capping or keeping the copies. Worth telling the DEV: the original app's own `threadV2` still embeds `data: replyTo` *with* its history, so it doubles with every reply (5 MB at reply #14 with 400-character replies). Q-Mail+ has stripped that since 1.0.0 and now sends references.
 - **2026-10-07, Simon:** the open message's date should be exact: weekday, date and time, plus the year when it isn't this year. **Done in 1.0.1** (`b8d9f94c`, `591dc742`).
+- **2026-10-08, Simon:** exact dates in the inbox, the archive and every list, with more detail on hover and on a tap on phones; the earlier-messages limit left to the overnight session; group threads hideable in Settings. **Done in 1.0.1** (Done → Overnight).
 
 ## Follow-ups
 
-**1.0.1, for Simon**
+**1.0.1, for Simon** (your answers of 2026-10-08 are in Done → Overnight)
 
-1. **One real reply** (needs your OK; nothing was sent this session): reply from Q-Mail+ 1.0.1 inside an existing conversation, for example between two of your names or to Tester GO. Then open it in Q-Mail+ ("Show earlier" should load the earlier messages) and in the original Q-Mail (it should show the reply alone, with no error).
-2. **Tell Qortal DEV?** The original app's `threadV2` embeds `data: replyTo` with its nested history, so it doubles with each reply (Community feedback). The fix upstream is a one-line strip of `generalData`, or references as here.
-3. **The 20-reference cap:** keep it? A reply references the newest 20 earlier messages (about 2.5 KB). Older ones stay in the mailbox but aren't reachable from that reply.
-4. **Group threads:** "reply to post" still prefills a short excerpt of the post (at most 400 characters and 6 lines, editable, so it can't snowball). Keep it, or drop it to match mail?
-5. **List dates:** rows keep compact dates ("Mon", "26 Sep", "11:40 PM"). Want the reader's exact form there too, or in the row's tooltip?
+1. ~~One real reply~~: done with your OK, as POS+ ↔ Simon James (3 mails, 0.03 QORT). It works in both apps.
+2. **Tell Qortal DEV?** (open) The original app's `threadV2` embeds `data: replyTo` with its nested history, so it doubles with each reply (Community feedback). The fix upstream is a one-line strip of `generalData`, or references as here.
+3. ~~The cap~~: 10 references plus walking back (my pick, as you asked).
+4. **Group threads:** now hideable in Settings. Question left: "reply to post" still prefills a short excerpt (at most 400 characters and 6 lines). Keep it?
+5. ~~List dates~~: done everywhere, with the detail on hover or tap.
+6. **The test mails:** "Q-Mail+ 1.0.1 test: replies that link" (3 messages) sit in the inboxes of Simon James and POS+. Archive them when you like.
+7. **The dev frame's archive:** your published archive (177 messages from 2026-10-05) is applied in the Dev Mode frame (127.0.0.1:12393); your real app isn't affected. Was that you pressing "Load state" before bed?
 
-Next-pass ideas from 1.0.1: when the 20 references run out, walk further back through the oldest loaded message's own references; poll the resource status before fetching an earlier message, as the opener does, for big or slow ones.
+Next-pass ideas from 1.0.1: poll the resource status before fetching an earlier message, as the opener does, for big or slow ones.
 
 **For Simon on his own account.** The round 5 Hub checks already ran on your account (read-only, nothing published or sent): the 86-name switcher and its search, the avatars after a switch, pane widths, switching between messages, the full-width list, Mugician's join link (declined), the footer at 1440 and 390 (all cleared again), mail 1's PDF in Hub's reader and in the in-app viewer, and the Q-Share+ comparison. Left for you, in Q-Mail+ and the original Q-Mail:
 1. **The footer for real:** set yours, send one mail, and check it in the original app.
