@@ -466,23 +466,6 @@ export const NewMessageAliasContainer = styled(Box)(({ theme }) => ({
     width: "100%",
   },
 }));
-export const AttachmentContainer = styled(Box)(() => ({
-  height: "36px",
-  width: "100%",
-  display: "flex",
-  alignItems: "center",
-}));
-
-export const NewMessageAttachmentImg = styled("img")({
-  width: "auto",
-  height: "auto",
-  userSelect: "none",
-  objectFit: "contain",
-  cursor: "pointer",
-  padding: "10px",
-  border: "1px dashed var(--qmail-compose-attach-border)",
-  filter: "var(--qmail-compose-icon-filter)",
-});
 
 export const NewMessageSendButton = styled(Box)`
   border-radius: 4px;

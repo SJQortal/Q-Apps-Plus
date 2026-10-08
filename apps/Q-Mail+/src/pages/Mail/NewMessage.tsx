@@ -29,7 +29,6 @@ import { useDropzone } from "react-dropzone";
 import CloseIcon from "@mui/icons-material/Close";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { useParams } from "react-router-dom";
-import { extensionFromMimeType } from "../../utils/fileExtension";
 import { objectToBase64, toBase64 } from "../../utils/toBase64";
 import {
   MAIL_ATTACHMENT_SERVICE_TYPE,
@@ -45,21 +44,20 @@ import {
 import { TextEditor } from "../../components/common/TextEditor/TextEditor";
 import { toPublishedMailHtml } from "../../components/common/TextEditor/quillHtml";
 import {
-  AttachmentContainer,
   ComposeContainer,
   ComposeIcon,
   ComposeP,
   InstanceFooter,
   InstanceListContainer,
   NewMessageAliasContainer,
-  NewMessageAttachmentImg,
   NewMessageInputLabelP,
   NewMessageInputRow,
 } from "./Mail-styles";
 import ComposeIconSVG from "../../assets/svgs/ComposeIcon.svg";
-import AttachmentSVG from "../../assets/svgs/NewMessageAttachment.svg";
 import { SendNewMessage } from "../../assets/svgs/SendNewMessage";
-import { formatBytes } from "../../utils/displaySize";
+import { ComposeAttachments } from "./ComposeAttachments";
+import { composeItemsFromFiles, extensionOfFile, withinSizeLimit } from "./composeFiles";
+import { AttachDropZone } from "./AttachDropZone";
 import { formatFullTimestamp } from "../../utils/time";
 import { readerMailDate } from "./readerTime";
 import { extractTextFromSlate } from "../../utils/extractTextFromSlate";
@@ -274,11 +272,6 @@ export const isForwardableAttachment = (reference: AttachmentReference, messageP
   );
 };
 
-const extensionOfFile = (file: File): string | null => {
-  const fromName = file.name.includes(".") ? file.name.split(".").pop() || "" : "";
-  if (fromName) return fromName;
-  return extensionFromMimeType(file.type);
-};
 
 interface NewMessageProps {
   replyTo?: any;
@@ -1425,48 +1418,35 @@ export const NewMessage = ({
       : replyPreviewText;
   }, [replyBodyText, replyPreviewMode, replyPreviewText]);
 
-  const { getRootProps, getInputProps } = useDropzone({
+  // The drop zone is the attach row; its button opens the file picker.
+  const dropzone = useDropzone({
     maxSize,
-    onDrop: async acceptedFiles => {
-      const files: any[] = [];
-      try {
-        acceptedFiles.forEach(item => {
-          const type = item?.type;
-          if (!type) {
-            files.push({
-              file: item,
-              mimetype: null,
-              extension: null,
-            });
-            return;
-          }
-
-          const extension = extensionFromMimeType(type);
-          files.push({
-            file: item,
-            mimetype: type,
-            extension: extension || null,
-          });
-        });
-      } catch {
-        dispatch(
-          setNotification({
-            msg: "One of your files is corrupted",
-            alertType: "error",
-          })
-        );
-      }
-      setAttachments(prev => [...prev, ...files]);
+    noClick: true,
+    noKeyboard: true,
+    onDrop: acceptedFiles => {
+      setAttachments(prev => [...prev, ...composeItemsFromFiles(acceptedFiles)]);
     },
     onDropRejected: () => {
       dispatch(
         setNotification({
-          msg: "One of your files is over the 40mb limit",
+          msg: "One of your files is over the 40 MB limit",
           alertType: "error",
         })
       );
     },
   });
+
+  // Files dropped on the editor are attached, as on the attach row.
+  const attachDroppedFiles = useCallback(
+    (files: File[]) => {
+      const { accepted, tooBig } = withinSizeLimit(files, maxSize);
+      if (accepted.length) setAttachments(prev => [...prev, ...composeItemsFromFiles(accepted)]);
+      if (tooBig.length) {
+        dispatch(setNotification({ msg: `Over the 40 MB limit: ${tooBig.join(", ")}`, alertType: "error" }));
+      }
+    },
+    [dispatch]
+  );
 
   const buildAttachmentPayloads = useCallback(
     async (
@@ -2481,70 +2461,12 @@ export const NewMessage = ({
             />
           </NewMessageInputRow>
 
-          <AttachmentContainer
-            {...getRootProps()}
-            sx={{
-              width: "fit-content",
-            }}
-          >
-            <input {...getInputProps()} />
-            <NewMessageAttachmentImg src={AttachmentSVG} alt="Attach files" />
-          </AttachmentContainer>
+          <AttachDropZone dropzone={dropzone} count={attachments.length} />
 
-          {attachments.map(({ file, extension, forwardKey }, index) => {
-            return (
-              <Box
-                key={`${file?.name || "attachment"}-${index}`}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  minWidth: 0,
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontSize: "1rem",
-                    minWidth: 0,
-                    overflowWrap: "anywhere",
-                    color: !extension
-                      ? "var(--qmail-danger-text)"
-                      : "var(--qmail-compose-text)",
-                  }}
-                >
-                  {file?.name} ({formatBytes(file?.size || 0)})
-                  {forwardKey ? " · forwarded" : ""}
-                </Typography>
-                <IconButton
-                  aria-label={`Remove attachment ${file?.name || ""}`}
-                  onClick={() =>
-                    setAttachments(prev =>
-                      prev.filter((item, itemIndex) => itemIndex !== index)
-                    )
-                  }
-                  size="small"
-                  sx={{
-                    minWidth: 44,
-                    minHeight: 44,
-                    color: "var(--qmail-compose-muted)",
-                  }}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-                {!extension && (
-                  <Typography
-                    sx={{
-                      fontSize: "0.875rem",
-                      fontWeight: "bold",
-                      color: "var(--qmail-danger-text)",
-                    }}
-                  >
-                    This file has no extension
-                  </Typography>
-                )}
-              </Box>
-            );
-          })}
+          <ComposeAttachments
+            attachments={attachments}
+            onRemove={index => setAttachments(prev => prev.filter((item, itemIndex) => itemIndex !== index))}
+          />
 
           {refusedForwardAttachments.map((label, index) => (
             <Typography
@@ -2811,6 +2733,7 @@ export const NewMessage = ({
           >
             <TextEditor
               className="qmail-compose-editor"
+              onDropFiles={attachDroppedFiles}
               inlineContent={value}
               setInlineContent={(val: string, source?: string) => {
                 if (source === "user") {

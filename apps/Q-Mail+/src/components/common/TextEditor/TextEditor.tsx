@@ -17,6 +17,12 @@ interface TextEditorProps {
   placeholder?: string
   autoFocus?: boolean
   focusToken?: string | number | null
+  /**
+   * Files dropped on the editor go here (the composers attach them) instead
+   * of Quill's uploader, which put PNG and JPEG inline as base64 and dropped
+   * every other file silently. Pasted images stay inline, as in Q-Mail.
+   */
+  onDropFiles?: (files: File[]) => void
 }
 
 /**
@@ -34,11 +40,14 @@ export const TextEditor = ({
   placeholder,
   autoFocus = false,
   focusToken = null,
+  onDropFiles,
 }: TextEditorProps) => {
   const quillRef = useRef<ReactQuill | null>(null);
   const reactId = useId();
   const toolbarId = useMemo(() => `qmail-toolbar-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}`, [reactId]);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [draggingFiles, setDraggingFiles] = useState(false);
+  const carriesFiles = (event: React.DragEvent) => Array.from(event.dataTransfer?.types || []).includes("Files");
 
   const modules = useMemo(() => {
     return {
@@ -101,7 +110,32 @@ export const TextEditor = ({
   );
 
   return (
-    <div className={`qmail-editor-root${className ? ` ${className}` : ""}`}>
+    <div
+      className={`qmail-editor-root${className ? ` ${className}` : ""}`}
+      onDragEnterCapture={event => {
+        if (onDropFiles && carriesFiles(event)) setDraggingFiles(true);
+      }}
+      onDragOverCapture={event => {
+        if (onDropFiles && carriesFiles(event)) event.preventDefault();
+      }}
+      onDragLeave={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDraggingFiles(false);
+      }}
+      onDropCapture={event => {
+        setDraggingFiles(false);
+        const files = Array.from(event.dataTransfer?.files || []);
+        if (!onDropFiles || !files.length) return;
+        // Before Quill's own drop handler on the editor below.
+        event.preventDefault();
+        event.stopPropagation();
+        onDropFiles(files);
+      }}
+    >
+      {draggingFiles && (
+        <div className="qmail-editor-drop" aria-hidden="true">
+          Drop to attach
+        </div>
+      )}
       <div id={toolbarId} className="qmail-toolbar">
         <div className="qmail-toolbar-row">
           <span className="ql-formats">
