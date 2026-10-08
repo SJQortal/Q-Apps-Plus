@@ -1654,10 +1654,22 @@ An independent review read the whole 1.0.1 diff (`c9270508..ffe9ed33`) by dimens
 
 **Screenshot check after the fixes:** every screen at 5 sizes × 4 themes after the second review's fixes (`242e7aaf`), 532 captures in dark mode and 532 in light; then, after the third review's, `earlier-refs`, `threads`, `group` and `inbox` again in both modes (160 captures). All gave 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 small targets and 0 axe violations. The Cc fixture now has five names, one of them long and registered, so `inbox-open` shows "and 2 more" and `reply-all` fills all five without a warning.
 
+### Right click and long press (2026-10-08, Simon's request)
+
+Simon asked for right click, and long press on phones. Additive and local: no new Qortal calls and nothing published.
+
+| Commit | Change |
+|---|---|
+| `42a03511` | `BottomSheetMenu` can open at a point. Opened in the screenshot check for the first time, it had three axe violations (the desktop panel outside any region, the phone sheet unnamed, buttons directly in its list); fixed as Q-Share+'s account menu does (a named dialog panel), which also fixes Group mail's menu. |
+| `f109ecb9` | **The row menu.** `useContextMenuTrigger`: right click, the menu key or Shift+F10, and a 500 ms long press that a 10 px move cancels. iOS's WebView fires no `contextmenu`; Android fires its own during the press, and whichever comes first opens the menu once. The tap that ends a long press doesn't also open the row, and events from inside the open menu (a portal) are ignored. Message rows in the inbox, Archived, alias inboxes and Sent: Open, Reply, Reply all, Forward, Mark as read or unread, Archive or Move to inbox, Select, Delete (Sent). Reply and Forward open a message that isn't decrypted yet first (the opener now resolves with the message). Sender groups: show or hide, mark all read or unread, archive or move all, select all. A menu at the pointer from 600 px, a bottom sheet below; the sheet's title draws names with `NameText`, so impostors stay struck. The menu is its own 2 kB chunk, loaded when first opened; the main chunk is unchanged (395.4 kB). |
+
+Not given a menu: "All mail" search results (a reply there switches mailbox in the same click, so its alias context needs more care), thread rows and drafts. Candidates for later.
+
 ## Community feedback
 
 - **2026-10-07, Qortal DEV (via Simon):** messages with the reply built in keep growing and eventually get very large in long threads, which is why it was removed from Q-Mail. Suggestion: keep showing the previous message, but don't include it in the reply. **Done in 1.0.1:** no quote in the body, and `threadV2` holds references only (§18, Done → 1.0.1). Simon chose references only over capping or keeping the copies. Worth telling the DEV: the original app's own `threadV2` still embeds `data: replyTo` *with* its history, so it doubles with every reply (5 MB at reply #14 with 400-character replies). Q-Mail+ has stripped that since 1.0.0 and now sends references.
 - **2026-10-07, Simon:** the open message's date should be exact: weekday, date and time, plus the year when it isn't this year. **Done in 1.0.1** (`b8d9f94c`, `591dc742`).
+- **2026-10-08, Simon (morning):** right click, and long press on phones. **Done in 1.0.1** (Done → Right click and long press).
 - **2026-10-08, Simon:** exact dates in the inbox, the archive and every list, with more detail on hover and on a tap on phones; the earlier-messages limit left to the overnight session; group threads hideable in Settings. **Done in 1.0.1** (Done → Overnight).
 
 **A reply for Qortal DEV**, if Simon wants one (draft, his to edit):
