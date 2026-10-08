@@ -1,5 +1,72 @@
 # Changelog
 
+## 1.0.1 (Q-Mail+) - October 8, 2026
+
+**Replies stay small** (on advice from Qortal DEV)
+- A reply no longer quotes the message you answer. That message shows above the editor for context (Preview, Full or Hide) and is not copied into your reply. The footer now ends a reply, as it ends a new message.
+- A reply no longer carries copies of the earlier messages either, only links to the last 10. In 1.0.0, a conversation's 50th reply weighed about 570 KB; now every reply stays under 2 KB, the size of a new message.
+- In an open message, "Show earlier" loads the earlier messages from QDN five at a time, with "Show older" for more, all the way back to the start of the conversation: each earlier message leads to the ones before it. Messages you have already opened appear at once. A message that was deleted, wasn't sent to you, or isn't on your node yet says so, and the last can be retried.
+- Earlier messages run from the newest, right under the message, back to the oldest, with "Show older" at the bottom.
+- Mail that carries copies of earlier messages (from Q-Mail, or from Q-Mail+ 1.0.0) shows them as before, marked as quoted, now with the sender's avatar.
+- Q-Mail opens these replies without their earlier messages.
+
+**Replies**
+- A reply comes from the name the mail was sent to: mail to one of your other names is answered as that name, not as the active one.
+- An open message shows its Cc names under the recipient ("cc Alice, Bob"), for mail written with Cc in Q-Mail+. A long list shows the first three names and "and 2 more", which shows the rest, so every name can be read on a phone.
+
+**Right click and long press**
+- Right-click a message in the inbox, Archived, an alias inbox or Sent, or press and hold it on a phone, for a menu: Open, Reply, Reply all, Forward, Mark as read or unread, Archive or Move to inbox, Select, and Delete in Sent. On a phone the menu opens as a sheet from the bottom. The keyboard's menu key (or Shift+F10) opens it too.
+- A sender's group has one as well: show its messages, mark them all read or unread, archive them all, or select them all.
+- Reply and Forward work on a message you haven't opened yet: it opens first.
+
+**Attachments**
+- A message with attachments has a paperclip in the list: its files open or save from there, without opening the message (and without marking it read). "Attachments" in a message's menu does the same, also for one you haven't opened yet.
+- A PDF's Download and Open PDF sit side by side, beside its name.
+- In both composers (new mail and new group threads), "Attach files" is a real button (or drop files on it), and attached files show as tiles in rows, with a thumbnail for images; on a phone they sit in one row that scrolls sideways, so the text stays in view. Tap one to preview it before you send.
+- Files dropped on the message text are attached too (pictures used to land inside the text, and other files were ignored). Pasting a picture still puts it in the text.
+- A file whose type the browser doesn't know (an .apk, an .odp) is no longer flagged "No file extension" when its name has one, so it can be sent.
+- From a message's attachments in the list, "Open message" opens it at once.
+- In a list, a message's files show beside its subject with short names (two, then "+3"), so you can see what's there; a click opens them. Mail that arrived before this version shows them once the inbox loads it again.
+
+**Lists and drafts**
+- Unread mail stands out more: the sender's name is blue as well as bold, in the list and in sender groups.
+- On a wide screen the subject follows the name closely instead of starting halfway across the row.
+- Drafts look like the inbox: the recipient's avatar, "To" and the date, the subject with the start of the text, and the name it goes from, with its files counted.
+
+**Names under Inbox**
+- The names under Inbox, Aliases and Sent fold away with the arrow beside the mailbox; the mailbox itself still opens with a click. Remembered on this device.
+- Right-click a name under Inbox, or press and hold it, and choose "Hide from the list": it folds away at once, with Undo. Settings → Mail can hide a name too, and lists hidden names to show them again; their mail stays in the Inbox.
+- The mailboxes' names, sender groups, earlier messages and their texts fold open and shut smoothly, or at once with the system's reduce-motion setting.
+- Settings → Mail → "Hide names with nothing in the inbox" leaves out names whose mail is all archived, until new mail arrives for them.
+
+**Faster with many names**
+- The first load asks the node once for all your names, and once for all your groups' threads, instead of name by name and group by group: on an account with 88 names and 43 groups, 126 searches instead of 413.
+- Long lists draw faster: a date's detail is prepared when you first hover or tap it, and a folded Threads list loads no group pictures.
+
+**Group threads**
+- Settings → Mail → "Show group threads" hides group threads: the Threads section and the bottom bar's Threads item go away, and nothing about threads is loaded, which makes the first load lighter for anyone in many groups. Your thread drafts are kept for when you turn it on again.
+
+**Dates**
+- An open message, and each earlier message under it, shows the weekday, date and time, like "Sun 2 Aug, 08:58", with the year when it isn't this year ("Sun 11 May 2025, 14:03"). A tap or hover still shows the full date with seconds.
+- Every message list shows the same date: inbox, archive, sent, alias inboxes, search results, sender groups, threads and drafts. On a phone the day sits above the time, so names keep their room. Hover over a date, or tap it on a phone, to see the full date and how long ago it was.
+
+**Fixes**
+- New mail shows within 2 minutes; while nothing new arrived it could take 5.
+- Switching the active mailbox to another name and back no longer asks about the published state again: Q-Mail+ asks once per name per session, and loads it again by itself if you chose "Load state".
+- Each group's avatar is loaded once instead of twice.
+- "Publish Q-Mail State" in the mailbox list asks first and says what is published, as Settings → Sync does.
+- A broken message (an impossible date, or a subject that isn't text) can no longer take the whole app down: it shows "This message could not be shown" in its place, and an earlier message that can't be shown says so in its own place.
+- Opening another message while "Show earlier" is open no longer loads that message's earlier messages before you ask.
+- An earlier message found inside another earlier message is marked as quoted by the person who sent that one, not by the sender of the message you opened.
+- After Retry, or the last "Show older", keyboard focus stays on the earlier messages instead of jumping to the top of the page.
+- A group avatar that failed to load is tried again later instead of staying blank until a reload.
+- Hiding group threads holds for the session where the browser blocks storage.
+- With many group threads on the network, the first load takes the cheaper way to find which of your groups have threads, and checks one by one only the groups it hasn't found yet.
+- On a phone, Back closes an open preview, sheet or dialog first: Back in an attachment preview used to close the message, or the composer with its attachments.
+- Archiving or moving mail from a list (a message's menu, a group's menu or the selection bar) says so, with Undo.
+- Menus: 44 px items on every screen, Cancel at the bottom of a phone's sheet, and a tap on a list date shows its detail only on the date itself; a tap beside it opens the message.
+- In a narrow list (a small window), names and subjects keep their room: a group's messages stack their dates, and the avatars step aside.
+
 ## 1.0.0 (Q-Mail+) - October 4, 2026
 
 The first release of **Q-Mail+**, Simon's "+" version of Q-Mail 3.2.1. It reads and writes the same QDN resources as Q-Mail (same services, identifiers and encryption), so your mail shows up in both apps, and mail sent from either one opens in the other.

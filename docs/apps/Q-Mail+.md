@@ -4,7 +4,7 @@ Encrypted mail between Qortal names, with threads, attachments and group mail.
 
 **Published:** `1.0.0` on 2026-10-05, as the QDN `APP` resource `Q-Mail+`, built from commit `a128d290`. Checked on 2026-10-05: the live `index.html` references the same 50 content-hashed files as a fresh build of that commit and as `release/Q-Mail+.zip`.
 
-**Version on the branch:** `1.0.0` (published). The next published update is `1.0.1`. The branch [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) holds this app's history, ready to merge into Qortal/q-mail (README).
+**Version on the branch:** `1.0.1` (not published yet; branch `q-mail-plus/1.0.1`). Replies carry nothing from earlier messages, on Qortal DEV's advice; the reader and every list show exact dates; group threads can be hidden; the first load makes 126 searches instead of 413 on Simon's account; three independent reviews' findings (9, then 7 and 3 in the fixes) are fixed (Done → 1.0.1, Overnight, Review of 1.0.1). The branch [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) holds this app's history, ready to merge into Qortal/q-mail (README).
 
 ## Baseline at import
 
@@ -499,7 +499,7 @@ Configured as `rating: { enabled: true, pollName: "app-library-APP-rating-qmails
 1. Identifier builders in §2 verbatim, including `slice(0,20)`/`slice(-6)`, the leading `_mail_` on new direct mail, the `attachments_qmail_<uid>_<uid>` shape, `qortal_qmail_thread_group<gid>_<token>` / `qortal_qmail_thmsg_group<gid>_<token>_<uid>` (readers derive the token positionally from `_` splits: `GroupMail.tsx:268-270`, `Thread.tsx:87-90`), and `qmail_state_v1`.
 2. Services per resource (§1, four of them including `DOCUMENT_PRIVATE`) and the `MAIL` thread header carrying the title in resource `description` (readers prefer it, `GroupMail.tsx:166`).
 3. `PUBLISH_MULTIPLE_QDN_RESOURCES { resources, encrypt:true, publicKeys:[...] }` with the recipient's (and each BCC's / each group member's) public key; `DECRYPT_DATA {encryptedData, publicKey?}`; `data64` = base64 of UTF-8 JSON.
-4. Mail JSON: `createdAt` (truthy), `version` (truthy), `attachments` (array), `generalData` (object, null tolerated) are validated (`checkStructure.ts:35-46`); readers rely on `subject`, `textContentV2` (HTML in Quill 1 shape), `generalData.threadV2[].data` being a full message object with `createdAt`, and `recipient`.
+4. Mail JSON: `createdAt` (truthy), `version` (truthy), `attachments` (array), `generalData` (object, null tolerated) are validated (`checkStructure.ts:35-46`); readers rely on `subject`, `textContentV2` (HTML in Quill 1 shape), `generalData.threadV2[].data` being a full message object with `createdAt` **when present** (entries without `data` are skipped; Q-Mail+ 1.0.1 writes none, §18), and `recipient`.
 5. Attachment reference fields `identifier`, `name`, `service` (required by `FileElement`), plus `filename`, `originalFilename`, `type` (display); `size` is optional and `NewThread` omits it.
 6. Thread header JSON `title` (only field read) and thread message JSON `name`, `attachments`, `textContentV2`, `createdAt`.
 7. Tombstone markers `__qmail_deleted__` (title/subject) and tag `qmail-deleted`.
@@ -518,12 +518,30 @@ Configured as `rating: { enabled: true, pollName: "app-library-APP-rating-qmails
 
 - **Direct mail JSON** gains `to: [recipient]` and `cc: [Cc names]` beside the binding `recipient`. Every To/Cc/Bcc name still gets its own copy with the binding identifier `_mail_qortal_qmail_<name.slice(0,20)>_<address.slice(-6)>_mail_<sameSendId>` and `recipient` = that name, all in one `PUBLISH_MULTIPLE_QDN_RESOURCES {resources, encrypt:true, publicKeys:[to, ...cc, ...bcc]}`. Bcc names never appear in any JSON. The original Q-Mail reads `recipient` and ignores `to`/`cc`, so every copy opens there. Pinned by tests in `src/utils/mailCompose.test.ts`.
 - **Bodies** are published through `toPublishedMailHtml()` (`src/components/common/TextEditor/quillHtml.ts`): the Quill 1 shape with plain spaces. Quill 2's `getSemanticHTML()` had turned every space into `&nbsp;`; runs of 2+ spaces keep one `&nbsp;` as Quill 1 does, and `<pre>` keeps plain spaces.
-- **Replies** embed the previous message without its own `generalData` history (since round 2).
+- **Replies** embed the previous message without its own `generalData` history (since round 2). Replaced in 1.0.1 by references only (§18).
 - **`qmail_state_v1`** gains top-level `archived` and `settings` maps (§10); the `messages` map is unchanged. Since round 5, `settings.footer` = `{ default, byName, inReplies }`, written only when there is footer text. It is applied on load, and before a publish that never loaded the document, only when this device has no `qmail_footer_<address>` key; a local footer, even a cleared one, is never replaced (`bfef27d`).
-- **Footer** (feat-footer): Settings → Mail → Footer. The composer writes it into the body as Quill 1 paragraphs (one escaped `<p>` per line, `<p><br></p>` for a blank one): a new message is `<p><br></p>` + footer; a reply or forward (switch on) is `<p><br></p>` + footer + `<p><br></p>` + the "X wrote:" line or forward header + quote. It reaches the recipient only inside `textContentV2`, so the mail format is unchanged. Settings' "Footer for" picker lists the names A to Z, as a plain select up to 15 names and as the searchable NameSwitcher (an "All names (default)" row first, "Own footer" under names that have one) above that. Changing From swaps it for that name's footer only while it is exactly as inserted; drafts keep what the user has. Pinned by `mailFooter.test.ts`, `mailCompose.test.ts` and `NewMessage.footer.test.tsx`.
+- **Footer** (feat-footer): Settings → Mail → Footer. The composer writes it into the body as Quill 1 paragraphs (one escaped `<p>` per line, `<p><br></p>` for a blank one): a new message is `<p><br></p>` + footer; a reply or forward (switch on) is `<p><br></p>` + footer + `<p><br></p>` + the "X wrote:" line or forward header + quote. Since 1.0.1 a reply is `<p><br></p>` + footer, like a new message, with no quote (§18). It reaches the recipient only inside `textContentV2`, so the mail format is unchanged. Settings' "Footer for" picker lists the names A to Z, as a plain select up to 15 names and as the searchable NameSwitcher (an "All names (default)" row first, "Own footer" under names that have one) above that. Changing From swaps it for that name's footer only while it is exactly as inserted; drafts keep what the user has. Pinned by `mailFooter.test.ts`, `mailCompose.test.ts` and `NewMessage.footer.test.tsx`.
 - **localStorage** (new keys or fields, all local): `qmail_read_state_<address>`, `qmail_archived_<address>`, `qmail-general-consent`, compose-draft keys `…::reply:<id>` and `…::replyall:<id>` with optional `ccNames`/`showCC`, and `qmail_alias_scan_checkpoint_<address>` gains `intervals` and `complete` (an old value reads as a finished scan) plus a per-address set of scanned identifiers (capped at 3000).
 - **localStorage, round 5:** `qmail_footer_<address>` = `{ default, byName: {"<name>": text}, inReplies }` (plain text with `\n`; the key is kept when the footer is emptied, which is how a cleared footer stays cleared), and `qmail_pane_widths_<address>` = `{ rail?, list? }` in px (only widths the user dragged; `src/layout/usePaneWidths.ts`). Both are local only and new; the original app never reads them.
 - **PDF preview** (round 5) adds no data: `SHOW_PDF_READER {blob}` gets the decrypted bytes locally (§6).
+
+#### 18. Changed by Q-Mail+ 1.0.1 (2026-10-07): nothing from earlier messages travels in a reply
+
+Qortal DEV warned that mail with the reply built in keeps growing, which is why Q-Mail 3.1 stopped quoting. Q-Mail+ 1.0.0 had brought the quote back, on top of the embedded `threadV2` copies. Simon chose "references only" on 2026-10-07. This is the one non-additive change: the original app shows a Q-Mail+ reply without its history.
+
+- **Body:** a reply's `textContentV2` is only what the user wrote, plus the footer. No "On …, X wrote:" line and no quote. The composer shows the original above the editor for context (Preview / Full / Hide, upstream's design), and doesn't publish it. Forwards still carry the forwarded body (the recipient doesn't have it).
+- **`generalData.threadV2`:** `Array<{ reference: { identifier, name, service: "MAIL_PRIVATE" } }>` with **no `data`**. The entries reference the replied-to message's own history (its references, or for an embedded copy without one, the copy's `id` and `user`) and then the replied-to message, oldest first, without local read markers or repeats. Only the newest `REPLY_HISTORY_MAX_REFERENCES` = 10 are kept, so a reply's history is at most about 1.3 KB (`buildReplyThreadV2`, `src/utils/mailCompose.ts`). It was 20 until Simon left the limit to the overnight session (2026-10-08): with the reader walking back (below), 10 keeps every reply small and still reaches the whole conversation.
+- **The original app with these replies** (checked in `up-q-mail/main`): `ShowMessageV2.tsx:328-333` sorts with `if (!a.data || !b.data) return 0` and renders nothing for an entry without `data`. `MailThreadWithoutCalling.tsx:86-87` (the alias inbox's reader) does the same. The read-state code only counts entries (`GroupedMailboxList.tsx:55-58`, `MailMessageRow.tsx:153-155`, `Mail.tsx:2413-2483, 2524-2528`). So a reply opens with no error and shows no earlier messages. When the original app replies to a Q-Mail+ reply, it appends `{ reference, data: replyTo }` as before, and Q-Mail+ shows that copy as quoted.
+- **The Q-Mail+ reader** (`src/pages/Mail/earlierMessages.ts`, `useEarlierMessages.ts`) shows embedded copies at once, marked "Quoted by …". A reference-only entry is fetched only when "Show earlier" opens: the newest 5, then 5 more per "Show older". It comes from the decrypted-message cache if the user already opened it, and otherwise is fetched under the reference's name with the original call shapes (`FETCH_QDN_RESOURCE` base64, `DECRYPT_DATA`), at most 2 at a time. Repeat fetches are merged, outcomes are kept for the session, there is no `ENCRYPT_DATA`, and nothing is written to the inbox cache or the published state. A fetched message shows its publisher's avatar and no quote note. Deleted, not-sent-to-you, not-yet-on-node and failed states say so (the last two with Retry). Someone added to a conversation later can't decrypt earlier mail that wasn't sent to them, so they see "not sent to you".
+- **Walking back** (`extendEarlierEntries`): each earlier message the reader has (embedded, fetched, or already decrypted this session) lists its own predecessors. References not listed yet join as older entries, each in its place in the conversation and behind "Show older". The open message is never added, nothing is added twice, and the total is capped at 500. Each reply links its newest 10, and those links overlap, so one deleted or unreadable message doesn't end the walk.
+- **Size** of the whole reply, measured with 400-character replies (unencrypted JSON, before base64 and encryption; the 1.0.1 column uses real-length identifiers):
+
+  | Reply | Original Q-Mail (nested copies) | Q-Mail+ 1.0.0 (quote + copies) | No quote, copies | 1.0.1 (references) |
+  |---|---|---|---|---|
+  | #10 | 315 KB | 25.6 KB | 5.9 KB | 1.7 KB |
+  | #14 | 5 MB (it doubles with each reply) | 48.2 KB | 8.3 KB | 1.8 KB |
+  | #20 | — | 95.3 KB | 11.9 KB | 1.8 KB |
+  | #50 | — | 569 KB | 29.8 KB | 1.8 KB (10 references, the cap: 1,251 bytes) |
 
 ### Qortal call inventory
 
@@ -1476,7 +1494,253 @@ With Simon's one-off OK, the branch was rewritten and force-pushed once before m
 - All 237 commits kept their files (every tree identical), authors, dates, order and the rest of their messages.
 - Only the hashes changed, and the hashes quoted in this brief are current. The published 1.0.0 is `a128d290` (was `b4700647`).
 
+### 1.0.1 (2026-10-07/08): replies that don't grow, exact dates
+
+Community testing of the published 1.0.0 (docs/RELEASE.md stage 3). Two requests, both in **Community feedback** below: Qortal DEV's warning about replies that keep growing, and Simon's request for exact dates in the reader.
+
+**Replies (data contract §18).** 1.0.0 quoted the original into every reply's body *and* embedded the earlier messages in `generalData.threadV2`, so a reply carried the conversation twice and grew quadratically. Simon chose "references only" (asked in the session, options: cap at 10 copies, keep full history, references only).
+
+| Commit | Change |
+|---|---|
+| `78bab6c2` | A reply starts like a new message (a line to type on, then the footer). The original stays above the editor as context (Preview / Full / Hide), as in Q-Mail 3.1. The reply footer now ends the body; forwards keep it above the forwarded message. |
+| `441e5412` | The reader loads earlier messages by reference (`earlierMessages.ts`, `useEarlierMessages.ts`). Nothing is fetched until "Show earlier", then the newest 5, with "Show older" for 5 more. Copies already decrypted this session come from the cache. Everything else uses the original call shapes, at most 2 fetches at a time; repeat fetches are merged and outcomes kept for the session. There is no `ENCRYPT_DATA`, and nothing is written to the inbox cache or the published state. A fetched message shows its publisher's avatar and no "Quoted by". Deleted, not-sent-to-you, not-on-node and failed messages say so, the last two with Retry. Embedded copies show as before. |
+| `a175d066` | `threadV2` holds `{ reference }` entries without `data`: the newest 20, oldest first. A reply's history stays under about 2.5 KB. |
+| `713a171a` | A reference to a sent message its sender deleted (Q-Mail's encrypted tombstone, §11) shows as deleted, not as a card titled `__qmail_deleted__`. Found in the Hub check. |
+| `604ca799` | Importing the tombstone title from `sentIndex.ts` had pulled the Sent view into the main chunk (395 → 507 kB); found in the screenshot build. |
+| `ff94da8a` | Screenshot fixture and the `earlier-refs` screen: a 1.0.1 reply with six references covering every state. |
+| `e49b088f`, `4c4f7f65` | Review fixes (below). |
+
+**Dates.** `b8d9f94c`: the reader's header and every earlier message show the weekday, date and time, with the year when it isn't this year ("Sun 2 Aug, 08:58", "Mon 5 Aug 2024, 15:05"). A tap, hover or long-press shows the full date with seconds. `591dc742`: the reply composer's "Replying to" box uses the same form instead of "2024-08-05 15:05:09". List rows keep their compact dates.
+
+**Version.** `ec12cc47`: package.json and the lockfile's root (so Settings → About), CHANGELOG.md, the in-app changelog, and the README's data notes.
+
+**Sizes,** measured with the app's own builders (400-character replies, unencrypted JSON; table in §18): reply #20 went from 95.3 KB (1.0.0) to 2.9 KB, and reply #50 from 569 KB to 3.1 KB. For comparison, the original app's nesting reaches 5 MB at reply #14. Real data: Qortal Seth's fourth message in a thread to Simon is 27,952 bytes on QDN for a 915-character body. 26.3 KB of its 27.5 KB of JSON is embedded history, nested 0, 1 and 2 deep.
+
+**Hub check** (Simon's Hub, GO 3.0.3 build, debug port 9222, signed in as Simon James; Dev Mode → Server 127.0.0.1:5173; read-only):
+- *How it was driven:* `scripts/hub-cdp.mjs` (eval, shot, size, requests). "Load published QDN state?" was answered "Not now" each time. The app's welcome notice and first-run tour were dismissed (local flags only). The frame's localStorage was saved first and restored at the end: 0 differing keys.
+- *Loader through Hub's real FETCH/DECRYPT,* run in the frame on real references:
+  - 5 inbox messages loaded in 17 ms – 1.8 s.
+  - Qortal Seth's three references (two sent by Simon James) decrypted to the same subject and body as the copies embedded in his reply.
+  - Mail between two other names gives "not sent to you" after 1.2 s.
+  - A missing identifier gives "Not available on your node right now" after 6 s.
+- *The reader with a 1.0.1-style reply:* Hermes Trismegistus's real reply "Regarding LunQ", with its `threadV2` turned into references in the frame's memory (what a 1.0.1 reply carries; nothing was sent):
+  - No calls before the tap. "Show earlier" then made 2 `FETCH_QDN_RESOURCE` + 2 `DECRYPT_DATA`, two at a time, with no `ENCRYPT_DATA` and no name lookups.
+  - Both messages showed real avatars and no "Quoted by"; reopening made 0 calls. Same result at 700 after a reload, and at 1440.
+  - With references swapped to the error cases at 390×844 touch, "not sent to you" and "Not available…" (Retry 71×44) show beside a loaded message.
+  - The unmodified reply shows its embedded copies as "Quoted by Hermes Trismegistus", with 0 calls.
+- *Composer:*
+  - Reply on that message opens with an empty editor (`<p><br></p>`), the original in the context box and "Re: Regarding  LunQ".
+  - A dry run of the publish payload in the frame (`buildDirectMailObject`, nothing published) gave 3 references and 648 bytes of JSON. The same reply in the original app's shape is 6,322 bytes.
+  - Discard closed without asking and left no draft.
+- *Sizes:* 1440, 700, 390×844 touch, 360×740 touch and 844×390 touch: no sideways overflow, targets 44 px or more, dates whole beside truncated names.
+- *Dates with real mail:* "Sun 2 Aug, 08:58" (header), "Sat 1 Aug, 15:44" and "15:53" (earlier messages), and piranhapariah's "Mon 5 Aug 2024, 15:05" (opened through the mailbox search).
+- *Console:* only the 404s of the deliberate missing-identifier probe and Vite's HMR socket through the dev proxy.
+- *Not checked:* Hub's light/dark switch (the change only uses theme colours; the screenshot check ran both modes), GO on a phone, and a real 1.0.1 reply sent and read in both apps (needs a send: Follow-ups 1).
+
+**Screenshot check** (`scripts/screens.mjs`, 4 themes × 5 sizes): `earlier-refs` (new), `reply`, `reply-all`, `inbox-open` and `impostor-open` in dark and light gave 200 captures. `earlier-refs` ran again after the wording fix (40 captures). Every capture had 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 small targets, 0 small text and 0 axe violations.
+
+**Review** of the whole 1.0.1 diff by dimension (correctness, data compatibility, efficiency, mobile/UX, accessibility, security). Each finding was checked against the code before fixing:
+- `e49b088f` (efficiency): the reader subscribed to the whole decrypted-message cache and re-rendered whenever any message decrypted, for example during a body search. It now selects only the copies on screen. A Profiler test fails with the old subscription.
+- `4c4f7f65` (UX): "Show 1 older · 1 more" said it twice; it now reads "Show 2 older messages" or "Show 5 older messages (12 left)".
+- Accepted: a crafted reference can make the viewer's node fetch another name's `MAIL_PRIVATE` resource after a tap, the same exposure as opening any mail. Earlier messages are fetched without status polling, so a slow first download ends in "Not available…" with Retry.
+- Checked and fine:
+  - the original app with reference-only entries (§18);
+  - reference shape and order, with self-references, read markers and repeats dropped;
+  - old 1.0.0 reply drafts keep their quote, since they are the user's text;
+  - fetched bodies go through the same sanitising `DisplayHtml`;
+  - group-thread "reply to post" prefills at most 400 characters and 6 lines, so it can't snowball.
+
+| | 1.0.0 | 1.0.1 |
+|---|---|---|
+| Main chunk | 395.0 kB (gzip 126.9 kB) | 394.7 kB (gzip 126.7 kB) |
+| Test files · tests | 90 · 716 | 91 · 734 |
+| Lint · kit | clean · in sync | clean · in sync |
+| Reply #20 / #50 (400-char replies) | 95.3 KB / 569 KB | 2.9 KB / 3.1 KB |
+
+### Overnight (2026-10-08): Simon's answers, list dates, hiding threads, real sends
+
+Simon answered the five questions before going to sleep. He asked for exact dates in every list, a switch to hide group threads, and the earlier-messages limit chosen by me. He also allowed test mails from and to Simon James, his test accounts and his own secondary names. Everything joins 1.0.1, which is not published yet.
+
+| Commit | Change |
+|---|---|
+| `bad1cfd4` | **List dates.** Every list (inbox, archive, sent, alias inboxes, search results, sender groups, threads, drafts) and thread posts use the reader's form: "Thu 8 Oct, 00:25", with the year when it isn't this year. Beside a row's two lines the day sits over the time (`MailListDate stacked`), because at 360 px a one-line date had cut names to "Alice …". Wide lists and one-line rows keep it on one line (`inlineFrom` = the wide-row container query). Hover shows the detail: the full date with seconds and how long ago ("1 month ago"). On a touch screen a tap on the date shows the detail for 4 s and does not open the row. Row labels for screen readers spell the date out ("Thursday 8 October, 01:03"). |
+| `5c354fa8` | The old date formatters, now unused, are gone. |
+| `afafe461`, `c0065818` | **Hide group threads:** Settings → Mail → "Show group threads", per account on this device (`qmail_show_threads_<address>`, stored only while off; nothing published). Off: no Threads in the rail or the bottom bar, no per-group activity searches and no unread polling, no groups offered in the composer, thread drafts kept but out of Drafts, and "g t" out of the shortcuts. |
+| `5c7eb48e` | **Walking back:** the reader adds the references found in the earlier messages it has as older entries behind "Show older", so the whole conversation is reachable from any reply. |
+| `be93c94a` | **The limit:** a reply links its newest **10** earlier messages, 1,251 bytes, so a reply levels off at 1.8 KB. With walking back, 10 reaches the whole conversation, gives two pages of five before any walking, and its overlapping links survive a deleted message. |
+| `e45125fd` | **Reply from the right name:** a reply starts from the own name the mail was sent to (`replyFromOwnName`). Mail to POS+ is answered as POS+, not as the active name (found during the test sends). |
+| `2845bf68` | An unused import in `NewMessage.groups.test.tsx` had made `npm run lint` fail from `afafe461` on. The lint check had been read through `tail -1`, which hides the summary; it now checks the exit code. |
+| `aa355c7c` | **One search for all owned names** (`mailInbox.ts`). Sent: one paged search per kind for up to 50 names at a time (Core takes repeated `name` params) replaces two searches per name. Inbox: one paged search for the address suffix (`_YcyQyH_mail_`) finds every name with by-address mail; names without it keep their alias-form probe, four at a time. Same row and identifier tests as before. A merged search that fails or reaches 10 pages leaves its names to the per-name probes. |
+| `09667e4a` | The screenshot mock filters by every `name` param, as Core does. |
+| `94810299` | Each group's avatar is asked once per session; a running request is shared. Groups 694 and 659 used to be asked twice at the same moment. |
+| `e3ca4aca` | **One search for every group's threads** (`groupsWithThreadActivity`) replaces one per joined group. The network held 157 thread headers in 34 groups. Same identifier test; per-group probes as the fallback. |
+| `1625a319` | The inbox poll backs off to every 2 minutes at most (was 5), so new mail shows within 2 minutes. |
+| `a83b2ae4` | **The published-state question comes once per name per session** (`publishedStatePlan`). "Not now" stays no, a name without a document is not searched again, and "Load state" reloads without asking when the name comes back (Follow-ups: "Load-state prompt per name"). Checked in Hub: Simon James → POS+ → Simon James after "Not now" brought no prompt. |
+| `2498f734` | **The rail's "Publish Q-Mail State" asks first** (audit UX #4), with the same question as Settings → Sync (`PublishStateMessage`). Checked in Hub: Cancel leaves no Hub request. |
+| `40d6d2f6`, `ce9ff29b` | **The reader shows the Cc names** ("cc POS+, MA's, …", Follow-ups question 1) and names the To of the send on every copy (`to[0]`, falling back to `recipient`). The copy delivered to a Cc name used to say "to" that name. Checked on Tester Hub's "Q-Mail+ test 2: copies to five names": "to Simon James · cc POS+, MA's, Custom Node on Qortal GO \| GUIDE, biohackerscorner.com". |
+
+**First load on Simon's account** (88 names, 43 groups; from a reload with the resource-timing buffer at 5,000; the inbox, Sent and Threads lists were compared after each step):
+
+| | Searches | Of which per-name / per-group probes | Inbox names · Sent names · thread groups |
+|---|---|---|---|
+| Start of the night | 413 | 186 inbox + 173 sent + 43 thread | 6 · 3 · 5 |
+| `aa355c7c` | 163 | 1 address + 4 sent (merged) + 92 alias + 43 thread | the same 6 · 3 (+ POS+ from the test sends) · 5 |
+| `e3ca4aca` | **126** | 1 + 4 + 92 + 6 thread | the same |
+
+The inbox showed the same 174 messages for Simon James. The 82 alias-form probes are what is left; that form has no address in the identifier, so it can't be merged.
+
+**Real sends on Simon's account (with his OK):** POS+ → Simon James "Q-Mail+ 1.0.1 test: replies that link" (`LCE3da`, 832 bytes on QDN), Simon James's reply (`oc2cGt`, 896 bytes) and POS+'s reply (`7xe3Ig`, 1,024 bytes). Hub showed **0.01 QORT** per publish, 0.03 QORT in all; nothing else was sent or published.
+- *Published JSON:* each reply body is only its own text. Reply 2's `threadV2` is `[{ reference: LCE3da/POS+ }]`. Reply 3's is `[LCE3da/POS+, oc2cGt/Simon James]`, oldest first, with no `data` (551 bytes of JSON).
+- *Q-Mail+, after a fresh reload:* reply 3's "Show earlier · 2 messages" made 2 `FETCH_QDN_RESOURCE` (in parallel), 1 `GET_NAME_DATA` and 2 `DECRYPT_DATA`, with no `ENCRYPT_DATA`. It showed message 1 (POS+) and reply 2 (Simon James) with their real avatars.
+- *The original Q-Mail 3.2.1* (`qortal://APP/Q-Mail`, closed again afterwards): it lists the POS+ group, and reply 3 opens with sender, "to: Simon James", date, subject and body, no earlier messages and no console error.
+
+**Hiding threads, measured on Simon's account** (first load from a reload, resource-timing buffer 5,000):
+
+| First load | Threads shown | Threads hidden |
+|---|---|---|
+| `/arbitrary/resources/search` | 413 (43 thread searches) | 360 (0) |
+| `FETCH_QDN_RESOURCE` | 21 (20 thread headers + the state document) | 1 |
+| `GET_QDN_RESOURCE_URL` | 14 | 9 |
+
+The setting was switched back on afterwards; the rail followed live, without a reload.
+
+**Screenshot check:**
+- The list screens (`inbox`, `archived`, `sent`, `drafts`, `threads`, `group`, `search-all`, `alias-inbox`, `inbox-open`) were checked at 5 sizes. The new `threads-hidden` screen (the switch turned off in Settings, then the inbox) was checked as well.
+- All gave 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 small targets and 0 axe violations.
+- At 390 the names fit beside the stacked dates ("Alice Wonder", "Marcus O'Neil"). The bottom bar has 4 items with threads hidden.
+
+**Found on the way:**
+- Vite's hot reload reaches the Dev Mode frame directly, so every code edit re-mounted the mail page and brought back the "Load published QDN state?" prompt in Simon's Hub.
+- Simon's published `archived` map (177 messages archived on 2026-10-05 at 14:56) was applied in the dev frame at some point that evening, most likely by "Load state" on one of those prompts. It came from his own state document, last published on 2026-10-05 at 20:09; nothing was published tonight, and no Hub request was left pending.
+- Also measured: the inbox's new-mail poll backs off to 5 minutes while nothing is new, so test mail took up to 5 minutes to appear.
+
+### Review of 1.0.1 (2026-10-08, overnight)
+
+An independent review read the whole 1.0.1 diff (`c9270508..ffe9ed33`) by dimension, ran the touched tests (121 passing) and confirmed each finding with a throwaway test before reporting it. It found the data format compatible with Q-Mail as §18 describes, two medium bugs and seven small ones. All nine are fixed, one commit each, with a test that fails on the old code.
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | **Medium.** Our own earlier mail to a name longer than 20 characters, or to an alias, never loaded: the recipient cut from the identifier resolved to nothing, and the loader gave up before trying the publisher. | `ffe9ed33`: every key is tried until one decrypts; only "loaded", "deleted" and "not on the node" stop the search. |
+| 2 | **Medium.** A crafted message could blank the whole app: a `createdAt` above 8.64e15 made Intl throw during render, and an object `subject` or `recipient` was rendered as is. A reply's references can pull such a message in on "Show earlier", and the only error boundary was the app's own. | `fa931fb6`: `stamp()` refuses timestamps that make an invalid Date; subject and recipient are used only when they are strings (reader, earlier cards, phone title, the composer's context line); each earlier card and the reader fail in place ("This message could not be shown"), and opening another message clears it. |
+| 3 | Switching messages with "Show earlier" open fetched the next message's earlier messages: the reader is reused, and the section was closed by an effect after the loader had seen it open. | `3ace707a`: the section records which message it is open for. |
+| 4 | A copy found by walking back was "Quoted by" the open message's sender. | `59b4c5c1`: it names the publisher of the message that carried it. |
+| 5 | The Cc line was one line with the list in a hover title, so a long list couldn't be read on a phone. | `57299276`: it wraps; five or more names show three and "and N more" (a 44 px button). |
+| 6 | Focus fell to the page when Retry or the last "Show older" disappeared. | `f592fd82`: each earlier message has a focusable place in the list; focus moves there (ring for keyboard focus only). |
+| 7 | A failed group avatar lookup was remembered as "no avatar" for the session. | `12b1be43`: failures are dropped from the session cache. Not enough on its own (second review, 1). |
+| 8 | With storage blocked, the "Show group threads" switch flipped back on. | `6402f86c`: the choice is kept in memory for the session. |
+| 9 | The merged thread probe reads every group's headers and could read 10 pages (2,000) before probing every group one by one. | `fe94b9cb`: the fallback probes only groups not found yet, four at a time. Its 3-page cap was revised (second review, 7). |
+
+**A second review** read the fixes (`ffe9ed33..fe94b9cb`), confirmed each finding with a throwaway test, and found two more medium bugs and five small points. All are fixed:
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | **Medium.** `12b1be43` changed only the session cache: the mailbox stored `""` for a failed avatar lookup and never asked that group again. | `1820f241`: the lookup answers null (unknown) on failure and the mailbox (now `useGroupAvatarUrls`, three groups at a time) stores only real answers. Its retries were reworked after the third review (1). |
+| 2 | **Medium.** After `3ace707a`, going back to a message whose earlier message had failed showed it on "Loading message" for good, with no Retry: the loader's record of what it had started was only replaced while the section was open. | `d6b0fe24`: the record starts afresh for every message, and each message opens with Show earlier and the Cc list closed. |
+| 3 | The Cc "and N more" button lost focus when pressed, and its spoken name ("Show all 5 Cc names") didn't contain its visible words (WCAG 2.5.3). | `83468d9a`: focus moves to the Cc line; the name is "and 2 more Cc names". `8f22e1f1`: the screens' long Cc name is a registered name, so Reply all shows no warning. |
+| 4 | An error boundary cleared its error in the update that brought it, so a broken message was drawn twice more. | `966bef0a`: it clears only on a key change after the error. |
+| 5 | With both new boundaries taken out, every test still passed. | `0fb324f3`: the reader's boundary moves to `ReaderErrorBoundary`, tested; an earlier card that throws is tested in its place. |
+| 6 | An earlier message's focus place was a plain div. | `45f7616f`: a group named "Earlier message from <name>". |
+| 7 | With the 3-page cap, past 600 headers every group not found cost a search, mostly groups without threads (about 38 of Simon's 43). | `242e7aaf`: up to 10 pages again, stopping early only when probing the groups not found costs no more than the pages left. |
+
+**A third review** read those fixes (`fe94b9cb..7d5c6a86`) and found one more medium bug and two small points, all fixed:
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | **Medium.** Every avatar that arrived restarted the hook's run from the top of the missing list, so a failing group started a new round of three tries each time and held a worker through its waits. With three failing groups ahead of twenty good ones (measured), the good avatars took 108 s and the failing groups were asked 45 times. | `5f6290e7`: the run restarts only when the list of groups changes; every group is asked once first, then the failed ones again after 5 s and 20 s, outside the workers. Measured in the new test: the good avatars show at once, and each failing group is asked 3 times in all. |
+| 2 | Nothing tested that Mail.tsx draws the reader inside its boundary. | `5278c554`: a structural test reads Mail.tsx (one `ShowMessageV2`, inside `ReaderErrorBoundary`). |
+| 3 | A loading or failed earlier message was named twice ("Earlier message from alice", group and card). | `bab6b170`: the card keeps its status text without a label. `e3e93f0f`: the probe's notes name its early stop. |
+
+**Checked in Hub after the fixes** (Simon's account, read-only): the 3-mail test chain opens with "Show earlier · 2 messages", both shown from the session cache with no requests; switching to the 01:09 reply with the section open leaves it closed ("Show earlier · 1 message", collapsed) and sends nothing; at 390×844 touch the reader shows no focus ring after taps. A first load from a reload made 127 searches (126 overnight; one poll apart), with one merged thread search as before. After the second and third reviews' fixes the Threads list shows the avatars of groups 709, 694 and 659 and initials for the two groups without one, as before. The "Load published QDN state?" prompt that hot reloads bring back was answered "Not now" each time.
+
+**Screenshot check after the fixes:** every screen at 5 sizes × 4 themes after the second review's fixes (`242e7aaf`), 532 captures in dark mode and 532 in light; then, after the third review's, `earlier-refs`, `threads`, `group` and `inbox` again in both modes (160 captures). All gave 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 small targets and 0 axe violations. The Cc fixture now has five names, one of them long and registered, so `inbox-open` shows "and 2 more" and `reply-all` fills all five without a warning.
+
+### Right click and long press (2026-10-08, Simon's request)
+
+Simon asked for right click, and long press on phones. Additive and local: no new Qortal calls and nothing published.
+
+| Commit | Change |
+|---|---|
+| `42a03511` | `BottomSheetMenu` can open at a point. Opened in the screenshot check for the first time, it had three axe violations (the desktop panel outside any region, the phone sheet unnamed, buttons directly in its list); fixed as Q-Share+'s account menu does (a named dialog panel), which also fixes Group mail's menu. |
+| `f109ecb9` | **The row menu.** `useContextMenuTrigger`: right click, the menu key or Shift+F10, and a 500 ms long press that a 10 px move cancels. iOS's WebView fires no `contextmenu`; Android fires its own during the press, and whichever comes first opens the menu once. The tap that ends a long press doesn't also open the row, and events from inside the open menu (a portal) are ignored. Message rows in the inbox, Archived, alias inboxes and Sent: Open, Reply, Reply all, Forward, Mark as read or unread, Archive or Move to inbox, Select, Delete (Sent). Reply and Forward open a message that isn't decrypted yet first (the opener now resolves with the message). Sender groups: show or hide, mark all read or unread, archive or move all, select all. A menu at the pointer from 600 px, a bottom sheet below; the sheet's title draws names with `NameText`, so impostors stay struck. The menu is its own 2 kB chunk, loaded when first opened; the main chunk is unchanged (395.4 kB). |
+
+Not given a menu: "All mail" search results (a reply there switches mailbox in the same click, so its alias context needs more care), thread rows and drafts. Candidates for later.
+
+### Earlier messages order, names under Inbox (2026-10-08, Simon's requests)
+
+From Simon's screenshot of an archived conversation with Juan Qortal:
+- **Earlier messages newest first** (`8b4432be`): under the open message they run from the newest (open) down to the oldest, with "Show older" at the bottom, so reading on goes back in time. Quoted copies (Q-Mail or 1.0.0 mail) showed a letter instead of the sender's avatar; they show the avatar now, and "Quoted by" still marks them unverified.
+- **Names under Inbox:** the names under Inbox, Aliases and Sent fold behind a chevron of their own (the section row still opens the mailbox), remembered on this device (`qmail_rail_collapsed_sections`). A name under Inbox can be hidden from its menu (right click, long press: "Hide from the list"); Settings → Mail lists hidden names with Show. "Hide names with nothing in the inbox" (off by default) leaves out another name whose inbox has loaded with every message archived. Per account, local only (`qmail_hidden_inbox_names_<address>`, `qmail_hide_empty_inbox_names_<address>`); a hidden name's mail stays in the combined Inbox, and the name being viewed never hides (`utils/inboxNamesPreference.ts`).
+
+### Attachments from the list, composer tiles, smoother folding (2026-10-08, Simon's requests)
+
+- **Attachments from a list row:** a paperclip button on rows known to have attachments, and "Attachments" in every row's menu (rows not decrypted yet included). `RowAttachmentsDialog` (own chunk) uses the session's decrypted copy, or fetches and decrypts the message through the earlier-messages loader (retries, session cache); it does not open the message, mark it read or add it to `hashMapMailMessages`. Same cards as the reader (Open, Save, Save all).
+- **PDF card:** Download and Open PDF side by side in the name's row; under the name when the card is narrow, sharing one row on phones.
+- **Composer:** "Attach files" is an outlined button (the old control was an image in a drop zone, a known accessibility gap); the row is the drop zone and lights up while dragging. Attached files are tiles in a grid (two per row on a phone) with image thumbnails, size, "forwarded" and a missing-extension warning; a tap previews the local file (`LocalAttachmentPreview`, own chunk: images, text, PDF, audio, video; other kinds say there is no preview). Nothing is fetched or published by a preview. Not changed: the group-thread composer's attach control.
+- **Motion:** names under the mailboxes, sender groups, the earlier-messages section and each earlier message fold with MUI `Collapse` (200 ms, 0 with `prefers-reduced-motion`: `hooks/useReducedMotion.ts`); the chevrons rotate. "Hide from the list" is optimistic: the name folds away at once and the mailboxes' heavier update runs after, in a transition; a snackbar offers Undo (also mid-fold).
+
+### Full review pass (2026-10-08, afternoon)
+
+Simon asked for one more pass over everything: no bugs, smooth, friendly. Four independent reviewers read the whole 1.0.1 diff (`c9270508..` with the uncommitted work), one per dimension, each verifying findings with throwaway tests before reporting. All findings below were confirmed and fixed; each fix has a test.
+
+**Correctness and data compatibility:** nothing changes what is published; reference-only replies open in every upstream branch's reader. One low bug: a name hidden while viewed, then shown again in Settings, stayed invisible in the rail until a reload. Fixed in `c8392fe1` (the reviewer's own repro tests pass).
+
+**User experience (10 findings):**
+1. Back during a full-screen preview (phone/GO) closed the composer under it, files and all. `715aaf86`: `OverlayBackClose` gives full-screen dialogs, the attachment previews, the phone menu sheet and the mailboxes drawer their own router entry (never `window.history`).
+2. Files dropped on the editor: Quill 2's uploader put PNG/JPEG inline as base64 and ignored other files. `2ae894ee`: a drop on the editor attaches (with a "Drop to attach" overlay); pasted images stay inline, as in the original Q-Mail (same react-quill-new).
+3. "No file extension" from the MIME type blocked Send for .apk/.odp or empty types. `2ae894ee`: name first, then type, as the publish path does (`composeFiles.ts`).
+4. Undo did not unhide the name being viewed. `c8392fe1`.
+5. Archive from a menu was silent. `88b66201`: "Archived" / "N archived" with Undo (row menu, group menu, selection bar; also when the list is then empty), focus to the next row.
+6. Menu items were 36 px from 600 px (MUI's own breakpoint rule). `88b66201`: 44 px.
+7. The 300 px list of a 700 px window cut subjects to three letters. `88b66201`: group rows stack their date and lose the indent; rows drop the avatar below 340 px.
+8. Composer tiles pushed the editor off a phone. `2ae894ee`: one sideways-scrolling row of smaller tiles on phones.
+9. "Attachments" on a locked row could be a dead end. `88b66201`: "Open message" opens it from the copy just decrypted (no second fetch); the dialog shows the real subject.
+10. The padded list date took a fifth of a row's tap area. `3848d141`: the date itself only.
+Polish: chevron 44 px with a gap; labels frozen while a menu fades out; "or drop files here" only with a mouse; one wording for "not sent to you"; "40 MB"; Settings → Mail can hide a name too (`c100645e`).
+
+**Accessibility (7):** the Undo toast failed contrast in every theme (1.5–2.9:1) and was hard to reach → `UndoSnackbar` (paper colours, `role=status`, Undo takes focus, focus returns to the next row); removing actions left focus on `<body>` (archive, hide, a tile's remove) → focus moves to the neighbour; the phone sheet had no way out but an action → Cancel; tile warnings weren't read → `aria-describedby`; "Show older" focus → the first message it brought in; an unnamed spinner → `aria-hidden`; fold buttons 44 px with a steady name, menus named "Actions for <name>" once.
+
+**Efficiency (5):** folded rail rows stayed mounted (30 group avatars loaded with Threads folded; rail DOM 404 → 952 elements) → `unmountOnExit` and a memoised rail; a Tooltip and a `matchMedia` per list date (300 rows mounted in 119 ms instead of 20) → the Tooltip mounts on first hover or tap (`3848d141`); closed row menus stayed mounted on phones with document listeners → unmounted after closing; the merged sent probe could read 11 pages and then 98 names one by one for one prolific sender → found names drop out and the search restarts, fallbacks four at a time (`33e905b9`); probes kept running after cancel → `mapWithConcurrency` takes a stop check.
+
+**Deferred, with reasons (Follow-ups):** the 2-minute poll cap makes idle polling 2.5× heavier than 5 minutes (one merged `_<suffix>_mail_` poll would cover every name's by-address mail; a bigger change to the poller); `fetchEarlierMessage` fetches the body again for each decrypt key it tries; the thread probe saves only the searches for groups without threads (the unread badges still read page 1 of each active group's headers: 43 → 6 thread searches on Simon's account, as measured).
+
+**Bundle:** the main file reads 373 kB (395 kB at 1.0.0), but most of the difference is Rollup moving ~19 kB of shared code into a small chunk the mail shell loads at startup anyway, so the startup download is about the same. Not claimed as a saving.
+
+**Checks:** 109 test files, 847 tests; lint, types and the theme check pass; each commit was verified in a scratch worktree before it was made.
+
+### Attachment chips, unread in blue, Drafts, a phone overlay fix (2026-10-08, Simon's requests)
+
+- **Overlay regression (`583e5299`):** the Back handling from the review pass (`OverlayBackClose`) closed overlays that mount already open, the phone row-menu sheet and attachment previews among them, in the same render (a stale POP from the router). It was in the 12:19 test zip only; the screenshot check caught it (the phone row-menu capture had no sheet). The overlay now closes on a POP only after it has seen its own entry; regression tests pin both cases.
+- **Attachment chips (`a322d343`, `68cadaaf`):** a row shows its first two files beside the subject with short names (`shortFileName`, 18 characters with the extension kept) and "+N"; a click opens the row's attachments dialog. Hidden below 480 px of list width, where the paperclip stays. The names come from the decrypted message or from the subject cache: `qmail_persistance_<name>` entries gain `attachmentNames` (up to 8 names, encrypted with the subject's key, newline-joined), added for new entries and backfilled for old ones when the inbox loads them. Local only; nothing published changes. Screen readers hear the names in the row's label instead of the chips.
+- **Rows:** on wide lists the name column is `0 1 auto` with a cap (`clamp(160px, 24%, 260px)`), so the subject follows the name instead of starting at a fixed column; the date sits at the end. Unread senders are `primary.main` and bold, in rows and group headers.
+- **Drafts (`ca48e92c`):** rows like the inbox: the recipient's avatar (the forum avatar for thread drafts), "To <name>" and the date, subject — start of the text, and the From name with an 18 px avatar and the file count.
+- **Checks:** 852 tests; targeted screens (row-menu, row-attachments, attachment-image, compose-attachment-preview, inbox, drafts) on `ca48e92c`, then the full run on the same build: every screen × 5 sizes × 4 themes, 612 captures in dark and 612 in light, with 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 small targets and 0 axe violations.
+
+## Community feedback
+
+- **2026-10-07, Qortal DEV (via Simon):** messages with the reply built in keep growing and eventually get very large in long threads, which is why it was removed from Q-Mail. Suggestion: keep showing the previous message, but don't include it in the reply. **Done in 1.0.1:** no quote in the body, and `threadV2` holds references only (§18, Done → 1.0.1). Simon chose references only over capping or keeping the copies. Worth telling the DEV: the original app's own `threadV2` still embeds `data: replyTo` *with* its history, so it doubles with every reply (5 MB at reply #14 with 400-character replies). Q-Mail+ has stripped that since 1.0.0 and now sends references.
+- **2026-10-07, Simon:** the open message's date should be exact: weekday, date and time, plus the year when it isn't this year. **Done in 1.0.1** (`b8d9f94c`, `591dc742`).
+- **2026-10-08, Simon (late morning):** attachments openable from the list without opening the mail; the PDF buttons in one row; composer attachments in rows with a preview and a nicer attach control; hiding a name smoother and optimistic, with smooth animations throughout. **Done in 1.0.1** (Done → Attachments from the list, composer tiles, smoother folding).
+- **2026-10-08, Simon (morning):** earlier messages newest first, with avatars; names under Inbox hideable (by hand, or when all their mail is archived) and the section collapsible. **Done in 1.0.1** (Done → Earlier messages order, names under Inbox).
+- **2026-10-08, Simon (morning):** right click, and long press on phones. **Done in 1.0.1** (Done → Right click and long press).
+- **2026-10-08, Simon:** exact dates in the inbox, the archive and every list, with more detail on hover and on a tap on phones; the earlier-messages limit left to the overnight session; group threads hideable in Settings. **Done in 1.0.1** (Done → Overnight).
+
+**A reply for Qortal DEV**, if Simon wants one (draft, his to edit):
+
+> Thanks, good catch. Q-Mail+ 1.0.1 no longer puts the previous message in the reply: the body is only what you write, and the original shows above the editor for context, as in Q-Mail 3.1. The history in `generalData.threadV2` is now references only, `{ reference: { identifier, name, service } }` with no `data`, the newest 10. The reader fetches and decrypts those messages when you tap "Show earlier", and walks back through their own references to the start of the conversation. A reply stays under 2 KB however long the thread gets; with quote plus copies, the 50th reply was about 570 KB. Q-Mail 3.2.1 opens these replies fine; it just doesn't show the earlier messages, because it skips `threadV2` entries without `data`. One thing you may want in Q-Mail itself: its replies embed `data: replyTo` including that message's own `threadV2`, so the history doubles with every reply (about 5 MB at reply 14 with 400-character replies). Dropping `generalData` from the copy, or switching to references, fixes it.
+
 ## Follow-ups
+
+**1.0.1, for Simon** (your answers of 2026-10-08 are in Done → Overnight)
+
+1. ~~One real reply~~: done with your OK, as POS+ ↔ Simon James (3 mails, 0.03 QORT). It works in both apps.
+2. **Tell Qortal DEV?** (open) The original app's `threadV2` embeds `data: replyTo` with its nested history, so it doubles with each reply (Community feedback). The fix upstream is a one-line strip of `generalData`, or references as here.
+3. ~~The cap~~: 10 references plus walking back (my pick, as you asked).
+4. **Group threads:** now hideable in Settings. Question left: "reply to post" still prefills a short excerpt (at most 400 characters and 6 lines). Keep it?
+5. ~~List dates~~: done everywhere, with the detail on hover or tap.
+6. **The test mails:** "Q-Mail+ 1.0.1 test: replies that link" (3 messages) sit in the inboxes of Simon James and POS+. Archive them when you like.
+7. **The dev frame's archive:** your published archive (177 messages from 2026-10-05) is applied in the Dev Mode frame (127.0.0.1:12393); your real app isn't affected. Was that you pressing "Load state" before bed?
+
+Next-pass ideas from 1.0.1: poll the resource status before fetching an earlier message, as the opener does, for big or slow ones; one merged `_<suffix>_mail_` search in the inbox poll instead of one per name (idle polling is 1 + 2N searches per tick since the cap went to 2 minutes); fetch an earlier message's body once and try each decrypt key on it; a menu for "All mail" search results, thread rows and drafts; an exit animation when a row is archived.
 
 **For Simon on his own account.** The round 5 Hub checks already ran on your account (read-only, nothing published or sent): the 86-name switcher and its search, the avatars after a switch, pane widths, switching between messages, the full-width list, Mugician's join link (declined), the footer at 1440 and 390 (all cleared again), mail 1's PDF in Hub's reader and in the in-app viewer, and the Q-Share+ comparison. Left for you, in Q-Mail+ and the original Q-Mail:
 1. **The footer for real:** set yours, send one mail, and check it in the original app.
@@ -1489,16 +1753,16 @@ With Simon's one-off OK, the branch was rewritten and force-pushed once before m
 
 **Questions for Simon**
 
-1. **Cc in the reader:** mail from Q-Mail+ now carries `cc`, but the reader only shows "to <recipient>". Show a Cc line (additive, from the `cc` field)?
+1. ~~**Cc in the reader**~~: done in 1.0.1 (`40d6d2f6`, `57299276`): a "cc …" line under the recipient.
 2. **Cc autocomplete:** only To has directory suggestions; Cc and Bcc names are typed and checked. Add suggestions there too?
 3. **Closing a reply** goes back to the full-width list; the message you replied to is not reopened. Reopen it beside the list instead?
 4. **`blogSlice`** stays registered because the `BlogPost` type and 8 tests use it; removing it is a small refactor with no user-visible change. Do it in the next pass?
 5. **Orphaned assets** nothing imports (old PNG logos and 18 old SVG icons in `src/assets`) were not on the approved list, so they stay. Delete them too?
 
 **Next pass:**
-- **Merge the per-name probes (next speed fix).** On Simon's account a first load sends about 400 `/arbitrary/resources/search`, almost all the inbox and sent probe per owned name (I4/I5, the same in the original): 170 inbox queries and 86 + 84 sent probes in the first 3 s. One query per kind with several `name=` params, or probing only names that have mail, would cut most of them.
-- **Duplicate group avatars:** avatars for groups 694 and 659 were requested twice at the same moment; the in-flight merge misses them.
-- **Load-state prompt per name:** switching the active mailbox away and back asks "Load published QDN state?" again; Settings says it asks once per sign-in.
+- ~~**Merge the per-name probes**~~: done in 1.0.1 (`aa355c7c`, `e3ca4aca`): 413 → 126 searches on Simon's account. The 82 alias-form probes are what is left (no address in that identifier, so they can't be merged).
+- ~~**Duplicate group avatars**~~: done in 1.0.1 (`94810299`, `12b1be43`).
+- ~~**Load-state prompt per name**~~: done in 1.0.1 (`a83b2ae4`): once per name per session.
 - **Impostor names in the other + apps:** Q-Share+ and the rest should cross out names with hidden characters the same way (Hub's rule, 2px line-through in the error colour). Not done here, because each app stands alone; copy `invisibleCharacters.ts` and `NameText` into each app on its own pass.
 
 Also: the attach control is an image inside a `role=presentation` drop zone rather than a labelled button; `MailTable.tsx`'s `SimpleTable` default export is dead; `hub-cdp.mjs tap` lands about 124 px high in the app frame (the frame's top offset in Hub's page; a separate repo task in `scripts/`); GO on a real phone (keyboard, hardware Back, pull-to-refresh); the React Compiler lint rules stay off (mostly upstream setState-in-effect code).

@@ -323,7 +323,7 @@ const sameNameSet = (chips: { name: string }[], names: string[]): boolean => {
 /**
  * Whether the composer holds something the user wrote, which is what makes
  * a draft worth saving and Discard worth confirming. What the composer
- * filled in by itself (the reply quote or forward header, the Re:/Fwd:
+ * filled in by itself (the footer or forward header, the Re:/Fwd:
  * subject, Reply all's Cc names) does not count.
  */
 export function hasComposerContent(input: ComposerContentInput): boolean {

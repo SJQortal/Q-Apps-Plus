@@ -14,6 +14,7 @@ import {
   IconButton,
   type DialogProps,
 } from '@mui/material';
+import { OverlayBackClose } from '../../layout/OverlayBackClose';
 import CloseIcon from '@mui/icons-material/Close';
 import { useLayoutMode } from '../../layout/useLayoutMode';
 import { useLandscapeFrame } from '../../utils/hubFrame';
@@ -66,6 +67,9 @@ export function ResponsiveDialog({
   const closeInTitle = showClose ?? (isPhone && Boolean(onClose));
 
   return (
+    <>
+    {/* Full screen on a phone: Back closes the dialog, not the pane under it. */}
+    <OverlayBackClose open={open} onClose={() => onClose?.()} enabled={isPhone && Boolean(onClose)} />
     <Dialog
       open={open}
       onClose={onClose ? () => onClose() : undefined}
@@ -145,5 +149,6 @@ export function ResponsiveDialog({
         </DialogActions>
       )}
     </Dialog>
+    </>
   );
 }

@@ -4,13 +4,14 @@
  * Settings. It renders the same `LeftSidebarItem[]` model that Mail.tsx builds
  * (`buildSidebarItems`), so the item ids and the select handler are unchanged.
  */
-import { useMemo, useState, type ReactNode } from 'react';
+import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Avatar,
   Badge,
   Box,
   Button,
   ButtonBase,
+  Collapse,
   IconButton,
   InputAdornment,
   TextField,
@@ -29,7 +30,6 @@ import AlternateEmailOutlinedIcon from '@mui/icons-material/AlternateEmailOutlin
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import type { LeftSidebarItem } from '@qortal/qapp-lib/left-sidebar/core';
@@ -37,6 +37,9 @@ import { primarySoft } from '../hub-theme';
 import { SHORT_FRAME_MEDIA } from '../utils/hubFrame';
 import { firstVisibleChar } from '../utils/invisibleCharacters';
 import { NameText, spokenName } from '../components/common/NameText';
+import { useRowMenu } from '../pages/Mail/useRowMenu';
+import { useFoldTimeout } from '../hooks/useReducedMotion';
+import { UndoSnackbar, type UndoToast } from '../components/common/UndoSnackbar';
 import Logo from '../assets/svgs/Logo.svg';
 import LogoLight from '../assets/svgs/LogoLight.svg';
 
@@ -180,6 +183,20 @@ const Footer = styled('div')(({ theme }) => ({
   borderTop: `1px solid ${theme.palette.divider}`,
 }));
 
+/** One chevron that turns as its list folds (pointing right when folded). */
+function FoldChevron({ open }: { open: boolean }) {
+  return (
+    <ExpandMoreIcon
+      aria-hidden
+      sx={{
+        transition: 'transform 200ms ease',
+        transform: open ? 'none' : 'rotate(-90deg)',
+        '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+      }}
+    />
+  );
+}
+
 export interface RailProps {
   items: LeftSidebarItem[];
   activeItemId: string | null;
@@ -192,6 +209,40 @@ export interface RailProps {
   version: string;
   /** In a drawer: show a close button and call this. */
   onClose?: () => void;
+  /** A name's menu under Inbox offers "Hide from the list" (Settings → Mail shows it again). */
+  onHideInboxName?: (name: string) => void;
+  /** Undo for a hidden name. */
+  onShowInboxName?: (name: string) => void;
+}
+
+/** Sections whose names fold away behind a chevron; Threads folds on its own row. */
+const COLLAPSIBLE: ReadonlyArray<string> = ['inbox', 'aliases', 'sent'];
+export const RAIL_COLLAPSED_STORAGE_KEY = 'qmail_rail_collapsed_sections';
+
+const readCollapsed = (): string[] => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RAIL_COLLAPSED_STORAGE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => COLLAPSIBLE.includes(id)) : [];
+  } catch {
+    return [];
+  }
+};
+
+/** Which sections are folded, remembered on this device. */
+function useCollapsedSections(): [Set<string>, (id: string) => void] {
+  const [collapsed, setCollapsed] = useState<string[]>(readCollapsed);
+  const toggle = useCallback((id: string) => {
+    setCollapsed((previous) => {
+      const next = previous.includes(id) ? previous.filter((entry) => entry !== id) : [...previous, id];
+      try {
+        localStorage.setItem(RAIL_COLLAPSED_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Storage blocked: folded for this session.
+      }
+      return next;
+    });
+  }, []);
+  return [useMemo(() => new Set(collapsed), [collapsed]), toggle];
 }
 
 /** A count badge ("99+" past 99) for numeric badge text, else the text itself (e.g. "!"). */
@@ -251,7 +302,7 @@ function childAvatar(item: LeftSidebarItem, avatarUrlByName?: Map<string, string
   );
 }
 
-export function Rail({
+function RailView({
   items,
   activeItemId,
   onSelect,
@@ -260,9 +311,96 @@ export function Rail({
   onOpenSettings,
   version,
   onClose,
+  onHideInboxName,
+  onShowInboxName,
 }: RailProps) {
   const theme = useTheme();
   const [nameFilter, setNameFilter] = useState('');
+  const [collapsed, toggleCollapsed] = useCollapsedSections();
+  // A name's menu under Inbox (right click, long press).
+  const nameMenu = useRowMenu<LeftSidebarItem>();
+  const foldTimeout = useFoldTimeout();
+
+  // Hiding a name is optimistic: it folds away at once, and the mailboxes
+  // (a heavier update) follow once it has, as a low-priority render. Undo
+  // brings it back, folding open.
+  const [leaving, setLeaving] = useState<ReadonlySet<string>>(() => new Set());
+  const [returning, setReturning] = useState<ReadonlySet<string>>(() => new Set());
+  // Hidden for real (the fold finished and the mailboxes were told). The name
+  // being viewed stays in the model while hidden, so the model can't tell.
+  // Refs: Undo runs from a toast made at hide time, and must see them now.
+  const committed = useRef(new Set<string>());
+  const itemIdsNow = useRef('');
+  const [undo, setUndo] = useState<UndoToast | null>(null);
+  const undoTarget = useRef<{ id: string; name: string } | null>(null);
+  const itemIds = useMemo(() => items.map((item) => item.id).join('\n'), [items]);
+  useEffect(() => {
+    itemIdsNow.current = itemIds;
+  }, [itemIds]);
+  // Forget names that have left the model (hidden for good). A hidden name
+  // still listed once it is no longer the one being viewed isn't hidden any
+  // more (shown again in Settings or another tab): it comes back.
+  useEffect(() => {
+    const present = new Set(itemIds.split('\n'));
+    setLeaving((previous) => {
+      const next = new Set(
+        [...previous].filter((id) => {
+          // Gone from the model: hidden. (Undo may still need `committed`.)
+          if (!present.has(id)) return false;
+          if (committed.current.has(id) && id !== activeItemId) {
+            committed.current.delete(id);
+            return false;
+          }
+          return true;
+        })
+      );
+      return next.size === previous.size ? previous : next;
+    });
+  }, [itemIds, activeItemId]);
+  const without = (set: ReadonlySet<string>, id: string) => {
+    if (!set.has(id)) return set;
+    const next = new Set(set);
+    next.delete(id);
+    return next;
+  };
+  // The row to focus once a name has gone: the next name, else the previous, else Inbox.
+  const neighbourOf = (id: string): (() => HTMLElement | null) => {
+    const rows = Array.from(document.querySelectorAll<HTMLElement>(`[data-qapp-lib-sidebar-item^="${INBOX_INSTANCE_PREFIX}"]`));
+    const at = rows.findIndex((row) => row.getAttribute('data-qapp-lib-sidebar-item') === id);
+    const next = (at >= 0 && (rows[at + 1] || rows[at - 1])) || null;
+    const nextId = next?.getAttribute('data-qapp-lib-sidebar-item') || 'inbox';
+    return () => document.querySelector<HTMLElement>(`[data-qapp-lib-sidebar-item="${CSS.escape(nextId)}"]`);
+  };
+  const undoHide = () => {
+    const target = undoTarget.current;
+    if (!target) return;
+    undoTarget.current = null;
+    const { id, name } = target;
+    const wasCommitted = committed.current.delete(id);
+    setLeaving((previous) => without(previous, id));
+    // Still folding away: it folds open again, nothing was hidden yet.
+    if (!wasCommitted) return;
+    if (!itemIdsNow.current.split('\n').includes(id)) setReturning((previous) => new Set(previous).add(id));
+    startTransition(() => onShowInboxName?.(name));
+  };
+  const hideName = (child: LeftSidebarItem) => {
+    setLeaving((previous) => new Set(previous).add(child.id));
+    undoTarget.current = { id: child.id, name: child.label };
+    setUndo((previous) => ({
+      key: (previous?.key ?? 0) + 1,
+      message: (
+        <span>
+          <NameText name={child.label} /> hidden from the list
+        </span>
+      ),
+      onUndo: onShowInboxName ? undoHide : undefined,
+      returnFocus: neighbourOf(child.id),
+    }));
+  };
+  const commitHide = (child: LeftSidebarItem) => {
+    committed.current.add(child.id);
+    startTransition(() => onHideInboxName?.(child.label));
+  };
   const { compose, aliasCompose, sections, publishState } = useMemo(() => groupRailItems(items), [items]);
   const nameCount = useMemo(
     () => items.filter((i) => i.id.startsWith(INBOX_INSTANCE_PREFIX)).length,
@@ -281,15 +419,35 @@ export function Rail({
   };
 
   const renderChild = (child: LeftSidebarItem) => {
-    if (child.hidden) return null;
     if (filter && !child.id.startsWith(THREAD_GROUP_PREFIX) && !child.label.toLowerCase().includes(filter)) return null;
     const active = child.id === activeItemId;
+    const hasMenu = Boolean(onHideInboxName) && child.id.startsWith(INBOX_INSTANCE_PREFIX);
+    const isLeaving = leaving.has(child.id);
+    // Each name folds in and out on its own: hidden (Threads folded), hidden
+    // from the list, or back with Undo. A folded one is out of the tab order.
     return (
-      <Row
+      <Collapse
         key={child.id}
+        in={!child.hidden && !isLeaving}
+        appear={returning.has(child.id)}
+        timeout={foldTimeout}
+        // Folded rows unmount: no avatars load for a folded Threads list.
+        unmountOnExit
+        onExited={isLeaving ? () => commitHide(child) : undefined}
+        onEntered={() =>
+          setReturning((previous) => {
+            if (!previous.has(child.id)) return previous;
+            const next = new Set(previous);
+            next.delete(child.id);
+            return next;
+          })
+        }
+      >
+      <Row
         $child
         $active={active}
         disabled={child.disabled}
+        {...(hasMenu ? nameMenu.triggerFor(child) : {})}
         onClick={() => select(child.id)}
         data-qapp-lib-sidebar-item={child.id}
         aria-current={active ? 'page' : undefined}
@@ -306,6 +464,7 @@ export function Rail({
         </Label>
         {renderBadge(child.badgeText)}
       </Row>
+      </Collapse>
     );
   };
 
@@ -383,27 +542,67 @@ export function Rail({
           const icon = SECTION_ICONS[item.id as SectionId] ?? null;
           // The Threads row's "+"/"-" only means expanded; it is drawn as a chevron, never as text.
           const sectionItem = isThreads ? { ...item, label: 'Threads', badgeText: undefined } : item;
+          // Inbox, Aliases and Sent fold their names behind a chevron of their
+          // own, so the row itself still opens the mailbox. A name filter shows all.
+          const foldable = COLLAPSIBLE.includes(item.id) && children.length > 0;
+          const folded = foldable && collapsed.has(item.id) && !filter;
+          const row = (
+            <Row
+              $active={active}
+              disabled={item.disabled}
+              onClick={() => select(item.id)}
+              data-qapp-lib-sidebar-item={item.id}
+              aria-current={active ? 'page' : undefined}
+              aria-expanded={isThreads ? expanded : undefined}
+              aria-label={rowAriaLabel(sectionItem)}
+            >
+              {icon}
+              <Label>{sectionItem.label}</Label>
+              {renderBadge(sectionItem.badgeText)}
+              {isThreads && children.length > 0 && <FoldChevron open={expanded} />}
+            </Row>
+          );
           return (
             <Box key={item.id} sx={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <Row
-                $active={active}
-                disabled={item.disabled}
-                onClick={() => select(item.id)}
-                data-qapp-lib-sidebar-item={item.id}
-                aria-current={active ? 'page' : undefined}
-                aria-expanded={isThreads ? expanded : undefined}
-                aria-label={rowAriaLabel(sectionItem)}
+              {foldable ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  {row}
+                  {/* A steady name with aria-expanded; while "Find a name" filters, everything shows. */}
+                  <IconButton
+                    onClick={() => toggleCollapsed(item.id)}
+                    disabled={Boolean(filter)}
+                    aria-expanded={!folded}
+                    aria-label={`Names under ${sectionItem.label}`}
+                    sx={{ minWidth: 44, minHeight: 44, borderRadius: 1, color: 'text.secondary', flexShrink: 0 }}
+                  >
+                    <FoldChevron open={!folded} />
+                  </IconButton>
+                </Box>
+              ) : (
+                row
+              )}
+              <Collapse
+                in={!folded}
+                timeout={foldTimeout}
+                unmountOnExit
+                sx={{ '& .MuiCollapse-wrapperInner': { display: 'flex', flexDirection: 'column', gap: '2px' } }}
               >
-                {icon}
-                <Label>{sectionItem.label}</Label>
-                {renderBadge(sectionItem.badgeText)}
-                {isThreads && children.length > 0 && (expanded ? <ExpandMoreIcon /> : <ChevronRightIcon />)}
-              </Row>
-              {children.map(renderChild)}
+                {children.map(renderChild)}
+              </Collapse>
             </Box>
           );
         })}
       </Scroll>
+
+      {nameMenu.renderMenu((child) => ({
+        title: <NameText name={child.label} />,
+        ariaLabel: `Actions for ${spokenName(child.label)}`,
+        actions: [
+          { id: 'open', label: 'Open', onSelect: () => select(child.id) },
+          { id: 'hide', label: 'Hide from the list', onSelect: () => hideName(child) },
+        ],
+      }))}
+      <UndoSnackbar toast={undo} onDone={() => setUndo(null)} />
 
       <Footer>
         {publishState && (
@@ -425,3 +624,6 @@ export function Rail({
     </Root>
   );
 }
+
+/** Re-renders only when its props change (Mail.tsx re-renders often; the rail lists every name). */
+export const Rail = memo(RailView);

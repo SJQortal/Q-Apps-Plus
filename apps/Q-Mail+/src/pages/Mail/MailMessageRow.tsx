@@ -4,7 +4,8 @@
  * - the row body is a real button (tap opens); the checkbox and the delete
  *   button are their own targets next to it, so nothing propagates (UX #5);
  * - unread = a dot plus weight, decided by the read store (Bugs #5);
- * - relative date in the row, the full stamp in its `title`;
+ * - the date as in the reader (weekday, date, time), its detail on hover or,
+ *   on touch screens, on a tap of the date (MailListDate);
  * - the avatar resolves lazily when the row is on screen (avatarCache);
  * - a subject that was never decrypted reads "Locked · open to read", never
  *   the ciphertext (Bugs #18, UX #27);
@@ -27,11 +28,13 @@ import {
   IconButton,
   Tooltip,
   Typography,
+  type Theme,
 } from "@mui/material";
 import { useSelector } from "react-redux";
 import { RootState } from "../../state/store";
 import { AvatarWrapper } from "./MailTable";
-import { formatFullTimestamp, formatRelativeDate } from "../../utils/time";
+import { MailListDate } from "./MailListDate";
+import { spokenMailDate } from "./readerTime";
 import { useSentRecipient } from "../../utils/sentRecipientCache";
 import { selectReadState } from "../../state/features/mailSlice";
 import { isMessageRead } from "../../utils/readState";
@@ -40,23 +43,38 @@ import { useDecryptedSubject } from "../../utils/subjectCache";
 import { primarySoft } from "../../hub-theme";
 import { LIST_CONTAINER } from "../../layout/MailShell";
 import { NameText, spokenName } from "../../components/common/NameText";
+import { useRowMenu } from "./useRowMenu";
+import { lazyNamed } from "../../components/common/lazyNamed";
+import { messageRowActions } from "./rowMenuActions";
+import { isOpenableMessage } from "./messageOpener";
+import { AttachmentIcon } from "../../components/AttachmentPreview/AttachmentIcon";
+import { attachmentDisplayName, attachmentKind } from "../../utils/attachmentMeta";
 
 export const LOCKED_SUBJECT_LABEL = "Locked · open to read";
 /** The list width from which a row lays out as columns (the list pane is the container). */
 export const WIDE_ROW_MIN_WIDTH = 720;
-const WIDE = `@container ${LIST_CONTAINER} (min-width: ${WIDE_ROW_MIN_WIDTH}px)`;
+/** The container query of a wide list, where rows read as one line of columns. */
+export const WIDE_ROW_QUERY = `@container ${LIST_CONTAINER} (min-width: ${WIDE_ROW_MIN_WIDTH}px)`;
+const WIDE = WIDE_ROW_QUERY;
+/** A list with room for an indent and one-line dates in a sender group's rows. */
+export const ROOMY_LIST_QUERY = `@container ${LIST_CONTAINER} (min-width: 480px)`;
+/** A list too narrow for avatars (the 300 px list of a 700 px window): names get their room. */
+export const NARROW_LIST_QUERY = `@container ${LIST_CONTAINER} (max-width: 339.98px)`;
 /** Column order in a wide row; the DOM (and the row's label) keep the two-line order. */
 const wideOrder = (order: number) => ({ [WIDE]: { order } });
+const RowAttachmentsDialog = lazyNamed(() => import("./RowAttachmentsDialog"), "RowAttachmentsDialog");
+
 export const NO_SUBJECT_LABEL = "(no subject)";
 
 export interface MailMessageRowProps {
   messageData: any;
+  /** Opens the message; may resolve with it once decrypted (the menu's Reply uses that). */
   openMessage: (
     user: string,
     id: string,
     content: any,
     alias?: string
-  ) => void | Promise<void>;
+  ) => unknown;
   isOpen?: boolean;
   isFromSent?: boolean;
   onDeleteMessage?: (message: any) => void | boolean | Promise<void | boolean>;
@@ -72,6 +90,17 @@ export interface MailMessageRowProps {
   highlightTerms?: string[];
   /** "li" when the row sits directly inside a list (ul); the default "div" expects a wrapping li. */
   component?: "div" | "li";
+  /**
+   * The row's menu (right click, long press). Reply, Reply all and Forward
+   * open the message first when it isn't decrypted yet; the others act on
+   * this message alone, as the list's bulk bar does on a selection.
+   */
+  onReply?: (message: any, options?: { replyAll?: boolean }) => void;
+  onForward?: (message: any) => void;
+  onMarkAsRead?: (messages: any[]) => unknown;
+  onMarkAsUnread?: (messages: any[]) => unknown;
+  onArchive?: (messages: any[]) => unknown;
+  onUnarchive?: (messages: any[]) => unknown;
 }
 
 /** Splits `text` into plain and highlighted runs for the given terms. */
@@ -133,6 +162,82 @@ export function Highlight({ text, terms }: { text: string; terms?: string[] }) {
   );
 }
 
+/** "Screenshot 2026-10…png": a short name that keeps the extension. */
+export function shortFileName(name: string, max = 18): string {
+  if (name.length <= max) return name;
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 && name.length - dot <= 6 ? name.slice(dot) : "";
+  return `${name.slice(0, Math.max(1, max - ext.length - 1))}…${ext}`;
+}
+
+const ATTACHMENT_CHIPS_SHOWN = 2;
+
+/**
+ * The attachments' names beside the subject (where the list has room), so
+ * you see what's there. A click shows them (the row's attachments dialog)
+ * without opening the message; keyboards use the paperclip button, and the
+ * row's own label reads the names.
+ */
+function AttachmentChips({ names, onOpen }: { names: string[]; onOpen: () => void }) {
+  const shown = names.slice(0, ATTACHMENT_CHIPS_SHOWN);
+  const more = names.length - shown.length;
+  const stop = (event: React.SyntheticEvent) => event.stopPropagation();
+  const chipSx = (theme: Theme) => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 0.5,
+    height: 24,
+    px: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: 170,
+    borderRadius: 999,
+    border: `1px solid ${theme.palette.divider}`,
+    color: theme.palette.text.secondary,
+    fontSize: "0.8125rem",
+    whiteSpace: "nowrap" as const,
+    overflow: "hidden",
+    cursor: "pointer",
+    "&:hover": { backgroundColor: theme.palette.action.hover, color: theme.palette.text.primary },
+  });
+  return (
+    <Box
+      aria-hidden
+      data-attachment-chips=""
+      onMouseDown={stop}
+      onTouchStart={stop}
+      onClick={event => {
+        event.stopPropagation();
+        event.preventDefault();
+        onOpen();
+      }}
+      sx={{
+        display: "none",
+        [ROOMY_LIST_QUERY]: { display: "inline-flex" },
+        alignItems: "center",
+        gap: 0.5,
+        minWidth: 0,
+        flexShrink: 1,
+        ...wideOrder(3),
+      }}
+    >
+      {shown.map((name, index) => (
+        <Box key={`${name}-${index}`} component="span" title={name} sx={chipSx}>
+          <AttachmentIcon kind={attachmentKind({ originalFilename: name })} sx={{ fontSize: 14, flexShrink: 0 }} />
+          <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+            {shortFileName(name)}
+          </Box>
+        </Box>
+      ))}
+      {more > 0 && (
+        <Box component="span" sx={[chipSx, { flexShrink: 0 }]}>
+          +{more}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 export const MailMessageRow = ({
   messageData,
   openMessage,
@@ -146,6 +251,12 @@ export const MailMessageRow = ({
   context,
   highlightTerms,
   component = "div",
+  onReply,
+  onForward,
+  onMarkAsRead,
+  onMarkAsUnread,
+  onArchive,
+  onUnarchive,
 }: MailMessageRowProps) => {
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const identifier: string = String(messageData?.id || messageData?.identifier || "");
@@ -181,6 +292,18 @@ export const MailMessageRow = ({
   }
   const isLocked = subject === null;
 
+  // The attachments' names: from the decrypted message, else from the
+  // subject cache (encrypted like the subject, decrypted once on screen).
+  const savedNames = useDecryptedSubject(
+    isDecrypted ? undefined : subjectInHash?.attachmentNames,
+    inView && !isDecrypted && Boolean(subjectInHash?.attachmentNames)
+  );
+  const attachmentNames: string[] = isDecrypted
+    ? (Array.isArray(data?.attachments) ? data.attachments : []).map((item: any) => attachmentDisplayName(item)).filter(Boolean)
+    : savedNames
+      ? savedNames.split("\n").filter(Boolean)
+      : [];
+
   // Sent rows: the recipient from the decrypted copy when we have it, else
   // one cached lookup per (name prefix, address suffix) group (I4).
   const decryptedRecipient =
@@ -197,18 +320,30 @@ export const MailMessageRow = ({
   const isAliasRecipient = isFromSent && sentRecipient.isAlias;
 
   const createdAt = messageData?.createdAt;
-  const relativeDate = useMemo(() => formatRelativeDate(createdAt), [createdAt]);
-  const fullDate = useMemo(() => formatFullTimestamp(createdAt), [createdAt]);
+  const spokenDate = useMemo(() => spokenMailDate(createdAt), [createdAt]);
 
-  const open = useCallback(() => {
-    if (!identifier) return;
-    void openMessage(
+  const openRow = useCallback((): unknown => {
+    if (!identifier) return null;
+    return openMessage(
       messageData?.user,
       identifier,
       messageData,
       isFromSent ? alias || name : username
     );
   }, [alias, identifier, isFromSent, messageData, name, openMessage, username]);
+  const open = useCallback(() => {
+    void openRow();
+  }, [openRow]);
+
+  const rowMenu = useRowMenu();
+  // Reply and Forward need the decrypted message: open it, then act on it.
+  const withOpened = (act: (opened: any) => void) => () => {
+    void Promise.resolve(openRow()).then(opened => {
+      if (isOpenableMessage(opened)) act(opened);
+    });
+  };
+  const onlyThis = (handler?: (messages: any[]) => unknown) =>
+    handler ? () => void handler([messageData]) : undefined;
 
   const handleDeleteClick = useCallback(
     async (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -225,8 +360,10 @@ export const MailMessageRow = ({
     : subject || NO_SUBJECT_LABEL;
   const nameLabel = isFromSent ? `To: ${name || "…"}` : name || "Unknown sender";
   const spokenLabel = isFromSent ? `To: ${name ? spokenName(name) : "…"}` : name ? spokenName(name) : "Unknown sender";
-  const ariaLabel = `${isUnread ? "Unread. " : ""}${spokenLabel}, ${subjectLabel}, ${fullDate}`;
+  const spokenAttachments = attachmentNames.length ? `, attachments: ${attachmentNames.join(", ")}` : "";
+  const ariaLabel = `${isUnread ? "Unread. " : ""}${spokenLabel}, ${subjectLabel}${spokenAttachments}${spokenDate ? `, ${spokenDate}` : ""}`;
 
+  // A message with attachments has a paperclip button at the row's end instead.
   const statusIcon = isLocked ? (
     <LockOutlinedIcon
       fontSize="inherit"
@@ -234,38 +371,29 @@ export const MailMessageRow = ({
       role="img"
       sx={{ color: "text.secondary", fontSize: 16, flexShrink: 0, ...(compact ? {} : wideOrder(2)) }}
     />
-  ) : hasAttachments ? (
-    <AttachFileOutlinedIcon
-      fontSize="inherit"
-      aria-label="Has attachments"
-      role="img"
-      sx={{ color: "text.secondary", fontSize: 16, flexShrink: 0, ...(compact ? {} : wideOrder(2)) }}
-    />
   ) : null;
 
-  const dateNode = (
-    <Typography
-      component="time"
-      title={fullDate}
-      sx={{
-        flexShrink: 0,
-        fontSize: "0.875rem",
-        lineHeight: 1.3,
-        fontWeight: isUnread ? 600 : 400,
-        color: isUnread ? "primary.main" : "text.secondary",
-        whiteSpace: "nowrap",
-        ...(compact ? {} : wideOrder(5)),
-      }}
-    >
-      {relativeDate}
-    </Typography>
+  // The attachments without opening the message (its own chunk, loaded on first use).
+  const [attachmentsDialog, setAttachmentsDialog] = useState<"closed" | "open" | "closing">("closed");
+  const showAttachments = useCallback(() => setAttachmentsDialog("open"), []);
+  const canShowAttachments = Boolean(identifier) && typeof messageData?.user === "string" && Boolean(messageData.user);
+
+  // Beside two lines the day sits over the time, so name and subject keep
+  // their room on a phone; one line (compact, or a wide row) keeps it inline.
+  const dateNode = compact ? (
+    // In a narrow list the date stacks here too, or the subject keeps three letters.
+    <MailListDate timestamp={createdAt} emphasis={isUnread} stacked inlineFrom={ROOMY_LIST_QUERY} sx={{ ml: "auto" }} />
+  ) : (
+    <MailListDate timestamp={createdAt} emphasis={isUnread} stacked inlineFrom={WIDE} sx={{ [WIDE]: { order: 5, ml: "auto" } }} />
   );
 
   return (
+    <>
     <Box
       ref={setRowNode}
       component={component}
       data-message-row={identifier}
+      {...rowMenu.triggerFor(undefined)}
       sx={theme => ({
         display: "flex",
         alignItems: "center",
@@ -274,7 +402,9 @@ export const MailMessageRow = ({
         gap: 0.5,
         listStyle: "none",
         borderBottom: `1px solid ${theme.palette.divider}`,
-        backgroundColor: isOpen ? primarySoft(theme) : "transparent",
+        backgroundColor: isOpen ? primarySoft(theme) : rowMenu.isOpen ? theme.palette.action.selected : "transparent",
+        // A long press opens the row's menu, not iOS's own callout.
+        WebkitTouchCallout: "none",
       })}
     >
       {onToggleSelected && (
@@ -311,7 +441,7 @@ export const MailMessageRow = ({
         })}
       >
         {!compact && (
-          <Box sx={{ flexShrink: 0, display: "flex" }}>
+          <Box sx={{ flexShrink: 0, display: "flex", [NARROW_LIST_QUERY]: { display: "none" } }}>
             <AvatarWrapper
               isAlias={isAliasRecipient}
               height="40px"
@@ -325,84 +455,103 @@ export const MailMessageRow = ({
             flex: 1,
             minWidth: 0,
             display: "flex",
-            flexDirection: "column",
-            gap: 0.25,
+            alignItems: "center",
+            gap: 1,
             ...(compact
               ? {}
               : {
                   [WIDE]: {
-                    flexDirection: "row",
-                    alignItems: "center",
                     gap: theme.spacing(1.5),
-                    // Both lines' items become this row's columns.
-                    "& > [data-row-line]": { display: "contents" },
+                    // Both lines' items and the date become this row's columns.
+                    "& > [data-row-text], & [data-row-line]": { display: "contents" },
                   },
                 }),
           })}
         >
-          <Box data-row-line sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-            {isUnread && <UnreadDot />}
-            {compact && statusIcon}
-            <Typography
-              noWrap
-              sx={{
-                flex: 1,
-                minWidth: 0,
-                fontSize: "1rem",
-                lineHeight: 1.3,
-                fontWeight: isUnread ? 700 : 500,
-                color: isLocked && compact ? "text.secondary" : "text.primary",
-                fontStyle: compact && (isLocked || !subject) ? "italic" : "normal",
-                ...(compact
-                  ? {}
-                  : { [WIDE]: { order: 1, flex: "0 0 clamp(160px, 24%, 260px)" } }),
-              }}
-            >
-              {compact ? (
-                <Highlight text={subjectLabel} terms={highlightTerms} />
-              ) : name ? (
-                <>
-                  {isFromSent && <Highlight text="To: " terms={highlightTerms} />}
-                  <NameText name={name}>
-                    <Highlight text={name} terms={highlightTerms} />
-                  </NameText>
-                </>
-              ) : (
-                <Highlight text={nameLabel} terms={highlightTerms} />
-              )}
-            </Typography>
-            {dateNode}
-          </Box>
-          {!compact && (
-            <Box data-row-line sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
-              {statusIcon}
+          <Box data-row-text sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0.25 }}>
+            <Box data-row-line sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+              {isUnread && <UnreadDot />}
+              {compact && statusIcon}
               <Typography
                 noWrap
                 sx={{
-                  flex: 1,
+                  // A compact row's subject leaves room for its attachments right after it.
+                  flex: compact && attachmentNames.length ? "0 1 auto" : 1,
                   minWidth: 0,
-                  fontSize: "0.875rem",
-                  lineHeight: 1.35,
-                  fontWeight: isUnread ? 600 : 400,
-                  color: isUnread && !isLocked ? "text.primary" : "text.secondary",
-                  fontStyle: isLocked || !subject ? "italic" : "normal",
-                  ...wideOrder(3),
+                  fontSize: "1rem",
+                  lineHeight: 1.3,
+                  fontWeight: isUnread ? 700 : 500,
+                  // Unread reads blue (the theme's primary), read in the text colour.
+                  color: isUnread ? "primary.main" : isLocked && compact ? "text.secondary" : "text.primary",
+                  fontStyle: compact && (isLocked || !subject) ? "italic" : "normal",
+                  ...(compact
+                    ? {}
+                    : // A wide row: the subject follows the name, not a fixed column away.
+                      { [WIDE]: { order: 1, flex: "0 1 auto", maxWidth: "clamp(160px, 24%, 260px)" } }),
                 }}
               >
-                <Highlight text={subjectLabel} terms={highlightTerms} />
+                {compact ? (
+                  <Highlight text={subjectLabel} terms={highlightTerms} />
+                ) : name ? (
+                  <>
+                    {isFromSent && <Highlight text="To: " terms={highlightTerms} />}
+                    <NameText name={name}>
+                      <Highlight text={name} terms={highlightTerms} />
+                    </NameText>
+                  </>
+                ) : (
+                  <Highlight text={nameLabel} terms={highlightTerms} />
+                )}
               </Typography>
-              {context && (
-                <Chip
-                  label={context}
-                  size="small"
-                  variant="outlined"
-                  sx={{ height: 24, fontSize: "0.875rem", flexShrink: 0, ...wideOrder(4) }}
-                />
+              {compact && attachmentNames.length > 0 && (
+                <AttachmentChips names={attachmentNames} onOpen={showAttachments} />
               )}
+              {compact && dateNode}
             </Box>
-          )}
+            {!compact && (
+              <Box data-row-line sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+                {statusIcon}
+                <Typography
+                  noWrap
+                  sx={{
+                    flex: attachmentNames.length ? "0 1 auto" : 1,
+                    minWidth: 0,
+                    fontSize: "0.875rem",
+                    lineHeight: 1.35,
+                    fontWeight: isUnread ? 600 : 400,
+                    color: isUnread && !isLocked ? "text.primary" : "text.secondary",
+                    fontStyle: isLocked || !subject ? "italic" : "normal",
+                    ...wideOrder(3),
+                  }}
+                >
+                  <Highlight text={subjectLabel} terms={highlightTerms} />
+                </Typography>
+                {attachmentNames.length > 0 && <AttachmentChips names={attachmentNames} onOpen={showAttachments} />}
+                {context && (
+                  <Chip
+                    label={context}
+                    size="small"
+                    variant="outlined"
+                    sx={{ height: 24, fontSize: "0.875rem", flexShrink: 0, ...wideOrder(4) }}
+                  />
+                )}
+              </Box>
+            )}
+          </Box>
+          {!compact && dateNode}
         </Box>
       </ButtonBase>
+      {hasAttachments && canShowAttachments && (
+        <Tooltip title="Attachments">
+          <IconButton
+            onClick={showAttachments}
+            aria-label={`Attachments: ${subjectLabel}`}
+            sx={{ minWidth: 44, minHeight: 44, color: "text.secondary", flexShrink: 0 }}
+          >
+            <AttachFileOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      )}
       {isFromSent && onDeleteMessage && (
         <Tooltip title="Delete sent message">
           <span>
@@ -422,5 +571,44 @@ export const MailMessageRow = ({
         </Tooltip>
       )}
     </Box>
+    {rowMenu.renderMenu(() => ({
+      title: name ? (
+        <>
+          {isFromSent && "To: "}
+          <NameText name={name} />
+        </>
+      ) : (
+        nameLabel
+      ),
+      ariaLabel: `Actions for ${spokenLabel}: ${subjectLabel}`,
+      actions: messageRowActions({
+        isFromSent,
+        isUnread,
+        selected,
+        open,
+        reply: onReply ? replyAll => withOpened(opened => onReply(opened, { replyAll }))() : undefined,
+        forward: onForward ? withOpened(onForward) : undefined,
+        attachments: canShowAttachments && hasAttachments !== false ? showAttachments : undefined,
+        markRead: onlyThis(onMarkAsRead),
+        markUnread: onlyThis(onMarkAsUnread),
+        archive: onlyThis(onArchive),
+        unarchive: onlyThis(onUnarchive),
+        toggleSelected: onToggleSelected,
+        remove: isFromSent && onDeleteMessage && !isDeleting ? () => void onDeleteMessage(messageData) : undefined,
+      }),
+    }))}
+    {attachmentsDialog !== "closed" && (
+      <React.Suspense fallback={null}>
+        <RowAttachmentsDialog
+          open={attachmentsDialog === "open"}
+          onClose={() => setAttachmentsDialog("closing")}
+          publisher={messageData.user}
+          identifier={identifier}
+          subject={subjectLabel}
+          onOpenMessage={open}
+        />
+      </React.Suspense>
+    )}
+    </>
   );
 };

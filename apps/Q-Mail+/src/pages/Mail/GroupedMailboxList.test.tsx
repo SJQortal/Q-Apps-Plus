@@ -12,6 +12,7 @@ import blogReducer from '../../state/features/blogSlice'
 import { mockQortalAction, qortalCalls } from '../../test/setup'
 import { GroupedMailboxList } from './GroupedMailboxList'
 import { LOCKED_SUBJECT_LABEL } from './MailMessageRow'
+import { readerMailDate } from './readerTime'
 import { resetSubjectCache } from '../../utils/subjectCache'
 import { addToHashMapSubject } from '../../state/features/mailSlice'
 
@@ -194,9 +195,10 @@ describe('GroupedMailboxList states and rows', () => {
     await screen.findByText('(no subject)')
     expect(screen.queryByText('Q2lwaGVydGV4dA==')).toBeNull()
     expect(qortalCalls('DECRYPT_DATA')).toHaveLength(1)
-    // The exact stamp is on the date's title, the row shows a short one.
-    const time = screen.getByTitle(/^1970-/)
-    expect(time.textContent).not.toMatch(/^\d{4}-/)
+    // The row shows the date as the reader does; the detail is on hover or tap (MailListDate).
+    const time = document.querySelector('[data-message-row="f1"] time') as HTMLElement
+    expect(time.textContent).toBe(readerMailDate(1_000))
+    expect(time.getAttribute('datetime')).toBe(new Date(1_000).toISOString())
   })
 
   it('decrypts a saved subject only once its row is on screen', async () => {

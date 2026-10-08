@@ -34,9 +34,12 @@ import {
   readAutoApplyQdnState,
   writeAutoApplyQdnState,
 } from '../../utils/qdnStatePreference';
+import { useShowGroupThreads, writeShowGroupThreads } from '../../utils/threadsPreference';
 import packageJson from '../../../package.json';
 import { ChangelogDialog } from './ChangelogDialog';
+import { PUBLISH_STATE_TITLE, PublishStateMessage } from '../../components/common/PublishStateMessage';
 import { FooterSettings } from './FooterSettings';
+import { InboxNamesSettings } from './InboxNamesSettings';
 import { SETTINGS_PATH } from './settingsPath';
 
 export { SETTINGS_PATH };
@@ -142,20 +145,15 @@ export function SettingsPage() {
   const [changelogOpen, setChangelogOpen] = useState(false);
   const identityKey = user?.address || user?.name || '';
   const [autoApplyQdnState, setAutoApplyQdnState] = useState(() => readAutoApplyQdnState(identityKey));
+  const showGroupThreads = useShowGroupThreads(user?.address);
 
   useEffect(() => {
     setAutoApplyQdnState(readAutoApplyQdnState(identityKey));
   }, [identityKey]);
 
   const { Modal: PublishStateModal, showModal: showPublishStateModal } = useConfirmationModal({
-    title: 'Publish mail state?',
-    message: (
-      <>
-        This publishes your read state, subjects, archived list, theme, text size, watched aliases and footer as an
-        encrypted document (qmail_state_v1) under {user?.name ? <NameText name={user.name} /> : 'your name'}, so
-        other devices can load it. It costs one QDN publish.
-      </>
-    ),
+    title: PUBLISH_STATE_TITLE,
+    message: <PublishStateMessage name={user?.name} />,
     confirmLabel: 'Publish',
   });
   const [isPublishingFromSettings, setIsPublishingFromSettings] = useState(false);
@@ -287,6 +285,28 @@ export function SettingsPage() {
               />
             }
           />
+          <FormControlLabel
+            sx={{ m: 0, justifyContent: 'space-between', minHeight: 44, gap: 2 }}
+            labelPlacement="start"
+            disabled={!user?.address}
+            label={
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 500 }}>Show group threads</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Threads in your groups, in the mailboxes and the bottom bar. Off, nothing about threads is shown or
+                  loaded; your thread drafts are kept for when you turn it on again.
+                </Typography>
+              </Box>
+            }
+            control={
+              <Switch
+                checked={showGroupThreads}
+                onChange={(event) => writeShowGroupThreads(user?.address, event.target.checked)}
+                slotProps={{ input: { 'aria-label': 'Show group threads' } }}
+              />
+            }
+          />
+          <InboxNamesSettings address={user?.address || ''} names={names.map((entry) => entry.name)} />
           <Row label="Blocked names" hint="Mail from blocked names is hidden.">
             <Button
               variant="outlined"

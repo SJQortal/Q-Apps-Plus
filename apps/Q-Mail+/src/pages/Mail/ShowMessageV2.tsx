@@ -7,6 +7,14 @@
  * Layout follows the pane's own width (ResizeObserver), not a viewport
  * query, so a 700 px Hub pane and a phone both get the compact form.
  *
+ * Earlier messages come from generalData.threadV2 through
+ * useEarlierMessages: embedded copies show at once, reference-only entries
+ * (Q-Mail+ 1.0.1 replies) are fetched from QDN when "Show earlier" opens,
+ * the newest EARLIER_PAGE_SIZE first, with "Show older" for the rest.
+ *
+ * The header names the recipient ("to …") and, for mail written with Cc
+ * names (Q-Mail+'s additive `cc`), a "cc …" line.
+ *
  * Props stay compatible with Mail.tsx (message, setReplyTo, setForwardInfo,
  * alias, onClose, setIsOpen); onReplyAll, onForward, onArchive and
  * onMarkUnread are optional extras. Archive and Mark unread are labelled
@@ -14,7 +22,7 @@
  * compact one (phones); they carry aria-keyshortcuts for the e / u keys.
  */
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Box, Button, IconButton, Tooltip, Typography, useTheme } from "@mui/material";
+import { Box, Button, Collapse, IconButton, Tooltip, Typography, useTheme } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ReplyOutlinedIcon from "@mui/icons-material/ReplyOutlined";
 import ReplyAllOutlinedIcon from "@mui/icons-material/ReplyAllOutlined";
@@ -31,13 +39,27 @@ import { RootState } from "../../state/store";
 import { setNotification } from "../../state/features/notificationsSlice";
 import ReadOnlySlate from "../../components/editor/ReadOnlySlate";
 import { AvatarWrapper } from "./MailTable";
-import { NameText } from "../../components/common/NameText";
+import { NameText, spokenName, srOnly } from "../../components/common/NameText";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
-import { ShowMessageV2Replies } from "./ShowMessageV2Replies";
+import { EarlierMessagePlaceholder, EarlierMessageUnreadable, ShowMessageV2Replies } from "./ShowMessageV2Replies";
+import { ErrorBoundary } from "../../components/common/ErrorBoundary";
+import { useEarlierMessages } from "./useEarlierMessages";
+import { useFoldTimeout } from "../../hooks/useReducedMotion";
+import { EARLIER_PAGE_SIZE } from "./earlierMessages";
 import { updateMessageDetails } from "../../utils/helpers";
 import { AttachmentList, usableAttachments } from "../../components/AttachmentPreview/AttachmentList";
 import { useDownloadAll } from "../../components/AttachmentPreview/useDownloadAll";
 import { MessageDate } from "./MessageDate";
+
+/** "Show 2 older messages", or "Show 5 older messages (7 left)" when more are hidden than a page. */
+export function olderLabel(hidden: number): string {
+  const next = Math.min(EARLIER_PAGE_SIZE, hidden);
+  const label = `Show ${next} older message${next === 1 ? "" : "s"}`;
+  return hidden > next ? `${label} (${hidden} left)` : label;
+}
+
+/** A Cc list longer than this (by more than one) shows these names and "and N more". */
+export const CC_NAMES_SHOWN = 3;
 
 /** Below this pane width the reader stacks (subject under the header, wrapped actions). */
 export const READER_COMPACT_WIDTH = 600;
@@ -98,21 +120,47 @@ export const ShowMessageV2 = ({
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const [rootRef, width] = useElementWidth<HTMLDivElement>();
   const compact = width > 0 && width < READER_COMPACT_WIDTH;
-  const [showEarlier, setShowEarlier] = useState(false);
+  // "Show earlier" belongs to the message it was opened on. The reader is
+  // reused for the next message, so the section is closed for it in that same
+  // render, before the loader could start on its history. Each message opens
+  // with it closed, also on the way back to one that had it open.
+  const messageKey = `${message?.user || ""}|${message?.id || ""}`;
+  const [earlierOpenFor, setEarlierOpenFor] = useState<string | null>(null);
+  const [ccOpenFor, setCcOpenFor] = useState<string | null>(null);
+  const [shownKey, setShownKey] = useState(messageKey);
+  if (shownKey !== messageKey) {
+    setShownKey(messageKey);
+    setEarlierOpenFor(null);
+    setCcOpenFor(null);
+  }
+  const showEarlier = earlierOpenFor === messageKey;
 
   const attachments = useMemo(() => usableAttachments(message?.attachments), [message?.attachments]);
   const downloadAll = useDownloadAll(attachments);
 
-  const earlier = useMemo(() => {
-    const thread = Array.isArray(message?.generalData?.threadV2) ? message.generalData.threadV2 : [];
-    return thread
-      .filter((entry: any) => entry?.data && !entry.data.markedAsReadLocally && (entry.data.user || entry.data.subject || entry.data.textContentV2))
-      .sort((a: any, b: any) => (Number(a.data?.createdAt) || 0) - (Number(b.data?.createdAt) || 0));
-  }, [message?.generalData?.threadV2]);
+  const earlier = useEarlierMessages(message, showEarlier);
+  const foldTimeout = useFoldTimeout();
 
+  // Focus follows the earlier messages: a pressed Retry leaves focus on the
+  // message's place in the list (which stays while it loads), and "Show
+  // older" moves it to the first message it brought in, just under the ones
+  // shown before, rather than leaving it on the button (or on the page, once
+  // the button goes away).
+  const earlierItemEls = useRef(new Map<string, HTMLElement>());
+  // How many were shown when "Show older" was pressed, until the next render.
+  const shownBeforeOlder = useRef<number | null>(null);
   useEffect(() => {
-    setShowEarlier(false);
-  }, [message?.id]);
+    const before = shownBeforeOlder.current;
+    if (before === null || earlier.items.length <= before) return;
+    shownBeforeOlder.current = null;
+    // Newest first on screen: the first new one is at display place `before`.
+    const firstNew = earlier.items[earlier.items.length - 1 - before];
+    if (firstNew) earlierItemEls.current.get(firstNew.entry.key)?.focus();
+  });
+  const showOlderEarlier = () => {
+    shownBeforeOlder.current = earlier.items.length;
+    earlier.showOlder();
+  };
 
   const handleClose = () => {
     if (typeof onClose === "function") {
@@ -150,8 +198,30 @@ export const ShowMessageV2 = ({
     }
   };
 
-  const recipient = message?.recipient || message?.to;
-  const subject = message?.subject || "(no subject)";
+  // The To of the send. Every copy of a Q-Mail+ send carries it in `to`
+  // (§17), while `recipient` names the copy's own target, a Cc or Bcc name
+  // on those copies; mail from the original app has only `recipient`.
+  // Strings only: a decrypted body can hold anything, and an object here
+  // would break the whole reader.
+  const recipient: string | undefined =
+    Array.isArray(message?.to) && typeof message.to[0] === "string" && message.to[0].trim()
+      ? message.to[0]
+      : typeof message?.recipient === "string" && message.recipient.trim()
+        ? message.recipient
+        : typeof message?.to === "string" && message.to.trim()
+          ? message.to
+          : undefined;
+  // Cc names Q-Mail+ writes into every copy (data contract §17); Bcc never.
+  const ccNames: string[] = Array.isArray(message?.cc)
+    ? Array.from(new Set(message.cc.filter((name: unknown): name is string => typeof name === "string" && name.trim().length > 0)))
+    : [];
+  // A long Cc list shows its first names and "and N more", which shows the
+  // rest. The line wraps, so every name is readable on a phone (no hover).
+  const ccShown = ccOpenFor === messageKey || ccNames.length <= CC_NAMES_SHOWN + 1 ? ccNames : ccNames.slice(0, CC_NAMES_SHOWN);
+  const ccMore = ccNames.length - ccShown.length;
+  // "and N more" goes away when pressed: focus moves to the whole line.
+  const ccLineRef = useRef<HTMLParagraphElement | null>(null);
+  const subject = typeof message?.subject === "string" && message.subject ? message.subject : "(no subject)";
   const cleanHTML = message?.htmlContent ? DOMPurify.sanitize(message.htmlContent) : "";
 
   const actionSx = { minHeight: 44, textTransform: "none" as const, flexShrink: 0 };
@@ -211,7 +281,63 @@ export const ShowMessageV2 = ({
             </Typography>
             {recipient && (
               <Typography variant="body2" color="text.secondary" noWrap>
-                to {typeof recipient === "string" ? <NameText name={recipient} /> : recipient}
+                to <NameText name={recipient} />
+              </Typography>
+            )}
+            {ccNames.length > 0 && (
+              <Typography
+                ref={ccLineRef}
+                tabIndex={-1}
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  overflowWrap: "anywhere",
+                  "&:focus": { outline: "none" },
+                  "&:focus-visible": { outline: `2px solid ${theme.palette.primary.main}`, borderRadius: 1 },
+                }}
+              >
+                cc{" "}
+                {ccShown.map((name, index) => (
+                  <React.Fragment key={name}>
+                    {index > 0 && ", "}
+                    <NameText name={name} />
+                  </React.Fragment>
+                ))}
+                {ccMore > 0 && (
+                  <>
+                    {" "}
+                    <Box
+                      component="button"
+                      type="button"
+                      onClick={() => {
+                        ccLineRef.current?.focus();
+                        setCcOpenFor(messageKey);
+                      }}
+                      sx={{
+                        background: "none",
+                        border: 0,
+                        p: 0,
+                        // A 44 px target that keeps the line's height.
+                        minHeight: 44,
+                        my: "-12px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        verticalAlign: "baseline",
+                        font: "inherit",
+                        color: "primary.main",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        "&:focus-visible": { outline: (theme) => `2px solid ${theme.palette.primary.main}`, borderRadius: 1 },
+                      }}
+                    >
+                      {/* Spoken "and 2 more Cc names": the name keeps the visible words (WCAG 2.5.3). */}
+                      {`and ${ccMore} more `}
+                      <Box component="span" sx={srOnly}>
+                        Cc names
+                      </Box>
+                    </Box>
+                  </>
+                )}
               </Typography>
             )}
             <MessageDate timestamp={message?.createdAt} />
@@ -246,32 +372,74 @@ export const ShowMessageV2 = ({
         </Box>
       </Box>
 
-      {earlier.length > 0 && (
-        <Box component="section" aria-label={message?.user ? `Earlier messages included by ${message.user}` : "Earlier messages included by the sender"} sx={{ width: "100%", mt: 3, px: compact ? 1.5 : 2.5, pb: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+      {earlier.total > 0 && (
+        <Box component="section" aria-label="Earlier messages in this conversation" sx={{ width: "100%", mt: 3, px: compact ? 1.5 : 2.5, pb: 2, display: "flex", flexDirection: "column", gap: 1 }}>
           <Button
-            onClick={() => setShowEarlier((v) => !v)}
+            onClick={() => setEarlierOpenFor(showEarlier ? null : messageKey)}
             aria-expanded={showEarlier}
             startIcon={showEarlier ? <ExpandLessOutlinedIcon /> : <ExpandMoreOutlinedIcon />}
             sx={{ alignSelf: "flex-start", minHeight: 44, textTransform: "none", color: theme.palette.text.secondary }}
           >
-            {showEarlier ? (
-              "Hide earlier"
-            ) : (
-              <>
-                {`Show earlier · ${earlier.length} message${earlier.length === 1 ? "" : "s"} included by `}
-                {message?.user ? <NameText name={message.user} /> : "the sender"}
-              </>
-            )}
+            {showEarlier ? "Hide earlier" : `Show earlier · ${earlier.total} message${earlier.total === 1 ? "" : "s"}`}
           </Button>
-          {showEarlier &&
-            earlier.map((entry: any, index: number) => (
-              <ShowMessageV2Replies
-                key={entry.data?.id || entry.reference?.identifier || index}
-                message={entry.data}
-                quotedBy={message?.user}
-                defaultExpanded={index === earlier.length - 1}
-              />
-            ))}
+          {/* Newest first, right under the message; older ones further down, then "Show older".
+              It folds open and shut; a new message gets a fresh one (key), closed. */}
+          <Collapse
+            key={messageKey}
+            in={showEarlier}
+            timeout={foldTimeout}
+            unmountOnExit
+            sx={{ "& .MuiCollapse-wrapperInner": { display: "flex", flexDirection: "column", gap: 1 } }}
+          >
+          {[...earlier.items].reverse().map(({ entry, load }, index) => {
+              const newest = index === 0;
+              const card = !load ? (
+                <ShowMessageV2Replies message={entry.data} quotedBy={entry.quotedBy || message?.user} defaultExpanded={newest} />
+              ) : load.status === "loaded" ? (
+                <ShowMessageV2Replies message={load.message} verified defaultExpanded={newest} />
+              ) : (
+                <EarlierMessagePlaceholder
+                  name={entry.reference?.name || "Unknown"}
+                  status={load.status}
+                  onRetry={() => {
+                    earlierItemEls.current.get(entry.key)?.focus();
+                    earlier.retry(entry.key);
+                  }}
+                />
+              );
+              return (
+                <Box
+                  key={entry.key}
+                  ref={(el: HTMLElement | null) => {
+                    if (el) earlierItemEls.current.set(entry.key, el);
+                    else earlierItemEls.current.delete(entry.key);
+                  }}
+                  tabIndex={-1}
+                  role="group"
+                  aria-label={`Earlier message from ${spokenName(
+                    entry.reference?.name || (typeof entry.data?.user === "string" ? entry.data.user : "") || "Unknown"
+                  )}`}
+                  data-earlier-item=""
+                  sx={{
+                    borderRadius: 1,
+                    "&:focus": { outline: "none" },
+                    "&:focus-visible": { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
+                  }}
+                >
+                  {/* One earlier message that cannot be drawn says so in its place. */}
+                  <ErrorBoundary fallback={<EarlierMessageUnreadable />}>{card}</ErrorBoundary>
+                </Box>
+              );
+            })}
+          {earlier.hidden > 0 && (
+            <Button
+              onClick={showOlderEarlier}
+              sx={{ alignSelf: "flex-start", minHeight: 44, textTransform: "none" }}
+            >
+              {olderLabel(earlier.hidden)}
+            </Button>
+          )}
+          </Collapse>
         </Box>
       )}
     </Box>

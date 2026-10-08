@@ -11,6 +11,7 @@ import { mockQortalAction } from '../../test/setup'
 import { resetNameCache } from '../../utils/nameCache'
 import { NewMessage } from './NewMessage'
 import { getComposeDraftsStorageKey } from './composeDrafts'
+import { readerMailDate } from './readerTime'
 
 const address = 'QmeAddress'
 const original = {
@@ -28,7 +29,7 @@ const original = {
 const storedDrafts = () => JSON.parse(localStorage.getItem(getComposeDraftsStorageKey(address)) || '{}')
 const wait = (ms: number) => act(() => new Promise(resolve => setTimeout(resolve, ms)))
 
-function renderComposer(props: { replyAll?: boolean; onRequestClose?: () => void } = {}) {
+function renderComposer(props: { replyAll?: boolean; onRequestClose?: () => void; replyTo?: any; ownedNames?: string[] } = {}) {
   const setReplyTo = vi.fn()
   const utils = render(
     <Provider store={store}>
@@ -37,13 +38,13 @@ function renderComposer(props: { replyAll?: boolean; onRequestClose?: () => void
           <NewMessage
             inlineMode
             hideButton
-            replyTo={original}
+            replyTo={props.replyTo ?? original}
             replyAll={props.replyAll}
             setReplyTo={setReplyTo}
             setForwardInfo={vi.fn()}
             forwardInfo={null}
             onRequestClose={props.onRequestClose}
-            ownedNames={['me']}
+            ownedNames={props.ownedNames ?? ['me']}
           />
         </HubThemeProvider>
       </MemoryRouter>
@@ -63,15 +64,33 @@ describe('NewMessage replies and drafts', () => {
     mockQortalAction('SEARCH_NAMES', [])
   })
 
-  it('opens a reply (no render loop) and quotes the original', async () => {
+  it('opens a reply (no render loop): the original shows above the editor, the body starts empty', async () => {
     const { quill } = renderComposer()
-    await waitFor(() => expect(quill().getText()).toContain('alice wrote:'))
-    expect(quill().getText()).toContain('See you at noon')
+    const context = await screen.findByRole('region', { name: 'Original message' })
+    expect(context.textContent).toContain('See you at noon')
+    // the same date as the reader: weekday, date and time
+    expect(screen.getByText(new RegExp(`^${readerMailDate(original.createdAt)} • Lunch$`))).toBeTruthy()
+    expect(screen.getByText(/links to this message instead of copying it/)).toBeTruthy()
+    await wait(50)
+    expect(quill().getText().trim()).toBe('')
+    expect(quill().root.innerHTML).not.toContain('blockquote')
+  })
+
+  it('answers from the own name the mail was sent to, not the active name', async () => {
+    renderComposer({ replyTo: { ...original, recipient: 'work' }, ownedNames: ['me', 'work'] })
+    await screen.findByRole('region', { name: 'Original message' })
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /From/ }).textContent).toContain('work'))
+  })
+
+  it('keeps the active name for mail that went to none of ours', async () => {
+    renderComposer({ replyTo: { ...original, recipient: 'someone-else' }, ownedNames: ['me', 'work'] })
+    await screen.findByRole('region', { name: 'Original message' })
+    expect(screen.getByRole('combobox', { name: /From/ }).textContent).toContain('me')
   })
 
   it('opening Reply saves nothing until the user writes, then saves under the reply key', async () => {
     const { quill } = renderComposer()
-    await waitFor(() => expect(quill().getText()).toContain('alice wrote:'))
+    await screen.findByRole('region', { name: 'Original message' })
     await wait(500)
     expect(storedDrafts()).toEqual({})
 
@@ -88,7 +107,7 @@ describe('NewMessage replies and drafts', () => {
     await waitFor(() => expect(screen.getByText('carl')).toBeTruthy())
     expect(screen.getByText('dana')).toBeTruthy()
     expect(screen.getByText(/Cc names are visible to every recipient/)).toBeTruthy()
-    expect(quill().getText()).toContain('alice wrote:')
+    expect(quill().getText().trim()).toBe('')
     await wait(500)
     expect(storedDrafts()).toEqual({})
 
@@ -112,7 +131,7 @@ describe('NewMessage replies and drafts', () => {
   it('Discard asks once something was written', async () => {
     const onRequestClose = vi.fn()
     const { quill } = renderComposer({ onRequestClose })
-    await waitFor(() => expect(quill().getText()).toContain('alice wrote:'))
+    await screen.findByRole('region', { name: 'Original message' })
     act(() => {
       quill().insertText(0, 'Hi', 'user')
     })

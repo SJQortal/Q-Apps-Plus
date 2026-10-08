@@ -88,6 +88,25 @@ export const hasGroupThreadActivity = async (
   );
 };
 
+/** The publisher of a group's avatar, or null when it has none. Throws when the search fails. */
+const groupAvatarPublisher = async (normalizedGroupId: string): Promise<string | null> => {
+  const params = new URLSearchParams({
+    mode: "ALL",
+    service: "THUMBNAIL",
+    identifier: `qortal_group_avatar_${normalizedGroupId}`,
+    limit: "1",
+    reverse: "true",
+    excludeblocked: "true",
+  });
+  const responseData = await searchResources(params);
+  if (!responseData.length) return null;
+  const publisherName =
+    typeof responseData[0]?.name === "string"
+      ? responseData[0].name.trim()
+      : "";
+  return publisherName || null;
+};
+
 export const fetchGroupAvatarPublisherName = async (
   groupId: string | number
 ): Promise<string | null> => {
@@ -95,51 +114,58 @@ export const fetchGroupAvatarPublisherName = async (
   if (!normalizedGroupId) return null;
 
   try {
-    const params = new URLSearchParams({
-      mode: "ALL",
-      service: "THUMBNAIL",
-      identifier: `qortal_group_avatar_${normalizedGroupId}`,
-      limit: "1",
-      reverse: "true",
-      excludeblocked: "true",
-    });
-    const responseData = await searchResources(params);
-    if (!responseData.length) return null;
-    const publisherName =
-      typeof responseData[0]?.name === "string"
-        ? responseData[0].name.trim()
-        : "";
-    return publisherName || null;
+    return await groupAvatarPublisher(normalizedGroupId);
   } catch {
     return null;
   }
 };
 
-export const fetchGroupAvatarUrl = async (
-  groupId: string | number
-): Promise<string> => {
-  const normalizedGroupId = normalizeId(groupId);
-  if (!normalizedGroupId) return "";
+const groupAvatarUrls = new Map<string, Promise<string | null>>();
 
-  const publisherName = await fetchGroupAvatarPublisherName(normalizedGroupId);
+/** Tests only: forget the group avatar answers of this session. */
+export const resetGroupAvatarCache = (): void => {
+  groupAvatarUrls.clear();
+};
+
+/**
+ * A group's avatar URL ("" when it has none), asked once per group per
+ * session: calls for the same group while one is running share it. The
+ * Threads loop re-ran while a request was out and asked twice (groups 694
+ * and 659 on Simon's account). A lookup that fails answers null (unknown,
+ * not "no avatar") and is not kept, so the next call asks afresh; when to
+ * ask again is up to the caller (useGroupAvatarUrls).
+ */
+export const fetchGroupAvatarUrl = (groupId: string | number): Promise<string | null> => {
+  const normalizedGroupId = normalizeId(groupId);
+  if (!normalizedGroupId) return Promise.resolve("");
+  const known = groupAvatarUrls.get(normalizedGroupId);
+  if (known) return known;
+  const request = askGroupAvatarUrl(normalizedGroupId).catch(() => null);
+  groupAvatarUrls.set(normalizedGroupId, request);
+  // Attached first, so it runs before any caller sees the null.
+  void request.then(url => {
+    if (url === null && groupAvatarUrls.get(normalizedGroupId) === request) groupAvatarUrls.delete(normalizedGroupId);
+  });
+  return request;
+};
+
+/** Throws when Qortal could not answer (fetchGroupAvatarUrl makes that null). */
+const askGroupAvatarUrl = async (normalizedGroupId: string): Promise<string> => {
+  const publisherName = await groupAvatarPublisher(normalizedGroupId);
   if (!publisherName) return "";
 
-  try {
-    const avatarUrl = await qortalRequest({
-      action: "GET_QDN_RESOURCE_URL",
-      name: publisherName,
-      service: "THUMBNAIL",
-      identifier: `qortal_group_avatar_${normalizedGroupId}`,
-    });
-    if (typeof avatarUrl !== "string") return "";
-    const normalizedUrl = avatarUrl.trim();
-    if (!normalizedUrl || normalizedUrl === "Resource does not exist") {
-      return "";
-    }
-    return normalizedUrl;
-  } catch {
+  const avatarUrl = await qortalRequest({
+    action: "GET_QDN_RESOURCE_URL",
+    name: publisherName,
+    service: "THUMBNAIL",
+    identifier: `qortal_group_avatar_${normalizedGroupId}`,
+  });
+  if (typeof avatarUrl !== "string") return "";
+  const normalizedUrl = avatarUrl.trim();
+  if (!normalizedUrl || normalizedUrl === "Resource does not exist") {
     return "";
   }
+  return normalizedUrl;
 };
 
 export const isDeletedSentResourceInSearch = (item: any): boolean => {
@@ -283,6 +309,297 @@ export const hasInboxMailActivityForOwnedName = async (
     if (hasMail) return true;
   }
   return false;
+};
+
+/** `fn` over `items`, at most `limit` at a time; results in input order. */
+export const mapWithConcurrency = async <T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+  /** Checked before each item: true stops taking new ones (the caller was cancelled). */
+  shouldStop?: () => boolean
+): Promise<R[]> => {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      if (shouldStop?.()) return;
+      const index = next;
+      next += 1;
+      results[index] = await fn(items[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
+  return results;
+};
+
+/** Names per merged search: Core takes repeated `name` params; 50 keeps the URL far below its limit. */
+export const NAMES_PER_SEARCH = 50;
+/** Pages a merged probe reads; names it has not settled by then are probed one by one. */
+export const MERGED_PROBE_MAX_PAGES = 10;
+const MERGED_PAGE_SIZE = 200;
+
+const lower = (value: unknown): string => (typeof value === "string" ? value.trim().toLowerCase() : "");
+
+const chunked = <T,>(items: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+};
+
+/**
+ * Pages one search until it runs out, `done()` says enough, or the page cap.
+ * Resolves true when the search was read to the end (or `done`), false when
+ * it stopped at the cap; throws when a page fails.
+ */
+const readPages = async (
+  build: (offset: number) => URLSearchParams,
+  onRows: (rows: any[]) => void,
+  done: () => boolean
+): Promise<boolean> => {
+  let offset = 0;
+  for (let page = 0; page < MERGED_PROBE_MAX_PAGES; page += 1) {
+    const rows = await searchResources(build(offset));
+    onRows(rows);
+    if (rows.length < MERGED_PAGE_SIZE || done()) return true;
+    offset += rows.length;
+  }
+  return false;
+};
+
+/**
+ * Which owned names have sent mail, with one paged search per kind for up to
+ * NAMES_PER_SEARCH names instead of two searches per name (88 names: about 2
+ * searches instead of 176). Same queries and row test as
+ * hasSentMailActivityForOwnedName; a name a merged search could not settle
+ * (a failed page, or the page cap) gets that per-name probe. Lowercased names.
+ */
+export const ownedNamesWithSentMail = async (names: string[]): Promise<Set<string>> => {
+  const owned = Array.from(new Set(names.map(name => (typeof name === "string" ? name.trim() : "")).filter(Boolean)));
+  const found = new Set<string>();
+  const unsettled = new Set<string>();
+  const configs: Array<{ query: string; identifier?: string }> = [
+    { query: "_mail_qortal_qmail_", identifier: "_mail_" },
+    { query: "qortal_qmail_" },
+  ];
+  for (const config of configs) {
+    for (const chunk of chunked(owned.filter(name => !found.has(lower(name))), NAMES_PER_SEARCH)) {
+      const build = (namesNow: string[], offset: number) => {
+        const params = new URLSearchParams({
+          mode: "ALL",
+          service: MAIL_SERVICE_TYPE,
+          query: config.query,
+          exactmatchnames: "true",
+          limit: String(MERGED_PAGE_SIZE),
+          offset: String(offset),
+          includemetadata: "true",
+          reverse: "true",
+          excludeblocked: "true",
+        });
+        if (config.identifier) params.set("identifier", config.identifier);
+        namesNow.forEach(name => params.append("name", name));
+        return params;
+      };
+      // A name found is dropped from the search, which starts again without
+      // it: one name with thousands of sent messages no longer fills every
+      // page (up to MERGED_PROBE_MAX_PAGES pages in all per chunk).
+      let remaining = chunk.filter(name => !found.has(lower(name)));
+      let pages = 0;
+      let complete = false;
+      try {
+        while (remaining.length && pages < MERGED_PROBE_MAX_PAGES) {
+          const wanted = new Set(remaining.map(lower));
+          let offset = 0;
+          let foundNew = false;
+          let short = false;
+          while (pages < MERGED_PROBE_MAX_PAGES) {
+            const rows = await searchResources(build(remaining, offset));
+            pages += 1;
+            rows.forEach(item => {
+              const itemName = lower(item?.name);
+              const identifier = typeof item?.identifier === "string" ? item.identifier : "";
+              if (wanted.has(itemName) && !found.has(itemName) && isSentMailIdentifier(identifier) && !isDeletedSentResourceInSearch(item)) {
+                found.add(itemName);
+                foundNew = true;
+              }
+            });
+            if (rows.length < MERGED_PAGE_SIZE) {
+              short = true;
+              break;
+            }
+            if (foundNew) break;
+            offset += rows.length;
+          }
+          // Every row of the names still searched was read: those not found have none.
+          if (short) {
+            complete = true;
+            break;
+          }
+          remaining = remaining.filter(name => !found.has(lower(name)));
+          if (!remaining.length) complete = true;
+        }
+        if (!complete) remaining.forEach(name => unsettled.add(name));
+      } catch {
+        chunk.forEach(name => {
+          if (!found.has(lower(name))) unsettled.add(name);
+        });
+      }
+    }
+  }
+  // Names a merged search could not settle get the per-name probe, four at a time.
+  const open = [...unsettled].filter(name => !found.has(lower(name)));
+  const active = await mapWithConcurrency(open, 4, async name => ((await hasSentMailActivityForOwnedName(name)) ? lower(name) : ""));
+  active.forEach(name => {
+    if (name) found.add(name);
+  });
+  return found;
+};
+
+/**
+ * Which owned names have mail addressed to them in the by-address form
+ * (`_mail_qortal_qmail_<name.slice(0,20)>_<address.slice(-6)>_mail_…`), from
+ * one paged search for the address suffix instead of one per name. Same
+ * identifier test as the first query of getOwnedNameInboxQueries. `settled`
+ * is false when a page failed or the cap was reached: the caller then probes
+ * each name as before. Lowercased names.
+ */
+export const ownedNamesWithAddressMail = async (
+  names: string[],
+  ownerAddress: string
+): Promise<{ found: Set<string>; settled: boolean }> => {
+  const found = new Set<string>();
+  const address = typeof ownerAddress === "string" ? ownerAddress.trim() : "";
+  const suffix = address.slice(-6);
+  if (!suffix) return { found, settled: false };
+  const matchers = names
+    .map(name => ({ name: lower(name), query: getOwnedNameInboxQueries(name, address)[0] }))
+    .filter(entry => entry.name && entry.query);
+  try {
+    const settled = await readPages(
+      offset =>
+        new URLSearchParams({
+          mode: "ALL",
+          service: MAIL_SERVICE_TYPE,
+          query: `_${suffix}_mail_`,
+          limit: String(MERGED_PAGE_SIZE),
+          offset: String(offset),
+          includemetadata: "false",
+          reverse: "true",
+          excludeblocked: "true",
+        }),
+      rows =>
+        rows.forEach(item => {
+          const identifier = typeof item?.identifier === "string" ? item.identifier : "";
+          if (!identifier) return;
+          matchers.forEach(entry => {
+            if (!found.has(entry.name) && entry.query.matches(identifier)) found.add(entry.name);
+          });
+        }),
+      () => matchers.every(entry => found.has(entry.name))
+    );
+    return { found, settled };
+  } catch {
+    return { found, settled: false };
+  }
+};
+
+/** A thread header's group id: `qortal_qmail_thread_group<id>_<token>`. */
+const THREAD_HEADER_GROUP = /^qortal_qmail_thread_group(\d+)_/;
+
+/**
+ * Pages the merged thread probe may read (2,000 headers; the whole network
+ * held 157 on 2026-10-08). It reads every group's headers, not only the
+ * user's, so it also stops as soon as probing the groups it has not found,
+ * one search each, can cost no more than the pages it may still read: a
+ * user in few groups on a big network gets the per-group probes at once.
+ */
+export const THREAD_PROBE_MAX_PAGES = 10;
+
+/**
+ * Which of the given groups have at least one thread, from one paged search
+ * for every thread header instead of one search per group (Simon's 43 groups:
+ * 1 search; the whole network held 157 headers in 34 groups on 2026-10-08).
+ * Same identifier test as hasGroupThreadActivity. `settled` is false when a
+ * page failed, when THREAD_PROBE_MAX_PAGES was reached, or when it stopped
+ * early because probing the groups not found was cheaper; `found` still
+ * holds the groups seen by then (groupIdsWithThreads probes the rest).
+ */
+export const groupsWithThreadActivity = async (
+  groupIds: Array<string | number>
+): Promise<{ found: Set<string>; settled: boolean }> => {
+  const wanted = new Set(groupIds.map(normalizeId).filter(Boolean));
+  const found = new Set<string>();
+  if (!wanted.size) return { found, settled: true };
+  try {
+    let offset = 0;
+    for (let page = 1; page <= THREAD_PROBE_MAX_PAGES; page += 1) {
+      const rows = await searchResources(
+        new URLSearchParams({
+          mode: "ALL",
+          service: THREAD_SERVICE_TYPE,
+          query: "qortal_qmail_thread_group",
+          limit: String(MERGED_PAGE_SIZE),
+          offset: String(offset),
+          includemetadata: "false",
+          reverse: "true",
+          excludeblocked: "true",
+        })
+      );
+      rows.forEach(item => {
+        const identifier = typeof item?.identifier === "string" ? item.identifier : "";
+        const groupId = THREAD_HEADER_GROUP.exec(identifier)?.[1];
+        if (groupId && wanted.has(groupId)) found.add(groupId);
+      });
+      // Every header read, or every group found: settled.
+      if (rows.length < MERGED_PAGE_SIZE || found.size === wanted.size) return { found, settled: true };
+      // Probing the rest now costs no more than the pages still allowed.
+      if (wanted.size - found.size <= THREAD_PROBE_MAX_PAGES - page) return { found, settled: false };
+      offset += rows.length;
+    }
+    return { found, settled: false };
+  } catch {
+    return { found, settled: false };
+  }
+};
+
+/**
+ * The given groups that have threads: the merged probe, then, if it could
+ * not settle, the per-group probe for the groups it has not found yet, four
+ * at a time.
+ */
+export const groupIdsWithThreads = async (groupIds: Array<string | number>): Promise<Set<string>> => {
+  const merged = await groupsWithThreadActivity(groupIds);
+  if (merged.settled) return merged.found;
+  const rest = Array.from(new Set(groupIds.map(normalizeId).filter(Boolean))).filter(id => !merged.found.has(id));
+  const active = await mapWithConcurrency(rest, 4, async id => ((await hasGroupThreadActivity(id)) ? id : ""));
+  active.forEach(id => {
+    if (id) merged.found.add(id);
+  });
+  return merged.found;
+};
+
+/**
+ * The alias-form inbox probe alone (`qortal_qmail_<name>_mail_`), exactly
+ * page 1 of fetchInboxMessagesForOwnedName's second query, so the two share
+ * one search.
+ */
+export const hasAliasFormInboxMail = async (name: string, ownerAddress: string): Promise<boolean> => {
+  const aliasQuery = getOwnedNameInboxQueries(name, ownerAddress)[1];
+  if (!aliasQuery) return false;
+  const params = new URLSearchParams({
+    mode: "ALL",
+    service: MAIL_SERVICE_TYPE,
+    query: aliasQuery.query,
+    limit: "200",
+    includemetadata: "true",
+    offset: "0",
+    reverse: "true",
+    excludeblocked: "true",
+  });
+  return fetchHasMailResources(params, item => {
+    const identifier = typeof item?.identifier === "string" ? item.identifier : "";
+    return Boolean(identifier) && aliasQuery.matches(identifier);
+  });
 };
 
 /** The latest (up to 20) messages sent to a watched alias; also the "has mail?" probe. */

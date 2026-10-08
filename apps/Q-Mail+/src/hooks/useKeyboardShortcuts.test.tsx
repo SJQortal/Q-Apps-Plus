@@ -26,7 +26,9 @@ describe('resolveShortcut', () => {
     expect(resolveShortcut({ key: 'a' }, null).action).toBe('replyAll')
     expect(resolveShortcut({ key: 'a' }, 'g').action).toBe('goAliases')
     const actions = new Set(SHORTCUT_HELP.map((entry) => entry.action))
-    expect(actions.size).toBe(16)
+    expect(actions.size).toBe(17)
+    // The row menu is the browser's own key: listed, not handled here.
+    expect(resolveShortcut({ key: 'F10', shiftKey: true }, null).action).toBeNull()
   })
 
   it('leaves browser and Hub shortcuts alone when a modifier is held', () => {

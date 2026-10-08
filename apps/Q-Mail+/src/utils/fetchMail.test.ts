@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { mockQortalAction, qortalCalls } from '../test/setup'
-import { NOT_YET_RETRY_DELAYS_MS, fetchAndEvaluateMail, isDeletedBody, isNotYetAvailable } from './fetchMail'
+import { NOT_YET_RETRY_DELAYS_MS, attachmentNamesForCache, fetchAndEvaluateMail, isDeletedBody, isNotYetAvailable } from './fetchMail'
 import { resetNameCache } from './nameCache'
 
 const row = { user: 'alice', messageIdentifier: '_mail_qortal_qmail_bob_abc123_mail_x1', content: { createdAt: 5, user: 'alice', id: 'row' }, otherUser: 'alice' }
@@ -40,6 +40,29 @@ describe('fetchAndEvaluateMail', () => {
     expect(saved).toHaveLength(1)
     expect(qortalCalls('GET_NAME_DATA')).toHaveLength(0)
     expect(qortalCalls('DECRYPT_DATA')).toHaveLength(0)
+  })
+
+  it('keeps the attachments\' names in the subject cache, encrypted, and adds them to an entry from before', async () => {
+    localStorage.clear()
+    const withFiles = { ...mailJson, attachments: [{ originalFilename: 'plan.pdf' }, { filename: 'x.png' }] }
+    mockQortalAction('FETCH_QDN_RESOURCE', 'ENC')
+    mockQortalAction('DECRYPT_DATA', btoa(JSON.stringify(withFiles)))
+    // An entry cached by Q-Mail or 1.0.0: subject and the attachments flag only.
+    localStorage.setItem('qmail_persistance_bob', JSON.stringify({ [row.messageIdentifier]: { timestamp: 1, subject: 'old-encrypted', attachments: true } }))
+    await fetchAndEvaluateMail(row, undefined, 'bob')
+    const entry = JSON.parse(localStorage.getItem('qmail_persistance_bob') || '{}')[row.messageIdentifier]
+    expect(entry).toEqual({ timestamp: 1, subject: 'old-encrypted', attachments: true, attachmentNames: 'encrypted-subject' })
+    const encrypted = qortalCalls('ENCRYPT_DATA').map((call) => JSON.parse(atob(call.data64)))
+    expect(encrypted).toEqual(['plan.pdf\nx.png'])
+    // Next time nothing is encrypted again.
+    await fetchAndEvaluateMail(row, undefined, 'bob')
+    expect(qortalCalls('ENCRYPT_DATA')).toHaveLength(1)
+  })
+
+  it('names for the cache: at most 8, without line breaks', () => {
+    expect(attachmentNamesForCache([{ originalFilename: 'a\nb.txt' }, {}, { filename: 'c.pdf' }])).toEqual(['a b.txt', 'c.pdf'])
+    expect(attachmentNamesForCache(Array.from({ length: 10 }, (_, i) => ({ originalFilename: `f${i}` })))).toHaveLength(8)
+    expect(attachmentNamesForCache(undefined)).toEqual([])
   })
 
   it('does not call a real body deleted', () => {

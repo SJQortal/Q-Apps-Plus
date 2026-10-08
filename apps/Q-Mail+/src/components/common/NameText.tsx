@@ -41,7 +41,7 @@ export const strikeNameSx = (theme: Theme) => ({
 export const strikeInputSx = (theme: Theme) => ({ '& .MuiInputBase-input': strikeNameSx(theme) });
 
 /** MUI's visuallyHidden, inline so the kit needs no @mui/utils import. */
-const srOnly = {
+export const srOnly = {
   border: 0,
   clip: 'rect(0 0 0 0)',
   height: '1px',

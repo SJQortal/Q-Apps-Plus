@@ -185,6 +185,22 @@ describe('SettingsPage', () => {
   })
 })
 
+describe('SettingsPage group threads', () => {
+  beforeEach(() => window.localStorage.clear())
+
+  it('hides and shows group threads for this account, on this device', () => {
+    renderSettings()
+    const toggle = screen.getByRole('switch', { name: 'Show group threads' }) as HTMLInputElement
+    expect(toggle.checked).toBe(true)
+    expect(screen.getByText(/nothing about threads is shown or\s+loaded/)).toBeTruthy()
+    fireEvent.click(toggle)
+    expect(window.localStorage.getItem('qmail_show_threads_QAddress1')).toBe('false')
+    expect((screen.getByRole('switch', { name: 'Show group threads' }) as HTMLInputElement).checked).toBe(false)
+    fireEvent.click(screen.getByRole('switch', { name: 'Show group threads' }))
+    expect(window.localStorage.getItem('qmail_show_threads_QAddress1')).toBeNull()
+  })
+})
+
 describe('SettingsPage footer', () => {
   const storedFooter = () => JSON.parse(window.localStorage.getItem('qmail_footer_QAddress1') || 'null')
 
