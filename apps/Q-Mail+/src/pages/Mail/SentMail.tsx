@@ -25,13 +25,16 @@ import { getMailIndex, getMailIndexWalkedAt, publishMailIndex, sentIndexKey } fr
 interface SentMailProps {
   instanceName?: string | null
   instanceNames?: string[] | null
+  /** Opens the message; resolves with it once decrypted (a row's Forward uses that). */
   onOpen: (
     user: string,
     identifier: string,
     content: any,
     to?: string
-  ) => Promise<void>
+  ) => Promise<unknown>
   openedMessageId?: string | number | null
+  /** Forward from a row's menu. */
+  onForward?: (message: any) => void
   /** The empty state's next action. */
   onCompose?: () => void
   /** The list pane's search box (Mail.tsx owns the query and the body limit). */
@@ -175,6 +178,7 @@ export const SentMail = ({
   instanceNames,
   onOpen,
   openedMessageId,
+  onForward,
   onCompose,
   searchQuery = '',
   bodySearchLimit = 0,
@@ -416,9 +420,8 @@ export const SentMail = ({
   usePolling(applySentDelta, { intervalMs: SENT_POLL_INTERVAL_MS, enabled: hasActiveInstances })
 
   const openMessage = useCallback(
-    async (messageUser: string, messageIdentifier: string, content: any, to?: string) => {
-      await onOpen(messageUser, messageIdentifier, content, to)
-    },
+    (messageUser: string, messageIdentifier: string, content: any, to?: string) =>
+      onOpen(messageUser, messageIdentifier, content, to),
     [onOpen]
   )
 
@@ -549,6 +552,7 @@ export const SentMail = ({
         mailboxType='sent'
         openMessage={openMessage}
         openedMessageId={openedMessageId}
+        onForward={onForward}
         onDeleteMessage={handleDeleteSentMessage}
         isDeletingMessage={isDeletingMessage}
         status={isLoading ? 'loading' : loadError ? 'error' : 'ready'}

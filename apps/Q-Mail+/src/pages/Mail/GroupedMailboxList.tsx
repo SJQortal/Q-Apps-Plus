@@ -25,6 +25,8 @@ import {
   getSentRecipientDisplayLabel,
   getSentRecipientGroupKey,
 } from "./mailIdentifier";
+import { useRowMenu } from "./useRowMenu";
+import { groupRowActions } from "./rowMenuActions";
 import { selectReadState } from "../../state/features/mailSlice";
 import { RootState } from "../../state/store";
 import { isMessageRead } from "../../utils/readState";
@@ -45,8 +47,12 @@ interface GroupedMailboxListProps {
     identifier: string,
     content: any,
     alias?: string
-  ) => void | Promise<void>;
+  ) => unknown;
   openedMessageId?: string | number | null;
+  /** Reply / Reply all from a row's menu (received mail). */
+  onReply?: (message: any, options?: { replyAll?: boolean }) => void;
+  /** Forward from a row's menu. */
+  onForward?: (message: any) => void;
   onDeleteMessage?: (message: any) => void | boolean | Promise<void | boolean>;
   isDeletingMessage?: (messageId: string) => boolean;
   onMarkAsRead?: (messages: any[]) => void | Promise<void>;
@@ -163,6 +169,8 @@ export const GroupedMailboxList = ({
   mailboxType,
   openMessage,
   openedMessageId,
+  onReply,
+  onForward,
   onDeleteMessage,
   isDeletingMessage,
   showSelectAll = false,
@@ -270,6 +278,9 @@ export const GroupedMailboxList = ({
     setSelectedMessageIds(new Set());
   };
 
+  // A sender group's menu (right click, long press on its header).
+  const groupMenu = useRowMenu<string>();
+
   useEffect(() => {
     const groupedMessageIds = new Set<string>();
     groupedMessages.forEach(group => {
@@ -309,6 +320,45 @@ export const GroupedMailboxList = ({
 
   const hasBulkActions = Boolean(onMarkAsRead || onMarkAsUnread || onArchive || onUnarchive);
   const selectable = showSelectAll || hasBulkActions;
+  // Each row's menu offers what this list can do with one message.
+  const rowActions = {
+    onReply: mailboxType === "sent" ? undefined : onReply,
+    onForward,
+    onMarkAsRead: mailboxType === "sent" ? undefined : onMarkAsRead,
+    onMarkAsUnread: mailboxType === "sent" ? undefined : onMarkAsUnread,
+    onArchive,
+    onUnarchive,
+  };
+  const groupMenuContent = (groupKey: string) => {
+    const group = groupedMessages.find(g => g.key === groupKey);
+    const all = group?.messages || [];
+    const ids = all.map(getMessageId).filter(Boolean) as string[];
+    const unread = mailboxType === "sent" ? 0 : all.filter(message => !isMessageRead(message, readState)).length;
+    const forAll = (handler?: (messages: any[]) => void | Promise<void>) =>
+      handler && all.length ? () => void handler(all) : undefined;
+    return {
+      title: !group ? undefined : mailboxType === "sent" ? (
+        `To: ${group.label}`
+      ) : group.key === "sender:unknown" ? (
+        group.label
+      ) : (
+        <NameText name={group.label} />
+      ),
+      ariaLabel: "Group actions",
+      actions: groupRowActions({
+        count: all.length,
+        unreadCount: unread,
+        expanded: Boolean(expandedGroups[groupKey]),
+        allSelected: ids.length > 0 && ids.every(id => selectedMessageIds.has(id)),
+        toggleExpanded: () => setExpandedGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] })),
+        markRead: mailboxType === "sent" ? undefined : forAll(onMarkAsRead),
+        markUnread: mailboxType === "sent" ? undefined : forAll(onMarkAsUnread),
+        archive: forAll(onArchive),
+        unarchive: forAll(onUnarchive),
+        toggleSelected: selectable ? () => handleToggleAll(groupKey) : undefined,
+      }),
+    };
+  };
   const bulkButtonSx = { minHeight: 44, textTransform: "none", fontWeight: 600 } as const;
 
   return (
@@ -383,6 +433,7 @@ export const GroupedMailboxList = ({
                     ? isDeletingMessage(messageId)
                     : false
                 }
+                {...rowActions}
                 isOpen={
                   openedMessageId !== null &&
                   openedMessageId !== undefined &&
@@ -415,11 +466,13 @@ export const GroupedMailboxList = ({
         return (
           <Box key={group.key} component="li" data-group={group.key} sx={{ display: "flex", flexDirection: "column" }}>
             <Box
+              {...groupMenu.triggerFor(group.key)}
               sx={theme => ({
                 display: "flex",
                 alignItems: "center",
                 gap: 0.5,
                 borderBottom: `1px solid ${theme.palette.divider}`,
+                WebkitTouchCallout: "none",
               })}
             >
               {selectable && (
@@ -547,6 +600,7 @@ export const GroupedMailboxList = ({
                           ? isDeletingMessage(messageId)
                           : false
                       }
+                      {...rowActions}
                       isOpen={
                         openedMessageId !== null &&
                         openedMessageId !== undefined &&
@@ -564,6 +618,7 @@ export const GroupedMailboxList = ({
       </Box>
 
       {footer}
+      {groupMenu.renderMenu(groupMenuContent)}
 
       {selectedMessageIds.size > 0 && hasBulkActions && (
         <Box

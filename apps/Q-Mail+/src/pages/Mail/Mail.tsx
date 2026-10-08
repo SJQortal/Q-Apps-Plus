@@ -2994,6 +2994,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
         instanceNames={sentInstanceNamesForCurrentView}
         onOpen={openMessage}
         openedMessageId={message?.id || message?.identifier}
+        onForward={openForwardComposerFromMessage}
         onCompose={() => onSelectSidebarItem("compose")}
         searchQuery={inboxSearchQuery}
         bodySearchLimit={bodySearchLimit}
@@ -3019,6 +3020,8 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
         onMarkAsRead={markMessagesAsRead}
         onMarkAsUnread={markMessagesAsUnread}
         onArchive={archiveMessages}
+        onReply={openReplyComposerFromMessage}
+        onForward={openForwardComposerFromMessage}
         searchQuery={inboxSearchQuery}
         bodySearchLimit={bodySearchLimit}
         onSearchStatus={setMailboxSearchStatus}
@@ -3042,6 +3045,8 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
         onMarkAsRead={markMessagesAsRead}
         onMarkAsUnread={markMessagesAsUnread}
         onUnarchive={unarchiveMessages}
+        onReply={openReplyComposerFromMessage}
+        onForward={openForwardComposerFromMessage}
         status={isLoading && !archivedForList.length ? "loading" : "ready"}
         highlightTerms={inboxSearchStatus.terms}
         emptyIcon={<ArchiveOutlinedIcon />}
@@ -3125,6 +3130,8 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
           onMarkAsRead={markMessagesAsRead}
           onMarkAsUnread={markMessagesAsUnread}
           onArchive={archiveMessages}
+          onReply={openReplyComposerFromMessage}
+          onForward={openForwardComposerFromMessage}
           highlightTerms={inboxSearchStatus.terms}
           status={
             isLoading ||

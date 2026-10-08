@@ -758,6 +758,20 @@ export default {
       },
     },
     { key: 'whats-new', path: '/settings', overlay: true, after: async (page) => { await page.waitForSelector('text=Appearance', { timeout: 8000 }).catch(() => {}); await page.getByRole('button', { name: "What's new" }).first().click({ timeout: 4000 }); await page.waitForSelector('text=The first Q-Mail+ release', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(300); } },
+    {
+      // A row's menu: right click here; a long press on a phone opens the same (a sheet below 600 px).
+      key: 'row-menu',
+      path: '/',
+      overlay: true,
+      after: async (page) => {
+        await waitForInbox(page);
+        const row = page.locator('[data-message-row] button').first();
+        await row.click({ button: 'right', position: { x: 60, y: 20 }, timeout: 4000 });
+        await page.getByRole('menuitem').first().waitFor({ timeout: 3000 }).catch(() => {});
+        await page.getByRole('button', { name: 'Archive' }).first().waitFor({ timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(400);
+      },
+    },
     { key: 'menu', path: '/', mobileOnly: true, overlay: true, after: async (page) => { await waitForInbox(page); await page.getByRole('button', { name: 'Open mailboxes menu' }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
     {
       key: 'shortcuts',

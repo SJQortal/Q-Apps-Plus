@@ -14,6 +14,9 @@
  *
  * Each open bumps `requestRef` (through `cancelPending`), so an open that is
  * superseded or closed may not open or clear anything when it settles.
+ *
+ * It resolves with the message it opened, or null (cancelled, superseded or
+ * not decryptable), so a row's menu can reply to a message it had to open.
  */
 import { openerInfoFor } from "./openerInfo";
 
@@ -78,7 +81,7 @@ export type OpenMessage = (
   content: any,
   to?: string,
   options?: OpenMessageOptions
-) => Promise<void>;
+) => Promise<any | null>;
 
 export function createOpenMessage(deps: MessageOpenerDeps): OpenMessage {
   return async (user, messageIdentifier, content, to, options) => {
@@ -95,7 +98,7 @@ export function createOpenMessage(deps: MessageOpenerDeps): OpenMessage {
       deps.setMessage(existing);
       deps.setIsOpen(true);
       markRead();
-      return;
+      return existing;
     }
     // The reader leaves the previous message now and the opener takes the pane.
     const pending = pendingSelectionFor(messageIdentifier, user);
@@ -108,21 +111,23 @@ export function createOpenMessage(deps: MessageOpenerDeps): OpenMessage {
     deps.setMailInfo(openerInfoFor(messageIdentifier, user, to, content));
     try {
       const res: any = await deps.show();
-      if (request !== deps.requestRef.current) return;
+      if (request !== deps.requestRef.current) return null;
       deps.setMailInfo(null);
       if (isOpenableMessage(res)) {
         deps.setMessage(res);
         deps.setIsOpen(true);
         markRead();
-        return;
+        return res;
       }
       // Cancelled or not decryptable: nothing stays selected.
       dropPending();
+      return null;
     } catch {
       if (request === deps.requestRef.current) {
         deps.setMailInfo(null);
         dropPending();
       }
+      return null;
     }
   };
 }

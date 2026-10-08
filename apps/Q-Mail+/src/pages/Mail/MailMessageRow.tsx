@@ -42,6 +42,9 @@ import { useDecryptedSubject } from "../../utils/subjectCache";
 import { primarySoft } from "../../hub-theme";
 import { LIST_CONTAINER } from "../../layout/MailShell";
 import { NameText, spokenName } from "../../components/common/NameText";
+import { useRowMenu } from "./useRowMenu";
+import { messageRowActions } from "./rowMenuActions";
+import { isOpenableMessage } from "./messageOpener";
 
 export const LOCKED_SUBJECT_LABEL = "Locked · open to read";
 /** The list width from which a row lays out as columns (the list pane is the container). */
@@ -55,12 +58,13 @@ export const NO_SUBJECT_LABEL = "(no subject)";
 
 export interface MailMessageRowProps {
   messageData: any;
+  /** Opens the message; may resolve with it once decrypted (the menu's Reply uses that). */
   openMessage: (
     user: string,
     id: string,
     content: any,
     alias?: string
-  ) => void | Promise<void>;
+  ) => unknown;
   isOpen?: boolean;
   isFromSent?: boolean;
   onDeleteMessage?: (message: any) => void | boolean | Promise<void | boolean>;
@@ -76,6 +80,17 @@ export interface MailMessageRowProps {
   highlightTerms?: string[];
   /** "li" when the row sits directly inside a list (ul); the default "div" expects a wrapping li. */
   component?: "div" | "li";
+  /**
+   * The row's menu (right click, long press). Reply, Reply all and Forward
+   * open the message first when it isn't decrypted yet; the others act on
+   * this message alone, as the list's bulk bar does on a selection.
+   */
+  onReply?: (message: any, options?: { replyAll?: boolean }) => void;
+  onForward?: (message: any) => void;
+  onMarkAsRead?: (messages: any[]) => unknown;
+  onMarkAsUnread?: (messages: any[]) => unknown;
+  onArchive?: (messages: any[]) => unknown;
+  onUnarchive?: (messages: any[]) => unknown;
 }
 
 /** Splits `text` into plain and highlighted runs for the given terms. */
@@ -150,6 +165,12 @@ export const MailMessageRow = ({
   context,
   highlightTerms,
   component = "div",
+  onReply,
+  onForward,
+  onMarkAsRead,
+  onMarkAsUnread,
+  onArchive,
+  onUnarchive,
 }: MailMessageRowProps) => {
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const identifier: string = String(messageData?.id || messageData?.identifier || "");
@@ -203,15 +224,28 @@ export const MailMessageRow = ({
   const createdAt = messageData?.createdAt;
   const spokenDate = useMemo(() => spokenMailDate(createdAt), [createdAt]);
 
-  const open = useCallback(() => {
-    if (!identifier) return;
-    void openMessage(
+  const openRow = useCallback((): unknown => {
+    if (!identifier) return null;
+    return openMessage(
       messageData?.user,
       identifier,
       messageData,
       isFromSent ? alias || name : username
     );
   }, [alias, identifier, isFromSent, messageData, name, openMessage, username]);
+  const open = useCallback(() => {
+    void openRow();
+  }, [openRow]);
+
+  const rowMenu = useRowMenu();
+  // Reply and Forward need the decrypted message: open it, then act on it.
+  const withOpened = (act: (opened: any) => void) => () => {
+    void Promise.resolve(openRow()).then(opened => {
+      if (isOpenableMessage(opened)) act(opened);
+    });
+  };
+  const onlyThis = (handler?: (messages: any[]) => unknown) =>
+    handler ? () => void handler([messageData]) : undefined;
 
   const handleDeleteClick = useCallback(
     async (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -255,10 +289,12 @@ export const MailMessageRow = ({
   );
 
   return (
+    <>
     <Box
       ref={setRowNode}
       component={component}
       data-message-row={identifier}
+      {...rowMenu.triggerFor(undefined)}
       sx={theme => ({
         display: "flex",
         alignItems: "center",
@@ -267,7 +303,9 @@ export const MailMessageRow = ({
         gap: 0.5,
         listStyle: "none",
         borderBottom: `1px solid ${theme.palette.divider}`,
-        backgroundColor: isOpen ? primarySoft(theme) : "transparent",
+        backgroundColor: isOpen ? primarySoft(theme) : rowMenu.isOpen ? theme.palette.action.selected : "transparent",
+        // A long press opens the row's menu, not iOS's own callout.
+        WebkitTouchCallout: "none",
       })}
     >
       {onToggleSelected && (
@@ -416,5 +454,31 @@ export const MailMessageRow = ({
         </Tooltip>
       )}
     </Box>
+    {rowMenu.renderMenu(() => ({
+      title: name ? (
+        <>
+          {isFromSent && "To: "}
+          <NameText name={name} />
+        </>
+      ) : (
+        nameLabel
+      ),
+      ariaLabel: "Message actions",
+      actions: messageRowActions({
+        isFromSent,
+        isUnread,
+        selected,
+        open,
+        reply: onReply ? replyAll => withOpened(opened => onReply(opened, { replyAll }))() : undefined,
+        forward: onForward ? withOpened(onForward) : undefined,
+        markRead: onlyThis(onMarkAsRead),
+        markUnread: onlyThis(onMarkAsUnread),
+        archive: onlyThis(onArchive),
+        unarchive: onlyThis(onUnarchive),
+        toggleSelected: onToggleSelected,
+        remove: isFromSent && onDeleteMessage && !isDeleting ? () => void onDeleteMessage(messageData) : undefined,
+      }),
+    }))}
+    </>
   );
 };

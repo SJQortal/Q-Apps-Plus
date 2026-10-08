@@ -29,13 +29,17 @@ export const ALIAS_POLL_INTERVAL_MS = 30_000;
 interface AliasMailProps {
   /** The watched alias. */
   value: string;
-  onOpen: (user: string, identifier: string, content: any) => Promise<void> | void;
+  /** Opens the message; resolves with it once decrypted (a row's Reply uses that). */
+  onOpen: (user: string, identifier: string, content: any) => unknown;
   messageOpenedId?: string | number | null;
   /** Every row loaded so far for this alias (for exact unread counts). */
   onMessagesLoaded?: (alias: string, rows: any[]) => void;
   onMarkAsRead?: (messages: any[]) => void | Promise<void>;
   onMarkAsUnread?: (messages: any[]) => void | Promise<void>;
   onArchive?: (messages: any[]) => void | Promise<void>;
+  /** Reply / Reply all and Forward from a row's menu. */
+  onReply?: (message: any, options?: { replyAll?: boolean }) => void;
+  onForward?: (message: any) => void;
   /** The list pane's search box (Mail.tsx owns the query and the body limit). */
   searchQuery?: string;
   bodySearchLimit?: number;
@@ -58,6 +62,8 @@ export const AliasMail = ({
   onMarkAsRead,
   onMarkAsUnread,
   onArchive,
+  onReply,
+  onForward,
   searchQuery = "",
   bodySearchLimit = 0,
   onSearchStatus,
@@ -177,9 +183,7 @@ export const AliasMail = ({
   }, [onSearchStatus, searchStatus]);
 
   const openMessage = useCallback(
-    (messageUser: string, messageIdentifier: string) => {
-      void onOpen(messageUser, messageIdentifier, {});
-    },
+    (messageUser: string, messageIdentifier: string) => onOpen(messageUser, messageIdentifier, {}),
     [onOpen]
   );
 
@@ -209,6 +213,8 @@ export const AliasMail = ({
       onMarkAsRead={onMarkAsRead}
       onMarkAsUnread={onMarkAsUnread}
       onArchive={onArchive}
+      onReply={onReply}
+      onForward={onForward}
       status={status}
       errorMessage={loadError || undefined}
       onRetry={() => void loadFirstPage()}
