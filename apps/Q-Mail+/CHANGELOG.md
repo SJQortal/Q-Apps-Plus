@@ -26,6 +26,7 @@
 - New mail shows within 2 minutes; while nothing new arrived it could take 5.
 - Switching the active mailbox to another name and back no longer asks about the published state again: Q-Mail+ asks once per name per session, and loads it again by itself if you chose "Load state".
 - Each group's avatar is loaded once instead of twice.
+- "Publish Q-Mail State" in the mailbox list asks first and says what is published, as Settings → Sync does.
 
 ## 1.0.0 (Q-Mail+) - October 4, 2026
 
