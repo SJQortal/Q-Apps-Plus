@@ -23,10 +23,21 @@ export const showThreadsStorageKey = (address?: string | null): string => {
   return normalized ? `${SHOW_THREADS_STORAGE_PREFIX}${normalized}` : "";
 };
 
+// The choices of this session where storage is blocked (a private window,
+// blocked site data): without it the switch would read back the default.
+const sessionChoices = new Map<string, boolean>();
+
+/** Tests only: forget this session's choices. */
+export const resetShowGroupThreadsSession = (): void => {
+  sessionChoices.clear();
+};
+
 /** True (the default) unless this account hid group threads on this device. */
 export const readShowGroupThreads = (address?: string | null): boolean => {
   const key = showThreadsStorageKey(address);
   if (!key) return true;
+  const chosen = sessionChoices.get(key);
+  if (chosen !== undefined) return chosen;
   try {
     return localStorage.getItem(key) !== "false";
   } catch {
@@ -40,8 +51,10 @@ export const writeShowGroupThreads = (address: string | null | undefined, show: 
   try {
     if (show) localStorage.removeItem(key);
     else localStorage.setItem(key, "false");
+    sessionChoices.delete(key);
   } catch {
     // Storage blocked: the choice lasts for this session only.
+    sessionChoices.set(key, show);
   }
   try {
     window.dispatchEvent(new CustomEvent(SHOW_THREADS_CHANGED_EVENT, { detail: { address: normalizeAddress(address), show } }));
