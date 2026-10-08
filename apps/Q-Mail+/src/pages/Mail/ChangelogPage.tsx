@@ -10,7 +10,7 @@ type ChangelogEntry = {
 const changelogEntries: ChangelogEntry[] = [
   {
     version: "1.0.1 (Q-Mail+)",
-    date: "October 7, 2026",
+    date: "October 8, 2026",
     highlights: [
       "Replies stay small, on advice from Qortal DEV: a reply no longer quotes the message you answer, which shows above the editor for context instead.",
       "A reply carries links to the last 10 earlier messages instead of copies of them, so a long conversation no longer makes each reply bigger (the 50th reply was about 570 KB in 1.0.0, now under 2 KB).",
@@ -19,9 +19,10 @@ const changelogEntries: ChangelogEntry[] = [
       "An open message shows its weekday, date and time (\"Sun 2 Aug, 08:58\"), with the year when it isn't this year.",
       "Every message list shows the same date; hover over it, or tap it on a phone, for the full date and how long ago.",
       "Settings → Mail → Show group threads: hide group threads, and nothing about them is loaded.",
-      "A reply comes from the name the mail was sent to, not the active name; an open message shows its Cc names.",
+      "A reply comes from the name the mail was sent to, not the active name; an open message shows its Cc names, a long list folded into \"and 2 more\".",
       "Faster first load with many names and groups: one search for all of them instead of one each (126 searches instead of 413 with 88 names and 43 groups).",
       "Fixes: new mail shows within 2 minutes; the published-state question comes once per name per session; group avatars load once; Publish Q-Mail State asks first.",
+      "Sturdier reader: a broken message shows \"This message could not be shown\" instead of taking the app down; switching messages with Show earlier open loads nothing extra; keyboard focus stays with the earlier messages; quoted copies name the right person.",
     ],
   },
   {

@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.1 (Q-Mail+) - October 7, 2026
+## 1.0.1 (Q-Mail+) - October 8, 2026
 
 **Replies stay small** (on advice from Qortal DEV)
 - A reply no longer quotes the message you answer. That message shows above the editor for context (Preview, Full or Hide) and is not copied into your reply. The footer now ends a reply, as it ends a new message.
@@ -11,7 +11,7 @@
 
 **Replies**
 - A reply comes from the name the mail was sent to: mail to one of your other names is answered as that name, not as the active one.
-- An open message shows its Cc names under the recipient ("cc Alice, Bob"), for mail written with Cc in Q-Mail+.
+- An open message shows its Cc names under the recipient ("cc Alice, Bob"), for mail written with Cc in Q-Mail+. A long list shows the first three names and "and 2 more", which shows the rest, so every name can be read on a phone.
 
 **Faster with many names**
 - The first load asks the node once for all your names, and once for all your groups' threads, instead of name by name and group by group: on an account with 88 names and 43 groups, 126 searches instead of 413.
@@ -28,6 +28,13 @@
 - Switching the active mailbox to another name and back no longer asks about the published state again: Q-Mail+ asks once per name per session, and loads it again by itself if you chose "Load state".
 - Each group's avatar is loaded once instead of twice.
 - "Publish Q-Mail State" in the mailbox list asks first and says what is published, as Settings → Sync does.
+- A broken message (an impossible date, or a subject that isn't text) can no longer take the whole app down: it shows "This message could not be shown" in its place, and an earlier message that can't be shown says so in its own place.
+- Opening another message while "Show earlier" is open no longer loads that message's earlier messages before you ask.
+- An earlier message found inside another earlier message is marked as quoted by the person who sent that one, not by the sender of the message you opened.
+- After Retry, or the last "Show older", keyboard focus stays on the earlier messages instead of jumping to the top of the page.
+- A group avatar that failed to load is tried again later instead of staying blank until a reload.
+- Hiding group threads holds for the session where the browser blocks storage.
+- On a network with many group threads, the first load stops reading other groups' threads sooner and then checks only your remaining groups.
 
 ## 1.0.0 (Q-Mail+) - October 4, 2026
 
