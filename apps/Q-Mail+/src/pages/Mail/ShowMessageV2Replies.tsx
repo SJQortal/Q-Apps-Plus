@@ -154,7 +154,6 @@ export const EarlierMessagePlaceholder = ({
   return (
     <Box
       component="article"
-      aria-label={`Earlier message from ${spokenName(name)}`}
       aria-busy={status === "loading" || undefined}
       sx={{ ...cardSx, display: "flex", alignItems: "center", gap: 1.5, px: 1.5, py: 1, minHeight: 56, flexWrap: "wrap" }}
     >
