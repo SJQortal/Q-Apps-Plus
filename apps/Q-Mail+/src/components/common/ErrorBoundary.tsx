@@ -35,8 +35,12 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error('Q-Mail+ could not show this screen:', error, info.componentStack);
   }
 
-  componentDidUpdate(previous: Props): void {
-    if (this.state.hasError && previous.resetKey !== this.props.resetKey) this.setState({ hasError: false });
+  componentDidUpdate(previous: Props, previousState: State): void {
+    // Only an error from before this update: the update that brought the
+    // error (a new message that fails at once) must not clear it again.
+    if (this.state.hasError && previousState.hasError && previous.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false });
+    }
   }
 
   private reload = () => {
