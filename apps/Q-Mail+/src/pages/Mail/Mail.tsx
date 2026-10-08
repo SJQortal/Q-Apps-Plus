@@ -86,7 +86,6 @@ import { applyPublishedFooter, readMailFooter } from "../../utils/mailFooter";
 import { usePolling } from "../../hooks/usePolling";
 import { invalidateSearches, searchResources } from "../../utils/qdnSearch";
 import {
-  fetchGroupAvatarUrl,
   fetchInboxMessagesForOwnedName,
   fetchRecentInboxMessagesForOwnedName,
   fetchRecentInboxMessagesForSavedAlias,
@@ -109,6 +108,7 @@ import type { StoredComposeDraft } from "./composeDrafts";
 import { invalidateThreadSearches } from "./threadData";
 import { useThreadUnreadCounts } from "./threadUnread";
 import { useShowGroupThreads } from "../../utils/threadsPreference";
+import { useGroupAvatarUrls } from "./useGroupAvatarUrls";
 import { PUBLISH_STATE_TITLE, PublishStateMessage } from "../../components/common/PublishStateMessage";
 import { getAvatarUrl } from "../../utils/avatarCache";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
@@ -574,9 +574,6 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
   const [groupOptionsWithThreads, setGroupOptionsWithThreads] = useState<any[]>(
     []
   );
-  const [groupAvatarUrlById, setGroupAvatarUrlById] = useState<
-    Record<string, string>
-  >({});
   const [isLoadingGroupInstances, setIsLoadingGroupInstances] = useState(false);
   const [mailInfo, setMailInfo] = useState<any>(null);
   // Each open request gets a number; a superseded one may not open or clear
@@ -1670,46 +1667,11 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     }
   }, [groupOptionsWithThreads, isLoadingGroupInstances, selectedGroup]);
 
-  const missingGroupAvatarIds = useMemo(() => {
-    return groupOptionsWithThreads
-      .map(group => String(group?.id || "").trim())
-      .filter(Boolean)
-      .filter(groupId => {
-        return !Object.prototype.hasOwnProperty.call(
-          groupAvatarUrlById,
-          groupId
-        );
-      });
-  }, [groupAvatarUrlById, groupOptionsWithThreads]);
-
-  useEffect(() => {
-    if (!hasAuthenticatedIdentity || !missingGroupAvatarIds.length) {
-      return;
-    }
-
-    let cancelled = false;
-    const populateGroupAvatars = async () => {
-      for (const groupId of missingGroupAvatarIds) {
-        if (cancelled) return;
-        const avatarUrl = await fetchGroupAvatarUrl(groupId);
-        if (cancelled) return;
-        setGroupAvatarUrlById(previous => {
-          if (Object.prototype.hasOwnProperty.call(previous, groupId)) {
-            return previous;
-          }
-          return {
-            ...previous,
-            [groupId]: avatarUrl || "",
-          };
-        });
-      }
-    };
-
-    void populateGroupAvatars();
-    return () => {
-      cancelled = true;
-    };
-  }, [hasAuthenticatedIdentity, missingGroupAvatarIds]);
+  const groupAvatarIds = useMemo(
+    () => groupOptionsWithThreads.map(group => String(group?.id || "").trim()),
+    [groupOptionsWithThreads]
+  );
+  const groupAvatarUrlById = useGroupAvatarUrls(groupAvatarIds, hasAuthenticatedIdentity);
 
   // Per-name inbox indexes are fetched once per session and address (Bugs #9);
   // the poll keeps them fresh. Names whose fetch failed are retried next visit.

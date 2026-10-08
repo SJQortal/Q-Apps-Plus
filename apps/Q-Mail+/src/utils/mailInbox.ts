@@ -120,31 +120,50 @@ export const fetchGroupAvatarPublisherName = async (
   }
 };
 
-const groupAvatarUrls = new Map<string, Promise<string>>();
+const groupAvatarUrls = new Map<string, Promise<string | null>>();
 
 /** Tests only: forget the group avatar answers of this session. */
 export const resetGroupAvatarCache = (): void => {
   groupAvatarUrls.clear();
 };
 
+/** After a failed group avatar lookup, ask again after these waits, then give up for this call. */
+export const GROUP_AVATAR_RETRY_DELAYS_MS = [5_000, 20_000];
+
 /**
  * A group's avatar URL ("" when it has none), asked once per group per
  * session: calls for the same group while one is running share it. The
  * Threads loop re-ran while a request was out and asked twice (groups 694
- * and 659 on Simon's account). An answer is kept; a failed lookup is not,
- * so the next call asks again instead of showing no avatar all session.
+ * and 659 on Simon's account). A failed lookup is asked again after each of
+ * `retryDelaysMs`; if it still fails the answer is null (unknown, not "no
+ * avatar") and nothing is kept, so a later call asks afresh.
  */
-export const fetchGroupAvatarUrl = (groupId: string | number): Promise<string> => {
+export const fetchGroupAvatarUrl = (
+  groupId: string | number,
+  retryDelaysMs: number[] = GROUP_AVATAR_RETRY_DELAYS_MS
+): Promise<string | null> => {
   const normalizedGroupId = normalizeId(groupId);
   if (!normalizedGroupId) return Promise.resolve("");
   const known = groupAvatarUrls.get(normalizedGroupId);
   if (known) return known;
-  const request: Promise<string> = askGroupAvatarUrl(normalizedGroupId).catch(() => {
-    if (groupAvatarUrls.get(normalizedGroupId) === request) groupAvatarUrls.delete(normalizedGroupId);
-    return "";
-  });
+  const request = askGroupAvatarUrlWithRetries(normalizedGroupId, retryDelaysMs);
   groupAvatarUrls.set(normalizedGroupId, request);
+  // Attached first, so it runs before any caller sees the null.
+  void request.then(url => {
+    if (url === null && groupAvatarUrls.get(normalizedGroupId) === request) groupAvatarUrls.delete(normalizedGroupId);
+  });
   return request;
+};
+
+const askGroupAvatarUrlWithRetries = async (normalizedGroupId: string, retryDelaysMs: number[]): Promise<string | null> => {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await askGroupAvatarUrl(normalizedGroupId);
+    } catch {
+      if (attempt >= retryDelaysMs.length) return null;
+      await new Promise(resolve => setTimeout(resolve, retryDelaysMs[attempt]));
+    }
+  }
 };
 
 /** Throws when Qortal could not answer, so the caller does not remember it. */
