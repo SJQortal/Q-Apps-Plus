@@ -1122,7 +1122,10 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
     },
     {
       intervalMs: 30000,
-      maxIntervalMs: 300000,
+      // While nothing is new the poll slows down to every 2 minutes (it was
+      // 5, and a test mail took up to 5 minutes to show): new mail still
+      // shows within 2 minutes, at one search per name with mail per tick.
+      maxIntervalMs: 120000,
       enabled: hasAuthenticatedIdentity,
     }
   );
