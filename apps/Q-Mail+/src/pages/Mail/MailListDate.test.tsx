@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { ButtonBase } from '@mui/material'
 import { HubThemeProvider } from '../../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
-import { MailListDate, TAP_DETAIL_MS } from './MailListDate'
+import { MailListDate, TAP_DETAIL_MS, resetHoverQuery } from './MailListDate'
 import { mailDateDetail, readerMailDate } from './readerTime'
 
 const at = (y: number, m: number, d: number, h = 0, min = 0, s = 0) => new Date(y, m - 1, d, h, min, s).getTime()
@@ -11,6 +11,7 @@ const stamp = at(2026, 8, 2, 8, 58, 20)
 
 /** Pretend to be a touch screen (no hover), or a mouse. */
 function pretendHover(hover: boolean) {
+  resetHoverQuery()
   const original = window.matchMedia
   window.matchMedia = ((query: string) => ({
     matches: query.includes('hover: none') ? !hover : false,
@@ -24,6 +25,7 @@ function pretendHover(hover: boolean) {
   })) as any
   return () => {
     window.matchMedia = original
+    resetHoverQuery()
   }
 }
 
@@ -60,7 +62,8 @@ describe('MailListDate', () => {
     const time = document.querySelector('time') as HTMLElement
     fireEvent.mouseOver(time)
     expect(await screen.findByRole('tooltip')).toHaveProperty('textContent', `Latest: ${mailDateDetail(stamp)}`)
-    fireEvent.click(time)
+    // The first hover mounted the tooltip around a fresh <time>.
+    fireEvent.click(document.querySelector('time') as HTMLElement)
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
 
@@ -88,8 +91,16 @@ describe('MailListDate', () => {
     const time = document.querySelector('time') as HTMLElement
     fireEvent.click(time)
     await screen.findByRole('tooltip')
-    fireEvent.click(time)
+    fireEvent.click(document.querySelector('time') as HTMLElement)
     await vi.waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull())
+  })
+
+  it('mounts no tooltip until a date is hovered or tapped (a long list stays light)', () => {
+    restore = pretendHover(true)
+    renderRow(() => {})
+    const time = document.querySelector('time') as HTMLElement
+    expect(time.getAttribute('aria-describedby')).toBeNull()
+    expect(document.querySelector('[role="tooltip"]')).toBeNull()
   })
 
   it('renders nothing for a missing stamp', () => {

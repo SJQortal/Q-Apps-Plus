@@ -24,10 +24,24 @@ import { mailDateTime } from "./MessageDate";
 /** How long a tapped date keeps its detail open. */
 export const TAP_DETAIL_MS = 4000;
 
-const hoverNone = () =>
-  typeof window !== "undefined" &&
-  typeof window.matchMedia === "function" &&
-  window.matchMedia("(hover: none)").matches;
+// One query object for every date in every list (a matchMedia per row and
+// render cost a 300-row list noticeably).
+let hoverNoneQuery: MediaQueryList | null | undefined;
+const hoverNone = (): boolean => {
+  if (hoverNoneQuery === undefined) {
+    hoverNoneQuery =
+      typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(hover: none)") : null;
+  }
+  return Boolean(hoverNoneQuery?.matches);
+};
+
+/** Tests only: read the device's hover capability again. */
+export const resetHoverQuery = (): void => {
+  hoverNoneQuery = undefined;
+};
+
+/** Hover this long before the detail shows (as MUI's enterDelay). */
+const HOVER_DELAY_MS = 300;
 
 export interface MailListDateProps {
   timestamp: number | string | undefined | null;
@@ -67,13 +81,15 @@ export function MailListDate({
   sx,
 }: MailListDateProps) {
   const [open, setOpen] = useState(false);
+  // The Tooltip mounts on the first hover or tap only: one per row up front
+  // cost most of a long list's render time.
+  const [armed, setArmed] = useState(false);
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
   const parts = readerMailDateParts(timestamp);
   const dateTime = mailDateTime(timestamp);
   if (!parts || !dateTime) return null;
-  const touch = hoverNone();
 
   // On touch screens the tap is the date's own: it neither opens the row nor
   // starts the row's ripple. With a mouse the click goes on to the row.
@@ -82,6 +98,7 @@ export function MailListDate({
     event.stopPropagation();
     event.preventDefault();
     window.clearTimeout(timer.current);
+    setArmed(true);
     setOpen(previous => {
       if (!previous) timer.current = window.setTimeout(() => setOpen(false), TAP_DETAIL_MS);
       return !previous;
@@ -90,19 +107,19 @@ export function MailListDate({
   const keepFromRow = (event: React.SyntheticEvent) => {
     if (hoverNone()) event.stopPropagation();
   };
+  const onMouseEnter = () => {
+    if (hoverNone()) return;
+    setArmed(true);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setOpen(true), HOVER_DELAY_MS);
+  };
+  const onMouseLeave = () => {
+    if (hoverNone()) return;
+    window.clearTimeout(timer.current);
+    setOpen(false);
+  };
 
-  return (
-    <Tooltip
-      title={`${detailPrefix}${mailDateDetail(timestamp)}`}
-      open={open}
-      onOpen={() => setOpen(true)}
-      onClose={() => setOpen(false)}
-      describeChild
-      enterDelay={300}
-      disableFocusListener
-      disableTouchListener
-      disableHoverListener={touch}
-    >
+  const time = (
       <Typography
         component="time"
         dateTime={dateTime}
@@ -110,6 +127,8 @@ export function MailListDate({
         onClick={onTap}
         onMouseDown={keepFromRow}
         onTouchStart={keepFromRow}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
         sx={[
           {
             flexShrink: 0,
@@ -118,8 +137,6 @@ export function MailListDate({
             whiteSpace: "nowrap",
             fontWeight: emphasis ? 600 : 400,
             color: emphasis ? "primary.main" : "text.secondary",
-            // A finger-sized target around the text, without moving it.
-            "@media (hover: none)": { py: "10px", my: "-10px", px: "6px", mx: "-6px" },
           },
           stacked ? STACKED : INLINE,
           stacked && inlineFrom ? { [inlineFrom]: INLINE } : {},
@@ -133,6 +150,19 @@ export function MailListDate({
         </span>
         <span data-date-time="">{parts.time}</span>
       </Typography>
+  );
+  if (!armed) return time;
+  return (
+    <Tooltip
+      title={`${detailPrefix}${mailDateDetail(timestamp)}`}
+      open={open}
+      onClose={() => setOpen(false)}
+      describeChild
+      disableFocusListener
+      disableHoverListener
+      disableTouchListener
+    >
+      {time}
     </Tooltip>
   );
 }
