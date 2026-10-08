@@ -195,6 +195,27 @@ describe('loadEarlierMessage', () => {
     expect(cachedEarlierMessage(reference, { [reference.identifier]: { isValid: true, user: 'alice', subject: '__qmail_deleted__' } })).toBeNull()
   })
 
+  it('decrypts our own earlier mail to a long name or an alias with the next key', async () => {
+    // The identifier keeps only 20 characters of the recipient, so that name
+    // resolves to nothing; the publisher (one of ours) still opens it.
+    const ownToLongName = { name: 'Me', identifier: '_mail_qortal_qmail_Custom Node on Qorta_AbCdEf_mail_x1', service: 'MAIL_PRIVATE' }
+    mockQortalAction('GET_NAME_DATA', (request: any) => (request.name === 'Me' ? { owner: 'QMe' } : {}))
+    mockQortalAction('FETCH_QDN_RESOURCE', 'ENC')
+    mockQortalAction('DECRYPT_DATA', btoa(JSON.stringify(mailJson('Mine'))))
+    const result = await loadEarlierMessage(ownToLongName, { ownNames: ['Me'] })
+    expect(result).toMatchObject({ status: 'loaded', message: { subject: 'Mine', user: 'Me' } })
+    expect(qortalCalls('GET_NAME_DATA').map((request) => request.name)).toEqual(['Custom Node on Qorta', 'Me'])
+  })
+
+  it('stops at a node error instead of trying more keys', async () => {
+    mockQortalAction('FETCH_QDN_RESOURCE', () => {
+      throw new Error('Something broke')
+    })
+    const ownToLongName = { name: 'Me', identifier: '_mail_qortal_qmail_Custom Node on Qorta_AbCdEf_mail_x2', service: 'MAIL_PRIVATE' }
+    expect(await loadEarlierMessage(ownToLongName, { ownNames: ['Me'] })).toEqual({ status: 'failed' })
+    expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(1)
+  })
+
   it('says "unavailable" after the retries and tries again next time', async () => {
     mockQortalAction('FETCH_QDN_RESOURCE', () => {
       throw { error: 1401, message: 'Data unavailable. Please try again later.' }

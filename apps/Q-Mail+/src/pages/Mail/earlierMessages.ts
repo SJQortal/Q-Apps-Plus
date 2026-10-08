@@ -275,7 +275,7 @@ export function loadEarlierMessage(reference: EarlierReference, options: LoadEar
 }
 
 async function fetchEarlierMessage(reference: EarlierReference, options: LoadEarlierOptions): Promise<EarlierLoad> {
-  let outcome: EarlierLoad = { status: "failed" };
+  let notSentToUs = false;
   for (const otherUser of decryptCandidates(reference, options.ownNames || [])) {
     const res: any = await fetchAndEvaluateMail(
       { user: reference.name, messageIdentifier: reference.identifier, content: {}, otherUser },
@@ -283,20 +283,13 @@ async function fetchEarlierMessage(reference: EarlierReference, options: LoadEar
       undefined,
       { retries: options.retries ?? EARLIER_FETCH_RETRIES, sleep: options.sleep }
     );
-    if (res?.deleted || (res?.isValid && isTombstoneMessage(res))) {
-      outcome = { status: "deleted" };
-      break;
-    }
-    if (res?.isValid) {
-      outcome = { status: "loaded", message: res };
-      break;
-    }
-    if (res?.unableToDecrypt) {
-      outcome = { status: "unableToDecrypt" };
-      continue;
-    }
-    outcome = res?.notAvailable ? { status: "unavailable" } : { status: "failed" };
-    break;
+    if (res?.deleted || (res?.isValid && isTombstoneMessage(res))) return { status: "deleted" };
+    if (res?.isValid) return { status: "loaded", message: res };
+    // The node could not provide it: another key will not help.
+    if (res?.fetchError) return res.notAvailable ? { status: "unavailable" } : { status: "failed" };
+    if (res?.unableToDecrypt) notSentToUs = true;
+    // Otherwise this candidate's key could not be found (a recipient name cut
+    // to 20 characters in the identifier, or an alias): try the next one.
   }
-  return outcome;
+  return notSentToUs ? { status: "unableToDecrypt" } : { status: "failed" };
 }
