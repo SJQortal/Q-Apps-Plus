@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined'
 import { HubThemeProvider } from '../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../theme/qplus-theme'
@@ -231,14 +231,16 @@ describe('Rail', () => {
     expect(grouped.sections[3].children.map((c) => c.label)).toEqual(['Devs'])
   })
 
-  it('folds the names under Inbox behind a chevron, remembered, while Inbox still opens the inbox', () => {
+  it('folds the names under Inbox behind a chevron, remembered, while Inbox still opens the inbox', async () => {
     localStorage.clear()
     const onSelect = vi.fn()
     const view = wrap(<Rail items={items} activeItemId="inbox" onSelect={onSelect} onOpenSettings={() => {}} version="1.0.0" />)
-    const fold = screen.getByRole('button', { name: 'Hide the names under Inbox' })
+    const fold = screen.getByRole('button', { name: 'Names under Inbox' })
     expect(fold.getAttribute('aria-expanded')).toBe('true')
     fireEvent.click(fold)
-    expect(screen.queryByRole('button', { name: 'alice' })).toBeNull()
+    expect(fold.getAttribute('aria-expanded')).toBe('false')
+    // Folds shut (an animation), then the names are out of reach.
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'alice' })).toBeNull())
     expect(onSelect).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Inbox' }))
     expect(onSelect).toHaveBeenCalledWith('inbox')
@@ -246,17 +248,88 @@ describe('Rail', () => {
     view.unmount()
     wrap(<Rail items={items} activeItemId="inbox" onSelect={() => {}} onOpenSettings={() => {}} version="1.0.0" />)
     expect(screen.queryByRole('button', { name: 'alice' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Show the names under Inbox' }))
-    expect(screen.getByRole('button', { name: 'alice' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Names under Inbox' }))
+    expect(await screen.findByRole('button', { name: 'alice' })).toBeTruthy()
   })
 
-  it("a name's menu under Inbox hides it from the list", async () => {
+  it("a name's menu under Inbox hides it at once, and Undo brings it back", async () => {
     localStorage.clear()
-    const onHide = vi.fn()
-    wrap(<Rail items={items} activeItemId="inbox" onSelect={() => {}} onOpenSettings={() => {}} version="1.0.0" onHideInboxName={onHide} />)
+    let model = items
+    const onHide = vi.fn((name: string) => {
+      model = model.filter((item) => item.label !== name)
+    })
+    const onShow = vi.fn()
+    const rail = () => (
+      <Rail items={model} activeItemId="inbox" onSelect={() => {}} onOpenSettings={() => {}} version="1.0.0" onHideInboxName={onHide} onShowInboxName={onShow} />
+    )
+    const view = wrap(rail())
     fireEvent.contextMenu(screen.getByRole('button', { name: 'bob' }), { clientX: 20, clientY: 20 })
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Hide from the list' }))
-    expect(onHide).toHaveBeenCalledWith('bob')
+    // It folds away first; the mailboxes are told once it has.
+    expect(screen.getByText(/hidden from the list/)).toBeTruthy()
+    await waitFor(() => expect(onHide).toHaveBeenCalledWith('bob'))
+    view.rerender(
+      <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+        {rail()}
+      </HubThemeProvider>
+    )
+    expect(screen.queryByRole('button', { name: 'bob' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(onShow).toHaveBeenCalledWith('bob')
+  })
+
+  it('Undo also brings back the name being viewed, which the mailboxes keep listed while hidden', async () => {
+    localStorage.clear()
+    const onHide = vi.fn()
+    const onShow = vi.fn()
+    // bob is open: the model keeps listing it after the hide.
+    wrap(<Rail items={items} activeItemId="inbox-instance:bob" onSelect={() => {}} onOpenSettings={() => {}} version="1.0.0" onHideInboxName={onHide} onShowInboxName={onShow} />)
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'bob' }), { clientX: 20, clientY: 20 })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Hide from the list' }))
+    await waitFor(() => expect(onHide).toHaveBeenCalledWith('bob'))
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(onShow).toHaveBeenCalledWith('bob')
+    expect(await screen.findByRole('button', { name: 'bob' })).toBeTruthy()
+  })
+
+  it('a viewed name hidden and then shown again in Settings is back once you leave it', async () => {
+    localStorage.clear()
+    const onHide = vi.fn()
+    const rail = (active: string) => (
+      <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+        <Rail items={items} activeItemId={active} onSelect={() => {}} onOpenSettings={() => {}} version="1.0.0" onHideInboxName={onHide} onShowInboxName={() => {}} />
+      </HubThemeProvider>
+    )
+    // bob is open, so the mailboxes keep listing it after the hide.
+    const view = render(rail('inbox-instance:bob'))
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'bob' }), { clientX: 20, clientY: 20 })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Hide from the list' }))
+    await waitFor(() => expect(onHide).toHaveBeenCalledWith('bob'))
+    // Shown again elsewhere (Settings): still listed when you go to Inbox, so not hidden.
+    view.rerender(rail('inbox'))
+    expect(await screen.findByRole('button', { name: 'bob' })).toBeTruthy()
+  })
+
+  it('the Undo toast reads in the theme (paper and text colours), is a polite status, and takes focus', async () => {
+    localStorage.clear()
+    wrap(<Rail items={items} activeItemId="inbox" onSelect={() => {}} onOpenSettings={() => {}} version="1.0.0" onHideInboxName={() => {}} onShowInboxName={() => {}} />)
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'bob' }), { clientX: 20, clientY: 20 })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Hide from the list' }))
+    const status = await screen.findByRole('status')
+    expect(status.textContent).toContain('bob hidden from the list')
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Undo' })))
+  })
+
+  it('Undo while the name is still folding away keeps it, telling the mailboxes nothing', async () => {
+    localStorage.clear()
+    const onHide = vi.fn()
+    wrap(<Rail items={items} activeItemId="inbox" onSelect={() => {}} onOpenSettings={() => {}} version="1.0.0" onHideInboxName={onHide} onShowInboxName={() => {}} />)
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'bob' }), { clientX: 20, clientY: 20 })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Hide from the list' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(onHide).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'bob' })).toBeTruthy()
   })
 
   it('renders the model and forwards selections', () => {
