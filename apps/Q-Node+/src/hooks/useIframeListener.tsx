@@ -1,11 +1,22 @@
 import { useEffect } from 'react';
 import { To, useNavigate } from 'react-router-dom';
-import { EnumTheme, themeAtom } from '../state/global/system';
+import { hostModeAtom } from '../state/global/system';
 import { useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { supportedLanguages } from '../i18n/i18n';
 
-type Language = 'ar' | 'de' | 'en' | 'es' | 'et' | 'fr' | 'it' | 'pt' | 'ru' | 'ja' | 'zh';
+type Language =
+  | 'ar'
+  | 'de'
+  | 'en'
+  | 'es'
+  | 'et'
+  | 'fr'
+  | 'it'
+  | 'pt'
+  | 'ru'
+  | 'ja'
+  | 'zh';
 type Theme = 'dark' | 'light';
 
 interface CustomWindow extends Window {
@@ -16,18 +27,11 @@ interface CustomWindow extends Window {
 const customWindow = window as unknown as CustomWindow;
 
 export const useIframe = () => {
-  const setTheme = useSetAtom(themeAtom);
+  const setHostMode = useSetAtom(hostModeAtom);
   const { i18n } = useTranslation();
 
   const navigate = useNavigate();
   useEffect(() => {
-    const themeColorDefault = customWindow?._qdnTheme;
-    if (themeColorDefault === 'dark') {
-      setTheme(EnumTheme.DARK);
-    } else if (themeColorDefault === 'light') {
-      setTheme(EnumTheme.LIGHT);
-    }
-
     const languageDefault = customWindow?._qdnLang;
 
     if (supportedLanguages?.includes(languageDefault)) {
@@ -52,10 +56,10 @@ export const useIframe = () => {
         );
       } else if (event.data?.action === 'THEME_CHANGED' && event.data.theme) {
         const themeColor = event.data.theme;
-        if (themeColor === 'dark') {
-          setTheme(EnumTheme.DARK);
-        } else if (themeColor === 'light') {
-          setTheme(EnumTheme.LIGHT);
+        if (themeColor === 'dark' || themeColor === 'light') {
+          // The theme kit reads _qdnTheme when its provider mounts.
+          customWindow._qdnTheme = themeColor;
+          setHostMode(themeColor);
         }
       } else if (
         event.data?.action === 'LANGUAGE_CHANGED' &&
@@ -71,6 +75,6 @@ export const useIframe = () => {
     return () => {
       window.removeEventListener('message', handleNavigation);
     };
-  }, [navigate, setTheme]);
+  }, [navigate, setHostMode, i18n]);
   return { navigate };
 };
