@@ -1726,6 +1726,29 @@ Simon tried 1.0.1 on his phone (GO) and asked for three things.
 - **Checks:** 865 tests (8 for the gesture, plus the layers' registration); a Playwright run with CDP touch events at 390×844 against the screens mocks: swipe closes the message, a short swipe and a vertical drag don't, the drawer closes left but not right, Settings from the gear closes with a swipe, the empty composer closes, 0 console errors. Screens (inbox, inbox-open, menu, compose, settings, whats-new, attachment-image, row-menu × hub30 and white): 76 captures, 0 errors, overflow, unlabelled buttons or axe violations.
 - **Not checked yet:** a real phone. The emulator's Chrome asks for its Terms of Service to be accepted first, which needs Simon's OK; GO in the emulator was not used.
 
+### Upstream PR preparation (2026-10-12)
+
+Simon called Q-Mail+ ready for its PR to Qortal/q-mail (docs/RELEASE.md, stage 4).
+
+**Ready for upstream** (RELEASE.md's checklist):
+- [x] No open community bug that loses data, costs QORT or blocks a main flow: everything reported is done (Community feedback); drafts sync is a feature question for later.
+- [ ] GO on a real phone: Simon has used 1.0.1 in GO since 2026-10-08 (the composer with the keyboard, Reply all, the mailboxes menu, Settings, Archived), and what he found is fixed in 1.0.2. Not confirmed yet: GO's hardware Back, the file picker and PDFs in Hub's reader. The PR text says so, as Q-Share's did.
+- [x] Qortal/q-mail hasn't moved: `main` at `ddf3aa92`, last change 2026-05-28; `scripts/upstream-pr.sh Q-Mail+ --check`: fast-forward yes, version 4.0.0 (Qortal's is 3.2.1).
+- [x] Open questions: the Follow-ups below are small UX choices, deliberately left for after the PR.
+
+**Prepared, local only.** `main` doesn't have 1.0.1 and 1.0.2 yet (PR #21), so `apps/Q-Mail+` was split from this branch for the preparation: 289 commits on top of Qortal/q-mail `main`, all by Simon James with the noreply address, no Claude lines, a fast-forward. On top, "Ship as Q-Mail 4.0.0" (42 files):
+- the name back to Q-Mail in the window title, the mailboxes header, the welcome notice, Settings → About (with the Q-Apps+ credit), What's new and the error messages; Q-Mail copies no `qortal://APP` links, so none change;
+- the theme's storage key `qmailplus-ui-theme` → `qmail-ui-theme` (3.2.1 keeps its settings under `qmail:*`, so nothing clashes; the other keys never had "plus");
+- version 4.0.0 in `package.json` and the lockfile, one 4.0.0 entry in `CHANGELOG.md` (above 3.2.1's, which stay) and one in What's new;
+- a README for the Qortal repo (what's new, develop, publish, data, notes for maintainers), comments that cite this brief linked to it on GitHub, and `e2e/screens.mjs` (Q-Share's standalone copy of `scripts/screens.mjs`).
+Checks in the split: 870 tests, lint, types and the build pass (main chunk 375.9 kB, the same as 1.0.2), and `node e2e/screens.mjs` in four themes, dark: 612 captures with 0 sideways overflow, 0 unlabelled buttons and 0 axe violations. One capture (threads at 1280 in Hub 3.0) failed with `ERR_NETWORK_CHANGED` while the host's network changed, and was clean on a re-run. The PR text is drafted from `docs/templates/upstream-pr.md` for Simon to read.
+
+**From here:**
+1. Simon publishes `release/Q-Mail+.zip` as 1.0.2; I check the live files, add the Published line and merge PR #21 (a merge commit), so `main` has 1.0.1 and 1.0.2.
+2. `scripts/upstream-pr.sh Q-Mail+` splits `apps/Q-Mail+` from `origin/main` into `q-mail-upstream/4.0.0`; the "Ship as" commit goes on top (the same tree), then `npm ci` and the checks again.
+3. Simon reads the PR text. After his yes: `scripts/upstream-pr.sh Q-Mail+ --push --version 4.0.0` (fork SJQortal/q-mail) and `gh pr create --repo Qortal/q-mail`.
+4. The PR's link goes in this brief and in docs/PROGRESS.md (a `Repo:` commit).
+
 ## Community feedback
 
 - **2026-10-07, Qortal DEV (via Simon):** messages with the reply built in keep growing and eventually get very large in long threads, which is why it was removed from Q-Mail. Suggestion: keep showing the previous message, but don't include it in the reply. **Done in 1.0.1:** no quote in the body, and `threadV2` holds references only (§18, Done → 1.0.1). Simon chose references only over capping or keeping the copies. Worth telling the DEV: the original app's own `threadV2` still embeds `data: replyTo` *with* its history, so it doubles with every reply (5 MB at reply #14 with 400-character replies). Q-Mail+ has stripped that since 1.0.0 and now sends references.
@@ -1734,6 +1757,9 @@ Simon tried 1.0.1 on his phone (GO) and asked for three things.
 - **2026-10-08, Simon (morning):** earlier messages newest first, with avatars; names under Inbox hideable (by hand, or when all their mail is archived) and the section collapsible. **Done in 1.0.1** (Done → Earlier messages order, names under Inbox).
 - **2026-10-08, Simon (morning):** right click, and long press on phones. **Done in 1.0.1** (Done → Right click and long press).
 - **2026-10-08, Simon:** exact dates in the inbox, the archive and every list, with more detail on hover and on a tap on phones; the earlier-messages limit left to the overnight session; group threads hideable in Settings. **Done in 1.0.1** (Done → Overnight).
+- **2026-10-12, Simon (1.0.1 in GO on his phone):** the composer's placeholder stayed under the first word; Settings in the phone's mailboxes menu did nothing (and the gear at the top does the same); a swipe to go back or close; the top bar flickering while writing a reply (a screen recording). **Done in 1.0.2** (Done → 1.0.2).
+- **2026-10-12, Simon:** drafts don't sync with the published mail state. Confirmed: drafts stay on the device, as in Q-Mail 3. Adding them to `qmail_state_v1` (additive, synced only on Publish, deletions remembered so they win, a size cap per draft) was offered; not decided, so it waits for a later version.
+- **2026-10-12, Simon:** Archived selection on phones. Already there (the same list as the inbox, with Select all and Move to inbox); no change.
 
 **A reply for Qortal DEV**, if Simon wants one (draft, his to edit):
 
@@ -1751,7 +1777,7 @@ Simon tried 1.0.1 on his phone (GO) and asked for three things.
 6. **The test mails:** "Q-Mail+ 1.0.1 test: replies that link" (3 messages) sit in the inboxes of Simon James and POS+. Archive them when you like.
 7. **The dev frame's archive:** your published archive (177 messages from 2026-10-05) is applied in the Dev Mode frame (127.0.0.1:12393); your real app isn't affected. Was that you pressing "Load state" before bed?
 
-Next-pass ideas from 1.0.1: poll the resource status before fetching an earlier message, as the opener does, for big or slow ones; one merged `_<suffix>_mail_` search in the inbox poll instead of one per name (idle polling is 1 + 2N searches per tick since the cap went to 2 minutes); fetch an earlier message's body once and try each decrypt key on it; a menu for "All mail" search results, thread rows and drafts; an exit animation when a row is archived.
+Next-pass ideas: drafts in the published mail state (Community feedback, 2026-10-12). From 1.0.1: poll the resource status before fetching an earlier message, as the opener does, for big or slow ones; one merged `_<suffix>_mail_` search in the inbox poll instead of one per name (idle polling is 1 + 2N searches per tick since the cap went to 2 minutes); fetch an earlier message's body once and try each decrypt key on it; a menu for "All mail" search results, thread rows and drafts; an exit animation when a row is archived.
 
 **For Simon on his own account.** The round 5 Hub checks already ran on your account (read-only, nothing published or sent): the 86-name switcher and its search, the avatars after a switch, pane widths, switching between messages, the full-width list, Mugician's join link (declined), the footer at 1440 and 390 (all cleared again), mail 1's PDF in Hub's reader and in the in-app viewer, and the Q-Share+ comparison. Left for you, in Q-Mail+ and the original Q-Mail:
 1. **The footer for real:** set yours, send one mail, and check it in the original app.
@@ -1776,4 +1802,4 @@ Next-pass ideas from 1.0.1: poll the resource status before fetching an earlier 
 - ~~**Load-state prompt per name**~~: done in 1.0.1 (`a83b2ae4`): once per name per session.
 - **Impostor names in the other + apps:** Q-Share+ and the rest should cross out names with hidden characters the same way (Hub's rule, 2px line-through in the error colour). Not done here, because each app stands alone; copy `invisibleCharacters.ts` and `NameText` into each app on its own pass.
 
-Also: the attach control is an image inside a `role=presentation` drop zone rather than a labelled button; `MailTable.tsx`'s `SimpleTable` default export is dead; `hub-cdp.mjs tap` lands about 124 px high in the app frame (the frame's top offset in Hub's page; a separate repo task in `scripts/`); GO on a real phone (keyboard, hardware Back, pull-to-refresh); the React Compiler lint rules stay off (mostly upstream setState-in-effect code).
+Also: ~~the attach control is an image inside a `role=presentation` drop zone~~ (a real "Attach files" button since 1.0.1); `MailTable.tsx`'s `SimpleTable` default export is dead; `hub-cdp.mjs tap` lands about 124 px high in the app frame (the frame's top offset in Hub's page; a separate repo task in `scripts/`); GO on a real phone (Simon uses it there since 1.0.1; still unconfirmed: hardware Back, the file picker, PDFs in Hub's reader, pull-to-refresh); the React Compiler lint rules stay off (mostly upstream setState-in-effect code).
