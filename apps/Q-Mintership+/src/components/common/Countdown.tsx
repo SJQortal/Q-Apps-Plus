@@ -41,6 +41,11 @@ export interface CountdownProps {
   doneText?: string;
   /** How the tooltip names the block: "Block", "Last block a signature counts in:". */
   blockLabel?: string;
+  /**
+   * Inside a link: no label of its own, so the link's name is the visible
+   * words ("6d 12h left to sign"); the block and date stay in the tooltip.
+   */
+  plain?: boolean;
 }
 
 export function Countdown({
@@ -49,6 +54,7 @@ export function Countdown({
   suffix = 'left',
   doneText = 'Time is up',
   blockLabel = 'Block',
+  plain = false,
 }: CountdownProps) {
   const clock = useNow(1000);
   const display = useAtomValue(timeDisplayAtom);
@@ -70,10 +76,16 @@ export function Countdown({
   const detail = `${blockLabel} ${formatCount(height)}, about ${formatDateTime(target)}${now.estimated ? ' (block time estimated)' : ''}`;
 
   return (
-    <Tooltip title={detail}>
+    <Tooltip title={detail} describeChild={plain}>
       <Box
         component="span"
-        aria-label={urgency === 'over' ? doneText : `${time} ${suffix}, ${blockText}. ${detail}`}
+        aria-label={
+          plain
+            ? undefined
+            : urgency === 'over'
+              ? doneText
+              : `${time} ${suffix}, ${blockText}. ${detail}`
+        }
         sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
       >
         <ScheduleOutlinedIcon
@@ -92,6 +104,7 @@ export function Countdown({
         >
           {main}
         </Typography>
+        {/* A space for screen readers; the flex row ignores it. */}{' '}
         {urgency !== 'over' ? (
           <Typography component="span" variant="body2" sx={{ color: 'text.secondary' }}>
             {suffix}

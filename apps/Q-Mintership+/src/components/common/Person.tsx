@@ -82,7 +82,10 @@ export function PersonChip({
   );
 }
 
-/** A row of small avatars (signers), with the rest counted. */
+/**
+ * A row of small avatars (signers), each linking to the person, the rest
+ * counted. List semantics sit on the items, not on the links.
+ */
 export function AvatarStack({
   people,
   max = 8,
@@ -98,17 +101,29 @@ export function AvatarStack({
   const rest = people.length - shown.length;
   return (
     <Box
-      role="list"
+      component="ul"
       aria-label={label}
-      sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}
+      sx={{
+        listStyle: 'none',
+        m: 0,
+        p: 0,
+        display: 'flex',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 0.5,
+      }}
     >
       {shown.map((p) => (
-        <StackedAvatar key={p.address} address={p.address} name={p.name} size={size} />
+        <Box component="li" key={p.address} sx={{ display: 'flex' }}>
+          <StackedAvatar address={p.address} name={p.name} size={size} />
+        </Box>
       ))}
       {rest > 0 ? (
-        <Typography role="listitem" variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
-          +{rest}
-        </Typography>
+        <Box component="li" sx={{ display: 'flex', alignItems: 'center', px: 0.5 }}>
+          <Typography variant="body2" color="text.secondary">
+            +{rest}
+          </Typography>
+        </Box>
       ) : null}
     </Box>
   );
@@ -129,7 +144,6 @@ function StackedAvatar({
       <Link
         component={RouterLink}
         to={personPath(address)}
-        role="listitem"
         aria-label={shown.label}
         sx={{ display: 'inline-flex', borderRadius: '50%' }}
       >

@@ -115,12 +115,13 @@ describe('Nominations page', () => {
     // Admins can jump to the Decisions queue from an open nomination.
     expect(within(wren).getByRole('link', { name: 'Open in Decisions' })).toBeInTheDocument();
     // Enough signatures already (8 of 8), or too late to count: support would change nothing.
-    for (const done of [ADDR.met, ADDR.late]) {
+    // Chain-only nominations show the nominee's name, looked up.
+    for (const done of ['Mia Met', 'Lars Late']) {
       const c = await card(done);
       expect(within(c).queryByRole('button', { name: 'Add your support' })).toBeNull();
     }
     expect(
-      within(await card(ADDR.early)).getByRole('button', { name: 'Add your support' })
+      within(await card('Eli Early')).getByRole('button', { name: 'Add your support' })
     ).toBeInTheDocument();
     mockQortalRequest('PUBLISH_QDN_RESOURCE', () => ({
       type: 'ARBITRARY',

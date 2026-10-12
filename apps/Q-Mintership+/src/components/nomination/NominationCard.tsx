@@ -12,6 +12,7 @@ import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutli
 import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
 import type { NominationState } from '../../rules/nomination';
+import { useDisplayName } from '../../hooks/useDisplayName';
 import { formatDuration, formatRelative } from '../../utils/format';
 import { openQortalLink } from '../../utils/links';
 import { Countdown } from '../common/Countdown';
@@ -57,15 +58,17 @@ export function NominationCard({
         'note' in s.record && s.record.note ? [{ who: s.publisher, note: s.record.note }] : []
       );
   const ended = ENDED_TEXT[n.state];
+  // No name in the record or the member list (a chain-only nomination): look it up.
+  const nominee = useDisplayName(n.nominee, n.nomineeName ?? undefined);
   return (
     <Card
       as="article"
-      aria-label={`Nomination of ${n.nomineeName ?? n.nominee}`}
+      aria-label={`Nomination of ${nominee.label}`}
       sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}
     >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-          {hideNominee ? null : <PersonChip address={n.nominee} name={n.nomineeName} size={40} />}
+          {hideNominee ? null : <PersonChip address={n.nominee} name={nominee.name} size={40} />}
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
             <NominationStateChip state={n.state} />
             {n.hasJoinRequest && (n.state === 'waiting' || n.state === 'signing') ? (

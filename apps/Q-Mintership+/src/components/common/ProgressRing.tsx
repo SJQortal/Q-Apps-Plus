@@ -18,6 +18,8 @@ export interface ProgressRingProps {
   label?: string;
   /** Colour of the filled arc. */
   tone?: 'primary' | 'success' | 'warning' | 'error';
+  /** Hidden from screen readers, when the words beside it say the same (inside a link). */
+  decorative?: boolean;
 }
 
 export function ProgressRing({
@@ -27,6 +29,7 @@ export function ProgressRing({
   size = 56,
   label,
   tone,
+  decorative = false,
 }: ProgressRingProps) {
   const theme = useTheme();
   const stroke = Math.max(4, Math.round(size / 10));
@@ -42,8 +45,9 @@ export function ProgressRing({
 
   return (
     <Box
-      role="img"
-      aria-label={text}
+      role={decorative ? undefined : 'img'}
+      aria-label={decorative ? undefined : text}
+      aria-hidden={decorative || undefined}
       sx={{ position: 'relative', width: size, height: size, flexShrink: 0 }}
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>

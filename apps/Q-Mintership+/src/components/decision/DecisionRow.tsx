@@ -2,6 +2,9 @@
  * A compact decision: what it does, who it is about, k of n and the time
  * left, and whether you have signed. Links to the decision in the queue.
  * (The full card with Sign lives on the Decisions screen.)
+ *
+ * The link's name is its visible text; the ring is decorative here, so its
+ * "k of n signatures" is in visually hidden words after the title.
  */
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Typography } from '@mui/material';
@@ -34,7 +37,6 @@ export function DecisionRow({
     <Box
       component={RouterLink}
       to={decisionPath(d.signature)}
-      aria-label={`${KIND_LABEL[d.kind]}: ${who}. ${d.tally ? `${d.tally.approvalCount} of ${d.tally.needed} signatures.` : ''}${signed ? ' You signed.' : ''}`}
       sx={{
         display: 'flex',
         alignItems: 'center',
@@ -56,10 +58,15 @@ export function DecisionRow({
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
           {KIND_LABEL[d.kind]}: {who}
+          {d.tally ? (
+            <span className="qmp-visually-hidden">
+              . {d.tally.approvalCount} of {d.tally.needed} signatures.
+            </span>
+          ) : null}
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mt: 0.5 }}>
           {d.window && (d.phase === 'open' || d.phase === 'early') ? (
-            <SigningClock now={now} height={d.window.lastUsefulSignatureHeight} />
+            <SigningClock now={now} height={d.window.lastUsefulSignatureHeight} plain />
           ) : (
             <DecisionPhaseChip phase={d.phase} />
           )}
@@ -78,6 +85,7 @@ export function DecisionRow({
           target={d.tally.needed}
           pending={d.tally.inFlight.filter((x) => x.approval).length}
           size={48}
+          decorative
         />
       ) : null}
     </Box>

@@ -15,7 +15,8 @@ import { KIND_LABEL, type Decision } from '../../rules/decision';
 import { useAccount } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { PersonChip } from '../../components/common/Person';
-import { DoneChip, SignerAvatars, SigningClock } from '../../components/decision/DecisionParts';
+import { DoneChip, SigningClock } from '../../components/decision/DecisionParts';
+import { AvatarStack } from '../../components/common/Person';
 import { ProgressRing } from '../../components/common/ProgressRing';
 import { Card, DecisionPhaseChip } from '../../components/common/Section';
 import { primarySoft } from '../../hub-theme';
@@ -444,7 +445,7 @@ function Signers({
       </Typography>
       {known.length ? (
         <Box sx={{ opacity: faded ? 0.7 : 1 }}>
-          <SignerAvatars people={known} label={label} />
+          <AvatarStack people={known} label={label} max={10} />
         </Box>
       ) : null}
     </Box>
