@@ -220,6 +220,39 @@ describe('Decisions: first signature', () => {
   });
 });
 
+describe('Decisions: bulk sign', () => {
+  it('signs the selected decisions one after another and stops at a cancel', async () => {
+    const u = user();
+    await openPage('admin');
+    let calls = 0;
+    mockQortalRequest('SIGN_TRANSACTION', () => {
+      calls++;
+      if (calls === 2) throw { error: 'User declined request', message: 'User declined request' };
+      return { type: 'GROUP_APPROVAL', signature: `S${calls}` };
+    });
+
+    await u.click(screen.getByRole('button', { name: 'Sign several' }));
+    await u.click(screen.getByRole('checkbox', { name: /bob\+builder/ }));
+    await u.click(screen.getByRole('checkbox', { name: /Kai Target/ }));
+    await u.click(screen.getByRole('checkbox', { name: /Ben Target/ }));
+    expect(screen.getByText('3 of 6 selected')).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: 'Sign 3' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Sign several' });
+    expect(within(dialog).getByText(/3 Hub confirmations, one for each/)).toBeVisible();
+    expect(within(dialog).getByText(/Fees in total: 0.03 QORT/)).toBeInTheDocument();
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+
+    expect(await within(dialog).findByText(/1 of 3 sent/)).toBeVisible();
+    const progress = within(dialog).getByRole('list', { name: 'Progress' });
+    const items = within(progress).getAllByRole('listitem');
+    expect(within(items[0]).getByText('Sent ✓')).toBeVisible();
+    expect(within(items[1]).getByText('Cancelled in Hub. Stopped here.')).toBeVisible();
+    expect(within(items[2]).getByText('Not sent.')).toBeVisible();
+    expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(2);
+  });
+});
+
 describe('Decisions: navigation and filters', () => {
   it('scrolls to and focuses the decision named in ?d=', async () => {
     const sig = createWorld().pending.find((t: { type: string }) => t.type === 'GROUP_KICK')

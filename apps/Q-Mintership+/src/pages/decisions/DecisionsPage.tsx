@@ -23,6 +23,7 @@ import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import { useAtom, useAtomValue } from 'jotai';
 import { PageBody } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
+import { BOTTOM_NAV_HEIGHT } from '../../components/layout/BottomNav';
 import { DoneChip } from '../../components/decision/DecisionParts';
 import { NominationCard } from '../../components/nomination/NominationCard';
 import { Card, Section } from '../../components/common/Section';
@@ -35,15 +36,20 @@ import {
 } from '../../components/common/states';
 import { STORAGE_PREFIX } from '../../constants/plus';
 import type { Nomination } from '../../data/nominations';
+import { peekQuery } from '../../data/query';
 import { useDecisions, useMembers, useNominations } from '../../hooks/useData';
+import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import type { Decision } from '../../rules/decision';
+import { KIND_LABEL, type Decision } from '../../rules/decision';
 import { approvalsNeeded } from '../../rules/threshold';
 import { useSession } from '../../state/session';
 import { decisionsHideSignedAtom } from '../../state/settings';
 import { displayName, plural } from '../../utils/format';
+import { useLandscapeFrame } from '../../utils/hubFrame';
+import { bulkSign } from '../../writes/flows';
 import { pendingWritesAtom, writeKeys, type PendingWrite } from '../../writes/optimistic';
 import type { Signer } from '../../writes/runner';
+import { BulkDialog } from './BulkDialog';
 import { DecisionCard, type SubjectFacts } from './DecisionCard';
 import { canSign, decisionCardId, isSignedByMe, myAnswer } from './decisionUi';
 import { FirstSignatureDialog } from './FirstSignatureDialog';
@@ -112,10 +118,15 @@ export default function DecisionsPage() {
   const writes = useAtomValue(pendingWritesAtom);
   const [params] = useSearchParams();
   const target = params.get('d');
+  const phone = usePhoneLayout();
+  const landscape = useLandscapeFrame();
   const reduced = useReducedMotion();
 
   const [signTarget, setSignTarget] = useState<Decision | null>(null);
   const [firstTarget, setFirstTarget] = useState<Nomination | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [bulkList, setBulkList] = useState<Decision[] | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [handledTarget, setHandledTarget] = useState<string | null>(null);
 
@@ -220,11 +231,36 @@ export default function DecisionsPage() {
     return () => clearTimeout(timer);
   }, [highlight]);
 
+  const toggleSelect = (signature: string) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(signature)) next.delete(signature);
+      else next.add(signature);
+      return next;
+    });
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+  const selectedList = signable.filter((d) => selected.has(d.signature));
+
+  const labelFor = (d: Decision) => {
+    if (!d.subject) return `${KIND_LABEL[d.kind]} (Core doesn’t say for whom)`;
+    const name =
+      nominationFor(d)?.nomineeName ??
+      members.get(d.subject)?.primaryName ??
+      adminNames.get(d.subject) ??
+      peekQuery<string | null>(`name:${d.subject}`) ??
+      null;
+    return `${KIND_LABEL[d.kind]}: ${displayName(name, d.subject)}`;
+  };
+
   const refresh = () => {
     void decisionsQ.refetch();
     void nominationsQ.refetch();
   };
 
+  const bottomBar = phone && !landscape;
   const fetching = decisionsQ.fetching || nominationsQ.fetching;
 
   return (
@@ -313,6 +349,15 @@ export default function DecisionsPage() {
                   label="Hide what I signed"
                   sx={{ minHeight: 44, mr: 'auto' }}
                 />
+                {selecting || signable.length > 1 ? (
+                  <Button
+                    variant={selecting ? 'text' : 'outlined'}
+                    onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+                    sx={{ minHeight: 44 }}
+                  >
+                    {selecting ? 'Cancel selection' : 'Sign several'}
+                  </Button>
+                ) : null}
               </Box>
             ) : null}
 
@@ -335,6 +380,9 @@ export default function DecisionsPage() {
                     nomination={nominationFor(d)}
                     adminNames={adminNames}
                     subjectFacts={factsFor(d.subject)}
+                    selecting={selecting}
+                    selected={selected.has(d.signature)}
+                    onToggleSelect={toggleSelect}
                     onSign={setSignTarget}
                     highlighted={highlight === d.signature}
                   />
@@ -351,6 +399,54 @@ export default function DecisionsPage() {
                   </Box>
                 ) : null}
               </Section>
+            ) : null}
+
+            {selecting ? (
+              <Box
+                role="region"
+                aria-label="Sign several"
+                sx={(theme) => ({
+                  position: 'sticky',
+                  bottom: bottomBar
+                    ? `calc(${BOTTOM_NAV_HEIGHT}px + var(--qp-safe-bottom) + 8px)`
+                    : 16,
+                  zIndex: theme.zIndex.appBar - 2,
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 1,
+                  p: 1.5,
+                  borderRadius: 1,
+                  border: 1,
+                  borderColor: 'primary.main',
+                  bgcolor: 'background.paper',
+                  boxShadow: theme.shadows[6],
+                })}
+              >
+                <Typography sx={{ fontWeight: 600, mr: 'auto' }} role="status">
+                  {selectedList.length} of {signable.length} selected
+                </Typography>
+                <Button
+                  onClick={() =>
+                    setSelected(
+                      selectedList.length === signable.length
+                        ? new Set()
+                        : new Set(signable.map((d) => d.signature))
+                    )
+                  }
+                  sx={{ minHeight: 44 }}
+                >
+                  {selectedList.length === signable.length ? 'Clear' : 'Select all'}
+                </Button>
+                <Button
+                  variant="contained"
+                  disabled={!selectedList.length}
+                  onClick={() => setBulkList(selectedList)}
+                  sx={{ minHeight: 44 }}
+                >
+                  Sign {selectedList.length || ''}
+                </Button>
+              </Box>
             ) : null}
 
             {waiting.length || nominationsQ.isLoading || nominationsQ.isError ? (
@@ -440,6 +536,31 @@ export default function DecisionsPage() {
           onClose={() => setFirstTarget(null)}
         />
       ) : null}
+      <BulkDialog
+        open={bulkList !== null}
+        onClose={() => setBulkList(null)}
+        title="Sign several"
+        intro={
+          <Typography>
+            Signs {plural(bulkList?.length ?? 0, 'decision')}, one after another. Each signature
+            counts once it is in a block.
+          </Typography>
+        }
+        action="SIGN_TRANSACTION"
+        feeTxType="GROUP_APPROVAL"
+        items={(bulkList ?? []).map((d) => ({ key: d.signature, label: labelFor(d) }))}
+        confirmLabel="Continue to Hub"
+        run={(report) =>
+          signer && bulkList
+            ? bulkSign(
+                signer,
+                bulkList.map((d) => d.signature),
+                report
+              )
+            : Promise.resolve([])
+        }
+        onFinished={stopSelecting}
+      />
     </>
   );
 }
