@@ -41,7 +41,8 @@ import {
 import { STORAGE_PREFIX } from '../../constants/plus';
 import type { Nomination } from '../../data/nominations';
 import { invalidate, peekQuery } from '../../data/query';
-import { useDecisions, useMembers, useMyStatus, useNominations } from '../../hooks/useData';
+import { useNavHas } from '../../components/layout/useNavHas';
+import { useDecisions, useMembers, useNominations } from '../../hooks/useData';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { KIND_LABEL, type Decision } from '../../rules/decision';
@@ -155,7 +156,7 @@ export default function DecisionsPage() {
     data && signer && data.admins.admins.some((a) => a.member === signer.address)
   );
   const myKey = signer?.publicKey ?? null;
-  const viewer = useMyStatus();
+  const inNav = useNavHas('decisions');
 
   const needed = data ? approvalsNeeded(data.group.approvalThreshold, data.admins.adminCount) : 0;
   const totalAdmins = data?.admins.adminCount ?? 0;
@@ -298,7 +299,7 @@ export default function DecisionsPage() {
           data ? `Each needs ${needed} signatures` : 'Everything waiting for the Minter Admins'
         }
         // Only Minter Admins have Decisions in their navigation; others arrive from a link.
-        back={viewer.status && !viewer.status.isAdmin ? PATHS.nominations : undefined}
+        back={inNav ? undefined : PATHS.nominations}
         actions={
           <>
             <Tooltip title="Refresh">
