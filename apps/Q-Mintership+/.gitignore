@@ -5,3 +5,4 @@ dist-ssr
 *.log
 *.tsbuildinfo
 hub-theme-check.tmp/
+e2e/shots/
