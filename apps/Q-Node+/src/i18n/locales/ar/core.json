@@ -72,5 +72,23 @@
     "minting_status": "حالة التعدين",
     "node_uptime": "مدة تشغيل العقدة",
     "sync_status": "حالة المزامنة"
+  },
+  "header": {
+    "node": "العقدة",
+    "settings": "الإعدادات",
+    "navigation": "التنقل"
+  },
+  "settings": {
+    "account": "الحساب",
+    "appearance": "المظهر",
+    "about": "حول",
+    "copy_address": "نسخ العنوان",
+    "copied": "تم النسخ",
+    "changelog": "ما الجديد",
+    "upstream": "التطبيق الأصلي: Qortal/Q-Node",
+    "source": "الكود المصدري: SJQortal/Q-Apps-Plus",
+    "not_signed_in": "لم يتم تسجيل الدخول",
+    "no_name": "لا يوجد اسم مسجّل",
+    "about_blurb": "Q-Node+ هو نسخة سايمون من تطبيق Q-Node الرسمي لـ Qortal. يستخدم واجهة برمجة العقدة نفسها، لذا فإن أي تغيير تجريه هنا يظهر أيضاً في التطبيق الأصلي."
   }
 }

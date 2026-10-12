@@ -1,16 +1,49 @@
 <!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <script>
+      /* Q-Apps+ theme boot (shared/hub-theme/boot-inline.js): paints the
+         saved theme's background before React loads. STORAGE_KEY and HUB20
+         match src/theme/qplus-theme.ts. */
+      (function () {
+        var STORAGE_KEY = 'qnodeplus-ui-theme';
+        var HUB20 = { light: '#fafafa', dark: '#313338' };
+        var BOOT = {
+          hub30: { light: '#EEE7DC', dark: '#0E0F14' },
+          black: { light: '#000000', dark: '#000000' },
+          white: { light: '#ffffff', dark: '#ffffff' },
+        };
+        var params = new URLSearchParams(location.search);
+        var mode = window._qdnTheme || params.get('theme') || 'dark';
+        if (mode !== 'light' && mode !== 'dark') mode = 'dark';
+        var ui = 'hub30';
+        try {
+          var stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+          if (stored === 'hub20' || BOOT.hasOwnProperty(stored)) ui = stored;
+        } catch (e) {}
+        var shown = ui === 'black' ? 'dark' : ui === 'white' ? 'light' : mode;
+        var bg = ui === 'hub20' ? HUB20[mode] : BOOT[ui][mode];
+        var root = document.documentElement;
+        root.setAttribute('data-theme', shown);
+        root.setAttribute('data-ui-theme', ui);
+        root.style.colorScheme = shown;
+        root.style.background = bg;
+        document.addEventListener('DOMContentLoaded', function () {
+          document.body.style.background = bg;
+        });
+      })();
+    </script>
+    <link rel="icon" type="image/png" href="./qnc.png" />
+    <meta
+      name="viewport"
+      content="initial-scale=1, width=device-width, viewport-fit=cover"
+    />
+    <title>Q-Node+</title>
+  </head>
 
-<head>
-  <meta charset="utf-8" />
-  <link rel="icon" type="image/png" href="/qnc.png" />
-  <meta name="viewport" content="initial-scale=1, width=device-width" />
-  <title>Qortal Node</title>
-</head>
-
-<body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
-</body>
-
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

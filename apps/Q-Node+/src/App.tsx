@@ -1,12 +1,10 @@
 import { styled } from '@mui/material/styles';
 import {
   Alert,
-  AppBar,
   Avatar,
   Box,
   Button,
   CircularProgress,
-  Container,
   Dialog,
   DialogActions,
   DialogContent,
@@ -15,7 +13,6 @@ import {
   Divider,
   Grid,
   IconButton,
-  Link,
   Paper,
   Table,
   TableBody,
@@ -25,7 +22,6 @@ import {
   TablePagination,
   TableRow,
   TextField,
-  Toolbar,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -34,28 +30,19 @@ import {
   AltRoute,
   Dangerous,
   Engineering,
-  FirstPage,
   GridView,
   HistoryToggleOff,
   Hub,
-  KeyboardArrowLeft,
-  KeyboardArrowRight,
-  LastPage,
   Refresh,
-  RemoveCircleOutline,
+  RemoveCircleOutlined,
   RestartAlt,
   Storage,
   Sync,
-  Close,
   SyncLock,
 } from '@mui/icons-material';
 import Snackbar, { SnackbarCloseReason } from '@mui/material/Snackbar';
 import Slide, { SlideProps } from '@mui/material/Slide';
 import TableCell, { tableCellClasses } from '@mui/material/TableCell';
-import changelogContent from '../CHANGELOG.md?raw';
-import Markdown from 'react-markdown';
-import appLogo from './assets/Q-Node.png';
-import packageJson from '../package.json';
 import noAvatar from './assets/noavatar.png';
 import NodeWidget from './components/NodeWidget';
 import { useTheme } from '@mui/material/styles';
@@ -79,6 +66,17 @@ import {
   TIME_SECONDS_6_IN_MILLISECONDS,
 } from './common/constants';
 import { useAuth } from 'qapp-core';
+import { formatCoreVersion, secondsToDhms } from './utils/format';
+import { primarySoft } from './hub-theme';
+import { PageHeader } from './components/layout/PageHeader';
+import { PageBody } from './components/layout/PageBody';
+import type {
+  DataPeer,
+  MintingAccount,
+  MintingAccountRaw,
+  NodeData,
+  Peer,
+} from './api/types';
 
 const peersRowsPerPageAtom = atomWithStorage<number>(
   'q-node-peers-rows-per-page',
@@ -89,103 +87,16 @@ const dataPeersRowsPerPageAtom = atomWithStorage<number>(
   5
 );
 
-function secondsToDhms(seconds: number) {
-  seconds = Number(seconds);
-
-  const d = Math.floor(seconds / (3600 * 24));
-  const h = Math.floor((seconds % (3600 * 24)) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-
-  const dDisplay = d > 0 ? d + (d == 1 ? 'd ' : 'd ') : '';
-  const hDisplay = h > 0 ? h + (h == 1 ? 'h ' : 'h ') : '';
-  const mDisplay = m > 0 ? m + (m == 1 ? 'm ' : 'm ') : '';
-  const sDisplay = s > 0 ? s + (s == 1 ? 's' : 's') : '';
-
-  return dDisplay + hDisplay + mDisplay + sDisplay;
-}
-
 function SlideTransition(props: SlideProps) {
   return <Slide {...props} direction="up" />;
 }
 
-interface TablePaginationActionsProps {
-  count: number;
-  page: number;
-  rowsPerPage: number;
-  onPageChange: (event: MouseEvent<HTMLButtonElement>, newPage: number) => void;
-}
-
-function TablePaginationActions(props: TablePaginationActionsProps) {
-  const theme = useTheme();
-  const { count, page, rowsPerPage, onPageChange } = props;
-
-  const handleFirstPageButtonClick = (event: MouseEvent<HTMLButtonElement>) => {
-    onPageChange(event, 0);
-  };
-
-  const handleBackButtonClick = (event: MouseEvent<HTMLButtonElement>) => {
-    onPageChange(event, page - 1);
-  };
-
-  const handleNextButtonClick = (event: MouseEvent<HTMLButtonElement>) => {
-    onPageChange(event, page + 1);
-  };
-
-  const handleLastPageButtonClick = (event: MouseEvent<HTMLButtonElement>) => {
-    onPageChange(event, Math.max(0, Math.ceil(count / rowsPerPage) - 1));
-  };
-
-  return (
-    <Box sx={{ flexShrink: 0, ml: 2.5 }}>
-      <IconButton
-        onClick={handleFirstPageButtonClick}
-        disabled={page === 0}
-        aria-label="first page"
-      >
-        {theme.direction === 'rtl' ? <LastPage /> : <FirstPage />}
-      </IconButton>
-
-      <IconButton
-        onClick={handleBackButtonClick}
-        disabled={page === 0}
-        aria-label="previous page"
-      >
-        {theme.direction === 'rtl' ? (
-          <KeyboardArrowRight />
-        ) : (
-          <KeyboardArrowLeft />
-        )}
-      </IconButton>
-
-      <IconButton
-        onClick={handleNextButtonClick}
-        disabled={page >= Math.ceil(count / rowsPerPage) - 1}
-        aria-label="next page"
-      >
-        {theme.direction === 'rtl' ? (
-          <KeyboardArrowLeft />
-        ) : (
-          <KeyboardArrowRight />
-        )}
-      </IconButton>
-
-      <IconButton
-        onClick={handleLastPageButtonClick}
-        disabled={page >= Math.ceil(count / rowsPerPage) - 1}
-        aria-label="last page"
-      >
-        {theme.direction === 'rtl' ? <FirstPage /> : <LastPage />}
-      </IconButton>
-    </Box>
-  );
-}
-
 const StyledTableCell = styled(TableCell)(({ theme }) => ({
   [`&.${tableCellClasses.head}`]: {
-    backgroundColor: '#02648d',
-    color: theme.palette.common.white,
-    fontSize: 14,
+    backgroundColor: primarySoft(theme),
+    color: theme.palette.text.primary,
+    fontSize: 13,
+    fontWeight: 600,
   },
   [`&.${tableCellClasses.body}`]: {
     fontSize: 13,
@@ -221,11 +132,10 @@ function App() {
   const theme = useTheme();
   const { address } = useAuth();
   const [isUsingGateway, setIsUsingGateway] = useState(true);
-  const [nodeData, setNodeData] = useState<any>(null);
-  const [mintingAccounts, setMintingAccounts] = useState<any>([]);
-  const [connectedPeers, setConnectedPeers] = useState<any>([]);
+  const [nodeData, setNodeData] = useState<NodeData | null>(null);
+  const [mintingAccounts, setMintingAccounts] = useState<MintingAccount[]>([]);
+  const [connectedPeers, setConnectedPeers] = useState<Peer[]>([]);
   const [errorMessage, setErrorMessage] = useState(EMPTY_STRING);
-  const [changelogOpen, setChangelogOpen] = useState(false);
   const [errorSnackbar, setErrorSnackbar] = useState(false);
   const [successMessage, setSuccessMessage] = useState(EMPTY_STRING);
   const isFetchingAccounts = useRef(false);
@@ -239,7 +149,7 @@ function App() {
   const [mintingAccountKey, setMintingAccountKey] = useState(EMPTY_STRING);
   const [openPeerDialog, setOpenPeerDialog] = useState(false);
   const [newPeerAddress, setNewPeerAddress] = useState(EMPTY_STRING);
-  const [connectedDataPeers, setConnectedDataPeers] = useState<any>([]);
+  const [connectedDataPeers, setConnectedDataPeers] = useState<DataPeer[]>([]);
   const [openDataPeerDialog, setOpenDataPeerDialog] = useState(false);
   const [newDataPeerAddress, setNewDataPeerAddress] = useState(EMPTY_STRING);
   const [dataPeerPage, setDataPeerPage] = useState(0);
@@ -686,7 +596,7 @@ function App() {
       });
       // Enrich in parallel and WAIT for them
       const enriched = await Promise.all(
-        list.map(async (item) => {
+        (list as MintingAccountRaw[]).map(async (item) => {
           const nameRes = await getNameInfo(item.mintingAccount);
           return {
             publicKey: item.publicKey,
@@ -766,7 +676,6 @@ function App() {
           display: 'flex',
           gap: '10px',
           justifyContent: 'end',
-          marginRight: '10px',
           width: 'auto',
         }}
       >
@@ -1009,7 +918,7 @@ function App() {
                         disabled={isUsingGateway}
                         size="small"
                         color="error"
-                        startIcon={<RemoveCircleOutline />}
+                        startIcon={<RemoveCircleOutlined />}
                         onClick={() => {
                           handleRemoveMintingAccount(row?.publicKey);
                         }}
@@ -1156,7 +1065,7 @@ function App() {
                         disabled={isUsingGateway}
                         size="small"
                         color="error"
-                        startIcon={<RemoveCircleOutline />}
+                        startIcon={<RemoveCircleOutlined />}
                         onClick={() => {
                           handleRemovePeer(row?.address);
                         }}
@@ -1221,7 +1130,8 @@ function App() {
                   }}
                   onPageChange={handleChangePage}
                   onRowsPerPageChange={handleChangeRowsPerPage}
-                  ActionsComponent={TablePaginationActions}
+                  showFirstButton
+                  showLastButton
                 />
               </TableRow>
             </TableFooter>
@@ -1340,7 +1250,7 @@ function App() {
                         disabled={isUsingGateway}
                         size="small"
                         color="error"
-                        startIcon={<RemoveCircleOutline />}
+                        startIcon={<RemoveCircleOutlined />}
                         onClick={() => {
                           handleRemoveDataPeer(row?.address ?? '');
                         }}
@@ -1393,7 +1303,8 @@ function App() {
                   }}
                   onPageChange={handleChangeDataPeerPage}
                   onRowsPerPageChange={handleChangeDataRowsPerPage}
-                  ActionsComponent={TablePaginationActions}
+                  showFirstButton
+                  showLastButton
                 />
               </TableRow>
             </TableFooter>
@@ -1622,311 +1533,224 @@ function App() {
   };
 
   return (
-    <Container maxWidth="xl">
-      {addMintingAccountDialog()}
-      {addPeerDialog()}
-      {addDataPeerDialog()}
-      <Snackbar
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        open={successSnackbar}
-        autoHideDuration={TIME_SECONDS_6_IN_MILLISECONDS}
-        slots={{ transition: SlideTransition }}
-        onClose={handleCloseSuccessSnackbar}
-      >
-        <Alert
+    <>
+      <PageHeader
+        title={t('core:header.node', { postProcess: 'capitalizeFirstChar' })}
+        subtitle={formatCoreVersion(nodeData?.buildVersion)}
+        actions={isUsingGateway ? undefined : nodeButtons()}
+      />
+      <PageBody $maxWidth={1280}>
+        {addMintingAccountDialog()}
+        {addPeerDialog()}
+        {addDataPeerDialog()}
+        <Snackbar
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          open={successSnackbar}
+          autoHideDuration={TIME_SECONDS_6_IN_MILLISECONDS}
+          slots={{ transition: SlideTransition }}
           onClose={handleCloseSuccessSnackbar}
-          severity="success"
-          variant="filled"
-          sx={{ width: '100%', color: theme.palette.text.primary }}
         >
-          {successMessage}
-        </Alert>
-      </Snackbar>
+          <Alert
+            onClose={handleCloseSuccessSnackbar}
+            severity="success"
+            variant="filled"
+            sx={{ width: '100%', color: theme.palette.text.primary }}
+          >
+            {successMessage}
+          </Alert>
+        </Snackbar>
 
-      <Snackbar
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        open={errorSnackbar}
-        autoHideDuration={TIME_SECONDS_6_IN_MILLISECONDS}
-        slots={{ transition: SlideTransition }}
-        onClose={handleCloseErrorSnackbar}
-      >
-        <Alert
+        <Snackbar
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          open={errorSnackbar}
+          autoHideDuration={TIME_SECONDS_6_IN_MILLISECONDS}
+          slots={{ transition: SlideTransition }}
           onClose={handleCloseErrorSnackbar}
-          severity="error"
-          variant="filled"
-          sx={{ width: '100%', color: theme.palette.text.primary }}
         >
-          {errorMessage}
-        </Alert>
-      </Snackbar>
-
-      <AppBar position="static" sx={{ marginTop: '10px' }}>
-        <Toolbar>
-          <Avatar sx={{ width: 28, height: 28 }} alt="avatar" src={appLogo} />
-          <Typography
-            variant="h4"
-            component="div"
-            noWrap
-            sx={{
-              flexGrow: 1,
-              display: {
-                xs: 'none',
-                sm: 'block',
-                paddingLeft: '10px',
-                paddingTop: '3px',
-              },
-              fontFamily: 'Inter',
-              fontWeight: 700,
-              letterSpacing: '.1rem',
-              color: 'inherit',
-              textDecoration: 'none',
-            }}
+          <Alert
+            onClose={handleCloseErrorSnackbar}
+            severity="error"
+            variant="filled"
+            sx={{ width: '100%', color: theme.palette.text.primary }}
           >
-            <Box sx={{ display: 'inline-flex', alignItems: 'baseline', gap: 1 }}>
-              <span>
-                <span style={{ color: '#05a2e4' }}>Qortal </span>Node
-              </span>
-              <Link
-                component="button"
-                variant="caption"
-                onClick={() => setChangelogOpen(true)}
-                sx={{ fontSize: 10, cursor: 'pointer', color: 'text.secondary' }}
-              >
-                v{packageJson.version}
-              </Link>
-            </Box>
-          </Typography>
+            {errorMessage}
+          </Alert>
+        </Snackbar>
 
-          <Typography
-            variant="h6"
-            component="div"
-            noWrap
-            sx={{
-              flexGrow: 1,
-              display: {
-                xs: 'block',
-                sm: 'none',
-                paddingLeft: '10px',
-                paddingTop: '3px',
-              },
-              fontFamily: 'Inter',
-              fontWeight: 700,
-              letterSpacing: '.1rem',
-              color: 'inherit',
-              textDecoration: 'none',
-            }}
-          >
-            <Box sx={{ display: 'inline-flex', alignItems: 'baseline', gap: 1 }}>
-              <span>
-                <span style={{ color: '#05a2e4' }}>Q</span>NC
-              </span>
-              <Link
-                component="button"
-                variant="caption"
-                onClick={() => setChangelogOpen(true)}
-                sx={{ fontSize: 10, cursor: 'pointer', color: 'text.secondary' }}
-              >
-                v{packageJson.version}
-              </Link>
-            </Box>
-          </Typography>
-          {isUsingGateway ? '' : nodeButtons()}
-        </Toolbar>
-      </AppBar>
-
-      <Grid
-        container
-        spacing={{ xs: 1, sm: 2, md: 3, lg: 4 }}
-        sx={{ mt: 4, justifyContent: 'center', alignItems: 'baseline' }}
-        columns={{ xs: 2, sm: 4, md: 6, lg: 8, xl: 12 }}
-      >
-        <Box>
-          <NodeWidget
-            icon={AltRoute}
-            title={t('core:widgets.core_version', {
-              postProcess: 'capitalizeAll',
-            })}
-            subtitle={nodeData?.buildVersion.replace('qortal-', 'v')}
-          />
-        </Box>
-
-        <Box>
-          <NodeWidget
-            icon={HistoryToggleOff}
-            title={t('core:widgets.node_uptime', {
-              postProcess: 'capitalizeAll',
-            })}
-            subtitle={secondsToDhms(nodeData?.uptime / 1000)}
-          />
-        </Box>
-
-        <Box>
-          <NodeWidget
-            icon={Hub}
-            title={t('core:widgets.connected_peers', {
-              postProcess: 'capitalizeAll',
-            })}
-            subtitle={nodeData?.numberOfConnections}
-          />
-        </Box>
-
-        <Box>
-          <NodeWidget
-            icon={Hub}
-            title={t('core:widgets.connected_data_peers', {
-              postProcess: 'capitalizeAll',
-            })}
-            subtitle={nodeData?.numberOfDataConnections}
-          />
-        </Box>
-
-        <Box>
-          <NodeWidget
-            icon={GridView}
-            title={t('core:widgets.block_height', {
-              postProcess: 'capitalizeAll',
-            })}
-            subtitle={nodeData?.height}
-          />
-        </Box>
-
-        <Box>
-          <NodeWidget
-            icon={Engineering}
-            title={t('core:widgets.minting_status', {
-              postProcess: 'capitalizeAll',
-            })}
-            subtitle={
-              nodeData?.isMintingPossible ? (
-                <span style={{ color: '#66bb6a' }}>
-                  {t('core:status.minting', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </span>
-              ) : (
-                <span style={{ color: '#f44336' }}>
-                  {t('core:status.not_minting', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </span>
-              )
-            }
-          />
-        </Box>
-
-        <Box>
-          <NodeWidget
-            icon={Sync}
-            title={t('core:widgets.sync_status', {
-              postProcess: 'capitalizeAll',
-            })}
-            subtitle={
-              nodeData?.isSynchronizing ? (
-                <>
-                  <span style={{ color: '#ffa726' }}>
-                    {t('core:status.synchronizing', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </span>
-                  <span>{'(' + nodeData?.syncPercent + '%)'}</span>
-                </>
-              ) : (
-                <>
-                  <span style={{ color: '#66bb6a' }}>
-                    {t('core:status.synchronized', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </span>
-                  <span>{'(' + nodeData?.syncPercent + '%)'}</span>
-                </>
-              )
-            }
-          />
-        </Box>
-      </Grid>
-
-      <Box maxWidth="xl" marginTop={3}>
-        {mintingAccountsHeader()}
-      </Box>
-
-      <Divider sx={{ marginTop: '5px' }} />
-
-      <Box maxWidth="xl" marginTop={2}>
-        {loadingMintingAccountsTable
-          ? tableLoaderMintingAccounts()
-          : tableMintingAccounts()}
-      </Box>
-
-      <Box maxWidth="xl" marginTop={4}>
-        {connectedPeersHeader()}
-      </Box>
-
-      <Divider sx={{ marginTop: '5px' }} />
-
-      <Box maxWidth="xl" marginTop={2}>
-        {tableConnectedPeers()}
-      </Box>
-
-      <Box maxWidth="xl" marginTop={4}>
-        {dataPeersHeader()}
-      </Box>
-
-      <Divider sx={{ marginTop: '5px' }} />
-
-      <Box maxWidth="xl" marginTop={2}>
-        {tableDataPeers()}
-      </Box>
-      <Dialog
-        open={changelogOpen}
-        onClose={() => setChangelogOpen(false)}
-        maxWidth="md"
-        fullWidth
-        slotProps={{ paper: { sx: { maxHeight: '80vh' } } }}
-      >
-        <DialogTitle sx={{ textAlign: 'center', position: 'relative' }}>
-          CHANGELOG
-          <IconButton
-            onClick={() => setChangelogOpen(false)}
-            size="small"
-            sx={{
-              position: 'absolute',
-              right: 8,
-              top: '50%',
-              transform: 'translateY(-50%)',
-            }}
-          >
-            <Close />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          <Box
-            sx={{
-              '& h1': { fontSize: '1.5rem', fontWeight: 600, mb: 2, mt: 0 },
-              '& h2': {
-                fontSize: '1.2rem',
-                fontWeight: 600,
-                mb: 1,
-                mt: 3,
-                color: 'primary.main',
-              },
-              '& h3': { fontSize: '1rem', fontWeight: 600, mb: 1, mt: 2 },
-              '& ul': { pl: 2, mb: 1 },
-              '& li': { mb: 0.5, fontSize: 14 },
-              '& p': { mb: 1, fontSize: 14 },
-              '& code': {
-                backgroundColor: 'action.hover',
-                px: 0.5,
-                py: 0.25,
-                borderRadius: 0.5,
-                fontSize: 13,
-              },
-            }}
-          >
-            <Markdown>{changelogContent}</Markdown>
+        <Grid
+          container
+          spacing={{ xs: 1, sm: 2, md: 3, lg: 4 }}
+          sx={{ justifyContent: 'center', alignItems: 'baseline' }}
+          columns={{ xs: 2, sm: 4, md: 6, lg: 8, xl: 12 }}
+        >
+          <Box>
+            <NodeWidget
+              icon={AltRoute}
+              title={t('core:widgets.core_version', {
+                postProcess: 'capitalizeAll',
+              })}
+              subtitle={nodeData?.buildVersion.replace('qortal-', 'v')}
+            />
           </Box>
-        </DialogContent>
-      </Dialog>
-    </Container>
+
+          <Box>
+            <NodeWidget
+              icon={HistoryToggleOff}
+              title={t('core:widgets.node_uptime', {
+                postProcess: 'capitalizeAll',
+              })}
+              subtitle={secondsToDhms(nodeData?.uptime / 1000)}
+            />
+          </Box>
+
+          <Box>
+            <NodeWidget
+              icon={Hub}
+              title={t('core:widgets.connected_peers', {
+                postProcess: 'capitalizeAll',
+              })}
+              subtitle={nodeData?.numberOfConnections}
+            />
+          </Box>
+
+          <Box>
+            <NodeWidget
+              icon={Hub}
+              title={t('core:widgets.connected_data_peers', {
+                postProcess: 'capitalizeAll',
+              })}
+              subtitle={nodeData?.numberOfDataConnections}
+            />
+          </Box>
+
+          <Box>
+            <NodeWidget
+              icon={GridView}
+              title={t('core:widgets.block_height', {
+                postProcess: 'capitalizeAll',
+              })}
+              subtitle={nodeData?.height}
+            />
+          </Box>
+
+          <Box>
+            <NodeWidget
+              icon={Engineering}
+              title={t('core:widgets.minting_status', {
+                postProcess: 'capitalizeAll',
+              })}
+              subtitle={
+                nodeData?.isMintingPossible ? (
+                  <span style={{ color: theme.palette.success.main }}>
+                    {t('core:status.minting', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </span>
+                ) : (
+                  <span style={{ color: theme.palette.error.main }}>
+                    {t('core:status.not_minting', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </span>
+                )
+              }
+            />
+          </Box>
+
+          <Box>
+            <NodeWidget
+              icon={Sync}
+              title={t('core:widgets.sync_status', {
+                postProcess: 'capitalizeAll',
+              })}
+              subtitle={
+                nodeData?.isSynchronizing ? (
+                  <>
+                    <span style={{ color: theme.palette.warning.main }}>
+                      {t('core:status.synchronizing', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </span>
+                    <span>{'(' + nodeData?.syncPercent + '%)'}</span>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ color: theme.palette.success.main }}>
+                      {t('core:status.synchronized', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </span>
+                    <span>{'(' + nodeData?.syncPercent + '%)'}</span>
+                  </>
+                )
+              }
+            />
+          </Box>
+        </Grid>
+
+        <Box
+          sx={{
+            maxWidth: 'xl',
+            marginTop: 3,
+          }}
+        >
+          {mintingAccountsHeader()}
+        </Box>
+
+        <Divider sx={{ marginTop: '5px' }} />
+
+        <Box
+          sx={{
+            maxWidth: 'xl',
+            marginTop: 2,
+          }}
+        >
+          {loadingMintingAccountsTable
+            ? tableLoaderMintingAccounts()
+            : tableMintingAccounts()}
+        </Box>
+
+        <Box
+          sx={{
+            maxWidth: 'xl',
+            marginTop: 4,
+          }}
+        >
+          {connectedPeersHeader()}
+        </Box>
+
+        <Divider sx={{ marginTop: '5px' }} />
+
+        <Box
+          sx={{
+            maxWidth: 'xl',
+            marginTop: 2,
+          }}
+        >
+          {tableConnectedPeers()}
+        </Box>
+
+        <Box
+          sx={{
+            maxWidth: 'xl',
+            marginTop: 4,
+          }}
+        >
+          {dataPeersHeader()}
+        </Box>
+
+        <Divider sx={{ marginTop: '5px' }} />
+
+        <Box
+          sx={{
+            maxWidth: 'xl',
+            marginTop: 2,
+          }}
+        >
+          {tableDataPeers()}
+        </Box>
+      </PageBody>
+    </>
   );
 }
 

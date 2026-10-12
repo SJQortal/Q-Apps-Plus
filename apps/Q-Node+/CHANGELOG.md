@@ -1,6 +1,21 @@
 # Changelog
 
-All notable changes to Q-Node will be documented in this file.
+All notable changes to Q-Node+ will be documented in this file. The same
+entries are shown in the app under Settings → About (src/constants/changelog.ts).
+
+## [1.0.3-plus.1] - 2026-09-29
+
+### Added
+
+- Hub 3.0 layout: a navigation rail on desktop and a bottom bar on phones
+- Settings page with four themes (Hub 3.0, Q-Node Classic, Black, White), account details and About
+- Test harness (vitest + jsdom) with a mocked `qortalRequest`
+
+### Changed
+
+- Upgraded to React 19.3, MUI 9.4, Vite 8 and TypeScript 5.9
+- Inter is bundled as woff2 instead of four TTF files
+- The changelog dialog moved to Settings → About and no longer needs a Markdown renderer
 
 ## [1.0.3] - 2026-02-14
 
