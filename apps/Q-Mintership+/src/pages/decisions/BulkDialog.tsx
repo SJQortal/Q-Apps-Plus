@@ -11,6 +11,7 @@ import RadioButtonUncheckedOutlinedIcon from '@mui/icons-material/RadioButtonUnc
 import ErrorOutlineOutlinedIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import RemoveCircleOutlineOutlinedIcon from '@mui/icons-material/RemoveCircleOutlineOutlined';
 import { FeeNote } from '../../components/common/FeeNote';
+import { friendlyError } from '../../utils/friendlyError';
 import { ResponsiveDialog } from '../../components/common/ResponsiveDialog';
 import type { GroupTxType } from '../../data/types';
 import { HUB_DIALOGS, HUB_DIALOG_SECONDS } from '../../writes/explain';
@@ -103,7 +104,7 @@ export function BulkDialog(props: BulkDialogProps) {
           next[at] = {
             outcome: {
               status: 'failed',
-              message: error instanceof Error ? error.message : String(error),
+              message: friendlyError(error) || 'Something went wrong.',
             },
           };
         return next;

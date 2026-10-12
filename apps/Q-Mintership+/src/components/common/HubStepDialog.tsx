@@ -16,6 +16,7 @@ import RadioButtonUncheckedOutlinedIcon from '@mui/icons-material/RadioButtonUnc
 import type { GroupTxType } from '../../data/types';
 import { HUB_DIALOGS, HUB_DIALOG_SECONDS } from '../../writes/explain';
 import type { WriteOutcome, WriteStage } from '../../writes/runner';
+import { friendlyError } from '../../utils/friendlyError';
 import { FeeNote } from './FeeNote';
 import { ResponsiveDialog } from './ResponsiveDialog';
 
@@ -99,7 +100,7 @@ export function HubStepDialog(props: HubStepDialogProps) {
       final = {
         outcome: {
           status: 'failed',
-          message: error instanceof Error ? error.message : String(error),
+          message: friendlyError(error) || 'Something went wrong.',
         },
       };
     }
