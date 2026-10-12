@@ -1732,7 +1732,7 @@ Simon called Q-Mail+ ready for its PR to Qortal/q-mail (docs/RELEASE.md, stage 4
 
 **Ready for upstream** (RELEASE.md's checklist):
 - [x] No open community bug that loses data, costs QORT or blocks a main flow: everything reported is done (Community feedback); drafts sync is a feature question for later.
-- [ ] GO on a real phone: Simon has used 1.0.1 in GO since 2026-10-08 (the composer with the keyboard, Reply all, the mailboxes menu, Settings, Archived), and what he found is fixed in 1.0.2. Not confirmed yet: GO's hardware Back, the file picker and PDFs in Hub's reader. The PR text says so, as Q-Share's did.
+- [x] GO on a real phone: Simon has used 1.0.1 in GO since 2026-10-08 (the composer with the keyboard, Reply all, the mailboxes menu, Settings, Archived), what he found is fixed in 1.0.2, and he checked the published 1.0.2 in GO on 2026-10-12.
 - [x] Qortal/q-mail hasn't moved: `main` at `ddf3aa92`, last change 2026-05-28; `scripts/upstream-pr.sh Q-Mail+ --check`: fast-forward yes, version 4.0.0 (Qortal's is 3.2.1).
 - [x] Open questions: the Follow-ups below are small UX choices, deliberately left for after the PR.
 
@@ -1744,7 +1744,7 @@ Simon called Q-Mail+ ready for its PR to Qortal/q-mail (docs/RELEASE.md, stage 4
 Checks in the split: 870 tests, lint, types and the build pass (main chunk 375.9 kB, the same as 1.0.2), and `node e2e/screens.mjs` in four themes, dark: 612 captures with 0 sideways overflow, 0 unlabelled buttons and 0 axe violations. One capture (threads at 1280 in Hub 3.0) failed with `ERR_NETWORK_CHANGED` while the host's network changed, and was clean on a re-run. Light: 612 captures, all clean. The PR text is drafted from `docs/templates/upstream-pr.md` for Simon to read.
 
 **From here:**
-1. Simon publishes `release/Q-Mail+.zip` as 1.0.2; I check the live files, add the Published line and merge PR #21 (a merge commit), so `main` has 1.0.1 and 1.0.2.
+1. ~~Simon publishes `release/Q-Mail+.zip` as 1.0.2~~ (done 2026-10-12; the live files match); PR #21 is merged (a merge commit), so `main` has 1.0.1 and 1.0.2. Auto mode refused the merge from this session ("merge without review"), so it waits for Simon. A local dry run of that merge splits into 290 commits, and with the "Ship as" commit on top the tree is byte-identical to the checked one (the only conflict is the README, which the "Ship as" version replaces). In the prepared repo, `npm ci` from scratch, 870 tests, lint and the build pass.
 2. `scripts/upstream-pr.sh Q-Mail+` splits `apps/Q-Mail+` from `origin/main` into `q-mail-upstream/4.0.0`; the "Ship as" commit goes on top (the same tree), then `npm ci` and the checks again.
 3. Simon reads the PR text. After his yes: `scripts/upstream-pr.sh Q-Mail+ --push --version 4.0.0` (fork SJQortal/q-mail) and `gh pr create --repo Qortal/q-mail`.
 4. The PR's link goes in this brief and in docs/PROGRESS.md (a `Repo:` commit).
