@@ -41,6 +41,7 @@ import { NominationCard } from '../../components/nomination/NominationCard';
 import { NomineeAction } from '../../components/nomination/NomineeAction';
 import { nomineeStep } from '../../components/nomination/nomineeStep';
 import { SupportDialog } from '../../components/nomination/SupportDialog';
+import { successText } from '../../components/nomination/tone';
 import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
 import { peekQuery } from '../../data/query';
@@ -440,7 +441,7 @@ function CardActions({
         <Typography
           variant="body2"
           role={inFlight ? 'status' : undefined}
-          sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: 'success.main' }}
+          sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: successText }}
         >
           <CheckCircleOutlineOutlinedIcon aria-hidden sx={{ fontSize: 18 }} />
           {mine}
