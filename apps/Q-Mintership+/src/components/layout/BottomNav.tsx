@@ -33,6 +33,8 @@ const Item = styled('button', {
   alignItems: 'center',
   justifyContent: 'center',
   gap: 2,
+  // The browser's default button padding (6 px a side) cut "Nominees" short at 360 px.
+  padding: 0,
   border: 0,
   background: 'none',
   color: $active ? theme.palette.primary.main : theme.palette.text.secondary,
