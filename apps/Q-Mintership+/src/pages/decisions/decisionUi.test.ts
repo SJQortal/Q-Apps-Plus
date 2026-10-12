@@ -1,0 +1,102 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { loadDecisions } from '../../data/decisions';
+import type { Decision } from '../../rules/decision';
+import { ADDR, installWorld } from '../../test/world';
+import type { PendingWrite } from '../../writes/optimistic';
+import {
+  banLengthText,
+  canSign,
+  myAnswer,
+  parseBanDays,
+  phaseLine,
+  reasonProblem,
+  signedLabel,
+} from './decisionUi';
+
+afterEach(() => vi.useRealTimers());
+
+const pendingWrite = (status: PendingWrite['status']): PendingWrite => ({
+  key: 'k',
+  status,
+  signature: null,
+  at: Date.now(),
+});
+
+async function decisionsAs(persona: string) {
+  const installed = installWorld(persona);
+  const data = await loadDecisions();
+  const by = (subject: string) => data.decisions.find((d) => d.subject === subject) as Decision;
+  return { ...installed, data, by };
+}
+
+describe('when Sign is offered', () => {
+  it('only for early or open decisions the admin has not signed', async () => {
+    const { data, by, publicKey } = await decisionsAs('admin');
+    const offered = (d: Decision) => canSign(d, myAnswer(d, publicKey), null);
+    expect(offered(by(ADDR.nominatedSigning))).toBe(true); // open, not signed
+    expect(offered(by(ADDR.urgent))).toBe(false); // signed
+    expect(offered(by(ADDR.met))).toBe(false); // threshold met
+    expect(offered(by(ADDR.late))).toBe(false); // too late
+    expect(offered(by(ADDR.early))).toBe(false); // early, but signed by this admin
+    expect(offered(by(ADDR.demote))).toBe(false); // still unconfirmed
+    expect(data.unusual.every((d) => !offered(d))).toBe(true);
+  });
+
+  it('for an early decision to another admin, and never while a signature is on its way', async () => {
+    const { by, publicKey } = await decisionsAs('adminL4');
+    const early = by(ADDR.early);
+    expect(early.phase).toBe('early');
+    expect(canSign(early, myAnswer(early, publicKey), null)).toBe(true);
+    expect(canSign(early, 'none', pendingWrite('sending'))).toBe(false);
+    expect(canSign(early, 'none', pendingWrite('confirming'))).toBe(false);
+    // A try that never showed up can be tried again.
+    expect(canSign(early, 'none', pendingWrite('failed'))).toBe(true);
+    // Only the latest answer counts, so a rejection can be replaced.
+    expect(canSign(early, 'rejected', null)).toBe(true);
+    expect(canSign(early, 'rejecting', null)).toBe(false);
+  });
+
+  it('labels a signature as confirmed or on its way', () => {
+    expect(signedLabel('signed', null)).toBe('Signed ✓');
+    expect(signedLabel('confirming', null)).toBe('Signed ✓ (confirming…)');
+    expect(signedLabel('none', pendingWrite('confirming'))).toBe('Signed ✓ (confirming…)');
+    expect(signedLabel('none', pendingWrite('sending'))).toBeNull();
+    expect(signedLabel('none', null)).toBeNull();
+  });
+
+  it('says where each phase stands in plain words', async () => {
+    const { data, by } = await decisionsAs('admin');
+    expect(phaseLine(by(ADDR.met), data.now)).toMatch(/Core applies it in the next block/);
+    expect(phaseLine(by(ADDR.late), data.now)).toMatch(/Too late to sign/);
+    expect(phaseLine(by(ADDR.demote), data.now)).toMatch(/On its way into a block/);
+    expect(phaseLine(by(ADDR.early), data.now)).toMatch(/can be applied from block 2,757,504/);
+    expect(phaseLine(by(ADDR.nominatedSigning), data.now)).toBeNull();
+  });
+});
+
+describe('ban lengths and reasons', () => {
+  it('takes 1 to 24 whole days and refuses anything longer', () => {
+    expect(parseBanDays('7')).toEqual({ seconds: 7 * 86_400 });
+    expect(parseBanDays('24')).toEqual({ seconds: 24 * 86_400 });
+    expect(parseBanDays('25')).toMatchObject({ error: expect.stringMatching(/up to 24 days/) });
+    expect(parseBanDays('0')).toMatchObject({ error: expect.stringMatching(/At least 1 day/) });
+    expect(parseBanDays('2.5')).toMatchObject({ error: expect.stringMatching(/whole number/) });
+    expect(parseBanDays('')).toMatchObject({ error: expect.any(String) });
+  });
+
+  it('shows 0 as permanent', () => {
+    expect(banLengthText(0)).toBe('Permanent');
+    expect(banLengthText(undefined)).toBe('Permanent');
+    expect(banLengthText(86_400)).toBe('1 day');
+    expect(banLengthText(24 * 86_400)).toBe('24 days');
+  });
+
+  it('needs a reason Core can carry (128 bytes of UTF-8)', () => {
+    expect(reasonProblem('  ')).toMatch(/Say why/);
+    expect(reasonProblem('Spam')).toBeNull();
+    expect(reasonProblem('a'.repeat(128))).toBeNull();
+    expect(reasonProblem('a'.repeat(129))).toMatch(/128 bytes/);
+    // 43 × 3 bytes = 129: too long although only 43 characters.
+    expect(reasonProblem('€'.repeat(43))).toMatch(/128 bytes/);
+  });
+});
