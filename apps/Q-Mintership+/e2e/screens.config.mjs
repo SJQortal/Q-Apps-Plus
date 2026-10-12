@@ -10,7 +10,7 @@
  * `signedOut` declines the account request. Every write is declined, so
  * nothing can be sent.
  */
-import { answerCore, createWorld, ADDR, PEOPLE } from './world.mjs';
+import { answerCore, createWorld, ADDR, NOW, PEOPLE } from './world.mjs';
 
 const world = createWorld();
 // Replaced in setup() by a visible 64×64 gradient, so avatars show in the shots.
@@ -67,6 +67,25 @@ export default {
     PNG = await gen.screenshot({ clip: { x: 0, y: 0, width: 64, height: 64 } });
     await gen.close();
   },
+
+  // The page's clock starts at the world's NOW (as the unit tests do), so
+  // countdowns and "3 days ago" read the same in every run.
+  initScripts: () => [
+    `(() => {
+      const offset = ${NOW} - Date.now();
+      const RealDate = Date;
+      class WorldDate extends RealDate {
+        constructor(...args) {
+          if (args.length) super(...args);
+          else super(RealDate.now() + offset);
+        }
+        static now() {
+          return RealDate.now() + offset;
+        }
+      }
+      window.Date = WorldDate;
+    })();`,
+  ],
 
   qortal,
 
