@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:decode": "QMP_DECODE_NODE=${QMP_DECODE_NODE:-http://127.0.0.1:12391} vitest run src/qortal/approvalBytes.node.test.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
