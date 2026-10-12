@@ -339,3 +339,25 @@ export function loadHistoryWindow(
     { ttlMs: index === 0 ? 2 * 60_000 : 30 * 60_000, force: options.force }
   );
 }
+
+/**
+ * The newest `count` windows together (key `timelines:<anchor height>:<count>`).
+ * Each window is cached on its own, so "Load older" fetches only the new one,
+ * and a refresh reloads only the newest.
+ */
+export function loadHistoryWindows(
+  anchor: HistoryAnchor,
+  count: number,
+  options: { force?: boolean } = {}
+): Promise<HistoryWindow[]> {
+  return fetchQuery(
+    `timelines:${anchor.height}:${count}`,
+    () =>
+      Promise.all(
+        Array.from({ length: Math.max(1, count) }, (_, i) =>
+          loadHistoryWindow(anchor, i, { force: Boolean(options.force) && i === 0 })
+        )
+      ),
+    { ttlMs: 2 * 60_000, force: options.force }
+  );
+}
