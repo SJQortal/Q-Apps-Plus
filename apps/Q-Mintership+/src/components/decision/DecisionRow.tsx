@@ -4,17 +4,17 @@
  * (The full card with Sign lives on the Decisions screen.)
  */
 import { Link as RouterLink } from 'react-router-dom';
-import { Box, Chip, Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import type { ChainNow } from '../../data/chain';
 import { KIND_LABEL, type Decision } from '../../rules/decision';
 import { signerState } from '../../rules/tally';
 import { decisionPath } from '../../routes/paths';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
-import { Countdown } from '../common/Countdown';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { NameAvatar } from '../common/NameAvatar';
 import { ProgressRing } from '../common/ProgressRing';
 import { DecisionPhaseChip } from '../common/Section';
+import { DoneChip, SigningClock } from './DecisionParts';
 
 export function DecisionRow({
   decision: d,
@@ -29,7 +29,7 @@ export function DecisionRow({
   const pending = usePendingWrite(writeKeys.sign(d.signature));
   const mine = d.tally && myPublicKey ? signerState(d.tally, myPublicKey) : 'none';
   const signed = mine === 'signed' || mine === 'confirming' || pending?.status === 'confirming';
-  const who = d.subject ? subject.label : 'someone (Core does not say who)';
+  const who = d.subject ? subject.label : 'an approved invite (Core doesn’t say for whom)';
   return (
     <Box
       component={RouterLink}
@@ -59,15 +59,15 @@ export function DecisionRow({
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mt: 0.5 }}>
           {d.window && (d.phase === 'open' || d.phase === 'early') ? (
-            <Countdown now={now} height={d.window.lastUsefulSignatureHeight} suffix="left" />
+            <SigningClock now={now} height={d.window.lastUsefulSignatureHeight} />
           ) : (
             <DecisionPhaseChip phase={d.phase} />
           )}
           {signed ? (
-            <Chip
-              size="small"
-              color="success"
+            <DoneChip
               label={mine === 'signed' ? 'Signed ✓' : 'Signed ✓ (confirming…)'}
+              settled={mine === 'signed'}
+              size="small"
             />
           ) : null}
         </Box>
