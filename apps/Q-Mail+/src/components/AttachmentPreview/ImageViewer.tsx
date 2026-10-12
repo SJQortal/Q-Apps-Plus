@@ -100,6 +100,8 @@ export function ImageViewer({ src, alt, onSwipe }: { src: string; alt: string; o
         ref={setStage}
         data-testid="image-preview-stage"
         data-image-stage
+        // Zoomed, a sideways drag pans the image instead of swiping back (SwipeBack).
+        data-no-swipe-back={zoom !== 100 ? '' : undefined}
         // Focusable, so keyboard users can pan a zoomed image with the arrows.
         tabIndex={0}
         role="region"

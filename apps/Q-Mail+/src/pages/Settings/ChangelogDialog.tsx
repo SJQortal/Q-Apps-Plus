@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogTitle, IconButton, useMediaQuery, useTheme
 import CloseIcon from '@mui/icons-material/Close';
 import { lazyNamed } from '../../components/common/lazyNamed';
 import { ListSkeleton } from '../../layout/states';
+import { OverlayBackClose } from '../../layout/OverlayBackClose';
 
 // The changelog text is its own chunk: it is read once per version, if at all.
 const ChangelogPage = lazyNamed(() => import('../Mail/ChangelogPage'), 'ChangelogPage');
@@ -17,6 +18,9 @@ export function ChangelogDialog({ open, onClose }: ChangelogDialogProps) {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   return (
+    <>
+    {/* Back (and a swipe back) closes it on a phone, not Settings under it. */}
+    <OverlayBackClose open={open} onClose={onClose} enabled={fullScreen} />
     <Dialog
       open={open}
       onClose={onClose}
@@ -53,5 +57,6 @@ export function ChangelogDialog({ open, onClose }: ChangelogDialogProps) {
         )}
       </DialogContent>
     </Dialog>
+    </>
   );
 }

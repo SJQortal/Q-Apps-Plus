@@ -13,6 +13,7 @@ import { SETTINGS_PATH } from './pages/Settings/settingsPath'
 import { lazyNamed } from './components/common/lazyNamed'
 import { ListSkeleton } from './layout/states'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
+import { SwipeBack } from './layout/SwipeBack'
 
 // Settings is a separate chunk: it is opened rarely and carries the theme
 // picker, the blocked-names dialog and the changelog.
@@ -47,6 +48,7 @@ function AppRoutes() {
           <SettingsPage />
         </Suspense>
       )}
+      <SwipeBack />
     </>
   )
 }

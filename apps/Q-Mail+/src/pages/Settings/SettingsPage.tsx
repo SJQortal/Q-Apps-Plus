@@ -2,7 +2,7 @@
  * Settings: a full page (docs/DESIGN.md → Settings page), reached from the
  * navigation. Sections: Account, Appearance, Mail, Sync, About.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate, type Location } from 'react-router-dom';
 import {
   Avatar,
@@ -41,6 +41,7 @@ import { PUBLISH_STATE_TITLE, PublishStateMessage } from '../../components/commo
 import { FooterSettings } from './FooterSettings';
 import { InboxNamesSettings } from './InboxNamesSettings';
 import { SETTINGS_PATH } from './settingsPath';
+import { registerBackLayer } from '../../layout/backStack';
 
 export { SETTINGS_PATH };
 export const APP_VERSION: string = packageJson.version;
@@ -193,6 +194,12 @@ export function SettingsPage() {
     // hardware Back afterwards does not bring Settings back (pitfall 8).
     navigate(background ?? '/', { replace: true });
   };
+  // A swipe back leaves Settings as its Back arrow does (SwipeBack).
+  const goBackRef = useRef(goBack);
+  useEffect(() => {
+    goBackRef.current = goBack;
+  });
+  useEffect(() => registerBackLayer(() => goBackRef.current()), []);
 
   const names = user?.names ?? [];
   const activeName = user?.name ?? '';

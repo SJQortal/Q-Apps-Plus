@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { BrowserRouter, MemoryRouter, Route, Routes, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { OVERLAY_STATE_KEY, OverlayBackClose } from './OverlayBackClose'
 import { BACK_STATE_KEY } from './usePhoneBackClose'
+import { topBackLayer } from './backStack'
 
 let navigateFn: ReturnType<typeof useNavigate> = () => {}
 let lastState: unknown = null
@@ -111,6 +112,18 @@ describe('OverlayBackClose', () => {
     act(() => openSettings())
     expect(window.location.pathname).toBe('/settings')
     expect(getByText('Settings')).toBeTruthy()
+  })
+
+  it('a swipe back closes it like its close button: the id comes off, no history step', () => {
+    const onClose = renderAt(null)
+    expect(topBackLayer()).toBeUndefined()
+    act(() => setOpenFn(true))
+    const layer = topBackLayer()!
+    expect(layer.overlay).toBe(true)
+    act(() => layer.close())
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(lastState === null || (lastState as any)[OVERLAY_STATE_KEY] === undefined).toBe(true)
+    expect(topBackLayer()).toBeUndefined()
   })
 
   it('does nothing outside a router', () => {

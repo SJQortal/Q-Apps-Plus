@@ -20,6 +20,7 @@ import {
   useNavigationType,
   type Location,
 } from 'react-router-dom';
+import { registerBackLayer, type SwipeDirection } from './backStack';
 
 export const OVERLAY_STATE_KEY = 'qmailOverlay';
 
@@ -48,13 +49,15 @@ export interface OverlayBackCloseProps {
   onClose: () => void;
   /** Only where the overlay covers the screen (phones); elsewhere Back keeps its meaning. */
   enabled?: boolean;
+  /** The swipe that closes it (SwipeBack): right unless it slides in from the left. */
+  swipeDirection?: SwipeDirection;
 }
 
 export function OverlayBackClose(props: OverlayBackCloseProps) {
   return useInRouterContext() ? <OverlayBackCloseInRouter {...props} /> : null;
 }
 
-function OverlayBackCloseInRouter({ open, onClose, enabled = true }: OverlayBackCloseProps) {
+function OverlayBackCloseInRouter({ open, onClose, enabled = true, swipeDirection = 'right' }: OverlayBackCloseProps) {
   const id = useId();
   const location = useLocation();
   const navigate = useNavigate();
@@ -76,6 +79,12 @@ function OverlayBackCloseInRouter({ open, onClose, enabled = true }: OverlayBack
   });
 
   const active = open && enabled;
+
+  // A swipe closes it as its own close button would.
+  useEffect(() => {
+    if (!active) return;
+    return registerBackLayer(() => onCloseRef.current(), { overlay: true, direction: swipeDirection });
+  }, [active, swipeDirection]);
 
   // Open: an entry of our own. Closed from the UI: take our id off again.
   useEffect(() => {

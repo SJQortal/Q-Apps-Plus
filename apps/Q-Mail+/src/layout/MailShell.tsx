@@ -237,7 +237,7 @@ export function MailShell({
         ) : (
           <>
           {/* Back closes the mailboxes menu first (phones). */}
-          <OverlayBackClose open={railOpen} onClose={() => onRailOpenChange(false)} enabled={onePane} />
+          <OverlayBackClose open={railOpen} onClose={() => onRailOpenChange(false)} enabled={onePane} swipeDirection="left" />
           <Drawer
             open={railOpen}
             onClose={() => onRailOpenChange(false)}
