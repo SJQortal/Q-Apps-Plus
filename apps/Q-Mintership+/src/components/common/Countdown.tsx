@@ -62,13 +62,16 @@ export function Countdown({
   // Time from the tip block's timestamp, ticking down with the wall clock.
   const target = now.timestamp + blocks * now.msPerBlock;
   const msLeft = Math.max(0, target - clock);
-  const urgency = blocks === 0 ? 'over' : urgencyOf(msLeft);
-  const time = formatCountdown(msLeft);
+  // Only the chain ends it: when blocks come slower than measured, the
+  // estimate runs out first and the blocks still to go are what counts.
+  const late = blocks > 0 && msLeft === 0;
+  const urgency: Urgency = blocks === 0 ? 'over' : late ? 'urgent' : urgencyOf(msLeft);
   const blockText = `${formatCount(blocks)} block${blocks === 1 ? '' : 's'}`;
+  const time = late ? blockText : formatCountdown(msLeft);
   const main =
     urgency === 'over'
       ? doneText
-      : display === 'blocks'
+      : display === 'blocks' || late
         ? blockText
         : display === 'both'
           ? `${time} · ${blockText}`
@@ -84,7 +87,9 @@ export function Countdown({
             ? undefined
             : urgency === 'over'
               ? doneText
-              : `${time} ${suffix}, ${blockText}. ${detail}`
+              : late
+                ? `${blockText} ${suffix}. ${detail}`
+                : `${time} ${suffix}, ${blockText}. ${detail}`
         }
         sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
       >
