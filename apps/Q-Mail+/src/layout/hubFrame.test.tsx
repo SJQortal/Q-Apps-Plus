@@ -77,6 +77,9 @@ describe('a landscape frame (844×390 in Hub is 703×201 CSS px)', () => {
       )
       const form = screen.getByTestId('form')
       Object.defineProperty(form, 'scrollTop', { value: 200, configurable: true })
+      // Room to scroll: a page with little to scroll keeps its header.
+      Object.defineProperty(form, 'scrollHeight', { value: 1000, configurable: true })
+      Object.defineProperty(form, 'clientHeight', { value: 300, configurable: true })
       await act(async () => {
         form.dispatchEvent(new Event('scroll'))
       })
