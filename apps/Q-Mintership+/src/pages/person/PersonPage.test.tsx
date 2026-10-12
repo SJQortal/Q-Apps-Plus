@@ -1,0 +1,217 @@
+import { describe, expect, it } from 'vitest';
+import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { renderPage } from '../../test/render';
+import { fetchCallsFor, qortalCalls } from '../../test/setup';
+import { fakeAddress } from '../../../e2e/world.mjs';
+import { ADDR, NOW, PEOPLE } from '../../test/world';
+import { CoreHttpError } from '../../qortal/client';
+import PersonPage from './PersonPage';
+import { isInvalidAddress } from './personWords';
+
+const ROUTE = '/people/:address';
+const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH|VOTE|POLL/;
+
+function visit(who: string, persona = 'admin') {
+  return renderPage(<PersonPage />, {
+    persona,
+    path: `/people/${encodeURIComponent(who)}`,
+    route: ROUTE,
+  });
+}
+
+function section(name: string) {
+  return screen.findByRole('region', { name });
+}
+
+describe('Person page', () => {
+  it('shows a nominee being signed for, as a Minter Admin sees them', async () => {
+    const { posts } = await visit(ADDR.nominatedSigning, 'admin');
+    expect(
+      await screen.findByRole('heading', { level: 2, name: PEOPLE.nominatedSigning.name as string })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Level 0')).toBeInTheDocument();
+    expect(screen.getByText('Nominated')).toBeInTheDocument();
+    expect(screen.getByText('Join request sent')).toBeInTheDocument();
+    expect(
+      screen.getByText("Nominated for MINTER, and they've accepted: approval adds them at once.")
+    ).toBeInTheDocument();
+    expect(screen.getByText('7,200 blocks')).toBeInTheDocument();
+    // Admins are already signing: no Nominate button, a way to the decision instead.
+    expect(screen.queryByRole('link', { name: /^Nominate/ })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Open in Decisions' }).getAttribute('href')).toMatch(
+      /^\/decisions\?d=/
+    );
+    expect(
+      screen.getByText('Minter Admins are already signing a nomination for this person.')
+    ).toBeInTheDocument();
+    const nomination = await section('Nomination');
+    expect(within(nomination).getByText('Collecting signatures')).toBeInTheDocument();
+    const timeline = await section('MINTER timeline');
+    expect(await within(timeline).findByText('Nominated for MINTER')).toBeInTheDocument();
+    const original = await section('From the original app');
+    expect(
+      await within(original).findByText(`${PEOPLE.nominatedSigning.name} for the MINTER group`)
+    ).toBeInTheDocument();
+    expect(within(original).getByText('Looked through all 27 cards.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy a link to this person' })).toBeInTheDocument();
+    expect(posts).toEqual([]);
+    expect(qortalCalls.filter((c) => WRITES.test(String(c.action)))).toEqual([]);
+  });
+
+  it('shows a removed member: when, what they keep, and their history', async () => {
+    await visit(ADDR.kicked, 'nominator');
+    expect(await screen.findByText('Former member')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /^Removed from MINTER on .* They keep their level and can be nominated again\.$/
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText('Level 3')).toBeInTheDocument();
+    const timeline = await section('MINTER timeline');
+    const titles = within(timeline)
+      .getAllByRole('listitem')
+      .map((li) => li.querySelector('p')?.textContent);
+    expect(titles).toEqual(['Removed from MINTER', 'Approved for MINTER']);
+    expect(within(timeline).getByText(/Reason: “Kicked by Minter Admins”/)).toBeInTheDocument();
+    // A level 5+ member can nominate them again.
+    expect(screen.getByRole('link', { name: `Nominate ${PEOPLE.kicked.name}` })).toHaveAttribute(
+      'href',
+      `/nominate?who=${ADDR.kicked}`
+    );
+    const original = await section('From the original app');
+    expect(await within(original).findByText('Please invite me to MINTER')).toBeInTheDocument();
+    expect(within(original).getByText(/Posted by Kit Kicked for themselves/)).toBeInTheDocument();
+  });
+
+  it('tells a member below level 5 why they cannot nominate', async () => {
+    await visit(ADDR.kicked, 'learner');
+    expect(await screen.findByText('Former member')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^Nominate/ })).toBeNull();
+    expect(
+      screen.getByText("Members can nominate from level 5. You're level 2.")
+    ).toBeInTheDocument();
+  });
+
+  it('shows a ban and that it must be lifted first', async () => {
+    await visit(ADDR.banned, 'nominator');
+    expect((await screen.findAllByText('Banned from MINTER')).length).toBeGreaterThan(1);
+    expect(screen.getByText(/^Banned from MINTER on .*, permanently\./)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Banned from MINTER: Minter Admins must lift the ban before a nomination can go ahead.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^Nominate/ })).toBeNull();
+    const timeline = await section('MINTER timeline');
+    expect(
+      within(timeline).getByText(/^Permanent · Reason: “Banned by Minter Admins”/)
+    ).toBeInTheDocument();
+  });
+
+  it('lets an eligible viewer support an open nomination', async () => {
+    await visit(ADDR.nominatedWaiting, 'admin');
+    expect(await screen.findByText('Nominated')).toBeInTheDocument();
+    const nomination = await section('Nomination');
+    expect(within(nomination).getByText('Waiting for a Minter Admin')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Add your support' })).toHaveAttribute(
+      'href',
+      `/nominate?who=${ADDR.nominatedWaiting}`
+    );
+  });
+
+  it('tells the nominator and supporters their part instead of offering support again', async () => {
+    await visit(ADDR.nominatedWaiting, 'nominator');
+    expect(await screen.findByText('You nominated them.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Add your support' })).toBeNull();
+  });
+
+  it('knows a supporter', async () => {
+    await visit(ADDR.nominatedWaiting, 'adminL4');
+    expect(await screen.findByText('You support this nomination.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Add your support' })).toBeNull();
+  });
+
+  it('shows a Minter Admin their own page with what they proposed', async () => {
+    await visit(ADDR.admin, 'admin');
+    expect(await screen.findByText('Minter Admin')).toBeInTheDocument();
+    expect(screen.getByText('You')).toBeInTheDocument();
+    expect(screen.getByText('Minter Admin and MINTER member.')).toBeInTheDocument();
+    const proposals = await section('As a Minter Admin');
+    expect(
+      within(proposals).getByText(
+        /^Proposed \d+ changes for others: \d+ approved, 1 collecting signatures/
+      )
+    ).toBeInTheDocument();
+    expect(within(proposals).getByText(PEOPLE.early.name as string)).toBeInTheDocument();
+    expect(
+      within(proposals).getByRole('link', { name: 'Signatures and activity' })
+    ).toHaveAttribute('href', '/activity');
+  });
+
+  it('shows a level 5+ member (no join on record, so no start date)', async () => {
+    await visit(ADDR.nominator, 'learner');
+    expect(await screen.findByText('MINTER member')).toBeInTheDocument();
+    expect(
+      screen.getByText('In MINTER. At level 6, they can nominate new minters.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('In MINTER since')).toBeNull();
+  });
+
+  it('says so for an address that never made a transaction', async () => {
+    await visit(fakeAddress('never-used'), 'learner');
+    expect(await screen.findByText('No activity on Qortal yet.')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'No registered name' })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'MINTER timeline' })).toBeNull();
+  });
+
+  it('opens a name’s owner when the link holds a name', async () => {
+    await visit(PEOPLE.nominator.name as string, 'learner');
+    expect(
+      await screen.findByRole('heading', { level: 2, name: PEOPLE.nominator.name as string })
+    ).toBeInTheDocument();
+    expect(fetchCallsFor('/names/Nora%20Nominator')).toHaveLength(1);
+  });
+
+  it('says no one was found for something that is neither an address nor a name', async () => {
+    await visit('not a person', 'learner');
+    expect(await screen.findByText('No one found.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Find a person')).toBeInTheDocument();
+  });
+
+  it('looks further back through the original app’s cards on request', async () => {
+    const { world } = await visit(fakeAddress('member-21'), 'learner');
+    // Push the cards about Member 22 past the first look.
+    for (let i = 0; i < 45; i++) {
+      world.legacy.resources.push({
+        service: 'BLOG_POST',
+        name: 'Admin F',
+        identifier: `Minter-board-card-new${String(i).padStart(3, '0')}`,
+        created: NOW - i * 1000,
+        body: { header: `Filler ${i}`, nominee: `Someone ${i}`, content: '<p>x</p>' },
+      });
+    }
+    const original = await section('From the original app');
+    expect(
+      await within(original).findByText(/Looked through the newest 40 of \d+ cards/)
+    ).toBeInTheDocument();
+    expect(within(original).queryByText('Member 22 for MINTER')).toBeNull();
+    await userEvent.click(within(original).getByRole('button', { name: 'Search older cards' }));
+    expect(await within(original).findByText('Member 22 for MINTER')).toBeInTheDocument();
+    expect(within(original).getByText(/Looked through all \d+ cards/)).toBeInTheDocument();
+  });
+});
+
+describe('person page words', () => {
+  it('recognises Core’s answer for an address that fails its checksum', () => {
+    expect(
+      isInvalidAddress(
+        new CoreHttpError('/addresses/Q1', 400, '{"error":102,"message":"invalid address"}')
+      )
+    ).toBe(true);
+    expect(isInvalidAddress(new CoreHttpError('/addresses/Q1', 500, 'boom'))).toBe(false);
+    expect(isInvalidAddress(new Error('invalid address'))).toBe(false);
+  });
+});
