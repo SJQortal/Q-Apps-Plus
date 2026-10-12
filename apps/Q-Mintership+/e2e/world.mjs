@@ -318,8 +318,9 @@ function buildWorld() {
     approvalStatus: 'NOT_REQUIRED',
   });
   // A recent expired round (re-nomination possible) and a recent approval.
+  // Core records an expired transaction's approvalHeight as h + 10,081.
   decided.push(
-    decidedTx('GROUP_INVITE', TIP - 15_000, null, 'EXPIRED', {
+    decidedTx('GROUP_INVITE', TIP - 15_000, TIP - 15_000 + 10_081, 'EXPIRED', {
       creatorAddress: extraAdmins[5],
       adminPublicKey: pk(extraAdmins[5]),
       groupId: GROUP,
