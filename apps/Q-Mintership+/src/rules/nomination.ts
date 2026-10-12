@@ -71,7 +71,7 @@ export const NOMINEE_BLOCK_TEXT: Record<NomineeBlock, string> = {
   member: 'Already in MINTER.',
   banned: 'Banned from MINTER: Minter Admins must lift the ban before a nomination can go ahead.',
   pending: 'Minter Admins are already signing a nomination for this person.',
-  stored: 'Already approved: they only need to press Join.',
+  stored: 'Already approved: they only need to press Join now.',
   open: 'Already nominated. You can add your support to that nomination instead.',
 };
 
@@ -80,7 +80,7 @@ export type NominationState =
   | 'waiting'
   /** A GROUP_INVITE is collecting signatures. */
   | 'signing'
-  /** Approved, but the nominee hasn't joined yet (they need to press Join). */
+  /** Approved, but the nominee hasn't joined yet (they need to press Join now). */
   | 'approved'
   /** The nominee is in MINTER. */
   | 'joined'

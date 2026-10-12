@@ -402,7 +402,7 @@ function InviteDetails({
           <span>
             {n.hasJoinRequest
               ? 'Has accepted: approval makes them a member at once.'
-              : 'Hasn’t accepted yet: after approval they still need to press Join.'}
+              : 'Hasn’t accepted yet: after approval they still need to press Join now.'}
           </span>
         </Typography>
       ) : null}

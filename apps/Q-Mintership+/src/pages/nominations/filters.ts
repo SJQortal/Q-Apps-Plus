@@ -12,7 +12,7 @@ export type NominationFilter = 'all' | 'waiting' | 'signing' | 'approved';
 
 export const FILTERS: Array<{ key: NominationFilter; label: string }> = [
   { key: 'all', label: 'All' },
-  { key: 'waiting', label: 'Waiting for an admin' },
+  { key: 'waiting', label: 'Waiting for a Minter Admin' },
   { key: 'signing', label: 'Collecting signatures' },
   { key: 'approved', label: 'Approved' },
 ];

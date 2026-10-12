@@ -227,7 +227,7 @@ export default function SettingsPage() {
             <Row>
               <SettingText
                 id="celebrate-label"
-                title="Celebrate new minters"
+                title="Celebrate joining MINTER"
                 hint="A small burst on Home when you become a minter."
               />
               <Switch

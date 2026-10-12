@@ -94,8 +94,8 @@ export function AdminActivityList({
         <Typography variant="body2" color="text.secondary">
           {plural(data.report.decisionCount, 'MINTER decision')}{' '}
           {data.report.decisionCount === 1 ? 'was' : 'were'} waiting for signatures{' '}
-          {windowWords(data.range.days)}; each needs {plural(data.needed, 'signature')} of{' '}
-          {formatCount(data.signerCount)} admins.
+          {windowWords(data.range.days)}; each needs {plural(data.needed, 'signature')}, from{' '}
+          {formatCount(data.signerCount)} Minter Admins who can sign.
         </Typography>
         {current.length ? (
           <AdminRows

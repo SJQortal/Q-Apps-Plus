@@ -44,7 +44,7 @@ import { useDecisions, useMembers, useNominations } from '../../hooks/useData';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { KIND_LABEL, type Decision } from '../../rules/decision';
-import { approvalsNeeded } from '../../rules/threshold';
+import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
 import { useSession } from '../../state/session';
 import { decisionsHideSignedAtom } from '../../state/settings';
 import { displayName, plural } from '../../utils/format';
@@ -293,9 +293,7 @@ export default function DecisionsPage() {
       <PageHeader
         title="Decisions"
         subtitle={
-          data
-            ? `Needs ${needed} of ${totalAdmins} admins`
-            : 'Everything waiting for the Minter Admins'
+          data ? `Each needs ${needed} signatures` : 'Everything waiting for the Minter Admins'
         }
         actions={
           <>
@@ -337,9 +335,8 @@ export default function DecisionsPage() {
             {targetChange ? (
               <Alert severity="info" role="status">
                 The target changed from {targetChange.needed} to {needed} signatures: MINTER now has{' '}
-                {totalAdmins} admins (it had {targetChange.totalAdmins}). It is{' '}
-                {data.group.approvalThreshold.replace('PCT', '')}% of all admins, recounted every
-                block.
+                {totalAdmins} admin seats (it had {targetChange.totalAdmins}). It is{' '}
+                {describeThreshold(data.group.approvalThreshold)}, recounted every block.
               </Alert>
             ) : null}
 
@@ -351,15 +348,15 @@ export default function DecisionsPage() {
                     : 'Nothing waiting for your signature'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Each needs {needed} of {totalAdmins} Minter Admins. Sign the ones you agree with;
-                  the rest expire by themselves.
+                  Each needs {plural(needed, 'signature')}:{' '}
+                  {describeThreshold(data.group.approvalThreshold)}, counting all {totalAdmins}{' '}
+                  admin seats. Sign the ones you agree with; the rest expire by themselves.
                 </Typography>
               </Card>
             ) : (
               <Alert severity="info" role="note">
                 Only Minter Admins sign decisions. Here you can follow each one: who proposed it,
-                who has signed, and how long is left. Each needs {needed} of {totalAdmins} Minter
-                Admins.
+                who has signed, and how long is left. Each needs {needed} Minter Admin signatures.
               </Alert>
             )}
 

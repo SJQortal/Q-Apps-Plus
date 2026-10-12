@@ -52,7 +52,7 @@ describe('Nominations page', () => {
     await card('Wren Waiting');
     const list = () => screen.getByRole('list', { name: 'Open nominations' });
 
-    await user.click(screen.getByRole('button', { name: /Waiting for an admin\s*1/ }));
+    await user.click(screen.getByRole('button', { name: /Waiting for a Minter Admin\s*1/ }));
     expect(cardNames(list())).toEqual(['Wren Waiting']);
 
     await user.click(screen.getByRole('button', { name: /Collecting signatures\s*5/ }));
@@ -311,7 +311,7 @@ describe('Nominations page', () => {
     expect(cardNames(screen.getByRole('list', { name: 'Open nominations' }))).toEqual([
       'Wren Waiting',
     ]);
-    expect(screen.getByRole('button', { name: /Waiting for an admin/ })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /Waiting for a Minter Admin/ })).toHaveAttribute(
       'aria-pressed',
       'true'
     );

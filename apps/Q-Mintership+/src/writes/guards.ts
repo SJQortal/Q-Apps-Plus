@@ -130,7 +130,7 @@ export async function guardInvite(signer: Signer, nominee: string): Promise<stri
     return 'This account is banned from MINTER. The ban has to be lifted first.';
   if (waiting)
     return 'A nomination for this person is already waiting for signatures. Sign that one instead.';
-  if (stored) return 'This person was already approved: they only need to press Join.';
+  if (stored) return 'This person was already approved: they only need to press Join now.';
   return null;
 }
 

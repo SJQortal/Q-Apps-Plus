@@ -3,7 +3,7 @@
  * who invited and when it was approved, "Propose cancelling" per row, and
  * "Propose for all" one Hub confirmation after another. Invites approved in
  * the last 30 days are marked recent and left out of "for all": those
- * people may still press Join.
+ * people may still press Join now.
  *
  * Core's answers leave the invitee out of pending cancellations, so the
  * screen says how many are already waiting instead of matching them.
@@ -230,7 +230,7 @@ function StaleRow({
         />
         {recent ? (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Approved recently: they may still press Join.
+            Approved recently: they may still press Join now.
           </Typography>
         ) : null}
       </Box>

@@ -506,8 +506,8 @@ function ProposeHubStep({
             </Typography>
           ) : null}
           <Typography sx={{ mt: 1 }}>
-            This proposes it. It happens only if {ctx.needed} of {ctx.totalAdmins} Minter Admins
-            sign within {windowText}.
+            This proposes it. It happens only if {ctx.needed} Minter Admins sign within {windowText}
+            .
           </Typography>
           <Typography sx={{ mt: 1 }}>
             Your proposal doesn’t count as your signature: sign it in the queue too, once it is in a

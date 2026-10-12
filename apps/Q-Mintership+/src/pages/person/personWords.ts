@@ -30,7 +30,7 @@ export function statusSentence(
       return `Banned from MINTER${when}${until}. Minter Admins must lift the ban before ${they} can rejoin.`;
     }
     case 'approvedInvite':
-      return `Approved for MINTER: ${they} only need to press Join.`;
+      return `Approved for MINTER: ${they} only need to press Join now.`;
     case 'nominated':
       return person.hasJoinRequest
         ? `Nominated for MINTER, and ${they}'ve accepted: approval adds ${them} at once.`

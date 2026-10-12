@@ -140,7 +140,7 @@ export function NominatedHero({
               accepted ? (
                 " That's enough: you're added to MINTER in the next block."
               ) : (
-                " That's enough: once it's applied in the next block, press Join to finish."
+                " That's enough: once it's applied in the next block, press Join now to finish."
               )
             ) : (
               <>

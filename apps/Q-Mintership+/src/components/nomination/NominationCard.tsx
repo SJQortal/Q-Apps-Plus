@@ -213,7 +213,7 @@ export function NominationCard({
         ) : null}
         {n.state === 'approved' ? (
           <Typography variant="body2" color="text.secondary">
-            Approved. They only need to press Join to become a member.
+            Approved. They only need to press Join now to become a member.
           </Typography>
         ) : null}
         {ended ? (

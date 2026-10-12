@@ -777,7 +777,7 @@ function Done({
         ) : (
           <Typography variant="body2" color="text.secondary">
             Accepting sends their join request, so an approval makes them a member at once. Without
-            it, they have to press Join after the approval.
+            it, they have to press Join now after the approval.
           </Typography>
         )}
         <ShareLink address={nominee} label="Send them this link so they can accept:" />

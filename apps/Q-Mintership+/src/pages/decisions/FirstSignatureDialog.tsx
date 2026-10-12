@@ -69,7 +69,7 @@ export function FirstSignatureDialog({
           </Typography>
           <Typography sx={{ mt: 1 }}>
             The clock starts once it is in a block. The other Minter Admins then have {windowText}{' '}
-            to reach {facts.needed} of {facts.totalAdmins} signatures.
+            to reach {facts.needed} signatures.
           </Typography>
           <Typography sx={{ mt: 1 }}>
             <FeeNote txType="GROUP_INVITE" times={2} prefix="Fees in total" />
