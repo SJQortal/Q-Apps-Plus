@@ -1,0 +1,315 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { fakeAddress } from '../../../e2e/world.mjs';
+import { renderPage } from '../../test/render';
+import { mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
+import { ADDR } from '../../test/world';
+import NominationsPage from './NominationsPage';
+import { renderWithWorld } from './testRender';
+
+afterEach(() => vi.useRealTimers());
+
+const open = (persona: string, path = '/nominations') =>
+  renderPage(<NominationsPage />, { persona, path, route: '/nominations' });
+
+const card = (name: RegExp | string) =>
+  screen.findByRole(
+    'article',
+    { name: new RegExp(`Nomination of ${String(name)}`) },
+    { timeout: 4000 }
+  );
+
+function cardNames(list: HTMLElement): string[] {
+  return within(list)
+    .getAllByRole('article')
+    .map((a) => a.getAttribute('aria-label')?.replace('Nomination of ', '') ?? '');
+}
+
+function decode(data64: unknown): unknown {
+  const bytes = Uint8Array.from(atob(String(data64)), (c) => c.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+describe('Nominations page', () => {
+  it('lists open nominations newest first, and offers Nominate to a level 5+ member', async () => {
+    await open('nominator');
+    await card('Wren Waiting');
+    const list = screen.getByRole('list', { name: 'Open nominations' });
+    const names = cardNames(list);
+    expect(names.indexOf('Wren Waiting')).toBeLessThan(names.indexOf('bob+builder'));
+    expect(names.indexOf('bob+builder')).toBeLessThan(names.indexOf('Uma Urgent'));
+    // Decided ones are not in the open list.
+    expect(names).not.toContain('Ünïcode Ñame');
+    expect(screen.getByRole('button', { name: /Nominate someone/ })).toBeInTheDocument();
+    // Nora nominated these herself.
+    expect(within(await card('Wren Waiting')).getByText('You nominated them')).toBeInTheDocument();
+  });
+
+  it('filters by state and shows the count on each filter', async () => {
+    const user = userEvent.setup();
+    await open('nominator');
+    await card('Wren Waiting');
+    const list = () => screen.getByRole('list', { name: 'Open nominations' });
+
+    await user.click(screen.getByRole('button', { name: /Waiting for an admin\s*1/ }));
+    expect(cardNames(list())).toEqual(['Wren Waiting']);
+
+    await user.click(screen.getByRole('button', { name: /Collecting signatures\s*5/ }));
+    expect(cardNames(list())).toHaveLength(5);
+    expect(cardNames(list())).toContain('bob+builder');
+    expect(cardNames(list())).not.toContain('Wren Waiting');
+
+    await user.click(screen.getByRole('button', { name: /^Approved\s*0/ }));
+    expect(screen.getByText('No nominations match')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Show all' }));
+    expect(cardNames(list())).toHaveLength(6);
+  });
+
+  it('searches by name, by address, and by who nominated', async () => {
+    const user = userEvent.setup();
+    await open('nominator');
+    await card('Wren Waiting');
+    const search = screen.getByRole('searchbox', { name: /Search nominations/ });
+    const list = () => screen.getByRole('list', { name: 'Open nominations' });
+
+    await user.type(search, 'BOB+');
+    expect(cardNames(list())).toEqual(['bob+builder']);
+
+    await user.clear(search);
+    await user.type(search, ADDR.urgent.slice(0, 12));
+    expect(cardNames(list())).toEqual(['Uma Urgent']);
+
+    await user.clear(search);
+    await user.type(search, 'nora');
+    expect(cardNames(list())).toEqual(['Wren Waiting', 'bob+builder', 'Uma Urgent']);
+
+    await user.clear(search);
+    await user.type(search, 'nobody at all');
+    expect(screen.getByText('No nominations match')).toBeInTheDocument();
+    expect(screen.getByText(/Nothing here matches “nobody at all”/)).toBeInTheDocument();
+  });
+
+  it('tells a level 2 member why they can’t nominate yet, with the blocks to go', async () => {
+    await open('learner');
+    await card('Wren Waiting');
+    expect(
+      await screen.findByText(/Members can nominate from level 5\. You're level 2\./)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/527,900 more blocks minted to reach level 5/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Nominate someone/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add your support' })).toBeNull();
+  });
+
+  it('asks a signed-out visitor to sign in', async () => {
+    await open('signedOut');
+    await card('Wren Waiting');
+    expect(screen.getByText(/Sign in to nominate someone/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+  });
+
+  it('lets a Minter Admin add their support with a note, through Hub', async () => {
+    const user = userEvent.setup();
+    const { address } = await open('admin');
+    const wren = await card('Wren Waiting');
+    // Admins can jump to the Decisions queue from an open nomination.
+    expect(within(wren).getByRole('link', { name: 'Open in Decisions' })).toBeInTheDocument();
+    // Enough signatures already (8 of 8), or too late to count: support would change nothing.
+    for (const done of [ADDR.met, ADDR.late]) {
+      const c = await card(done);
+      expect(within(c).queryByRole('button', { name: 'Add your support' })).toBeNull();
+    }
+    expect(
+      within(await card(ADDR.early)).getByRole('button', { name: 'Add your support' })
+    ).toBeInTheDocument();
+    mockQortalRequest('PUBLISH_QDN_RESOURCE', () => ({
+      type: 'ARBITRARY',
+      signature: 'SupportSig',
+      timestamp: Date.now(),
+    }));
+
+    await user.click(within(wren).getByRole('button', { name: 'Add your support' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add your support' });
+    expect(within(dialog).getByText(/Fee: 0.01 QORT/)).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText(/A note/), 'Helps everyone in the minting chat.');
+    expect(within(dialog).getByText('35 / 280')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(dialog).findByText('Support published', {}, { timeout: 4000 })
+    ).toBeInTheDocument();
+
+    const [call] = qortalCallsFor('PUBLISH_QDN_RESOURCE');
+    expect(call).toMatchObject({
+      name: 'Avery Admin',
+      service: 'JSON',
+      identifier: `qmp-support-${ADDR.nominatedWaiting}`,
+    });
+    expect(decode(call.data64)).toEqual({
+      v: 1,
+      nomineeAddress: ADDR.nominatedWaiting,
+      note: 'Helps everyone in the minting chat.',
+    });
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+    expect(await within(wren).findByText(/Support sent ✓ \(confirming…\)/)).toBeInTheDocument();
+    expect(address).toBe(ADDR.admin);
+  });
+
+  it('shows who already supports a nomination instead of the button', async () => {
+    await open('adminL4');
+    const wren = await card('Wren Waiting');
+    expect(within(wren).getByText('You support this')).toBeInTheDocument();
+    expect(within(wren).queryByRole('button', { name: 'Add your support' })).toBeNull();
+  });
+
+  it('puts the nominee’s own nomination first, with Accept nomination (JOIN_GROUP)', async () => {
+    const user = userEvent.setup();
+    await open('nominatedWaiting');
+    const mine = await screen.findByRole('region', { name: 'Your nomination' }, { timeout: 4000 });
+    expect(within(mine).getByRole('article', { name: /Wren Waiting/ })).toBeInTheDocument();
+    // Not repeated in the open list.
+    expect(cardNames(screen.getByRole('list', { name: 'Open nominations' }))).not.toContain(
+      'Wren Waiting'
+    );
+    mockQortalRequest('JOIN_GROUP', () => ({
+      type: 'JOIN_GROUP',
+      signature: 'JoinSig',
+      timestamp: Date.now(),
+    }));
+
+    await user.click(within(mine).getByRole('button', { name: 'Accept nomination' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Accept your nomination' });
+    expect(within(dialog).getByText(/you become a member straight away/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Fee: 0.01 QORT/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(dialog).findByText('Nomination accepted', {}, { timeout: 4000 })
+    ).toBeInTheDocument();
+    expect(qortalCallsFor('JOIN_GROUP')).toEqual([{ action: 'JOIN_GROUP', groupId: 694 }]);
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+    expect(await within(mine).findByText(/Accepted ✓ \(confirming…\)/)).toBeInTheDocument();
+  });
+
+  it('says how to get the fee when the nominee has no QORT, and sends nothing', async () => {
+    const user = userEvent.setup();
+    const { world } = await open('nominatedWaiting');
+    world.accounts.get(ADDR.nominatedWaiting).balance = 0;
+    const mine = await screen.findByRole('region', { name: 'Your nomination' }, { timeout: 4000 });
+    await user.click(within(mine).getByRole('button', { name: 'Accept nomination' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Accept your nomination' });
+    expect(
+      await within(dialog).findByText(/You need 0.01 QORT for the fee first/)
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/Your confirmed balance is 0 QORT/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(dialog).findByText(/This needs 0.01 QORT for the fee/, {}, { timeout: 4000 })
+    ).toBeInTheDocument();
+    expect(qortalCallsFor('JOIN_GROUP')).toHaveLength(0);
+  });
+
+  it('shows a nominee who already accepted that approval will make them a member', async () => {
+    await open('nominatedSigning');
+    const mine = await screen.findByRole('region', { name: 'Your nomination' }, { timeout: 4000 });
+    expect(
+      within(mine).getByText(/You accepted: approval makes you a member at once/)
+    ).toBeInTheDocument();
+    expect(within(mine).queryByRole('button', { name: 'Accept nomination' })).toBeNull();
+  });
+
+  it('offers Join now to an approved person, even without a nomination card', async () => {
+    const user = userEvent.setup();
+    await open('approved');
+    const mine = await screen.findByRole('region', { name: 'Your nomination' }, { timeout: 4000 });
+    expect(within(mine).getByText('You were approved for MINTER')).toBeInTheDocument();
+    mockQortalRequest('JOIN_GROUP', () => ({ type: 'JOIN_GROUP', signature: 'J2' }));
+    await user.click(within(mine).getByRole('button', { name: 'Join now' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Join MINTER' });
+    await user.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(dialog).findByText('Welcome to MINTER', {}, { timeout: 4000 })
+    ).toBeInTheDocument();
+    expect(qortalCallsFor('JOIN_GROUP')).toHaveLength(1);
+  });
+
+  it('keeps recently decided ones collapsed, with Nominate again for expired and lapsed', async () => {
+    const user = userEvent.setup();
+    await open('nominator');
+    await card('Wren Waiting');
+    const toggle = screen.getByRole('button', { name: /Show 2/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('list', { name: 'Recently decided nominations' })).toBeNull();
+    await user.click(toggle);
+    const decided = screen.getByRole('list', { name: 'Recently decided nominations' });
+    expect(cardNames(decided)).toEqual([
+      'Lapsed Person With A Very Long Name That Wraps On Phones',
+      'Ünïcode Ñame',
+    ]);
+    expect(within(decided).getByText(/Expired 4 days ago/)).toBeInTheDocument();
+    const again = within(decided).getAllByRole('button', { name: 'Nominate again' });
+    expect(again).toHaveLength(2);
+    await user.click(again[1]);
+    expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
+  });
+
+  it('says so when nothing is open, and offers Nominate to those who can', async () => {
+    const user = userEvent.setup();
+    await renderWithWorld(<NominationsPage />, {
+      persona: 'nominator',
+      path: '/nominations',
+      route: '/nominations',
+      before: (world) => {
+        world.records.length = 0;
+        world.pending.length = 0;
+      },
+    });
+    expect(
+      await screen.findByText('No open nominations right now', {}, { timeout: 4000 })
+    ).toBeInTheDocument();
+    const region = screen.getByRole('region', { name: 'Open nominations' });
+    await user.click(within(region).getByRole('button', { name: 'Nominate someone' }));
+    expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
+  });
+
+  it('shows an error with Retry when the nominations can’t be read', async () => {
+    await renderWithWorld(<NominationsPage />, {
+      persona: 'learner',
+      path: '/nominations',
+      route: '/nominations',
+      before: () =>
+        mockFetchRoute(
+          '/arbitrary/resources/searchsimple',
+          () => new Response('', { status: 500 })
+        ),
+    });
+    expect(
+      await screen.findByText('Couldn’t load the nominations.', {}, { timeout: 4000 })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('notes when a read stopped before the end of a very long list', async () => {
+    await renderWithWorld(<NominationsPage />, {
+      persona: 'nominator',
+      path: '/nominations',
+      route: '/nominations',
+      before: (world) => {
+        for (let i = 0; i < 3_000; i++) world.members.push(fakeAddress(`many-${i}`));
+      },
+    });
+    expect(
+      await screen.findByText(/Showing the first part of the nominations/, {}, { timeout: 8000 })
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the filter in the address so Back returns to the same view', async () => {
+    await open('nominator', '/nominations?show=waiting');
+    await card('Wren Waiting');
+    expect(cardNames(screen.getByRole('list', { name: 'Open nominations' }))).toEqual([
+      'Wren Waiting',
+    ]);
+    expect(screen.getByRole('button', { name: /Waiting for an admin/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+});
