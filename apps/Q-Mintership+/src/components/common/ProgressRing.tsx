@@ -105,7 +105,7 @@ export function ProgressRing({
         </Typography>
         <Typography
           component="span"
-          sx={{ fontSize: Math.max(9, size * 0.17), color: 'text.secondary', lineHeight: 1.1 }}
+          sx={{ fontSize: Math.max(11, size * 0.2), color: 'text.secondary', lineHeight: 1.1 }}
         >
           of {target}
         </Typography>

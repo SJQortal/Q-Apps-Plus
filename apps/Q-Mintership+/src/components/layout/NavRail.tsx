@@ -106,7 +106,10 @@ export function NavRail({
       <Brand>
         <BrandMark aria-hidden>QM+</BrandMark>
         {compact ? null : (
-          <Typography sx={{ fontWeight: 700, fontSize: 18 }}>{APP_NAME}</Typography>
+          // One line: at 18 px the name broke after "Q-".
+          <Typography sx={{ fontWeight: 700, fontSize: 16, whiteSpace: 'nowrap' }}>
+            {APP_NAME}
+          </Typography>
         )}
       </Brand>
       {railItems(isAdmin).map(({ key, label, path, Icon }) => {
