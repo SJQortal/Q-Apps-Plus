@@ -179,11 +179,12 @@ describe('Nominations page', () => {
 
     await user.click(within(mine).getByRole('button', { name: 'Accept nomination' }));
     const dialog = await screen.findByRole('dialog', { name: 'Accept your nomination' });
-    expect(within(dialog).getByText(/you become a member straight away/)).toBeInTheDocument();
+    // Home and Nominations share this dialog: the signatures needed, then the fee.
+    expect(within(dialog).getByText(/once 8 Minter Admins have signed/)).toBeInTheDocument();
     expect(within(dialog).getByText(/Fee: 0.01 QORT/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(
-      await within(dialog).findByText('Nomination accepted', {}, { timeout: 4000 })
+      await within(dialog).findByText('Accepted ✓', {}, { timeout: 4000 })
     ).toBeInTheDocument();
     expect(qortalCallsFor('JOIN_GROUP')).toEqual([{ action: 'JOIN_GROUP', groupId: 694 }]);
     await user.click(within(dialog).getByRole('button', { name: 'Done' }));
@@ -200,7 +201,9 @@ describe('Nominations page', () => {
     expect(
       await within(dialog).findByText(/You need 0.01 QORT for the fee first/)
     ).toBeInTheDocument();
-    expect(within(dialog).getByText(/Your confirmed balance is 0 QORT/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Your confirmed balance is 0 QORT/)).toHaveTextContent(
+      /Ask Nora Nominator to send/
+    );
     await user.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(
       await within(dialog).findByText(/This needs 0.01 QORT for the fee/, {}, { timeout: 4000 })
@@ -227,7 +230,7 @@ describe('Nominations page', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Join MINTER' });
     await user.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(
-      await within(dialog).findByText('Welcome to MINTER', {}, { timeout: 4000 })
+      await within(dialog).findByText('Welcome to MINTER ✓', {}, { timeout: 4000 })
     ).toBeInTheDocument();
     expect(qortalCallsFor('JOIN_GROUP')).toHaveLength(1);
   });

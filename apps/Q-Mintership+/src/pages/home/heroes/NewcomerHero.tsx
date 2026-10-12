@@ -11,13 +11,13 @@ import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import PersonSearchOutlinedIcon from '@mui/icons-material/PersonSearchOutlined';
 import { formatQort } from '../../../data/accounts';
 import { NOMINATOR_MIN_LEVEL } from '../../../data/constants';
+import { useBalance } from '../../../hooks/useData';
 import { useFee } from '../../../hooks/useFee';
 import { PATHS } from '../../../routes/paths';
 import type { MyStatus } from '../../../rules/status';
 import { openQortalLink } from '../../../utils/links';
 import { FindNominatorDialog, NAMES_APP_LINK } from '../HelpDialogs';
 import { CopyButton, Hero, HeroText, Num } from '../Hero';
-import { useBalance } from '../homeData';
 
 export function NewcomerHero({ status, needed }: { status: MyStatus; needed: number | null }) {
   const [helpOpen, setHelpOpen] = useState(false);

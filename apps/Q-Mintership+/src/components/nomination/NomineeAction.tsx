@@ -30,10 +30,16 @@ function Done({ children }: { children: string }) {
 export function NomineeAction({
   step,
   signer,
+  needed,
+  askWho,
   onDone,
 }: {
   step: NomineeStep;
   signer: Signer | null;
+  /** Signatures needed now, for the dialog's explanation. */
+  needed?: number | null;
+  /** Who nominated them: who to ask for QORT if the fee can't be paid. */
+  askWho?: string | null;
   onDone?: () => void;
 }) {
   const pending = usePendingWrite(signer ? writeKeys.join(signer.address) : null);
@@ -75,6 +81,8 @@ export function NomineeAction({
           open={dialog.open}
           mode={dialog.mode}
           signer={signer}
+          needed={needed}
+          askWho={askWho}
           onClose={() => setDialog((d) => (d ? { ...d, open: false } : d))}
           onSuccess={onDone}
         />

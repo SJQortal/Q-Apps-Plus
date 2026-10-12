@@ -1,6 +1,7 @@
 /**
- * The join dialog, loaded the first time it opens: the write code (guards,
- * Hub requests) stays out of Home's first load, which everyone sees.
+ * The join dialog, loaded the first time it opens: Home uses this, so the
+ * write code (guards, Hub requests) stays out of its first load, which
+ * everyone sees.
  */
 import { lazy, Suspense, useState } from 'react';
 import type { JoinDialogProps } from './JoinDialog';

@@ -12,7 +12,7 @@ import { formatQort } from '../../../data/accounts';
 import type { Nomination } from '../../../data/nominations';
 import { Countdown } from '../../../components/common/Countdown';
 import { ProgressRing } from '../../../components/common/ProgressRing';
-import { useChainNow } from '../../../hooks/useData';
+import { useBalance, useChainNow } from '../../../hooks/useData';
 import { useFee } from '../../../hooks/useFee';
 import { personPath } from '../../../routes/paths';
 import type { MyStatus } from '../../../rules/status';
@@ -20,9 +20,8 @@ import { signerOf, useSession } from '../../../state/session';
 import { formatDuration, formatRelative } from '../../../utils/format';
 import { usePendingWrite, writeKeys } from '../../../writes/optimistic';
 import { Hero, HeroText, Num, PeopleList, PersonLink } from '../Hero';
-import { LazyJoinDialog } from '../LazyJoinDialog';
+import { LazyJoinDialog } from '../../../components/nomination/LazyJoinDialog';
 import { readable } from '../../../utils/readable';
-import { useBalance } from '../homeData';
 
 export function NominatedHero({
   status,

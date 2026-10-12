@@ -1,5 +1,6 @@
 /**
- * The nominee's JOIN_GROUP, explained before Hub opens:
+ * The nominee's JOIN_GROUP, the same on Home and Nominations, explained
+ * before Hub opens:
  *
  * - "Accept nomination" (before approval): the join request waits, and the
  *   approval then makes them a member at once, with nothing more to press.
@@ -7,11 +8,13 @@
  *
  * One Hub confirmation and the JOIN_GROUP fee. With too little QORT, it says
  * so up front and how to get some (writes/flows.ts → joinMinter checks again).
+ * Home loads it lazily (LazyJoinDialog), so the write code stays out of the
+ * first screen everyone sees.
  */
 import { Alert, Box, Typography } from '@mui/material';
-import { formatQort, getBalance } from '../../data/accounts';
+import { formatQort } from '../../data/accounts';
+import { useBalance } from '../../hooks/useData';
 import { useFee } from '../../hooks/useFee';
-import { useQuery } from '../../hooks/useQuery';
 import { joinMinter } from '../../writes/flows';
 import type { Signer } from '../../writes/runner';
 import { HubStepDialog } from '../common/HubStepDialog';
@@ -23,31 +26,43 @@ export interface JoinDialogProps {
   onClose: () => void;
   mode: JoinMode;
   signer: Signer | null;
+  /** Signatures needed right now, for the explanation ("once 8 Minter Admins…"). */
+  needed?: number | null;
+  /** Who to ask for QORT when the balance is short (the nominator's name). */
+  askWho?: string | null;
+  /** Hub sent it. */
   onSuccess?: () => void;
 }
 
-export function JoinDialog({ open, onClose, mode, signer, onSuccess }: JoinDialogProps) {
+export function JoinDialog({
+  open,
+  onClose,
+  mode,
+  signer,
+  needed,
+  askWho,
+  onSuccess,
+}: JoinDialogProps) {
   const address = signer?.address ?? null;
   const fee = useFee('JOIN_GROUP');
-  const balance = useQuery(open && address ? `balance:${address}` : null, (force) =>
-    getBalance(address as string, { force })
-  );
+  const balance = useBalance(open ? address : null);
   const feeQort = fee.data?.qort ?? 0.01;
   const short = typeof balance.data === 'number' && balance.data < feeQort;
+  const accept = mode === 'accept';
 
   return (
     <HubStepDialog
       open={open}
       onClose={onClose}
-      title={mode === 'accept' ? 'Accept your nomination' : 'Join MINTER'}
+      title={accept ? 'Accept your nomination' : 'Join MINTER'}
       intro={
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {mode === 'accept' ? (
+          {accept ? (
             <>
               <Typography>
-                Accepting sends your request to join MINTER. It waits while the Minter Admins sign,
-                and once enough of them have, you become a member straight away, with nothing more
-                to press.
+                Accepting sends your request to join MINTER. It doesn&rsquo;t make you a member yet:
+                once {needed ? needed : 'enough'} Minter Admins have signed your nomination,
+                you&rsquo;re added at once, with nothing more to press.
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 If the nomination expires instead, your request stays, and a later approval still
@@ -56,8 +71,8 @@ export function JoinDialog({ open, onClose, mode, signer, onSuccess }: JoinDialo
             </>
           ) : (
             <Typography>
-              You were approved. Joining uses that approval, so you are a member of MINTER as soon
-              as this is in a block, usually within a couple of minutes.
+              The Minter Admins approved you, so joining makes you a MINTER member as soon as this
+              is in a block, usually within a minute or two.
             </Typography>
           )}
           {short ? (
@@ -66,9 +81,9 @@ export function JoinDialog({ open, onClose, mode, signer, onSuccess }: JoinDialo
                 You need {formatQort(feeQort)} for the fee first.
               </Typography>
               <Typography variant="body2">
-                Your confirmed balance is {formatQort(balance.data ?? 0)}. Ask the person who
-                nominated you, or any Qortal friend, to send you a little QORT to your address, then
-                come back once it has confirmed (a block or two).
+                Your confirmed balance is {formatQort(balance.data ?? 0)}. Ask{' '}
+                {askWho ?? 'the person who nominated you, or any Qortal friend,'} to send a little
+                QORT to your address, then come back once it has confirmed (a block or two).
               </Typography>
               {address ? (
                 <Box sx={{ mt: 0.5 }}>
@@ -82,7 +97,7 @@ export function JoinDialog({ open, onClose, mode, signer, onSuccess }: JoinDialo
       steps={[
         {
           action: 'JOIN_GROUP',
-          title: mode === 'accept' ? 'Send your join request' : 'Join MINTER',
+          title: accept ? 'Send your join request' : 'Join MINTER',
           feeTxType: 'JOIN_GROUP',
         },
       ]}
@@ -91,12 +106,12 @@ export function JoinDialog({ open, onClose, mode, signer, onSuccess }: JoinDialo
         const outcome = await joinMinter(signer, (stage) => report(0, stage));
         return { outcome };
       }}
-      successTitle={mode === 'accept' ? 'Nomination accepted' : 'Welcome to MINTER'}
+      successTitle={accept ? 'Accepted ✓' : 'Welcome to MINTER ✓'}
       successText={
         <Typography variant="body2">
-          {mode === 'accept'
-            ? 'Your join request is on its way. Once it is in a block, the Minter Admins see that you accepted.'
-            : 'Your join is on its way. Once it is in a block you are a member of MINTER.'}
+          {accept
+            ? 'Your join request is on its way into a block. You join MINTER the moment enough Minter Admins have signed.'
+            : 'Your join is on its way into a block, usually within a minute or two. Then you are a member of MINTER.'}
         </Typography>
       }
       onSuccess={() => onSuccess?.()}

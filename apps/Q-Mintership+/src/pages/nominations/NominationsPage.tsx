@@ -50,6 +50,7 @@ import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { appParam } from '../../routes/hubLocation';
 import { PATHS, decisionPath, nominatePath, personPath } from '../../routes/paths';
 import type { MyStatus } from '../../rules/status';
+import { approvalsNeeded } from '../../rules/threshold';
 import { signIn, signerOf, useSession, type Session } from '../../state/session';
 import { displayName, formatCount } from '../../utils/format';
 import { useLandscapeFrame, useShortFrame } from '../../utils/hubFrame';
@@ -172,7 +173,20 @@ export default function NominationsPage() {
               <NominationCard
                 nomination={own}
                 now={data.decisions.now}
-                actions={<NomineeAction step={step} signer={signer} />}
+                actions={
+                  <NomineeAction
+                    step={step}
+                    signer={signer}
+                    needed={
+                      own.decision?.tally?.needed ??
+                      approvalsNeeded(
+                        data.decisions.group.approvalThreshold,
+                        data.decisions.admins.adminCount
+                      )
+                    }
+                    askWho={own.nomination?.publisher.name ?? null}
+                  />
+                }
               />
             ) : (
               <Card sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>

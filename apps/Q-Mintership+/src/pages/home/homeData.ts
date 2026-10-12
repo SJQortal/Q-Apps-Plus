@@ -9,7 +9,6 @@
  */
 import { useEffect, useState } from 'react';
 import { useAtomValue } from 'jotai';
-import { getBalance } from '../../data/accounts';
 import { CUMULATIVE_BLOCKS_BY_LEVEL } from '../../data/constants';
 import type { DecisionsData } from '../../data/decisions';
 import { getStoredInvites } from '../../data/group';
@@ -25,14 +24,6 @@ import { approvalsNeeded, thresholdPercent } from '../../rules/threshold';
 import { pendingWritesAtom, writeKeys } from '../../writes/optimistic';
 
 /** The account's confirmed balance in QORT (the fee check), refreshed while visible. */
-export function useBalance(address: string | null) {
-  return useQuery(
-    address ? `balance:${address}` : null,
-    (force) => getBalance(address as string, { force }),
-    { refreshMs: 60_000 }
-  );
-}
-
 const NEEDED_KEY = `${STORAGE_PREFIX}home-signatures-needed`;
 
 function readStoredNeeded(): number | null {

@@ -5,7 +5,7 @@
  * Refresh pace: the chain makes a block about every 73 s, so live views
  * refresh every 60 s while visible; slow lists every few minutes.
  */
-import { getAccount, getPrimaryName } from '../data/accounts';
+import { getAccount, getBalance, getPrimaryName } from '../data/accounts';
 import { getChainNow } from '../data/chain';
 import { loadDecisions } from '../data/decisions';
 import { getAdmins, getGroupInfo, getMembers } from '../data/group';
@@ -67,6 +67,15 @@ export function useAccount(address: string | null) {
 
 export function usePrimaryName(address: string | null) {
   return useQuery(address ? `name:${address}` : null, () => getPrimaryName(address as string));
+}
+
+/** Confirmed balance in QORT (for fee checks). */
+export function useBalance(address: string | null) {
+  return useQuery(
+    address ? `balance:${address}` : null,
+    (force) => getBalance(address as string, { force }),
+    { refreshMs: 60_000 }
+  );
 }
 
 export function useAddressHistory(address: string | null) {

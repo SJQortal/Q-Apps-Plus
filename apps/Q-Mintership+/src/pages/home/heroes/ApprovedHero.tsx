@@ -10,15 +10,15 @@ import HowToRegOutlinedIcon from '@mui/icons-material/HowToRegOutlined';
 import { formatQort } from '../../../data/accounts';
 import { heightToTime } from '../../../data/chain';
 import { CUMULATIVE_BLOCKS_BY_LEVEL } from '../../../data/constants';
-import { useAddressHistory, useChainNow } from '../../../hooks/useData';
+import { useAddressHistory, useBalance, useChainNow } from '../../../hooks/useData';
 import { useFee } from '../../../hooks/useFee';
 import type { MyStatus } from '../../../rules/status';
 import { signerOf, useSession } from '../../../state/session';
 import { formatCount, formatRelative } from '../../../utils/format';
 import { usePendingWrite, writeKeys } from '../../../writes/optimistic';
 import { Hero, HeroText, Num, PersonLink } from '../Hero';
-import { LazyJoinDialog } from '../LazyJoinDialog';
-import { approvedInviteHeight, useBalance } from '../homeData';
+import { LazyJoinDialog } from '../../../components/nomination/LazyJoinDialog';
+import { approvedInviteHeight } from '../homeData';
 import { rememberStatus } from '../welcome';
 
 export function ApprovedHero({ status }: { status: MyStatus }) {
@@ -114,7 +114,7 @@ export function ApprovedHero({ status }: { status: MyStatus }) {
           mode="join"
           signer={signer}
           needed={null}
-          onSent={() => {
+          onSuccess={() => {
             setCelebrate(true);
             // Celebrated now: the confirmation that follows doesn't celebrate again.
             rememberStatus(status.address, 'member');
