@@ -1,0 +1,540 @@
+/**
+ * Propose a kick, ban, admin change or lifted ban: pick the person (name
+ * or address), see the same check the write will run, then one explained
+ * Hub confirmation. Kicking or banning a Minter Admin is offered as
+ * "remove their admin role first", because Core refuses it otherwise.
+ */
+import { useEffect, useId, useState } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  FormControlLabel,
+  Radio,
+  RadioGroup,
+  TextField,
+  Typography,
+} from '@mui/material';
+import { HubStepDialog } from '../../components/common/HubStepDialog';
+import { PersonChip } from '../../components/common/Person';
+import { ResponsiveDialog } from '../../components/common/ResponsiveDialog';
+import { CardSkeleton } from '../../components/common/states';
+import { getBans, isBanActive } from '../../data/group';
+import type { GroupMemberRow } from '../../data/types';
+import { useQuery } from '../../hooks/useQuery';
+import { useDisplayName } from '../../hooks/useDisplayName';
+import { KIND_LABEL } from '../../rules/decision';
+import { displayName, formatCount, formatDuration, formatRelative } from '../../utils/format';
+import {
+  proposeAddAdmin,
+  proposeBan,
+  proposeCancelBan,
+  proposeKick,
+  proposeRemoveAdmin,
+} from '../../writes/flows';
+import type { Signer, WriteOutcome, WriteStage } from '../../writes/runner';
+import {
+  BAN_MAX_DAYS,
+  REASON_MAX_BYTES,
+  banLengthText,
+  parseBanDays,
+  reasonProblem,
+  utf8Length,
+} from './decisionUi';
+import {
+  PROPOSE_KINDS,
+  checkSubject,
+  resolvePerson,
+  type ProposeKind,
+  type SubjectCheck,
+} from './proposeKinds';
+
+export interface ProposeContext {
+  needed: number;
+  totalAdmins: number;
+  maximumBlockDelay: number;
+  msPerBlock: number;
+  /** Admins who can sign (the null owner left out). */
+  signers: GroupMemberRow[];
+}
+
+export interface ProposeDialogProps {
+  kind: ProposeKind | null;
+  signer: Signer | null;
+  ctx: ProposeContext;
+  /** Start with this person picked (e.g. after "remove their admin role first"). */
+  preset?: { address: string; name?: string | null } | null;
+  onClose: () => void;
+  /** Switch to another kind for the same person. */
+  onSwitch: (kind: ProposeKind, person: { address: string; name?: string | null }) => void;
+}
+
+type Person = { address: string; name?: string | null };
+
+export function ProposeDialog({
+  kind,
+  signer,
+  ctx,
+  preset,
+  onClose,
+  onSwitch,
+}: ProposeDialogProps) {
+  const open = Boolean(kind && signer);
+  const [phase, setPhase] = useState<'form' | 'hub'>('form');
+  const [input, setInput] = useState('');
+  const [person, setPerson] = useState<Person | null>(null);
+  const [resolving, setResolving] = useState(false);
+  const [inputError, setInputError] = useState<string | null>(null);
+  const [check, setCheck] = useState<SubjectCheck | 'checking' | null>(null);
+  const [reason, setReason] = useState('');
+  const [banMode, setBanMode] = useState<'permanent' | 'days'>('permanent');
+  const [days, setDays] = useState('7');
+  const [touched, setTouched] = useState(false);
+  const [presetFor, setPresetFor] = useState<string | null>(null);
+  const banLabelId = useId();
+
+  // A new kind or preset person starts a fresh form (React's adjust-while-rendering pattern).
+  const presetKey = `${kind ?? ''}:${preset?.address ?? ''}`;
+  if (open && presetFor !== presetKey) {
+    setPresetFor(presetKey);
+    setPhase('form');
+    setInput(preset ? (preset.name ?? preset.address) : '');
+    setPerson(preset ?? null);
+    setInputError(null);
+    setCheck(null);
+    setReason('');
+    setBanMode('permanent');
+    setDays('7');
+    setTouched(false);
+  }
+
+  // Run the write's own check whenever the person changes (`signer` is stable per account).
+  useEffect(() => {
+    if (!kind || !signer || !person) return;
+    let live = true;
+    setCheck('checking');
+    checkSubject(kind, signer, person.address)
+      .then((result) => live && setCheck(result))
+      .catch(
+        () =>
+          live &&
+          setCheck({
+            status: 'blocked',
+            reason: 'Couldn’t check this account on your node. Try again in a moment.',
+          })
+      );
+    return () => {
+      live = false;
+    };
+  }, [kind, signer, person]);
+
+  const close = () => {
+    onClose();
+    setPresetFor(null);
+  };
+
+  if (!kind || !signer) return null;
+  const info = PROPOSE_KINDS[kind];
+  const needsReason = kind === 'kick' || kind === 'ban';
+  const reasonError = needsReason ? reasonProblem(reason) : null;
+  const ban = kind === 'ban' && banMode === 'days' ? parseBanDays(days) : { seconds: 0 };
+  const banError = 'error' in ban ? ban.error : null;
+  const ready =
+    person !== null &&
+    check !== null &&
+    check !== 'checking' &&
+    check.status === 'ok' &&
+    !reasonError &&
+    !banError;
+
+  const find = async () => {
+    setInputError(null);
+    setResolving(true);
+    try {
+      const result = await resolvePerson(input);
+      if ('error' in result) {
+        setPerson(null);
+        setCheck(null);
+        setInputError(result.error);
+      } else setPerson({ address: result.address, name: result.name });
+    } catch {
+      setInputError('Couldn’t look that up on your node. Try again in a moment.');
+    } finally {
+      setResolving(false);
+    }
+  };
+
+  const windowText = `${formatCount(ctx.maximumBlockDelay)} blocks (about ${formatDuration(
+    ctx.maximumBlockDelay * ctx.msPerBlock,
+    { precise: true }
+  )})`;
+
+  return (
+    <>
+      <ResponsiveDialog
+        open={open && phase === 'form'}
+        onClose={close}
+        title={info.label}
+        actions={
+          <>
+            <Button onClick={close}>Cancel</Button>
+            <Button
+              variant="contained"
+              disabled={!ready}
+              onClick={() => {
+                setTouched(true);
+                if (ready) setPhase('hub');
+              }}
+            >
+              Review
+            </Button>
+          </>
+        }
+      >
+        <Typography color="text.secondary">{info.description}</Typography>
+
+        {kind === 'removeAdmin' ? (
+          <AdminPicker
+            signers={ctx.signers}
+            self={signer.address}
+            value={person?.address ?? ''}
+            onPick={(p) => setPerson(p)}
+          />
+        ) : kind === 'cancelBan' ? (
+          <BanPicker value={person?.address ?? ''} onPick={(p) => setPerson(p)} />
+        ) : (
+          <Box
+            component="form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void find();
+            }}
+            sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}
+          >
+            <TextField
+              label="Name or address"
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                setInputError(null);
+              }}
+              error={Boolean(inputError)}
+              helperText={inputError ?? 'A registered name, or a Q… address.'}
+              fullWidth
+              autoComplete="off"
+              slotProps={{ htmlInput: { autoCapitalize: 'none', spellCheck: false } }}
+            />
+            <Button
+              type="submit"
+              variant="outlined"
+              disabled={resolving || !input.trim()}
+              sx={{ minHeight: 56, flexShrink: 0 }}
+            >
+              {resolving ? 'Finding…' : 'Find'}
+            </Button>
+          </Box>
+        )}
+
+        {person ? (
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1,
+              p: 1.5,
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+            }}
+          >
+            <PersonChip address={person.address} name={person.name ?? undefined} size={40} />
+            <CheckResult
+              check={check}
+              kind={kind}
+              onSwitch={() => onSwitch('removeAdmin', person)}
+            />
+          </Box>
+        ) : null}
+
+        {kind === 'ban' ? (
+          <Box>
+            <Typography sx={{ fontWeight: 600 }} id={banLabelId}>
+              How long
+            </Typography>
+            <RadioGroup
+              aria-labelledby={banLabelId}
+              value={banMode}
+              onChange={(e) => setBanMode(e.target.value as 'permanent' | 'days')}
+            >
+              <FormControlLabel
+                value="permanent"
+                control={<Radio />}
+                label="Permanent (until Minter Admins lift it)"
+                sx={{ minHeight: 44 }}
+              />
+              <FormControlLabel
+                value="days"
+                control={<Radio />}
+                label={`A number of days (up to ${BAN_MAX_DAYS})`}
+                sx={{ minHeight: 44 }}
+              />
+            </RadioGroup>
+            {banMode === 'days' ? (
+              <TextField
+                label="Days"
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                error={Boolean(banError)}
+                helperText={banError ?? `${banLengthText('seconds' in ban ? ban.seconds : 0)}.`}
+                slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }}
+                sx={{ mt: 1, maxWidth: 200 }}
+              />
+            ) : null}
+          </Box>
+        ) : null}
+
+        {needsReason ? (
+          <TextField
+            label="Reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            onBlur={() => setTouched(true)}
+            error={touched && Boolean(reasonError)}
+            helperText={
+              touched && reasonError
+                ? reasonError
+                : `The other Minter Admins and the account see it. ${utf8Length(reason.trim())} of ${REASON_MAX_BYTES} bytes.`
+            }
+            multiline
+            minRows={2}
+            fullWidth
+          />
+        ) : null}
+      </ResponsiveDialog>
+
+      {person ? (
+        <ProposeHubStep
+          open={open && phase === 'hub'}
+          kind={kind}
+          person={person}
+          reason={reason.trim()}
+          banSeconds={'seconds' in ban ? ban.seconds : 0}
+          signer={signer}
+          ctx={ctx}
+          windowText={windowText}
+          onClose={close}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function CheckResult({
+  check,
+  kind,
+  onSwitch,
+}: {
+  check: SubjectCheck | 'checking' | null;
+  kind: ProposeKind;
+  onSwitch: () => void;
+}) {
+  if (check === null || check === 'checking') {
+    return (
+      <Typography variant="body2" color="text.secondary" role="status">
+        Checking this account on your node…
+      </Typography>
+    );
+  }
+  if (check.status === 'ok')
+    return (
+      <Alert severity="success" role="status">
+        Nothing stops this proposal.
+      </Alert>
+    );
+  if (check.status === 'blocked')
+    return (
+      <Alert severity="warning" role="status">
+        {check.reason}
+      </Alert>
+    );
+  return (
+    <Alert severity="info" role="status">
+      <Typography variant="body2">
+        This is a Minter Admin. Core doesn’t let admins be{' '}
+        {kind === 'ban' ? 'banned' : 'removed from MINTER'} directly: propose removing their admin
+        role first. Once that is approved, you can propose this.
+      </Typography>
+      <Button variant="outlined" onClick={onSwitch} sx={{ mt: 1, minHeight: 44 }}>
+        Propose removing their admin role
+      </Button>
+    </Alert>
+  );
+}
+
+function AdminPicker({
+  signers,
+  self,
+  value,
+  onPick,
+}: {
+  signers: GroupMemberRow[];
+  self: string;
+  value: string;
+  onPick: (p: Person | null) => void;
+}) {
+  return (
+    <TextField
+      select
+      label="Minter Admin"
+      value={value}
+      onChange={(e) => {
+        const row = signers.find((s) => s.member === e.target.value);
+        onPick(row ? { address: row.member, name: row.primaryName ?? null } : null);
+      }}
+      helperText="MINTER’s owner account isn’t listed: it can’t be removed."
+      fullWidth
+      slotProps={{ select: { native: true } }}
+    >
+      <option value="">Choose an admin…</option>
+      {signers.map((s) => (
+        <option key={s.member} value={s.member}>
+          {displayName(s.primaryName, s.member)}
+          {s.member === self ? ' (you)' : ''}
+        </option>
+      ))}
+    </TextField>
+  );
+}
+
+function BanPicker({ value, onPick }: { value: string; onPick: (p: Person | null) => void }) {
+  const bans = useQuery('group:bans', (force) => getBans({ force }));
+  if (bans.isLoading) return <CardSkeleton lines={1} />;
+  const active = (bans.data ?? []).filter((b) => isBanActive(b));
+  if (!active.length)
+    return (
+      <Alert severity="info" role="status">
+        No bans are in force right now.
+      </Alert>
+    );
+  return (
+    <TextField
+      select
+      label="Banned account"
+      value={value}
+      onChange={(e) => onPick(e.target.value ? { address: e.target.value } : null)}
+      fullWidth
+      slotProps={{ select: { native: true } }}
+    >
+      <option value="">Choose an account…</option>
+      {active.map((b) => (
+        <BanOption key={b.offender} address={b.offender} banned={b.banned} reason={b.reason} />
+      ))}
+    </TextField>
+  );
+}
+
+function BanOption({
+  address,
+  banned,
+  reason,
+}: {
+  address: string;
+  banned: number;
+  reason?: string;
+}) {
+  const name = useDisplayName(address);
+  return (
+    <option value={address}>
+      {name.label}, banned {formatRelative(banned)}
+      {reason ? `: ${reason}` : ''}
+    </option>
+  );
+}
+
+function ProposeHubStep({
+  open,
+  kind,
+  person,
+  reason,
+  banSeconds,
+  signer,
+  ctx,
+  windowText,
+  onClose,
+}: {
+  open: boolean;
+  kind: ProposeKind;
+  person: Person;
+  reason: string;
+  banSeconds: number;
+  signer: Signer;
+  ctx: ProposeContext;
+  windowText: string;
+  onClose: () => void;
+}) {
+  const who = useDisplayName(person.address, person.name);
+  const info = PROPOSE_KINDS[kind];
+  const send = (onStage: (s: WriteStage) => void): Promise<WriteOutcome> => {
+    switch (kind) {
+      case 'kick':
+        return proposeKick(signer, person.address, reason, onStage);
+      case 'ban':
+        return proposeBan(signer, person.address, reason, banSeconds, onStage);
+      case 'addAdmin':
+        return proposeAddAdmin(signer, person.address, onStage);
+      case 'removeAdmin':
+        return proposeRemoveAdmin(signer, person.address, onStage);
+      case 'cancelBan':
+        return proposeCancelBan(signer, person.address, onStage);
+    }
+  };
+  return (
+    <HubStepDialog
+      open={open}
+      onClose={onClose}
+      title={`${KIND_LABEL[kind]}: ${who.label}`}
+      intro={
+        <>
+          {kind === 'ban' ? (
+            <Typography>
+              <b>Length:</b> {banLengthText(banSeconds)}
+            </Typography>
+          ) : null}
+          {reason ? (
+            <Typography sx={{ overflowWrap: 'anywhere' }}>
+              <b>Reason:</b> {reason}
+            </Typography>
+          ) : null}
+          <Typography sx={{ mt: 1 }}>
+            This proposes it. It happens only if {ctx.needed} of {ctx.totalAdmins} Minter Admins
+            sign within {windowText}.
+          </Typography>
+          <Typography sx={{ mt: 1 }}>
+            Your proposal doesn’t count as your signature: sign it in the queue too, once it is in a
+            block.
+          </Typography>
+        </>
+      }
+      steps={[
+        {
+          action: info.action,
+          title: 'Propose it',
+          detail: (
+            <Typography variant="body2">
+              Hub shows {who.label} ({person.address.slice(0, 6)}…) and the group MINTER.
+            </Typography>
+          ),
+          feeTxType: info.txType,
+        },
+      ]}
+      run={async (report) => ({ outcome: await send((stage) => report(0, stage)) })}
+      successTitle="Proposed"
+      successText={
+        <Typography variant="body2">
+          It shows in the queue once it is in a block, usually within a couple of minutes. Sign it
+          there too.
+        </Typography>
+      }
+    />
+  );
+}

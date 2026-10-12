@@ -3,7 +3,9 @@
  * kicks, bans, admin changes, cancelled invites and bans), most urgent
  * first, plus the nominations no Minter Admin has signed yet.
  *
- * Minter Admins sign here; everyone else follows along read-only. There is
+ * Minter Admins sign here, one at a time or several in a row, make the first
+ * signature on a nomination, propose kicks, bans and admin changes, and
+ * clean up stale invites. Everyone else follows along read-only. There is
  * no reject or withdraw: an admin signs or lets it expire.
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -54,6 +56,9 @@ import { DecisionCard, type SubjectFacts } from './DecisionCard';
 import { canSign, decisionCardId, isSignedByMe, myAnswer } from './decisionUi';
 import { FirstSignatureDialog } from './FirstSignatureDialog';
 import { HowSigningWorks } from './HowSigningWorks';
+import { ProposeDialog } from './ProposeDialog';
+import { ProposeMenu, type ProposeChoice } from './ProposeMenu';
+import type { ProposeKind } from './proposeKinds';
 import { SignDialog } from './SignDialog';
 import { StaleInvites } from './StaleInvites';
 import { UnusualList } from './UnusualList';
@@ -126,6 +131,10 @@ export default function DecisionsPage() {
 
   const [signTarget, setSignTarget] = useState<Decision | null>(null);
   const [firstTarget, setFirstTarget] = useState<Nomination | null>(null);
+  const [propose, setPropose] = useState<{
+    kind: ProposeKind;
+    preset: { address: string; name?: string | null } | null;
+  } | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkList, setBulkList] = useState<Decision[] | null>(null);
@@ -264,6 +273,17 @@ export default function DecisionsPage() {
     invalidate('staleinvites:');
   };
 
+  const chooseProposal = (choice: ProposeChoice) => {
+    if (choice === 'stale') {
+      setStaleExpanded(true);
+      document
+        .getElementById(STALE_SECTION_ID)
+        ?.scrollIntoView?.({ block: 'start', behavior: reduced ? 'auto' : 'smooth' });
+      return;
+    }
+    setPropose({ kind: choice, preset: null });
+  };
+
   const bottomBar = phone && !landscape;
   const fetching = decisionsQ.fetching || nominationsQ.fetching;
 
@@ -292,6 +312,7 @@ export default function DecisionsPage() {
                 </IconButton>
               </span>
             </Tooltip>
+            {isAdmin ? <ProposeMenu onChoose={chooseProposal} /> : null}
           </>
         }
       />
@@ -556,6 +577,22 @@ export default function DecisionsPage() {
             msPerBlock: data.now.msPerBlock,
           }}
           onClose={() => setFirstTarget(null)}
+        />
+      ) : null}
+      {data ? (
+        <ProposeDialog
+          kind={propose?.kind ?? null}
+          preset={propose?.preset ?? null}
+          signer={signer}
+          ctx={{
+            needed,
+            totalAdmins,
+            maximumBlockDelay: data.group.maximumBlockDelay,
+            msPerBlock: data.now.msPerBlock,
+            signers: data.admins.signers,
+          }}
+          onClose={() => setPropose(null)}
+          onSwitch={(kind, person) => setPropose({ kind, preset: person })}
         />
       ) : null}
       <BulkDialog

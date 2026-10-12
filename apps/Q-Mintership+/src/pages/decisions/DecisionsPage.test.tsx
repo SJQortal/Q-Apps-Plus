@@ -279,6 +279,66 @@ describe('Decisions: stale invites', () => {
   });
 });
 
+describe('Decisions: proposing', () => {
+  it('offers removing the admin role first when the member to remove is a Minter Admin', async () => {
+    const u = user();
+    await openPage('admin');
+    mockQortalRequest('REMOVE_GROUP_ADMIN', (req: Record<string, unknown>) => ({
+      type: 'REMOVE_GROUP_ADMIN',
+      signature: base58Encode(new Uint8Array(64).fill(3)),
+      admin: req.qortalAddress,
+    }));
+
+    await u.click(screen.getByRole('button', { name: 'Propose' }));
+    await u.click(await screen.findByRole('menuitem', { name: /Remove a member/ }));
+    const form = await screen.findByRole('dialog', { name: 'Remove a member' });
+    await u.type(within(form).getByRole('textbox', { name: 'Name or address' }), 'Admin B');
+    await u.click(within(form).getByRole('button', { name: 'Find' }));
+    expect(await within(form).findByText(/This is a Minter Admin/)).toBeVisible();
+    expect(within(form).getByRole('button', { name: 'Review' })).toBeDisabled();
+
+    await u.click(within(form).getByRole('button', { name: 'Propose removing their admin role' }));
+    const switched = await screen.findByRole('dialog', { name: 'Remove a Minter Admin' });
+    expect(await within(switched).findByText('Nothing stops this proposal.')).toBeVisible();
+    await u.click(within(switched).getByRole('button', { name: 'Review' }));
+
+    const hub = await screen.findByRole('dialog', { name: /Remove a Minter Admin: Admin B/ });
+    expect(within(hub).getByText(/Fee: 0.01 QORT/)).toBeInTheDocument();
+    await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(hub).findByText('Proposed')).toBeVisible();
+    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')[0]).toMatchObject({
+      groupId: 694,
+      txGroupId: 694,
+    });
+    expect(qortalCallsFor('KICK_FROM_GROUP')).toHaveLength(0);
+  });
+
+  it('refuses a ban longer than 24 days before Hub is asked', async () => {
+    const u = user();
+    await openPage('admin');
+    await u.click(screen.getByRole('button', { name: 'Propose' }));
+    await u.click(await screen.findByRole('menuitem', { name: /Ban an account/ }));
+    const form = await screen.findByRole('dialog', { name: 'Ban an account' });
+    await u.type(within(form).getByRole('textbox', { name: 'Name or address' }), 'Leo Learner');
+    await u.click(within(form).getByRole('button', { name: 'Find' }));
+    expect(await within(form).findByText('Nothing stops this proposal.')).toBeVisible();
+    await u.type(within(form).getByRole('textbox', { name: 'Reason' }), 'Spam in the chat');
+    await u.click(within(form).getByRole('radio', { name: /A number of days/ }));
+    const days = within(form).getByRole('textbox', { name: 'Days' });
+    await u.clear(days);
+    await u.type(days, '25');
+    expect(within(form).getByText(/A ban can last up to 24 days/)).toBeVisible();
+    expect(within(form).getByRole('button', { name: 'Review' })).toBeDisabled();
+    await u.clear(days);
+    await u.type(days, '24');
+    expect(within(form).getByRole('button', { name: 'Review' })).toBeEnabled();
+    await u.click(within(form).getByRole('button', { name: 'Review' }));
+    const hub = await screen.findByRole('dialog', { name: /Ban from MINTER: Leo Learner/ });
+    expect(within(hub).getByText('24 days')).toBeInTheDocument();
+    expect(qortalCallsFor('BAN_FROM_GROUP')).toHaveLength(0);
+  });
+});
+
 describe('Decisions: navigation and filters', () => {
   it('scrolls to and focuses the decision named in ?d=', async () => {
     const sig = createWorld().pending.find((t: { type: string }) => t.type === 'GROUP_KICK')
