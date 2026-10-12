@@ -65,6 +65,8 @@ import {
 } from './filters';
 
 const DECIDED_PAGE = 10;
+/** The floating button (48 px, 16 px above the bar) plus a margin. */
+const FAB_CLEARANCE = 80;
 
 const nameOf = (address: string) => peekQuery<string | null>(`name:${address}`);
 
@@ -159,7 +161,7 @@ export default function NominationsPage() {
           </>
         }
       />
-      <PageBody sx={fab ? { pb: 12 } : undefined}>
+      <PageBody>
         <NominateNote session={session} status={status} hidden={showOwn} />
 
         {showOwn && data ? (
@@ -328,6 +330,8 @@ export default function NominationsPage() {
             me={me}
           />
         ) : null}
+        {/* Room under the last card, so the floating button never covers it. */}
+        {fab ? <Box aria-hidden sx={{ height: FAB_CLEARANCE, flexShrink: 0 }} /> : null}
       </PageBody>
 
       {fab && !shortFrame ? (
@@ -340,6 +344,8 @@ export default function NominationsPage() {
             right: 16,
             bottom: `calc(${BOTTOM_NAV_HEIGHT + 16}px + var(--qp-safe-bottom))`,
             zIndex: (theme) => theme.zIndex.speedDial,
+            textTransform: 'none',
+            fontWeight: 700,
           }}
         >
           <PersonAddAlt1OutlinedIcon aria-hidden sx={{ mr: 1 }} />
