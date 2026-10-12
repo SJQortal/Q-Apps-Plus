@@ -110,14 +110,18 @@ function when(event: TimelineEvent, nowMs: number): string {
 function TimelineItem({
   event,
   showSubject,
+  showProposer,
   nowMs,
 }: {
   event: TimelineEvent;
   showSubject: boolean;
+  showProposer: boolean;
   nowMs: number;
 }) {
   const proposer =
-    event.creator && event.kind !== 'join' && event.kind !== 'leave' ? event.creator : null;
+    showProposer && event.creator && event.kind !== 'join' && event.kind !== 'leave'
+      ? event.creator
+      : null;
   const chip = event.outcome === 'done' ? null : OUTCOME_CHIP[event.outcome];
   return (
     <Box
@@ -187,13 +191,21 @@ export interface TimelineListProps {
   events: TimelineEvent[];
   /** Show who each event is about (History); a person page leaves it out. */
   showSubject?: boolean;
+  /** Show which Minter Admin proposed each (default true; off on an admin's own list). */
+  showProposer?: boolean;
   nowMs: number;
   /** A label for the list, read by screen readers. */
   label: string;
 }
 
 /** Events newest first, under a small month heading each. */
-export function TimelineList({ events, showSubject = false, nowMs, label }: TimelineListProps) {
+export function TimelineList({
+  events,
+  showSubject = false,
+  showProposer = true,
+  nowMs,
+  label,
+}: TimelineListProps) {
   const months: Array<{ month: string; events: TimelineEvent[] }> = [];
   for (const event of events) {
     const month = MONTH.format(new Date(event.at));
@@ -219,6 +231,7 @@ export function TimelineList({ events, showSubject = false, nowMs, label }: Time
                   key={event.signature}
                   event={event}
                   showSubject={showSubject}
+                  showProposer={showProposer}
                   nowMs={nowMs}
                 />
               ))}

@@ -32,6 +32,7 @@ export function AdminProposals({
       <TimelineList
         events={shown}
         showSubject
+        showProposer={false}
         nowMs={nowMs}
         label="Their proposals, newest first"
       />

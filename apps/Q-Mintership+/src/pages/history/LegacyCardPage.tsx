@@ -183,6 +183,7 @@ function CardView({ row, section }: { row: LegacyCardRow; section: string }) {
         }
         sx={{
           flexWrap: 'wrap',
+          '& .MuiAlert-message': { flex: '1 1 240px', minWidth: 0 },
           '& .MuiAlert-action': { pl: { xs: 0, sm: 2 }, ml: { xs: 0, sm: 'auto' } },
         }}
       >

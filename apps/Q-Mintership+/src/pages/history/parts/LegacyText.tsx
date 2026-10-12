@@ -38,6 +38,16 @@ export function LegacyTextView({ text, clamp }: { text: LegacyText; clamp?: numb
   );
 }
 
+/** The link without its scheme, decoded for reading (`bob%2Bbuilder` → `bob+builder`). */
+function linkLabel(link: string): string {
+  const bare = link.replace(/^qortal:\/\//i, '');
+  try {
+    return decodeURIComponent(bare);
+  } catch {
+    return bare;
+  }
+}
+
 export function QortalLinks({ links }: { links: string[] }) {
   if (!links.length) return null;
   return (
@@ -57,7 +67,7 @@ export function QortalLinks({ links }: { links: string[] }) {
           }}
         >
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {link.replace(/^qortal:\/\//i, '')}
+            {linkLabel(link)}
           </span>
         </Button>
       ))}

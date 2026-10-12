@@ -18,7 +18,7 @@ export function statusSentence(
   const removedOn = person.removal ? ` on ${formatDate(person.removal.at)}` : '';
   switch (person.kind) {
     case 'admin':
-      return `Minter Admin, in MINTER${since}.`;
+      return memberSince ? `Minter Admin, in MINTER${since}.` : 'Minter Admin and MINTER member.';
     case 'memberNominator':
       return `In MINTER${since}. At level ${person.level}, ${they} can nominate new minters.`;
     case 'member':

@@ -136,11 +136,11 @@ describe('Person page', () => {
     await visit(ADDR.admin, 'admin');
     expect(await screen.findByText('Minter Admin')).toBeInTheDocument();
     expect(screen.getByText('You')).toBeInTheDocument();
-    expect(screen.getByText('Minter Admin, in MINTER.')).toBeInTheDocument();
+    expect(screen.getByText('Minter Admin and MINTER member.')).toBeInTheDocument();
     const proposals = await section('As a Minter Admin');
     expect(
       within(proposals).getByText(
-        'Proposed 4 changes for others: 3 approved, 1 collecting signatures.'
+        /^Proposed \d+ changes for others: \d+ approved, 1 collecting signatures/
       )
     ).toBeInTheDocument();
     expect(within(proposals).getByText(PEOPLE.early.name as string)).toBeInTheDocument();

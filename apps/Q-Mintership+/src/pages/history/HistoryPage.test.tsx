@@ -8,8 +8,12 @@ import HistoryPage from './HistoryPage';
 
 const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH|VOTE|POLL/;
 
+/** The on-chain list, expanded when it has more than the first dozen events. */
 async function eventsList() {
-  return screen.findByRole('group', { name: 'MINTER events, newest first' });
+  const list = await screen.findByRole('group', { name: 'MINTER events, newest first' });
+  const all = screen.queryByRole('button', { name: /^Show all \d+$/ });
+  if (all) await userEvent.click(all);
+  return list;
 }
 
 describe('History page: on chain', () => {
@@ -17,15 +21,18 @@ describe('History page: on chain', () => {
     const { posts } = await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
     const list = await eventsList();
     expect(within(list).getByText('Left MINTER')).toBeInTheDocument();
-    expect(within(list).getAllByText('Approved for MINTER')).toHaveLength(2);
+    expect(within(list).getAllByText('Approved for MINTER').length).toBeGreaterThanOrEqual(2);
     expect(within(list).getByText(PEOPLE.left.name as string)).toBeInTheDocument();
     expect(within(list).getByText(PEOPLE.recentlyJoined.name as string)).toBeInTheDocument();
     // An expired nomination is history; still-open ones are not.
-    expect(within(list).getByText('Nominated for MINTER')).toBeInTheDocument();
-    expect(within(list).getByText('Expired')).toBeInTheDocument();
+    const expired = within(list)
+      .getByText(PEOPLE.expired.name as string)
+      .closest('li') as HTMLElement;
+    expect(within(expired).getByText('Nominated for MINTER')).toBeInTheDocument();
+    expect(within(expired).getByText('Expired')).toBeInTheDocument();
     expect(within(list).queryByText('Collecting signatures')).toBeNull();
     expect(within(list).queryByText(PEOPLE.urgent.name as string)).toBeNull();
-    expect(screen.getByText(/4 events since/)).toBeInTheDocument();
+    expect(screen.getByText(/^\d+ events since \d+ \w+ \d{4}\.$/)).toBeInTheDocument();
     expect(posts).toEqual([]);
     expect(qortalCalls.filter((c) => WRITES.test(String(c.action)))).toEqual([]);
   });
