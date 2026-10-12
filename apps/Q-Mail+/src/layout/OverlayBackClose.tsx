@@ -11,8 +11,15 @@
  * the pane under the overlay stays open. Renders nothing, and does nothing
  * outside a router (tests, previews).
  */
-import { useEffect, useId, useRef } from 'react';
-import { useInRouterContext, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
+import { useCallback, useContext, useEffect, useId, useRef } from 'react';
+import {
+  UNSAFE_NavigationContext,
+  useInRouterContext,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+  type Location,
+} from 'react-router-dom';
 
 export const OVERLAY_STATE_KEY = 'qmailOverlay';
 
@@ -26,24 +33,15 @@ const withoutOverlay = (state: unknown): Record<string, unknown> | null => {
 };
 
 /**
- * Whether the entry the browser is really on carries this overlay's id. Under
+ * Whether the entry the router is really on carries this overlay's id. Under
  * Settings the mail page renders at its background location (App.tsx), so
  * useLocation() there is the entry Settings was opened from, not Settings:
- * the router's own record of the real entry (`history.state.usr`, read only)
- * decides, so closing the mailboxes drawer as Settings opens no longer
- * replaces Settings with the inbox. Without one (a memory router), the
- * location seen is the real one.
+ * the router's history (`navigator.location`) knows the real one, so closing
+ * the mailboxes drawer as Settings opens no longer replaces Settings with
+ * the inbox.
  */
-const realEntryIsOurs = (seen: unknown, id: string): boolean => {
-  let real: unknown;
-  try {
-    real = window.history.state;
-  } catch {
-    real = undefined;
-  }
-  const usr = real && typeof real === 'object' && 'usr' in real ? (real as { usr: unknown }).usr : seen;
-  return stateObject(usr)[OVERLAY_STATE_KEY] === id && stateObject(seen)[OVERLAY_STATE_KEY] === id;
-};
+const realEntryIsOurs = (seen: Location, real: Location | undefined, id: string): boolean =>
+  stateObject(seen.state)[OVERLAY_STATE_KEY] === id && (!real || stateObject(real.state)[OVERLAY_STATE_KEY] === id);
 
 export interface OverlayBackCloseProps {
   open: boolean;
@@ -61,6 +59,9 @@ function OverlayBackCloseInRouter({ open, onClose, enabled = true }: OverlayBack
   const location = useLocation();
   const navigate = useNavigate();
   const navigationType = useNavigationType();
+  // The router's history: its location is the real entry, also under Settings.
+  const { navigator } = useContext(UNSAFE_NavigationContext);
+  const realLocation = useCallback(() => (navigator as { location?: Location }).location, [navigator]);
   const onCloseRef = useRef(onClose);
   const locationRef = useRef(location);
   const pushed = useRef(false);
@@ -87,11 +88,11 @@ function OverlayBackCloseInRouter({ open, onClose, enabled = true }: OverlayBack
     } else if (!active && pushed.current) {
       pushed.current = false;
       sawOwnEntry.current = false;
-      if (realEntryIsOurs(current.state, id)) {
+      if (realEntryIsOurs(current, realLocation(), id)) {
         navigate(path, { replace: true, state: withoutOverlay(current.state) });
       }
     }
-  }, [active, id, navigate]);
+  }, [active, id, navigate, realLocation]);
 
   // Gone while open (the pane under it closed): leave no id behind.
   useEffect(
@@ -99,11 +100,11 @@ function OverlayBackCloseInRouter({ open, onClose, enabled = true }: OverlayBack
       if (!pushed.current) return;
       pushed.current = false;
       const current = locationRef.current;
-      if (realEntryIsOurs(current.state, id)) {
+      if (realEntryIsOurs(current, realLocation(), id)) {
         navigate(current.pathname + current.search + current.hash, { replace: true, state: withoutOverlay(current.state) });
       }
     },
-    [id, navigate]
+    [id, navigate, realLocation]
   );
 
   // Back popped our entry: close.
