@@ -186,6 +186,8 @@ export function extendLegacy(world) {
     });
     if (i % 2 === 0) poll(id, by, 8 + (i % 4), i % 3);
   }
+  // A poll created by someone other than the card's publisher (the original app hid that card).
+  polls['Minter-board-card-old002-poll'].owner = addressOf('Admin A');
 
   // 6. The encrypted admin board: listed by Core, never decrypted here.
   add(
