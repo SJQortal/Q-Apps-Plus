@@ -6,10 +6,14 @@ Newest first. The in-app copy lives in `src/constants/changelog.ts` (Settings �
 
 Changes since the published 1.0.0:
 
+- **Notifications:** a bell in the header (on phones too) lists comments on your shares, replies to your comments and your shares added to someone's collection, with the commenter, the share, the comment's opening words and the time. A comment opens its share scrolled to the comments. Comments written in the original Q-Share count too. Q-Share+ checks while it is open: 4 s after start, every 2 minutes, backing off to 15 while nothing happens, paused while out of sight (another Hub tab, minimised), and at once when you come back or open the list. Each check is usually a comment search, a collection search and a look at the node's last block, so comments a syncing or offline node indexes late are still found. Settings → Notifications switches each kind on and off.
+- **Alerts from Qortal Hub while Q-Share+ is closed** (Settings → Notifications, off by default): Hub's own notifications (`NOTIFICATION_*`) for new comments on your 30 newest shares and replies to your 20 newest comments, after Hub's permission banner. Collection adds can't raise Hub alerts (Hub only matches brand-new resources, and adding to a collection re-publishes it), so they wait for the bell.
+- Collections name the owners of their newest shares in their QDN description (`~qsn-<last 12 characters of the address>~`, newly added first, at most four), so the owner's Q-Share+ finds them with one search. Additive metadata only; the app never shows it.
+- Links opened from Hub while Q-Share+ is already open go to the right page from any screen (they used to resolve relative to the current page).
 - Share pages: audio and video files say **Play audio** / **Play video** (with a play icon) and **Close player** once open, instead of "Preview"; the player's error message and fallback name say so too. Images and text keep "Preview".
 - File types found in real shares: subtitles (.srt, .vtt) and checksum files (.md5, .sha*) preview as text, audiobooks (.m4b) and WebM audio (.weba) play, and comic books (.cbz, .cbr) are listed as documents.
 - Editor: the description placeholder no longer sits on top of the first word while a phone keyboard (or a desktop IME) is still composing it.
-- 490 tests; lint clean.
+- 548 tests; lint clean.
 
 ## 1.0.0 (2026-09-30)
 
