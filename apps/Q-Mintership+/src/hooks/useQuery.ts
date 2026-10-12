@@ -4,7 +4,7 @@
  * politely while the view is mounted and the tab is visible.
  */
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
-import { getQueryState, isStale, subscribeQuery, type QueryState } from '../data/query';
+import { getQueryState, staleVersion, subscribeQuery, type QueryState } from '../data/query';
 
 export interface UseQueryResult<T> extends QueryState<T> {
   /** Load again now (a refresh button or pull-to-refresh). */
@@ -57,11 +57,13 @@ export function useQuery<T>(
     [enabled]
   );
 
-  // First load, and reload when something invalidated the key.
-  const stale = enabled && isStale(storeKey);
+  // First load, and one reload per invalidation (a write, a Refresh button).
+  // invalidate() hands the key a new state object, so this re-renders.
+  const stale = enabled ? staleVersion(storeKey) : 0;
   useEffect(() => {
     if (!enabled) return;
-    if (state.status === 'idle' || stale) void run(stale);
+    if (stale) void run(true);
+    else if (state.status === 'idle') void run(false);
   }, [enabled, run, state.status, stale, storeKey]);
 
   usePoliteInterval(

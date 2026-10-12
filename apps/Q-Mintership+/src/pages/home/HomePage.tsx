@@ -5,7 +5,6 @@
  * sections that status needs, so a newcomer's Home costs a handful of reads
  * and an admin's loads the decisions and nominations it shows.
  */
-import { useReducer } from 'react';
 import { IconButton, Tooltip } from '@mui/material';
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import { PageBody } from '../../components/layout/PageBody';
@@ -18,7 +17,6 @@ import { useChainNow, useMyStatus } from '../../hooks/useData';
 import type { MyStatus } from '../../rules/status';
 import { useSession } from '../../state/session';
 import { displayName } from '../../utils/format';
-import { usePendingWrite, writeKeys } from '../../writes/optimistic';
 import { AdminSection } from './AdminSection';
 import { HowItWorks } from './HowItWorks';
 import { LiveStats } from './LiveStats';
@@ -139,14 +137,11 @@ export default function HomePage() {
   const session = useSession();
   const my = useMyStatus();
   const needed = useNeededSignatures();
-  // A join sent from Home re-renders the page, so the status reloads once Core has it.
-  usePendingWrite(session.address ? writeKeys.join(session.address) : null);
-  const [, rerender] = useReducer((n: number) => n + 1, 0);
   const status = my.status;
 
+  // Mounted sections reload what they show; the rest reloads when next read.
   const refresh = () => {
     for (const prefix of REFRESH_PREFIXES) invalidate(prefix);
-    rerender();
   };
 
   return (

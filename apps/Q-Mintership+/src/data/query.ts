@@ -28,8 +28,12 @@ export interface QueryState<T> {
 interface Entry {
   state: QueryState<unknown>;
   inflight: Promise<unknown> | null;
+  /** `version` when the running load started. */
+  inflightVersion: number;
   /** Set by invalidate(): the next read loads again even inside the TTL. */
   stale: boolean;
+  /** Bumped by every invalidate(), so a load that started before it can't clear it. */
+  version: number;
   listeners: Set<() => void>;
 }
 
@@ -50,7 +54,14 @@ const IDLE: QueryState<unknown> = Object.freeze({
 function entryFor(key: string): Entry {
   let entry = entries.get(key);
   if (!entry) {
-    entry = { state: IDLE, inflight: null, stale: false, listeners: new Set() };
+    entry = {
+      state: IDLE,
+      inflight: null,
+      inflightVersion: 0,
+      stale: false,
+      version: 0,
+      listeners: new Set(),
+    };
     entries.set(key, entry);
     if (entries.size > MAX_ENTRIES) evictOne();
   }
@@ -97,17 +108,25 @@ export function fetchQuery<T>(
   const ttlMs = options.ttlMs ?? 60_000;
   const entry = entryFor(key);
   if (!options.force && isFresh(entry, ttlMs)) return Promise.resolve(entry.state.data as T);
-  if (entry.inflight) return entry.inflight as Promise<T>;
+  // Share a running load, unless the key was invalidated after it started:
+  // its answer may predate the write, so a new load replaces it.
+  if (entry.inflight && entry.inflightVersion === entry.version) {
+    return entry.inflight as Promise<T>;
+  }
 
   const prefix = key.split(':')[0];
   loadCounts.set(prefix, (loadCounts.get(prefix) ?? 0) + 1);
+  const startedAt = entry.version;
   const self: { promise?: Promise<T> } = {};
+  const current = () => entry.inflight === self.promise;
   const run = (async () => {
     // Yield first, so `self.promise` is set before `finally` can run.
     await null;
     try {
       const data = await load();
-      entry.stale = false;
+      // A newer load replaced this one: its answer is the one that counts.
+      if (!current()) return data;
+      if (entry.version === startedAt) entry.stale = false;
       setState(entry, {
         data,
         error: undefined,
@@ -117,18 +136,21 @@ export function fetchQuery<T>(
       });
       return data;
     } catch (error) {
-      setState(entry, {
-        error,
-        status: entry.state.data === undefined ? 'error' : 'success',
-        fetching: false,
-      });
+      if (current()) {
+        setState(entry, {
+          error,
+          status: entry.state.data === undefined ? 'error' : 'success',
+          fetching: false,
+        });
+      }
       throw error;
     } finally {
-      if (entry.inflight === self.promise) entry.inflight = null;
+      if (current()) entry.inflight = null;
     }
   })();
   self.promise = run;
   entry.inflight = run;
+  entry.inflightVersion = startedAt;
   setState(entry, {
     fetching: true,
     status: entry.state.data === undefined ? 'loading' : entry.state.status,
@@ -168,14 +190,16 @@ export function setQueryData<T>(key: string, update: T | ((previous: T | undefin
 }
 
 /**
- * Mark every key starting with `prefix` stale. Mounted views reload them on
- * their next read; values stay on screen meanwhile.
+ * Mark every key starting with `prefix` stale. Mounted views reload them at
+ * once (useQuery watches staleVersion()); values stay on screen meanwhile.
+ * Each key gets a new state object, so useSyncExternalStore re-renders.
  */
 export function invalidate(prefix: string): void {
   for (const [key, entry] of entries) {
     if (key.startsWith(prefix)) {
       entry.stale = true;
-      for (const listener of [...entry.listeners]) listener();
+      entry.version += 1;
+      setState(entry, {});
     }
   }
 }
@@ -191,6 +215,12 @@ export function queryLoadCounts(): Record<string, number> {
   return Object.fromEntries(loadCounts);
 }
 
-export function isStale(key: string): boolean {
-  return entries.get(key)?.stale ?? false;
+/**
+ * 0 while `key` is fresh; otherwise a number that changes with every
+ * invalidate(), so a view reloads once per invalidation (and a failed reload
+ * doesn't loop: it waits for the next refresh or invalidation).
+ */
+export function staleVersion(key: string): number {
+  const entry = entries.get(key);
+  return entry?.stale ? entry.version : 0;
 }
