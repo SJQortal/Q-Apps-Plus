@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.2 (Q-Mail+) - October 12, 2026
+
+**Swipe back on phones**
+- Swipe right to close what's on top, as Back does: an open message, the composer, a thread, an attachment preview, a dialog, a menu sheet or Settings. A round arrow follows your finger and fills in once letting go will close; a short swipe or a scroll does nothing.
+- The mailboxes menu, which slides in from the left, closes with a swipe left.
+- A swipe in something that scrolls sideways (a zoomed picture or PDF, the composer's row of attachments) scrolls it instead; a long press still opens a message's menu.
+- On a phone, Back and a swipe also close What's new in Settings, instead of Settings under it.
+
+**Fixes**
+- On a phone, "Write your message here" disappears as soon as you start typing. It stayed under the first word until the keyboard finished it.
+- Settings in the phone's mailboxes menu did nothing. The menu no longer lists it: the gear at the top opens Settings.
+
 ## 1.0.1 (Q-Mail+) - October 8, 2026
 
 **Replies stay small** (on advice from Qortal DEV)

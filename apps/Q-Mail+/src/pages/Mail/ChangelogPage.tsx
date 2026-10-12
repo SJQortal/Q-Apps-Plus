@@ -9,6 +9,15 @@ type ChangelogEntry = {
 
 const changelogEntries: ChangelogEntry[] = [
   {
+    version: "1.0.2 (Q-Mail+)",
+    date: "October 12, 2026",
+    highlights: [
+      "Swipe back on phones: swipe right to close an open message, the composer, a preview, a dialog or Settings, as Back does; swipe left to close the mailboxes menu. An arrow shows when letting go will close.",
+      "On a phone, \"Write your message here\" disappears as soon as you start typing.",
+      "Settings opens from the gear at the top on phones; the mailboxes menu no longer lists a Settings item that did nothing.",
+    ],
+  },
+  {
     version: "1.0.1 (Q-Mail+)",
     date: "October 8, 2026",
     highlights: [
