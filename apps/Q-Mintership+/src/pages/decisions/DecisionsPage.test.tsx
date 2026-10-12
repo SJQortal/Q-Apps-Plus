@@ -253,6 +253,32 @@ describe('Decisions: bulk sign', () => {
   });
 });
 
+describe('Decisions: stale invites', () => {
+  it('lists approved invites of non-members only, marks recent ones, and counts waiting cancels', async () => {
+    const u = user();
+    await openPage('admin');
+    expect(await screen.findByText('3 approved invites never used')).toBeVisible();
+    expect(screen.getByText(/Left out: 1 invite for people already in MINTER/)).toBeVisible();
+    expect(screen.getByText(/1 cancellation is already waiting for signatures/)).toBeVisible();
+
+    await u.click(screen.getByRole('button', { name: 'Show them' }));
+    const list = await screen.findByRole('list', { name: 'Approved invites never used' });
+    const rows = within(list).getAllByRole('listitem');
+    expect(rows).toHaveLength(3);
+    expect(within(list).queryByText(/Member 6/)).toBeNull();
+    const ada = await within(list).findByText('Ada Approved');
+    expect(
+      within(ada.closest('li') as HTMLElement).getByText(
+        /Approved recently: they may still press Join/
+      )
+    ).toBeVisible();
+    // Only the two older ones go into "for all".
+    expect(
+      await screen.findByRole('button', { name: 'Propose cancelling all 2 older ones' })
+    ).toBeVisible();
+  });
+});
+
 describe('Decisions: navigation and filters', () => {
   it('scrolls to and focuses the decision named in ?d=', async () => {
     const sig = createWorld().pending.find((t: { type: string }) => t.type === 'GROUP_KICK')

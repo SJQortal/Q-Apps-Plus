@@ -36,7 +36,7 @@ import {
 } from '../../components/common/states';
 import { STORAGE_PREFIX } from '../../constants/plus';
 import type { Nomination } from '../../data/nominations';
-import { peekQuery } from '../../data/query';
+import { invalidate, peekQuery } from '../../data/query';
 import { useDecisions, useMembers, useNominations } from '../../hooks/useData';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -55,6 +55,7 @@ import { canSign, decisionCardId, isSignedByMe, myAnswer } from './decisionUi';
 import { FirstSignatureDialog } from './FirstSignatureDialog';
 import { HowSigningWorks } from './HowSigningWorks';
 import { SignDialog } from './SignDialog';
+import { StaleInvites } from './StaleInvites';
 import { UnusualList } from './UnusualList';
 
 const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
@@ -66,6 +67,7 @@ const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
 
 const PENDING_MAX_AGE_MS = 15 * 60_000;
 const TARGET_KEY = `${STORAGE_PREFIX}decisions-last-target`;
+const STALE_SECTION_ID = 'stale-invites';
 
 const spin = keyframes`
   from { transform: rotate(0deg); }
@@ -127,6 +129,7 @@ export default function DecisionsPage() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkList, setBulkList] = useState<Decision[] | null>(null);
+  const [staleExpanded, setStaleExpanded] = useState(false);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [handledTarget, setHandledTarget] = useState<string | null>(null);
 
@@ -258,6 +261,7 @@ export default function DecisionsPage() {
   const refresh = () => {
     void decisionsQ.refetch();
     void nominationsQ.refetch();
+    invalidate('staleinvites:');
   };
 
   const bottomBar = phone && !landscape;
@@ -507,6 +511,24 @@ export default function DecisionsPage() {
               <Section title="Unusual approval route" id="unusual">
                 <UnusualList decisions={data.unusual} now={data.now} />
               </Section>
+            ) : null}
+
+            {isAdmin && signer ? (
+              <Box
+                id={STALE_SECTION_ID}
+                sx={{ scrollMarginTop: 'calc(var(--qmp-header-offset, 0px) + 16px)' }}
+              >
+                <Section title="Clean up stale invites" id="stale">
+                  <StaleInvites
+                    signer={signer}
+                    decisions={decisions}
+                    now={data.now}
+                    adminNames={adminNames}
+                    expanded={staleExpanded}
+                    onExpandedChange={setStaleExpanded}
+                  />
+                </Section>
+              </Box>
             ) : null}
 
             <HowSigningWorks
