@@ -3,7 +3,7 @@
  * proposed), to whom, when, and which Minter Admin proposed it. Proposals
  * that didn't happen carry a chip saying so; open ones link to Decisions.
  */
-import { Fragment, type ReactNode } from 'react';
+import { Fragment } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Link, Typography, type ChipProps } from '@mui/material';
 import { alpha, styled, useTheme } from '@mui/material/styles';
@@ -21,7 +21,7 @@ import PersonRemoveOutlinedIcon from '@mui/icons-material/PersonRemoveOutlined';
 import RemoveModeratorOutlinedIcon from '@mui/icons-material/RemoveModeratorOutlined';
 import { primarySoft } from '../../../hub-theme';
 import { OUTCOME_LABEL, type TimelineEvent, type TimelineKind } from '../../../data/timeline';
-import { PersonChip } from '../../../components/common/Person';
+import { PersonChip, PersonInline } from '../../../components/common/Person';
 import { ToneChip } from '../../../components/common/Section';
 import { decisionPath } from '../../../routes/paths';
 import { formatDate, formatRelative } from '../../../utils/format';
@@ -89,17 +89,6 @@ function EventIcon({ event }: { event: TimelineEvent }) {
   );
 }
 
-function Inline({ children }: { children: ReactNode }) {
-  return (
-    <Box
-      component="span"
-      sx={{ display: 'inline-flex', verticalAlign: 'middle', '& p, & span': { display: 'inline' } }}
-    >
-      {children}
-    </Box>
-  );
-}
-
 function when(event: TimelineEvent, nowMs: number): string {
   if (event.outcome === 'pending') return `Proposed ${formatRelative(event.proposedAt, nowMs)}`;
   const date = formatDate(event.at);
@@ -154,9 +143,7 @@ function TimelineItem({
           {proposer && proposer !== event.subject ? (
             <>
               {event.outcome === 'pending' ? ' by ' : ' · proposed by '}
-              <Inline>
-                <PersonChip address={proposer} size={20} strong={false} />
-              </Inline>
+              <PersonInline address={proposer} />
             </>
           ) : null}
         </Typography>

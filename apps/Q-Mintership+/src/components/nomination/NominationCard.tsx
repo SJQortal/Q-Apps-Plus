@@ -16,7 +16,7 @@ import { useDisplayName } from '../../hooks/useDisplayName';
 import { formatDuration, formatRelative } from '../../utils/format';
 import { openQortalLink } from '../../utils/links';
 import { Countdown } from '../common/Countdown';
-import { PersonChip } from '../common/Person';
+import { PersonChip, PersonInline } from '../common/Person';
 import { ProgressRing } from '../common/ProgressRing';
 import { Card, NominationStateChip } from '../common/Section';
 import { readable } from '../../utils/readable';
@@ -227,22 +227,5 @@ export function NominationCard({
         ) : null}
       </Box>
     </Card>
-  );
-}
-
-function PersonInline({ address, name }: { address: string; name?: string | null }) {
-  return (
-    <Box
-      component="span"
-      sx={{
-        display: 'inline-flex',
-        verticalAlign: 'middle',
-        '& p, & span': { display: 'inline' },
-        // The name reads as part of the sentence around it.
-        '& .MuiTypography-root': { fontSize: 'inherit' },
-      }}
-    >
-      <PersonChip address={address} name={name} size={20} strong={false} />
-    </Box>
   );
 }

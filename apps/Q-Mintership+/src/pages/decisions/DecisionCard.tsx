@@ -14,9 +14,8 @@ import type { Nomination } from '../../data/nominations';
 import { KIND_LABEL, type Decision } from '../../rules/decision';
 import { useAccount } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
-import { PersonChip } from '../../components/common/Person';
+import { AvatarStack, PersonChip, PersonInline } from '../../components/common/Person';
 import { DoneChip, SigningClock } from '../../components/decision/DecisionParts';
-import { AvatarStack } from '../../components/common/Person';
 import { ProgressRing } from '../../components/common/ProgressRing';
 import { Card, DecisionPhaseChip } from '../../components/common/Section';
 import { primarySoft } from '../../hub-theme';
@@ -156,7 +155,7 @@ export function DecisionCard(props: DecisionCardProps) {
       {d.creatorAddress ? (
         <Typography component="div" variant="body2" color="text.secondary">
           Proposed by{' '}
-          <InlinePerson address={d.creatorAddress} name={adminNames.get(d.creatorAddress)} />{' '}
+          <PersonInline address={d.creatorAddress} name={adminNames.get(d.creatorAddress)} />{' '}
           {formatRelative(d.createdAt, now.timestamp)}
           {d.blockHeight ? ` (block ${formatCount(d.blockHeight)})` : ''}.
         </Typography>
@@ -322,7 +321,7 @@ function InviteDetails({
         <>
           <Typography component="div" variant="body2" color="text.secondary">
             Nominated by{' '}
-            <InlinePerson address={record.publisher.address} name={record.publisher.name} />{' '}
+            <PersonInline address={record.publisher.address} name={record.publisher.name} />{' '}
             {formatRelative(record.publishedAt, now.timestamp)}
             {supporters.length ? (
               <>
@@ -330,7 +329,7 @@ function InviteDetails({
                 {supporters.map((p, i) => (
                   <span key={p.address}>
                     {i > 0 ? (i === supporters.length - 1 ? ' and ' : ', ') : ''}
-                    <InlinePerson address={p.address} name={p.name} />
+                    <PersonInline address={p.address} name={p.name} />
                   </span>
                 ))}
               </>
@@ -406,17 +405,6 @@ function InviteDetails({
           </span>
         </Typography>
       ) : null}
-    </Box>
-  );
-}
-
-function InlinePerson({ address, name }: { address: string; name?: string | null }) {
-  return (
-    <Box
-      component="span"
-      sx={{ display: 'inline-flex', verticalAlign: 'middle', maxWidth: '100%' }}
-    >
-      <PersonChip address={address} name={name} size={20} strong={false} />
     </Box>
   );
 }

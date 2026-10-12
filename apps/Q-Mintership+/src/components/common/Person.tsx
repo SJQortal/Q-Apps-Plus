@@ -82,6 +82,25 @@ export function PersonChip({
   );
 }
 
+/** A person inside a sentence ("Nominated by [Ada] 2 days ago"): small avatar, the sentence's size. */
+export function PersonInline({ address, name }: { address: string; name?: string | null }) {
+  return (
+    <Box
+      component="span"
+      sx={{
+        display: 'inline-flex',
+        verticalAlign: 'middle',
+        maxWidth: '100%',
+        '& p, & span': { display: 'inline' },
+        // The name reads as part of the sentence around it.
+        '& .MuiTypography-root': { fontSize: 'inherit' },
+      }}
+    >
+      <PersonChip address={address} name={name} size={20} strong={false} />
+    </Box>
+  );
+}
+
 /**
  * A row of small avatars (signers), each linking to the person, the rest
  * counted. List semantics sit on the items, not on the links.
