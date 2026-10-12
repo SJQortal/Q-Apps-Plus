@@ -75,7 +75,11 @@ function classicOptions(
       },
     },
     shape: { borderRadius: 12 },
-    typography: { fontFamily: FONT_STACK },
+    typography: {
+      fontFamily: FONT_STACK,
+      // The original's buttons: bold, as written (MUI's default is uppercase).
+      button: { textTransform: 'none', fontWeight: 700 },
+    },
   };
 }
 
