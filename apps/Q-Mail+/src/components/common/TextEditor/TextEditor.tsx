@@ -33,6 +33,9 @@ interface TextEditorProps {
  * colours, font, alignment) that stays hidden until asked for, so the bar
  * fits a 360 px screen without scrolling sideways.
  */
+/** On the editor while it holds text, even mid-word (texteditor.css hides the placeholder). */
+export const TYPING_CLASS = "qmail-has-text";
+
 export const TextEditor = ({
   inlineContent,
   setInlineContent,
@@ -104,6 +107,26 @@ export const TextEditor = ({
       window.clearTimeout(focusEditor);
     };
   }, [autoFocus, focusToken]);
+
+  // While a phone keyboard composes a word (Gboard underlines it), Quill 2
+  // holds its updates back until the word ends, so the editor stays
+  // "ql-blank" and the placeholder showed under the first word. The text
+  // itself decides here, on every input event (composing too) and change.
+  React.useEffect(() => {
+    const editor = quillRef.current?.getEditor();
+    if (!editor) return;
+    const root = editor.root;
+    const sync = () => root.classList.toggle(TYPING_CLASS, (root.textContent ?? "") !== "");
+    sync();
+    root.addEventListener("input", sync);
+    root.addEventListener("compositionupdate", sync);
+    editor.on("editor-change", sync);
+    return () => {
+      root.removeEventListener("input", sync);
+      root.removeEventListener("compositionupdate", sync);
+      editor.off("editor-change", sync);
+    };
+  }, []);
 
   const control = (cls: string, title: string, value?: string) => (
     <button type="button" className={cls} value={value} title={title} aria-label={title} />

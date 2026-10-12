@@ -266,3 +266,8 @@
   color: var(--qmail-compose-placeholder);
   font-style: normal;
 }
+
+/* Typing a first word on a phone: Quill still says "blank" (TextEditor.tsx). */
+.qmail-editor-root .ql-editor.ql-blank.qmail-has-text::before {
+  display: none;
+}

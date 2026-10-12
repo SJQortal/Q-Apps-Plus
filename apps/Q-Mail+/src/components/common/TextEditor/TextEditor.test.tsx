@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import { TextEditor } from './TextEditor'
+import { TYPING_CLASS, TextEditor } from './TextEditor'
 import { paletteColorName } from './pickerA11y'
 import Quill from 'quill'
 
@@ -69,5 +69,21 @@ describe('TextEditor toolbar', () => {
     const [html, source] = onChange.mock.calls.at(-1)!
     expect(html).toBe('<p>hi there, friend</p>')
     expect(source).toBe('user')
+  })
+
+  it('hides the placeholder as soon as a phone keyboard starts a word (Quill still says blank)', () => {
+    const { container } = render(<TextEditor inlineContent="" setInlineContent={() => {}} placeholder="Write your message here" />)
+    const root = container.querySelector('.ql-editor') as HTMLElement
+    expect(root.classList.contains(TYPING_CLASS)).toBe(false)
+    // Mid-composition: the word is in the page, Quill has not updated yet.
+    fireEvent.compositionStart(root)
+    root.firstElementChild!.textContent = 'This'
+    fireEvent.input(root)
+    expect(root.classList.contains('ql-blank')).toBe(true)
+    expect(root.classList.contains(TYPING_CLASS)).toBe(true)
+    // Deleted again: the placeholder comes back.
+    root.firstElementChild!.textContent = ''
+    fireEvent.input(root)
+    expect(root.classList.contains(TYPING_CLASS)).toBe(false)
   })
 })
