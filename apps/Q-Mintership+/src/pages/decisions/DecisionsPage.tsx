@@ -47,6 +47,7 @@ import { DecisionCard, type SubjectFacts } from './DecisionCard';
 import { canSign, decisionCardId, isSignedByMe, myAnswer } from './decisionUi';
 import { HowSigningWorks } from './HowSigningWorks';
 import { SignDialog } from './SignDialog';
+import { UnusualList } from './UnusualList';
 
 const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
   'open',
@@ -194,7 +195,11 @@ export default function DecisionsPage() {
     ? collecting.filter((d) => canSign(d, myAnswer(d, myKey), pendingOf(d)))
     : [];
   const waiting = (nominationsQ.data?.open ?? []).filter((n) => n.state === 'waiting');
-  const targetKnown = !target || !data || decisions.some((d) => d.signature === target);
+  const targetKnown =
+    !target ||
+    !data ||
+    decisions.some((d) => d.signature === target) ||
+    (isAdmin && data.unusual.some((d) => d.signature === target));
 
   // ?d=<signature>: scroll to that decision once, and light it up for a moment.
   useEffect(() => {
@@ -386,6 +391,12 @@ export default function DecisionsPage() {
                     highlighted={highlight === d.signature}
                   />
                 ))}
+              </Section>
+            ) : null}
+
+            {isAdmin && data.unusual.length ? (
+              <Section title="Unusual approval route" id="unusual">
+                <UnusualList decisions={data.unusual} now={data.now} />
               </Section>
             ) : null}
 

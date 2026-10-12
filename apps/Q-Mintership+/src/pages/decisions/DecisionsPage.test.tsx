@@ -96,6 +96,19 @@ describe('Decisions: phases and actions', () => {
   });
 });
 
+describe('Decisions: unusual approval route', () => {
+  it('shows the unusual approval route to Minter Admins only, with the neutral label', async () => {
+    await openPage('admin');
+    const list = await screen.findByRole('list', { name: 'Unusual approval route' });
+    expect(
+      within(list).getByText(
+        'This one can’t be signed here. Check it with the other Minter Admins.'
+      )
+    ).toBeInTheDocument();
+    expect(within(list).queryByRole('button')).toBeNull();
+  });
+});
+
 describe('Decisions: signing', () => {
   it('explains the Hub dialog, then signs the pending signature, then shows confirming', async () => {
     const u = user();
