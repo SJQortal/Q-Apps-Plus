@@ -23,6 +23,7 @@ import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import { useAtom, useAtomValue } from 'jotai';
 import { PageBody } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
+import { DoneChip } from '../../components/decision/DecisionParts';
 import { NominationCard } from '../../components/nomination/NominationCard';
 import { Card, Section } from '../../components/common/Section';
 import {
@@ -40,11 +41,12 @@ import type { Decision } from '../../rules/decision';
 import { approvalsNeeded } from '../../rules/threshold';
 import { useSession } from '../../state/session';
 import { decisionsHideSignedAtom } from '../../state/settings';
-import { plural } from '../../utils/format';
+import { displayName, plural } from '../../utils/format';
 import { pendingWritesAtom, writeKeys, type PendingWrite } from '../../writes/optimistic';
 import type { Signer } from '../../writes/runner';
 import { DecisionCard, type SubjectFacts } from './DecisionCard';
 import { canSign, decisionCardId, isSignedByMe, myAnswer } from './decisionUi';
+import { FirstSignatureDialog } from './FirstSignatureDialog';
 import { HowSigningWorks } from './HowSigningWorks';
 import { SignDialog } from './SignDialog';
 import { UnusualList } from './UnusualList';
@@ -113,6 +115,7 @@ export default function DecisionsPage() {
   const reduced = useReducedMotion();
 
   const [signTarget, setSignTarget] = useState<Decision | null>(null);
+  const [firstTarget, setFirstTarget] = useState<Nomination | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [handledTarget, setHandledTarget] = useState<string | null>(null);
 
@@ -371,7 +374,17 @@ export default function DecisionsPage() {
                   </Typography>
                 ) : null}
                 {waiting.map((n) => (
-                  <NominationCard key={n.nominee} nomination={n} now={data.now} compact />
+                  <NominationCard
+                    key={n.nominee}
+                    nomination={n}
+                    now={data.now}
+                    compact
+                    actions={
+                      isAdmin ? (
+                        <FirstSignatureAction nomination={n} onStart={() => setFirstTarget(n)} />
+                      ) : null
+                    }
+                  />
                 ))}
               </Section>
             ) : null}
@@ -414,6 +427,43 @@ export default function DecisionsPage() {
       </PageBody>
 
       <SignDialog decision={signTarget} signer={signer} onClose={() => setSignTarget(null)} />
+      {data ? (
+        <FirstSignatureDialog
+          nomination={firstTarget}
+          signer={signer}
+          facts={{
+            needed,
+            totalAdmins,
+            maximumBlockDelay: data.group.maximumBlockDelay,
+            msPerBlock: data.now.msPerBlock,
+          }}
+          onClose={() => setFirstTarget(null)}
+        />
+      ) : null}
     </>
+  );
+}
+
+function FirstSignatureAction({
+  nomination: n,
+  onStart,
+}: {
+  nomination: Nomination;
+  onStart: () => void;
+}) {
+  const writes = useAtomValue(pendingWritesAtom);
+  const pending = writes[writeKeys.invite(n.nominee)];
+  if (pending?.status === 'confirming')
+    return <DoneChip label="On chain ✓ (confirming…)" settled={false} />;
+  return (
+    <Button
+      variant="contained"
+      onClick={onStart}
+      disabled={pending?.status === 'sending'}
+      aria-label={`First signature: ${displayName(n.nomineeName, n.nominee)}`}
+      sx={{ minHeight: 44 }}
+    >
+      First signature
+    </Button>
   );
 }

@@ -150,6 +150,76 @@ describe('Decisions: signing', () => {
   });
 });
 
+describe('Decisions: first signature', () => {
+  it('makes the first signature in one guided step of two Hub confirmations', async () => {
+    const u = user();
+    const { world, address, publicKey } = await openPage('admin');
+    const inviteSig = base58Encode(new Uint8Array(64).fill(7));
+    mockQortalRequest('INVITE_TO_GROUP', (req: Record<string, unknown>) => {
+      const tx = {
+        type: 'GROUP_INVITE',
+        timestamp: Date.now(),
+        signature: inviteSig,
+        txGroupId: 694,
+        groupId: 694,
+        approvalStatus: 'PENDING',
+        creatorAddress: address,
+        adminPublicKey: publicKey,
+        invitee: req.inviteeAddress,
+        timeToLive: 864000,
+      };
+      world.pending.push(tx);
+      return tx;
+    });
+    mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'A2' }));
+
+    await u.click(await screen.findByRole('button', { name: 'First signature: Wren Waiting' }));
+    const dialog = await screen.findByRole('dialog', { name: 'First signature: Wren Waiting' });
+    expect(within(dialog).getByText('Step 1 of 2: Create the nomination on chain')).toBeVisible();
+    expect(within(dialog).getByText('Step 2 of 2: Sign it')).toBeVisible();
+    expect(within(dialog).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
+    expect(qortalCallsFor('INVITE_TO_GROUP')).toHaveLength(0);
+
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(dialog).findByText('Signed: the clock has started')).toBeVisible();
+    expect(qortalCallsFor('INVITE_TO_GROUP')[0]).toMatchObject({
+      inviteeAddress: ADDR.nominatedWaiting,
+      groupId: 694,
+      txGroupId: 694,
+    });
+    const bytes = base58Decode(String(qortalCallsFor('SIGN_TRANSACTION')[0].unsignedBytes));
+    expect(base58Encode(bytes.slice(112, 176))).toBe(inviteSig);
+  });
+
+  it('explains a first signature whose second step was cancelled', async () => {
+    const u = user();
+    const { world } = await openPage('admin');
+    const inviteSig = base58Encode(new Uint8Array(64).fill(8));
+    mockQortalRequest('INVITE_TO_GROUP', (req: Record<string, unknown>) => {
+      const tx = {
+        type: 'GROUP_INVITE',
+        timestamp: Date.now(),
+        signature: inviteSig,
+        txGroupId: 694,
+        groupId: 694,
+        approvalStatus: 'PENDING',
+        invitee: req.inviteeAddress,
+      };
+      world.pending.push(tx);
+      return tx;
+    });
+    // SIGN_TRANSACTION keeps the world's answer: declined.
+    await u.click(await screen.findByRole('button', { name: 'First signature: Wren Waiting' }));
+    const dialog = await screen.findByRole('dialog', { name: 'First signature: Wren Waiting' });
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(dialog).findByText('Step 1 done: the nomination is on chain')
+    ).toBeVisible();
+    expect(within(dialog).getByText(/You cancelled step 2 in Hub/)).toBeVisible();
+    expect(within(dialog).getByText(/sign it there like any other decision/)).toBeVisible();
+  });
+});
+
 describe('Decisions: navigation and filters', () => {
   it('scrolls to and focuses the decision named in ?d=', async () => {
     const sig = createWorld().pending.find((t: { type: string }) => t.type === 'GROUP_KICK')
