@@ -70,3 +70,27 @@ export async function loadPublishedStateDocument(
 
   return { status: "loaded", encoded: await fetchPromise };
 }
+
+/** What the user decided about one name's published state this session. */
+export type PublishedStateDecision = "loaded" | "declined" | "none";
+
+/**
+ * On each sign-in or name switch: "skip" when the user already said "Not now"
+ * for this name this session, or it had no document; "load" (without asking)
+ * when they already chose "Load state" for it, or auto-apply is on; "ask"
+ * the first time. So switching names away and back asks at most once per
+ * name, as Settings → Sync says.
+ */
+export function publishedStatePlan(
+  decision: PublishedStateDecision | undefined,
+  autoApply: boolean
+): "skip" | "load" | "ask" {
+  if (decision === "declined" || decision === "none") return "skip";
+  if (decision === "loaded" || autoApply) return "load";
+  return "ask";
+}
+
+/** The decision a load result records (a failed load records nothing: it is asked again). */
+export function decisionOf(result: PublishedStateLoadResult): PublishedStateDecision {
+  return result.status;
+}

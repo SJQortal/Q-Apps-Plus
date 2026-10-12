@@ -7,7 +7,7 @@
  * while the first load runs, an ErrorState with Retry, and an EmptyState with
  * a next action; the list itself shows as soon as there are rows.
  */
-import React, { useEffect, useMemo, useState, type ReactNode } from "react";
+import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useInView } from "../../hooks/useInView";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import CheckIcon from "@mui/icons-material/Check";
@@ -15,16 +15,20 @@ import MarkEmailUnreadOutlinedIcon from "@mui/icons-material/MarkEmailUnreadOutl
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import UnarchiveOutlinedIcon from "@mui/icons-material/UnarchiveOutlined";
 import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
-import { Box, Button, ButtonBase, Checkbox, Typography } from "@mui/material";
+import { Box, Button, ButtonBase, Checkbox, Collapse, Typography } from "@mui/material";
 import { useSelector } from "react-redux";
-import { formatFullTimestamp, formatRelativeDate } from "../../utils/time";
-import { MailMessageRow } from "./MailMessageRow";
+import { MailListDate } from "./MailListDate";
+import { MailMessageRow, NARROW_LIST_QUERY, ROOMY_LIST_QUERY, WIDE_ROW_QUERY } from "./MailMessageRow";
 import { AvatarWrapper } from "./MailTable";
 import { NameText, spokenName } from "../../components/common/NameText";
 import {
   getSentRecipientDisplayLabel,
   getSentRecipientGroupKey,
 } from "./mailIdentifier";
+import { useRowMenu } from "./useRowMenu";
+import { UndoSnackbar, type UndoToast } from "../../components/common/UndoSnackbar";
+import { useFoldTimeout } from "../../hooks/useReducedMotion";
+import { groupRowActions } from "./rowMenuActions";
 import { selectReadState } from "../../state/features/mailSlice";
 import { RootState } from "../../state/store";
 import { isMessageRead } from "../../utils/readState";
@@ -45,8 +49,12 @@ interface GroupedMailboxListProps {
     identifier: string,
     content: any,
     alias?: string
-  ) => void | Promise<void>;
+  ) => unknown;
   openedMessageId?: string | number | null;
+  /** Reply / Reply all from a row's menu (received mail). */
+  onReply?: (message: any, options?: { replyAll?: boolean }) => void;
+  /** Forward from a row's menu. */
+  onForward?: (message: any) => void;
   onDeleteMessage?: (message: any) => void | boolean | Promise<void | boolean>;
   isDeletingMessage?: (messageId: string) => boolean;
   onMarkAsRead?: (messages: any[]) => void | Promise<void>;
@@ -55,6 +63,10 @@ interface GroupedMailboxListProps {
   onArchive?: (messages: any[]) => void | Promise<void>;
   /** Move the selected messages back to the inbox. */
   onUnarchive?: (messages: any[]) => void | Promise<void>;
+  /** Undo for Archive (moves them back): offered in a toast after archiving from the list. */
+  onUndoArchive?: (messages: any[]) => unknown;
+  /** Undo for Move to inbox (archives them again). */
+  onUndoUnarchive?: (messages: any[]) => unknown;
   /** Load state of the list; `loading`/`error` only matter while there are no rows. */
   status?: ListStatus;
   emptyIcon?: ReactNode;
@@ -163,13 +175,17 @@ export const GroupedMailboxList = ({
   mailboxType,
   openMessage,
   openedMessageId,
+  onReply,
+  onForward,
   onDeleteMessage,
   isDeletingMessage,
   showSelectAll = false,
   onMarkAsRead,
   onMarkAsUnread,
-  onArchive,
-  onUnarchive,
+  onArchive: archiveRaw,
+  onUnarchive: unarchiveRaw,
+  onUndoArchive,
+  onUndoUnarchive,
   status = "ready",
   emptyIcon,
   emptyTitle,
@@ -262,6 +278,46 @@ export const GroupedMailboxList = ({
       .map(id => messages.find(m => getMessageId(m) === id) || null)
       .filter(Boolean);
 
+  // Archive and Move to inbox take mail out of this list: a toast says so and
+  // offers Undo, and focus goes to the next row rather than to the page.
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [toast, setToast] = useState<UndoToast | null>(null);
+  const nextRowAfter = (moved: any[]) => {
+    const movedIds = new Set(moved.map(getMessageId));
+    const rows = Array.from(listRef.current?.querySelectorAll<HTMLElement>("[data-message-row]") || []);
+    const lastMoved = rows.reduce((at, row, index) => (movedIds.has(row.getAttribute("data-message-row") || "") ? index : at), -1);
+    const next =
+      rows.slice(lastMoved + 1).find(row => !movedIds.has(row.getAttribute("data-message-row") || "")) ||
+      [...rows.slice(0, Math.max(0, lastMoved))].reverse().find(row => !movedIds.has(row.getAttribute("data-message-row") || ""));
+    const nextId = next?.getAttribute("data-message-row") || "";
+    return () =>
+      (nextId
+        ? listRef.current?.querySelector<HTMLElement>(`[data-message-row="${CSS.escape(nextId)}"] > button`)
+        : null) || listRef.current?.querySelector<HTMLElement>("button");
+  };
+  const withUndo = (
+    handler: ((messages: any[]) => void | Promise<void>) | undefined,
+    undo: ((messages: any[]) => unknown) | undefined,
+    done: (count: number) => string
+  ) =>
+    handler
+      ? async (moved: any[]) => {
+          if (!moved.length) return;
+          const returnFocus = nextRowAfter(moved);
+          await handler(moved);
+          setToast(previous => ({
+            key: (previous?.key ?? 0) + 1,
+            message: done(moved.length),
+            onUndo: undo ? () => void undo(moved) : undefined,
+            returnFocus,
+          }));
+        }
+      : undefined;
+  const onArchive = withUndo(archiveRaw, onUndoArchive, count => (count === 1 ? "Archived" : `${count} archived`));
+  const onUnarchive = withUndo(unarchiveRaw, onUndoUnarchive, count =>
+    count === 1 ? "Moved to the inbox" : `${count} moved to the inbox`
+  );
+
   const runOnSelection = async (
     handler?: (messages: any[]) => void | Promise<void>
   ) => {
@@ -269,6 +325,11 @@ export const GroupedMailboxList = ({
     await handler(selectedMessages());
     setSelectedMessageIds(new Set());
   };
+
+  // A sender group's menu (right click, long press on its header).
+  const groupMenu = useRowMenu<string>();
+  // A sender group folds open and shut (0 ms with reduced motion).
+  const foldTimeout = useFoldTimeout();
 
   useEffect(() => {
     const groupedMessageIds = new Set<string>();
@@ -284,9 +345,16 @@ export const GroupedMailboxList = ({
     });
   }, [groupedMessages]);
 
+  // Archiving the last messages empties the list: the toast (and its Undo) stays.
+  const toastNode = <UndoSnackbar toast={toast} onDone={() => setToast(null)} />;
   if (!groupedMessages.length) {
     if (status === "loading" || status === "idle") {
-      return <ListSkeleton rows={6} />;
+      return (
+        <>
+          <ListSkeleton rows={6} />
+          {toastNode}
+        </>
+      );
     }
     if (status === "error") {
       return (
@@ -298,21 +366,63 @@ export const GroupedMailboxList = ({
       );
     }
     return (
-      <EmptyState
-        icon={emptyIcon ?? <InboxOutlinedIcon />}
-        title={emptyTitle || (mailboxType === "sent" ? "No sent mail yet" : "No mail yet")}
-        hint={emptyHint}
-        action={emptyAction}
-      />
+      <>
+        <EmptyState
+          icon={emptyIcon ?? <InboxOutlinedIcon />}
+          title={emptyTitle || (mailboxType === "sent" ? "No sent mail yet" : "No mail yet")}
+          hint={emptyHint}
+          action={emptyAction}
+        />
+        {toastNode}
+      </>
     );
   }
 
   const hasBulkActions = Boolean(onMarkAsRead || onMarkAsUnread || onArchive || onUnarchive);
   const selectable = showSelectAll || hasBulkActions;
+  // Each row's menu offers what this list can do with one message.
+  const rowActions = {
+    onReply: mailboxType === "sent" ? undefined : onReply,
+    onForward,
+    onMarkAsRead: mailboxType === "sent" ? undefined : onMarkAsRead,
+    onMarkAsUnread: mailboxType === "sent" ? undefined : onMarkAsUnread,
+    onArchive,
+    onUnarchive,
+  };
+  const groupMenuContent = (groupKey: string) => {
+    const group = groupedMessages.find(g => g.key === groupKey);
+    const all = group?.messages || [];
+    const ids = all.map(getMessageId).filter(Boolean) as string[];
+    const unread = mailboxType === "sent" ? 0 : all.filter(message => !isMessageRead(message, readState)).length;
+    const forAll = (handler?: (messages: any[]) => void | Promise<void>) =>
+      handler && all.length ? () => void handler(all) : undefined;
+    return {
+      title: !group ? undefined : mailboxType === "sent" ? (
+        `To: ${group.label}`
+      ) : group.key === "sender:unknown" ? (
+        group.label
+      ) : (
+        <NameText name={group.label} />
+      ),
+      ariaLabel: `Actions for all from ${group ? (mailboxType === "sent" ? `To: ${group.label}` : spokenName(group.label)) : "this group"}`,
+      actions: groupRowActions({
+        count: all.length,
+        unreadCount: unread,
+        expanded: Boolean(expandedGroups[groupKey]),
+        allSelected: ids.length > 0 && ids.every(id => selectedMessageIds.has(id)),
+        toggleExpanded: () => setExpandedGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] })),
+        markRead: mailboxType === "sent" ? undefined : forAll(onMarkAsRead),
+        markUnread: mailboxType === "sent" ? undefined : forAll(onMarkAsUnread),
+        archive: forAll(onArchive),
+        unarchive: forAll(onUnarchive),
+        toggleSelected: selectable ? () => handleToggleAll(groupKey) : undefined,
+      }),
+    };
+  };
   const bulkButtonSx = { minHeight: 44, textTransform: "none", fontWeight: 600 } as const;
 
   return (
-    <Box sx={{ width: "100%", display: "flex", flexDirection: "column", minWidth: 0 }}>
+    <Box ref={listRef} sx={{ width: "100%", display: "flex", flexDirection: "column", minWidth: 0 }}>
       {showSelectAll && allVisibleMessageIds.length > 0 && (
         <Box
           sx={theme => ({
@@ -383,6 +493,7 @@ export const GroupedMailboxList = ({
                     ? isDeletingMessage(messageId)
                     : false
                 }
+                {...rowActions}
                 isOpen={
                   openedMessageId !== null &&
                   openedMessageId !== undefined &&
@@ -394,8 +505,6 @@ export const GroupedMailboxList = ({
           );
         }
 
-        const relativeDate = formatRelativeDate(latestMessage?.createdAt);
-        const fullDate = formatFullTimestamp(latestMessage?.createdAt);
         const decryptedRecipient =
           mailboxType === "sent"
             ? group.messages
@@ -417,11 +526,13 @@ export const GroupedMailboxList = ({
         return (
           <Box key={group.key} component="li" data-group={group.key} sx={{ display: "flex", flexDirection: "column" }}>
             <Box
+              {...groupMenu.triggerFor(group.key)}
               sx={theme => ({
                 display: "flex",
                 alignItems: "center",
                 gap: 0.5,
                 borderBottom: `1px solid ${theme.palette.divider}`,
+                WebkitTouchCallout: "none",
               })}
             >
               {selectable && (
@@ -438,7 +549,6 @@ export const GroupedMailboxList = ({
                   setExpandedGroups(prev => ({ ...prev, [group.key]: !prev[group.key] }))
                 }
                 aria-expanded={isExpanded}
-                title={`Latest ${fullDate}. ${isExpanded ? "Collapse" : "Expand"} ${label}`}
                 sx={theme => ({
                   flex: 1,
                   minWidth: 0,
@@ -460,7 +570,7 @@ export const GroupedMailboxList = ({
                   "@media (prefers-reduced-motion: reduce)": { transition: "none" },
                 })}
               >
-                <Box sx={{ flexShrink: 0, display: "flex" }}>
+                <Box sx={{ flexShrink: 0, display: "flex", [NARROW_LIST_QUERY]: { display: "none" } }}>
                   <AvatarWrapper
                     isAlias={isAliasGroup}
                     height="40px"
@@ -479,6 +589,8 @@ export const GroupedMailboxList = ({
                         fontSize: "1rem",
                         lineHeight: 1.3,
                         fontWeight: groupHasUnread ? 700 : 500,
+                        // Unread reads blue, as a message row does.
+                        color: groupHasUnread ? "primary.main" : "text.primary",
                       }}
                     >
                       {mailboxType === "sent" ? (
@@ -491,19 +603,6 @@ export const GroupedMailboxList = ({
                       ) : (
                         <NameText name={group.label} />
                       )}
-                    </Typography>
-                    <Typography
-                      component="time"
-                      title={fullDate}
-                      sx={{
-                        flexShrink: 0,
-                        fontSize: "0.875rem",
-                        fontWeight: groupHasUnread ? 600 : 400,
-                        color: groupHasUnread ? "primary.main" : "text.secondary",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {relativeDate}
                     </Typography>
                   </Box>
                   <Typography
@@ -518,6 +617,13 @@ export const GroupedMailboxList = ({
                     {summary}
                   </Typography>
                 </Box>
+                <MailListDate
+                  timestamp={latestMessage?.createdAt}
+                  emphasis={groupHasUnread}
+                  detailPrefix="Latest: "
+                  stacked
+                  inlineFrom={WIDE_ROW_QUERY}
+                />
                 <ExpandMoreIcon
                   aria-hidden
                   sx={{
@@ -530,11 +636,11 @@ export const GroupedMailboxList = ({
                 />
               </ButtonBase>
             </Box>
-            {isExpanded && (
+            <Collapse in={isExpanded} timeout={foldTimeout} unmountOnExit>
               <Box
                 component="ul"
                 aria-label={mailboxType === "sent" ? `Messages to ${group.label}` : `Messages from ${spokenGroup}`}
-                sx={{ listStyle: "none", m: 0, p: 0, pl: { xs: 0, sm: 3 }, display: "flex", flexDirection: "column" }}
+                sx={{ listStyle: "none", m: 0, p: 0, [ROOMY_LIST_QUERY]: { pl: 3 }, display: "flex", flexDirection: "column" }}
               >
                 {group.messages.map(message => {
                   const messageId = getMessageId(message);
@@ -556,6 +662,7 @@ export const GroupedMailboxList = ({
                           ? isDeletingMessage(messageId)
                           : false
                       }
+                      {...rowActions}
                       isOpen={
                         openedMessageId !== null &&
                         openedMessageId !== undefined &&
@@ -566,13 +673,15 @@ export const GroupedMailboxList = ({
                   );
                 })}
               </Box>
-            )}
+            </Collapse>
           </Box>
         );
       })}
       </Box>
 
       {footer}
+      {groupMenu.renderMenu(groupMenuContent)}
+      {toastNode}
 
       {selectedMessageIds.size > 0 && hasBulkActions && (
         <Box

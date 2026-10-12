@@ -24,14 +24,14 @@ The theme kit in `src/hub-theme/` is a copy of `shared/hub-theme` in the monorep
 
 ## Merging this back into Q-Mail
 
-- The upstream history is intact: the app was imported from [Qortal/q-mail](https://github.com/Qortal/q-mail) `main` at `ddf3aa9` with `git subtree`, and every + commit sits on top. `git log --oneline -- apps/Q-Mail+` shows the full series; `scripts/sync-upstream.sh --check` reports new upstream commits.
-- **Data notes:** nothing published changed shape. Direct mail JSON gains optional top-level `to` and `cc` arrays; the published mail state (`DOCUMENT_PRIVATE` / `qmail_state_v1`) gains optional top-level `archived` and `settings` maps; replies embed the previous message without its own `generalData` history. Readers of the original app ignore all of these. New local state lives under new `localStorage` keys (`qmail_read_state_*`, `qmail_archived_*`, `qmail-general-consent`); the original keys keep their shapes.
-- **Specific to the + build:** the theme kit copy in `src/hub-theme/` (synced from `shared/hub-theme`, never edited here), the Settings page, the layout shell in `src/layout/`, the `qortalRequest` stub outside Hub in `src/main.tsx`, and the screenshot check config in `e2e/`.
-- **Ready-made branch:** [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) is this folder's history as a repository of its own, split at the published 1.0.0. It sits on top of Qortal/q-mail `main` up to `ddf3aa9`, with the original commit hashes, so the merge is a fast-forward while upstream hasn't moved. In a clone of Qortal/q-mail:
+Q-Mail+ goes back to [Qortal/q-mail](https://github.com/Qortal/q-mail) as a pull request, prepared with `scripts/upstream-pr.sh Q-Mail+` (docs/RELEASE.md, stage 4):
 
-  ```bash
-  git fetch https://github.com/SJQortal/Q-Apps-Plus.git q-mail-plus/for-upstream
-  git merge FETCH_HEAD
-  ```
-
-  To include later changes, split it again in a clone of SJQortal/Q-Apps-Plus with `git subtree split --prefix="apps/Q-Mail+" origin/main -b q-mail-plus`. The platform upgrade commits (React 19.3, MUI 9.4, react-quill-new) come first in the series.
+- **The branch** is this folder's history split out of `main` with `git subtree split`, on top of Qortal/q-mail `main` (`ddf3aa9`, imported with `git subtree`), so the PR is a fast-forward while upstream hasn't moved. `scripts/upstream-pr.sh Q-Mail+ --check` says whether it still is.
+- **The last commit, "Ship as Q-Mail 4.0.0",** turns the + build back into Q-Mail. What it changes is what is specific to the + build:
+  - the name in `index.html`, the window title (`Mail.tsx`), the mailboxes header (`layout/Rail.tsx`), the welcome notice (`components/modals/ConsentModal.tsx`), Settings → About, What's new (`pages/Mail/ChangelogPage.tsx`) and the error messages;
+  - the theme's storage key `qmailplus-ui-theme` → `qmail-ui-theme` (`index.html`, `theme/qplus-theme.ts`, `e2e/screens.config.mjs`); Q-Mail 3.2.1 keeps its settings under `qmail:*`, so nothing clashes;
+  - the version (Qortal's series, one major up: 4.0.0) and one changelog entry for it;
+  - a README for the Qortal repo, links to the brief in comments that cite it, and `e2e/screens.mjs`, a standalone copy of `scripts/screens.mjs`.
+- **Data notes:** direct mail JSON gains optional top-level `to` and `cc` arrays, and the published mail state (`DOCUMENT_PRIVATE` / `qmail_state_v1`) gains optional top-level `archived` and `settings` maps; readers of the original app ignore all of these. Since 1.0.1, on Qortal DEV's advice, a reply carries nothing from earlier messages: its body has no quote, and `generalData.threadV2` holds `{ reference }` entries without `data` (the newest 10), so replies don't grow with the conversation. The original reader skips entries without `data`, so it opens these replies without their history; the + reader fetches the referenced messages on "Show earlier" and walks back through their own references. New local state lives under new `localStorage` keys (`qmail_read_state_*`, `qmail_archived_*`, `qmail-general-consent`); the original keys keep their shapes.
+- **Also specific to the + build,** and simply part of the app once merged: the theme kit copy in `src/hub-theme/` (synced from `shared/hub-theme`, never edited here), the Settings page, the layout shell in `src/layout/`, the `qortalRequest` stub outside Hub in `src/main.tsx`, and the screenshot check config in `e2e/`.
+- **The older ready-made branch** [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) stops at the published 1.0.0; the PR replaces it.

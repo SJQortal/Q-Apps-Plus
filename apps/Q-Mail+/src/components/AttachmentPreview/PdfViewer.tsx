@@ -441,6 +441,8 @@ export function PdfViewer({ data, title }: { data: ArrayBuffer; title: string })
           <Box
             ref={setStage}
             data-testid="pdf-preview-stage"
+            // Zoomed, a sideways drag pans the page instead of swiping back (SwipeBack).
+            data-no-swipe-back={zoom !== 100 ? '' : undefined}
             tabIndex={0}
             aria-label={`${title}, page ${page} of ${numPages || 1}`}
             sx={{

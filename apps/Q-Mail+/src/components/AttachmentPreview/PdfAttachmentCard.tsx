@@ -1,7 +1,8 @@
 /**
  * A PDF attachment, laid out like a file on a Q-Share+ share page: the kind
- * icon, a filename that wraps, "PDF · size", then the download control
- * (Download → progress → Save) beside "Open PDF".
+ * icon, a filename that wraps and "PDF · size", with the download control
+ * (Download → progress → Save) and "Open PDF" side by side in the same row
+ * (under the name when the card is narrow, sharing a row on phones).
  *
  * "Open PDF" fetches and decrypts the attachment once (session cache, see
  * useAttachment) and hands the bytes to Hub's own PDF reader
@@ -152,7 +153,7 @@ export function PdfAttachmentCard({ attachment, onOpenInApp, compact }: PdfAttac
     const building = decrypting || state.status === 'DOWNLOADED' || state.status === 'BUILDING';
     const known = typeof state.percent === 'number' && state.percent > 0;
     download = (
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, width: '100%', minWidth: 0 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, width: phone ? '100%' : 220, minWidth: 0 }}>
         <LinearProgress
           variant={building || !known ? 'indeterminate' : 'determinate'}
           value={state.percent ?? 0}
@@ -183,23 +184,16 @@ export function PdfAttachmentCard({ attachment, onOpenInApp, compact }: PdfAttac
     );
   } else {
     open = (
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, width: bigButton.width, flexShrink: 0 }}>
-        <Button
-          variant="outlined"
-          startIcon={busy ? <CircularProgress size={18} color="inherit" /> : <PictureAsPdfOutlinedIcon />}
-          onClick={openPdf}
-          disabled={busy}
-          aria-label={`Open PDF ${name}`}
-          sx={bigButton}
-        >
-          {!busy ? 'Open PDF' : entry ? 'Opening…' : 'Opens when ready'}
-        </Button>
-        {message && (
-          <Typography variant="body2" color="text.secondary" role="status">
-            {message}
-          </Typography>
-        )}
-      </Box>
+      <Button
+        variant="outlined"
+        startIcon={busy ? <CircularProgress size={18} color="inherit" /> : <PictureAsPdfOutlinedIcon />}
+        onClick={openPdf}
+        disabled={busy}
+        aria-label={`Open PDF ${name}`}
+        sx={bigButton}
+      >
+        {!busy ? 'Open PDF' : entry ? 'Opening…' : 'Opens when ready'}
+      </Button>
     );
   }
 
@@ -217,47 +211,55 @@ export function PdfAttachmentCard({ attachment, onOpenInApp, compact }: PdfAttac
         backgroundColor: theme.palette.background.paper,
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, minWidth: 0 }}>
+      {/* One row: the file, then Download and Open PDF side by side (wrapping under it in a narrow card). */}
+      <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1.5, minWidth: 0 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: '1 1 200px', minWidth: 0 }}>
+          <Box
+            aria-hidden
+            sx={{
+              width: 40,
+              height: 40,
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 1.5,
+              bgcolor: 'action.hover',
+              color: 'text.secondary',
+            }}
+          >
+            <PictureAsPdfOutlinedIcon />
+          </Box>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography component="p" sx={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+              {name}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+              {['PDF', formatFileSize(size)].filter(Boolean).join(' · ')}
+            </Typography>
+          </Box>
+        </Box>
         <Box
-          aria-hidden
           sx={{
-            width: 40,
-            height: 40,
-            flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: 1.5,
-            bgcolor: 'action.hover',
-            color: 'text.secondary',
+            gap: 1,
+            minWidth: 0,
+            // On a phone the two share the width of a row of their own.
+            flex: phone ? '1 1 100%' : '0 1 auto',
+            ml: phone ? 0 : 'auto',
+            '& > *': phone ? { flex: '1 1 0', minWidth: 0 } : {},
           }}
         >
-          <PictureAsPdfOutlinedIcon />
-        </Box>
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography component="p" sx={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-            {name}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-            {['PDF', formatFileSize(size)].filter(Boolean).join(' · ')}
-          </Typography>
+          <Box sx={{ display: 'flex', minWidth: 0 }}>{download}</Box>
+          {open}
         </Box>
       </Box>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: phone ? 'column' : 'row',
-          alignItems: phone ? 'stretch' : 'center',
-          // A half-width card in the two-column grid puts Open PDF under the download control.
-          flexWrap: 'wrap',
-          gap: 1,
-          minWidth: 0,
-        }}
-      >
-        {/* The 160px basis is a width for the row layout; in the phone column it would become a 160px-tall button. */}
-        <Box sx={{ flex: phone ? '0 0 auto' : '1 1 160px', minWidth: 0, display: 'flex' }}>{download}</Box>
-        {open}
-      </Box>
+      {message && (
+        <Typography variant="body2" color="text.secondary" role="status">
+          {message}
+        </Typography>
+      )}
     </Box>
   );
 }

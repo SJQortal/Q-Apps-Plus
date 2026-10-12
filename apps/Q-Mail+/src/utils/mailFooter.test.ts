@@ -135,10 +135,12 @@ describe('footer blocks in the body', () => {
     expect(buildNewMessageBody(footerBlockFor(emptyMailFooter(), 'me', 'new'))).toBe('')
   })
 
-  it('adds a blank line after the footer of a reply or forward, and nothing when replies are off', () => {
-    expect(footerBlockFor(footer, 'work', 'reply')).toBe('<p>Simon</p><p>Work</p><p><br></p>')
+  it('ends a reply with its footer, adds a blank line after a forward\'s, and nothing when replies are off', () => {
+    expect(footerBlockFor(footer, 'work', 'reply')).toBe('<p>Simon</p><p>Work</p>')
+    expect(buildNewMessageBody(footerBlockFor(footer, 'work', 'reply'))).toBe('<p><br></p><p>Simon</p><p>Work</p>')
     expect(footerBlockFor(footer, 'me', 'forward')).toBe('<p>Simon</p><p><br></p>')
     expect(footerBlockFor({ ...footer, inReplies: false }, 'me', 'reply')).toBe('')
+    expect(footerBlockFor({ ...footer, inReplies: false }, 'me', 'forward')).toBe('')
     expect(footerBlockFor({ ...footer, inReplies: false }, 'me', 'new')).toBe('<p>Simon</p>')
   })
 
@@ -156,17 +158,25 @@ describe('footer blocks in the body', () => {
     expect(swapFooterInBody('', '', '<p>Simon</p>', 'new', true)).toBe('<p><br></p><p>Simon</p>')
     expect(swapFooterInBody('<p><br></p>', '', '<p>Simon</p>', 'new', true)).toBe('<p><br></p><p>Simon</p>')
     expect(swapFooterInBody('<p>Hi</p>', '', '<p>Simon</p>', 'new', false)).toBeNull()
-    const reply = '<p><br></p><p>alice wrote:</p><blockquote>x</blockquote>'
-    expect(swapFooterInBody(reply, '', '<p>Simon</p><p><br></p>', 'reply', true)).toBe(
-      '<p><br></p><p>Simon</p><p><br></p><p>alice wrote:</p><blockquote>x</blockquote>'
+    expect(swapFooterInBody('', '', '<p>Simon</p>', 'reply', true)).toBe('<p><br></p><p>Simon</p>')
+    expect(swapFooterInBody('<p>Hi</p>', '', '<p>Simon</p>', 'reply', false)).toBeNull()
+    const forward = '<p><br></p><p>---------- Forwarded message ---------</p><blockquote>x</blockquote>'
+    expect(swapFooterInBody(forward, '', '<p>Simon</p><p><br></p>', 'forward', true)).toBe(
+      '<p><br></p><p>Simon</p><p><br></p><p>---------- Forwarded message ---------</p><blockquote>x</blockquote>'
     )
-    expect(swapFooterInBody(reply, '', '<p>Simon</p><p><br></p>', 'reply', false)).toBeNull()
+    expect(swapFooterInBody(forward, '', '<p>Simon</p><p><br></p>', 'forward', false)).toBeNull()
   })
 
-  it('swaps the footer of a reply in place, above the quote', () => {
-    const reply = '<p>Thanks</p><p>Simon</p><p><br></p><p>alice wrote:</p><blockquote>Simon</blockquote>'
-    expect(swapFooterInBody(reply, '<p>Simon</p><p><br></p>', '<p>W</p><p><br></p>', 'reply', false)).toBe(
-      '<p>Thanks</p><p>W</p><p><br></p><p>alice wrote:</p><blockquote>Simon</blockquote>'
+  it('swaps the footer of a reply at the end, like a new message', () => {
+    const reply = '<p>Thanks</p><p>Simon</p>'
+    expect(swapFooterInBody(reply, '<p>Simon</p>', '<p>W</p>', 'reply', false)).toBe('<p>Thanks</p><p>W</p>')
+    expect(swapFooterInBody('<p>Thanks</p><p>Simon!</p>', '<p>Simon</p>', '<p>W</p>', 'reply', false)).toBeNull()
+  })
+
+  it('swaps the footer of a forward in place, above the forwarded message', () => {
+    const forward = '<p>FYI</p><p>Simon</p><p><br></p><p>---------- Forwarded message ---------</p><blockquote>Simon</blockquote>'
+    expect(swapFooterInBody(forward, '<p>Simon</p><p><br></p>', '<p>W</p><p><br></p>', 'forward', false)).toBe(
+      '<p>FYI</p><p>W</p><p><br></p><p>---------- Forwarded message ---------</p><blockquote>Simon</blockquote>'
     )
   })
 })

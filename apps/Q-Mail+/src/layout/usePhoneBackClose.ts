@@ -19,6 +19,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useNavigationType } from 'react-router-dom';
+import { registerBackLayer } from './backStack';
 
 export const BACK_STATE_KEY = 'qmailSubPane';
 
@@ -71,6 +72,12 @@ export function usePhoneBackClose({ enabled, activeKey, onBack }: Options): void
       onBackRef.current();
     }
   }, [enabled, location, navigationType]);
+
+  // A swipe back closes the open sub-pane, as Back does (SwipeBack).
+  useEffect(() => {
+    if (!enabled || !activeKey) return;
+    return registerBackLayer(() => onBackRef.current());
+  }, [activeKey, enabled]);
 
   // Keep the router entry in step with the open sub-pane.
   useEffect(() => {

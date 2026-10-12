@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { Profiler } from 'react'
 import { Provider } from 'react-redux'
 import { HubThemeProvider } from '../../hub-theme'
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme'
 import { store } from '../../state/store'
 import { addUser } from '../../state/features/authSlice'
+import { addToHashMapMail, clearMessages } from '../../state/features/mailSlice'
 import { resetAvatarCache } from '../../utils/avatarCache'
-import { ShowMessageV2 } from './ShowMessageV2'
-import { escapeHtmlText, relativeMailDate } from './readerTime'
+import { resetNameCache } from '../../utils/nameCache'
+import { mockQortalAction, qortalCalls } from '../../test/setup'
+import { resetEarlierMessagesCache } from './earlierMessages'
+import { ShowMessageV2, olderLabel } from './ShowMessageV2'
+import { escapeHtmlText, exactMailDate, readerMailDate } from './readerTime'
 import { mailDateTime } from './MessageDate'
 
 const now = Date.now()
@@ -43,11 +48,10 @@ function wrap(ui: React.ReactElement) {
 }
 
 describe('readerTime', () => {
-  it('formats relative dates and escapes HTML', () => {
-    expect(relativeMailDate(now - 10_000, now)).toBe('Just now')
-    expect(relativeMailDate(now - 5 * 60_000, now)).toBe('5 min ago')
-    expect(relativeMailDate(now - 400 * 24 * 3600_000, now)).toMatch(/\d{4}$/)
-    expect(relativeMailDate(undefined)).toBe('')
+  it('formats exact reader dates and escapes HTML', () => {
+    expect(readerMailDate(now - 5 * 60_000, now)).toMatch(/^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}, \d{2}:\d{2}$/)
+    expect(readerMailDate(now - 400 * 24 * 3600_000, now)).toMatch(/ \d{4}, \d{2}:\d{2}$/)
+    expect(readerMailDate(undefined)).toBe('')
     expect(escapeHtmlText('<b>&"x"')).toBe('&lt;b&gt;&amp;&quot;x&quot;')
   })
 
@@ -77,17 +81,58 @@ describe('ShowMessageV2', () => {
     expect(screen.queryAllByRole('heading', { level: 1 })).toHaveLength(0)
     expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual(['Lunch <plan>'])
     expect(screen.getByRole('heading', { level: 2, name: 'Lunch <plan>' })).toBeTruthy()
-    expect(screen.getByText('5 min ago')).toBeTruthy()
-    expect(screen.getByText('5 min ago').closest('time')?.getAttribute('datetime')).toBe(new Date(message.createdAt).toISOString())
+    const shortDate = readerMailDate(message.createdAt)
+    expect(screen.getByText(shortDate)).toBeTruthy()
+    expect(screen.getByText(shortDate).closest('time')?.getAttribute('datetime')).toBe(new Date(message.createdAt).toISOString())
+    expect(screen.getByRole('button', { name: `Sent ${shortDate}. Show the full date` })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
     expect(setReplyTo).toHaveBeenCalledWith(message)
     fireEvent.click(screen.getByRole('button', { name: 'Reply all' }))
     expect(onReplyAll).toHaveBeenCalledWith(message)
     expect(screen.getByRole('button', { name: 'Save all (2)' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Close message' })).toBeTruthy()
-    // the date toggles to the exact form on tap
-    fireEvent.click(screen.getByText('5 min ago'))
-    expect(screen.getByText(/\d{4}, \d{2}:\d{2}:\d{2}$/)).toBeTruthy()
+    // the date toggles to the full form, with seconds, on tap
+    fireEvent.click(screen.getByText(shortDate))
+    expect(screen.getByText(exactMailDate(message.createdAt))).toBeTruthy()
+  })
+
+  it('names the To of the send on every copy, not the copy\'s own recipient', () => {
+    // The copy delivered to a Cc name: recipient is that name, to is the To.
+    wrap(<ShowMessageV2 message={{ ...message, recipient: 'dana', to: ['bob'], cc: ['dana'] }} />)
+    expect(screen.getByText('to bob')).toBeTruthy()
+    expect(screen.getByText((_, el) => el?.textContent === 'cc dana' && el.tagName === 'P')).toBeTruthy()
+  })
+
+  it('shows a crafted message with an object subject and recipient and an impossible date', () => {
+    wrap(<ShowMessageV2 message={{ ...message, subject: { a: 1 }, recipient: { b: 2 }, to: [{ c: 3 }], createdAt: 1e16, generalData: { thread: [], threadV2: [] } }} />)
+    expect(screen.getByRole('heading', { level: 2, name: '(no subject)' })).toBeTruthy()
+    expect(screen.queryByText(/^to /)).toBeNull()
+    expect(document.querySelector('time')).toBeNull()
+    expect(screen.getByText('noon')).toBeTruthy()
+  })
+
+  it('folds a long Cc list into "and N more", which shows every name', () => {
+    const cc = ['carl', 'dana', 'erin', 'fay', 'gus', 'Custom Node on Qortal Hub']
+    const ccLine = () => screen.getByText((_, el) => el?.tagName === 'P' && /^cc /.test(el.textContent || ''))
+    const { unmount } = wrap(<ShowMessageV2 message={{ ...message, cc }} />)
+    expect(ccLine().textContent).toBe('cc carl, dana, erin and 3 more Cc names')
+    fireEvent.click(screen.getByRole('button', { name: 'and 3 more Cc names' }))
+    expect(ccLine().textContent).toBe(`cc ${cc.join(', ')}`)
+    expect(screen.queryByRole('button', { name: /Cc names/ })).toBeNull()
+    // Focus moved to the line the button left.
+    expect(document.activeElement).toBe(ccLine())
+    unmount()
+    // Four names are all shown: "and 1 more" would save nothing.
+    wrap(<ShowMessageV2 message={{ ...message, cc: cc.slice(0, 4) }} />)
+    expect(ccLine().textContent).toBe('cc carl, dana, erin, fay')
+  })
+
+  it('shows the Cc names under the recipient, and no Cc line without them', () => {
+    const { unmount } = wrap(<ShowMessageV2 message={{ ...message, cc: ['carl', 'dana', 'carl', 7, ''] }} />)
+    expect(screen.getByText((_, el) => el?.textContent === 'cc carl, dana' && el.tagName === 'P')).toBeTruthy()
+    unmount()
+    wrap(<ShowMessageV2 message={message} />)
+    expect(screen.queryByText(/^cc /)).toBeNull()
   })
 
   it('escapes the forward header and hands attachments to onForward when given', () => {
@@ -108,13 +153,13 @@ describe('ShowMessageV2', () => {
     expect(setForwardInfo).toHaveBeenCalledTimes(1)
   })
 
-  it('collapses earlier messages with a count, ignoring the local read marker, and expands in order', () => {
+  it('collapses earlier messages with a count, ignoring the local read marker, and lists them newest first', async () => {
     wrap(<ShowMessageV2 message={message} />)
     const toggle = screen.getByRole('button', { name: /Show earlier · 2 messages/ })
     expect(screen.queryByText('Re: Lunch')).toBeNull()
     fireEvent.click(toggle)
     const articles = screen.getAllByRole('article', { name: /Lunch/ }).filter((a) => a.getAttribute('aria-label') !== 'Lunch <plan>')
-    expect(articles.map((a) => a.getAttribute('aria-label'))).toEqual(['alice: Lunch', 'bob: Re: Lunch'])
+    expect(articles.map((a) => a.getAttribute('aria-label'))).toEqual(['bob: Re: Lunch', 'alice: Lunch'])
     // Entries come from the sender's body: quoted, never styled as the viewer's own.
     expect(screen.queryByText('You')).toBeNull()
     expect(screen.getAllByText(/^Quoted by /)).toHaveLength(2)
@@ -124,7 +169,8 @@ describe('ShowMessageV2', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Expand message from alice' }))
     expect(screen.getByText('first')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Hide earlier' }))
-    expect(screen.queryByText('second')).toBeNull()
+    // It folds shut (an animation), then the earlier messages are gone.
+    await vi.waitFor(() => expect(screen.queryByText('second')).toBeNull())
   })
 
   it('offers Archive and Mark unread as labelled buttons in a wide pane, with the e / u shortcuts', () => {
@@ -178,5 +224,247 @@ describe('ShowMessageV2', () => {
     const img = document.querySelector('.ql-editor-display img') as HTMLImageElement
     expect(img).toBeTruthy()
     expect(getComputedStyle(img).maxWidth).toBe('100%')
+  })
+})
+
+describe('ShowMessageV2 earlier messages by reference (1.0.1 replies)', () => {
+  const mailJson = (subject: string, createdAt: number) =>
+    btoa(JSON.stringify({ subject, createdAt, version: 1, attachments: [], textContentV2: `<p>${subject} body</p>`, generalData: { thread: [], threadV2: [] } }))
+  const reply = (count: number) => ({
+    id: 'reply',
+    user: 'alice',
+    recipient: 'bob',
+    subject: 'Re: Plan',
+    createdAt: now,
+    textContentV2: '<p>latest</p>',
+    attachments: [],
+    generalData: {
+      thread: [],
+      threadV2: Array.from({ length: count }, (_, i) => ({
+        reference: { identifier: `m${i}`, name: i % 2 ? 'bob' : 'alice', service: 'MAIL_PRIVATE' },
+      })),
+    },
+  })
+
+  beforeEach(() => {
+    resetAvatarCache()
+    resetNameCache()
+    resetEarlierMessagesCache()
+    store.dispatch(clearMessages())
+    store.dispatch(addUser({ name: 'bob', address: 'Qbob' } as any))
+    mockQortalAction('GET_NAME_DATA', (request: any) => ({ owner: `Q${request.name}` }))
+    mockQortalAction('GET_ACCOUNT_DATA', { publicKey: 'PK' })
+    mockQortalAction('GET_QDN_RESOURCE_URL', '')
+    mockQortalAction('FETCH_QDN_RESOURCE', (request: any) => (request.identifier === 'm2' ? 'D' : `ENC:${request.identifier}`))
+    mockQortalAction('DECRYPT_DATA', (request: any) => {
+      const id = String(request.encryptedData).slice(4)
+      if (id === 'm1') throw new Error('Unable to decrypt')
+      return mailJson(`Message ${id}`, 1000 + Number(id.slice(1)))
+    })
+  })
+
+  it('fetches nothing until Show earlier, then the newest five, verified, with the newest open', async () => {
+    wrap(<ShowMessageV2 message={reply(7)} />)
+    expect(screen.getByRole('button', { name: 'Show earlier · 7 messages' })).toBeTruthy()
+    expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 7 messages' }))
+    expect(await screen.findByText('Message m6 body')).toBeTruthy()
+    await screen.findByRole('article', { name: 'alice: Message m4' })
+    expect(qortalCalls('FETCH_QDN_RESOURCE').map(request => request.identifier).sort()).toEqual(['m2', 'm3', 'm4', 'm5', 'm6'])
+    expect(qortalCalls('ENCRYPT_DATA')).toHaveLength(0)
+    // fetched under the publisher's name: no "Quoted by" note
+    expect(screen.queryByText(/^Quoted by /)).toBeNull()
+    expect(screen.getByText('The sender deleted this message.')).toBeTruthy()
+    expect(screen.queryByText('Message m5 body')).toBeNull()
+
+    // "Show older" sits below the cards, after the oldest one shown.
+    const older = screen.getByRole('button', { name: 'Show 2 older messages' })
+    const items = Array.from(document.querySelectorAll('[data-earlier-item]'))
+    expect(items[items.length - 1].compareDocumentPosition(older) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.click(older)
+    expect(await screen.findByText('This message was not sent to you, so it can\'t be opened.')).toBeTruthy()
+    await screen.findByRole('article', { name: 'alice: Message m0' })
+    expect(screen.queryByRole('button', { name: /older/ })).toBeNull()
+    expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(7)
+  })
+
+  it('walks back through the earlier messages\' own links to the start of the conversation', async () => {
+    // The open reply links m5..m9 (a 1.0.1 reply links its newest ten); m5 linked m0..m4.
+    const ids = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => `m${from + i}`)
+    const refOf = (id: string) => ({ reference: { identifier: id, name: 'alice', service: 'MAIL_PRIVATE' } })
+    mockQortalAction('FETCH_QDN_RESOURCE', (request: any) => `ENC:${request.identifier}`)
+    mockQortalAction('DECRYPT_DATA', (request: any) => {
+      const id = String(request.encryptedData).slice(4)
+      const n = Number(id.slice(1))
+      return btoa(JSON.stringify({
+        subject: `Message ${id}`,
+        createdAt: 1000 + n,
+        version: 1,
+        attachments: [],
+        textContentV2: `<p>Message ${id} body</p>`,
+        generalData: { thread: [], threadV2: id === 'm5' ? ids(0, 4).map(refOf) : [] },
+      }))
+    })
+    const message = { ...reply(0), generalData: { thread: [], threadV2: ids(5, 9).map(refOf) } }
+    wrap(<ShowMessageV2 message={message} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 5 messages' }))
+    expect(await screen.findByText('Message m9 body')).toBeTruthy()
+    // m5 arrives and leads further back.
+    fireEvent.click(await screen.findByRole('button', { name: 'Show 5 older messages' }))
+    await screen.findByRole('article', { name: 'alice: Message m0' })
+    const order = screen.getAllByRole('article').map((a) => a.getAttribute('aria-label')).filter((label) => /^alice: Message m\d$/.test(label || ''))
+    // Newest first, down to the start of the conversation.
+    expect(order).toEqual(ids(0, 9).reverse().map((id) => `alice: Message ${id}`))
+    expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(10)
+    expect(screen.queryByRole('button', { name: /older message/ })).toBeNull()
+  })
+
+  it('closes Show earlier for the next message without fetching its history', async () => {
+    const refOf = (id: string) => ({ reference: { identifier: id, name: 'alice', service: 'MAIL_PRIVATE' } })
+    const withRefs = (id: string, refs: string[]) => ({ ...reply(0), id, generalData: { thread: [], threadV2: refs.map(refOf) } })
+    const { rerender } = wrap(<ShowMessageV2 message={withRefs('A', ['m3', 'm4'])} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 2 messages' }))
+    expect(await screen.findByText('Message m4 body')).toBeTruthy()
+    await screen.findByRole('article', { name: 'alice: Message m3' })
+    // The reader is reused for the next message (Mail.tsx gives it no key).
+    rerender(
+      <Provider store={store}>
+        <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+          <ShowMessageV2 message={withRefs('B', ['m5', 'm6', 'm0'])} />
+        </HubThemeProvider>
+      </Provider>
+    )
+    expect(screen.getByRole('button', { name: 'Show earlier · 3 messages' }).getAttribute('aria-expanded')).toBe('false')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(qortalCalls('FETCH_QDN_RESOURCE').map((request) => request.identifier).sort()).toEqual(['m3', 'm4'])
+  })
+
+  it('names who quoted a copy found by walking back: the earlier message\'s sender, not the open one\'s', async () => {
+    // carol's open reply links erin's m2; erin's m2 (fetched) embedded dave's m1.
+    mockQortalAction('FETCH_QDN_RESOURCE', (request: any) => `ENC:${request.identifier}`)
+    mockQortalAction('DECRYPT_DATA', () =>
+      btoa(JSON.stringify({
+        subject: 'Message m2',
+        createdAt: 2000,
+        version: 1,
+        attachments: [],
+        textContentV2: '<p>Message m2 body</p>',
+        generalData: { thread: [], threadV2: [{ reference: { identifier: 'm1', name: 'dave', service: 'MAIL_PRIVATE' }, data: { id: 'm1', user: 'dave', subject: 'Message m1', createdAt: 1000, textContentV2: '<p>first</p>' } }] },
+      }))
+    )
+    const open = { ...reply(0), user: 'carol', generalData: { thread: [], threadV2: [{ reference: { identifier: 'm2', name: 'erin', service: 'MAIL_PRIVATE' } }] } }
+    wrap(<ShowMessageV2 message={open} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 1 message' }))
+    expect(await screen.findByText('Message m2 body')).toBeTruthy()
+    const m1 = await screen.findByRole('article', { name: 'dave: Message m1' })
+    expect(m1.getAttribute('aria-description')).toBe('Quoted by erin, not verified')
+    expect(screen.queryByText(/Quoted by carol/)).toBeNull()
+  })
+
+  it('on the way back to a message, a failed earlier message can load again', async () => {
+    let up = false
+    mockQortalAction('FETCH_QDN_RESOURCE', (request: any) => {
+      if (request.identifier === 'm0' && !up) throw new Error('Unable to decrypt: some other failure')
+      return `ENC:${request.identifier}`
+    })
+    const refOf = (id: string) => ({ reference: { identifier: id, name: 'alice', service: 'MAIL_PRIVATE' } })
+    const withRefs = (id: string, refs: string[]) => ({ ...reply(0), id, generalData: { thread: [], threadV2: refs.map(refOf) } })
+    const reader = (message: any) => (
+      <Provider store={store}>
+        <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+          <ShowMessageV2 message={message} />
+        </HubThemeProvider>
+      </Provider>
+    )
+    const a = withRefs('A', ['m0', 'm3'])
+    const { rerender } = render(reader(a))
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 2 messages' }))
+    expect(await screen.findByText('This message could not be loaded.')).toBeTruthy()
+    rerender(reader(withRefs('B', ['m4'])))
+    up = true
+    rerender(reader(a))
+    // Closed again on the way back, and opening it fetches the failed one anew.
+    const show = screen.getByRole('button', { name: 'Show earlier · 2 messages' })
+    expect(show.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(show)
+    expect(await screen.findByRole('article', { name: 'alice: Message m0' })).toBeTruthy()
+    expect(screen.queryByText('Loading message')).toBeNull()
+  })
+
+  it('words the Show older button by what is left', () => {
+    expect(olderLabel(1)).toBe('Show 1 older message')
+    expect(olderLabel(5)).toBe('Show 5 older messages')
+    expect(olderLabel(12)).toBe('Show 5 older messages (12 left)')
+  })
+
+  it('does not re-render the reader when other messages are decrypted', async () => {
+    let commits = 0
+    const message = reply(1)
+    wrap(
+      <Profiler id="reader" onRender={() => { commits += 1 }}>
+        <ShowMessageV2 message={message} />
+      </Profiler>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 1 message' }))
+    await screen.findByText('Message m0 body')
+    const before = commits
+    act(() => {
+      store.dispatch(addToHashMapMail({ id: 'unrelated', user: 'carol', isValid: true, subject: 'x', createdAt: 1 }))
+    })
+    expect(commits).toBe(before)
+  })
+
+  it('uses a message already decrypted this session without asking Qortal', async () => {
+    store.dispatch(addToHashMapMail({ id: 'm0', user: 'alice', isValid: true, subject: 'Opened before', createdAt: 5, textContentV2: '<p>cached</p>', attachments: [] }))
+    wrap(<ShowMessageV2 message={reply(1)} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 1 message' }))
+    expect(await screen.findByText('cached')).toBeTruthy()
+    expect(qortalCalls('FETCH_QDN_RESOURCE')).toHaveLength(0)
+  })
+
+  it('shows a crafted earlier message (object subject, impossible date) without taking the reader down', async () => {
+    mockQortalAction('DECRYPT_DATA', () =>
+      btoa(JSON.stringify({ subject: { a: 1 }, createdAt: 1e16, version: 1, attachments: [], textContentV2: '<p>odd body</p>', generalData: { thread: [], threadV2: [] } }))
+    )
+    wrap(<ShowMessageV2 message={reply(1)} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 1 message' }))
+    expect(await screen.findByText('odd body')).toBeTruthy()
+    expect(screen.getByRole('article', { name: 'alice: (no subject)' })).toBeTruthy()
+    expect(screen.getByText('latest')).toBeTruthy()
+  })
+
+  it('offers Retry when the node has not got a message yet', async () => {
+    let available = false
+    mockQortalAction('FETCH_QDN_RESOURCE', () => {
+      if (!available) throw new Error('Unable to decrypt: some other failure')
+      return 'ENC:m0'
+    })
+    wrap(<ShowMessageV2 message={reply(1)} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 1 message' }))
+    expect(await screen.findByText('This message could not be loaded.')).toBeTruthy()
+    available = true
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByText('Message m0 body')).toBeTruthy()
+    // Focus stayed with the message's place while Retry went away.
+    const focused = document.activeElement as HTMLElement
+    expect(focused).toBe(screen.getByRole('group', { name: 'Earlier message from alice' }))
+    expect(focused.textContent).toContain('Message m0 body')
+  })
+
+  it('moves focus to the first message Show older brought in, just under those shown before', async () => {
+    wrap(<ShowMessageV2 message={reply(7)} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show earlier · 7 messages' }))
+    const older = await screen.findByRole('button', { name: 'Show 2 older messages' })
+    older.focus()
+    fireEvent.click(older)
+    await screen.findByRole('article', { name: 'alice: Message m0' })
+    expect(screen.queryByRole('button', { name: /older message/ })).toBeNull()
+    // m6..m2 were shown; m1 (bob's) is the first new one, newest first.
+    await vi.waitFor(() => {
+      const places = Array.from(document.querySelectorAll('[data-earlier-item]'))
+      expect(places.indexOf(document.activeElement as Element)).toBe(5)
+    })
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Earlier message from bob')
   })
 })

@@ -90,19 +90,22 @@ describe('NewMessage footer', () => {
     expect(body()).toBe('<p><br></p>')
   })
 
-  it('puts the footer above the quote of a reply, and leaves it out when switched off', async () => {
+  it('ends a reply with the footer and no quote, and leaves it out when switched off', async () => {
     writeMailFooter(address, FOOTER)
     const first = renderComposer({ replyTo: original })
-    await waitFor(() => expect(first.quill().getText()).toContain('alice wrote:'))
-    expect(toPublishedMailHtml(first.body())).toMatch(
-      new RegExp(`^<p><br></p>${escapeRegExp(DEFAULT_HTML)}<p><br></p><p>On .*, alice wrote:</p><blockquote>See you at noon</blockquote>$`)
-    )
+    await waitFor(() => expect(first.body()).toBe(`<p><br></p>${DEFAULT_HTML}`))
+    expect(toPublishedMailHtml(first.body())).toBe(`<p><br></p>${DEFAULT_HTML}`)
+    expect(first.body()).not.toContain('See you at noon')
+    await wait(500)
+    expect(storedDrafts()).toEqual({})
     first.unmount()
 
     writeMailFooter(address, { ...FOOTER, inReplies: false })
     const second = renderComposer({ replyTo: original })
-    await waitFor(() => expect(second.quill().getText()).toContain('alice wrote:'))
-    expect(second.body()).toMatch(/^<p><br><\/p><p>On .*, alice wrote:<\/p>/)
+    await screen.findByRole('region', { name: 'Original message' })
+    await wait(50)
+    expect(second.quill().getText().trim()).toBe('')
+    expect(second.body()).not.toContain('See you at noon')
   })
 
   it('puts the footer above the header of a forward', async () => {
@@ -160,11 +163,11 @@ describe('NewMessage footer', () => {
     expect(body()).toBe('<p>My draft</p>')
   })
 
-  it('a reply swaps its footer in place when From changes', async () => {
+  it('a reply swaps its footer when From changes', async () => {
     writeMailFooter(address, FOOTER)
-    const { quill, body } = renderComposer({ replyTo: original })
-    await waitFor(() => expect(quill().getText()).toContain('alice wrote:'))
+    const { body } = renderComposer({ replyTo: original })
+    await waitFor(() => expect(body()).toBe(`<p><br></p>${DEFAULT_HTML}`))
     await pickFrom('work')
-    await waitFor(() => expect(body()).toMatch(new RegExp(`^<p><br></p>${WORK_HTML}<p><br></p><p>On `)))
+    await waitFor(() => expect(body()).toBe(`<p><br></p>${WORK_HTML}`))
   })
 })

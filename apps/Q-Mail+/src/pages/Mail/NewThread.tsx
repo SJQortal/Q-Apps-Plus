@@ -7,11 +7,8 @@ import ShortUniqueId from "short-unique-id";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
 import { useDropzone } from "react-dropzone";
-import CloseIcon from "@mui/icons-material/Close";
 import { setNotification } from "../../state/features/notificationsSlice";
-import { extensionFromMimeType } from "../../utils/fileExtension";
 import ModalCloseSVG from "../../assets/svgs/ModalClose.svg";
-import AttachmentSVG from "../../assets/svgs/NewMessageAttachment.svg";
 
 
 import { objectToBase64, toBase64 } from "../../utils/toBase64";
@@ -22,12 +19,10 @@ import {
 } from "../../constants/mail";
 import { subscribeToEvent, unsubscribeFromEvent } from "../../utils/events";
 import {
-  AttachmentContainer,
   CloseContainer,
   InstanceFooter,
   InstanceListContainer,
   InstanceListHeader,
-  NewMessageAttachmentImg,
   NewMessageCloseImg,
   NewMessageHeaderP,
   NewMessageInputRow,
@@ -36,7 +31,9 @@ import { Spacer } from "../../components/common/Spacer";
 import { TextEditor } from "../../components/common/TextEditor/TextEditor";
 import { toPublishedMailHtml } from "../../components/common/TextEditor/quillHtml";
 import { SendNewMessage } from "../../assets/svgs/SendNewMessage";
-import { formatBytes } from "../../utils/displaySize";
+import { ComposeAttachments } from "./ComposeAttachments";
+import { composeItemsFromFiles, withinSizeLimit } from "./composeFiles";
+import { AttachDropZone } from "./AttachDropZone";
 import { CreateThreadIcon } from "../../assets/svgs/CreateThreadIcon";
 import { MultiplePublish } from "../../components/common/MultiplePublish/MultiplePublish";
 import {
@@ -175,50 +172,17 @@ export const NewThread = ({
 
 
   const dispatch = useDispatch();
-  const { getRootProps, getInputProps } = useDropzone({
+  const dropzone = useDropzone({
     maxSize,
+    noClick: true,
+    noKeyboard: true,
     onDrop: acceptedFiles => {
-      const files: any[] = [];
-      try {
-        acceptedFiles.forEach(item => {
-          const type = item?.type;
-          if (!type) {
-            files.push({
-              file: item,
-              mimetype: null,
-              extension: null,
-            });
-          } else {
-            const extension = extensionFromMimeType(type);
-            if (!extension) {
-              files.push({
-                file: item,
-                mimetype: type,
-                extension: null,
-              });
-            } else {
-              files.push({
-                file: item,
-                mimetype: type,
-                extension: extension,
-              });
-            }
-          }
-        });
-      } catch (error) {
-        dispatch(
-          setNotification({
-            msg: "One of your files is corrupted",
-            alertType: "error",
-          })
-        );
-      }
-      setAttachments(prev => [...prev, ...files]);
+      setAttachments(prev => [...prev, ...composeItemsFromFiles(acceptedFiles)]);
     },
     onDropRejected: () => {
       dispatch(
         setNotification({
-          msg: "One of your files is over the 25mb limit",
+          msg: "One of your files is over the 25 MB limit",
           alertType: "error",
         })
       );
@@ -644,69 +608,12 @@ export const NewThread = ({
           }}>
             
           
-            <AttachmentContainer
-              {...getRootProps()}
-              sx={{
-                width: "fit-content",
-              }}
-            >
-              <input {...getInputProps()} />
-              <NewMessageAttachmentImg src={AttachmentSVG} />
-            </AttachmentContainer>
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-start",
-                width: "100%",
-              }}
-            >
-              {attachments.map(({ file, extension }, index) => {
-                return (
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "15px",
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        fontSize: "1rem",
-                        color: !extension
-                          ? "var(--qmail-danger-text)"
-                          : "var(--qmail-compose-text)",
-                      }}
-                    >
-                      {file?.name} ({formatBytes(file?.size || 0)})
-                    </Typography>
-                    <CloseIcon
-                      onClick={() =>
-                        setAttachments(prev =>
-                          prev.filter((item, itemIndex) => itemIndex !== index)
-                        )
-                      }
-                      sx={{
-                        height: "16px",
-                        width: "auto",
-                        cursor: "pointer",
-                        color: "var(--qmail-compose-muted)",
-                      }}
-                    />
-                    {!extension && (
-                      <Typography
-                        sx={{
-                          fontSize: "0.875rem",
-                          fontWeight: "bold",
-                          color: "var(--qmail-danger-text)",
-                        }}
-                      >
-                        This file has no extension
-                      </Typography>
-                    )}
-                  </Box>
-                );
-              })}
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%", minWidth: 0 }}>
+              <AttachDropZone dropzone={dropzone} count={attachments.length} />
+              <ComposeAttachments
+                attachments={attachments}
+                onRemove={index => setAttachments(prev => prev.filter((item, itemIndex) => itemIndex !== index))}
+              />
             </Box>
             <Spacer height="10px" />
           </NewMessageInputRow>
@@ -722,6 +629,13 @@ export const NewThread = ({
           >
             <TextEditor
               className="qmail-compose-editor"
+              onDropFiles={files => {
+                const { accepted, tooBig } = withinSizeLimit(files, maxSize);
+                if (accepted.length) setAttachments(prev => [...prev, ...composeItemsFromFiles(accepted)]);
+                if (tooBig.length) {
+                  dispatch(setNotification({ msg: `Over the 25 MB limit: ${tooBig.join(", ")}`, alertType: "error" }));
+                }
+              }}
               inlineContent={value}
               setInlineContent={(val: any) => {
                 setValue(val);

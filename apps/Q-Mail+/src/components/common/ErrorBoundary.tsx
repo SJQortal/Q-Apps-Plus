@@ -6,6 +6,10 @@ interface Props {
   children: ReactNode;
   /** Called by the Reload button; defaults to reloading the app frame. */
   onReload?: () => void;
+  /** Shown in place of the children instead of the full-screen message (one message, one card). */
+  fallback?: ReactNode;
+  /** A new value (another message) clears the error. */
+  resetKey?: unknown;
 }
 
 interface State {
@@ -16,7 +20,9 @@ interface State {
  * Catches render errors and failed code-split chunks below it, so one bad
  * screen shows a message with a Reload button instead of blanking the whole
  * app (found in the Hub check: a chunk that failed to load left an empty
- * frame with no way back). The error still goes to the console.
+ * frame with no way back). The error still goes to the console. With a
+ * `fallback` it stays in place: a message someone crafted to break the
+ * reader takes down that message, not the app.
  */
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false };
@@ -29,12 +35,21 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error('Q-Mail+ could not show this screen:', error, info.componentStack);
   }
 
+  componentDidUpdate(previous: Props, previousState: State): void {
+    // Only an error from before this update: the update that brought the
+    // error (a new message that fails at once) must not clear it again.
+    if (this.state.hasError && previousState.hasError && previous.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false });
+    }
+  }
+
   private reload = () => {
     if (this.props.onReload) this.props.onReload();
     else window.location.reload();
   };
 
   render(): ReactNode {
+    if (this.state.hasError && this.props.fallback !== undefined) return this.props.fallback;
     if (this.state.hasError) {
       return (
         <Box sx={{ minHeight: '100%', bgcolor: 'background.default' }}>

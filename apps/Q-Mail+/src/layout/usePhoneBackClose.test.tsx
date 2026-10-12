@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
 import { BACK_STATE_KEY, hasSubPaneEntry, subPaneOf, usePhoneBackClose } from './usePhoneBackClose'
+import { topBackLayer } from './backStack'
 
 function Harness({ activeKey, onBack, enabled = true }: { activeKey: string | null; onBack: () => void; enabled?: boolean }) {
   usePhoneBackClose({ enabled, activeKey, onBack })
@@ -83,6 +84,20 @@ describe('usePhoneBackClose', () => {
     pressBack()
     expect(onBack).not.toHaveBeenCalled()
     expect(hasSubPaneEntry(state())).toBe(false)
+  })
+
+  it('an open sub-pane is what a swipe back closes, on phones only', () => {
+    const onBack = vi.fn()
+    const view = mount(<Harness activeKey="message" onBack={onBack} />)
+    const layer = topBackLayer()!
+    expect(layer.overlay).toBe(false)
+    layer.close()
+    expect(onBack).toHaveBeenCalledTimes(1)
+    view.rerender(<MemoryRouter><Harness activeKey={null} onBack={onBack} /></MemoryRouter>)
+    expect(topBackLayer()).toBeUndefined()
+    view.unmount()
+    mount(<Harness activeKey="message" onBack={onBack} enabled={false} />)
+    expect(topBackLayer()).toBeUndefined()
   })
 
   it('does nothing on wider layouts', () => {

@@ -7,8 +7,8 @@
  * account "Tester GO" that also owns "bob+builder"; an inbox of 30
  * MAIL_PRIVATE rows from four senders (one with a "+", one non-ASCII), some
  * with a cached subject, some locked (DECRYPT_DATA throws); one message with
- * four attachments (PNG, text, a valid one-page PDF, WAV) and two Cc names
- * (Reply all fills Cc); 53 qortal_qmail_ rows, so the paged alias
+ * four attachments (PNG, text, a valid one-page PDF, WAV) and five Cc names,
+ * one long (the reader folds them; Reply all fills Cc); 53 qortal_qmail_ rows, so the paged alias
  * scan reads two pages; a watched alias
  * with mail; sent rows for both owned names (plus a tombstone that must stay
  * hidden); a group with threads and posts; a draft, archived ids and read
@@ -20,6 +20,12 @@
  * recent inbox message and both come back from SEARCH_NAMES, so the inbox,
  * the reader (impostor-open) and the composer's suggestions (compose-names)
  * show the strike next to the real name.
+ *
+ * Reference-only history (1.0.1 replies): Simon James's message carries six
+ * threadV2 references and no copies (earlier-refs): one not sent to us (a
+ * locked id), our own deleted sent message (the tombstone), one the node
+ * can't fetch, and three that load, so "Show earlier" shows every state and
+ * "Show 1 older message".
  *
  * Encryption is mocked end to end: FETCH_QDN_RESOURCE answers a token that
  * names the resource, DECRYPT_DATA turns the token into the base64 body the
@@ -42,6 +48,9 @@ const SIMON_ADDRESS = 'QSimonJames666666666666666666S1m0nJ';
 // An impostor's copy of the name above: the space is U+2800 BRAILLE PATTERN BLANK.
 const IMPOSTOR = 'Simon\u2800James';
 const IMPOSTOR_ADDRESS = 'QImpostor77777777777777777777Imp0st';
+// A long registered name (25 characters) among the Cc names.
+const LONG_NAME = 'Custom Node on Qortal Hub';
+const LONG_ADDRESS = 'QCustomNodeQortalHub88888888CuNoQH';
 const GROUP_ID = 7;
 const GROUP_NAME = 'Qortal Builders';
 
@@ -53,6 +62,7 @@ const OWNERS = {
   [MARCUS]: MARCUS_ADDRESS,
   [SIMON]: SIMON_ADDRESS,
   [IMPOSTOR]: IMPOSTOR_ADDRESS,
+  [LONG_NAME]: LONG_ADDRESS,
 };
 const suffix = (address) => address.slice(-6);
 const now = Date.now();
@@ -252,7 +262,8 @@ const mailBody = (r, index, recipientName) => {
     // m01 went to two more people in Cc (the + app's additive to/cc fields),
     // so Reply all fills the composer's Cc row.
     to: hasFiles ? [recipientName] : recipientName,
-    cc: hasFiles ? [ZOE, MARCUS] : [],
+    // Five Cc names, one long: the reader folds them into "and 2 more".
+    cc: hasFiles ? [ZOE, MARCUS, SECOND, SIMON, LONG_NAME] : [],
   };
 };
 
@@ -270,6 +281,16 @@ LOOKALIKE_INBOX.forEach((r, i) => {
     textContentV2: `<p>Message from ${r.name}.</p>`,
   };
 });
+// A 1.0.1 reply: references only, oldest first (earlier-refs).
+const historyRef = (name, identifier) => ({ reference: { identifier, name, service: 'MAIL_PRIVATE' } });
+BODIES[LOOKALIKE_INBOX[0].identifier].generalData.threadV2 = [
+  historyRef(SECOND, inboxId(NAME, ADDRESS, 'm02')),
+  historyRef(MARCUS, inboxId(NAME, ADDRESS, 'm04')), // locked: not sent to us
+  historyRef(NAME, inboxId(ALICE, ALICE_ADDRESS, 's09')), // our deleted sent message (tombstone)
+  historyRef(SIMON, inboxId(NAME, ADDRESS, 'gone')), // the node can't fetch it
+  historyRef(ZOE, inboxId(NAME, ADDRESS, 'm03')),
+  historyRef(NAME, inboxId(ALICE, ALICE_ADDRESS, 's02')), // our own reply, sent by us
+];
 ALIAS_INBOX.forEach((r, i) => {
   BODIES[r.identifier] = { ...mailBody(r, i + 5, ALIAS), recipient: NAME, to: ALIAS };
 });
@@ -497,6 +518,7 @@ export default {
         case 'GET_QDN_RESOURCE_PROPERTIES': return PROPS[p.identifier] || { filename: 'file.bin', mimeType: 'application/octet-stream' };
         case 'FETCH_QDN_RESOURCE': {
           if (p.service === 'DOCUMENT_PRIVATE') throw { error: 'Resource does not exist' };
+          if (String(p.identifier).endsWith('_mail_gone')) throw { error: 'Resource does not exist' };
           if (p.service === 'MAIL' && p.encoding !== 'base64') return BODIES[p.identifier] || null; // thread header JSON
           return 'ENCRES:' + p.service + ':' + p.identifier;
         }
@@ -535,12 +557,13 @@ export default {
     const sp = url.searchParams;
     if (p.endsWith('/resources/search')) {
       const service = sp.get('service');
-      const name = sp.get('name');
+      // Core takes several names (the merged probes send all owned names).
+      const names = sp.getAll('name');
       const ident = (sp.get('identifier') || '').toLowerCase();
       const query = (sp.get('query') || '').toLowerCase();
       let list = ALL_ROWS.filter((r) => {
         if (service && r.service !== service) return false;
-        if (name && r.name !== name) return false;
+        if (names.length && !names.includes(r.name)) return false;
         if (ident && !r.identifier.toLowerCase().includes(ident)) return false;
         if (query) {
           const hay = [r.identifier, r.name, r.metadata?.title || '', r.metadata?.description || ''].join('\n').toLowerCase();
@@ -635,6 +658,35 @@ export default {
       },
     },
     {
+      // Files being attached, as tiles in rows (a photo, a long-named text file, a PDF).
+      key: 'compose-attachments',
+      path: '/',
+      after: async (page) => {
+        await goTo(page, /^Compose$/);
+        await page.waitForSelector('.ql-editor', { timeout: 8000 }).catch(() => {});
+        await page.locator('input[type=file]').first().setInputFiles([
+          { name: 'harbour-photo.png', mimeType: 'image/png', buffer: PNG },
+          { name: 'meeting notes for the Qortal builders call.txt', mimeType: 'text/plain', buffer: Buffer.from('Agenda: Q-Mail+ 1.0.1') },
+          { name: 'spec-sheet.pdf', mimeType: 'application/pdf', buffer: Buffer.from(makePdf('Spec sheet')) },
+        ]);
+        await page.getByRole('list', { name: 'Attachments' }).waitFor({ timeout: 4000 }).catch(() => {});
+        await page.waitForTimeout(300);
+      },
+    },
+    {
+      key: 'compose-attachment-preview',
+      path: '/',
+      overlay: true,
+      after: async (page) => {
+        await goTo(page, /^Compose$/);
+        await page.waitForSelector('.ql-editor', { timeout: 8000 }).catch(() => {});
+        await page.locator('input[type=file]').first().setInputFiles([{ name: 'harbour-photo.png', mimeType: 'image/png', buffer: PNG }]);
+        await page.getByRole('button', { name: 'Preview harbour-photo.png' }).click({ timeout: 4000 });
+        await page.waitForSelector('[role=dialog] img', { timeout: 4000 }).catch(() => {});
+        await page.waitForTimeout(300);
+      },
+    },
+    {
       // To, Cc and Bcc open, with a name checked into Cc.
       key: 'compose',
       path: '/',
@@ -675,7 +727,7 @@ export default {
       },
     },
     {
-      // m01 has two Cc names: Reply all puts them in the composer's Cc row.
+      // m01 has five Cc names: Reply all puts them in the composer's Cc row.
       key: 'reply-all',
       path: '/',
       after: async (page) => {
@@ -684,6 +736,22 @@ export default {
         await page.waitForSelector('.ql-editor', { timeout: 8000 }).catch(() => {});
         await page.getByRole('button', { name: new RegExp(MARCUS) }).first().waitFor({ timeout: 4000 }).catch(() => {});
         await page.waitForTimeout(300);
+      },
+    },
+    {
+      // A 1.0.1 reply: its earlier messages load by reference on Show earlier.
+      key: 'earlier-refs',
+      path: '/',
+      after: async (page) => {
+        await waitForInbox(page);
+        await page.getByRole('button', { name: new RegExp(SIMON) }).first().click({ timeout: 4000 });
+        await page.waitForSelector('article', { timeout: 8000 }).catch(() => {});
+        await page.getByRole('button', { name: /^Show earlier/ }).first().click({ timeout: 4000 });
+        await page.getByText('This message could not be loaded.').first().waitFor({ timeout: 8000 }).catch(() => {});
+        await page.getByText('Sent message 2 to').first().waitFor({ timeout: 8000 }).catch(() => {});
+        await page.getByRole('button', { name: /^Show 1 older message/ }).first().scrollIntoViewIfNeeded().catch(() => {});
+        await page.mouse.move(1, 1);
+        await page.waitForTimeout(400);
       },
     },
     { key: 'attachment-image', path: '/', overlay: true, after: async (page) => { await openAttachment(page, /^Open coast-photo\.png/); await page.waitForSelector('[role=dialog] img', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(300); } },
@@ -705,7 +773,54 @@ export default {
       },
     },
     { key: 'settings', path: '/settings', after: async (page) => page.waitForSelector('text=Appearance', { timeout: 8000 }).catch(() => {}) },
+    {
+      // Settings → Mail → Show group threads off, then back to mail: no Threads
+      // in the rail or the bottom bar (four items on phones).
+      key: 'threads-hidden',
+      path: '/settings',
+      after: async (page) => {
+        await page.waitForSelector('text=Appearance', { timeout: 8000 }).catch(() => {});
+        await page.getByRole('switch', { name: 'Show group threads' }).first().click({ timeout: 4000 });
+        await page.getByRole('button', { name: 'Back to mail' }).first().click({ timeout: 4000 });
+        await waitForInbox(page);
+        await page.waitForTimeout(300);
+      },
+    },
     { key: 'whats-new', path: '/settings', overlay: true, after: async (page) => { await page.waitForSelector('text=Appearance', { timeout: 8000 }).catch(() => {}); await page.getByRole('button', { name: "What's new" }).first().click({ timeout: 4000 }); await page.waitForSelector('text=The first Q-Mail+ release', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(300); } },
+    {
+      // A row's menu: right click here; a long press on a phone opens the same (a sheet below 600 px).
+      key: 'row-menu',
+      path: '/',
+      overlay: true,
+      after: async (page) => {
+        await waitForInbox(page);
+        const row = page.locator('[data-message-row] button').first();
+        await row.click({ button: 'right', position: { x: 60, y: 20 }, timeout: 4000 });
+        await page.getByRole('menuitem').first().waitFor({ timeout: 3000 }).catch(() => {});
+        await page.getByRole('button', { name: 'Archive' }).first().waitFor({ timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(400);
+      },
+    },
+    {
+      // A row's attachments without opening it: the paperclip, else "Attachments" in the row's menu.
+      key: 'row-attachments',
+      path: '/',
+      overlay: true,
+      after: async (page) => {
+        await waitForInbox(page);
+        const clip = page.getByRole('button', { name: /^Attachments: / }).first();
+        const hasClip = await clip.waitFor({ timeout: 3000 }).then(() => true, () => false);
+        if (hasClip) {
+          await clip.click({ timeout: 4000 });
+        } else {
+          await page.locator('[data-message-row] button').first().click({ button: 'right', position: { x: 60, y: 20 }, timeout: 4000 });
+          // A menu item from 600 px, a button in the phone sheet.
+          await page.getByRole('menuitem', { name: 'Attachments' }).or(page.getByRole('button', { name: 'Attachments', exact: true })).first().click({ timeout: 3000 });
+        }
+        await page.getByText('coast-photo.png').first().waitFor({ timeout: 8000 }).catch(() => {});
+        await page.waitForTimeout(400);
+      },
+    },
     { key: 'menu', path: '/', mobileOnly: true, overlay: true, after: async (page) => { await waitForInbox(page); await page.getByRole('button', { name: 'Open mailboxes menu' }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
     {
       key: 'shortcuts',

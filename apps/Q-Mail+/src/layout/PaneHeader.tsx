@@ -57,6 +57,9 @@ const Actions = styled('div')(({ theme }) => ({
   flexShrink: 0,
 }));
 
+/** After the header hides or shows, scroll changes for this long are its own doing (the 180 ms slide, and a frame or two). */
+export const HEADER_SETTLE_MS = 300;
+
 /** Pure direction logic, exported for tests: returns the new hidden state. */
 export function nextHiddenState(hidden: boolean, previousTop: number, top: number, headerHeight = PANE_HEADER_HEIGHT): boolean {
   if (top <= headerHeight) return false;
@@ -64,6 +67,44 @@ export function nextHiddenState(hidden: boolean, previousTop: number, top: numbe
   if (delta > SCROLL_DELTA) return true;
   if (delta < -SCROLL_DELTA) return false;
   return hidden;
+}
+
+export interface ScrollSample {
+  top: number;
+  /** scrollHeight - clientHeight: how far the scroller can scroll right now. */
+  max: number;
+  at: number;
+}
+
+/**
+ * The hidden state after a scroll event, ignoring scrolling the user didn't
+ * do. Hiding the header makes the scroller taller (so does GO hiding its own
+ * bar, or the keyboard closing), which leaves less room to scroll; near the
+ * end, the browser pulls the content back by up to the header's height. Read
+ * as a scroll up, that showed the header again, which shrank the scroller,
+ * and so on: on a page only a little taller than the screen (a reply with the
+ * keyboard down), the header flickered at certain positions, even with no
+ * finger on the screen. So:
+ * - a page with less than three header heights to scroll keeps its header,
+ *   and at the very top the header always shows;
+ * - the scroller growing and pulling the content back to its new end is not
+ *   a scroll;
+ * - for HEADER_SETTLE_MS after the header hides or shows, nothing changes.
+ */
+export function nextHiddenOnScroll(
+  hidden: boolean,
+  previous: ScrollSample,
+  sample: ScrollSample,
+  settleUntil: number,
+  headerHeight = PANE_HEADER_HEIGHT
+): boolean {
+  if (sample.top <= 0) return false;
+  // Judged only while the header shows: once hidden, the room also lost the
+  // header's height, and GO's bar's if it went too.
+  if (!hidden && sample.max < headerHeight * 3) return false;
+  const pulledBack = sample.max < previous.max - 1 && sample.top >= sample.max - 1 && sample.top < previous.top;
+  if (pulledBack || sample.at < settleUntil) return hidden;
+  return nextHiddenState(hidden, previous.top, sample.top, headerHeight);
 }
 
 /**
@@ -87,22 +128,34 @@ function useHideOnScroll(enabled: boolean, headerHeight: number) {
     // capture phase, so one capturing listener on the sibling sees both.
     const isPaneScroller = (target: EventTarget | null): target is HTMLElement =>
       target === next || (target instanceof HTMLElement && target.hasAttribute('data-pane-scroll') && next.contains(target));
-    let previousTop = 0;
+    const sampleOf = (scroller: HTMLElement): ScrollSample => ({
+      top: scroller.scrollTop,
+      max: scroller.scrollHeight - scroller.clientHeight,
+      at: performance.now(),
+    });
+    let previous: ScrollSample | null = null;
     let lastScroller: HTMLElement | null = null;
+    let isHidden = false;
+    let settleUntil = 0;
     let frame = 0;
     const onScroll = (event: Event) => {
       const scroller = event.target;
       if (!isPaneScroller(scroller)) return;
       if (scroller !== lastScroller) {
         lastScroller = scroller;
-        previousTop = 0;
+        previous = null;
       }
       if (frame) return;
       frame = window.requestAnimationFrame(() => {
         frame = 0;
-        const top = scroller.scrollTop;
-        setHidden((current) => nextHiddenState(current, previousTop, top, headerHeight));
-        previousTop = top;
+        const sample = sampleOf(scroller);
+        const next = nextHiddenOnScroll(isHidden, previous ?? { ...sample, top: 0 }, sample, settleUntil, headerHeight);
+        if (next !== isHidden) {
+          isHidden = next;
+          settleUntil = sample.at + HEADER_SETTLE_MS;
+          setHidden(next);
+        }
+        previous = sample;
       });
     };
     next.addEventListener('scroll', onScroll, { passive: true, capture: true });

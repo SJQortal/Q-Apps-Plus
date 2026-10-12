@@ -5,8 +5,8 @@ import {
   buildDirectMailPublishRequest,
   buildForwardHeaderHtml,
   buildForwardHtml,
-  buildReplyQuoteHtml,
   buildReplyThreadV2,
+  REPLY_HISTORY_MAX_REFERENCES,
   directMailIdentifier,
   escapeHtml,
   htmlToTextLines,
@@ -14,8 +14,8 @@ import {
   quoteLinesToHtml,
   recipientActivityByName,
   replyAllRecipients,
+  replyFromOwnName,
   sortNamesByRecency,
-  stripEmbeddedHistory,
   uniqueCopyRecipients,
   withSubjectPrefix,
 } from './mailCompose'
@@ -112,7 +112,7 @@ describe('messageBodyLines', () => {
   })
 })
 
-describe('quoteLinesToHtml / buildReplyQuoteHtml', () => {
+describe('quoteLinesToHtml (forwards)', () => {
   it('emits one Quill 1 blockquote per line with escaped text', () => {
     expect(quoteLinesToHtml(['a <b>', '', 'c'])).toBe(
       '<blockquote>a &lt;b&gt;</blockquote><blockquote><br></blockquote><blockquote>c</blockquote>'
@@ -121,13 +121,6 @@ describe('quoteLinesToHtml / buildReplyQuoteHtml', () => {
   it('caps very long quotes', () => {
     const html = quoteLinesToHtml(['1', '2', '3'], 2)
     expect(html).toBe('<blockquote>1</blockquote><blockquote>2</blockquote><blockquote>[…]</blockquote>')
-  })
-  it('starts with an empty paragraph to type in, then the intro and the quote', () => {
-    const html = buildReplyQuoteHtml({ sender: 'Ali <x>', sentAt: '2026-10-01 10:00:00', lines: ['hello'] })
-    expect(html).toBe(
-      '<p><br></p><p>On 2026-10-01 10:00:00, Ali &lt;x&gt; wrote:</p><blockquote>hello</blockquote>'
-    )
-    expect(buildReplyQuoteHtml({ lines: [] })).toContain('- no message body -')
   })
 })
 
@@ -141,16 +134,9 @@ describe('the footer in the published body (textContentV2)', () => {
     expect(toPublishedMailHtml(`<p>Hello</p>${footerHtml}`)).toBe(`<p>Hello</p>${footerHtml}`)
   })
 
-  it('a reply: the footer and a blank line above "X wrote:" and the quote', () => {
-    const html = buildReplyQuoteHtml({
-      sender: 'Ali',
-      sentAt: 'today',
-      lines: ['hello'],
-      footerBlock: footerBlockFor(footer, 'Work', 'reply'),
-    })
-    expect(toPublishedMailHtml(html)).toBe(
-      '<p><br></p><p>Simon at work</p><p><br></p><p>On today, Ali wrote:</p><blockquote>hello</blockquote>'
-    )
+  it('a reply: a line to type on, then the footer, and no quote of the original', () => {
+    const body = buildNewMessageBody(footerBlockFor(footer, 'Work', 'reply'))
+    expect(toPublishedMailHtml(body)).toBe('<p><br></p><p>Simon at work</p>')
   })
 
   it('a forward: the footer and a blank line above the forward header', () => {
@@ -167,9 +153,7 @@ describe('the footer in the published body (textContentV2)', () => {
   it('no footer when it is empty or switched off for replies: the bodies are exactly as before', () => {
     const empty = { default: '', byName: {}, inReplies: true }
     expect(buildNewMessageBody(footerBlockFor(empty, 'simon', 'new'))).toBe('')
-    expect(
-      buildReplyQuoteHtml({ sender: 'Ali', lines: ['x'], footerBlock: footerBlockFor({ ...footer, inReplies: false }, 'simon', 'reply') })
-    ).toBe('<p><br></p><p>Ali wrote:</p><blockquote>x</blockquote>')
+    expect(buildNewMessageBody(footerBlockFor({ ...footer, inReplies: false }, 'simon', 'reply'))).toBe('')
     expect(buildForwardHtml({ from: 'Ali', subject: 'S', to: 'Me' }, ['x'], footerBlockFor(empty, 'simon', 'forward'))).toBe(
       buildForwardHtml({ from: 'Ali', subject: 'S', to: 'Me' }, ['x'])
     )
@@ -215,47 +199,71 @@ const original = {
   isValid: true,
 }
 
-describe('embedded reply history (Bugs #12)', () => {
-  it('stripEmbeddedHistory drops generalData and nothing else', () => {
-    const stripped = stripEmbeddedHistory(original)
-    expect(stripped.generalData).toBeUndefined()
-    expect(stripped).toMatchObject({ id: 'id-1', user: 'Ali', subject: 'Hi', createdAt: 100, textContentV2: '<p>first</p>', isValid: true })
-    expect(stripEmbeddedHistory(null)).toBeNull()
-  })
-
-  it('buildReplyThreadV2 keeps the order, strips nested history and drops local read markers', () => {
+describe('reply history: references only (1.0.1)', () => {
+  it('buildReplyThreadV2 keeps the order and the reference shape, drops copies and local read markers', () => {
     const thread = buildReplyThreadV2(original, 'MAIL_PRIVATE')
-    expect(thread).toHaveLength(2)
-    expect(thread[0].reference).toEqual({ identifier: 'id-0', name: 'Bob', service: 'MAIL_PRIVATE' })
-    expect(thread[0].data).toEqual({ id: 'id-0', user: 'Bob', createdAt: 50, textContentV2: '<p>zero</p>' })
-    expect(thread[1].reference).toEqual({ identifier: 'id-1', name: 'Ali', service: 'MAIL_PRIVATE' })
-    expect(thread[1].data.generalData).toBeUndefined()
-    expect(thread[1].data.user).toBe('Ali')
-    expect(JSON.stringify(thread)).not.toContain('markedAsReadLocally')
+    expect(thread).toEqual([
+      { reference: { identifier: 'id-0', name: 'Bob', service: 'MAIL_PRIVATE' } },
+      { reference: { identifier: 'id-1', name: 'Ali', service: 'MAIL_PRIVATE' } },
+    ])
+    expect(JSON.stringify(thread)).not.toContain('"data"')
+    expect(JSON.stringify(thread)).not.toContain('zero')
     expect(JSON.stringify(thread)).not.toContain('deep')
   })
 
-  it('the payload no longer grows geometrically', () => {
-    let message: any = { id: 'm0', user: 'A', createdAt: 1, textContentV2: '<p>x</p>', generalData: { thread: [], threadV2: [] } }
+  it('takes the reference of an embedded copy that has none from its id and user, and skips repeats', () => {
+    const replyTo = {
+      id: 'm3',
+      user: 'Ali',
+      generalData: {
+        threadV2: [
+          { data: { id: 'm1', user: 'Bob', textContentV2: '<p>old</p>' } },
+          { reference: { identifier: 'm1', name: 'bob', service: 'MAIL_PRIVATE' } },
+          { reference: { identifier: 'm2', name: 'Ali' } },
+          { reference: { identifier: 'x', name: 'Ali', service: 'MAIL' } },
+          { reference: { identifier: 'm3', name: 'Ali', service: 'MAIL_PRIVATE' } },
+          { data: { subject: 'no id' } },
+          null,
+        ],
+      },
+    }
+    expect(buildReplyThreadV2(replyTo, 'MAIL_PRIVATE').map(entry => entry.reference.identifier)).toEqual(['m1', 'm2', 'm3'])
+  })
+
+  it(`keeps the newest ${REPLY_HISTORY_MAX_REFERENCES} references, the replied-to message last`, () => {
+    const replyTo = {
+      id: 'last',
+      user: 'Ali',
+      generalData: { threadV2: Array.from({ length: 30 }, (_, i) => ({ reference: { identifier: `m${i}`, name: 'Bob', service: 'MAIL_PRIVATE' } })) },
+    }
+    const thread = buildReplyThreadV2(replyTo, 'MAIL_PRIVATE')
+    expect(REPLY_HISTORY_MAX_REFERENCES).toBe(10)
+    expect(thread).toHaveLength(REPLY_HISTORY_MAX_REFERENCES)
+    expect(thread[0].reference.identifier).toBe('m21')
+    expect(thread[thread.length - 1].reference).toEqual({ identifier: 'last', name: 'Ali', service: 'MAIL_PRIVATE' })
+  })
+
+  it('a reply no longer grows with the conversation', () => {
+    const body = (hop: number) => `<p>${`reply ${hop} `.repeat(30)}</p>`
+    let message: any = { id: 'm0', user: 'A', createdAt: 1, textContentV2: body(0), generalData: { thread: [], threadV2: [] } }
     const sizes: number[] = []
-    for (let hop = 1; hop <= 6; hop += 1) {
+    for (let hop = 1; hop <= 50; hop += 1) {
       const next = buildDirectMailObject({
         subject: 'Re: x',
         createdAt: hop + 1,
         attachments: [],
-        textContentV2: '<p>y</p>',
+        textContentV2: body(hop),
         recipient: 'B',
         replyTo: message,
         service: 'MAIL_PRIVATE',
       })
       sizes.push(JSON.stringify(next).length)
-      message = { ...next, id: `m${hop}`, user: hop % 2 ? 'B' : 'A' }
+      message = { ...next, id: `_mail_qortal_qmail_B_abc123_mail_${hop}`, user: hop % 2 ? 'B' : 'A' }
     }
-    // linear growth: each hop adds about one stripped message
-    const deltas = sizes.slice(1).map((size, i) => size - sizes[i])
-    const spread = Math.max(...deltas) - Math.min(...deltas)
-    expect(spread).toBeLessThan(40)
-    expect(sizes[5]).toBeLessThan(sizes[0] * 8)
+    // Only references grow, until the cap: then not at all.
+    expect(sizes[49]).toBe(sizes[39])
+    expect(sizes[49]).toBeLessThan(3000)
+    expect(JSON.stringify(message)).not.toContain('reply 1 ')
   })
 })
 
@@ -281,7 +289,7 @@ describe('buildDirectMailObject', () => {
       cc: [],
     })
   })
-  it('appends the reply history only for replies', () => {
+  it('appends the reply history references only for replies', () => {
     const mail = buildDirectMailObject({
       subject: 'Re: Hi',
       createdAt: 200,
@@ -291,8 +299,13 @@ describe('buildDirectMailObject', () => {
       replyTo: original,
       service: 'MAIL_PRIVATE',
     })
-    expect(mail.generalData.threadV2).toHaveLength(2)
-    expect(mail.generalData.threadV2[1].data.id).toBe('id-1')
+    expect(mail.generalData).toEqual({
+      thread: [],
+      threadV2: [
+        { reference: { identifier: 'id-0', name: 'Bob', service: 'MAIL_PRIVATE' } },
+        { reference: { identifier: 'id-1', name: 'Ali', service: 'MAIL_PRIVATE' } },
+      ],
+    })
   })
 })
 
@@ -302,6 +315,21 @@ describe('identifiers (binding)', () => {
       '_mail_qortal_qmail_averyveryverylongnam_XYZ123_mail_sid'
     )
     expect(aliasMailIdentifier('my alias_x', 'sid')).toBe('_mail_qortal_qmail_my alias_x_mail_sid')
+  })
+})
+
+describe('replyFromOwnName', () => {
+  it('replies from the own name the mail was sent to, spelt as we own it', () => {
+    const own = ['Simon James', 'POS+', 'MA\'s']
+    expect(replyFromOwnName({ user: 'Ali', recipient: 'pos+' }, own)).toBe('POS+')
+    expect(replyFromOwnName({ user: 'Ali', recipient: 'Simon James' }, own)).toBe('Simon James')
+  })
+  it('is null for mail to someone else, without a recipient, or to a name we no longer own', () => {
+    const own = ['Simon James', 'POS+']
+    expect(replyFromOwnName({ user: 'POS+', recipient: 'Ali' }, own)).toBeNull()
+    expect(replyFromOwnName({ user: 'Ali' }, own)).toBeNull()
+    expect(replyFromOwnName({ user: 'Ali', recipient: 'Sold Name' }, own)).toBeNull()
+    expect(replyFromOwnName(null, own)).toBeNull()
   })
 })
 
@@ -419,7 +447,9 @@ describe('buildDirectMailPublishRequest (the whole publish, binding §3/§4)', (
       mail: { ...mail, replyTo: original }, encode,
     })
     request.resources.forEach(resource => {
-      expect(decode(resource.data64).generalData.threadV2).toHaveLength(2)
+      const thread = decode(resource.data64).generalData.threadV2
+      expect(thread).toHaveLength(2)
+      expect(thread.every((entry: any) => !('data' in entry))).toBe(true)
     })
   })
 })

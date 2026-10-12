@@ -44,7 +44,9 @@ export type ShortcutAction =
   | 'goSent'
   | 'goThreads'
   | 'goAliases'
-  | 'showHelp';
+  | 'showHelp'
+  /** Help only: the browser's own context-menu key opens a row's menu (useContextMenuTrigger). */
+  | 'rowMenu';
 
 /**
  * A handler returns false when it did nothing (for example "open" while a
@@ -63,6 +65,7 @@ export const SHORTCUT_HELP: ReadonlyArray<{ keys: string[]; label: string; actio
   { keys: ['j'], label: 'Next message', action: 'next' },
   { keys: ['k'], label: 'Previous message', action: 'previous' },
   { keys: ['Enter', 'o'], label: 'Open the first message', action: 'open' },
+  { keys: ['Shift+F10'], label: 'Menu for the focused message', action: 'rowMenu' },
   { keys: ['Esc'], label: 'Close the message or composer', action: 'close' },
   { keys: ['/'], label: 'Search', action: 'focusSearch' },
   { keys: ['g', 'i'], label: 'Go to Inbox', action: 'goInbox' },

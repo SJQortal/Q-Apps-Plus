@@ -13,6 +13,15 @@ import {
  * (docs/QORTAL.md → Hub & GO pitfalls 14). Four retries, then the caller
  * says "Not available on your node right now".
  */
+/** The attachments' display names for the subject cache: at most 8, newline-free. */
+export function attachmentNamesForCache(attachments: unknown): string[] {
+  if (!Array.isArray(attachments)) return []
+  return attachments
+    .map((item: any) => String(item?.originalFilename || item?.filename || '').replace(/[\r\n]+/g, ' ').trim())
+    .filter(Boolean)
+    .slice(0, 8)
+}
+
 export const NOT_YET_RETRY_DELAYS_MS = [2000, 4000, 8000, 16000]
 
 export interface FetchMailOptions {
@@ -170,17 +179,31 @@ export const fetchAndEvaluateMail = async (
           }
           if (username) {
             const subjects = JSON.parse(localStorage.getItem(`qmail_persistance_${username}`) || '{}')
-            if (!subjects[messageIdentifier]) {
+            const existing = subjects[messageIdentifier]
+            // Q-Mail+ also keeps the attachments' names (encrypted like the
+            // subject, an extra field Q-Mail ignores) so list rows can show
+            // them; an entry from before gets them the next time it decrypts.
+            const names = attachmentNamesForCache(obj?.attachments)
+            const needsNames = Boolean(existing) && names.length > 0 && !existing.attachmentNames
+            if (!existing || needsNames) {
               const copySubjects = structuredClone(subjects)
-              let subject = obj?.subject || ''
-              if (subject) {
-                subject = await encryptData(subject)
+              let entry = existing ? { ...existing } : null
+              if (!entry) {
+                let subject = obj?.subject || ''
+                if (subject) {
+                  subject = await encryptData(subject)
+                }
+                entry = {
+                  timestamp: Date.now(),
+                  subject: subject || '',
+                  attachments: obj?.attachments?.length > 0 ? true : false
+                }
               }
-              copySubjects[messageIdentifier] = {
-                timestamp: Date.now(),
-                subject: subject || '',
-                attachments: obj?.attachments?.length > 0 ? true : false
+              if (names.length) {
+                const encryptedNames = await encryptData(names.join('\n'))
+                if (encryptedNames) entry.attachmentNames = encryptedNames
               }
+              copySubjects[messageIdentifier] = entry
               localStorage.setItem(`qmail_persistance_${username}`, JSON.stringify(copySubjects))
             }
           }

@@ -29,7 +29,6 @@ import { useDropzone } from "react-dropzone";
 import CloseIcon from "@mui/icons-material/Close";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { useParams } from "react-router-dom";
-import { extensionFromMimeType } from "../../utils/fileExtension";
 import { objectToBase64, toBase64 } from "../../utils/toBase64";
 import {
   MAIL_ATTACHMENT_SERVICE_TYPE,
@@ -45,31 +44,31 @@ import {
 import { TextEditor } from "../../components/common/TextEditor/TextEditor";
 import { toPublishedMailHtml } from "../../components/common/TextEditor/quillHtml";
 import {
-  AttachmentContainer,
   ComposeContainer,
   ComposeIcon,
   ComposeP,
   InstanceFooter,
   InstanceListContainer,
   NewMessageAliasContainer,
-  NewMessageAttachmentImg,
   NewMessageInputLabelP,
   NewMessageInputRow,
 } from "./Mail-styles";
 import ComposeIconSVG from "../../assets/svgs/ComposeIcon.svg";
-import AttachmentSVG from "../../assets/svgs/NewMessageAttachment.svg";
 import { SendNewMessage } from "../../assets/svgs/SendNewMessage";
-import { formatBytes } from "../../utils/displaySize";
+import { ComposeAttachments } from "./ComposeAttachments";
+import { composeItemsFromFiles, extensionOfFile, withinSizeLimit } from "./composeFiles";
+import { AttachDropZone } from "./AttachDropZone";
 import { formatFullTimestamp } from "../../utils/time";
+import { readerMailDate } from "./readerTime";
 import { extractTextFromSlate } from "../../utils/extractTextFromSlate";
 import { CreateThreadIcon } from "../../assets/svgs/CreateThreadIcon";
 import {
   buildDirectMailPublishRequest,
   buildForwardHtml,
-  buildReplyQuoteHtml,
   messageBodyLines,
   recipientActivityByName,
   replyAllRecipients,
+  replyFromOwnName,
   sortNamesByRecency,
   withSubjectPrefix,
 } from "../../utils/mailCompose";
@@ -273,11 +272,6 @@ export const isForwardableAttachment = (reference: AttachmentReference, messageP
   );
 };
 
-const extensionOfFile = (file: File): string | null => {
-  const fromName = file.name.includes(".") ? file.name.split(".").pop() || "" : "";
-  if (fromName) return fromName;
-  return extensionFromMimeType(file.type);
-};
 
 interface NewMessageProps {
   replyTo?: any;
@@ -295,6 +289,12 @@ interface NewMessageProps {
   onRequestClose?: () => void;
   ownedNames?: string[];
   joinedGroups?: JoinedGroupOption[];
+  /**
+   * Offer joined groups as targets (a new group thread). Off while group
+   * threads are hidden (Settings): no group suggestions and no typed name
+   * taken for a group; a group target the composer was opened with still works.
+   */
+  offerGroups?: boolean;
   priorityRecipientNames?: string[];
   /** Inbox rows and opened messages, to order "Recent" names by last contact. */
   recentInboxMessages?: any[];
@@ -374,6 +374,7 @@ export const NewMessage = ({
   onRequestClose,
   ownedNames = NO_NAMES,
   joinedGroups = NO_GROUPS,
+  offerGroups = true,
   priorityRecipientNames = NO_NAMES,
   recentInboxMessages = NO_MESSAGES,
   openedMessagesById,
@@ -443,7 +444,7 @@ export const NewMessage = ({
     request: any;
   } | null>(null);
   const lastLoadedDraftKeyRef = useRef<string | null>(null);
-  // What the composer started with (the reply quote, the forward header, a
+  // What the composer started with (the footer, the forward header, a
   // prefilled subject). Content equal to this is not "something the user
   // wrote", so it is neither saved as a draft nor guarded on Discard.
   const initialValueRef = useRef("");
@@ -561,6 +562,7 @@ export const NewMessage = ({
   }, [knownRecipientNameOptions]);
 
   const joinedGroupTargetOptions = useMemo(() => {
+    if (!offerGroups) return [];
     return joinedGroupOptions.map(group => {
       return {
         id: `group:${String(group.id).trim()}`,
@@ -571,7 +573,7 @@ export const NewMessage = ({
         groupId: String(group.id).trim(),
       };
     });
-  }, [joinedGroupOptions]);
+  }, [joinedGroupOptions, offerGroups]);
 
   const normalizedDestination = useMemo(() => {
     return normalizeValue(destinationName);
@@ -664,9 +666,11 @@ export const NewMessage = ({
       };
     }
 
-    const matchingJoinedGroup = joinedGroupOptions.find(group => {
-      return normalizeValue(group.name) === normalizedInput;
-    });
+    const matchingJoinedGroup = offerGroups
+      ? joinedGroupOptions.find(group => {
+          return normalizeValue(group.name) === normalizedInput;
+        })
+      : undefined;
     if (matchingJoinedGroup) {
       return {
         type: "group",
@@ -679,7 +683,7 @@ export const NewMessage = ({
       type: "name",
       label: destinationName.trim(),
     };
-  }, [destinationName, joinedGroupOptions, selectedTargetOption]);
+  }, [destinationName, joinedGroupOptions, offerGroups, selectedTargetOption]);
 
   const resolvedTarget = useMemo(
     () => resolveComposeTarget(),
@@ -1060,6 +1064,10 @@ export const NewMessage = ({
       setReplyPreviewMode("preview");
       const nextSubject = withSubjectPrefix(replyTo?.subject, "Re");
       initialSubjectRef.current = nextSubject;
+      // Answer as the name the mail was sent to (mail to POS+ is answered as
+      // POS+, not as the active name). A stored draft keeps its own From.
+      const sentToOwnName = replyFromOwnName(replyTo, fromOptions);
+      if (sentToOwnName && !pendingDraftRef.current) setFromName(sentToOwnName);
       if (pendingDraftRef.current) {
         // A stored reply draft is being opened: keep its subject and body.
         initialValueRef.current = "";
@@ -1069,9 +1077,11 @@ export const NewMessage = ({
       setSubject(nextSubject);
       bodyBaselineFrozenRef.current = false;
       hydratedDraftRef.current = false;
-      // Start the editor with the quoted original (Quill 1 markup, so the
-      // original app renders it too). A stored draft for this reply, if any,
-      // replaces it when the draft key resolves.
+      // A reply starts like a new message: a line to type on, then the
+      // footer. The original is shown above the editor for context and is
+      // not copied into the body, so a long conversation does not make each
+      // reply bigger than the last (Qortal DEV's advice, 1.0.1). A stored
+      // draft for this reply, if any, replaces it when the draft key resolves.
       const { fromName: footerName, address: footerAddress } =
         footerContextRef.current;
       const footerBlock = footerBlockFor(
@@ -1080,15 +1090,13 @@ export const NewMessage = ({
         "reply"
       );
       footerRef.current = { block: footerBlock, name: footerName, kind: "reply" };
-      const quoteHtml = buildReplyQuoteHtml({
-        sender: replyTo?.user,
-        sentAt: formatFullTimestamp(replyTo?.createdAt),
-        lines: messageBodyLines(replyTo, extractTextFromSlate),
-        footerBlock,
-      });
-      setValue(quoteHtml);
-      initialValueRef.current = quoteHtml;
+      const body = buildNewMessageBody(footerBlock);
+      setValue(body);
+      initialValueRef.current = body;
     }
+    // Only a new reply sets the composer up: a change of the owned names
+    // later must not reset what the user has written.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [replyTo]);
 
   // Reply all: everyone from the original's to/cc (minus our own names and
@@ -1295,7 +1303,7 @@ export const NewMessage = ({
     }, 0);
   }, [activeDraftKey, user?.address]);
 
-  // Something the user wrote (not the quote, the Re: subject or Reply all's
+  // Something the user wrote (not the footer, the Re: subject or Reply all's
   // own Cc names): only that is saved as a draft or guarded on Discard.
   const composerHasContent = useCallback(
     () =>
@@ -1410,48 +1418,35 @@ export const NewMessage = ({
       : replyPreviewText;
   }, [replyBodyText, replyPreviewMode, replyPreviewText]);
 
-  const { getRootProps, getInputProps } = useDropzone({
+  // The drop zone is the attach row; its button opens the file picker.
+  const dropzone = useDropzone({
     maxSize,
-    onDrop: async acceptedFiles => {
-      const files: any[] = [];
-      try {
-        acceptedFiles.forEach(item => {
-          const type = item?.type;
-          if (!type) {
-            files.push({
-              file: item,
-              mimetype: null,
-              extension: null,
-            });
-            return;
-          }
-
-          const extension = extensionFromMimeType(type);
-          files.push({
-            file: item,
-            mimetype: type,
-            extension: extension || null,
-          });
-        });
-      } catch {
-        dispatch(
-          setNotification({
-            msg: "One of your files is corrupted",
-            alertType: "error",
-          })
-        );
-      }
-      setAttachments(prev => [...prev, ...files]);
+    noClick: true,
+    noKeyboard: true,
+    onDrop: acceptedFiles => {
+      setAttachments(prev => [...prev, ...composeItemsFromFiles(acceptedFiles)]);
     },
     onDropRejected: () => {
       dispatch(
         setNotification({
-          msg: "One of your files is over the 40mb limit",
+          msg: "One of your files is over the 40 MB limit",
           alertType: "error",
         })
       );
     },
   });
+
+  // Files dropped on the editor are attached, as on the attach row.
+  const attachDroppedFiles = useCallback(
+    (files: File[]) => {
+      const { accepted, tooBig } = withinSizeLimit(files, maxSize);
+      if (accepted.length) setAttachments(prev => [...prev, ...composeItemsFromFiles(accepted)]);
+      if (tooBig.length) {
+        dispatch(setNotification({ msg: `Over the 40 MB limit: ${tooBig.join(", ")}`, alertType: "error" }));
+      }
+    },
+    [dispatch]
+  );
 
   const buildAttachmentPayloads = useCallback(
     async (
@@ -2089,7 +2084,7 @@ export const NewMessage = ({
                     <TextField
                       {...params}
                       variant="standard"
-                      placeholder="Type a name or joined group"
+                      placeholder={offerGroups ? "Type a name or joined group" : "Type a name"}
                       sx={[
                         {
                           width: "100%",
@@ -2289,7 +2284,9 @@ export const NewMessage = ({
                   ? <><NameText name={recipientCheck.name} /> is a registered name</>
                   : recipientCheck?.status === "checking"
                   ? "Checking the name…"
-                  : "Type to search joined groups and registered names."}
+                  : offerGroups
+                  ? "Type to search joined groups and registered names."
+                  : "Type to search registered names."}
               </Typography>
             </Box>
           )}
@@ -2464,70 +2461,12 @@ export const NewMessage = ({
             />
           </NewMessageInputRow>
 
-          <AttachmentContainer
-            {...getRootProps()}
-            sx={{
-              width: "fit-content",
-            }}
-          >
-            <input {...getInputProps()} />
-            <NewMessageAttachmentImg src={AttachmentSVG} alt="Attach files" />
-          </AttachmentContainer>
+          <AttachDropZone dropzone={dropzone} count={attachments.length} />
 
-          {attachments.map(({ file, extension, forwardKey }, index) => {
-            return (
-              <Box
-                key={`${file?.name || "attachment"}-${index}`}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  minWidth: 0,
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontSize: "1rem",
-                    minWidth: 0,
-                    overflowWrap: "anywhere",
-                    color: !extension
-                      ? "var(--qmail-danger-text)"
-                      : "var(--qmail-compose-text)",
-                  }}
-                >
-                  {file?.name} ({formatBytes(file?.size || 0)})
-                  {forwardKey ? " · forwarded" : ""}
-                </Typography>
-                <IconButton
-                  aria-label={`Remove attachment ${file?.name || ""}`}
-                  onClick={() =>
-                    setAttachments(prev =>
-                      prev.filter((item, itemIndex) => itemIndex !== index)
-                    )
-                  }
-                  size="small"
-                  sx={{
-                    minWidth: 44,
-                    minHeight: 44,
-                    color: "var(--qmail-compose-muted)",
-                  }}
-                >
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-                {!extension && (
-                  <Typography
-                    sx={{
-                      fontSize: "0.875rem",
-                      fontWeight: "bold",
-                      color: "var(--qmail-danger-text)",
-                    }}
-                  >
-                    This file has no extension
-                  </Typography>
-                )}
-              </Box>
-            );
-          })}
+          <ComposeAttachments
+            attachments={attachments}
+            onRemove={index => setAttachments(prev => prev.filter((item, itemIndex) => itemIndex !== index))}
+          />
 
           {refusedForwardAttachments.map((label, index) => (
             <Typography
@@ -2736,8 +2675,8 @@ export const NewMessage = ({
                   color: "var(--qmail-compose-muted)",
                 }}
               >
-                {formatFullTimestamp(replyTo?.createdAt)} •{" "}
-                {replyTo?.subject || "- no subject -"}
+                {readerMailDate(replyTo?.createdAt)} •{" "}
+                {typeof replyTo?.subject === "string" && replyTo.subject ? replyTo.subject : "- no subject -"}
               </Typography>
               <Typography
                 sx={{
@@ -2745,13 +2684,13 @@ export const NewMessage = ({
                   color: "var(--qmail-compose-muted)",
                 }}
               >
-                The original is quoted in your reply below, and the message
-                itself travels with the reply as thread history.
+                Shown here for context only. Your reply links to this
+                message instead of copying it, so it stays small.
               </Typography>
               {replyPreviewMode !== "hidden" && (
                 <Box
                   role="region"
-                  aria-label="Quoted original message"
+                  aria-label="Original message"
                   tabIndex={0}
                   sx={[{
                     overflowY: "auto",
@@ -2794,6 +2733,7 @@ export const NewMessage = ({
           >
             <TextEditor
               className="qmail-compose-editor"
+              onDropFiles={attachDroppedFiles}
               inlineContent={value}
               setInlineContent={(val: string, source?: string) => {
                 if (source === "user") {

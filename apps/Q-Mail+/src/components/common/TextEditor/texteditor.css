@@ -121,11 +121,28 @@
 }
 
 .qmail-editor-root {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
+}
+
+/* Files dragged over the editor: they will be attached (TextEditor onDropFiles). */
+.qmail-editor-drop {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--qp-primary);
+  border-radius: var(--qp-radius-card, 12px);
+  background-color: var(--qp-primary-soft);
+  color: var(--qp-primary);
+  font-weight: 600;
+  pointer-events: none;
 }
 
 .qmail-editor-root .quill {
@@ -248,4 +265,9 @@
 .qmail-compose-editor .ql-editor.ql-blank::before {
   color: var(--qmail-compose-placeholder);
   font-style: normal;
+}
+
+/* Typing a first word on a phone: Quill still says "blank" (TextEditor.tsx). */
+.qmail-editor-root .ql-editor.ql-blank.qmail-has-text::before {
+  display: none;
 }

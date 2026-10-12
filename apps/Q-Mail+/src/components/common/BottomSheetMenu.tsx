@@ -12,6 +12,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import {
   Box,
   List,
+  ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
@@ -21,6 +22,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useLayoutMode } from '../../layout/useLayoutMode';
+import { OverlayBackClose } from '../../layout/OverlayBackClose';
 
 export interface SheetMenuItem {
   id: string;
@@ -36,15 +38,20 @@ export interface BottomSheetMenuProps {
   onClose: () => void;
   /** Anchor for the desktop Menu; ignored for the phone sheet. */
   anchorEl: HTMLElement | null;
+  /** Instead of `anchorEl`: the point the desktop Menu opens at (a right click). */
+  anchorPosition?: { top: number; left: number } | null;
   items: SheetMenuItem[];
   /** Shown above the items on phones. */
   title?: ReactNode;
+  /** Names the menu's dialog, e.g. "Actions for Alice". */
   ariaLabel?: string;
+  /** After the close transition: the caller may unmount the menu. */
+  onExited?: () => void;
 }
 
 const noop = () => {};
 
-export function BottomSheetMenu({ open, onClose, anchorEl, items, title, ariaLabel }: BottomSheetMenuProps) {
+export function BottomSheetMenu({ open, onClose, anchorEl, anchorPosition, items, title, ariaLabel, onExited }: BottomSheetMenuProps) {
   const isPhone = useLayoutMode() === 'phone';
   const [everOpened, setEverOpened] = useState(open);
   useEffect(() => {
@@ -56,10 +63,15 @@ export function BottomSheetMenu({ open, onClose, anchorEl, items, title, ariaLab
   if (!isPhone) {
     return (
       <Menu
-        anchorEl={anchorEl}
-        open={open && Boolean(anchorEl)}
+        {...(anchorPosition
+          ? { anchorReference: 'anchorPosition' as const, anchorPosition }
+          : { anchorEl })}
+        open={open && Boolean(anchorPosition || anchorEl)}
         onClose={onClose}
-        slotProps={{ list: { 'aria-label': ariaLabel } as any }}
+        // A named dialog around the menu, as Q-Share+'s account menu: the
+        // popup's content then sits in a region (axe "region").
+        // The menu inside is not named again (it would be read twice).
+        slotProps={{ paper: { role: 'dialog', 'aria-label': ariaLabel } as any, transition: { onExited } as any }}
       >
         {items.map((item) => (
           <MenuItem
@@ -70,7 +82,9 @@ export function BottomSheetMenu({ open, onClose, anchorEl, items, title, ariaLab
               onClose();
               item.onSelect();
             }}
-            sx={{ minHeight: 44, gap: 1.5 }}
+            // MUI drops a menu item to its text height from 600 px: keep 44 px
+            // for touch (a phone held sideways is wider than 600 px).
+            sx={{ minHeight: 44, gap: 1.5, '@media (min-width: 600px)': { minHeight: 44 } }}
           >
             {item.icon && <ListItemIcon sx={{ minWidth: 32 }}>{item.icon}</ListItemIcon>}
             {item.label}
@@ -81,6 +95,9 @@ export function BottomSheetMenu({ open, onClose, anchorEl, items, title, ariaLab
   }
 
   return (
+    <>
+    {/* Back closes the sheet, not the pane under it. */}
+    <OverlayBackClose open={open} onClose={onClose} />
     <SwipeableDrawer
       anchor="bottom"
       open={open}
@@ -88,7 +105,10 @@ export function BottomSheetMenu({ open, onClose, anchorEl, items, title, ariaLab
       onOpen={noop}
       disableSwipeToOpen
       slotProps={{
+        transition: { onExited } as any,
         paper: {
+          role: 'dialog',
+          'aria-label': ariaLabel,
           sx: (theme) => ({
             borderTopLeftRadius: 16,
             borderTopRightRadius: 16,
@@ -122,26 +142,37 @@ export function BottomSheetMenu({ open, onClose, anchorEl, items, title, ariaLab
           {title}
         </Typography>
       )}
-      <List aria-label={ariaLabel} sx={{ pb: 1 }}>
+      <List sx={{ pb: 1 }}>
         {items.map((item) => (
-          <ListItemButton
-            key={item.id}
-            selected={item.selected}
-            disabled={item.disabled}
-            onClick={() => {
-              onClose();
-              item.onSelect();
-            }}
-            sx={{ minHeight: 48, px: 2.5 }}
-          >
-            {item.icon && <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>}
+          <ListItem key={item.id} disablePadding>
+            <ListItemButton
+              selected={item.selected}
+              disabled={item.disabled}
+              onClick={() => {
+                onClose();
+                item.onSelect();
+              }}
+              sx={{ minHeight: 48, px: 2.5 }}
+            >
+              {item.icon && <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>}
+              <ListItemText
+                primary={item.label}
+                slotProps={{ primary: { sx: { fontSize: '1rem', fontWeight: item.selected ? 600 : 400 } } }}
+              />
+            </ListItemButton>
+          </ListItem>
+        ))}
+        {/* A way out that doesn't need a swipe, the backdrop or a Back gesture (screen readers). */}
+        <ListItem disablePadding sx={(theme) => ({ borderTop: `1px solid ${theme.palette.divider}`, mt: 0.5 })}>
+          <ListItemButton onClick={onClose} sx={{ minHeight: 48, px: 2.5, justifyContent: 'center' }}>
             <ListItemText
-              primary={item.label}
-              slotProps={{ primary: { sx: { fontSize: '1rem', fontWeight: item.selected ? 600 : 400 } } }}
+              primary="Cancel"
+              slotProps={{ primary: { sx: { fontSize: '1rem', fontWeight: 600, textAlign: 'center', color: 'text.secondary' } } }}
             />
           </ListItemButton>
-        ))}
+        </ListItem>
       </List>
     </SwipeableDrawer>
+    </>
   );
 }
