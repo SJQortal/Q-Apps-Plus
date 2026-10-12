@@ -24,7 +24,7 @@ The theme kit in `src/hub-theme/` is a copy of `shared/hub-theme` in the monorep
 
 ## Merging this back into Q-Mail
 
-Q-Mail+ goes back to [Qortal/q-mail](https://github.com/Qortal/q-mail) as a pull request, prepared with `scripts/upstream-pr.sh Q-Mail+` (docs/RELEASE.md, stage 4):
+Q-Mail+ goes back to [Qortal/q-mail](https://github.com/Qortal/q-mail) as a pull request, prepared with `scripts/upstream-pr.sh Q-Mail+` (docs/RELEASE.md, stage 4). The first one is [Qortal/q-mail#7](https://github.com/Qortal/q-mail/pull/7) (Q-Mail 4.0.0, from 1.0.2).
 
 - **The branch** is this folder's history split out of `main` with `git subtree split`, on top of Qortal/q-mail `main` (`ddf3aa9`, imported with `git subtree`), so the PR is a fast-forward while upstream hasn't moved. `scripts/upstream-pr.sh Q-Mail+ --check` says whether it still is.
 - **The last commit, "Ship as Q-Mail 4.0.0",** turns the + build back into Q-Mail. What it changes is what is specific to the + build:

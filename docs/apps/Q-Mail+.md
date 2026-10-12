@@ -4,7 +4,9 @@ Encrypted mail between Qortal names, with threads, attachments and group mail.
 
 **Published:** `1.0.2` on 2026-10-12, as the QDN `APP` resource `Q-Mail+`, built from commit `a0af8e4b`. Checked on 2026-10-12: the live `index.html` references the same 61 content-hashed files as `release/Q-Mail+.zip` and as a fresh build of the branch; Simon checked it in GO on his phone. (`1.0.1` on 2026-10-08, from `63bb8d62`; `1.0.0` on 2026-10-05, from `a128d290`.)
 
-**Version on the branch:** `1.0.2`, published (PR #21). Next: the PR to Qortal/q-mail as Q-Mail 4.0.0 (Done → Upstream PR preparation). The branch [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) stops at 1.0.0; the PR replaces it.
+**Upstream PR:** [Qortal/q-mail#7](https://github.com/Qortal/q-mail/pull/7), Q-Mail 4.0.0, opened 2026-10-12 from `SJQortal:q-mail-4.0.0` (`a55ac553`, 291 commits, a fast-forward of Qortal's `main` at `ddf3aa9`).
+
+**Version on the branch:** `1.0.2`, published and merged into `main` (PR #21, `bd5e7d25`). The branch [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) stops at 1.0.0; the upstream PR replaces it.
 
 ## Baseline at import
 
@@ -1743,11 +1745,12 @@ Simon called Q-Mail+ ready for its PR to Qortal/q-mail (docs/RELEASE.md, stage 4
 - a README for the Qortal repo (what's new, develop, publish, data, notes for maintainers), comments that cite this brief linked to it on GitHub, and `e2e/screens.mjs` (Q-Share's standalone copy of `scripts/screens.mjs`).
 Checks in the split: 870 tests, lint, types and the build pass (main chunk 375.9 kB, the same as 1.0.2), and `node e2e/screens.mjs` in four themes, dark: 612 captures with 0 sideways overflow, 0 unlabelled buttons and 0 axe violations. One capture (threads at 1280 in Hub 3.0) failed with `ERR_NETWORK_CHANGED` while the host's network changed, and was clean on a re-run. Light: 612 captures, all clean. The PR text is drafted from `docs/templates/upstream-pr.md` for Simon to read.
 
-**From here:**
-1. ~~Simon publishes `release/Q-Mail+.zip` as 1.0.2~~ (done 2026-10-12; the live files match); PR #21 is merged (a merge commit), so `main` has 1.0.1 and 1.0.2. Auto mode refused the merge from this session ("merge without review"), so it waits for Simon. A local dry run of that merge splits into 290 commits, and with the "Ship as" commit on top the tree is byte-identical to the checked one (the only conflict is the README, which the "Ship as" version replaces). In the prepared repo, `npm ci` from scratch, 870 tests, lint and the build pass.
-2. `scripts/upstream-pr.sh Q-Mail+` splits `apps/Q-Mail+` from `origin/main` into `q-mail-upstream/4.0.0`; the "Ship as" commit goes on top (the same tree), then `npm ci` and the checks again.
-3. Simon reads the PR text. After his yes: `scripts/upstream-pr.sh Q-Mail+ --push --version 4.0.0` (fork SJQortal/q-mail) and `gh pr create --repo Qortal/q-mail`.
-4. The PR's link goes in this brief and in docs/PROGRESS.md (a `Repo:` commit).
+**Done (2026-10-12):**
+1. Simon published 1.0.2 (the live files match `release/Q-Mail+.zip`) and merged PR #21 himself (`bd5e7d25`; auto mode refused the merge from this session as "merge without review").
+2. `scripts/upstream-pr.sh Q-Mail+` split `apps/Q-Mail+` from `origin/main` into `q-mail-upstream/4.0.0`: 290 commits, the same hashes as the dry run. The "Ship as" commit went on top (`a55ac553`; the README conflict resolved to the "Ship as" version), and the files are byte-identical to the checked build. On that branch: a clean `npm ci`, 870 tests, lint, the build and the screenshot check (inbox, message, composer, Settings, What's new in Hub 3.0 and White: 50 captures, clean).
+3. Simon approved the PR text. `scripts/upstream-pr.sh Q-Mail+ --push --version 4.0.0` forked Qortal/q-mail to [SJQortal/q-mail](https://github.com/SJQortal/q-mail) and pushed the branch as `q-mail-4.0.0`; `gh pr create` opened [Qortal/q-mail#7](https://github.com/Qortal/q-mail/pull/7) (291 commits, 424 files, mergeable).
+
+**Next:** answer the review on #7 on the same branch (fix in `.worktrees/upstream-q-mail`, then `--push --version 4.0.0` again; the PR updates itself). Later 1.0.x releases of Q-Mail+ go up as a new `--version`, as docs/RELEASE.md describes.
 
 ## Community feedback
 
