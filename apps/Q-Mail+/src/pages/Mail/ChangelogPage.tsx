@@ -15,6 +15,7 @@ const changelogEntries: ChangelogEntry[] = [
       "Swipe back on phones: swipe right to close an open message, the composer, a preview, a dialog or Settings, as Back does; swipe left to close the mailboxes menu. An arrow shows when letting go will close.",
       "On a phone, \"Write your message here\" disappears as soon as you start typing.",
       "Settings opens from the gear at the top on phones; the mailboxes menu no longer lists a Settings item that did nothing.",
+      "On a phone, the top bar no longer flickers in and out at certain scroll positions (a reply with the keyboard down).",
     ],
   },
   {

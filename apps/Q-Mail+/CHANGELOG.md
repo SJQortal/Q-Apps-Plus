@@ -11,6 +11,7 @@
 **Fixes**
 - On a phone, "Write your message here" disappears as soon as you start typing. It stayed under the first word until the keyboard finished it.
 - Settings in the phone's mailboxes menu did nothing. The menu no longer lists it: the gear at the top opens Settings.
+- On a phone, the bar at the top (with "Reply all", "New message" or the message's subject) no longer flickers in and out at certain scroll positions. It happened on pages only a little taller than the screen, such as a reply with the keyboard down. A page with little to scroll now keeps its bar.
 
 ## 1.0.1 (Q-Mail+) - October 8, 2026
 
