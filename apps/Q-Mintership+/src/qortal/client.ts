@@ -1,7 +1,8 @@
 /**
  * The two ways a Q-App reaches Qortal: `qortalRequest` (Hub's bridge, needed
  * for anything that signs, publishes or reads the user's account) and
- * relative `fetch('/…')` to Core's REST API for public reads.
+ * relative `fetch('/…')` to Core's REST API for public reads. The app only
+ * ever GETs from Core: every write goes through Hub, which shows it first.
  */
 
 type HostRequest = (request: Record<string, unknown>) => Promise<unknown>;
@@ -74,20 +75,6 @@ export async function coreJson<T>(path: string): Promise<T> {
 export async function coreText(path: string): Promise<string> {
   const response = await coreGet(path, 'text/plain');
   if (!response.ok) throw new CoreHttpError(path, response.status, await safeText(response));
-  return response.text();
-}
-
-/** POST a JSON body to a transaction builder; Core answers with the raw unsigned tx as text. */
-export async function corePostJsonForText(path: string, payload: unknown): Promise<string> {
-  const response = await fetch(coreUrl(path), {
-    method: 'POST',
-    headers: { Accept: 'text/plain', 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok) {
-    const body = await safeText(response);
-    throw new Error(`Failed to create transaction: ${response.status}, ${body}`);
-  }
   return response.text();
 }
 

@@ -38,7 +38,10 @@ export const CLASSIC_LIGHT = {
 
 const FONT_STACK = ['"DM Sans"', '"Space Grotesk"', 'Inter', 'system-ui', 'sans-serif'].join(',');
 
-function classicOptions(p: typeof CLASSIC_DARK | typeof CLASSIC_LIGHT, mode: 'light' | 'dark'): ThemeOptions {
+function classicOptions(
+  p: typeof CLASSIC_DARK | typeof CLASSIC_LIGHT,
+  mode: 'light' | 'dark'
+): ThemeOptions {
   return {
     palette: {
       mode,

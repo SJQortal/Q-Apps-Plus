@@ -1,0 +1,85 @@
+/**
+ * A compact decision: what it does, who it is about, k of n and the time
+ * left, and whether you have signed. Links to the decision in the queue.
+ * (The full card with Sign lives on the Decisions screen.)
+ */
+import { Link as RouterLink } from 'react-router-dom';
+import { Box, Chip, Typography } from '@mui/material';
+import type { ChainNow } from '../../data/chain';
+import { KIND_LABEL, type Decision } from '../../rules/decision';
+import { signerState } from '../../rules/tally';
+import { decisionPath } from '../../routes/paths';
+import { usePendingWrite, writeKeys } from '../../writes/optimistic';
+import { Countdown } from '../common/Countdown';
+import { useDisplayName } from '../../hooks/useDisplayName';
+import { NameAvatar } from '../common/NameAvatar';
+import { ProgressRing } from '../common/ProgressRing';
+import { DecisionPhaseChip } from '../common/Section';
+
+export function DecisionRow({
+  decision: d,
+  now,
+  myPublicKey,
+}: {
+  decision: Decision;
+  now: ChainNow;
+  myPublicKey?: string;
+}) {
+  const subject = useDisplayName(d.subject ?? '', d.subject ? undefined : null);
+  const pending = usePendingWrite(writeKeys.sign(d.signature));
+  const mine = d.tally && myPublicKey ? signerState(d.tally, myPublicKey) : 'none';
+  const signed = mine === 'signed' || mine === 'confirming' || pending?.status === 'confirming';
+  const who = d.subject ? subject.label : 'someone (Core does not say who)';
+  return (
+    <Box
+      component={RouterLink}
+      to={decisionPath(d.signature)}
+      aria-label={`${KIND_LABEL[d.kind]}: ${who}. ${d.tally ? `${d.tally.approvalCount} of ${d.tally.needed} signatures.` : ''}${signed ? ' You signed.' : ''}`}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.5,
+        p: 1.5,
+        minHeight: 44,
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 1,
+        bgcolor: 'background.paper',
+        color: 'inherit',
+        textDecoration: 'none',
+        transition: 'background-color 160ms ease',
+        '&:hover': { bgcolor: 'action.hover' },
+        '&:focus-visible': { outline: 2, outlineColor: 'primary.main', outlineStyle: 'solid' },
+      }}
+    >
+      <NameAvatar name={d.subject ? subject.name : null} size={36} />
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
+          {KIND_LABEL[d.kind]}: {who}
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mt: 0.5 }}>
+          {d.window && (d.phase === 'open' || d.phase === 'early') ? (
+            <Countdown now={now} height={d.window.lastUsefulSignatureHeight} suffix="left" />
+          ) : (
+            <DecisionPhaseChip phase={d.phase} />
+          )}
+          {signed ? (
+            <Chip
+              size="small"
+              color="success"
+              label={mine === 'signed' ? 'Signed ✓' : 'Signed ✓ (confirming…)'}
+            />
+          ) : null}
+        </Box>
+      </Box>
+      {d.tally ? (
+        <ProgressRing
+          value={d.tally.approvalCount}
+          target={d.tally.needed}
+          pending={d.tally.inFlight.filter((x) => x.approval).length}
+          size={48}
+        />
+      ) : null}
+    </Box>
+  );
+}

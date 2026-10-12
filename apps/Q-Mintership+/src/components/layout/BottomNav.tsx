@@ -1,7 +1,8 @@
+import { Badge } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { headerFill, primarySoft } from '../../hub-theme';
-import { isNavActive, NAV_ITEMS } from './navItems';
+import { isNavActive, phoneItems } from './navItems';
 
 export const BOTTOM_NAV_HEIGHT = 60;
 
@@ -26,6 +27,7 @@ const Item = styled('button', {
 })<{ $active?: boolean }>(({ theme, $active }) => ({
   flex: 1,
   minWidth: 0,
+  minHeight: 44,
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
@@ -36,43 +38,61 @@ const Item = styled('button', {
   color: $active ? theme.palette.primary.main : theme.palette.text.secondary,
   cursor: 'pointer',
   font: 'inherit',
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: $active ? 700 : 500,
   transition: 'color 160ms ease',
   '& svg': {
-    fontSize: 26,
-    padding: 2,
+    fontSize: 24,
+    padding: '2px 12px',
     borderRadius: 999,
-    backgroundColor: $active ? primarySoft(theme) : 'transparent',
     boxSizing: 'content-box',
-    paddingLeft: 10,
-    paddingRight: 10,
+    backgroundColor: $active ? primarySoft(theme) : 'transparent',
     transition: 'background-color 160ms ease',
   },
-  '&:focus-visible': {
-    outline: `2px solid ${theme.palette.primary.main}`,
-    outlineOffset: -2,
-  },
+  '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
 }));
 
-export function BottomNav() {
+const Label = styled('span')({
+  maxWidth: '100%',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  padding: '0 2px',
+});
+
+export function BottomNav({
+  isAdmin,
+  decisionsBadge = 0,
+}: {
+  isAdmin: boolean;
+  decisionsBadge?: number;
+}) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   return (
-    <Bar aria-label="Navigation">
-      {NAV_ITEMS.filter((item) => item.phone).map(({ label, path, Icon }) => {
+    <Bar aria-label="Main">
+      {phoneItems(isAdmin).map(({ key, label, short, path, Icon }) => {
         const active = isNavActive(pathname, path);
+        const badge = key === 'decisions' ? decisionsBadge : 0;
         return (
           <Item
-            key={path}
+            key={key}
             type="button"
             $active={active}
             aria-current={active ? 'page' : undefined}
-            aria-label={label}
             onClick={() => navigate(path)}
           >
-            <Icon />
-            <span>{label === 'Minter Board' ? 'Minters' : label}</span>
+            <Badge
+              badgeContent={badge}
+              color="error"
+              max={99}
+              overlap="circular"
+              slotProps={{ badge: { 'aria-hidden': true } }}
+            >
+              <Icon aria-hidden />
+            </Badge>
+            <Label>{short ?? label}</Label>
+            {badge ? <span className="qmp-visually-hidden">, {badge} waiting for you</span> : null}
           </Item>
         );
       })}

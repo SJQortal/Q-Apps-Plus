@@ -71,14 +71,16 @@ describe('buildBoardRouteHash', () => {
 });
 
 describe('legacyHashToPath', () => {
-  it('maps board hashes onto React routes', () => {
+  it('opens old cards read-only in History and boards on the screens that replaced them', () => {
     expect(legacyHashToPath('#/minter/Minter-board-card-abc/comments')).toBe(
-      '/minters/Minter-board-card-abc/comments'
+      '/history/card/Minter-board-card-abc/comments'
     );
-    expect(legacyHashToPath('#/admin/card-MAC-1')).toBe('/admin-board/card-MAC-1');
-    expect(legacyHashToPath('#/mam/QM-AR-card-1')).toBe('/mam/QM-AR-card-1');
-    expect(legacyHashToPath('#/stats')).toBe('/stats');
-    expect(legacyHashToPath('#?board=stats&section=nominator')).toBe('/stats');
+    expect(legacyHashToPath('#/admin/card-MAC-1')).toBe('/history/card/card-MAC-1');
+    expect(legacyHashToPath('#/mam/QM-AR-card-1')).toBe('/history/card/QM-AR-card-1');
+    expect(legacyHashToPath('#/minter')).toBe('/nominations');
+    expect(legacyHashToPath('#/admin')).toBe('/decisions');
+    expect(legacyHashToPath('#/stats')).toBe('/activity');
+    expect(legacyHashToPath('#?board=stats&section=nominator')).toBe('/activity');
   });
 
   it('ignores a hash that names no board', () => {
@@ -89,10 +91,11 @@ describe('legacyHashToPath', () => {
 
 describe('legacyPathToPath', () => {
   it('maps the old nav hrefs', () => {
-    expect(legacyPathToPath('/MINTERS')).toBe('/minters');
-    expect(legacyPathToPath('/render/APP/Q-Mintership+/MINTERSHIP-FORUM')).toBe('/forum');
-    expect(legacyPathToPath('/ADDREMOVEADMIN')).toBe('/mam');
-    expect(legacyPathToPath('/tools')).toBe('/tools');
+    expect(legacyPathToPath('/MINTERS')).toBe('/nominations');
+    expect(legacyPathToPath('/render/APP/Q-Mintership+/MINTERSHIP-FORUM')).toBe('/');
+    expect(legacyPathToPath('/ADDREMOVEADMIN')).toBe('/decisions');
+    expect(legacyPathToPath('/tools')).toBe('/decisions');
+    expect(legacyPathToPath('/STATS')).toBe('/activity');
     expect(legacyPathToPath('/settings')).toBeNull();
     expect(legacyPathToPath('/')).toBeNull();
   });

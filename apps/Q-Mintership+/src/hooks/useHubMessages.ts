@@ -25,7 +25,10 @@ export function useHubMessages() {
       if (data.action === 'NAVIGATE_TO_PATH' && typeof data.path === 'string') {
         navigate(normalizeHubPath(data.path));
         window.parent?.postMessage({ action: 'NAVIGATION_SUCCESS', path: data.path }, '*');
-      } else if (data.action === 'THEME_CHANGED' && (data.theme === 'dark' || data.theme === 'light')) {
+      } else if (
+        data.action === 'THEME_CHANGED' &&
+        (data.theme === 'dark' || data.theme === 'light')
+      ) {
         (window as HubWindow)._qdnTheme = data.theme;
         setHostMode(data.theme);
       }

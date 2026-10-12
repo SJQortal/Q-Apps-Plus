@@ -1,9 +1,10 @@
+import { Badge, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import { Typography } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { headerFill, primarySoft } from '../../hub-theme';
 import { useCompactRail } from '../../hooks/usePhoneLayout';
-import { isNavActive, NAV_ITEMS } from './navItems';
+import { APP_NAME } from '../../constants/plus';
+import { isNavActive, railItems } from './navItems';
 
 export const RAIL_WIDTH = 220;
 export const RAIL_WIDTH_COMPACT = 72;
@@ -12,7 +13,7 @@ const Rail = styled('nav')(({ theme }) => ({
   position: 'sticky',
   top: 0,
   alignSelf: 'flex-start',
-  height: '100dvh',
+  height: 'var(--qmp-app-height, 100dvh)',
   width: RAIL_WIDTH,
   flexShrink: 0,
   display: 'flex',
@@ -36,10 +37,7 @@ const Brand = styled('div')(({ theme }) => ({
   alignItems: 'center',
   gap: theme.spacing(1.25),
   padding: theme.spacing(1, 1.5, 2),
-  [theme.breakpoints.down('md')]: {
-    padding: theme.spacing(1, 0, 2),
-    justifyContent: 'center',
-  },
+  [theme.breakpoints.down('md')]: { padding: theme.spacing(1, 0, 2), justifyContent: 'center' },
 }));
 
 const BrandMark = styled('span')(({ theme }) => ({
@@ -52,7 +50,7 @@ const BrandMark = styled('span')(({ theme }) => ({
   alignItems: 'center',
   justifyContent: 'center',
   fontWeight: 800,
-  fontSize: 15,
+  fontSize: 13,
   flexShrink: 0,
 }));
 
@@ -77,10 +75,7 @@ const NavButton = styled('button', {
   textAlign: 'left',
   transition: 'background-color 160ms ease, color 160ms ease',
   '&:hover': { backgroundColor: $active ? primarySoft(theme) : theme.palette.action.hover },
-  '&:focus-visible': {
-    outline: `2px solid ${theme.palette.primary.main}`,
-    outlineOffset: 2,
-  },
+  '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
   '& svg': { fontSize: 24, flexShrink: 0 },
   [theme.breakpoints.down('md')]: {
     width: 48,
@@ -90,38 +85,53 @@ const NavButton = styled('button', {
   },
 }));
 
-const NavLabel = styled('span')(({ theme }) => ({
+const NavLabel = styled('span')({
   whiteSpace: 'nowrap',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
-  [theme.breakpoints.down('md')]: { display: 'none' },
-}));
+});
 
-export function NavRail({ isAdmin }: { isAdmin: boolean }) {
+export function NavRail({
+  isAdmin,
+  decisionsBadge = 0,
+}: {
+  isAdmin: boolean;
+  decisionsBadge?: number;
+}) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const compact = useCompactRail();
-
   return (
-    <Rail aria-label="Navigation">
+    <Rail aria-label="Main">
       <Brand>
         <BrandMark aria-hidden>QM+</BrandMark>
-        {compact ? null : <Typography sx={{ fontWeight: 700, fontSize: 18 }}>Q-Mintership+</Typography>}
+        {compact ? null : (
+          <Typography sx={{ fontWeight: 700, fontSize: 18 }}>{APP_NAME}</Typography>
+        )}
       </Brand>
-      {NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin).map(({ label, path, Icon }) => {
+      {railItems(isAdmin).map(({ key, label, path, Icon }) => {
         const active = isNavActive(pathname, path);
+        const badge = key === 'decisions' ? decisionsBadge : 0;
         return (
           <NavButton
-            key={path}
+            key={key}
             type="button"
             $active={active}
             aria-current={active ? 'page' : undefined}
-            aria-label={label}
             title={compact ? label : undefined}
             onClick={() => navigate(path)}
           >
-            <Icon />
-            <NavLabel>{label}</NavLabel>
+            <Badge
+              badgeContent={badge}
+              color="error"
+              max={99}
+              overlap="circular"
+              slotProps={{ badge: { 'aria-hidden': true } }}
+            >
+              <Icon aria-hidden />
+            </Badge>
+            <NavLabel className={compact ? 'qmp-visually-hidden' : undefined}>{label}</NavLabel>
+            {badge ? <span className="qmp-visually-hidden">, {badge} waiting for you</span> : null}
           </NavButton>
         );
       })}

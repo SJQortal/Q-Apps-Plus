@@ -4,9 +4,10 @@
  * relative hrefs (`MINTERS`, `ADMINBOARD`, …) for its nav buttons. Existing
  * links in chat and forum posts still use those forms, so this module parses
  * them exactly as legacy/assets/js/Q-Mintership.js did and maps them onto the
- * React routes.
+ * new routes: a card opens read-only in History, a board opens the screen
+ * that replaced it.
  */
-import { boardPath, PATHS, type BoardKey } from './paths';
+import { legacyCardPath, PATHS, type BoardKey } from './paths';
 
 export interface LegacyBoardRoute {
   board: BoardKey | '';
@@ -109,22 +110,32 @@ export function parseBoardRouteHash(rawHash: string): LegacyBoardRoute | null {
   return { board, cardIdentifier, section, hash: rawHash };
 }
 
-/** The React route for a legacy hash, or null when it is not one (or names no board). */
+/** Where each old board lives now, when a link names no card. */
+const BOARD_HOME: Record<BoardKey, string> = {
+  minter: PATHS.nominations,
+  admin: PATHS.decisions,
+  ar: PATHS.decisions,
+  stats: PATHS.activity,
+};
+
+/** The route for a legacy hash, or null when it is not one (or names no board). */
 export function legacyHashToPath(rawHash: string): string | null {
   const route = parseBoardRouteHash(rawHash);
   if (!route || !route.board) return null;
-  return boardPath(route.board, route.cardIdentifier, route.section);
+  if (route.cardIdentifier && route.board !== 'stats')
+    return legacyCardPath(route.cardIdentifier, route.section);
+  return BOARD_HOME[route.board];
 }
 
-/** The original nav buttons pointed at these relative hrefs. */
+/** The original nav buttons pointed at these relative hrefs. The forum is not part of this app. */
 const LEGACY_HREFS: Record<string, string> = {
-  'MINTERSHIP-FORUM': PATHS.forum,
-  MINTERS: PATHS.minters,
-  'MINTER-BOARD': PATHS.minters,
-  ADMINBOARD: PATHS.adminBoard,
-  TOOLS: PATHS.tools,
-  STATS: PATHS.stats,
-  ADDREMOVEADMIN: PATHS.mam,
+  'MINTERSHIP-FORUM': PATHS.home,
+  MINTERS: PATHS.nominations,
+  'MINTER-BOARD': PATHS.nominations,
+  ADMINBOARD: PATHS.decisions,
+  TOOLS: PATHS.decisions,
+  STATS: PATHS.activity,
+  ADDREMOVEADMIN: PATHS.decisions,
   'INDEX.HTML': PATHS.home,
 };
 

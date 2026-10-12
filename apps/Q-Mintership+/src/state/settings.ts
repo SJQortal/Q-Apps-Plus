@@ -1,28 +1,36 @@
 /**
- * Per-app settings, saved in localStorage the same way the theme is (a JSON
- * value under a `qmintershipplus-` key), so a later QDN sync can ship them as
- * one object.
+ * Per-app settings, saved in localStorage as JSON under the app's storage
+ * prefix (constants/plus.ts), the way the theme is.
  */
 import { atomWithStorage } from 'jotai/utils';
+import { STORAGE_PREFIX } from '../constants/plus';
 
-export type BoardView = 'cards' | 'list';
-export type ForumRoom = 'general' | 'minters' | 'admins';
+export type MotionSetting = 'system' | 'reduce' | 'full';
+export type TimeDisplay = 'time' | 'blocks' | 'both';
+export type ActivityWindow = 30 | 60 | 90 | 180;
 
 export const SETTINGS_KEYS = {
-  boardView: 'qmintershipplus-board-view',
-  defaultRoom: 'qmintershipplus-forum-room',
-  showNewMarkers: 'qmintershipplus-new-markers',
-  compactCards: 'qmintershipplus-compact-cards',
+  motion: `${STORAGE_PREFIX}motion`,
+  timeDisplay: `${STORAGE_PREFIX}time-display`,
+  celebrate: `${STORAGE_PREFIX}celebrate`,
+  activityWindow: `${STORAGE_PREFIX}activity-window`,
+  decisionsHideSigned: `${STORAGE_PREFIX}decisions-hide-signed`,
 } as const;
 
-/** The legacy Minter Board "display mode" select: cards or list. */
-export const boardViewAtom = atomWithStorage<BoardView>(SETTINGS_KEYS.boardView, 'cards');
+/** Animations: follow the system, always reduce, or always play. */
+export const motionAtom = atomWithStorage<MotionSetting>(SETTINGS_KEYS.motion, 'system');
 
-/** The forum room opened first; the legacy app always opened General. */
-export const defaultRoomAtom = atomWithStorage<ForumRoom>(SETTINGS_KEYS.defaultRoom, 'general');
+/** Countdowns as time left, blocks left, or both. */
+export const timeDisplayAtom = atomWithStorage<TimeDisplay>(SETTINGS_KEYS.timeDisplay, 'time');
 
-/** The red NEW marker on forum messages newer than the last visit. */
-export const showNewMarkersAtom = atomWithStorage<boolean>(SETTINGS_KEYS.showNewMarkers, true);
+/** The small celebration when someone becomes a minter. */
+export const celebrateAtom = atomWithStorage<boolean>(SETTINGS_KEYS.celebrate, true);
 
-/** Tighter card spacing on the boards. */
-export const compactCardsAtom = atomWithStorage<boolean>(SETTINGS_KEYS.compactCards, false);
+/** Minter Admin Activity's default window, in days. */
+export const activityWindowAtom = atomWithStorage<ActivityWindow>(SETTINGS_KEYS.activityWindow, 30);
+
+/** Decisions: hide the ones you have already signed. */
+export const decisionsHideSignedAtom = atomWithStorage<boolean>(
+  SETTINGS_KEYS.decisionsHideSigned,
+  false
+);

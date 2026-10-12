@@ -13,27 +13,33 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
-    version: '3.0.5-plus.1',
-    date: '2026-09-29',
-    title: 'React rewrite, phase 1',
+    version: '1.0.0',
+    date: '2026-10-12',
+    title: 'Q-Mintership+ 2.0: nominate, then sign',
     summary:
-      'Q-Mintership rebuilt on React 19.3 and MUI 9.4 with the Hub 3.0 look, four themes and a Settings page. The boards arrive in the next phases; the original app keeps working meanwhile.',
+      'A new, simpler way into MINTER: level 5+ minters and Minter Admins nominate, Minter Admins sign or let it expire. Not published yet.',
     sections: [
       {
-        title: 'Look and feel',
+        title: 'For everyone',
         notes: [
-          'Hub 3.0 layout: a navigation rail on desktop and a bottom bar on phones and narrow Hub panes.',
-          'Four themes in Settings: Hub 3.0, Q-Mintership Classic, Black and White.',
-          'A Settings page with your account, appearance, board defaults and this changelog.',
+          'Home speaks to you: what your MINTER status is, with your real numbers, and the one thing to do next.',
+          'Nominations show who nominated, who supports, the signatures so far and the time left.',
+          'Nominees accept with one step, so approval makes them a minter straight away.',
+        ],
+      },
+      {
+        title: 'For Minter Admins',
+        notes: [
+          'One Decisions queue for nominations, removals, bans and admin changes, most urgent first, with k of n and a live countdown.',
+          'Sign in one step, or several in a row. Every Hub confirmation is explained before it opens, with its fee.',
         ],
       },
       {
         title: 'Under the hood',
         notes: [
-          'Every Qortal call from the original QortalApi.js is now a typed, unit-tested module.',
-          'Searches are paged, merged and cached instead of unlimited.',
-          'Old #/minter/… deep links still open the right card.',
-          'Nothing in tests can publish, sign, vote or spend: every write action is mocked.',
+          'Signature counts and deadlines follow Qortal Core exactly, from live block times.',
+          'Every read is bounded, paged and cached; nothing loads everything at once.',
+          'Hub 3.0 look with four themes, built for phones first.',
         ],
       },
     ],
