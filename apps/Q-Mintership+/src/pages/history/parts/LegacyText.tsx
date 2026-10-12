@@ -7,24 +7,10 @@ import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import type { LegacyText } from '../../../data/legacy';
 import { openQortalLink } from '../../../utils/links';
 
-export function LegacyTextView({ text, clamp }: { text: LegacyText; clamp?: number }) {
+export function LegacyTextView({ text }: { text: LegacyText }) {
   if (!text.paragraphs.length) return null;
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 1,
-        ...(clamp
-          ? {
-              display: '-webkit-box',
-              WebkitLineClamp: clamp,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-            }
-          : {}),
-      }}
-    >
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
       {text.paragraphs.map((p, i) => (
         <Typography
           key={i}

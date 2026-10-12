@@ -111,8 +111,9 @@ function NameLookup({ name }: { name: string }) {
 function PersonView({ address }: { address: string }) {
   const session = useSession();
   const self = session.status === 'ready' && session.address === address;
+  // Someone else's standing changes slowly; their nomination card refreshes on its own.
   const status = useQuery(`status:${address}`, (force) => loadMyStatus(address, { force }), {
-    refreshMs: 90_000,
+    refreshMs: 3 * 60_000,
   });
   const account = useAccount(address);
   const history = useAddressHistory(address);
