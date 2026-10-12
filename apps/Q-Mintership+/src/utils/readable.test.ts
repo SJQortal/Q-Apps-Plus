@@ -14,7 +14,10 @@ function surfacesOf(theme: ReturnType<typeof createTheme>) {
 describe('readable text colours', () => {
   it('keeps a colour that already reads well', () => {
     const theme = createTheme({
-      palette: { background: { paper: '#ffffff', default: '#ffffff' }, primary: { main: '#0b57d0' } },
+      palette: {
+        background: { paper: '#ffffff', default: '#ffffff' },
+        primary: { main: '#0b57d0' },
+      },
     });
     expect(readableTone(theme, 'primary')).toBe('#0b57d0');
   });

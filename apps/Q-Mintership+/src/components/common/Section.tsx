@@ -89,12 +89,7 @@ export function StatTile({
  * readable shade of the colour (utils/readable), since the plain accent can
  * be too faint as small text on light surfaces.
  */
-export function ToneChip({
-  color = 'default',
-  variant = 'filled',
-  sx,
-  ...rest
-}: ChipProps) {
+export function ToneChip({ color = 'default', variant = 'filled', sx, ...rest }: ChipProps) {
   const tone = color === 'default' ? null : (color as Tone);
   return (
     <Chip

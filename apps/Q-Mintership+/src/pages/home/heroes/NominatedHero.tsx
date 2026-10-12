@@ -183,10 +183,7 @@ export function NominatedHero({
         ) : null}
 
         {accepted ? (
-          <Typography
-            role="status"
-            sx={{ fontWeight: 700, color: readable('success') }}
-          >
+          <Typography role="status" sx={{ fontWeight: 700, color: readable('success') }}>
             You&rsquo;ve accepted ✓{confirming ? ' (confirming…)' : ''}
           </Typography>
         ) : (

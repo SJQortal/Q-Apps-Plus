@@ -46,8 +46,10 @@ describe('AvatarStack', () => {
     expect(items).toHaveLength(3);
     expect(within(items[0]).getByRole('link', { name: 'Ada Admin' })).toBeInTheDocument();
     expect(items[2]).toHaveTextContent('+1');
-    expect(within(list).getAllByRole('link').every((a) => a.getAttribute('role') === null)).toBe(
-      true
-    );
+    expect(
+      within(list)
+        .getAllByRole('link')
+        .every((a) => a.getAttribute('role') === null)
+    ).toBe(true);
   });
 });
