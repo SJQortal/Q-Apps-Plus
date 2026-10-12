@@ -1,8 +1,9 @@
 /**
  * One nomination, as everyone sees it: the nominee, who nominated and who
- * supports, the reason and links, and where it stands (waiting for a Minter
- * Admin, k of n signatures with the countdown, approved, …). Screens add
- * their own buttons through `actions`.
+ * supports (with their notes), the reason and links, and where it stands
+ * (waiting for a Minter Admin, k of n signatures with the countdown,
+ * approved, or how it ended). Screens add their own buttons through
+ * `actions`.
  */
 import type { ReactNode } from 'react';
 import { Box, Button, Typography } from '@mui/material';
@@ -10,22 +11,33 @@ import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
-import { formatRelative } from '../../utils/format';
+import type { NominationState } from '../../rules/nomination';
+import { formatDuration, formatRelative } from '../../utils/format';
 import { openQortalLink } from '../../utils/links';
 import { Countdown } from '../common/Countdown';
 import { PersonChip } from '../common/Person';
 import { ProgressRing } from '../common/ProgressRing';
 import { Card, NominationStateChip } from '../common/Section';
+import { successText } from './tone';
 
 export interface NominationCardProps {
   nomination: Nomination;
   now: ChainNow;
   actions?: ReactNode;
-  /** Shorter: the reason is clamped and links are hidden. */
+  /** Shorter: the reason is clamped, links and supporters' notes are hidden. */
   compact?: boolean;
   /** Leave out the nominee line (on the nominee's own page). */
   hideNominee?: boolean;
+  /** When a decided nomination ended (ms), for "Expired 3 days ago". */
+  endedAt?: number | null;
 }
+
+const ENDED_TEXT: Partial<Record<NominationState, string>> = {
+  joined: 'Joined MINTER',
+  expired: 'Expired',
+  rejected: 'Rejected',
+  lapsed: 'Closed with no Minter Admin signature',
+};
 
 export function NominationCard({
   nomination: n,
@@ -33,11 +45,18 @@ export function NominationCard({
   actions,
   compact,
   hideNominee,
+  endedAt,
 }: NominationCardProps) {
   const tally = n.decision?.tally ?? null;
   const window = n.decision?.window ?? null;
   const by = n.nomination?.publisher;
   const supporters = n.supporters.map((s) => s.publisher);
+  const notes = compact
+    ? []
+    : n.supporters.flatMap((s) =>
+        'note' in s.record && s.record.note ? [{ who: s.publisher, note: s.record.note }] : []
+      );
+  const ended = ENDED_TEXT[n.state];
   return (
     <Card
       as="article"
@@ -56,7 +75,7 @@ export function NominationCard({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 0.5,
-                  color: 'success.main',
+                  color: successText,
                 }}
               >
                 <CheckCircleOutlineOutlinedIcon aria-hidden sx={{ fontSize: 18 }} />
@@ -143,6 +162,32 @@ export function NominationCard({
         </Box>
       ) : null}
 
+      {notes.length ? (
+        <Box
+          component="ul"
+          aria-label="Supporters' notes"
+          sx={{ m: 0, p: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 1 }}
+        >
+          {notes.map(({ who, note }) => (
+            <Box
+              component="li"
+              key={who.address}
+              sx={{ pl: 1.5, borderLeft: 2, borderColor: 'divider', minWidth: 0 }}
+            >
+              <Typography
+                variant="body2"
+                sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontStyle: 'italic' }}
+              >
+                “{note}”
+              </Typography>
+              <Typography component="div" variant="body2" color="text.secondary">
+                <PersonInline address={who.address} name={who.name} />
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      ) : null}
+
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
         {n.state === 'signing' && window ? (
           <Countdown
@@ -159,8 +204,19 @@ export function NominationCard({
         ) : null}
         {n.state === 'waiting' && n.waitingEndsAt ? (
           <Typography variant="body2" color="text.secondary">
-            Stays open {formatRelative(n.waitingEndsAt, now.timestamp).replace(/^in /, 'for ')} more
-            for a Minter Admin to sign.
+            Waiting for a Minter Admin’s first signature:{' '}
+            {formatDuration(n.waitingEndsAt - now.timestamp)} left.
+          </Typography>
+        ) : null}
+        {n.state === 'approved' ? (
+          <Typography variant="body2" color="text.secondary">
+            Approved. They only need to press Join to become a member.
+          </Typography>
+        ) : null}
+        {ended ? (
+          <Typography variant="body2" color="text.secondary">
+            {ended}
+            {endedAt ? ` ${formatRelative(endedAt, now.timestamp)}` : ''}.
           </Typography>
         ) : null}
         {actions ? (
@@ -175,7 +231,13 @@ function PersonInline({ address, name }: { address: string; name?: string | null
   return (
     <Box
       component="span"
-      sx={{ display: 'inline-flex', verticalAlign: 'middle', '& p, & span': { display: 'inline' } }}
+      sx={{
+        display: 'inline-flex',
+        verticalAlign: 'middle',
+        '& p, & span': { display: 'inline' },
+        // The name reads as part of the sentence around it.
+        '& .MuiTypography-root': { fontSize: 'inherit' },
+      }}
     >
       <PersonChip address={address} name={name} size={20} strong={false} />
     </Box>
