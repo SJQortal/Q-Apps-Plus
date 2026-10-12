@@ -388,6 +388,28 @@ describe('computeActivity', () => {
     const report = run({ currentAdmins: ['Qa', 'Qnull'], exclude: ['Qnull'] });
     expect(report.current.map((a) => a.address)).toEqual(['Qa']);
   });
+
+  it('counts both stretches of an admin removed and made an admin again', () => {
+    const decisions = [
+      decision('d1', 110_000, 'APPROVED', 111_000),
+      decision('rm-r', 115_000, 'APPROVED', 120_000, {
+        type: 'REMOVE_GROUP_ADMIN',
+        admin: 'Qr',
+        invitee: undefined,
+      }),
+      decision('away', 130_000, 'APPROVED', 131_000),
+      decision('add-r', 140_000, 'APPROVED', 150_000, {
+        type: 'ADD_GROUP_ADMIN',
+        member: 'Qr',
+        invitee: undefined,
+      }),
+      decision('d2', 160_000, 'APPROVED', 161_000),
+    ];
+    const r = admin(run({ decisions, currentAdmins: ['Qa', 'Qr'] }), 'Qr');
+    // d1 and its own removal before; d2 after; not 'away' or the add itself.
+    expect(r).toMatchObject({ current: true, adminSince: 150_000, adminAgain: true, eligible: 3 });
+    expect(admin(run({ decisions, currentAdmins: ['Qa', 'Qr'] }), 'Qa').adminAgain).toBe(false);
+  });
 });
 
 describe('sortActivity', () => {
@@ -395,6 +417,7 @@ describe('sortActivity', () => {
     address,
     current: true,
     adminSince: null,
+    adminAgain: false,
     removedAt: null,
     eligible: 10,
     signed: 0,

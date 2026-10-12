@@ -173,6 +173,8 @@ export interface AdminActivity {
   current: boolean;
   /** Block of their newest approved ADD_GROUP_ADMIN that was read; null = before what was read. */
   adminSince: number | null;
+  /** Removed earlier and made an admin again at `adminSince` (both counted). */
+  adminAgain: boolean;
   /** Block of their newest approved REMOVE_GROUP_ADMIN that was read (former admins). */
   removedAt: number | null;
   /** Decisions they could have signed in the window. */
@@ -330,10 +332,12 @@ export function computeActivity(input: ActivityInput): ActivityReport {
 
     const adds = changes.filter((c) => c.address === address && c.added);
     const removes = changes.filter((c) => c.address === address && !c.added);
+    const adminSince = adds.length ? adds[adds.length - 1].height : null;
     const activity: AdminActivity = {
       address,
       current: isCurrent,
-      adminSince: adds.length ? adds[adds.length - 1].height : null,
+      adminSince,
+      adminAgain: adminSince !== null && removes.some((r) => r.height < adminSince),
       removedAt: !isCurrent && removes.length ? removes[removes.length - 1].height : null,
       eligible,
       signed,

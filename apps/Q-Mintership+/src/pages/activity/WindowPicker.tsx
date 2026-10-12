@@ -143,7 +143,7 @@ export function WindowPicker({
               inputLabel: { shrink: true },
               htmlInput: { min: earliest ? toDateInput(earliest) : undefined, max: to },
             }}
-            sx={{ flex: '1 1 140px', '& .MuiInputBase-root': { minHeight: 44 } }}
+            sx={{ flex: '1 1 140px', maxWidth: 240, '& .MuiInputBase-root': { minHeight: 44 } }}
           />
           <TextField
             type="date"
@@ -155,7 +155,7 @@ export function WindowPicker({
               inputLabel: { shrink: true },
               htmlInput: { min: from, max: toDateInput(today) },
             }}
-            sx={{ flex: '1 1 140px', '& .MuiInputBase-root': { minHeight: 44 } }}
+            sx={{ flex: '1 1 140px', maxWidth: 240, '& .MuiInputBase-root': { minHeight: 44 } }}
           />
           <Button type="submit" variant="contained" sx={{ minHeight: 44, flex: '0 0 auto' }}>
             Show

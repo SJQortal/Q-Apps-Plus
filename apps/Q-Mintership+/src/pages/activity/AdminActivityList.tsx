@@ -178,9 +178,8 @@ function tenureText(row: AdminActivity, ctx: RowContext): string {
       ? `Removed ${blockDate(row.removedAt, now)}`
       : 'No longer an admin';
   if (row.adminSince === null) return 'Admin since before this window';
-  if (row.adminSince > ctx.data.range.endBlock)
-    return `Admin since ${blockDate(row.adminSince, now)}, after this range`;
-  return `Admin since ${blockDate(row.adminSince, now)}`;
+  const since = `Admin ${row.adminAgain ? 'again ' : ''}since ${blockDate(row.adminSince, now)}`;
+  return row.adminSince > ctx.data.range.endBlock ? `${since}, after this range` : since;
 }
 
 const PROPOSAL_WORDS: Record<DecisionKind, [string, string]> = {
