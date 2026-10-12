@@ -13,12 +13,16 @@ export function useReducedMotion(): boolean {
   return setting === 'reduce' || (setting === 'system' && system);
 }
 
-/** Mirror the setting on <html data-motion> so the CSS rule in index.css applies it everywhere. */
+/**
+ * Mirror the setting on <html data-motion> so the CSS rules in index.css
+ * apply it everywhere: "reduce" turns motion down, "full" keeps it even when
+ * the system asks for less.
+ */
 export function useApplyMotionSetting(): void {
   const setting = useAtomValue(motionAtom);
   useEffect(() => {
     const root = document.documentElement;
-    if (setting === 'reduce') root.setAttribute('data-motion', 'reduce');
-    else root.removeAttribute('data-motion');
+    if (setting === 'system') root.removeAttribute('data-motion');
+    else root.setAttribute('data-motion', setting);
   }, [setting]);
 }

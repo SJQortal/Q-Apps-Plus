@@ -25,11 +25,12 @@ body {
   min-height: var(--qmp-app-height, 100dvh);
 }
 
-/* The system setting, or Settings → Appearance → Reduce motion. */
+/* The system setting (unless Settings → Appearance → Motion is Full), or
+   Motion → Reduce. useApplyMotionSetting sets html[data-motion]. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  html:not([data-motion='full']) *,
+  html:not([data-motion='full']) *::before,
+  html:not([data-motion='full']) *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
