@@ -2,9 +2,9 @@
 
 Encrypted mail between Qortal names, with threads, attachments and group mail.
 
-**Published:** `1.0.1` on 2026-10-08, as the QDN `APP` resource `Q-Mail+`, built from commit `63bb8d62`. Checked on 2026-10-12: the live `index.html` references the same 61 content-hashed files as `release/Q-Mail+.zip` from that commit. (`1.0.0` on 2026-10-05, from `a128d290`.)
+**Published:** `1.0.2` on 2026-10-12, as the QDN `APP` resource `Q-Mail+`, built from commit `a0af8e4b`. Checked on 2026-10-12: the live `index.html` references the same 61 content-hashed files as `release/Q-Mail+.zip` and as a fresh build of the branch; Simon checked it in GO on his phone. (`1.0.1` on 2026-10-08, from `63bb8d62`; `1.0.0` on 2026-10-05, from `a128d290`.)
 
-**Version on the branch:** `1.0.2` (not published yet; branch `q-mail-plus/1.0.1`). Swipe back on phones, the composer's placeholder under a phone keyboard, Settings from the phone's mailboxes menu, and the top bar's flicker on short pages (Done → 1.0.2). The branch [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) holds this app's history, ready to merge into Qortal/q-mail (README).
+**Version on the branch:** `1.0.2`, published (PR #21). Next: the PR to Qortal/q-mail as Q-Mail 4.0.0 (Done → Upstream PR preparation). The branch [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) stops at 1.0.0; the PR replaces it.
 
 ## Baseline at import
 
