@@ -421,12 +421,13 @@ export function loadLegacyPoll(
     `legacy:poll:${name}`,
     async () => {
       if (!name) return null;
-      const [counts, info, publisherAddress] = await Promise.all([
-        getPollCounts(name),
+      // Counts first: a card without a poll costs one read, not three.
+      const counts = await getPollCounts(name);
+      if (!counts) return null;
+      const [info, publisherAddress] = await Promise.all([
         getPollInfo(name),
         getNameOwner(card.publisher),
       ]);
-      if (!counts) return null;
       return {
         name,
         ...counts,
