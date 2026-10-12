@@ -20,7 +20,8 @@ describe('History page: on chain', () => {
   it('lists the last 30 days of decided MINTER changes, with who and by whom', async () => {
     const { posts } = await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
     const list = await eventsList();
-    expect(within(list).getByText('Left MINTER')).toBeInTheDocument();
+    // Other mock history (Activity's) adds more events; check these ones are among them.
+    expect(within(list).getAllByText('Left MINTER').length).toBeGreaterThanOrEqual(1);
     expect(within(list).getAllByText('Approved for MINTER').length).toBeGreaterThanOrEqual(2);
     expect(within(list).getByText(PEOPLE.left.name as string)).toBeInTheDocument();
     expect(within(list).getByText(PEOPLE.recentlyJoined.name as string)).toBeInTheDocument();
@@ -39,12 +40,13 @@ describe('History page: on chain', () => {
 
   it('loads the 30 days before on request, in bounded block windows', async () => {
     await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
-    await eventsList();
-    expect(screen.queryByText('Removed from MINTER')).toBeNull();
+    const list = await eventsList();
+    // Kit was removed about 47 days ago: not in the first 30-day window.
+    expect(within(list).queryByText(PEOPLE.kicked.name as string)).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Load the 30 days before' }));
-    const removed = await screen.findByText('Removed from MINTER');
-    const item = removed.closest('li') as HTMLElement;
-    expect(within(item).getByText(PEOPLE.kicked.name as string)).toBeInTheDocument();
+    const kicked = await screen.findByText(PEOPLE.kicked.name as string);
+    const item = kicked.closest('li') as HTMLElement;
+    expect(within(item).getByText('Removed from MINTER')).toBeInTheDocument();
     expect(within(item).getByText(/Reason: “Kicked by Minter Admins”/)).toBeInTheDocument();
     expect(within(item).getByText(/proposed by/)).toBeInTheDocument();
     for (const path of fetchCallsFor('/transactions/search')) {
