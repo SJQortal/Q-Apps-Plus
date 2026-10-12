@@ -3,9 +3,9 @@
  * /render/APP/<Name>/… and injects window._qdnBase; outside Hub the app runs
  * at the site root. Ported from Torq's utils/hubLocation.ts.
  */
-const RENDER_BASE_RE = /^\/render\/(?:APP|WEBSITE)\/[^/]+/i;
+import { APP_NAME, LINK_APP_NAME } from '../constants/plus';
 
-export const APP_NAME = 'Q-Mintership+';
+const RENDER_BASE_RE = /^\/render\/(?:APP|WEBSITE)\/[^/]+/i;
 
 interface QdnWindow extends Window {
   _qdnBase?: string;
@@ -70,11 +70,14 @@ export function normalizeHubPath(path: string): string {
   return next;
 }
 
-/** A `qortal://APP/Q-Mintership+/<path>` link for sharing. */
+/**
+ * A `qortal://APP/Q-Mintership+/<path>` link for sharing. Hub never decodes
+ * the app name, so its `+` stays literal (docs/QORTAL.md → Deep links).
+ */
 export function buildAppLink(path: string): string {
   const normalized = normalizeHubPath(path);
   const suffix = normalized === '/' ? '' : normalized;
-  return `qortal://APP/${encodeURIComponent(currentQortalAppName())}${suffix}`;
+  return `qortal://APP/${LINK_APP_NAME}${suffix}`;
 }
 
 function hubParentWindow(): Window | null {

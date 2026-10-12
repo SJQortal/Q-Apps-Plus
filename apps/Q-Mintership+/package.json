@@ -1,7 +1,7 @@
 {
   "name": "q-mintership-plus",
   "private": true,
-  "version": "3.0.5-plus.1",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

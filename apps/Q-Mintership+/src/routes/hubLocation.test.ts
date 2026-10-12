@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildAppLink, currentQortalAppName, normalizeHubPath, resolveQdnBase } from './hubLocation';
+import {
+  buildAppLink,
+  currentQortalAppName,
+  normalizeHubPath,
+  resolveQdnBase,
+} from './hubLocation';
 
 type QdnWindow = Window & { _qdnBase?: string; _qdnName?: string };
 
@@ -15,7 +20,9 @@ describe('resolveQdnBase', () => {
   });
 
   it('falls back to the render prefix in the pathname', () => {
-    expect(resolveQdnBase('/render/APP/Q-Mintership%2B/minters')).toBe('/render/APP/Q-Mintership%2B');
+    expect(resolveQdnBase('/render/APP/Q-Mintership%2B/minters')).toBe(
+      '/render/APP/Q-Mintership%2B'
+    );
     expect(resolveQdnBase('/minters')).toBe('');
   });
 });
@@ -34,15 +41,17 @@ describe('currentQortalAppName', () => {
 describe('normalizeHubPath and buildAppLink', () => {
   it('removes the base, query and hash', () => {
     (window as QdnWindow)._qdnBase = '/render/APP/Q-Mintership+';
-    expect(normalizeHubPath('/render/APP/Q-Mintership+/minters/x?theme=dark#/y')).toBe('/minters/x');
+    expect(normalizeHubPath('/render/APP/Q-Mintership+/minters/x?theme=dark#/y')).toBe(
+      '/minters/x'
+    );
     expect(normalizeHubPath('')).toBe('/');
     expect(normalizeHubPath('minters/')).toBe('/minters');
   });
 
-  it('builds a qortal:// link with the app name encoded', () => {
-    expect(buildAppLink('/minters/Minter-board-card-1')).toBe(
-      'qortal://APP/Q-Mintership%2B/minters/Minter-board-card-1'
+  it('builds a qortal:// link with a literal + in the app name (Hub never decodes it)', () => {
+    expect(buildAppLink('/history/card/Minter-board-card-1')).toBe(
+      'qortal://APP/Q-Mintership+/history/card/Minter-board-card-1'
     );
-    expect(buildAppLink('/')).toBe('qortal://APP/Q-Mintership%2B');
+    expect(buildAppLink('/')).toBe('qortal://APP/Q-Mintership+');
   });
 });

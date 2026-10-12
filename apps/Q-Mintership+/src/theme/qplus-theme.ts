@@ -1,8 +1,7 @@
 import type { AppThemeConfig } from '../hub-theme';
 import { CLASSIC_DARK, CLASSIC_LIGHT, classicDarkOptions, classicLightOptions } from './classic';
 
-/** localStorage key for the chosen look. Must match STORAGE_KEY in index.html. */
-export const THEME_STORAGE_KEY = 'qmintershipplus-ui-theme';
+export { THEME_STORAGE_KEY } from '../constants/plus';
 
 export const themeConfig: AppThemeConfig = {
   hub20: {
