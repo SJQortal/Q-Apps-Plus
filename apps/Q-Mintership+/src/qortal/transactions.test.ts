@@ -25,7 +25,7 @@ import {
 } from './transactions';
 
 const ADMIN = 'QdSnUy6sUiEnaN87dWmE92g1uQjrvPgrWG';
-const NOMINEE = 'QNomiUy6sUiEnaN87dWmE92g1uQjrvPgrWX';
+const NOMINEE = 'QNomiUy6sUiEnaN87dWmE92g1uQjrvPgrW';
 
 function postedBody(path: string): Record<string, unknown> {
   const request = fetchRequests.find((r) => r.path === path);
@@ -37,12 +37,13 @@ beforeEach(() => {
   resetAccountCaches();
   vi.useFakeTimers();
   vi.setSystemTime(new Date(1_700_000_000_000));
-  mockFetchRoute('/addresses/convert/', ADMIN);
+  // Routes match newest first, so the narrower /addresses/convert/ goes last.
   mockFetchRoute('/addresses/', (url) => ({
     address: url.pathname.split('/').pop(),
     reference: `ref-${url.pathname.split('/').pop()}`,
     publicKey: 'PK-ADMIN',
   }));
+  mockFetchRoute('/addresses/convert/', ADMIN);
   for (const path of ['/groups/invite', '/groups/kick', '/groups/ban', '/groups/addadmin', '/groups/removeadmin', '/groups/approval', '/groups/join']) {
     mockFetchRoute(path, 'RAWTX');
   }

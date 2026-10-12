@@ -162,6 +162,18 @@ if (typeof window.IntersectionObserver === 'undefined') {
   });
 }
 
+// Node's URL.createObjectURL only takes Node's own Blob, not jsdom's, so
+// tests get a stub; blob previews only need a unique string.
+{
+  let nextBlob = 0;
+  Object.defineProperty(URL, 'createObjectURL', {
+    writable: true,
+    configurable: true,
+    value: () => `blob:test/${++nextBlob}`,
+  });
+  Object.defineProperty(URL, 'revokeObjectURL', { writable: true, configurable: true, value: () => {} });
+}
+
 beforeEach(() => {
   qortalHandlers.clear();
   qortalCalls.length = 0;

@@ -69,11 +69,13 @@ export function buildSearchSimpleQuery(params: SearchSimpleParams): string | nul
   const after =
     afterRaw === null || afterRaw === undefined || Number.isNaN(afterRaw) ? 0 : afterRaw;
 
+  // The legacy forms never paged; an offset is appended only when a caller pages.
+  const page = offset > 0 ? `&offset=${offset}` : '';
   if (name && !identifier && !room) {
-    return `service=${service}&name=${name}&limit=${limit}&prefix=true&reverse=${reverse}&after=${after}`;
+    return `service=${service}&name=${name}&limit=${limit}${page}&prefix=true&reverse=${reverse}&after=${after}`;
   }
   if (!name && identifier && !room) {
-    return `service=${service}&identifier=${identifier}&limit=${limit}&prefix=true&reverse=${reverse}&after=${after}`;
+    return `service=${service}&identifier=${identifier}&limit=${limit}${page}&prefix=true&reverse=${reverse}&after=${after}`;
   }
   if (!name && !identifier && !room) return null;
   return `service=${service}&identifier=${identifier}&name=${name}&prefix=true&limit=${limit}&offset=${offset}&reverse=${reverse}&prefix=${prefixOnly}&after=${after}`;

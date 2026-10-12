@@ -24,7 +24,7 @@ const adminBoard = <BoardPlaceholder title="Admin Board" subtitle="Encrypted, Mi
 const tools = <BoardPlaceholder title="Admin Tools" subtitle="Block list, pending and manual invites" phase={4} />;
 const account = <BoardPlaceholder title="Account details" subtitle="Transactions and minting history" phase={4} itemLabel="account" />;
 
-export const router = createBrowserRouter(
+const router = createBrowserRouter(
   [
     {
       path: '/',
