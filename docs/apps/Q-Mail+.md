@@ -1741,7 +1741,7 @@ Simon called Q-Mail+ ready for its PR to Qortal/q-mail (docs/RELEASE.md, stage 4
 - the theme's storage key `qmailplus-ui-theme` → `qmail-ui-theme` (3.2.1 keeps its settings under `qmail:*`, so nothing clashes; the other keys never had "plus");
 - version 4.0.0 in `package.json` and the lockfile, one 4.0.0 entry in `CHANGELOG.md` (above 3.2.1's, which stay) and one in What's new;
 - a README for the Qortal repo (what's new, develop, publish, data, notes for maintainers), comments that cite this brief linked to it on GitHub, and `e2e/screens.mjs` (Q-Share's standalone copy of `scripts/screens.mjs`).
-Checks in the split: 870 tests, lint, types and the build pass (main chunk 375.9 kB, the same as 1.0.2), and `node e2e/screens.mjs` in four themes, dark: 612 captures with 0 sideways overflow, 0 unlabelled buttons and 0 axe violations. One capture (threads at 1280 in Hub 3.0) failed with `ERR_NETWORK_CHANGED` while the host's network changed, and was clean on a re-run. The PR text is drafted from `docs/templates/upstream-pr.md` for Simon to read.
+Checks in the split: 870 tests, lint, types and the build pass (main chunk 375.9 kB, the same as 1.0.2), and `node e2e/screens.mjs` in four themes, dark: 612 captures with 0 sideways overflow, 0 unlabelled buttons and 0 axe violations. One capture (threads at 1280 in Hub 3.0) failed with `ERR_NETWORK_CHANGED` while the host's network changed, and was clean on a re-run. Light: 612 captures, all clean. The PR text is drafted from `docs/templates/upstream-pr.md` for Simon to read.
 
 **From here:**
 1. Simon publishes `release/Q-Mail+.zip` as 1.0.2; I check the live files, add the Published line and merge PR #21 (a merge commit), so `main` has 1.0.1 and 1.0.2.
