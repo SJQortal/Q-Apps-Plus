@@ -5,7 +5,7 @@
  */
 import { Fragment, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Box, Chip, Link, Typography, type ChipProps } from '@mui/material';
+import { Box, Link, Typography, type ChipProps } from '@mui/material';
 import { alpha, styled, useTheme } from '@mui/material/styles';
 import type { SvgIconComponent } from '@mui/icons-material';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
@@ -22,6 +22,7 @@ import RemoveModeratorOutlinedIcon from '@mui/icons-material/RemoveModeratorOutl
 import { primarySoft } from '../../../hub-theme';
 import { OUTCOME_LABEL, type TimelineEvent, type TimelineKind } from '../../../data/timeline';
 import { PersonChip } from '../../../components/common/Person';
+import { ToneChip } from '../../../components/common/Section';
 import { decisionPath } from '../../../routes/paths';
 import { formatDate, formatRelative } from '../../../utils/format';
 
@@ -139,7 +140,7 @@ function TimelineItem({
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
           <Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{event.title}</Typography>
           {chip ? (
-            <Chip
+            <ToneChip
               size="small"
               label={OUTCOME_LABEL[event.outcome as keyof typeof OUTCOME_LABEL]}
               color={chip.color}

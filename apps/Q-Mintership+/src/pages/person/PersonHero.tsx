@@ -11,7 +11,7 @@ import { NOMINEE_BLOCK_TEXT, nomineeBlock } from '../../rules/nomination';
 import type { MyStatus, StatusKind } from '../../rules/status';
 import { AddressText } from '../../components/common/Person';
 import { NameAvatar } from '../../components/common/NameAvatar';
-import { Card, LevelBadge } from '../../components/common/Section';
+import { Card, LevelBadge, ToneChip } from '../../components/common/Section';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { decisionPath, nominatePath } from '../../routes/paths';
 import { formatCount, formatDate } from '../../utils/format';
@@ -142,14 +142,14 @@ export function PersonHero({ address, person, self, memberSince, open, viewer }:
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
         <LevelBadge level={person.level} />
-        <Chip
+        <ToneChip
           size="small"
           label={chip.label}
           color={chip.color}
           variant={chip.filled ? 'filled' : 'outlined'}
         />
         {person.hasJoinRequest && !person.isMember ? (
-          <Chip size="small" color="success" variant="outlined" label="Join request sent" />
+          <ToneChip size="small" color="success" variant="outlined" label="Join request sent" />
         ) : null}
         {self ? <Chip size="small" variant="outlined" label="You" /> : null}
       </Box>

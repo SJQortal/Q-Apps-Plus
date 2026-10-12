@@ -32,7 +32,7 @@ import { PageBody } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { NominationCard } from '../../components/nomination/NominationCard';
 import { SupportDialog } from '../../components/nomination/SupportDialog';
-import { successText } from '../../components/nomination/tone';
+import { readable } from '../../utils/readable';
 import { isAddress } from '../../data/accounts';
 import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
@@ -566,7 +566,7 @@ function CandidateSummary({
       ) : info ? (
         <Typography
           variant="body2"
-          sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, color: successText }}
+          sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, color: readable('success') }}
         >
           <CheckCircleOutlineOutlinedIcon aria-hidden sx={{ fontSize: 18, mt: '1px' }} />
           <span>

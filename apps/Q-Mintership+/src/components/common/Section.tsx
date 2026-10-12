@@ -4,6 +4,7 @@ import { Box, Chip, Typography, type ChipProps } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import type { NominationState } from '../../rules/nomination';
 import type { DecisionPhase } from '../../rules/decision';
+import { readable, type Tone } from '../../utils/readable';
 
 export const SectionTitle = styled(Typography)(({ theme }) => ({
   color: theme.palette.text.secondary,
@@ -82,6 +83,32 @@ export function StatTile({
   );
 }
 
+/**
+ * A status chip in a theme colour. Filled chips take the palette's
+ * contrastText (4.5:1 in every theme); outlined ones show their words in the
+ * readable shade of the colour (utils/readable), since the plain accent can
+ * be too faint as small text on light surfaces.
+ */
+export function ToneChip({
+  color = 'default',
+  variant = 'filled',
+  sx,
+  ...rest
+}: ChipProps) {
+  const tone = color === 'default' ? null : (color as Tone);
+  return (
+    <Chip
+      color={color}
+      variant={variant}
+      sx={[
+        tone && variant === 'outlined' ? { color: readable(tone) } : {},
+        ...(Array.isArray(sx) ? sx : [sx]),
+      ]}
+      {...rest}
+    />
+  );
+}
+
 /** "Level 6". */
 export function LevelBadge({ level }: { level: number }) {
   return <Chip size="small" label={`Level ${level}`} variant="outlined" sx={{ fontWeight: 600 }} />;
@@ -101,7 +128,7 @@ const NOMINATION_CHIP: Record<NominationState, { label: string; color: ChipProps
 export function NominationStateChip({ state }: { state: NominationState }) {
   const chip = NOMINATION_CHIP[state];
   return (
-    <Chip
+    <ToneChip
       size="small"
       label={chip.label}
       color={chip.color}
@@ -122,7 +149,7 @@ const PHASE_CHIP: Record<DecisionPhase, { label: string; color: ChipProps['color
 export function DecisionPhaseChip({ phase }: { phase: DecisionPhase }) {
   const chip = PHASE_CHIP[phase];
   return (
-    <Chip
+    <ToneChip
       size="small"
       label={chip.label}
       color={chip.color}

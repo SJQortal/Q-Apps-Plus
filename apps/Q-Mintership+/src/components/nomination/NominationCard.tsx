@@ -18,7 +18,7 @@ import { Countdown } from '../common/Countdown';
 import { PersonChip } from '../common/Person';
 import { ProgressRing } from '../common/ProgressRing';
 import { Card, NominationStateChip } from '../common/Section';
-import { successText } from './tone';
+import { readable } from '../../utils/readable';
 
 export interface NominationCardProps {
   nomination: Nomination;
@@ -75,7 +75,7 @@ export function NominationCard({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 0.5,
-                  color: successText,
+                  color: readable('success'),
                 }}
               >
                 <CheckCircleOutlineOutlinedIcon aria-hidden sx={{ fontSize: 18 }} />

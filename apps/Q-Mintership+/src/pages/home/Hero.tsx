@@ -14,7 +14,7 @@ import { Celebration } from '../../components/common/Celebration';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { personPath } from '../../routes/paths';
 import { copyText } from '../../utils/links';
-import { readablePrimary } from './readable';
+import { readable } from '../../utils/readable';
 
 const rise = keyframes`
   from { opacity: 0; transform: translate3d(0, 6px, 0); }
@@ -58,7 +58,7 @@ export function Hero({ eyebrow, title, children, aside, actions, next, celebrate
           <Typography
             component="p"
             sx={{
-              color: (theme) => readablePrimary(theme),
+              color: readable('primary'),
               fontSize: 13,
               fontWeight: 700,
               letterSpacing: '0.06em',
@@ -159,7 +159,7 @@ export function PersonLink({ address, name }: { address: string; name?: string |
       component={RouterLink}
       to={personPath(address)}
       underline="always"
-      sx={{ fontWeight: 600, overflowWrap: 'anywhere', color: (theme) => readablePrimary(theme) }}
+      sx={{ fontWeight: 600, overflowWrap: 'anywhere', color: readable('primary') }}
     >
       {shown.label}
     </Link>

@@ -2,6 +2,10 @@
  * A live countdown to a block height: time left at the measured block pace
  * (and/or blocks left, per Settings), shifting colour as time runs out.
  * Re-renders once a second from one shared timer (hooks/useNow).
+ *
+ * The icon carries the urgency colour (calm → soon → urgent); the time is
+ * text, so it takes the readable shade of that colour (utils/readable), and
+ * stays in the text colour while there is plenty of time.
  */
 import { Box, Tooltip, Typography } from '@mui/material';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
@@ -10,12 +14,20 @@ import type { ChainNow } from '../../data/chain';
 import { useNow } from '../../hooks/useNow';
 import { timeDisplayAtom } from '../../state/settings';
 import { formatCount, formatCountdown, formatDateTime } from '../../utils/format';
+import { readable } from '../../utils/readable';
 import { urgencyOf, type Urgency } from '../../utils/urgency';
 
-const TONE: Record<Urgency, string> = {
+const ICON_TONE: Record<Urgency, string> = {
   calm: 'success.main',
   soon: 'warning.main',
   urgent: 'error.main',
+  over: 'text.secondary',
+};
+
+const TEXT_TONE: Record<Urgency, string | ReturnType<typeof readable>> = {
+  calm: 'text.primary',
+  soon: readable('warning'),
+  urgent: readable('error'),
   over: 'text.secondary',
 };
 
@@ -27,6 +39,8 @@ export interface CountdownProps {
   suffix?: string;
   /** Text once the block is reached. */
   doneText?: string;
+  /** How the tooltip names the block: "Block", "Last block a signature counts in:". */
+  blockLabel?: string;
 }
 
 export function Countdown({
@@ -34,6 +48,7 @@ export function Countdown({
   height,
   suffix = 'left',
   doneText = 'Time is up',
+  blockLabel = 'Block',
 }: CountdownProps) {
   const clock = useNow(1000);
   const display = useAtomValue(timeDisplayAtom);
@@ -52,26 +67,28 @@ export function Countdown({
         : display === 'both'
           ? `${time} · ${blockText}`
           : time;
-  const detail = `Block ${formatCount(height)}, about ${formatDateTime(target)}${now.estimated ? ' (block time estimated)' : ''}`;
+  const detail = `${blockLabel} ${formatCount(height)}, about ${formatDateTime(target)}${now.estimated ? ' (block time estimated)' : ''}`;
 
   return (
     <Tooltip title={detail}>
       <Box
         component="span"
         aria-label={urgency === 'over' ? doneText : `${time} ${suffix}, ${blockText}. ${detail}`}
-        sx={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 0.5,
-          color: TONE[urgency],
-          transition: 'color 400ms ease',
-        }}
+        sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
       >
-        <ScheduleOutlinedIcon aria-hidden sx={{ fontSize: 18 }} />
+        <ScheduleOutlinedIcon
+          aria-hidden
+          sx={{ fontSize: 18, color: ICON_TONE[urgency], transition: 'color 400ms ease' }}
+        />
         <Typography
           component="span"
           variant="body2"
-          sx={{ fontWeight: 700, color: 'inherit', fontVariantNumeric: 'tabular-nums' }}
+          sx={{
+            fontWeight: 700,
+            color: TEXT_TONE[urgency],
+            fontVariantNumeric: 'tabular-nums',
+            transition: 'color 400ms ease',
+          }}
         >
           {main}
         </Typography>

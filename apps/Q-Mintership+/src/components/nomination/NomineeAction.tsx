@@ -11,7 +11,7 @@ import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutli
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
 import type { Signer } from '../../writes/runner';
 import { JoinDialog } from './JoinDialog';
-import { successText } from './tone';
+import { readable } from '../../utils/readable';
 import { JOIN_LABEL, type JoinMode, type NomineeStep } from './nomineeStep';
 
 function Done({ children }: { children: string }) {
@@ -19,7 +19,7 @@ function Done({ children }: { children: string }) {
     <Typography
       variant="body2"
       role="status"
-      sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: successText }}
+      sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: readable('success') }}
     >
       <CheckCircleOutlineOutlinedIcon aria-hidden sx={{ fontSize: 18 }} />
       {children}

@@ -6,7 +6,6 @@ import { useState } from 'react';
 import {
   Box,
   Button,
-  Chip,
   IconButton,
   MenuItem,
   Select,
@@ -25,7 +24,7 @@ import { PageBody } from '../../components/layout/PageBody';
 import { ChangelogDialog } from '../../components/Settings/ChangelogDialog';
 import { AddressText } from '../../components/common/Person';
 import { NameAvatar } from '../../components/common/NameAvatar';
-import { Section } from '../../components/common/Section';
+import { Section, ToneChip } from '../../components/common/Section';
 import { useMyStatus } from '../../hooks/useData';
 import { signIn, useSession } from '../../state/session';
 import {
@@ -163,7 +162,7 @@ export default function SettingsPage() {
                   </Copy>
                   <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                     {roles.map((role) => (
-                      <Chip
+                      <ToneChip
                         key={role}
                         size="small"
                         color="primary"

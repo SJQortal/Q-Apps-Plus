@@ -21,7 +21,7 @@ import { formatDuration, formatRelative } from '../../../utils/format';
 import { usePendingWrite, writeKeys } from '../../../writes/optimistic';
 import { Hero, HeroText, Num, PeopleList, PersonLink } from '../Hero';
 import { LazyJoinDialog } from '../LazyJoinDialog';
-import { readableSuccess } from '../readable';
+import { readable } from '../../../utils/readable';
 import { useBalance } from '../homeData';
 
 export function NominatedHero({
@@ -185,7 +185,7 @@ export function NominatedHero({
         {accepted ? (
           <Typography
             role="status"
-            sx={{ fontWeight: 700, color: (theme) => readableSuccess(theme) }}
+            sx={{ fontWeight: 700, color: readable('success') }}
           >
             You&rsquo;ve accepted ✓{confirming ? ' (confirming…)' : ''}
           </Typography>
