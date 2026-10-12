@@ -93,6 +93,13 @@ describe('Decisions: phases and actions', () => {
     expect(screen.queryByText('Hide what I signed')).toBeNull();
     // The waiting nomination is still listed.
     expect(await screen.findByText('Wren Waiting')).toBeInTheDocument();
+    // Decisions isn't in their navigation, so the page offers Back.
+    expect(await screen.findByRole('button', { name: 'Back' })).toBeInTheDocument();
+  });
+
+  it('has no Back for Minter Admins, whose navigation has Decisions', async () => {
+    await openPage('admin');
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
   });
 });
 

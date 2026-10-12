@@ -133,7 +133,7 @@ export function ChangelogDialog({ open, onClose }: { open: boolean; onClose: () 
             You are on Q-Mintership+ {APP_VERSION}
           </Typography>
         </Box>
-        <IconButton aria-label="Close changelog" onClick={onClose}>
+        <IconButton aria-label="Close changelog" onClick={onClose} sx={{ width: 44, height: 44 }}>
           <CloseIcon />
         </IconButton>
       </Header>
