@@ -238,9 +238,12 @@ export default function NominationsPage() {
                     <>
                       {f.label}
                       {data ? (
-                        <Box component="span" sx={{ ml: 0.75, fontWeight: 700 }}>
-                          {formatCount(counts[f.key])}
-                        </Box>
+                        <>
+                          {' '}
+                          <Box component="span" sx={{ ml: 0.5, fontWeight: 700 }}>
+                            {formatCount(counts[f.key])}
+                          </Box>
+                        </>
                       ) : null}
                     </>
                   }
