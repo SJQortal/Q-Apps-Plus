@@ -228,7 +228,7 @@ export default function SettingsPage() {
               <SettingText
                 id="celebrate-label"
                 title="Celebrate new minters"
-                hint="A small burst when someone you follow here becomes a minter."
+                hint="A small burst on Home when you become a minter."
               />
               <Switch
                 checked={celebrate}

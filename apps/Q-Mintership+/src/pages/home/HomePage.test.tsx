@@ -155,6 +155,18 @@ describe('Home: members', () => {
     expect(within(dialog).getByText('618,400')).toBeInTheDocument();
   });
 
+  it('welcomes a nominee who became a member since Home last showed them, once', async () => {
+    window.localStorage.setItem(`${STORAGE_PREFIX}last-status:${ADDR.learner}`, 'nominated');
+    const first = await renderPage(<HomePage />, { persona: 'learner' });
+    expect(await headline('Welcome to MINTER, Leo Learner!')).toBeInTheDocument();
+    expect(window.localStorage.getItem(`${STORAGE_PREFIX}last-status:${ADDR.learner}`)).toBe(
+      'member'
+    );
+    first.unmount();
+    await renderPage(<HomePage />, { persona: 'learner' });
+    expect(await headline("You're minting, Leo Learner")).toBeInTheDocument();
+  });
+
   it('does not load the whole group for members who cannot nominate', async () => {
     await renderPage(<HomePage />, { persona: 'learner' });
     await headline("You're minting, Leo Learner");

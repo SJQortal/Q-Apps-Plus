@@ -29,6 +29,7 @@ import { LearnerHero, NominatorHero } from './heroes/MemberHero';
 import { NewcomerHero } from './heroes/NewcomerHero';
 import { NominatedHero } from './heroes/NominatedHero';
 import { useNeededSignatures, type NeededSignatures } from './homeData';
+import { useBecameMinter } from './welcome';
 
 /** What the Refresh button reloads (only the keys Home shows; immutable blocks stay). */
 const REFRESH_PREFIXES = [
@@ -66,10 +67,13 @@ function StatusView({
   status,
   needed,
   publicKey,
+  welcome,
 }: {
   status: MyStatus;
   needed: NeededSignatures;
   publicKey: string;
+  /** They just became a minter: welcome them, with the small celebration. */
+  welcome: boolean;
 }) {
   const now = useChainNow();
   switch (status.kind) {
@@ -93,12 +97,12 @@ function StatusView({
     case 'memberNominator':
       return (
         <>
-          <NominatorHero status={status} needed={needed.needed} />
+          <NominatorHero status={status} needed={needed.needed} welcome={welcome} />
           <MemberSection status={status} />
         </>
       );
     case 'member':
-      return <LearnerHero status={status} />;
+      return <LearnerHero status={status} welcome={welcome} />;
     case 'nominated':
       if (!status.nomination) break;
       return (
@@ -138,6 +142,7 @@ export default function HomePage() {
   const my = useMyStatus();
   const needed = useNeededSignatures();
   const status = my.status;
+  const welcome = useBecameMinter(status);
 
   // Mounted sections reload what they show; the rest reloads when next read.
   const refresh = () => {
@@ -167,7 +172,12 @@ export default function HomePage() {
           />
         ) : null}
         {status ? (
-          <StatusView status={status} needed={needed} publicKey={session.publicKey} />
+          <StatusView
+            status={status}
+            needed={needed}
+            publicKey={session.publicKey}
+            welcome={welcome}
+          />
         ) : my.isError ? (
           <ErrorState
             title="Couldn't load your MINTER status."

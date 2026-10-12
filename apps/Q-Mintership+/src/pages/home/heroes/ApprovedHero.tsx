@@ -1,6 +1,8 @@
 /**
  * Approved, but the invite isn't used yet: one step left. "Join now" sends
- * JOIN_GROUP (explained first), and a small celebration marks the moment.
+ * JOIN_GROUP (explained first), and a small celebration marks the moment
+ * (see welcome.ts for the one that greets a nominee approved with a join
+ * request).
  */
 import { useState } from 'react';
 import { Alert, Button } from '@mui/material';
@@ -17,6 +19,7 @@ import { usePendingWrite, writeKeys } from '../../../writes/optimistic';
 import { Hero, HeroText, Num, PersonLink } from '../Hero';
 import { LazyJoinDialog } from '../LazyJoinDialog';
 import { approvedInviteHeight, useBalance } from '../homeData';
+import { rememberStatus } from '../welcome';
 
 export function ApprovedHero({ status }: { status: MyStatus }) {
   const session = useSession();
@@ -111,7 +114,11 @@ export function ApprovedHero({ status }: { status: MyStatus }) {
           mode="join"
           signer={signer}
           needed={null}
-          onSent={() => setCelebrate(true)}
+          onSent={() => {
+            setCelebrate(true);
+            // Celebrated now: the confirmation that follows doesn't celebrate again.
+            rememberStatus(status.address, 'member');
+          }}
         />
       ) : null}
     </>

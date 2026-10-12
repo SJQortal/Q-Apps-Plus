@@ -41,14 +41,26 @@ function NextLevel({ status }: { status: MyStatus }) {
   );
 }
 
-export function LearnerHero({ status }: { status: MyStatus }) {
+/** "Welcome to MINTER, Ada!" for someone who just became a member. */
+function welcomeTitle(name: string | null): string {
+  return `Welcome to MINTER${name ? `, ${name}` : ''}!`;
+}
+
+export function LearnerHero({ status, welcome }: { status: MyStatus; welcome?: boolean }) {
   const [tipsOpen, setTipsOpen] = useState(false);
   const pct = Math.round(status.progress.targetProgress * 100);
   return (
     <>
       <Hero
         eyebrow={`MINTER member · Level ${status.level}`}
-        title={status.name ? `You're minting, ${status.name}` : "You're minting"}
+        title={
+          welcome
+            ? welcomeTitle(status.name)
+            : status.name
+              ? `You're minting, ${status.name}`
+              : "You're minting"
+        }
+        celebrate={welcome}
         actions={
           <Button
             variant="contained"
@@ -112,12 +124,27 @@ function OpenNominationsLine({ address }: { address: string }) {
   );
 }
 
-export function NominatorHero({ status, needed }: { status: MyStatus; needed: number | null }) {
+export function NominatorHero({
+  status,
+  needed,
+  welcome,
+}: {
+  status: MyStatus;
+  needed: number | null;
+  welcome?: boolean;
+}) {
   const name = status.name;
   return (
     <Hero
       eyebrow={`MINTER member · Level ${status.level}`}
-      title={name ? `${name}, you can nominate new minters` : 'You can nominate new minters'}
+      title={
+        welcome
+          ? welcomeTitle(name)
+          : name
+            ? `${name}, you can nominate new minters`
+            : 'You can nominate new minters'
+      }
+      celebrate={welcome}
       actions={
         status.canNominate ? (
           <Button
