@@ -13,6 +13,8 @@ import {
 } from '../../e2e/world.mjs';
 import { resetQueries } from '../data/query';
 import { setQdnRetryDelays } from '../data/qdn';
+import { setLookupDelays } from '../writes/runner';
+import { setTxWaitDelays } from '../writes/flows';
 import { mockFetchRoute, mockQortalRequest } from './setup';
 
 export { ADDR, NOW, TIP, MS_PER_BLOCK, PEOPLE, NULL_OWNER } from '../../e2e/world.mjs';
@@ -45,6 +47,8 @@ export function installWorld(
 ): InstalledWorld {
   resetQueries();
   setQdnRetryDelays([1, 1]);
+  setLookupDelays([1, 1, 1]);
+  setTxWaitDelays([1, 1]);
   if (options.fakeNow !== false) {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(1_791_830_000_000));
