@@ -62,7 +62,7 @@ export default {
   async setup({ browser }) {
     const gen = await browser.newPage({ viewport: { width: 64, height: 64 } });
     await gen.setContent(
-      '<div style="width:64px;height:64px;background:linear-gradient(135deg,#73d0c3,#84aff0)"></div>'
+      '<body style="margin:0"><div style="width:64px;height:64px;background:linear-gradient(135deg,#73d0c3,#84aff0)"></div></body>'
     );
     PNG = await gen.screenshot({ clip: { x: 0, y: 0, width: 64, height: 64 } });
     await gen.close();
