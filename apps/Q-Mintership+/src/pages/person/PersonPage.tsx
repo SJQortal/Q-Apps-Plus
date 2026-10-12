@@ -14,7 +14,6 @@ import { Link as RouterLink, Navigate, useParams } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import { getNameOwner, isAddress } from '../../data/accounts';
-import { loadMyStatus } from '../../data/me';
 import {
   buildTimeline,
   eventsAbout,
@@ -30,6 +29,7 @@ import {
   useGroupInfo,
   useMyStatus,
   useNominationsFor,
+  usePersonStatus,
 } from '../../hooks/useData';
 import { useQuery } from '../../hooks/useQuery';
 import { useSession } from '../../state/session';
@@ -111,10 +111,8 @@ function NameLookup({ name }: { name: string }) {
 function PersonView({ address }: { address: string }) {
   const session = useSession();
   const self = session.status === 'ready' && session.address === address;
-  // Someone else's standing changes slowly; their nomination card refreshes on its own.
-  const status = useQuery(`status:${address}`, (force) => loadMyStatus(address, { force }), {
-    refreshMs: 3 * 60_000,
-  });
+  // Their nomination card refreshes on its own, faster.
+  const status = usePersonStatus(address);
   const account = useAccount(address);
   const history = useAddressHistory(address);
   const nominations = useNominationsFor(address);

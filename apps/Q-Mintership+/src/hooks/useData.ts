@@ -75,6 +75,20 @@ export function useAddressHistory(address: string | null) {
   );
 }
 
+/** Anyone's MINTER status: the same read (and key) as useMyStatus. */
+function useStatusQuery(address: string | null, refreshMs: number) {
+  return useQuery(
+    address ? `status:${address}` : null,
+    (force) => loadMyStatus(address as string, { force }),
+    { refreshMs }
+  );
+}
+
+/** Someone else's status, for their page: their standing changes slowly. */
+export function usePersonStatus(address: string | null) {
+  return useStatusQuery(address, 3 * 60_000);
+}
+
 export interface MyStatusResult extends Pick<
   UseQueryResult<MyStatus>,
   'refetch' | 'isLoading' | 'isError' | 'error' | 'fetching'
@@ -89,13 +103,7 @@ export interface MyStatusResult extends Pick<
 export function useMyStatus(): MyStatusResult {
   const session = useSession();
   const address = session.status === 'ready' ? session.address : null;
-  const query = useQuery(
-    address ? `status:${address}` : null,
-    (force) => loadMyStatus(address as string, { force }),
-    {
-      refreshMs: 90_000,
-    }
-  );
+  const query = useStatusQuery(address, 90_000);
   if (session.status === 'outside')
     return { ...query, status: anonymousStatus('outside'), isLoading: false };
   if (session.status === 'signedOut' || session.status === 'error') {
