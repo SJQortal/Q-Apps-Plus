@@ -131,12 +131,21 @@ Agreed with Simon (2026-10-12):
 
 ### Night 1 (2026-10-12): foundation, data, writes behind mocks, and the screens
 
-_In progress; numbers are filled in as the night ends._
+_Done on the branch; Simon reviews in the morning._
 
 - **Scaffold fixes:** the 8 failing tests (one a real bug: `searchsimple` dropped the offset, so paging returned page one again), the lint warning, the theme kit copy re-synced.
 - **Stack and look:** React 19.3, MUI 9.4, the theme kit with four themes (Hub 2.0 = Q-Mintership Classic), a Hub 3.0 shell (rail; a bottom bar of five on phones; a compact rail in landscape), Back from the app's own history, a header that hides while scrolling on phones, the app sized to Hub's frame, Settings.
 - **One module for every + specific:** `src/constants/plus.ts`.
 - **Core rules, data layer, write layer:** as described above, with the mock MINTER world (`e2e/world.mjs`) that tests and the screenshot check share.
+- **Finishing pass (2026-10-13):**
+  - **Read store:** `invalidate()` notified with the same state object, so `useSyncExternalStore` skipped the render and mounted views kept pre-write data. Each invalidation now hands the key a new state and a version; views reload once per invalidation, a load that started before it can't mark the key fresh, and a failed reload doesn't loop. Home's re-render workaround is gone.
+  - **Readable colours:** one helper (`src/utils/readable.ts`) gives any theme colour as text at 4.5:1 on every surface, keeping its hue; countdowns keep the urgency colour on the icon. Q-Mintership Classic's light accents are deeper shades of the original (teal `#186d64`, gold `#8b6016`, green `#27764b`, red `#b34444`), its fills pick black or white text at 4.5:1, and its buttons are bold sentence case like the original's.
+  - **Accessible names:** decision rows are named by their visible text; avatar lists put list semantics on wrappers; chain-only nominees show their name.
+  - **One of each:** one Accept / Join dialog (Home and Nominations), one countdown, one inline person, one avatar row; the same words for the same things (Minter Admin, signatures, admin seats, Join now).
+  - **Behaviour:** countdowns show the blocks still to go when the time estimate runs out first; Settings → Motion → Full now overrides the system's reduced motion; Home welcomes a nominee who became a member ("Welcome to MINTER", with the small celebration, once); Back wherever a page isn't in the navigation on screen.
+  - **Cleanup:** the scaffold's `src/qortal/constants.ts`, `cache.ts` and `util.ts` are gone; `usePersonStatus` and `useBalance` are shared hooks.
+- **Screenshot check** (`scripts/screens.mjs`, 26 screens × 5 sizes × 4 themes = 520 captures per mode, the page clock pinned to the mock world's time): dark and light both 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations. The `small-text` counts that remain are the 12 px section titles and bottom-bar labels, badge counts and the avatars' decorative letters.
+- **Tests:** 369 passed, 1 skipped (the node decode test, `npm run test:decode`), in 39 files.
 
 ## Follow-ups
 
