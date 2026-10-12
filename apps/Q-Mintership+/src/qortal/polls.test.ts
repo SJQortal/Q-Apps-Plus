@@ -1,89 +1,73 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchCallsFor, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../test/setup';
-import {
-  createBoardPoll,
-  fetchPollResults,
-  fetchPollResultsCached,
-  getPollOwnerAddressCached,
-  resetPollCaches,
-  voteNoOnPoll,
-  voteYesOnPoll,
-} from './polls';
+import { describe, expect, it } from 'vitest';
+import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../test/setup';
+import { getPollCounts, getPollInfo, pollNameFor } from './polls';
 
-const RESULTS = {
-  totalVotes: 2,
-  voteCounts: [
-    { optionName: 'Yes', voteCount: 1 },
-    { optionName: 'No', voteCount: 1 },
-  ],
-  votes: [],
-};
+const NOT_FOUND = () =>
+  new Response(JSON.stringify({ error: 501, message: 'POLL_NO_EXISTS' }), { status: 404 });
 
-beforeEach(() => resetPollCaches());
+describe('old board polls (read-only)', () => {
+  it('names a card poll after the card', () => {
+    expect(pollNameFor('Minter-board-card-abc123')).toBe('Minter-board-card-abc123-poll');
+  });
 
-describe('poll results', () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
-
-  it('retries with the legacy backoff until Core answers', async () => {
-    let calls = 0;
-    mockFetchRoute('/polls/votes/', () => {
-      calls += 1;
-      return calls < 3 ? new Response('not yet', { status: 404 }) : RESULTS;
+  it('reads counts by option name, whatever order Core lists them in', async () => {
+    mockFetchRoute('/polls/votes/', () => ({
+      totalVotes: 10,
+      totalWeight: 15_545_388,
+      voteCounts: [
+        { optionName: 'No', voteCount: 3 },
+        { optionName: 'Yes', voteCount: 7 },
+      ],
+    }));
+    expect(await getPollCounts('Minter-board-card-abc123-poll')).toEqual({
+      yes: 7,
+      no: 3,
+      total: 10,
     });
-    const promise = fetchPollResults('Minter-board-card-abc');
-    await vi.advanceTimersByTimeAsync(500);
-    await vi.advanceTimersByTimeAsync(1000);
-    await expect(promise).resolves.toEqual(RESULTS);
-    expect(calls).toBe(3);
-  });
-
-  it('gives up after ten attempts and returns null', async () => {
-    mockFetchRoute('/polls/votes/', new Response('nope', { status: 500 }));
-    const promise = fetchPollResults('missing');
-    await vi.advanceTimersByTimeAsync(60_000);
-    await expect(promise).resolves.toBeNull();
-    expect(fetchCallsFor('/polls/votes/')).toHaveLength(10);
-  });
-
-  it('caches successful results for the session and merges concurrent calls', async () => {
-    mockFetchRoute('/polls/votes/', RESULTS);
-    await Promise.all([fetchPollResultsCached('p1'), fetchPollResultsCached('p1')]);
-    await fetchPollResultsCached('p1');
-    expect(fetchCallsFor('/polls/votes/')).toEqual(['/polls/votes/p1']);
-    await expect(fetchPollResultsCached('')).resolves.toBeNull();
-  });
-});
-
-describe('poll info and votes', () => {
-  it('caches the owner lookup', async () => {
-    mockFetchRoute('/polls/', { pollName: 'p', owner: 'Qowner', creatorPublicKey: 'PK' });
-    await expect(getPollOwnerAddressCached('p')).resolves.toBe('Qowner');
-    await getPollOwnerAddressCached('p');
-    expect(fetchCallsFor('/polls/p')).toHaveLength(1);
-  });
-
-  it('votes Yes as option 0 and No as option 1 through the mocked bridge', async () => {
-    mockQortalRequest('VOTE_ON_POLL', { signature: 'sig' });
-    await voteYesOnPoll('p');
-    await voteNoOnPoll('p');
-    expect(qortalCallsFor('VOTE_ON_POLL')).toEqual([
-      { action: 'VOTE_ON_POLL', pollName: 'p', optionIndex: 0 },
-      { action: 'VOTE_ON_POLL', pollName: 'p', optionIndex: 1 },
+    expect(fetchCallsFor('/polls/votes/')).toEqual([
+      '/polls/votes/Minter-board-card-abc123-poll?onlyCounts=true',
     ]);
   });
 
-  it('creates a poll with the exact legacy option list', async () => {
-    mockQortalRequest('CREATE_POLL', { signature: 'sig' });
-    await createBoardPoll({ pollName: 'p', pollDescription: 'd', pollOwnerAddress: 'Qo' });
-    expect(qortalCallsFor('CREATE_POLL')).toEqual([
-      {
-        action: 'CREATE_POLL',
-        pollName: 'p',
-        pollDescription: 'd',
-        pollOptions: ['Yes, No'],
-        pollOwnerAddress: 'Qo',
-      },
-    ]);
+  it('tolerates odd answers without inventing votes', async () => {
+    mockFetchRoute('/polls/votes/', () => ({ voteCounts: [{ optionName: 'Yes', voteCount: -2 }] }));
+    expect(await getPollCounts('p')).toEqual({ yes: 0, no: 0, total: 0 });
+  });
+
+  it('answers null for a poll Core does not have, and asks only once', async () => {
+    mockFetchRoute('/polls/', NOT_FOUND);
+    expect(await getPollCounts('missing-poll')).toBeNull();
+    expect(await getPollInfo('missing-poll')).toBeNull();
+    expect(fetchCallsFor('/polls/')).toHaveLength(2);
+  });
+
+  it('reports other failures to the caller', async () => {
+    mockFetchRoute('/polls/', () => new Response('boom', { status: 500 }));
+    await expect(getPollCounts('p')).rejects.toThrow(/500/);
+  });
+
+  it('reads the owner and options, encoding unusual poll names', async () => {
+    mockFetchRoute('/polls/', () => ({
+      pollName: 'a b/c-poll',
+      description: 'Mintership Board Poll for Bob',
+      owner: 'QOwner',
+      published: 5,
+      pollOptions: [{ optionName: 'Yes' }, { optionName: 'No' }],
+    }));
+    const info = await getPollInfo('a b/c-poll');
+    expect(info).toEqual({
+      pollName: 'a b/c-poll',
+      description: 'Mintership Board Poll for Bob',
+      owner: 'QOwner',
+      published: 5,
+      options: ['Yes', 'No'],
+    });
+    expect(fetchCallsFor('/polls/')).toEqual(['/polls/a%20b%2Fc-poll']);
+  });
+
+  it('never goes through Hub (no votes, no new polls)', async () => {
+    mockFetchRoute('/polls/', NOT_FOUND);
+    await getPollCounts('p');
+    expect(qortalCalls).toHaveLength(0);
   });
 });
