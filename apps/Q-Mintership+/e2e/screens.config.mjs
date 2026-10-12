@@ -100,11 +100,34 @@ export default {
     { key: 'home-banned', path: '/?as=banned', after: settle },
     { key: 'home-left', path: '/?as=left', after: settle },
     { key: 'nominations', path: '/nominations?as=nominator', after: settle },
+    // The nominee's own card comes first, with Accept nomination.
+    { key: 'nominations-nominee', path: '/nominations?as=nominatedWaiting', after: settle },
     { key: 'nominate', path: '/nominate?as=nominator', after: settle },
+    // A candidate picked from a link. `who` comes first: the check appends
+    // `?theme=` to the last value (the app ignores it, see appParam).
+    {
+      key: 'nominate-picked',
+      path: `/nominate?who=${ADDR.newcomerName}&as=nominator`,
+      after: wait('main textarea'),
+    },
     { key: 'decisions', path: '/decisions?as=admin', after: settle },
+    { key: 'decisions-member', path: '/decisions?as=learner', after: settle },
     { key: 'person', path: `/people/${ADDR.nominatedSigning}?as=admin`, after: settle },
     { key: 'history', path: '/history?as=learner', after: settle },
+    // An old card from the original app (e2e/world-legacy.mjs), with its poll and comments.
+    {
+      key: 'legacy-card',
+      path: '/history/card/Minter-board-card-bQ7xK2?as=learner',
+      after: wait('#legacy-poll-title'),
+    },
+    // An encrypted admin-board card: listed, never decrypted; links to the original app.
+    {
+      key: 'legacy-admin-card',
+      path: '/history/card/card-MAC-NC-1780000000000-a1B2c3?as=admin',
+      after: wait('main h2'),
+    },
     { key: 'activity', path: '/activity?as=admin', after: settle },
+    { key: 'activity-member', path: '/activity?as=learner', after: settle },
     { key: 'settings', path: '/settings?as=admin', after: settle },
   ],
 };

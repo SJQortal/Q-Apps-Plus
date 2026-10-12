@@ -47,6 +47,7 @@ import type { Nomination } from '../../data/nominations';
 import { peekQuery } from '../../data/query';
 import { useMyStatus, useNominations } from '../../hooks/useData';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
+import { appParam } from '../../routes/hubLocation';
 import { PATHS, decisionPath, nominatePath, personPath } from '../../routes/paths';
 import type { MyStatus } from '../../rules/status';
 import { signIn, signerOf, useSession, type Session } from '../../state/session';
@@ -82,7 +83,7 @@ export default function NominationsPage() {
   const shortFrame = useShortFrame();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const filter = parseFilter(params.get('show'));
+  const filter = parseFilter(appParam(params, 'show'));
   const [search, setSearch] = useState('');
   const [decidedShown, setDecidedShown] = useState(0);
   const [support, setSupport] = useState<{
@@ -444,7 +445,12 @@ function CardActions({
         <Typography
           variant="body2"
           role={inFlight ? 'status' : undefined}
-          sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: readable('success') }}
+          sx={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 0.5,
+            color: readable('success'),
+          }}
         >
           <CheckCircleOutlineOutlinedIcon aria-hidden sx={{ fontSize: 18 }} />
           {mine}

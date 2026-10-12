@@ -71,6 +71,18 @@ export function normalizeHubPath(path: string): string {
 }
 
 /**
+ * One of the app's own query values (`?who=`, `?show=`, `?d=`). Hub's
+ * `?theme=…&lang=…` can be appended to a URL that already has a query, which
+ * leaves a second "?" inside the last value ("Q…?theme=dark"): from there on
+ * it isn't the app's.
+ */
+export function appParam(params: URLSearchParams, key: string): string | null {
+  const value = params.get(key);
+  if (value === null) return null;
+  return value.split('?')[0] || null;
+}
+
+/**
  * A `qortal://APP/Q-Mintership+/<path>` link for sharing. Hub never decodes
  * the app name, so its `+` stays literal (docs/QORTAL.md → Deep links).
  */

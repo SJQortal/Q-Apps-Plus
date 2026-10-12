@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  appParam,
   buildAppLink,
   currentQortalAppName,
   normalizeHubPath,
@@ -53,5 +54,16 @@ describe('normalizeHubPath and buildAppLink', () => {
       'qortal://APP/Q-Mintership+/history/card/Minter-board-card-1'
     );
     expect(buildAppLink('/')).toBe('qortal://APP/Q-Mintership+');
+  });
+});
+
+describe('appParam', () => {
+  it("reads the app's own value when Hub appended its query after it", () => {
+    const params = new URLSearchParams('?who=QAbc&as=nominator?theme=dark&lang=en');
+    expect(appParam(params, 'who')).toBe('QAbc');
+    expect(appParam(new URLSearchParams('?as=x&who=QAbc?theme=light'), 'who')).toBe('QAbc');
+    expect(appParam(new URLSearchParams('?show=open'), 'show')).toBe('open');
+    expect(appParam(new URLSearchParams('?who=?theme=dark'), 'who')).toBeNull();
+    expect(appParam(new URLSearchParams(''), 'who')).toBeNull();
   });
 });

@@ -50,6 +50,7 @@ import { useAdmins, useChainNow, useGroupInfo, useMyStatus } from '../../hooks/u
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useQuery } from '../../hooks/useQuery';
+import { appParam } from '../../routes/hubLocation';
 import { PATHS, personPath } from '../../routes/paths';
 import { NOMINEE_BLOCK_TEXT, type NomineeBlock } from '../../rules/nomination';
 import type { MyStatus } from '../../rules/status';
@@ -152,7 +153,7 @@ interface Published {
 function NominateForm({ me, status }: { me: string; status: MyStatus }) {
   const session = useSession();
   const [params, setParams] = useSearchParams();
-  const who = params.get('who');
+  const who = appParam(params, 'who');
   const [picked, setPicked] = useState<PickedCandidate | null>(() =>
     who && isAddress(who) ? { address: who, name: null } : null
   );

@@ -10,6 +10,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { appParam } from '../../routes/hubLocation';
 import {
   Alert,
   Box,
@@ -124,7 +125,7 @@ export default function DecisionsPage() {
   const [hideSigned, setHideSigned] = useAtom(decisionsHideSignedAtom);
   const writes = useAtomValue(pendingWritesAtom);
   const [params] = useSearchParams();
-  const target = params.get('d');
+  const target = appParam(params, 'd');
   const phone = usePhoneLayout();
   const landscape = useLandscapeFrame();
   const reduced = useReducedMotion();
