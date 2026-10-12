@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { act, render } from '@testing-library/react'
 import { useState } from 'react'
-import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
+import { BrowserRouter, MemoryRouter, Route, Routes, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { OVERLAY_STATE_KEY, OverlayBackClose } from './OverlayBackClose'
 import { BACK_STATE_KEY } from './usePhoneBackClose'
 
@@ -71,6 +71,46 @@ describe('OverlayBackClose', () => {
     expect(onClose).not.toHaveBeenCalled()
     act(() => back(-1))
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('closing it while a page opens over a background location (the drawer\'s Settings) keeps that page', () => {
+    // App.tsx renders the mail page at Settings' background location, so the
+    // drawer there sees the entry it was opened on, not Settings.
+    let open: (value: boolean) => void = () => {}
+    let openSettings: () => void = () => {}
+    function MailPage() {
+      const [drawer, setDrawer] = useState(false)
+      const navigate = useNavigate()
+      const location = useLocation()
+      open = setDrawer
+      openSettings = () => {
+        navigate('/settings', { state: { backgroundLocation: location } })
+        setDrawer(false)
+      }
+      return <OverlayBackClose open={drawer} onClose={() => setDrawer(false)} />
+    }
+    function App() {
+      const location = useLocation()
+      const background = (location.state as { backgroundLocation?: Location } | null)?.backgroundLocation
+      return (
+        <>
+          <Routes location={background ?? location}>
+            <Route path="/" element={<MailPage />} />
+          </Routes>
+          {background && <Routes><Route path="/settings" element={<p>Settings</p>} /></Routes>}
+        </>
+      )
+    }
+    window.history.replaceState(null, '', '/')
+    const { getByText } = render(
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    )
+    act(() => open(true))
+    act(() => openSettings())
+    expect(window.location.pathname).toBe('/settings')
+    expect(getByText('Settings')).toBeTruthy()
   })
 
   it('does nothing outside a router', () => {

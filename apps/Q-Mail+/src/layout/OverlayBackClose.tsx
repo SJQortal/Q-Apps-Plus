@@ -25,6 +25,26 @@ const withoutOverlay = (state: unknown): Record<string, unknown> | null => {
   return Object.keys(rest).length ? rest : null;
 };
 
+/**
+ * Whether the entry the browser is really on carries this overlay's id. Under
+ * Settings the mail page renders at its background location (App.tsx), so
+ * useLocation() there is the entry Settings was opened from, not Settings:
+ * the router's own record of the real entry (`history.state.usr`, read only)
+ * decides, so closing the mailboxes drawer as Settings opens no longer
+ * replaces Settings with the inbox. Without one (a memory router), the
+ * location seen is the real one.
+ */
+const realEntryIsOurs = (seen: unknown, id: string): boolean => {
+  let real: unknown;
+  try {
+    real = window.history.state;
+  } catch {
+    real = undefined;
+  }
+  const usr = real && typeof real === 'object' && 'usr' in real ? (real as { usr: unknown }).usr : seen;
+  return stateObject(usr)[OVERLAY_STATE_KEY] === id && stateObject(seen)[OVERLAY_STATE_KEY] === id;
+};
+
 export interface OverlayBackCloseProps {
   open: boolean;
   onClose: () => void;
@@ -67,7 +87,7 @@ function OverlayBackCloseInRouter({ open, onClose, enabled = true }: OverlayBack
     } else if (!active && pushed.current) {
       pushed.current = false;
       sawOwnEntry.current = false;
-      if (stateObject(current.state)[OVERLAY_STATE_KEY] === id) {
+      if (realEntryIsOurs(current.state, id)) {
         navigate(path, { replace: true, state: withoutOverlay(current.state) });
       }
     }
@@ -79,7 +99,7 @@ function OverlayBackCloseInRouter({ open, onClose, enabled = true }: OverlayBack
       if (!pushed.current) return;
       pushed.current = false;
       const current = locationRef.current;
-      if (stateObject(current.state)[OVERLAY_STATE_KEY] === id) {
+      if (realEntryIsOurs(current.state, id)) {
         navigate(current.pathname + current.search + current.hash, { replace: true, state: withoutOverlay(current.state) });
       }
     },

@@ -3559,7 +3559,7 @@ export const Mail = ({ isFromTo, isHidden = false }: MailProps) => {
       onSelect={onSelectSidebarItem}
       avatarUrlByName={avatarUrlByNameLowercase}
       groupAvatarUrlById={groupAvatarUrlById}
-      onOpenSettings={openSettings}
+      onOpenSettings={isDesktopLayout ? openSettings : undefined}
       version={packageJson.version}
       onClose={isDesktopLayout ? undefined : closeRail}
       onHideInboxName={hideInboxName}

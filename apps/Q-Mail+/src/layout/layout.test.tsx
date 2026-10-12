@@ -403,6 +403,12 @@ describe('Rail and BottomNav badges', () => {
     expect(onClose).toHaveBeenCalledTimes(3)
   })
 
+  it('has no Settings row without onOpenSettings (the drawer: the top bar has the gear)', () => {
+    const items = [{ id: 'inbox', label: 'Inbox' }]
+    wrap(<Rail items={items} activeItemId="inbox" onSelect={() => {}} version="1.0.0" onClose={() => {}} />)
+    expect(screen.queryByRole('button', { name: 'Settings' })).toBeNull()
+  })
+
   it('bottom nav badges read as counts and cap at 99+', () => {
     const items = [
       { id: 'inbox', label: 'Inbox', icon: <InboxOutlinedIcon />, badge: 250 },

@@ -205,7 +205,8 @@ export interface RailProps {
   avatarUrlByName?: Map<string, string>;
   /** Avatar URL per group id. */
   groupAvatarUrlById?: Record<string, string>;
-  onOpenSettings: () => void;
+  /** The Settings row at the bottom. Left out in the drawer, where the top bar has a Settings gear. */
+  onOpenSettings?: () => void;
   version: string;
   /** In a drawer: show a close button and call this. */
   onClose?: () => void;
@@ -414,7 +415,7 @@ function RailView({
     onClose?.();
   };
   const openSettings = () => {
-    onOpenSettings();
+    onOpenSettings?.();
     onClose?.();
   };
 
@@ -616,10 +617,12 @@ function RailView({
             {publishState.badgeText && <Badge color="warning" variant="dot" sx={{ mr: 1.5 }} />}
           </Row>
         )}
-        <Row onClick={openSettings} aria-label="Settings">
-          <SettingsOutlinedIcon />
-          <Label>Settings</Label>
-        </Row>
+        {onOpenSettings && (
+          <Row onClick={openSettings} aria-label="Settings">
+            <SettingsOutlinedIcon />
+            <Label>Settings</Label>
+          </Row>
+        )}
       </Footer>
     </Root>
   );
