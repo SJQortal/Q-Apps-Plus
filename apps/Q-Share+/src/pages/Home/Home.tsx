@@ -1,323 +1,550 @@
-import React, { useEffect, useRef, useState } from "react";
-import ReactDOM from "react-dom";
+import { ClearFieldButton } from "../../components/common/ClearFieldButton";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import {
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Skeleton,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from "@mui/material";
+import FilterListIcon from "@mui/icons-material/FilterList";
+import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
+import { useNavigate } from "react-router-dom";
+import { BottomSheet } from "../../components/common/mobile/BottomSheet";
+import { useNarrowLayout } from "../../hooks/usePhoneLayout";
+import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { RootState } from "../../state/store";
-import { FileList } from "./FileList.tsx";
-import { Box, Button, Grid, Input, useTheme } from "@mui/material";
-import { useFetchFiles } from "../../hooks/useFetchFiles.tsx";
+import { FileGridSkeleton, FileList } from "./FileList.tsx";
+import { useFetchFiles, useListedFiles } from "../../hooks/useFetchFiles.tsx";
 import LazyLoad from "../../components/common/LazyLoad";
-import { FiltersCol, FiltersContainer } from "./FileList-styles.tsx";
-import { SubtitleContainer } from "./Home-styles";
-import {
-  changefilterName,
-  changefilterSearch,
-  changeFilterType,
-} from "../../state/features/fileSlice.ts";
+import { PageRetry } from "../../components/common/PageRetry.tsx";
+import { FiltersRail } from "./FileList-styles.tsx";
+import { changefilterName, changefilterSearch } from "../../state/features/fileSlice.ts";
 import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
-import {
-  CategoryList,
-  CategoryListRef,
-} from "../../components/common/CategoryList/CategoryList.tsx";
-import { StatsData } from "../../components/StatsData.tsx";
+import { CategoryList, CategoryListRef } from "../../components/common/CategoryList/CategoryList.tsx";
+import { EmptyState } from "../../components/common/EmptyState.tsx";
+import { NameSuggestField } from "../../components/common/NameSuggestField.tsx";
+import { ListViewToggle } from "../../components/common/ListViewToggle.tsx";
+import { QDN_PAGE } from "../../utils/qdnSearch.ts";
+import { isNameHidden, useAppSettings } from "../../utils/settings.ts";
+import { requestOpenPublish } from "../../constants/events.ts";
 
-interface HomeProps {
-  mode?: string;
+export type { SortOrder } from "../../utils/settings.ts";
+import type { SortOrder } from "../../utils/settings.ts";
+
+/** The filters a search ran with; the form fields may have changed since. */
+interface AppliedFilters {
+  name: string;
+  /** Every name of the signed-in account ("All my names"), in place of `name`; empty otherwise. */
+  names: string[];
+  keywords: string;
+  categories: string[];
 }
-export const Home = ({ mode }: HomeProps) => {
-  const theme = useTheme();
-  const prevVal = useRef("");
-  const categoryListRef = useRef<CategoryListRef>(null);
-  const isFiltering = useSelector((state: RootState) => state.file.isFiltering);
-  const filterValue = useSelector((state: RootState) => state.file.filterValue);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const filterType = useSelector((state: RootState) => state.file.filterType);
-  const totalFilesPublished = useSelector(
-    (state: RootState) => state.global.totalFilesPublished
-  );
-  const totalNamesPublished = useSelector(
-    (state: RootState) => state.global.totalNamesPublished
-  );
-  const filesPerNamePublished = useSelector(
-    (state: RootState) => state.global.filesPerNamePublished
-  );
-  const setFilterType = payload => {
-    dispatch(changeFilterType(payload));
-  };
-  const filterSearch = useSelector(
-    (state: RootState) => state.file.filterSearch
-  );
 
-  const setFilterSearch = payload => {
-    dispatch(changefilterSearch(payload));
-  };
-  const filterName = useSelector((state: RootState) => state.file.filterName);
+interface ListQuery {
+  applied: AppliedFilters;
+  sort: SortOrder;
+  following: boolean;
+  hasMore: boolean;
+}
 
-  const setFilterName = payload => {
-    dispatch(changefilterName(payload));
-  };
+/**
+ * The query behind state.file.files. Home remounts on Back with the rows still
+ * in the store, and must show and page the same list, not its defaults.
+ */
+let listQuery: ListQuery | null = null;
 
-  const isFilterMode = useRef(false);
-  const firstFetch = useRef(false);
-  const afterFetch = useRef(false);
-  const isFetchingFiltered = useRef(false);
-  const isFetching = useRef(false);
+/** The most specific category picked, e.g. "Music" for Audio › Music. */
+export function categoryLabel(ids: string[]): string {
+  let label = "";
+  ids.forEach((id, index) => {
+    if (!id) return;
+    const options =
+      index === 0 ? allCategoryData.category : allCategoryData.subCategories[index - 1]?.[ids[index - 1]];
+    const match = options?.find((option) => option.id === +id);
+    if (match) label = match.name;
+  });
+  return label;
+}
 
-  const countNewFiles = useSelector(
-    (state: RootState) => state.file.countNewFiles
-  );
-  const userAvatarHash = useSelector(
-    (state: RootState) => state.global.userAvatarHash
-  );
-
-  const { files: globalVideos } = useSelector((state: RootState) => state.file);
-
-  const setSelectedCategoryFiles = payload => {};
-
+export const Home = () => {
+  const phone = useNarrowLayout();
   const dispatch = useDispatch();
-  const filteredFiles = useSelector(
-    (state: RootState) => state.file.filteredFiles
+  const navigate = useNavigate();
+  const categoryListRef = useRef<CategoryListRef>(null);
+  const files = useSelector((state: RootState) => state.file.files);
+  const filterSearch = useSelector((state: RootState) => state.file.filterSearch);
+  const filterName = useSelector((state: RootState) => state.file.filterName);
+  const username = useSelector((state: RootState) => state.auth?.user?.name);
+  const accountNames = useSelector((state: RootState) => state.auth?.user?.names);
+  const myNames = useMemo(() => [...new Set((accountNames ?? []).map((n) => n.name).filter(Boolean))], [accountNames]);
+  const listVersion = useSelector((state: RootState) => state.file.listVersion);
+  const settings = useAppSettings();
+  // Back on Home with rows still loaded: pick up the query that loaded them. A
+  // Following or "All my names" list whose chip is gone (Following feed
+  // switched off in Settings, or signed out) is not restored: it would page
+  // those shares with no way to turn that off. The default list loads over it instead.
+  const [{ restored, reloadDefault }] = useState(() => {
+    const query = files.length > 0 ? listQuery : null;
+    const chipGone =
+      (Boolean(query?.following) && !(username && settings.followingFeed)) ||
+      (Boolean(query?.applied.names.length) && !username);
+    return { restored: chipGone ? null : query, reloadDefault: chipGone };
+  });
+  const [sort, setSort] = useState<SortOrder>(restored?.sort ?? settings.defaultSort);
+  const [following, setFollowing] = useState(restored?.following ?? false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  // A next page failed: the rows stay, with a Retry for that page.
+  const [pageError, setPageError] = useState(false);
+  const [hasMore, setHasMore] = useState(restored?.hasMore ?? true);
+  const [applied, setApplied] = useState<AppliedFilters>(
+    () => restored?.applied ?? { name: filterName, names: [], keywords: filterSearch, categories: [] }
   );
+  // The same, for next-page loads, which must not pick up edits that weren't applied.
+  const appliedRef = useRef(applied);
+  const isFetching = useRef(false);
+  const requestId = useRef(0);
+  const mounted = useRef(false);
+  // Holds the list's rows, for Retry to move focus to the first row its page adds.
+  const listColumn = useRef<HTMLDivElement>(null);
+  // A new one for each new list (filters, sort, refresh), so paging starts a fresh budget.
+  const [listId, setListId] = useState(0);
 
-  const {
-    getFiles,
-    checkAndUpdateFile,
-    getFile,
-    hashMapFiles,
-    getNewFiles,
-    checkNewFiles,
-    getFilesFiltered,
-    getFilesCount,
-  } = useFetchFiles();
+  const { getFiles, queueBodies } = useFetchFiles();
 
-  const getFilesHandler = React.useCallback(
-    async (reset?: boolean, resetFilers?: boolean) => {
-      if (!firstFetch.current || !afterFetch.current) return;
-      if (isFetching.current) return;
+  const runSearch = useCallback(
+    async (
+      reset: boolean,
+      overrides: { name?: string; sort?: SortOrder; clear?: boolean; following?: boolean; allNames?: boolean } = {}
+    ) => {
+      // A next page waits for the one in flight; a reset (filters, sort, refresh)
+      // always starts, and whatever was in flight is ignored when it lands.
+      if (!reset && (isFetching.current || !hasMore)) return;
+      const id = ++requestId.current;
+      const current = () => id === requestId.current;
+      if (reset) setListId((n) => n + 1);
       isFetching.current = true;
-      const selectedCategories =
-        categoryListRef.current.getSelectedCategories() || [];
-
-      await getFiles(
-        {
-          name: filterName,
-          categories: selectedCategories,
-          keywords: filterSearch,
-          type: filterType,
-        },
-        reset,
-        resetFilers
-      );
-      isFetching.current = false;
+      setIsLoading(true);
+      setError(null);
+      setPageError(false);
+      const name = overrides.clear ? "" : (overrides.name ?? filterName);
+      // "All my names" stays on for a new sort, filter or refresh, until a publisher is searched or it is turned off.
+      const allNames = !overrides.clear && !name && (overrides.allNames ?? appliedRef.current.names.length > 0);
+      const filters: AppliedFilters = reset
+        ? {
+            name,
+            names: allNames ? myNames : [],
+            keywords: overrides.clear ? "" : filterSearch,
+            categories: overrides.clear ? [] : (categoryListRef.current?.getSelectedCategories() ?? []),
+          }
+        : appliedRef.current;
+      if (reset) {
+        appliedRef.current = filters;
+        setApplied(filters);
+      }
+      const listSort = overrides.sort ?? sort;
+      const listFollowing = overrides.clear ? false : (overrides.following ?? following);
+      try {
+        const count = await getFiles({ ...filters, sort: listSort, following: listFollowing }, reset, undefined, undefined, current);
+        if (!current()) return;
+        const more = count >= QDN_PAGE;
+        setHasMore(more);
+        // Only once its rows are in the store: a reset that fails leaves the old list, and its query.
+        if (reset) listQuery = { applied: filters, sort: listSort, following: listFollowing, hasMore: more };
+        else if (listQuery) listQuery = { ...listQuery, hasMore: more };
+      } catch (e) {
+        // A failed reset takes the whole list: the old rows still in the store don't
+        // belong under the new heading. A failed next page keeps the rows it follows.
+        if (!current()) return;
+        if (reset) setError("The list could not be loaded. Check that your node is running, then try again.");
+        else setPageError(true);
+      } finally {
+        if (current()) {
+          isFetching.current = false;
+          setIsLoading(false);
+        }
+      }
     },
-    [
-      getFiles,
-      filterValue,
-      getFilesFiltered,
-      isFiltering,
-      filterName,
-      filterSearch,
-      filterType,
-    ]
+    [getFiles, filterName, myNames, filterSearch, sort, following, hasMore]
   );
 
-  const searchOnEnter = e => {
-    if (e.keyCode == 13) {
-      getFilesHandler(true);
-    }
-  };
+  const { pull, refreshing } = usePullToRefresh(() => runSearch(true), true);
 
+  // The picker starts on the applied categories: one that mounts again (Back, or
+  // the layout crossing 900 px) matches the list on screen, which later searches read.
+  const pickerCategories = applied.categories.some(Boolean) ? applied.categories : undefined;
+
+  const hasFiles = files.length > 0;
   useEffect(() => {
-    if (isFiltering && filterValue !== prevVal?.current) {
-      prevVal.current = filterValue;
-      getFilesHandler();
-    }
-  }, [filterValue, isFiltering, filteredFiles, getFilesCount]);
+    if (mounted.current) return;
+    mounted.current = true;
+    if (!hasFiles) queueMicrotask(() => void runSearch(true));
+    else if (reloadDefault) queueMicrotask(() => void runSearch(true, { following: false, allNames: false }));
+    // Back on Home: rows whose name was hidden when they loaded (and un-hidden
+    // in Settings since) still need their body.
+    else queueBodies(files, false);
+  }, [hasFiles, reloadDefault, runSearch, queueBodies, files]);
 
-  const getFilesHandlerMount = React.useCallback(async () => {
-    if (firstFetch.current) return;
-    firstFetch.current = true;
-    setIsLoading(true);
+  // Leaving Home drops the search in flight, so the rows in the store always
+  // match listQuery when Home mounts again.
+  useEffect(() => {
+    const requests = requestId;
+    return () => {
+      requests.current++;
+    };
+  }, []);
 
-    await getFiles();
-    afterFetch.current = true;
+  // A publish or update from this session: reload page one so the new share shows.
+  const seenVersion = useRef(listVersion);
+  useEffect(() => {
+    if (seenVersion.current === listVersion) return;
+    seenVersion.current = listVersion;
     isFetching.current = false;
+    queueMicrotask(() => void runSearch(true));
+  }, [listVersion, runSearch]);
 
-    setIsLoading(false);
-  }, [getFiles]);
-
-  let videos = globalVideos;
-
-  if (isFiltering) {
-    videos = filteredFiles;
-    isFilterMode.current = true;
-  } else {
-    isFilterMode.current = false;
-  }
-
-  // const interval = useRef<any>(null);
-
-  // const checkNewVideosFunc = useCallback(() => {
-  //   let isCalling = false;
-  //   interval.current = setInterval(async () => {
-  //     if (isCalling || !firstFetch.current) return;
-  //     isCalling = true;
-  //     await checkNewVideos();
-  //     isCalling = false;
-  //   }, 30000); // 1 second interval
-  // }, [checkNewVideos]);
-
-  // useEffect(() => {
-  //   if (isFiltering && interval.current) {
-  //     clearInterval(interval.current);
-  //     return;
-  //   }
-  //   checkNewVideosFunc();
-
-  //   return () => {
-  //     if (interval?.current) {
-  //       clearInterval(interval.current);
-  //     }
-  //   };
-  // }, [mode, checkNewVideosFunc, isFiltering]);
-
-  useEffect(() => {
-    if (
-      !firstFetch.current &&
-      !isFilterMode.current &&
-      globalVideos.length === 0
-    ) {
-      isFetching.current = true;
-      getFilesHandlerMount();
-    } else {
-      firstFetch.current = true;
-      afterFetch.current = true;
-    }
-  }, [getFilesHandlerMount, globalVideos]);
-
-  const filtersToDefault = async () => {
-    setFilterType("videos");
-    setFilterSearch("");
-    setFilterName("");
+  const resetFilters = () => {
+    dispatch(changefilterSearch(""));
+    dispatch(changefilterName(""));
     categoryListRef.current?.clearCategories();
-
-    ReactDOM.flushSync(() => {
-      getFilesHandler(true, true);
-    });
+    setSort(settings.defaultSort);
+    setFollowing(false);
+    runSearch(true, { clear: true, sort: settings.defaultSort, following: false });
   };
 
-  return (
-    <Grid container sx={{ width: "100%" }}>
-      <FiltersCol item xs={12} md={2} sm={3}>
-        <FiltersContainer>
-          <StatsData />
-          <Input
-            id="standard-adornment-name"
-            onChange={e => {
-              setFilterSearch(e.target.value);
-            }}
-            onKeyDown={searchOnEnter}
-            value={filterSearch}
-            placeholder="Search"
-            sx={{
-              borderBottom: "1px solid white",
-              "&&:before": {
-                borderBottom: "none",
-              },
-              "&&:after": {
-                borderBottom: "none",
-              },
-              "&&:hover:before": {
-                borderBottom: "none",
-              },
-              "&&.Mui-focused:before": {
-                borderBottom: "none",
-              },
-              "&&.Mui-focused": {
-                outline: "none",
-              },
-              fontSize: "18px",
-            }}
-          />
-          <Input
-            id="standard-adornment-name"
-            onChange={e => {
-              setFilterName(e.target.value);
-            }}
-            onKeyDown={searchOnEnter}
-            value={filterName}
-            placeholder="User's Name (Exact)"
-            sx={{
-              marginTop: "20px",
-              borderBottom: "1px solid white",
-              "&&:before": {
-                borderBottom: "none",
-              },
-              "&&:after": {
-                borderBottom: "none",
-              },
-              "&&:hover:before": {
-                borderBottom: "none",
-              },
-              "&&.Mui-focused:before": {
-                borderBottom: "none",
-              },
-              "&&.Mui-focused": {
-                outline: "none",
-              },
-              fontSize: "18px",
-            }}
-          />
-          <CategoryList categoryData={allCategoryData} ref={categoryListRef} />
+  const changeSort = (next: SortOrder | null) => {
+    if (!next || next === sort) return;
+    setSort(next);
+    runSearch(true, { sort: next });
+  };
 
-          <Button
-            onClick={() => {
-              filtersToDefault();
-            }}
-            sx={{
-              marginTop: "20px",
-            }}
-            variant="contained"
-          >
-            reset
-          </Button>
-          <Button
-            onClick={() => {
-              getFilesHandler(true);
-            }}
-            sx={{
-              marginTop: "20px",
-            }}
-            variant="contained"
-          >
-            Search
-          </Button>
-        </FiltersContainer>
-      </FiltersCol>
-      <Grid item xs={12} md={10} sm={9}>
-        <Box
-          sx={{
-            width: "100%",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            marginTop: "20px",
+  const mine = Boolean(username) && applied.name === username;
+  const allMine = applied.names.length > 0;
+  const toggleMine = () => {
+    if (!username) return;
+    // Like Following, a second tap goes back to everyone's shares.
+    const next = mine || allMine ? "" : username;
+    dispatch(changefilterName(next));
+    runSearch(true, { name: next, allNames: false });
+  };
+  // With more than one name, My shares can take in every one of them.
+  const toggleAllNames = () => {
+    if (!username) return;
+    const next = !allMine;
+    dispatch(changefilterName(next ? "" : username));
+    runSearch(true, { name: next ? "" : username, allNames: next });
+  };
+
+  const toggleFollowing = () => {
+    const next = !following;
+    setFollowing(next);
+    runSearch(true, { following: next });
+  };
+
+  // Deleted shares ("D" bodies) and hidden names drop out of the list.
+  const listedFiles = useListedFiles(files);
+  // Memoized so the list's rows keep stable props across Home's own re-renders.
+  const visibleFiles = useMemo(
+    () => (settings.hiddenNames.length ? listedFiles.filter((f) => !isNameHidden(f.user, settings)) : listedFiles),
+    [listedFiles, settings]
+  );
+  // Rows came back, but every one of them is from a hidden name.
+  const hiddenAll = listedFiles.length > 0 && visibleFiles.length === 0;
+  // The publishers on screen, in list order: they certainly have shares, so the
+  // publisher field ranks them up and offers them before anything is typed.
+  const seenPublishers = useMemo(() => [...new Set(visibleFiles.map((f) => f.user).filter(Boolean))], [visibleFiles]);
+
+  // A suggested publisher applies at once; in the phone sheet it also closes the sheet.
+  const pickPublisher = (name: string) => {
+    dispatch(changefilterName(name));
+    runSearch(true, { name });
+    if (phone) setFiltersOpen(false);
+  };
+
+  const sortToggle = (
+    <ToggleButtonGroup
+      size="small"
+      exclusive
+      value={sort}
+      onChange={(_e, v) => changeSort(v)}
+      aria-label="Sort order"
+      sx={{
+        // 44 px tap targets in the phone sheet; the desktop header keeps the compact size.
+        "& .MuiToggleButton-root": { minHeight: phone ? 44 : 40, px: 2 },
+      }}
+    >
+      <ToggleButton value="newest">Newest</ToggleButton>
+      <ToggleButton value="oldest">Oldest</ToggleButton>
+    </ToggleButtonGroup>
+  );
+
+  const filterForm = (
+    <Box
+      component="form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        runSearch(true);
+        if (phone) setFiltersOpen(false);
+      }}
+      sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+    >
+      {phone && (
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+          <Typography sx={{ fontWeight: 600 }}>Sort</Typography>
+          {sortToggle}
+        </Box>
+      )}
+      <TextField
+        size="small"
+        label="Search titles"
+        value={filterSearch}
+        onChange={(e) => dispatch(changefilterSearch(e.target.value))}
+        slotProps={{
+          input: {
+            endAdornment: filterSearch ? (
+              <ClearFieldButton label="Clear the title search" onClear={() => dispatch(changefilterSearch(""))} />
+            ) : undefined,
+          },
+        }}
+      />
+      <NameSuggestField
+        label="Publisher name (exact)"
+        value={filterName}
+        onChange={(name) => dispatch(changefilterName(name))}
+        onPick={pickPublisher}
+        seenNames={seenPublishers}
+        listLabel="Suggested publishers"
+        clearLabel="Clear the publisher filter"
+      />
+      <CategoryList categoryData={allCategoryData} ref={categoryListRef} initialCategories={pickerCategories} dense />
+      <Box sx={{ display: "flex", gap: 1, "& .MuiButton-root": { minHeight: 44 } }}>
+        <Button type="submit" variant="contained" fullWidth>
+          {phone ? "Apply" : "Search"}
+        </Button>
+        <Button
+          type="button"
+          variant="outlined"
+          fullWidth
+          onClick={() => {
+            resetFilters();
+            if (phone) setFiltersOpen(false);
           }}
         >
-          <SubtitleContainer
-            sx={{
-              justifyContent: "flex-start",
-              paddingLeft: "15px",
-              width: "100%",
-              maxWidth: "1400px",
-            }}
-          ></SubtitleContainer>
-          <FileList files={videos} />
-          <LazyLoad
-            onLoadMore={getFilesHandler}
-            isLoading={isLoading}
-          ></LazyLoad>
+          Reset
+        </Button>
+      </Box>
+    </Box>
+  );
+
+  const appliedCategory = categoryLabel(applied.categories);
+  const categoriesOn = applied.categories.some(Boolean);
+  const activeFilters = Boolean(applied.keywords || applied.name || allMine || categoriesOn);
+  const heading = allMine
+    ? "Shares by your names"
+    : applied.name
+      ? `Shares by ${applied.name}`
+      : following
+        ? "From names you follow"
+        : appliedCategory
+          ? `Shares in ${appliedCategory}`
+          : activeFilters
+            ? "Filtered shares"
+            : "Latest shares";
+
+  const emptyState: React.ComponentProps<typeof EmptyState> = following
+    ? {
+        title: "Nothing from the names you follow yet",
+        description: "Follow a publisher from their profile and their shares appear here.",
+        actionLabel: "Show latest shares",
+        onAction: resetFilters,
+      }
+    : (mine || allMine) && !applied.keywords && !categoriesOn
+      ? {
+          title: allMine ? "None of your names has shared anything yet" : "You haven't shared anything yet",
+          description: allMine ? "Files you share under any of your names show up here." : "Files you share show up here.",
+          actionLabel: "Share files",
+          onAction: requestOpenPublish,
+        }
+      : activeFilters
+        ? {
+            title: "No shares match these filters",
+            description: "Try fewer filters or a different spelling.",
+            actionLabel: "Reset filters",
+            onAction: resetFilters,
+          }
+        : username
+          ? { title: "No shares yet", description: "Be the first to share files.", actionLabel: "Share files", onAction: requestOpenPublish }
+          : { title: "No shares yet", description: "Sign in to Hub with a Qortal name to share files." };
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: { xs: "column", md: "row" },
+        gap: { xs: 2, md: 3 },
+        width: "100%",
+        maxWidth: 1200,
+        margin: "0 auto",
+        padding: { xs: "12px 16px", md: "20px 24px" },
+        paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))",
+      }}
+    >
+      {(pull > 0 || refreshing) && (
+        <Box
+          role="status"
+          aria-live="polite"
+          aria-label={refreshing ? "Refreshing" : "Pull to refresh"}
+          sx={{
+            position: "fixed",
+            top: `calc(56px + env(safe-area-inset-top, 0px) + ${Math.round(pull * 0.5)}px)`,
+            left: 0,
+            right: 0,
+            display: "flex",
+            justifyContent: "center",
+            zIndex: 20,
+            pointerEvents: "none",
+            opacity: refreshing ? 1 : Math.min(1, pull / 72),
+            transition: "opacity 120ms ease",
+          }}
+        >
+          <CircularProgress size={28} variant={refreshing ? "indeterminate" : "determinate"} value={Math.min(100, (pull / 72) * 100)} />
         </Box>
-      </Grid>
-    </Grid>
+      )}
+      {phone ? (
+        // keepMounted: CategoryList holds the selected categories, and every later
+        // page, refresh and chip reads them through categoryListRef.
+        <BottomSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters and sort" keepMounted>
+          {filterForm}
+        </BottomSheet>
+      ) : (
+        <FiltersRail>
+          <Typography sx={{ fontWeight: 700, fontSize: 13, textTransform: "uppercase", color: "text.secondary" }}>
+            Filters
+          </Typography>
+          {filterForm}
+        </FiltersRail>
+      )}
+
+      <Box ref={listColumn} sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            columnGap: 1,
+            rowGap: phone ? 1.5 : 1,
+            flexWrap: "wrap",
+            // Phones: 44 px chips with a 12 px row gap keep each tap target clear of the next.
+            "& .MuiChip-root": phone ? { minHeight: 44, fontSize: 14, px: 0.5 } : { minHeight: 36 },
+          }}
+        >
+          <Typography component="h1" variant="h6" sx={{ fontWeight: 700, flex: "1 1 160px", minWidth: 0, wordBreak: "break-word" }}>
+            {heading}
+          </Typography>
+          {phone && (
+            <Button
+              variant={activeFilters ? "contained" : "outlined"}
+              size="small"
+              startIcon={<FilterListIcon />}
+              onClick={() => setFiltersOpen(true)}
+              aria-haspopup="dialog"
+              sx={{ minHeight: 44 }}
+            >
+              {activeFilters ? "Filters on" : "Filters"}
+            </Button>
+          )}
+          {username && settings.followingFeed && (
+            <Chip
+              label="Following"
+              variant={following ? "filled" : "outlined"}
+              color={following ? "primary" : "default"}
+              onClick={toggleFollowing}
+              clickable
+              aria-pressed={following}
+            />
+          )}
+          {username && (
+            <Chip
+              label="My shares"
+              variant={mine || allMine ? "filled" : "outlined"}
+              color={mine || allMine ? "primary" : "default"}
+              onClick={toggleMine}
+              clickable
+              aria-pressed={mine || allMine}
+            />
+          )}
+          {username && (mine || allMine) && myNames.length > 1 && (
+            <Chip
+              label="All my names"
+              variant={allMine ? "filled" : "outlined"}
+              color={allMine ? "primary" : "default"}
+              onClick={toggleAllNames}
+              clickable
+              aria-pressed={allMine}
+            />
+          )}
+          {!phone && sortToggle}
+          {phone ? (
+            // Phones and the narrow layout: at the right of the chips row, as tall as the chips (the
+            // sort is in the sheet). The group's class makes this rule outrank the toggle's own
+            // 40 px, which it keeps between 600 and 899 px.
+            <Box sx={{ ml: "auto", "& .MuiToggleButtonGroup-root .MuiToggleButton-root": { minHeight: 44, minWidth: 44 } }}>
+              <ListViewToggle />
+            </Box>
+          ) : (
+            <ListViewToggle />
+          )}
+        </Box>
+
+        {error ? (
+          <EmptyState title="Could not load shares" description={error} actionLabel="Retry" onAction={() => runSearch(true)} />
+        ) : files.length === 0 && (isLoading || hasMore) ? (
+          // The first page's placeholders take the layout the rows will have.
+          settings.listView === "grid" ? (
+            <FileGridSkeleton count={6} label="Loading shares" />
+          ) : (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              {Array.from({ length: 6 }, (_, i) => (
+                <Skeleton key={i} variant="rounded" height={64} />
+              ))}
+            </Box>
+          )
+        ) : visibleFiles.length === 0 && !hasMore && !isLoading && hiddenAll ? (
+          <EmptyState
+            icon={<VisibilityOffOutlinedIcon />}
+            title="Every share here is from a name you hid"
+            description="You can show those names again in Settings."
+            actionLabel="Open Settings"
+            onAction={() => navigate("/settings")}
+          />
+        ) : visibleFiles.length === 0 && !hasMore && !isLoading ? (
+          <EmptyState {...emptyState} />
+        ) : (
+          <>
+            {hiddenAll && (
+              <Typography role="status" variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 1 }}>
+                Every share loaded so far is from a name you hid in Settings.
+              </Typography>
+            )}
+            <FileList files={visibleFiles} />
+            {/* hasMore lets it keep paging while hidden names leave the end of the list in view.
+                A failed page stops the pager (it would retry at once, up to five times) until Retry. */}
+            <LazyLoad key={listId} onLoadMore={() => runSearch(false)} isLoading={isLoading} hasMore={hasMore && !pageError} />
+            <PageRetry failed={pageError} onRetry={() => runSearch(false)} rows={listColumn} />
+            {!hasMore && visibleFiles.length > 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", py: 1 }}>
+                That's every share that matches.
+              </Typography>
+            )}
+          </>
+        )}
+      </Box>
+    </Box>
   );
 };

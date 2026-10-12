@@ -74,7 +74,8 @@ export function ThemePicker() {
               <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
                 {option.name}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              {/* 14 px, not MUI's 12 px caption: DESIGN.md's minimum for text. */}
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: 14, lineHeight: 1.4 }}>
                 {option.description}
               </Typography>
             </div>

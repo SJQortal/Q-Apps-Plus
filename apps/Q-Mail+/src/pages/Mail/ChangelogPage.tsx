@@ -9,6 +9,57 @@ type ChangelogEntry = {
 
 const changelogEntries: ChangelogEntry[] = [
   {
+    version: "1.0.2 (Q-Mail+)",
+    date: "October 12, 2026",
+    highlights: [
+      "Swipe back on phones: swipe right to close an open message, the composer, a preview, a dialog or Settings, as Back does; swipe left to close the mailboxes menu. An arrow shows when letting go will close.",
+      "On a phone, \"Write your message here\" disappears as soon as you start typing.",
+      "Settings opens from the gear at the top on phones; the mailboxes menu no longer lists a Settings item that did nothing.",
+      "On a phone, the top bar no longer flickers in and out at certain scroll positions (a reply with the keyboard down).",
+    ],
+  },
+  {
+    version: "1.0.1 (Q-Mail+)",
+    date: "October 8, 2026",
+    highlights: [
+      "Replies stay small, on advice from Qortal DEV: a reply no longer quotes the message you answer, which shows above the editor for context instead.",
+      "A reply carries links to the last 10 earlier messages instead of copies of them, so a long conversation no longer makes each reply bigger (the 50th reply was about 570 KB in 1.0.0, now under 2 KB).",
+      "Show earlier loads the earlier messages from QDN, five at a time, back to the start of the conversation; messages you already opened appear at once, and deleted or unavailable ones say so.",
+      "Mail that carries copies of earlier messages (from Q-Mail or Q-Mail+ 1.0.0) shows them as before; Q-Mail opens the new replies without their earlier messages.",
+      "An open message shows its weekday, date and time (\"Sun 2 Aug, 08:58\"), with the year when it isn't this year.",
+      "Every message list shows the same date; hover over it, or tap it on a phone, for the full date and how long ago.",
+      "Settings → Mail → Show group threads: hide group threads, and nothing about them is loaded.",
+      "Right-click a message, or press and hold it on a phone, for Open, Reply, Forward, Mark read or unread, Archive and Select; sender groups have a menu too.",
+      "The names under Inbox, Aliases and Sent fold away; names under Inbox can be hidden from their menu, or hidden while their inbox is empty (Settings → Mail).",
+      "Earlier messages run newest first, with the senders' avatars.",
+      "Attachments open or save from the list, without opening the message; in the composer they show as tiles you can preview before sending.",
+      "A message's files show beside its subject in the list, with short names; unread senders are blue; drafts show avatars, like the inbox.",
+      "Folding and hiding are smooth: names fold away with Undo, groups and earlier messages fold open and shut.",
+      "On a phone, Back closes a preview, sheet or dialog first; archiving from a list has Undo; files dropped on the text are attached.",
+      "A reply comes from the name the mail was sent to, not the active name; an open message shows its Cc names, a long list folded into \"and 2 more\".",
+      "Faster first load with many names and groups: one search for all of them instead of one each (126 searches instead of 413 with 88 names and 43 groups).",
+      "Fixes: new mail shows within 2 minutes; the published-state question comes once per name per session; group avatars load once; Publish Q-Mail State asks first.",
+      "Sturdier reader: a broken message shows \"This message could not be shown\" instead of taking the app down; switching messages with Show earlier open loads nothing extra; keyboard focus stays with the earlier messages; quoted copies name the right person.",
+    ],
+  },
+  {
+    version: "1.0.0 (Q-Mail+)",
+    date: "October 4, 2026",
+    highlights: [
+      "The first Q-Mail+ release. It reads and writes the same mail as Q-Mail, so your mail shows up in both apps.",
+      "The Hub 3.0 layout with mailboxes, message list and message side by side, borders you can drag to set their widths, one pane at a time on phones, four themes and a full Settings page.",
+      "Read state that survives reloads, unread counts, Archive and Mark unread, and search across all your mail, with message bodies on request.",
+      "Reply with a quote, Reply all with a Cc row, Forward with attachments, Drafts, and recipient suggestions with avatars and name checks.",
+      "Send to alias, Cc and Bcc explain what they do when you hover over them, focus them or long-press them; From shows your names with their avatars and is searchable above 15 names.",
+      "A mail footer in Settings → Mail, for all your names or one per name.",
+      "Attachments open in the app; PDFs open in Hub's own PDF reader, as in Q-Share+.",
+      "qortal:// links open through Hub, so group join links work; names with hidden characters, often used to imitate someone, are crossed out, as in Hub.",
+      "The active mailbox is a dropdown with search above 15 names; group threads as list and pane with unread marks and paging.",
+      "Faster: 6 searches on first load instead of about 25, messages on your node open in about half a second, and a first download of 395 kB instead of 1,576 kB.",
+      "Made for phones and GO: 44 px targets, full-screen sheets, Send above the keyboard and Back that closes the open pane; quiet declines and safer message HTML.",
+    ],
+  },
+  {
     version: "v3.2.1",
     date: "May 28, 2026",
     highlights: [
@@ -143,10 +194,12 @@ export const ChangelogPage = () => {
       }}
     >
       <Typography
+        component="h2"
         sx={{
           fontSize: "1.5rem",
           fontWeight: 700,
           color: "var(--qmail-thread-text)",
+          m: 0,
         }}
       >
         Changelog
@@ -157,7 +210,9 @@ export const ChangelogPage = () => {
           sx={{
             border: "1px solid var(--qmail-shell-border)",
             borderRadius: "10px",
-            backgroundColor: "var(--qmail-shell-active)",
+            // A plain card: the dates' secondary text keeps 4.5:1 on it in every
+            // theme (on the old active-row tint it fell short in Hub 3.0 dark).
+            backgroundColor: "transparent",
             padding: "14px 16px",
             display: "flex",
             flexDirection: "column",
@@ -165,9 +220,11 @@ export const ChangelogPage = () => {
           }}
         >
           <Typography
+            component="h3"
             sx={{
               fontSize: "1rem",
               fontWeight: 700,
+              m: 0,
             }}
           >
             {entry.version}
@@ -175,7 +232,7 @@ export const ChangelogPage = () => {
           <Typography
             sx={{
               fontSize: "0.875rem",
-              color: "var(--qmail-message-meta)",
+              color: "text.secondary",
             }}
           >
             {entry.date}

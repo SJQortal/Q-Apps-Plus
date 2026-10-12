@@ -1,281 +1,206 @@
-import { styled } from "@mui/system";
-import { Card, Box, Typography, Button, TextField } from "@mui/material";
+import type { ElementType } from "react";
+import { alpha, styled } from "@mui/material/styles";
+import { Box, Typography, Button, TextField } from "@mui/material";
 
-export const StyledCard = styled(Card)(({ theme }) => ({
-  backgroundColor:
-    theme.palette.mode === "light"
-      ? theme.palette.primary.main
-      : theme.palette.primary.dark,
-  maxWidth: "600px",
+export const CommentsPanel = styled("section")(({ theme }) => ({
+  display: "flex",
+  flexDirection: "column",
   width: "100%",
-  margin: "10px 0px",
-  cursor: "pointer",
-  "@media (max-width: 450px)": {
-    width: "100%;",
-  },
+  minWidth: 0,
+  gap: theme.spacing(1.5),
+  paddingBottom: theme.spacing(1),
 }));
 
-export const CardContentContainer = styled(Box)(({ theme }) => ({
-  backgroundColor:
-    theme.palette.mode === "light"
-      ? theme.palette.primary.dark
-      : theme.palette.primary.light,
-  margin: "5px 10px",
-  borderRadius: "15px",
+export const CommentsTitle = styled(Typography)<{ component?: ElementType }>(({ theme }) => ({
+  fontSize: 13,
+  fontWeight: 700,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  color: theme.palette.text.secondary,
 }));
 
 export const CardContentContainerComment = styled(Box)(({ theme }) => ({
-  backgroundColor: theme.palette.mode === "light" ? "#a9d9d038" : "#c3abe414",
-  border: `1px solid ${theme.palette.primary.main}`,
-  margin: "0px",
-  padding: "8px 15px",
-  borderRadius: "8px",
+  backgroundColor: theme.palette.background.paper,
+  border: `1px solid ${theme.palette.divider}`,
+  margin: 0,
+  padding: theme.spacing(1, 1.5),
+  borderRadius: theme.shape.borderRadius,
   width: "100%",
+  minWidth: 0,
   display: "flex",
   flexDirection: "column",
 }));
 
-export const StyledCardHeader = styled(Box)({
+export const ReplyCard = styled(Box)(({ theme }) => ({
+  display: "flex",
+  minWidth: 0,
+  borderLeft: `3px solid ${theme.palette.divider}`,
+  borderRadius: theme.shape.borderRadius,
+}));
+
+export const StyledCardHeaderComment = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "flex-start",
-  gap: "5px",
-  padding: "7px",
-});
+  gap: theme.spacing(1),
+  padding: theme.spacing(1, 0),
+  minWidth: 0,
+}));
 
-export const StyledCardHeaderComment = styled(Box)({
+/** Author and time on one line: a long name is cut short, the time never is. */
+export const CommentAuthorLine = styled(Box)(({ theme }) => ({
   display: "flex",
-  alignItems: "center",
-  justifyContent: "flex-start",
-  gap: "7px",
-  padding: "9px 7px",
-});
+  alignItems: "baseline",
+  gap: theme.spacing(1),
+  flex: 1,
+  minWidth: 0,
+}));
 
-export const StyledCardCol = styled(Box)({
-  display: "flex",
-  overflow: "hidden",
-  flexDirection: "column",
-  gap: "2px",
-  alignItems: "flex-start",
-  width: "100%",
-});
-
-export const StyledCardColComment = styled(Box)({
-  display: "flex",
-  overflow: "hidden",
-  flexDirection: "column",
-  gap: "2px",
-  alignItems: "flex-start",
-  width: "100%",
-});
-
-export const StyledCardContent = styled(Box)({
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "flex-start",
-  padding: "5px 10px",
-  gap: "10px",
-});
-
-export const StyledCardContentComment = styled(Box)({
+export const StyledCardContentComment = styled(Box)(({ theme }) => ({
   display: "flex",
   flexDirection: "column",
   alignItems: "flex-start",
   justifyContent: "flex-start",
-  padding: "5px 10px",
-  gap: "10px",
-});
+  padding: theme.spacing(0.5, 0),
+  gap: theme.spacing(1),
+  minWidth: 0,
+}));
 
 export const StyledCardComment = styled(Typography)(({ theme }) => ({
-  fontFamily: "Mulish",
   letterSpacing: 0,
   fontWeight: 400,
   color: theme.palette.text.primary,
-  fontSize: "19px",
-  wordBreak: "break-word"
+  fontSize: 16,
+  lineHeight: 1.5,
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  whiteSpace: "pre-wrap",
 }));
-
-export const TitleText = styled(Typography)({
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  width: "100%",
-  fontFamily: "Cairo, sans-serif",
-  fontSize: "22px",
-  lineHeight: "1.2",
-});
-
-export const AuthorText = styled(Typography)({
-  fontFamily: "Raleway, sans-serif",
-  fontSize: "16px",
-  lineHeight: "1.2",
-});
 
 export const AuthorTextComment = styled(Typography)(({ theme }) => ({
-  fontFamily: "Montserrat, sans-serif",
-  fontSize: "17px",
-  letterSpacing: "0.3px",
-  fontWeight: 400,
+  fontSize: 15,
+  fontWeight: 600,
   color: theme.palette.text.primary,
-  userSelect: "none",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  maxWidth: "100%",
 }));
 
-export const IconsBox = styled(Box)({
-  display: "flex",
-  gap: "3px",
-  position: "absolute",
-  top: "12px",
-  right: "5px",
-  transition: "all 0.3s ease-in-out",
-});
-
-export const BookmarkIconContainer = styled(Box)({
-  display: "flex",
-  boxShadow: "rgba(99, 99, 99, 0.2) 0px 2px 8px 0px;",
-  backgroundColor: "#fbfbfb",
-  color: "#50e3c2",
-  padding: "5px",
-  borderRadius: "3px",
-  transition: "all 0.3s ease-in-out",
-  "&:hover": {
-    cursor: "pointer",
-    transform: "scale(1.1)",
-  },
-});
-
-export const BlockIconContainer = styled(Box)({
-  display: "flex",
-  boxShadow: "rgba(99, 99, 99, 0.2) 0px 2px 8px 0px;",
-  backgroundColor: "#fbfbfb",
-  color: "#c25252",
-  padding: "5px",
-  borderRadius: "3px",
-  transition: "all 0.3s ease-in-out",
-  "&:hover": {
-    cursor: "pointer",
-    transform: "scale(1.1)",
-  },
-});
-
 export const CommentsContainer = styled(Box)({
-  width: "90%",
-  maxWidth: "1000px",
-  display: "flex",
-  flexDirection: "column",
-  flex: "1",
-  overflow: "auto",
-});
-
-export const CommentContainer = styled(Box)({
-  display: "flex",
-  flexDirection: "column",
-  margin: "25px 0px 50px 0px",
-  maxWidth: "100%",
   width: "100%",
-  gap: "10px",
-  padding: "0px 5px",
+  minWidth: 0,
+  display: "flex",
+  flexDirection: "column",
 });
 
-export const NoCommentsRow = styled(Box)({
+export const CommentContainer = styled(Box)(({ theme }) => ({
+  display: "flex",
+  flexDirection: "column",
+  width: "100%",
+  minWidth: 0,
+  gap: theme.spacing(1.5),
+}));
+
+export const NoCommentsRow = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  flex: "1",
-  padding: "10px 0px",
-  fontFamily: "Mulish",
-  letterSpacing: 0,
-  fontWeight: 400,
-  fontSize: "18px",
-});
+  flexWrap: "wrap",
+  gap: theme.spacing(0.5),
+  padding: theme.spacing(3, 1),
+  fontSize: 15,
+  color: theme.palette.text.secondary,
+  border: `1px solid ${theme.palette.divider}`,
+  borderRadius: theme.shape.borderRadius,
+  backgroundColor: theme.palette.background.paper,
+}));
 
-export const LoadMoreCommentsButtonRow = styled(Box)({
+export const LoadMoreCommentsButtonRow = styled(Box)(({ theme }) => ({
   display: "flex",
-});
-
-export const EditReplyButton = styled(Button)(({ theme }) => ({
-  width: "30px",
-  alignSelf: "flex-end",
-  background: theme.palette.primary.light,
-  color: "#ffffff",
+  justifyContent: "center",
+  marginTop: theme.spacing(1.5),
 }));
 
 export const LoadMoreCommentsButton = styled(Button)(({ theme }) => ({
-  fontFamily: "Montserrat",
-  fontWeight: 400,
-  letterSpacing: "0.2px",
-  fontSize: "15px",
-  backgroundColor: theme.palette.primary.main,
-  color: "#ffffff",
+  fontWeight: 500,
+  fontSize: 14,
+  minHeight: 44,
+  [theme.breakpoints.down("sm")]: {
+    width: "100%",
+  },
 }));
 
-export const CommentActionButtonRow = styled(Box)({
+export const CommentActionButton = styled(Button)(({ theme }) => ({
+  fontWeight: 500,
+  fontSize: 14,
+  textTransform: "none",
+  minHeight: 36,
+  [theme.breakpoints.down("sm")]: {
+    minHeight: 44,
+  },
+}));
+
+export const CommentActionButtonRow = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
-  gap: "5px",
-});
+  justifyContent: "flex-end",
+  flexWrap: "wrap",
+  gap: theme.spacing(1),
+  marginLeft: "auto",
+  marginTop: theme.spacing(0.5),
+}));
 
 export const CommentEditorContainer = styled(Box)({
   width: "100%",
+  minWidth: 0,
   display: "flex",
   justifyContent: "center",
 });
 
-export const CommentDateText = styled(Typography)(({ theme }) => ({
-  fontFamily: "Mulish",
-  letterSpacing: 0,
+export const CommentDateText = styled(Typography)<{ component?: ElementType; dateTime?: string }>(({ theme }) => ({
   fontWeight: 400,
-  fontSize: "13px",
-  marginLeft: "5px",
-  color: theme.palette.text.primary,
+  fontSize: 13,
+  color: theme.palette.text.secondary,
+  flexShrink: 0,
+  whiteSpace: "nowrap",
 }));
 
-export const CommentInputContainer = styled(Box)({
+export const CommentInputContainer = styled(Box)(({ theme }) => ({
   display: "flex",
   flexDirection: "column",
-  marginTop: "15px",
-  width: "90%",
-  maxWidth: "1000px",
-  borderRadius: "8px",
-  gap: "10px",
-  alignItems: "center",
-  marginBottom: "25px",
-});
+  width: "100%",
+  minWidth: 0,
+  gap: theme.spacing(1),
+  alignItems: "stretch",
+  marginTop: theme.spacing(1),
+}));
 
 export const CommentInput = styled(TextField)(({ theme }) => ({
-  backgroundColor: theme.palette.mode === "light" ? "#a9d9d01d" : "#c3abe4a",
-  border: `1px solid ${theme.palette.primary.main}`,
+  backgroundColor: alpha(theme.palette.primary.main, 0.04),
+  border: `1px solid ${theme.palette.divider}`,
   width: "100%",
-  borderRadius: "8px",
-  '& [class$="-MuiFilledInput-root"]': {
-    fontFamily: "Mulish",
+  borderRadius: theme.shape.borderRadius,
+  "& .MuiFilledInput-root": {
     letterSpacing: 0,
     fontWeight: 400,
     color: theme.palette.text.primary,
-    fontSize: "19px",
-    minHeight: "100px",
+    fontSize: 16,
     backgroundColor: "transparent",
-    "&:before": {
-      borderBottom: "none",
-      "&:hover": {
-        borderBottom: "none",
-      },
-    },
+    borderRadius: theme.shape.borderRadius,
+    "&:before": { borderBottom: "none" },
     "&:hover": {
       backgroundColor: "transparent",
-      "&:before": {
-        borderBottom: "none",
-      },
+      "&:before": { borderBottom: "none" },
     },
   },
 }));
 
 export const SubmitCommentButton = styled(Button)(({ theme }) => ({
-  fontFamily: "Montserrat",
-  fontWeight: 400,
-  letterSpacing: "0.2px",
-  fontSize: "15px",
-  backgroundColor: theme.palette.primary.main,
-  color: "#ffffff",
-  width: "75%",
+  fontWeight: 600,
+  fontSize: 15,
+  minHeight: 44,
+  [theme.breakpoints.down("sm")]: {
+    width: "100%",
+  },
 }));

@@ -1,171 +1,234 @@
-import { Box, Button, ButtonProps } from "@mui/material";
+import { Button, ButtonProps } from "@mui/material";
+import PersonAddAlt1OutlinedIcon from "@mui/icons-material/PersonAddAlt1Outlined";
+import PersonRemoveOutlinedIcon from "@mui/icons-material/PersonRemoveOutlined";
 import Tooltip, { TooltipProps, tooltipClasses } from "@mui/material/Tooltip";
-
-import { MouseEvent, useEffect, useMemo, useState } from "react";
+import { MouseEvent, useEffect, useState } from "react";
 import { styled } from "@mui/material/styles";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "../../state/store";
+import { setNotification } from "../../state/features/notificationsSlice";
+import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { formatBytes } from "../../utils/formatBytes";
+import { HUB_DIALOG_GRACE_MS, isHubDecline, isHubTimeout } from "../../utils/hubErrors";
 
 interface FollowButtonProps extends ButtonProps {
   followerName: string;
+  /** Icon over label, no minimum width: the share page's phone action row. */
+  compact?: boolean;
 }
 
-const TooltipLine = styled("div")(({ theme }) => ({
-  fontSize: "18px",
-}));
+const TooltipLine = styled("div")({
+  fontSize: 15,
+  lineHeight: 1.4,
+});
 
-const CustomWidthTooltipStyles = styled(
-  ({ className, ...props }: TooltipProps) => (
-    <Tooltip {...props} classes={{ popper: className }} />
-  )
-)({
+const CustomWidthTooltipStyles = styled(({ className, ...props }: TooltipProps) => (
+  <Tooltip {...props} classes={{ popper: className }} />
+))({
   [`& .${tooltipClasses.tooltip}`]: {
-    maxWidth: 600,
+    maxWidth: 420,
   },
 });
 
-const CustomTooltip = ({ title, ...props }: TooltipProps) => {
-  if (typeof title === "string") title = <TooltipLine>{title}</TooltipLine>;
+const SIZE_PAGE = 100;
+const SIZE_MAX_PAGES = 10;
+const sizeCache = new Map<string, Promise<{ bytes: number; items: number; complete: boolean }>>();
+let followedNames: { address: string; list: Promise<string[]> } | null = null;
 
-  return <CustomWidthTooltipStyles title={title} {...props} />;
+/**
+ * The signed-in account's followedNames, read once per session and updated
+ * locally on follow/unfollow. The list belongs to the account, not to one of
+ * its names, so it is keyed by address: an account with no name has one too,
+ * and switching names doesn't read it again. Callers read it only once
+ * signed in: accepting GET_USER_ACCOUNT lets Hub answer list reads silently,
+ * while before that every read is a permission dialog. A decline (or any
+ * failure) counts as an empty list for the rest of the session, so it isn't
+ * asked again.
+ */
+function readFollowedNames(address: string): Promise<string[]> {
+  if (!followedNames || followedNames.address !== address) {
+    const list = qortalRequest({ action: "GET_LIST_ITEMS", list_name: "followedNames" })
+      .then((items) => (Array.isArray(items) ? items : []))
+      .catch(() => [] as string[]);
+    followedNames = { address, list };
+  }
+  return followedNames.list;
+}
+
+function rememberFollowedNames(address: string | undefined, list: string[]) {
+  if (address) followedNames = { address, list: Promise.resolve(list) };
+}
+
+/**
+ * Sum of a name's publishes, read in bounded pages instead of one unlimited
+ * list. Read from Core directly: q-apps.js's LIST_QDN_RESOURCES puts the
+ * name into the URL unencoded, so "+" arrives as a space and "&" cuts the
+ * query (a name like "POS+" read as 0 files).
+ */
+function readPublishSize(name: string) {
+  const cached = sizeCache.get(name);
+  if (cached) return cached;
+  const request = (async () => {
+    let bytes = 0;
+    let items = 0;
+    let complete = false;
+    for (let page = 0; page < SIZE_MAX_PAGES; page++) {
+      const params = new URLSearchParams({
+        name,
+        includemetadata: "false",
+        limit: String(SIZE_PAGE),
+        offset: String(page * SIZE_PAGE),
+      });
+      const response = await fetch(`/arbitrary/resources?${params.toString()}`);
+      if (!response.ok) throw new Error(`List failed (${response.status})`);
+      const rows = await response.json();
+      const list = Array.isArray(rows) ? rows : [];
+      for (const publish of list) {
+        bytes += Number(publish?.size) || 0;
+        items++;
+      }
+      if (list.length < SIZE_PAGE) {
+        complete = true;
+        break;
+      }
+    }
+    return { bytes, items, complete };
+  })();
+  sizeCache.set(name, request);
+  request.catch(() => sizeCache.delete(name));
+  return request;
+}
+
+export const resetFollowCaches = () => {
+  sizeCache.clear();
+  followedNames = null;
 };
 
-export const FollowButton = ({ followerName, ...props }: FollowButtonProps) => {
+/**
+ * Follow / Unfollow a publisher (Qortal's followedNames list). Hidden when the
+ * name is the signed-in user's own. The tooltip explains what following does
+ * and loads the name's total size only when it opens.
+ */
+export const FollowButton = ({ followerName, compact = false, sx, ...props }: FollowButtonProps) => {
+  const phone = usePhoneLayout();
+  const dispatch = useDispatch();
+  const username = useSelector((state: RootState) => state.auth.user?.name);
+  const address = useSelector((state: RootState) => state.auth.user?.address);
   const [followingList, setFollowingList] = useState<string[]>([]);
-  const [followingSize, setFollowingSize] = useState<string>("");
-  const [followingItemCount, setFollowingItemCount] = useState<string>("");
-  const followerNameMemo = useMemo<string>(() => followerName, [followerName]);
+  const [size, setSize] = useState<{ bytes: number; items: number; complete: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
 
+  // Signed out, the list stays unread (reading it would be a Hub dialog).
   useEffect(() => {
-    getFollowData();
-  }, [followerNameMemo]);
-
-  const getFollowData = async () => {
-    if (followerNameMemo) {
-      setFollowingList(await getFollowedNames());
-      getFollowSize();
-    }
-  };
-
-  const getFollowedNames = async (): Promise<string[]> => {
-    return await qortalRequest({
-      action: "GET_LIST_ITEMS",
-      list_name: "followedNames",
+    if (!followerName || !address) return;
+    let active = true;
+    readFollowedNames(address).then((list) => {
+      if (active) setFollowingList(list);
     });
+    return () => {
+      active = false;
+    };
+  }, [followerName, address]);
+
+  if (!followerName || followerName === username) return null;
+
+  const loadSize = () => {
+    if (size) return;
+    readPublishSize(followerName)
+      .then(setSize)
+      .catch(() => {});
   };
 
-  const getFollowSize = async () => {
-    const publishesList = await qortalRequest({
-      action: "LIST_QDN_RESOURCES",
-      name: followerName,
-      limit: 0,
-      includeMetadata: false,
-    });
-
-    let totalSize = 0;
-    let itemsCount = 0;
-    publishesList.map(publish => {
-      totalSize += +publish.size;
-      itemsCount++;
-    });
-    setFollowingSize(formatBytes(totalSize));
-    setFollowingItemCount(itemsCount.toString());
-  };
-
-  const isFollowingName = () => {
-    return followingList.includes(followerNameMemo);
-  };
+  const following = followingList.includes(followerName);
+  const compactIcon = following ? <PersonRemoveOutlinedIcon /> : <PersonAddAlt1OutlinedIcon />;
 
   const followName = async () => {
-    if (isFollowingName() === false) {
-      const response: boolean = await qortalRequest({
-        action: "ADD_LIST_ITEMS",
-        list_name: "followedNames",
-        items: [followerName],
-      });
-      if (response === false) console.log("followName failed");
-      else {
-        setFollowingList([...followingList, followerName]);
-        console.log("following Name: ", followerName);
-      }
-    }
-  };
-  const unfollowName = async () => {
-    if (isFollowingName()) {
-      const response: boolean = await qortalRequest({
-        action: "DELETE_LIST_ITEM",
-        list_name: "followedNames",
-        items: [followerName],
-      });
-      if (response === false) console.log("unfollowName failed");
-      else {
-        const listWithoutName = followingList.filter(
-          item => followerName !== item
-        );
-        setFollowingList(listWithoutName);
-        console.log("unfollowing Name: ", followerName);
-      }
-    }
+    const response: boolean = await qortalRequest({
+      action: "ADD_LIST_ITEMS",
+      list_name: "followedNames",
+      items: [followerName],
+    });
+    if (response === false) return;
+    const next = [...followingList, followerName];
+    setFollowingList(next);
+    rememberFollowedNames(address, next);
   };
 
-  const manageFollow = (e: MouseEvent<HTMLButtonElement>) => {
+  const unfollowName = async () => {
+    const response: boolean = await qortalRequest({
+      action: "DELETE_LIST_ITEM",
+      list_name: "followedNames",
+      item: followerName,
+    });
+    if (response === false) return;
+    const next = followingList.filter((item) => followerName !== item);
+    setFollowingList(next);
+    rememberFollowedNames(address, next);
+  };
+
+  const manageFollow = async (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    isFollowingName() ? unfollowName() : followName();
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (following) await unfollowName();
+      else await followName();
+    } catch (error) {
+      if (isHubTimeout(error) && address) {
+        // Hub gave up waiting at 30 s but its dialog stays up and a late Accept
+        // still changes the list: read it again once the dialog has gone.
+        followedNames = null;
+        window.setTimeout(() => void readFollowedNames(address).then(setFollowingList), HUB_DIALOG_GRACE_MS);
+        return;
+      }
+      // Saying no in Hub's dialog is not an error; the button keeps its state either way.
+      if (!isHubDecline(error)) {
+        const msg = `Could not ${following ? "unfollow" : "follow"} ${followerName}`;
+        dispatch(setNotification({ msg, alertType: "error" }));
+      }
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const verticalPadding = "3px";
-  const horizontalPadding = "8px";
-  const buttonStyle = {
-    fontSize: "15px",
-    fontWeight: "700",
-    paddingTop: verticalPadding,
-    paddingBottom: verticalPadding,
-    paddingLeft: horizontalPadding,
-    paddingRight: horizontalPadding,
-    borderRadius: 28,
-    color: "white",
-    width: "96px",
-    height: "45px",
-    ...props.sx,
-  };
-
-  const  formatBytes = (bytes: number, decimals = 2)=> {
-    if (!+bytes) return "0 Bytes";
-
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
-
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
-  }
-
-  const tooltipTitle = followingSize && (
+  const tooltipTitle = (
     <>
       <TooltipLine>
-        Following a name automatically downloads all of its content to your
-        node. The more followers a name has, the faster its content will
-        download for everyone.
+        Following a name downloads all of its content to your node. The more followers a name has, the faster its
+        content downloads for everyone.
       </TooltipLine>
       <br />
-      <TooltipLine>{`${followerName}'s Current Download Size: ${followingSize}`}</TooltipLine>
-      <TooltipLine>{`Number of Files: ${followingItemCount}`}</TooltipLine>
+      {size ? (
+        <>
+          <TooltipLine>{`${followerName}'s current download size: ${formatBytes(size.bytes)}${size.complete ? "" : "+"}`}</TooltipLine>
+          <TooltipLine>{`Number of files: ${size.items}${size.complete ? "" : "+"}`}</TooltipLine>
+        </>
+      ) : (
+        <TooltipLine>Working out the download size…</TooltipLine>
+      )}
     </>
   );
 
   return (
-    <>
-      <CustomTooltip title={tooltipTitle} placement={"top"} arrow>
-        <Button
-          {...props}
-          variant={"contained"}
-          color="success"
-          sx={buttonStyle}
-          onClick={e => manageFollow(e)}
-        >
-          {isFollowingName() ? "Unfollow" : "Follow"}
-        </Button>
-      </CustomTooltip>
-    </>
+    <CustomWidthTooltipStyles title={tooltipTitle} placement="top" arrow onOpen={loadSize}>
+      <Button
+        {...props}
+        variant={following ? "outlined" : "contained"}
+        startIcon={compact ? compactIcon : props.startIcon}
+        onClick={manageFollow}
+        disabled={busy || props.disabled}
+        aria-pressed={following}
+        aria-label={`${following ? "Unfollow" : "Follow"} ${followerName}`}
+        sx={[
+          compact
+            ? { fontWeight: 700, minHeight: 44 }
+            : { fontWeight: 700, minWidth: 96, minHeight: phone ? 44 : 36, px: 2 },
+          ...(Array.isArray(sx) ? sx : [sx]),
+        ]}
+      >
+        {following ? "Unfollow" : "Follow"}
+      </Button>
+    </CustomWidthTooltipStyles>
   );
 };

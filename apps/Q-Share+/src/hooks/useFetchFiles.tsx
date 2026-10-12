@@ -1,286 +1,265 @@
 import React from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import {
   addFiles,
   addToHashMap,
+  heldShare,
+  markUnavailable,
   setCountNewFiles,
+  shareKey,
   upsertFiles,
   upsertFilesBeginning,
   Video,
   upsertFilteredFiles,
 } from "../state/features/fileSlice.ts";
-import {
-  setIsLoadingGlobal,
-  setUserAvatarHash,
-  setTotalFilesPublished,
-  setTotalNamesPublished,
-  setFilesPerNamePublished,
-} from "../state/features/globalSlice";
+import { setIsLoadingGlobal, setUserAvatarHash } from "../state/features/globalSlice";
 import { RootState } from "../state/store";
 import { fetchAndEvaluateVideos } from "../utils/fetchVideos";
-import {
-  QSHARE_PLAYLIST_BASE,
-  QSHARE_FILE_BASE,
-} from "../constants/Identifiers.ts";
-import { RequestQueue } from "../utils/queue";
-import { queue } from "../wrappers/GlobalWrapper";
+import { QSHARE_FILE_BASE } from "../constants/Identifiers.ts";
+import { queue } from "../utils/queue";
 import { getCategoriesFetchString } from "../components/common/CategoryList/CategoryList.tsx";
+import { QDN_PAGE, QdnResourceSummary, searchQdn } from "../utils/qdnSearch";
+import { isNameHidden } from "../utils/settings";
+
+/**
+ * Q-Share writes the category ids at the start of the QDN description,
+ * "**cat:4;sub:421**…", so a row can show its category icon before the body lands.
+ */
+export function categoriesFromQdnDescription(description?: string): Record<string, string> {
+  const head = description?.match(/^\*\*([^*]*)\*\*/)?.[1];
+  const out: Record<string, string> = {};
+  for (const part of head?.split(";") ?? []) {
+    const [key, value] = part.split(":");
+    if (!value) continue;
+    if (key === "cat") out.category = value;
+    else if (key === "sub") out.subcategory = value;
+    else if (/^sub\d+$/.test(key)) out[`subcategory${key.slice(3)}`] = value;
+  }
+  return out;
+}
+
+/**
+ * A readable title for a share with no QDN metadata, from its identifier:
+ * "qshare_file_qorterminator-2-visual_WiRAxt_metadata" → "Qorterminator 2 visual".
+ */
+export function shareTitleFromIdentifier(identifier: string): string {
+  const slug = identifier
+    .replace(/^qshare_file_/, "")
+    .replace(/_metadata$/, "")
+    .replace(/_[^_]*$/, "")
+    .replace(/[-_]+/g, " ")
+    .trim();
+  return slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : "Untitled share";
+}
+
+/**
+ * A list row built from a search result (searched with metadata, so it has a
+ * title and date at once); the JSON body arrives later via getFile.
+ */
+export function summaryToVideo(video: QdnResourceSummary): Video {
+  return {
+    title: video?.metadata?.title,
+    service: video?.service,
+    category: video?.metadata?.category,
+    categoryName: video?.metadata?.categoryName,
+    tags: video?.metadata?.tags || [],
+    description: video?.metadata?.description,
+    created: video?.created,
+    updated: video?.updated,
+    user: video.name,
+    videoImage: "",
+    id: video.identifier,
+    ...categoriesFromQdnDescription(video?.metadata?.description),
+  };
+}
+
+/** Shares (shareKey) whose body is queued or being fetched, so a list never queues one twice. */
+const bodiesInFlight = new Set<string>();
+
+/** The search row says the share changed after the copy in the hash map. */
+const updatedSince = (row: { updated?: number | string } | undefined, held: Video) =>
+  Boolean(row?.updated && (!held.updated || row.updated > held.updated));
+
+/**
+ * Fetch one share's JSON body into the hash map, with two more tries through
+ * the queue. After the last one the share is marked unavailable, so its row
+ * says so instead of loading forever (a MISSING_DATA body answers "Data
+ * unavailable" after ~15 s, an empty one "Empty response").
+ */
+async function fetchShareBody(
+  dispatch: (action: unknown) => unknown,
+  getState: () => RootState,
+  user: string,
+  videoId: string,
+  content: any,
+  attempt = 0
+): Promise<void> {
+  // While this waited in the queue, the share page (a row opens before its
+  // body lands), a collection or another list may have fetched it.
+  const key = shareKey(user, videoId);
+  const held = heldShare(getState().file, user, videoId);
+  if (held && !updatedSince(content, held)) {
+    bodiesInFlight.delete(key);
+    return;
+  }
+  try {
+    const res = await fetchAndEvaluateVideos({ user, videoId, content });
+    bodiesInFlight.delete(key);
+    dispatch(addToHashMap(res));
+  } catch {
+    if (attempt < 2) {
+      queue.push(() => fetchShareBody(dispatch, getState, user, videoId, content, attempt + 1));
+    } else {
+      bodiesInFlight.delete(key);
+      dispatch(markUnavailable({ user, id: videoId }));
+    }
+  }
+}
+
+/**
+ * `files` without the shares whose body turned out to be deleted or unreadable
+ * (see isShareBody): Home and profile lists leave them out. The selector
+ * returns a string of share keys, so a body landing re-renders the caller
+ * only when that set changes.
+ */
+export function useListedFiles(files: Video[]): Video[] {
+  const gone = useSelector((state: RootState) => {
+    let keys = "";
+    for (const file of files) {
+      if (heldShare(state.file, file.user, file.id)?.isValid === false) {
+        keys += `${shareKey(file.user, file.id)}\n`;
+      }
+    }
+    return keys;
+  });
+  return React.useMemo(() => {
+    if (!gone) return files;
+    const drop = new Set(gone.split("\n"));
+    return files.filter((file) => !drop.has(shareKey(file.user, file.id)));
+  }, [files, gone]);
+}
 
 export const useFetchFiles = () => {
   const dispatch = useDispatch();
-  const hashMapFiles = useSelector(
-    (state: RootState) => state.file.hashMapFiles
-  );
+  const store = useStore<RootState>();
   const videos = useSelector((state: RootState) => state.file.files);
-  const userAvatarHash = useSelector(
-    (state: RootState) => state.global.userAvatarHash
-  );
-  const filteredVideos = useSelector(
-    (state: RootState) => state.file.filteredFiles
-  );
+  const filteredVideos = useSelector((state: RootState) => state.file.filteredFiles);
 
-  const totalFilesPublished = useSelector(
-    (state: RootState) => state.global.totalFilesPublished
-  );
-  const totalNamesPublished = useSelector(
-    (state: RootState) => state.global.totalNamesPublished
-  );
-  const filesPerNamePublished = useSelector(
-    (state: RootState) => state.global.filesPerNamePublished
-  );
-
+  // Reads the store when called rather than subscribing, so the page using
+  // this hook doesn't re-render for every body that lands (rows do that).
   const checkAndUpdateFile = React.useCallback(
     (video: Video) => {
-      const existingVideo = hashMapFiles[video.id];
-      if (!existingVideo) {
-        return true;
-      } else if (
-        video?.updated &&
-        existingVideo?.updated &&
-        (!existingVideo?.updated || video?.updated) > existingVideo?.updated
-      ) {
-        return true;
-      } else {
-        return false;
-      }
+      const existingVideo = heldShare(store.getState().file, video.user, video.id);
+      if (!existingVideo) return true;
+      // Re-fetch when the search says the share was updated after the copy we hold.
+      return Boolean(
+        video?.updated && (!existingVideo?.updated || video.updated > existingVideo.updated)
+      );
     },
-    [hashMapFiles]
+    [store]
   );
 
   const getAvatar = React.useCallback(async (author: string) => {
     try {
-      let url = await qortalRequest({
+      const url = await qortalRequest({
         action: "GET_QDN_RESOURCE_URL",
         name: author,
         service: "THUMBNAIL",
         identifier: "qortal_avatar",
       });
-
-      dispatch(
-        setUserAvatarHash({
-          name: author,
-          url,
-        })
-      );
-    } catch (error) {}
-  }, []);
-
-  const getFile = async (
-    user: string,
-    videoId: string,
-    content: any,
-    retries: number = 0
-  ) => {
-    try {
-      const res = await fetchAndEvaluateVideos({
-        user,
-        videoId,
-        content,
-      });
-
-      dispatch(addToHashMap(res));
+      dispatch(setUserAvatarHash({ name: author, url }));
     } catch (error) {
-      retries = retries + 1;
-      if (retries < 2) {
-        // 3 is the maximum number of retries here, you can adjust it to your needs
-        queue.push(() => getFile(user, videoId, content, retries + 1));
-      } else {
-        console.error("Failed to get video after 3 attempts", error);
-      }
+      /* avatar is optional */
     }
-  };
+  }, [dispatch]);
+
+  const getFile = React.useCallback(
+    (user: string, videoId: string, content: any) => fetchShareBody(dispatch, store.getState, user, videoId, content),
+    [dispatch, store]
+  );
+
+  /**
+   * Queue the bodies a list still needs. Rows of hidden names are never shown,
+   * so they are skipped: one name can fill 90% of a Latest page. A search
+   * retries shares marked unavailable; `retryUnavailable: false` (coming back
+   * to a list) leaves them alone. `skipHidden: false` is for a list that still
+   * shows hidden names (a profile opened on purpose).
+   */
+  const queueBodies = React.useCallback(
+    (rows: Video[], retryUnavailable = true, skipHidden = true) => {
+      const { unavailableFiles } = store.getState().file;
+      for (const content of rows) {
+        if (!content.user || !content.id || (skipHidden && isNameHidden(content.user))) continue;
+        const key = shareKey(content.user, content.id);
+        if (bodiesInFlight.has(key) || !checkAndUpdateFile(content)) continue;
+        if (!retryUnavailable && unavailableFiles[key]) continue;
+        bodiesInFlight.add(key);
+        queue.push(() => getFile(content.user, content.id, content));
+      }
+    },
+    [checkAndUpdateFile, getFile, store]
+  );
 
   const getNewFiles = React.useCallback(async () => {
     try {
       dispatch(setIsLoadingGlobal(true));
-
-      const url = `/arbitrary/resources/search?mode=ALL&service=DOCUMENT&query=${QSHARE_FILE_BASE}&limit=20&includemetadata=false&reverse=true&excludeblocked=true&exactmatchnames=true`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const responseData = await response.json();
-
-      // const responseData = await qortalRequest({
-      //   action: "SEARCH_QDN_RESOURCES",
-      //   mode: "ALL",
-      //   service: "DOCUMENT",
-      //   query: "${QTUBE_VIDEO_BASE}",
-      //   limit: 20,
-      //   includeMetadata: true,
-      //   reverse: true,
-      //   excludeBlocked: true,
-      //   exactMatchNames: true,
-      //   name: names
-      // })
+      const responseData = await searchQdn(
+        { service: "DOCUMENT", query: QSHARE_FILE_BASE, limit: QDN_PAGE },
+        { fresh: true }
+      );
       const latestVideo = videos[0];
       if (!latestVideo) return;
-      const findVideo = responseData?.findIndex(
-        (item: any) => item?.identifier === latestVideo?.id
-      );
+      const findVideo = responseData.findIndex((item) => item?.identifier === latestVideo?.id);
       let fetchAll = responseData;
       let willFetchAll = true;
       if (findVideo !== -1) {
         willFetchAll = false;
         fetchAll = responseData.slice(0, findVideo);
       }
-
-      const structureData = fetchAll.map((video: any): Video => {
-        return {
-          title: video?.metadata?.title,
-          category: video?.metadata?.category,
-          categoryName: video?.metadata?.categoryName,
-          tags: video?.metadata?.tags || [],
-          description: video?.metadata?.description,
-          created: video?.created,
-          updated: video?.updated,
-          user: video.name,
-          videoImage: "",
-          id: video.identifier,
-        };
-      });
-      if (!willFetchAll) {
-        dispatch(upsertFilesBeginning(structureData));
-      }
-      if (willFetchAll) {
-        dispatch(addFiles(structureData));
-      }
+      const structureData = fetchAll.map(summaryToVideo);
+      if (!willFetchAll) dispatch(upsertFilesBeginning(structureData));
+      if (willFetchAll) dispatch(addFiles(structureData));
       setTimeout(() => {
         dispatch(setCountNewFiles(0));
       }, 1000);
-      for (const content of structureData) {
-        if (content.user && content.id) {
-          const res = checkAndUpdateFile(content);
-          if (res) {
-            queue.push(() => getFile(content.user, content.id, content));
-          }
-        }
-      }
+      queueBodies(structureData);
     } catch (error) {
+      /* the list keeps what it has */
     } finally {
       dispatch(setIsLoadingGlobal(false));
     }
-  }, [videos, hashMapFiles]);
+  }, [videos, dispatch, queueBodies]);
 
   const getFiles = React.useCallback(
-    async (
-      filters = {},
-      reset?: boolean,
-      resetFilers?: boolean,
-      limit?: number
-    ) => {
-      try {
-        const {
-          name = "",
-          categories = [],
-          keywords = "",
-          type = "",
-        }: any = resetFilers ? {} : filters;
-        let offset = videos.length;
-        if (reset) {
-          offset = 0;
-        }
-        const videoLimit = limit || 50;
-        let defaultUrl = `/arbitrary/resources/search?mode=ALL&includemetadata=false&reverse=true&excludeblocked=true&exactmatchnames=true&offset=${offset}&limit=${videoLimit}`;
-
-        if (name) {
-          defaultUrl += `&name=${name}`;
-        }
-
-        if (categories.length > 0) {
-          defaultUrl += "&description=" + getCategoriesFetchString(categories);
-        }
-
-        if (keywords) {
-          defaultUrl = defaultUrl + `&query=${keywords}`;
-        }
-        if (type === "playlists") {
-          defaultUrl = defaultUrl + `&service=PLAYLIST`;
-          defaultUrl = defaultUrl + `&identifier=${QSHARE_PLAYLIST_BASE}`;
-        } else {
-          defaultUrl = defaultUrl + `&service=DOCUMENT`;
-          defaultUrl = defaultUrl + `&identifier=${QSHARE_FILE_BASE}`;
-        }
-
-        // const url = `/arbitrary/resources/search?mode=ALL&service=DOCUMENT&query=${QTUBE_VIDEO_BASE}&limit=${videoLimit}&includemetadata=false&reverse=true&excludeblocked=true&exactmatchnames=true&offset=${offset}`
-        const url = defaultUrl;
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-        const responseData = await response.json();
-
-        // const responseData = await qortalRequest({
-        //   action: "SEARCH_QDN_RESOURCES",
-        //   mode: "ALL",
-        //   service: "DOCUMENT",
-        //   query: "${QTUBE_VIDEO_BASE}",
-        //   limit: 20,
-        //   includeMetadata: true,
-        //   offset: offset,
-        //   reverse: true,
-        //   excludeBlocked: true,
-        //   exactMatchNames: true,
-        //   name: names
-        // })
-        const structureData = responseData.map((video: any): Video => {
-          return {
-            title: video?.metadata?.title,
-            service: video?.service,
-            category: video?.metadata?.category,
-            categoryName: video?.metadata?.categoryName,
-            tags: video?.metadata?.tags || [],
-            description: video?.metadata?.description,
-            created: video?.created,
-            updated: video?.updated,
-            user: video.name,
-            videoImage: "",
-            id: video.identifier,
-          };
-        });
-        if (reset) {
-          dispatch(addFiles(structureData));
-        } else {
-          dispatch(upsertFiles(structureData));
-        }
-        for (const content of structureData) {
-          if (content.user && content.id) {
-            const res = checkAndUpdateFile(content);
-            if (res) {
-              queue.push(() => getFile(content.user, content.id, content));
-            }
-          }
-        }
-      } catch (error) {
-        console.log({ error });
-      } finally {
-      }
+    async (filters = {}, reset?: boolean, resetFilers?: boolean, limit?: number, isCurrent?: () => boolean) => {
+      const { name = "", names = [], categories = [], keywords = "", sort = "newest", following = false }: any = resetFilers ? {} : filters;
+      const offset = reset ? 0 : videos.length;
+      const responseData = await searchQdn(
+        {
+          service: "DOCUMENT",
+          identifier: QSHARE_FILE_BASE,
+          // `names` (every name of the account, for "All my names") takes the place of `name`.
+          name: names.length > 0 ? undefined : name || undefined,
+          names: names.length > 0 ? names : undefined,
+          description: categories.length > 0 ? getCategoriesFetchString(categories) : undefined,
+          query: keywords || undefined,
+          offset,
+          limit: limit || QDN_PAGE,
+          reverse: sort !== "oldest",
+          followedonly: Boolean(following),
+          includemetadata: true,
+        },
+        { fresh: Boolean(reset) }
+      );
+      const structureData = responseData.map(summaryToVideo);
+      // Superseded by a newer search while waiting: leave the list alone.
+      if (isCurrent && !isCurrent()) return structureData.length;
+      if (reset) dispatch(addFiles(structureData));
+      else dispatch(upsertFiles(structureData));
+      queueBodies(structureData);
+      return structureData.length;
     },
-    [videos, hashMapFiles]
+    [videos, dispatch, queueBodies]
   );
 
   const getFilesFiltered = React.useCallback(
@@ -288,134 +267,50 @@ export const useFetchFiles = () => {
       try {
         const offset = filteredVideos.length;
         const replaceSpacesWithUnderscore = filterValue.replace(/ /g, "_");
-
-        const url = `/arbitrary/resources/search?mode=ALL&service=DOCUMENT&query=${replaceSpacesWithUnderscore}&identifier=${QSHARE_FILE_BASE}&limit=10&includemetadata=false&reverse=true&excludeblocked=true&exactmatchnames=true&offset=${offset}`;
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
+        const responseData = await searchQdn({
+          service: "DOCUMENT",
+          query: replaceSpacesWithUnderscore,
+          identifier: QSHARE_FILE_BASE,
+          limit: 10,
+          offset,
         });
-        const responseData = await response.json();
-
-        // const responseData = await qortalRequest({
-        //   action: "SEARCH_QDN_RESOURCES",
-        //   mode: "ALL",
-        //   service: "DOCUMENT",
-        //   query: replaceSpacesWithUnderscore,
-        //   identifier: "${QTUBE_VIDEO_BASE}",
-        //   limit: 20,
-        //   includeMetadata: true,
-        //   offset: offset,
-        //   reverse: true,
-        //   excludeBlocked: true,
-        //   exactMatchNames: true,
-        //   name: names
-        // })
-        const structureData = responseData.map((video: any): Video => {
-          return {
-            title: video?.metadata?.title,
-            category: video?.metadata?.category,
-            categoryName: video?.metadata?.categoryName,
-            tags: video?.metadata?.tags || [],
-            description: video?.metadata?.description,
-            created: video?.created,
-            updated: video?.updated,
-            user: video.name,
-            videoImage: "",
-            id: video.identifier,
-          };
-        });
+        const structureData = responseData.map(summaryToVideo);
         dispatch(upsertFilteredFiles(structureData));
-
-        for (const content of structureData) {
-          if (content.user && content.id) {
-            const res = checkAndUpdateFile(content);
-            if (res) {
-              queue.push(() => getFile(content.user, content.id, content));
-            }
-          }
-        }
+        queueBodies(structureData);
       } catch (error) {
-      } finally {
+        /* keep the current list */
       }
     },
-    [filteredVideos, hashMapFiles]
+    [filteredVideos, dispatch, queueBodies]
   );
 
   const checkNewFiles = React.useCallback(async () => {
     try {
-      const url = `/arbitrary/resources/search?mode=ALL&service=DOCUMENT&query=${QSHARE_FILE_BASE}&limit=20&includemetadata=false&reverse=true&excludeblocked=true&exactmatchnames=true`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const responseData = await response.json();
-      // const responseData = await qortalRequest({
-      //   action: "SEARCH_QDN_RESOURCES",
-      //   mode: "ALL",
-      //   service: "DOCUMENT",
-      //   query: "${QTUBE_VIDEO_BASE}",
-      //   limit: 20,
-      //   includeMetadata: true,
-      //   reverse: true,
-      //   excludeBlocked: true,
-      //   exactMatchNames: true,
-      //   name: names
-      // })
+      const responseData = await searchQdn(
+        { service: "DOCUMENT", query: QSHARE_FILE_BASE, limit: QDN_PAGE },
+        { fresh: true }
+      );
       const latestVideo = videos[0];
       if (!latestVideo) return;
-      const findVideo = responseData?.findIndex(
-        (item: any) => item?.identifier === latestVideo?.id
-      );
+      const findVideo = responseData.findIndex((item) => item?.identifier === latestVideo?.id);
       if (findVideo === -1) {
         dispatch(setCountNewFiles(responseData.length));
         return;
       }
-      const newArray = responseData.slice(0, findVideo);
-      dispatch(setCountNewFiles(newArray.length));
-      return;
-    } catch (error) {}
-  }, [videos]);
-
-  const getFilesCount = React.useCallback(async () => {
-    try {
-      let url = `/arbitrary/resources/search?mode=ALL&includemetadata=false&limit=0&service=DOCUMENT&identifier=${QSHARE_FILE_BASE}`;
-
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const responseData = await response.json();
-
-      const totalFilesPublished = responseData.length;
-      const uniqueNames = new Set(responseData.map(video => video.name));
-      const totalNamesPublished = uniqueNames.size;
-      const filesPerNamePublished = (
-        totalFilesPublished / totalNamesPublished
-      ).toFixed(2);
-
-      dispatch(setTotalFilesPublished(totalFilesPublished));
-      dispatch(setTotalNamesPublished(totalNamesPublished));
-      dispatch(setFilesPerNamePublished(filesPerNamePublished));
+      dispatch(setCountNewFiles(responseData.slice(0, findVideo).length));
     } catch (error) {
-      console.log({ error });
-    } finally {
+      /* ignore */
     }
-  }, []);
+  }, [videos, dispatch]);
 
   return {
     getFiles,
     checkAndUpdateFile,
     getFile,
-    hashMapFiles,
+    getAvatar,
     getNewFiles,
     checkNewFiles,
     getFilesFiltered,
-    getFilesCount,
+    queueBodies,
   };
 };

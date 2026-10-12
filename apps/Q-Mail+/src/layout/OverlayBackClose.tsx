@@ -1,0 +1,133 @@
+/**
+ * Back (GO's hardware button, the browser's Back) closes a full-screen dialog
+ * or a sheet on a phone, instead of the pane underneath it: Back in an
+ * attachment preview used to close the composer, and its files with it.
+ *
+ * Like usePhoneBackClose, it works through the router and never touches
+ * `window.history` (shared by every Hub tab: docs/QORTAL.md → pitfall 8):
+ * opening pushes an entry for the same path carrying this overlay's id;
+ * Back pops it and the overlay closes; closing from the UI replaces the
+ * entry with one without the id. Pane entries (`qmailSubPane`) are kept, so
+ * the pane under the overlay stays open. Renders nothing, and does nothing
+ * outside a router (tests, previews).
+ */
+import { useCallback, useContext, useEffect, useId, useRef } from 'react';
+import {
+  UNSAFE_NavigationContext,
+  useInRouterContext,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+  type Location,
+} from 'react-router-dom';
+import { registerBackLayer, type SwipeDirection } from './backStack';
+
+export const OVERLAY_STATE_KEY = 'qmailOverlay';
+
+const stateObject = (state: unknown): Record<string, unknown> =>
+  state && typeof state === 'object' ? (state as Record<string, unknown>) : {};
+
+const withoutOverlay = (state: unknown): Record<string, unknown> | null => {
+  const rest = { ...stateObject(state) };
+  delete rest[OVERLAY_STATE_KEY];
+  return Object.keys(rest).length ? rest : null;
+};
+
+/**
+ * Whether the entry the router is really on carries this overlay's id. Under
+ * Settings the mail page renders at its background location (App.tsx), so
+ * useLocation() there is the entry Settings was opened from, not Settings:
+ * the router's history (`navigator.location`) knows the real one, so closing
+ * the mailboxes drawer as Settings opens no longer replaces Settings with
+ * the inbox.
+ */
+const realEntryIsOurs = (seen: Location, real: Location | undefined, id: string): boolean =>
+  stateObject(seen.state)[OVERLAY_STATE_KEY] === id && (!real || stateObject(real.state)[OVERLAY_STATE_KEY] === id);
+
+export interface OverlayBackCloseProps {
+  open: boolean;
+  onClose: () => void;
+  /** Only where the overlay covers the screen (phones); elsewhere Back keeps its meaning. */
+  enabled?: boolean;
+  /** The swipe that closes it (SwipeBack): right unless it slides in from the left. */
+  swipeDirection?: SwipeDirection;
+}
+
+export function OverlayBackClose(props: OverlayBackCloseProps) {
+  return useInRouterContext() ? <OverlayBackCloseInRouter {...props} /> : null;
+}
+
+function OverlayBackCloseInRouter({ open, onClose, enabled = true, swipeDirection = 'right' }: OverlayBackCloseProps) {
+  const id = useId();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const navigationType = useNavigationType();
+  // The router's history: its location is the real entry, also under Settings.
+  const { navigator } = useContext(UNSAFE_NavigationContext);
+  const realLocation = useCallback(() => (navigator as { location?: Location }).location, [navigator]);
+  const onCloseRef = useRef(onClose);
+  const locationRef = useRef(location);
+  const pushed = useRef(false);
+  // Set once our own entry has been seen as the current location. Until
+  // then a POP is not Back: an overlay that mounts open pushes its entry in
+  // the same pass in which it still sees the previous one (often the app's
+  // first, a POP), and took that for Back, closing at once.
+  const sawOwnEntry = useRef(false);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    locationRef.current = location;
+  });
+
+  const active = open && enabled;
+
+  // A swipe closes it as its own close button would.
+  useEffect(() => {
+    if (!active) return;
+    return registerBackLayer(() => onCloseRef.current(), { overlay: true, direction: swipeDirection });
+  }, [active, swipeDirection]);
+
+  // Open: an entry of our own. Closed from the UI: take our id off again.
+  useEffect(() => {
+    const current = locationRef.current;
+    const path = current.pathname + current.search + current.hash;
+    if (active && !pushed.current) {
+      pushed.current = true;
+      sawOwnEntry.current = false;
+      navigate(path, { state: { ...stateObject(current.state), [OVERLAY_STATE_KEY]: id } });
+    } else if (!active && pushed.current) {
+      pushed.current = false;
+      sawOwnEntry.current = false;
+      if (realEntryIsOurs(current, realLocation(), id)) {
+        navigate(path, { replace: true, state: withoutOverlay(current.state) });
+      }
+    }
+  }, [active, id, navigate, realLocation]);
+
+  // Gone while open (the pane under it closed): leave no id behind.
+  useEffect(
+    () => () => {
+      if (!pushed.current) return;
+      pushed.current = false;
+      const current = locationRef.current;
+      if (realEntryIsOurs(current, realLocation(), id)) {
+        navigate(current.pathname + current.search + current.hash, { replace: true, state: withoutOverlay(current.state) });
+      }
+    },
+    [id, navigate, realLocation]
+  );
+
+  // Back popped our entry: close.
+  useEffect(() => {
+    if (!pushed.current) return;
+    if (stateObject(location.state)[OVERLAY_STATE_KEY] === id) {
+      sawOwnEntry.current = true;
+      return;
+    }
+    if (!sawOwnEntry.current || navigationType !== 'POP') return;
+    pushed.current = false;
+    sawOwnEntry.current = false;
+    onCloseRef.current();
+  }, [location, navigationType, id]);
+
+  return null;
+}

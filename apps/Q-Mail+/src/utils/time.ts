@@ -1,43 +1,70 @@
-import moment from 'moment'
+/**
+ * Date formatting without a date library. The patterns use moment's tokens
+ * (the app used moment with its default English locale until 2026-10), so
+ * every string stays exactly as it was: English names, local time.
+ */
 
-export function formatTimestamp(timestamp: number): string {
-  const now = moment()
-  const timestampMoment = moment(timestamp)
-  const elapsedTime = now.diff(timestampMoment, 'minutes')
+const MONTH_LONG = new Intl.DateTimeFormat('en-US', { month: 'long' })
+const MONTH_SHORT = new Intl.DateTimeFormat('en-US', { month: 'short' })
+const WEEKDAY_LONG = new Intl.DateTimeFormat('en-US', { weekday: 'long' })
+const WEEKDAY_SHORT = new Intl.DateTimeFormat('en-US', { weekday: 'short' })
 
-  if (elapsedTime < 1) {
-    return 'Just now'
-  } else if (elapsedTime < 60) {
-    return `${elapsedTime}m`
-  } else if (elapsedTime < 1440) {
-    return `${Math.floor(elapsedTime / 60)}h`
-  } else {
-    return timestampMoment.format('MMM D')
-  }
-}
+const DAY = 24 * 60 * 60_000
 
-export const formatDate = (unixTimestamp: number): string => {
-  const date = moment(unixTimestamp, 'x').fromNow()
+const pad = (value: number, length = 2) => String(value).padStart(length, '0')
 
-  return date
-}
+const PATTERN_TOKENS = /YYYY|MMMM|MMM|MM|dddd|ddd|DD|D|HH|H|hh|h|mm|ss|A|\[[^\]]*\]/g
 
-
-
-export function formatEmailDate(timestamp: number) {
-    const date = moment(timestamp);
-    const now = moment();
-
-    if (date.isSame(now, 'day')) {
-        // If the email was received today, show the time
-        return date.format('h:mm A');
-    } else if (date.isSame(now, 'year')) {
-        // If the email was received this year, show the month and day
-        return date.format('MMM D');
-    } else {
-        // For older emails, show the full date
-        return date.format('MMM D, YYYY');
+/**
+ * Formats `date` in local time with a subset of moment's tokens:
+ * YYYY, MMMM, MMM, MM, dddd, ddd, DD, D, HH, H, hh, h, mm, ss, A and
+ * `[literal]` text. Anything else is copied as is.
+ */
+export function formatDatePattern(date: Date, pattern: string): string {
+  return pattern.replace(PATTERN_TOKENS, (token) => {
+    const hours = date.getHours()
+    switch (token) {
+      case 'YYYY':
+        return pad(date.getFullYear(), 4)
+      case 'MMMM':
+        return MONTH_LONG.format(date)
+      case 'MMM':
+        return MONTH_SHORT.format(date)
+      case 'MM':
+        return pad(date.getMonth() + 1)
+      case 'dddd':
+        return WEEKDAY_LONG.format(date)
+      case 'ddd':
+        return WEEKDAY_SHORT.format(date)
+      case 'DD':
+        return pad(date.getDate())
+      case 'D':
+        return String(date.getDate())
+      case 'HH':
+        return pad(hours)
+      case 'H':
+        return String(hours)
+      case 'hh':
+        return pad(hours % 12 || 12)
+      case 'h':
+        return String(hours % 12 || 12)
+      case 'mm':
+        return pad(date.getMinutes())
+      case 'ss':
+        return pad(date.getSeconds())
+      case 'A':
+        return hours < 12 ? 'AM' : 'PM'
+      default:
+        return token.slice(1, -1)
     }
+  })
+}
+
+/** Whole local calendar days from `from` to `to` (positive when `to` is later). */
+export function calendarDaysBetween(from: Date, to: Date): number {
+  const fromDay = Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())
+  const toDay = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate())
+  return Math.round((toDay - fromDay) / DAY)
 }
 
 export function formatFullTimestamp(
@@ -48,5 +75,5 @@ export function formatFullTimestamp(
     return "-"
   }
 
-  return moment(numericTimestamp).format("YYYY-MM-DD HH:mm:ss")
+  return formatDatePattern(new Date(numericTimestamp), "YYYY-MM-DD HH:mm:ss")
 }

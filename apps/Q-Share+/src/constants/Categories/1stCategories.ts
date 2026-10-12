@@ -21,10 +21,7 @@ import {
   Category,
   CategoryData,
 } from "../../components/common/CategoryList/CategoryList.tsx";
-import {
-  getAllCategoriesWithIcons,
-  sortCategory,
-} from "./CategoryFunctions.ts";
+import { collectCategoriesWithIcons, sortCategory } from "./categoryUtils.ts";
 
 export const firstCategories: Category[] = [
   { id: 1, name: "Software", icon: softwareIcon },
@@ -54,4 +51,4 @@ export const allCategoryData: CategoryData = {
   subCategories: [secondCategories, thirdCategories],
 };
 
-export const iconCategories = getAllCategoriesWithIcons();
+export const iconCategories = collectCategoriesWithIcons(allCategoryData);

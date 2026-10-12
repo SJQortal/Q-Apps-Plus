@@ -1,67 +1,49 @@
-import React, { Dispatch, useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReusableModal } from "../../components/modals/ReusableModal";
-import { Box, Button, Input, Typography, useMediaQuery, useTheme } from "@mui/material";
-import { BuilderButton } from "../CreatePost/CreatePost-styles";
-import BlogEditor from "../../components/editor/BlogEditor";
-import EmailIcon from "@mui/icons-material/Email";
-import { Descendant } from "slate";
+import { Box, Button, Input, Typography } from "@mui/material";
+import { useLayoutMode } from "../../layout/useLayoutMode";
+import { useLandscapeFrame } from "../../utils/hubFrame";
 import ShortUniqueId from "short-unique-id";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
 import { useDropzone } from "react-dropzone";
-import AttachFileIcon from "@mui/icons-material/AttachFile";
-import CloseIcon from "@mui/icons-material/Close";
-import CreateIcon from "@mui/icons-material/Create";
 import { setNotification } from "../../state/features/notificationsSlice";
-import { useNavigate, useLocation } from "react-router-dom";
-import mime from "mime";
 import ModalCloseSVG from "../../assets/svgs/ModalClose.svg";
-import AttachmentSVG from "../../assets/svgs/NewMessageAttachment.svg";
-import CreateThreadSVG from "../../assets/svgs/CreateThread.svg";
 
 
-import {
-  objectToBase64,
-  objectToUint8Array,
-  objectToUint8ArrayFromResponse,
-  processFileInChunks,
-  toBase64,
-  uint8ArrayToBase64,
-} from "../../utils/toBase64";
+import { objectToBase64, toBase64 } from "../../utils/toBase64";
 import {
   MAIL_ATTACHMENT_SERVICE_TYPE,
   MAIL_SERVICE_TYPE,
   THREAD_SERVICE_TYPE,
 } from "../../constants/mail";
-import ConfirmationModal from "../../components/common/ConfirmationModal";
-import useConfirmationModal from "../../hooks/useConfirmModal";
 import { subscribeToEvent, unsubscribeFromEvent } from "../../utils/events";
 import {
-  AttachmentContainer,
   CloseContainer,
   InstanceFooter,
   InstanceListContainer,
   InstanceListHeader,
-  MoreImg,
-  NewMessageAttachmentImg,
   NewMessageCloseImg,
   NewMessageHeaderP,
   NewMessageInputRow,
-  NewMessageSendButton,
-  NewMessageSendP,
 } from "./Mail-styles";
 import { Spacer } from "../../components/common/Spacer";
 import { TextEditor } from "../../components/common/TextEditor/TextEditor";
+import { toPublishedMailHtml } from "../../components/common/TextEditor/quillHtml";
 import { SendNewMessage } from "../../assets/svgs/SendNewMessage";
-import { formatBytes } from "../../utils/displaySize";
+import { ComposeAttachments } from "./ComposeAttachments";
+import { composeItemsFromFiles, withinSizeLimit } from "./composeFiles";
+import { AttachDropZone } from "./AttachDropZone";
 import { CreateThreadIcon } from "../../assets/svgs/CreateThreadIcon";
 import { MultiplePublish } from "../../components/common/MultiplePublish/MultiplePublish";
-const initialValue: Descendant[] = [
-  {
-    type: "paragraph",
-    children: [{ text: "" }],
-  },
-];
+import {
+  createComposeDraftId,
+  deleteComposeDraft,
+  readComposeDrafts,
+  saveComposeDraft,
+  threadDraftKey,
+  type StoredComposeDraft,
+} from "./composeDrafts";
 const uid = new ShortUniqueId();
 
 interface NewMessageProps {
@@ -78,86 +60,135 @@ const maxSize = 25 * 1024 * 1024; // 25 MB in bytes
 export const NewThread = ({
   groupInfo,
   members,
-  hideButton,
   currentThread,
   isMessage = false,
   messageCallback,
-  refreshLatestThreads,
   threadCallback
 }: NewMessageProps) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [value, setValue] = useState("");
-  const [title, setTitle] = useState<string>("");
   const [attachments, setAttachments] = useState<any[]>([]);
   const [subject, setSubject] = useState<string>("");
   const [threadTitle, setThreadTitle] = useState<string>("");
-  const [destinationName, setDestinationName] = useState("");
   const { user } = useSelector((state: RootState) => state.auth);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isOpenMultiplePublish, setIsOpenMultiplePublish] = useState(false);
   const [publishes, setPublishes] = useState<any>(null);
   const [callbackContent, setCallbackContent] = useState<any>(null);
- const isMobile = useMediaQuery("(max-width:950px)");
+  // Compact on phones and in a landscape Hub frame (703x201), as NewMessage.
+  const landscapeFrame = useLandscapeFrame();
+  const isMobile = useLayoutMode() === "phone" || landscapeFrame;
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
+  // The MAIL thread header goes out after the post batch succeeds (Bugs #21).
+  const pendingThreadHeaderRef = useRef<any>(null);
+  const isHydratingDraftRef = useRef(false);
 
+  // Thread-post drafts share the mail drafts store (additive `kind: "thread"`),
+  // keyed by group and thread, so the Drafts mailbox lists them too.
+  const groupName: string =
+    (typeof groupInfo?.name === "string" && groupInfo.name.trim()) ||
+    (typeof groupInfo?.groupName === "string" && groupInfo.groupName.trim()) ||
+    "Group";
+  const draftKey = useMemo(() => {
+    const groupId = String(groupInfo?.id || "").trim();
+    if (!groupId) return null;
+    return threadDraftKey(groupId, isMessage ? currentThread?.threadId || null : null);
+  }, [currentThread?.threadId, groupInfo?.id, isMessage]);
 
-  const theme = useTheme();
+  useEffect(() => {
+    if (!isOpen || !draftKey || !user?.address) return;
+    const stored = readComposeDrafts(user.address)[draftKey];
+    if (!stored) return;
+    isHydratingDraftRef.current = true;
+    setValue(stored.value || "");
+    if (!isMessage) setThreadTitle(stored.threadTitle || stored.subject || "");
+    setDraftSavedAt(stored.updatedAt || null);
+    window.setTimeout(() => {
+      isHydratingDraftRef.current = false;
+    }, 0);
+  }, [draftKey, isMessage, isOpen, user?.address]);
 
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const location = useLocation();
-  const { getRootProps, getInputProps } = useDropzone({
-    maxSize,
-    onDrop: acceptedFiles => {
-      let files: any[] = [];
-      try {
-        acceptedFiles.forEach(item => {
-          const type = item?.type;
-          if (!type) {
-            files.push({
-              file: item,
-              mimetype: null,
-              extension: null,
-            });
-          } else {
-            const extension = mime.getExtension(type);
-            if (!extension) {
-              files.push({
-                file: item,
-                mimetype: type,
-                extension: null,
-              });
-            } else {
-              files.push({
-                file: item,
-                mimetype: type,
-                extension: extension,
-              });
-            }
-          }
-        });
-      } catch (error) {
-        dispatch(
-          setNotification({
-            msg: "One of your files is corrupted",
-            alertType: "error",
-          })
-        );
+  useEffect(() => {
+    if (!isOpen || !draftKey || !user?.address || isHydratingDraftRef.current) return;
+    const address = user.address;
+    const timeout = window.setTimeout(() => {
+      const hasText = Boolean(value.replace(/<[^>]*>/g, "").trim() || threadTitle.trim());
+      if (!hasText) {
+        deleteComposeDraft(address, draftKey);
+        setDraftSavedAt(null);
+        return;
       }
-      setAttachments(prev => [...prev, ...files]);
+      const updatedAt = Date.now();
+      const fromName = user?.name || "";
+      if (!fromName) return;
+      const draft: StoredComposeDraft = {
+        draftId: createComposeDraftId(fromName, groupName, updatedAt),
+        fromName,
+        toName: groupName,
+        subject: isMessage ? "" : threadTitle,
+        value,
+        aliasValue: "",
+        showAlias: false,
+        showBCC: false,
+        bccNames: [],
+        updatedAt,
+        kind: "thread",
+        groupId: String(groupInfo?.id || ""),
+        groupName,
+        threadId: isMessage ? currentThread?.threadId || null : null,
+        threadTitle: isMessage ? currentThread?.threadData?.title || "" : threadTitle,
+      };
+      if (attachments.length) {
+        draft.attachments = attachments.map(item => ({
+          name: item?.file?.name || "attachment",
+          size: Number(item?.file?.size || 0),
+          type: item?.file?.type || null,
+        }));
+      }
+      saveComposeDraft(address, draftKey, draft);
+      setDraftSavedAt(updatedAt);
+    }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [
+    attachments,
+    currentThread?.threadData?.title,
+    currentThread?.threadId,
+    draftKey,
+    groupInfo?.id,
+    groupName,
+    isMessage,
+    isOpen,
+    threadTitle,
+    user?.address,
+    user?.name,
+    value,
+  ]);
+
+  const discardDraft = () => {
+    if (draftKey && user?.address) deleteComposeDraft(user.address, draftKey);
+    setDraftSavedAt(null);
+    setThreadTitle("");
+    closeModal();
+  };
+
+
+  const dispatch = useDispatch();
+  const dropzone = useDropzone({
+    maxSize,
+    noClick: true,
+    noKeyboard: true,
+    onDrop: acceptedFiles => {
+      setAttachments(prev => [...prev, ...composeItemsFromFiles(acceptedFiles)]);
     },
-    onDropRejected: rejectedFiles => {
+    onDropRejected: () => {
       dispatch(
         setNotification({
-          msg: "One of your files is over the 25mb limit",
+          msg: "One of your files is over the 25 MB limit",
           alertType: "error",
         })
       );
     },
   });
 
-  const openModal = useCallback(() => {
-    setIsOpen(true);
-  }, []);
   const openModalFromEvent = useCallback(() => {
     if (isMessage) return;
     setIsOpen(true);
@@ -165,7 +196,6 @@ export const NewThread = ({
   const closeModal = () => {
     setAttachments([]);
     setSubject("");
-    setDestinationName("");
     setValue("");
     setIsOpen(false);
   };
@@ -179,8 +209,13 @@ export const NewThread = ({
     };
   }, [openModalFromEvent]);
 
-  const openModalPostFromEvent = useCallback(() => {
+  const openModalPostFromEvent = useCallback((event?: any) => {
     if (isMessage) {
+      // Reply to a post: the thread screen passes a quote block to prefill.
+      const quoteHtml = event?.detail?.quoteHtml;
+      if (typeof quoteHtml === "string" && quoteHtml) {
+        setValue(prev => (prev ? `${prev}${quoteHtml}` : quoteHtml));
+      }
       setIsOpen(true);
     }
   }, [isMessage]);
@@ -221,7 +256,7 @@ export const NewThread = ({
     const noExtension = attachments.filter(item => !item.extension);
     if (noExtension.length > 0) {
       errorMsg =
-        "One of your attachments does not have an extension (example: .png, .pdf, ect...)";
+        "One of your attachments has no file extension (for example .png or .pdf)";
     }
 
     if (errorMsg) {
@@ -239,7 +274,7 @@ export const NewThread = ({
       createdAt: Date.now(),
       version: 1,
       attachments,
-      textContentV2: value,
+      textContentV2: toPublishedMailHtml(value),
       name,
       threadOwner: currentThread?.threadData?.name || name,
     };
@@ -315,8 +350,8 @@ export const NewThread = ({
           name,
         };
         const threadToBase64 = await objectToBase64(threadObject);
-        let identifierThread = `qortal_qmail_thread_group${groupInfo.id}_${idThread}`;
-        let requestBodyThread: any = {
+        const identifierThread = `qortal_qmail_thread_group${groupInfo.id}_${idThread}`;
+        const requestBodyThread: any = {
           name: name,
           service: THREAD_SERVICE_TYPE,
           data64: threadToBase64,
@@ -325,10 +360,10 @@ export const NewThread = ({
           action: "PUBLISH_QDN_RESOURCE",
         };
         const idMsg = uid();
-        let groupIndex = identifierThread.indexOf("group");
-        let result = identifierThread.substring(groupIndex);
-        let identifier = `qortal_qmail_thmsg_${result}_${idMsg}`;
-        let requestBody: any = {
+        const groupIndex = identifierThread.indexOf("group");
+        const result = identifierThread.substring(groupIndex);
+        const identifier = `qortal_qmail_thmsg_${result}_${idMsg}`;
+        const requestBody: any = {
           name: name,
           service: MAIL_SERVICE_TYPE,
           data64: messageToBase64,
@@ -340,7 +375,7 @@ export const NewThread = ({
           encrypt: true,
           publicKeys: groupPublicKeys,
         };
-        await qortalRequest(requestBodyThread);
+        pendingThreadHeaderRef.current = requestBodyThread;
         setPublishes(multiplePublishMsg);
         setIsOpenMultiplePublish(true);
         // await qortalRequest(multiplePublishMsg);
@@ -378,10 +413,10 @@ export const NewThread = ({
         const idThread = currentThread.threadId;
         const messageToBase64 = await objectToBase64(mailObject);
         const idMsg = uid();
-        let groupIndex = idThread.indexOf("group");
-        let result = idThread.substring(groupIndex);
-        let identifier = `qortal_qmail_thmsg_${result}_${idMsg}`;
-        let requestBody: any = {
+        const groupIndex = idThread.indexOf("group");
+        const result = idThread.substring(groupIndex);
+        const identifier = `qortal_qmail_thmsg_${result}_${idMsg}`;
+        const requestBody: any = {
           name: name,
           service: MAIL_SERVICE_TYPE,
           data64: messageToBase64,
@@ -451,36 +486,68 @@ export const NewThread = ({
   }
 
   const sendMail = () => {
-    publishQDNResource();
+    publishQDNResource().catch(() => {
+      // Reported through the notification already.
+    });
   };
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!isOpenMultiplePublish) sendMail();
+    }
+  };
+
   return (
     <Box
       sx={{
         display: "flex",
       }}
+      onKeyDown={handleKeyDown}
     >
       <ReusableModal
         open={isOpen}
-        customStyles={{
-          maxHeight: "95vh",
-          maxWidth: "950px",
-          height: isMobile ? '95vh' : '700px',
-          borderRadius: "12px 12px 0px 0px",
-          background: "var(--Mail-Background)",
-          padding: "0px",
-          gap: "0px",
-          width: isMobile ? '95%' : '75%'
-        }}
+        onClose={closeModal}
+        customStyles={
+          isMobile
+            ? {
+                top: 0,
+                left: 0,
+                transform: "none",
+                width: "100%",
+                maxWidth: "100%",
+                height: "var(--qmail-app-height, 100dvh)",
+                maxHeight: "var(--qmail-app-height, 100dvh)",
+                borderRadius: 0,
+                background: "var(--Mail-Background)",
+                padding: "0px",
+                gap: "0px",
+              }
+            : {
+                maxHeight: "calc(var(--qmail-app-height, 100dvh) - 32px)",
+                maxWidth: "950px",
+                height: "700px",
+                borderRadius: "12px",
+                background: "var(--Mail-Background)",
+                padding: "0px",
+                gap: "0px",
+                width: "75%",
+              }
+        }
       >
         <InstanceListHeader
-          sx={{
+          sx={[{
             backgroundColor: "unset",
             height: "50px",
-            padding: isMobile ? '10px' : '20px 42px',
             flexDirection: "row",
             justifyContent: "space-between",
-            alignItems: "center",
-          }}
+            alignItems: "center"
+          }, isMobile ? {
+            padding: '10px'
+          } : {
+            padding: '20px 42px'
+          }]}
         >
           <NewMessageHeaderP>
             {isMessage ? "Post Message" : "New Thread"}
@@ -490,12 +557,17 @@ export const NewThread = ({
           </CloseContainer>
         </InstanceListHeader>
         <InstanceListContainer
-          sx={{
+          sx={[{
             backgroundColor: "var(--qmail-compose-surface)",
-            padding: isMobile ? '10px' : '20px 42px',
-            height: "calc(100% - 150px)",
-            flexShrink: 0,
-          }}
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column"
+          }, isMobile ? {
+            padding: '10px'
+          } : {
+            padding: '20px 42px'
+          }]}
         >
           {!isMessage && (
             <>
@@ -523,9 +595,6 @@ export const NewThread = ({
                   letterSpacing: '0.15px',
                   opacity: 1
                 },
-                '&:focus': {
-                  outline: 'none',
-                },
                 // Add any additional styles for the input here
               }}
             />
@@ -539,121 +608,124 @@ export const NewThread = ({
           }}>
             
           
-            <AttachmentContainer
-              {...getRootProps()}
-              sx={{
-                width: "fit-content",
-              }}
-            >
-              <input {...getInputProps()} />
-              <NewMessageAttachmentImg src={AttachmentSVG} />
-            </AttachmentContainer>
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-start",
-                width: "100%",
-              }}
-            >
-              {attachments.map(({ file, extension }, index) => {
-                return (
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "15px",
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        fontSize: "1rem",
-                        color: !extension
-                          ? "var(--qmail-danger-text)"
-                          : "var(--qmail-compose-text)",
-                      }}
-                    >
-                      {file?.name} ({formatBytes(file?.size || 0)})
-                    </Typography>
-                    <CloseIcon
-                      onClick={() =>
-                        setAttachments(prev =>
-                          prev.filter((item, itemIndex) => itemIndex !== index)
-                        )
-                      }
-                      sx={{
-                        height: "16px",
-                        width: "auto",
-                        cursor: "pointer",
-                        color: "var(--qmail-compose-muted)",
-                      }}
-                    />
-                    {!extension && (
-                      <Typography
-                        sx={{
-                          fontSize: "0.75rem",
-                          fontWeight: "bold",
-                          color: "var(--qmail-danger-text)",
-                        }}
-                      >
-                        This file has no extension
-                      </Typography>
-                    )}
-                  </Box>
-                );
-              })}
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%", minWidth: 0 }}>
+              <AttachDropZone dropzone={dropzone} count={attachments.length} />
+              <ComposeAttachments
+                attachments={attachments}
+                onRemove={index => setAttachments(prev => prev.filter((item, itemIndex) => itemIndex !== index))}
+              />
             </Box>
             <Spacer height="10px" />
           </NewMessageInputRow>
           <Spacer height="30px" />
           <Box
             sx={{
-              maxHeight: "40vh",
+              flex: 1,
+              minHeight: "12rem",
+              display: "flex",
+              flexDirection: "column",
+              minWidth: 0,
             }}
           >
             <TextEditor
+              className="qmail-compose-editor"
+              onDropFiles={files => {
+                const { accepted, tooBig } = withinSizeLimit(files, maxSize);
+                if (accepted.length) setAttachments(prev => [...prev, ...composeItemsFromFiles(accepted)]);
+                if (tooBig.length) {
+                  dispatch(setNotification({ msg: `Over the 25 MB limit: ${tooBig.join(", ")}`, alertType: "error" }));
+                }
+              }}
               inlineContent={value}
               setInlineContent={(val: any) => {
                 setValue(val);
               }}
+              placeholder={isMessage ? "Write your post here" : "Write the first post here"}
             />
           </Box>
         </InstanceListContainer>
         <InstanceFooter
-          sx={{
+          sx={[{
             backgroundColor: "var(--qmail-compose-footer-surface)",
-            padding: isMobile
-              ? '10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px)'
-              : '20px 42px',
+            borderTop: "1px solid var(--qmail-compose-divider)",
             alignItems: "center",
-            height: 'auto',
-            position: isMobile ? 'sticky' : 'static',
-            bottom: isMobile ? 0 : 'auto',
-            zIndex: isMobile ? 2 : 'auto'
-          }}
+            height: 'auto'
+          }, isMobile ? {
+            padding: '10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px)'
+          } : {
+            padding: '14px 42px'
+          }]}
         >
-          <NewMessageSendButton
+          <Box
             sx={{
-              padding: isMobile ? '10px 14px' : undefined
+              display: "flex",
+              width: "100%",
+              alignItems: "center",
+              gap: "0.75rem",
+              flexWrap: "wrap",
             }}
-            onClick={sendMail}
           >
-            <NewMessageSendP>
-              {isMessage ? "Post" : "Create Thread"}
-            </NewMessageSendP>
-            {isMessage ? (
-               <SendNewMessage
-               color="currentColor"
-               opacity={1}
-               height="25px"
-               width="25px"
-             />
-            ) : (
-              <CreateThreadIcon  color="currentColor"
-              opacity={1} height="25px" width="25px"  />
+            <Button
+              variant="outlined"
+              onClick={discardDraft}
+              sx={{
+                textTransform: "none",
+                borderColor: "var(--qmail-shell-border)",
+                color: "var(--qmail-compose-text)",
+                minHeight: "2.9rem",
+                px: "1rem",
+                borderRadius: "0.85rem",
+              }}
+            >
+              Discard
+            </Button>
+            {draftSavedAt && (
+              <Typography
+                role="status"
+                aria-live="polite"
+                sx={{ fontSize: "0.875rem", color: "var(--qmail-compose-muted)" }}
+              >
+                Draft saved
+              </Typography>
             )}
-           
-          </NewMessageSendButton>
+          <Button
+            variant="contained"
+            onClick={sendMail}
+            disabled={isOpenMultiplePublish}
+            title="Ctrl+Enter (⌘+Enter on Mac) also posts"
+            endIcon={
+              isMessage ? (
+                <SendNewMessage color="currentColor" opacity={1} height="22px" width="22px" />
+              ) : (
+                <CreateThreadIcon color="currentColor" opacity={1} height="22px" width="22px" />
+              )
+            }
+            sx={[{
+              marginLeft: "auto",
+              minHeight: 44,
+              minWidth: 120,
+              textTransform: "none",
+              fontWeight: 600,
+              borderRadius: "0.85rem",
+              px: "1.1rem",
+              color: "var(--qmail-action-primary-text)",
+              backgroundColor: "var(--qmail-action-primary-bg)",
+              border: "1px solid var(--qmail-action-primary-border)",
+              boxShadow: "none",
+              "&:hover": {
+                backgroundColor: "var(--qmail-action-primary-hover)",
+                boxShadow: "none",
+              },
+              "& svg path": { fill: "currentColor" },
+            }, isMobile ? {
+              flex: "1 1 auto"
+            } : {
+              flex: "0 0 auto"
+            }]}
+          >
+            {isMessage ? "Post" : "Create Thread"}
+          </Button>
+          </Box>
         </InstanceFooter>
        
       </ReusableModal>
@@ -673,7 +745,26 @@ export const NewThread = ({
               )
             }
           }}
-          onSubmit={() => {
+          onSubmit={async () => {
+            const header = pendingThreadHeaderRef.current
+            if (header) {
+              try {
+                await qortalRequest(header)
+                pendingThreadHeaderRef.current = null
+              } catch (error: any) {
+                setIsOpenMultiplePublish(false);
+                setPublishes(null)
+                dispatch(
+                  setNotification({
+                    msg: `The post was published, but the thread's title record was not${
+                      error?.message ? ` (${error.message})` : ''
+                    }. Press Create Thread again to retry it.`,
+                    alertType: 'error'
+                  })
+                )
+                return
+              }
+            }
             dispatch(
               setNotification({
                 msg: 'Posted',
@@ -689,6 +780,9 @@ export const NewThread = ({
             setCallbackContent(null)
             setIsOpenMultiplePublish(false);
             setPublishes(null)
+            if (draftKey && user?.address) deleteComposeDraft(user.address, draftKey)
+            setDraftSavedAt(null)
+            setThreadTitle("")
 
             closeModal()
           }}

@@ -12,9 +12,61 @@ These are the platform facts that matter when changing these apps. Where Torq al
 - **Routing:**
   - Client routes must work under the `/render/APP/<Name>` prefix. Torq sets a `<base href>` from `_qdnBase` at boot.
   - Report route changes to Hub with `qortalRequest({ action: 'NAVIGATION_SUCCESS', path })` (Names and Q-Node do this) or the `QDN_RESOURCE_DISPLAYED` postMessage (Torq's `index.html`), so Hub's back button and deep links work.
-- **Deep links:** `qortal://APP/<Name>/<path>` opens an app. **These app names contain `+`**, so always build links with `encodeURIComponent(name)`, and decode `_qdnName` / path segments with `decodeURIComponent` (never `URLSearchParams`, which turns `+` into a space). Check that `qortal://APP/Q-Mail+` opens in Hub. If it doesn't, write down the exact failure in the brief.
+- **Deep links:** `qortal://APP/<Name>/<path>` opens an app. **These app names contain `+`, and Hub never decodes the app name**, so write it literally: `qortal://APP/Q-Share+/share/<name>/<id>`. `Q-Share%2B` opens a blank tab, because the router's basename never matches `/render/APP/Q-Share+` (checked in Hub, 2026-09-30). Encode the path segments after the app name with `encodeURIComponent` (a space becomes `%20`, as Hub's own Copy link does), and let the router accept the `%2B` spelling too. Decode `_qdnName` and path segments with `decodeURIComponent`, never `URLSearchParams`, which turns `+` into a space.
 - **Links between the + apps:** when one + app links to another app that also has a + version (e.g. a Q-Tube video from Q-Mail+), link to the + version.
 - **No outside network:** apps can't call web2 services, so bundle every asset.
+
+## Hub & GO pitfalls
+
+Q-Share+'s Hub Dev Mode check (2026-09-30) found these in real Hub. None of them showed up in unit tests or the screenshot check, and most apply to every app. Check each one in an app's Hub round (docs/HUB-TESTING.md). Reuse Q-Share+'s fix where one is named.
+
+**Theme and layout**
+
+1. **Hub light/dark switch.** Hub doesn't reload the app when its light/dark switch flips; it posts `THEME_CHANGED` instead. The theme kit handles this from 2026-09-30, so keep the app's kit copy synced (`scripts/sync-theme.sh --check`).
+2. **Sticky headers.** `overflow-x: hidden` on `html` or `body` makes `body` a scroll container, and sticky headers and Back bars then scroll away. Use `overflow-x: clip`.
+3. **Frame height.** Size the app to Hub's frame, never `100vh`. A phone held sideways gives the app a frame only about 266 px tall in Hub. Plan a compact landscape layout: a bar of 52 px or less, and no floating button (Q-Share+ `utils/hubFrame.ts`, `PHONE_MEDIA`).
+4. **Bottom sheets.** MUI's `SwipeableDrawer` forces `keepMounted`. One sheet per list row added 458 of 2,020 DOM nodes on one page, so mount sheets when they're first opened.
+5. **Avatars.** MUI's `Avatar` starts loading its `src` on mount, whatever `loading="lazy"` says. In long lists, use an `<img>` that loads only when it scrolls into view (Q-Share+ `NameAvatar`).
+6. **Overlaps.** Floating buttons and toasts covered real controls, such as "Submit comment". Keep content clear of the floating button, and put toasts above the bottom bar.
+
+**Navigation**
+
+7. **Deep links.** Write the app name with a literal `+` (see Deep links above).
+8. **Back.** Never use `window.history` for Back, because all Hub tabs share it. Use the router's own history (Q-Share+ `useSafeBack`).
+
+**Qortal requests**
+
+9. **Unusual names.** q-apps.js builds some URLs with the raw name, for example `SEARCH_NAMES`, `GET_QDN_RESOURCE_STATUS` and `GET_QDN_RESOURCE_PROPERTIES`.
+   - In direct fetches, encode names yourself (`encodeURIComponent`, `URLSearchParams`).
+   - Test with names that contain a space, `+`, `/` or non-ASCII letters.
+10. **Publish timeouts.** Hub allows up to 30 minutes for a publish, so don't give up after 30 seconds.
+    - After a timeout, check QDN for the resource before offering Retry. Otherwise Retry publishes, and charges the fee, twice.
+    - Show Hub's `PUBLISH_STATUS` progress per file.
+11. **Declines.** Hub words "declined" in 12 languages. Recognise all of them (Q-Share+ `utils/hubErrors.ts`), and treat a decline as a cancel, not a red error.
+12. **Account request.** `GET_USER_ACCOUNT` can hang until Hub's 30-second timeout, for example while Hub is locked. Retry once, then show a Sign in button.
+13. **Public nodes.** Hub refuses `GET/ADD/DELETE_LIST_ITEMS` on a public node, so follows, blocks and lists-based feeds fail for GO users on the default node. Handle that answer quietly; don't show it as an error.
+14. **Resources not on the node.**
+    - Not downloaded yet: show "Fetching from peers…" and retry at 2, 4, 8 and 16 seconds. Don't say "check your node".
+    - Deleted (a `"D"` body): say so, and drop it from lists.
+    - Fails three times: show the search row's title and date with "Not available on your node right now", never a skeleton that never ends.
+15. **Trust and caching.** Another name can publish under the same identifier, and a JSON body can claim a different publisher.
+    - Key cached bodies by name and identifier.
+    - Trust the search row's name and identifier over the body's fields.
+
+**Files and rich text**
+
+16. **PDFs.** An inline `<iframe>` or `<embed>` stays blank: Hub's Electron window has no PDF plugin, and GO's WebView has no PDF viewer. Two fixes:
+    - Hub's `SHOW_PDF_READER`, once the file is on the node (Q-Share+).
+    - Bundled pdf.js, as Torq does (`src/utils/pdfJsHub.ts` in Torq). Its worker has to run on the main thread, because Hub fails to serve the lazily loaded worker file.
+17. **Saves.**
+    - Desktop Hub: use `SAVE_FILE` with a blob for files under 100 MB, which saves straight to Downloads in one step.
+    - GO, and files over 100 MB: save by `location`. On desktop this adds a native Save As dialog.
+    - Declining Hub's save prompt isn't an error.
+18. **User-written HTML** (descriptions, comments, mail):
+    - Sanitise with DOMPurify 3.4 or newer; older versions have mXSS advisories.
+    - Build links on the DOM, never with a regex over sanitised HTML. Upstream Q-Share had a stored XSS hole from exactly that.
+    - Drop inline text colours on display: white text pasted from dark pages is invisible in the light themes.
+    - Hub's sandbox blocks web links, so copy the URL and say so.
 
 ## QDN in one paragraph
 

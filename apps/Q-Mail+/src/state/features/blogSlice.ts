@@ -1,10 +1,4 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import localForage from 'localforage'
-import { RootState } from '../store'
-const favoritesLocal = localForage.createInstance({
-  name: 'q-blog-favorites'
-})
-const instanceCache = new Map<string, LocalForage>()
+import { createSlice } from '@reduxjs/toolkit';
 
 interface GlobalState {
   posts: BlogPost[]
@@ -46,72 +40,6 @@ export interface BlogPost {
   updated?: number | string
   isValid?: boolean
 }
-
-export const removeFavorites = createAsyncThunk<
-  string,
-  string,
-  { state: RootState }
->('favorites/remove', async (id, thunkAPI) => {
-  const state = thunkAPI.getState() // Get the current state
-  const username = state?.auth?.user?.name // Access the user.name property
-  if (!username) return ''
-  let favoritesLocal = instanceCache.get(`q-blog-favorites-${username}`)
-  if (!favoritesLocal) {
-    favoritesLocal = localForage.createInstance({
-      name: `q-blog-favorites-${username}`
-    })
-  }
-  await favoritesLocal.removeItem(id)
-  return id
-})
-export const removeFavoritesArray = createAsyncThunk<
-  string[],
-  string[],
-  { state: RootState }
->('favorites/remove', async (ids, thunkAPI) => {
-  const state = thunkAPI.getState() // Get the current state
-  const username = state?.auth?.user?.name // Access the user.name property
-  if (!username || !ids.length) return []
-
-  let favoritesLocal = instanceCache.get(`q-blog-favorites-${username}`)
-  if (!favoritesLocal) {
-    favoritesLocal = localForage.createInstance({
-      name: `q-blog-favorites-${username}`
-    })
-  }
-  if (!favoritesLocal) return []
-
-  // Remove all items in parallel
-  await Promise.all(ids.map((id) => favoritesLocal?.removeItem(id)))
-
-  return ids
-})
-
-export const upsertFavorites = createAsyncThunk<
-  any[],
-  any[],
-  { state: RootState }
->('favorites/upsert', async (payload: any, thunkAPI) => {
-  const state = thunkAPI.getState() // Get the current state
-  const username = state?.auth?.user?.name // Access the user.name property
-  if (!username) return ''
-  let favoritesLocal = instanceCache.get(`q-blog-favorites-${username}`)
-  if (!favoritesLocal) {
-    favoritesLocal = localForage.createInstance({
-      name: `q-blog-favorites-${username}`
-    })
-  }
-  if (!favoritesLocal) {
-    return []
-  }
-  payload.forEach((favorite: BlogPost) => {
-    favoritesLocal?.setItem(favorite.id, {
-      user: favorite.user,
-      id: favorite.id
-    })
-  })
-  return payload
-})
 
 export const blogSlice = createSlice({
   name: 'blog',
@@ -257,48 +185,11 @@ export const blogSlice = createSlice({
       )
 
       if (state?.favoritesLocal) {
-        const ids = state.favoritesLocal
-          .filter((item) => item.user === username)
-          .map((user) => user?.user || '')
         state.favoritesLocal = state.favoritesLocal.filter(
           (item) => item.user !== username
         )
-
-        removeFavoritesArray(ids)
       }
     }
-  },
-  extraReducers: (builder) => {
-    builder.addCase(removeFavorites.fulfilled, (state, action) => {
-      const idToDelete = action.payload
-      if (!idToDelete) return state
-      state.favorites = state.favorites.filter((item) => item.id !== idToDelete)
-      state.favoritesLocal = state?.favorites?.filter(
-        (item) => item.id !== idToDelete
-      )
-    }),
-      builder.addCase(upsertFavorites.fulfilled, (state, action) => {
-        ;(action.payload || []).forEach((favorite: BlogPost) => {
-          favoritesLocal.setItem(favorite.id, {
-            user: favorite.user,
-            id: favorite.id
-          })
-          const index = state.favorites.findIndex((p) => p.id === favorite.id)
-          if (index !== -1) {
-            state.favorites[index] = favorite
-          } else {
-            state.favorites.push(favorite)
-          }
-          const index2 = state?.favoritesLocal?.findIndex(
-            (p) => p.id === favorite.id
-          )
-          if (index2 !== -1) {
-            state.favorites[index] = favorite
-          } else {
-            state?.favoritesLocal?.push(favorite)
-          }
-        })
-      })
   }
 })
 
