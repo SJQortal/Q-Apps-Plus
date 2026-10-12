@@ -225,7 +225,18 @@ function Who({
           secondary={you && inlineYou ? `You · ${tenure}` : tenure}
         />
       </Box>
-      {you && !inlineYou ? <Chip size="small" color="primary" label="You" /> : null}
+      {you && !inlineYou ? (
+        <Chip
+          size="small"
+          label="You"
+          sx={(theme) => ({
+            bgcolor: primarySoft(theme),
+            color: 'text.primary',
+            border: `1px solid ${theme.palette.primary.main}`,
+            fontWeight: 600,
+          })}
+        />
+      ) : null}
     </Box>
   );
 }

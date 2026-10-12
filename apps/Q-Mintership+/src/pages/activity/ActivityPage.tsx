@@ -46,6 +46,7 @@ export default function ActivityPage() {
             <Button
               component={RouterLink}
               to={PATHS.history}
+              color="inherit"
               startIcon={<HistoryOutlinedIcon />}
               sx={{ minHeight: 44 }}
             >

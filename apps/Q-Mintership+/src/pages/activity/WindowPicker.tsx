@@ -42,7 +42,8 @@ function WindowButton({
         borderRadius: 999,
         fontWeight: 600,
         textTransform: 'none',
-        color: selected ? theme.palette.primary.main : theme.palette.text.primary,
+        // Text stays text.primary: a primary-coloured label is too faint in some themes.
+        color: theme.palette.text.primary,
         borderColor: selected ? theme.palette.primary.main : theme.palette.divider,
         bgcolor: selected ? primarySoft(theme) : 'transparent',
       })}
@@ -157,7 +158,12 @@ export function WindowPicker({
             }}
             sx={{ flex: '1 1 140px', maxWidth: 240, '& .MuiInputBase-root': { minHeight: 44 } }}
           />
-          <Button type="submit" variant="contained" sx={{ minHeight: 44, flex: '0 0 auto' }}>
+          <Button
+            type="submit"
+            variant="outlined"
+            color="inherit"
+            sx={{ minHeight: 44, flex: '0 0 auto' }}
+          >
             Show
           </Button>
           {problem ? (

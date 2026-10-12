@@ -143,6 +143,7 @@ function LevelSpreadCard({ members }: { members: string[] }) {
         </Box>
         <Button
           variant="outlined"
+          color="inherit"
           aria-expanded={open}
           aria-controls={id}
           onClick={() => setOpen((v) => !v)}
