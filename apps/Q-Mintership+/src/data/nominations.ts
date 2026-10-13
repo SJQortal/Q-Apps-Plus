@@ -336,6 +336,7 @@ export function loadNominations(options: { force?: boolean } = {}): Promise<Nomi
       const since = Math.max(1, now.height - 2 * decisions.group.maximumBlockDelay - 10);
       const recent = await getDecisionsInRange(['GROUP_INVITE'], since, now.height, {
         force,
+        slot: 'nominations',
       }).catch(() => ({
         rows: [] as TxRow[],
         truncated: false,

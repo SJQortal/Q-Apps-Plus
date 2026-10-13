@@ -13,10 +13,50 @@ import { cancelInviteTarget, type CancelInviteTarget } from '../qortal/groupTxBy
 import { MINTER_GROUP_ID } from './constants';
 import { getJson, getPaged, getText, query, seg, type PagedResult } from './core';
 import { mapLimit } from './qdn';
-import { fetchQuery } from './query';
+import { fetchQuery, removeQuery } from './query';
 import type { GroupTxType, TxRow } from './types';
 
 const G = MINTER_GROUP_ID;
+
+export interface RangeOptions {
+  force?: boolean;
+  ttlMs?: number;
+  /**
+   * Who reads this range ("queue", "nominations", …). A window that ends at
+   * the tip gets a new key every block; with a slot, the previous key's
+   * entry is dropped once the new one loads, instead of staying in the store.
+   */
+  slot?: string;
+}
+
+/** The keys each slot has read, the newest last. */
+const slotKeys = new Map<string, string[]>();
+
+/** fetchQuery for a moving range: once `key` loads, drop the slot's older keys. */
+function rangeQuery<T>(
+  key: string,
+  load: () => Promise<T>,
+  options: { ttlMs: number; force?: boolean; slot?: string }
+): Promise<T> {
+  const { slot } = options;
+  if (slot) {
+    const keys = (slotKeys.get(slot) ?? []).filter((k) => k !== key);
+    slotKeys.set(slot, [...keys, key]);
+  }
+  const result = fetchQuery(key, load, { ttlMs: options.ttlMs, force: options.force });
+  if (slot) {
+    void result.then(
+      () => {
+        const keys = slotKeys.get(slot) ?? [];
+        // Only the newest key cleans up: an older read finishing late keeps what came after it.
+        if (keys[keys.length - 1] !== key) return;
+        slotKeys.set(slot, [...keys.slice(0, -1).filter((k) => !removeQuery(k)), key]);
+      },
+      () => {}
+    );
+  }
+  return result;
+}
 
 /** Transactions waiting for MINTER's approval (`txGroupId=694`), confirmed or not. */
 export function getPending(options: { force?: boolean } = {}): Promise<PagedResult<TxRow>> {
@@ -56,11 +96,11 @@ export function getPendingAllGroups(
 export function getApprovalsInRange(
   startBlock: number,
   endBlock: number,
-  options: { force?: boolean; ttlMs?: number } = {}
+  options: RangeOptions = {}
 ): Promise<PagedResult<TxRow>> {
   const start = Math.max(1, Math.floor(startBlock));
   const blockLimit = Math.max(1, Math.floor(endBlock) - start + 1);
-  return fetchQuery(
+  return rangeQuery(
     `approvals:${start}:${blockLimit}`,
     () =>
       getPaged<TxRow>(
@@ -75,7 +115,7 @@ export function getApprovalsInRange(
           })}`,
         { maxPages: 50 }
       ),
-    { ttlMs: options.ttlMs ?? 60_000, force: options.force }
+    { ttlMs: options.ttlMs ?? 60_000, force: options.force, slot: options.slot }
   );
 }
 
@@ -226,12 +266,12 @@ export function getDecisionsInRange(
   types: readonly GroupTxType[],
   startBlock: number,
   endBlock: number,
-  options: { force?: boolean; ttlMs?: number } = {}
+  options: RangeOptions = {}
 ): Promise<PagedResult<TxRow>> {
   const start = Math.max(1, Math.floor(startBlock));
   const blockLimit = Math.max(1, Math.floor(endBlock) - start + 1);
   const key = [...types].sort().join(',');
-  return fetchQuery(
+  return rangeQuery(
     `decisions:${key}:${start}:${blockLimit}`,
     async () => {
       const result = await getPaged<TxRow>(
@@ -250,7 +290,7 @@ export function getDecisionsInRange(
       );
       return { ...result, rows: result.rows.filter(isMinterTx) };
     },
-    { ttlMs: options.ttlMs ?? 5 * 60_000, force: options.force }
+    { ttlMs: options.ttlMs ?? 5 * 60_000, force: options.force, slot: options.slot }
   );
 }
 
@@ -259,12 +299,12 @@ export function getGroupTxsInRange(
   types: readonly GroupTxType[],
   startBlock: number,
   endBlock: number,
-  options: { force?: boolean } = {}
+  options: RangeOptions = {}
 ): Promise<PagedResult<TxRow>> {
   const start = Math.max(1, Math.floor(startBlock));
   const blockLimit = Math.max(1, Math.floor(endBlock) - start + 1);
   const key = [...types].sort().join(',');
-  return fetchQuery(
+  return rangeQuery(
     `grouptxs:${key}:${start}:${blockLimit}`,
     async () => {
       const result = await getPaged<TxRow>(
@@ -282,6 +322,6 @@ export function getGroupTxsInRange(
       );
       return { ...result, rows: result.rows.filter(isMinterTx) };
     },
-    { ttlMs: 5 * 60_000, force: options.force }
+    { ttlMs: options.ttlMs ?? 5 * 60_000, force: options.force, slot: options.slot }
   );
 }

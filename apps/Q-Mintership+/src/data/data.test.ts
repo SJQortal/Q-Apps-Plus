@@ -8,7 +8,8 @@ import { loadDecisions } from './decisions';
 import { getAdmins, getGroupInfo, getMembers } from './group';
 import { loadMyStatus } from './me';
 import { loadNominations, loadNominationsFor } from './nominations';
-import { fetchQuery, invalidate, queryLoadCounts, resetQueries } from './query';
+import { fetchQuery, invalidate, peekQuery, queryLoadCounts, resetQueries } from './query';
+import { getApprovalsInRange } from './txs';
 
 afterEach(() => vi.useRealTimers());
 
@@ -150,6 +151,22 @@ describe('loadDecisions', () => {
     const waiting = data.all.find((n) => n.nominee === ADDR.nominatedWaiting)!;
     expect(waiting.state).toBe('waiting');
     expect(waiting.latestInvite).toBeNull();
+  });
+
+  it('keeps one entry per moving range, not one per block', async () => {
+    installWorld();
+    const keyOf = (end: number) => `approvals:${TIP - 100}:${end - (TIP - 100) + 1}`;
+    await getApprovalsInRange(TIP - 100, TIP - 1, { slot: 'test' });
+    expect(peekQuery(keyOf(TIP - 1))).toBeDefined();
+    // The tip moved: the new read replaces the old entry.
+    await getApprovalsInRange(TIP - 100, TIP, { slot: 'test' });
+    await Promise.resolve();
+    expect(peekQuery(keyOf(TIP))).toBeDefined();
+    expect(peekQuery(keyOf(TIP - 1))).toBeUndefined();
+    // Without a slot nothing is dropped.
+    await getApprovalsInRange(TIP - 100, TIP - 2);
+    await getApprovalsInRange(TIP - 100, TIP - 3);
+    expect(peekQuery(keyOf(TIP - 2))).toBeDefined();
   });
 
   it('reads approvals by block range, starting just below the oldest pending', async () => {

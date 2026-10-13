@@ -82,7 +82,7 @@ export function loadDecisions(options: { force?: boolean } = {}): Promise<Decisi
       const oldest = heights.length ? Math.min(...heights) : now.height;
       const start = Math.max(1, oldest - APPROVAL_SLACK_BLOCKS);
       const confirmed = minterRows.length
-        ? await getApprovalsInRange(start, now.height, { force })
+        ? await getApprovalsInRange(start, now.height, { force, slot: 'queue' })
         : { rows: [], truncated: false, pages: 0 };
 
       const approvals = [...confirmed.rows, ...unconfirmed.rows]

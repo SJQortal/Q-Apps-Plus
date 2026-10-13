@@ -114,7 +114,9 @@ async function myLatestConfirmedDecision(
 ): Promise<ApprovalRow | null> {
   if (typeof tx.blockHeight !== 'number') return null;
   const now = await getChainNow();
-  const rows = (await getApprovalsInRange(tx.blockHeight - 10, now.height, { force: true })).rows
+  const rows = (
+    await getApprovalsInRange(tx.blockHeight - 10, now.height, { force: true, slot: 'guard' })
+  ).rows
     .map(toApprovalRow)
     .filter(
       (r): r is ApprovalRow =>

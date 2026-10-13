@@ -165,28 +165,33 @@ export function loadActivity(
       const max = group.maximumBlockDelay;
       // Decisions confirmed up to one window before the start were still waiting in it.
       const from = Math.max(1, range.startBlock - max);
+      // One slot per window: its range keys move with the tip.
+      const slot = activityKey(choice);
       const [decided, laterAdminChanges, pending, approvals, leaves, members, joinRequests] =
         await Promise.all([
           getDecisionsInRange(APPROVAL_GATED_TYPES, from, range.endBlock, {
             force,
             ttlMs: ACTIVITY_TTL_MS,
+            slot: `${slot}:decided`,
           }),
           // A past window: admin changes after its end still say who was an admin in it.
           range.endBlock < now.height
             ? getDecisionsInRange(ADMIN_CHANGE_TYPES, range.endBlock + 1, now.height, {
                 force,
                 ttlMs: ACTIVITY_TTL_MS,
+                slot: `${slot}:admins`,
               })
             : Promise.resolve(NONE),
           getPending({ force }).catch(() => NONE),
           getApprovalsInRange(
             from - APPROVAL_SLACK_BLOCKS,
             Math.min(now.height, range.endBlock + max),
-            { force, ttlMs: ACTIVITY_TTL_MS }
+            { force, ttlMs: ACTIVITY_TTL_MS, slot: `${slot}:approvals` }
           ),
-          getGroupTxsInRange(['LEAVE_GROUP'], range.startBlock, range.endBlock, { force }).catch(
-            () => null
-          ),
+          getGroupTxsInRange(['LEAVE_GROUP'], range.startBlock, range.endBlock, {
+            force,
+            slot: `${slot}:leaves`,
+          }).catch(() => null),
           getMembers().catch(() => null),
           getJoinRequests({ force }).catch(() => null),
         ]);
@@ -211,10 +216,7 @@ export function loadActivity(
         tipHeight: now.height,
         maxDelay: max,
         decisions: [...decided.rows, ...confirmedPending],
-        adminChangeRows: [
-          ...decided.rows.filter(isAdminChange),
-          ...laterAdminChanges.rows,
-        ],
+        adminChangeRows: [...decided.rows.filter(isAdminChange), ...laterAdminChanges.rows],
         approvals: approvals.rows,
         currentAdmins: admins.signers.map((row) => row.member),
         exclude: [NULL_OWNER],

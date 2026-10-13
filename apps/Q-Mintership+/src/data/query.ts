@@ -204,6 +204,18 @@ export function invalidate(prefix: string): void {
   }
 }
 
+/**
+ * Forget one key, unless a view is watching it or a load is running. True
+ * when it is gone.
+ */
+export function removeQuery(key: string): boolean {
+  const entry = entries.get(key);
+  if (!entry) return true;
+  if (entry.listeners.size > 0 || entry.inflight) return false;
+  entries.delete(key);
+  return true;
+}
+
 /** Forget everything (tests, or switching accounts). */
 export function resetQueries(): void {
   entries.clear();
