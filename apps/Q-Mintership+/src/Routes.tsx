@@ -1,7 +1,15 @@
 import { lazy } from 'react';
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
+import {
+  createBrowserRouter,
+  isRouteErrorResponse,
+  Navigate,
+  RouterProvider,
+  useRouteError,
+} from 'react-router-dom';
+import { Box } from '@mui/material';
 import { AppShell } from './components/layout/AppShell';
-import { resolveQdnBase } from './routes/hubLocation';
+import { ErrorState } from './components/common/states';
+import { routerBaseForPage } from './routes/hubLocation';
 
 // Home is the first screen almost everyone sees; the rest load on demand.
 import HomePage from './pages/home/HomePage';
@@ -14,11 +22,27 @@ const LegacyCardPage = lazy(() => import('./pages/history/LegacyCardPage'));
 const ActivityPage = lazy(() => import('./pages/activity/ActivityPage'));
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'));
 
+/** A path the router can't place opens Home; anything else gets Reload. */
+function RouteError() {
+  const error = useRouteError();
+  if (isRouteErrorResponse(error) && error.status === 404) return <Navigate to="/" replace />;
+  return (
+    <Box sx={{ p: 2 }}>
+      <ErrorState
+        title="Q-Mintership+ could not open this page."
+        error="Reloading usually fixes it. Nothing on chain was changed."
+        onRetry={() => window.location.reload()}
+      />
+    </Box>
+  );
+}
+
 const router = createBrowserRouter(
   [
     {
       path: '/',
       element: <AppShell />,
+      errorElement: <RouteError />,
       children: [
         { index: true, element: <HomePage /> },
         { path: 'nominations', element: <NominationsPage /> },
@@ -38,7 +62,8 @@ const router = createBrowserRouter(
       ],
     },
   ],
-  { basename: resolveQdnBase() }
+  // Also accepts the app name spelled Q-Mintership%2B in the frame's URL.
+  { basename: routerBaseForPage() }
 );
 
 export function Routes() {

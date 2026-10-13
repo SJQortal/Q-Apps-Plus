@@ -29,6 +29,67 @@ export function resolveQdnBase(pathname?: string): string {
   return match ? match[0] : '';
 }
 
+function decodedLower(value: string): string {
+  try {
+    return decodeURIComponent(value).toLowerCase();
+  } catch {
+    return value.toLowerCase();
+  }
+}
+
+/** The start of `pathname` that names the same app as `qdnBase`, as the URL spells it; null if none. */
+function appPrefix(pathname: string, qdnBase: string): string | null {
+  const next = pathname.charAt(qdnBase.length);
+  if (pathname.toLowerCase().startsWith(qdnBase.toLowerCase()) && (!next || next === '/')) {
+    return pathname.slice(0, qdnBase.length);
+  }
+  // "/render/APP/Q-Mintership+" has 4 parts once split on "/"; take as many from the path.
+  const prefix = pathname.split('/').slice(0, qdnBase.split('/').length).join('/');
+  return decodedLower(prefix) === decodedLower(qdnBase) ? prefix : null;
+}
+
+/**
+ * The router's basename for `pathname`: `qdnBase` when the path starts with
+ * it; the path's own leading segments when they spell the same app
+ * differently (Core injects `_qdnBase` decoded, "/render/APP/Q-Mintership+",
+ * but Hub loads the frame with the name as the qortal:// link spelled it,
+ * e.g. "Q-Mintership%2B"); "" when there is no base.
+ */
+export function resolveRouterBase(pathname: string, qdnBase: string | undefined): string {
+  if (!qdnBase) return '';
+  const prefix = appPrefix(pathname, qdnBase);
+  return prefix === null || prefix.toLowerCase() === qdnBase.toLowerCase() ? qdnBase : prefix;
+}
+
+/**
+ * The basename for this page load (ported from Q-Share+). When the URL
+ * spells the app name differently from Core, it is first rewritten (no new
+ * history entry) to Core's spelling, so the paths reported to Hub (its Back
+ * and Copy link) strip cleanly. The basename always matches the path as it
+ * reads after the rewrite; React Router shows a 404 for one that doesn't.
+ */
+export function routerBaseForPage(
+  qdnBase: string | undefined = resolveQdnBase(),
+  location: Location = window.location,
+  history: History = window.history
+): string {
+  if (!qdnBase) return '';
+  const prefix = appPrefix(location.pathname, qdnBase);
+  if (prefix === null || prefix === qdnBase) return qdnBase;
+  try {
+    history.replaceState(
+      history.state,
+      '',
+      qdnBase + location.pathname.slice(prefix.length) + location.search + location.hash
+    );
+  } catch {
+    // Keep the URL as it is: the basename below still matches it.
+  }
+  // Check the path that resulted: the browser percent-encodes non-ASCII in a
+  // replaceState path, while Core injects `_qdnBase` raw.
+  return resolveRouterBase(location.pathname, qdnBase);
+}
+
 /** The name this app was published under, decoded (`+` stays `+`). */
 export function currentQortalAppName(): string {
   const injected = qdnWindow()?._qdnName?.trim();

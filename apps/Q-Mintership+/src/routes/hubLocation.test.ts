@@ -5,6 +5,8 @@ import {
   currentQortalAppName,
   normalizeHubPath,
   resolveQdnBase,
+  resolveRouterBase,
+  routerBaseForPage,
 } from './hubLocation';
 
 type QdnWindow = Window & { _qdnBase?: string; _qdnName?: string };
@@ -25,6 +27,47 @@ describe('resolveQdnBase', () => {
       '/render/APP/Q-Mintership%2B'
     );
     expect(resolveQdnBase('/minters')).toBe('');
+  });
+});
+
+describe('routerBaseForPage', () => {
+  const page = (pathname: string) => {
+    const state = { pathname, search: '?theme=dark', hash: '' };
+    const history = {
+      state: null,
+      replaceState: (_s: unknown, _t: string, url: string) => {
+        const [path, search = ''] = url.split('?');
+        state.pathname = path;
+        state.search = search ? `?${search}` : '';
+      },
+    };
+    return { location: state as unknown as Location, history: history as unknown as History };
+  };
+
+  it("accepts the %2B spelling Hub loads, and rewrites it to Core's", () => {
+    const { location, history } = page('/render/APP/Q-Mintership%2B/people/QAbc');
+    expect(routerBaseForPage('/render/APP/Q-Mintership+', location, history)).toBe(
+      '/render/APP/Q-Mintership+'
+    );
+    expect(location.pathname).toBe('/render/APP/Q-Mintership+/people/QAbc');
+    expect(location.search).toBe('?theme=dark');
+  });
+
+  it('keeps a path that already matches, and has no base outside Hub', () => {
+    const { location, history } = page('/render/APP/Q-Mintership+/decisions');
+    expect(routerBaseForPage('/render/APP/Q-Mintership+', location, history)).toBe(
+      '/render/APP/Q-Mintership+'
+    );
+    expect(routerBaseForPage('', location, history)).toBe('');
+  });
+
+  it('matches the app name whatever the case or encoding', () => {
+    expect(
+      resolveRouterBase('/render/app/q-mintership%2b/history', '/render/APP/Q-Mintership+')
+    ).toBe('/render/app/q-mintership%2b');
+    expect(resolveRouterBase('/render/APP/Other/history', '/render/APP/Q-Mintership+')).toBe(
+      '/render/APP/Q-Mintership+'
+    );
   });
 });
 
