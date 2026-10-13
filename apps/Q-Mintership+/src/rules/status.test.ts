@@ -106,6 +106,21 @@ describe('how a ban ended', () => {
     });
   });
 
+  it('only bans up to 24 days get an end date', () => {
+    // Both proposed about 69 days ago (100,000 blocks at a minute), so both are over.
+    const longest = ban(24);
+    expect(removal([invite, longest])?.endedAt).toBe(longest.timestamp + 24 * DAY);
+    const longer = ban(30);
+    expect(removal([invite, longer])).toMatchObject({ kind: 'ban', banSeconds: 30 * 86_400 });
+    expect(removal([invite, longer])?.endedAt).toBeUndefined();
+    expect(banEnd(removal([invite, longer])!)).toEqual({ how: 'ended', at: null });
+    expect(former([invite, longer])).toEqual({
+      kind: 'banned',
+      at: at(1_901_440),
+      ban: { how: 'ended', at: null },
+    });
+  });
+
   it('a permanent ban with no lift on record has ended without a date', () => {
     expect(banEnd(removal([invite, ban(0)])!)).toEqual({ how: 'ended', at: null });
   });

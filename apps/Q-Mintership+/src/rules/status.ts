@@ -8,7 +8,7 @@
  *   (kicked / left) → not in MINTER yet.
  */
 import { levelProgress, type LevelProgress } from './levels';
-import { NOMINATOR_MIN_LEVEL } from '../data/constants';
+import { BAN_MAX_SECONDS, NOMINATOR_MIN_LEVEL } from '../data/constants';
 import type { BanRow, InviteRow, TxRow } from '../data/types';
 import type { Nomination } from '../data/nominations';
 import { nominatorBlock } from './nomination';
@@ -41,7 +41,8 @@ export interface Removal {
   liftedAt?: number;
   /**
    * A timed ban whose end has passed: when it ended (ms). Its length counts
-   * from when it was proposed, as Core counts it; never before it took effect.
+   * from when it was proposed, as Core records it; never before it took
+   * effect. Only bans up to 24 days get a date.
    */
   endedAt?: number;
 }
@@ -49,7 +50,10 @@ export interface Removal {
 /** How a ban that is no longer in force ended. */
 export interface BanEnd {
   how: 'lifted' | 'ended';
-  /** When (ms); null when the history doesn't date it (a permanent ban with no lift found). */
+  /**
+   * When (ms); null when the history doesn't date it (a permanent ban, or one
+   * longer than 24 days, with no lift found).
+   */
   at: number | null;
 }
 
@@ -164,7 +168,8 @@ function banTiming(
   tip: StatusInputs['tip']
 ): Pick<Removal, 'banSeconds' | 'endedAt'> {
   const banSeconds = Number(tx.timeToLive ?? 0);
-  if (!(banSeconds > 0)) return { banSeconds };
+  // Only bans up to 24 days get a date; a longer one, once over, has ended without one.
+  if (!(banSeconds > 0) || banSeconds > BAN_MAX_SECONDS) return { banSeconds };
   const end = Math.max(at, tx.timestamp + banSeconds * 1000);
   // Only an end that has passed is a date to give.
   return end <= tip.timestamp ? { banSeconds, endedAt: end } : { banSeconds };
