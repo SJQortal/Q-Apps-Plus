@@ -208,6 +208,8 @@ describe('CommentsSection', () => {
     );
     await user.click(await screen.findByRole('menuitem', { name: 'Edit' }));
     const box = within(li).getByRole('textbox', { name: 'Edit your comment' });
+    // Focus ends in the box, not back on the More button.
+    await waitFor(() => expect(box).toHaveFocus());
     expect(box).toHaveValue(
       'Same experience here. Their node guide is worth a read: qortal://WEBSITE/WrenNodeGuide'
     );

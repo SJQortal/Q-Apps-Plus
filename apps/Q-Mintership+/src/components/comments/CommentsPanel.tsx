@@ -6,7 +6,7 @@
  * device). Every write is explained in its Hub step first, and shows at once
  * once Hub sends it. Refreshes every minute while open and visible.
  */
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Box, Button, TextField, Typography } from '@mui/material';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import { COMMENT_MAX, commentTextProblems, type CommentRecord } from '../../data/commentRecords';
@@ -514,6 +514,15 @@ function Composer({
   hint?: string;
   autoFocus?: boolean;
 }) {
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Opened from a comment's More menu (Edit): the menu puts focus back on its
+  // own button as it closes, after autoFocus ran. This runs after that, so
+  // focus ends in the box. (autoFocus still covers Reply, a plain button.)
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+    // Only when the composer opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <Box
       component="form"
@@ -522,6 +531,7 @@ function Composer({
       sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}
     >
       <TextField
+        inputRef={inputRef}
         label={label}
         value={value}
         onChange={(e) => onChange(e.target.value)}
