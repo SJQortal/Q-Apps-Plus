@@ -17,9 +17,10 @@ Who joins the MINTER group (694), and therefore who mints QORT: propose a nomina
 ## Notes
 
 - **Decided (Simon, 2026-10-12): a new, simpler process**, in `src/` from scratch, replacing the scaffold's port of the old boards. The plan that decided it is Simon's; the facts it rests on were checked against Qortal Core 6.1.4–6.1.9, Qortal Hub's source and a mainnet node, and are pinned by tests here.
-- **No votes, no polls, no threshold feature.** Changing MINTER's approval percentage is not possible in today's Core (the group's owner is the null account, and its `UPDATE_GROUP` would need that owner). Simon decided the app offers nothing for it, not even an advisory vote, until Core can apply such a change. A Core change is a separate track.
+- **No threshold vote.** Changing MINTER's approval percentage is not possible in today's Core (the group's owner is the null account, and its `UPDATE_GROUP` would need that owner). Simon decided the app offers nothing for it, not even an advisory vote, until Core can apply such a change. A Core change is a separate track. Minter Admin polls (below, added on night 3) are advisory questions among the Minter Admins and change nothing on chain; nominations still have no votes or polls.
 - **A clean break from the old cards and polls.** What happens on chain (invite, approvals, join) works in every app; the old cards, polls, comments and AR cards stay readable in History.
 - **Added by Simon (2026-10-13), built on night 2:** Reject, Withdraw my signature and Considering; safeguards for the admin-count trap; who may propose admin changes; comments; a shareable link for every decision and nomination; "Propose nomination"; notifications. Every write is proven on a private testnet (see Testnet).
+- **Added by Simon (2026-10-13), built on night 3:** doubles; his answers to the night 2 questions; Decline a join request; Minter Admin polls; subtle motion across the app. Each new write is proven on the testnet too.
 
 ## The new process
 
@@ -73,6 +74,15 @@ Who joins the MINTER group (694), and therefore who mints QORT: propose a nomina
 - Activity never counts an expired double as a miss, and doesn't count it at all for an admin who left it alone; an answer on it counts like any other. An approved addition of someone already a Minter Admin moves no seat in History or Activity's pulse.
 - On the testnet (`doubles`): a member's second proposal, sent the way another app would, was marked as the double of the first; once the first passed it read as "already a Minter Admin", and signed anyway it was approved with the admin rows unchanged.
 
+**Minter Admin polls** (Simon, 2026-10-13): advisory questions for the Minter Admins, such as "Should only level 5+ minters become Minter Admins?". Nothing on chain follows from a result.
+
+- **Ask:** Decisions → Propose → Ask the Minter Admins: a question (10–200 characters), optional details (up to 2,000) and a duration of 1–30 days (7 by default; the end date and block come from the measured block time). One Hub step, "Publish, encrypted to the N Minter Admins", 0.01 QORT, explained before Hub opens and checked against the confirmed balance. Asking needs a registered name.
+- **Who can read:** each poll, vote, comment and share is a QDN record encrypted (Hub's own encryption, `PUBLISH_QDN_RESOURCE` with `encrypt: true`) to every current Minter Admin who can sign, plus the writer. Anyone can see that a record exists; only those Minter Admins can read it. An admin added later can't read older polls until any admin who can read one shares it with them ("Share with N Minter Admins added since", one more publish): a share carries the poll, every voter's latest vote and the comments as that admin read them, shown as "Shared by <name>".
+- **Voting:** Yes, No or Neutral, one Hub step each (0.01 QORT); changing a vote republishes it. Each admin's latest vote counts if it was published by the poll's end; after the end, voting isn't offered. The card shows the counts, who voted what, how many haven't voted, and "Advisory: nothing changes on chain from the result."; no pass or fail.
+- **Where:** a "Minter Admin polls" section on Decisions (Minter Admins only; open polls first, then those closed in the last 31 days), each poll's own page `/decisions/polls/<id>` (others read "This is for Minter Admins only"), encrypted comments in the same thread as public comments, and a line on an admin's Home once the polls have been read in the session.
+- **Trust:** the publisher comes from the QDN row, never the body, and a record counts only when its name belongs to a current Minter Admin at the time of reading. A share's copy only fills in what the reader can't read themselves.
+- On the testnet (`admin-polls`): a poll, three votes (1 Yes, 1 No, 1 Neutral), a member who can't read it, a comment, a new Minter Admin who can't read it until a share, then reads it and votes (2/1/1), and a vote refused after the end.
+
 **Core facts the app follows** (each pinned by a test in `src/rules/`, and each write proven on the testnet):
 
 - **Signatures needed:** `approvals × 100 ≥ adminCount × 40` for MINTER's PCT40, where `adminCount` includes the null owner (it counts, but can't sign). With 20 admin rows that is **8**. The count is re-read every refresh, because Core re-reads it every block. Rejections are measured against the same target.
@@ -121,6 +131,10 @@ The status engine (`src/rules/status.ts`, loaded by `src/data/me.ts`) resolves t
 | JSON | `qmp-considering-<key>` | a Minter Admin, under their name | `{ v: 1, pendingSignature?, nomineeAddress?, note? (≤ 280), cleared?: true }` |
 | JSON | `qmp-comment-<key>-<id>` | anyone with a registered name, under that name | `{ v: 1, key, text (1–1000 chars, plain text; empty when deleted), replyTo?: identifier, edited?: true, deleted?: true }` |
 | JSON | `qmp-hide-<key>-<id>` | a Minter Admin, under their name | `{ v: 1, commentName, commentIdentifier, hidden: true \| false }` |
+| DOCUMENT_PRIVATE | `qmp-adminpoll-<id>` (id: 8 letters or digits) | a Minter Admin, encrypted to the Minter Admins | `{ v: 1, id, question (10–200), details? (≤ 2000), durationDays (1–30), createdAt, endsAt, endHeight, readers: [addresses] }` |
+| DOCUMENT_PRIVATE | `qmp-adminvote-<pollId>` | each Minter Admin (republished to change) | `{ v: 1, pollId, vote: 'yes' \| 'no' \| 'neutral' }` |
+| DOCUMENT_PRIVATE | `qmp-admincomment-<pollId>-<cid>` | a Minter Admin | `{ v: 1, pollId, text, replyTo?, edited?, deleted? }` |
+| DOCUMENT_PRIVATE | `qmp-adminshare-<pollId>` | a Minter Admin who shares it | `{ v: 1, pollId, poll, pollPublisher, votes: [{ name, vote, updated }], comments, readers, sharedAt }` |
 
 - **JSON** is Core's validated service for small JSON (valid JSON, at most 25 KB).
 - One identifier per nominee: a publisher has at most one nomination and one support per person; publishing again replaces it (and restarts that nomination's waiting window).
@@ -148,6 +162,7 @@ The status engine (`src/rules/status.ts`, loaded by `src/data/me.ts`) resolves t
 | Step down as Minter Admin | `REMOVE_GROUP_ADMIN { groupId: 694, qortalAddress: <own address>, txGroupId: 694 }`, then the admin's own `SIGN_TRANSACTION` on it |
 | Nominate / support | `PUBLISH_QDN_RESOURCE { name, service: 'JSON', identifier, data64 }` |
 | Considering / No longer considering | `PUBLISH_QDN_RESOURCE { name, service: 'JSON', identifier: 'qmp-considering-<key>', data64 }` |
+| Ask, vote, comment or share (Minter Admin polls) | `PUBLISH_QDN_RESOURCE { name, service: 'DOCUMENT_PRIVATE', identifier: qmp-adminpoll-…, qmp-adminvote-…, qmp-admincomment-… or qmp-adminshare-…, data64, encrypt: true, publicKeys: [every current Minter Admin who can sign, and the writer] }` |
 | Comment, reply, edit, delete; hide or show again (Minter Admins) | `PUBLISH_QDN_RESOURCE { name, service: 'JSON', identifier: qmp-comment-… or qmp-hide-…, data64 }` (`publishCommentRequest`) |
 
 - **A proposal and its proposer's signature** (`proposeAndSign` in `src/writes/flows.ts`): the kick, ban, admin change, lift or cancellation above, then, once the node knows it and only when the proposer is a Minter Admin, `SIGN_TRANSACTION` on it as for Sign. If the proposal goes through and the signature doesn't, the proposal waits in the queue like any other.
@@ -169,6 +184,7 @@ The status engine (`src/rules/status.ts`, loaded by `src/data/me.ts`) resolves t
 | `SHOW_ACTIONS` | once a session, on Settings, to check whether Hub offers alerts |
 | `NOTIFICATION_GET` | on Settings, to read whether alerts are on |
 | `NOTIFICATION_PERMISSION`, then `NOTIFICATION_ADD { notifications }`, then `NOTIFICATION_REMOVE { notificationIds }` | only when you turn alerts on (the last drops rules that no longer fit your role) |
+| `DECRYPT_DATA { encryptedData }` (no dialog) | to read a Minter Admin poll's records, once per version for the session; only for Minter Admins, only on Decisions or a poll's page |
 | `NOTIFICATION_HAS_PERMISSION` (no dialog), then, only if Hub says yes, `NOTIFICATION_PERMISSION` (silent: Hub already has it), `NOTIFICATION_ADD` and `NOTIFICATION_REMOVE` | on Settings, only while alerts are on and only for a nominator whose open nominations changed: rules for new ones are added, closed ones dropped; a remove never goes out with an empty list |
 | `NOTIFICATION_REMOVE` | only when you turn alerts off |
 
@@ -205,6 +221,7 @@ The rules registered with Hub (all `service: 'JSON'`, `prefix: true`, `excludeBl
 | Accounts, names, fees | `/addresses/{a}`, `/names/primary/{a}`, `/names/{name}`, `/addresses/balance/{a}`, `/addresses/lastreference/{a}`, `/transactions/unitfee` |
 | A person's MINTER history | `/transactions/search?address=…&txType=JOIN_GROUP&…&confirmationStatus=CONFIRMED`, reduced to group 694 |
 | Records | `/arbitrary/resources/searchsimple?service=JSON&identifier=qmp-…&prefix=true`, bodies `/arbitrary/JSON/{name}/{identifier}` cached per version; a body that isn't on the node is tried again after 2, 4 and 8 minutes, then every 15 |
+| Minter Admin polls (Minter Admins only, on Decisions or a poll's page) | four `searchsimple?service=DOCUMENT_PRIVATE&identifier=qmp-adminpoll-` (`-adminvote-`, `-admincomment-`, `-adminshare-`) `&prefix=true&reverse=true&after=<62 days ago>`, 100 a page, at most 3 pages; bodies only from current Minter Admins' names, `/arbitrary/DOCUMENT_PRIVATE/{name}/{identifier}?encoding=base64`, then `DECRYPT_DATA`; comment bodies only once a thread opens; public keys only when writing, `/addresses/publickey/{a}`, once a session |
 | Considering | `searchsimple?service=JSON&identifier=qmp-considering-&prefix=true&reverse=true`, pages of 100, at most 3, one read shared by every card (cached 60 s, refreshed while visible). Bodies only for rows published within the last two signing windows, keyed by a decision still pending or by an address, under a current Minter Admin's name |
 | Comment counts | `searchsimple?service=JSON&identifier=qmp-comment-&prefix=true&after=<45 days ago>` (100 a page, at most 3 pages), one search shared by every card. An item that can be older, or a full list, searches `identifier=qmp-comment-<key>-` itself, only once its card is on screen |
 | A thread, once opened | `identifier=qmp-comment-<key>-` and `identifier=qmp-hide-<key>-` searches, the bodies of the newest 20 comments (20 more per Show more) and the comments their replies answer, `/names/{name}` per author and per hide publisher; refreshed every minute while open |
@@ -248,7 +265,7 @@ Every write is proven on a private, one-node Qortal testnet before anyone publis
 | ops | 6 | 3 | kicks, bans, lifting bans, admin changes, cancelling an approved invite |
 | shift | 13 | 6 | the admin-count trap, on chain and in the app |
 | reject | 7 | 3 | Reject, Withdraw, Considering |
-| rules | 5 | 2 | who may propose admin changes, comments, links |
+| rules | 5 | 2 | who may propose admin changes, comments, links; doubles, declining a join request, Minter Admin polls (each on its own fresh copy) |
 | bulk (its own) | 5 | 2 | bulk sign and Core's 25-unconfirmed limit |
 
 **How it stays private** (in layers)
@@ -259,7 +276,7 @@ Every write is proven on a private, one-node Qortal testnet before anyone publis
 
 **The test signer**
 
-`testnet/lib/hub.mjs` answers `qortalRequest` the way Hub does: the same actions with the same payloads (`GET_USER_ACCOUNT`, `INVITE_TO_GROUP`, `KICK_FROM_GROUP`, `BAN_FROM_GROUP`, `CANCEL_GROUP_BAN`, `CANCEL_GROUP_INVITE`, `ADD_GROUP_ADMIN`, `REMOVE_GROUP_ADMIN`, `JOIN_GROUP`, `LEAVE_GROUP`, `SIGN_TRANSACTION` with Core's validity-checked decode first, `PUBLISH_QDN_RESOURCE` with the fee), the same reference, fee and process steps, and Hub's error texts. On demand it behaves like Hub's worst moments: a decline, the 30-second timeout with a late accept, and the generic "Failed to decode transaction"; these are queued per account and group, so scenarios running side by side never take each other's. The signer and its controls take same-origin JSON on a loopback host only, so no other page open in the browser can drive them.
+`testnet/lib/hub.mjs` answers `qortalRequest` the way Hub does: the same actions with the same payloads (`GET_USER_ACCOUNT`, `INVITE_TO_GROUP`, `KICK_FROM_GROUP`, `BAN_FROM_GROUP`, `CANCEL_GROUP_BAN`, `CANCEL_GROUP_INVITE`, `ADD_GROUP_ADMIN`, `REMOVE_GROUP_ADMIN`, `JOIN_GROUP`, `LEAVE_GROUP`, `SIGN_TRANSACTION` with Core's validity-checked decode first, `PUBLISH_QDN_RESOURCE` with the fee, encrypted to `publicKeys` when asked, `ENCRYPT_DATA` and `DECRYPT_DATA`, with Hub's own group encryption ported into `testnet/lib/encryption.mjs` using the dev-only packages `tweetnacl` and `ed2curve`), the same reference, fee and process steps, and Hub's error texts. On demand it behaves like Hub's worst moments: a decline, the 30-second timeout with a late accept, and the generic "Failed to decode transaction"; these are queued per account and group, so scenarios running side by side never take each other's. The signer and its controls take same-origin JSON on a loopback host only, so no other page open in the browser can drive them.
 
 **The app in testnet mode**
 
