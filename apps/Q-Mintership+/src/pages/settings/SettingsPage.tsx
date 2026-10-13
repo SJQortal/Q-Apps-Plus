@@ -84,15 +84,27 @@ const LinkRow = styled('button')(({ theme }) => ({
   '& + &, & + div, div + &': { borderTop: `1px solid ${theme.palette.divider}` },
 }));
 
-const Copy = styled('div')({ flex: 1, minWidth: 0 });
+const Copy = styled('span')({ display: 'block', flex: 1, minWidth: 0 });
+
+/** A row whose switch the whole row turns on and off (the switch alone is under 44 px). */
+const SwitchRow = styled('label')(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: theme.spacing(1.5),
+  minHeight: 56,
+  padding: theme.spacing(1.25, 2),
+  cursor: 'pointer',
+  'div + &, label + &': { borderTop: `1px solid ${theme.palette.divider}` },
+}));
 
 function SettingText({ title, hint, id }: { title: string; hint: string; id?: string }) {
   return (
     <Copy>
-      <Typography id={id} sx={{ fontWeight: 600 }}>
+      <Typography id={id} component="span" sx={{ display: 'block', fontWeight: 600 }}>
         {title}
       </Typography>
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" component="span" color="text.secondary" sx={{ display: 'block' }}>
         {hint}
       </Typography>
     </Copy>
@@ -240,7 +252,7 @@ export default function SettingsPage() {
                 <MenuItem value="full">Full</MenuItem>
               </Select>
             </Row>
-            <Row>
+            <SwitchRow>
               <SettingText
                 id="celebrate-label"
                 title="Celebrate joining MINTER"
@@ -251,7 +263,7 @@ export default function SettingsPage() {
                 onChange={(_, v) => setCelebrate(v)}
                 slotProps={{ input: { 'aria-labelledby': 'celebrate-label' } }}
               />
-            </Row>
+            </SwitchRow>
           </Card>
         </Section>
 
@@ -276,7 +288,7 @@ export default function SettingsPage() {
               </Select>
             </Row>
             {status?.isAdmin ? (
-              <Row>
+              <SwitchRow>
                 <SettingText
                   id="hide-signed-label"
                   title="Hide decisions I signed"
@@ -287,7 +299,7 @@ export default function SettingsPage() {
                   onChange={(_, v) => setHideSigned(v)}
                   slotProps={{ input: { 'aria-labelledby': 'hide-signed-label' } }}
                 />
-              </Row>
+              </SwitchRow>
             ) : null}
           </Card>
           <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>

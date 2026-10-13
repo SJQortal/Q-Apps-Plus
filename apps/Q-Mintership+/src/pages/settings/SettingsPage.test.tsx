@@ -26,6 +26,25 @@ describe('Settings', () => {
     expect(await screen.findByText('Open in Qortal Hub or GO')).toBeInTheDocument();
   });
 
+  it('a switch turns with a tap anywhere on its row (the switch alone is under 44 px)', async () => {
+    const u = userEvent.setup();
+    await renderPage(<SettingsPage />, { persona: 'admin', path: '/settings' });
+    for (const [name, hint] of [
+      ['Celebrate joining MINTER', 'A small burst on Home when you become a minter.'],
+      ['Hide decisions I signed', 'Keep the Decisions queue to what still needs you.'],
+      ['Since your last visit', /^Home lists what changed since you last opened the app/],
+    ] as const) {
+      const toggle = await screen.findByRole('switch', { name });
+      const before = (toggle as HTMLInputElement).checked;
+      await u.click(screen.getByText(hint));
+      expect((toggle as HTMLInputElement).checked).toBe(!before);
+      // Its name stays the title, not the whole row.
+      expect(toggle).toHaveAccessibleName(name);
+      await u.click(screen.getByText(hint));
+      expect((toggle as HTMLInputElement).checked).toBe(before);
+    }
+  });
+
   it('confirms a copied web link on screen, not only in a tooltip', async () => {
     const u = userEvent.setup();
     await renderPage(<SettingsPage />, { persona: 'admin', path: '/settings' });
