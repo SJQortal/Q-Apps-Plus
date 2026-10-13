@@ -22,6 +22,13 @@ import {
 } from '../data/records';
 import type { GroupTxType } from '../data/types';
 import { COMMENT_SERVICE, type CommentRecord, type HideRecord } from '../data/commentRecords';
+import {
+  ADMIN_POLL_SERVICE,
+  type PollCommentRecord,
+  type PollRecord,
+  type ShareRecord,
+  type VoteRecord,
+} from '../data/adminPollRecords';
 
 export interface HubRequest {
   action: string;
@@ -110,6 +117,33 @@ export function publishCommentRequest(
     service: COMMENT_SERVICE,
     identifier,
     data64: toData64(record),
+  };
+}
+
+/**
+ * A Minter Admin poll record (data/adminPollRecords.ts) under `name`,
+ * encrypted by Hub to `publicKeys` (base58): every current Minter Admin who
+ * can sign, and the writer. Hub adds the writer's own key too, refuses an
+ * empty list, and shows "isEncrypted: true" in its dialog (get.ts
+ * publishQDNResource → encryptDataGroup). DOCUMENT_PRIVATE only takes data
+ * that is encrypted (Core's Service.validate).
+ */
+export function publishEncryptedRequest(
+  name: string,
+  identifier: string,
+  record: PollRecord | VoteRecord | PollCommentRecord | ShareRecord,
+  publicKeys: readonly string[]
+): HubRequest {
+  const keys = [...new Set(publicKeys)];
+  if (!keys.length) throw new Error('Encrypting needs at least one public key.');
+  return {
+    action: 'PUBLISH_QDN_RESOURCE',
+    name,
+    service: ADMIN_POLL_SERVICE,
+    identifier,
+    data64: toData64(record),
+    encrypt: true,
+    publicKeys: keys,
   };
 }
 
