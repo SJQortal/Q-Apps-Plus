@@ -39,12 +39,18 @@ export function useShift(data: DecisionsData | null | undefined, members?: Membe
 
 export type Shift = NonNullable<ReturnType<typeof useShift>>;
 
-/** An admin change: what it does to the target if it passes. */
+/**
+ * An admin change: what it does to the target if it passes. Nothing for a
+ * double (rules/double.ts): there's no need to sign it, so no impact to
+ * check before Hub.
+ */
 export function impactIn(shift: Shift | null, d: Decision) {
-  return shift && isAdminChangeKind(d.kind) ? scenarioFor(shift.scenarios, d.signature) : null;
+  return shift && isAdminChangeKind(d.kind) && !d.double
+    ? scenarioFor(shift.scenarios, d.signature)
+    : null;
 }
 
-/** A waiting admin change would tip this decision over (the chip). */
+/** A waiting admin change would tip this decision over (the chip; never on a double). */
 export function riskIn(shift: Shift | null, d: Decision) {
-  return shift ? riskFor(d.signature, shift.scenarios) : null;
+  return shift && !d.double ? riskFor(d.signature, shift.scenarios) : null;
 }

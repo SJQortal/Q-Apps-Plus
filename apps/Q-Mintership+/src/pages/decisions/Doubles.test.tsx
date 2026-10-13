@@ -3,7 +3,7 @@
  * Minter Admin", a removal of someone who isn't a Minter Admin, and the same
  * addition waiting twice (e2e/world.mjs addDoubles). Each says so on its
  * card and its own page, keeps Sign and Reject as secondary buttons, offers
- * no Considering, and counts nowhere as waiting.
+ * no Considering, shows no target impact, and counts nowhere as waiting.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
@@ -131,6 +131,31 @@ describe('Doubles on the Decisions page', () => {
       screen.getByText('Plus 3 doubles, marked on their cards: no need to sign them.')
     ).toBeVisible();
   });
+
+  it('shows no target impact or chip on a double, and Sign asks for no check', async () => {
+    const u = user();
+    await openQueue();
+    for (const name of [ALREADY, NOT_ADMIN]) {
+      const double = card(name);
+      expect(within(double).queryByText(/^If this passes/)).toBeNull();
+      expect(within(double).queryByRole('button', { name: /^Target may/ })).toBeNull();
+    }
+    const [older, newer] = screen.getAllByRole('article', { name: MEMBER_9 });
+    // The older addition says what it does to the target; its double doesn't.
+    expect(within(older).getByText(/^If this passes/)).toBeInTheDocument();
+    expect(within(newer).queryByText(/^If this passes/)).toBeNull();
+    expect(within(newer).queryByRole('button', { name: /^Target may/ })).toBeNull();
+
+    await u.click(within(card(ALREADY)).getByRole('button', { name: /^Sign: / }));
+    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    expect(within(dialog).queryByText(/^If this passes/)).toBeNull();
+    expect(within(dialog).queryByRole('checkbox', { name: 'I’ve checked these' })).toBeNull();
+    // Hub opens (and declines in the mock) without a box to tick first.
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(dialog).findByText('Cancelled in Hub. Nothing was sent.', {}, T)
+    ).toBeVisible();
+  }, 20_000);
 });
 
 describe('Doubles and Sign several', () => {
