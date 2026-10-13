@@ -640,6 +640,38 @@ export default {
         await page.waitForTimeout(400);
       },
     },
+    // Minter Admin polls (e2e/world.mjs addAdminPolls), encrypted to the Minter Admins: the
+    // section on Decisions (one poll read from a share, one closed), and one poll's own page
+    // with its comments open.
+    {
+      key: 'decisions-polls',
+      path: '/decisions?as=admin',
+      // The whole of Decisions with the polls is taller than one capture can be on phones:
+      // the viewport, scrolled to the section (the checks still cover the whole page).
+      overlay: true,
+      after: withPolls(async (page) => {
+        await settle(page);
+        const section = page.getByRole('region', { name: /^Minter Admin polls · / });
+        await section.getByRole('article').first().waitFor({ timeout: 8000 });
+        // Landscape phones take the viewport: the section from its top.
+        await section.evaluate((s) => s.scrollIntoView({ block: 'start' }));
+        await page.waitForTimeout(300);
+      }),
+    },
+    {
+      key: 'poll-page',
+      // The check answers every URL with "/polls/" in it as Core's polls API, so the page
+      // starts on Decisions and withPolls goes to /decisions/polls/<id> itself.
+      path: '/decisions?as=admin',
+      after: withPolls(async (page) => {
+        await settle(page);
+        await page
+          .getByRole('region', { name: /^Comments on / })
+          .getByText(/they know how the network works/)
+          .waitFor({ timeout: 8000 });
+        await page.waitForTimeout(300);
+      }, `/decisions/polls/${ADMIN_POLL_IDS.open}`),
+    },
   ],
 };
 
@@ -687,6 +719,107 @@ function withDoubles(pick, then) {
     if (pick) {
       const url = new URL(page.url());
       url.pathname = `/decisions/${pick(made)}`;
+      await page.goto(url.toString(), { waitUntil: 'load' });
+    } else await page.reload({ waitUntil: 'load' });
+    await then(page);
+  };
+}
+
+// ---- Minter Admin polls: the two screens above -----------------------------------
+import { ADMIN_POLL_IDS, addAdminPolls, answerAdminPolls } from './world.mjs';
+
+// Polls in the default world; only the two screens above serve them (DOCUMENT_PRIVATE).
+addAdminPolls(world);
+
+/**
+ * DECRYPT_DATA in the page, as the persona's Hub would (the mock world's
+ * stand-in encryption, e2e/world.mjs mockDecrypt): wraps the answers the
+ * check installs, before or after this script runs.
+ */
+function decryptScript() {
+  const keys = Object.fromEntries(
+    Object.entries(ADDR).map(([persona, address]) => [
+      persona,
+      world.accounts.get(address)?.publicKey ?? '',
+    ])
+  );
+  return `(() => {
+    const KEYS = ${JSON.stringify(keys)};
+    const persona = (location.search.match(/[?&]as=([A-Za-z0-9]+)/) || [])[1] || 'admin';
+    const mine = KEYS[persona] || KEYS.admin;
+    const PREFIX = 'qortalGroupEncryptedData';
+    const decrypt = (data) => {
+      let sealed = null;
+      try {
+        const text = atob(String(data));
+        if (text.startsWith(PREFIX)) sealed = JSON.parse(text.slice(PREFIX.length));
+      } catch {
+        sealed = null;
+      }
+      if (!sealed || !Array.isArray(sealed.k) || !sealed.k.includes(mine))
+        throw { error: 'Unable to decrypt', message: 'Unable to decrypt' };
+      return sealed.d;
+    };
+    const wrap = (answer) => async (p) =>
+      p && p.action === 'DECRYPT_DATA' ? decrypt(p.encryptedData) : answer(p);
+    let current = window.__qplusAnswer;
+    if (typeof current === 'function') {
+      window.__qplusAnswer = wrap(current);
+      return;
+    }
+    Object.defineProperty(window, '__qplusAnswer', {
+      configurable: true,
+      get: () => current,
+      set: (v) => {
+        current = typeof v === 'function' ? wrap(v) : v;
+      },
+    });
+  })();`;
+}
+
+/**
+ * Serve the polls' DOCUMENT_PRIVATE reads and answer DECRYPT_DATA from now
+ * on (a route added later comes first), then load the page again, or go to
+ * `pathname` (the app's own page there, not a Core call). The first load is
+ * the screen without polls, so nothing fails before the route is in.
+ */
+function withPolls(then, pathname) {
+  return async (page) => {
+    await settle(page);
+    if (pathname) {
+      // The page and its files (assets, icon: relative, so under the same path), not Core calls.
+      const dir = pathname.slice(0, pathname.lastIndexOf('/') + 1);
+      await page.route(
+        (url) =>
+          url.pathname === pathname ||
+          (url.pathname.startsWith(dir) && /\.[a-z0-9]+$/i.test(url.pathname)),
+        (route) => {
+          const url = new URL(route.request().url());
+          if (url.pathname === pathname) return route.continue();
+          return route.continue({ url: `${url.origin}/${url.pathname.slice(dir.length)}${url.search}` });
+        }
+      );
+    }
+    await page.route(
+      /\/(arbitrary\/resources\/searchsimple|arbitrary\/DOCUMENT_PRIVATE\/|addresses\/publickey\/)/,
+      async (route) => {
+        const url = new URL(route.request().url());
+        const answer = answerAdminPolls(world, url.pathname, url.searchParams);
+        if (!answer) return route.fallback();
+        page.__fetches?.push(url.pathname + url.search);
+        if (answer.text !== undefined)
+          return route.fulfill({
+            status: answer.status,
+            contentType: 'text/plain',
+            body: answer.text,
+          });
+        return json(route, answer.status, answer.body);
+      }
+    );
+    await page.addInitScript(decryptScript());
+    if (pathname) {
+      const url = new URL(page.url());
+      url.pathname = pathname;
       await page.goto(url.toString(), { waitUntil: 'load' });
     } else await page.reload({ waitUntil: 'load' });
     await then(page);
