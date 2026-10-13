@@ -840,3 +840,18 @@ describe('Home: loading and errors', () => {
     expect(ADDR.learner).toBe(installed.address);
   });
 });
+
+describe('Home: an admin with no open decisions', () => {
+  it('says there are none, not "0 of 0"', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'admin',
+      setup: (world) => {
+        world.pending.length = 0;
+      },
+    });
+    const activity = await screen.findByRole('region', { name: 'Your activity' });
+    await waitFor(() => expect(within(activity).getByText('None')).toBeInTheDocument());
+    expect(within(activity).getByText('Open decisions right now')).toBeInTheDocument();
+    expect(within(activity).queryByText(/0 of 0/)).toBeNull();
+  }, 15_000);
+});

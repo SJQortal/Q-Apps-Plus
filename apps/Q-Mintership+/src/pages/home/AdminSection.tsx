@@ -131,8 +131,18 @@ export function AdminSection({ publicKey }: { publicKey: string }) {
           }}
         >
           <StatTile
-            value={summary ? `${summary.signed} of ${summary.open.length}` : '…'}
-            label="Open decisions you've signed"
+            value={
+              !summary
+                ? '…'
+                : summary.open.length
+                  ? `${summary.signed} of ${summary.open.length}`
+                  : 'None'
+            }
+            label={
+              summary && !summary.open.length
+                ? 'Open decisions right now'
+                : "Open decisions you've signed"
+            }
           />
           <StatTile
             value={unused.count !== null ? formatCount(unused.count) : unused.error ? '–' : '…'}
