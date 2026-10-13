@@ -84,12 +84,14 @@ describe('Since your last visit: Minter Admins', () => {
     ).toBeVisible();
     expect(fetchCallsFor(ONE_TX)).toHaveLength(3);
 
-    // One polite sentence, once it has settled.
+    // One polite sentence, once it has settled (other status regions on Home,
+    // such as each card's "Link copied", stay empty).
+    const summary = 'Since your last visit: 7 new decisions, 1 new nomination, 3 decided.';
     await waitFor(
       () =>
-        expect(screen.getByRole('status', { name: '' })).toHaveTextContent(
-          'Since your last visit: 7 new decisions, 1 new nomination, 3 decided.'
-        ),
+        expect(
+          screen.getAllByRole('status', { name: '' }).filter((el) => el.textContent === summary)
+        ).toHaveLength(1),
       T
     );
   });
