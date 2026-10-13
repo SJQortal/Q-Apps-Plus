@@ -1,7 +1,7 @@
 /**
  * A double on its card (rules/double.ts): the "Double" chip in the title
- * row (its full words for screen readers), and the note that says why it
- * changes nothing, that there's no need to sign it and when it runs out,
+ * row (its full words for screen readers), and the note that says why
+ * there's no need to sign it and when it runs out,
  * with a link to the other decision when there is one.
  */
 import { Link as RouterLink } from 'react-router-dom';
@@ -15,8 +15,8 @@ import { decisionPath } from '../../routes/paths';
 import { doubleChipText, doubleNote } from './doubleUi';
 
 /** "Double", with what it means in full for screen readers; never colour alone. */
-export function DoubleChip({ double }: { double: DecisionDouble }) {
-  const full = doubleChipText(double);
+export function DoubleChip({ decision: d, double }: { decision: Decision; double: DecisionDouble }) {
+  const full = doubleChipText({ kind: d.kind, double });
   return (
     <ToneChip
       size="small"

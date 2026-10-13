@@ -6,6 +6,7 @@ import {
   approvedAddFor,
   doubleOf,
   isDouble,
+  isRemovalDouble,
   markDoubles,
   type DecisionDouble,
   type DoubleCandidate,
@@ -365,5 +366,16 @@ describe('sortDecisions with doubles', () => {
       'double-soon',
       'double-late',
     ]);
+  });
+});
+
+describe('isRemovalDouble', () => {
+  it('is true only for a removal marked as a double', () => {
+    const double = { reason: 'alreadyInEffect' as const };
+    expect(isRemovalDouble({ kind: 'removeAdmin', double })).toBe(true);
+    expect(isRemovalDouble({ kind: 'removeAdmin', double: { reason: 'duplicate', otherSignature: 'x' } })).toBe(true);
+    expect(isRemovalDouble({ kind: 'removeAdmin', double: null })).toBe(false);
+    expect(isRemovalDouble({ kind: 'removeAdmin' })).toBe(false);
+    expect(isRemovalDouble({ kind: 'addAdmin', double })).toBe(false);
   });
 });

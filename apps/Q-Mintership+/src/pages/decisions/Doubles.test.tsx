@@ -68,8 +68,11 @@ describe('Doubles on the Decisions page', () => {
 
     const notAdmin = card(NOT_ADMIN);
     expect(within(notAdmin).getByText('Double')).toBeInTheDocument();
+    expect(within(notAdmin).getByText('Double').closest('.MuiChip-root')).toHaveTextContent(
+      'Double: nothing to remove'
+    );
     expect(doubleNote(notAdmin)).toHaveTextContent(
-      /^Nora Nominator isn’t a Minter Admin, so removing them changes nothing\. There’s no need to sign it\. It runs out by itself at block/
+      /^Nora Nominator isn’t a Minter Admin, so there’s nothing to remove\. There’s no need to sign it: reject it, or let it run out\. It runs out by itself at block/
     );
   });
 
@@ -81,7 +84,7 @@ describe('Doubles on the Decisions page', () => {
       'Double: the same change is already waiting'
     );
     expect(doubleNote(newer)).toHaveTextContent(
-      /^The same change is already waiting in an earlier proposal: answer that one instead\. Once one of them passes, the other changes nothing\. This one runs out by itself at block/
+      /^The same change is already waiting in an earlier proposal: answer that one instead\. Once one of them passes, there’s no need to sign the other\. This one runs out by itself at block/
     );
     expect(
       within(newer).getByRole('link', {
@@ -90,7 +93,7 @@ describe('Doubles on the Decisions page', () => {
     ).toHaveAttribute('href', `/decisions/${doubles.duplicate.older}`);
   });
 
-  it('keeps Sign and Reject secondary on a double, with no Considering', async () => {
+  it('keeps Sign and Reject secondary on a double (Reject only on a removal), with no Considering', async () => {
     await openQueue();
     const already = card(ALREADY);
     expect(within(already).getByRole('button', { name: /^Sign: / })).toHaveClass(
@@ -98,6 +101,10 @@ describe('Doubles on the Decisions page', () => {
     );
     expect(within(already).getByRole('button', { name: /^Reject: / })).toBeVisible();
     expect(within(already).queryByRole('button', { name: /^Considering: / })).toBeNull();
+    // A removal that is a double offers Reject only.
+    const notAdmin = card(NOT_ADMIN);
+    expect(within(notAdmin).queryByRole('button', { name: /^Sign: / })).toBeNull();
+    expect(within(notAdmin).getByRole('button', { name: /^Reject: / })).toBeVisible();
     // A real decision keeps its main Sign, and Considering.
     const real = card(/Add to MINTER, bob\+builder/);
     expect(within(real).getByRole('button', { name: /^Sign: / })).toHaveClass(
@@ -188,6 +195,9 @@ describe('Doubles and Sign several', () => {
     expect(
       within(newer).getByText('Left out: a double, the same change is already waiting.')
     ).toBeInTheDocument();
+    expect(
+      within(card(NOT_ADMIN)).getByText('Left out: a double, there’s nothing to remove.')
+    ).toBeInTheDocument();
 
     await u.click(screen.getByRole('button', { name: 'Select all' }));
     expect(screen.getByText('7 of 7 selected')).toBeInTheDocument();
@@ -202,7 +212,7 @@ describe('Doubles and Sign several', () => {
     ).toBeVisible();
     expect(
       within(dialog).getByText(
-        'Remove a Minter Admin: Nora Nominator. Left out: a double, it changes nothing.'
+        'Remove a Minter Admin: Nora Nominator. Left out: a double, there’s nothing to remove.'
       )
     ).toBeVisible();
     expect(

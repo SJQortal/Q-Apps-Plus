@@ -1,6 +1,6 @@
 /**
- * Doubles: a waiting admin change that changes nothing if it passes, so
- * there is no need to sign it. Only admin changes, and only these cases:
+ * Doubles: a waiting admin change there is no need to sign. Only admin
+ * changes, and only these cases:
  *
  * - alreadyInEffect: making someone a Minter Admin who already is one, or
  *   removing someone who isn't one (any more). For an addition, it points to
@@ -17,7 +17,8 @@
  * Decisions loader feeds it.
  *
  * Doubles stay in the queue (after the others), and don't count as waiting
- * for anyone's signature.
+ * for anyone's signature. The app doesn't sign a removal that is a double
+ * (isRemovalDouble): Reject stays, or it runs out.
  */
 import { MINTER_GROUP_ID } from '../data/constants';
 import type { TxRow } from '../data/types';
@@ -118,6 +119,14 @@ export function markDoubles<T extends DoubleCandidate & { double?: DecisionDoubl
 /** True for a decision marked as a double. */
 export function isDouble(d: { double?: DecisionDouble | null }): boolean {
   return Boolean(d.double);
+}
+
+/** A removal marked as a double: the app offers Reject on it, never Sign. */
+export function isRemovalDouble(d: {
+  kind: Decision['kind'];
+  double?: DecisionDouble | null;
+}): boolean {
+  return d.kind === 'removeAdmin' && Boolean(d.double);
 }
 
 /**

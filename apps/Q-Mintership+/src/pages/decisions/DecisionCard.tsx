@@ -237,7 +237,7 @@ export function DecisionCard(props: DecisionCardProps) {
               {title}
             </Typography>
             <DecisionPhaseChip phase={d.phase} />
-            {double ? <DoubleChip double={double} /> : null}
+            {double ? <DoubleChip decision={d} double={double} /> : null}
             {risk && labelOf ? (
               <TargetRiskChip
                 risk={risk}
@@ -403,9 +403,9 @@ export function DecisionCard(props: DecisionCardProps) {
               answer counts.
             </Typography>
           ) : null}
-          {selecting && double && signable && view.shown === 'none' ? (
+          {selecting && double && (signable || rejectable) && view.shown === 'none' ? (
             <Typography variant="body2" color="text.secondary" sx={{ flexBasis: '100%' }}>
-              {doubleLeftOutText(double)}.
+              {doubleLeftOutText({ kind: d.kind, double })}.
             </Typography>
           ) : null}
           {view.failed && (signable || rejectable || withdrawable) ? (
@@ -440,7 +440,8 @@ export function DecisionCard(props: DecisionCardProps) {
               ) : null}
               {signable ? (
                 <Button
-                  // A double needs no signature: Sign stays, as a secondary button.
+                  // A double needs no signature: Sign stays, as a secondary button
+                  // (never on a removal that is a double: canSign).
                   variant={double ? 'outlined' : 'contained'}
                   onClick={() => onSign?.(d)}
                   aria-label={`Sign: ${fullTitle}`}

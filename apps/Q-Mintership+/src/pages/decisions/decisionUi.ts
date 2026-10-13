@@ -6,6 +6,7 @@
 import { BAN_MAX_SECONDS } from '../../data/constants';
 import { heightToTime, type ChainNow } from '../../data/chain';
 import type { Decision } from '../../rules/decision';
+import { isRemovalDouble } from '../../rules/double';
 import { signerState, withdrewSignature } from '../../rules/tally';
 import { formatBlock, formatCount, formatDateTime, formatDuration } from '../../utils/format';
 import type { PendingAnswers, PendingWrite } from '../../writes/optimistic';
@@ -164,9 +165,10 @@ function signaturesCanStillWin(d: Decision): boolean {
  * Sign is offered while a new signature can still count (early or open, or
  * early with enough rejections), to an admin who hasn't signed, or whose
  * rejection is in a block: only the latest answer counts, so a signature
- * replaces it.
+ * replaces it. Never on a removal that is a double (Reject stays).
  */
 export function canSign(d: Decision, view: AnswerView): boolean {
+  if (isRemovalDouble(d)) return false;
   if (!(answerable(d) || signaturesCanStillWin(d)) || view.busy) return false;
   return view.shown === 'none' || (view.shown === 'rejected' && view.settled);
 }

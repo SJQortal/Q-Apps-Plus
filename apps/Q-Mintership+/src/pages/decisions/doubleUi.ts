@@ -8,17 +8,20 @@ import type { Decision } from '../../rules/decision';
 import type { DecisionDouble } from '../../rules/double';
 import { formatBlock, formatDateTime, plural } from '../../utils/format';
 
+type DoubleView = Pick<Decision, 'kind'> & { double: DecisionDouble };
+
 /** What the "Double" chip says in full (the rest is for screen readers). */
-export function doubleChipText(double: DecisionDouble): string {
-  return double.reason === 'duplicate'
-    ? 'Double: the same change is already waiting'
-    : 'Double: changes nothing';
+export function doubleChipText(d: DoubleView): string {
+  if (d.double.reason === 'duplicate') return 'Double: the same change is already waiting';
+  return d.kind === 'removeAdmin' ? 'Double: nothing to remove' : 'Double: changes nothing';
 }
 
 /** Why Sign several leaves a double out. */
-export function doubleLeftOutText(double: DecisionDouble): string {
-  return double.reason === 'duplicate'
-    ? 'Left out: a double, the same change is already waiting'
+export function doubleLeftOutText(d: DoubleView): string {
+  if (d.double.reason === 'duplicate')
+    return 'Left out: a double, the same change is already waiting';
+  return d.kind === 'removeAdmin'
+    ? 'Left out: a double, there’s nothing to remove'
     : 'Left out: a double, it changes nothing';
 }
 
@@ -50,13 +53,13 @@ export function doubleNote(
 ): string {
   if (d.double.reason === 'duplicate') {
     const out = runsOutLine(d, now, 'This one');
-    return `The same change is already waiting in an earlier proposal: answer that one instead. Once one of them passes, the other changes nothing.${out ? ` ${out}` : ''}`;
+    return `The same change is already waiting in an earlier proposal: answer that one instead. Once one of them passes, there’s no need to sign the other.${out ? ` ${out}` : ''}`;
   }
   const out = runsOutLine(d, now);
   const why =
     d.kind === 'addAdmin'
       ? `${name} is already a Minter Admin, from an earlier proposal. If this one passes, nothing changes, so there’s no need to sign it.`
-      : `${name} isn’t a Minter Admin, so removing them changes nothing. There’s no need to sign it.`;
+      : `${name} isn’t a Minter Admin, so there’s nothing to remove. There’s no need to sign it: reject it, or let it run out.`;
   return out ? `${why} ${out}` : why;
 }
 

@@ -76,7 +76,7 @@ import {
 import type { Signer } from '../../writes/runner';
 import { BulkDialog } from './BulkDialog';
 import { DecisionCard, type NominationsState, type SubjectFacts } from './DecisionCard';
-import { answerView, canSign, isWaitingForMe } from './decisionUi';
+import { answerView, canReject, canSign, isWaitingForMe } from './decisionUi';
 import { doubleLeftOutText, doublesAsideText } from './doubleUi';
 import { FirstSignatureDialog } from './FirstSignatureDialog';
 import { HowSigningWorks } from './HowSigningWorks';
@@ -246,11 +246,12 @@ function DecisionsQueue() {
   const hiddenCount = collecting.length - shown.length;
   // Waiting for this admin: no answer yet (a rejection can still be replaced on its card).
   const signable = isAdmin ? collecting.filter((d) => isWaitingForMe(d, viewOf(d))) : [];
-  // Doubles this admin hasn't answered: not waiting for them, and left out of Sign several.
+  // Doubles this admin hasn't answered: not waiting for them, and left out of Sign several
+  // (a removal that is a double offers Reject only).
   const doubles = isAdmin
     ? collecting.filter((d) => {
         const view = viewOf(d);
-        return d.double && canSign(d, view) && view.shown === 'none';
+        return d.double && (canSign(d, view) || canReject(d, view)) && view.shown === 'none';
       })
     : [];
   const waiting = (nominationsQ.data?.open ?? []).filter((n) => n.state === 'waiting');
@@ -731,7 +732,7 @@ function DecisionsQueue() {
         leftOut={doubles.map((d) => ({
           key: d.signature,
           label: labelFor(d),
-          reason: d.double ? doubleLeftOutText(d.double) : '',
+          reason: d.double ? doubleLeftOutText({ kind: d.kind, double: d.double }) : '',
         }))}
         confirmLabel="Continue to Hub"
         run={(report) =>

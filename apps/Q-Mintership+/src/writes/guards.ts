@@ -15,6 +15,7 @@ import {
   getMembership,
   getStoredInviteFor,
 } from '../data/group';
+import { loadDecisions } from '../data/decisions';
 import { loadNominationsFor } from '../data/nominations';
 import type { ConsideringTarget } from '../data/records';
 import {
@@ -34,6 +35,7 @@ import {
   toApprovalRow,
 } from '../rules/decision';
 import { adminChangeBlock, adminChangeBlockText, type AdminChangeKind } from '../rules/adminChange';
+import { isRemovalDouble } from '../rules/double';
 import { NOMINEE_BLOCK_TEXT, isOpenState, nomineeBlock, nominatorBlock } from '../rules/nomination';
 import { latestPerSigner, type ApprovalRow } from '../rules/tally';
 import { decisionWindow, windowPhase } from '../rules/timing';
@@ -132,6 +134,10 @@ export async function guardDecision(
   if (tx.approvalStatus && tx.approvalStatus !== 'PENDING') {
     return `This has already been decided (${tx.approvalStatus.toLowerCase().replace('_', ' ')}).`;
   }
+  if (intent === 'sign' && tx.type === 'REMOVE_GROUP_ADMIN') {
+    const problem = await removalDoubleProblem(tx);
+    if (problem) return problem;
+  }
   if (typeof tx.blockHeight === 'number') {
     const [group, now] = await Promise.all([getGroupInfo(), getChainNow({ force: true })]);
     const phase = windowPhase(decisionWindow(tx.blockHeight, group), now.height);
@@ -151,6 +157,19 @@ export async function guardDecision(
   // A confirmed answer of yours: look it up through the transaction's own search window.
   const latestMine = await myLatestConfirmedDecision(signer, pendingSignature, tx);
   return confirmedProblem(intent, latestMine ? latestMine.approval : null);
+}
+
+/**
+ * Sign is never sent on a removal that is a double (rules/double.ts), read
+ * fresh: Reject stays, or it runs out.
+ */
+async function removalDoubleProblem(tx: TxRow): Promise<string | null> {
+  const data = await loadDecisions({ force: true });
+  const d = data.decisions.find((x) => x.signature === tx.signature);
+  if (!d || !isRemovalDouble(d)) return null;
+  return d.double?.reason === 'duplicate'
+    ? 'The same removal is already waiting in an earlier proposal: answer that one instead.'
+    : "There's nothing to remove: they aren't a Minter Admin. Reject it, or let it run out.";
 }
 
 /** The admin's newest answer is still on its way into a block. */

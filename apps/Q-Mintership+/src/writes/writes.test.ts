@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { base58Decode, base58Encode } from '../qortal/base58';
 import { GROUP_APPROVAL_UNSIGNED_LENGTH } from '../qortal/approvalBytes';
 import { loadDecisions } from '../data/decisions';
-import { ADDR, NULL_OWNER, addOtherPending, installWorld } from '../test/world';
-import { addReady, fakeAddress } from '../../e2e/world.mjs';
+import { ADDR, NULL_OWNER, TIP, addOtherPending, installWorld } from '../test/world';
+import { addDoubles, addReady, fakeAddress } from '../../e2e/world.mjs';
 import { mockFetchRoute, mockQortalRequest, qortalCalls, qortalCallsFor } from '../test/setup';
 import {
   addAdminRequest,
@@ -25,6 +25,7 @@ import {
   guardJoin,
   guardKick,
   guardNominate,
+  guardReject,
   guardRemoveAdmin,
   guardSign,
   guardSupport,
@@ -160,6 +161,41 @@ describe('guards re-read the chain before a write', () => {
     const data = await loadDecisions();
     const mintersCancel = data.decisions.find((d) => d.kind === 'cancelInvite')!;
     expect(await guardSign(admin, mintersCancel.signature)).toBeNull();
+  });
+
+  it('sign: never on a removal that is a double; Reject stays', async () => {
+    const { world, address, publicKey } = installWorld('admin');
+    const admin = { address, publicKey };
+    const doubles = addDoubles(world);
+    // Nora Nominator isn't a Minter Admin: nothing to remove.
+    expect(await guardSign(admin, doubles.notAdmin.signature)).toBe(
+      "There's nothing to remove: they aren't a Minter Admin. Reject it, or let it run out."
+    );
+    expect(await guardReject(admin, doubles.notAdmin.signature)).toBeNull();
+    // The same removal of a Minter Admin twice: the newer one is the double.
+    const data = await loadDecisions({ force: true });
+    const target = data.admins.admins.find(
+      (a) => a.member !== NULL_OWNER && a.member !== address
+    )!.member;
+    const base = world.pending.find(
+      (t: { signature: string }) => t.signature === doubles.notAdmin.signature
+    );
+    const removal = (seed: string, h: number) => ({
+      ...base,
+      admin: target,
+      signature: `${base.signature.slice(0, -6)}${seed}`,
+      blockHeight: h,
+      timestamp: base.timestamp + (h - base.blockHeight) * 72_900,
+    });
+    const older = removal('older1', TIP - 400);
+    const newer = removal('newer1', TIP - 300);
+    world.pending.push(older, newer);
+    expect(await guardSign(admin, newer.signature)).toBe(
+      'The same removal is already waiting in an earlier proposal: answer that one instead.'
+    );
+    expect(await guardSign(admin, older.signature)).toBeNull();
+    // A double that adds someone already a Minter Admin can still be signed.
+    expect(await guardSign(admin, doubles.alreadyAdmin.signature)).toBeNull();
   });
 
   it('invite: blocks members, banned accounts, duplicates and stored invites', async () => {
