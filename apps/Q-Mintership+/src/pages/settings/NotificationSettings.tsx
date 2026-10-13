@@ -1,13 +1,31 @@
 /**
  * Settings → Notifications: Home's "Since your last visit" (on by default,
- * kept in this browser).
+ * kept in this browser) and Hub alerts (off until you turn them on; Hub
+ * keeps them for your account: qortal/hubAlerts.ts).
  */
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { Switch, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useAtom } from 'jotai';
 import { Section } from '../../components/common/Section';
+import { useMyStatus } from '../../hooks/useData';
+import { useQuery } from '../../hooks/useQuery';
+import { hasQortalRequest } from '../../qortal/client';
+import {
+  alertRole,
+  getHubActions,
+  getHubAlertIds,
+  rulesMatch,
+  supportsHubAlerts,
+  turnOffHubAlerts,
+  turnOnHubAlerts,
+  type AlertRole,
+} from '../../qortal/hubAlerts';
+import { useSession } from '../../state/session';
 import { sinceLastVisitAtom } from '../../state/notifications';
+import { friendlyError } from '../../utils/friendlyError';
+import { isHubDecline, isHubTimeout } from '../../utils/hubErrors';
+import { readable } from '../../utils/readable';
 
 const Card = styled('div')(({ theme }) => ({
   backgroundColor: theme.palette.background.paper,
@@ -26,6 +44,123 @@ const Row = styled('div')(({ theme }) => ({
 }));
 
 const Copy = styled('div')({ flex: 1, minWidth: 0 });
+
+/** What the Hub alerts switch says for each role. */
+const ROLE_HINT: Record<AlertRole, string> = {
+  admin:
+    'Hub tells you when a new nomination is published, even when this app is closed. Hub asks you once to allow it. No fee.',
+  nominee:
+    'Hub tells you when someone nominates you or adds their support, even when this app is closed. Hub asks you once to allow it. No fee.',
+  none: 'Hub alerts are for Minter Admins (new nominations) and for people not in MINTER yet (being nominated). Nothing to alert you about now.',
+};
+
+type Note = { tone: 'success' | 'warning' | 'error' | 'neutral'; text: string } | null;
+
+function HubAlertsRow() {
+  const session = useSession();
+  const { status } = useMyStatus();
+  const labelId = useId();
+  const hintId = useId();
+  const inHub = hasQortalRequest() && session.status === 'ready';
+  const actions = useQuery(inHub ? 'hub:actions' : null, () => getHubActions());
+  const supported = supportsHubAlerts(actions.data);
+  const alerts = useQuery(inHub && supported ? 'hub:alerts' : null, () => getHubAlertIds());
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<Note>(null);
+
+  const role = alertRole(status);
+  const ids = alerts.data ?? [];
+  const on = ids.length > 0;
+  const stale = on && !rulesMatch(ids, role, session.address);
+
+  let hint: string;
+  if (!inHub) hint = 'Open this app in Qortal Hub or GO, signed in, to use Hub alerts.';
+  else if (actions.isLoading) hint = 'Checking what your Hub offers…';
+  else if (!supported) hint = "Your Hub doesn't offer app alerts. Home still shows what changed.";
+  else if (alerts.isError) hint = "Couldn't read your Hub alerts. Try again later.";
+  else if (stale)
+    hint = 'These alerts were set up for your earlier role. Turn them off and on to update them.';
+  else hint = ROLE_HINT[role];
+
+  const ready = inHub && supported && !alerts.isLoading && !alerts.isError;
+  const disabled = busy || !ready || (!on && role === 'none') || !status;
+
+  const toggle = async (next: boolean) => {
+    setBusy(true);
+    setNote(null);
+    try {
+      if (next) {
+        await turnOnHubAlerts(role, session.address);
+        setNote({ tone: 'success', text: 'Hub alerts are on.' });
+      } else {
+        await turnOffHubAlerts();
+        setNote({ tone: 'neutral', text: 'Hub alerts are off.' });
+      }
+    } catch (error) {
+      if (isHubDecline(error)) {
+        setNote({ tone: 'neutral', text: "You didn't allow alerts in Hub. Nothing changed." });
+      } else if (isHubTimeout(error)) {
+        setNote({
+          tone: 'warning',
+          text: 'Hub stopped waiting. If you allowed alerts there, turn this on again to finish.',
+        });
+      } else {
+        const reason = friendlyError(error);
+        setNote({
+          tone: 'error',
+          text: `Couldn't change Hub alerts${reason ? `: ${reason}` : '.'}`,
+        });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Row>
+      <Copy>
+        <Typography id={labelId} sx={{ fontWeight: 600 }}>
+          Hub alerts
+        </Typography>
+        <Typography id={hintId} variant="body2" color="text.secondary">
+          {hint}
+        </Typography>
+        {ready && role === 'nominee' && !session.name ? (
+          <Typography variant="body2" color="text.secondary">
+            Hub listens for app alerts only on accounts with a registered name.
+          </Typography>
+        ) : null}
+        {ready && role !== 'none' ? (
+          <Typography variant="body2" color="text.secondary">
+            Signatures, approvals and expiry show on Home: Hub can only alert about published
+            records.
+          </Typography>
+        ) : null}
+        <Typography
+          variant="body2"
+          role="status"
+          sx={{
+            color: (theme) =>
+              !note || note.tone === 'neutral'
+                ? theme.palette.text.secondary
+                : readable(note.tone)(theme),
+            fontWeight: note && note.tone !== 'neutral' ? 600 : 400,
+          }}
+        >
+          {busy ? 'Waiting for Hub…' : (note?.text ?? '')}
+        </Typography>
+      </Copy>
+      <Switch
+        checked={on}
+        disabled={disabled}
+        onChange={(_, next) => void toggle(next)}
+        slotProps={{
+          input: { 'aria-labelledby': labelId, 'aria-describedby': hintId },
+        }}
+      />
+    </Row>
+  );
+}
 
 export function NotificationSettings() {
   const [since, setSince] = useAtom(sinceLastVisitAtom);
@@ -50,6 +185,7 @@ export function NotificationSettings() {
             slotProps={{ input: { 'aria-labelledby': labelId, 'aria-describedby': hintId } }}
           />
         </Row>
+        <HubAlertsRow />
       </Card>
     </Section>
   );
