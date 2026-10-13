@@ -202,6 +202,29 @@ describe('guards re-read the chain before a write', () => {
     expect(await guardJoin(signerFor('nominatedWaiting'))).toBeNull();
   });
 
+  it('join: refuses while their own join request is still on its way into a block', async () => {
+    const { world, address, publicKey } = installWorld('nominatedWaiting');
+    const join = (groupId: number, fill: number) => ({
+      type: 'JOIN_GROUP',
+      timestamp: Date.now(),
+      signature: base58Encode(new Uint8Array(64).fill(fill)),
+      txGroupId: 0,
+      groupId,
+      creatorAddress: address,
+      joinerPublicKey: publicKey,
+    });
+    // Another group's join request doesn't count.
+    world.pending.push(join(2, 21));
+    expect(await guardJoin({ address, publicKey })).toBeNull();
+    world.pending.push(join(694, 22));
+    expect(await guardJoin({ address, publicKey })).toBe(
+      'Your join request is already on its way into a block. Check again in a minute or two.'
+    );
+    const outcome = await joinMinter({ address, publicKey });
+    expect(outcome).toEqual({ status: 'blocked', reason: expect.stringMatching(/on its way/) });
+    expect(qortalCallsFor('JOIN_GROUP')).toHaveLength(0);
+  });
+
   it('nominate and support: level 5+ members or admins, no self, no duplicates', async () => {
     expect(await guardNominate(signerFor('learner'), ADDR.newcomerName)).toMatch(/from level 5/);
     const nora = signerFor('nominator');

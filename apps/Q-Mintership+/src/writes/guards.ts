@@ -21,6 +21,7 @@ import {
   getPending,
   getTransaction,
   getUnconfirmedApprovals,
+  getUnconfirmedBy,
   getUnconfirmedOfTypes,
   withCancelInviteTargets,
 } from '../data/txs';
@@ -241,18 +242,26 @@ export async function guardRemoveAdmin(signer: Signer, admin: string): Promise<s
   return null;
 }
 
-/** Before the nominee's JOIN_GROUP (Accept nomination / Join now). */
+/**
+ * Before the JOIN_GROUP (Accept nomination / Join now / Show you're ready to
+ * mint). Core lists a join request only once it is in a block, so the
+ * account's own unconfirmed ones are checked too: one sent a moment ago
+ * (or before a reload) is never sent twice.
+ */
 export async function guardJoin(signer: Signer): Promise<string | null> {
-  const [membership, bans, joinRequest] = await Promise.all([
+  const [membership, bans, joinRequest, unconfirmed] = await Promise.all([
     getMembership(signer.address, { force: true }),
     getBans({ force: true }),
     getJoinRequestFor(signer.address, { force: true }),
+    getUnconfirmedBy(signer.publicKey, 'JOIN_GROUP'),
   ]);
   if (membership.isMember) return "You're already in MINTER.";
   if (activeBanFor(bans, signer.address))
     return 'Your account is banned from MINTER, so it can’t join until the ban is lifted.';
   if (joinRequest)
     return "You've already accepted: your join request is waiting for the Minter Admins.";
+  if (unconfirmed.some((tx) => tx.type === 'JOIN_GROUP' && Number(tx.groupId) === MINTER_GROUP_ID))
+    return 'Your join request is already on its way into a block. Check again in a minute or two.';
   return null;
 }
 

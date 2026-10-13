@@ -729,7 +729,10 @@ export function answerCore(world, pathname, sp) {
       ...world.pending.filter((t) => typeof t.blockHeight !== 'number'),
     ];
     if (types.length) rows = rows.filter((t) => types.includes(t.type));
-    if (creator) rows = rows.filter((t) => (t.adminPublicKey ?? t.ownerPublicKey) === creator);
+    if (creator)
+      rows = rows.filter(
+        (t) => (t.adminPublicKey ?? t.ownerPublicKey ?? t.joinerPublicKey) === creator
+      );
     return json(page(rows, sp));
   }
   if ((m = p.match(/^\/transactions\/signature\/(\w+)\/raw$/))) {
