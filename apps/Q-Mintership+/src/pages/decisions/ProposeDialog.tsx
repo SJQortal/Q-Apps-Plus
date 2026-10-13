@@ -295,11 +295,14 @@ export function ProposeDialog({
             }}
           >
             <PersonChip address={person.address} name={person.name ?? undefined} size={40} />
-            <CheckResult
-              check={check}
-              kind={kind}
-              onSwitch={() => onSwitch('removeAdmin', person)}
-            />
+            {/* One live region for the check, kept while it runs and when it answers. */}
+            <Box role="status">
+              <CheckResult
+                check={check}
+                kind={kind}
+                onSwitch={() => onSwitch('removeAdmin', person)}
+              />
+            </Box>
             {recent ? (
               <Alert severity="info" role="note">
                 Approved {formatRelative(recent)}: they may still press Join now.
@@ -406,25 +409,25 @@ function CheckResult({
 }) {
   if (check === null || check === 'checking') {
     return (
-      <Typography variant="body2" color="text.secondary" role="status">
+      <Typography variant="body2" color="text.secondary">
         Checking this account on your node…
       </Typography>
     );
   }
   if (check.status === 'ok')
     return (
-      <Alert severity="success" role="status">
+      <Alert severity="success" role="note">
         Nothing stops this proposal.
       </Alert>
     );
   if (check.status === 'blocked')
     return (
-      <Alert severity="warning" role="status">
+      <Alert severity="warning" role="note">
         {check.reason}
       </Alert>
     );
   return (
-    <Alert severity="info" role="status">
+    <Alert severity="info" role="note">
       <Typography variant="body2">
         This is a Minter Admin. Core doesn’t let admins be{' '}
         {kind === 'ban' ? 'banned' : 'removed from MINTER'} directly: propose removing their admin

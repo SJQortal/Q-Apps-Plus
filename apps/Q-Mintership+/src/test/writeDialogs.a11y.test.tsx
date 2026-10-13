@@ -180,6 +180,30 @@ describe('Write dialogs by keyboard: Propose', () => {
     }
   });
 
+  it('reads the check on the person picked out of one live region, kept for the next pick', async () => {
+    const u = user();
+    await decisions();
+    await choose(u, /^Remove a Minter Admin/);
+    const form = await screen.findByRole('dialog', { name: 'Remove a Minter Admin' }, T);
+    const picker = within(form).getByRole('combobox', { name: 'Minter Admin' });
+    const admin = within(picker)
+      .getAllByRole('option')
+      .find((o) => /^Admin C/.test(o.textContent ?? '')) as HTMLOptionElement;
+    await u.selectOptions(picker, admin.value);
+    const live = within(form).getByRole('status');
+    expect(await within(live).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
+    // Picking someone else checks again in the same region, which says the new answer.
+    const other = within(picker)
+      .getAllByRole('option')
+      .find((o) => /^Admin D/.test(o.textContent ?? '')) as HTMLOptionElement;
+    await u.selectOptions(picker, other.value);
+    expect(within(form).getByRole('status')).toBe(live);
+    expect(await within(live).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
+    // Nothing inside it is a live region of its own (one region, read once).
+    expect(live.querySelector('[role="status"], [role="alert"], [aria-live]')).toBeNull();
+    expect(within(form).queryByRole('alert')).toBeNull();
+  });
+
   it('Clean up stale invites opens the section and moves focus to it', async () => {
     const u = user();
     await decisions();
