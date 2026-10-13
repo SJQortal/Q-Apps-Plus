@@ -5,6 +5,19 @@
  */
 
 /**
+ * The main action of level 5+ members and Minter Admins: start a nomination.
+ * Every button, link, page title and empty-state action that offers it reads
+ * this one constant, in sentence case (docs/DESIGN.md → Copy). To show it in
+ * title case instead, change it here to 'Propose Nomination'.
+ */
+export const PROPOSE_NOMINATION = 'Propose nomination';
+
+/** The same action for one person: "Propose nomination for Kit Kicked". */
+export function proposeNominationFor(who: string): string {
+  return `${PROPOSE_NOMINATION} for ${who}`;
+}
+
+/**
  * An open join request to MINTER, however it was sent: by accepting a
  * nomination, or with "Show you're ready to mint". The same words wherever
  * the person sees their own.

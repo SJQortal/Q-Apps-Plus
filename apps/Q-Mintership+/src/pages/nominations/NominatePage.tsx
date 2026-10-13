@@ -1,5 +1,6 @@
 /**
- * Nominate someone (level 5+ MINTER members and Minter Admins):
+ * Propose nomination (level 5+ MINTER members and Minter Admins; the words
+ * are one constant, PROPOSE_NOMINATION in constants/words.ts):
  *
  * 1. Pick the candidate by name or address; their level, blocks minted and
  *    MINTER status show at once, with every reason they can't be nominated
@@ -13,7 +14,7 @@
  *
  * The submit bar is sticky inside the page (never 100vh). With the phone's
  * keyboard open the bottom bar steps aside and the submit bar sits right
- * above the keyboard, so Nominate stays in view while the reason is typed;
+ * above the keyboard, so its button stays in view while the reason is typed;
  * in a landscape frame it stays in the flow.
  */
 import { useRef, useState } from 'react';
@@ -55,6 +56,7 @@ import { useDisplayName } from '../../hooks/useDisplayName';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useQuery } from '../../hooks/useQuery';
 import { appParam } from '../../routes/hubLocation';
+import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { PATHS, personPath } from '../../routes/paths';
 import { NOMINEE_BLOCK_TEXT, type NomineeBlock } from '../../rules/nomination';
 import type { MyStatus } from '../../rules/status';
@@ -83,8 +85,8 @@ export default function NominatePage() {
   } else if (session.status === 'signedOut' || session.status === 'error') {
     body = (
       <EmptyState
-        title="Sign in to nominate"
-        description="MINTER members at level 5 or above, and Minter Admins, can nominate someone."
+        title="Sign in to propose a nomination"
+        description="MINTER members at level 5 or above, and Minter Admins, can propose a nomination."
         actionLabel="Sign in"
         onAction={() => void signIn()}
       />
@@ -108,7 +110,7 @@ export default function NominatePage() {
   return (
     <>
       <PageHeader
-        title="Nominate someone"
+        title={PROPOSE_NOMINATION}
         subtitle="Pick the person, say why, add links."
         back={PATHS.nominations}
       />
@@ -122,7 +124,7 @@ function NotEligible({ status }: { status: MyStatus }) {
   return (
     <Card sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
       <Typography component="h2" sx={{ fontSize: 18, fontWeight: 700 }}>
-        You can’t nominate yet
+        You can’t propose a nomination yet
       </Typography>
       <Typography>{status.nominateBlock}</Typography>
       {toLevel5 > 0 ? (
@@ -173,7 +175,7 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [support, setSupport] = useState<{ open: boolean } | null>(null);
   const [published, setPublished] = useState<Published | null>(null);
-  // Nominate with a problem moves focus to it (its error is read with it).
+  // Pressing the button with a problem moves focus to it (its error is read with it).
   const pickerRef = useRef<HTMLInputElement | null>(null);
   const reasonRef = useRef<HTMLInputElement | null>(null);
   const linkRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -391,7 +393,7 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
                 role="status"
                 color={attempted && !ready ? 'error' : 'text.secondary'}
               >
-                {/* Changes on a failed Nominate, so it is announced, not only recoloured. */}
+                {/* Changes on a failed press, so it is announced, not only recoloured. */}
                 {attempted && !ready ? `Can’t publish yet: ${hint}` : hint}
               </Typography>
               {phone ? null : <FeeNote txType="ARBITRARY" prefix="QDN publish fee" />}
@@ -407,7 +409,7 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
                 component="span"
                 sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
               >
-                {picked && !phone ? `Nominate ${shownName}` : 'Nominate'}
+                {picked && !phone ? proposeNominationFor(shownName) : PROPOSE_NOMINATION}
               </Box>
             </Button>
           </Box>
@@ -821,7 +823,7 @@ function Done({
           See all nominations
         </Button>
         <Button variant="outlined" onClick={onAgain} sx={{ minHeight: 44 }}>
-          Nominate someone else
+          {PROPOSE_NOMINATION} for someone else
         </Button>
       </Box>
     </>

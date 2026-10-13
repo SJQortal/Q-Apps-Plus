@@ -12,6 +12,7 @@ import TipsAndUpdatesOutlinedIcon from '@mui/icons-material/TipsAndUpdatesOutlin
 import { CUMULATIVE_BLOCKS_BY_LEVEL, NOMINATOR_MIN_LEVEL } from '../../../data/constants';
 import { ProgressBar } from '../../../components/common/ProgressRing';
 import { useNominations } from '../../../hooks/useData';
+import { PROPOSE_NOMINATION } from '../../../constants/words';
 import { nominatePath } from '../../../routes/paths';
 import type { MyStatus } from '../../../rules/status';
 import { formatCount } from '../../../utils/format';
@@ -154,7 +155,7 @@ export function NominatorHero({
             variant="contained"
             startIcon={<PersonAddAltOutlinedIcon />}
           >
-            Nominate someone
+            {PROPOSE_NOMINATION}
           </Button>
         ) : (
           <Button

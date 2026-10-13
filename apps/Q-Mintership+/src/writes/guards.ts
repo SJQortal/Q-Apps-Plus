@@ -319,7 +319,7 @@ export async function guardSupport(signer: Signer, nominee: string): Promise<str
   const nominations = await loadNominationsFor(nominee, { force: true });
   const open = nominations.find((n) => isOpenState(n.state));
   if (!open)
-    return 'There is no open nomination for this person to support. You can nominate them instead.';
+    return 'There is no open nomination for this person to support. You can propose a nomination for them instead.';
   if (open.nomination?.publisher.address === signer.address)
     return 'You nominated this person already.';
   return null;

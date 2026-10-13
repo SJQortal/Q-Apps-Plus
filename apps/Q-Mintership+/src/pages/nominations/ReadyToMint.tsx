@@ -1,7 +1,7 @@
 /**
  * Ready to mint (`/nominations?show=ready`): the people who asked to join
  * MINTER, for everyone to see, so nominators can find them. Level 5+ members
- * and Minter Admins get Nominate on each row, or Add your support where an
+ * and Minter Admins get Propose nomination on each row, or Add your support where an
  * open nomination already exists. Twenty rows at a time, in Core's order;
  * each row's level, blocks minted, name and whether they were a member
  * before ("Former member: left MINTER on …") are read only once it is shown.
@@ -28,6 +28,7 @@ import {
 } from '../../data/readyToMint';
 import type { AccountInfo } from '../../data/types';
 import type { UseQueryResult } from '../../hooks/useQuery';
+import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { nominatePath } from '../../routes/paths';
 import type { FormerMember } from '../../rules/status';
 import { displayName, formatCount, formatDate } from '../../utils/format';
@@ -322,10 +323,10 @@ function ReadyRow({
       <Button
         variant="outlined"
         onClick={() => navigate(nominatePath(address))}
-        aria-label={`Nominate ${label}`}
+        aria-label={proposeNominationFor(label)}
         sx={{ minHeight: 44 }}
       >
-        Nominate
+        {PROPOSE_NOMINATION}
       </Button>
     );
   }

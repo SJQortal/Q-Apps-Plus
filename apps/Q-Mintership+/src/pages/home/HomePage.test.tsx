@@ -13,6 +13,7 @@ import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme';
 import { STORAGE_PREFIX } from '../../constants/plus';
 import { resetSessionStarter, signIn } from '../../state/session';
 import { markWrite, pendingWritesAtom, writeKeys } from '../../writes/optimistic';
+import { PROPOSE_NOMINATION } from '../../constants/words';
 import { renderPage } from '../../test/render';
 import { fetchCalls, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { ADDR, installWorld } from '../../test/world';
@@ -119,7 +120,7 @@ describe('Home: Minter Admins', () => {
     await renderPage(<HomePage />, { persona: 'adminL4' });
     await headline(/Juniper L4, 8 decisions are waiting/);
     expect(screen.getByText(/1 hour 35 minutes/)).toBeInTheDocument();
-    expect(await screen.findByRole('link', { name: 'Nominate someone' }, T)).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: PROPOSE_NOMINATION }, T)).toHaveAttribute(
       'href',
       '/nominate'
     );
@@ -142,7 +143,7 @@ describe('Home: members', () => {
     await headline('Nora Nominator, you can nominate new minters');
     expect(screen.getAllByText('980,000').length).toBeGreaterThan(0);
     expect(screen.getAllByText('502,400').length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('link', { name: 'Nominate someone' })[0]).toHaveAttribute(
+    expect(screen.getAllByRole('link', { name: PROPOSE_NOMINATION })[0]).toHaveAttribute(
       'href',
       '/nominate'
     );

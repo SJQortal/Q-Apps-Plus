@@ -3,6 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { fakeAddress, type World } from '../../../e2e/world.mjs';
 import { shortAddress } from '../../utils/format';
+import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
 import { fetchCallsFor, mockFetchRoute } from '../../test/setup';
 import { ADDR } from '../../test/world';
@@ -195,7 +196,7 @@ describe('Ready to mint', () => {
     expect(others()).toBe(othersBefore);
   });
 
-  it('offers Nominate to a level 5+ member, and says where they already nominated', async () => {
+  it('offers Propose nomination to a level 5+ member, and says where they already nominated', async () => {
     const user = userEvent.setup();
     await open('nominator');
     const jr1 = await row(shortAddress(fakeAddress('jr-1')));
@@ -207,12 +208,16 @@ describe('Ready to mint', () => {
     expect(within(mia).getByText('Nominated')).toBeInTheDocument();
     // Enough Minter Admins have signed already: support would change nothing.
     expect(within(mia).queryByRole('button')).toBeNull();
-    expect(within(await readyList()).getAllByRole('button', { name: /^Nominate / })).toHaveLength(
-      3
-    );
+    expect(
+      within(await readyList()).getAllByRole('button', {
+        name: new RegExp(`^${PROPOSE_NOMINATION} for `),
+      })
+    ).toHaveLength(3);
 
     await user.click(
-      within(jr1).getByRole('button', { name: `Nominate ${shortAddress(fakeAddress('jr-1'))}` })
+      within(jr1).getByRole('button', {
+        name: proposeNominationFor(shortAddress(fakeAddress('jr-1'))),
+      })
     );
     expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
   });
