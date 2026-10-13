@@ -333,6 +333,19 @@ describe('CommentsSection', () => {
     expect(commentLi(ids.sameHere)).toHaveFocus();
   });
 
+  it('Post with nothing written moves focus to the field, which says why', async () => {
+    const user = userEvent.setup();
+    await show('nominator', { open: true });
+    const panel = await region();
+    within(panel).getByRole('button', { name: 'Post' }).focus();
+    await user.keyboard('{Enter}');
+    const box = within(panel).getByRole('textbox', { name: 'Write a comment' });
+    expect(box).toHaveFocus();
+    expect(box).toHaveAttribute('aria-invalid', 'true');
+    expect(box).toHaveAccessibleDescription('Write something first.');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it("a reply's Cancel puts focus back on the comment it answered", async () => {
     const user = userEvent.setup();
     const { ids } = await show('nominator', { open: true });

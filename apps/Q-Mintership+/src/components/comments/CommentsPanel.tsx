@@ -118,22 +118,26 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
   };
   const closeDialog = () => setDialogOpen(false);
 
+  // False when the text can't go: the field then takes focus, and its description says why.
   const submitDraft = (event: FormEvent) => {
     event.preventDefault();
     const problems = commentTextProblems(draft);
     setDraftError(problems[0] ?? null);
-    if (!problems.length) openDialog({ kind: 'publish', mode: 'post', text: draft, about: null });
+    if (problems.length) return false;
+    openDialog({ kind: 'publish', mode: 'post', text: draft, about: null });
+    return true;
   };
   const submitInline = (event: FormEvent) => {
     event.preventDefault();
-    if (!inline) return;
+    if (!inline) return true;
     const problems = commentTextProblems(inline.text);
     if (problems.length) {
       setInline({ ...inline, error: problems[0] });
-      return;
+      return false;
     }
     setInline({ ...inline, error: null });
     openDialog({ kind: 'publish', mode: inline.mode, text: inline.text, about: inline.comment });
+    return true;
   };
   // Cancel on a reply or an edit: back to the comment it was about (the editor goes away).
   const cancelInline = () => {
@@ -514,7 +518,8 @@ function Composer({
   value: string;
   error: string | null;
   onChange: (text: string) => void;
-  onSubmit: (event: FormEvent) => void;
+  /** False when the text can't go: focus then moves to the field. */
+  onSubmit: (event: FormEvent) => boolean;
   onCancel?: () => void;
   submitLabel: string;
   hint?: string;
@@ -530,7 +535,9 @@ function Composer({
     <Box
       component="form"
       noValidate
-      onSubmit={onSubmit}
+      onSubmit={(event: FormEvent) => {
+        if (!onSubmit(event)) field.current?.focus();
+      }}
       sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}
     >
       <TextField
