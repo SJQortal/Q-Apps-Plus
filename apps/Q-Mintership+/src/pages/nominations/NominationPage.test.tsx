@@ -7,7 +7,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { renderPage } from '../../test/render';
 import { fetchCalls, qortalCalls } from '../../test/setup';
-import { ADDR, PEOPLE } from '../../test/world';
+import { ADDR, PEOPLE, TIP, type InstalledWorld } from '../../test/world';
+import { fakeAddress } from '../../../e2e/world.mjs';
+import { base58Encode } from '../../qortal/base58';
 import NominationPage from './NominationPage';
 
 afterEach(() => vi.useRealTimers());
@@ -15,12 +17,35 @@ afterEach(() => vi.useRealTimers());
 const T = { timeout: 4000 };
 const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH/;
 
-function open(who: string, persona = 'nominator') {
+function open(who: string, persona = 'nominator', setup?: (world: World) => void) {
   return renderPage(<NominationPage />, {
     persona,
     path: `/nominations/${encodeURIComponent(who)}`,
     route: '/nominations/:address',
+    setup,
   });
+}
+
+type World = InstalledWorld['world'];
+
+/** Two confirmed rejections of the nominee's pending invite, by admins who didn't sign it. */
+function rejectTwice(world: World, nominee: string) {
+  const invite = world.pending.find((t: { invitee?: string }) => t.invitee === nominee);
+  for (let i = 0; i < 2; i++) {
+    const admin = fakeAddress(`admin-${10 + i}`);
+    world.approvals.push({
+      type: 'GROUP_APPROVAL',
+      timestamp: invite.timestamp + 60_000 * (i + 1),
+      signature: base58Encode(new Uint8Array(64).fill(100 + i)),
+      txGroupId: 0,
+      blockHeight: TIP - 100 + i,
+      approvalStatus: 'NOT_REQUIRED',
+      creatorAddress: admin,
+      adminPublicKey: world.accounts.get(admin).publicKey,
+      pendingSignature: invite.signature,
+      approval: false,
+    });
+  }
 }
 
 describe('A nomination’s own page', () => {
@@ -103,6 +128,30 @@ describe('A nomination’s own page', () => {
     const current = await screen.findByRole('region', { name: 'Nomination' }, T);
     expect(
       await within(current).findByRole('button', { name: 'Accept nomination' }, T)
+    ).toBeVisible();
+  });
+
+  it('says rejections gently to the nominee their link is for; others read them as before', async () => {
+    const own = await open(ADDR.nominatedSigning, 'nominatedSigning', (world) =>
+      rejectTwice(world, ADDR.nominatedSigning)
+    );
+    const mine = await screen.findByRole('region', { name: 'Nomination' }, T);
+    expect(
+      await within(mine).findByText(
+        '2 Minter Admins have said no so far, of the 8 it takes to end it.',
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(within(mine).getByRole('article')).not.toHaveTextContent(/rejection/i);
+    own.unmount();
+
+    await open(ADDR.nominatedSigning, 'admin', (world) =>
+      rejectTwice(world, ADDR.nominatedSigning)
+    );
+    const theirs = await screen.findByRole('region', { name: 'Nomination' }, T);
+    expect(
+      await within(theirs).findByText('2 rejections of the 8 that would end it.', {}, T)
     ).toBeVisible();
   });
 

@@ -112,9 +112,9 @@ function useDecisionTitle(facts: Pick<Decision, 'kind' | 'subject' | 'creatorAdd
   return `${decisionTitle(facts)}: ${facts.subject ? who.label : 'an approved invite'}`;
 }
 
-/** Open, and not signed (or rejected) by this admin yet. */
+/** Open, not a double (rules/double.ts), and not signed (or rejected) by this admin yet. */
 function waitsFor(d: Decision, publicKey: string): boolean {
-  if (!d.tally || !(d.phase === 'open' || d.phase === 'early')) return false;
+  if (!d.tally || d.double || !(d.phase === 'open' || d.phase === 'early')) return false;
   return !publicKey || signerState(d.tally, publicKey) === 'none';
 }
 
@@ -429,9 +429,15 @@ function NomineeItem({ event: e }: { event: NomineeEvent }) {
         </Item>
       );
     case 'rejected':
+      // The nominee's own words, as on their Home and their own card.
       return (
-        <Item Icon={HighlightOffOutlinedIcon} tone="error" title="Your nomination was rejected">
-          Enough Minter Admins rejected it. You can be nominated again later.
+        <Item
+          Icon={HighlightOffOutlinedIcon}
+          tone="neutral"
+          title="Your nomination didn't go through this time"
+        >
+          Enough Minter Admins said no. Your account and your level stay as they are, and you can be
+          nominated again later.
         </Item>
       );
     case 'lapsed':
@@ -496,12 +502,13 @@ export function SinceLastVisit({ status, welcome }: { status: MyStatus; welcome:
               <MadeItem key={`made-${e.nominee}`} event={e} />
             ))}
             {made.length > TOP ? (
+              // Nominations lists them (open, and recently decided), not History.
               <MoreItem
                 Icon={HowToRegOutlinedIcon}
                 text={`And ${made.length - TOP} more of your nominations ended`}
-                to={PATHS.history}
-                label="History"
-                ariaLabel="See your other nominations in History"
+                to={PATHS.nominations}
+                label="Nominations"
+                ariaLabel="See your other nominations on Nominations"
               />
             ) : null}
             {admin?.newDecisions.length ? (

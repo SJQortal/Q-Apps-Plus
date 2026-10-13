@@ -6,8 +6,9 @@ import { getDefaultStore } from 'jotai';
 import { peekQuery } from '../../data/query';
 import { SINCE_LAST_VISIT_KEY, sinceLastVisitAtom } from '../../state/notifications';
 import { renderPage } from '../../test/render';
-import { mockQortalRequest, qortalCalls, qortalCallsFor } from '../../test/setup';
+import { mockFetchRoute, mockQortalRequest, qortalCalls, qortalCallsFor } from '../../test/setup';
 import { ADDR, NOW } from '../../test/world';
+import { answerCore, type World } from '../../../e2e/world.mjs';
 import { NotificationSettings } from './NotificationSettings';
 
 const T = { timeout: 4000 };
@@ -31,6 +32,20 @@ function hubWithAlerts(rules: string[] = []) {
   mockQortalRequest('NOTIFICATION_PERMISSION', true);
   mockQortalRequest('NOTIFICATION_ADD', true);
   mockQortalRequest('NOTIFICATION_REMOVE', true);
+}
+
+/** The search for every nomination fails while `failing()` says so; the rest reads as usual. */
+function failNominationSearch(world: World, failing: () => boolean) {
+  mockFetchRoute('/arbitrary/resources/searchsimple', (url: URL) => {
+    if (failing() && url.searchParams.get('identifier') === 'qmp-nomination-') {
+      return new Response('', { status: 500 });
+    }
+    const answer = answerCore(world, url.pathname, url.searchParams);
+    return new Response(JSON.stringify(answer?.body ?? null), {
+      status: answer?.status ?? 404,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
 }
 
 const hubSwitch = () => screen.getByRole('switch', { name: 'Hub alerts' });
@@ -285,6 +300,76 @@ describe('Settings → Notifications: support alerts for nominators', () => {
     ).toBeVisible();
     expect(hubSwitch()).toBeDisabled();
     expect(within(section()).queryByText(/^Support alerts cover/)).toBeNull();
+  });
+
+  it('says when the nominations they made can’t be read, with Try again', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts();
+    let failing = true;
+    await renderPage(<NotificationSettings />, {
+      persona: 'nominator',
+      path: '/settings',
+      setup: (world) => failNominationSearch(world, () => failing),
+    });
+    expect(
+      await within(section()).findByText(
+        "Couldn't read the nominations you made, so there's nothing to turn on yet.",
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(hubSwitch()).toBeDisabled();
+    expect(within(section()).queryByText(/^Support alerts cover/)).toBeNull();
+    const again = screen.getByRole('button', {
+      name: 'Try again to read the nominations you made',
+    });
+    expect(again).toHaveTextContent('Try again');
+
+    // Still failing: it says so, and focus stays on the button.
+    await u.click(again);
+    expect(
+      await within(section()).findByText(
+        "Still couldn't read the nominations you made. Try again in a moment.",
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(again).toHaveFocus();
+
+    // Read now: the switch can be turned on, and takes focus from the button that went away.
+    failing = false;
+    await u.click(again);
+    await waitFor(() => expect(hubSwitch()).toBeEnabled(), T);
+    expect(screen.queryByRole('button', { name: /Try again/ })).toBeNull();
+    expect(hubSwitch()).toHaveFocus();
+    expect(hubSwitch()).not.toBeChecked();
+    expect(within(section()).getByText(/^Support alerts cover/)).toBeVisible();
+  });
+
+  it('stays on when none of the nominations they made is open any more', async () => {
+    const u = userEvent.setup();
+    // Set up while Lapsed Person's nomination was open; Pia has none open now.
+    hubThatChecks([yours(ADDR.lapsed)], true);
+    await renderPage(<NotificationSettings />, { persona: 'promote', path: '/settings' });
+    await waitFor(() => expect(peekQuery('nominations:all')).toBeDefined(), T);
+    expect(
+      await within(section()).findByText(/You have no open nominations now\.$/, {}, T)
+    ).toBeVisible();
+    // Give the sync its turn: it drops nothing.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')).toHaveLength(0);
+    expect(hubSwitch()).toBeChecked();
+    expect(hubSwitch()).toBeEnabled();
+    expect(
+      within(section()).getByText(
+        /While alerts are on, opening Settings adds the ones you made since/
+      )
+    ).toBeVisible();
+    // Turning them off still removes every rule.
+    await u.click(hubSwitch());
+    expect(await screen.findByText('Hub alerts are off.', {}, T)).toBeVisible();
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')[0].notificationIds).toContain(yours(ADDR.lapsed));
+    expect(hubSwitch()).not.toBeChecked();
   });
 
   it('keeps them in step while alerts are on: checks first, so Hub shows no dialog', async () => {

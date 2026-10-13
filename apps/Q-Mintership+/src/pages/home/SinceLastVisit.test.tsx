@@ -15,6 +15,7 @@ import { fetchCallsFor } from '../../test/setup';
 import { renderPage } from '../../test/render';
 import { ADDR, NOW, TIP } from '../../test/world';
 import {
+  addDoubles,
   addNominatorHistory,
   lastVisitSnapshots,
   lastVisitStorageKey,
@@ -183,6 +184,55 @@ describe('Since your last visit: Minter Admins', () => {
   });
 });
 
+describe('Since your last visit: doubles', () => {
+  it('never says a new double is waiting for your signature', async () => {
+    let doubles = {} as ReturnType<typeof addDoubles>;
+    await renderPage(<HomePage />, {
+      persona: 'admin',
+      setup: (world) => {
+        doubles = addDoubles(world);
+        // Everything but the removal of Nora Nominator was there at the last visit.
+        const decisions = world.pending
+          .filter((t: { signature: string }) => t.signature !== doubles.notAdmin.signature)
+          .map((t: { signature: string }) => ({
+            signature: t.signature,
+            kind: 'invite',
+            subject: null,
+            height: null,
+          }));
+        window.localStorage.setItem(
+          lastVisitStorageKey(ADDR.admin),
+          JSON.stringify({ v: 1, at: NOW - 3 * 86_400_000, height: TIP - 3_556, decisions })
+        );
+      },
+    });
+    const region = await panel();
+    const open = await within(region).findByRole(
+      'link',
+      { name: 'Open: Remove a Minter Admin: Nora Nominator' },
+      T
+    );
+    const row = open.closest('li') as HTMLElement;
+    expect(row).toHaveTextContent(/New · 2 of \d+ signatures/);
+    expect(row).not.toHaveTextContent('waiting for your signature');
+  });
+
+  it('leaves doubles out of the new decisions waiting for your signature', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'admin',
+      setup: (world) => {
+        // Admin C's second proposal was there at the last visit; the other three are new.
+        addDoubles(world);
+        seed('admin')(world);
+      },
+    });
+    const region = await panel();
+    // Five as before, and the older of Member 9's two additions; not the two doubles.
+    const row = (await within(region).findByText('10 new decisions', {}, T)).closest('li');
+    expect(row).toHaveTextContent('and 8 more. 6 are waiting for your signature.');
+  });
+});
+
 describe('Since your last visit: titles', () => {
   it('names a member’s own Minter Admin proposal as its card does, new or decided', async () => {
     await renderPage(<HomePage />, {
@@ -314,6 +364,36 @@ describe('Since your last visit: nominees', () => {
     ).toBeVisible();
   });
 
+  it('says gently that the nomination didn’t go through', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'expired',
+      setup: (world) => {
+        // Enough Minter Admins said no to Ünïcode Ñame's invite since the last visit.
+        const invite = world.decided.find((t: { invitee?: string }) => t.invitee === ADDR.expired);
+        invite.approvalStatus = 'REJECTED';
+        const record = world.records.find(
+          (r: { identifier: string }) => r.identifier === `qmp-nomination-${ADDR.expired}`
+        );
+        seedNomination(ADDR.expired, {
+          decision: invite.signature,
+          state: 'signing',
+          signed: 2,
+          needed: 8,
+          supporters: 0,
+          publishedAt: record.created,
+        });
+      },
+    });
+    const region = await panel();
+    const item = within(region)
+      .getByText("Your nomination didn't go through this time")
+      .closest('li') as HTMLElement;
+    expect(item).toHaveTextContent(
+      'Enough Minter Admins said no. Your account and your level stay as they are, and you can be nominated again later.'
+    );
+    expect(item).not.toHaveTextContent(/reject/i);
+  });
+
   it('reports an approval from the history when no nomination record shows it', async () => {
     await renderPage(<HomePage />, {
       persona: 'approved',
@@ -397,6 +477,37 @@ describe('Since your last visit: nominators', () => {
         ).toHaveLength(1),
       T
     );
+  });
+
+  it('sends the rest of the nominations that ended to Nominations, which lists them', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'nominator',
+      setup: (world) => {
+        addNominatorHistory(world);
+        // A fourth: Nora also nominated Rae Ready ten days ago, and no Minter Admin signed it.
+        world.records.push({
+          name: 'Nora Nominator',
+          identifier: `qmp-nomination-${ADDR.ready}`,
+          created: NOW - 10 * 86_400_000 + 3_600_000,
+          body: {
+            v: 1,
+            nomineeAddress: ADDR.ready,
+            reason: 'Runs a reliable node and helps in the minting chat every week.',
+            links: [],
+          },
+        });
+        seedNominator(world);
+      },
+    });
+    const region = await panel();
+    const more = (
+      await within(region).findByText('And 1 more of your nominations ended', {}, T)
+    ).closest('li') as HTMLElement;
+    expect(
+      within(more).getByRole('link', { name: 'See your other nominations on Nominations' })
+    ).toHaveAttribute('href', '/nominations');
+    expect(within(more).getByRole('link')).toHaveTextContent('Nominations');
+    expect(within(region).getAllByRole('listitem')).toHaveLength(4);
   });
 
   it('has nothing to compare from a visit saved before nominations were kept', async () => {

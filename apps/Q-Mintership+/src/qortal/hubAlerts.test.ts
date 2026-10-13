@@ -338,12 +338,38 @@ describe('keeping the support alerts in step', () => {
 
   it('never adds a rule unless Hub says the app may alert, so Hub shows no dialog', async () => {
     hub({ allowed: false });
-    setQueryData('hub:alerts', [yours(N1)]);
-    expect(await syncNominatorAlerts('nominator', [N2])).toEqual([]);
+    setQueryData('hub:alerts', [yours(N1), yours(N3)]);
+    expect(await syncNominatorAlerts('nominator', [N2])).toEqual([yours(N1)]);
     expect(qortalCallsFor('NOTIFICATION_PERMISSION')).toHaveLength(0);
     expect(qortalCallsFor('NOTIFICATION_ADD')).toHaveLength(0);
-    // Dropping a closed one needs no permission.
+    // Dropping a closed one needs no permission; the last one stays, so alerts stay on.
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')).toHaveLength(1);
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')[0].notificationIds).toEqual([yours(N3)]);
+  });
+
+  it("keeps a nominator's alerts on when their open nominations close, until a new one's rule is in", async () => {
+    hub();
+    setQueryData('hub:alerts', [yours(N1)]);
+    // N1 closed and nothing is open: the rule stays, and Hub is asked nothing.
+    expect(await syncNominatorAlerts('nominator', [])).toBeNull();
+    expect(qortalCalls).toHaveLength(0);
+    expect(await getHubAlertIds()).toEqual([yours(N1)]);
+    // A later nomination: its rule is added, then the closed one goes.
+    expect(await syncNominatorAlerts('nominator', [N2])).toEqual([yours(N2)]);
+    const added = qortalCallsFor('NOTIFICATION_ADD')[0].notifications as Array<{
+      notificationId: string;
+    }>;
+    expect(added.map((r) => r.notificationId)).toEqual([yours(N2)]);
     expect(qortalCallsFor('NOTIFICATION_REMOVE')[0].notificationIds).toEqual([yours(N1)]);
+  });
+
+  it('keeps the last rule when Hub cannot add the new ones', async () => {
+    hub({ allowed: false });
+    setQueryData('hub:alerts', [yours(N1)]);
+    expect(await syncNominatorAlerts('nominator', [N2])).toBeNull();
+    expect(qortalCallsFor('NOTIFICATION_ADD')).toHaveLength(0);
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')).toHaveLength(0);
+    expect(await getHubAlertIds()).toEqual([yours(N1)]);
   });
 
   it('adds nothing in a Hub that cannot say whether the app may alert', async () => {

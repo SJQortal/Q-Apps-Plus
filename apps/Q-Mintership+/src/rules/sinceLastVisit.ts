@@ -562,7 +562,7 @@ function nomineeWords(e: NomineeEvent): string {
     case 'expired':
       return 'your nomination expired';
     case 'rejected':
-      return 'your nomination was rejected';
+      return "your nomination didn't go through this time";
     case 'lapsed':
       return 'your nomination closed without a first signature';
   }

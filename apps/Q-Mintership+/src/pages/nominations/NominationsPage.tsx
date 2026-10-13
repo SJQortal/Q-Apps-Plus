@@ -201,6 +201,7 @@ export default function NominationsPage() {
                 nomination={own}
                 now={data.decisions.now}
                 comments
+                forNominee
                 actions={
                   <NomineeAction
                     step={step}
