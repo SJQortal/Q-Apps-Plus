@@ -175,9 +175,11 @@ describe('Nominate page: writing and publishing', () => {
     await user.type(reason, 'Too short');
     expect(screen.getByText(/9 \/ 600 · at least 20 characters/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Nominate Zoë Newcomer/ }));
-    expect(screen.getAllByText('Write at least 20 characters about why.').length).toBeGreaterThan(
-      0
-    );
+    // Said, not only recoloured, and focus goes to the field to fix.
+    expect(
+      screen.getByText('Can’t publish yet: Write at least 20 characters about why.')
+    ).toBeInTheDocument();
+    expect(reason).toHaveFocus();
     expect(screen.queryByRole('dialog')).toBeNull();
 
     await user.clear(reason);
@@ -189,9 +191,19 @@ describe('Nominate page: writing and publishing', () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Nominate Zoë Newcomer/ }));
     expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Link 1' })).toHaveFocus();
     await user.click(screen.getByRole('button', { name: 'Remove link 1' }));
     expect(screen.queryByRole('textbox', { name: 'Link 1' })).toBeNull();
     expect(qortalCallsFor('PUBLISH_QDN_RESOURCE')).toHaveLength(0);
+  });
+
+  it('takes you to the name field when Nominate is pressed before picking anyone', async () => {
+    const user = userEvent.setup();
+    await open('nominator');
+    await who();
+    await user.click(await screen.findByRole('button', { name: 'Nominate' }));
+    expect(screen.getByText('Can’t publish yet: Pick someone first.')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Name or Qortal address' })).toHaveFocus();
   });
 
   it('allows at most five links', async () => {

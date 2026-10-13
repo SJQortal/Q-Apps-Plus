@@ -4,7 +4,7 @@
  * Qortal address. A typed name that isn't chosen from the list is looked up
  * exactly with GET /names/{name} when you press Enter or "Look up".
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type Ref } from 'react';
 import { Autocomplete, Box, Button, TextField, Typography } from '@mui/material';
 import { NameAvatar } from '../../components/common/NameAvatar';
 import { getNameOwner, isAddress } from '../../data/accounts';
@@ -28,9 +28,12 @@ const DEBOUNCE_MS = 300;
 export function CandidatePicker({
   onPick,
   initialError = '',
+  inputRef,
 }: {
   onPick: (picked: PickedCandidate) => void;
   initialError?: string;
+  /** The text field, so the form can move focus to it. */
+  inputRef?: Ref<HTMLInputElement>;
 }) {
   const [input, setInput] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -120,6 +123,7 @@ export function CandidatePicker({
         renderInput={(params) => (
           <TextField
             {...params}
+            inputRef={inputRef}
             label="Name or Qortal address"
             error={Boolean(error)}
             helperText={error || 'Type a name and choose it, or paste an address.'}

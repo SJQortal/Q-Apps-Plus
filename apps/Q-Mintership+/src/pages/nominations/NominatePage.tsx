@@ -16,7 +16,7 @@
  * above the keyboard, so Nominate stays in view while the reason is typed;
  * in a landscape frame it stays in the flow.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { Alert, Box, Button, IconButton, Skeleton, TextField, Typography } from '@mui/material';
 import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
@@ -172,6 +172,10 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [support, setSupport] = useState<{ open: boolean } | null>(null);
   const [published, setPublished] = useState<Published | null>(null);
+  // Nominate with a problem moves focus to it (its error is read with it).
+  const pickerRef = useRef<HTMLInputElement | null>(null);
+  const reasonRef = useRef<HTMLInputElement | null>(null);
+  const linkRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const chainNow = useChainNow().data;
   const group = useGroupInfo().data;
@@ -235,7 +239,19 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
 
   const submit = () => {
     setAttempted(true);
-    if (ready) setDialogOpen(true);
+    if (ready) {
+      setDialogOpen(true);
+      return;
+    }
+    const badLink = links.findIndex((l) => l.trim() !== '' && !isQortalLink(l.trim()));
+    const target = !picked
+      ? pickerRef.current
+      : reasonLength < REASON_MIN
+        ? reasonRef.current
+        : badLink >= 0
+          ? linkRefs.current[badLink]
+          : null;
+    target?.focus();
   };
 
   const form = (
@@ -256,6 +272,7 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
           />
         ) : (
           <CandidatePicker
+            inputRef={pickerRef}
             onPick={choose}
             initialError={
               who && !isAddress(who)
@@ -278,6 +295,7 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
               minRows={4}
               maxRows={14}
               fullWidth
+              inputRef={reasonRef}
               error={attempted && reasonLength < REASON_MIN}
               helperText={
                 reasonLength < REASON_MIN
@@ -298,6 +316,9 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
               return (
                 <Box key={i} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
                   <TextField
+                    inputRef={(el: HTMLInputElement | null) => {
+                      linkRefs.current[i] = el;
+                    }}
                     label={`Link ${i + 1}`}
                     placeholder="qortal://APP/Q-Tube/channel/…"
                     value={link}
@@ -365,7 +386,8 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
                 role="status"
                 color={attempted && !ready ? 'error' : 'text.secondary'}
               >
-                {hint}
+                {/* Changes on a failed Nominate, so it is announced, not only recoloured. */}
+                {attempted && !ready ? `Can’t publish yet: ${hint}` : hint}
               </Typography>
               {phone ? null : <FeeNote txType="ARBITRARY" prefix="QDN publish fee" />}
             </Box>
