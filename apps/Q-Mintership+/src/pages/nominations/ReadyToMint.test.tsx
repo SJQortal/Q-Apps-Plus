@@ -430,5 +430,11 @@ describe('Ready to mint: search', () => {
     expect(
       screen.getByText('Try their full registered name, or their address.')
     ).toBeInTheDocument();
+    // The search's own status region says it too, worded apart from the empty state.
+    expect(
+      screen
+        .getAllByRole('status')
+        .some((el) => /^None of \d+ match “zzz”\.$/.test(el.textContent ?? ''))
+    ).toBe(true);
   });
 });
