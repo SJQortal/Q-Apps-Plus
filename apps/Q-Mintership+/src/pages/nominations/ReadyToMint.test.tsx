@@ -119,6 +119,41 @@ describe('Ready to mint', () => {
     expect(screen.queryByRole('button', { name: /^Show \d+ more$/ })).toBeNull();
   });
 
+  it('reads a row again on Refresh when its level could not be read', async () => {
+    const user = userEvent.setup();
+    let down = true;
+    await open('nominator', (world) => {
+      world.joinRequests.push(joinRequest(ADDR.kicked));
+      mockFetchRoute(`/addresses/${ADDR.kicked}`, () =>
+        down
+          ? new Response('', { status: 500 })
+          : { address: ADDR.kicked, level: 3, blocksMinted: 210_000 }
+      );
+    });
+    const kit = await row('Kit Kicked');
+    expect(
+      await within(kit).findByText('Level not available right now', {}, { timeout: 4000 })
+    ).toBeInTheDocument();
+    const reads = () => fetchCallsFor(`/addresses/${ADDR.kicked}`).length;
+    const others = () => fetchCallsFor(`/addresses/${fakeAddress('jr-1')}`).length;
+    const [kitBefore, othersBefore] = [reads(), others()];
+
+    // Two minutes later the node answers again.
+    down = false;
+    vi.setSystemTime(Date.now() + 2 * 60_000);
+    await user.click(screen.getByRole('button', { name: 'Refresh nominations' }));
+    expect(
+      await within(await row('Kit Kicked')).findByText(
+        'Level 3 · 210,000 blocks minted',
+        {},
+        { timeout: 4000 }
+      )
+    ).toBeInTheDocument();
+    expect(reads()).toBe(kitBefore + 1);
+    // Rows read a moment ago aren't read again.
+    expect(others()).toBe(othersBefore);
+  });
+
   it('offers Nominate to a level 5+ member, and says where they already nominated', async () => {
     const user = userEvent.setup();
     await open('nominator');

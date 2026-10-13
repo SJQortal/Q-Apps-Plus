@@ -51,12 +51,15 @@ export function ReadyToMintSection({
   const visibleKey = visible.join(',');
 
   // Only the rows on screen are read, six reads at a time; leaving stops new reads.
+  // Each refresh of the list (every minute, or Refresh) reads again the rows whose
+  // read failed or is older than 10 minutes; the rest are cached and cost nothing.
+  const listUpdatedAt = ready.updatedAt;
   useEffect(() => {
     if (!visibleKey) return;
     const controller = new AbortController();
     void loadReadyDetails(visibleKey.split(','), { signal: controller.signal });
     return () => controller.abort();
-  }, [visibleKey]);
+  }, [visibleKey, listUpdatedAt]);
 
   // After "Show more", focus moves to the first new row.
   useEffect(() => {
