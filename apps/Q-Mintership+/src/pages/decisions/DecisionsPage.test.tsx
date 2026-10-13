@@ -632,9 +632,24 @@ describe('Decisions: proposing', () => {
     expect(
       await within(picker).findByRole('option', { name: /^Ada Approved, invited by / })
     ).toBeInTheDocument();
+    // Each says when it was approved, the oldest first: Ada's, the newest, comes last.
+    const ada = await within(picker).findByRole(
+      'option',
+      { name: /^Ada Approved, invited by .+, approved \d+ days ago$/ },
+      T
+    );
+    const options = within(picker).getAllByRole('option');
+    expect(options[options.length - 1]).toBe(ada);
+
+    // Approved recently: the same words as Clean up stale invites.
+    await u.selectOptions(picker, ADDR.approved);
+    expect(
+      await within(form).findByText(/^Approved \d+ days ago: they may still press Join now\.$/)
+    ).toBeVisible();
 
     // One whose cancellation is already waiting: the same check as the write, before Hub.
     await u.selectOptions(picker, waiting);
+    expect(within(form).queryByText(/they may still press Join now/)).toBeNull();
     expect(
       await within(form).findByText(
         'Cancelling this invite is already waiting for signatures.',

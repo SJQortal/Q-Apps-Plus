@@ -1,10 +1,12 @@
 /**
  * Propose a kick, ban, admin change, lifted ban or cancelled invite: pick
  * the person (by name or address, or from the admins, bans in force or
- * unused approved invites), see the same check the write will run, then the
- * proposal and the admin's own signature on it as one explained step of two
- * Hub confirmations. Kicking or banning a Minter Admin is offered as
- * "remove their admin role first", because Core refuses it otherwise.
+ * unused approved invites with when each was approved), see the same check
+ * the write will run, then the proposal and the admin's own signature on it
+ * as one explained step of two Hub confirmations. Kicking or banning a
+ * Minter Admin is offered as "remove their admin role first", because Core
+ * refuses it otherwise. An invite approved in the last 30 days says they
+ * may still press Join now.
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import {
@@ -21,7 +23,7 @@ import { PersonChip } from '../../components/common/Person';
 import { ResponsiveDialog } from '../../components/common/ResponsiveDialog';
 import { CardSkeleton, ErrorState } from '../../components/common/states';
 import { getBans, isBanActive } from '../../data/group';
-import { loadStaleInvites } from '../../data/staleInvites';
+import { loadStaleInviteDetails, loadStaleInvites, staleDetailsKey } from '../../data/staleInvites';
 import type { GroupMemberRow } from '../../data/types';
 import { useQuery } from '../../hooks/useQuery';
 import { useDisplayName } from '../../hooks/useDisplayName';
@@ -45,6 +47,7 @@ import {
   type SubjectCheck,
 } from './proposeKinds';
 import { ProposeSignDialog, type ProposalFacts } from './ProposeSignDialog';
+import { isRecentInvite } from './staleRules';
 
 export interface ProposeContext extends ProposalFacts {
   totalAdmins: number;
@@ -64,6 +67,24 @@ export interface ProposeDialogProps {
 }
 
 type Person = { address: string; name?: string | null };
+
+/**
+ * Unused approved invites and when each was approved: the same reads (and
+ * cache) as Clean up stale invites, made only for "Cancel an approved invite".
+ */
+function useUnusedInvites(enabled: boolean) {
+  const list = useQuery(enabled ? 'staleinvites:list' : null, (force) =>
+    loadStaleInvites({ force })
+  );
+  const rows = list.data?.rows ?? [];
+  const details = useQuery(enabled && rows.length ? staleDetailsKey(rows) : null, (force) =>
+    loadStaleInviteDetails(rows, { force })
+  );
+  const detailOf = (invitee: string) => details.data?.find((d) => d.invitee === invitee);
+  return { list, rows, detailOf };
+}
+
+type UnusedInvites = ReturnType<typeof useUnusedInvites>;
 
 export function ProposeDialog({
   kind,
@@ -88,6 +109,7 @@ export function ProposeDialog({
   const banLabelId = useId();
   const reasonRef = useRef<HTMLInputElement | null>(null);
   const daysRef = useRef<HTMLInputElement | null>(null);
+  const invites = useUnusedInvites(open && kind === 'cancelInvite');
 
   // A new kind or preset person starts a fresh form (React's adjust-while-rendering pattern).
   const presetKey = `${kind ?? ''}:${preset?.address ?? ''}`;
@@ -138,6 +160,10 @@ export function ProposeDialog({
   const personOk =
     person !== null && check !== null && check !== 'checking' && check.status === 'ok';
   const ready = personOk && !reasonError && !banError;
+  // An invite approved in the last 30 days: they may still press Join now.
+  const inviteDetail =
+    kind === 'cancelInvite' && person ? invites.detailOf(person.address) : undefined;
+  const recent = isRecentInvite(inviteDetail, Date.now()) ? inviteDetail?.approvedAt : null;
 
   // Review stays pressable while only the reason or length is missing, and says which.
   const review = () => {
@@ -194,6 +220,7 @@ export function ProposeDialog({
           <BanPicker value={person?.address ?? ''} onPick={(p) => setPerson(p)} />
         ) : kind === 'cancelInvite' ? (
           <InvitePicker
+            invites={invites}
             admins={ctx.signers}
             value={person?.address ?? ''}
             onPick={(p) => setPerson(p)}
@@ -249,6 +276,11 @@ export function ProposeDialog({
               kind={kind}
               onSwitch={() => onSwitch('removeAdmin', person)}
             />
+            {recent ? (
+              <Alert severity="info" role="note">
+                Approved {formatRelative(recent)}: they may still press Join now.
+              </Alert>
+            ) : null}
           </Box>
         ) : null}
 
@@ -454,17 +486,20 @@ function BanOption({
   );
 }
 
-/** Unused approved invites: the same list (and read) as Clean up stale invites. */
+/** Unused approved invites, the oldest first once the dates are in, as under Clean up stale invites. */
 function InvitePicker({
+  invites,
   admins,
   value,
   onPick,
 }: {
+  invites: UnusedInvites;
   admins: GroupMemberRow[];
   value: string;
   onPick: (p: Person | null) => void;
 }) {
-  const list = useQuery('staleinvites:list', (force) => loadStaleInvites({ force }));
+  const { list, detailOf } = invites;
+  const approvedAt = (invitee: string) => detailOf(invitee)?.approvedAt ?? null;
   if (list.isLoading) return <CardSkeleton lines={1} />;
   if (list.isError && !list.data)
     return (
@@ -475,7 +510,9 @@ function InvitePicker({
         onRetry={list.refetch}
       />
     );
-  const rows = list.data?.rows ?? [];
+  const rows = [...invites.rows].sort(
+    (a, b) => (approvedAt(a.invitee) ?? 0) - (approvedAt(b.invitee) ?? 0)
+  );
   if (!rows.length)
     return (
       <Alert severity="info" role="status">
@@ -496,17 +533,31 @@ function InvitePicker({
     >
       <option value="">Choose an account…</option>
       {rows.map((row) => (
-        <InviteOption key={row.invitee} address={row.invitee} inviter={adminName(row.inviter)} />
+        <InviteOption
+          key={row.invitee}
+          address={row.invitee}
+          inviter={adminName(row.inviter)}
+          approvedAt={approvedAt(row.invitee)}
+        />
       ))}
     </TextField>
   );
 }
 
-function InviteOption({ address, inviter }: { address: string; inviter: string }) {
+function InviteOption({
+  address,
+  inviter,
+  approvedAt,
+}: {
+  address: string;
+  inviter: string;
+  approvedAt: number | null;
+}) {
   const name = useDisplayName(address);
   return (
     <option value={address}>
       {name.label}, invited by {inviter}
+      {approvedAt ? `, approved ${formatRelative(approvedAt)}` : ''}
     </option>
   );
 }
