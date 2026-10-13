@@ -28,6 +28,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import { PageBody } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { BOTTOM_NAV_HEIGHT } from '../../components/layout/BottomNav';
+import { useBottomNavShown } from '../../components/layout/useBottomNav';
 import { DoneChip } from '../../components/decision/DecisionParts';
 import { NominationCard } from '../../components/nomination/NominationCard';
 import { Card, Section } from '../../components/common/Section';
@@ -43,14 +44,12 @@ import type { Nomination } from '../../data/nominations';
 import { invalidate, peekQuery } from '../../data/query';
 import { useNavHas } from '../../components/layout/useNavHas';
 import { useDecisions, useMembers, useNominations } from '../../hooks/useData';
-import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { KIND_LABEL, type Decision } from '../../rules/decision';
 import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
 import { useSession } from '../../state/session';
 import { decisionsHideSignedAtom } from '../../state/settings';
 import { displayName, plural } from '../../utils/format';
-import { useLandscapeFrame } from '../../utils/hubFrame';
 import { bulkSign } from '../../writes/flows';
 import { pendingWritesAtom, writeKeys, type PendingWrite } from '../../writes/optimistic';
 import type { Signer } from '../../writes/runner';
@@ -129,8 +128,8 @@ export default function DecisionsPage() {
   const writes = useAtomValue(pendingWritesAtom);
   const [params] = useSearchParams();
   const target = appParam(params, 'd');
-  const phone = usePhoneLayout();
-  const landscape = useLandscapeFrame();
+  // Sticky bars sit above the phone's bottom bar while it is on screen.
+  const bottomBar = useBottomNavShown();
   const reduced = useReducedMotion();
 
   const [signTarget, setSignTarget] = useState<Decision | null>(null);
@@ -299,7 +298,6 @@ export default function DecisionsPage() {
     setPropose({ kind: choice, preset: null });
   };
 
-  const bottomBar = phone && !landscape;
   const fetching = decisionsQ.fetching || nominationsQ.fetching;
 
   return (

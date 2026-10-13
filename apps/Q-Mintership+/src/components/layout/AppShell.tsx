@@ -2,7 +2,6 @@ import { Suspense, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useHubMessages } from '../../hooks/useHubMessages';
 import { useAppViewport } from '../../hooks/useAppViewport';
 import { useTrackInAppHistory } from '../../hooks/useSafeBack';
@@ -14,9 +13,9 @@ import { useSession, useStartSession } from '../../state/session';
 import { signerState } from '../../rules/tally';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 import { ListSkeleton } from '../common/states';
-import { useLandscapeFrame } from '../../utils/hubFrame';
 import { BottomNav, BOTTOM_NAV_HEIGHT } from './BottomNav';
 import { NavRail } from './NavRail';
+import { isBottomBarLayout, isBottomNavShown, useFrameFacts } from './useBottomNav';
 
 const Frame = styled('div')(({ theme }) => ({
   display: 'flex',
@@ -56,8 +55,7 @@ function PageFallback() {
 
 /** Rail or bottom bar, the Hub listeners, the session, and the routed page. */
 export function AppShell() {
-  const phone = usePhoneLayout();
-  const landscape = useLandscapeFrame();
+  const frame = useFrameFacts();
   const { pathname } = useLocation();
   const session = useSession();
   const { status } = useMyStatus();
@@ -75,18 +73,20 @@ export function AppShell() {
     notifyHubDisplayedPath(pathname);
   }, [pathname]);
 
-  const bottomBar = phone && !landscape;
+  // The bottom-bar layout keeps the rail away; the bar itself steps aside for the keyboard.
+  const bottomBar = isBottomBarLayout(frame);
+  const navShown = isBottomNavShown(frame);
   return (
     <Frame>
       {bottomBar ? null : <NavRail isAdmin={isAdmin} decisionsBadge={badge} />}
-      <Main $phone={bottomBar}>
+      <Main $phone={navShown}>
         <ErrorBoundary resetKey={pathname}>
           <Suspense fallback={<PageFallback />}>
             <Outlet />
           </Suspense>
         </ErrorBoundary>
       </Main>
-      {bottomBar ? <BottomNav isAdmin={isAdmin} decisionsBadge={badge} /> : null}
+      {navShown ? <BottomNav isAdmin={isAdmin} decisionsBadge={badge} /> : null}
     </Frame>
   );
 }

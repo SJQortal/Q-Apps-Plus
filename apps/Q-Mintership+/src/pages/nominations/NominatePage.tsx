@@ -11,8 +11,10 @@
  *    (PUBLISH_QDN_RESOURCE, fee stated). Done: the new nomination, and the
  *    app link to send the nominee so they can accept.
  *
- * The submit bar is sticky inside the page (never 100vh), and stays in the
- * flow when the frame is short, so the keyboard never hides the field.
+ * The submit bar is sticky inside the page (never 100vh). With the phone's
+ * keyboard open the bottom bar steps aside and the submit bar sits right
+ * above the keyboard, so Nominate stays in view while the reason is typed;
+ * in a landscape frame it stays in the flow.
  */
 import { useState } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
@@ -28,6 +30,7 @@ import { AddressText, PersonChip } from '../../components/common/Person';
 import { Card, Section } from '../../components/common/Section';
 import { EmptyState, ErrorState, HeroSkeleton } from '../../components/common/states';
 import { BOTTOM_NAV_HEIGHT } from '../../components/layout/BottomNav';
+import { useBottomNavShown } from '../../components/layout/useBottomNav';
 import { PageBody } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { NominationCard } from '../../components/nomination/NominationCard';
@@ -57,7 +60,7 @@ import type { MyStatus } from '../../rules/status';
 import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
 import { signIn, signerOf, useSession } from '../../state/session';
 import { formatCount, plural } from '../../utils/format';
-import { useLandscapeFrame, useShortFrame } from '../../utils/hubFrame';
+import { useLandscapeFrame } from '../../utils/hubFrame';
 import { appLink, copyText } from '../../utils/links';
 import { publishNomination } from '../../writes/flows';
 import { CandidatePicker, type PickedCandidate } from './CandidatePicker';
@@ -174,7 +177,7 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
   const group = useGroupInfo().data;
   const phone = usePhoneLayout();
   const landscape = useLandscapeFrame();
-  const shortFrame = useShortFrame();
+  const navShown = useBottomNavShown();
 
   const candidate = useQuery(picked ? `${CANDIDATE_KEY}${picked.address}` : null, (force) =>
     loadCandidate((picked as PickedCandidate).address, { force })
@@ -341,9 +344,8 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
 
           <Box
             sx={{
-              position: shortFrame ? 'static' : 'sticky',
-              bottom:
-                phone && !landscape ? `calc(${BOTTOM_NAV_HEIGHT}px + var(--qp-safe-bottom))` : 0,
+              position: landscape ? 'static' : 'sticky',
+              bottom: navShown ? `calc(${BOTTOM_NAV_HEIGHT}px + var(--qp-safe-bottom))` : 0,
               zIndex: 2,
               mx: { xs: -1.5, sm: -2 },
               px: { xs: 1.5, sm: 2 },
