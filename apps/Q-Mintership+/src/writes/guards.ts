@@ -16,6 +16,7 @@ import {
   getStoredInviteFor,
 } from '../data/group';
 import { loadNominationsFor } from '../data/nominations';
+import type { ConsideringTarget } from '../data/records';
 import {
   getApprovalsInRange,
   getPending,
@@ -385,4 +386,38 @@ export async function guardSupport(signer: Signer, nominee: string): Promise<str
   if (open.nomination?.publisher.address === signer.address)
     return 'You nominated this person already.';
   return null;
+}
+
+/**
+ * Before publishing Considering (or "No longer considering"): a current
+ * Minter Admin with a registered name to publish under. Considering needs
+ * the decision still pending and able to count, or the nomination still
+ * waiting for its first signature; clearing is always allowed.
+ */
+export async function guardConsidering(
+  signer: Signer & { name?: string | null },
+  target: ConsideringTarget,
+  cleared: boolean
+): Promise<string | null> {
+  const notAdmin = await requireAdmin(signer);
+  if (notAdmin) return notAdmin;
+  if (!signer.name)
+    return 'Considering is published under your registered name, and your account has none yet.';
+  if (cleared) return null;
+  if ('pendingSignature' in target) {
+    const tx = await getTransaction(target.pendingSignature, { force: true });
+    if (!tx || (tx.approvalStatus && tx.approvalStatus !== 'PENDING'))
+      return 'This decision isn’t waiting for signatures any more.';
+    if (typeof tx.blockHeight === 'number') {
+      const [group, now] = await Promise.all([getGroupInfo(), getChainNow({ force: true })]);
+      const phase = windowPhase(decisionWindow(tx.blockHeight, group), now.height);
+      if (phase === 'tooLate' || phase === 'expired')
+        return 'Too late: signatures and rejections can no longer count on this one.';
+    }
+    return null;
+  }
+  const nominations = await loadNominationsFor(target.nomineeAddress, { force: true });
+  return nominations.some((n) => n.state === 'waiting')
+    ? null
+    : 'This nomination isn’t waiting for a first signature any more.';
 }

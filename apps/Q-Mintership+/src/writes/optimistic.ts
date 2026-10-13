@@ -109,4 +109,8 @@ export const writeKeys = {
   nominate: (nominee: string) => `nominate:${nominee}`,
   support: (nominee: string) => `support:${nominee}`,
   propose: (kind: string, subject: string) => `propose:${kind}:${subject}`,
+  /** Considering, by its record's key (a pending signature's first 40 characters, or an address). */
+  considering: (key: string) => `considering:${key}`,
+  /** No longer considering. */
+  notConsidering: (key: string) => `notconsidering:${key}`,
 };

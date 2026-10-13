@@ -11,10 +11,14 @@ import { ATOMIC_PER_QORT, MINTER_GROUP_ID } from '../data/constants';
 import { getTransaction } from '../data/txs';
 import { invalidate } from '../data/query';
 import {
+  buildConsidering,
   buildNomination,
   buildSupport,
+  consideringIdentifier,
+  consideringKey,
   nominationIdentifier,
   supportIdentifier,
+  type ConsideringTarget,
   type NominationInput,
 } from '../data/records';
 import type { GroupTxType, TxRow } from '../data/types';
@@ -25,6 +29,7 @@ import {
   guardBan,
   guardCancelBan,
   guardCancelInvite,
+  guardConsidering,
   guardInvite,
   guardJoin,
   guardKick,
@@ -68,6 +73,7 @@ function invalidateChainReads(): void {
     'tx:',
     'balance:',
     'qdnsearch:',
+    'considering:',
   ]) {
     invalidate(prefix);
   }
@@ -585,6 +591,42 @@ export async function publishSupport(
       signer,
       precheck: () => guardSupport(signer, nomineeAddress),
       match: (tx) => tx.type === 'ARBITRARY' && tx.identifier === supportIdentifier(nomineeAddress),
+      onStage,
+    });
+  });
+}
+
+/**
+ * Considering ("I've looked at this, not sure yet"), or with `cleared`
+ * "No longer considering": a small QDN record under the admin's name. It
+ * changes nothing on chain; a later signature or rejection replaces it.
+ */
+export async function publishConsidering(
+  signer: Signer & { name: string | null },
+  target: ConsideringTarget,
+  options: { note?: string; cleared?: boolean } = {},
+  onStage?: (s: WriteStage) => void
+): Promise<WriteOutcome> {
+  let key: string;
+  try {
+    key = consideringKey(target);
+  } catch (error) {
+    return { status: 'blocked', reason: error instanceof Error ? error.message : String(error) };
+  }
+  const writeKey = options.cleared ? writeKeys.notConsidering(key) : writeKeys.considering(key);
+  return tracked(writeKey, async () => {
+    let record;
+    try {
+      record = buildConsidering(target, options);
+    } catch (error) {
+      return { status: 'blocked', reason: error instanceof Error ? error.message : String(error) };
+    }
+    const identifier = consideringIdentifier(target);
+    return runWrite({
+      request: publishRecordRequest(signer.name ?? '', identifier, record),
+      signer,
+      precheck: () => guardConsidering(signer, target, Boolean(options.cleared)),
+      match: (tx) => tx.type === 'ARBITRARY' && tx.identifier === identifier,
       onStage,
     });
   });

@@ -88,6 +88,55 @@ export function consideringFor(
   return people.sort((a, b) => a.publishedAt - b.publishedAt);
 }
 
+/** A publish from this device still on its way (writes/optimistic.ts PendingWrite). */
+export interface ConsideringWrite {
+  status: 'sending' | 'confirming' | 'failed';
+  at: number;
+}
+
+export interface MyConsideringState {
+  /** Shown as considering (from QDN, or a publish from this device still on its way). */
+  considering: boolean;
+  /** QDN shows it; false while this device's publish is on its way. */
+  settled: boolean;
+  /** A publish from this device is being sent or is on its way: no new one until it shows. */
+  busy: boolean;
+  /** Being sent right now ('set': Considering, 'clear': No longer considering). */
+  sending: 'set' | 'clear' | null;
+}
+
+/** Entries older than this are dropped (as writes/optimistic.ts does). */
+const WRITE_EXPIRE_MS = 15 * 60_000;
+
+/**
+ * This admin's Considering as the card shows it: what QDN says, unless a
+ * newer publish from this device ("Considering" or "No longer considering")
+ * hasn't shown up there yet.
+ */
+export function myConsideringState(
+  people: ConsideringPerson[],
+  myAddress: string,
+  pending: { set: ConsideringWrite | null; clear: ConsideringWrite | null },
+  nowMs = Date.now()
+): MyConsideringState {
+  const onQdn = people.some((p) => p.address === myAddress);
+  const live = (w: ConsideringWrite | null) =>
+    w && (w.status === 'sending' || w.status === 'confirming') && nowMs - w.at <= WRITE_EXPIRE_MS
+      ? w
+      : null;
+  const set = live(pending.set);
+  const clear = live(pending.clear);
+  const newest =
+    set && clear ? (set.at >= clear.at ? 'set' : 'clear') : set ? 'set' : clear ? 'clear' : null;
+  const write = newest === 'set' ? set : newest === 'clear' ? clear : null;
+  if (!newest || !write) return { considering: onQdn, settled: true, busy: false, sending: null };
+  if (write.status === 'sending')
+    return { considering: onQdn, settled: true, busy: true, sending: newest };
+  const want = newest === 'set';
+  const settled = onQdn === want;
+  return { considering: want, settled, busy: !settled, sending: null };
+}
+
 /** "1 Minter Admin is considering", "3 Minter Admins are considering". */
 export function consideringCountText(count: number): string {
   return count === 1
