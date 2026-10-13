@@ -11,6 +11,7 @@ import userEvent from '@testing-library/user-event';
 import { renderPage } from '../../test/render';
 import { addDoubles } from '../../../e2e/world.mjs';
 import { formatBlock } from '../../utils/format';
+import { getAddressHistory } from '../../data/txs';
 import { TIP } from '../../test/world';
 import type { InstalledWorld } from '../../test/world';
 import HomePage from '../home/HomePage';
@@ -105,6 +106,20 @@ describe('Doubles on the Decisions page', () => {
     expect(
       await within(real).findByRole('button', { name: /^Considering: / }, T)
     ).toBeInTheDocument();
+  });
+
+  it('links the approved earlier proposal once that person’s history is read already', async () => {
+    const u = user();
+    const { doubles } = await openQueue();
+    const name = 'The earlier proposal: Become a Minter Admin, Admin C';
+    expect(within(card(ALREADY)).queryByRole('link', { name })).toBeNull();
+    // Their own page (or their Home) read it; the queue never reads it for this.
+    await getAddressHistory(doubles.alreadyAdmin.subject);
+    await u.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await within(card(ALREADY)).findByRole('link', { name }, T)).toHaveAttribute(
+      'href',
+      `/decisions/${doubles.alreadyAdmin.approved}`
+    );
   });
 
   it('sorts doubles after the real decisions, still in the queue', async () => {
