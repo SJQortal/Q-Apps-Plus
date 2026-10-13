@@ -258,7 +258,13 @@ export function DecisionCard(props: DecisionCardProps) {
       </Box>
 
       {risk && labelOf && riskOpen ? (
-        <TargetRiskNote id={riskId} risk={risk} labelOf={labelOf} advice={canAct} />
+        <TargetRiskNote
+          id={riskId}
+          risk={risk}
+          labelOf={labelOf}
+          advice={canAct}
+          withdraw={withdrawable}
+        />
       ) : null}
 
       <KindDetails
