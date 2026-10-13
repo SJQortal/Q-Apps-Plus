@@ -9,7 +9,6 @@ import { formatQort, getBalance, getFee, getLastReference } from '../data/accoun
 import { getChainNow } from '../data/chain';
 import { ATOMIC_PER_QORT, MINTER_GROUP_ID } from '../data/constants';
 import { getTransaction } from '../data/txs';
-import { invalidate } from '../data/query';
 import {
   buildConsidering,
   buildNomination,
@@ -55,27 +54,9 @@ import {
   signApprovalRequest,
   type HubRequest,
 } from './hubActions';
+import { CHAIN_PREFIXES, invalidateReads } from './chainReads';
 import { clearWrite, markWrite, writeKeys } from './optimistic';
 import { runWrite, type Signer, type WriteOutcome, type WriteStage } from './runner';
-
-/** Reads every chain write can change. */
-const CHAIN_PREFIXES: readonly string[] = [
-  'decisions:',
-  'pending:',
-  'unconfirmed:',
-  'approvals:',
-  'nominations:',
-  'status:',
-  'membership:',
-  'joinrequest:',
-  'invite:',
-  'group:',
-  'history:',
-  'tx:',
-  'balance:',
-  'qdnsearch:',
-  'considering:',
-];
 
 /** A Considering record changes only who is considering (and the balance it costs). */
 const CONSIDERING_PREFIXES: readonly string[] = ['considering:', 'balance:'];
@@ -94,10 +75,10 @@ async function tracked(
   const outcome = await run();
   if (outcome.status === 'sent') {
     markWrite(key, 'confirming', { signature: outcome.signature ?? undefined });
-    for (const prefix of prefixes) invalidate(prefix);
+    invalidateReads(prefixes);
   } else if (outcome.status === 'unknown') {
     markWrite(key, 'failed', { message: outcome.message });
-    for (const prefix of prefixes) invalidate(prefix);
+    invalidateReads(prefixes);
   } else {
     clearWrite(key);
   }

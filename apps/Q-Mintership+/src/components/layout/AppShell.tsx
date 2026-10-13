@@ -9,6 +9,7 @@ import { useApplyMotionSetting } from '../../hooks/useReducedMotion';
 import { BOTTOM_NAV_VAR, usePublishOffset } from '../../hooks/useOverlayPadding';
 import { useDecisions, useMyStatus } from '../../hooks/useData';
 import { useRecordVisit } from '../../hooks/useLastVisit';
+import { useSettleConfirmingWrites } from '../../hooks/useSettleConfirmingWrites';
 import { notifyHubDisplayedPath } from '../../routes/hubLocation';
 import { useLegacyRouteRedirect } from '../../routes/useLegacyRouteRedirect';
 import { useSession, useStartSession } from '../../state/session';
@@ -71,6 +72,7 @@ export function AppShell() {
   useAppViewport();
   useApplyMotionSetting();
   useRecordVisit();
+  useSettleConfirmingWrites();
 
   useEffect(() => {
     notifyHubDisplayedPath(pathname);
