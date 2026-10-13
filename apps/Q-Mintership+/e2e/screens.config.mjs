@@ -23,6 +23,8 @@ import {
   FORMER_READY,
   createWorld,
   fakeAddress,
+  lastVisitSnapshots,
+  lastVisitStorageKey,
   ADDR,
   NOW,
   PEOPLE,
@@ -124,6 +126,57 @@ const propose = (choice) => async (page) => {
   const choices = page.locator('[role="menu"], .MuiDrawer-paper');
   await choices.getByText(choice, { exact: true }).click({ timeout: 4000 });
   await page.getByRole('dialog', { name: choice }).waitFor({ timeout: 8000 });
+};
+
+/**
+ * Home with an earlier visit on this device (e2e/world.mjs → lastVisitSnapshots):
+ * the snapshot is put in place before the app loads again, so "Since your
+ * last visit" compares with it.
+ */
+const visits = lastVisitSnapshots(world);
+const sinceLastVisit = (persona, ready) => async (page) => {
+  const { address, snapshot } = visits[persona];
+  await page.addInitScript(
+    ([key, value]) => {
+      try {
+        localStorage.setItem(key, value);
+      } catch {
+        // No storage: the screen shows no panel, and the wait below says so.
+      }
+    },
+    [lastVisitStorageKey(address), JSON.stringify(snapshot)]
+  );
+  await page.reload({ waitUntil: 'load' });
+  await settle(page);
+  await page.getByRole('region', { name: 'Since your last visit' }).waitFor({ timeout: 8000 });
+  if (ready) await page.getByText(ready).first().waitFor({ timeout: 8000 });
+  await page.waitForTimeout(400);
+};
+
+/** Settings in a Hub that offers app alerts (none set up yet), reached from Home. */
+const hubAlertsOffered = async (page) => {
+  await settle(page);
+  await page.evaluate(() => {
+    const answer = window.__qplusAnswer;
+    window.__qplusAnswer = async (p) => {
+      if (p.action === 'SHOW_ACTIONS')
+        return [
+          'GET_USER_ACCOUNT',
+          'NOTIFICATION_PERMISSION',
+          'NOTIFICATION_ADD',
+          'NOTIFICATION_GET',
+          'NOTIFICATION_REMOVE',
+        ];
+      if (p.action === 'NOTIFICATION_GET') return [];
+      return answer(p);
+    };
+  });
+  await page
+    .getByRole('button', { name: 'Settings', exact: true })
+    .first()
+    .click({ timeout: 4000 });
+  await page.getByText(/Hub tells you when a new nomination/).waitFor({ timeout: 8000 });
+  await page.waitForTimeout(400);
 };
 
 export default {
@@ -405,5 +458,18 @@ export default {
         'Their node has been steady all month'
       ),
     },
+    // What changed since an earlier visit: an admin's and a nominee's Home.
+    {
+      key: 'home-since-admin',
+      path: '/?as=admin',
+      after: sinceLastVisit('admin', /Approved in block/),
+    },
+    {
+      key: 'home-since-nominee',
+      path: '/?as=nominatedSigning',
+      after: sinceLastVisit('nominatedSigning'),
+    },
+    // Settings → Notifications where Hub offers app alerts.
+    { key: 'settings-alerts', path: '/?as=admin', after: hubAlertsOffered },
   ],
 };

@@ -59,3 +59,12 @@ export function answerNameSearch(
   pathname: string,
   searchParams: URLSearchParams
 ): { status: number; body: unknown } | undefined;
+export const LAST_VISIT_HEIGHT: number;
+export const LAST_VISIT_AT: number;
+export function lastVisitStorageKey(address: string, groupId?: number): string;
+export function lastVisitSnapshots(
+  world: World
+): Record<
+  'admin' | 'nominatedSigning' | 'nominatedWaiting',
+  { address: string; snapshot: unknown }
+>;
