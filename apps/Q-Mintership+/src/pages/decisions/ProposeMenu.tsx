@@ -50,7 +50,7 @@ const ITEMS: Array<{ key: ProposeChoice; label: string; description: string; ico
   {
     key: 'stale',
     label: 'Clean up stale invites',
-    description: 'Approved invites nobody used.',
+    description: 'Every unused invite with when it was approved; the old ones in one go.',
     icon: <CleaningServicesOutlinedIcon />,
   },
 ];

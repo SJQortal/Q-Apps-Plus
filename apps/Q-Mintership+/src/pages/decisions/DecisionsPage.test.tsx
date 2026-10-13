@@ -624,6 +624,17 @@ describe('Decisions: proposing', () => {
     mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'OWN' }));
 
     await u.click(screen.getByRole('button', { name: 'Propose' }));
+    // The two invite choices say how they differ.
+    expect(
+      await screen.findByRole('menuitem', {
+        name: /Cancel an approved invite.*One unused invite you pick, with your signature added\./,
+      })
+    ).toBeVisible();
+    expect(
+      screen.getByRole('menuitem', {
+        name: /Clean up stale invites.*Every unused invite with when it was approved; the old ones in one go\./,
+      })
+    ).toBeVisible();
     await u.click(await screen.findByRole('menuitem', { name: /Cancel an approved invite/ }));
     const form = await screen.findByRole('dialog', { name: 'Cancel an approved invite' });
     const picker = await within(form).findByRole('combobox', { name: 'Approved invite' });
