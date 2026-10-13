@@ -6,7 +6,8 @@
  * sees their own nomination first, with Accept or Join now. Recently decided
  * ones sit in a collapsed section below, with "Nominate again" where a round
  * ran out of time. "Ready to mint" (`?show=ready`) lists the people who asked
- * to join, to nominate from (ReadyToMint.tsx).
+ * to join, to nominate from (ReadyToMint.tsx); the same search box searches
+ * it there, by address or by a name looked up on the node.
  */
 import { useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
@@ -229,32 +230,34 @@ export default function NominationsPage() {
         ) : null}
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {view === 'ready' ? null : (
-            <TextField
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name or address"
-              size="small"
-              fullWidth
-              slotProps={{
-                htmlInput: {
-                  'aria-label': 'Search nominations by name or address',
-                  enterKeyHint: 'search',
-                  autoCapitalize: 'none',
-                  spellCheck: false,
-                },
-                input: {
-                  sx: { minHeight: 44 },
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchOutlinedIcon aria-hidden />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-          )}
+          {/* One search for both views: Ready to mint matches addresses and looks up names. */}
+          <TextField
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or address"
+            size="small"
+            fullWidth
+            slotProps={{
+              htmlInput: {
+                'aria-label':
+                  view === 'ready'
+                    ? 'Search the people ready to mint by name or address'
+                    : 'Search nominations by name or address',
+                enterKeyHint: 'search',
+                autoCapitalize: 'none',
+                spellCheck: false,
+              },
+              input: {
+                sx: { minHeight: 44 },
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchOutlinedIcon aria-hidden />
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
           <Box
             role="group"
             aria-label="Show nominations or the people ready to mint"
@@ -300,6 +303,8 @@ export default function NominationsPage() {
             canNominate={canNominate}
             canSupport={canNominate && Boolean(publishSigner)}
             onSupport={openSupport}
+            search={search}
+            onClearSearch={() => setSearch('')}
           />
         ) : (
           <Section title="Open nominations" id="open">

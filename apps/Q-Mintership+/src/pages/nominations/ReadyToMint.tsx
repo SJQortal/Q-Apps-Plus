@@ -5,17 +5,27 @@
  * open nomination already exists. Twenty rows at a time, in Core's order;
  * each row's level, blocks minted, name and whether they were a member
  * before ("Former member: left MINTER on …") are read only once it is shown.
+ * The page's search box filters it: a typed address directly, a typed name
+ * through its owners (one small name search, cached), never by reading
+ * every row's name.
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import { PersonChip } from '../../components/common/Person';
 import { Section } from '../../components/common/Section';
 import { EmptyState, ErrorState, ListSkeleton } from '../../components/common/states';
-import { effectiveBlocksMinted } from '../../data/accounts';
+import { effectiveBlocksMinted, isAddress } from '../../data/accounts';
 import type { Nomination } from '../../data/nominations';
-import { READY_PAGE, formerKey, loadReadyDetails, type ReadyToMint } from '../../data/readyToMint';
+import { peekQuery } from '../../data/query';
+import {
+  READY_PAGE,
+  formerKey,
+  loadReadyDetails,
+  matchReady,
+  type ReadyToMint,
+} from '../../data/readyToMint';
 import type { AccountInfo } from '../../data/types';
 import type { UseQueryResult } from '../../hooks/useQuery';
 import { nominatePath } from '../../routes/paths';
@@ -24,7 +34,10 @@ import { displayName, formatCount, formatDate } from '../../utils/format';
 import { readable } from '../../utils/readable';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
 import { isStillOpenForSupport, myPart } from './filters';
-import { useStoredValue } from './useReadyToMint';
+import { useReadySearch, useStoredValue } from './useReadyToMint';
+
+/** A name already read for a row on screen (searching never reads one). */
+const knownName = (address: string) => peekQuery<string | null>(`name:${address}`);
 
 export interface ReadyToMintSectionProps {
   ready: UseQueryResult<ReadyToMint>;
@@ -35,6 +48,9 @@ export interface ReadyToMintSectionProps {
   /** Can publish a support record (eligible, with a name). */
   canSupport: boolean;
   onSupport: (n: Nomination) => void;
+  /** The page's search box, as typed: a name or an address. */
+  search: string;
+  onClearSearch: () => void;
 }
 
 export function ReadyToMintSection({
@@ -44,11 +60,25 @@ export function ReadyToMintSection({
   canNominate,
   canSupport,
   onSupport,
+  search,
+  onClearSearch,
 }: ReadyToMintSectionProps) {
   const [shown, setShown] = useState(READY_PAGE);
   const listRef = useRef<HTMLUListElement | null>(null);
   const focusRow = useRef<number | null>(null);
-  const people = ready.data?.people;
+  const find = useReadySearch(search);
+  const query = find.query;
+  const all = ready.data?.people;
+  const people = useMemo(
+    () => (all && query ? matchReady(all, query, find.owners, knownName) : all),
+    [all, query, find.owners]
+  );
+  // A new search starts again at the first page.
+  const [shownFor, setShownFor] = useState(query);
+  if (shownFor !== query) {
+    setShownFor(query);
+    setShown(READY_PAGE);
+  }
   const visible = people ? people.slice(0, shown) : [];
   const visibleKey = visible.join(',');
 
@@ -70,6 +100,13 @@ export function ReadyToMintSection({
     focusRow.current = null;
   }, [shown]);
 
+  const found =
+    query && all?.length && people?.length
+      ? find.looking
+        ? 'Looking up names…'
+        : `${formatCount(people.length)} of ${formatCount(all.length)} ${people.length === 1 ? 'matches' : 'match'} “${query}”.${find.failed ? ' Names couldn’t be looked up just now, so only addresses and names already shown count.' : ''}`
+      : '';
+
   let body: ReactNode;
   if (!people && ready.isError) {
     body = (
@@ -81,11 +118,28 @@ export function ReadyToMintSection({
     );
   } else if (!people) {
     body = <ListSkeleton count={3} label="Loading the people ready to mint" />;
-  } else if (people.length === 0) {
+  } else if (all?.length === 0) {
     body = (
       <EmptyState
         title="No one has asked to join right now"
         description="When someone sends MINTER a join request, they show up here, ready for a nomination."
+      />
+    );
+  } else if (people.length === 0 && find.looking) {
+    body = <ListSkeleton count={1} label="Looking up names" />;
+  } else if (people.length === 0) {
+    body = (
+      <EmptyState
+        title={`No one on this list matches “${query}”`}
+        description={
+          isAddress(query)
+            ? 'This address hasn’t asked to join MINTER, or is a member already.'
+            : find.failed
+              ? 'Couldn’t look up names on your node just now. Try again, or search by their address.'
+              : 'Try their full registered name, or their address.'
+        }
+        actionLabel="Clear the search"
+        onAction={onClearSearch}
       />
     );
   } else {
@@ -157,6 +211,16 @@ export function ReadyToMintSection({
       <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
         People who asked to join MINTER. They need a nomination from a level 5+ minter or a Minter
         Admin. Join requests carry no date, so this is the order your node lists them in.
+      </Typography>
+      {/* What the search found, read out as it changes. */}
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        role="status"
+        className={found ? undefined : 'qmp-visually-hidden'}
+        sx={{ px: 0.5 }}
+      >
+        {found}
       </Typography>
       {body}
     </Section>

@@ -84,8 +84,11 @@ describe('Ready to mint', () => {
       'aria-pressed',
       'true'
     );
-    // Nominations' own search and lists step aside; nobody signed out can nominate.
-    expect(screen.queryByRole('searchbox')).toBeNull();
+    // The search box searches this list; the nominations' lists step aside; nobody
+    // signed out can nominate.
+    expect(
+      screen.getByRole('searchbox', { name: 'Search the people ready to mint by name or address' })
+    ).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Open nominations' })).toBeNull();
     expect(
       await within(await row('Uma Urgent')).findByText('Nominated', {}, { timeout: 4000 })
@@ -283,5 +286,144 @@ describe('Ready to mint', () => {
     expect(screen.getByRole('searchbox')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^Ready to mint\s*6/ }));
     expect(await readyList()).toBeInTheDocument();
+  });
+});
+
+describe('Ready to mint: search', () => {
+  const searchBox = () =>
+    screen.getByRole('searchbox', { name: 'Search the people ready to mint by name or address' });
+  const nameLookups = () => fetchCallsFor(/^\/names\/(?!primary\/)/);
+
+  it('finds a typed address directly, without looking up any name', async () => {
+    const user = userEvent.setup();
+    await open('nominator', (world) => {
+      world.joinRequests.push(joinRequest(ADDR.kicked));
+    });
+    await row('Kit Kicked');
+    await user.click(searchBox());
+    await user.paste(ADDR.kicked);
+    const list = await readyList();
+    await waitFor(() => expect(rowLabels(list)).toEqual(['Kit Kicked']));
+    expect(screen.getByText(`1 of 7 matches “${ADDR.kicked}”.`)).toBeInTheDocument();
+    expect(nameLookups()).toHaveLength(0);
+  });
+
+  it('says so when a typed address isn’t on the list, and clears the search', async () => {
+    const user = userEvent.setup();
+    await open('nominator');
+    await readyList();
+    await user.click(searchBox());
+    await user.paste(ADDR.learner);
+    expect(
+      await screen.findByText(
+        `No one on this list matches “${ADDR.learner}”`,
+        {},
+        { timeout: 4000 }
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('This address hasn’t asked to join MINTER, or is a member already.')
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Clear the search' }));
+    expect(searchBox()).toHaveValue('');
+    await waitFor(async () => expect(rowLabels(await readyList())).toHaveLength(6));
+  });
+
+  it('matches part of an address, as the short address on a row shows it', async () => {
+    const user = userEvent.setup();
+    await open('nominator', () => {
+      mockFetchRoute('/names/search', () => []);
+    });
+    const jr2 = fakeAddress('jr-2');
+    await row(shortAddress(jr2));
+    await user.type(searchBox(), jr2.slice(-6));
+    await waitFor(async () => expect(rowLabels(await readyList())).toEqual([shortAddress(jr2)]));
+  });
+
+  it('resolves a typed name to its owner, without reading every row’s name', async () => {
+    const user = userEvent.setup();
+    const many = Array.from({ length: 45 }, (_, i) => fakeAddress(`many-jr-${i}`));
+    const searched: Array<string | null> = [];
+    await open('nominator', (world) => {
+      // Lou is row 52: far below the first page, never read before the search.
+      world.joinRequests.push(...many.map(joinRequest), joinRequest(ADDR.left));
+      mockFetchRoute('/names/search', (url: URL) => {
+        searched.push(url.searchParams.get('query'));
+        return [
+          { name: 'Lou Left', owner: ADDR.left },
+          { name: 'Lou Elsewhere', owner: fakeAddress('not-ready') },
+        ];
+      });
+    });
+    const list = await readyList();
+    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(20));
+    // The first page's rows are read (the 20th is many[13]).
+    await waitFor(() => expect(fetchCallsFor(`/names/primary/${many[13]}`)).toHaveLength(1));
+    const namesRead = fetchCallsFor('/names/primary/').length;
+
+    await user.type(searchBox(), 'lou');
+    // While the name is looked up nothing on the page matches: the list makes way for a skeleton.
+    await waitFor(async () => expect(rowLabels(await readyList())).toEqual(['Lou Left']), {
+      timeout: 4000,
+    });
+    expect(screen.getByText('1 of 52 matches “lou”.')).toBeInTheDocument();
+    // One small name search once typing paused; no exact lookup (the page had room).
+    expect(searched).toEqual(['lou']);
+    expect(fetchCallsFor('/names/search')[0]).toMatch(/[?&]limit=10(&|$)/);
+    expect(nameLookups()).toHaveLength(1);
+    // Only Lou's own row was read; the 32 rows the search hid never were.
+    await waitFor(() => expect(fetchCallsFor(`/names/primary/${ADDR.left}`)).toHaveLength(1));
+    expect(fetchCallsFor('/names/primary/')).toHaveLength(namesRead + 1);
+    expect(many.slice(14).flatMap((a) => fetchCallsFor(`/names/primary/${a}`))).toEqual([]);
+  });
+
+  it('looks up the exact name when the name search page is full without it', async () => {
+    const user = userEvent.setup();
+    await open('nominator', (world) => {
+      world.joinRequests.push(joinRequest(ADDR.left));
+      mockFetchRoute('/names/search', () =>
+        Array.from({ length: 10 }, (_, i) => ({
+          name: `Lou Left ${i + 1}`,
+          owner: fakeAddress(`lou-${i}`),
+        }))
+      );
+    });
+    await row('Lou Left');
+    await user.type(searchBox(), 'Lou Left');
+    await waitFor(async () => expect(rowLabels(await readyList())).toEqual(['Lou Left']));
+    expect(fetchCallsFor('/names/Lou%20Left')).toHaveLength(1);
+  });
+
+  it('still matches names already shown when the name search fails', async () => {
+    const user = userEvent.setup();
+    await open('nominator', (world) => {
+      world.joinRequests.push(joinRequest(ADDR.kicked));
+      mockFetchRoute('/names/search', () => new Response('', { status: 500 }));
+    });
+    await row('Kit Kicked');
+    await user.type(searchBox(), 'kit');
+    await waitFor(async () => expect(rowLabels(await readyList())).toEqual(['Kit Kicked']), {
+      timeout: 4000,
+    });
+    expect(
+      await screen.findByText(
+        '1 of 7 matches “kit”. Names couldn’t be looked up just now, so only addresses and names already shown count.'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('says what to try when nothing matches', async () => {
+    const user = userEvent.setup();
+    await open('nominator', () => {
+      mockFetchRoute('/names/search', () => []);
+    });
+    await readyList();
+    await user.type(searchBox(), 'zzz');
+    expect(
+      await screen.findByText('No one on this list matches “zzz”', {}, { timeout: 4000 })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Try their full registered name, or their address.')
+    ).toBeInTheDocument();
   });
 });

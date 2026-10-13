@@ -11,6 +11,7 @@ import {
   getFormerMember,
   loadReadyDetails,
   loadReadyToMint,
+  matchReady,
   pickReadyToMint,
 } from './readyToMint';
 import { formerMember } from '../rules/status';
@@ -38,6 +39,39 @@ describe('pickReadyToMint', () => {
     });
     // b is a member, d is banned; e's ban ran out; another group's request is ignored.
     expect(people).toEqual([c, a, e]);
+  });
+});
+
+describe('matchReady', () => {
+  const [a, b, c, d] = ['a', 'b', 'c', 'd'].map((s) => fakeAddress(`match-${s}`));
+  const people = [a, b, c, d];
+  const names: Record<string, string> = { [b]: 'Kit Kicked' };
+  const nameOf = (address: string) => names[address] ?? null;
+  const none = new Set<string>();
+
+  it('keeps everyone, in Core’s order, for an empty search', () => {
+    expect(matchReady(people, '', none)).toEqual(people);
+    expect(matchReady(people, '   ', none)).toEqual(people);
+  });
+
+  it('matches a whole address only to that person, and nobody for an address not listed', () => {
+    expect(matchReady(people, ` ${c} `, none)).toEqual([c]);
+    expect(matchReady(people, fakeAddress('elsewhere'), none)).toEqual([]);
+  });
+
+  it('matches part of an address, from 4 characters, case kept', () => {
+    expect(matchReady(people, d.slice(0, 6), none)).toContain(d);
+    expect(matchReady(people, d.slice(-4), none)).toContain(d);
+    expect(matchReady(people, d.slice(-4).toLowerCase() + '!', none)).toEqual([]);
+    // Too short to tell addresses apart.
+    expect(matchReady(people, d.slice(0, 3), none)).toEqual([]);
+  });
+
+  it('matches the owners of a typed name, and names already read, in Core’s order', () => {
+    expect(matchReady(people, 'lou', new Set([d, a, fakeAddress('not-listed')]))).toEqual([a, d]);
+    expect(matchReady(people, 'kick', none, nameOf)).toEqual([b]);
+    expect(matchReady(people, '@KIT', none, nameOf)).toEqual([b]);
+    expect(matchReady(people, 'kit', new Set([c]), nameOf)).toEqual([b, c]);
   });
 });
 

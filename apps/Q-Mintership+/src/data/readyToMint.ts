@@ -10,9 +10,12 @@
  * - Each person's level, blocks minted, name and whether they were a member
  *   before are read only for the rows on screen, six reads at a time, and
  *   cached (loadReadyDetails).
+ * - The search (matchReady) matches addresses directly and resolves a typed
+ *   name to its owners (data/nameSearch.ts → findNameOwners): no row's name
+ *   is read to search.
  */
 import { formerMember, type FormerMember } from '../rules/status';
-import { getAccount, getPrimaryName } from './accounts';
+import { getAccount, getPrimaryName, isAddress } from './accounts';
 import { getChainNow } from './chain';
 import { MINTER_GROUP_ID } from './constants';
 import { activeBanFor, getAdmins, getBans, getJoinRequests, getMembers } from './group';
@@ -57,6 +60,38 @@ export function pickReadyToMint(input: ReadyInput): string[] {
     people.push(address);
   }
   return people;
+}
+
+/** Base58 characters, as in an address: a typed part of one is matched directly. */
+const ADDRESS_PART_RE = /^[1-9A-HJ-NP-Za-km-z]{4,}$/;
+
+/**
+ * Ready to mint's search, in Core's order: a typed address matches that
+ * person only; a part of an address (4 characters or more, as the short
+ * address on each row shows) matches the addresses that contain it; a name
+ * matches the owners found for it (`owners`, from findNameOwners) and the
+ * names already read for rows on screen (`nameOf`). No row's name is read
+ * to search.
+ */
+export function matchReady(
+  people: string[],
+  text: string,
+  owners: ReadonlySet<string>,
+  nameOf: (address: string) => string | null | undefined = () => null
+): string[] {
+  const q = text.trim().replace(/^@/, '');
+  if (!q) return people;
+  // A whole address (the guard is on a copy, so `q` stays a string below).
+  const typed: unknown = q;
+  if (isAddress(typed)) return people.filter((address) => address === typed);
+  const part = ADDRESS_PART_RE.test(q);
+  const lower = q.toLowerCase();
+  return people.filter(
+    (address) =>
+      owners.has(address) ||
+      (part && address.includes(q)) ||
+      Boolean(nameOf(address)?.toLowerCase().includes(lower))
+  );
 }
 
 /**
