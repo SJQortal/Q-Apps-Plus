@@ -287,6 +287,32 @@ describe('Settings → Notifications: support alerts for nominators', () => {
     expect(within(section()).queryByText(/^Support alerts cover/)).toBeNull();
   });
 
+  it('stays on when none of the nominations they made is open any more', async () => {
+    const u = userEvent.setup();
+    // Set up while Lapsed Person's nomination was open; Pia has none open now.
+    hubThatChecks([yours(ADDR.lapsed)], true);
+    await renderPage(<NotificationSettings />, { persona: 'promote', path: '/settings' });
+    await waitFor(() => expect(peekQuery('nominations:all')).toBeDefined(), T);
+    expect(
+      await within(section()).findByText(/You have no open nominations now\.$/, {}, T)
+    ).toBeVisible();
+    // Give the sync its turn: it drops nothing.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')).toHaveLength(0);
+    expect(hubSwitch()).toBeChecked();
+    expect(hubSwitch()).toBeEnabled();
+    expect(
+      within(section()).getByText(
+        /While alerts are on, opening Settings adds the ones you made since/
+      )
+    ).toBeVisible();
+    // Turning them off still removes every rule.
+    await u.click(hubSwitch());
+    expect(await screen.findByText('Hub alerts are off.', {}, T)).toBeVisible();
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')[0].notificationIds).toContain(yours(ADDR.lapsed));
+    expect(hubSwitch()).not.toBeChecked();
+  });
+
   it('keeps them in step while alerts are on: checks first, so Hub shows no dialog', async () => {
     // Set up earlier: Lapsed Person's nomination has closed since, two are new.
     hubThatChecks([yours(ADDR.lapsed), yours(ADDR.urgent)], true);

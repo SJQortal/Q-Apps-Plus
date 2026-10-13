@@ -112,7 +112,7 @@ function HubAlertsRow() {
       role === 'none'
         ? 'These alerts were set up for your earlier role and no longer fit. Turn them off.'
         : 'These alerts were set up for your earlier role. Turn them off and on to update them.';
-  else if (!on && noneOpen)
+  else if (noneOpen)
     hint =
       'Hub tells you when someone adds their support to a nomination you made. You have no open nominations now.';
   else hint = ROLE_HINT[role];
@@ -196,7 +196,8 @@ function HubAlertsRow() {
             Hub listens for app alerts only on accounts with a registered name.
           </Typography>
         ) : null}
-        {ready && nominator && !noneOpen ? (
+        {/* With alerts on and none open, it still says how the next ones get their alerts. */}
+        {ready && nominator && (on || !noneOpen) ? (
           <Typography variant="body2" color="text.secondary" {...LINE}>
             {SUPPORT_SCOPE}
           </Typography>

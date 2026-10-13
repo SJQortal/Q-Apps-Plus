@@ -316,8 +316,10 @@ async function mayAlert(): Promise<boolean> {
  * (Settings, only while alerts are on): rules for new ones are added and
  * rules for ones that closed are removed. Adding needs Hub's permission, and
  * it is only checked, never asked for: unless Hub says the app may alert,
- * nothing is added (Hub then shows no dialog). Returns the rules Hub has
- * now, or null when nothing changed.
+ * nothing is added (Hub then shows no dialog). The app's last rule is never
+ * removed here: one closed rule stays until a new one is added, so alerts
+ * stay on until they are turned off (a nominator has no other rule).
+ * Returns the rules Hub has now, or null when nothing changed.
  */
 export function syncNominatorAlerts(
   role: AlertRole,
@@ -329,7 +331,7 @@ export function syncNominatorAlerts(
     const wanted = supportAlertRules(nominees);
     const wantedIds = wanted.map((r) => r.notificationId);
     const toAdd = wanted.filter((r) => !present.includes(r.notificationId));
-    const toRemove = present.filter((id) => isSupportAlertId(id) && !wantedIds.includes(id));
+    const closed = present.filter((id) => isSupportAlertId(id) && !wantedIds.includes(id));
     let added: AlertId[] = [];
     if (toAdd.length && (await mayAlert())) {
       // Hub has the permission: this only opens the session for NOTIFICATION_ADD.
@@ -337,6 +339,7 @@ export function syncNominatorAlerts(
       await qortal({ action: 'NOTIFICATION_ADD', notifications: toAdd });
       added = toAdd.map((r) => r.notificationId);
     }
+    const toRemove = !added.length && closed.length === present.length ? closed.slice(1) : closed;
     await removeRules(toRemove);
     if (!added.length && !toRemove.length) return null;
     const next = [...present.filter((id) => !toRemove.includes(id)), ...added];
