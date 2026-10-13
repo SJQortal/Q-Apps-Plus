@@ -4,9 +4,10 @@
  * first, plus the nominations no Minter Admin has signed yet.
  *
  * Minter Admins sign here, one at a time or several in a row, make the first
- * signature on a nomination, propose kicks, bans and admin changes, and
- * clean up stale invites. Everyone else follows along read-only. There is
- * no reject or withdraw: an admin signs or lets it expire.
+ * signature on a nomination, propose kicks, bans, admin changes and
+ * cancelled invites (each with their own signature), and clean up stale
+ * invites. Everyone else follows along read-only. There is no reject or
+ * withdraw: an admin signs or lets it expire.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -538,6 +539,11 @@ export default function DecisionsPage() {
                 <Section title="Clean up stale invites" id="stale">
                   <StaleInvites
                     signer={signer}
+                    facts={{
+                      needed,
+                      maximumBlockDelay: data.group.maximumBlockDelay,
+                      msPerBlock: data.now.msPerBlock,
+                    }}
                     decisions={decisions}
                     now={data.now}
                     adminNames={adminNames}

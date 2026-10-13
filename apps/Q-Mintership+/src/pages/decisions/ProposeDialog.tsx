@@ -1,7 +1,9 @@
 /**
- * Propose a kick, ban, admin change or lifted ban: pick the person (name
- * or address), see the same check the write will run, then one explained
- * Hub confirmation. Kicking or banning a Minter Admin is offered as
+ * Propose a kick, ban, admin change, lifted ban or cancelled invite: pick
+ * the person (by name or address, or from the admins, bans in force or
+ * unused approved invites), see the same check the write will run, then the
+ * proposal and the admin's own signature on it as one explained step of two
+ * Hub confirmations. Kicking or banning a Minter Admin is offered as
  * "remove their admin role first", because Core refuses it otherwise.
  */
 import { useEffect, useId, useRef, useState } from 'react';
@@ -15,24 +17,18 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { HubStepDialog } from '../../components/common/HubStepDialog';
 import { PersonChip } from '../../components/common/Person';
 import { ResponsiveDialog } from '../../components/common/ResponsiveDialog';
-import { CardSkeleton } from '../../components/common/states';
+import { CardSkeleton, ErrorState } from '../../components/common/states';
 import { getBans, isBanActive } from '../../data/group';
+import { loadStaleInvites } from '../../data/staleInvites';
 import type { GroupMemberRow } from '../../data/types';
 import { useQuery } from '../../hooks/useQuery';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { KIND_LABEL } from '../../rules/decision';
-import { displayName, formatCount, formatDuration, formatRelative } from '../../utils/format';
-import {
-  proposeAddAdmin,
-  proposeBan,
-  proposeCancelBan,
-  proposeKick,
-  proposeRemoveAdmin,
-} from '../../writes/flows';
-import type { Signer, WriteOutcome, WriteStage } from '../../writes/runner';
+import { displayName, formatDuration, formatRelative } from '../../utils/format';
+import type { Proposal } from '../../writes/flows';
+import type { Signer } from '../../writes/runner';
 import {
   BAN_MAX_DAYS,
   REASON_MAX_BYTES,
@@ -48,12 +44,10 @@ import {
   type ProposeKind,
   type SubjectCheck,
 } from './proposeKinds';
+import { ProposeSignDialog, type ProposalFacts } from './ProposeSignDialog';
 
-export interface ProposeContext {
-  needed: number;
+export interface ProposeContext extends ProposalFacts {
   totalAdmins: number;
-  maximumBlockDelay: number;
-  msPerBlock: number;
   /** Admins who can sign (the null owner left out). */
   signers: GroupMemberRow[];
 }
@@ -170,10 +164,6 @@ export function ProposeDialog({
     }
   };
 
-  const windowText = `${formatCount(ctx.maximumBlockDelay)} blocks (about ${formatDuration(
-    ctx.maximumBlockDelay * ctx.msPerBlock,
-    { precise: true }
-  )})`;
   const approvalText = `about ${formatDuration(ctx.maximumBlockDelay * ctx.msPerBlock, { precise: true })}`;
 
   return (
@@ -202,6 +192,12 @@ export function ProposeDialog({
           />
         ) : kind === 'cancelBan' ? (
           <BanPicker value={person?.address ?? ''} onPick={(p) => setPerson(p)} />
+        ) : kind === 'cancelInvite' ? (
+          <InvitePicker
+            admins={ctx.signers}
+            value={person?.address ?? ''}
+            onPick={(p) => setPerson(p)}
+          />
         ) : (
           <Box
             component="form"
@@ -328,7 +324,6 @@ export function ProposeDialog({
           banSeconds={'seconds' in ban ? ban.seconds : 0}
           signer={signer}
           ctx={ctx}
-          windowText={windowText}
           onClose={close}
           onBack={() => setPhase('form')}
         />
@@ -459,6 +454,80 @@ function BanOption({
   );
 }
 
+/** Unused approved invites: the same list (and read) as Clean up stale invites. */
+function InvitePicker({
+  admins,
+  value,
+  onPick,
+}: {
+  admins: GroupMemberRow[];
+  value: string;
+  onPick: (p: Person | null) => void;
+}) {
+  const list = useQuery('staleinvites:list', (force) => loadStaleInvites({ force }));
+  if (list.isLoading) return <CardSkeleton lines={1} />;
+  if (list.isError && !list.data)
+    return (
+      <ErrorState
+        compact
+        title="Couldn’t load the approved invites."
+        error={list.error}
+        onRetry={list.refetch}
+      />
+    );
+  const rows = list.data?.rows ?? [];
+  if (!rows.length)
+    return (
+      <Alert severity="info" role="status">
+        There are no unused approved invites right now.
+      </Alert>
+    );
+  const adminName = (address: string) =>
+    displayName(admins.find((a) => a.member === address)?.primaryName, address);
+  return (
+    <TextField
+      select
+      label="Approved invite"
+      value={value}
+      onChange={(e) => onPick(e.target.value ? { address: e.target.value } : null)}
+      helperText="Approved invites nobody has used, as under Clean up stale invites."
+      fullWidth
+      slotProps={{ select: { native: true } }}
+    >
+      <option value="">Choose an account…</option>
+      {rows.map((row) => (
+        <InviteOption key={row.invitee} address={row.invitee} inviter={adminName(row.inviter)} />
+      ))}
+    </TextField>
+  );
+}
+
+function InviteOption({ address, inviter }: { address: string; inviter: string }) {
+  const name = useDisplayName(address);
+  return (
+    <option value={address}>
+      {name.label}, invited by {inviter}
+    </option>
+  );
+}
+
+/** The proposal as the write takes it, from what the form holds. */
+function toProposal(
+  kind: ProposeKind,
+  subject: string,
+  reason: string,
+  banSeconds: number
+): Proposal {
+  switch (kind) {
+    case 'kick':
+      return { kind, subject, reason };
+    case 'ban':
+      return { kind, subject, reason, banSeconds };
+    default:
+      return { kind, subject };
+  }
+}
+
 function ProposeHubStep({
   open,
   kind,
@@ -467,7 +536,6 @@ function ProposeHubStep({
   banSeconds,
   signer,
   ctx,
-  windowText,
   onClose,
   onBack,
 }: {
@@ -478,76 +546,38 @@ function ProposeHubStep({
   banSeconds: number;
   signer: Signer;
   ctx: ProposeContext;
-  windowText: string;
   onClose: () => void;
   /** Back to the form, with the person, reason and length kept. */
   onBack: () => void;
 }) {
   const who = useDisplayName(person.address, person.name);
-  const info = PROPOSE_KINDS[kind];
-  const send = (onStage: (s: WriteStage) => void): Promise<WriteOutcome> => {
-    switch (kind) {
-      case 'kick':
-        return proposeKick(signer, person.address, reason, onStage);
-      case 'ban':
-        return proposeBan(signer, person.address, reason, banSeconds, onStage);
-      case 'addAdmin':
-        return proposeAddAdmin(signer, person.address, onStage);
-      case 'removeAdmin':
-        return proposeRemoveAdmin(signer, person.address, onStage);
-      case 'cancelBan':
-        return proposeCancelBan(signer, person.address, onStage);
-    }
-  };
   return (
-    <HubStepDialog
+    <ProposeSignDialog
       open={open}
+      proposal={toProposal(kind, person.address, reason, banSeconds)}
+      who={who.label}
+      signer={signer}
+      facts={ctx}
+      title={`${KIND_LABEL[kind]}: ${who.label}`}
+      details={
+        kind === 'ban' || reason ? (
+          <>
+            {kind === 'ban' ? (
+              <Typography>
+                <b>Length:</b> {banLengthText(banSeconds)}
+                {banSeconds ? ', counted from when it is proposed, not from approval' : ''}
+              </Typography>
+            ) : null}
+            {reason ? (
+              <Typography sx={{ overflowWrap: 'anywhere' }}>
+                <b>Reason:</b> {reason}
+              </Typography>
+            ) : null}
+          </>
+        ) : null
+      }
       onClose={onClose}
       onBack={onBack}
-      title={`${KIND_LABEL[kind]}: ${who.label}`}
-      intro={
-        <>
-          {kind === 'ban' ? (
-            <Typography>
-              <b>Length:</b> {banLengthText(banSeconds)}
-              {banSeconds ? ', counted from when it is proposed, not from approval' : ''}
-            </Typography>
-          ) : null}
-          {reason ? (
-            <Typography sx={{ overflowWrap: 'anywhere' }}>
-              <b>Reason:</b> {reason}
-            </Typography>
-          ) : null}
-          <Typography sx={{ mt: 1 }}>
-            This proposes it. It happens only if {ctx.needed} Minter Admins sign within {windowText}
-            .
-          </Typography>
-          <Typography sx={{ mt: 1 }}>
-            Your proposal doesn’t count as your signature: sign it in the queue too, once it is in a
-            block.
-          </Typography>
-        </>
-      }
-      steps={[
-        {
-          action: info.action,
-          title: 'Propose it',
-          detail: (
-            <Typography variant="body2">
-              Hub shows {who.label} ({person.address.slice(0, 6)}…) and the group MINTER.
-            </Typography>
-          ),
-          feeTxType: info.txType,
-        },
-      ]}
-      run={async (report) => ({ outcome: await send((stage) => report(0, stage)) })}
-      successTitle="Proposed"
-      successText={
-        <Typography variant="body2">
-          It shows in the queue once it is in a block, usually within a couple of minutes. Sign it
-          there too.
-        </Typography>
-      }
     />
   );
 }

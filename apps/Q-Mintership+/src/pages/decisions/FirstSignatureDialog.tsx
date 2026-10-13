@@ -10,30 +10,17 @@ import { Typography } from '@mui/material';
 import { FeeNote } from '../../components/common/FeeNote';
 import { HubStepDialog } from '../../components/common/HubStepDialog';
 import type { Nomination } from '../../data/nominations';
-import { formatCount, formatDuration, plural } from '../../utils/format';
+import { plural } from '../../utils/format';
 import { firstSignature, type FirstSignatureOutcome } from '../../writes/flows';
-import type { Signer, WriteOutcome } from '../../writes/runner';
+import type { Signer } from '../../writes/runner';
 import { useDisplayName } from '../../hooks/useDisplayName';
+import { secondStepProblem, signingWindowText } from './decisionUi';
 
 export interface FirstSignatureFacts {
   needed: number;
   totalAdmins: number;
   maximumBlockDelay: number;
   msPerBlock: number;
-}
-
-function step2Problem(outcome: WriteOutcome | null): string {
-  switch (outcome?.status) {
-    case 'declined':
-      return 'You cancelled step 2 in Hub.';
-    case 'blocked':
-      return outcome.reason;
-    case 'unknown':
-    case 'failed':
-      return outcome.message;
-    default:
-      return 'Step 2 did not run.';
-  }
 }
 
 export function FirstSignatureDialog({
@@ -52,10 +39,7 @@ export function FirstSignatureDialog({
 }) {
   const nominee = useDisplayName(n?.nominee ?? '', n ? n.nomineeName : null);
   const [partial, setPartial] = useState<FirstSignatureOutcome | null>(null);
-  const windowText = `${formatCount(facts.maximumBlockDelay)} blocks (about ${formatDuration(
-    facts.maximumBlockDelay * facts.msPerBlock,
-    { precise: true }
-  )})`;
+  const windowText = signingWindowText(facts.maximumBlockDelay, facts.msPerBlock);
   return (
     <HubStepDialog
       open={Boolean(n && signer)}
@@ -117,8 +101,8 @@ export function FirstSignatureDialog({
           outcome: result.invite,
           message: (
             <Typography variant="body2" sx={{ mt: 0.5 }}>
-              Step 2 didn’t go through: {step2Problem(result.approval)} The nomination is on chain
-              and waiting. Once it shows in the queue, sign it there like any other decision.
+              Step 2 didn’t go through: {secondStepProblem(result.approval)} The nomination is on
+              chain and waiting. Once it shows in the queue, sign it there like any other decision.
             </Typography>
           ),
         };

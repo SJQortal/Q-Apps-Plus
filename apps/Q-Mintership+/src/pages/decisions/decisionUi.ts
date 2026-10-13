@@ -8,8 +8,32 @@ import type { Decision } from '../../rules/decision';
 import { signerState } from '../../rules/tally';
 import { formatBlock, formatCount, formatDateTime, formatDuration } from '../../utils/format';
 import type { PendingWrite } from '../../writes/optimistic';
+import type { WriteOutcome } from '../../writes/runner';
 
 export type MyAnswer = ReturnType<typeof signerState>;
+
+/** "10,080 blocks (about 8 days 12 hours)": how long a decision collects signatures. */
+export function signingWindowText(maximumBlockDelay: number, msPerBlock: number): string {
+  return `${formatCount(maximumBlockDelay)} blocks (about ${formatDuration(
+    maximumBlockDelay * msPerBlock,
+    { precise: true }
+  )})`;
+}
+
+/** Why step 2 (the admin's own signature) didn't go through, in one plain sentence. */
+export function secondStepProblem(outcome: WriteOutcome | null): string {
+  switch (outcome?.status) {
+    case 'declined':
+      return 'You cancelled step 2 in Hub.';
+    case 'blocked':
+      return outcome.reason;
+    case 'unknown':
+    case 'failed':
+      return outcome.message;
+    default:
+      return 'Step 2 did not run.';
+  }
+}
 
 /** The DOM id of a decision's card, for ?d= links. */
 export function decisionCardId(signature: string): string {
