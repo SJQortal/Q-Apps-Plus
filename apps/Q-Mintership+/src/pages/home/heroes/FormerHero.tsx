@@ -171,7 +171,19 @@ export function FormerHero({ status, needed }: { status: MyStatus; needed: numbe
                 , proposed by <PersonLink address={removal.by} />
               </>
             ) : null}
-            .{endedBan ? ' That ban has run out.' : ''}
+            .
+            {endedBan ? (
+              removal.liftedAt ? (
+                <>
+                  {' '}
+                  The Minter Admins lifted it <When at={removal.liftedAt} />.
+                </>
+              ) : removal.banSeconds ? (
+                ' That ban has run out.'
+              ) : (
+                ' That ban has ended.'
+              )
+            ) : null}
           </HeroText>
         ) : null}
         <Reason reason={removal?.reason} />

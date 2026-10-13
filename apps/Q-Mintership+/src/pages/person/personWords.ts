@@ -41,8 +41,12 @@ export function statusSentence(
     case 'formerKicked': {
       // Someone who was never a member: a ban, or a kick of their join request.
       const again = person.wasMember ? ' again' : '';
-      if (person.removal?.kind === 'ban')
-        return `Was banned from MINTER${removedOn}; the ban has ended, so ${they} can be nominated${again}.`;
+      if (person.removal?.kind === 'ban') {
+        const ended = person.removal.liftedAt
+          ? `Minter Admins lifted the ban on ${formatDate(person.removal.liftedAt)}`
+          : 'the ban has ended';
+        return `Was banned from MINTER${removedOn}; ${ended}, so ${they} can be nominated${again}.`;
+      }
       return person.wasMember
         ? `Removed from MINTER${removedOn}. ${They} keep ${their} level and can be nominated again.`
         : `Removed from MINTER's join list${removedOn}. ${They} can be nominated.`;

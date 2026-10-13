@@ -35,6 +35,10 @@ export interface Removal {
   by: string | null;
   reason?: string;
   signature: string;
+  /** A ban's length in seconds (0 = permanent). */
+  banSeconds?: number;
+  /** A ban the Minter Admins lifted (an approved CANCEL_GROUP_BAN after it): when (ms). */
+  liftedAt?: number;
 }
 
 export interface MyStatus {
@@ -115,10 +119,33 @@ export function latestRemoval(
         by: kind === 'leave' ? null : (tx.creatorAddress ?? null),
         reason: typeof tx.reason === 'string' ? tx.reason : undefined,
         signature: tx.signature,
+        ...(kind === 'ban' ? { banSeconds: Number(tx.timeToLive ?? 0) } : {}),
       };
     }
   }
+  if (best?.kind === 'ban') {
+    const liftedAt = banLiftedAt(address, history, best.at, tip, msPerBlock);
+    if (liftedAt !== null) best = { ...best, liftedAt };
+  }
   return best;
+}
+
+/** When the Minter Admins lifted a ban that took effect at `after`: an approved CANCEL_GROUP_BAN about the account. */
+export function banLiftedAt(
+  address: string,
+  history: TxRow[],
+  after: number,
+  tip: StatusInputs['tip'],
+  msPerBlock: number
+): number | null {
+  let lifted: number | null = null;
+  for (const tx of history) {
+    if (tx.type !== 'CANCEL_GROUP_BAN' || tx.member !== address) continue;
+    if (!DONE.has(String(tx.approvalStatus))) continue;
+    const at = effectiveTime(tx, tip, msPerBlock);
+    if (at > after && (lifted === null || at < lifted)) lifted = at;
+  }
+  return lifted;
 }
 
 /** Evidence the account was a member before `before`: an approved (or pre-approval-era) invite for it. */

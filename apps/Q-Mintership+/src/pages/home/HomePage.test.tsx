@@ -360,6 +360,43 @@ describe('Home: former members', () => {
     expect(screen.getByText('Not in MINTER')).toBeInTheDocument();
   });
 
+  it('says a lifted ban was lifted, not that it ran out', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'banned',
+      setup: (world) => {
+        const ban = world.decided.find((tx: { type: string }) => tx.type === 'GROUP_BAN');
+        world.bans = world.bans.filter((b: { offender: string }) => b.offender !== ban.offender);
+        world.decided.push({
+          ...ban,
+          type: 'CANCEL_GROUP_BAN',
+          signature: `${ban.signature.slice(0, -4)}Lift`,
+          member: ban.offender,
+          offender: undefined,
+          timeToLive: undefined,
+          blockHeight: ban.approvalHeight + 1000,
+          approvalHeight: ban.approvalHeight + 1500,
+        });
+      },
+    });
+    await headline('Your ban from MINTER has ended');
+    const hero = screen.getByRole('region', { name: /ban from MINTER has ended/ });
+    expect(hero).toHaveTextContent(/The Minter Admins lifted it on /);
+    expect(hero).not.toHaveTextContent(/run out/);
+  });
+
+  it('says a permanent ban that is no longer in force has ended, not run out', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'banned',
+      setup: (world) => {
+        world.bans = world.bans.slice(1);
+      },
+    });
+    await headline('Your ban from MINTER has ended');
+    const hero = screen.getByRole('region', { name: /ban from MINTER has ended/ });
+    expect(hero).toHaveTextContent(/That ban has ended\./);
+    expect(hero).not.toHaveTextContent(/run out/);
+  });
+
   it('tells a member who left when, and that a new nomination is possible', async () => {
     await renderPage(<HomePage />, { persona: 'left' });
     await headline('Lou Left, you left MINTER');
