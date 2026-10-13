@@ -103,7 +103,7 @@ describe('Nominations page', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/527,900 more blocks minted to reach level 5/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: PROPOSE_NOMINATION })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Add your support' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Add your support/ })).toBeNull();
   });
 
   it('asks a signed-out visitor to sign in', async () => {
@@ -118,15 +118,19 @@ describe('Nominations page', () => {
     const { address } = await open('admin');
     const wren = await card('Wren Waiting');
     // Admins can jump to the Decisions queue from an open nomination.
-    expect(within(wren).getByRole('link', { name: 'Open in Decisions' })).toBeInTheDocument();
+    expect(
+      within(wren).getByRole('link', { name: 'Open in Decisions: Wren Waiting' })
+    ).toBeInTheDocument();
     // Enough signatures already (8 of 8), or too late to count: support would change nothing.
     // Chain-only nominations show the nominee's name, looked up.
     for (const done of ['Mia Met', 'Lars Late']) {
       const c = await card(done);
-      expect(within(c).queryByRole('button', { name: 'Add your support' })).toBeNull();
+      expect(within(c).queryByRole('button', { name: /^Add your support/ })).toBeNull();
     }
     expect(
-      within(await card('Eli Early')).getByRole('button', { name: 'Add your support' })
+      within(await card('Eli Early')).getByRole('button', {
+        name: 'Add your support for Eli Early',
+      })
     ).toBeInTheDocument();
     mockQortalRequest('PUBLISH_QDN_RESOURCE', () => ({
       type: 'ARBITRARY',
@@ -134,7 +138,9 @@ describe('Nominations page', () => {
       timestamp: Date.now(),
     }));
 
-    await user.click(within(wren).getByRole('button', { name: 'Add your support' }));
+    await user.click(
+      within(wren).getByRole('button', { name: 'Add your support for Wren Waiting' })
+    );
     const dialog = await screen.findByRole('dialog', { name: 'Add your support' });
     expect(within(dialog).getByText(/Fee: 0.01 QORT/)).toBeInTheDocument();
     await user.type(within(dialog).getByLabelText(/A note/), 'Helps everyone in the minting chat.');
@@ -164,7 +170,7 @@ describe('Nominations page', () => {
     await open('adminL4');
     const wren = await card('Wren Waiting');
     expect(within(wren).getByText('You support this')).toBeInTheDocument();
-    expect(within(wren).queryByRole('button', { name: 'Add your support' })).toBeNull();
+    expect(within(wren).queryByRole('button', { name: /^Add your support/ })).toBeNull();
   });
 
   it('puts the nominee’s own nomination first, with Accept nomination (JOIN_GROUP)', async () => {

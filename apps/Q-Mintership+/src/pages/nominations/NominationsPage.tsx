@@ -44,6 +44,7 @@ import { NomineeAction } from '../../components/nomination/NomineeAction';
 import { nomineeStep } from '../../components/nomination/nomineeStep';
 import { SupportDialog } from '../../components/nomination/SupportDialog';
 import { readable } from '../../utils/readable';
+import { useDisplayName } from '../../hooks/useDisplayName';
 import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
 import { peekQuery } from '../../data/query';
@@ -55,7 +56,7 @@ import { PATHS, decisionPath, nominatePath, nominationPath } from '../../routes/
 import type { MyStatus } from '../../rules/status';
 import { approvalsNeeded } from '../../rules/threshold';
 import { signIn, signerOf, useSession, type Session } from '../../state/session';
-import { displayName, formatCount } from '../../utils/format';
+import { formatCount } from '../../utils/format';
 import { useLandscapeFrame, useShortFrame } from '../../utils/hubFrame';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
 import {
@@ -488,6 +489,8 @@ function CardActions({
   const collecting = n.state === 'waiting' || n.state === 'signing';
   const part = myPart(n, me, pending);
   const mine = part?.label ?? null;
+  // Every card has these buttons: their names say whose card they are on (as the card shows it).
+  const who = useDisplayName(n.nominee, n.nomineeName ?? undefined).label;
 
   return (
     <>
@@ -510,7 +513,7 @@ function CardActions({
         component={RouterLink}
         to={nominationPath(n.nominee)}
         variant="text"
-        aria-label={`Details about ${displayName(n.nomineeName, n.nominee)}`}
+        aria-label={`Details about ${who}`}
         sx={{ minHeight: 44 }}
       >
         Details
@@ -520,13 +523,19 @@ function CardActions({
           component={RouterLink}
           to={n.decision ? decisionPath(n.decision.signature) : PATHS.decisions}
           variant="outlined"
+          aria-label={`Open in Decisions: ${who}`}
           sx={{ minHeight: 44 }}
         >
           Open in Decisions
         </Button>
       ) : null}
       {!mine && canSupport && isStillOpenForSupport(n) && n.nominee !== me ? (
-        <Button variant="contained" onClick={onSupport} sx={{ minHeight: 44 }}>
+        <Button
+          variant="contained"
+          onClick={onSupport}
+          aria-label={`Add your support for ${who}`}
+          sx={{ minHeight: 44 }}
+        >
           Add your support
         </Button>
       ) : null}

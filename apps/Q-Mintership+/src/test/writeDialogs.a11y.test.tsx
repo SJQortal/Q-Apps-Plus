@@ -134,8 +134,13 @@ describe('Write dialogs by keyboard: a decision', () => {
     const u = user();
     await decisions();
     await u.click(screen.getByRole('button', { name: 'Show them' }));
-    const row = await screen.findAllByRole('button', { name: /^Propose cancelling the invite/ }, T);
-    await checkDialogByKeyboard(u, row[0], /^Cancel the invite for /);
+    // Each row's button says whose invite, by the name the row shows.
+    const ada = await screen.findByRole(
+      'button',
+      { name: 'Propose cancelling the invite for Ada Approved' },
+      T
+    );
+    await checkDialogByKeyboard(u, ada, 'Cancel the invite for Ada Approved');
     await checkDialogByKeyboard(
       u,
       await screen.findByRole('button', { name: /^Propose cancelling all \d+ older ones$/ }, T),
@@ -318,7 +323,7 @@ describe('Write dialogs by keyboard: nominations', () => {
     const eli = await screen.findByRole('article', { name: /Nomination of Eli Early/ }, T);
     await checkDialogByKeyboard(
       u,
-      within(eli).getByRole('button', { name: /Add your support/ }),
+      within(eli).getByRole('button', { name: 'Add your support for Eli Early' }),
       'Add your support'
     );
   });
