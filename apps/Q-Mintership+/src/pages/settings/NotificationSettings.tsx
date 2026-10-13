@@ -1,28 +1,37 @@
 /**
  * Settings → Notifications: Home's "Since your last visit" (on by default,
  * kept in this browser) and Hub alerts (off until you turn them on; Hub
- * keeps them for your account: qortal/hubAlerts.ts).
+ * keeps them for your account: qortal/hubAlerts.ts). While alerts are on,
+ * a nominator's support alerts are brought in step with their open
+ * nominations here, without a Hub dialog.
  */
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Switch, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useAtom } from 'jotai';
 import { Section } from '../../components/common/Section';
 import { useMyStatus } from '../../hooks/useData';
 import { useQuery } from '../../hooks/useQuery';
+import { loadNominations } from '../../data/nominations';
 import { hasQortalRequest } from '../../qortal/client';
 import {
+  MAX_SUPPORT_ALERTS,
+  SUPPORTED_YOURS_PREFIX,
   alertRole,
   getHubActions,
   getHubAlertIds,
+  makesNominations,
   rulesMatch,
+  supportAlertNominees,
   supportsHubAlerts,
+  syncNominatorAlerts,
   turnOffHubAlerts,
   turnOnHubAlerts,
   type AlertRole,
 } from '../../qortal/hubAlerts';
 import { useSession } from '../../state/session';
 import { sinceLastVisitAtom } from '../../state/notifications';
+import { plural } from '../../utils/format';
 import { friendlyError } from '../../utils/friendlyError';
 import { isHubDecline, isHubTimeout } from '../../utils/hubErrors';
 import { readable } from '../../utils/readable';
@@ -53,11 +62,16 @@ const LINE = { component: 'span', sx: { display: 'block' } } as const;
 /** What the Hub alerts switch says for each role. */
 const ROLE_HINT: Record<AlertRole, string> = {
   admin:
-    'Hub tells you when a new nomination is published, even when this app is closed. Hub asks you once to allow it. No fee.',
+    'Hub tells you when a new nomination is published, and when someone adds their support to a nomination you made, even when this app is closed. Hub asks you once to allow it. No fee.',
+  nominator:
+    'Hub tells you when someone adds their support to a nomination you made, even when this app is closed. Hub asks you once to allow it. No fee.',
   nominee:
     'Hub tells you when someone nominates you or adds their support, even when this app is closed. Hub asks you once to allow it. No fee.',
-  none: 'Hub alerts are for Minter Admins (new nominations) and for people not in MINTER yet (being nominated). Nothing to alert you about now.',
+  none: 'Hub alerts are for Minter Admins, members at level 5 or above who nominate, and people not in MINTER yet. Nothing to alert you about now.',
 };
+
+/** What the support alerts cover, for Minter Admins and nominators. */
+const SUPPORT_SCOPE = `Support alerts cover the nominations you made that are still open (up to ${MAX_SUPPORT_ALERTS}). While alerts are on, opening Settings adds the ones you made since and drops the ones that closed.`;
 
 type Note = { tone: 'success' | 'warning' | 'error' | 'neutral'; text: string } | null;
 
@@ -79,6 +93,13 @@ function HubAlertsRow() {
   const ids = alerts.data ?? [];
   const on = ids.length > 0;
   const stale = on && !rulesMatch(ids, role, session.address);
+  // The nominations a nominator made (the read Home makes; usually still cached).
+  const nominator = makesNominations(role);
+  const all = useQuery(inHub && supported && nominator ? 'nominations:all' : null, (force) =>
+    loadNominations({ force })
+  );
+  const nominees = all.data ? supportAlertNominees(all.data.all, session.address) : null;
+  const noneOpen = role === 'nominator' && nominees !== null && nominees.length === 0;
 
   let hint: string;
   if (!inHub) hint = 'Open this app in Qortal Hub or GO, signed in, to use Hub alerts.';
@@ -91,12 +112,41 @@ function HubAlertsRow() {
       role === 'none'
         ? 'These alerts were set up for your earlier role and no longer fit. Turn them off.'
         : 'These alerts were set up for your earlier role. Turn them off and on to update them.';
+  else if (!on && noneOpen)
+    hint =
+      'Hub tells you when someone adds their support to a nomination you made. You have no open nominations now.';
   else hint = ROLE_HINT[role];
 
   const ready = inHub && supported && !alerts.isLoading && !alerts.isError;
   // Not disabled while its own request runs: a disabled control loses focus.
-  // Presses meanwhile are ignored instead.
-  const disabled = !ready || (!on && role === 'none') || !status;
+  // Presses meanwhile are ignored instead. A nominator's rules come from their
+  // open nominations: none (or not read yet), nothing to turn on.
+  const disabled =
+    !ready || !status || (!on && (role === 'none' || (role === 'nominator' && !nominees?.length)));
+
+  // While alerts are on, bring the support rules in step once per visit and list of nominations.
+  const synced = useRef<string | null>(null);
+  const [checked, setChecked] = useState<string | null>(null);
+  const nomineesKey = nominees?.join(',') ?? null;
+  const syncKey = `${role}|${nomineesKey}`;
+  useEffect(() => {
+    if (!ready || !on || stale || !nominator || nomineesKey === null) return;
+    if (synced.current === syncKey) return;
+    synced.current = syncKey;
+    syncNominatorAlerts(role, nomineesKey ? nomineesKey.split(',') : [])
+      .catch(() =>
+        setNote({
+          tone: 'warning',
+          text: "Couldn't update the alerts for your nominations. Try again later.",
+        })
+      )
+      .finally(() => setChecked(syncKey));
+  }, [ready, on, stale, nominator, role, nomineesKey, syncKey]);
+  // Open nominations still without a rule once that is done (Hub didn't let the app add them).
+  const missing =
+    on && !stale && nominees && checked === syncKey
+      ? nominees.filter((n) => !ids.includes(`${SUPPORTED_YOURS_PREFIX}${n}`)).length
+      : 0;
 
   const toggle = async (next: boolean) => {
     if (busyRef.current) return;
@@ -105,7 +155,7 @@ function HubAlertsRow() {
     setNote(null);
     try {
       if (next) {
-        await turnOnHubAlerts(role, session.address);
+        await turnOnHubAlerts(role, session.address, nominees ?? []);
         setNote({ tone: 'success', text: 'Hub alerts are on.' });
       } else {
         await turnOffHubAlerts();
@@ -144,6 +194,17 @@ function HubAlertsRow() {
         {ready && role === 'nominee' && !session.name ? (
           <Typography variant="body2" color="text.secondary" {...LINE}>
             Hub listens for app alerts only on accounts with a registered name.
+          </Typography>
+        ) : null}
+        {ready && nominator && !noneOpen ? (
+          <Typography variant="body2" color="text.secondary" {...LINE}>
+            {SUPPORT_SCOPE}
+          </Typography>
+        ) : null}
+        {missing ? (
+          <Typography variant="body2" color="text.secondary" {...LINE}>
+            Alerts for {plural(missing, 'open nomination')} you made aren&apos;t set up yet: turn
+            alerts off and on to add them.
           </Typography>
         ) : null}
         {ready && role !== 'none' ? (

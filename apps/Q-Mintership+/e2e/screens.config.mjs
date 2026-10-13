@@ -534,5 +534,36 @@ export default {
         await page.waitForTimeout(400);
       },
     },
+    // Settings → Notifications for a level 5+ nominator, in a Hub that offers app alerts.
+    {
+      key: 'settings-alerts-nominator',
+      path: '/?as=nominator',
+      after: async (page) => {
+        await settle(page);
+        await page.evaluate(() => {
+          const answer = window.__qplusAnswer;
+          window.__qplusAnswer = async (p) => {
+            if (p.action === 'SHOW_ACTIONS')
+              return [
+                'GET_USER_ACCOUNT',
+                'NOTIFICATION_PERMISSION',
+                'NOTIFICATION_ADD',
+                'NOTIFICATION_GET',
+                'NOTIFICATION_REMOVE',
+              ];
+            if (p.action === 'NOTIFICATION_GET') return [];
+            return answer(p);
+          };
+        });
+        await page
+          .getByRole('button', { name: 'Settings', exact: true })
+          .first()
+          .click({ timeout: 4000 });
+        await page.getByText(/^Support alerts cover the nominations you made/).waitFor({
+          timeout: 8000,
+        });
+        await page.waitForTimeout(400);
+      },
+    },
   ],
 };

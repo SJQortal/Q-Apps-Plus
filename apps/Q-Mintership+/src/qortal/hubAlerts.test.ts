@@ -1,29 +1,38 @@
 /** Hub alerts: the rules sent to Hub, feature detection, and turning them on and off. */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { resetQueries } from '../data/query';
+import type { Nomination } from '../data/nominations';
+import { resetQueries, setQueryData } from '../data/query';
 import { mockQortalRequest, qortalCalls, qortalCallsFor } from '../test/setup';
 import {
   ALERT_IDS,
   ALL_ALERT_IDS,
+  MAX_SUPPORT_ALERTS,
   alertRole,
   alertRules,
   getHubActions,
   getHubAlertIds,
   rulesMatch,
+  supportAlertNominees,
   supportsHubAlerts,
+  syncNominatorAlerts,
   turnOffHubAlerts,
   turnOnHubAlerts,
 } from './hubAlerts';
 
 const ME = 'QZm1mjw9Wr7Xy2Pq8sTnFhYk3Lc5Vb6NdA';
+const N1 = 'QN1111111111111111111111111111111a';
+const N2 = 'QN2222222222222222222222222222222b';
+const N3 = 'QN3333333333333333333333333333333c';
+const yours = (nominee: string) => `qmp-supported-yours-${nominee}`;
 
 beforeEach(() => resetQueries());
 
 describe('alert rules', () => {
-  it('fits the account: Minter Admins, people not in MINTER, or nobody', () => {
-    expect(alertRole({ isAdmin: true, isMember: true })).toBe('admin');
-    expect(alertRole({ isAdmin: false, isMember: false })).toBe('nominee');
-    expect(alertRole({ isAdmin: false, isMember: true })).toBe('none');
+  it('fits the account: Minter Admins, nominators, people not in MINTER, or nobody', () => {
+    expect(alertRole({ isAdmin: true, isMember: true, level: 1 })).toBe('admin');
+    expect(alertRole({ isAdmin: false, isMember: true, level: 5 })).toBe('nominator');
+    expect(alertRole({ isAdmin: false, isMember: false, level: 7 })).toBe('nominee');
+    expect(alertRole({ isAdmin: false, isMember: true, level: 4 })).toBe('none');
     expect(alertRole(undefined)).toBe('none');
   });
 
@@ -54,15 +63,65 @@ describe('alert rules', () => {
     expect(rules.every((r) => r.message.en.length > 0)).toBe(true);
   });
 
-  it('has nothing for members who are not admins, or without an address', () => {
-    expect(alertRules('none', ME)).toEqual([]);
+  it('has nothing for members below level 5, or without an address', () => {
+    expect(alertRules('none', ME, [N1])).toEqual([]);
     expect(alertRules('nominee', '')).toEqual([]);
+    expect(alertRules('nominator', ME)).toEqual([]);
+  });
+
+  it('tells a nominator about support on each open nomination they made', () => {
+    expect(alertRules('nominator', ME, [N1])).toEqual([
+      {
+        notificationId: `qmp-supported-yours-${N1}`,
+        link: `qortal://APP/Q-Mintership+/nominations/${N1}`,
+        image: '/arbitrary/THUMBNAIL/Q-Mintership%2B/qortal_avatar?async=true',
+        message: { en: 'Someone added their support to a nomination you made.' },
+        filters: {
+          service: 'JSON',
+          identifier: `qmp-support-${N1}`,
+          prefix: true,
+          excludeBlocked: true,
+        },
+      },
+    ]);
+    // A Minter Admin gets them too, after the new-nomination rule; a nominee never does.
+    expect(alertRules('admin', ME, [N1, N2]).map((r) => r.notificationId)).toEqual([
+      'qmp-new-nomination',
+      yours(N1),
+      yours(N2),
+    ]);
+    expect(alertRules('nominee', ME, [N1]).map((r) => r.notificationId)).toEqual([
+      'qmp-nominated-you',
+      'qmp-supported-you',
+    ]);
+    // At most 20, each nominee once.
+    const many = Array.from({ length: MAX_SUPPORT_ALERTS + 5 }, (_, i) => `Q${i}`);
+    expect(alertRules('nominator', ME, [...many, 'Q0'])).toHaveLength(MAX_SUPPORT_ALERTS);
+  });
+
+  it('picks the open nominations a nominator made, newest first', () => {
+    const byMe = { publisher: { address: ME } } as Nomination['nomination'];
+    const byOther = { publisher: { address: 'QOther' } } as Nomination['nomination'];
+    const n = (nominee: string, over: Partial<Nomination>) =>
+      ({ nominee, supporters: [], nomination: byMe, publishedAt: 0, ...over }) as Nomination;
+    const all = [
+      n(N1, { state: 'waiting', publishedAt: 1 }),
+      n(N2, { state: 'signing', publishedAt: 3 }),
+      n(N3, { state: 'expired', publishedAt: 5 }),
+      n('Qapproved', { state: 'approved', publishedAt: 6 }),
+      n('Qtheirs', { state: 'waiting', publishedAt: 7, nomination: byOther }),
+    ];
+    expect(supportAlertNominees(all, ME)).toEqual([N2, N1]);
   });
 
   it('uses only filter keys Hub accepts', () => {
     // Qortal-Hub get.ts NOTIFICATION_FILTER_SPEC: an unknown key makes NOTIFICATION_ADD fail.
     const accepted = new Set(['service', 'identifier', 'prefix', 'excludeBlocked', 'mode']);
-    for (const rule of [...alertRules('admin', ME), ...alertRules('nominee', ME)]) {
+    for (const rule of [
+      ...alertRules('admin', ME, [N1]),
+      ...alertRules('nominator', ME, [N1]),
+      ...alertRules('nominee', ME),
+    ]) {
       expect(Object.keys(rule.filters).every((key) => accepted.has(key))).toBe(true);
     }
   });
@@ -76,6 +135,14 @@ describe('alert rules', () => {
     expect(rulesMatch(['qmp-nominated-you'], 'nominee', ME)).toBe(false);
     expect(rulesMatch(['qmp-nominated-you', 'qmp-supported-you'], 'admin', ME)).toBe(false);
     expect(rulesMatch(['qmp-new-nomination'], 'none', ME)).toBe(false);
+    // Support rules come and go with nominations: any of them fits a nominator or an admin.
+    expect(rulesMatch([yours(N1), yours(N2)], 'nominator', ME)).toBe(true);
+    expect(rulesMatch(['qmp-new-nomination', yours(N1)], 'admin', ME)).toBe(true);
+    expect(rulesMatch(['qmp-new-nomination', yours(N1)], 'nominator', ME)).toBe(false);
+    expect(rulesMatch(['qmp-nominated-you', 'qmp-supported-you', yours(N1)], 'nominee', ME)).toBe(
+      false
+    );
+    expect(rulesMatch([yours(N1)], 'none', ME)).toBe(false);
   });
 });
 
@@ -115,10 +182,12 @@ describe('what Hub offers', () => {
   it("lists this app's alert rules from NOTIFICATION_GET", async () => {
     mockQortalRequest('NOTIFICATION_GET', [
       { notificationId: 'qmp-new-nomination', link: 'x', message: { en: 'x' }, filters: {} },
+      { notificationId: yours(N1) },
+      { notificationId: 'qmp-supported-yours-' },
       { notificationId: 'something-else' },
       null,
     ]);
-    expect(await getHubAlertIds()).toEqual(['qmp-new-nomination']);
+    expect(await getHubAlertIds()).toEqual(['qmp-new-nomination', yours(N1)]);
   });
 });
 
@@ -166,6 +235,28 @@ describe('turning alerts on and off', () => {
     expect(await getHubAlertIds()).toEqual([]);
   });
 
+  it('removes the support rules Hub has too', async () => {
+    mockQortalRequest('NOTIFICATION_REMOVE', true);
+    setQueryData('hub:alerts', ['qmp-new-nomination', yours(N1)]);
+    await turnOffHubAlerts();
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')[0].notificationIds).toEqual([
+      ...ALL_ALERT_IDS,
+      yours(N1),
+    ]);
+  });
+
+  it("turns a nominator's alerts on with a rule per open nomination, dropping old ones", async () => {
+    mockQortalRequest('NOTIFICATION_PERMISSION', true);
+    mockQortalRequest('NOTIFICATION_ADD', true);
+    mockQortalRequest('NOTIFICATION_REMOVE', true);
+    setQueryData('hub:alerts', [yours(N3)]);
+    expect(await turnOnHubAlerts('nominator', ME, [N1, N2])).toEqual([yours(N1), yours(N2)]);
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')[0].notificationIds).toEqual([
+      ...ALL_ALERT_IDS,
+      yours(N3),
+    ]);
+  });
+
   it('makes one change at a time', async () => {
     const order: string[] = [];
     let release: () => void = () => {};
@@ -187,5 +278,82 @@ describe('turning alerts on and off', () => {
     await Promise.all([on, off]);
     expect(order).toEqual(['ask', 'add', 'remove', 'remove']);
     expect(await getHubAlertIds()).toEqual([]);
+  });
+});
+
+describe('keeping the support alerts in step', () => {
+  const ACTIONS = [
+    'NOTIFICATION_PERMISSION',
+    'NOTIFICATION_ADD',
+    'NOTIFICATION_GET',
+    'NOTIFICATION_REMOVE',
+    'NOTIFICATION_HAS_PERMISSION',
+  ];
+  function hub({ actions = ACTIONS, allowed = true } = {}) {
+    mockQortalRequest('SHOW_ACTIONS', actions);
+    mockQortalRequest('NOTIFICATION_HAS_PERMISSION', allowed);
+    mockQortalRequest('NOTIFICATION_PERMISSION', true);
+    mockQortalRequest('NOTIFICATION_ADD', true);
+    mockQortalRequest('NOTIFICATION_REMOVE', true);
+  }
+
+  it('adds rules for new nominations and drops the ones that closed', async () => {
+    hub();
+    setQueryData('hub:alerts', ['qmp-new-nomination', yours(N1), yours(N3)]);
+    expect(await syncNominatorAlerts('admin', [N1, N2])).toEqual([
+      'qmp-new-nomination',
+      yours(N1),
+      yours(N2),
+    ]);
+    expect(qortalCalls.map((c) => c.action)).toEqual([
+      'SHOW_ACTIONS',
+      'NOTIFICATION_HAS_PERMISSION',
+      'NOTIFICATION_PERMISSION',
+      'NOTIFICATION_ADD',
+      'NOTIFICATION_REMOVE',
+    ]);
+    const added = qortalCallsFor('NOTIFICATION_ADD')[0].notifications as Array<{
+      notificationId: string;
+    }>;
+    expect(added.map((r) => r.notificationId)).toEqual([yours(N2)]);
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')[0].notificationIds).toEqual([yours(N3)]);
+    expect(await getHubAlertIds()).toEqual(['qmp-new-nomination', yours(N1), yours(N2)]);
+  });
+
+  it('asks Hub nothing when the rules already fit', async () => {
+    hub();
+    setQueryData('hub:alerts', [yours(N1)]);
+    expect(await syncNominatorAlerts('nominator', [N1])).toBeNull();
+    expect(qortalCalls).toHaveLength(0);
+  });
+
+  it('changes nothing while alerts are off, or for a role without nominations', async () => {
+    hub();
+    setQueryData('hub:alerts', []);
+    expect(await syncNominatorAlerts('nominator', [N1])).toBeNull();
+    setQueryData('hub:alerts', ['qmp-nominated-you', 'qmp-supported-you']);
+    expect(await syncNominatorAlerts('nominee', [N1])).toBeNull();
+    expect(qortalCalls).toHaveLength(0);
+  });
+
+  it('never adds a rule unless Hub says the app may alert, so Hub shows no dialog', async () => {
+    hub({ allowed: false });
+    setQueryData('hub:alerts', [yours(N1)]);
+    expect(await syncNominatorAlerts('nominator', [N2])).toEqual([]);
+    expect(qortalCallsFor('NOTIFICATION_PERMISSION')).toHaveLength(0);
+    expect(qortalCallsFor('NOTIFICATION_ADD')).toHaveLength(0);
+    // Dropping a closed one needs no permission.
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')[0].notificationIds).toEqual([yours(N1)]);
+  });
+
+  it('adds nothing in a Hub that cannot say whether the app may alert', async () => {
+    hub({ actions: ACTIONS.filter((a) => a !== 'NOTIFICATION_HAS_PERMISSION') });
+    setQueryData('hub:alerts', ['qmp-new-nomination']);
+    expect(await syncNominatorAlerts('admin', [N1])).toBeNull();
+    expect(qortalCallsFor('NOTIFICATION_HAS_PERMISSION')).toHaveLength(0);
+    expect(qortalCallsFor('NOTIFICATION_PERMISSION')).toHaveLength(0);
+    expect(qortalCallsFor('NOTIFICATION_ADD')).toHaveLength(0);
+    // Never an empty remove: Hub would drop every rule of the app.
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')).toHaveLength(0);
   });
 });
