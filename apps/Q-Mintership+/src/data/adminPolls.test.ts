@@ -18,6 +18,7 @@ import {
   loadPollThread,
   pollContext,
   pollThreadKey,
+  retryPollDecrypts,
 } from './adminPolls';
 import { invalidate } from './query';
 
@@ -194,10 +195,50 @@ describe('loadAdminPolls: what an admin reads', () => {
     expect(decrypts()).toBe(0);
   });
 
-  it('outside a Hub that can decrypt: every body is skipped, nothing is shown', async () => {
+  it('outside a Hub that can decrypt: nothing is shown, and that is said, not "no polls"', async () => {
     const { address } = setup('admin', { decrypt: false });
-    const { views: list } = await views(address);
+    const { data, views: list } = await views(address);
     expect(list).toEqual([]);
+    expect(data.undecrypted).toBeGreaterThan(0);
+  });
+
+  it('Hub’s wallet locked: not cached as locked; asked again after a wait, or at once on Retry', async () => {
+    const { address, world } = setup();
+    let walletLocked = true;
+    mockQortalRequest('DECRYPT_DATA', (request: Record<string, unknown>) => {
+      if (walletLocked) throw new Error('Wallet not authenticated');
+      return answerDecrypt(world, 'admin', request);
+    });
+    const first = await views(address);
+    expect(first.views).toEqual([]);
+    // Five polls from current admins Hub didn't decrypt (the one never encrypted to
+    // Avery among them: Hub didn't say so this time).
+    expect(first.data.undecrypted).toBe(5);
+    const asked = decrypts();
+    walletLocked = false;
+    // A background refresh within the wait doesn't ask Hub again.
+    invalidate('adminpolls:');
+    expect((await views(address, true)).views).toEqual([]);
+    expect(decrypts()).toBe(asked);
+    // Retry (or Refresh): asked again now, and the polls are back.
+    retryPollDecrypts();
+    invalidate('adminpolls:');
+    const after = await views(address, true);
+    expect(after.views.map((v) => v.id)).toContain(ADMIN_POLL_IDS.open);
+    expect(after.views).toHaveLength(4);
+    expect(after.data.undecrypted).toBe(0);
+  });
+
+  it('“Unable to decrypt” is final for the session: not encrypted to this viewer', async () => {
+    const { address } = setup();
+    const { data } = await views(address);
+    // The poll never encrypted to Avery: locked, so not counted as a Hub failure.
+    expect(data.undecrypted).toBe(0);
+    const asked = decrypts();
+    retryPollDecrypts();
+    invalidate('adminpolls:');
+    await views(address, true);
+    expect(decrypts()).toBe(asked);
   });
 
   it('a Hub timeout on DECRYPT_DATA is asked again on the next read', async () => {

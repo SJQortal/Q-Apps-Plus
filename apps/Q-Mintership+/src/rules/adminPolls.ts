@@ -69,10 +69,13 @@ export interface PollRow {
 /** A body as the loader got it: decrypted JSON, or why not. */
 export type BodyRead =
   | { status: 'ok'; value: unknown }
-  /** Not encrypted to the viewer (or not decryptable): skipped quietly. */
+  /** Not encrypted to the viewer (Hub's "unable to decrypt"): skipped quietly. */
   | { status: 'locked' }
-  /** Not on the node yet, or the read was too slow this time. */
-  | { status: 'unavailable' }
+  /**
+   * Not on the node yet, or the read was too slow this time; `hub` when Hub
+   * didn't decrypt it for another reason (its wallet locked, outside Hub).
+   */
+  | { status: 'unavailable'; hub?: true }
   /** Deleted, or not what it should be. */
   | { status: 'invalid' };
 

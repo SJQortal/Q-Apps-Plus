@@ -4,11 +4,12 @@
  * this viewer, with this device's writes still on their way. Writes that
  * QDN now shows are settled here.
  */
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import {
   adminPollsKey,
   loadAdminPolls,
   pollContext,
+  retryPollDecrypts,
   type AdminPollsData,
 } from '../../data/adminPolls';
 import { getQueryState, subscribeQuery, type QueryState } from '../../data/query';
@@ -57,14 +58,22 @@ function useAssembled(data: AdminPollsData | undefined) {
   return { views, pending, signers: data?.signers ?? [] };
 }
 
-/** The polls, read for `viewer` (a Minter Admin) while `enabled`. */
+/**
+ * The polls, read for `viewer` (a Minter Admin) while `enabled`. `undecrypted`:
+ * polls Hub didn't decrypt this time; `retry` asks Hub for them again now.
+ */
 export function useAdminPolls(viewer: string | null, enabled = true) {
   const query = useQuery(
     viewer && enabled ? adminPollsKey(viewer) : null,
     (force) => loadAdminPolls(viewer as string, { force }),
     { refreshMs: LIVE_REFRESH_MS }
   );
-  return { query, ...useAssembled(query.data) };
+  const { refetch } = query;
+  const retry = useCallback(() => {
+    retryPollDecrypts();
+    void refetch();
+  }, [refetch]);
+  return { query, retry, undecrypted: query.data?.undecrypted ?? 0, ...useAssembled(query.data) };
 }
 
 const IDLE = '__idle__';

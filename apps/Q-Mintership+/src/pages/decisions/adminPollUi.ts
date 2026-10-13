@@ -83,6 +83,17 @@ export function unlistedText(count: number): string {
     : `${formatCount(count)} of these votes are only in a share’s copy: the search stopped before their own records.`;
 }
 
+/** Why polls are missing when Hub didn't decrypt them (not that they aren't encrypted to you). */
+export const HUB_DID_NOT_DECRYPT =
+  'Hub didn’t decrypt them just now. If Hub is locked, unlock it, then try again.';
+
+/** "1 more poll couldn't be decrypted just now." */
+export function undecryptedText(count: number): string {
+  return count === 1
+    ? '1 more poll couldn’t be decrypted just now.'
+    : `${formatCount(count)} more polls couldn’t be decrypted just now.`;
+}
+
 /** "Share with 2 Minter Admins added since". */
 export function shareLabel(missing: number): string {
   return `Share with ${plural(missing, 'Minter Admin')} added since`;

@@ -11,9 +11,11 @@
  *   sign: `/arbitrary/DOCUMENT_PRIVATE/{name}/{identifier}?encoding=base64`,
  *   then Hub's `DECRYPT_DATA { encryptedData }` (no dialog), each once per
  *   (viewer, name, identifier, updated) for the session. One that isn't
- *   encrypted to the viewer is remembered as locked and skipped quietly; one
- *   that isn't on the node yet is tried again after 2, 4, 8 and then every
- *   15 minutes. A body slower than a few seconds counts on the next read.
+ *   encrypted to the viewer (Hub's "unable to decrypt") is remembered as
+ *   locked and skipped quietly; one that isn't on the node yet, or that Hub
+ *   didn't decrypt for another reason (its wallet locked), is tried again
+ *   after 2, 4, 8 and then every 15 minutes, or at once on Retry or Refresh.
+ *   A body slower than a few seconds counts on the next read.
  * - **What is read:** every poll; votes only for polls that are listed (or
  *   might be, through a share); shares only where something is missing for
  *   the viewer (rules/adminPolls.ts needsShareRead). Comment bodies wait
@@ -25,7 +27,7 @@
  */
 import { qortal } from '../qortal/client';
 import { base58Decode } from '../qortal/base58';
-import { isHubTimeout } from '../utils/hubErrors';
+import { isHubNotDecryptable, isHubTimeout } from '../utils/hubErrors';
 import { getNameOwner } from './accounts';
 import {
   ADMIN_POLL_SERVICE,
@@ -36,7 +38,7 @@ import {
   fromData64,
   parseShare,
 } from './adminPollRecords';
-import { adminPollsKey } from './adminPollKeys';
+import { adminPollsKey, pollDecryptRetries, retryPollDecrypts } from './adminPollKeys';
 import { getText, seg } from './core';
 import { getAdmins } from './group';
 import { QdnDeletedError, fetchQdnText, mapLimit, quick, searchQdn } from './qdn';
@@ -74,6 +76,8 @@ export interface AdminPollsData {
   sources: PollSources[];
   /** A search hit its ceiling (shown, never silent). */
   truncated: boolean;
+  /** Polls whose body Hub didn't decrypt this time (not "not encrypted to you"): said, with Retry. */
+  undecrypted: number;
   loadedAt: number;
 }
 
@@ -90,22 +94,46 @@ export function pollContext(data: AdminPollsData, now = Date.now()): PollContext
   };
 }
 
-/** Bodies not on the node yet, by key, so a refresh doesn't ask for them each minute. */
-const misses = new Map<string, { until: number; wait: number }>();
+/**
+ * Bodies not on the node yet, or that Hub didn't decrypt (`hub`, with the
+ * Retry count then), by key, so a refresh doesn't ask for them each minute.
+ */
+const misses = new Map<string, { until: number; wait: number; hub?: number }>();
 
 /** Tests start with nothing remembered. */
 export function resetAdminPollMisses(): void {
   misses.clear();
 }
 
+export { retryPollDecrypts };
+
+/** DECRYPT_DATA failed, but not because the body isn't encrypted to the viewer. */
+class HubDidNotDecrypt extends Error {}
+
 /**
  * One encrypted body, decrypted with the viewer's key, kept for the session
- * per version. Never throws: what went wrong is the status.
+ * per version. Never throws: what went wrong is the status. Only Hub's own
+ * "unable to decrypt" makes a body locked; when Hub fails otherwise (its
+ * wallet locked, outside Hub) the body is unavailable this time and tried
+ * again after 2, 4, 8 and then every 15 minutes, or at once on a Retry.
  */
 export function readPollBody(viewer: string, row: PollRow): Promise<BodyRead> {
   const key = `adminpollbody:${viewer}:${row.name}:${row.identifier}:${pollRowTime(row)}`;
   const miss = misses.get(key);
-  if (miss && Date.now() < miss.until) return Promise.resolve({ status: 'unavailable' });
+  const hubMiss = miss?.hub !== undefined;
+  // A Retry since Hub failed asks again now; a background refresh waits.
+  if (miss && Date.now() < miss.until && (!hubMiss || miss.hub === pollDecryptRetries()))
+    return Promise.resolve(
+      hubMiss ? { status: 'unavailable', hub: true } : { status: 'unavailable' }
+    );
+  const backOff = (hub: boolean) => {
+    const wait = miss ? Math.min(miss.wait * 2, MISS_MAX_MS) : MISS_FIRST_MS;
+    misses.set(key, {
+      until: Date.now() + wait,
+      wait,
+      ...(hub ? { hub: pollDecryptRetries() } : {}),
+    });
+  };
   return fetchQuery<BodyRead>(
     key,
     async () => {
@@ -116,8 +144,7 @@ export function readPollBody(viewer: string, row: PollRow): Promise<BodyRead> {
         });
       } catch (error) {
         if (error instanceof QdnDeletedError) return { status: 'invalid' };
-        const wait = miss ? Math.min(miss.wait * 2, MISS_MAX_MS) : MISS_FIRST_MS;
-        misses.set(key, { until: Date.now() + wait, wait });
+        backOff(false);
         throw error;
       }
       misses.delete(key);
@@ -125,10 +152,13 @@ export function readPollBody(viewer: string, row: PollRow): Promise<BodyRead> {
       try {
         plain = await qortal({ action: 'DECRYPT_DATA', encryptedData: encrypted.trim() });
       } catch (error) {
-        // Hub busy (locked, or its 30 s limit): ask again on the next read.
+        // Hub busy (its 30 s limit): ask again on the next read.
         if (isHubTimeout(error)) throw error;
         // Not encrypted to this viewer: skipped quietly from now on.
-        return { status: 'locked' };
+        if (isHubNotDecryptable(error)) return { status: 'locked' };
+        // Anything else can work later: not kept.
+        backOff(true);
+        throw new HubDidNotDecrypt();
       }
       try {
         return { status: 'ok', value: fromData64(String(plain)) };
@@ -137,7 +167,11 @@ export function readPollBody(viewer: string, row: PollRow): Promise<BodyRead> {
       }
     },
     { ttlMs: Number.POSITIVE_INFINITY }
-  ).catch((): BodyRead => ({ status: 'unavailable' }));
+  ).catch((error): BodyRead =>
+    error instanceof HubDidNotDecrypt
+      ? { status: 'unavailable', hub: true }
+      : { status: 'unavailable' }
+  );
 }
 
 /** Read rows' bodies, 6 at a time; a slow one is 'unavailable' this time. */
@@ -154,6 +188,7 @@ const EMPTY = (viewer: string, signers: string[]): AdminPollsData => ({
   publishers: {},
   sources: [],
   truncated: false,
+  undecrypted: 0,
   loadedAt: Date.now(),
 });
 
@@ -295,6 +330,13 @@ export function loadAdminPolls(
         const resolved = resolvePoll(src, ctx, validShares(src, ctx));
         return resolved !== null && isPollShown(resolved.poll, now);
       });
+      // Polls left out only because Hub didn't decrypt them this time: never an empty list in silence.
+      const shown = new Set(listed);
+      const hubFailed = (reads: ReadRow[]) =>
+        reads.some((r) => r.body.status === 'unavailable' && r.body.hub);
+      const undecrypted = sources.filter(
+        (src) => !shown.has(src) && (hubFailed(src.polls) || hubFailed(src.shares))
+      ).length;
 
       return {
         viewer,
@@ -302,6 +344,7 @@ export function loadAdminPolls(
         publishers: Object.fromEntries(publishers),
         sources: listed,
         truncated,
+        undecrypted,
         loadedAt: Date.now(),
       };
     },

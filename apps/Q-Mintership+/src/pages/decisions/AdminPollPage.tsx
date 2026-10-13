@@ -23,7 +23,7 @@ import { signIn, useSession } from '../../state/session';
 import type { PollAuthor } from '../../writes/adminPolls';
 import { AdminPollCard } from './AdminPollCard';
 import { PollWriteDialogs, type PollDialog } from './PollWriteDialogs';
-import { ADMINS_ONLY, myVoteView } from './adminPollUi';
+import { ADMINS_ONLY, HUB_DID_NOT_DECRYPT, myVoteView } from './adminPollUi';
 import { useAdminPolls } from './useAdminPolls';
 
 export default function AdminPollPage() {
@@ -39,7 +39,7 @@ export default function AdminPollPage() {
       ready ? { address: session.address, publicKey: session.publicKey, name: session.name } : null,
     [ready, session.address, session.publicKey, session.name]
   );
-  const { query, views, pending, signers } = useAdminPolls(
+  const { query, views, pending, signers, undecrypted, retry } = useAdminPolls(
     author?.address ?? null,
     isAdmin && isPollId(id)
   );
@@ -92,6 +92,15 @@ export default function AdminPollPage() {
     );
   } else if (!views) {
     content = <CardSkeleton lines={5} />;
+  } else if (!view && undecrypted) {
+    // Not "isn't here": Hub didn't decrypt some polls this time.
+    content = (
+      <ErrorState
+        title="Couldn’t decrypt the Minter Admin polls."
+        error={HUB_DID_NOT_DECRYPT}
+        onRetry={retry}
+      />
+    );
   } else if (!view) {
     content = (
       <EmptyState

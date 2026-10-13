@@ -5,7 +5,7 @@
  * votes, shares and comments through its own Hub step. Advisory only.
  */
 import { useState } from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import { Section } from '../../components/common/Section';
 import {
   CardSkeleton,
@@ -19,7 +19,13 @@ import { plural } from '../../utils/format';
 import type { PollAuthor } from '../../writes/adminPolls';
 import { AdminPollCard } from './AdminPollCard';
 import { PollWriteDialogs, type PollDialog } from './PollWriteDialogs';
-import { ADVISORY, myVoteView, type ShownPoll } from './adminPollUi';
+import {
+  ADVISORY,
+  HUB_DID_NOT_DECRYPT,
+  myVoteView,
+  undecryptedText,
+  type ShownPoll,
+} from './adminPollUi';
 import { useAdminPolls } from './useAdminPolls';
 
 export const ADMIN_POLLS_SECTION_ID = 'admin-polls';
@@ -33,7 +39,7 @@ export default function AdminPollsSection({
   /** Opens Ask the Minter Admins (as Propose does). */
   onAsk: () => void;
 }) {
-  const { query, views, pending, signers } = useAdminPolls(author.address);
+  const { query, views, pending, signers, undecrypted, retry } = useAdminPolls(author.address);
   const now = useNow(60_000);
   const [dialog, setDialog] = useState<PollDialog | null>(null);
   const open = views?.filter((v) => v.open) ?? [];
@@ -78,6 +84,14 @@ export default function AdminPollsSection({
         />
       ) : !views ? (
         <CardSkeleton lines={3} />
+      ) : !views.length && undecrypted ? (
+        // Not "no polls": Hub didn't decrypt them this time.
+        <ErrorState
+          compact
+          title="Couldn’t decrypt the Minter Admin polls."
+          error={HUB_DID_NOT_DECRYPT}
+          onRetry={retry}
+        />
       ) : !views.length ? (
         <EmptyState
           title="No Minter Admin polls in the last 31 days"
@@ -96,6 +110,16 @@ export default function AdminPollsSection({
             </Box>
           ) : null}
           {closed.map(card)}
+          {undecrypted ? (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 1 }}>
+              <Typography variant="body2" color="text.secondary" role="note">
+                {undecryptedText(undecrypted)}
+              </Typography>
+              <Button onClick={retry} sx={{ minHeight: 44 }}>
+                Try again
+              </Button>
+            </Box>
+          ) : null}
         </>
       )}
       {query.data?.truncated ? <TruncatedNote what="the Minter Admin polls" /> : null}

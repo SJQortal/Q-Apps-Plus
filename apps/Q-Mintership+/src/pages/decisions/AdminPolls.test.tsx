@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ADMIN_POLL_IDS, NULL_OWNER, fakeAddress } from '../../../e2e/world.mjs';
+import { ADMIN_POLL_IDS, NULL_OWNER, answerDecrypt, fakeAddress } from '../../../e2e/world.mjs';
 import { fromData64 } from '../../data/adminPollRecords';
 import { resetPendingPollWrites } from '../../state/adminPolls';
 import { resetOptimisticComments } from '../../state/comments';
@@ -193,6 +193,31 @@ describe('Decisions → Minter Admin polls', () => {
     ).toBeVisible();
     await u.click(within(section).getByRole('button', { name: 'Ask the Minter Admins' }));
     expect(await screen.findByRole('dialog', { name: 'Ask the Minter Admins' }, T)).toBeVisible();
+  });
+
+  it('Hub not decrypting (its wallet locked): says so with Retry, never "no polls"', async () => {
+    const u = user();
+    let walletLocked = true;
+    await openDecisions('admin', (world) => {
+      withAdminPolls('admin')(world);
+      mockQortalRequest('DECRYPT_DATA', (request: Record<string, unknown>) => {
+        if (walletLocked) throw new Error('Wallet not authenticated');
+        return answerDecrypt(world, 'admin', request);
+      });
+    });
+    const section = await polls();
+    expect(
+      await within(section).findByText(/Couldn’t decrypt the Minter Admin polls\./, {}, T)
+    ).toBeVisible();
+    expect(
+      within(section).getByText(/If Hub is locked, unlock it, then try again\./)
+    ).toBeVisible();
+    expect(within(section).queryByText('No Minter Admin polls in the last 31 days')).toBeNull();
+    walletLocked = false;
+    await u.click(within(section).getByRole('button', { name: 'Retry' }));
+    expect(
+      await within(section).findByRole('article', { name: `Minter Admin poll: ${OPEN_Q}` }, T)
+    ).toBeVisible();
   });
 
   it('the section passes axe', async () => {

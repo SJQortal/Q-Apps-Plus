@@ -58,6 +58,7 @@ import {
   ListSkeleton,
   TruncatedNote,
 } from '../../components/common/states';
+import { retryPollDecrypts } from '../../data/adminPollKeys';
 import type { Nomination } from '../../data/nominations';
 import { invalidate, peekQuery } from '../../data/query';
 import { useNavHas } from '../../components/layout/useNavHas';
@@ -342,7 +343,9 @@ function DecisionsQueue() {
     void decisionsQ.refetch();
     void nominationsQ.refetch();
     invalidate('staleinvites:');
-    // The Minter Admin polls too (read only for admins, so nothing for anyone else).
+    // The Minter Admin polls too (read only for admins, so nothing for anyone else),
+    // asking Hub again for any it didn't decrypt.
+    retryPollDecrypts();
     invalidate('adminpolls:list:');
   };
 
