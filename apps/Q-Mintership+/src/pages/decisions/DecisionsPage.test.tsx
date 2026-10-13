@@ -612,6 +612,37 @@ describe('Decisions: proposing', () => {
     expect(within(hub).queryByRole('button', { name: 'Back to the form' })).toBeNull();
   }, 20_000);
 
+  it('checks both fees quietly: says nothing about the balance until it can’t pay them', async () => {
+    const u = user();
+    const { world, address } = await openPage('admin');
+    await u.click(screen.getByRole('button', { name: 'Propose' }));
+    await u.click(await screen.findByRole('menuitem', { name: /Lift a ban/ }));
+    const form = await screen.findByRole('dialog', { name: 'Lift a ban' });
+    await u.selectOptions(
+      await within(form).findByRole('combobox', { name: 'Banned account' }, T),
+      ADDR.banned
+    );
+    expect(await within(form).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
+    await u.click(within(form).getByRole('button', { name: 'Review' }));
+    const hub = await screen.findByRole('dialog', { name: /^Lift a ban: / }, T);
+    // The fees are stated; the balance isn't mentioned.
+    expect(within(hub).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
+    expect(within(hub).queryByText(/balance/i)).toBeNull();
+
+    // It can't pay both: the one message, before Hub is asked anything.
+    world.accounts.get(address).balance = 0.015;
+    await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(hub).findByText(
+        'This needs 0.02 QORT for the two fees, and your confirmed balance is 0.015 QORT.',
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(qortalCallsFor('CANCEL_GROUP_BAN')).toHaveLength(0);
+    expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
+  }, 20_000);
+
   it('goes back to the form, with everything typed, from the Hub step or after a cancel in Hub', async () => {
     const u = user();
     await openPage('admin');
