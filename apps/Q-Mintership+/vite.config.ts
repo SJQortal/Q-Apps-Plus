@@ -34,7 +34,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
-    css: false,
+    // Only the app's own rules, read as text by motion.test.tsx; other CSS stays empty.
+    css: { include: [/[\\/]src[\\/]index\.css/] },
     // The page tests take about a second each; on a busy machine some passed 5 s.
     testTimeout: 15_000,
   },

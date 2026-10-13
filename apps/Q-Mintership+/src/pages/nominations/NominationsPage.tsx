@@ -18,19 +18,17 @@ import {
   Button,
   Chip,
   Fab,
-  IconButton,
   InputAdornment,
   TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
-import ExpandLessOutlinedIcon from '@mui/icons-material/ExpandLessOutlined';
-import ExpandMoreOutlinedIcon from '@mui/icons-material/ExpandMoreOutlined';
 import PersonAddAlt1OutlinedIcon from '@mui/icons-material/PersonAddAlt1Outlined';
-import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
+import { ExpandChevron } from '../../components/common/ExpandChevron';
 import { FeeNote } from '../../components/common/FeeNote';
+import { RefreshButton } from '../../components/common/RefreshButton';
 import { Card, Section } from '../../components/common/Section';
 import {
   EmptyState,
@@ -170,14 +168,11 @@ export default function NominationsPage() {
         subtitle="Who is up for MINTER right now."
         actions={
           <>
-            <IconButton
-              aria-label="Refresh nominations"
+            <RefreshButton
+              label="Refresh nominations"
               onClick={refresh}
-              disabled={nominations.fetching}
-              sx={{ width: 44, height: 44 }}
-            >
-              <RefreshOutlinedIcon />
-            </IconButton>
+              fetching={nominations.fetching}
+            />
             {canNominate && !fab ? (
               <Button
                 variant="contained"
@@ -581,7 +576,7 @@ function RecentlyDecided({
           onClick={() => onShow(open ? 0 : DECIDED_PAGE)}
           aria-expanded={open}
           aria-controls="decided-list"
-          endIcon={open ? <ExpandLessOutlinedIcon /> : <ExpandMoreOutlinedIcon />}
+          endIcon={<ExpandChevron open={open} />}
           sx={{ minHeight: 44 }}
         >
           {open ? 'Hide' : `Show ${formatCount(decided.length)}`}

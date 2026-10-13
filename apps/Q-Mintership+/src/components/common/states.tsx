@@ -1,7 +1,8 @@
 /**
  * Loading, empty and error states (docs/DESIGN.md → Components and states):
  * skeletons shaped like the content, one plain line about why a view is
- * empty plus the next action, and errors in plain words with Retry.
+ * empty plus the next action, and errors in plain words with Retry. Each
+ * fades in as it appears (index.css → .qmp-fade).
  */
 import type { ReactNode } from 'react';
 import { Alert, Box, Button, Skeleton, Typography } from '@mui/material';
@@ -31,6 +32,7 @@ export function EmptyState({
   return (
     <Box
       role="status"
+      className="qmp-fade"
       sx={{
         display: 'flex',
         flexDirection: 'column',
@@ -84,6 +86,7 @@ export function ErrorState({
       <Alert
         severity="error"
         variant="outlined"
+        className="qmp-fade"
         action={
           onRetry ? (
             <Button color="inherit" onClick={onRetry} sx={{ minHeight: 44 }}>

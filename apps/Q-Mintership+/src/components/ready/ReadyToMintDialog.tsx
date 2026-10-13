@@ -14,19 +14,10 @@
  * Reusable: any screen can open it (Home does, through LazyReadyToMintDialog).
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import {
-  Alert,
-  Box,
-  Button,
-  Checkbox,
-  CircularProgress,
-  FormControlLabel,
-  Typography,
-} from '@mui/material';
+import { Alert, Box, Button, Checkbox, FormControlLabel, Typography } from '@mui/material';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
-import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import { formatQort } from '../../data/accounts';
 import { NOMINATOR_MIN_LEVEL } from '../../data/constants';
 import { useBalance } from '../../hooks/useData';
@@ -37,6 +28,7 @@ import { joinMinter } from '../../writes/flows';
 import type { Signer } from '../../writes/runner';
 import { HubStepDialog } from '../common/HubStepDialog';
 import { AddressText } from '../common/Person';
+import { RefreshIcon } from '../common/RefreshButton';
 import { ResponsiveDialog } from '../common/ResponsiveDialog';
 import {
   NAMES_APP_LINK,
@@ -343,9 +335,7 @@ function FeeCheck({
     // Stays enabled while it reads, so focus stays on it; a second press waits for the first.
     <Button
       variant="outlined"
-      startIcon={
-        checking ? <CircularProgress size={18} color="inherit" /> : <RefreshOutlinedIcon />
-      }
+      startIcon={<RefreshIcon busy={checking} />}
       onClick={() => {
         if (checking) return;
         setPressedWith(balance);

@@ -278,7 +278,7 @@ export function AddressText({ address, full = false }: { address: string; full?:
           sx={{ width: 44, height: 44 }}
         >
           {copied ? (
-            <CheckOutlinedIcon fontSize="small" />
+            <CheckOutlinedIcon fontSize="small" className="qmp-pop" />
           ) : (
             <ContentCopyOutlinedIcon fontSize="small" />
           )}

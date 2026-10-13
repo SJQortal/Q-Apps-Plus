@@ -15,10 +15,9 @@
 import { lazy, Suspense, useId, useState } from 'react';
 import { Box, Button } from '@mui/material';
 import ChatBubbleOutlineOutlinedIcon from '@mui/icons-material/ChatBubbleOutlineOutlined';
-import ExpandMoreOutlinedIcon from '@mui/icons-material/ExpandMoreOutlined';
-import ExpandLessOutlinedIcon from '@mui/icons-material/ExpandLessOutlined';
 import type { CommentTarget } from '../../data/commentThread';
 import { formatCount } from '../../utils/format';
+import { ExpandChevron } from '../common/ExpandChevron';
 import { ListSkeleton } from '../common/states';
 import { useCommentCount, useInView, useStableTarget } from './useComments';
 
@@ -62,7 +61,7 @@ export function CommentsSection({
         aria-controls={open ? panelId : undefined}
         aria-label={`${text}: ${label}`}
         startIcon={<ChatBubbleOutlineOutlinedIcon />}
-        endIcon={open ? <ExpandLessOutlinedIcon /> : <ExpandMoreOutlinedIcon />}
+        endIcon={<ExpandChevron open={open} />}
         sx={{ minHeight: 44, ml: -1 }}
       >
         {text}

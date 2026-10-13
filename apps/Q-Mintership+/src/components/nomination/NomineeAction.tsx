@@ -20,9 +20,10 @@ function Done({ children }: { children: string }) {
     <Typography
       variant="body2"
       role="status"
+      className="qmp-fade"
       sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: readable('success') }}
     >
-      <CheckCircleOutlineOutlinedIcon aria-hidden sx={{ fontSize: 18 }} />
+      <CheckCircleOutlineOutlinedIcon aria-hidden className="qmp-pop" sx={{ fontSize: 18 }} />
       {children}
     </Typography>
   );

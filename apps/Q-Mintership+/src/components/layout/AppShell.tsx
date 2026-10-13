@@ -49,9 +49,10 @@ function useDecisionsBadge(isAdmin: boolean, publicKey: string): number {
   ).length;
 }
 
+/** While a page's code loads: shown only if that takes a moment (.qmp-fade-late). */
 function PageFallback() {
   return (
-    <Box sx={{ p: 2, maxWidth: 760, mx: 'auto', width: '100%' }}>
+    <Box className="qmp-fade-late" sx={{ p: 2, maxWidth: 760, mx: 'auto', width: '100%' }}>
       <ListSkeleton count={3} />
     </Box>
   );

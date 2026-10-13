@@ -415,8 +415,11 @@ describe('Decisions: stale invites', () => {
       )
     ).toBeVisible();
     // The one whose cancellation is already waiting can't be proposed again.
-    const waiting = within(list).getByText('Cancellation waiting for signatures').closest('li')!;
+    const waitingChip = within(list).getByText('Cancellation waiting for signatures');
+    const waiting = waitingChip.closest('li')!;
     expect(within(waiting as HTMLElement).queryByRole('button')).toBeNull();
+    // It was there when the list opened: it doesn't pop in (index.css → .qmp-pop).
+    expect(waitingChip.closest('.MuiChip-root')).not.toHaveClass('qmp-pop');
     // Only the two older ones without a waiting cancellation go into "for all".
     expect(
       await screen.findByRole('button', { name: 'Propose cancelling all 2 older ones' })

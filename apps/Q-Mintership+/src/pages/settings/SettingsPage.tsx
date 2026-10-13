@@ -240,7 +240,7 @@ export default function SettingsPage() {
               <SettingText
                 id="motion-label"
                 title="Motion"
-                hint="Rings, countdowns and the celebration animate. Follow your system, or turn animation down."
+                hint="Pages and lists fade in, refresh icons turn, rings fill and the celebration plays. Follow your system, or turn animation down."
               />
               <Select
                 size="small"

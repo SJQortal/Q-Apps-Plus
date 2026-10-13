@@ -5,7 +5,7 @@
  * The result is spoken once: "Link copied", or "Couldn't copy the link"
  * when the browser refuses, from a status region beside the button. The
  * button's name never changes, so going back to "Copy link" isn't read out
- * as news.
+ * as news. The tick pops in (index.css → .qmp-pop).
  */
 import { useEffect, useRef, useState } from 'react';
 import { Button, IconButton, Tooltip } from '@mui/material';
@@ -63,7 +63,9 @@ export function CopyLinkButton({
       <>
         <Button
           size="small"
-          startIcon={state === 'copied' ? <CheckOutlinedIcon /> : <LinkOutlinedIcon />}
+          startIcon={
+            state === 'copied' ? <CheckOutlinedIcon className="qmp-pop" /> : <LinkOutlinedIcon />
+          }
           onClick={() => void copy()}
           // A fixed name: it starts with the visible words, then says what the link is to.
           aria-label={`Copy link to ${what}`}
@@ -89,7 +91,7 @@ export function CopyLinkButton({
           onClick={() => void copy()}
           sx={{ width: 44, height: 44 }}
         >
-          {state === 'copied' ? <CheckOutlinedIcon /> : <LinkOutlinedIcon />}
+          {state === 'copied' ? <CheckOutlinedIcon className="qmp-pop" /> : <LinkOutlinedIcon />}
         </IconButton>
       </Tooltip>
       {status}

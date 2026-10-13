@@ -54,9 +54,16 @@ const BrandMark = styled('span')(({ theme }) => ({
   flexShrink: 0,
 }));
 
+/**
+ * A rail item. The selected item's highlight is its own layer: on a page
+ * change the old one fades out as the new one fades in and settles to full
+ * size, so the selection glides from item to item.
+ */
 const NavButton = styled('button', {
   shouldForwardProp: (prop) => prop !== '$active',
 })<{ $active?: boolean }>(({ theme, $active }) => ({
+  position: 'relative',
+  isolation: 'isolate',
   display: 'flex',
   alignItems: 'center',
   gap: theme.spacing(1.5),
@@ -66,7 +73,7 @@ const NavButton = styled('button', {
   border: 0,
   borderRadius:
     theme.qplus.id === 'hub30' || theme.qplus.id === 'hub20' ? theme.shape.borderRadius : 999,
-  backgroundColor: $active ? primarySoft(theme) : 'transparent',
+  backgroundColor: 'transparent',
   color: $active ? theme.palette.primary.main : theme.palette.text.primary,
   cursor: 'pointer',
   font: 'inherit',
@@ -74,7 +81,19 @@ const NavButton = styled('button', {
   fontWeight: $active ? 700 : 500,
   textAlign: 'left',
   transition: 'background-color 160ms ease, color 160ms ease',
-  '&:hover': { backgroundColor: $active ? primarySoft(theme) : theme.palette.action.hover },
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    inset: 0,
+    zIndex: -1,
+    borderRadius: 'inherit',
+    backgroundColor: primarySoft(theme),
+    opacity: $active ? 1 : 0,
+    scale: $active ? '1' : '0.92',
+    transition:
+      'opacity var(--qmp-motion-enter) var(--qmp-ease-fade), scale var(--qmp-motion-enter) var(--qmp-ease-enter)',
+  },
+  '&:hover': { backgroundColor: $active ? 'transparent' : theme.palette.action.hover },
   '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
   '& svg': { fontSize: 24, flexShrink: 0 },
   [theme.breakpoints.down('md')]: {
