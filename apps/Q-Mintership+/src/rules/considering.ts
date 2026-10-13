@@ -7,7 +7,9 @@
  * - Per admin only their latest publish counts; a `cleared` one means "no
  *   longer considering".
  * - A later answer on chain by the same admin (a signature, a rejection or
- *   a withdrawn signature) replaces it in the display.
+ *   a withdrawn signature) replaces it in the display. A record published
+ *   after their latest answer (reconsidering a rejection) shows until their
+ *   next one.
  * - A nomination's record (keyed by the nominee) carries over to its invite
  *   once the first signature puts it on chain, as long as it was published
  *   in this round (`since`).

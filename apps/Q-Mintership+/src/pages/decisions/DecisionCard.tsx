@@ -166,6 +166,8 @@ export function DecisionCard(props: DecisionCardProps) {
   const rejectable = canAct && canReject(d, view);
   const withdrawable = canAct && canWithdraw(d, view, now);
   const double = d.double ?? null;
+  // Rejected (in a block) and it can still count: they may say they are reconsidering.
+  const reconsiderable = signable && view.shown === 'rejected' && view.settled;
   const tally = d.tally;
   const confirming = tally ? tally.inFlight.filter((x) => x.approval) : [];
   const rejecting = tally ? tally.inFlight.filter((x) => !x.approval) : [];
@@ -195,6 +197,7 @@ export function DecisionCard(props: DecisionCardProps) {
       label: d.subject ? `${title}: ${subject.label}` : title,
       // Only an invite has a nominee who reads it too.
       nominee: d.kind === 'invite',
+      again: reconsiderable,
     });
 
   return (
@@ -383,7 +386,8 @@ export function DecisionCard(props: DecisionCardProps) {
               mine={considering.mine}
               label={fullTitle}
               // Never on a double.
-              canStart={rejectable && !double}
+              canStart={(rejectable || reconsiderable) && !double}
+              again={reconsiderable}
               onSet={() => consider('set')}
               onClear={() => consider('clear')}
             />

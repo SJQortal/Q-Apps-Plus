@@ -56,18 +56,25 @@ export function ConsideringCount({ count }: { count: number }) {
 /**
  * The admin's own Considering: a button, or "Considering" with "No longer
  * considering" once they are. `label` names the card for screen readers.
+ * An admin whose latest answer is a rejection gets "Reconsidering" (`again`).
  */
 export function ConsideringControls({
   mine,
   label,
   canStart,
+  again = false,
   onSet,
   onClear,
 }: {
   mine: MyConsideringState;
   label: string;
-  /** Considering can be started (the admin hasn't answered, and it can still count). */
+  /**
+   * Considering can be started: the admin hasn't answered, or their latest
+   * answer is a rejection in a block, and it can still count.
+   */
   canStart: boolean;
+  /** Their latest answer is a rejection: the button says "Reconsidering". */
+  again?: boolean;
   onSet: () => void;
   onClear: () => void;
 }) {
@@ -101,6 +108,7 @@ export function ConsideringControls({
     );
   }
   if (!canStart) return null;
+  const word = again ? 'Reconsidering' : 'Considering';
   return (
     <Button
       variant="text"
@@ -108,10 +116,10 @@ export function ConsideringControls({
       onClick={onSet}
       disabled={mine.busy}
       startIcon={<VisibilityOutlinedIcon aria-hidden />}
-      aria-label={`Considering: ${label}`}
+      aria-label={`${word}: ${label}`}
       sx={{ minHeight: 44 }}
     >
-      Considering
+      {word}
     </Button>
   );
 }
@@ -123,4 +131,6 @@ export interface ConsideringRequest {
   label: string;
   /** It is about a nominee: a waiting nomination or an invite. */
   nominee?: boolean;
+  /** The admin's latest answer is a rejection: they are reconsidering it. */
+  again?: boolean;
 }
