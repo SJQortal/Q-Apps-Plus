@@ -496,12 +496,13 @@ export function SinceLastVisit({ status, welcome }: { status: MyStatus; welcome:
               <MadeItem key={`made-${e.nominee}`} event={e} />
             ))}
             {made.length > TOP ? (
+              // Nominations lists them (open, and recently decided), not History.
               <MoreItem
                 Icon={HowToRegOutlinedIcon}
                 text={`And ${made.length - TOP} more of your nominations ended`}
-                to={PATHS.history}
-                label="History"
-                ariaLabel="See your other nominations in History"
+                to={PATHS.nominations}
+                label="Nominations"
+                ariaLabel="See your other nominations on Nominations"
               />
             ) : null}
             {admin?.newDecisions.length ? (

@@ -449,6 +449,37 @@ describe('Since your last visit: nominators', () => {
     );
   });
 
+  it('sends the rest of the nominations that ended to Nominations, which lists them', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'nominator',
+      setup: (world) => {
+        addNominatorHistory(world);
+        // A fourth: Nora also nominated Rae Ready ten days ago, and no Minter Admin signed it.
+        world.records.push({
+          name: 'Nora Nominator',
+          identifier: `qmp-nomination-${ADDR.ready}`,
+          created: NOW - 10 * 86_400_000 + 3_600_000,
+          body: {
+            v: 1,
+            nomineeAddress: ADDR.ready,
+            reason: 'Runs a reliable node and helps in the minting chat every week.',
+            links: [],
+          },
+        });
+        seedNominator(world);
+      },
+    });
+    const region = await panel();
+    const more = (
+      await within(region).findByText('And 1 more of your nominations ended', {}, T)
+    ).closest('li') as HTMLElement;
+    expect(
+      within(more).getByRole('link', { name: 'See your other nominations on Nominations' })
+    ).toHaveAttribute('href', '/nominations');
+    expect(within(more).getByRole('link')).toHaveTextContent('Nominations');
+    expect(within(region).getAllByRole('listitem')).toHaveLength(4);
+  });
+
   it('has nothing to compare from a visit saved before nominations were kept', async () => {
     await renderPage(<HomePage />, {
       persona: 'nominator',
