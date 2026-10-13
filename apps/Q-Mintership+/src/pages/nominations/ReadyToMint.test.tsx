@@ -331,6 +331,8 @@ describe('Ready to mint: search', () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Clear the search' }));
     expect(searchBox()).toHaveValue('');
+    // The button went with the empty state: focus is on the search box, not lost.
+    expect(searchBox()).toHaveFocus();
     await waitFor(async () => expect(rowLabels(await readyList())).toHaveLength(6));
   });
 

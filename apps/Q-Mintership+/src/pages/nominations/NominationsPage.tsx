@@ -9,7 +9,7 @@
  * to join, to nominate from (ReadyToMint.tsx); the same search box searches
  * it there, by address or by a name looked up on the node.
  */
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Alert,
@@ -94,6 +94,7 @@ export default function NominationsPage() {
   const filter = view === 'ready' ? 'all' : view;
   const ready = useReadyToMint(data?.loadedAt);
   const [search, setSearch] = useState('');
+  const searchRef = useRef<HTMLInputElement | null>(null);
   const [decidedShown, setDecidedShown] = useState(0);
   const [support, setSupport] = useState<{
     nominee: string;
@@ -236,6 +237,7 @@ export default function NominationsPage() {
           {/* One search for both views: Ready to mint matches addresses and looks up names. */}
           <TextField
             type="search"
+            inputRef={searchRef}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name or address"
@@ -307,7 +309,11 @@ export default function NominationsPage() {
             canSupport={canNominate && Boolean(publishSigner)}
             onSupport={openSupport}
             search={search}
-            onClearSearch={() => setSearch('')}
+            onClearSearch={() => {
+              setSearch('');
+              // The button goes with the empty state: keep focus on the search box.
+              searchRef.current?.focus();
+            }}
           />
         ) : (
           <Section title="Open nominations" id="open">
@@ -342,6 +348,7 @@ export default function NominationsPage() {
                 onAction={() => {
                   setSearch('');
                   setFilter('all');
+                  searchRef.current?.focus();
                 }}
               />
             ) : (
