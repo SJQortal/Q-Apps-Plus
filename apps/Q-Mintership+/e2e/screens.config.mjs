@@ -11,9 +11,12 @@
  * nothing can be sent.
  */
 import {
+  addFormerReady,
   addOtherPending,
   addReady,
   answerCore,
+  answerNameSearch,
+  FORMER_READY,
   createWorld,
   fakeAddress,
   ADDR,
@@ -26,6 +29,8 @@ const world = createWorld();
 addOtherPending(world);
 // Rae Ready has shown they're ready to mint (a join request, no nomination).
 addReady(world);
+// Two former members have asked to join again: Ready to mint marks them.
+addFormerReady(world);
 // Replaced in setup() by a visible 64×64 gradient, so avatars show in the shots.
 let PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAQklEQVR42u3OMQEAAAgDINc/9Mzg14MGLUmHCgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFbzwB2GwADvYAAAAASUVORK5CYII=',
@@ -124,7 +129,9 @@ export default {
       await route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
       return true;
     }
-    const answer = answerCore(world, url.pathname, url.searchParams);
+    const answer =
+      answerNameSearch(world, url.pathname, url.searchParams) ??
+      answerCore(world, url.pathname, url.searchParams);
     if (!answer) return false;
     if (answer.text !== undefined) {
       await route.fulfill({ status: answer.status, contentType: 'text/plain', body: answer.text });
@@ -160,6 +167,21 @@ export default {
     // Who is ready to mint: join requests without a nomination.
     { key: 'nominations-ready', path: '/nominations?show=ready&as=nominator', after: settle },
     { key: 'nominations-ready-admin', path: '/nominations?show=ready&as=admin', after: settle },
+    // Ready to mint searched by a name, resolved to its owner on the node.
+    {
+      key: 'nominations-ready-search',
+      path: '/nominations?show=ready&as=nominator',
+      after: async (page) => {
+        await settle(page);
+        await page
+          .getByRole('searchbox', { name: 'Search the people ready to mint by name or address' })
+          .fill('fern', { timeout: 4000 });
+        await page
+          .getByRole('link', { name: `${FORMER_READY.removed.name}: open their page` })
+          .waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
     // The nominee's own card comes first, with Accept nomination.
     { key: 'nominations-nominee', path: '/nominations?as=nominatedWaiting', after: settle },
     { key: 'nominate', path: '/nominate?as=nominator', after: settle },
@@ -198,6 +220,21 @@ export default {
         await page
           .getByRole('dialog', { name: /^Cancel an approved invite: / })
           .waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
+    // Propose cancelling all: two Hub steps for each stale invite (the intro).
+    {
+      key: 'decisions-cancel-all',
+      path: '/decisions?as=admin',
+      overlay: true,
+      after: async (page) => {
+        await settle(page);
+        await page.getByRole('button', { name: 'Show them', exact: true }).click({ timeout: 4000 });
+        await page
+          .getByRole('button', { name: /^Propose cancelling all \d+ older ones$/ })
+          .click({ timeout: 8000 });
+        await page.getByRole('dialog', { name: 'Cancel stale invites' }).waitFor({ timeout: 8000 });
         await page.waitForTimeout(400);
       },
     },
