@@ -179,7 +179,7 @@ describe('tenureOf', () => {
 });
 
 describe('computeActivity', () => {
-  it('counts signatures against the decisions an admin could have signed', () => {
+  it('counts answers against the decisions an admin could have answered', () => {
     const decisions = [
       decision('d1', 120_000, 'APPROVED', 121_000),
       decision('d2', 130_000, 'APPROVED', 131_000),
@@ -187,19 +187,46 @@ describe('computeActivity', () => {
     ];
     const approvals = [approval('Qa', 'd1', 120_100), approval('Qa', 'd2', 130_300)];
     const a = admin(run({ decisions, approvals }), 'Qa');
-    expect(a).toMatchObject({ eligible: 3, signed: 2, missed: 0, rejected: 0 });
+    expect(a).toMatchObject({ eligible: 3, answered: 2, signed: 2, missed: 1, rejected: 0 });
     expect(a.participation).toBeCloseTo(2 / 3);
-    expect(admin(run({ decisions, approvals }), 'Qb')).toMatchObject({ eligible: 3, signed: 0 });
+    expect(admin(run({ decisions, approvals }), 'Qb')).toMatchObject({
+      eligible: 3,
+      answered: 0,
+      signed: 0,
+      missed: 3,
+      participation: 0,
+    });
   });
 
-  it('counts a miss only for a decision that expired unsigned', () => {
+  it('counts a rejection as taking part: only doing nothing is a miss', () => {
     const decisions = [
-      decision('expired', 120_000, 'EXPIRED', 130_081),
-      decision('approved', 140_000, 'APPROVED', 141_000),
+      decision('signed', 120_000, 'APPROVED', 121_000),
+      decision('rejected', 130_000, 'EXPIRED', 140_081),
+      decision('nothing', 150_000, 'EXPIRED', 160_081),
+      decision('nothing-approved', 170_000, 'APPROVED', 171_000),
     ];
-    const report = run({ decisions, approvals: [approval('Qa', 'approved', 140_010)] });
-    expect(admin(report, 'Qa')).toMatchObject({ eligible: 2, signed: 1, missed: 1 });
-    expect(admin(report, 'Qb')).toMatchObject({ eligible: 2, signed: 0, missed: 1 });
+    const approvals = [
+      approval('Qa', 'signed', 120_100),
+      approval('Qa', 'rejected', 130_100, false),
+      approval('Qb', 'signed', 120_200),
+      approval('Qb', 'rejected', 130_200),
+      approval('Qb', 'nothing', 150_200),
+      approval('Qb', 'nothing-approved', 170_200, false),
+    ];
+    const report = run({ decisions, approvals });
+    const a = admin(report, 'Qa');
+    // Two answers of four; the two decisions they did nothing on are misses, however they ended.
+    expect(a).toMatchObject({ eligible: 4, answered: 2, signed: 1, rejected: 1, missed: 2 });
+    expect(a.participation).toBe(0.5);
+    // Three signatures and a rejection: every decision answered.
+    expect(admin(report, 'Qb')).toMatchObject({
+      eligible: 4,
+      answered: 4,
+      signed: 3,
+      rejected: 1,
+      missed: 0,
+      participation: 1,
+    });
   });
 
   it('takes the median blocks to sign, leaving out the admin’s own proposals', () => {
@@ -237,8 +264,8 @@ describe('computeActivity', () => {
     const report = run({ decisions, currentAdmins: ['Qa', 'Qb', 'Qc'] });
     const c = admin(report, 'Qc');
     expect(c.adminSince).toBe(150_000);
-    // 'before' and the add itself closed before Qc was an admin.
-    expect(c).toMatchObject({ eligible: 2, missed: 1, signed: 0, current: true });
+    // 'before' and the add itself closed before Qc was an admin; the two after are misses.
+    expect(c).toMatchObject({ eligible: 2, missed: 2, signed: 0, current: true });
     expect(admin(report, 'Qa').eligible).toBe(4);
     expect(admin(report, 'Qa').adminSince).toBeNull();
   });
@@ -293,7 +320,8 @@ describe('computeActivity', () => {
     expect(report.current.map((a) => a.address).sort()).toEqual(['Qa', 'Qb']);
     expect(report.former.map((a) => a.address)).toEqual(['Qd']);
     const d = admin(report, 'Qd');
-    expect(d).toMatchObject({ current: false, removedAt: 130_000, signed: 1, missed: 0 });
+    // The removal itself ended unanswered while Qd was an admin; d2 ended after.
+    expect(d).toMatchObject({ current: false, removedAt: 130_000, signed: 1, missed: 1 });
     // d1, the removal itself and d2 were waiting while Qd was an admin; d3 wasn't.
     expect(d.eligible).toBe(3);
     expect(admin(report, 'Qa').proposedByKind).toEqual({ removeAdmin: 1 });
@@ -325,19 +353,20 @@ describe('computeActivity', () => {
     });
   });
 
-  it('counts rejections apart: not signatures, not misses', () => {
+  it('counts rejections apart from signatures, and as taking part', () => {
     const decisions = [decision('exp', 120_000, 'EXPIRED', 130_081)];
     const report = run({ decisions, approvals: [approval('Qa', 'exp', 121_000, false)] });
     expect(admin(report, 'Qa')).toMatchObject({
       eligible: 1,
+      answered: 1,
       signed: 0,
       rejected: 1,
       missed: 0,
-      participation: 0,
+      participation: 1,
     });
   });
 
-  it('a rejection is an answer: it counts on a decision still waiting, and is never a miss', () => {
+  it('a rejection or a withdrawal is an answer: it counts on a decision still waiting, and is never a miss', () => {
     const decisions = [
       decision('open', 195_000, 'PENDING'),
       decision('ended', 120_000, 'REJECTED', 121_000),
@@ -351,9 +380,16 @@ describe('computeActivity', () => {
       approval('Qa', 'withdrawn', 140_300, false),
     ];
     const report = run({ decisions, approvals });
-    expect(admin(report, 'Qa')).toMatchObject({ eligible: 3, signed: 0, rejected: 3, missed: 0 });
-    // Nobody misses a decision that ended as rejected: only expired ones are missed.
-    expect(admin(report, 'Qb')).toMatchObject({ missed: 1, rejected: 0 });
+    expect(admin(report, 'Qa')).toMatchObject({
+      eligible: 3,
+      answered: 3,
+      signed: 0,
+      rejected: 3,
+      missed: 0,
+      participation: 1,
+    });
+    // Qb answered none: both decisions that ended are misses, the open one isn't yet.
+    expect(admin(report, 'Qb')).toMatchObject({ eligible: 2, missed: 2, rejected: 0 });
   });
 
   it('ignores approvals of other groups’ transactions', () => {
@@ -471,6 +507,7 @@ describe('sortActivity', () => {
     adminAgain: false,
     removedAt: null,
     eligible: 10,
+    answered: 0,
     signed: 0,
     rejected: 0,
     missed: 0,
@@ -482,17 +519,25 @@ describe('sortActivity', () => {
     ...extra,
   });
   const rows = [
-    row('Q1', { signed: 5, participation: 0.5, lastActiveHeight: 300 }),
-    row('Q2', { signed: 9, participation: 0.9, lastActiveHeight: 100 }),
+    row('Q1', { answered: 5, signed: 5, participation: 0.5, lastActiveHeight: 300 }),
+    row('Q2', { answered: 9, signed: 9, participation: 0.9, lastActiveHeight: 100 }),
     row('Q3', { signed: 0, participation: null, lastActiveHeight: null, eligible: 0 }),
-    row('Q4', { signed: 8, participation: 0.9, lastActiveHeight: 200 }),
+    // Eight signatures and two rejections of eleven.
+    row('Q4', {
+      eligible: 11,
+      answered: 10,
+      signed: 8,
+      rejected: 2,
+      participation: 0.9,
+      lastActiveHeight: 200,
+    }),
   ];
   const names: Record<string, string> = { Q1: 'delta', Q2: 'Bravo', Q3: 'alpha', Q4: 'Charlie' };
   const order = (sort: Parameters<typeof sortActivity>[1]) =>
     sortActivity(rows, sort, (a) => names[a]).map((r) => r.address);
 
-  it('sorts by participation (ties by signatures), nothing eligible last', () => {
-    expect(order('participation')).toEqual(['Q2', 'Q4', 'Q1', 'Q3']);
+  it('sorts by participation (ties by answers), nothing eligible last', () => {
+    expect(order('participation')).toEqual(['Q4', 'Q2', 'Q1', 'Q3']);
   });
   it('sorts by signatures', () => {
     expect(order('signatures')).toEqual(['Q2', 'Q4', 'Q1', 'Q3']);

@@ -46,6 +46,21 @@ describe('Activity', () => {
     expect(qortalCalls.every((c) => c.action === 'GET_USER_ACCOUNT')).toBe(true);
   });
 
+  it('counts any answer as taking part, and shows signatures and rejections apart', async () => {
+    await renderPage(<ActivityPage />, { persona: 'admin', path: '/activity' });
+    await admins();
+    const avery = screen.getByRole('group', { name: /^Avery Admin:/ });
+    for (const label of ['Answered', 'Signed', 'Rejected', 'Missed'])
+      expect(within(avery).getByText(label)).toBeInTheDocument();
+    expect(within(avery).getByRole('progressbar')).toHaveAttribute(
+      'aria-valuetext',
+      expect.stringMatching(/^\d+ of \d+ answered$/)
+    );
+    const how = screen.getByText('How this is counted').closest('details') as HTMLElement;
+    expect(how).toHaveTextContent(/Signing and rejecting are both answers/);
+    expect(how).toHaveTextContent(/only doing nothing is a miss/);
+  });
+
   it('shows an admin removed in the window under Former admins', async () => {
     await renderPage(<ActivityPage />, { persona: 'admin', path: '/activity' });
     await admins();
@@ -227,6 +242,7 @@ describe('Activity', () => {
     );
     const firstRow = within(table).getAllByRole('row')[1];
     expect(within(firstRow).getByText('Admin A')).toBeInTheDocument();
+    expect(within(firstRow).getByText(/^\d+ of \d+ answered$/)).toBeInTheDocument();
   });
 
   it('says what failed and offers Retry when the reads fail', async () => {

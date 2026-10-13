@@ -1,6 +1,7 @@
 /**
- * Minter Admin Activity: every admin's signatures against the decisions they
- * could have signed, misses, time to sign, proposals and last activity.
+ * Minter Admin Activity: every admin's answers (signatures and rejections,
+ * shown apart) against the decisions they could have answered, misses, time
+ * to sign, proposals and last activity.
  * Cards on phones and tablets (one or two columns), a sortable table from
  * 900 px. Former admins of the window are listed apart.
  */
@@ -241,21 +242,36 @@ function Who({
   );
 }
 
-function Participation({ row }: { row: AdminActivity }) {
-  return (
+/** "7 of 10 answered". */
+function answeredText(row: AdminActivity): string {
+  return `${ofTotal(row.answered, row.eligible)} answered`;
+}
+
+function Participation({ row, caption }: { row: AdminActivity; caption?: boolean }) {
+  const bar = (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
       <Box sx={{ flex: 1, minWidth: 48 }}>
         <ProgressBar
           value={row.participation ?? 0}
           label={
             row.participation === null
-              ? 'Participation: nothing to sign in this window'
+              ? 'Participation: nothing to answer in this window'
               : `Participation ${percent(row.participation)}`
           }
+          valueText={row.participation === null ? undefined : answeredText(row)}
         />
       </Box>
       <Typography sx={{ fontWeight: 700, minWidth: 40, textAlign: 'right' }}>
         {percent(row.participation)}
+      </Typography>
+    </Box>
+  );
+  if (!caption || !row.eligible) return bar;
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      {bar}
+      <Typography variant="body2" color="text.secondary" aria-hidden>
+        {answeredText(row)}
       </Typography>
     </Box>
   );
@@ -297,12 +313,13 @@ function AdminCard({ row, ctx }: { row: AdminActivity; ctx: RowContext }) {
           rowGap: 1,
         }}
       >
-        <Stat label="Signed" value={row.eligible ? ofTotal(row.signed, row.eligible) : NONE} />
+        <Stat label="Answered" value={row.eligible ? ofTotal(row.answered, row.eligible) : NONE} />
+        <Stat label="Signed" value={formatCount(row.signed)} />
+        <Stat label="Rejected" value={formatCount(row.rejected)} />
         <Stat label="Missed" value={formatCount(row.missed)} />
         <Stat label="Proposed" value={formatCount(row.proposed)} />
         <Stat label="Median time to sign" value={blocksAsTime(row.medianBlocksToSign, now)} />
         <Stat label="Last active" value={lastActive(row.lastActiveHeight, now)} />
-        {row.rejected ? <Stat label="Rejected" value={formatCount(row.rejected)} /> : null}
       </Box>
       {row.proposed ? (
         <Typography variant="body2" color="text.secondary">
@@ -443,10 +460,10 @@ function AdminTable({
                 <Who row={row} ctx={ctx} size={32} inlineYou />
               </Box>
               <Box component="td" sx={{ width: '18%', minWidth: 130 }}>
-                <Participation row={row} />
+                <Participation row={row} caption />
               </Box>
               <td className="num">
-                {row.eligible ? ofTotal(row.signed, row.eligible) : NONE}
+                {row.eligible ? formatCount(row.signed) : NONE}
                 {row.rejected ? (
                   <Typography variant="body2" color="text.secondary">
                     {row.rejected} rejected

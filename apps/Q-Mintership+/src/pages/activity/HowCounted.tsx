@@ -54,8 +54,8 @@ export function HowCounted({ data }: { data: ActivityData | undefined }) {
         }}
       >
         <Typography component="li" variant="body2">
-          Only signatures on MINTER decisions count: adding someone, removing or banning them,
-          lifting a ban, cancelling an invite, and making or removing a Minter Admin.
+          Only answers on MINTER decisions count: adding someone, removing or banning them, lifting
+          a ban, cancelling an invite, and making or removing a Minter Admin.
         </Typography>
         <Typography component="li" variant="body2">
           A decision is eligible for an admin when it was waiting for signatures while they were a
@@ -63,14 +63,18 @@ export function HowCounted({ data }: { data: ActivityData | undefined }) {
           admins count until they stopped.
         </Typography>
         <Typography component="li" variant="body2">
-          Only an admin's latest answer on a decision counts, as on chain, and only if it landed in
-          time. Rejections (a withdrawn signature is one too) are shown apart and never count as
-          signatures.
+          Participation is the share of eligible decisions they answered. Signing and rejecting are
+          both answers, so both count as taking part; a withdrawn signature is a rejection.
+          Signatures and rejections are shown apart.
         </Typography>
         <Typography component="li" variant="body2">
-          Missed means a decision expired while they were an admin and they neither signed nor
-          rejected it: a rejection is an answer, not a miss. Decisions still collecting signatures
-          count for an admin once they have signed or rejected.
+          Only an admin's latest answer on a decision counts, as on chain, and only if it landed in
+          time.
+        </Typography>
+        <Typography component="li" variant="body2">
+          Missed means a decision ended (approved, rejected or expired) while they were an admin and
+          they never answered it: only doing nothing is a miss. Decisions still collecting
+          signatures count for an admin once they have answered.
         </Typography>
         <Typography component="li" variant="body2">
           Time to sign is the median from a decision's block to their signature's block, at the live

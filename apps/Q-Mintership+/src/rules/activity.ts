@@ -10,16 +10,19 @@
  *   h + max − 1, or the block before it was approved or rejected if that
  *   came first (an approval in block B counts from B + 1, rules/timing.ts).
  * - It is "eligible" for an admin when that stretch overlaps both the
- *   window and a time they were an admin. A signature always makes it
- *   eligible: only admins can sign.
+ *   window and a time they were an admin. An answer always makes it
+ *   eligible: only admins can answer.
  * - Only each admin's latest approval on a decision counts, as Core does,
  *   and only one that landed in time. `approval: false` is a rejection:
  *   counted apart, never as a signature.
- * - Decisions still waiting count once the admin has acted on them (signed
- *   or rejected); an unanswered open decision is neither a miss nor a gap yet.
- * - Missed: it expired, they were an admin until its last useful block,
- *   and they neither signed nor rejected it. A rejection (Reject, or a
- *   withdrawn signature) is an answer, never a miss.
+ * - Answered: their latest answer is a signature or a rejection (Reject, or
+ *   a withdrawn signature). Participation is answered ÷ eligible, so any
+ *   answer is taking part.
+ * - Decisions still waiting count once the admin has answered them; an
+ *   unanswered open decision is neither a miss nor a gap yet.
+ * - Missed: it ended (approved, rejected or expired), they were an admin
+ *   until its last useful block, and they never answered it. Only doing
+ *   nothing is a miss.
  * - Time to sign leaves out decisions the admin proposed themselves (the
  *   proposer signs in the next block, which says nothing about response).
  */
@@ -178,14 +181,16 @@ export interface AdminActivity {
   adminAgain: boolean;
   /** Block of their newest approved REMOVE_GROUP_ADMIN that was read (former admins). */
   removedAt: number | null;
-  /** Decisions they could have signed in the window. */
+  /** Decisions they could have answered in the window. */
   eligible: number;
+  /** Signed or rejected: signed + rejected. */
+  answered: number;
   signed: number;
   /** Their latest answer on it was a rejection (not a signature). */
   rejected: number;
-  /** Expired while they were an admin, and they didn't act on it. */
+  /** Ended while they were an admin, and they never answered it. */
   missed: number;
-  /** signed / eligible, or null when nothing was eligible. */
+  /** answered / eligible, or null when nothing was eligible. */
   participation: number | null;
   /** Median blocks from a decision's block to their signature's (own proposals left out). */
   medianBlocksToSign: number | null;
@@ -316,7 +321,7 @@ export function computeActivity(input: ActivityInput): ActivityReport {
       } else if (row) {
         rejected++;
       } else if (
-        span.outcome === 'expired' &&
+        span.outcome !== 'pending' &&
         span.lastSignatureHeight >= S &&
         span.lastSignatureHeight <= E &&
         contains(tenure, span.lastSignatureHeight)
@@ -347,10 +352,11 @@ export function computeActivity(input: ActivityInput): ActivityReport {
       adminAgain: adminSince !== null && removes.some((r) => r.height < adminSince),
       removedAt: !isCurrent && removes.length ? removes[removes.length - 1].height : null,
       eligible,
+      answered: signed + rejected,
       signed,
       rejected,
       missed,
-      participation: eligible ? signed / eligible : null,
+      participation: eligible ? (signed + rejected) / eligible : null,
       medianBlocksToSign: median(delays),
       proposed,
       proposedByKind,
@@ -389,7 +395,7 @@ export function sortActivity(
   return [...rows].sort((a, b) => {
     let order = 0;
     if (sort === 'participation')
-      order = desc(a.participation, b.participation) || b.signed - a.signed;
+      order = desc(a.participation, b.participation) || b.answered - a.answered;
     else if (sort === 'signatures')
       order = b.signed - a.signed || desc(a.participation, b.participation);
     else if (sort === 'lastActive') order = desc(a.lastActiveHeight, b.lastActiveHeight);

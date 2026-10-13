@@ -59,6 +59,21 @@ describe('Minter Admin Activity reads (mock world)', () => {
     expect(data.pulse.approvalRate).toBeGreaterThan(0.5);
   });
 
+  it('counts every answer as taking part: signed or rejected', async () => {
+    installWorld();
+    const data = await loadActivity({ days: 180 });
+    const rows = [...data.report.current, ...data.report.former];
+    for (const row of rows) {
+      expect(row.answered).toBe(row.signed + row.rejected);
+      if (row.eligible) expect(row.participation).toBeCloseTo(row.answered / row.eligible);
+    }
+    // The mock world's admins who rejected something: their rejections raise participation.
+    const rejecters = rows.filter((row) => row.rejected > 0);
+    expect(rejecters.length).toBeGreaterThan(0);
+    for (const row of rejecters)
+      expect(row.participation as number).toBeGreaterThan(row.signed / row.eligible);
+  });
+
   it('summarises the group’s pulse for the window', async () => {
     installWorld();
     const data = await loadActivity({ days: 30 });
