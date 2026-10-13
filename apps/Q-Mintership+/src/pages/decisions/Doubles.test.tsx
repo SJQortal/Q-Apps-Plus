@@ -89,9 +89,34 @@ describe('Doubles on the Decisions page', () => {
       /^The same change is already waiting in an earlier proposal: answer that one instead\. Once one of them passes, there’s no need to sign the other\. This one runs out by itself at block/
     );
     expect(
-      within(newer).getByRole('link', {
-        name: 'The earlier proposal: Make a Minter Admin, Member 9',
-      })
+      within(newer).getByRole('link', { name: 'The earlier proposal about Member 9' })
+    ).toHaveAttribute('href', `/decisions/${doubles.duplicate.older}`);
+  });
+
+  it('names the earlier proposal’s link after its subject, whoever proposed each', async () => {
+    let doubles = {} as Doubles;
+    await renderPage(<DecisionsPage />, {
+      persona: 'admin',
+      path: '/decisions',
+      route: '/decisions',
+      setup: (world: World) => {
+        doubles = addDoubles(world);
+        // Member 9 proposed the newer one themselves: "Become", where the older one is "Make".
+        const newer = world.pending.find(
+          (tx: { signature: string }) => tx.signature === doubles.duplicate.signature
+        );
+        newer.creatorAddress = doubles.duplicate.subject;
+        newer.ownerPublicKey = world.accounts.get(doubles.duplicate.subject)?.publicKey;
+      },
+    });
+    const newer = await screen.findByRole(
+      'article',
+      { name: 'Become a Minter Admin, Member 9' },
+      T
+    );
+    expect(card(MEMBER_9)).not.toBe(newer);
+    expect(
+      within(newer).getByRole('link', { name: 'The earlier proposal about Member 9' })
     ).toHaveAttribute('href', `/decisions/${doubles.duplicate.older}`);
   });
 
@@ -120,7 +145,7 @@ describe('Doubles on the Decisions page', () => {
   it('links the approved earlier proposal once that person’s history is read already', async () => {
     const u = user();
     const { doubles } = await openQueue();
-    const name = 'The earlier proposal: Become a Minter Admin, Admin C';
+    const name = 'The earlier proposal about Admin C';
     expect(within(card(ALREADY)).queryByRole('link', { name })).toBeNull();
     // Their own page (or their Home) read it; the queue never reads it for this.
     await getAddressHistory(doubles.alreadyAdmin.subject);
@@ -286,9 +311,7 @@ describe('A double’s own page', () => {
     });
     const page = await screen.findByRole('article', { name: 'Make a Minter Admin, Member 9' }, T);
     expect(
-      within(page).getByRole('link', {
-        name: 'The earlier proposal: Make a Minter Admin, Member 9',
-      })
+      within(page).getByRole('link', { name: 'The earlier proposal about Member 9' })
     ).toHaveAttribute('href', `/decisions/${older}`);
     // Like the earlier one, it says what it does to the target.
     expect(await within(page).findByText(/^If this passes/, {}, T)).toBeInTheDocument();

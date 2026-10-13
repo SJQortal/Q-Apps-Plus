@@ -39,16 +39,16 @@ export function DoubleNote({
   decision: d,
   double,
   name,
-  label,
   now,
   advice,
 }: {
   decision: Decision;
   double: DecisionDouble;
-  /** The subject as the card shows them. */
+  /**
+   * The subject as the card shows them, also for the link's name: the other
+   * proposal is about them too, though its title can differ (who proposed it).
+   */
   name: string;
-  /** The card's full title, for the link's name. */
-  label: string;
   now: ChainNow;
   /** Minter Admins also read that there's no need to sign it, and what to do instead. */
   advice: boolean;
@@ -68,7 +68,7 @@ export function DoubleNote({
             component={RouterLink}
             to={decisionPath(other)}
             color="inherit"
-            aria-label={`The earlier proposal: ${label}`}
+            aria-label={`The earlier proposal about ${name}`}
             sx={{ minHeight: 44, textDecoration: 'underline' }}
           >
             The earlier proposal

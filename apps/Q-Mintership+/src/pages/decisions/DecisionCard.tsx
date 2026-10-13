@@ -281,14 +281,7 @@ export function DecisionCard(props: DecisionCardProps) {
       ) : null}
 
       {double ? (
-        <DoubleNote
-          decision={d}
-          double={double}
-          name={subject.label}
-          label={fullTitle}
-          now={now}
-          advice={canAct}
-        />
+        <DoubleNote decision={d} double={double} name={subject.label} now={now} advice={canAct} />
       ) : null}
 
       <KindDetails
