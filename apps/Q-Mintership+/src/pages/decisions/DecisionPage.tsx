@@ -39,6 +39,8 @@ import type { Signer } from '../../writes/runner';
 import { DecidedCard } from './DecidedCard';
 import { DecisionCard, type NominationsState, type SubjectFacts } from './DecisionCard';
 import { SignDialog } from './SignDialog';
+import { CommentsSection } from '../../components/comments/CommentsSection';
+import { commentTarget } from '../../data/commentThread';
 import { RejectDialog, type RejectMode } from './RejectDialog';
 import type { LabelOf } from './targetShiftUi';
 import { impactIn, riskIn, useShift } from './useShift';
@@ -183,7 +185,14 @@ function LinkView({
         )}
       </Section>
       <MoreLinks tx={link.tx} />
-      {/* Comments on this decision go here. */}
+      <Section title="Comments" id="decision-comments">
+        <CommentsSection
+          target={commentTarget('decision', signature, link.tx.timestamp - 60_000)}
+          label="this decision"
+          defaultOpen
+          variant="plain"
+        />
+      </Section>
     </>
   );
 }
@@ -338,10 +347,10 @@ function PendingView({
           risk={riskIn(shift, decision)}
           labelOf={labelOf}
           copyLink={false}
+          commentsOpen
         />
       </Section>
       <MoreLinks tx={tx} />
-      {/* Comments on this decision go here. */}
       <SignDialog
         decision={signTarget}
         signer={signer}

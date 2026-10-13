@@ -121,6 +121,8 @@ export interface DecisionCardProps {
   labelOf?: LabelOf;
   /** A "Copy link" to the decision's own page (default; its page has one in the header). */
   copyLink?: boolean;
+  /** Its comments start open (on the decision's own page). */
+  commentsOpen?: boolean;
 }
 
 export function DecisionCard(props: DecisionCardProps) {
@@ -147,6 +149,7 @@ export function DecisionCard(props: DecisionCardProps) {
     risk,
     labelOf,
     copyLink = true,
+    commentsOpen = false,
   } = props;
   const [riskOpen, setRiskOpen] = useState(false);
   const riskId = useId();
@@ -429,7 +432,11 @@ export function DecisionCard(props: DecisionCardProps) {
         </Box>
       ) : null}
 
-      <CommentsSection target={decisionCommentTarget(d, nomination)} label={fullTitle} />
+      <CommentsSection
+        target={decisionCommentTarget(d, nomination)}
+        label={fullTitle}
+        defaultOpen={commentsOpen}
+      />
     </Card>
   );
 }

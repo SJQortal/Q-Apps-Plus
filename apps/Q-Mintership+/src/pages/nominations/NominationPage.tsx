@@ -171,6 +171,7 @@ function NominationView({ address }: { address: string }) {
             now={chain.data}
             hideNominee
             copyLink={false}
+            comments="open"
             actions={<CurrentActions nomination={current} viewer={viewer.status} />}
           />
         </Section>
@@ -201,8 +202,6 @@ function NominationView({ address }: { address: string }) {
         )}
         {history.data?.truncated ? <TruncatedNote what="their history" /> : null}
       </Section>
-
-      {/* Comments on this nomination go here. */}
 
       <Box>
         <Button component={RouterLink} to={personPath(address)} sx={{ minHeight: 44 }}>
