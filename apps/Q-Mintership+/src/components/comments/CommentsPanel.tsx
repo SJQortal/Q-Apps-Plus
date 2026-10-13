@@ -6,7 +6,7 @@
  * device). Every write is explained in its Hub step first, and shows at once
  * once Hub sends it. Refreshes every minute while open and visible.
  */
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Box, Button, TextField, Typography } from '@mui/material';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import { COMMENT_MAX, commentTextProblems, type CommentRecord } from '../../data/commentRecords';
@@ -135,6 +135,12 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
     setInline({ ...inline, error: null });
     openDialog({ kind: 'publish', mode: inline.mode, text: inline.text, about: inline.comment });
   };
+  // Cancel on a reply or an edit: back to the comment it was about (the editor goes away).
+  const cancelInline = () => {
+    if (inline)
+      document.querySelector<HTMLElement>(`[data-comment="${inline.comment.identifier}"]`)?.focus();
+    setInline(null);
+  };
 
   const publish = (onStage: (stage: WriteStage) => void) => {
     if (!dialog || dialog.kind !== 'publish' || !signer)
@@ -194,7 +200,7 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
         error={inline.error}
         onChange={(text) => setInline({ ...inline, text })}
         onSubmit={submitInline}
-        onCancel={() => setInline(null)}
+        onCancel={cancelInline}
         submitLabel="Save"
         autoFocus
       />
@@ -299,7 +305,7 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
                       error={replying.error}
                       onChange={(text) => setInline({ ...replying, text })}
                       onSubmit={submitInline}
-                      onCancel={() => setInline(null)}
+                      onCancel={cancelInline}
                       submitLabel="Post reply"
                       autoFocus
                     />
@@ -514,6 +520,12 @@ function Composer({
   hint?: string;
   autoFocus?: boolean;
 }) {
+  const field = useRef<HTMLTextAreaElement | null>(null);
+  // In an effect, not autoFocus: a menu that opened it (More → Edit) puts focus
+  // back on its own button as it closes, after autoFocus has run.
+  useEffect(() => {
+    if (autoFocus) field.current?.focus();
+  }, [autoFocus]);
   return (
     <Box
       component="form"
@@ -529,7 +541,7 @@ function Composer({
         minRows={2}
         maxRows={8}
         fullWidth
-        autoFocus={autoFocus}
+        inputRef={field}
         error={Boolean(error)}
         helperText={
           error ??

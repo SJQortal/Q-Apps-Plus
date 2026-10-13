@@ -210,11 +210,13 @@ export function CommentItem(props: CommentItemProps) {
       component="li"
       tabIndex={-1}
       data-comment={c.identifier}
-      sx={{
+      sx={(theme) => ({
         py: 1.25,
         outline: 'none',
+        // Focus comes here when a dialog or an editor about it closes.
+        '&:focus-visible': { boxShadow: `0 0 0 2px ${theme.palette.primary.main}` },
         '& + &': isReply ? {} : { borderTop: 1, borderColor: 'divider' },
-      }}
+      })}
     >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.75 }}>

@@ -314,6 +314,37 @@ describe('CommentsSection', () => {
     expect(await screen.findByRole('menuitem', { name: 'Show for everyone again' })).toBeVisible();
   });
 
+  it('by keyboard: Edit from More puts focus in the editor, and Cancel puts it back on the comment', async () => {
+    const user = userEvent.setup();
+    const { ids } = await show('nominator', { open: true });
+    await region();
+    const li = await waitFor(() => commentLi(ids.sameHere) ?? Promise.reject(new Error('not yet')));
+    within(li).getByRole('button', { name: 'Comment by Nora Nominator: more actions' }).focus();
+    await user.keyboard('{Enter}');
+    expect(await screen.findByRole('menuitem', { name: 'Edit' })).toHaveFocus();
+    await user.keyboard('{Enter}');
+    // The menu closing puts focus back on More first: the editor takes it after that.
+    await waitFor(() =>
+      expect(within(li).getByRole('textbox', { name: 'Edit your comment' })).toHaveFocus()
+    );
+    within(li).getByRole('button', { name: 'Cancel' }).focus();
+    await user.keyboard('{Enter}');
+    expect(within(li).queryByRole('textbox', { name: 'Edit your comment' })).toBeNull();
+    expect(commentLi(ids.sameHere)).toHaveFocus();
+  });
+
+  it("a reply's Cancel puts focus back on the comment it answered", async () => {
+    const user = userEvent.setup();
+    const { ids } = await show('nominator', { open: true });
+    await region();
+    const li = await waitFor(() => commentLi(ids.answer) ?? Promise.reject(new Error('not yet')));
+    await user.click(within(li).getByRole('button', { name: 'Reply to Wren Waiting' }));
+    expect(screen.getByRole('textbox', { name: 'Reply to Wren Waiting' })).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('textbox', { name: 'Reply to Wren Waiting' })).toBeNull();
+    expect(commentLi(ids.answer)).toHaveFocus();
+  });
+
   it('says what a name is and where to register one, without a name', async () => {
     const user = userEvent.setup();
     await show('newcomer', { open: true });
