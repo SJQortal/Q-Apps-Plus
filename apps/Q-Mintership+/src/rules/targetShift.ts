@@ -25,6 +25,7 @@
  * removing someone who isn't an admin, or the group's owner (it can never be
  * removed), changes nothing. Several changes about one account count once.
  */
+import { MINTER_GROUP_ID } from '../data/constants';
 import type { TxRow } from '../data/types';
 import type { Decision, DecisionKind } from './decision';
 import { approvalsNeeded, meetsThreshold, type ApprovalThreshold } from './threshold';
@@ -456,6 +457,81 @@ export function approvedAdminChanges(rows: readonly TxRow[]): ApprovedAdminChang
   return out;
 }
 
+/** A MINTER LEAVE_GROUP, and whether the leaver was a Minter Admin when they left. */
+export interface AdminLeave {
+  signature?: string;
+  address: string;
+  /** The block it is in. */
+  height: number;
+  /**
+   * Null when nothing in the rows read says. targetSteps then takes it as a
+   * member's leave, as most are: with nothing on record either way, counting
+   * every such leave as unknown would leave almost no step with a number.
+   */
+  wasAdmin: boolean | null;
+}
+
+function isMinterRow(tx: TxRow): boolean {
+  return typeof tx.groupId === 'number'
+    ? tx.groupId === MINTER_GROUP_ID
+    : tx.txGroupId === MINTER_GROUP_ID;
+}
+
+/**
+ * The confirmed MINTER LEAVE_GROUP rows among `rows`, each once, newest
+ * first. Core deletes a leaving admin's admin row along with their member
+ * row, with no approval, so a leave can move the admin count too. Whether
+ * the leaver was an admin then: the newest approved admin change about them
+ * before the leave (an add: yes; a removal: no), or their own JOIN_GROUP
+ * after it (someone who joins is a member, not an admin); failing those,
+ * yes when they signed a GROUP_APPROVAL before it (`approvals`: the caller
+ * passes only those on MINTER decisions, which only its admins can sign).
+ * Null when none of these is in the rows read. MINTER's owner can't leave
+ * and is skipped.
+ */
+export function adminLeaves(
+  rows: readonly TxRow[],
+  changes: readonly ApprovedAdminChange[],
+  options: { owner?: string | null; approvals?: readonly TxRow[] } = {}
+): AdminLeave[] {
+  const confirmed = (tx: TxRow | null | undefined, type: string): tx is TxRow =>
+    Boolean(
+      tx &&
+      tx.type === type &&
+      typeof tx.blockHeight === 'number' &&
+      typeof tx.creatorAddress === 'string' &&
+      tx.creatorAddress
+    );
+  const joins = rows.filter((tx) => confirmed(tx, 'JOIN_GROUP') && isMinterRow(tx));
+  const signed = (options.approvals ?? []).filter((tx) => confirmed(tx, 'GROUP_APPROVAL'));
+  const seen = new Set<string>();
+  const out: AdminLeave[] = [];
+  for (const tx of rows) {
+    if (!confirmed(tx, 'LEAVE_GROUP') || !isMinterRow(tx) || seen.has(tx.signature)) continue;
+    const address = tx.creatorAddress as string;
+    const height = tx.blockHeight as number;
+    if (options.owner && address === options.owner) continue;
+    seen.add(tx.signature);
+    let newest: { height: number; wasAdmin: boolean } | null = null;
+    for (const c of changes) {
+      if (c.address !== address || c.height >= height) continue;
+      if (!newest || c.height > newest.height) newest = { height: c.height, wasAdmin: c.added };
+    }
+    for (const j of joins) {
+      const at = j.blockHeight as number;
+      if (j.creatorAddress !== address || at >= height) continue;
+      if (!newest || at > newest.height) newest = { height: at, wasAdmin: false };
+    }
+    const wasAdmin =
+      newest?.wasAdmin ??
+      (signed.some((a) => a.creatorAddress === address && (a.blockHeight as number) < height)
+        ? true
+        : null);
+    out.push({ signature: tx.signature, address, height, wasAdmin });
+  }
+  return out.sort((a, b) => b.height - a.height);
+}
+
 export interface TargetStep extends ApprovedAdminChange {
   countBefore: number;
   countAfter: number;
@@ -463,31 +539,76 @@ export interface TargetStep extends ApprovedAdminChange {
   neededAfter: number;
 }
 
+type CountEvent = { at: number; change: ApprovedAdminChange } | { at: number; leave: AdminLeave };
+
+/** Approved changes and leaves, newest first (in one block, a change after a leave). */
+function newestFirstEvents(
+  changes: readonly ApprovedAdminChange[],
+  leaves: readonly AdminLeave[]
+): CountEvent[] {
+  const events: CountEvent[] = [
+    ...changes.map((change) => ({ at: change.height, change })),
+    ...leaves.map((leave) => ({ at: leave.height, leave })),
+  ];
+  return events.sort((a, b) => b.at - a.at || Number('leave' in a) - Number('leave' in b));
+}
+
 /**
  * The admin count and target before and after each approved admin change,
  * newest first, worked back from today's count. Each approved change moved
- * the count by one. `changes` must hold every approved admin change from
- * the oldest one wanted up to now (one unbroken read), or the counts drift.
+ * the count by one, and so did each leave of an admin (`leaves`, with no
+ * step of its own). `changes` and `leaves` must hold every approved admin
+ * change and leave from the oldest one wanted up to now (one unbroken read),
+ * or the counts drift. A leave with nothing on record about the leaver
+ * (wasAdmin null) is taken as a member's.
  */
 export function targetSteps(
   changes: readonly ApprovedAdminChange[],
   currentCount: number,
-  threshold: ApprovalThreshold
+  threshold: ApprovalThreshold,
+  leaves: readonly AdminLeave[] = []
 ): TargetStep[] {
-  const newestFirst = [...changes].sort((a, b) => b.height - a.height);
   let running = Math.max(0, currentCount);
-  return newestFirst.map((change) => {
+  const steps: TargetStep[] = [];
+  for (const event of newestFirstEvents(changes, leaves)) {
+    if ('leave' in event) {
+      if (event.leave.wasAdmin === true) running += 1;
+      continue;
+    }
+    const { change } = event;
     const countAfter = running;
     const countBefore = Math.max(0, change.added ? countAfter - 1 : countAfter + 1);
     running = countBefore;
-    return {
+    steps.push({
       ...change,
       countBefore,
       countAfter,
       neededBefore: approvalsNeeded(threshold, countBefore),
       neededAfter: approvalsNeeded(threshold, countAfter),
-    };
-  });
+    });
+  }
+  return steps;
+}
+
+/**
+ * The admin count at the end of block `height`, worked back from today's
+ * count through the approved changes and leaves after it, as targetSteps
+ * does.
+ */
+export function adminCountAt(
+  changes: readonly ApprovedAdminChange[],
+  leaves: readonly AdminLeave[],
+  currentCount: number,
+  height: number
+): number {
+  let running = Math.max(0, currentCount);
+  for (const event of newestFirstEvents(changes, leaves)) {
+    if (event.at <= height) break;
+    if ('leave' in event) {
+      if (event.leave.wasAdmin === true) running += 1;
+    } else running = Math.max(0, event.change.added ? running - 1 : running + 1);
+  }
+  return running;
 }
 
 /** The steps that moved the target (not just the admin count). */

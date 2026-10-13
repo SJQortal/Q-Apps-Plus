@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderPage } from '../../test/render';
+import { GROUP, MS_PER_BLOCK, NOW, TIP } from '../../../e2e/world.mjs';
 import { fetchCalls, mockFetchRoute, qortalCalls } from '../../test/setup';
 import { SETTINGS_KEYS } from '../../state/settings';
 import ActivityPage from './ActivityPage';
@@ -99,6 +100,40 @@ describe('Activity', () => {
     expect(items[1]).toHaveTextContent(
       /^8 → 9 signatures on .+ was made a Minter Admin \(20 → 21 admin seats\)\.$/
     );
+  });
+
+  it('counts an admin who has left MINTER since: the leave took their admin seat away too', async () => {
+    await renderPage(<ActivityPage />, {
+      persona: 'learner',
+      path: '/activity',
+      setup: (world) => {
+        // The admin made one 20 days ago left 5 days ago: one admin seat fewer today.
+        const who = world.activity.addedAdmins.lateAdded as string;
+        world.admins.splice(world.admins.indexOf(who), 1);
+        world.members.splice(world.members.indexOf(who), 1);
+        const h = TIP - 5 * world.activity.dayBlocks;
+        world.decided.push({
+          type: 'LEAVE_GROUP',
+          timestamp: NOW - (TIP - h) * MS_PER_BLOCK,
+          reference: 'leave-ref',
+          fee: '0.01000000',
+          signature: 'late-admin-leave',
+          txGroupId: 0,
+          blockHeight: h,
+          approvalStatus: 'NOT_REQUIRED',
+          creatorAddress: who,
+          groupId: GROUP,
+        });
+      },
+    });
+    const card = (await screen.findByRole('heading', { name: 'Target changes' }, { timeout: 4000 }))
+      .parentElement as HTMLElement;
+    const items = within(card).getAllByRole('listitem');
+    // The same steps as before the leave, not one seat lower.
+    expect(items[0]).toHaveTextContent(
+      /Fern Former was removed as a Minter Admin \(21 → 20 admin seats\)\.$/
+    );
+    expect(items[1]).toHaveTextContent(/^8 → 9 signatures on .+ \(20 → 21 admin seats\)\.$/);
   });
 
   it('switches the window and remembers the choice', async () => {
