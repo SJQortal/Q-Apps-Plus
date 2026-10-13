@@ -298,7 +298,8 @@ function Votes({ view }: { view: ShownPoll }) {
               <AvatarStack
                 people={people.map((p) => ({ address: p.address, name: p.name }))}
                 label={`Voted ${VOTE_LABEL[v]}`}
-                max={10}
+                // Every voter, by name: one vote per admin, so at most the admin list.
+                max={people.length}
                 size={24}
                 showNames
               />

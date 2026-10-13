@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ADMIN_POLL_IDS, NULL_OWNER, type World } from '../../../e2e/world.mjs';
+import { ADMIN_POLL_IDS, NULL_OWNER, fakeAddress, type World } from '../../../e2e/world.mjs';
 import { fromData64 } from '../../data/adminPollRecords';
 import { resetPendingPollWrites } from '../../state/adminPolls';
 import { withAdminPolls } from '../../test/adminPolls';
@@ -184,5 +184,36 @@ describe('near the end of voting', () => {
       within(card).getByText('Your vote came after the end, so it doesn’t count.')
     ).toBeVisible();
     expect(within(card).queryByText(/^You voted/)).toBeNull();
+  });
+});
+
+describe('who voted what', () => {
+  it('names every voter, however many voted the same', async () => {
+    await renderPage(<AdminPollPage />, {
+      persona: 'admin',
+      path: `/decisions/polls/${ADMIN_POLL_IDS.voted}`,
+      route: '/decisions/polls/:id',
+      setup: withAdminPolls('admin', (world: World) => {
+        const signers = world.admins.filter((a: string) => a !== NULL_OWNER);
+        // Ten more Yes votes: eleven with Admin A's.
+        for (const i of [1, 2, 3, 4, 5, 7, 8, 9, 10, 11])
+          world.adminPollRecords.push({
+            name: world.accounts.get(fakeAddress(`admin-${i}`)).name,
+            identifier: `qmp-adminvote-${ADMIN_POLL_IDS.voted}`,
+            created: Date.now() - 3_600_000 + i,
+            readers: signers,
+            body: { v: 1, pollId: ADMIN_POLL_IDS.voted, vote: 'yes' },
+          });
+      }),
+    });
+    const card = await screen.findByRole(
+      'article',
+      { name: /^Minter Admin poll: Should we remove/ },
+      T
+    );
+    const yes = within(card).getByRole('list', { name: 'Voted Yes' });
+    expect(within(yes).getAllByRole('link')).toHaveLength(11);
+    expect(within(card).queryByText(/and \d+ more/)).toBeNull();
+    expect(within(card).queryByText(/^\+\d+$/)).toBeNull();
   });
 });
