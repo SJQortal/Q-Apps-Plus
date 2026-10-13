@@ -26,6 +26,7 @@ import { formatCount } from '../../utils/format';
 import { openQortalLink } from '../../utils/links';
 import { deleteComment, editComment, postComment, setCommentHidden } from '../../writes/comments';
 import type { WriteStage } from '../../writes/runner';
+import { focusElement } from '../../utils/focus';
 import { ErrorState, ListSkeleton, TruncatedNote } from '../common/states';
 import { NAMES_APP_LINK } from '../ready/readyChecks';
 import {
@@ -99,6 +100,27 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
         : null,
     [data, muted, optimistic]
   );
+  // Show more: once the next comments are in, focus goes to the first of them
+  // (the button may have gone with the last page).
+  const shownBefore = useRef<Set<string> | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
+  useEffect(() => {
+    const before = shownBefore.current;
+    if (!before || !query.data || !threads) return;
+    shownBefore.current = null;
+    const fresh = threads.find((t) => !before.has(t.comment.ref));
+    const target = fresh
+      ? document.querySelector<HTMLElement>(`[data-comment="${fresh.comment.identifier}"]`)
+      : listRef.current;
+    if (target) focusElement(target);
+  }, [threads, query.data]);
+  const showMore = () => {
+    // Stays enabled while it reads (a disabled button would drop focus); a second press waits.
+    if (shownBefore.current) return;
+    shownBefore.current = new Set(threads?.map((t) => t.comment.ref) ?? []);
+    setLimit((n) => n + COMMENTS_PAGE);
+  };
+
   useEffect(() => {
     if (!data) return;
     const loaded = new Map<string, CommentRecord>();
@@ -235,6 +257,7 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
       <>
         <Box
           component="ul"
+          ref={listRef}
           aria-label={`Comments on ${label}, newest first`}
           sx={{ listStyle: 'none', m: 0, p: 0 }}
         >
@@ -322,12 +345,7 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
         {data.truncated ? <TruncatedNote what="the comments" /> : null}
         {unread > 0 ? (
           <Box>
-            <Button
-              variant="outlined"
-              onClick={() => setLimit((n) => n + COMMENTS_PAGE)}
-              disabled={query.fetching && !query.data}
-              sx={{ minHeight: 44 }}
-            >
+            <Button variant="outlined" onClick={showMore} sx={{ minHeight: 44 }}>
               Show more comments ({formatCount(unread)})
             </Button>
           </Box>

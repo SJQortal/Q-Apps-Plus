@@ -110,6 +110,10 @@ describe('CommentsSection', () => {
     expect(within(panel).getByText(/Wren helped me set up my node/)).toBeVisible();
     expect(within(panel).getByText('Extra comment 0')).toBeVisible();
     expect(within(panel).queryByRole('button', { name: /Show more comments/ })).toBeNull();
+    // The button went with the last page: focus is on the first comment it brought.
+    await waitFor(() =>
+      expect(within(panel).getByText('Extra comment 20').closest('li')).toHaveFocus()
+    );
     // Each body is read once, however many pages.
     expect(
       fetchCallsFor('/arbitrary/JSON/').filter((p) => p.includes('qmp-comment-'))
