@@ -57,7 +57,7 @@ import type { MyStatus } from '../../rules/status';
 import { approvalsNeeded } from '../../rules/threshold';
 import { signIn, signerOf, useSession, type Session } from '../../state/session';
 import { formatCount } from '../../utils/format';
-import { useLandscapeFrame, useShortFrame } from '../../utils/hubFrame';
+import { useKeyboardOpen, useLandscapeFrame, useShortFrame } from '../../utils/hubFrame';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
 import {
   VIEWS,
@@ -89,6 +89,7 @@ export default function NominationsPage() {
   const phone = usePhoneLayout();
   const landscape = useLandscapeFrame();
   const shortFrame = useShortFrame();
+  const keyboardOpen = useKeyboardOpen();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const view = parseView(appParam(params, 'show'));
@@ -403,7 +404,7 @@ export default function NominationsPage() {
         {fab ? <Box aria-hidden sx={{ height: FAB_CLEARANCE, flexShrink: 0 }} /> : null}
       </PageBody>
 
-      {fab && !shortFrame ? (
+      {fab && !shortFrame && !keyboardOpen ? (
         <Tooltip title={PROPOSE_NOMINATION}>
           <Fab
             color="primary"

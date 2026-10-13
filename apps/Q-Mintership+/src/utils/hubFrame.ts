@@ -8,6 +8,7 @@
  * reading pane takes the whole width. Adapted from Q-Mail+ (Q-Share+'s hubFrame.ts)
  * and usePhoneLayout.ts (PHONE_MEDIA).
  */
+import { useEffect, useState } from 'react';
 import { useMediaQuery } from '@mui/material';
 
 /** A frame under 500 px tall: a phone in landscape, or a portrait phone with the keyboard open. */
@@ -47,4 +48,67 @@ export function useLandscapeFrame(): boolean {
 /** True in any frame under 500 px tall. */
 export function useShortFrame(): boolean {
   return useMediaQuery(`@media ${SHORT_FRAME_MEDIA}`);
+}
+
+const NOT_TYPED = new Set([
+  'button',
+  'checkbox',
+  'color',
+  'file',
+  'hidden',
+  'image',
+  'radio',
+  'range',
+  'reset',
+  'submit',
+]);
+
+/** A field that brings up the on-screen keyboard has focus. */
+export function isTypingIn(el: Element | null): boolean {
+  if (!el) return false;
+  if (el instanceof HTMLTextAreaElement) return true;
+  if (el instanceof HTMLInputElement) return !NOT_TYPED.has(el.type);
+  return (
+    el instanceof HTMLElement &&
+    (el.isContentEditable === true || el.getAttribute('contenteditable') === 'true')
+  );
+}
+
+/** The frame has shrunk this far below its tallest at this width: the keyboard. */
+export const KEYBOARD_SHRINK = 0.75;
+
+/**
+ * The on-screen keyboard is open: a text field has focus and the frame is
+ * well under the tallest it has been at this width. GO resizes the app for
+ * the keyboard, by an amount that depends on whether GO's own top and
+ * bottom bars are showing (they hide while scrolling), so a fixed height
+ * alone (SHORT_FRAME_MEDIA) can miss it: on a real phone the frame was
+ * 832 px tall with GO's bars hidden, 717 px with them, and 505 px with the
+ * keyboard open.
+ */
+export function useKeyboardOpen(): boolean {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    let width = window.innerWidth;
+    let tallest = window.innerHeight;
+    const check = () => {
+      if (window.innerWidth !== width) {
+        width = window.innerWidth;
+        tallest = window.innerHeight;
+      }
+      tallest = Math.max(tallest, window.innerHeight);
+      setOpen(window.innerHeight < tallest * KEYBOARD_SHRINK && isTypingIn(document.activeElement));
+    };
+    // Focus moves before the frame resizes, and leaves before the next field gets it.
+    const later = () => window.setTimeout(check, 0);
+    window.addEventListener('resize', check);
+    document.addEventListener('focusin', check);
+    document.addEventListener('focusout', later);
+    return () => {
+      window.removeEventListener('resize', check);
+      document.removeEventListener('focusin', check);
+      document.removeEventListener('focusout', later);
+    };
+  }, []);
+  return open;
 }
