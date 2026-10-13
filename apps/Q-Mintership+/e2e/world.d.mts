@@ -24,3 +24,11 @@ export function answerQortal(
   persona: string,
   request: Record<string, unknown>
 ): unknown;
+export function addTargetShift(world: World): {
+  seenBefore: { adminCount: number; needed: number; height: number };
+  demote: string;
+  kick: string;
+  met: string;
+  removed: string[];
+  outgoing: string[];
+};

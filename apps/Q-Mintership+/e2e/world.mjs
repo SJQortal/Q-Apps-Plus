@@ -832,3 +832,101 @@ export function answerQortal(world, persona, request) {
       return null;
   }
 }
+
+// ---- a moving target (Decisions → admin changes and the target) ------------
+/**
+ * The target moves: two Minter Admins were removed lately (23 admin rows
+ * became 21, so 10 signatures needed became 9), a new admin row is added so
+ * the count is 21, and the waiting removal of Dex Demote is confirmed with
+ * three signatures. If it passes, the target drops to 8 and Mia Met's invite
+ * (8 signatures) applies at once. Kai Target's removal has 9 signatures:
+ * enough now, not at the old target. Returns what tests need.
+ */
+export function addTargetShift(world) {
+  const extra = Array.from({ length: 16 }, (_, i) => fakeAddress(`admin-${i}`));
+  const person = (seed, name, level) => {
+    const address = fakeAddress(seed);
+    world.accounts.set(address, {
+      address,
+      name,
+      level,
+      blocks: 1_000_000,
+      publicKey: pk(address),
+      reference: sig(`ref:${address}`),
+      balance: 5,
+    });
+    world.names.set(name, address);
+    if (!world.members.includes(address)) world.members.push(address);
+    return address;
+  };
+  // A 21st admin row: 9 signatures needed.
+  const newAdmin = person('admin-16', 'Admin Q', 7);
+  world.admins.splice(world.admins.length - 1, 0, newAdmin);
+
+  // Two removals approved lately: the count went 23 → 22 → 21.
+  const outgoing = [
+    person('outgoing-1', 'Otto Outgoing', 6),
+    person('outgoing-2', 'Orla Outgoing', 6),
+  ];
+  const removed = outgoing.map((address, i) => {
+    const h = TIP - 2_000 + i * 500;
+    const row = {
+      type: 'REMOVE_GROUP_ADMIN',
+      timestamp: blockTime(h) - 20_000,
+      reference: sig(`r:shift:${address}`),
+      fee: '0.01000000',
+      signature: sig(`shift:remove:${address}`),
+      txGroupId: GROUP,
+      blockHeight: h,
+      approvalStatus: 'APPROVED',
+      approvalHeight: TIP - 40 + i * 20,
+      creatorAddress: extra[0],
+      ownerPublicKey: pk(extra[0]),
+      groupId: GROUP,
+      admin: address,
+    };
+    world.decided.push(row);
+    return row;
+  });
+
+  const approve = (pendingTx, who, h) =>
+    world.approvals.push({
+      type: 'GROUP_APPROVAL',
+      timestamp: blockTime(h) - 10_000,
+      reference: sig(`ar:shift:${who}:${pendingTx.signature}`),
+      fee: '0.01000000',
+      signature: sig(`a:shift:${who}:${pendingTx.signature}:${h}`),
+      txGroupId: 0,
+      blockHeight: h,
+      approvalStatus: 'NOT_REQUIRED',
+      creatorAddress: who,
+      adminPublicKey: pk(who),
+      pendingSignature: pendingTx.signature,
+      approval: true,
+    });
+
+  // The waiting removal of Dex Demote, now in a block, with three signatures.
+  const demote = world.pending.find(
+    (t) => t.type === 'REMOVE_GROUP_ADMIN' && t.admin === ADDR.demote
+  );
+  demote.blockHeight = TIP - 900;
+  demote.timestamp = blockTime(TIP - 900) - 20_000;
+  [extra[12], extra[13], extra[14]].forEach((who, i) => approve(demote, who, TIP - 890 + i));
+
+  // Kai Target's removal: 9 signatures (enough at 21 rows, not at 23).
+  const kick = world.pending.find((t) => t.type === 'GROUP_KICK' && t.member === ADDR.kickTarget);
+  [extra[0], extra[1], extra[2], extra[3], extra[6], extra[7], extra[8]].forEach((who, i) =>
+    approve(kick, who, TIP - 1_000 + i)
+  );
+
+  const met = world.pending.find((t) => t.type === 'GROUP_INVITE' && t.invitee === ADDR.met);
+  return {
+    /** What this device saw before the two removals (for the "target changed" note). */
+    seenBefore: { adminCount: 23, needed: 10, height: TIP - 100 },
+    demote: demote.signature,
+    kick: kick.signature,
+    met: met.signature,
+    removed: removed.map((row) => row.signature),
+    outgoing,
+  };
+}

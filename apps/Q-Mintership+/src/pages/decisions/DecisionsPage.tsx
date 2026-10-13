@@ -8,8 +8,13 @@
  * cancelled invites (each with their own signature), and clean up stale
  * invites. Everyone else follows along read-only. There is no reject or
  * withdraw: an admin signs or lets it expire.
+ *
+ * The target moves with the admin count (rules/targetShift.ts): an admin
+ * change says what it would do to every waiting decision, and Sign /
+ * Propose / Sign several need "I've checked these" before Hub opens when
+ * anything would change.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { appParam } from '../../routes/hubLocation';
 import { PATHS } from '../../routes/paths';
@@ -48,6 +53,16 @@ import { useNavHas } from '../../components/layout/useNavHas';
 import { useDecisions, useMembers, useNominations } from '../../hooks/useData';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { KIND_LABEL, type Decision } from '../../rules/decision';
+import { NULL_OWNER } from '../../data/constants';
+import {
+  hasImpact,
+  isAdminChangeKind,
+  projectShift,
+  scenarioFor,
+  shiftDecisionsOf,
+  shiftScenarios,
+  type ShiftState,
+} from '../../rules/targetShift';
 import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
 import { useSession } from '../../state/session';
 import { decisionsHideSignedAtom } from '../../state/settings';
@@ -67,6 +82,10 @@ import { SignDialog } from './SignDialog';
 import { StaleInvites } from './StaleInvites';
 import { OtherPendingList } from './OtherPendingList';
 import { UnusualList } from './UnusualList';
+import { TargetImpact } from './TargetImpact';
+import { TargetShiftSection } from './TargetShiftSection';
+import type { LabelOf } from './targetShiftUi';
+import { useAcknowledge } from './useAcknowledge';
 
 const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
   'open',
@@ -172,6 +191,19 @@ export default function DecisionsPage() {
     [data, needed, totalAdmins]
   );
   const targetChange = useTargetChange(snapshot);
+
+  // What waiting admin changes would do to the target (each, and together).
+  const shift = useMemo(() => {
+    if (!data) return null;
+    const state: ShiftState = {
+      threshold: data.group.approvalThreshold,
+      adminCount: data.admins.adminCount,
+      admins: new Set(data.admins.admins.map((a) => a.member)),
+      owner: data.group.owner || NULL_OWNER,
+    };
+    const list = shiftDecisionsOf(data.decisions);
+    return { state, list, scenarios: shiftScenarios(state, list) };
+  }, [data]);
 
   const adminNames = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -287,6 +319,50 @@ export default function DecisionsPage() {
       null;
     return `${KIND_LABEL[d.kind]}: ${displayName(name, d.subject)}`;
   };
+
+  const bySignature = useMemo(
+    () => new Map((data?.decisions ?? []).map((d) => [d.signature, d])),
+    [data]
+  );
+  const labelOf: LabelOf = (signature) => {
+    const d = bySignature.get(signature);
+    return d ? labelFor(d) : 'A waiting decision';
+  };
+  const impactOf = (d: Decision) =>
+    shift && isAdminChangeKind(d.kind) ? scenarioFor(shift.scenarios, d.signature) : null;
+  const projectImpact = useCallback(
+    (kind: ProposeKind, subject: string) =>
+      shift && (kind === 'addAdmin' || kind === 'removeAdmin')
+        ? projectShift(shift.state, shift.list, [{ kind, subject }])
+        : null,
+    [shift]
+  );
+
+  // Sign several: the admin changes picked, and what they would do together.
+  const bulkChanges = useMemo(
+    () => (bulkList ?? []).filter((d) => isAdminChangeKind(d.kind)),
+    [bulkList]
+  );
+  const bulkImpact = useMemo(
+    () =>
+      shift && bulkChanges.length
+        ? projectShift(
+            shift.state,
+            shift.list,
+            bulkChanges.map((d) => ({
+              signature: d.signature,
+              kind: d.kind as 'addAdmin' | 'removeAdmin',
+              subject: d.subject,
+            })),
+            bulkChanges.length > 1 ? 'all' : 'one'
+          )
+        : null,
+    [shift, bulkChanges]
+  );
+  const bulkMustCheck = hasImpact(bulkImpact);
+  const bulkAck = useAcknowledge(
+    bulkList && bulkImpact ? bulkList.map((d) => d.signature).join(',') : null
+  );
 
   const refresh = () => {
     void decisionsQ.refetch();
@@ -412,6 +488,16 @@ export default function DecisionsPage() {
               />
             )}
 
+            {shift ? (
+              <TargetShiftSection
+                scenarios={shift.scenarios}
+                decisions={decisions}
+                now={data.now}
+                labelOf={labelOf}
+                advice={isAdmin}
+              />
+            ) : null}
+
             {collecting.length ? (
               <Section title={`Collecting signatures · ${collecting.length}`} id="collecting">
                 {shown.map((d) => (
@@ -431,6 +517,8 @@ export default function DecisionsPage() {
                     onToggleSelect={toggleSelect}
                     onSign={setSignTarget}
                     highlighted={highlight === d.signature}
+                    impact={impactOf(d)}
+                    labelOf={labelOf}
                   />
                 ))}
                 {hiddenCount ? (
@@ -514,6 +602,8 @@ export default function DecisionsPage() {
                     adminNames={adminNames}
                     subjectFacts={factsFor(d.subject)}
                     highlighted={highlight === d.signature}
+                    impact={impactOf(d)}
+                    labelOf={labelOf}
                   />
                 ))}
               </Section>
@@ -567,7 +657,13 @@ export default function DecisionsPage() {
         ) : null}
       </PageBody>
 
-      <SignDialog decision={signTarget} signer={signer} onClose={() => setSignTarget(null)} />
+      <SignDialog
+        decision={signTarget}
+        signer={signer}
+        onClose={() => setSignTarget(null)}
+        impact={signTarget ? impactOf(signTarget) : null}
+        labelOf={labelOf}
+      />
       {data ? (
         <FirstSignatureDialog
           nomination={firstTarget}
@@ -593,6 +689,8 @@ export default function DecisionsPage() {
             maximumBlockDelay: data.group.maximumBlockDelay,
             msPerBlock: data.now.msPerBlock,
             signers: data.admins.signers,
+            projectImpact,
+            labelOf,
           }}
           onClose={() => setPropose(null)}
           onSwitch={(kind, person) => setPropose({ kind, preset: person })}
@@ -603,11 +701,28 @@ export default function DecisionsPage() {
         onClose={() => setBulkList(null)}
         title="Sign several"
         intro={
-          <Typography>
-            Signs {plural(bulkList?.length ?? 0, 'decision')}, one after another. Each signature
-            counts once it is in a block.
-          </Typography>
+          <>
+            <Typography>
+              Signs {plural(bulkList?.length ?? 0, 'decision')}, one after another. Each signature
+              counts once it is in a block.
+            </Typography>
+            {bulkImpact ? (
+              <Box sx={{ mt: 1.5 }}>
+                <TargetImpact
+                  scenario={bulkImpact}
+                  labelOf={labelOf}
+                  lead={
+                    bulkChanges.length > 1
+                      ? `If the ${bulkChanges.length} admin changes you picked pass`
+                      : `If ${labelOf(bulkChanges[0].signature)} passes`
+                  }
+                  ack={bulkMustCheck ? bulkAck : null}
+                />
+              </Box>
+            ) : null}
+          </>
         }
+        beforeStart={bulkMustCheck ? bulkAck.confirm : undefined}
         action="SIGN_TRANSACTION"
         feeTxType="GROUP_APPROVAL"
         items={(bulkList ?? []).map((d) => ({ key: d.signature, label: labelFor(d) }))}

@@ -2,8 +2,10 @@
  * Sign one decision: what it approves, what Hub's raw-data dialog will show
  * (GROUP_APPROVAL, approval true, the pending signature, a tick box) and the
  * fee, then signDecision. The card turns "Signed ✓ (confirming…)" at once.
+ * An admin change first says what it does to the target; when that changes
+ * any waiting decision, "I've checked these" must be ticked before Hub opens.
  */
-import { Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import type { Decision } from '../../rules/decision';
 import { KIND_LABEL } from '../../rules/decision';
 import { HubStepDialog } from '../../components/common/HubStepDialog';
@@ -11,17 +13,29 @@ import { SignaturePrefix } from '../../components/common/SignaturePrefix';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { signDecision } from '../../writes/flows';
 import type { Signer } from '../../writes/runner';
+import { hasImpact, type ShiftScenario } from '../../rules/targetShift';
+import { TargetImpact } from './TargetImpact';
+import type { LabelOf } from './targetShiftUi';
+import { useAcknowledge } from './useAcknowledge';
 
 export function SignDialog({
   decision: d,
   signer,
   onClose,
+  impact,
+  labelOf,
 }: {
   decision: Decision | null;
   signer: Signer | null;
   onClose: () => void;
+  /** An admin change: what it does to the target if it passes. */
+  impact?: ShiftScenario | null;
+  labelOf?: LabelOf;
 }) {
   const subject = useDisplayName(d?.subject ?? '', d?.subject ? undefined : null);
+  const shift = impact && labelOf ? impact : null;
+  const ack = useAcknowledge(d && shift ? d.signature : null);
+  const mustCheck = hasImpact(shift);
   const who = d?.subject ? subject.label : 'an approved invite (Core doesn’t say for whom)';
   const tally = d?.tally;
   return (
@@ -40,9 +54,20 @@ export function SignDialog({
               {tally ? `; ${tally.approvalCount} of ${tally.needed} signatures so far` : ''}. Core
               applies it by itself when enough Minter Admins have signed.
             </Typography>
+            {shift && labelOf ? (
+              <Box sx={{ mt: 1.5 }}>
+                <TargetImpact
+                  scenario={shift}
+                  labelOf={labelOf}
+                  lead="If this passes"
+                  ack={mustCheck ? ack : null}
+                />
+              </Box>
+            ) : null}
           </>
         ) : null
       }
+      beforeStart={mustCheck ? ack.confirm : undefined}
       steps={[
         {
           action: 'SIGN_TRANSACTION',

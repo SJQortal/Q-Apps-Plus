@@ -6,7 +6,8 @@
  * as one explained step of two Hub confirmations. Kicking or banning a
  * Minter Admin is offered as "remove their admin role first", because Core
  * refuses it otherwise. An invite approved in the last 30 days says they
- * may still press Join now.
+ * may still press Join now. An admin change says, before Hub opens, what it
+ * would do to the target of every waiting decision.
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import {
@@ -48,11 +49,17 @@ import {
 } from './proposeKinds';
 import { ProposeSignDialog, type ProposalFacts } from './ProposeSignDialog';
 import { isRecentInvite } from './staleRules';
+import type { ShiftScenario } from '../../rules/targetShift';
+import type { LabelOf } from './targetShiftUi';
 
 export interface ProposeContext extends ProposalFacts {
   totalAdmins: number;
   /** Admins who can sign (the null owner left out). */
   signers: GroupMemberRow[];
+  /** What an admin change about `subject` would do to the target (null for other kinds). */
+  projectImpact?: (kind: ProposeKind, subject: string) => ShiftScenario | null;
+  /** Decisions' labels by signature, for that impact. */
+  labelOf?: LabelOf;
 }
 
 export interface ProposeDialogProps {
@@ -208,6 +215,13 @@ export function ProposeDialog({
         }
       >
         <Typography color="text.secondary">{info.description}</Typography>
+        {kind === 'addAdmin' || kind === 'removeAdmin' ? (
+          <Typography variant="body2" color="text.secondary">
+            Every waiting decision is measured against the admin seats, so this can move the target
+            for all of them, including ones that already have signatures. Review shows what it would
+            change before Hub opens.
+          </Typography>
+        ) : null}
 
         {kind === 'removeAdmin' ? (
           <AdminPicker
@@ -610,6 +624,8 @@ function ProposeHubStep({
       signer={signer}
       facts={ctx}
       title={`${KIND_LABEL[kind]}: ${who.label}`}
+      impact={ctx.projectImpact?.(kind, person.address) ?? null}
+      labelOf={ctx.labelOf}
       details={
         kind === 'ban' || reason ? (
           <>

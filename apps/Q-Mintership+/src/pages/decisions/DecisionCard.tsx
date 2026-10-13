@@ -2,7 +2,8 @@
  * One decision in full, for the Minter Admins and everyone following along:
  * what it does and to whom, who proposed it, the subject's profile (and the
  * nomination behind an invite), k of n with the time left to sign, who has
- * signed, and Sign / Signed ✓ / Signed ✓ (confirming…).
+ * signed, and Sign / Signed ✓ / Signed ✓ (confirming…). An admin change
+ * says what it does to the target.
  */
 import { useState } from 'react';
 import { Box, Button, Checkbox, Skeleton, Typography } from '@mui/material';
@@ -22,6 +23,9 @@ import { primarySoft } from '../../hub-theme';
 import { formatCount, formatDate, formatRelative, plural } from '../../utils/format';
 import { openQortalLink } from '../../utils/links';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
+import type { ShiftScenario } from '../../rules/targetShift';
+import { TargetImpact } from './TargetImpact';
+import type { LabelOf } from './targetShiftUi';
 import {
   banEndLine,
   banLengthText,
@@ -68,6 +72,10 @@ export interface DecisionCardProps {
   onToggleSelect?: (signature: string) => void;
   onSign?: (decision: Decision) => void;
   highlighted?: boolean;
+  /** An admin change: what it does to the target if it passes. */
+  impact?: ShiftScenario | null;
+  /** Decisions' labels by signature, for the impact. */
+  labelOf?: LabelOf;
 }
 
 export function DecisionCard(props: DecisionCardProps) {
@@ -86,6 +94,8 @@ export function DecisionCard(props: DecisionCardProps) {
     onToggleSelect,
     onSign,
     highlighted,
+    impact,
+    labelOf,
   } = props;
   const pending = usePendingWrite(writeKeys.sign(d.signature));
   const answer = myAnswer(d, myPublicKey);
@@ -169,6 +179,10 @@ export function DecisionCard(props: DecisionCardProps) {
         onRetryNominations={onRetryNominations}
         now={now}
       />
+
+      {impact && labelOf ? (
+        <TargetImpact scenario={impact} labelOf={labelOf} lead="If this passes" advice={canAct} />
+      ) : null}
 
       {d.creatorAddress ? (
         <Typography component="div" variant="body2" color="text.secondary">
