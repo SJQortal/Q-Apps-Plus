@@ -58,7 +58,7 @@ export function doubleNote(
   const out = runsOutLine(d, now);
   const why =
     d.kind === 'addAdmin'
-      ? `${name} is already a Minter Admin, from an earlier proposal. If this one passes, nothing changes, so there’s no need to sign it.`
+      ? `${name} is already a Minter Admin, from an earlier proposal. As things stand, if this one passes, nothing changes, so there’s no need to sign it.`
       : `${name} isn’t a Minter Admin, so there’s nothing to remove. There’s no need to sign it: reject it, or let it run out.`;
   return out ? `${why} ${out}` : why;
 }

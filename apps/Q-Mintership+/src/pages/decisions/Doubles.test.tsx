@@ -62,7 +62,7 @@ describe('Doubles on the Decisions page', () => {
     );
     const note = doubleNote(already);
     expect(note).toHaveTextContent(
-      'Admin C is already a Minter Admin, from an earlier proposal. If this one passes, nothing changes, so there’s no need to sign it.'
+      'Admin C is already a Minter Admin, from an earlier proposal. As things stand, if this one passes, nothing changes, so there’s no need to sign it.'
     );
     expect(note).toHaveTextContent(
       new RegExp(`It runs out by itself at ${ADMIN_C_EXPIRES} \\(about .+\\)\\.$`)
