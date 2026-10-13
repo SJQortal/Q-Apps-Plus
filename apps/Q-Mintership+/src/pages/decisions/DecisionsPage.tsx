@@ -20,18 +20,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { PATHS, legacyDecisionPath } from '../../routes/paths';
-import {
-  Alert,
-  Box,
-  Button,
-  FormControlLabel,
-  IconButton,
-  Switch,
-  Tooltip,
-  Typography,
-  keyframes,
-} from '@mui/material';
-import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
+import { Alert, Box, Button, FormControlLabel, Switch, Typography } from '@mui/material';
 import { useAtom, useAtomValue } from 'jotai';
 import { PageBody } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
@@ -46,6 +35,7 @@ import {
 import { ConsideringDialog } from '../../components/decision/ConsideringDialog';
 import { useConsideringFor } from '../../hooks/useConsidering';
 import { NominationCard } from '../../components/nomination/NominationCard';
+import { RefreshButton } from '../../components/common/RefreshButton';
 import { Card, Section } from '../../components/common/Section';
 import {
   CardSkeleton,
@@ -110,11 +100,6 @@ const STALE_SECTION_ID = 'stale-invites';
 function sectionOf(id: string): HTMLElement | null {
   return document.getElementById(`${id}-title`)?.closest('section') ?? null;
 }
-
-const spin = keyframes`
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-`;
 
 /** `/decisions`. An old `/decisions?d=<signature>` link opens that decision's own page. */
 export default function DecisionsPage() {
@@ -355,20 +340,7 @@ function DecisionsQueue() {
         back={inNav ? undefined : PATHS.nominations}
         actions={
           <>
-            <Tooltip title="Refresh">
-              <span>
-                <IconButton
-                  aria-label="Refresh"
-                  onClick={refresh}
-                  disabled={fetching}
-                  sx={{ width: 44, height: 44 }}
-                >
-                  <RefreshOutlinedIcon
-                    sx={fetching ? { animation: `${spin} 1s linear infinite` } : undefined}
-                  />
-                </IconButton>
-              </span>
-            </Tooltip>
+            <RefreshButton onClick={refresh} fetching={fetching} />
             {isAdmin ? <ProposeMenu onChoose={chooseProposal} buttonRef={proposeButton} /> : null}
           </>
         }

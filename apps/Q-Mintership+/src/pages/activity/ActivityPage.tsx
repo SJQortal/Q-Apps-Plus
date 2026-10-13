@@ -5,13 +5,13 @@
  */
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Button, IconButton, Tooltip } from '@mui/material';
+import { Button } from '@mui/material';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
-import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import { useAtom } from 'jotai';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody } from '../../components/layout/PageBody';
 import { ErrorState, ListSkeleton, TruncatedNote } from '../../components/common/states';
+import { RefreshButton } from '../../components/common/RefreshButton';
 import { Section } from '../../components/common/Section';
 import { useGroupInfo, useNominations } from '../../hooks/useData';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
@@ -52,18 +52,7 @@ export default function ActivityPage() {
             >
               History
             </Button>
-            <Tooltip title="Refresh">
-              <span>
-                <IconButton
-                  aria-label="Refresh"
-                  onClick={() => void activity.refetch()}
-                  disabled={activity.fetching}
-                  sx={{ width: 44, height: 44 }}
-                >
-                  <RefreshOutlinedIcon />
-                </IconButton>
-              </span>
-            </Tooltip>
+            <RefreshButton onClick={() => void activity.refetch()} fetching={activity.fetching} />
           </>
         }
       />

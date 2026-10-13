@@ -5,11 +5,10 @@
  * sections that status needs, so a newcomer's Home costs a handful of reads
  * and an admin's loads the decisions and nominations it shows.
  */
-import { IconButton, Tooltip } from '@mui/material';
-import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import { PageBody } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { NominationCard } from '../../components/nomination/NominationCard';
+import { RefreshButton } from '../../components/common/RefreshButton';
 import { Section } from '../../components/common/Section';
 import { ErrorState, HeroSkeleton } from '../../components/common/states';
 import { invalidate } from '../../data/query';
@@ -168,13 +167,7 @@ export default function HomePage() {
       <PageHeader
         title="Home"
         subtitle={subtitleFor(status, session.status)}
-        actions={
-          <Tooltip title="Refresh">
-            <IconButton aria-label="Refresh" onClick={refresh} sx={{ width: 44, height: 44 }}>
-              <RefreshOutlinedIcon />
-            </IconButton>
-          </Tooltip>
-        }
+        actions={<RefreshButton onClick={refresh} fetching={my.fetching} />}
       />
       <PageBody>
         {status && my.isError ? (
