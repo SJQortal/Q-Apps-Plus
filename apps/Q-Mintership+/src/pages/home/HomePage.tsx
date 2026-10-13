@@ -119,7 +119,13 @@ function StatusView({
           <NominatedHero status={status} nomination={status.nomination} needed={needed.needed} />
           {now.data ? (
             <Section title="Your nomination" id="home-nomination">
-              <NominationCard nomination={status.nomination} now={now.data} hideNominee comments />
+              <NominationCard
+                nomination={status.nomination}
+                now={now.data}
+                hideNominee
+                comments
+                forNominee
+              />
             </Section>
           ) : null}
         </>

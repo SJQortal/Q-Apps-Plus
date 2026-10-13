@@ -1,7 +1,8 @@
 /**
  * Someone nominated this account: who (and who supports it), where it
  * stands (waiting for a first Minter Admin, or k of n with the time left
- * to sign, any rejections, and how many Minter Admins are considering it),
+ * to sign, how many Minter Admins have said no so far, in gentle words,
+ * and how many are considering it),
  * and Accept, which sends the join request so approval makes the nominee a
  * member at once. With a join request open, however it was sent:
  * "You're ready ✓: when the admins approve, you're in at once."
@@ -81,7 +82,7 @@ export function NominatedHero({
   const title = met
     ? 'Enough Minter Admins have signed'
     : rejectedEnd
-      ? 'Enough Minter Admins have rejected your nomination'
+      ? "Your nomination won't go through this time"
       : signing
         ? name
           ? `${name}, Minter Admins are signing your nomination`
@@ -91,7 +92,7 @@ export function NominatedHero({
           : "You've been nominated for MINTER";
 
   const next = rejectedEnd
-    ? `It ends as rejected ${when}. You can be nominated again later.`
+    ? `It closes ${when}. Your account and your level stay as they are, and you can be nominated again later.`
     : !accepted
       ? `Accept, then wait for the Minter Admins: ${needNow ? `at ${needNow} signatures` : 'once enough have signed'} you're in, with no further step.`
       : met
@@ -176,18 +177,18 @@ export function NominatedHero({
             )}
           </HeroText>
         ) : null}
+        {/* The nominee's own words for rejections: the same numbers, said gently. */}
         {signing && tally && rejections > 0 && !met ? (
           <HeroText muted>
             {rejectedEnd ? (
               <>
-                <Num>{rejections}</Num> Minter Admins have rejected it, as many as the{' '}
-                <Num>{tally.needed}</Num> that end it.
+                <Num>{rejections}</Num> Minter Admins have said no, as many as it takes to end it.
               </>
             ) : (
               <>
                 <Num>{plural(rejections, 'Minter Admin')}</Num> {rejections === 1 ? 'has' : 'have'}{' '}
-                rejected it so far. It ends as rejected only if <Num>{tally.needed}</Num> do, and
-                signatures are counted first.
+                said no so far; it needs <Num>{tally.needed}</Num> to end it, and signatures are
+                counted first.
               </>
             )}
           </HeroText>
