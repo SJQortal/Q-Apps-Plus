@@ -16,7 +16,7 @@ import { qortal } from '../qortal/client';
 import { getBalance, getFee } from '../data/accounts';
 import { MAX_UNCONFIRMED_PER_ACCOUNT } from '../data/constants';
 import { getJson, query } from '../data/core';
-import { getUnconfirmedBy } from '../data/txs';
+import { getUnconfirmedBy, withCancelInviteTargets } from '../data/txs';
 import type { GroupTxType, TxRow } from '../data/types';
 import { errorMessage, isHubDecline, isHubTimeout } from '../utils/hubErrors';
 import { TX_TYPE_OF_ACTION, WRITE_ACTIONS, type HubRequest } from './hubActions';
@@ -82,18 +82,39 @@ export async function commonPrecheck(
   return null;
 }
 
-/** Look for the write's transaction after a timeout: the mempool, then recent confirmed ones. */
+/** Signatures this session's writes already returned: a later lookup never takes them again. */
+const claimed = new Set<string>();
+
+/** Tests start each world with nothing claimed. */
+export function resetClaimedSignatures(): void {
+  claimed.clear();
+}
+
+function claim(outcome: WriteOutcome): WriteOutcome {
+  if (outcome.status === 'sent' && outcome.signature) claimed.add(outcome.signature);
+  return outcome;
+}
+
+/**
+ * Look for the write's transaction after a timeout: the mempool, then recent
+ * confirmed ones. Only transactions made after this write started, and not
+ * already returned by an earlier write, can be it. Cancelled invites get
+ * their group and invitee from the raw bytes first, so `match` can check them.
+ */
 async function findSent(
   spec: WriteSpec,
   txType: GroupTxType | 'ARBITRARY',
   since: number
 ): Promise<TxRow | null> {
-  const recent = (tx: TxRow) => tx.timestamp >= since - 5_000 && spec.match(tx);
+  const candidates = async (rows: TxRow[]) =>
+    withCancelInviteTargets(
+      rows.filter((tx) => tx.timestamp >= since && !claimed.has(tx.signature))
+    );
   if (txType !== 'ARBITRARY') {
     const unconfirmed = await getUnconfirmedBy(spec.signer.publicKey, txType).catch(
       () => [] as TxRow[]
     );
-    const hit = unconfirmed.find(recent);
+    const hit = (await candidates(unconfirmed)).find(spec.match);
     if (hit) return hit;
   }
   const confirmed = await getJson<TxRow[]>(
@@ -105,12 +126,18 @@ async function findSent(
       reverse: true,
     })}`
   ).catch(() => [] as TxRow[]);
-  return (Array.isArray(confirmed) ? confirmed : []).find(recent) ?? null;
+  return (await candidates(Array.isArray(confirmed) ? confirmed : [])).find(spec.match) ?? null;
 }
 
 export async function runWrite(spec: WriteSpec): Promise<WriteOutcome> {
+  return claim(await sendWrite(spec));
+}
+
+async function sendWrite(spec: WriteSpec): Promise<WriteOutcome> {
   spec.onStage?.('checking');
   let request: HubRequest;
+  // Set before the request is built: approval bytes carry their own timestamp.
+  let startedAt = Date.now();
   try {
     const probe = typeof spec.request === 'function' ? null : spec.request;
     const action = probe?.action;
@@ -121,6 +148,7 @@ export async function runWrite(spec: WriteSpec): Promise<WriteOutcome> {
     if (common) return { status: 'blocked', reason: common };
     const own = spec.precheck ? await spec.precheck() : null;
     if (own) return { status: 'blocked', reason: own };
+    startedAt = Date.now();
     request = typeof spec.request === 'function' ? await spec.request() : spec.request;
   } catch (error) {
     return {
@@ -132,7 +160,6 @@ export async function runWrite(spec: WriteSpec): Promise<WriteOutcome> {
     return { status: 'blocked', reason: `Unknown action ${request.action}` };
   const txType = TX_TYPE_OF_ACTION[request.action];
 
-  const startedAt = Date.now();
   spec.onStage?.('waitingForHub');
   try {
     const result = await qortal<TxRow | string | null>(request);

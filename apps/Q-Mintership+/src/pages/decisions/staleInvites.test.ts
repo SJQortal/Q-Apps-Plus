@@ -10,7 +10,7 @@ import { ADDR, NOW, installWorld } from '../../test/world';
 import { mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { cancelAll, isRecentInvite, waitingCancelInvitees } from './staleRules';
 import { guardCancelInvite } from '../../writes/guards';
-import { fakeAddress } from '../../../e2e/world.mjs';
+import { fakeAddress, fakeKey } from '../../../e2e/world.mjs';
 
 afterEach(() => vi.useRealTimers());
 
@@ -91,5 +91,38 @@ describe('stale invites', () => {
       txGroupId: 694,
       qortalAddress: list.rows[0].invitee,
     });
+  });
+
+  it('after a Hub timeout, never takes the previous cancellation for this one', async () => {
+    const { world, address, publicKey } = installWorld('admin');
+    const rows = (await loadStaleInvites()).rows.filter((r) =>
+      [fakeAddress('stale-2'), fakeAddress('stale-3')].includes(r.invitee)
+    );
+    const first = fakeKey('first-cancel', 64);
+    let n = 0;
+    mockQortalRequest('CANCEL_GROUP_INVITE', () => {
+      n++;
+      if (n === 1) {
+        // The first proposal reaches the mempool (no block yet).
+        world.pending.push({
+          type: 'CANCEL_GROUP_INVITE',
+          timestamp: Date.now(),
+          reference: world.pending[0].reference,
+          fee: '0.01000000',
+          signature: first,
+          txGroupId: 694,
+          approvalStatus: 'PENDING',
+          creatorAddress: address,
+          adminPublicKey: publicKey,
+        });
+        world.cancelTargets.set(first, { groupId: 694, invitee: rows[0].invitee });
+        return { type: 'CANCEL_GROUP_INVITE', signature: first };
+      }
+      throw { error: 'timeout', message: 'Request timed out after 30000 ms' };
+    });
+    const outcomes = await cancelAll({ address, publicKey }, rows, () => {});
+    expect(outcomes[0]).toMatchObject({ status: 'sent', signature: first });
+    // The second one timed out and never showed up: not "sent" with the first one's transaction.
+    expect(outcomes[1].status).toBe('unknown');
   });
 });

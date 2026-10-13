@@ -13,7 +13,7 @@ import {
 } from '../../e2e/world.mjs';
 import { resetQueries } from '../data/query';
 import { setQdnRetryDelays } from '../data/qdn';
-import { setLookupDelays } from '../writes/runner';
+import { resetClaimedSignatures, setLookupDelays } from '../writes/runner';
 import { setTxWaitDelays } from '../writes/flows';
 import { mockFetchRoute, mockQortalRequest } from './setup';
 
@@ -56,6 +56,7 @@ export function installWorld(
   resetQueries();
   setQdnRetryDelays([1, 1]);
   setLookupDelays([1, 1, 1]);
+  resetClaimedSignatures();
   setTxWaitDelays([1, 1]);
   if (options.fakeNow !== false) {
     vi.useFakeTimers({ toFake: ['Date'] });

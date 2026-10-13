@@ -7,6 +7,7 @@
  */
 import { getFee, getLastReference } from '../data/accounts';
 import { getChainNow } from '../data/chain';
+import { MINTER_GROUP_ID } from '../data/constants';
 import { getTransaction } from '../data/txs';
 import { invalidate } from '../data/query';
 import {
@@ -264,8 +265,11 @@ export function proposeCancelInvite(
       request: cancelInviteRequest(invitee),
       signer,
       precheck: () => guardCancelInvite(signer, invitee),
-      // Core leaves the invitee out of these rows: match on type and creator time only.
-      match: (tx) => tx.type === 'CANCEL_GROUP_INVITE',
+      // The group and invitee come from the raw bytes (the runner fills them in).
+      match: (tx) =>
+        tx.type === 'CANCEL_GROUP_INVITE' &&
+        tx.groupId === MINTER_GROUP_ID &&
+        tx.invitee === invitee,
       onStage,
     })
   );
