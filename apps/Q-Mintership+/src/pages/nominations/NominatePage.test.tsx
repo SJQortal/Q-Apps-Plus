@@ -119,7 +119,8 @@ describe('Nominate page: picking the candidate', () => {
 
 describe('Nominate page: guards before anything is written', () => {
   const cases: Array<[string, string, RegExp]> = [
-    ['nominator', 'nominator', /You can't nominate yourself/],
+    // Only members can nominate: no advice to go and get nominated.
+    ['nominator', 'nominator', /^That's your own account: you can't nominate yourself\.$/],
     ['nominator', 'learner', /Already in MINTER/],
     ['nominator', 'banned', /Banned from MINTER: Minter Admins must lift the ban/],
     ['nominator', 'nominatedSigning', /Minter Admins are already signing a nomination/],

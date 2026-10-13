@@ -67,7 +67,7 @@ export function nomineeBlock(facts: NomineeFacts): NomineeBlock | null {
 }
 
 export const NOMINEE_BLOCK_TEXT: Record<NomineeBlock, string> = {
-  self: "You can't nominate yourself. Ask a level 5+ minter to nominate you.",
+  self: "That's your own account: you can't nominate yourself.",
   member: 'Already in MINTER.',
   banned: 'Banned from MINTER: Minter Admins must lift the ban before a nomination can go ahead.',
   pending: 'Minter Admins are already signing a nomination for this person.',
