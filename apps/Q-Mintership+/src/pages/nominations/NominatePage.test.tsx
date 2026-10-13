@@ -114,6 +114,33 @@ describe('Nominate page: picking the candidate', () => {
     ).toBeInTheDocument();
   });
 
+  it('by keyboard: focus goes to the card picked, its check is read out, and Change goes back', async () => {
+    const user = userEvent.setup();
+    await open('nominator');
+    await who();
+    const input = screen.getByRole('combobox', { name: 'Name or Qortal address' });
+    await user.click(input);
+    await user.paste(ADDR.newcomer);
+    const region = await who();
+    // The field is gone: focus is on the card that replaced it, never on the page.
+    const card = within(region).getByText(ADDR.newcomer).closest('[tabindex="-1"]');
+    expect(card).toHaveFocus();
+    // The check's answer lands in a live region that was there while it ran.
+    const live = within(card as HTMLElement).getByRole('status');
+    expect(await within(live).findByText(/Can be nominated/)).toBeInTheDocument();
+
+    within(region).getByRole('button', { name: 'Change' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('combobox', { name: 'Name or Qortal address' })).toHaveFocus();
+  });
+
+  it('a candidate who can’t be nominated says why in the same live region', async () => {
+    await open('nominator', ADDR.learner);
+    const region = await who();
+    const live = within(region).getByRole('status');
+    expect(await within(live).findByText(/Already in MINTER/)).toBeInTheDocument();
+  });
+
   it('says when the link held no valid address', async () => {
     await open('nominator', 'not-an-address');
     expect(await screen.findByText(/didn’t hold a valid Qortal address/)).toBeInTheDocument();

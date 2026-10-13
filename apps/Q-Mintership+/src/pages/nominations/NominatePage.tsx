@@ -17,7 +17,7 @@
  * above the keyboard, so its button stays in view while the reason is typed;
  * in a landscape frame it stays in the flow.
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState, type Ref } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { Alert, Box, Button, IconButton, Skeleton, TextField, Typography } from '@mui/material';
 import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
@@ -38,6 +38,7 @@ import { PageHeader } from '../../components/layout/PageHeader';
 import { NominationCard } from '../../components/nomination/NominationCard';
 import { SupportDialog } from '../../components/nomination/SupportDialog';
 import { readable } from '../../utils/readable';
+import { focusElement } from '../../utils/focus';
 import { isAddress } from '../../data/accounts';
 import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
@@ -179,6 +180,16 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
   const pickerRef = useRef<HTMLInputElement | null>(null);
   const reasonRef = useRef<HTMLInputElement | null>(null);
   const linkRefs = useRef<Array<HTMLInputElement | null>>([]);
+  // Picking someone replaces the picker with their card, and Change the other way
+  // round: focus follows, so it never falls to the page.
+  const summaryRef = useRef<HTMLDivElement | null>(null);
+  const focusNext = useRef<'summary' | 'picker' | null>(null);
+  useEffect(() => {
+    const next = focusNext.current;
+    focusNext.current = null;
+    if (next === 'picker') pickerRef.current?.focus();
+    else if (next === 'summary' && summaryRef.current) focusElement(summaryRef.current);
+  }, [picked, published]);
   // The sticky submit bar's height is kept clear for focus (not in landscape, where it isn't sticky).
   const [submitBar, setSubmitBar] = useState<HTMLElement | null>(null);
 
@@ -228,6 +239,7 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
   };
 
   const restart = () => {
+    focusNext.current = 'picker';
     setPublished(null);
     setReason('');
     setLinks([]);
@@ -273,13 +285,20 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
             block={block}
             me={me}
             canSupport={Boolean(publishSigner)}
-            onChange={() => choose(null)}
+            onChange={() => {
+              focusNext.current = 'picker';
+              choose(null);
+            }}
+            cardRef={summaryRef}
             onSupport={() => setSupport({ open: true })}
           />
         ) : (
           <CandidatePicker
             inputRef={pickerRef}
-            onPick={choose}
+            onPick={(next) => {
+              focusNext.current = 'summary';
+              choose(next);
+            }}
             initialError={
               who && !isAddress(who)
                 ? 'The link didn’t hold a valid Qortal address. Pick someone here instead.'
@@ -543,6 +562,7 @@ function CandidateSummary({
   canSupport,
   onChange,
   onSupport,
+  cardRef,
 }: {
   picked: PickedCandidate;
   info: Candidate | undefined;
@@ -554,6 +574,8 @@ function CandidateSummary({
   canSupport: boolean;
   onChange: () => void;
   onSupport: () => void;
+  /** The card, which takes focus once someone is picked. */
+  cardRef?: Ref<HTMLDivElement>;
 }) {
   const role = info
     ? info.isAdmin
@@ -563,7 +585,16 @@ function CandidateSummary({
         : 'Not in MINTER'
     : null;
   return (
-    <Card sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+    <Card
+      ref={cardRef}
+      sx={(theme) => ({
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1.5,
+        outline: 'none',
+        '&:focus-visible': { boxShadow: `0 0 0 2px ${theme.palette.primary.main}` },
+      })}
+    >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
           <PersonChip
@@ -587,28 +618,31 @@ function CandidateSummary({
       {error ? (
         <ErrorState compact title="Couldn’t check this account." error={error} onRetry={onRetry} />
       ) : null}
-      {block ? (
-        <BlockNotice
-          block={block}
-          info={info}
-          me={me}
-          canSupport={canSupport}
-          onSupport={onSupport}
-        />
-      ) : info ? (
-        <Typography
-          variant="body2"
-          sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, color: readable('success') }}
-        >
-          <CheckCircleOutlineOutlinedIcon aria-hidden sx={{ fontSize: 18, mt: '1px' }} />
-          <span>
-            Can be nominated.
-            {info.hasJoinRequest
-              ? ' They have already asked to join MINTER, so an approval makes them a member at once.'
-              : ''}
-          </span>
-        </Typography>
-      ) : null}
+      {/* There from the start (empty while checking), so the check's answer is read out. */}
+      <Box role="status" sx={{ '&:empty': { mt: -1.5 } }}>
+        {block ? (
+          <BlockNotice
+            block={block}
+            info={info}
+            me={me}
+            canSupport={canSupport}
+            onSupport={onSupport}
+          />
+        ) : info ? (
+          <Typography
+            variant="body2"
+            sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, color: readable('success') }}
+          >
+            <CheckCircleOutlineOutlinedIcon aria-hidden sx={{ fontSize: 18, mt: '1px' }} />
+            <span>
+              Can be nominated.
+              {info.hasJoinRequest
+                ? ' They have already asked to join MINTER, so an approval makes them a member at once.'
+                : ''}
+            </span>
+          </Typography>
+        ) : null}
+      </Box>
     </Card>
   );
 }
@@ -633,7 +667,7 @@ function BlockNotice({
     (block === 'open' || block === 'pending') && open && isStillOpenForSupport(open);
   const severity = block === 'banned' ? 'warning' : block === 'stored' ? 'success' : 'info';
   return (
-    <Alert severity={severity} role="status">
+    <Alert severity={severity} role="note">
       <Typography variant="body2">{NOMINEE_BLOCK_TEXT[block]}</Typography>
       {supportable && nominatedByMe ? (
         <Typography variant="body2" sx={{ mt: 0.5 }}>
