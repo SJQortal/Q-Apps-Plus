@@ -399,30 +399,59 @@ export function loadHistoryWindow(
 }
 
 /**
- * Each MINTER kick with `declinesJoinRequest` set: whether it declined (or,
- * not applied, proposed to decline) a join request, from the kicked
- * person's own MINTER history (the cached read their page makes, four at a
- * time). A kick whose history can't be read is left as it is.
+ * Whether each MINTER kick among `rows` declined (or, not applied, proposed
+ * to decline) a join request, by signature, from the kicked person's own
+ * MINTER history (the cached read their page makes, four at a time). Kicks
+ * whose person's history can't be read, or about `skip`, are left out.
  */
-export async function withDeclines(rows: TxRow[]): Promise<TxRow[]> {
-  const kicked = [
-    ...new Set(
-      rows.filter((tx) => tx.type === 'GROUP_KICK' && tx.member).map((tx) => tx.member as string)
-    ),
-  ];
-  if (!kicked.length) return rows;
+export async function declineMarks(
+  rows: readonly TxRow[],
+  skip?: string
+): Promise<Map<string, boolean>> {
+  const kicks = rows.filter((tx) => tx.type === 'GROUP_KICK' && tx.member && tx.member !== skip);
+  const kicked = [...new Set(kicks.map((tx) => tx.member as string))];
   const stories = new Map<string, JoinRequestStory>();
   await mapLimit(kicked, 4, async (address) => {
     try {
       stories.set(address, joinRequestStory(address, (await getAddressHistory(address)).rows));
     } catch {
-      // Unread: the kick is read from the window alone.
+      // Unread: the kick is read from the rows in hand alone.
     }
   });
-  return rows.map((tx) => {
-    const story = tx.type === 'GROUP_KICK' && tx.member ? stories.get(tx.member) : undefined;
-    return story ? { ...tx, declinesJoinRequest: isDeclineIn(story, tx) } : tx;
+  const marks = new Map<string, boolean>();
+  for (const tx of kicks) {
+    const story = stories.get(tx.member as string);
+    if (story) marks.set(tx.signature, isDeclineIn(story, tx));
+  }
+  return marks;
+}
+
+/**
+ * declineMarks for the kicks in an account's own history that are about
+ * others (the ones a Minter Admin proposed), key `declinemarks:<address>`.
+ */
+export function loadDeclineMarks(
+  address: string,
+  rows: readonly TxRow[],
+  options: { force?: boolean } = {}
+): Promise<Map<string, boolean>> {
+  return fetchQuery(`declinemarks:${address}`, () => declineMarks(rows, address), {
+    ttlMs: 2 * 60_000,
+    force: options.force,
   });
+}
+
+/** The rows with each marked kick's `declinesJoinRequest` set (buildTimeline reads it). */
+export function withDeclineMarks(rows: TxRow[], marks: ReadonlyMap<string, boolean>): TxRow[] {
+  if (!marks.size) return rows;
+  return rows.map((tx) =>
+    marks.has(tx.signature) ? { ...tx, declinesJoinRequest: marks.get(tx.signature) } : tx
+  );
+}
+
+/** `rows` with every kick marked (declineMarks), for History's windows. */
+export async function withDeclines(rows: TxRow[]): Promise<TxRow[]> {
+  return withDeclineMarks(rows, await declineMarks(rows));
 }
 
 /**

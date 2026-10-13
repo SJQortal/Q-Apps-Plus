@@ -144,6 +144,24 @@ describe('Person page', () => {
     expect(within(timeline).getByText('Asked to join MINTER')).toBeInTheDocument();
   });
 
+  it('words the declines a Minter Admin proposed as declines, from each person’s history', async () => {
+    const adminG = fakeAddress('admin-6');
+    await renderPage(<PersonPage />, {
+      persona: 'admin',
+      path: `/people/${adminG}`,
+      route: ROUTE,
+      setup: (world) => void addDecline(world),
+    });
+    const list = await section('As a Minter Admin');
+    expect(
+      await within(list).findByText('Join request declined', {}, { timeout: 4000 })
+    ).toBeInTheDocument();
+    expect(within(list).getByText('Proposed: Decline a join request')).toBeInTheDocument();
+    expect(within(list).queryByText(/Remove(d)? from MINTER/)).toBeNull();
+    // One read of each kicked person's history.
+    expect(fetchCallsFor(`/transactions/search?address=${DECLINED.address}`)).toHaveLength(1);
+  });
+
   it('tells a member below level 5 why they cannot nominate', async () => {
     await visit(ADDR.kicked, 'learner');
     expect(await screen.findByText('Former member')).toBeInTheDocument();
