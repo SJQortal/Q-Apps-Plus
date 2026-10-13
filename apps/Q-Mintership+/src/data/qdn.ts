@@ -108,8 +108,24 @@ export async function fetchQdnText(
 }
 
 /**
+ * Bodies that weren't there, so a refresh doesn't start the retry ladder
+ * again each minute: one that is unavailable is tried again after 2 min,
+ * then 4, 8 and every 15 min ("fills in when it arrives" still holds); one
+ * that was deleted is final for that version (a republish has a new one).
+ */
+const misses = new Map<string, { error: Error; until: number; wait: number }>();
+const MISS_FIRST_MS = 2 * 60_000;
+const MISS_MAX_MS = 15 * 60_000;
+
+/** Tests start with no remembered misses. */
+export function resetQdnMisses(): void {
+  misses.clear();
+}
+
+/**
  * A JSON body, cached for the session per version. `version` should be the
- * search row's latest signature (or its newest timestamp).
+ * search row's latest signature (or its newest timestamp). A body that
+ * wasn't there fails at once until it is due to be tried again.
  */
 export function fetchQdnJson<T = unknown>(
   service: string,
@@ -117,11 +133,54 @@ export function fetchQdnJson<T = unknown>(
   identifier: string,
   version: string | number
 ): Promise<T> {
+  const key = `qdnbody:${service}:${name}:${identifier}:${version}`;
+  const miss = misses.get(key);
+  if (miss && Date.now() < miss.until) return Promise.reject(miss.error);
   return fetchQuery(
-    `qdnbody:${service}:${name}:${identifier}:${version}`,
-    async () => JSON.parse(await fetchQdnText(service, name, identifier)) as T,
+    key,
+    async () => {
+      try {
+        const value = JSON.parse(await fetchQdnText(service, name, identifier)) as T;
+        misses.delete(key);
+        return value;
+      } catch (error) {
+        if (error instanceof QdnDeletedError) {
+          misses.set(key, { error, until: Number.POSITIVE_INFINITY, wait: 0 });
+        } else if (error instanceof QdnUnavailableError) {
+          const wait = miss ? Math.min(miss.wait * 2, MISS_MAX_MS) : MISS_FIRST_MS;
+          misses.set(key, { error, until: Date.now() + wait, wait });
+        }
+        throw error;
+      }
+    },
     { ttlMs: Number.POSITIVE_INFINITY }
   );
+}
+
+type Quick<T> = { value: T; late: null } | { value: null; late: Promise<T> };
+
+/** How long a body read waits before the list shows without it. */
+let bodyWaitMs = 3_000;
+
+/** Tests shorten the wait. */
+export function setBodyWait(ms: number): void {
+  bodyWaitMs = ms;
+}
+
+/**
+ * `work`, or after the body wait the promise still running, so one slow
+ * body never holds a whole list up.
+ */
+export async function quick<T>(work: Promise<T>): Promise<Quick<T>> {
+  // Nobody may be waiting for it any more when it fails late.
+  work.catch(() => undefined);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const slow = new Promise<'slow'>((resolve) => {
+    timer = setTimeout(() => resolve('slow'), bodyWaitMs);
+  });
+  const first = await Promise.race([work, slow]);
+  clearTimeout(timer);
+  return first === 'slow' ? { value: null, late: work } : { value: first as T, late: null };
 }
 
 /** Run `work` over `items`, at most `limit` at a time (Hub/GO queue politely). */

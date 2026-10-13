@@ -1,7 +1,9 @@
 /**
  * Considering records, as everyone sees them: one paged prefix search for
  * `qmp-considering-` shared by every card (newest first, at most 3 pages of
- * 100), then each candidate's small JSON body (cached per version).
+ * 100), then each candidate's small JSON body (cached per version; one
+ * slower than a few seconds counts on the next read, so it never holds the
+ * others up).
  *
  * Only rows that can still matter are read: published within the last two
  * signing windows (a nomination waits at most one, then its invite collects
@@ -14,7 +16,7 @@ import type { ChainAnswer, ConsideringEntry } from '../rules/considering';
 import type { Tally } from '../rules/tally';
 import { getNameOwner, isAddress } from './accounts';
 import { loadDecisions } from './decisions';
-import { fetchQdnJson, mapLimit, rowTime, searchQdn } from './qdn';
+import { fetchQdnJson, mapLimit, quick, rowTime, searchQdn } from './qdn';
 import { fetchQuery } from './query';
 import {
   CONSIDERING_PREFIX,
@@ -74,13 +76,17 @@ export function loadConsidering(options: { force?: boolean } = {}): Promise<Cons
       const valid = candidates.filter((row) => publisherOf.get(row.name));
       const read = await mapLimit(valid, 6, async (row): Promise<ConsideringEntry | null> => {
         try {
-          const body = await fetchQdnJson(
-            RECORD_SERVICE,
-            row.name,
-            row.identifier,
-            row.latestSignature ?? rowTime(row)
+          const body = await quick(
+            fetchQdnJson(
+              RECORD_SERVICE,
+              row.name,
+              row.identifier,
+              row.latestSignature ?? rowTime(row)
+            )
           );
-          const record = parseConsidering(body, row.identifier);
+          // A slow one counts on the next read (it is cached by then).
+          if (body.value === null) return null;
+          const record = parseConsidering(body.value, row.identifier);
           if (!record) return null;
           return {
             publisher: { name: row.name, address: publisherOf.get(row.name) as string },
