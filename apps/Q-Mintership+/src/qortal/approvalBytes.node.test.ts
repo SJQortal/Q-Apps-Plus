@@ -7,11 +7,12 @@
  *   QMP_DECODE_NODE=http://127.0.0.1:12391 npm run test:decode
  *
  * Skipped in the normal test run (no node there). The pending signature and
- * the account are read from the node with GETs at run time.
+ * the account are read from the node with GETs at run time. Both a signature
+ * (approval 1) and a rejection (approval 0) are decoded.
  */
 import { describe, expect, it } from 'vitest';
 import fixture from '../test/fixtures/group-approvals.json';
-import { groupApprovalUnsignedBase58 } from './approvalBytes';
+import { groupApprovalUnsignedBase58, groupRejectionUnsignedBase58 } from './approvalBytes';
 
 type Env = { QMP_DECODE_NODE?: string };
 const NODE = (
@@ -83,6 +84,37 @@ describe.skipIf(!NODE)('GROUP_APPROVAL bytes decoded by a real node (read-only)'
       adminPublicKey: account.publicKey,
       pendingSignature: sample.pendingSignature,
       approval: true,
+      creatorAddress: sample.creatorAddress,
+    });
+  });
+
+  it('decodes a rejection (approval 0) back to the same fields', async () => {
+    const sample = fixture.approvals[1];
+    const account = JSON.parse((await http('GET', `/addresses/${sample.creatorAddress}`)).text) as {
+      reference: string;
+      publicKey: string;
+    };
+    const timestamp = 1_791_000_000_000;
+    const unsigned = groupRejectionUnsignedBase58({
+      timestamp,
+      reference: account.reference,
+      adminPublicKey: account.publicKey,
+      pendingSignature: sample.pendingSignature,
+      approval: false,
+      feeAtomic: 1_000_000,
+    });
+    const res = await http('POST', '/transactions/decode?ignoreValidityChecks=true', unsigned);
+    expect(res.status).toBe(200);
+    const decoded = JSON.parse(res.text) as Record<string, unknown>;
+    expect(decoded).toMatchObject({
+      type: 'GROUP_APPROVAL',
+      timestamp,
+      reference: account.reference,
+      fee: '0.01000000',
+      txGroupId: 0,
+      adminPublicKey: account.publicKey,
+      pendingSignature: sample.pendingSignature,
+      approval: false,
       creatorAddress: sample.creatorAddress,
     });
   });
