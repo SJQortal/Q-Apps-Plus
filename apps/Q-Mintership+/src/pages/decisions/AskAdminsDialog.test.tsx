@@ -133,6 +133,28 @@ describe('Propose → Ask the Minter Admins', () => {
     expect(publishes()).toHaveLength(1);
   });
 
+  it('the question wraps as it is written, and goes out on one line', async () => {
+    const u = user();
+    await openDecisions();
+    mockQortalRequest('PUBLISH_QDN_RESOURCE', (request: Record<string, unknown>) => ({
+      type: 'ARBITRARY',
+      signature: 'S1',
+      identifier: request.identifier,
+    }));
+    const form = await openAsk(u);
+    const question = within(form).getByRole('textbox', { name: 'Question' });
+    expect(question.tagName).toBe('TEXTAREA');
+    await u.type(question, 'Should we meet{Enter}once a month in Q-Chat?');
+    await u.click(within(form).getByRole('button', { name: 'Review' }));
+    const hub = await screen.findByRole('dialog', { name: 'Ask the Minter Admins' }, T);
+    expect(within(hub).getByText('Should we meet once a month in Q-Chat?')).toBeVisible();
+    await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(hub).findByText('Poll published', {}, T)).toBeVisible();
+    expect(fromData64(String(publishes()[0].data64))).toMatchObject({
+      question: 'Should we meet once a month in Q-Chat?',
+    });
+  });
+
   it('needs a registered name, and says so', async () => {
     const u = user();
     await openDecisions((world) => {

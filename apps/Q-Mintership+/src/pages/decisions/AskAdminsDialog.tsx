@@ -58,7 +58,7 @@ export default function AskAdminsDialog({
   const [details, setDetails] = useState('');
   const [days, setDays] = useState(DURATION_DEFAULT_DAYS);
   const [touched, setTouched] = useState(false);
-  const questionRef = useRef<HTMLInputElement | null>(null);
+  const questionRef = useRef<HTMLTextAreaElement | null>(null);
   const detailsRef = useRef<HTMLTextAreaElement | null>(null);
   const durationId = useId();
   const chain = useChainNow();
@@ -132,8 +132,12 @@ export default function AskAdminsDialog({
               helperText={
                 touched && questionError
                   ? questionError
-                  : `${formatCount(q.length)} / ${QUESTION_MAX} characters, on one line.`
+                  : `${formatCount(q.length)} / ${QUESTION_MAX} characters. It is one line: line breaks become spaces.`
               }
+              // Wraps, so all of it shows on a phone.
+              multiline
+              minRows={2}
+              maxRows={5}
               fullWidth
               slotProps={{ htmlInput: { maxLength: QUESTION_MAX + 20 } }}
             />
