@@ -477,6 +477,10 @@ describe('Home: nominated', () => {
     expect(within(hero).getByText(/^Last block a signature counts in: /)).toBeVisible();
     expect(within(hero).getByText(/accepted ✓/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Accept nomination' })).toBeNull();
+    expect(within(hero).getByRole('link', { name: 'See your nomination' })).toHaveAttribute(
+      'href',
+      `/nominations/${ADDR.nominatedSigning}`
+    );
     // The full nomination below, with its reason.
     expect(screen.getByRole('region', { name: 'Your nomination' })).toHaveTextContent(
       /reliable node/
