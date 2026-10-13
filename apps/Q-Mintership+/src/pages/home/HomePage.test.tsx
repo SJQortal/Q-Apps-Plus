@@ -286,6 +286,10 @@ describe('Home: not in MINTER yet', () => {
     );
     expect(within(hero).queryByRole('button', { name: "Show you're ready to mint" })).toBeNull();
     expect(within(hero).getByRole('button', { name: 'Copy your name' })).toBeInTheDocument();
+    // How it works says the same: nominators reach out, and being ready counts as accepting.
+    const how = screen.getByRole('region', { name: 'How joining MINTER works' });
+    expect(how).toHaveTextContent(/often reach out first/);
+    expect(how).toHaveTextContent(/shown you.re ready to mint, that request is in/);
   });
 });
 
