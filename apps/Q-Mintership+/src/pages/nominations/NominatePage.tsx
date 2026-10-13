@@ -17,7 +17,7 @@
  * above the keyboard, so its button stays in view while the reason is typed;
  * in a landscape frame it stays in the flow.
  */
-import { useEffect, useRef, useState, type Ref } from 'react';
+import { useEffect, useId, useRef, useState, type Ref } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { Alert, Box, Button, IconButton, Skeleton, TextField, Typography } from '@mui/material';
 import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
@@ -183,6 +183,8 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
   // Picking someone replaces the picker with their card, and Change the other way
   // round: focus follows, so it never falls to the page.
   const summaryRef = useRef<HTMLDivElement | null>(null);
+  // Once published, the form (and the button that opened the dialog) is gone: focus goes to the news.
+  const doneTitleId = useId();
   const focusNext = useRef<'summary' | 'picker' | null>(null);
   useEffect(() => {
     const next = focusNext.current;
@@ -446,6 +448,7 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
           nominee={published.preview.nominee}
           name={shownName}
           onAgain={restart}
+          titleId={doneTitleId}
         />
       ) : (
         form
@@ -454,6 +457,7 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
       <HubStepDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
+        returnFocus={() => document.getElementById(doneTitleId)}
         title="Publish your nomination"
         intro={
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -812,17 +816,25 @@ function Done({
   nominee,
   name,
   onAgain,
+  titleId,
 }: {
   published: Published;
   now: ChainNow | undefined;
   nominee: string;
   name: string;
   onAgain: () => void;
+  /** The heading's id: focus comes here when the publish dialog closes. */
+  titleId: string;
 }) {
   return (
     <>
       <Card sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <Typography component="h2" sx={{ fontSize: 20, fontWeight: 700 }}>
+        <Typography
+          component="h2"
+          id={titleId}
+          tabIndex={-1}
+          sx={{ fontSize: 20, fontWeight: 700, '&:focus': { outline: 'none' } }}
+        >
           Nomination published
         </Typography>
         <Typography variant="body2" color="text.secondary">

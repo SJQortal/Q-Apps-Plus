@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
@@ -302,6 +302,13 @@ describe('Nominate page: writing and publishing', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('article', { name: /Nomination of Zoë Newcomer/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+    // The form (and its button) went: focus is on the news, not on the page.
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Nomination published' })).toHaveFocus()
+    );
+    // "… for someone else" brings the form back, with focus in its first field.
+    await user.click(screen.getByRole('button', { name: /for someone else$/ }));
+    expect(await screen.findByRole('combobox', { name: 'Name or Qortal address' })).toHaveFocus();
   });
 
   it('treats a decline in Hub as a cancel and keeps what was written', async () => {
