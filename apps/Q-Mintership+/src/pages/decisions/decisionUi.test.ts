@@ -11,7 +11,9 @@ import {
   parseBanDays,
   phaseLine,
   reasonProblem,
+  secondStepProblem,
   signedLabel,
+  signingWindowText,
   whenApplied,
 } from './decisionUi';
 
@@ -73,6 +75,21 @@ describe('when Sign is offered', () => {
     expect(phaseLine(by(ADDR.demote), data.now)).toMatch(/On its way into a block/);
     expect(phaseLine(by(ADDR.early), data.now)).toMatch(/can be applied from block 2,757,504/);
     expect(phaseLine(by(ADDR.nominatedSigning), data.now)).toBeNull();
+  });
+});
+
+describe('a proposal and its proposer’s signature', () => {
+  it('says why step 2 did not go through, in one sentence', () => {
+    expect(secondStepProblem({ status: 'declined' })).toBe('You cancelled step 2 in Hub.');
+    expect(secondStepProblem({ status: 'blocked', reason: 'Your node doesn’t show it yet.' })).toBe(
+      'Your node doesn’t show it yet.'
+    );
+    expect(secondStepProblem({ status: 'failed', message: 'Core said no.' })).toBe('Core said no.');
+    expect(secondStepProblem(null)).toBe('Step 2 did not run.');
+  });
+
+  it('gives the signing window in blocks and time', () => {
+    expect(signingWindowText(10_080, 72_900)).toMatch(/^10,080 blocks \(about 8 days/);
   });
 });
 

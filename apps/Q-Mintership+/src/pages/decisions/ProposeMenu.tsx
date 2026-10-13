@@ -23,6 +23,7 @@ import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import RemoveModeratorOutlinedIcon from '@mui/icons-material/RemoveModeratorOutlined';
 import LockOpenOutlinedIcon from '@mui/icons-material/LockOpenOutlined';
+import PersonAddDisabledOutlinedIcon from '@mui/icons-material/PersonAddDisabledOutlined';
 import CleaningServicesOutlinedIcon from '@mui/icons-material/CleaningServicesOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
@@ -34,6 +35,7 @@ const ICONS: Record<ProposeKind, ReactNode> = {
   addAdmin: <AdminPanelSettingsOutlinedIcon />,
   removeAdmin: <RemoveModeratorOutlinedIcon />,
   cancelBan: <LockOpenOutlinedIcon />,
+  cancelInvite: <PersonAddDisabledOutlinedIcon />,
 };
 
 export type ProposeChoice = ProposeKind | 'stale';

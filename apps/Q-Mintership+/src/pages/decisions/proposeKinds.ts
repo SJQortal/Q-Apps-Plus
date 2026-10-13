@@ -5,16 +5,18 @@
 import { getNameOwner, isAddress } from '../../data/accounts';
 import { getMembership } from '../../data/group';
 import type { GroupTxType } from '../../data/types';
+import type { ProposalKind } from '../../writes/flows';
 import {
   guardAddAdmin,
   guardBan,
   guardCancelBan,
+  guardCancelInvite,
   guardKick,
   guardRemoveAdmin,
 } from '../../writes/guards';
 import type { Signer } from '../../writes/runner';
 
-export type ProposeKind = 'kick' | 'ban' | 'addAdmin' | 'removeAdmin' | 'cancelBan';
+export type ProposeKind = ProposalKind;
 
 export interface ProposeKindInfo {
   /** Menu label. */
@@ -55,6 +57,12 @@ export const PROPOSE_KINDS: Record<ProposeKind, ProposeKindInfo> = {
     description: 'So they can be nominated again.',
     action: 'CANCEL_GROUP_BAN',
     txType: 'CANCEL_GROUP_BAN',
+  },
+  cancelInvite: {
+    label: 'Cancel an approved invite',
+    description: 'An approved invite that was never used.',
+    action: 'CANCEL_GROUP_INVITE',
+    txType: 'CANCEL_GROUP_INVITE',
   },
 };
 
@@ -97,6 +105,7 @@ export async function checkSubject(
     addAdmin: () => guardAddAdmin(signer, address),
     removeAdmin: () => guardRemoveAdmin(signer, address),
     cancelBan: () => guardCancelBan(signer, address),
+    cancelInvite: () => guardCancelInvite(signer, address),
   }[kind]();
   return reason ? { status: 'blocked', reason } : { status: 'ok' };
 }

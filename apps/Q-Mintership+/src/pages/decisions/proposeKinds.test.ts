@@ -1,9 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadDecisions } from '../../data/decisions';
 import { ADDR, installWorld } from '../../test/world';
-import { checkSubject, resolvePerson } from './proposeKinds';
+import { fakeAddress } from '../../../e2e/world.mjs';
+import { TX_TYPE_OF_ACTION } from '../../writes/hubActions';
+import { PROPOSAL_TX_TYPE } from '../../writes/flows';
+import { PROPOSE_KINDS, checkSubject, resolvePerson } from './proposeKinds';
 
 afterEach(() => vi.useRealTimers());
+
+describe('proposals: kinds', () => {
+  it('opens the Hub action that creates the transaction each proposal pays for', () => {
+    for (const [kind, info] of Object.entries(PROPOSE_KINDS)) {
+      expect(TX_TYPE_OF_ACTION[info.action], kind).toBe(info.txType);
+      expect(PROPOSAL_TX_TYPE[kind as keyof typeof PROPOSAL_TX_TYPE], kind).toBe(info.txType);
+    }
+    expect(Object.keys(PROPOSE_KINDS).sort()).toEqual(Object.keys(PROPOSAL_TX_TYPE).sort());
+  });
+});
 
 describe('proposals: person and check', () => {
   it('resolves a name or an address, and says when neither works', async () => {
@@ -36,6 +49,23 @@ describe('proposals: person and check', () => {
     await expect(checkSubject('removeAdmin', signer, owner)).resolves.toMatchObject({
       status: 'blocked',
       reason: expect.stringMatching(/owner/),
+    });
+  });
+
+  it('cancels only a stored invite, and not twice', async () => {
+    const { address, publicKey } = installWorld('admin');
+    const signer = { address, publicKey };
+    await expect(checkSubject('cancelInvite', signer, fakeAddress('stale-2'))).resolves.toEqual({
+      status: 'ok',
+    });
+    await expect(checkSubject('cancelInvite', signer, ADDR.learner)).resolves.toEqual({
+      status: 'blocked',
+      reason: 'There is no approved invite stored for this account.',
+    });
+    // Its cancellation is waiting already (the invitee is read from its raw bytes).
+    await expect(checkSubject('cancelInvite', signer, fakeAddress('stale-1'))).resolves.toEqual({
+      status: 'blocked',
+      reason: 'Cancelling this invite is already waiting for signatures.',
     });
   });
 });

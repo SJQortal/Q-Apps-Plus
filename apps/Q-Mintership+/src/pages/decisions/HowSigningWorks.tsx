@@ -1,6 +1,7 @@
 /**
  * "How signing works", folded away: the rules every Minter Admin should
- * know, with today's real numbers (target, admins, window, block time).
+ * know, with today's real numbers (target, admins, window, block time),
+ * including that proposing comes with the proposer's own signature.
  */
 import { Accordion, AccordionDetails, AccordionSummary, Box, Typography } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -29,6 +30,7 @@ export function HowSigningWorks({
   const window = group.maximumBlockDelay;
   const points = [
     `A signature counts once it is in a block. Each one is a Hub confirmation and costs ${formatQort(fee.data?.qort ?? 0.01)}.`,
+    `A proposal doesn’t count as its proposer’s signature, so when you propose something here you sign it straight after: two Hub confirmations, one after the other. A nomination’s first signature works the same way.`,
     `Only your latest answer counts.`,
     `There is no reject or withdraw button: on chain, taking a signature back counts as a rejection. If you don’t agree, do nothing and let it expire.`,
     `Doing nothing lets it expire ${formatCount(window + 1)} blocks after the block it went into (about ${formatDuration((window + 1) * now.msPerBlock, { precise: true })} at today’s ${blockSeconds} s a block). The last block a signature can count in is two blocks before that.`,

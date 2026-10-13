@@ -538,6 +538,11 @@ export default function DecisionsPage() {
                 <Section title="Clean up stale invites" id="stale">
                   <StaleInvites
                     signer={signer}
+                    facts={{
+                      needed,
+                      maximumBlockDelay: data.group.maximumBlockDelay,
+                      msPerBlock: data.now.msPerBlock,
+                    }}
                     decisions={decisions}
                     now={data.now}
                     adminNames={adminNames}

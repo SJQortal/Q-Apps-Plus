@@ -1,18 +1,19 @@
 /**
  * Clean up stale invites (Minter Admins): approved invites nobody used, with
- * who invited and when it was approved, "Propose cancelling" per row, and
- * "Propose for all" one Hub confirmation after another. Invites approved in
- * the last 30 days are marked recent and left out of "for all": those
- * people may still press Join now. An invite whose cancellation is already
- * waiting for signatures is marked, and never offered again.
+ * who invited and when it was approved, "Propose cancelling" per row (the
+ * proposal and the admin's own signature), and "Propose for all" one Hub
+ * confirmation after another (proposals only). Invites approved in the last
+ * 30 days are marked recent and left out of "for all": those people may
+ * still press Join now. An invite whose cancellation is already waiting for
+ * signatures is marked, and never offered again.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { Alert, Box, Button, Typography } from '@mui/material';
 import { BulkDialog } from './BulkDialog';
 import { DoneChip } from '../../components/decision/DecisionParts';
 import { cancelAll, isRecentInvite, unmatchedCancels, waitingCancelInvitees } from './staleRules';
-import { HubStepDialog } from '../../components/common/HubStepDialog';
+import { ProposeSignDialog, type ProposalFacts } from './ProposeSignDialog';
 import { PersonChip } from '../../components/common/Person';
 import { Card } from '../../components/common/Section';
 import { CardSkeleton, ErrorState } from '../../components/common/states';
@@ -29,12 +30,13 @@ import { useDisplayName } from '../../hooks/useDisplayName';
 import { useQuery } from '../../hooks/useQuery';
 import type { Decision } from '../../rules/decision';
 import { displayName, formatCount, formatDate, formatRelative, plural } from '../../utils/format';
-import { proposeCancelInvite } from '../../writes/flows';
+import type { Proposal } from '../../writes/flows';
 import { pendingWritesAtom, usePendingWrite, writeKeys } from '../../writes/optimistic';
 import type { Signer } from '../../writes/runner';
 
 export function StaleInvites({
   signer,
+  facts,
   decisions,
   now,
   adminNames,
@@ -42,6 +44,8 @@ export function StaleInvites({
   onExpandedChange,
 }: {
   signer: Signer;
+  /** Signatures needed and the window, for the proposal's words. */
+  facts: ProposalFacts;
   decisions: Decision[];
   now: ChainNow;
   adminNames: Map<string, string | null>;
@@ -167,16 +171,23 @@ export function StaleInvites({
         </Box>
       ) : null}
 
-      <SingleCancel row={single} signer={signer} onClose={() => setSingle(null)} />
+      <SingleCancel row={single} signer={signer} facts={facts} onClose={() => setSingle(null)} />
       <BulkDialog
         open={bulkRows !== null}
         onClose={() => setBulkRows(null)}
         title="Cancel stale invites"
         intro={
-          <Typography>
-            Proposes cancelling {plural(bulkRows?.length ?? 0, 'approved invite')} not approved in
-            the last 30 days, one after another. Each happens only if enough Minter Admins sign it.
-          </Typography>
+          <>
+            <Typography>
+              Proposes cancelling {plural(bulkRows?.length ?? 0, 'approved invite')} not approved in
+              the last 30 days, one after another. Each happens only if enough Minter Admins sign
+              it.
+            </Typography>
+            <Typography sx={{ mt: 1 }}>
+              Your own signatures aren’t part of this run: once the proposals are in a block, sign
+              them in the queue with Sign several.
+            </Typography>
+          </>
         }
         action="CANCEL_GROUP_INVITE"
         feeTxType="CANCEL_GROUP_INVITE"
@@ -263,51 +274,37 @@ function StaleRow({
   );
 }
 
+/** "Propose cancelling" on one row: the proposal and the admin's own signature on it. */
 function SingleCancel({
   row,
   signer,
+  facts,
   onClose,
 }: {
   row: InviteRow | null;
   signer: Signer;
+  facts: ProposalFacts;
   onClose: () => void;
 }) {
-  const who = useDisplayName(row?.invitee ?? '', row ? undefined : null);
+  // The last row stays while the dialog closes, so its words don't change mid-way.
+  const [last, setLast] = useState(row);
+  if (row && row !== last) setLast(row);
+  const shown = row ?? last;
+  const who = useDisplayName(shown?.invitee ?? '', shown ? undefined : null);
+  const proposal = useMemo<Proposal | null>(
+    () => (shown ? { kind: 'cancelInvite', subject: shown.invitee } : null),
+    [shown]
+  );
   return (
-    <HubStepDialog
+    <ProposeSignDialog
       open={Boolean(row)}
-      onClose={onClose}
+      proposal={proposal}
+      who={who.label}
+      signer={signer}
+      facts={facts}
       title={`Cancel the invite for ${who.label}`}
-      intro={
-        <Typography>
-          This proposes cancelling their approved invite. It happens only if enough Minter Admins
-          sign it. Your proposal doesn’t count as your signature: sign it in the queue too.
-        </Typography>
-      }
-      steps={[
-        {
-          action: 'CANCEL_GROUP_INVITE',
-          title: 'Propose it',
-          detail: row ? (
-            <Typography variant="body2">
-              Hub shows the account {row.invitee.slice(0, 6)}… and the group MINTER.
-            </Typography>
-          ) : null,
-          feeTxType: 'CANCEL_GROUP_INVITE',
-        },
-      ]}
-      run={async (report) => {
-        if (!row) return { outcome: { status: 'blocked', reason: 'Nothing to cancel.' } };
-        return {
-          outcome: await proposeCancelInvite(signer, row.invitee, (stage) => report(0, stage)),
-        };
-      }}
-      successTitle="Proposed"
-      successText={
-        <Typography variant="body2">
-          It shows in the queue once it is in a block, usually within a couple of minutes.
-        </Typography>
-      }
+      lead="This proposes cancelling their approved invite."
+      onClose={onClose}
     />
   );
 }
