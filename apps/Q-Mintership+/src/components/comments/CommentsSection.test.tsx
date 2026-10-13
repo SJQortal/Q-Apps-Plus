@@ -22,7 +22,7 @@ function decode(data64: unknown): unknown {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-async function show(persona: string, options: { open?: boolean } = {}) {
+async function show(persona: string, options: { open?: boolean; extra?: number } = {}) {
   let ids: Record<string, string> = {};
   const rendered = await renderPage(
     <CommentsSection
@@ -34,6 +34,16 @@ async function show(persona: string, options: { open?: boolean } = {}) {
       persona,
       setup: (world) => {
         ids = addComments(world).ids;
+        // More comments, newer than the thread's: one a minute.
+        for (let i = 0; i < (options.extra ?? 0); i++) {
+          const id = `more${String(i).padStart(2, '0')}`;
+          world.records.push({
+            name: `Member ${10 + (i % 20)}`,
+            identifier: `qmp-comment-${ADDR.nominatedWaiting}-${id}`,
+            created: NOW - (i + 1) * 60_000,
+            body: { v: 1, key: ADDR.nominatedWaiting, text: `Extra comment ${i}` },
+          });
+        }
       },
     }
   );
@@ -80,6 +90,30 @@ describe('CommentsSection', () => {
     expect(within(commentLi(ids.helped)).queryByText('Hidden by a Minter Admin.')).toBeNull();
     // Anyone with a registered name can comment, at any level.
     expect(within(panel).getByRole('textbox', { name: 'Write a comment' })).toBeVisible();
+  });
+
+  it('reads 20 at a time: Show more reads the next ones, keeping the first on screen', async () => {
+    const user = userEvent.setup();
+    await show('learner', { extra: 23 });
+    await user.click(
+      await screen.findByRole('button', { name: /^Comments \(31\): / }, { timeout: 4000 })
+    );
+    const panel = await region();
+    expect(await within(panel).findByText('Extra comment 0')).toBeVisible();
+    expect(within(panel).getByText('Extra comment 19')).toBeVisible();
+    expect(within(panel).queryByText('Extra comment 20')).toBeNull();
+    expect(
+      fetchCallsFor('/arbitrary/JSON/').filter((p) => p.includes('qmp-comment-'))
+    ).toHaveLength(20);
+    await user.click(within(panel).getByRole('button', { name: 'Show more comments (11)' }));
+    expect(await within(panel).findByText('Extra comment 22')).toBeVisible();
+    expect(within(panel).getByText(/Wren helped me set up my node/)).toBeVisible();
+    expect(within(panel).getByText('Extra comment 0')).toBeVisible();
+    expect(within(panel).queryByRole('button', { name: /Show more comments/ })).toBeNull();
+    // Each body is read once, however many pages.
+    expect(
+      fetchCallsFor('/arbitrary/JSON/').filter((p) => p.includes('qmp-comment-'))
+    ).toHaveLength(31);
   });
 
   it('Show anyway unfolds a hidden comment and moves focus to it', async () => {
