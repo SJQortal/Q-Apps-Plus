@@ -53,7 +53,6 @@ function ComeBack({ ready }: { ready: ReadyToMint }) {
           It can&rsquo;t be withdrawn: it stays open until you&rsquo;re approved, or Minter Admins
           remove it.
         </HeroText>
-        <ReadyUnknown ready={ready} />
       </>
     );
   }

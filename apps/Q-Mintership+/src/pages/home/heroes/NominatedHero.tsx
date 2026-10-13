@@ -208,7 +208,7 @@ export function NominatedHero({
             {formatQort(feeQort)} covers the fee), then accept.
           </Alert>
         ) : null}
-        {pending?.status === 'failed' ? (
+        {!accepted && pending?.status === 'failed' ? (
           <Alert severity="warning">
             {pending.message ??
               "Your join request hasn't shown up yet. Check again in a minute before trying again."}

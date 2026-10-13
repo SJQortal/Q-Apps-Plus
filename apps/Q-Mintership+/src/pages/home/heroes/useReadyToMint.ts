@@ -20,9 +20,9 @@ export function useReadyToMint(status: MyStatus) {
     /** Hub sent it; it isn't in a block yet. */
     confirming,
     sending: pending?.status === 'sending',
-    /** Hub stopped waiting and nothing turned up yet. */
+    /** Hub stopped waiting and nothing turned up yet (until the join request shows). */
     unknown:
-      pending?.status === 'failed'
+      !status.hasJoinRequest && pending?.status === 'failed'
         ? (pending.message ??
           "Your join request hasn't shown up yet. Check again in a minute before trying again.")
         : null,

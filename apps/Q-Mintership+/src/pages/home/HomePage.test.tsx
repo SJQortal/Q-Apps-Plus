@@ -4,7 +4,7 @@
  * the mock, or answered by the test) without anything reaching a node.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { getDefaultStore } from 'jotai';
@@ -12,7 +12,7 @@ import { HubThemeProvider } from '../../hub-theme';
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme';
 import { STORAGE_PREFIX } from '../../constants/plus';
 import { resetSessionStarter, signIn } from '../../state/session';
-import { pendingWritesAtom } from '../../writes/optimistic';
+import { markWrite, pendingWritesAtom, writeKeys } from '../../writes/optimistic';
 import { renderPage } from '../../test/render';
 import { fetchCalls, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { ADDR, installWorld } from '../../test/world';
@@ -38,6 +38,10 @@ function hubAcceptsJoin(address: string) {
     creatorAddress: address,
   }));
 }
+
+/** What a join says after Hub's timeout when the lookup found nothing yet (runner.ts). */
+const NOT_YET =
+  "Hub stopped waiting before it answered, and the transaction hasn't shown up yet. It may still arrive: check again in a minute before trying again.";
 
 /** Home's "Show you're ready to mint": the self-check ticked, then Continue to Hub. Returns the Hub step. */
 async function readyThroughTheCheck() {
@@ -275,6 +279,21 @@ describe('Home: not in MINTER yet', () => {
     getDefaultStore().set(pendingWritesAtom, {});
   }, 20_000);
 
+  it('drops "hasn’t shown up yet" once the join request is in a block', async () => {
+    const { world, address } = await renderPage(<HomePage />, { persona: 'newcomerName' });
+    await headline("Hi Zoë Newcomer, you're not in MINTER yet");
+    // Hub stopped waiting, and the lookup found nothing yet.
+    act(() => markWrite(writeKeys.join(address), 'failed', { message: NOT_YET }));
+    const hero = screen.getByRole('region', { name: /you're not in MINTER yet/ });
+    expect(await within(hero).findByText(NOT_YET)).toBeVisible();
+    // A minute later it is in a block.
+    world.joinRequests.push({ groupId: 694, joiner: address });
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await headline("Zoë Newcomer, you've shown you're ready to mint")).toBeInTheDocument();
+    expect(screen.queryByText(NOT_YET)).toBeNull();
+    getDefaultStore().set(pendingWritesAtom, {});
+  });
+
   it('says what happens next once they have shown they are ready', async () => {
     const { world, address } = await renderPage(<HomePage />, { persona: 'newcomerName' });
     await headline("Hi Zoë Newcomer, you're not in MINTER yet");
@@ -348,7 +367,10 @@ describe('Home: nominated', () => {
   it('shows k of n with the time left to sign once Minter Admins are signing', async () => {
     await renderPage(<HomePage />, { persona: 'nominatedSigning' });
     await headline('bob+builder, Minter Admins are signing your nomination');
+    // An earlier Accept whose lookup found nothing in time: the join request is in now.
+    act(() => markWrite(writeKeys.join(ADDR.nominatedSigning), 'failed', { message: NOT_YET }));
     const hero = screen.getByRole('region', { name: /signing your nomination/ });
+    expect(hero).not.toHaveTextContent(NOT_YET);
     expect(within(hero).getByRole('img', { name: '5 of 8 signatures, 1 confirming' }));
     expect(hero).toHaveTextContent(/5 of 8 signatures so far, 1 more confirming\. 2 more needed/);
     expect(within(hero).getByText('left to sign')).toBeInTheDocument();
@@ -359,6 +381,7 @@ describe('Home: nominated', () => {
     expect(screen.getByRole('region', { name: 'Your nomination' })).toHaveTextContent(
       /reliable node/
     );
+    getDefaultStore().set(pendingWritesAtom, {});
   });
 });
 
@@ -506,7 +529,10 @@ describe('Home: former members', () => {
       setup: (world) => world.joinRequests.push({ groupId: 694, joiner: ADDR.left }),
     });
     await headline('Lou Left, you left MINTER');
+    // An earlier send whose lookup found nothing in time: the join request is in now.
+    act(() => markWrite(writeKeys.join(ADDR.left), 'failed', { message: NOT_YET }));
     const hero = screen.getByRole('region', { name: /you left MINTER/ });
+    expect(hero).not.toHaveTextContent(NOT_YET);
     expect(hero).toHaveTextContent(/14 days ago/);
     expect(within(hero).getByRole('status')).toHaveTextContent(
       'You’ve shown you’re ready to mint ✓'
@@ -514,6 +540,7 @@ describe('Home: former members', () => {
     expect(hero).toHaveTextContent(/see that you.d like to mint again/);
     expect(hero).toHaveTextContent(/once 8 have signed, you.re in at once/);
     expect(within(hero).queryByRole('button', { name: "Show you're ready to mint" })).toBeNull();
+    getDefaultStore().set(pendingWritesAtom, {});
   });
 });
 
