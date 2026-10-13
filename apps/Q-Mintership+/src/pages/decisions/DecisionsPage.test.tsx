@@ -460,16 +460,62 @@ describe('Decisions: stale invites', () => {
     expect(base58Encode(bytes.slice(112, 176))).toBe(cancel);
   }, 20_000);
 
-  it('says in "for all" that the proposer’s own signatures come later', async () => {
+  it('"for all" signs each cancellation straight after proposing it, two Hub steps each', async () => {
     const u = user();
-    await openPage('admin');
+    const { world, address, publicKey } = await openPage('admin');
+    let n = 0;
+    mockQortalRequest('CANCEL_GROUP_INVITE', (req: Record<string, unknown>) => {
+      n++;
+      const signature = base58Encode(new Uint8Array(64).fill(20 + n));
+      const tx = newProposal(world, { address, publicKey }, signature, {
+        type: 'CANCEL_GROUP_INVITE',
+        groupId: undefined,
+      });
+      world.cancelTargets.set(signature, { groupId: 694, invitee: req.qortalAddress });
+      return tx;
+    });
+    mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'OWN' }));
+
     await u.click(await screen.findByRole('button', { name: 'Show them' }));
     await u.click(
       await screen.findByRole('button', { name: 'Propose cancelling all 2 older ones' }, T)
     );
     const dialog = await screen.findByRole('dialog', { name: 'Cancel stale invites' });
-    expect(within(dialog).getByText(/Your own signatures aren’t part of this run/)).toBeVisible();
-  });
+    expect(within(dialog).getByText(/so you sign each one straight after it/)).toBeVisible();
+    expect(
+      within(dialog).getByText('4 Hub confirmations, two for each, one after another:')
+    ).toBeVisible();
+    expect(within(dialog).getByText('1. Propose it.')).toBeVisible();
+    expect(within(dialog).getByText('2. Sign it.')).toBeVisible();
+    expect(within(dialog).getByText(/Fees in total: 0.04 QORT \(4 × 0.01 QORT\)/)).toBeVisible();
+    // Nothing about the balance unless it can't pay.
+    expect(within(dialog).queryByText(/balance/)).toBeNull();
+    expect(qortalCallsFor('CANCEL_GROUP_INVITE')).toHaveLength(0);
+
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(dialog).findByText(
+        '2 of 2 proposed and signed. Each counts once it is in a block.',
+        {},
+        T
+      )
+    ).toBeVisible();
+    const progress = within(dialog).getByRole('list', { name: 'Progress' });
+    expect(within(progress).getAllByText('Proposed and signed ✓')).toHaveLength(2);
+    expect(qortalCallsFor('CANCEL_GROUP_INVITE').map((c) => c.qortalAddress)).toEqual([
+      fakeAddress('stale-2'),
+      fakeAddress('stale-3'),
+    ]);
+    // Each signature is on the cancellation just proposed.
+    const signed = qortalCallsFor('SIGN_TRANSACTION').map((c) =>
+      base58Encode(base58Decode(String(c.unsignedBytes)).slice(112, 176))
+    );
+    expect(signed).toEqual([
+      base58Encode(new Uint8Array(64).fill(21)),
+      base58Encode(new Uint8Array(64).fill(22)),
+    ]);
+    expect(within(dialog).getByRole('button', { name: 'Done' })).toHaveFocus();
+  }, 20_000);
 });
 
 describe('Decisions: proposing', () => {
