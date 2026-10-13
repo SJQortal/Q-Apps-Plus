@@ -39,6 +39,13 @@ import type { Signer } from '../../writes/runner';
 import { DecidedCard } from './DecidedCard';
 import { DecisionCard, type NominationsState, type SubjectFacts } from './DecisionCard';
 import { SignDialog } from './SignDialog';
+import { RejectDialog, type RejectMode } from './RejectDialog';
+import type { LabelOf } from './targetShiftUi';
+import { impactIn, riskIn, useShift } from './useShift';
+import { ConsideringDialog, type ConsideringRequest } from '../../components/decision/Considering';
+import { peekQuery } from '../../data/query';
+import { signerOf } from '../../state/session';
+import { displayName } from '../../utils/format';
 
 /** The section a waiting decision's card sits in (one that ended sits in "Decided"). */
 const NOT_DECIDED = 'Not decided yet';
@@ -240,6 +247,10 @@ function PendingView({
     getMembership(subject as string, { force })
   );
   const [signTarget, setSignTarget] = useState<Decision | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<{ decision: Decision; mode: RejectMode } | null>(
+    null
+  );
+  const [considerRequest, setConsiderRequest] = useState<ConsideringRequest | null>(null);
   const ready = session.status === 'ready';
   const signer: Signer | null = useMemo(
     () => (ready ? { address: session.address, publicKey: session.publicKey } : null),
@@ -247,6 +258,8 @@ function PendingView({
   );
 
   const data = queue.data;
+  // An admin change's impact, and the chip on a decision an admin change would tip over.
+  const shift = useShift(data);
   const decision = data?.decisions.find((d) => d.signature === signature) ?? null;
   const gone = Boolean(data && !decision && data.loadedAt > since);
   // The queue no longer lists it: read it again, to show how it ended.
@@ -276,6 +289,13 @@ function PendingView({
   const adminNames = new Map<string, string | null>(
     data.admins.admins.map((a) => [a.member, a.primaryName ?? null])
   );
+  const labelOf: LabelOf = (sig) => {
+    const d = data.decisions.find((x) => x.signature === sig);
+    if (!d) return 'A waiting decision';
+    if (!d.subject) return `${decisionTitle(d)} (Core doesn’t say for whom)`;
+    const name = adminNames.get(d.subject) ?? peekQuery<string | null>(`name:${d.subject}`) ?? null;
+    return `${decisionTitle(d)}: ${displayName(name, d.subject)}`;
+  };
   const list = nominations.data ?? [];
   const nomination = isInvite
     ? (list.find((n) => n.decision?.signature === signature) ??
@@ -311,12 +331,35 @@ function PendingView({
           adminNames={adminNames}
           subjectFacts={facts}
           onSign={setSignTarget}
+          onReject={(d) => setRejectTarget({ decision: d, mode: 'reject' })}
+          onWithdraw={(d) => setRejectTarget({ decision: d, mode: 'withdraw' })}
+          onConsider={setConsiderRequest}
+          impact={impactIn(shift, decision)}
+          risk={riskIn(shift, decision)}
+          labelOf={labelOf}
           copyLink={false}
         />
       </Section>
       <MoreLinks tx={tx} />
       {/* Comments on this decision go here. */}
-      <SignDialog decision={signTarget} signer={signer} onClose={() => setSignTarget(null)} />
+      <SignDialog
+        decision={signTarget}
+        signer={signer}
+        onClose={() => setSignTarget(null)}
+        impact={signTarget ? impactIn(shift, signTarget) : null}
+        labelOf={labelOf}
+      />
+      <RejectDialog
+        decision={rejectTarget?.decision ?? null}
+        mode={rejectTarget?.mode ?? 'reject'}
+        signer={signer}
+        onClose={() => setRejectTarget(null)}
+      />
+      <ConsideringDialog
+        request={considerRequest}
+        signer={signerOf(session)}
+        onClose={() => setConsiderRequest(null)}
+      />
     </>
   );
 }

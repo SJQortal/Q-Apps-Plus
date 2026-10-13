@@ -55,6 +55,14 @@ describe('A decision’s own page: still waiting', () => {
     );
   });
 
+  it('offers what the queue offers a Minter Admin: Reject and Considering, each with its dialog', async () => {
+    const user = (await import('@testing-library/user-event')).default.setup();
+    await open('admin', pendingOf('GROUP_KICK'));
+    const card = await screen.findByRole('article', { name: 'Remove from MINTER, Kai Target' }, T);
+    await user.click(within(card).getByRole('button', { name: /^Reject: Remove from MINTER/ }));
+    expect(await screen.findByRole('dialog', {}, T)).toHaveTextContent(/rejection/i);
+  });
+
   it('is read-only for everyone else, and an invite links to its nomination', async () => {
     await open(
       'nominator',

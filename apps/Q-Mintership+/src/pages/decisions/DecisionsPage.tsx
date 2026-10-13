@@ -60,17 +60,7 @@ import { useNavHas } from '../../components/layout/useNavHas';
 import { useDecisions, useMembers, useNominations } from '../../hooks/useData';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { decisionTitle, type Decision } from '../../rules/decision';
-import { NULL_OWNER } from '../../data/constants';
-import {
-  hasImpact,
-  isAdminChangeKind,
-  projectShift,
-  riskFor,
-  scenarioFor,
-  shiftDecisionsOf,
-  shiftScenarios,
-  type ShiftState,
-} from '../../rules/targetShift';
+import { hasImpact, isAdminChangeKind, projectShift } from '../../rules/targetShift';
 import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
 import { signerOf, useSession } from '../../state/session';
 import { decisionsHideSignedAtom } from '../../state/settings';
@@ -92,6 +82,7 @@ import { ProposeDialog } from './ProposeDialog';
 import { ProposeMenu, type ProposeChoice } from './ProposeMenu';
 import type { ProposeKind } from './proposeKinds';
 import { RejectDialog, type RejectMode } from './RejectDialog';
+import { impactIn, riskIn, useShift } from './useShift';
 import { SignDialog } from './SignDialog';
 import { StaleInvites } from './StaleInvites';
 import { OtherPendingList } from './OtherPendingList';
@@ -181,17 +172,7 @@ function DecisionsQueue() {
   const [targetChange, dismissTargetChange] = useSeenTargetChange(snapshot);
 
   // What waiting admin changes would do to the target (each, and together).
-  const shift = useMemo(() => {
-    if (!data) return null;
-    const state: ShiftState = {
-      threshold: data.group.approvalThreshold,
-      adminCount: data.admins.adminCount,
-      admins: new Set(data.admins.admins.map((a) => a.member)),
-      owner: data.group.owner || NULL_OWNER,
-    };
-    const list = shiftDecisionsOf(data.decisions);
-    return { state, list, scenarios: shiftScenarios(state, list) };
-  }, [data]);
+  const shift = useShift(data);
 
   const adminNames = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -287,9 +268,8 @@ function DecisionsQueue() {
     const d = bySignature.get(signature);
     return d ? labelFor(d) : 'A waiting decision';
   };
-  const impactOf = (d: Decision) =>
-    shift && isAdminChangeKind(d.kind) ? scenarioFor(shift.scenarios, d.signature) : null;
-  const riskOf = (d: Decision) => (shift ? riskFor(d.signature, shift.scenarios) : null);
+  const impactOf = (d: Decision) => impactIn(shift, d);
+  const riskOf = (d: Decision) => riskIn(shift, d);
   const projectImpact = useCallback(
     (kind: ProposeKind, subject: string) =>
       shift && (kind === 'addAdmin' || kind === 'removeAdmin')
