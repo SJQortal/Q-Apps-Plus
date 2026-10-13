@@ -9,8 +9,11 @@ import {
   loadHistoryWindow,
   memberSince,
   proposalsBy,
+  targetStepDetail,
   withOwnSubject,
+  withTargetSteps,
 } from './timeline';
+import { approvedAdminChanges, targetSteps } from '../rules/targetShift';
 import type { TxRow } from './types';
 
 const CTX = { msPerBlock: 60_000, maximumBlockDelay: 10_080 };
@@ -209,5 +212,60 @@ describe('timeline from the mock node', () => {
       expect(Number(params.get('blockLimit'))).toBeGreaterThan(0);
       expect(Number(params.get('startBlock'))).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('withTargetSteps: what an approved admin change did to the target', () => {
+  const rows = [
+    tx('ADD_GROUP_ADMIN', 100, {
+      member: A,
+      creatorAddress: ADMIN,
+      approvalStatus: 'APPROVED',
+      approvalHeight: 110,
+    }),
+    tx('REMOVE_GROUP_ADMIN', 200, {
+      admin: B,
+      creatorAddress: ADMIN,
+      approvalStatus: 'APPROVED',
+      approvalHeight: 210,
+    }),
+    tx('REMOVE_GROUP_ADMIN', 300, { admin: A, creatorAddress: ADMIN, approvalStatus: 'EXPIRED' }),
+    tx('GROUP_KICK', 400, {
+      member: B,
+      creatorAddress: ADMIN,
+      approvalStatus: 'APPROVED',
+      approvalHeight: 410,
+    }),
+  ];
+
+  it('adds the target before and after to approved admin changes only', () => {
+    const steps = targetSteps(approvedAdminChanges(rows), 20, 'PCT40');
+    const events = withTargetSteps(buildTimeline(rows, CTX), steps);
+    const detail = (kind: string, outcome = 'done') =>
+      events.find((e) => e.kind === kind && e.outcome === outcome)?.detail;
+    // 20 now; before the removal 21 (9 needed); before the addition 20.
+    expect(detail('removeAdmin')).toBe('Target 9 → 8 signatures (21 → 20 admin seats)');
+    expect(detail('addAdmin')).toBe('Target 8 → 9 signatures (20 → 21 admin seats)');
+    expect(detail('removeAdmin', 'expired')).toBeNull();
+    expect(detail('kick')).toBeNull();
+  });
+
+  it('says when only the admin seats moved', () => {
+    expect(
+      targetStepDetail({
+        address: A,
+        added: false,
+        height: 1,
+        countBefore: 20,
+        countAfter: 19,
+        neededBefore: 8,
+        neededAfter: 8,
+      })
+    ).toBe('Admin seats 20 → 19; the target stayed at 8 signatures');
+  });
+
+  it('leaves the events alone without steps', () => {
+    const events = buildTimeline(rows, CTX);
+    expect(withTargetSteps(events, [])).toBe(events);
   });
 });
