@@ -3,15 +3,16 @@
  * happened, who proposed it and why, that the level stays, and what it
  * takes to come back. After a kick or leaving: a new nomination, which
  * nominators often start themselves, and they can show they're ready to
- * mint again (MINTER's join request). After a ban: the Minter Admins
- * lifting it first.
+ * mint again (MINTER's join request). During a ban: the Minter Admins
+ * lifting it first. A ban that ended or was lifted says so, with its date,
+ * not "removed from MINTER".
  */
 import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Button } from '@mui/material';
 import { NOMINATOR_MIN_LEVEL } from '../../../data/constants';
 import { personPath } from '../../../routes/paths';
-import type { MyStatus } from '../../../rules/status';
+import { banEnd, type MyStatus } from '../../../rules/status';
 import { formatCount, formatDate, formatDateTime, formatRelative } from '../../../utils/format';
 import { Hero, HeroText, Num, PersonLink } from '../Hero';
 import { ReadyButton, ReadyDialog, ReadyDone, ReadyNext, ReadyUnknown, ShareButton } from './ready';
@@ -170,10 +171,12 @@ export function FormerHero({ status, needed }: { status: MyStatus; needed: numbe
     );
   }
 
-  // formerKicked: an approved kick, or a ban that has since ended.
-  const endedBan = removal?.kind === 'ban';
-  const title = endedBan
-    ? 'Your ban from MINTER has ended'
+  // formerKicked: an approved kick, or a ban that has since ended or been lifted.
+  const end = removal ? banEnd(removal) : null;
+  const title = end
+    ? end.how === 'lifted'
+      ? 'Your ban from MINTER was lifted'
+      : 'Your ban from MINTER has ended'
     : status.wasMember
       ? name
         ? `${name}, you were removed from MINTER`
@@ -189,7 +192,7 @@ export function FormerHero({ status, needed }: { status: MyStatus; needed: numbe
       >
         {removal ? (
           <HeroText>
-            {endedBan
+            {end
               ? 'The Minter Admins banned this account'
               : status.wasMember
                 ? 'The Minter Admins removed you'
@@ -201,16 +204,15 @@ export function FormerHero({ status, needed }: { status: MyStatus; needed: numbe
               </>
             ) : null}
             .
-            {endedBan ? (
-              removal.liftedAt ? (
+            {end ? (
+              end.at === null ? (
+                ' That ban has ended.'
+              ) : (
                 <>
                   {' '}
-                  The Minter Admins lifted it <When at={removal.liftedAt} />.
+                  {end.how === 'lifted' ? 'The Minter Admins lifted it' : 'The ban ended'}{' '}
+                  <When at={end.at} />.
                 </>
-              ) : removal.banSeconds ? (
-                ' That ban has run out.'
-              ) : (
-                ' That ban has ended.'
               )
             ) : null}
           </HeroText>

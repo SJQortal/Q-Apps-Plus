@@ -7,6 +7,7 @@ import { fetchCallsFor, mockFetchRoute, qortalCalls, qortalCallsFor } from '../.
 import { addTargetShift, fakeAddress } from '../../../e2e/world.mjs';
 import { ADDR, NOW, PEOPLE } from '../../test/world';
 import { CoreHttpError } from '../../qortal/client';
+import { formatDate } from '../../utils/format';
 import PersonPage from './PersonPage';
 import { isInvalidAddress } from './personWords';
 
@@ -145,6 +146,56 @@ describe('Person page', () => {
     expect(
       within(timeline).getByText(/^Permanent · Reason: “Banned by Minter Admins”/)
     ).toBeInTheDocument();
+  });
+
+  it('says how a former member’s ban ended, or that it was lifted, not that they were removed', async () => {
+    let ended = 0;
+    const timed = await renderPage(<PersonPage />, {
+      persona: 'nominator',
+      path: `/people/${ADDR.banned}`,
+      route: ROUTE,
+      setup: (world) => {
+        const ban = world.decided.find((tx: { type: string }) => tx.type === 'GROUP_BAN');
+        ban.timeToLive = 3 * 86_400;
+        ended = ban.timestamp + 3 * 86_400_000;
+        world.bans = world.bans.filter((b: { offender: string }) => b.offender !== ADDR.banned);
+      },
+    });
+    expect(
+      await screen.findByText(
+        new RegExp(
+          `^Was banned from MINTER on .+; the ban ended on ${formatDate(ended)}, so they can be nominated again\\.$`
+        )
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText('Former member')).toBeInTheDocument();
+    timed.unmount();
+
+    await renderPage(<PersonPage />, {
+      persona: 'nominator',
+      path: `/people/${ADDR.banned}`,
+      route: ROUTE,
+      setup: (world) => {
+        const ban = world.decided.find((tx: { type: string }) => tx.type === 'GROUP_BAN');
+        world.bans = world.bans.filter((b: { offender: string }) => b.offender !== ADDR.banned);
+        world.decided.push({
+          ...ban,
+          type: 'CANCEL_GROUP_BAN',
+          signature: `${ban.signature.slice(0, -4)}Lift`,
+          member: ban.offender,
+          offender: undefined,
+          timeToLive: undefined,
+          blockHeight: ban.approvalHeight + 1000,
+          approvalHeight: ban.approvalHeight + 1500,
+        });
+      },
+    });
+    expect(
+      await screen.findByText(
+        /^Was banned from MINTER on .+; Minter Admins lifted the ban on .+, so they can be nominated again\.$/
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Removed from MINTER on/)).toBeNull();
   });
 
   it('lets an eligible viewer support an open nomination', async () => {

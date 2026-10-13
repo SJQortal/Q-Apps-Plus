@@ -18,6 +18,7 @@ import { renderPage } from '../../test/render';
 import { fetchCalls, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { ADDR, TIP, installWorld } from '../../test/world';
 import { decisionPath } from '../../routes/paths';
+import { formatDate } from '../../utils/format';
 import { seenTargetKey } from '../decisions/seenTarget';
 import HomePage from './HomePage';
 
@@ -716,10 +717,29 @@ describe('Home: former members', () => {
         });
       },
     });
+    await headline('Your ban from MINTER was lifted');
+    const hero = screen.getByRole('region', { name: /ban from MINTER was lifted/ });
+    expect(hero).toHaveTextContent(/The Minter Admins banned this account on /);
+    expect(hero).toHaveTextContent(/The Minter Admins lifted it on /);
+    expect(hero).not.toHaveTextContent(/run out|removed/);
+  });
+
+  it('says when a timed ban ended, not that they were removed', async () => {
+    let ended = 0;
+    await renderPage(<HomePage />, {
+      persona: 'banned',
+      setup: (world) => {
+        const ban = world.decided.find((tx: { type: string }) => tx.type === 'GROUP_BAN');
+        ban.timeToLive = 3 * 86_400;
+        // Counted from when it was proposed, as Core counts it.
+        ended = ban.timestamp + 3 * 86_400_000;
+        world.bans = world.bans.filter((b: { offender: string }) => b.offender !== ban.offender);
+      },
+    });
     await headline('Your ban from MINTER has ended');
     const hero = screen.getByRole('region', { name: /ban from MINTER has ended/ });
-    expect(hero).toHaveTextContent(/The Minter Admins lifted it on /);
-    expect(hero).not.toHaveTextContent(/run out/);
+    expect(hero).toHaveTextContent(new RegExp(`The ban ended on ${formatDate(ended)} \\(`));
+    expect(hero).not.toHaveTextContent(/run out|removed/);
   });
 
   it('says a permanent ban that is no longer in force has ended, not run out', async () => {

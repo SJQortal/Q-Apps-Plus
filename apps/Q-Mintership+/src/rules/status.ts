@@ -39,6 +39,29 @@ export interface Removal {
   banSeconds?: number;
   /** A ban the Minter Admins lifted (an approved CANCEL_GROUP_BAN after it): when (ms). */
   liftedAt?: number;
+  /**
+   * A timed ban whose end has passed: when it ended (ms). Its length counts
+   * from when it was proposed, as Core counts it; never before it took effect.
+   */
+  endedAt?: number;
+}
+
+/** How a ban that is no longer in force ended. */
+export interface BanEnd {
+  how: 'lifted' | 'ended';
+  /** When (ms); null when the history doesn't date it (a permanent ban with no lift found). */
+  at: number | null;
+}
+
+/**
+ * How a removal by a ban ended, for an account the ban no longer holds:
+ * lifted by the Minter Admins, or a timed ban past its end. Null for a kick
+ * or leaving.
+ */
+export function banEnd(removal: Removal): BanEnd | null {
+  if (removal.kind !== 'ban') return null;
+  if (removal.liftedAt !== undefined) return { how: 'lifted', at: removal.liftedAt };
+  return { how: 'ended', at: removal.endedAt ?? null };
 }
 
 export interface MyStatus {
@@ -119,7 +142,7 @@ export function latestRemoval(
         by: kind === 'leave' ? null : (tx.creatorAddress ?? null),
         reason: typeof tx.reason === 'string' ? tx.reason : undefined,
         signature: tx.signature,
-        ...(kind === 'ban' ? { banSeconds: Number(tx.timeToLive ?? 0) } : {}),
+        ...(kind === 'ban' ? banTiming(tx, at, tip) : {}),
       };
     }
   }
@@ -128,6 +151,19 @@ export function latestRemoval(
     if (liftedAt !== null) best = { ...best, liftedAt };
   }
   return best;
+}
+
+/** A ban's length, and for a timed one already over, when it ended (`at`: when it took effect). */
+function banTiming(
+  tx: TxRow,
+  at: number,
+  tip: StatusInputs['tip']
+): Pick<Removal, 'banSeconds' | 'endedAt'> {
+  const banSeconds = Number(tx.timeToLive ?? 0);
+  if (!(banSeconds > 0)) return { banSeconds };
+  const end = Math.max(at, tx.timestamp + banSeconds * 1000);
+  // Only an end that has passed is a date to give.
+  return end <= tip.timestamp ? { banSeconds, endedAt: end } : { banSeconds };
 }
 
 /** When the Minter Admins lifted a ban that took effect at `after`: an approved CANCEL_GROUP_BAN about the account. */
@@ -159,17 +195,24 @@ export function wasMemberBefore(address: string, history: TxRow[], before: numbe
   );
 }
 
-/** How a former member last left MINTER: removed (a kick or a ban) or left, and when (ms). */
+/**
+ * How a former member last left MINTER, and when it took effect (ms):
+ * removed (a kick), banned, or left. A ban also says how it ended.
+ */
 export interface FormerMember {
-  kind: 'removed' | 'left';
+  kind: 'removed' | 'banned' | 'left';
   at: number;
+  /** Banned: lifted, or ended. */
+  ban?: BanEnd;
 }
 
 /**
  * Whether the account was in MINTER once and isn't now: its newest removal
  * (an approved kick or ban, or its own LEAVE_GROUP), counted only when it
  * was a member before it, as the status engine counts `wasMember`. A kicked
- * join request alone is not a former member. Null otherwise.
+ * join request alone is not a former member. Null otherwise. For a ban it
+ * says how it ended, so it suits accounts the ban no longer holds (Ready to
+ * mint leaves out bans in force).
  */
 export function formerMember(
   address: string,
@@ -179,8 +222,10 @@ export function formerMember(
 ): FormerMember | null {
   const removal = latestRemoval(address, history, tip, msPerBlock);
   if (!removal) return null;
-  if (removal.kind !== 'leave' && !wasMemberBefore(address, history, removal.at)) return null;
-  return { kind: removal.kind === 'leave' ? 'left' : 'removed', at: removal.at };
+  if (removal.kind === 'leave') return { kind: 'left', at: removal.at };
+  if (!wasMemberBefore(address, history, removal.at)) return null;
+  if (removal.kind === 'kick') return { kind: 'removed', at: removal.at };
+  return { kind: 'banned', at: removal.at, ban: banEnd(removal) ?? undefined };
 }
 
 export function resolveStatus(input: StatusInputs): MyStatus {
