@@ -41,9 +41,9 @@ import { BOTTOM_BAR_VAR, usePublishOverlay } from '../../hooks/useOverlayPadding
 import { DoneChip } from '../../components/decision/DecisionParts';
 import {
   ConsideringControls,
-  ConsideringDialog,
   type ConsideringRequest,
 } from '../../components/decision/Considering';
+import { ConsideringDialog } from '../../components/decision/ConsideringDialog';
 import { useConsideringFor } from '../../hooks/useConsidering';
 import { NominationCard } from '../../components/nomination/NominationCard';
 import { Card, Section } from '../../components/common/Section';
