@@ -42,24 +42,27 @@ export function runsOutLine(
 }
 
 /**
- * The note on a double's card: why it changes nothing, that there's no
- * need to sign it, and when it runs out. `name` is the subject as shown.
+ * The note on a double's card: why it is a double, and when it runs out.
+ * With `advice` (Minter Admins, who can answer it), also that there's no
+ * need to sign it and what to do instead. `name` is the subject as shown.
  * The card links to the other decision when there is one.
  */
 export function doubleNote(
   d: Pick<Decision, 'kind' | 'phase' | 'window'> & { double: DecisionDouble },
   name: string,
-  now: ChainNow
+  now: ChainNow,
+  advice = true
 ): string {
-  if (d.double.reason === 'duplicate') {
-    const out = runsOutLine(d, now, 'This one');
-    return `The same change is already waiting in an earlier proposal: answer that one instead. Once one of them passes, there’s no need to sign the other.${out ? ` ${out}` : ''}`;
-  }
-  const out = runsOutLine(d, now);
-  const why =
-    d.kind === 'addAdmin'
-      ? `${name} is already a Minter Admin, from an earlier proposal. As things stand, if this one passes, nothing changes, so there’s no need to sign it.`
-      : `${name} isn’t a Minter Admin, so there’s nothing to remove. There’s no need to sign it: reject it, or let it run out.`;
+  let why: string;
+  if (d.double.reason === 'duplicate')
+    why = advice
+      ? 'The same change is already waiting in an earlier proposal: answer that one instead. Once one of them passes, there’s no need to sign the other.'
+      : 'The same change is already waiting in an earlier proposal.';
+  else if (d.kind === 'addAdmin')
+    why = `${name} is already a Minter Admin, from an earlier proposal. As things stand, if this one passes, nothing changes${advice ? ', so there’s no need to sign it' : ''}.`;
+  else
+    why = `${name} isn’t a Minter Admin, so there’s nothing to remove.${advice ? ' There’s no need to sign it: reject it, or let it run out.' : ''}`;
+  const out = runsOutLine(d, now, d.double.reason === 'duplicate' ? 'This one' : 'It');
   return out ? `${why} ${out}` : why;
 }
 

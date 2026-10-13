@@ -302,8 +302,24 @@ describe('A double’s own page', () => {
       T
     );
     expect(within(page).getByText('Double')).toBeInTheDocument();
-    expect(doubleNote(page)).toHaveTextContent(/isn’t a Minter Admin/);
+    // Why it is a double and when it runs out; what to do is for Minter Admins.
+    const note = doubleNote(page);
+    expect(note).toHaveTextContent(
+      /^Nora Nominator isn’t a Minter Admin, so there’s nothing to remove\. It runs out by itself at block/
+    );
+    expect(note).not.toHaveTextContent(/reject it|answer that one|need to sign/);
     expect(within(page).queryByRole('button', { name: /^Sign: / })).toBeNull();
+    expect(within(page).queryByRole('button', { name: /^Reject: / })).toBeNull();
+  });
+
+  it('tells members why a repeat is a double, with no advice', async () => {
+    await openDecision((d) => d.duplicate.signature, 'learner');
+    const page = await screen.findByRole('article', { name: 'Make a Minter Admin, Member 9' }, T);
+    const note = doubleNote(page);
+    expect(note).toHaveTextContent(
+      /^The same change is already waiting in an earlier proposal\. This one runs out by itself at block/
+    );
+    expect(note).not.toHaveTextContent(/reject it|answer that one|need to sign/);
   });
 });
 
