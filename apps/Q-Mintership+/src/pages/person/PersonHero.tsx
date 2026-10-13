@@ -54,9 +54,19 @@ export interface PersonHeroProps {
   open: Nomination | null;
   /** The signed-in viewer (undefined while loading or outside Hub). */
   viewer: MyStatus | undefined;
+  /** Their own page: Join now when there is no open nomination card to carry it. */
+  action?: ReactNode;
 }
 
-export function PersonHero({ address, person, self, memberSince, open, viewer }: PersonHeroProps) {
+export function PersonHero({
+  address,
+  person,
+  self,
+  memberSince,
+  open,
+  viewer,
+  action,
+}: PersonHeroProps) {
   const phone = usePhoneLayout();
   const chip = STATUS_CHIP[person.kind as keyof typeof STATUS_CHIP] ?? STATUS_CHIP.newcomer;
   const next = person.progress;
@@ -82,6 +92,7 @@ export function PersonHero({ address, person, self, memberSince, open, viewer }:
     : null;
 
   const actions: ReactNode[] = [];
+  if (action) actions.push(<Box key="own">{action}</Box>);
   if (canNominate && (block === null || (block === 'open' && !mine))) {
     actions.push(
       <Button

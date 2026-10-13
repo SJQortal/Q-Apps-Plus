@@ -59,6 +59,25 @@ describe('Person page', () => {
     expect(qortalCalls.filter((c) => WRITES.test(String(c.action)))).toEqual([]);
   });
 
+  it('gives a nominee their next step on their own page (the link a nominator sends)', async () => {
+    await visit(ADDR.nominatedWaiting, 'nominatedWaiting');
+    const nomination = await section('Nomination');
+    expect(
+      await within(nomination).findByRole('button', { name: 'Accept nomination' })
+    ).toBeVisible();
+    const timeline = await section('MINTER timeline');
+    expect(
+      await within(timeline).findByText('No MINTER transactions about you on chain yet.')
+    ).toBeVisible();
+    expect(screen.queryByText(/haven't been nominated/)).toBeNull();
+    expect(qortalCalls.filter((c) => WRITES.test(String(c.action)))).toEqual([]);
+  });
+
+  it('offers Join now to an approved nominee on their own page', async () => {
+    await visit(ADDR.approved, 'approved');
+    expect(await screen.findByRole('button', { name: 'Join now' })).toBeVisible();
+  });
+
   it('shows a removed member: when, what they keep, and their history', async () => {
     await visit(ADDR.kicked, 'nominator');
     expect(await screen.findByText('Former member')).toBeInTheDocument();

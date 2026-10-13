@@ -3,7 +3,9 @@
  * MINTER, their nomination, their on-chain MINTER timeline, what they
  * proposed as a Minter Admin, and their cards from the original app. It
  * replaces the original app's account explorer. A name in place of the
- * address opens that name's owner.
+ * address opens that name's owner. On their own page a nominee gets their
+ * next step (Accept nomination or Join now): it is the link a nominator
+ * sends them.
  *
  * Reads: the same cached status read Home uses (account, name, membership,
  * join request, stored invite, bans, MINTER history, nominations), plus the
@@ -32,10 +34,12 @@ import {
   usePersonStatus,
 } from '../../hooks/useData';
 import { useQuery } from '../../hooks/useQuery';
-import { useSession } from '../../state/session';
+import { signerOf, useSession } from '../../state/session';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody } from '../../components/layout/PageBody';
 import { NominationCard } from '../../components/nomination/NominationCard';
+import { NomineeAction } from '../../components/nomination/NomineeAction';
+import { nomineeStep } from '../../components/nomination/nomineeStep';
 import { Section } from '../../components/common/Section';
 import {
   EmptyState,
@@ -180,6 +184,24 @@ function PersonView({ address }: { address: string }) {
   const open = list.find((n) => isOpenState(n.state)) ?? null;
   const latest = open ?? list[0] ?? null;
   const nowMs = chain.data?.timestamp ?? Date.now();
+  // Their own page: the nominee's next step, as on Home and Nominations.
+  const step = self
+    ? nomineeStep({
+        isMember: person.isMember,
+        activeBan: Boolean(person.activeBan),
+        hasJoinRequest: person.hasJoinRequest || Boolean(open?.hasJoinRequest),
+        storedInvite: Boolean(person.storedInvite) || Boolean(open?.hasStoredInvite),
+        state: open?.state ?? null,
+      })
+    : null;
+  const nomineeAction = step ? (
+    <NomineeAction
+      step={step}
+      signer={signerOf(session)}
+      needed={open?.decision?.tally?.needed ?? null}
+      askWho={open?.nomination?.publisher.name ?? null}
+    />
+  ) : null;
 
   return (
     <Shell title={title} address={address}>
@@ -190,6 +212,7 @@ function PersonView({ address }: { address: string }) {
         memberSince={since}
         open={open}
         viewer={viewer.status}
+        action={open ? null : nomineeAction}
       />
 
       {unused ? (
@@ -201,7 +224,13 @@ function PersonView({ address }: { address: string }) {
         <>
           {latest && chain.data ? (
             <Section title={open ? 'Nomination' : 'Latest nomination'} id="person-nomination">
-              <NominationCard nomination={latest} now={chain.data} hideNominee compact={!open} />
+              <NominationCard
+                nomination={latest}
+                now={chain.data}
+                hideNominee
+                compact={!open}
+                actions={open ? nomineeAction : null}
+              />
             </Section>
           ) : null}
 
@@ -223,8 +252,7 @@ function PersonView({ address }: { address: string }) {
               />
             ) : (
               <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
-                Nothing on chain yet: {self ? "you haven't" : "they haven't"} been nominated, joined
-                or removed.
+                No MINTER transactions about {self ? 'you' : 'them'} on chain yet.
               </Typography>
             )}
             {history.data?.truncated ? <TruncatedNote what="their history" /> : null}
