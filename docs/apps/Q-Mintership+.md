@@ -449,12 +449,59 @@ _Done on the branch; Simon reviews in the morning._ Six branches built side by s
 
 ## Follow-ups
 
-### Night 3
+### Readiness
 
-0. **Build Simon's answers to the night 2 questions** (below: items 3–12, 17, 21, 25, 27, 28), with tests and the screenshot check.
-1. **Hub check, read-only, with real data** (docs/HUB-TESTING.md): every screen at the five sizes, touch on, against the original app side by side, with the request log per screen. Not done on night 2.
-2. **Then Simon's guided real actions, one at a time:** Simon presses each write in Hub with real accounts; the app's step, Hub's dialog (action, fee, `"approval"`, identifier) and the outcome are checked together before the next one. A comment's publish dialog should match what the step says.
-3. A real screen-reader pass: NVDA or JAWS on desktop Hub, TalkBack in GO. Night 2's pass used jsdom, axe and Chromium.
+READINESS_VERDICT
+
+### The morning: Simon's guided real actions, before publishing
+
+Real writes on mainnet, one at a time, by Simon, in a test Hub on his own account with Dev Mode → **Zip** → `release/Q-Mintership+.zip` (the exact bundle; it previews without publishing). Before each step, read what the app's dialog says; in Hub's dialog, check the action, the fee and the fields named below; after Hub, check the result before the next step. Decline in Hub if anything differs. Never Reject unless you mean it.
+
+Today (block ≈ 2,758,700) the only MINTER decision waiting is a member's second "Become a Minter Admin": a double you have already signed; it runs out at block 2,760,156. There are no Q-Mintership+ records on mainnet yet.
+
+1. **A comment (harmless).** Decisions → the double's card → Comments (0) → write a short note → Post.
+   - App: "Public, under your name Simon James", 0.01 QORT, one Hub step.
+   - Hub: `PUBLISH_QDN_RESOURCE`, service `JSON`, name `Simon James`, identifier `qmp-comment-<the first 40 characters of 5YiHUjTE…>-<6 letters or digits>`, fee 0.01.
+   - After: "Publishing…", then the comment with its menu once QDN lists it (a minute or two); Comments (1); the same on the decision's own page.
+   - Undo: the comment's menu → Delete (0.01 more; it then reads "Deleted").
+2. **Propose nomination (only for someone you would nominate anyway).** If another nomination is already open for someone you'd back, Add your support instead (the same Hub step, identifier `qmp-support-<their address>`). Nominations → Ready to mint (or Propose nomination) → pick them → reason (20–600 characters) → Propose.
+   - Hub: `PUBLISH_QDN_RESOURCE`, `JSON`, identifier `qmp-nomination-<their address>`, fee 0.01.
+   - After: the card under "Waiting for a Minter Admin"; the link the app gives you opens `/nominations/<address>`; in the original app nothing changes (it has no such cards).
+   - Undo: none on QDN; it leaves the open list after 10,080 blocks, and nobody is invited until an admin signs.
+3. **Considering, then No longer considering (harmless), on the nomination from step 2** (or any nomination waiting for its first signature). Nominations → the card → Considering → optional note → Mark as considering.
+   - Hub: `PUBLISH_QDN_RESOURCE`, `JSON`, identifier `qmp-considering-<their address>`, body with `nomineeAddress`, fee 0.01.
+   - After: "1 Minter Admin is considering" on the card, the nomination's page and the nominee's Home.
+   - Undo: No longer considering publishes the same identifier again with `cleared: true` (0.01).
+   - Considering isn't offered on a double, so the waiting double can't be used for this.
+4. **A signature (only on a decision you would sign anyway).** The first signature on your nomination from step 2: its card → Sign.
+   - App: two Hub steps, 0.02 QORT: the invite, then your own signature.
+   - Hub, step 1: `INVITE_TO_GROUP`, `groupId: 694`, `inviteeAddress` theirs, `inviteTime: 864000`, `txGroupId: 694`, fee 0.01.
+   - Hub, step 2: `SIGN_TRANSACTION` with the raw approval: `"approval": true`, `pendingSignature` starting with the invite's signature, fee 0.01.
+   - After: "Signed ✓ (confirming…)", then 1 of 8 once it is in a block; the same decision in the original app's view of pending approvals; Home's counts.
+   - Undo: none. Withdraw my signature is a rejection on chain; the invite simply runs out after about 8.5 days if nobody else signs.
+5. **Optional, a Minter Admin poll (only for a question you want to ask the admins).** Decisions → Propose → Ask the Minter Admins → question, duration → Review → Publish.
+   - Hub: `PUBLISH_QDN_RESOURCE`, service `DOCUMENT_PRIVATE`, identifier `qmp-adminpoll-<8 letters or digits>`, encrypted (Hub shows it is encrypted), fee 0.01.
+   - After: the poll on Decisions under Minter Admin polls, readable by the other Minter Admins in their own Hub; Vote (one more step, `qmp-adminvote-<id>`).
+   - Undo: none; it runs out at its end.
+6. **Reject and Decline a join request:** only if you mean them. A rejection counts against a decision exactly as a signature counts for it; a decline removes someone from Ready to mint once enough Minter Admins sign.
+
+Report anything that differs from these words before going on; the app is ready to publish once these match.
+
+### Open questions for Simon (night 3)
+
+From building tonight's work; the app works either way.
+
+1. **Removal doubles:** a removal that is a double offers Reject only (there's nothing to remove), while an addition that is a double keeps a secondary Sign. Keep?
+2. **Rule (a) while a removal of the same admin waits:** an addition of someone who is a Minter Admin is still marked a double, even if a waiting removal of them could pass first. Keep, or don't mark it then?
+3. **Rule (c):** the newer copy is the double even when it has more signatures than the older one. Keep, or call the one with more signatures the real one?
+4. **Activity and decided doubles:** a double that was signed anyway and approved, or rejected, still counts as eligible (never as a miss) for admins who left it alone. Leave those out too?
+5. **Decline a join request:** offered on Ready to mint rows without an open nomination, and in Propose. Also on rows with an open nomination, or on the person page? And should Home tell someone whose join request was declined (their person page says so)? Activity's pulse still counts declines among "removed".
+6. **Nominators' alerts:** to keep alerts on between nominations, the last support rule stays until a new nomination's rule replaces it, so a later support for that person still alerts. OK, or a per-device "alerts wanted" flag instead?
+7. **Supporters:** Since your last visit outcomes and support alerts are for nominators only. Supporters too?
+8. **Home's target line** shows when the signatures needed moved, not when only the admin seats moved (Decisions says both). OK?
+9. **Wording to check:** "Your nomination won't go through this time", "Your account and your level stay as they are", "Level 5+ is suggested for Minter Admins, and you're level 2. You can still propose yourself.", "As things stand, if this one passes, nothing changes".
+10. **Minter Admin polls:** closing a poll early or correcting its question isn't offered (republishing would replace it for everyone). Wanted? And an opt-in Hub alert when a poll is published (it could only say one was published)?
+11. **Refresh buttons** stay enabled while they read (a press during a read is ignored), so focus stays on them. OK?
 
 ### Simon's answers (2026-10-13)
 
