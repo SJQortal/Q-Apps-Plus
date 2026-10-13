@@ -22,9 +22,15 @@ import {
   getTransaction,
   getUnconfirmedApprovals,
   getUnconfirmedOfTypes,
+  withCancelInviteTargets,
 } from '../data/txs';
 import type { GroupTxType, TxRow } from '../data/types';
-import { decisionSubject, isUnusualApprovalRoute, toApprovalRow } from '../rules/decision';
+import {
+  decisionSubject,
+  isMinterGroupChange,
+  isUnusualApprovalRoute,
+  toApprovalRow,
+} from '../rules/decision';
 import { NOMINEE_BLOCK_TEXT, isOpenState, nomineeBlock, nominatorBlock } from '../rules/nomination';
 import { latestPerSigner, type ApprovalRow } from '../rules/tally';
 import { decisionWindow, windowPhase } from '../rules/timing';
@@ -69,6 +75,9 @@ export async function guardSign(signer: Signer, pendingSignature: string): Promi
     return "This one can't be signed here. Check it with the other Minter Admins.";
   if (tx.txGroupId !== MINTER_GROUP_ID)
     return "This transaction isn't waiting for MINTER's approval.";
+  const [target] = await withCancelInviteTargets([tx]);
+  if (!isMinterGroupChange(target))
+    return "This isn't a MINTER group change, so it can't be signed here.";
   if (tx.approvalStatus && tx.approvalStatus !== 'PENDING') {
     return `This has already been decided (${tx.approvalStatus.toLowerCase().replace('_', ' ')}).`;
   }

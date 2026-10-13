@@ -17,7 +17,15 @@ import { setLookupDelays } from '../writes/runner';
 import { setTxWaitDelays } from '../writes/flows';
 import { mockFetchRoute, mockQortalRequest } from './setup';
 
-export { ADDR, NOW, TIP, MS_PER_BLOCK, PEOPLE, NULL_OWNER } from '../../e2e/world.mjs';
+export {
+  ADDR,
+  NOW,
+  TIP,
+  MS_PER_BLOCK,
+  PEOPLE,
+  NULL_OWNER,
+  addOtherPending,
+} from '../../e2e/world.mjs';
 
 export interface InstalledWorld {
   world: World;

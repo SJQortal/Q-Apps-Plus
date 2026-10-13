@@ -31,7 +31,13 @@ import { NULL_OWNER } from './constants';
 import { getAdmins, getGroupInfo, getJoinRequests, getMembers } from './group';
 import { mapLimit } from './qdn';
 import { fetchQuery } from './query';
-import { getApprovalsInRange, getDecisionsInRange, getGroupTxsInRange, getPending } from './txs';
+import {
+  getApprovalsInRange,
+  getDecisionsInRange,
+  getGroupTxsInRange,
+  getPending,
+  isMinterTx,
+} from './txs';
 import { APPROVAL_GATED_TYPES } from './types';
 
 export const ACTIVITY_TTL_MS = 5 * 60_000;
@@ -175,8 +181,13 @@ export function loadActivity(
       primeNames(Object.entries(names).map(([address, name]) => ({ address, name })));
 
       // Fresh pending rows replace the (up to 5-minute-old) search rows.
+      // Only MINTER group changes, as in the confirmed search.
       const confirmedPending = pending.rows.filter(
-        (tx) => typeof tx.blockHeight === 'number' && tx.blockHeight <= range.endBlock
+        (tx) =>
+          (APPROVAL_GATED_TYPES as readonly string[]).includes(tx.type) &&
+          isMinterTx(tx) &&
+          typeof tx.blockHeight === 'number' &&
+          tx.blockHeight <= range.endBlock
       );
       const report = computeActivity({
         range,

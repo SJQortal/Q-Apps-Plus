@@ -11,6 +11,7 @@ export function fakeKey(seed: string, bytes?: number): string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type World = any;
 export function createWorld(): World;
+export function addOtherPending(world: World): string[];
 export function answerCore(
   world: World,
   pathname: string,

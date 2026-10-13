@@ -24,6 +24,8 @@ export interface RenderPageOptions {
   path?: string;
   /** The route pattern the page is mounted on (for useParams), e.g. '/people/:address'. */
   route?: string;
+  /** Change the mock world before the page first reads it. */
+  setup?: (world: InstalledWorld['world']) => void;
 }
 
 export async function renderPage(
@@ -32,6 +34,7 @@ export async function renderPage(
 ): Promise<InstalledWorld & ReturnType<typeof render>> {
   const persona = options.persona ?? 'admin';
   const installed = installWorld(persona === 'outside' ? 'admin' : persona);
+  options.setup?.(installed.world);
   resetSessionStarter();
   getDefaultStore().set(pendingWritesAtom, {});
   const saved = (globalThis as { qortalRequest?: unknown }).qortalRequest;

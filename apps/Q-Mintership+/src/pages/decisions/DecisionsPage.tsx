@@ -64,6 +64,7 @@ import { ProposeMenu, type ProposeChoice } from './ProposeMenu';
 import type { ProposeKind } from './proposeKinds';
 import { SignDialog } from './SignDialog';
 import { StaleInvites } from './StaleInvites';
+import { OtherPendingList } from './OtherPendingList';
 import { UnusualList } from './UnusualList';
 
 const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
@@ -229,7 +230,9 @@ export default function DecisionsPage() {
     !target ||
     !data ||
     decisions.some((d) => d.signature === target) ||
-    (isAdmin && data.unusual.some((d) => d.signature === target));
+    (isAdmin &&
+      (data.unusual.some((d) => d.signature === target) ||
+        data.others.some((o) => o.signature === target)));
 
   // ?d=<signature>: scroll to that decision once, and light it up for a moment.
   useEffect(() => {
@@ -534,6 +537,12 @@ export default function DecisionsPage() {
             {isAdmin && data.unusual.length ? (
               <Section title="Unusual approval route" id="unusual">
                 <UnusualList decisions={data.unusual} now={data.now} />
+              </Section>
+            ) : null}
+
+            {isAdmin && data.others.length ? (
+              <Section title="Other transactions waiting for Minter Admins" id="others">
+                <OtherPendingList items={data.others} now={data.now} />
               </Section>
             ) : null}
 

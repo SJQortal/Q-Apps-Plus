@@ -10,9 +10,11 @@
  * `signedOut` declines the account request. Every write is declined, so
  * nothing can be sent.
  */
-import { answerCore, createWorld, ADDR, NOW, PEOPLE } from './world.mjs';
+import { addOtherPending, answerCore, createWorld, ADDR, NOW, PEOPLE } from './world.mjs';
 
 const world = createWorld();
+// Admins' Decisions also shows the transactions that aren't MINTER group changes.
+addOtherPending(world);
 // Replaced in setup() by a visible 64×64 gradient, so avatars show in the shots.
 let PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAQklEQVR42u3OMQEAAAgDINc/9Mzg14MGLUmHCgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFbzwB2GwADvYAAAAASUVORK5CYII=',

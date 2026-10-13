@@ -9,8 +9,10 @@
  * - Block ranges only work with confirmationStatus=CONFIRMED.
  * - Every search is paged at 100 and bounded.
  */
+import { cancelInviteTarget, type CancelInviteTarget } from '../qortal/groupTxBytes';
 import { MINTER_GROUP_ID } from './constants';
-import { getJson, getPaged, query, seg, type PagedResult } from './core';
+import { getJson, getPaged, getText, query, seg, type PagedResult } from './core';
+import { mapLimit } from './qdn';
 import { fetchQuery } from './query';
 import type { GroupTxType, TxRow } from './types';
 
@@ -136,6 +138,36 @@ export async function getTransaction(
   );
 }
 
+/**
+ * The group and invitee of a CANCEL_GROUP_INVITE, which Core's JSON leaves
+ * out, from `GET /transactions/signature/{sig}/raw`. A transaction never
+ * changes, so the answer is kept for the session.
+ */
+export function getCancelInviteTarget(signature: string): Promise<CancelInviteTarget> {
+  return fetchQuery(
+    `txraw:${signature}`,
+    async () => cancelInviteTarget(await getText(`/transactions/signature/${seg(signature)}/raw`)),
+    { ttlMs: Number.POSITIVE_INFINITY }
+  );
+}
+
+/**
+ * Rows with the group filled in for CANCEL_GROUP_INVITE rows that lack it.
+ * A row whose bytes can't be read stays without a group, so it is never
+ * taken for a MINTER group change.
+ */
+export async function withCancelInviteTargets(rows: TxRow[]): Promise<TxRow[]> {
+  return mapLimit(rows, 4, async (tx) => {
+    if (tx.type !== 'CANCEL_GROUP_INVITE' || typeof tx.groupId === 'number') return tx;
+    try {
+      const target = await getCancelInviteTarget(tx.signature);
+      return { ...tx, groupId: target.groupId };
+    } catch {
+      return tx;
+    }
+  });
+}
+
 /** The group transaction types that make up an address's MINTER history. */
 export const HISTORY_TYPES: readonly GroupTxType[] = [
   'JOIN_GROUP',
@@ -188,7 +220,7 @@ export function isMinterTx(tx: TxRow): boolean {
 
 /**
  * Confirmed MINTER decisions (txGroupId 694) of the given types in a block
- * window, newest first. At most 50 pages.
+ * window, newest first, reduced to MINTER group changes. At most 50 pages.
  */
 export function getDecisionsInRange(
   types: readonly GroupTxType[],
@@ -201,8 +233,8 @@ export function getDecisionsInRange(
   const key = [...types].sort().join(',');
   return fetchQuery(
     `decisions:${key}:${start}:${blockLimit}`,
-    () =>
-      getPaged<TxRow>(
+    async () => {
+      const result = await getPaged<TxRow>(
         (offset, limit) =>
           `/transactions/search?${query({
             txGroupId: G,
@@ -215,7 +247,9 @@ export function getDecisionsInRange(
             reverse: true,
           })}`,
         { maxPages: 50 }
-      ),
+      );
+      return { ...result, rows: result.rows.filter(isMinterTx) };
+    },
     { ttlMs: options.ttlMs ?? 5 * 60_000, force: options.force }
   );
 }

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { base58Decode, base58Encode } from '../qortal/base58';
 import { GROUP_APPROVAL_UNSIGNED_LENGTH } from '../qortal/approvalBytes';
 import { loadDecisions } from '../data/decisions';
-import { ADDR, installWorld } from '../test/world';
+import { ADDR, addOtherPending, installWorld } from '../test/world';
 import { mockQortalRequest, qortalCalls, qortalCallsFor } from '../test/setup';
 import {
   addAdminRequest,
@@ -143,6 +143,19 @@ describe('guards re-read the chain before a write', () => {
     expect(await guardSign(admin, of(ADDR.nominatedSigning))).toBeNull();
     const learner = signerFor('learner');
     expect(await guardSign(learner, of(ADDR.nominatedSigning))).toMatch(/Only Minter Admins/);
+  });
+
+  it('sign: refuses anything that is not a MINTER group change', async () => {
+    const { world, address, publicKey } = installWorld('admin');
+    const [invite, name, cancel] = addOtherPending(world);
+    const admin = { address, publicKey };
+    for (const signature of [invite, name, cancel])
+      expect(await guardSign(admin, signature)).toBe(
+        "This isn't a MINTER group change, so it can't be signed here."
+      );
+    const data = await loadDecisions();
+    const mintersCancel = data.decisions.find((d) => d.kind === 'cancelInvite')!;
+    expect(await guardSign(admin, mintersCancel.signature)).toBeNull();
   });
 
   it('invite: blocks members, banned accounts, duplicates and stored invites', async () => {

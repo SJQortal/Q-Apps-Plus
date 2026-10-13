@@ -66,6 +66,59 @@ export function decisionSubject(tx: TxRow): string | null {
 }
 
 /**
+ * A MINTER group change: one of the seven group types above, for group 694.
+ * Only these are MINTER decisions with a Sign button. CANCEL_GROUP_INVITE
+ * rows need their groupId filled in from the raw bytes first (data/txs.ts).
+ */
+export function isMinterGroupChange(tx: Pick<TxRow, 'type' | 'groupId'>): boolean {
+  return tx.type in KIND_BY_TYPE && tx.groupId === MINTER_GROUP_ID;
+}
+
+/** Plain words for a group transaction that isn't a MINTER group change. */
+const OTHER_GROUP_LABEL: Record<DecisionKind, string> = {
+  invite: 'Invite to a group',
+  cancelInvite: 'Cancel a group invite',
+  kick: 'Remove from a group',
+  ban: 'Ban from a group',
+  cancelBan: 'Lift a group ban',
+  addAdmin: 'Make a group admin',
+  removeAdmin: 'Remove a group admin',
+  other: 'Transaction',
+};
+
+/** "Invite to a group", or Core's type in words ("Register name") for other types. */
+export function otherTransactionLabel(tx: Pick<TxRow, 'type'>): string {
+  const kind = decisionKind(tx);
+  if (kind !== 'other') return OTHER_GROUP_LABEL[kind];
+  const words = tx.type.toLowerCase().replace(/_/g, ' ').trim();
+  return words ? words[0].toUpperCase() + words.slice(1) : OTHER_GROUP_LABEL.other;
+}
+
+/** A pending transaction waiting for Minter Admins that isn't a MINTER group change (read-only). */
+export interface OtherPending {
+  signature: string;
+  type: string;
+  label: string;
+  /** The group it changes, when Core's answer says. */
+  groupId: number | null;
+  creatorAddress: string | null;
+  createdAt: number;
+  blockHeight: number | null;
+}
+
+export function toOtherPending(tx: TxRow): OtherPending {
+  return {
+    signature: tx.signature,
+    type: tx.type,
+    label: otherTransactionLabel(tx),
+    groupId: typeof tx.groupId === 'number' ? tx.groupId : null,
+    creatorAddress: tx.creatorAddress ?? null,
+    createdAt: tx.timestamp,
+    blockHeight: typeof tx.blockHeight === 'number' ? tx.blockHeight : null,
+  };
+}
+
+/**
  * Unusual approval route (admins only): a MINTER transaction (groupId 694)
  * whose txGroupId is neither 694 nor 0. Core's own MINTER transactions use
  * txGroupId 694; transactions from before group approval used 0.

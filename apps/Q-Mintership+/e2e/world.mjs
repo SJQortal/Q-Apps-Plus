@@ -53,6 +53,44 @@ function base58(bytes) {
     .map((d) => B58[d])
     .join('');
 }
+/** Base58 with leading zero bytes kept as "1" (raw transaction bytes start with zeros). */
+function base58Raw(bytes) {
+  let zeros = 0;
+  while (zeros < bytes.length && bytes[zeros] === 0) zeros++;
+  return '1'.repeat(zeros) + base58(bytes.slice(zeros));
+}
+function base58Bytes(text) {
+  let zeros = 0;
+  while (text[zeros] === '1') zeros++;
+  const bytes = [];
+  for (const char of text.slice(zeros)) {
+    let carry = B58.indexOf(char);
+    for (let j = 0; j < bytes.length; j++) {
+      carry += bytes[j] * 58;
+      bytes[j] = carry & 0xff;
+      carry >>= 8;
+    }
+    while (carry > 0) {
+      bytes.push(carry & 0xff);
+      carry >>= 8;
+    }
+  }
+  return new Uint8Array([...new Array(zeros).fill(0), ...bytes.reverse()]);
+}
+/** The raw bytes Core answers for a CANCEL_GROUP_INVITE (…/raw), group and invitee included. */
+function cancelInviteRaw(row, target) {
+  const bytes = new Uint8Array(213);
+  const view = new DataView(bytes.buffer);
+  view.setInt32(0, 30);
+  view.setBigInt64(4, BigInt(row.timestamp));
+  view.setInt32(12, row.txGroupId);
+  bytes.set(base58Bytes(row.reference).slice(0, 64), 16);
+  view.setInt32(112, target.groupId);
+  bytes.set(base58Bytes(target.invitee), 116);
+  view.setBigInt64(141, 1_000_000n);
+  bytes.set(base58Bytes(row.signature).slice(0, 64), 149);
+  return base58Raw(bytes);
+}
 /** A made-up key or signature: `bytes` pseudo-random bytes, base58 (32 for keys, 64 for signatures). */
 export function fakeKey(seed, bytes = 32) {
   let x = 7;
@@ -258,9 +296,13 @@ function buildWorld() {
   });
   pending.push(lift);
   extraAdmins.slice(13, 16).forEach((s, i) => sign(lift, s, TIP - 590 + i));
-  // Cancel an approved invite: Core's answer leaves out groupId and invitee.
+  // Cancel an approved invite: Core's answer leaves out groupId and invitee
+  // (the raw bytes have them: cancelTargets).
   const cancel = tx('CANCEL_GROUP_INVITE', TIP - 300, { creatorAddress: extraAdmins[14] });
   pending.push(cancel);
+  const cancelTargets = new Map([
+    [cancel.signature, { groupId: GROUP, invitee: fakeAddress('stale-1') }],
+  ]);
   // A MINTER transaction on an unusual approval route (txGroupId neither 694 nor 0).
   const unusual = tx('ADD_GROUP_ADMIN', TIP - 50, {
     creatorAddress: ADDR.learner,
@@ -472,6 +514,7 @@ function buildWorld() {
     memberJoined,
     pending,
     unusual,
+    cancelTargets,
     approvals,
     unconfirmedApprovals,
     decided,
@@ -500,6 +543,40 @@ function buildWorld() {
 
 export function createWorld() {
   return buildWorld();
+}
+
+/**
+ * Add three pending transactions that wait for MINTER's admins but aren't
+ * MINTER group changes: another group's invite, a name registration and
+ * another group's invite cancellation. Returns their signatures.
+ */
+export function addOtherPending(world) {
+  const base = {
+    fee: '0.01000000',
+    txGroupId: GROUP,
+    approvalStatus: 'PENDING',
+    creatorAddress: ADDR.learner,
+    reference: sig('r:other-pending'),
+  };
+  const rows = [
+    {
+      ...base,
+      type: 'GROUP_INVITE',
+      groupId: 4242,
+      invitee: ADDR.nominatedWaiting,
+      timeToLive: 864_000,
+    },
+    { ...base, type: 'REGISTER_NAME', name: 'example' },
+    { ...base, type: 'CANCEL_GROUP_INVITE' },
+  ].map((row, i) => ({
+    ...row,
+    timestamp: blockTime(TIP - 8 + i) - 20_000,
+    signature: sig(`other-pending-${i}`),
+    blockHeight: TIP - 8 + i,
+  }));
+  world.pending.push(...rows);
+  world.cancelTargets.set(rows[2].signature, { groupId: 4242, invitee: ADDR.nominatedWaiting });
+  return rows.map((row) => row.signature);
 }
 
 // ---- answering Core --------------------------------------------------------
@@ -641,6 +718,12 @@ export function answerCore(world, pathname, sp) {
     if (types.length) rows = rows.filter((t) => types.includes(t.type));
     if (creator) rows = rows.filter((t) => (t.adminPublicKey ?? t.ownerPublicKey) === creator);
     return json(page(rows, sp));
+  }
+  if ((m = p.match(/^\/transactions\/signature\/(\w+)\/raw$/))) {
+    const row = [...world.pending, ...world.decided].find((t) => t.signature === m[1]);
+    const target = world.cancelTargets.get(m[1]);
+    if (!row || !target) return json({ error: 1, message: 'transaction unknown' }, 404);
+    return text(cancelInviteRaw(row, target));
   }
   if ((m = p.match(/^\/transactions\/signature\/(\w+)$/))) {
     const found = [...world.pending, world.unusual, ...world.decided, ...world.approvals].find(

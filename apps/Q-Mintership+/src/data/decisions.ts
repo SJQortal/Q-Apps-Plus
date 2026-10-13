@@ -1,5 +1,5 @@
 /**
- * The Decisions queue's data: every transaction waiting for MINTER's
+ * The Decisions queue's data: every MINTER group change waiting for MINTER's
  * approval, with its signatures and its clock, from a fixed set of reads:
  *
  *   /groups/694, /groups/members/694?onlyAdmins=true, /blocks/last (+ one
@@ -7,15 +7,24 @@
  *   GROUP_APPROVAL search over the blocks the pending ones can have
  *   signatures in, /transactions/unconfirmed?txType=GROUP_APPROVAL, and
  *   /transactions/pending (all groups) for the unusual approval route check.
+ *   Each pending CANCEL_GROUP_INVITE's raw bytes are read once (kept for the
+ *   session) for its group, which Core's JSON leaves out.
  *
  * About 8 GETs, each paged at 100, whatever the number of decisions.
+ *
+ * The queue lists MINTER group changes (groupId 694) as decisions. Other
+ * pending transactions that wait for MINTER's admins are listed apart in
+ * `others`, without Sign.
  */
 import {
   buildDecision,
+  isMinterGroupChange,
   isUnusualApprovalRoute,
   sortDecisions,
   toApprovalRow,
+  toOtherPending,
   type Decision,
+  type OtherPending,
 } from '../rules/decision';
 import type { ApprovalRow } from '../rules/tally';
 import { getChainNow, type ChainNow } from './chain';
@@ -26,6 +35,7 @@ import {
   getPending,
   getPendingAllGroups,
   getUnconfirmedApprovals,
+  withCancelInviteTargets,
 } from './txs';
 import type { GroupInfo } from './types';
 
@@ -33,6 +43,8 @@ export interface DecisionsData {
   decisions: Decision[];
   /** MINTER transactions on an unusual approval route: groupId 694, txGroupId neither 694 nor 0 (admins only). */
   unusual: Decision[];
+  /** Other transactions waiting for Minter Admins: not MINTER group changes, never signed here. */
+  others: OtherPending[];
   group: GroupInfo;
   admins: AdminList;
   now: ChainNow;
@@ -60,12 +72,16 @@ export function loadDecisions(options: { force?: boolean } = {}): Promise<Decisi
         getPendingAllGroups({ force }).catch(() => ({ rows: [], truncated: false, pages: 0 })),
       ]);
 
-      const heights = pending.rows
+      const rows = await withCancelInviteTargets(pending.rows);
+      const minterRows = rows.filter(isMinterGroupChange);
+      const others = rows.filter((tx) => !isMinterGroupChange(tx)).map(toOtherPending);
+
+      const heights = minterRows
         .map((tx) => tx.blockHeight)
         .filter((h): h is number => typeof h === 'number');
       const oldest = heights.length ? Math.min(...heights) : now.height;
       const start = Math.max(1, oldest - APPROVAL_SLACK_BLOCKS);
-      const confirmed = pending.rows.length
+      const confirmed = minterRows.length
         ? await getApprovalsInRange(start, now.height, { force })
         : { rows: [], truncated: false, pages: 0 };
 
@@ -80,7 +96,7 @@ export function loadDecisions(options: { force?: boolean } = {}): Promise<Decisi
         tipHeight: now.height,
         approvals,
       };
-      const decisions = sortDecisions(pending.rows.map((tx) => buildDecision(tx, ctx)));
+      const decisions = sortDecisions(minterRows.map((tx) => buildDecision(tx, ctx)));
       const unusual = allPending.rows
         .filter(isUnusualApprovalRoute)
         .map((tx) => buildDecision(tx, ctx));
@@ -88,6 +104,7 @@ export function loadDecisions(options: { force?: boolean } = {}): Promise<Decisi
       return {
         decisions,
         unusual,
+        others,
         group,
         admins,
         now,

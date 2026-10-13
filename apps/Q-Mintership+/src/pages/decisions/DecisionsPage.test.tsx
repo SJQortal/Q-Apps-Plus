@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderPage } from '../../test/render';
-import { ADDR } from '../../test/world';
+import { renderPage, type RenderPageOptions } from '../../test/render';
+import { ADDR, addOtherPending } from '../../test/world';
 import { createWorld } from '../../../e2e/world.mjs';
 import { mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { base58Decode, base58Encode } from '../../qortal/base58';
@@ -12,8 +12,17 @@ afterEach(() => vi.useRealTimers());
 
 const user = () => userEvent.setup();
 
-async function openPage(persona = 'admin', path = '/decisions') {
-  const rendered = await renderPage(<DecisionsPage />, { persona, path, route: '/decisions' });
+async function openPage(
+  persona = 'admin',
+  path = '/decisions',
+  setup?: RenderPageOptions['setup']
+) {
+  const rendered = await renderPage(<DecisionsPage />, {
+    persona,
+    path,
+    route: '/decisions',
+    setup,
+  });
   await screen.findByRole('article', { name: /Add to MINTER, bob\+builder/ });
   return rendered;
 }
@@ -113,6 +122,28 @@ describe('Decisions: unusual approval route', () => {
       )
     ).toBeInTheDocument();
     expect(within(list).queryByRole('button')).toBeNull();
+  });
+});
+
+describe('Decisions: other transactions waiting for Minter Admins', () => {
+  it('lists them apart for Minter Admins, read-only, and keeps them out of the queue', async () => {
+    await openPage('admin', '/decisions', addOtherPending);
+    const list = await screen.findByRole('list', {
+      name: 'Other transactions waiting for Minter Admins',
+    });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    expect(within(list).getByText(/Invite to a group · group 4242/)).toBeInTheDocument();
+    expect(within(list).getByText(/Register name/)).toBeInTheDocument();
+    expect(within(list).queryByRole('button')).toBeNull();
+    // Nothing in the queue is about them: still six to sign.
+    expect(screen.getAllByRole('button', { name: /^Sign: / })).toHaveLength(6);
+  });
+
+  it('is not shown to members', async () => {
+    await openPage('nominator', '/decisions', addOtherPending);
+    expect(
+      screen.queryByRole('list', { name: 'Other transactions waiting for Minter Admins' })
+    ).toBeNull();
   });
 });
 

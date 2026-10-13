@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ADDR, NULL_OWNER, TIP, installWorld } from '../test/world';
+import { ADDR, NULL_OWNER, TIP, addOtherPending, installWorld } from '../test/world';
+import { fakeKey } from '../../e2e/world.mjs';
 import { fetchCalls } from '../test/setup';
 import { getChainNow, heightToTime } from './chain';
 import { loadDecisions } from './decisions';
@@ -9,6 +10,7 @@ import { loadNominations, loadNominationsFor } from './nominations';
 import { fetchQuery, invalidate, queryLoadCounts, resetQueries } from './query';
 
 afterEach(() => vi.useRealTimers());
+
 
 describe('read store', () => {
   it('merges identical loads, caches, and never caches a failure', async () => {
@@ -92,6 +94,42 @@ describe('loadDecisions', () => {
     expect(data.unusual[0].unusualRoute).toBe(true);
     expect(data.unusual[0].tally).toBeNull();
     expect(data.decisions.every((d) => !d.unusualRoute)).toBe(true);
+  });
+
+  it('lists only MINTER group changes as decisions; other waiting transactions apart', async () => {
+    const { world } = installWorld();
+    const others = addOtherPending(world);
+    const data = await loadDecisions();
+    expect(data.decisions.some((d) => others.includes(d.signature))).toBe(false);
+    expect(data.others.map((o) => [o.label, o.groupId])).toEqual([
+      ['Invite to a group', 4242],
+      ['Register name', null],
+      ['Cancel a group invite', 4242],
+    ]);
+    // MINTER's own cancellation (group 694 in its raw bytes) stays a decision.
+    expect(data.decisions.filter((d) => d.kind === 'cancelInvite')).toHaveLength(1);
+    // The nominee's real nomination is still waiting for its first signature.
+    const nominations = await loadNominations();
+    const waiting = nominations.all.find((n) => n.nominee === ADDR.nominatedWaiting)!;
+    expect(waiting.state).toBe('waiting');
+    expect(waiting.decision).toBeNull();
+  });
+
+  it('never takes another group’s decided invite for a MINTER one', async () => {
+    const { world } = installWorld();
+    world.decided.push({
+      ...world.pending[0],
+      signature: fakeKey('other-decided', 64),
+      groupId: 4242,
+      invitee: ADDR.nominatedWaiting,
+      blockHeight: TIP - 500,
+      approvalStatus: 'APPROVED',
+      approvalHeight: TIP - 400,
+    });
+    const data = await loadNominations();
+    const waiting = data.all.find((n) => n.nominee === ADDR.nominatedWaiting)!;
+    expect(waiting.state).toBe('waiting');
+    expect(waiting.latestInvite).toBeNull();
   });
 
   it('reads approvals by block range, starting just below the oldest pending', async () => {
