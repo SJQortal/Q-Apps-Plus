@@ -2,7 +2,8 @@
  * One decision in full, for the Minter Admins and everyone following along:
  * what it does and to whom, who proposed it, the subject's profile (and the
  * nomination behind an invite), k of n with the time left to sign, who has
- * signed, and Sign / Signed ✓ / Signed ✓ (confirming…).
+ * signed, Sign / Signed ✓ / Signed ✓ (confirming…), and its public comments
+ * behind a "Comments (n)" toggle.
  */
 import { useState } from 'react';
 import { Box, Button, Checkbox, Skeleton, Typography } from '@mui/material';
@@ -11,10 +12,12 @@ import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutli
 import type { ChainNow } from '../../data/chain';
 import { effectiveBlocksMinted } from '../../data/accounts';
 import type { Nomination } from '../../data/nominations';
+import { decisionCommentTarget } from '../../data/commentThread';
 import { KIND_LABEL, type Decision } from '../../rules/decision';
 import { useAccount } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { AvatarStack, PersonChip, PersonInline } from '../../components/common/Person';
+import { CommentsSection } from '../../components/comments/CommentsSection';
 import { DoneChip, SigningClock } from '../../components/decision/DecisionParts';
 import { ProgressRing } from '../../components/common/ProgressRing';
 import { Card, DecisionPhaseChip } from '../../components/common/Section';
@@ -252,6 +255,8 @@ export function DecisionCard(props: DecisionCardProps) {
           ) : null}
         </Box>
       ) : null}
+
+      <CommentsSection target={decisionCommentTarget(d, nomination)} label={fullTitle} />
     </Card>
   );
 }

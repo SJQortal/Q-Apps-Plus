@@ -3,7 +3,7 @@
  * supports (with their notes), the reason and links, and where it stands
  * (waiting for a Minter Admin, k of n signatures with the countdown,
  * approved, or how it ended). Screens add their own buttons through
- * `actions`.
+ * `actions`, and its public comments with `comments`.
  */
 import type { ReactNode } from 'react';
 import { Box, Button, Typography } from '@mui/material';
@@ -11,6 +11,7 @@ import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
+import { nominationCommentTarget } from '../../data/commentThread';
 import type { NominationState } from '../../rules/nomination';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { formatDuration, formatRelative } from '../../utils/format';
@@ -19,6 +20,7 @@ import { Countdown } from '../common/Countdown';
 import { PersonChip, PersonInline } from '../common/Person';
 import { ProgressRing } from '../common/ProgressRing';
 import { Card, NominationStateChip } from '../common/Section';
+import { CommentsSection } from '../comments/CommentsSection';
 import { readable } from '../../utils/readable';
 
 export interface NominationCardProps {
@@ -31,6 +33,8 @@ export interface NominationCardProps {
   hideNominee?: boolean;
   /** When a decided nomination ended (ms), for "Expired 3 days ago". */
   endedAt?: number | null;
+  /** Its public comments behind a "Comments (n)" toggle; 'open' starts open. */
+  comments?: boolean | 'open';
 }
 
 const ENDED_TEXT: Partial<Record<NominationState, string>> = {
@@ -47,6 +51,7 @@ export function NominationCard({
   compact,
   hideNominee,
   endedAt,
+  comments,
 }: NominationCardProps) {
   const tally = n.decision?.tally ?? null;
   const window = n.decision?.window ?? null;
@@ -228,6 +233,14 @@ export function NominationCard({
           <Box sx={{ ml: 'auto', display: 'flex', gap: 1, flexWrap: 'wrap' }}>{actions}</Box>
         ) : null}
       </Box>
+
+      {comments ? (
+        <CommentsSection
+          target={nominationCommentTarget(n)}
+          label={`the nomination of ${nominee.label}`}
+          defaultOpen={comments === 'open'}
+        />
+      ) : null}
     </Card>
   );
 }

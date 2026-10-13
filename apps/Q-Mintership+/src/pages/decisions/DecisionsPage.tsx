@@ -489,6 +489,7 @@ export default function DecisionsPage() {
                     nomination={n}
                     now={data.now}
                     compact
+                    comments
                     actions={
                       isAdmin ? (
                         <FirstSignatureAction nomination={n} onStart={() => setFirstTarget(n)} />
