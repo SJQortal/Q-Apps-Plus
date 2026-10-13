@@ -396,3 +396,21 @@ describe('comments on a poll', () => {
     ).toBeVisible();
   });
 });
+
+describe('Refresh', () => {
+  it('reads the polls again with the rest of Decisions', async () => {
+    const u = user();
+    await openDecisions();
+    await pollCard(OPEN_Q);
+    const searches = () =>
+      fetchCallsFor('/arbitrary/resources/searchsimple').filter((p) =>
+        p.includes('DOCUMENT_PRIVATE')
+      ).length;
+    expect(searches()).toBe(4);
+    const decrypted = qortalCallsFor('DECRYPT_DATA').length;
+    await u.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(searches()).toBe(8), T);
+    // The bodies were decrypted once: nothing again.
+    expect(qortalCallsFor('DECRYPT_DATA')).toHaveLength(decrypted);
+  });
+});

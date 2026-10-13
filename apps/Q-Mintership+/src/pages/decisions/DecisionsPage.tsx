@@ -342,6 +342,8 @@ function DecisionsQueue() {
     void decisionsQ.refetch();
     void nominationsQ.refetch();
     invalidate('staleinvites:');
+    // The Minter Admin polls too (read only for admins, so nothing for anyone else).
+    invalidate('adminpolls:list:');
   };
 
   const chooseProposal = (choice: ProposeChoice) => {
