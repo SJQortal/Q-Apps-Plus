@@ -57,7 +57,8 @@ export function FormerHero({ status, needed }: { status: MyStatus; needed: numbe
 
   if (status.kind === 'formerBanned') {
     const ban = status.activeBan;
-    const at = ban?.banned ?? removal?.at ?? null;
+    // When it took effect (its approval); Core's `banned` is when it was proposed.
+    const at = (removal?.kind === 'ban' ? removal.at : null) ?? ban?.banned ?? null;
     const by = ban?.admin ?? removal?.by ?? null;
     return (
       <Hero

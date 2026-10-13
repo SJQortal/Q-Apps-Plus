@@ -25,7 +25,9 @@ export function statusSentence(
       return `In MINTER${since}, minting as an online account. Level 5 lets ${them} nominate.`;
     case 'formerBanned': {
       const ban = person.activeBan;
-      const when = ban ? ` on ${formatDate(ban.banned)}` : '';
+      // When it took effect (its approval); Core's `banned` is when it was proposed.
+      const at = (person.removal?.kind === 'ban' ? person.removal.at : null) ?? ban?.banned;
+      const when = at ? ` on ${formatDate(at)}` : '';
       const until = ban?.expiry ? `, until ${formatDate(ban.expiry)}` : ', permanently';
       return `Banned from MINTER${when}${until}. Minter Admins must lift the ban before ${they} can rejoin.`;
     }

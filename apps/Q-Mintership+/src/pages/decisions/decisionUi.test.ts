@@ -4,6 +4,7 @@ import type { Decision } from '../../rules/decision';
 import { ADDR, installWorld } from '../../test/world';
 import type { PendingWrite } from '../../writes/optimistic';
 import {
+  banEndLine,
   banLengthText,
   canSign,
   myAnswer,
@@ -98,5 +99,19 @@ describe('ban lengths and reasons', () => {
     expect(reasonProblem('a'.repeat(129))).toMatch(/128 bytes/);
     // 43 × 3 bytes = 129: too long although only 43 characters.
     expect(reasonProblem('€'.repeat(43))).toMatch(/128 bytes/);
+  });
+});
+
+describe('when a timed ban ends', () => {
+  it('counts from the proposal, and says when that time has already run out', async () => {
+    const { data, by } = await decisionsAs('admin');
+    const ban = by(ADDR.banTarget); // proposed 5,000 blocks (about 4 days) ago
+    expect(banEndLine(ban, data.now)).toBeNull(); // permanent
+    const tenDays = banEndLine({ ...ban, banSeconds: 10 * 86_400 }, data.now);
+    expect(tenDays).toMatch(
+      /^Ends about .+: a ban counts from when it was proposed, not from approval\.$/
+    );
+    const threeDays = banEndLine({ ...ban, banSeconds: 3 * 86_400 }, data.now);
+    expect(threeDays).toMatch(/^Its time has already run out \(it ended .+\)/);
   });
 });

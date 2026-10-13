@@ -168,6 +168,7 @@ export function ProposeDialog({
     ctx.maximumBlockDelay * ctx.msPerBlock,
     { precise: true }
   )})`;
+  const approvalText = `about ${formatDuration(ctx.maximumBlockDelay * ctx.msPerBlock, { precise: true })}`;
 
   return (
     <>
@@ -285,7 +286,10 @@ export function ProposeDialog({
                 value={days}
                 onChange={(e) => setDays(e.target.value)}
                 error={Boolean(banError)}
-                helperText={banError ?? `${banLengthText('seconds' in ban ? ban.seconds : 0)}.`}
+                helperText={
+                  banError ??
+                  `${banLengthText('seconds' in ban ? ban.seconds : 0)}, counted from when it is proposed, not from approval (which can take up to ${approvalText}).`
+                }
                 slotProps={{ htmlInput: { inputMode: 'numeric', pattern: '[0-9]*' } }}
                 sx={{ mt: 1, maxWidth: 200 }}
               />
@@ -498,6 +502,7 @@ function ProposeHubStep({
           {kind === 'ban' ? (
             <Typography>
               <b>Length:</b> {banLengthText(banSeconds)}
+              {banSeconds ? ', counted from when it is proposed, not from approval' : ''}
             </Typography>
           ) : null}
           {reason ? (

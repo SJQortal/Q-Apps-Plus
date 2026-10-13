@@ -375,9 +375,15 @@ describe('Decisions: proposing', () => {
     await u.clear(days);
     await u.type(days, '24');
     expect(within(form).getByRole('button', { name: 'Review' })).toBeEnabled();
+    // Core counts a ban from its proposal, so the form says so.
+    expect(
+      within(form).getByText(/^24 days, counted from when it is proposed, not from approval/)
+    ).toBeVisible();
     await u.click(within(form).getByRole('button', { name: 'Review' }));
     const hub = await screen.findByRole('dialog', { name: /Ban from MINTER: Leo Learner/ });
-    expect(within(hub).getByText('24 days')).toBeInTheDocument();
+    expect(
+      within(hub).getByText(/24 days, counted from when it is proposed, not from approval/)
+    ).toBeInTheDocument();
     expect(qortalCallsFor('BAN_FROM_GROUP')).toHaveLength(0);
   });
 });

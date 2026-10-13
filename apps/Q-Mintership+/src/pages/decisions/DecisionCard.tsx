@@ -23,6 +23,7 @@ import { formatCount, formatDate, formatRelative, plural } from '../../utils/for
 import { openQortalLink } from '../../utils/links';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
 import {
+  banEndLine,
   banLengthText,
   canSign,
   decisionCardId,
@@ -281,6 +282,7 @@ function KindDetails({
       />
     );
   if (d.kind === 'kick' || d.kind === 'ban') {
+    const banEnd = banEndLine(d, now);
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
         {d.kind === 'ban' ? (
@@ -289,6 +291,11 @@ function KindDetails({
               Length:
             </Box>{' '}
             {banLengthText(d.banSeconds)}
+          </Typography>
+        ) : null}
+        {banEnd ? (
+          <Typography variant="body2" color="text.secondary">
+            {banEnd}
           </Typography>
         ) : null}
         <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>

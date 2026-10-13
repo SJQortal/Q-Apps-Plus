@@ -85,6 +85,24 @@ export function banLengthText(seconds: number | undefined): string {
   return formatDuration(seconds * 1000, { precise: true });
 }
 
+/**
+ * When a timed ban ends. Core counts a ban from the time it was proposed,
+ * not from its approval, so this is the proposal time plus the length.
+ * Null for a permanent ban (or anything that isn't a ban).
+ */
+export function banEndLine(d: Decision, now: ChainNow): string | null {
+  if (d.kind !== 'ban' || !d.banSeconds) return null;
+  const end = d.createdAt + d.banSeconds * 1000;
+  // It can't apply before the next block, nor before its window allows.
+  const earliest = Math.max(
+    now.timestamp + now.msPerBlock,
+    d.window ? heightToTime(now, d.window.earliestDecisionHeight) : 0
+  );
+  return end <= earliest
+    ? `Its time has already run out (it ended ${formatDateTime(end)}): a ban counts from when it was proposed, not from approval.`
+    : `Ends about ${formatDateTime(end)}: a ban counts from when it was proposed, not from approval.`;
+}
+
 export const BAN_MAX_DAYS = BAN_MAX_SECONDS / 86_400;
 
 /**
