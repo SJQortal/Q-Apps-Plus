@@ -381,7 +381,7 @@ export default {
         await page.reload({ waitUntil: 'load' });
         await settle(page);
         await page
-          .getByText('The target changed from 10 to 9 signatures')
+          .getByRole('heading', { name: 'The target changed from 10 to 9 signatures' })
           .waitFor({ timeout: 8000 });
       },
     },

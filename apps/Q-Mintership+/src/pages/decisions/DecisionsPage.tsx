@@ -90,9 +90,9 @@ import { OtherPendingList } from './OtherPendingList';
 import { UnusualList } from './UnusualList';
 import { useSeenTargetChange } from './seenTarget';
 import { TargetChangedBanner } from './TargetChangedBanner';
+import { targetChangedTitle, type LabelOf } from './targetShiftUi';
 import { TargetImpact } from './TargetImpact';
 import { TargetShiftSection } from './TargetShiftSection';
-import type { LabelOf } from './targetShiftUi';
 import { useAcknowledge } from './useAcknowledge';
 
 const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
@@ -363,6 +363,10 @@ function DecisionsQueue() {
         }
       />
       <PageBody>
+        {/* There from the start: says once that the target changed (the note below isn't live). */}
+        <span role="status" className="qmp-visually-hidden">
+          {targetChange ? targetChangedTitle(targetChange.from.needed, targetChange.to.needed) : ''}
+        </span>
         {decisionsQ.isLoading && !data ? (
           <ListSkeleton count={4} ring label="Loading decisions" />
         ) : decisionsQ.isError && !data ? (
