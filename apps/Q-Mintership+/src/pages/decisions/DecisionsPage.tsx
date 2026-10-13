@@ -11,8 +11,9 @@
  *
  * The target moves with the admin count (rules/targetShift.ts): an admin
  * change says what it would do to every waiting decision, a decision it
- * would tip over carries a chip, and Sign / Propose / Sign several need
- * "I've checked these" before Hub opens when anything would change.
+ * would tip over carries a chip, Sign / Propose / Sign several need "I've
+ * checked these" before Hub opens when anything would change, and a banner
+ * says when the target changed since this device last looked.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -46,7 +47,6 @@ import {
   ListSkeleton,
   TruncatedNote,
 } from '../../components/common/states';
-import { STORAGE_PREFIX } from '../../constants/plus';
 import type { Nomination } from '../../data/nominations';
 import { invalidate, peekQuery } from '../../data/query';
 import { useNavHas } from '../../components/layout/useNavHas';
@@ -83,6 +83,8 @@ import { SignDialog } from './SignDialog';
 import { StaleInvites } from './StaleInvites';
 import { OtherPendingList } from './OtherPendingList';
 import { UnusualList } from './UnusualList';
+import { useSeenTargetChange } from './seenTarget';
+import { TargetChangedBanner } from './TargetChangedBanner';
 import { TargetImpact } from './TargetImpact';
 import { TargetShiftSection } from './TargetShiftSection';
 import type { LabelOf } from './targetShiftUi';
@@ -96,7 +98,6 @@ const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
 ]);
 
 const PENDING_MAX_AGE_MS = 15 * 60_000;
-const TARGET_KEY = `${STORAGE_PREFIX}decisions-last-target`;
 const STALE_SECTION_ID = 'stale-invites';
 
 /** A page section by its Section id, to return focus to. */
@@ -108,43 +109,6 @@ const spin = keyframes`
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 `;
-
-interface TargetSnapshot {
-  needed: number;
-  totalAdmins: number;
-}
-
-function readTarget(): TargetSnapshot | null {
-  try {
-    const raw = window.localStorage.getItem(TARGET_KEY);
-    const value = raw ? (JSON.parse(raw) as TargetSnapshot) : null;
-    return value && typeof value.needed === 'number' && typeof value.totalAdmins === 'number'
-      ? value
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeTarget(value: TargetSnapshot): void {
-  try {
-    window.localStorage.setItem(TARGET_KEY, JSON.stringify(value));
-  } catch {
-    // A private window: the note just won't appear next time.
-  }
-}
-
-/** The target the viewer saw last time, when it has changed since (shown once per visit). */
-function useTargetChange(current: TargetSnapshot | null): TargetSnapshot | null {
-  const [previous] = useState(readTarget);
-  useEffect(() => {
-    if (current) writeTarget(current);
-  }, [current]);
-  if (!previous || !current) return null;
-  return previous.needed !== current.needed || previous.totalAdmins !== current.totalAdmins
-    ? previous
-    : null;
-}
 
 export default function DecisionsPage() {
   const session = useSession();
@@ -187,11 +151,12 @@ export default function DecisionsPage() {
 
   const needed = data ? approvalsNeeded(data.group.approvalThreshold, data.admins.adminCount) : 0;
   const totalAdmins = data?.admins.adminCount ?? 0;
+  const tipHeight = data?.now.height ?? 0;
   const snapshot = useMemo(
-    () => (data ? { needed, totalAdmins } : null),
-    [data, needed, totalAdmins]
+    () => (data ? { adminCount: totalAdmins, needed, height: tipHeight } : null),
+    [data, needed, totalAdmins, tipHeight]
   );
-  const targetChange = useTargetChange(snapshot);
+  const [targetChange, dismissTargetChange] = useSeenTargetChange(snapshot);
 
   // What waiting admin changes would do to the target (each, and together).
   const shift = useMemo(() => {
@@ -432,11 +397,16 @@ export default function DecisionsPage() {
               </Alert>
             ) : null}
             {targetChange ? (
-              <Alert severity="info" role="status">
-                The target changed from {targetChange.needed} to {needed} signatures: MINTER now has{' '}
-                {totalAdmins} admin seats (it had {targetChange.totalAdmins}). It is{' '}
-                {describeThreshold(data.group.approvalThreshold)}, recounted every block.
-              </Alert>
+              <TargetChangedBanner
+                change={targetChange}
+                decisions={data.decisions}
+                threshold={data.group.approvalThreshold}
+                now={data.now}
+                maximumBlockDelay={data.group.maximumBlockDelay}
+                labelOf={labelOf}
+                isAdmin={isAdmin}
+                onDismiss={dismissTargetChange}
+              />
             ) : null}
 
             {isAdmin ? (
