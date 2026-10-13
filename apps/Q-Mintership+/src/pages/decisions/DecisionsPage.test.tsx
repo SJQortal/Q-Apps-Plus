@@ -114,7 +114,9 @@ describe('Decisions: phases and actions', () => {
     expect(within(signing).getByText(/Confirming: 1 signature on the way/)).toBeInTheDocument();
     // The nomination behind it.
     expect(within(signing).getByText(/Nominated by/)).toBeInTheDocument();
-    expect(within(signing).getByText(/Has accepted/)).toBeInTheDocument();
+    expect(
+      within(signing).getByText('Ready to mint: approval makes them a member at once.')
+    ).toBeInTheDocument();
   });
 
   it('is read-only for people who are not Minter Admins', async () => {

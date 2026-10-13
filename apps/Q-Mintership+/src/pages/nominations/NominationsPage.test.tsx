@@ -44,6 +44,10 @@ describe('Nominations page', () => {
     expect(screen.getByRole('button', { name: /Nominate someone/ })).toBeInTheDocument();
     // Nora nominated these herself.
     expect(within(await card('Wren Waiting')).getByText('You nominated them')).toBeInTheDocument();
+    // A nominee whose join request is in reads as ready, in the same words everywhere.
+    expect(within(await card('bob\\+builder')).getByText('Ready to mint')).toBeInTheDocument();
+    expect(within(await card('Wren Waiting')).queryByText('Ready to mint')).toBeNull();
+    expect(within(list).queryByText(/accepted/i)).toBeNull();
   });
 
   it('filters by state and shows the count on each filter', async () => {
@@ -184,11 +188,11 @@ describe('Nominations page', () => {
     expect(within(dialog).getByText(/Fee: 0.01 QORT/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(
-      await within(dialog).findByText('Accepted ✓', {}, { timeout: 4000 })
+      await within(dialog).findByText("You're ready ✓", {}, { timeout: 4000 })
     ).toBeInTheDocument();
     expect(qortalCallsFor('JOIN_GROUP')).toEqual([{ action: 'JOIN_GROUP', groupId: 694 }]);
     await user.click(within(dialog).getByRole('button', { name: 'Done' }));
-    expect(await within(mine).findByText(/Accepted ✓ \(confirming…\)/)).toBeInTheDocument();
+    expect(await within(mine).findByText("You're ready ✓ (confirming…)")).toBeInTheDocument();
   });
 
   it('says how to get the fee when the nominee has no QORT, and sends nothing', async () => {
@@ -211,11 +215,11 @@ describe('Nominations page', () => {
     expect(qortalCallsFor('JOIN_GROUP')).toHaveLength(0);
   });
 
-  it('shows a nominee who already accepted that approval will make them a member', async () => {
+  it('shows a nominee whose join request is in that approval will make them a member', async () => {
     await open('nominatedSigning');
     const mine = await screen.findByRole('region', { name: 'Your nomination' }, { timeout: 4000 });
     expect(
-      within(mine).getByText(/You accepted: approval makes you a member at once/)
+      within(mine).getByText("You're ready ✓: when the admins approve, you're in at once.")
     ).toBeInTheDocument();
     expect(within(mine).queryByRole('button', { name: 'Accept nomination' })).toBeNull();
   });

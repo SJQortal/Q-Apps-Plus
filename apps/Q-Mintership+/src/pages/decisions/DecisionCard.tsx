@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { Box, Button, Checkbox, Skeleton, Typography } from '@mui/material';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
+import { READY_LABEL } from '../../constants/words';
 import type { ChainNow } from '../../data/chain';
 import { effectiveBlocksMinted } from '../../data/accounts';
 import type { Nomination } from '../../data/nominations';
@@ -452,7 +453,7 @@ function InviteDetails({
           ) : null}
           <span>
             {n.hasJoinRequest
-              ? 'Has accepted: approval makes them a member at once.'
+              ? `${READY_LABEL}: approval makes them a member at once.`
               : 'Hasn’t accepted yet: after approval they still need to press Join now.'}
           </span>
         </Typography>

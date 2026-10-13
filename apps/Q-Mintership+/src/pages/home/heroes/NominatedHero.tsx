@@ -2,7 +2,8 @@
  * Someone nominated this account: who (and who supports it), where it
  * stands (waiting for a first Minter Admin, or k of n with the time left
  * to sign), and Accept, which sends the join request so approval makes the
- * nominee a member at once. Once accepted: "You've accepted ✓".
+ * nominee a member at once. With a join request open, however it was sent:
+ * "You're ready ✓: when the admins approve, you're in at once."
  */
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -22,6 +23,7 @@ import { usePendingWrite, writeKeys } from '../../../writes/optimistic';
 import { Hero, HeroText, Num, PeopleList, PersonLink } from '../Hero';
 import { LazyJoinDialog } from '../../../components/nomination/LazyJoinDialog';
 import { readable } from '../../../utils/readable';
+import { READY_DONE, READY_DONE_NEXT } from '../../../constants/words';
 import { whenApplied } from '../../decisions/decisionUi';
 
 export function NominatedHero({
@@ -188,7 +190,9 @@ export function NominatedHero({
 
         {accepted ? (
           <Typography role="status" sx={{ fontWeight: 700, color: readable('success') }}>
-            You&rsquo;ve accepted ✓{confirming ? ' (confirming…)' : ''}
+            {READY_DONE}
+            {confirming ? ' (confirming…)' : ''}
+            {met ? '' : `: ${READY_DONE_NEXT}`}
           </Typography>
         ) : (
           <HeroText>
@@ -196,11 +200,6 @@ export function NominatedHero({
             MINTER, with a <Num>{formatQort(feeQort)}</Num> fee.
           </HeroText>
         )}
-        {accepted && !met ? (
-          <HeroText muted>
-            Your join request is in, so you join MINTER the moment the last needed signature lands.
-          </HeroText>
-        ) : null}
         {short ? (
           <Alert severity="warning">
             Your confirmed balance is <Num>{formatQort(balance.data ?? 0)}</Num>. Ask{' '}

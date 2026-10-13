@@ -12,6 +12,7 @@
  * first screen everyone sees.
  */
 import { Alert, Box, Typography } from '@mui/material';
+import { READY_DONE } from '../../constants/words';
 import { formatQort } from '../../data/accounts';
 import { useBalance } from '../../hooks/useData';
 import { useFee } from '../../hooks/useFee';
@@ -106,7 +107,7 @@ export function JoinDialog({
         const outcome = await joinMinter(signer, (stage) => report(0, stage));
         return { outcome };
       }}
-      successTitle={accept ? 'Accepted ✓' : 'Welcome to MINTER ✓'}
+      successTitle={accept ? READY_DONE : 'Welcome to MINTER ✓'}
       successText={
         <Typography variant="body2">
           {accept

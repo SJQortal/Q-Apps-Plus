@@ -34,7 +34,7 @@ describe('Person page', () => {
     expect(screen.getByText('Nominated')).toBeInTheDocument();
     expect(screen.getByText('Join request sent')).toBeInTheDocument();
     expect(
-      screen.getByText("Nominated for MINTER, and they've accepted: approval adds them at once.")
+      screen.getByText("Nominated for MINTER, and they're ready: approval adds them at once.")
     ).toBeInTheDocument();
     expect(screen.getByText('7,200 blocks')).toBeInTheDocument();
     // Admins are already signing: no Nominate button, a way to the decision instead.

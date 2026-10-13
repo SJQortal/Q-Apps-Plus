@@ -347,20 +347,26 @@ describe('Home: nominated', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.getByRole('button', { name: 'Accept nomination' })).toBeEnabled();
-    expect(screen.queryByText(/accepted ✓/)).toBeNull();
+    expect(screen.queryByText(/You're ready ✓/)).toBeNull();
     expect(posts).toEqual([]);
   });
 
-  it('shows "You\'ve accepted ✓" once Hub sends the join request', async () => {
+  it('shows "You\'re ready ✓" once Hub sends the join request', async () => {
     const { address, posts } = await renderPage(<HomePage />, { persona: 'nominatedWaiting' });
     await headline("Wren Waiting, you've been nominated for MINTER");
     hubAcceptsJoin(address);
     await userEvent.click(screen.getByRole('button', { name: 'Accept nomination' }));
     const dialog = await screen.findByRole('dialog', { name: 'Accept your nomination' });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
-    expect(await within(dialog).findByText('Accepted ✓', {}, T)).toBeInTheDocument();
+    expect(await within(dialog).findByText("You're ready ✓", {}, T)).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
-    expect(await screen.findByText(/accepted ✓ \(confirming…\)/, {}, T)).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        "You're ready ✓ (confirming…): when the admins approve, you're in at once.",
+        {},
+        T
+      )
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Accept nomination' })).toBeNull();
     expect(posts).toEqual([]);
     getDefaultStore().set(pendingWritesAtom, {});
@@ -377,7 +383,11 @@ describe('Home: nominated', () => {
     expect(hero).toHaveTextContent(/5 of 8 signatures so far, 1 more confirming\. 2 more needed/);
     expect(within(hero).getByText('left to sign')).toBeInTheDocument();
     expect(within(hero).getByText(/^Last block a signature counts in: /)).toBeVisible();
-    expect(within(hero).getByText(/accepted ✓/)).toBeInTheDocument();
+    // The join request is in: one wording, however it was sent.
+    expect(
+      within(hero).getByText("You're ready ✓: when the admins approve, you're in at once.")
+    ).toBeInTheDocument();
+    expect(hero).not.toHaveTextContent(/accepted/i);
     expect(screen.queryByRole('button', { name: 'Accept nomination' })).toBeNull();
     // The full nomination below, with its reason.
     expect(screen.getByRole('region', { name: 'Your nomination' })).toHaveTextContent(

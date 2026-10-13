@@ -2,12 +2,13 @@
  * The nominee's own button, the same wherever it shows (their card on
  * Nominations, Home's hero): "Accept nomination" or "Join now" (rules in
  * nomineeStep.ts), each explained in JoinDialog before Hub opens.
- * Optimistic: "Accepted ✓ (confirming…)" from the moment Hub sends it
- * until the chain shows it.
+ * Optimistic: "You're ready ✓ (confirming…)" from the moment Hub sends it
+ * until the chain shows it; then the same words as Home's.
  */
 import { useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
+import { READY_DONE, READY_DONE_NEXT } from '../../constants/words';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
 import type { Signer } from '../../writes/runner';
 import { JoinDialog } from './JoinDialog';
@@ -55,11 +56,11 @@ export function NomineeAction({
           ? 'Sending…'
           : joining
             ? 'Joined ✓ (confirming…)'
-            : 'Accepted ✓ (confirming…)'}
+            : `${READY_DONE} (confirming…)`}
       </Done>
     );
-  } else if (step === 'accepted') {
-    content = <Done>You accepted: approval makes you a member at once.</Done>;
+  } else if (step === 'ready') {
+    content = <Done>{`${READY_DONE}: ${READY_DONE_NEXT}`}</Done>;
   } else if (step === 'accept' || step === 'join') {
     const mode = step;
     content = (
