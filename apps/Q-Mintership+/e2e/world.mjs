@@ -133,6 +133,8 @@ export const PEOPLE = {
   demote: { name: 'Dex Demote', level: 7, blocks: 1_600_000 },
   liftBan: { name: null, level: 1, blocks: 9_000 },
   recentlyJoined: { name: 'Remy Recent', level: 0, blocks: 1_200 },
+  // Not in MINTER; addReady() gives them a join request ("ready to mint").
+  ready: { name: 'Rae Ready', level: 0, blocks: 0 },
 };
 export const ADDR = Object.fromEntries(Object.keys(PEOPLE).map((key) => [key, fakeAddress(key)]));
 
@@ -583,6 +585,11 @@ export function addOtherPending(world) {
   world.pending.push(...rows);
   world.cancelTargets.set(rows[2].signature, { groupId: 4242, invitee: ADDR.nominatedWaiting });
   return rows.map((row) => row.signature);
+}
+
+/** Give the `ready` persona a join request, so they have shown they're ready to mint. */
+export function addReady(world) {
+  world.joinRequests.push({ groupId: GROUP, joiner: ADDR.ready });
 }
 
 // ---- answering Core --------------------------------------------------------

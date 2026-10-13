@@ -12,6 +12,7 @@ export function fakeKey(seed: string, bytes?: number): string;
 export type World = any;
 export function createWorld(): World;
 export function addOtherPending(world: World): string[];
+export function addReady(world: World): void;
 export function answerCore(
   world: World,
   pathname: string,

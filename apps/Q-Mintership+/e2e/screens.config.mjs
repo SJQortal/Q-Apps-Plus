@@ -10,11 +10,22 @@
  * `signedOut` declines the account request. Every write is declined, so
  * nothing can be sent.
  */
-import { addOtherPending, answerCore, createWorld, ADDR, NOW, PEOPLE } from './world.mjs';
+import {
+  addOtherPending,
+  addReady,
+  answerCore,
+  createWorld,
+  fakeAddress,
+  ADDR,
+  NOW,
+  PEOPLE,
+} from './world.mjs';
 
 const world = createWorld();
 // Admins' Decisions also shows the transactions that aren't MINTER group changes.
 addOtherPending(world);
+// Rae Ready has shown they're ready to mint (a join request, no nomination).
+addReady(world);
 // Replaced in setup() by a visible 64×64 gradient, so avatars show in the shots.
 let PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAQklEQVR42u3OMQEAAAgDINc/9Mzg14MGLUmHCgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFbzwB2GwADvYAAAAASUVORK5CYII=',
@@ -55,6 +66,23 @@ const json = (route, status, body) =>
 const wait = (selector) => async (page) =>
   page.waitForSelector(selector, { timeout: 8000 }).catch(() => {});
 const settle = wait('main h1');
+
+/** Settle, then press a button and wait for the dialog it opens. */
+const open = (button, dialog) => async (page) => {
+  await settle(page);
+  await page.getByRole('button', { name: button, exact: true }).first().click({ timeout: 4000 });
+  await page.getByRole('dialog', { name: dialog }).waitFor({ timeout: 8000 });
+  await page.waitForTimeout(400);
+};
+
+/** Propose (a menu, or a sheet on phones), then one of its choices. */
+const propose = (choice) => async (page) => {
+  await settle(page);
+  await page.getByRole('button', { name: 'Propose', exact: true }).click({ timeout: 4000 });
+  const choices = page.locator('[role="menu"], .MuiDrawer-paper');
+  await choices.getByText(choice, { exact: true }).click({ timeout: 4000 });
+  await page.getByRole('dialog', { name: choice }).waitFor({ timeout: 8000 });
+};
 
 export default {
   name: 'Q-Mintership+',
@@ -120,7 +148,18 @@ export default {
     { key: 'home-kicked', path: '/?as=kicked', after: settle },
     { key: 'home-banned', path: '/?as=banned', after: settle },
     { key: 'home-left', path: '/?as=left', after: settle },
+    // A newcomer who has shown they're ready to mint, and the dialog that does it.
+    { key: 'home-ready', path: '/?as=ready', after: settle },
+    {
+      key: 'home-ready-dialog',
+      path: '/?as=newcomerName',
+      overlay: true,
+      after: open("Show you're ready to mint", "Show you're ready to mint"),
+    },
     { key: 'nominations', path: '/nominations?as=nominator', after: settle },
+    // Who is ready to mint: join requests without a nomination.
+    { key: 'nominations-ready', path: '/nominations?show=ready&as=nominator', after: settle },
+    { key: 'nominations-ready-admin', path: '/nominations?show=ready&as=admin', after: settle },
     // The nominee's own card comes first, with Accept nomination.
     { key: 'nominations-nominee', path: '/nominations?as=nominatedWaiting', after: settle },
     { key: 'nominate', path: '/nominate?as=nominator', after: settle },
@@ -133,6 +172,35 @@ export default {
     },
     { key: 'decisions', path: '/decisions?as=admin', after: settle },
     { key: 'decisions-member', path: '/decisions?as=learner', after: settle },
+    // Propose's choices, then cancelling an approved invite up to its two Hub steps.
+    {
+      key: 'decisions-propose',
+      path: '/decisions?as=admin',
+      overlay: true,
+      after: async (page) => {
+        await settle(page);
+        await page.getByRole('button', { name: 'Propose', exact: true }).click({ timeout: 4000 });
+        await page.waitForTimeout(500);
+      },
+    },
+    {
+      key: 'decisions-cancel-invite',
+      path: '/decisions?as=admin',
+      overlay: true,
+      after: async (page) => {
+        await propose('Cancel an approved invite')(page);
+        const form = page.getByRole('dialog', { name: 'Cancel an approved invite' });
+        await form
+          .getByRole('combobox', { name: 'Approved invite' })
+          .selectOption(fakeAddress('stale-2'), { timeout: 8000 });
+        await form.getByText('Nothing stops this proposal.').waitFor({ timeout: 8000 });
+        await form.getByRole('button', { name: 'Review' }).click({ timeout: 4000 });
+        await page
+          .getByRole('dialog', { name: /^Cancel an approved invite: / })
+          .waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
     { key: 'person', path: `/people/${ADDR.nominatedSigning}?as=admin`, after: settle },
     { key: 'history', path: '/history?as=learner', after: settle },
     // An old card from the original app (e2e/world-legacy.mjs), with its poll and comments.
