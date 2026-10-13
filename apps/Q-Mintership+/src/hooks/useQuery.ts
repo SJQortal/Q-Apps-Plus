@@ -66,9 +66,18 @@ export function useQuery<T>(
     else if (state.status === 'idle') void run(false);
   }, [enabled, run, state.status, stale, storeKey]);
 
+  const refreshMs = enabled ? (options.refreshMs ?? 0) : 0;
   usePoliteInterval(
-    () => run(true),
-    enabled ? (options.refreshMs ?? 0) : 0,
+    () => {
+      // Several views can poll one key (the shell and the page): a tick skips
+      // a key that is loading or that another view loaded since the last one.
+      const current = getQueryState<T>(storeKey);
+      if (current.fetching) return;
+      if (current.status === 'success' && Date.now() - current.updatedAt < refreshMs * 0.75)
+        return;
+      return run(true);
+    },
+    refreshMs,
     state.status === 'error'
   );
 

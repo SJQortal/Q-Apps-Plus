@@ -1,5 +1,5 @@
 import { act, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchQuery, invalidate, resetQueries } from '../data/query';
 import { useQuery } from './useQuery';
 
@@ -70,5 +70,38 @@ describe('useQuery and invalidate()', () => {
     });
     expect(calls).toBe(2);
     expect(screen.getByText('value 1')).toBeInTheDocument();
+  });
+});
+
+function Poller({ load }: { load: (force: boolean) => Promise<number> }) {
+  const q = useQuery('t:poll', load, { refreshMs: 60_000 });
+  return <p>{q.data === undefined ? 'loading' : `poll ${q.data}`}</p>;
+}
+
+describe('polling one key from several views', () => {
+  beforeEach(() => {
+    resetQueries();
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('loads once per period, not once per mounted view', async () => {
+    let calls = 0;
+    const load = (force: boolean) => fetchQuery('t:poll', async () => ++calls, { force });
+    render(<Poller load={load} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(calls).toBe(1);
+    // A second view mounts 20 s later (a page under the shell): its timer is out of phase.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+    render(<Poller load={load} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180_000 - 20_000);
+    });
+    // Three minutes at a 60 s period: the first load plus three refreshes, not six.
+    expect(calls).toBe(4);
   });
 });
