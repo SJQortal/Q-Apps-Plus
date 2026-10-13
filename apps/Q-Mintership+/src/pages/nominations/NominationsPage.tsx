@@ -1,8 +1,9 @@
 /**
  * Nominations: everyone who is up for MINTER right now, newest first, with
  * filters by state and a search by name or address. Level 5+ members and
- * Minter Admins propose a nomination from here (a floating button on phones,
- * a header button elsewhere) and add their support to open nominations; the nominee
+ * Minter Admins propose a nomination from here (a round floating button on
+ * phones, its icon only, named for screen readers; a header button with its
+ * words elsewhere) and add their support to open nominations; the nominee
  * sees their own nomination first, with Accept or Join now. Recently decided
  * ones sit in a collapsed section below, with "Propose nomination again" where a round
  * ran out of time. "Ready to mint" (`?show=ready`) lists the people who asked
@@ -20,6 +21,7 @@ import {
   IconButton,
   InputAdornment,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
@@ -75,8 +77,8 @@ import { ReadyToMintSection } from './ReadyToMint';
 import { useReadyToMint } from './useReadyToMint';
 
 const DECIDED_PAGE = 10;
-/** The floating button (48 px, 16 px above the bar) plus a margin. */
-const FAB_CLEARANCE = 80;
+/** The floating button (56 px, 16 px above the bar) plus a margin. */
+const FAB_CLEARANCE = 88;
 
 const nameOf = (address: string) => peekQuery<string | null>(`name:${address}`);
 
@@ -108,7 +110,8 @@ export default function NominationsPage() {
   const publishSigner = signer && publishName ? { ...signer, name: publishName } : null;
   const canNominate = Boolean(me && status?.canNominate);
   const isAdmin = Boolean(me && status?.isAdmin);
-  // Phones get a floating button above the bottom bar; it steps aside for the keyboard.
+  // Phones get a floating button above the bottom bar, icon only (its name is the words);
+  // it steps aside for the keyboard.
   const fab = canNominate && phone && !landscape;
 
   const own = data && me ? (data.open.find((n) => n.nominee === me) ?? null) : null;
@@ -405,22 +408,21 @@ export default function NominationsPage() {
       </PageBody>
 
       {fab && !shortFrame ? (
-        <Fab
-          variant="extended"
-          color="primary"
-          onClick={() => navigate(PATHS.nominate)}
-          sx={{
-            position: 'fixed',
-            right: 16,
-            bottom: `calc(${BOTTOM_NAV_HEIGHT + 16}px + var(--qp-safe-bottom))`,
-            zIndex: (theme) => theme.zIndex.speedDial,
-            textTransform: 'none',
-            fontWeight: 700,
-          }}
-        >
-          <PersonAddAlt1OutlinedIcon aria-hidden sx={{ mr: 1 }} />
-          {PROPOSE_NOMINATION}
-        </Fab>
+        <Tooltip title={PROPOSE_NOMINATION}>
+          <Fab
+            color="primary"
+            aria-label={PROPOSE_NOMINATION}
+            onClick={() => navigate(PATHS.nominate)}
+            sx={{
+              position: 'fixed',
+              right: 16,
+              bottom: `calc(${BOTTOM_NAV_HEIGHT + 16}px + var(--qp-safe-bottom))`,
+              zIndex: (theme) => theme.zIndex.speedDial,
+            }}
+          >
+            <PersonAddAlt1OutlinedIcon aria-hidden />
+          </Fab>
+        </Tooltip>
       ) : null}
 
       {support ? (
