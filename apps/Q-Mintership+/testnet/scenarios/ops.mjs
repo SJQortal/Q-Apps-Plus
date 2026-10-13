@@ -5,15 +5,16 @@
  * proposer's own signature (two Hub steps). 6 admin rows at PCT40: 3 needed.
  * Also the guards: banned, member, duplicate, already signed.
  */
-import { banOf, decided, isAdmin, isMember, pages, proposeSigned, sign } from '../lib/scenario-helpers.mjs';
+import { banOf, decided, freshGroup, isAdmin, isMember, pages, proposeSigned, sign } from '../lib/scenario-helpers.mjs';
 
 export default {
   name: 'ops',
   title: 'Kick, ban (permanent, timed), lift, add/remove admin, admin-first path, cancel an approved invite, guards',
   group: 'ops',
   async run(ctx) {
-    const groupId = ctx.group('ops').groupId;
-    const page = pages(ctx, 'ops');
+    const key = await freshGroup('ops');
+    const groupId = ctx.group(key).groupId;
+    const page = pages(ctx, key);
     const A = (l) => ctx.account(l).address;
     const rows = async () => (await ctx.get(`/groups/members/${groupId}?onlyAdmins=true&limit=100`)).adminCount;
     ctx.record('adminRowsAtStart', await rows());

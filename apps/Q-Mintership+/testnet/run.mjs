@@ -96,12 +96,12 @@ function makeContext(browser, scenario, results) {
     },
     /** Answer as Hub would for `as`, outside the app (setup steps). */
     hub: (as, request) => hubRequest(account(as), request),
-    /** Queue Hub behaviours for `as`'s next dialog: decline, timeout, decodeError. */
-    async behaviour(as, mode, extra = {}) {
+    /** Queue Hub behaviours for `as`'s next dialog in `extra.group` (default: the scenario's): decline, timeout, decodeError. */
+    async behaviour(as, mode, { group = scenario.group, ...extra } = {}) {
       await fetch(`${BASE}/qmp-testnet-control/behaviour`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ as, mode, ...extra }),
+        body: JSON.stringify({ as, group, mode, ...extra }),
       });
     },
     async signerLog(since) {

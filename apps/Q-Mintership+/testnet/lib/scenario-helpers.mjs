@@ -1,6 +1,18 @@
 /**
  * Small helpers the testnet scenarios share (dev-only).
  */
+import { GROUPS } from './groups.mjs';
+import { makeGroup } from './world.mjs';
+
+/**
+ * A fresh copy of a standard group for this run (scenarios that kick, ban or
+ * change admins leave their group changed): returns its world key.
+ */
+export async function freshGroup(base, spec = GROUPS[base]) {
+  const key = `${base}-${Date.now().toString(36)}`;
+  await makeGroup(key, spec);
+  return key;
+}
 
 /** One browser page per test account, opened once per scenario. */
 export function pages(ctx, group) {

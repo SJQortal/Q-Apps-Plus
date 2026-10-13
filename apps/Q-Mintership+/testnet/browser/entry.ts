@@ -44,7 +44,7 @@ async function start(): Promise<void> {
     const res = await fetch('/qmp-testnet-signer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ as, request }),
+      body: JSON.stringify({ as, group: groupKey, request }),
     });
     const body = (await res.json()) as { ok: boolean; result?: unknown; error?: unknown };
     if (body.ok) return body.result;

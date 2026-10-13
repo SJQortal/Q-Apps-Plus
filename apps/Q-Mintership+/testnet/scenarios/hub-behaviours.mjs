@@ -3,7 +3,7 @@
  * nothing; a 30-second timeout with a late Accept is found by the lookup and
  * never sent twice.
  */
-import { pages, sign } from '../lib/scenario-helpers.mjs';
+import { freshGroup, pages, sign } from '../lib/scenario-helpers.mjs';
 
 async function approvalsBy(ctx, publicKey, pendingSignature, fromHeight) {
   const unconfirmed = await ctx.get(`/transactions/unconfirmed?txType=GROUP_APPROVAL&creator=${publicKey}&limit=50`).catch(() => []);
@@ -18,7 +18,9 @@ export default {
   title: 'Decline, decode error, and a 30 s timeout with a late accept (found, no duplicate)',
   group: 'main',
   async run(ctx) {
-    const page = pages(ctx, 'main');
+    // Its own copy of the main group: other scenarios sign as the same admins at the same time.
+    const key = await freshGroup('main');
+    const page = pages(ctx, key);
     const [label] = await ctx.fresh('hb-', 1, '1');
     const first = await (await page('admin06')).flow('firstSignature', ctx.account(label).address);
     ctx.expect(first.invite.status === 'sent', 'a decision to sign', first);
@@ -27,19 +29,19 @@ export default {
     const admin = ctx.account('admin03');
     const signer = await page('admin03');
 
-    await ctx.behaviour('admin03', 'decline', { action: 'SIGN_TRANSACTION' });
+    await ctx.behaviour('admin03', 'decline', { group: key, action: 'SIGN_TRANSACTION' });
     const declined = await signer.flow('signDecision', sig);
     ctx.record('decline', declined);
     ctx.expect(declined.status === 'declined', 'a decline is a cancel, not an error');
     ctx.expect((await approvalsBy(ctx, admin.publicKey, sig, start)).length === 0, 'after a decline nothing was sent');
 
-    await ctx.behaviour('admin03', 'decodeError', { action: 'SIGN_TRANSACTION' });
+    await ctx.behaviour('admin03', 'decodeError', { group: key, action: 'SIGN_TRANSACTION' });
     const decode = await signer.flow('signDecision', sig);
     ctx.record('decodeError', decode);
     ctx.expect(decode.status === 'failed', "Hub's generic decode error is reported", decode);
     ctx.expect((await approvalsBy(ctx, admin.publicKey, sig, start)).length === 0, 'after the decode error nothing was sent');
 
-    await ctx.behaviour('admin03', 'timeout', { action: 'SIGN_TRANSACTION', lateMs: 40_000 });
+    await ctx.behaviour('admin03', 'timeout', { group: key, action: 'SIGN_TRANSACTION', lateMs: 40_000 });
     const t0 = Date.now();
     const timedOut = await signer.flow('signDecision', sig);
     ctx.record('timeout', { status: timedOut.status, recovered: timedOut.recovered, seconds: Math.round((Date.now() - t0) / 1000) });
@@ -53,7 +55,7 @@ export default {
     ctx.expect(rows.length === 1, 'exactly one signature: no duplicate');
 
     // A two-step proposal declined at step 2: the proposal waits, unsigned by its proposer.
-    await ctx.behaviour('admin07', 'decline', { action: 'SIGN_TRANSACTION' });
+    await ctx.behaviour('admin07', 'decline', { group: key, action: 'SIGN_TRANSACTION' });
     const [kickLabel] = await ctx.fresh('hb-k-', 1, '1');
     const join = await (await page(kickLabel)).flow('joinMinter');
     ctx.expect(join.status === 'sent', 'a join request to decline later', join);

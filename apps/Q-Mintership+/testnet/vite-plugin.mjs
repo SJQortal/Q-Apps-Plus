@@ -22,7 +22,7 @@ import { signerRequestRefusal } from './lib/request-guard.mjs';
 
 const HUB_TIMEOUT_MS = 30_000;
 
-/** Per account: queued Hub behaviours for its next dialogs. */
+/** Per account and group ("as@group"): queued Hub behaviours for its next dialogs. */
 const behaviours = new Map();
 /** What the signer did, newest last (no keys, no payload bodies). */
 const log = [];
@@ -54,7 +54,7 @@ function nextBehaviour(as, action) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function signer(req, res) {
-  const { as, request } = JSON.parse(await readBody(req));
+  const { as, group, request } = JSON.parse(await readBody(req));
   let who;
   try {
     who = account(as);
@@ -62,7 +62,7 @@ async function signer(req, res) {
     return sendJson(res, 200, { ok: false, error: hubError(`No test account "${as}"`) });
   }
   const action = request?.action;
-  const behaviour = nextBehaviour(as, action);
+  const behaviour = nextBehaviour(`${as}@${group ?? ''}`, action);
   const entry = { at: Date.now(), as, action, mode: behaviour.mode, outcome: 'pending' };
   log.push(entry);
   const run = (beforeAccept) =>
@@ -114,9 +114,10 @@ async function control(req, res, url) {
   }
   if (url.pathname === '/qmp-testnet-control/behaviour' && req.method === 'POST') {
     const body = JSON.parse(await readBody(req));
-    const queue = behaviours.get(body.as) ?? [];
+    const key = `${body.as}@${body.group ?? ''}`;
+    const queue = behaviours.get(key) ?? [];
     queue.push({ mode: body.mode, action: body.action, lateMs: body.lateMs, timeoutMs: body.timeoutMs });
-    behaviours.set(body.as, queue);
+    behaviours.set(key, queue);
     return sendJson(res, 200, { queued: queue.length });
   }
   if (url.pathname === '/qmp-testnet-control/behaviour/clear' && req.method === 'POST') {

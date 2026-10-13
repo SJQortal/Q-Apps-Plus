@@ -13,7 +13,7 @@
  * - Links: /decisions/<signature> (waiting and decided), the old
  *   /decisions?d=<signature>, and /nominations/<address>.
  */
-import { decided, isAdmin, pages, sign } from '../lib/scenario-helpers.mjs';
+import { decided, freshGroup, isAdmin, pages, sign } from '../lib/scenario-helpers.mjs';
 import { NULL_OWNER } from '../lib/world.mjs';
 
 export default {
@@ -21,8 +21,9 @@ export default {
   title: 'Admin-change rules (become, propose another, step down, guards), comments, shareable links',
   group: 'rules',
   async run(ctx) {
-    const groupId = ctx.group('rules').groupId;
-    const page = pages(ctx, 'rules');
+    const key = await freshGroup('rules');
+    const groupId = ctx.group(key).groupId;
+    const page = pages(ctx, key);
     const A = (l) => ctx.account(l).address;
     const rows = async () => (await ctx.get(`/groups/members/${groupId}?onlyAdmins=true&limit=100`)).adminCount;
     const needed = async () => Math.ceil(((await rows()) * 40) / 100);
@@ -140,10 +141,10 @@ export default {
     ctx.expect(JSON.stringify(thread.bodies).includes('"replyTo"'), 'the reply points at its comment');
 
     // Links.
-    const viewer = await ctx.open('nom12', { group: 'rules', route: `/decisions/${encodeURIComponent(becomeSig)}` });
+    const viewer = await ctx.open('nom12', { group: key, route: `/decisions/${encodeURIComponent(becomeSig)}` });
     await viewer.page.getByText(/Decided|Approved/).first().waitFor({ timeout: 60_000 });
     ctx.check(true, 'a decided decision opens on its own page');
-    const old = await ctx.open('nom12', { group: 'rules', route: `/decisions?d=${encodeURIComponent(becomeSig)}` });
+    const old = await ctx.open('nom12', { group: key, route: `/decisions?d=${encodeURIComponent(becomeSig)}` });
     await old.page.waitForURL(new RegExp(`/decisions/${becomeSig.slice(0, 20)}`), { timeout: 30_000 });
     ctx.check(true, 'an old /decisions?d= link opens the decision page');
     const [newcomer] = await ctx.fresh('rl-', 1, '1');
@@ -153,7 +154,7 @@ export default {
       links: [],
     });
     ctx.expect(nomination.status === 'sent', 'a nomination to link to', nomination);
-    const np = await ctx.open('nom11', { group: 'rules', route: `/nominations/${A(newcomer)}` });
+    const np = await ctx.open('nom11', { group: key, route: `/nominations/${A(newcomer)}` });
     await np.page.getByText(/careful node runner/).first().waitFor({ timeout: 5 * 60_000 });
     ctx.check(true, 'the nomination opens on its own page with its reason');
     ctx.check([viewer, old, np].every((v) => v.errors.length === 0), 'no console errors on the link pages', [viewer, old, np].map((v) => v.errors.slice(0, 2)));

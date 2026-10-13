@@ -12,14 +12,15 @@
  * C  Considering on D: published (with a note), cleared, published again,
  *    then superseded once the same admin signs.
  */
-import { appDecision, decided, pages, sign } from '../lib/scenario-helpers.mjs';
+import { appDecision, decided, freshGroup, pages, sign } from '../lib/scenario-helpers.mjs';
 
 export default {
   name: 'reject',
   title: 'Reject, Withdraw (sign, withdraw, sign again), rejections reaching the target, a tie',
   group: 'reject',
   async run(ctx) {
-    const page = pages(ctx, 'reject');
+    const key = await freshGroup('reject');
+    const page = pages(ctx, key);
     const [n1, n2, n3] = await ctx.fresh('rj-', 3, '1');
     const A = (l) => ctx.account(l).address;
     const flow = async (label, name, ...args) => (await page(label)).flow(name, ...args);

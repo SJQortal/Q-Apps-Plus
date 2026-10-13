@@ -10,12 +10,15 @@
  * and D1 and D2 apply with no new signature: one in the same block as R, the
  * other in the next, depending on the order Core evaluates them in.
  */
+import { freshGroup } from '../lib/scenario-helpers.mjs';
+
 export default {
   name: 'shift',
   title: 'Admin-count trap: an admin removal lowers the target and two removals apply with no new signature',
   group: 'shift',
   async run(ctx) {
-    const groupId = ctx.group('shift').groupId;
+    const key = await freshGroup('shift');
+    const groupId = ctx.group(key).groupId;
     const jonny = ctx.account('mem09');
     const other = ctx.account('mem10');
     const leaving = ctx.account('admin25');
@@ -24,7 +27,7 @@ export default {
     ctx.expect(admins0.adminCount === 13, '13 admin rows (12 admins and the null owner): 6 needed');
 
     const page = {};
-    const open = async (label) => (page[label] ??= await ctx.open(label, { group: 'shift' }));
+    const open = async (label) => (page[label] ??= await ctx.open(label, { group: key }));
 
     // Proposes (with the proposer's own signature) and adds signatures until `count`.
     const propose = async (proposer, proposal, signers) => {
