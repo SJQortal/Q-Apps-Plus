@@ -24,6 +24,7 @@ export function SignDialog({
   onClose,
   impact,
   labelOf,
+  returnFocus,
 }: {
   decision: Decision | null;
   signer: Signer | null;
@@ -31,6 +32,8 @@ export function SignDialog({
   /** An admin change: what it does to the target if it passes. */
   impact?: ShiftScenario | null;
   labelOf?: LabelOf;
+  /** Where focus goes on close when the card that opened it is gone. */
+  returnFocus?: () => HTMLElement | null;
 }) {
   const subject = useDisplayName(d?.subject ?? '', d?.subject ? undefined : null);
   const shift = impact && labelOf ? impact : null;
@@ -42,6 +45,7 @@ export function SignDialog({
     <HubStepDialog
       open={Boolean(d && signer)}
       onClose={onClose}
+      returnFocus={returnFocus}
       title="Sign this decision"
       intro={
         d ? (

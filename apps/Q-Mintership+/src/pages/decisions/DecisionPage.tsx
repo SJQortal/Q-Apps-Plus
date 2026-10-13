@@ -10,7 +10,7 @@
  * and, for an invite, that person's nomination; once decided, its own
  * signatures and the admins' names.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { Alert, Box, Button, Typography } from '@mui/material';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
@@ -49,12 +49,17 @@ import { CommentsSection } from '../../components/comments/CommentsSection';
 import { commentTarget } from '../../data/commentThread';
 import { RejectDialog, type RejectMode } from './RejectDialog';
 import type { LabelOf } from './targetShiftUi';
+import type { ShiftScenario } from '../../rules/targetShift';
+import { decisionCardId } from './decisionUi';
 import { impactIn, riskIn, useShift } from './useShift';
 import type { ConsideringRequest } from '../../components/decision/Considering';
 import { ConsideringDialog } from '../../components/decision/ConsideringDialog';
 import { peekQuery } from '../../data/query';
 import { signerOf } from '../../state/session';
 import { displayName } from '../../utils/format';
+
+/** The card's section heading (Section id "decision-card"), waiting or decided. */
+const CARD_HEADING_ID = 'decision-card-title';
 
 /** The section a waiting decision's card sits in (one that ended sits in "Decided"). */
 const NOT_DECIDED = 'Not decided yet';
@@ -75,6 +80,25 @@ export default function DecisionPage() {
   const { refetch } = link;
   const reread = useCallback(() => void refetch(), [refetch]);
 
+  // Decided while the page is open: the card swaps for how it ended. Say so,
+  // and when focus went with the old card, put it on the section's heading.
+  const [said, setSaid] = useState('');
+  const prevKind = useRef(data?.kind);
+  useEffect(() => {
+    const before = prevKind.current;
+    prevKind.current = data?.kind;
+    if (before !== 'pending' || data?.kind !== 'decided') return;
+    setSaid(`This decision has ended: ${OUTCOME_LABEL[data.outcome]}.`);
+    const active = document.activeElement;
+    if (!active || active === document.body || !active.isConnected) {
+      const heading = document.getElementById(CARD_HEADING_ID);
+      if (heading) {
+        if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+        heading.focus();
+      }
+    }
+  }, [data]);
+
   return (
     <>
       <PageHeader
@@ -90,6 +114,9 @@ export default function DecisionPage() {
         }
       />
       <PageBody>
+        <Box role="status" className="qmp-visually-hidden">
+          {said}
+        </Box>
         {!signature ? (
           <Unknown />
         ) : link.isError && !data ? (
@@ -105,6 +132,7 @@ export default function DecisionPage() {
             link={data}
             signature={signature}
             linkLoadedAt={link.updatedAt}
+            linkError={link.isError}
             reread={reread}
           />
         )}
@@ -148,58 +176,150 @@ function AdminsOnly() {
   );
 }
 
+/** A Sign dialog's decision, with what it does to the target as the queue was when it opened. */
+interface SignTarget {
+  decision: Decision;
+  impact: ShiftScenario | null;
+  labelOf: LabelOf;
+}
+
+/** The waiting card's dialogs, opened from PendingView and kept by LinkView. */
+interface DialogOpeners {
+  sign: (target: SignTarget) => void;
+  reject: (decision: Decision, mode: RejectMode) => void;
+  consider: (request: ConsideringRequest) => void;
+}
+
+/** After a dialog, focus goes back to the card, or its section's heading once it has changed. */
+function cardOrHeading(signature: string): () => HTMLElement | null {
+  return () => {
+    const card = document.getElementById(decisionCardId(signature));
+    return card?.isConnected ? card : document.getElementById(CARD_HEADING_ID);
+  };
+}
+
 function LinkView({
   link,
   signature,
   linkLoadedAt,
+  linkError,
   reread,
 }: {
   link: DecisionLink;
   signature: string;
   linkLoadedAt: number;
+  linkError: boolean;
   reread: () => void;
 }) {
   const session = useSession();
   const admins = useAdmins();
   const chain = useChainNow();
+  // The dialogs live here, not with the waiting card: a decision decided while
+  // one is open swaps the card out, and the dialog (maybe mid-way) stays.
+  const [signTarget, setSignTarget] = useState<SignTarget | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<{ decision: Decision; mode: RejectMode } | null>(
+    null
+  );
+  const [considerRequest, setConsiderRequest] = useState<ConsideringRequest | null>(null);
+  const openers: DialogOpeners = useMemo(
+    () => ({
+      sign: setSignTarget,
+      reject: (decision, mode) => setRejectTarget({ decision, mode }),
+      consider: setConsiderRequest,
+    }),
+    []
+  );
+  const ready = session.status === 'ready';
+  // Stable while the account is the same, so dialogs don't re-run their checks on every render.
+  const signer: Signer | null = useMemo(
+    () => (ready ? { address: session.address, publicKey: session.publicKey } : null),
+    [ready, session.address, session.publicKey]
+  );
+  const returnFocus = cardOrHeading(signature);
+  const dialogs = (
+    <>
+      <SignDialog
+        decision={signTarget?.decision ?? null}
+        signer={signer}
+        onClose={() => setSignTarget(null)}
+        impact={signTarget?.impact ?? null}
+        labelOf={signTarget?.labelOf}
+        returnFocus={returnFocus}
+      />
+      <RejectDialog
+        decision={rejectTarget?.decision ?? null}
+        mode={rejectTarget?.mode ?? 'reject'}
+        signer={signer}
+        onClose={() => setRejectTarget(null)}
+        returnFocus={returnFocus}
+      />
+      <ConsideringDialog
+        request={considerRequest}
+        signer={signerOf(session)}
+        onClose={() => setConsiderRequest(null)}
+        returnFocus={returnFocus}
+      />
+    </>
+  );
   const viewerIsAdmin = Boolean(
     session.status === 'ready' && admins.data?.admins.some((a) => a.member === session.address)
   );
-  if (link.kind === 'unknown') return <Unknown />;
-  if (link.kind === 'other') return <NotShownHere tx={link.tx} />;
-  if (link.kind === 'unusual') {
+
+  let content: ReactNode;
+  if (link.kind === 'unknown') content = <Unknown />;
+  else if (link.kind === 'other') content = <NotShownHere tx={link.tx} />;
+  else if (link.kind === 'unusual') {
     // Listed for Minter Admins only, as in the queue.
-    if (!admins.data && admins.isLoading) return <CardSkeleton lines={2} />;
-    if (!viewerIsAdmin) return <AdminsOnly />;
-    return (
-      <Section title={NOT_DECIDED} id="decision-card">
-        <UnusualView tx={link.tx} />
-      </Section>
+    content =
+      !admins.data && admins.isLoading ? (
+        <CardSkeleton lines={2} />
+      ) : !viewerIsAdmin ? (
+        <AdminsOnly />
+      ) : (
+        <Section title={NOT_DECIDED} id="decision-card">
+          <UnusualView tx={link.tx} />
+        </Section>
+      );
+  } else if (link.kind === 'pending')
+    content = (
+      <PendingView
+        tx={link.tx}
+        signature={signature}
+        since={linkLoadedAt}
+        linkError={linkError}
+        reread={reread}
+        open={openers}
+      />
+    );
+  else {
+    const adminNames = new Map<string, string | null>(
+      (admins.data?.admins ?? []).map((a) => [a.member, a.primaryName ?? null])
+    );
+    content = (
+      <>
+        <Section title="Decided" id="decision-card">
+          {chain.data ? (
+            <DecidedCard link={link} now={chain.data} adminNames={adminNames} />
+          ) : (
+            <CardSkeleton lines={4} />
+          )}
+        </Section>
+        <MoreLinks tx={link.tx} />
+        <Section title="Comments" id="decision-comments">
+          <CommentsSection
+            target={commentTarget('decision', signature, link.tx.timestamp - 60_000)}
+            label="this decision"
+            defaultOpen
+            variant="plain"
+          />
+        </Section>
+      </>
     );
   }
-  if (link.kind === 'pending')
-    return <PendingView tx={link.tx} signature={signature} since={linkLoadedAt} reread={reread} />;
-  const adminNames = new Map<string, string | null>(
-    (admins.data?.admins ?? []).map((a) => [a.member, a.primaryName ?? null])
-  );
   return (
     <>
-      <Section title="Decided" id="decision-card">
-        {chain.data ? (
-          <DecidedCard link={link} now={chain.data} adminNames={adminNames} />
-        ) : (
-          <CardSkeleton lines={4} />
-        )}
-      </Section>
-      <MoreLinks tx={link.tx} />
-      <Section title="Comments" id="decision-comments">
-        <CommentsSection
-          target={commentTarget('decision', signature, link.tx.timestamp - 60_000)}
-          label="this decision"
-          defaultOpen
-          variant="plain"
-        />
-      </Section>
+      {content}
+      {dialogs}
     </>
   );
 }
@@ -246,13 +366,18 @@ function PendingView({
   tx,
   signature,
   since,
+  linkError,
   reread,
+  open,
 }: {
   tx: TxRow;
   signature: string;
   /** When the link was read: a queue read after it that no longer lists it means it was decided. */
   since: number;
+  /** Reading the decision again (to see how it ended) failed. */
+  linkError: boolean;
   reread: () => void;
+  open: DialogOpeners;
 }) {
   const session = useSession();
   const queue = useDecisions();
@@ -262,11 +387,6 @@ function PendingView({
   const membership = useQuery(subject ? `membership:${subject}` : null, (force) =>
     getMembership(subject as string, { force })
   );
-  const [signTarget, setSignTarget] = useState<Decision | null>(null);
-  const [rejectTarget, setRejectTarget] = useState<{ decision: Decision; mode: RejectMode } | null>(
-    null
-  );
-  const [considerRequest, setConsiderRequest] = useState<ConsideringRequest | null>(null);
   const ready = session.status === 'ready';
   const signer: Signer | null = useMemo(
     () => (ready ? { address: session.address, publicKey: session.publicKey } : null),
@@ -280,10 +400,12 @@ function PendingView({
   const shift = useShift(data, membersQ.data);
   const decision = data?.decisions.find((d) => d.signature === signature) ?? null;
   const gone = Boolean(data && !decision && data.loadedAt > since);
-  // The queue no longer lists it: read it again, to show how it ended.
+  // The queue no longer lists it: read it again, to show how it ended (again
+  // with each newer queue read, so a failed read doesn't leave it stuck).
+  const queueLoadedAt = data?.loadedAt;
   useEffect(() => {
     if (gone) reread();
-  }, [gone, reread]);
+  }, [gone, queueLoadedAt, reread]);
 
   if (!data) {
     if (queue.isError)
@@ -299,7 +421,21 @@ function PendingView({
   if (!decision)
     return (
       <Section title={NOT_DECIDED} id="decision-card">
-        <NotInQueue tx={tx} />
+        {!gone ? (
+          <NotInQueue tx={tx} />
+        ) : linkError ? (
+          <ErrorState
+            compact
+            title="It’s no longer waiting, but how it ended couldn’t be read."
+            onRetry={reread}
+          />
+        ) : (
+          <Card role="status">
+            <Typography variant="body2" color="text.secondary">
+              No longer waiting. Checking how it ended…
+            </Typography>
+          </Card>
+        )}
       </Section>
     );
 
@@ -349,10 +485,10 @@ function PendingView({
           onRetryNominations={() => void nominations.refetch()}
           adminNames={adminNames}
           subjectFacts={facts}
-          onSign={setSignTarget}
-          onReject={(d) => setRejectTarget({ decision: d, mode: 'reject' })}
-          onWithdraw={(d) => setRejectTarget({ decision: d, mode: 'withdraw' })}
-          onConsider={setConsiderRequest}
+          onSign={(d) => open.sign({ decision: d, impact: impactIn(shift, d), labelOf })}
+          onReject={(d) => open.reject(d, 'reject')}
+          onWithdraw={(d) => open.reject(d, 'withdraw')}
+          onConsider={open.consider}
           impact={impactIn(shift, decision)}
           risk={riskIn(shift, decision)}
           labelOf={labelOf}
@@ -361,24 +497,6 @@ function PendingView({
         />
       </Section>
       <MoreLinks tx={tx} />
-      <SignDialog
-        decision={signTarget}
-        signer={signer}
-        onClose={() => setSignTarget(null)}
-        impact={signTarget ? impactIn(shift, signTarget) : null}
-        labelOf={labelOf}
-      />
-      <RejectDialog
-        decision={rejectTarget?.decision ?? null}
-        mode={rejectTarget?.mode ?? 'reject'}
-        signer={signer}
-        onClose={() => setRejectTarget(null)}
-      />
-      <ConsideringDialog
-        request={considerRequest}
-        signer={signerOf(session)}
-        onClose={() => setConsiderRequest(null)}
-      />
     </>
   );
 }

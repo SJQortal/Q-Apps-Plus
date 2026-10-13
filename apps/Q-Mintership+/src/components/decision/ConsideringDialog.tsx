@@ -17,10 +17,13 @@ export function ConsideringDialog({
   request,
   signer,
   onClose,
+  returnFocus,
 }: {
   request: ConsideringRequest | null;
   signer: (Signer & { name: string | null }) | null;
   onClose: () => void;
+  /** Where focus goes on close when the card that opened it is gone. */
+  returnFocus?: () => HTMLElement | null;
 }) {
   const [note, setNote] = useState('');
   // A note belongs to one decision or nomination: start empty when the target
@@ -42,6 +45,7 @@ export function ConsideringDialog({
     <HubStepDialog
       open={Boolean(request && signer)}
       onClose={onClose}
+      returnFocus={returnFocus}
       title={clear ? 'No longer considering' : 'Mark as considering'}
       intro={
         request ? (

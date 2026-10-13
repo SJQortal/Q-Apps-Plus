@@ -4,13 +4,14 @@
  * ended, who signed), plus old /decisions?d= links.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
 import { HubThemeProvider } from '../../hub-theme';
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme';
 import { renderPage } from '../../test/render';
 import { fetchCalls } from '../../test/setup';
-import { ADDR, addOtherPending, type InstalledWorld } from '../../test/world';
+import { ADDR, TIP, addOtherPending, type InstalledWorld } from '../../test/world';
+import { invalidate } from '../../data/query';
 import { addDecidedSignatures } from '../../../e2e/world.mjs';
 import DecisionPage from './DecisionPage';
 import DecisionsPage from './DecisionsPage';
@@ -85,6 +86,60 @@ describe('A decision’s own page: still waiting', () => {
     expect(
       await within(card).findByRole('button', { name: /^No longer considering: / }, T)
     ).toBeVisible();
+  });
+
+  it('says how it ended when it is decided while open, and keeps focus on the page', async () => {
+    const { world } = await open('admin', pendingOf('GROUP_KICK'));
+    const card = await screen.findByRole('article', { name: 'Remove from MINTER, Kai Target' }, T);
+    act(() => card.focus());
+    expect(card).toHaveFocus();
+    // Core approves it: the queue no longer lists it, and its transaction says so.
+    const at = world.pending.findIndex((t: { type: string }) => t.type === 'GROUP_KICK');
+    const [kick] = world.pending.splice(at, 1);
+    world.decided.push({ ...kick, approvalStatus: 'APPROVED', approvalHeight: TIP });
+    vi.setSystemTime(Date.now() + 60_000);
+    act(() => {
+      invalidate('pending:');
+      invalidate('decisions:');
+    });
+    await waitFor(
+      () =>
+        expect(
+          screen
+            .getAllByRole('status')
+            .some((el) => el.textContent === 'This decision has ended: Approved.')
+        ).toBe(true),
+      T
+    );
+    expect(screen.getByRole('heading', { name: 'Decided' })).toHaveFocus();
+    expect(screen.queryByText(/doesn’t list it yet/)).toBeNull();
+  });
+
+  it('keeps an open dialog through the swap when it is decided meanwhile', async () => {
+    const user = (await import('@testing-library/user-event')).default.setup();
+    const { world } = await open('admin', pendingOf('GROUP_KICK'));
+    const card = await screen.findByRole('article', { name: 'Remove from MINTER, Kai Target' }, T);
+    await user.click(within(card).getByRole('button', { name: /^Reject: Remove from MINTER/ }));
+    const dialog = await screen.findByRole('dialog', {}, T);
+    const at = world.pending.findIndex((t: { type: string }) => t.type === 'GROUP_KICK');
+    const [kick] = world.pending.splice(at, 1);
+    world.decided.push({ ...kick, approvalStatus: 'APPROVED', approvalHeight: TIP });
+    vi.setSystemTime(Date.now() + 60_000);
+    act(() => {
+      invalidate('pending:');
+      invalidate('decisions:');
+    });
+    await waitFor(
+      () =>
+        expect(
+          screen
+            .getAllByRole('status', { hidden: true })
+            .some((el) => el.textContent === 'This decision has ended: Approved.')
+        ).toBe(true),
+      T
+    );
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBe(dialog);
   });
 
   it('is read-only for everyone else, and an invite links to its nomination', async () => {

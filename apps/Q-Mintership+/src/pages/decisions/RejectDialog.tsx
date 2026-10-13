@@ -44,11 +44,14 @@ export function RejectDialog({
   mode,
   signer,
   onClose,
+  returnFocus,
 }: {
   decision: Decision | null;
   mode: RejectMode;
   signer: Signer | null;
   onClose: () => void;
+  /** Where focus goes on close when the card that opened it is gone. */
+  returnFocus?: () => HTMLElement | null;
 }) {
   const subject = useDisplayName(d?.subject ?? '', d?.subject ? undefined : null);
   const who = d?.subject ? subject.label : 'an approved invite (Core doesn’t say for whom)';
@@ -60,6 +63,7 @@ export function RejectDialog({
     <HubStepDialog
       open={Boolean(d && signer)}
       onClose={onClose}
+      returnFocus={returnFocus}
       title={text.title}
       intro={
         d ? (
