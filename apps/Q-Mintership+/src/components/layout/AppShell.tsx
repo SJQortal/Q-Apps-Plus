@@ -9,6 +9,7 @@ import { useApplyMotionSetting } from '../../hooks/useReducedMotion';
 import { BOTTOM_NAV_VAR, usePublishOffset } from '../../hooks/useOverlayPadding';
 import { useDecisions, useMyStatus } from '../../hooks/useData';
 import { useRecordVisit } from '../../hooks/useLastVisit';
+import { useScrollTopOnNewPage } from '../../hooks/useScrollTopOnNewPage';
 import { useSettleConfirmingWrites } from '../../hooks/useSettleConfirmingWrites';
 import { notifyHubDisplayedPath } from '../../routes/hubLocation';
 import { useLegacyRouteRedirect } from '../../routes/useLegacyRouteRedirect';
@@ -71,6 +72,7 @@ export function AppShell() {
   useHubMessages();
   useLegacyRouteRedirect();
   useTrackInAppHistory();
+  useScrollTopOnNewPage();
   useAppViewport();
   useApplyMotionSetting();
   useRecordVisit();
