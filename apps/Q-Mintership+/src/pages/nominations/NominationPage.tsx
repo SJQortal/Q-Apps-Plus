@@ -230,6 +230,7 @@ function CurrentActions({
       hasJoinRequest: viewer.hasJoinRequest || n.hasJoinRequest,
       storedInvite: Boolean(viewer.storedInvite) || n.hasStoredInvite,
       state: isOpenState(n.state) ? n.state : null,
+      rejectedEnd: n.decision?.phase === 'rejectedMet',
     });
     return step ? (
       <NomineeAction

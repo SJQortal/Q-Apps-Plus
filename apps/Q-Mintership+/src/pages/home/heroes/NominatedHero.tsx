@@ -73,7 +73,8 @@ export function NominatedHero({
   const supporters = n.supporters.map((s) => s.publisher);
   const proposer = by ? null : (n.decision?.creatorAddress ?? null);
   const feeQort = fee.data?.qort ?? 0.01;
-  const short = !accepted && balance.data !== undefined && balance.data < feeQort;
+  // Nothing to accept once enough Minter Admins have rejected it.
+  const short = !accepted && !rejectedEnd && balance.data !== undefined && balance.data < feeQort;
   const inFlight = tally ? tally.inFlight.filter((d) => d.approval).length : 0;
   const name = status.name;
 
@@ -116,7 +117,7 @@ export function NominatedHero({
         }
         actions={
           <>
-            {accepted ? null : (
+            {accepted || rejectedEnd ? null : (
               <Button
                 variant="contained"
                 startIcon={<HowToRegOutlinedIcon />}
@@ -233,9 +234,9 @@ export function NominatedHero({
           <Typography role="status" sx={{ fontWeight: 700, color: readable('success') }}>
             {READY_DONE}
             {confirming ? ' (confirming…)' : ''}
-            {met ? '' : `: ${READY_DONE_NEXT}`}
+            {met || rejectedEnd ? '' : `: ${READY_DONE_NEXT}`}
           </Typography>
-        ) : (
+        ) : rejectedEnd ? null : (
           <HeroText>
             Accept now so you join the moment you&rsquo;re approved. It sends a join request to
             MINTER, with a <Num>{formatQort(feeQort)}</Num> fee.

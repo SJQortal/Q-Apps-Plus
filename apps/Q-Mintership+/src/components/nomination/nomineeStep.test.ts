@@ -25,6 +25,13 @@ describe("the nominee's next step", () => {
     expect(nomineeStep({ ...base, state: null, storedInvite: true })).toBe('join');
   });
 
+  it('is nothing once enough Minter Admins have rejected it, Join only after an approval', () => {
+    const rejected = { ...base, state: 'signing' as const, rejectedEnd: true };
+    expect(nomineeStep(rejected)).toBeNull();
+    expect(nomineeStep({ ...rejected, hasJoinRequest: true })).toBeNull();
+    expect(nomineeStep({ ...rejected, storedInvite: true })).toBe('join');
+  });
+
   it('is nothing for members, banned accounts, or without an open nomination', () => {
     expect(nomineeStep({ ...base, isMember: true, storedInvite: true })).toBeNull();
     expect(nomineeStep({ ...base, activeBan: true, state: 'blocked' })).toBeNull();

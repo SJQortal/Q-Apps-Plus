@@ -118,6 +118,7 @@ export default function NominationsPage() {
           hasJoinRequest: status.hasJoinRequest || Boolean(own?.hasJoinRequest),
           storedInvite: Boolean(status.storedInvite) || Boolean(own?.hasStoredInvite),
           state: own?.state ?? null,
+          rejectedEnd: own?.decision?.phase === 'rejectedMet',
         })
       : null;
   const showOwn = Boolean(own) || step === 'join';

@@ -198,6 +198,7 @@ function PersonView({ address }: { address: string }) {
         hasJoinRequest: person.hasJoinRequest || Boolean(open?.hasJoinRequest),
         storedInvite: Boolean(person.storedInvite) || Boolean(open?.hasStoredInvite),
         state: open?.state ?? null,
+        rejectedEnd: open?.decision?.phase === 'rejectedMet',
       })
     : null;
   const nomineeAction = step ? (
