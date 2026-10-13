@@ -129,7 +129,13 @@ export function isUnusualApprovalRoute(tx: Pick<TxRow, 'type' | 'groupId' | 'txG
   return tx.txGroupId !== MINTER_GROUP_ID && tx.txGroupId !== 0;
 }
 
-export type DecisionPhase = WindowPhase | 'unconfirmed' | 'thresholdMet';
+/**
+ * Where a decision stands: its window phase, or still unconfirmed, or
+ * decided by the count already (Core applies it, or ends it as rejected, in
+ * its next decision block). Signatures are checked first, so a decision with
+ * enough of both is `thresholdMet`.
+ */
+export type DecisionPhase = WindowPhase | 'unconfirmed' | 'thresholdMet' | 'rejectedMet';
 
 export interface Decision {
   signature: string;
@@ -146,9 +152,10 @@ export interface Decision {
   window: DecisionWindow | null;
   phase: DecisionPhase;
   /**
-   * With enough signatures: the block Core applies it in. The next block,
-   * or its earliest decision block when that is later (a decision is never
-   * applied before h + minimumBlockDelay + 1). Null otherwise.
+   * With enough signatures: the block Core applies it in (with enough
+   * rejections: the block Core ends it as rejected). The next block, or its
+   * earliest decision block when that is later (a decision is never made
+   * before h + minimumBlockDelay + 1). Null otherwise.
    */
   applyAtHeight: number | null;
   /** Null for an unusual approval route (see isUnusualApprovalRoute). */
@@ -191,10 +198,11 @@ export function buildDecision(tx: TxRow, ctx: DecisionContext): Decision {
         totalAdmins: ctx.totalAdmins,
       });
   let phase: DecisionPhase = window ? windowPhase(window, ctx.tipHeight) : 'unconfirmed';
-  if (tally?.met && (phase === 'open' || phase === 'early' || phase === 'tooLate'))
-    phase = 'thresholdMet';
+  const decidable = phase === 'open' || phase === 'early' || phase === 'tooLate';
+  if (decidable && tally?.met) phase = 'thresholdMet';
+  else if (decidable && tally?.rejectedMet) phase = 'rejectedMet';
   const applyAtHeight =
-    phase === 'thresholdMet' && window
+    (phase === 'thresholdMet' || phase === 'rejectedMet') && window
       ? Math.max(ctx.tipHeight + 1, window.earliestDecisionHeight)
       : null;
   return {
@@ -220,6 +228,7 @@ const PHASE_ORDER: Record<DecisionPhase, number> = {
   open: 0,
   early: 0,
   thresholdMet: 1,
+  rejectedMet: 1,
   unconfirmed: 2,
   tooLate: 3,
   expired: 4,

@@ -90,6 +90,12 @@ export function phaseLine(d: Decision, now: ChainNow): string | null {
       return null;
     case 'thresholdMet':
       return `Enough signatures: Core applies it ${whenApplied(d, now)}. Nobody has to do anything else.`;
+    case 'rejectedMet': {
+      const when = whenApplied(d, now);
+      return when === 'in the next block'
+        ? `Enough rejections: Core ends it as rejected in the next block. It can be proposed again.`
+        : `Enough rejections: Core ends it as rejected ${when}, unless it has ${d.tally?.needed ?? 'enough'} signatures by then (signatures are counted first). It can be proposed again.`;
+    }
     case 'tooLate':
       return w
         ? `Too late to sign: the last block a signature could count in has passed. It expires at ${formatBlock(w.expiresAtHeight)}.`

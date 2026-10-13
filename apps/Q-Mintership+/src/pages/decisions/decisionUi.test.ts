@@ -166,3 +166,71 @@ describe('when a decision with enough signatures is applied', () => {
     expect(phaseLine(by(ADDR.met), data.now)).toMatch(/Core applies it in the next block/);
   });
 });
+
+describe('when a decision has enough rejections', () => {
+  const rejectRows = (pending: string, height: number, n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      signature: `r${i}`,
+      pendingSignature: pending,
+      adminPublicKey: `rk${i}`,
+      creatorAddress: `QR${i}`,
+      approval: false,
+      timestamp: 1,
+      blockHeight: height,
+    }));
+
+  it('ends it as rejected in the next block once it can be decided', async () => {
+    const { data, by } = await decisionsAs('admin');
+    const open = by(ADDR.kickTarget); // open, 2 of 8 signatures
+    const ctx = {
+      threshold: data.group.approvalThreshold,
+      totalAdmins: data.admins.adminCount,
+      delays: data.group,
+      tipHeight: data.now.height,
+      approvals: [...data.approvals, ...rejectRows(open.signature, data.now.height, 8)],
+    };
+    const rejected = buildDecision(open.tx, ctx);
+    expect(rejected.phase).toBe('rejectedMet');
+    expect(rejected.applyAtHeight).toBe(data.now.height + 1);
+    expect(phaseLine(rejected, data.now)).toBe(
+      'Enough rejections: Core ends it as rejected in the next block. It can be proposed again.'
+    );
+    expect(canSign(rejected, 'none', null)).toBe(false);
+    // Seven are not enough.
+    const seven = buildDecision(open.tx, {
+      ...ctx,
+      approvals: [...data.approvals, ...rejectRows(open.signature, data.now.height, 7)],
+    });
+    expect(seven.phase).toBe('open');
+  });
+
+  it('says signatures still win while it is just proposed', async () => {
+    const { data, by } = await decisionsAs('admin');
+    const early = by(ADDR.early);
+    const decision = buildDecision(early.tx, {
+      threshold: data.group.approvalThreshold,
+      totalAdmins: data.admins.adminCount,
+      delays: data.group,
+      tipHeight: data.now.height,
+      approvals: rejectRows(early.signature, data.now.height, 8),
+    });
+    expect(decision.phase).toBe('rejectedMet');
+    expect(decision.applyAtHeight).toBe(early.window!.earliestDecisionHeight);
+    expect(phaseLine(decision, data.now)).toMatch(
+      /^Enough rejections: Core ends it as rejected at block [\d,]+ \(in about .+\), unless it has 8 signatures by then \(signatures are counted first\)\./
+    );
+  });
+
+  it('is approved, not rejected, when both reach the target', async () => {
+    const { data, by } = await decisionsAs('admin');
+    const met = by(ADDR.met); // 8 of 8 signatures
+    const decision = buildDecision(met.tx, {
+      threshold: data.group.approvalThreshold,
+      totalAdmins: data.admins.adminCount,
+      delays: data.group,
+      tipHeight: data.now.height,
+      approvals: [...data.approvals, ...rejectRows(met.signature, data.now.height, 8)],
+    });
+    expect(decision.phase).toBe('thresholdMet');
+  });
+});

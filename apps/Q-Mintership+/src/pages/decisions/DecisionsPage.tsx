@@ -72,6 +72,7 @@ const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
   'open',
   'early',
   'thresholdMet',
+  'rejectedMet',
   'unconfirmed',
 ]);
 

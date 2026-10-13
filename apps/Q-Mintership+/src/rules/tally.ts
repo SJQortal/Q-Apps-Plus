@@ -6,7 +6,10 @@
  * - per signer (admin public key) only the latest one counts: the newest
  *   timestamp, then the larger signature on a tie;
  * - `approval: true` is a signature, `approval: false` a rejection. Both are
- *   measured against the same threshold, approvals first.
+ *   measured against the same threshold, approvals first, so a tie is an
+ *   approval. A rejection takes nothing from anyone else's signature.
+ * - Withdrawing a signature is a rejection sent after it: only the latest
+ *   counts, so the signature stops counting and the rejection counts instead.
  *
  * Unconfirmed approvals are shown as "confirming" so the UI can update at
  * once; they count only once they are in a block.
@@ -33,6 +36,11 @@ export interface SignerDecision {
   timestamp: number;
   blockHeight: number | null;
   signature: string;
+  /**
+   * A rejection sent after a confirmed signature of the same admin on this
+   * transaction: a withdrawn signature. Always false for a signature.
+   */
+  withdrew: boolean;
 }
 
 export interface Tally {
@@ -55,14 +63,23 @@ export interface Tally {
   rejectedMet: boolean;
 }
 
-function toDecision(row: ApprovalRow): SignerDecision {
+function toDecision(row: ApprovalRow, confirmed: ApprovalRow[] = []): SignerDecision {
+  const approval = row.approval === true;
   return {
     adminPublicKey: row.adminPublicKey,
     address: row.creatorAddress,
-    approval: row.approval === true,
+    approval,
     timestamp: row.timestamp,
     blockHeight: typeof row.blockHeight === 'number' ? row.blockHeight : null,
     signature: row.signature,
+    withdrew:
+      !approval &&
+      confirmed.some(
+        (earlier) =>
+          earlier.adminPublicKey === row.adminPublicKey &&
+          earlier.approval === true &&
+          isNewerDecision(row, earlier)
+      ),
   };
 }
 
@@ -111,13 +128,13 @@ export function tallyApprovals(params: {
   const approvals: SignerDecision[] = [];
   const rejections: SignerDecision[] = [];
   for (const row of latestConfirmed.values()) {
-    (row.approval ? approvals : rejections).push(toDecision(row));
+    (row.approval ? approvals : rejections).push(toDecision(row, confirmed));
   }
 
   const inFlight: SignerDecision[] = [];
   for (const row of latestPerSigner(unconfirmed).values()) {
     const settled = latestConfirmed.get(row.adminPublicKey);
-    if (!settled || isNewerDecision(row, settled)) inFlight.push(toDecision(row));
+    if (!settled || isNewerDecision(row, settled)) inFlight.push(toDecision(row, confirmed));
   }
 
   // What the count becomes once the in-flight decisions confirm.
@@ -157,4 +174,28 @@ export function signerState(
   if (tally.approvals.some((d) => d.adminPublicKey === adminPublicKey)) return 'signed';
   if (tally.rejections.some((d) => d.adminPublicKey === adminPublicKey)) return 'rejected';
   return 'none';
+}
+
+/**
+ * The confirmed counts once the admin's new decision (`approval`) is in a
+ * block, everything else unchanged: what Withdraw and Reject show.
+ */
+export function countsAfter(
+  tally: Pick<Tally, 'approvals' | 'rejections'>,
+  adminPublicKey: string,
+  approval: boolean
+): { approvals: number; rejections: number } {
+  const others = (list: SignerDecision[]) =>
+    list.filter((d) => d.adminPublicKey !== adminPublicKey).length;
+  return {
+    approvals: others(tally.approvals) + (approval ? 1 : 0),
+    rejections: others(tally.rejections) + (approval ? 0 : 1),
+  };
+}
+
+/** True when the admin's current answer (confirmed or in flight) is a withdrawn signature. */
+export function withdrewSignature(tally: Tally, adminPublicKey: string): boolean {
+  const flying = tally.inFlight.find((d) => d.adminPublicKey === adminPublicKey);
+  if (flying) return flying.withdrew;
+  return tally.rejections.some((d) => d.adminPublicKey === adminPublicKey && d.withdrew);
 }

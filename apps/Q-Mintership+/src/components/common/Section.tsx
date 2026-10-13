@@ -137,6 +137,7 @@ const PHASE_CHIP: Record<DecisionPhase, { label: string; color: ChipProps['color
   early: { label: 'Collecting signatures', color: 'primary' },
   open: { label: 'Collecting signatures', color: 'primary' },
   thresholdMet: { label: 'Enough signatures', color: 'success' },
+  rejectedMet: { label: 'Enough rejections', color: 'error' },
   tooLate: { label: 'Too late to sign', color: 'default' },
   expired: { label: 'Expired', color: 'default' },
 };

@@ -176,8 +176,8 @@ export function myNominations(all: Nomination[], address: string): Nomination[] 
     });
 }
 
-/** Signatures can no longer change the outcome (enough already, or too late). */
-const SETTLED_PHASES = new Set(['thresholdMet', 'tooLate', 'expired']);
+/** Signatures can no longer change the outcome (enough signatures or rejections already, or too late). */
+const SETTLED_PHASES = new Set(['thresholdMet', 'rejectedMet', 'tooLate', 'expired']);
 
 /**
  * Open nominations `address` could add their support to: not theirs, not
