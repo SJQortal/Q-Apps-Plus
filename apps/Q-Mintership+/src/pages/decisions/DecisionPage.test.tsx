@@ -4,7 +4,7 @@
  * ended, who signed), plus old /decisions?d= links.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
 import { HubThemeProvider } from '../../hub-theme';
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme';
@@ -60,7 +60,31 @@ describe('A decision’s own page: still waiting', () => {
     await open('admin', pendingOf('GROUP_KICK'));
     const card = await screen.findByRole('article', { name: 'Remove from MINTER, Kai Target' }, T);
     await user.click(within(card).getByRole('button', { name: /^Reject: Remove from MINTER/ }));
-    expect(await screen.findByRole('dialog', {}, T)).toHaveTextContent(/rejection/i);
+    const reject = await screen.findByRole('dialog', {}, T);
+    expect(reject).toHaveTextContent(/rejection/i);
+    await user.click(within(reject).getByRole('button', { name: 'Not now' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // Considering, as on the queue's card.
+    await user.click(
+      await within(card).findByRole('button', { name: /^Considering: Remove from MINTER/ }, T)
+    );
+    expect(await screen.findByRole('dialog', { name: 'Mark as considering' }, T)).toBeVisible();
+  });
+
+  it('shows an admin who is considering it “No longer considering”', async () => {
+    await open('admin', pendingOf('GROUP_KICK'), (world) => {
+      const kick = world.pending.find((t: { type: string }) => t.type === 'GROUP_KICK');
+      world.records.push({
+        name: 'Avery Admin',
+        identifier: `qmp-considering-${kick.signature.slice(0, 40)}`,
+        created: Date.now() - 60_000,
+        body: { v: 1, pendingSignature: kick.signature },
+      });
+    });
+    const card = await screen.findByRole('article', { name: 'Remove from MINTER, Kai Target' }, T);
+    expect(
+      await within(card).findByRole('button', { name: /^No longer considering: / }, T)
+    ).toBeVisible();
   });
 
   it('is read-only for everyone else, and an invite links to its nomination', async () => {

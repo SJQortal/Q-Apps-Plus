@@ -342,6 +342,7 @@ function PendingView({
           decision={decision}
           now={data.now}
           myPublicKey={signer?.publicKey ?? null}
+          myAddress={signer?.address ?? null}
           canAct={isAdmin}
           nomination={nomination}
           nominationsState={nominationsState}
