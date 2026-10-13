@@ -134,7 +134,7 @@ export function AdminRoleAction({ status, layout = 'inline' }: AdminRoleActionPr
     </Box>
   ) : (
     <Button
-      variant={mode === 'become' && layout === 'section' ? 'contained' : 'outlined'}
+      variant="outlined"
       startIcon={mode === 'become' ? <AdminPanelSettingsOutlinedIcon /> : undefined}
       disabled={!facts}
       onClick={() => setOpen(true)}
