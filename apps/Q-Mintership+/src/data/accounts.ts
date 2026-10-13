@@ -1,6 +1,7 @@
 /**
  * Accounts, names, balances and fees. All public reads, cached per address.
  */
+import { CoreHttpError } from '../qortal/client';
 import { ATOMIC_PER_QORT, FALLBACK_FEE_ATOMIC } from './constants';
 import { getJson, getText, query, seg } from './core';
 import { fetchQuery, peekQuery, setQueryData } from './query';
@@ -58,7 +59,19 @@ export function primeNames(rows: Array<{ address: string; name?: string | null }
   }
 }
 
-/** `GET /names/{name}`: the owner's address, or null when the name doesn't exist. */
+/** Core's answer for a name nobody has registered (`404 {"error":401,"message":"name unknown"}`). */
+export function isUnknownName(error: unknown): boolean {
+  return (
+    error instanceof CoreHttpError &&
+    (error.status === 404 || /"error"\s*:\s*401|name unknown/i.test(error.body))
+  );
+}
+
+/**
+ * `GET /names/{name}`: the owner's address, or null when the name doesn't
+ * exist. Any other failure (the node unreachable, a 5xx) is thrown, so it
+ * is never cached as "no such name".
+ */
 export function getNameOwner(name: string): Promise<string | null> {
   return fetchQuery(
     `nameowner:${name}`,
@@ -66,8 +79,9 @@ export function getNameOwner(name: string): Promise<string | null> {
       try {
         const body = await getJson<{ owner?: string }>(`/names/${seg(name)}`);
         return isAddress(body?.owner) ? body.owner : null;
-      } catch {
-        return null;
+      } catch (error) {
+        if (isUnknownName(error)) return null;
+        throw error;
       }
     },
     { ttlMs: 30 * 60_000 }

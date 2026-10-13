@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ADDR, NULL_OWNER, TIP, addOtherPending, installWorld } from '../test/world';
 import { fakeAddress, fakeKey } from '../../e2e/world.mjs';
-import { fetchCalls } from '../test/setup';
+import { fetchCalls, mockFetchRoute } from '../test/setup';
+import { getNameOwner } from './accounts';
 import { getChainNow, heightToTime } from './chain';
 import { loadDecisions } from './decisions';
 import { getAdmins, getGroupInfo, getMembers } from './group';
@@ -10,7 +11,6 @@ import { loadNominations, loadNominationsFor } from './nominations';
 import { fetchQuery, invalidate, queryLoadCounts, resetQueries } from './query';
 
 afterEach(() => vi.useRealTimers());
-
 
 describe('read store', () => {
   it('merges identical loads, caches, and never caches a failure', async () => {
@@ -30,6 +30,23 @@ describe('read store', () => {
     );
     expect(await fetchQuery('t:b', async () => 'up')).toBe('up');
     expect(queryLoadCounts().t).toBe(4);
+  });
+});
+
+describe('name lookups', () => {
+  it('caches "no such name" only when Core says so, never a failed read', async () => {
+    installWorld();
+    expect(await getNameOwner('Nora Nominator')).toBe(ADDR.nominator);
+    expect(await getNameOwner('nobody-has-this-name')).toBeNull();
+    let down = true;
+    mockFetchRoute(/^\/names\/Leo/, () =>
+      down
+        ? new Response('Bad gateway', { status: 502 })
+        : { name: 'Leo Learner', owner: ADDR.learner }
+    );
+    await expect(getNameOwner('Leo Learner')).rejects.toThrow(/502/);
+    down = false;
+    expect(await getNameOwner('Leo Learner')).toBe(ADDR.learner);
   });
 });
 

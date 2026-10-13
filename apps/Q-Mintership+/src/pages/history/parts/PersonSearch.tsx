@@ -34,6 +34,8 @@ export function PersonSearch() {
       if (owner) navigate(personPath(owner));
       else
         setProblem(`No account has the name “${text}”. Check the spelling, or paste an address.`);
+    } catch {
+      setProblem('Couldn’t look that up on your node. Try again.');
     } finally {
       setBusy(false);
     }

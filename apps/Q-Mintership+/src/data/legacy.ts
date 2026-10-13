@@ -426,7 +426,7 @@ export function loadLegacyPoll(
       if (!counts) return null;
       const [info, publisherAddress] = await Promise.all([
         getPollInfo(name),
-        getNameOwner(card.publisher),
+        getNameOwner(card.publisher).catch(() => null),
       ]);
       return {
         name,

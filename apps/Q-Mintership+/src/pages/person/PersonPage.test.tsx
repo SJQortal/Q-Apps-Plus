@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage } from '../../test/render';
-import { fetchCallsFor, qortalCalls } from '../../test/setup';
+import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../test/setup';
 import { fakeAddress } from '../../../e2e/world.mjs';
 import { ADDR, NOW, PEOPLE } from '../../test/world';
 import { CoreHttpError } from '../../qortal/client';
@@ -192,6 +192,20 @@ describe('Person page', () => {
       await screen.findByRole('heading', { level: 2, name: PEOPLE.nominator.name as string })
     ).toBeInTheDocument();
     expect(fetchCallsFor('/names/Nora%20Nominator')).toHaveLength(1);
+  });
+
+  it('offers Retry when a name could not be looked up, instead of "no one found"', async () => {
+    await renderPage(<PersonPage />, {
+      persona: 'learner',
+      path: `/people/${encodeURIComponent('Nora Nominator')}`,
+      route: ROUTE,
+      setup: () => mockFetchRoute(/^\/names\//, () => new Response('down', { status: 503 })),
+    });
+    expect(
+      await screen.findByText("Couldn't look up “Nora Nominator” on your node.")
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible();
+    expect(screen.queryByText('No one found.')).toBeNull();
   });
 
   it('says no one was found for something that is neither an address nor a name', async () => {

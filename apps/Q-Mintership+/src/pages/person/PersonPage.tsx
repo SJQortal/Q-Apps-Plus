@@ -95,6 +95,12 @@ function NameLookup({ name }: { name: string }) {
     <Shell title="Person">
       {name && owner.isLoading ? (
         <HeroSkeleton />
+      ) : owner.isError ? (
+        <ErrorState
+          title={`Couldn't look up “${name}” on your node.`}
+          error={owner.error}
+          onRetry={() => void owner.refetch()}
+        />
       ) : (
         <>
           <EmptyState

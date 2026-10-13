@@ -57,10 +57,15 @@ export function CandidatePicker({
     }
     setResolving(true);
     setError('');
-    const owner = await getNameOwner(value);
-    setResolving(false);
-    if (owner) onPick({ address: owner, name: value });
-    else setError(`No registered name “${value}”. Check the spelling, or paste their address.`);
+    try {
+      const owner = await getNameOwner(value);
+      if (owner) onPick({ address: owner, name: value });
+      else setError(`No registered name “${value}”. Check the spelling, or paste their address.`);
+    } catch {
+      setError('Couldn’t look that up on your node. Try again.');
+    } finally {
+      setResolving(false);
+    }
   };
 
   return (
@@ -86,7 +91,11 @@ export function CandidatePicker({
         }}
         loading={search.fetching}
         loadingText="Looking up names…"
-        noOptionsText="No registered names start with that"
+        noOptionsText={
+          search.isError
+            ? 'Couldn’t search names right now. Try again, or paste their address.'
+            : 'No registered names start with that'
+        }
         renderOption={(props, option) => {
           const { key, ...rest } = props;
           return (
