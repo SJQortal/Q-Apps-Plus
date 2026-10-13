@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderPage } from '../../test/render';
 import SettingsPage from './SettingsPage';
 
@@ -23,5 +24,16 @@ describe('Settings', () => {
   it('explains what works outside Hub', async () => {
     await renderPage(<SettingsPage />, { persona: 'outside', path: '/settings' });
     expect(await screen.findByText('Open in Qortal Hub or GO')).toBeInTheDocument();
+  });
+
+  it('confirms a copied web link on screen, not only in a tooltip', async () => {
+    const u = userEvent.setup();
+    await renderPage(<SettingsPage />, { persona: 'admin', path: '/settings' });
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    await u.click(await screen.findByRole('button', { name: 'Copy the Q-Apps+ source link' }));
+    expect(await screen.findByText('Copied: paste it in your browser.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Q-Apps+ source link copied' })).toBeVisible();
+    expect(writeText).toHaveBeenCalled();
   });
 });

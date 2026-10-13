@@ -2,7 +2,7 @@
  * Settings (docs/DESIGN.md → Settings page): Account, Appearance, the app's
  * own Mintership section, and About with the changelog.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Box,
   Button,
@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
+import CheckOutlinedIcon from '@mui/icons-material/CheckOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import { useAtom } from 'jotai';
@@ -44,6 +45,7 @@ import {
   UPSTREAM_REPO,
 } from '../../constants/plus';
 import { copyText, openQortalLink } from '../../utils/links';
+import { readable } from '../../utils/readable';
 
 const Card = styled('div')(({ theme }) => ({
   backgroundColor: theme.palette.background.paper,
@@ -98,12 +100,21 @@ function SettingText({ title, hint, id }: { title: string; hint: string; id?: st
 
 function WebLinkRow({ title, url }: { title: string; url: string }) {
   const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2500);
+    return () => clearTimeout(timer);
+  }, [copied]);
   return (
     <Row>
       <Copy>
         <Typography sx={{ fontWeight: 700 }}>{title}</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
           {url}
+        </Typography>
+        {/* Visible on touch too, where the tooltip can't be read. */}
+        <Typography variant="body2" role="status" sx={{ color: readable('success') }}>
+          {copied ? 'Copied: paste it in your browser.' : ''}
         </Typography>
       </Copy>
       <Tooltip
@@ -116,7 +127,11 @@ function WebLinkRow({ title, url }: { title: string; url: string }) {
           onClick={async () => setCopied(await copyText(url))}
           sx={{ width: 44, height: 44 }}
         >
-          <ContentCopyOutlinedIcon fontSize="small" />
+          {copied ? (
+            <CheckOutlinedIcon fontSize="small" />
+          ) : (
+            <ContentCopyOutlinedIcon fontSize="small" />
+          )}
         </IconButton>
       </Tooltip>
     </Row>

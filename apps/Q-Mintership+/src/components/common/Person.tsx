@@ -103,33 +103,39 @@ export function PersonInline({ address, name }: { address: string; name?: string
 
 /**
  * A row of small avatars (signers), each linking to the person, the rest
- * counted. List semantics sit on the items, not on the links.
+ * counted. List semantics sit on the items, not on the links. Each avatar
+ * is a 44 px tap target. `showNames` adds the names in a line below, for
+ * phones, where a tooltip can't be read.
  */
 export function AvatarStack({
   people,
   max = 8,
   size = 28,
   label,
+  showNames = false,
 }: {
   people: Array<{ address: string; name?: string | null }>;
   max?: number;
   size?: number;
   label: string;
+  showNames?: boolean;
 }) {
   const shown = people.slice(0, max);
   const rest = people.length - shown.length;
-  return (
+  // The first avatar lines up with the text above, its tap target reaching past it.
+  const inset = Math.max(0, (44 - size) / 2);
+  const list = (
     <Box
       component="ul"
       aria-label={label}
       sx={{
         listStyle: 'none',
         m: 0,
+        ml: `${-inset}px`,
         p: 0,
         display: 'flex',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: 0.5,
       }}
     >
       {shown.map((p) => (
@@ -146,6 +152,31 @@ export function AvatarStack({
       ) : null}
     </Box>
   );
+  if (!showNames) return list;
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, minWidth: 0 }}>
+      {list}
+      {/* The same names the avatar links carry, readable without a tooltip. */}
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        aria-hidden
+        sx={{ overflowWrap: 'anywhere' }}
+      >
+        {shown.map((p, i) => (
+          <span key={p.address}>
+            {i > 0 ? (i === shown.length - 1 && !rest ? ' and ' : ', ') : ''}
+            <ShownName address={p.address} name={p.name} />
+          </span>
+        ))}
+        {rest > 0 ? ` and ${rest} more` : ''}
+      </Typography>
+    </Box>
+  );
+}
+
+function ShownName({ address, name }: { address: string; name?: string | null }) {
+  return <>{useDisplayName(address, name).label}</>;
 }
 
 function StackedAvatar({
@@ -164,7 +195,14 @@ function StackedAvatar({
         component={RouterLink}
         to={personPath(address)}
         aria-label={shown.label}
-        sx={{ display: 'inline-flex', borderRadius: '50%' }}
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minWidth: 44,
+          minHeight: 44,
+          borderRadius: '50%',
+        }}
       >
         <NameAvatar name={shown.name} size={size} />
       </Link>

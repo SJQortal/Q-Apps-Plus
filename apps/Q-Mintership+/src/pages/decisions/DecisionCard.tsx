@@ -485,7 +485,7 @@ function Signers({
       </Typography>
       {known.length ? (
         <Box sx={{ opacity: faded ? 0.7 : 1 }}>
-          <AvatarStack people={known} label={label} max={10} />
+          <AvatarStack people={known} label={label} max={10} showNames />
         </Box>
       ) : null}
     </Box>

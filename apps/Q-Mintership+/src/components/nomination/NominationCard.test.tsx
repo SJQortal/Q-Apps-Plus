@@ -52,4 +52,28 @@ describe('AvatarStack', () => {
         .every((a) => a.getAttribute('role') === null)
     ).toBe(true);
   });
+
+  it('shows the names under the avatars for phones, and gives each a 44 px target', async () => {
+    await renderPage(
+      <AvatarStack
+        label="Signed by"
+        max={2}
+        showNames
+        people={[
+          { address: ADDR.admin, name: 'Ada Admin' },
+          { address: ADDR.nominator, name: 'Nora Nominator' },
+          { address: ADDR.learner, name: 'Juniper L4' },
+        ]}
+      />,
+      { persona: 'admin', path: '/' }
+    );
+    expect(
+      screen.getByText(
+        (_, el) => el?.tagName === 'P' && el.textContent === 'Ada Admin, Nora Nominator and 1 more'
+      )
+    ).toBeVisible();
+    const link = screen.getByRole('link', { name: 'Ada Admin' });
+    expect(getComputedStyle(link).minWidth).toBe('44px');
+    expect(getComputedStyle(link).minHeight).toBe('44px');
+  });
 });
