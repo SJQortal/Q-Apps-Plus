@@ -275,9 +275,11 @@ describe('Write dialogs by keyboard: Home', () => {
     const dialog = await openWithKeyboard(u, opener, 'Become a Minter Admin');
     await expectNamedControls(dialog);
     await expectFocusTrapped(u, dialog, ['Not now', 'Continue to Hub']);
-    expect(
-      within(dialog).getByRole('textbox', { name: 'A short statement (optional)' })
-    ).toBeVisible();
+    const statement = within(dialog).getByRole('textbox', { name: 'A short statement (optional)' });
+    // Its limit is said, not only enforced: what is cut off is never a surprise.
+    expect(statement).toHaveAccessibleDescription(/0 \/ 500$/);
+    await u.type(statement, 'I check Decisions every day.');
+    expect(statement).toHaveAccessibleDescription(/28 \/ 500$/);
     await closeWithEscape(u, () => opener);
   });
 
