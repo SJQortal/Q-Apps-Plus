@@ -105,7 +105,7 @@ describe('A nomination’s own page', () => {
   it('says when nobody has nominated someone, and offers to', async () => {
     await open(ADDR.newcomerName, 'nominator');
     expect(await screen.findByText('No nomination for this person', {}, T)).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Nominate them' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Propose nomination' })).toBeVisible();
   });
 
   it('opens a name’s owner when the link holds a name', async () => {

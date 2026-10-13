@@ -38,6 +38,7 @@ import {
 } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { useQuery } from '../../hooks/useQuery';
+import { PROPOSE_NOMINATION } from '../../constants/words';
 import { PATHS, decisionPath, nominatePath, nominationPath, personPath } from '../../routes/paths';
 import { isOpenState } from '../../rules/nomination';
 import { OUTCOME_LABEL, outcomeSentence, type DecisionOutcome } from '../../rules/outcome';
@@ -156,7 +157,7 @@ function NominationView({ address }: { address: string }) {
         <EmptyState
           title="No nomination for this person"
           description="Nobody has nominated them yet, and no Minter Admin has invited them."
-          actionLabel={viewer.status?.canNominate ? 'Nominate them' : undefined}
+          actionLabel={viewer.status?.canNominate ? PROPOSE_NOMINATION : undefined}
           onAction={() => navigate(nominatePath(address))}
         />
       ) : null}
