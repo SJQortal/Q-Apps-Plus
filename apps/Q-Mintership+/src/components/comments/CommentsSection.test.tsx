@@ -197,6 +197,18 @@ describe('CommentsSection', () => {
     );
   });
 
+  it('Cancel on a reply puts focus back on the comment it answered', async () => {
+    const user = userEvent.setup();
+    const { ids } = await show('nominator', { open: true });
+    await region();
+    const li = await waitFor(() => commentLi(ids.answer) ?? Promise.reject(new Error('not yet')));
+    await user.click(within(li).getByRole('button', { name: 'Reply to Wren Waiting' }));
+    expect(screen.getByRole('textbox', { name: 'Reply to Wren Waiting' })).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('textbox', { name: 'Reply to Wren Waiting' })).toBeNull();
+    expect(commentLi(ids.answer)).toHaveFocus();
+  });
+
   it('edits your own comment: same identifier, marked edited, shown at once', async () => {
     const user = userEvent.setup();
     const { ids } = await show('nominator', { open: true });

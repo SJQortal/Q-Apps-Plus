@@ -175,6 +175,14 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
   const returnFocus = () =>
     about ? document.querySelector<HTMLElement>(`[data-comment="${about.identifier}"]`) : null;
 
+  // Cancel removes the composer with its focused button: focus goes to the
+  // comment it was about (its <li> stays, and takes focus without a tab stop).
+  const cancelInline = () => {
+    const commentId = inline?.comment.identifier;
+    if (commentId) document.querySelector<HTMLElement>(`[data-comment="${commentId}"]`)?.focus();
+    setInline(null);
+  };
+
   const itemHandlers = {
     onEdit: (c: CommentView) =>
       setInline({ mode: 'edit', comment: c, thread: '', text: c.text, error: null }),
@@ -194,7 +202,7 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
         error={inline.error}
         onChange={(text) => setInline({ ...inline, text })}
         onSubmit={submitInline}
-        onCancel={() => setInline(null)}
+        onCancel={cancelInline}
         submitLabel="Save"
         autoFocus
       />
@@ -299,7 +307,7 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
                       error={replying.error}
                       onChange={(text) => setInline({ ...replying, text })}
                       onSubmit={submitInline}
-                      onCancel={() => setInline(null)}
+                      onCancel={cancelInline}
                       submitLabel="Post reply"
                       autoFocus
                     />
