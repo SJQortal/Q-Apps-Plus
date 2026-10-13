@@ -4,7 +4,7 @@
  * nothing, and Escape puts focus back where it came from.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { addComments } from '../../e2e/world.mjs';
 import { CommentsSection } from '../components/comments/CommentsSection';
@@ -141,6 +141,75 @@ describe('Write dialogs by keyboard: a decision', () => {
       await screen.findByRole('button', { name: /^Propose cancelling all \d+ older ones$/ }, T),
       'Cancel stale invites'
     );
+  });
+});
+
+describe('Write dialogs by keyboard: Propose', () => {
+  /** Propose → a choice, by keyboard: the menu, arrow keys and Enter. */
+  async function choose(u: ReturnType<typeof user>, label: RegExp): Promise<HTMLElement> {
+    const propose = screen.getByRole('button', { name: 'Propose' });
+    propose.focus();
+    await u.keyboard('{Enter}');
+    const menu = await screen.findByRole('menu', {}, T);
+    const items = within(menu).getAllByRole('menuitem');
+    const index = items.findIndex((item) => label.test(item.textContent ?? ''));
+    expect(index).toBeGreaterThanOrEqual(0);
+    for (let i = 0; i < index; i++) await u.keyboard('{ArrowDown}');
+    expect(items[index]).toHaveFocus();
+    await u.keyboard('{Enter}');
+    return propose;
+  }
+
+  it('every kind’s form: focus in, kept in, and back on Propose after Escape', async () => {
+    const u = user();
+    await decisions();
+    for (const [label, title] of [
+      [/^Remove a member/, 'Remove a member'],
+      [/^Ban an account/, 'Ban an account'],
+      [/^Make a Minter Admin/, 'Make a Minter Admin'],
+      [/^Remove a Minter Admin/, 'Remove a Minter Admin'],
+      [/^Lift a ban/, 'Lift a ban'],
+      [/^Cancel an approved invite/, 'Cancel an approved invite'],
+    ] as const) {
+      const propose = await choose(u, label);
+      const dialog = await screen.findByRole('dialog', { name: title }, T);
+      await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
+      await expectNamedControls(dialog);
+      await expectFocusTrapped(u, dialog, ['Cancel']);
+      await closeWithEscape(u, () => propose);
+    }
+  });
+
+  it('the Hub step after Review, and its result, put focus back on Propose', async () => {
+    const u = user();
+    await decisions();
+    const propose = await choose(u, /^Remove a member/);
+    const form = await screen.findByRole('dialog', { name: 'Remove a member' }, T);
+    await u.type(within(form).getByRole('textbox', { name: 'Name or address' }), 'Leo Learner');
+    await u.keyboard('{Enter}');
+    await within(form).findByText('Nothing stops this proposal.', {}, T);
+    await u.type(within(form).getByRole('textbox', { name: 'Reason' }), 'Spam in the chat.');
+    await u.click(within(form).getByRole('button', { name: 'Review' }));
+    const hub = await screen.findByRole('dialog', { name: /^Remove from MINTER: Leo Learner/ }, T);
+    await waitFor(() => expect(hub).toContainElement(document.activeElement as HTMLElement));
+    await expectNamedControls(hub);
+    await expectFocusTrapped(u, hub, ['Back to the form', 'Continue to Hub']);
+    await closeWithEscape(u, () => propose);
+
+    // Through Hub (the mock declines it) to the result, then Close.
+    await choose(u, /^Remove a member/);
+    const again = await screen.findByRole('dialog', { name: 'Remove a member' }, T);
+    await u.type(within(again).getByRole('textbox', { name: 'Name or address' }), 'Leo Learner');
+    await u.keyboard('{Enter}');
+    await within(again).findByText('Nothing stops this proposal.', {}, T);
+    await u.type(within(again).getByRole('textbox', { name: 'Reason' }), 'Spam in the chat.');
+    await u.click(within(again).getByRole('button', { name: 'Review' }));
+    const step = await screen.findByRole('dialog', { name: /^Remove from MINTER: / }, T);
+    await u.click(within(step).getByRole('button', { name: 'Continue to Hub' }));
+    await within(step).findByText('Cancelled in Hub. Nothing was sent.', {}, T);
+    expect(within(step).getByRole('button', { name: 'Back to the form' })).toHaveFocus();
+    await u.click(within(step).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(propose).toHaveFocus(), T);
   });
 });
 

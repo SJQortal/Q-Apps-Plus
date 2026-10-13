@@ -73,6 +73,8 @@ export interface ProposeDialogProps {
   onClose: () => void;
   /** Switch to another kind for the same person. */
   onSwitch: (kind: ProposeKind, person: { address: string; name?: string | null }) => void;
+  /** Where focus goes once it is over (the menu item that opened it is gone by then). */
+  returnFocus?: () => HTMLElement | null;
 }
 
 type Person = { address: string; name?: string | null };
@@ -104,6 +106,7 @@ export function ProposeDialog({
   preset,
   onClose,
   onSwitch,
+  returnFocus,
 }: ProposeDialogProps) {
   const open = Boolean(kind && signer);
   const [phase, setPhase] = useState<'form' | 'hub'>('form');
@@ -210,6 +213,7 @@ export function ProposeDialog({
       <ResponsiveDialog
         open={open && phase === 'form'}
         onClose={close}
+        returnFocus={returnFocus}
         title={info.label}
         actions={
           <>
@@ -384,6 +388,7 @@ export function ProposeDialog({
           ctx={ctx}
           onClose={close}
           onBack={() => setPhase('form')}
+          returnFocus={returnFocus}
         />
       ) : null}
     </>
@@ -641,6 +646,7 @@ function ProposeHubStep({
   ctx,
   onClose,
   onBack,
+  returnFocus,
 }: {
   open: boolean;
   kind: ProposeKind;
@@ -652,6 +658,7 @@ function ProposeHubStep({
   onClose: () => void;
   /** Back to the form, with the person, reason and length kept. */
   onBack: () => void;
+  returnFocus?: () => HTMLElement | null;
 }) {
   const who = useDisplayName(person.address, person.name);
   const stepDown = kind === 'removeAdmin' && person.address === signer.address;
@@ -685,6 +692,7 @@ function ProposeHubStep({
       }
       onClose={onClose}
       onBack={onBack}
+      returnFocus={returnFocus}
     />
   );
 }

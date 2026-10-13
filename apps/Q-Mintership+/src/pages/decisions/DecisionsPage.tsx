@@ -17,7 +17,7 @@
  * checked these" before Hub opens when anything would change, and a banner
  * says when the target changed since this device last looked.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { PATHS, legacyDecisionPath } from '../../routes/paths';
 import {
@@ -148,6 +148,7 @@ function DecisionsQueue() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkList, setBulkList] = useState<Decision[] | null>(null);
   const [staleExpanded, setStaleExpanded] = useState(false);
+  const proposeButton = useRef<HTMLButtonElement | null>(null);
 
   const data = decisionsQ.data;
   const ready = session.status === 'ready';
@@ -348,7 +349,7 @@ function DecisionsQueue() {
                 </IconButton>
               </span>
             </Tooltip>
-            {isAdmin ? <ProposeMenu onChoose={chooseProposal} /> : null}
+            {isAdmin ? <ProposeMenu onChoose={chooseProposal} buttonRef={proposeButton} /> : null}
           </>
         }
       />
@@ -658,6 +659,7 @@ function DecisionsQueue() {
           }}
           onClose={() => setPropose(null)}
           onSwitch={(kind, person) => setPropose({ kind, preset: person })}
+          returnFocus={() => proposeButton.current}
         />
       ) : null}
       <BulkDialog
