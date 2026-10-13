@@ -35,7 +35,7 @@ import {
   getStoredInvites,
 } from './group';
 import { fetchQdnJson, mapLimit, rowTime, searchQdn } from './qdn';
-import { fetchQuery } from './query';
+import { fetchQuery, peekQuery } from './query';
 import {
   NOMINATION_PREFIX,
   RECORD_SERVICE,
@@ -49,7 +49,7 @@ import {
   type SupportRecord,
 } from './records';
 import { getAddressHistory, getDecisionsInRange } from './txs';
-import type { QdnRow, TxRow } from './types';
+import type { AccountInfo, QdnRow, TxRow } from './types';
 
 export interface Publisher {
   name: string;
@@ -134,9 +134,13 @@ async function readBodies(
 
 type MembershipOf = (address: string) => Promise<{ isMember: boolean; isAdmin: boolean }>;
 
+/** A level only matters at 5 (and levels change over weeks): a publisher's is kept 30 minutes. */
+const PUBLISHER_LEVEL_TTL_MS = 30 * 60_000;
+
 /**
  * The publisher's address, membership, admin role and level, checked now.
  * `primaryToAddress` (from the member list) saves a name lookup for members.
+ * Admins may nominate at any level, so theirs isn't read.
  */
 async function resolvePublishers(
   names: string[],
@@ -156,7 +160,9 @@ async function resolvePublishers(
         result.set(name, null);
         return;
       }
-      const level = (await getAccount(address)).level;
+      const level = isAdmin
+        ? (peekQuery<AccountInfo>(`account:${address}`)?.level ?? 0)
+        : (await getAccount(address, { ttlMs: PUBLISHER_LEVEL_TTL_MS })).level;
       result.set(
         name,
         isEligibleNominator({ isAdmin, isMember, level }) ? { name, address, isAdmin, level } : null

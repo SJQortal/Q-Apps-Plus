@@ -17,7 +17,7 @@ export function isAddress(value: unknown): value is string {
 /** `GET /addresses/{a}`: level, blocks minted, public key. */
 export function getAccount(
   address: string,
-  options: { force?: boolean } = {}
+  options: { force?: boolean; ttlMs?: number } = {}
 ): Promise<AccountInfo> {
   return fetchQuery(
     `account:${address}`,
@@ -35,7 +35,7 @@ export function getAccount(
         blocksMintedPenalty: Number(body.blocksMintedPenalty ?? 0),
       };
     },
-    { ttlMs: 2 * 60_000, force: options.force }
+    { ttlMs: options.ttlMs ?? 2 * 60_000, force: options.force }
   );
 }
 

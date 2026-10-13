@@ -207,6 +207,18 @@ describe('loadNominations', () => {
     ).toBe(true);
   });
 
+  it("reads publishers' levels sparingly: never an admin's, a member's once per 30 minutes", async () => {
+    installWorld();
+    await loadNominations();
+    const accountReads = (who: string) => fetchCalls.filter((c) => c === `/addresses/${who}`);
+    // adminL4 publishes a support: an admin, so no level read.
+    expect(accountReads(ADDR.adminL4)).toHaveLength(0);
+    expect(accountReads(ADDR.nominator)).toHaveLength(1);
+    vi.setSystemTime(Date.now() + 5 * 60_000);
+    await loadNominations({ force: true });
+    expect(accountReads(ADDR.nominator)).toHaveLength(1);
+  });
+
   it('treats an invite that expired after the record as the end of that round', async () => {
     installWorld();
     const data = await loadNominations();
