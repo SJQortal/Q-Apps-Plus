@@ -11,6 +11,7 @@
  * nothing can be sent.
  */
 import {
+  addDecidedSignatures,
   addOtherPending,
   addReady,
   answerCore,
@@ -26,6 +27,9 @@ const world = createWorld();
 addOtherPending(world);
 // Rae Ready has shown they're ready to mint (a join request, no nomination).
 addReady(world);
+// Shareable links: a decision still waiting, one decided (with its signatures), a nomination.
+const DECIDED_SIG = addDecidedSignatures(world);
+const PENDING_SIG = world.pending.find((t) => t.type === 'GROUP_KICK').signature;
 // Replaced in setup() by a visible 64×64 gradient, so avatars show in the shots.
 let PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAQklEQVR42u3OMQEAAAgDINc/9Mzg14MGLUmHCgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFbzwB2GwADvYAAAAASUVORK5CYII=',
@@ -218,5 +222,21 @@ export default {
     { key: 'activity', path: '/activity?as=admin', after: settle },
     { key: 'activity-member', path: '/activity?as=learner', after: settle },
     { key: 'settings', path: '/settings?as=admin', after: settle },
+    // Shareable links: one decision waiting (Sign), one decided, and one nomination with its rounds.
+    {
+      key: 'decision-pending',
+      path: `/decisions/${PENDING_SIG}?as=admin`,
+      after: wait('main article'),
+    },
+    {
+      key: 'decision-decided',
+      path: `/decisions/${DECIDED_SIG}?as=learner`,
+      after: wait('main [aria-label^="Signed by"]'),
+    },
+    {
+      key: 'nomination',
+      path: `/nominations/${ADDR.nominatedSigning}?as=nominator`,
+      after: wait('main ol[aria-label="Rounds, newest first"]'),
+    },
   ],
 };
