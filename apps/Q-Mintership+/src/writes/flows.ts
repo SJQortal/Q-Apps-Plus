@@ -454,7 +454,9 @@ export function joinMinter(
       signer,
       precheck: () => guardJoin(signer),
       match: (tx) =>
-        tx.type === 'JOIN_GROUP' && tx.groupId === 694 && tx.creatorAddress === signer.address,
+        tx.type === 'JOIN_GROUP' &&
+        tx.groupId === MINTER_GROUP_ID &&
+        tx.creatorAddress === signer.address,
       onStage,
     })
   );
