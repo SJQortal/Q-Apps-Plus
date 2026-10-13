@@ -24,3 +24,8 @@ export function answerQortal(
   persona: string,
   request: Record<string, unknown>
 ): unknown;
+export function addComments(world: World): {
+  waitingKey: string;
+  decisionKey: string;
+  ids: Record<string, string>;
+};
