@@ -25,6 +25,7 @@ import RemoveModeratorOutlinedIcon from '@mui/icons-material/RemoveModeratorOutl
 import LockOpenOutlinedIcon from '@mui/icons-material/LockOpenOutlined';
 import PersonAddDisabledOutlinedIcon from '@mui/icons-material/PersonAddDisabledOutlined';
 import CleaningServicesOutlinedIcon from '@mui/icons-material/CleaningServicesOutlined';
+import HowToVoteOutlinedIcon from '@mui/icons-material/HowToVoteOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { PROPOSE_KINDS, PROPOSE_ORDER, type ProposeKind } from './proposeKinds';
@@ -38,7 +39,8 @@ const ICONS: Record<ProposeKind, ReactNode> = {
   cancelInvite: <PersonAddDisabledOutlinedIcon />,
 };
 
-export type ProposeChoice = ProposeKind | 'stale';
+/** A chain proposal, Clean up stale invites, or a Minter Admin poll. */
+export type ProposeChoice = ProposeKind | 'stale' | 'poll';
 
 const ITEMS: Array<{ key: ProposeChoice; label: string; description: string; icon: ReactNode }> = [
   ...PROPOSE_ORDER.map((kind) => ({
@@ -52,6 +54,12 @@ const ITEMS: Array<{ key: ProposeChoice; label: string; description: string; ico
     label: 'Clean up stale invites',
     description: 'Every unused invite with when it was approved; the old ones in one go.',
     icon: <CleaningServicesOutlinedIcon />,
+  },
+  {
+    key: 'poll',
+    label: 'Ask the Minter Admins',
+    description: 'An advisory poll: Yes, No or Neutral, encrypted to the Minter Admins.',
+    icon: <HowToVoteOutlinedIcon />,
   },
 ];
 

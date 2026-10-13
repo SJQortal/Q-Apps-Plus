@@ -16,8 +16,12 @@
  * would tip over carries a chip, Sign / Propose / Sign several need "I've
  * checked these" before Hub opens when anything would change, and a banner
  * says when the target changed since this device last looked.
+ *
+ * Minter Admins also ask each other advisory questions here (Propose → Ask
+ * the Minter Admins) and vote on them under "Minter Admin polls": encrypted
+ * to the Minter Admins, and loaded only for them.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { PATHS, legacyDecisionPath } from '../../routes/paths';
 import {
@@ -96,6 +100,9 @@ import { TargetImpact } from './TargetImpact';
 import { TargetShiftSection } from './TargetShiftSection';
 import { useAcknowledge } from './useAcknowledge';
 
+// Minter Admins only: nobody else downloads the polls' code or reads them.
+const AskAdminsDialog = lazy(() => import('./AskAdminsDialog'));
+
 const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
   'open',
   'early',
@@ -150,6 +157,7 @@ function DecisionsQueue() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkList, setBulkList] = useState<Decision[] | null>(null);
   const [staleExpanded, setStaleExpanded] = useState(false);
+  const [asking, setAsking] = useState(false);
   const proposeButton = useRef<HTMLButtonElement | null>(null);
   const hideAnsweredSwitch = useRef<HTMLInputElement | null>(null);
   // Propose → Clean up stale invites: the section takes focus, after the menu
@@ -169,6 +177,11 @@ function DecisionsQueue() {
   );
   const isAdmin = Boolean(
     data && signer && data.admins.admins.some((a) => a.member === signer.address)
+  );
+  // The name a Minter Admin poll is published under.
+  const pollAuthor = useMemo(
+    () => (signer ? { ...signer, name: session.name } : null),
+    [signer, session.name]
   );
   const myKey = signer?.publicKey ?? null;
   const inNav = useNavHas('decisions');
@@ -331,6 +344,10 @@ function DecisionsQueue() {
   };
 
   const chooseProposal = (choice: ProposeChoice) => {
+    if (choice === 'poll') {
+      setAsking(true);
+      return;
+    }
     if (choice === 'stale') {
       setStaleExpanded(true);
       setStaleFocus((n) => n + 1);
@@ -698,6 +715,17 @@ function DecisionsQueue() {
           onSwitch={(kind, person) => setPropose({ kind, preset: person })}
           returnFocus={() => proposeButton.current}
         />
+      ) : null}
+      {asking && pollAuthor && data ? (
+        <Suspense fallback={null}>
+          <AskAdminsDialog
+            open
+            onClose={() => setAsking(false)}
+            author={pollAuthor}
+            admins={data.admins.signers.length}
+            returnFocus={() => proposeButton.current}
+          />
+        </Suspense>
       ) : null}
       <BulkDialog
         open={bulkList !== null}
