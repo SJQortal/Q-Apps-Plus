@@ -19,7 +19,7 @@ import {
 } from '../data/records';
 import type { GroupTxType, TxRow } from '../data/types';
 import { decisionSubject } from '../rules/decision';
-import { groupApprovalUnsignedBase58 } from '../qortal/approvalBytes';
+import { groupApprovalUnsignedBase58, groupRejectionUnsignedBase58 } from '../qortal/approvalBytes';
 import {
   guardAddAdmin,
   guardBan,
@@ -29,9 +29,11 @@ import {
   guardJoin,
   guardKick,
   guardNominate,
+  guardReject,
   guardRemoveAdmin,
   guardSign,
   guardSupport,
+  guardWithdraw,
 } from './guards';
 import {
   addAdminRequest,
@@ -106,6 +108,35 @@ export async function buildApprovalRequest(
   return signApprovalRequest(unsignedBytes);
 }
 
+/**
+ * The GROUP_APPROVAL request with approval false (Reject, or Withdraw my
+ * signature), built from fresh reads with the rejection's own builder.
+ */
+export async function buildRejectionRequest(
+  signer: Signer,
+  pendingSignature: string
+): Promise<HubRequest> {
+  const [reference, fee] = await Promise.all([
+    getLastReference(signer.address),
+    getFee('GROUP_APPROVAL'),
+  ]);
+  const unsignedBytes = groupRejectionUnsignedBase58({
+    timestamp: Date.now(),
+    reference,
+    adminPublicKey: signer.publicKey,
+    pendingSignature,
+    approval: false,
+    feeAtomic: fee.atomic,
+  });
+  return signApprovalRequest(unsignedBytes);
+}
+
+/** This write's GROUP_APPROVAL on `pendingSignature`, with this answer (after a Hub timeout). */
+const answerMatch = (pendingSignature: string, approval: boolean) => (tx: TxRow) =>
+  tx.type === 'GROUP_APPROVAL' &&
+  tx.pendingSignature === pendingSignature &&
+  tx.approval === approval;
+
 /** Sign (approve) a pending MINTER transaction. */
 export function signDecision(
   signer: Signer,
@@ -117,7 +148,51 @@ export function signDecision(
       request: () => buildApprovalRequest(signer, pendingSignature),
       signer,
       precheck: () => guardSign(signer, pendingSignature),
-      match: (tx) => tx.type === 'GROUP_APPROVAL' && tx.pendingSignature === pendingSignature,
+      match: answerMatch(pendingSignature, true),
+      onStage,
+    })
+  );
+}
+
+/**
+ * Reject a pending MINTER transaction the admin hasn't signed: a
+ * GROUP_APPROVAL with approval false. It counts towards ending it as
+ * rejected (against the same target as signatures) and cancels nobody
+ * else's signature. The admin can still sign later: only their latest
+ * answer counts.
+ */
+export function rejectDecision(
+  signer: Signer,
+  pendingSignature: string,
+  onStage?: (s: WriteStage) => void
+): Promise<WriteOutcome> {
+  return tracked(writeKeys.reject(pendingSignature), () =>
+    runWrite({
+      request: () => buildRejectionRequest(signer, pendingSignature),
+      signer,
+      precheck: () => guardReject(signer, pendingSignature),
+      match: answerMatch(pendingSignature, false),
+      onStage,
+    })
+  );
+}
+
+/**
+ * Withdraw the admin's signature: on chain the same GROUP_APPROVAL with
+ * approval false, sent after their signature. Only the latest answer
+ * counts, so the signature stops counting and a rejection counts instead.
+ */
+export function withdrawSignature(
+  signer: Signer,
+  pendingSignature: string,
+  onStage?: (s: WriteStage) => void
+): Promise<WriteOutcome> {
+  return tracked(writeKeys.withdraw(pendingSignature), () =>
+    runWrite({
+      request: () => buildRejectionRequest(signer, pendingSignature),
+      signer,
+      precheck: () => guardWithdraw(signer, pendingSignature),
+      match: answerMatch(pendingSignature, false),
       onStage,
     })
   );

@@ -1,7 +1,8 @@
 /**
- * Writes in flight, for optimistic UI: "Signed ✓ (confirming…)" from the
- * moment Hub answers until the chain shows the signature. Keyed by what the
- * write is about, e.g. `sign:<pendingSignature>` or `join:<address>`.
+ * Writes in flight, for optimistic UI: "Signed ✓ (confirming…)", "Rejected
+ * (confirming…)" or "Withdrawn (confirming…)" from the moment Hub answers
+ * until the chain shows the answer. Keyed by what the write is about, e.g.
+ * `sign:<pendingSignature>` or `join:<address>`.
  * Entries expire after 15 minutes so a lost transaction never sticks.
  */
 import { atom, getDefaultStore, useAtomValue } from 'jotai';
@@ -69,6 +70,10 @@ export function usePendingWrite(key: string | null): PendingWrite | null {
 
 export const writeKeys = {
   sign: (pendingSignature: string) => `sign:${pendingSignature}`,
+  /** Reject: a rejection from an admin who hadn't signed. */
+  reject: (pendingSignature: string) => `reject:${pendingSignature}`,
+  /** Withdraw my signature: a rejection after the admin's own signature. */
+  withdraw: (pendingSignature: string) => `withdraw:${pendingSignature}`,
   invite: (nominee: string) => `invite:${nominee}`,
   join: (address: string) => `join:${address}`,
   nominate: (nominee: string) => `nominate:${nominee}`,

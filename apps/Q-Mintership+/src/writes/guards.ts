@@ -77,8 +77,44 @@ async function requireAdmin(signer: Signer): Promise<string | null> {
     : 'Only Minter Admins can do this, and your account is not one right now.';
 }
 
-/** Before signing (GROUP_APPROVAL) a pending MINTER transaction. */
-export async function guardSign(signer: Signer, pendingSignature: string): Promise<string | null> {
+/**
+ * What an admin's GROUP_APPROVAL says: Sign (approval true), Reject (false,
+ * not signed), or Withdraw my signature (false, sent after their signature).
+ */
+export type DecisionIntent = 'sign' | 'reject' | 'withdraw';
+
+/** Before signing (GROUP_APPROVAL, approval true) a pending MINTER transaction. */
+export function guardSign(signer: Signer, pendingSignature: string): Promise<string | null> {
+  return guardDecision(signer, pendingSignature, 'sign');
+}
+
+/** Before rejecting (approval false) a pending MINTER transaction the admin hasn't signed. */
+export function guardReject(signer: Signer, pendingSignature: string): Promise<string | null> {
+  return guardDecision(signer, pendingSignature, 'reject');
+}
+
+/** Before withdrawing a signature (approval false, after the admin's own signature). */
+export function guardWithdraw(signer: Signer, pendingSignature: string): Promise<string | null> {
+  return guardDecision(signer, pendingSignature, 'withdraw');
+}
+
+const TOO_LATE: Record<DecisionIntent, string> = {
+  sign: 'Too late to count: the last block in which a signature can count has passed.',
+  reject: 'Too late to count: the last block in which a rejection can count has passed.',
+  withdraw:
+    'Too late to count: the last block in which withdrawing a signature can count has passed.',
+};
+
+/**
+ * The checks every answer shares (still an admin, still pending, a MINTER
+ * group change, not too late), then the admin's own answers on it: the
+ * newest one still on its way, then their latest confirmed one.
+ */
+export async function guardDecision(
+  signer: Signer,
+  pendingSignature: string,
+  intent: DecisionIntent
+): Promise<string | null> {
   const notAdmin = await requireAdmin(signer);
   if (notAdmin) return notAdmin;
   const tx = await getTransaction(pendingSignature, { force: true });
@@ -96,9 +132,7 @@ export async function guardSign(signer: Signer, pendingSignature: string): Promi
   if (typeof tx.blockHeight === 'number') {
     const [group, now] = await Promise.all([getGroupInfo(), getChainNow({ force: true })]);
     const phase = windowPhase(decisionWindow(tx.blockHeight, group), now.height);
-    if (phase === 'tooLate' || phase === 'expired') {
-      return 'Too late to count: the last block in which a signature can count has passed.';
-    }
+    if (phase === 'tooLate' || phase === 'expired') return TOO_LATE[intent];
   }
   const unconfirmed = await getUnconfirmedApprovals({ force: true });
   const mine = unconfirmed.rows
@@ -109,12 +143,40 @@ export async function guardSign(signer: Signer, pendingSignature: string): Promi
         r.pendingSignature === pendingSignature &&
         r.adminPublicKey === signer.publicKey
     );
-  if (mine.some((r) => r.approval))
-    return 'Your signature is already on its way. It counts once it is in a block.';
-  // A confirmed signature of yours: look it up through the transaction's own search window.
+  const flying = latestPerSigner(mine).get(signer.publicKey);
+  if (flying) return inFlightProblem(intent, flying.approval);
+  // A confirmed answer of yours: look it up through the transaction's own search window.
   const latestMine = await myLatestConfirmedDecision(signer, pendingSignature, tx);
-  if (latestMine?.approval) return "You've already signed this.";
-  return null;
+  return confirmedProblem(intent, latestMine ? latestMine.approval : null);
+}
+
+/** The admin's newest answer is still on its way into a block. */
+function inFlightProblem(intent: DecisionIntent, approval: boolean): string {
+  if (approval) {
+    return intent === 'sign'
+      ? 'Your signature is already on its way. It counts once it is in a block.'
+      : 'Your signature is still on its way into a block. You can withdraw it once it is in.';
+  }
+  return intent === 'sign'
+    ? 'Your rejection is still on its way into a block. You can sign once it is in.'
+    : 'Your rejection is already on its way. It counts once it is in a block.';
+}
+
+/** The admin's latest confirmed answer (null: none yet) against what they want to do. */
+function confirmedProblem(intent: DecisionIntent, approval: boolean | null): string | null {
+  switch (intent) {
+    case 'sign':
+      return approval === true ? "You've already signed this." : null;
+    case 'reject':
+      if (approval === true)
+        return "You've signed this. To take your signature back, use Withdraw my signature.";
+      return approval === false ? "You've already rejected this." : null;
+    case 'withdraw':
+      if (approval === false) return 'Your latest answer on chain is already a rejection.';
+      return approval === null
+        ? "You haven't signed this, so there's no signature to withdraw."
+        : null;
+  }
 }
 
 async function myLatestConfirmedDecision(

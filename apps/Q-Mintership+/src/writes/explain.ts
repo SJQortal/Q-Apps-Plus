@@ -84,5 +84,16 @@ export const SIGN_NEW_TX_CHECK: string[] = [
   'Tick the box, then Accept.',
 ];
 
+/**
+ * Hub's checks for a rejection (Reject, or Withdraw my signature): the same
+ * SIGN_TRANSACTION dialog as a signature, with "approval": false.
+ */
+export const SIGN_REJECTION_CHECK: string[] = [
+  'Tx type: GROUP_APPROVAL.',
+  '"approval": false.',
+  '"pendingSignature" starts with the characters shown here.',
+  'Tick the box, then Accept.',
+];
+
 /** Hub's approval queue gives up after this long; mention it so nobody waits on a closed dialog. */
 export const HUB_DIALOG_SECONDS = 60;
