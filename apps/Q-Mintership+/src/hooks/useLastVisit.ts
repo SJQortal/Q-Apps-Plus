@@ -7,9 +7,11 @@
  *
  * Neither polls. They read the keys other views already keep fresh
  * (`decisions:queue`, `nominations:all`, `nominations:for:<address>`); the
- * only extra reads are the decided decisions' outcomes, once each.
+ * only extra reads are the decided decisions' outcomes, once each. A
+ * nominator's own nominations come from `nominations:all`, saved whenever
+ * a screen has read it (Home does for every nominator).
  */
-import { useCallback, useEffect, useReducer, useState } from 'react';
+import { useCallback, useEffect, useReducer, useState, useSyncExternalStore } from 'react';
 import type { ChainNow } from '../data/chain';
 import {
   claimAnnouncement,
@@ -21,19 +23,21 @@ import {
   recordVisit,
   visitBaseline,
 } from '../data/lastVisit';
-import { loadNominationsFor, type Nomination } from '../data/nominations';
-import { peekQuery } from '../data/query';
+import { loadNominationsFor, type Nomination, type NominationsData } from '../data/nominations';
+import { peekQuery, subscribeQuery } from '../data/query';
 import { getAddressHistory } from '../data/txs';
 import {
   adminChanges,
   buildSnapshot,
   hasChanges,
+  madeEvents,
   newestNomination,
   nomineeEvents,
   sinceSummary,
   vanishedDecisions,
   type SinceChanges,
 } from '../rules/sinceLastVisit';
+import { isEligibleNominator } from '../rules/nomination';
 import type { MyStatus } from '../rules/status';
 import { useSession } from '../state/session';
 import { useDecisions, useMyStatus, useNominations } from './useData';
@@ -45,6 +49,21 @@ function accountOf(status: MyStatus | undefined): string | null {
   return status.address || null;
 }
 
+/** A level 5+ member or a Minter Admin: someone who can have made nominations. */
+function isNominator(status: MyStatus | undefined): boolean {
+  return Boolean(status && isEligibleNominator(status));
+}
+
+/** A key's value as other views load it: follows it, never loads it. */
+function useLoaded<T>(key: string | null): T | undefined {
+  const subscribe = useCallback(
+    (listener: () => void) => subscribeQuery(key ?? '__idle__', listener),
+    [key]
+  );
+  const read = useCallback(() => (key ? peekQuery<T>(key) : undefined), [key]);
+  return useSyncExternalStore(subscribe, read, read);
+}
+
 /** The newest nomination about `address` the status already loaded, if it did. */
 function loadedNomination(address: string): Nomination | null | undefined {
   const list = peekQuery<Nomination[]>(`nominations:for:${address}`);
@@ -54,8 +73,9 @@ function loadedNomination(address: string): Nomination | null | undefined {
 /**
  * Save the signed-in account's snapshot whenever its data changes: the
  * Decisions queue for Minter Admins, the newest nomination for accounts not
- * in MINTER. Waits until that data is there, so a half-loaded screen never
- * overwrites a full snapshot.
+ * in MINTER, and the nominations a nominator made once a screen has read
+ * them. Waits until the queue or the nomination is there, so a half-loaded
+ * screen never overwrites a full snapshot.
  */
 export function useRecordVisit(): void {
   const session = useSession();
@@ -65,6 +85,8 @@ export function useRecordVisit(): void {
   const isAdmin = Boolean(address && status?.isAdmin);
   const decisions = useDecisions(isAdmin);
   const data = decisions.data;
+  const nominator = Boolean(address && isNominator(status));
+  const all = useLoaded<NominationsData>(nominator ? 'nominations:all' : null);
 
   useEffect(() => {
     if (!address || !status) return;
@@ -82,9 +104,10 @@ export function useRecordVisit(): void {
         height,
         decisions: isAdmin ? data?.decisions : undefined,
         nomination,
+        made: nominator && all ? { all: all.all, me: address } : undefined,
       })
     );
-  }, [address, status, isAdmin, data]);
+  }, [address, status, isAdmin, data, nominator, all]);
 }
 
 export interface SinceLastVisitResult {
@@ -117,10 +140,11 @@ export function useSinceLastVisit(
   const baseline = address ? visitBaseline(address) : null;
   const isAdmin = Boolean(address && status?.isAdmin);
   const isNominee = Boolean(address && status && !status.isMember);
+  const nominator = Boolean(address && isNominator(status));
 
-  // The same keys (and polls) as the admin's Home sections: no new reads.
+  // The same keys (and polls) as the admin's and nominator's Home sections: no new reads.
   const decisions = useDecisions(isAdmin && baseline !== null);
-  const nominations = useNominations(isAdmin && baseline !== null);
+  const nominations = useNominations((isAdmin || nominator) && baseline !== null);
   // Loaded by the status itself for accounts not in MINTER; no poll of its own.
   const mine = useQuery(
     isNominee && baseline !== null ? `nominations:for:${address}` : null,
@@ -156,8 +180,12 @@ export function useSinceLastVisit(
     ? (history.data?.rows.find((tx) => tx.signature === lastInvite) ?? null)
     : null;
   const nominee = isNominee && baseline ? nomineeEvents(baseline.nomination, current, decided) : [];
+  const made =
+    nominator && baseline && nominations.data && address
+      ? madeEvents(baseline.made, nominations.data.all, address, admin?.decided)
+      : [];
   const joined = Boolean(welcome && address && !isJoinedSeen(address));
-  const changes: SinceChanges = { joined, admin, nominee };
+  const changes: SinceChanges = { joined, admin, nominee, made };
 
   const settled =
     (!isAdmin ||
@@ -171,7 +199,8 @@ export function useSinceLastVisit(
     (!isNominee ||
       !baseline ||
       ((mine.data !== undefined || mine.isError) &&
-        (!lastInvite || history.data !== undefined || history.isError)));
+        (!lastInvite || history.data !== undefined || history.isError))) &&
+    (!nominator || !baseline?.made || nominations.data !== undefined || nominations.isError);
 
   const seen = useCallback(() => {
     if (!address) return;
@@ -182,10 +211,12 @@ export function useSinceLastVisit(
         height: decisions.data?.now.height ?? peekQuery<ChainNow>('chain:now')?.height ?? null,
         decisions: isAdmin ? decisions.data?.decisions : undefined,
         nomination: isNominee ? current : undefined,
+        made:
+          nominator && nominations.data ? { all: nominations.data.all, me: address } : undefined,
       })
     );
     bump();
-  }, [address, current, decisions.data, isAdmin, isNominee]);
+  }, [address, current, decisions.data, isAdmin, isNominee, nominator, nominations.data]);
 
   const claim = useCallback(() => (address ? claimAnnouncement(address) : false), [address]);
 

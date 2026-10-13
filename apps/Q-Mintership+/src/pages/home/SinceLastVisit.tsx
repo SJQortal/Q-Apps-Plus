@@ -2,9 +2,9 @@
  * Home's "Since your last visit": a compact list of what changed for the
  * signed-in account since this device last showed the app (new decisions
  * and decided ones for Minter Admins, the nomination's progress for a
- * nominee, "You're in" from the welcome). "Mark as seen" clears it; it
- * comes back when something else changes. Settings → Notifications can
- * turn it off.
+ * nominee, how the nominations a nominator made ended, "You're in" from the
+ * welcome). "Mark as seen" clears it; it comes back when something else
+ * changes. Settings → Notifications can turn it off.
  *
  * A heading, a list, and one polite sentence read out once a session.
  */
@@ -28,10 +28,15 @@ import { useDisplayName } from '../../hooks/useDisplayName';
 import { useAnnounceOnce, useSinceLastVisit } from '../../hooks/useLastVisit';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { decisionTitle, type Decision } from '../../rules/decision';
-import type { DecidedEntry, NomineeEvent } from '../../rules/sinceLastVisit';
+import type {
+  DecidedEntry,
+  MadeEvent,
+  MadeOutcome,
+  NomineeEvent,
+} from '../../rules/sinceLastVisit';
 import type { MyStatus } from '../../rules/status';
 import { signerState } from '../../rules/tally';
-import { decisionPath, PATHS } from '../../routes/paths';
+import { decisionPath, nominationPath, PATHS } from '../../routes/paths';
 import { useSession } from '../../state/session';
 import { sinceLastVisitAtom } from '../../state/notifications';
 import { formatBlock, formatRelative, plural } from '../../utils/format';
@@ -298,6 +303,66 @@ function MoreItem({
   );
 }
 
+const MADE: Record<
+  MadeOutcome,
+  { Icon: SvgIconComponent; tone: Tone; title: (who: string) => string; text: string }
+> = {
+  joined: {
+    Icon: CheckCircleOutlineOutlinedIcon,
+    tone: 'success',
+    title: (who) => `${who} joined MINTER`,
+    text: 'Your nomination was approved.',
+  },
+  approved: {
+    Icon: CheckCircleOutlineOutlinedIcon,
+    tone: 'success',
+    title: (who) => `Your nomination of ${who} was approved`,
+    text: 'One step left for them: Join now.',
+  },
+  rejected: {
+    Icon: HighlightOffOutlinedIcon,
+    tone: 'error',
+    title: (who) => `Your nomination of ${who} was rejected`,
+    text: 'Enough Minter Admins rejected it. They can be nominated again later.',
+  },
+  expired: {
+    Icon: ScheduleOutlinedIcon,
+    tone: 'neutral',
+    title: (who) => `Your nomination of ${who} expired`,
+    text: 'It ran out of time without enough signatures. They can be nominated again.',
+  },
+  lapsed: {
+    Icon: HourglassEmptyOutlinedIcon,
+    tone: 'neutral',
+    title: (who) => `Your nomination of ${who} closed`,
+    text: 'No Minter Admin signed it in time. They can be nominated again.',
+  },
+};
+
+/** How a nomination the account made ended, with a link to it. */
+function MadeItem({ event: e }: { event: MadeEvent }) {
+  const who = useDisplayName(e.nominee, e.nomineeName ?? undefined).label;
+  const words = MADE[e.kind];
+  return (
+    <Item
+      Icon={words.Icon}
+      tone={words.tone}
+      title={words.title(who)}
+      action={
+        <Button
+          component={RouterLink}
+          to={nominationPath(e.nominee)}
+          aria-label={`Open the nomination of ${who}`}
+        >
+          Open
+        </Button>
+      }
+    >
+      {words.text}
+    </Item>
+  );
+}
+
 function signaturesLine(signed: number, needed: number | null): string {
   return needed ? `${signed} of ${needed} signatures` : plural(signed, 'signature');
 }
@@ -392,6 +457,7 @@ export function SinceLastVisit({ status, welcome }: { status: MyStatus; welcome:
   if (!on || !since.visible) return null;
 
   const { joined, admin, nominee } = since.changes;
+  const made = since.changes.made ?? [];
 
   return (
     <Box sx={{ animation: reduced ? 'none' : `${appear} 200ms ease-out both` }}>
@@ -426,6 +492,18 @@ export function SinceLastVisit({ status, welcome }: { status: MyStatus; welcome:
             {nominee.map((e) => (
               <NomineeItem key={e.kind} event={e} />
             ))}
+            {made.slice(0, TOP).map((e) => (
+              <MadeItem key={`made-${e.nominee}`} event={e} />
+            ))}
+            {made.length > TOP ? (
+              <MoreItem
+                Icon={HowToRegOutlinedIcon}
+                text={`And ${made.length - TOP} more of your nominations ended`}
+                to={PATHS.history}
+                label="History"
+                ariaLabel="See your other nominations in History"
+              />
+            ) : null}
             {admin?.newDecisions.length ? (
               <NewDecisionsItem decisions={admin.newDecisions} publicKey={session.publicKey} />
             ) : null}

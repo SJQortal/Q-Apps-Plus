@@ -1,7 +1,9 @@
 /** The shell saves the last visit from data it already has, and keeps the earlier one as the baseline. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
 import { lastVisitKey, resetLastVisitSession, visitBaseline } from '../data/lastVisit';
+import { loadNominations } from '../data/nominations';
+import { queryLoadCounts } from '../data/query';
 import { parseSnapshot } from '../rules/sinceLastVisit';
 import { renderPage } from '../test/render';
 import { fetchCallsFor } from '../test/setup';
@@ -41,6 +43,24 @@ describe('useRecordVisit', () => {
     await renderPage(<Recorder />, { persona: 'newcomerName' });
     await waitFor(() => expect(saved(ADDR.newcomerName)).not.toBeNull());
     expect(saved(ADDR.newcomerName)?.nomination).toBeNull();
+  });
+
+  it('saves the nominations a nominator made once a screen has read them, never reading them itself', async () => {
+    await renderPage(<Recorder />, { persona: 'nominator' });
+    await waitFor(() => expect(saved(ADDR.nominator)).not.toBeNull());
+    expect('made' in (saved(ADDR.nominator) ?? {})).toBe(false);
+    expect(queryLoadCounts().nominations ?? 0).toBe(0);
+    // Home reads every nomination: the shell saves Nora's own from it.
+    await act(() => loadNominations());
+    await waitFor(() => expect(saved(ADDR.nominator)?.made?.length).toBe(5));
+    const made = saved(ADDR.nominator)?.made ?? [];
+    expect(made.map((m) => [m.nominee, m.state])).toEqual([
+      [ADDR.nominatedWaiting, 'waiting'],
+      [ADDR.nominatedSigning, 'signing'],
+      [ADDR.urgent, 'signing'],
+      [ADDR.lapsed, 'lapsed'],
+      [ADDR.expired, 'expired'],
+    ]);
   });
 
   it('saves only the time for a member', async () => {

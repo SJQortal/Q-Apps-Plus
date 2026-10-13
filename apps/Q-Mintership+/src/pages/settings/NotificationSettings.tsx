@@ -198,7 +198,7 @@ export function NotificationSettings() {
             </Typography>
             <Typography id={hintId} variant="body2" color="text.secondary" {...LINE}>
               Home lists what changed since you last opened the app on this device: new decisions,
-              your nomination&apos;s progress.
+              your nomination&apos;s progress, how the nominations you made ended.
             </Typography>
           </Copy>
           <Switch

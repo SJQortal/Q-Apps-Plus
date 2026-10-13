@@ -42,6 +42,18 @@ describe('the last visit', () => {
     expect(visitBaseline('QA')?.at).toBe(AT + 5000);
   });
 
+  it("keeps the nominations a nominator made when a save doesn't know them", () => {
+    const made = [{ nominee: 'Qn', decision: null, state: 'waiting' as const, publishedAt: AT }];
+    const stored = () => JSON.parse(window.localStorage.getItem(lastVisitKey('QM')) ?? '{}');
+    recordVisit('QM', { ...snap(AT), made });
+    // A screen that didn't read every nomination: the time moves on, the list stays.
+    recordVisit('QM', snap(AT + 1));
+    expect(stored()).toMatchObject({ at: AT + 1, made });
+    // A screen that did: its list (even an empty one) replaces it.
+    recordVisit('QM', { ...snap(AT + 2), made: [] });
+    expect(stored()).toMatchObject({ at: AT + 2, made: [] });
+  });
+
   it('reads the earlier visit before the first save of a session', () => {
     window.localStorage.setItem(lastVisitKey('QB'), JSON.stringify(snap(AT)));
     recordVisit('QB', snap(AT + 1));

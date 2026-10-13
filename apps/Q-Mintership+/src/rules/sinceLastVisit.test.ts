@@ -7,9 +7,12 @@ import type { Tally } from './tally';
 import {
   MAX_OUTCOME_LOOKUPS,
   MAX_SNAPSHOT_DECISIONS,
+  MAX_SNAPSHOT_MADE,
   adminChanges,
   buildSnapshot,
   hasChanges,
+  madeBy,
+  madeEvents,
   newestNomination,
   nomineeEvents,
   outcomeOf,
@@ -17,8 +20,11 @@ import {
   roundDecision,
   sameRound,
   sinceSummary,
+  snapMade,
   snapNomination,
   vanishedDecisions,
+  type MadeEvent,
+  type SnapMade,
   type SnapNomination,
   type VisitSnapshot,
 } from './sinceLastVisit';
@@ -511,6 +517,159 @@ describe('summary', () => {
     ];
     expect(sinceSummary({ joined: false, admin: null, nominee: kinds })).toBe(
       "Since your last visit: you've been nominated, a Minter Admin signed your nomination first, your nomination was approved, your nomination expired, your nomination was rejected, your nomination closed without a first signature."
+    );
+  });
+});
+
+describe('nominators: the nominations they made', () => {
+  const byMe = { publisher: { address: ME } } as Nomination['nomination'];
+  const byOther = { publisher: { address: OTHER } } as Nomination['nomination'];
+  /** A later nomination record of mine in someone else's round (it has an identifier). */
+  const mineToo = { publisher: { address: ME }, identifier: 'qmp-nomination-Q' } as never;
+  /** A support record of mine (no identifier). */
+  const mySupport = { publisher: { address: ME } } as never;
+  const made = (nominee: string, over: Partial<Nomination> = {}) =>
+    nomination({ nominee, nomineeName: `Name ${nominee}`, nomination: byMe, ...over });
+  const then = (nominee: string, state: SnapMade['state'], decision: string | null = null) => ({
+    nominee,
+    decision,
+    state,
+    publishedAt: AT - 86_400_000,
+  });
+
+  it('counts a record published first or later, never a support', () => {
+    expect(madeBy(made('Q1'), ME)).toBe(true);
+    expect(madeBy(nomination({ nomination: byOther, supporters: [mineToo] }), ME)).toBe(true);
+    expect(madeBy(nomination({ nomination: byOther, supporters: [mySupport] }), ME)).toBe(false);
+    expect(madeBy(nomination({ nomination: null, source: 'chain' }), ME)).toBe(false);
+  });
+
+  it('keeps them in the snapshot: open ones first, then the newest, at most 20', () => {
+    const list = [
+      made('Q-old-closed', { state: 'expired', publishedAt: AT - 9 }),
+      made('Q-open', { state: 'signing', decision: decision('inv'), publishedAt: AT - 50 }),
+      made('Q-new-closed', { state: 'lapsed', publishedAt: AT - 1 }),
+      nomination({ nominee: 'Q-theirs', nomination: byOther }),
+    ];
+    const s = buildSnapshot({ at: AT, height: 1, made: { all: list, me: ME } });
+    expect(s.made).toEqual([
+      { nominee: 'Q-open', decision: 'inv', state: 'signing', publishedAt: AT - 50 },
+      { nominee: 'Q-new-closed', decision: null, state: 'lapsed', publishedAt: AT - 1 },
+      { nominee: 'Q-old-closed', decision: null, state: 'expired', publishedAt: AT - 9 },
+    ]);
+    expect(parseSnapshot(JSON.parse(JSON.stringify(s)))).toEqual(s);
+    const many = Array.from({ length: MAX_SNAPSHOT_MADE + 5 }, (_, i) => made(`Q${i}`));
+    expect(snapMade(many, ME)).toHaveLength(MAX_SNAPSHOT_MADE);
+    expect('made' in buildSnapshot({ at: AT, height: 1 })).toBe(false);
+  });
+
+  it('still reads a snapshot saved before nominations were kept, and drops damaged ones', () => {
+    const older = parseSnapshot({ v: 1, at: AT, height: 1, decisions: [] });
+    expect(older).not.toBeNull();
+    expect('made' in (older ?? {})).toBe(false);
+    expect('made' in (parseSnapshot({ v: 1, at: AT, height: 1, made: 'all' }) ?? {})).toBe(false);
+    expect(
+      parseSnapshot({
+        v: 1,
+        at: AT,
+        height: 1,
+        made: [
+          then('Qok', 'waiting'),
+          { ...then('Qbad', 'waiting'), state: 'dreaming' },
+          then('', 'waiting'),
+          { ...then('Qneg', 'waiting'), publishedAt: -1 },
+          null,
+        ],
+      })?.made
+    ).toEqual([then('Qok', 'waiting')]);
+  });
+
+  it('has nothing to compare without them', () => {
+    expect(madeEvents(undefined, [made('Q1', { state: 'expired' })], ME)).toEqual([]);
+  });
+
+  it('reports each way one ended, the good news first', () => {
+    const old = { signature: 'inv-old' } as TxRow;
+    const previous = [
+      then('Qjoined', 'signing', 'inv-j'),
+      then('Qapproved', 'signing', 'inv-a'),
+      then('Qrejected', 'signing', 'inv-old'),
+      then('Qexpired', 'signing', 'inv-e'),
+      then('Qlapsed', 'waiting'),
+    ];
+    const all = [
+      made('Qlapsed', { state: 'lapsed', publishedAt: AT - 86_400_000 }),
+      made('Qexpired', { state: 'expired', latestInvite: { signature: 'inv-e' } as TxRow }),
+      made('Qrejected', { state: 'rejected', latestInvite: old }),
+      made('Qapproved', { state: 'approved', latestInvite: { signature: 'inv-a' } as TxRow }),
+      // In MINTER now: the round's invite isn't named any more, its record still matches.
+      made('Qjoined', { state: 'joined', publishedAt: AT - 86_400_000 }),
+    ];
+    const events = madeEvents(previous, all, ME);
+    expect(events.map((e) => [e.kind, e.nominee, e.decision])).toEqual([
+      ['joined', 'Qjoined', 'inv-j'],
+      ['approved', 'Qapproved', 'inv-a'],
+      ['rejected', 'Qrejected', 'inv-old'],
+      ['expired', 'Qexpired', 'inv-e'],
+      ['lapsed', 'Qlapsed', null],
+    ]);
+    expect(events[0].nomineeName).toBe('Name Qjoined');
+  });
+
+  it('stays quiet when nothing ended, or it was over already, or it is another round', () => {
+    const previous = [
+      then('Qsigning', 'signing', 'inv-s'),
+      then('Qwas-expired', 'expired', 'inv-x'),
+      then('Qwas-approved', 'approved', 'inv-ap'),
+      then('Qnew-round', 'signing', 'inv-1'),
+      then('Qsigned-then-gone', 'signing', 'inv-g'),
+    ];
+    const all = [
+      made('Qsigning', { state: 'signing', decision: decision('inv-s') }),
+      made('Qwas-expired', { state: 'expired', latestInvite: { signature: 'inv-x' } as TxRow }),
+      // Approved before, still waiting for them to join: not news again.
+      made('Qwas-approved', { state: 'approved', latestInvite: { signature: 'inv-ap' } as TxRow }),
+      made('Qnew-round', { state: 'expired', latestInvite: { signature: 'inv-2' } as TxRow }),
+      // Signing then, past its window now with no invite found: not guessed.
+      made('Qsigned-then-gone', { state: 'lapsed', publishedAt: AT - 86_400_000 }),
+      // Never in the snapshot.
+      made('Qunknown', { state: 'expired' }),
+    ];
+    expect(madeEvents(previous, all, ME)).toEqual([]);
+  });
+
+  it("leaves out someone else's nomination, and what an admin's decided rows already say", () => {
+    const previous = [then('Q1', 'signing', 'inv-1'), then('Q2', 'signing', 'inv-2')];
+    const all = [
+      nomination({
+        nominee: 'Q1',
+        nomination: byOther,
+        state: 'expired',
+        latestInvite: { signature: 'inv-1' } as TxRow,
+      }),
+      made('Q2', { state: 'approved', latestInvite: { signature: 'inv-2' } as TxRow }),
+    ];
+    expect(madeEvents(previous, all, ME, [{ signature: 'inv-2' }])).toEqual([]);
+    expect(madeEvents(previous, all, ME).map((e) => e.nominee)).toEqual(['Q2']);
+  });
+
+  it('shows in the panel and reads as part of the sentence', () => {
+    const event = (kind: MadeEvent['kind']): MadeEvent => ({
+      kind,
+      nominee: `Q-${kind}`,
+      nomineeName: null,
+      decision: null,
+    });
+    const changes = {
+      joined: false,
+      admin: null,
+      nominee: [],
+      made: [event('joined'), event('approved'), event('rejected'), event('lapsed')],
+    };
+    expect(hasChanges(changes)).toBe(true);
+    expect(hasChanges({ ...changes, made: [] })).toBe(false);
+    expect(sinceSummary(changes)).toBe(
+      'Since your last visit: 2 nominations you made were approved, 1 nomination you made was rejected, 1 nomination you made ran out.'
     );
   });
 });

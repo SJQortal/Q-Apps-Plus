@@ -68,3 +68,6 @@ export function lastVisitSnapshots(
   'admin' | 'nominatedSigning' | 'nominatedWaiting',
   { address: string; snapshot: unknown }
 >;
+// A nominator's last visit (activity-alerts).
+export function addNominatorHistory(world: World): string;
+export function nominatorLastVisit(world: World): { address: string; snapshot: unknown };

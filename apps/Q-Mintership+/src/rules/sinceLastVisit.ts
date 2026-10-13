@@ -11,6 +11,11 @@
  * - Nominees: their nomination's progress (nominated, first signature, new
  *   signatures, new support, approved, expired, rejected, or closed without
  *   a first signature).
+ * - Nominators (level 5+ members and Minter Admins): how the nominations
+ *   they made ended (approved, the nominee joined, expired, rejected, or
+ *   closed without a first signature), from the nominations Home already
+ *   reads. Snapshots from before this was added have no `made`: nothing to
+ *   compare until the next one.
  * - "You're in" is Home's welcome (pages/home/welcome.ts), not worked out
  *   here a second time.
  */
@@ -24,6 +29,8 @@ export const SNAPSHOT_VERSION = 1;
 export const MAX_SNAPSHOT_DECISIONS = 100;
 /** Decisions decided since the last visit that are looked up (one read each, kept for the session). */
 export const MAX_OUTCOME_LOOKUPS = 12;
+/** Nominations a nominator made that a snapshot keeps (open ones first, then the newest). */
+export const MAX_SNAPSHOT_MADE = 20;
 
 /** A decision as the snapshot keeps it. */
 export interface SnapDecision {
@@ -48,6 +55,15 @@ export interface SnapNomination {
   publishedAt: number;
 }
 
+/** A nomination the account made, as the snapshot keeps it. */
+export interface SnapMade {
+  nominee: string;
+  /** The invite of this round (pending or decided); null before a first signature. */
+  decision: string | null;
+  state: NominationState;
+  publishedAt: number;
+}
+
 export interface VisitSnapshot {
   v: typeof SNAPSHOT_VERSION;
   /** When it was saved (ms, this device's clock). */
@@ -58,6 +74,11 @@ export interface VisitSnapshot {
   decisions?: SnapDecision[];
   /** Accounts not in MINTER: their newest nomination then (null: none). Absent for members. */
   nomination?: SnapNomination | null;
+  /**
+   * Nominators: the nominations they made then (at most MAX_SNAPSHOT_MADE).
+   * Absent when not known (not a nominator, or no screen had read them).
+   */
+  made?: SnapMade[];
 }
 
 const KINDS = new Set<string>([...Object.values(KIND_BY_TYPE), 'other']);
@@ -104,22 +125,52 @@ export function snapNomination(n: Nomination | null): SnapNomination | null {
   };
 }
 
+/** True when `address` published a nomination record in this round (the first or a later one). */
+export function madeBy(n: Nomination, address: string): boolean {
+  if (n.nomination?.publisher.address === address) return true;
+  return n.supporters.some((s) => 'identifier' in s && s.publisher.address === address);
+}
+
+/** The nominations `address` made: open ones first, then the newest. */
+export function nominationsMade(all: readonly Nomination[], address: string): Nomination[] {
+  return all
+    .filter((n) => madeBy(n, address))
+    .sort(
+      (a, b) =>
+        Number(isOpenState(b.state)) - Number(isOpenState(a.state)) || b.publishedAt - a.publishedAt
+    );
+}
+
+export function snapMade(all: readonly Nomination[], address: string): SnapMade[] {
+  return nominationsMade(all, address)
+    .slice(0, MAX_SNAPSHOT_MADE)
+    .map((n) => ({
+      nominee: n.nominee,
+      decision: roundDecision(n),
+      state: n.state,
+      publishedAt: n.publishedAt,
+    }));
+}
+
 /**
  * What this device saves for the account now. `decisions` only for Minter
  * Admins, `nomination` (the newest, any state) only for accounts not in
- * MINTER; leave either out when it doesn't apply.
+ * MINTER, `made` (from every nomination; the account's own are kept) only
+ * for nominators; leave any out when it doesn't apply or isn't loaded.
  */
 export function buildSnapshot(input: {
   at: number;
   height: number | null;
   decisions?: Decision[];
   nomination?: Nomination | null;
+  made?: { all: readonly Nomination[]; me: string };
 }): VisitSnapshot {
   const snapshot: VisitSnapshot = { v: SNAPSHOT_VERSION, at: input.at, height: input.height };
   if (input.decisions) {
     snapshot.decisions = input.decisions.slice(0, MAX_SNAPSHOT_DECISIONS).map(snapDecision);
   }
   if (input.nomination !== undefined) snapshot.nomination = snapNomination(input.nomination);
+  if (input.made) snapshot.made = snapMade(input.made.all, input.made.me);
   return snapshot;
 }
 
@@ -155,6 +206,16 @@ function parseSnapNomination(raw: unknown): SnapNomination | null | undefined {
   };
 }
 
+function parseSnapMade(raw: unknown): SnapMade | null {
+  const m = raw as Partial<SnapMade> | null;
+  if (!m || typeof m !== 'object') return null;
+  if (typeof m.nominee !== 'string' || !m.nominee) return null;
+  if (!(m.decision === null || (typeof m.decision === 'string' && m.decision))) return null;
+  if (typeof m.state !== 'string' || !STATES.has(m.state)) return null;
+  if (!isCount(m.publishedAt)) return null;
+  return { nominee: m.nominee, decision: m.decision, state: m.state, publishedAt: m.publishedAt };
+}
+
 /** A stored snapshot, checked field by field (storage can hold anything); null when it can't be read. */
 export function parseSnapshot(raw: unknown): VisitSnapshot | null {
   const s = raw as Partial<VisitSnapshot> | null;
@@ -171,6 +232,13 @@ export function parseSnapshot(raw: unknown): VisitSnapshot | null {
   if ('nomination' in s) {
     const nomination = parseSnapNomination(s.nomination);
     if (nomination !== undefined) snapshot.nomination = nomination;
+  }
+  // Added later in v1: anything but a list is left out, as if it weren't known.
+  if (Array.isArray(s.made)) {
+    snapshot.made = s.made
+      .slice(0, MAX_SNAPSHOT_MADE)
+      .map(parseSnapMade)
+      .filter((m): m is SnapMade => m !== null);
   }
   return snapshot;
 }
@@ -310,7 +378,10 @@ export type NomineeEvent =
   | { kind: 'lapsed' };
 
 /** The same nomination round as at the last visit (the same invite, or the same record). */
-export function sameRound(previous: SnapNomination, current: Nomination): boolean {
+export function sameRound(
+  previous: Pick<SnapNomination, 'decision' | 'publishedAt'>,
+  current: Nomination
+): boolean {
   const decision = roundDecision(current);
   if (previous.decision && decision) return previous.decision === decision;
   return Math.abs(previous.publishedAt - current.publishedAt) < 1000;
@@ -385,6 +456,74 @@ export function nomineeEvents(
   return events;
 }
 
+// ---- Nominators -------------------------------------------------------------
+
+/** How a nomination the account made ended: `joined` when the nominee is in MINTER now. */
+export type MadeOutcome = 'approved' | 'joined' | 'expired' | 'rejected' | 'lapsed';
+
+export interface MadeEvent {
+  kind: MadeOutcome;
+  nominee: string;
+  /** A hint for the name (the member list's or the record's), never trusted for identity. */
+  nomineeName: string | null;
+  /** The round's invite, when it had one. */
+  decision: string | null;
+}
+
+/** The states a nomination can have been in at the last visit for each outcome to be news. */
+const MADE_FROM: Record<MadeOutcome, readonly NominationState[]> = {
+  approved: ['waiting', 'signing'],
+  joined: ['waiting', 'signing', 'approved'],
+  expired: ['waiting', 'signing'],
+  rejected: ['waiting', 'signing'],
+  lapsed: ['waiting'],
+};
+
+const MADE_ORDER: Record<MadeOutcome, number> = {
+  joined: 0,
+  approved: 1,
+  rejected: 2,
+  expired: 3,
+  lapsed: 4,
+};
+
+function isMadeOutcome(state: NominationState): state is MadeOutcome {
+  return state in MADE_FROM;
+}
+
+/**
+ * How the nominations `me` made ended since the last visit, the good news
+ * first. `previous` undefined (an older snapshot, or not a nominator then)
+ * means nothing to compare. A round that isn't the one the snapshot kept
+ * is left out rather than guessed; so is one whose invite is in `decided`
+ * (a Minter Admin's "decided since" rows already say it).
+ */
+export function madeEvents(
+  previous: readonly SnapMade[] | undefined,
+  all: readonly Nomination[],
+  me: string,
+  decided: ReadonlyArray<Pick<DecidedEntry, 'signature'>> = []
+): MadeEvent[] {
+  if (!previous) return [];
+  const before = new Map(previous.map((m) => [m.nominee, m]));
+  const shown = new Set(decided.map((d) => d.signature));
+  const events: Array<{ event: MadeEvent; at: number }> = [];
+  for (const n of all) {
+    const then = before.get(n.nominee);
+    if (!then || !isMadeOutcome(n.state) || !madeBy(n, me) || !sameRound(then, n)) continue;
+    if (!MADE_FROM[n.state].includes(then.state)) continue;
+    const decision = roundDecision(n) ?? then.decision;
+    if (decision && shown.has(decision)) continue;
+    events.push({
+      event: { kind: n.state, nominee: n.nominee, nomineeName: n.nomineeName, decision },
+      at: n.publishedAt,
+    });
+  }
+  return events
+    .sort((a, b) => MADE_ORDER[a.event.kind] - MADE_ORDER[b.event.kind] || b.at - a.at)
+    .map((e) => e.event);
+}
+
 // ---- Together --------------------------------------------------------------
 
 export interface SinceChanges {
@@ -392,6 +531,8 @@ export interface SinceChanges {
   joined: boolean;
   admin: AdminChanges | null;
   nominee: NomineeEvent[];
+  /** Nominators: how the nominations they made ended (absent: none). */
+  made?: MadeEvent[];
 }
 
 export function hasChanges(changes: SinceChanges): boolean {
@@ -399,6 +540,7 @@ export function hasChanges(changes: SinceChanges): boolean {
   return (
     changes.joined ||
     changes.nominee.length > 0 ||
+    Boolean(changes.made?.length) ||
     Boolean(a && (a.newDecisions.length || a.decided.length || a.newNominations.length))
   );
 }
@@ -438,5 +580,21 @@ export function sinceSummary(changes: SinceChanges): string | null {
   }
   if (a?.decided.length) parts.push(`${a.decided.length} decided`);
   for (const e of changes.nominee) parts.push(nomineeWords(e));
+  const made = changes.made ?? [];
+  const ended = (kinds: readonly MadeOutcome[]) =>
+    made.filter((e) => kinds.includes(e.kind)).length;
+  const approved = ended(['approved', 'joined']);
+  const rejected = ended(['rejected']);
+  const ranOut = ended(['expired', 'lapsed']);
+  if (approved)
+    parts.push(
+      count(approved, 'nomination you made was approved', 'nominations you made were approved')
+    );
+  if (rejected)
+    parts.push(
+      count(rejected, 'nomination you made was rejected', 'nominations you made were rejected')
+    );
+  if (ranOut)
+    parts.push(count(ranOut, 'nomination you made ran out', 'nominations you made ran out'));
   return parts.length ? `Since your last visit: ${parts.join(', ')}.` : null;
 }

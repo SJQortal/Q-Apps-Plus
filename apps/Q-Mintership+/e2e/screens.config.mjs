@@ -30,6 +30,7 @@ import {
   PEOPLE,
 } from './world.mjs';
 import { addTargetShift } from './world.mjs';
+import { nominatorLastVisit } from './world.mjs';
 
 const world = createWorld();
 // Admins' Decisions also shows the transactions that aren't MINTER group changes.
@@ -494,6 +495,31 @@ export default {
         const section = page.getByRole('region', { name: 'Muted names' });
         await section.getByRole('button', { name: 'Unmute Member 7' }).waitFor({ timeout: 8000 });
         await page.waitForTimeout(300);
+      },
+    },
+    // A nominator's Home after an earlier visit: how the nominations she made ended.
+    {
+      key: 'home-since-nominator',
+      path: '/?as=nominator',
+      after: async (page) => {
+        const { address, snapshot } = nominatorLastVisit(world);
+        await page.addInitScript(
+          ([key, value]) => {
+            try {
+              localStorage.setItem(key, value);
+            } catch {
+              // No storage: the screen shows no panel, and the wait below says so.
+            }
+          },
+          [lastVisitStorageKey(address), JSON.stringify(snapshot)]
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+        await page
+          .getByRole('region', { name: 'Since your last visit' })
+          .getByText(/^Your nomination of .+ expired$/)
+          .waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
       },
     },
   ],
