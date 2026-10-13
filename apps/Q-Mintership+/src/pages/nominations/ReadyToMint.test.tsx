@@ -68,6 +68,15 @@ describe('Ready to mint', () => {
     expect(
       await within(await row('bob+builder')).findByText('Level 0 · no blocks minted yet')
     ).toBeInTheDocument();
+    // Kit was a member once: the row says so, from their MINTER history.
+    expect(
+      await within(kit).findByText(
+        'Former member: removed from MINTER on 26 Aug 2026',
+        {},
+        { timeout: 4000 }
+      )
+    ).toBeInTheDocument();
+    expect(within(await row('bob+builder')).queryByText(/Former member/)).toBeNull();
     expect(screen.getByText(/They need a nomination from a level 5\+ minter/)).toBeInTheDocument();
     expect(screen.getByText(/this is the order your node lists them in/)).toBeInTheDocument();
     expect(screen.getByText('8 of 8 shown')).toBeInTheDocument();
@@ -94,11 +103,13 @@ describe('Ready to mint', () => {
     // 6 from the mock world, then 14 of these.
     await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(20));
     expect(screen.getByText('20 of 51 shown')).toBeInTheDocument();
+    // Account, name and MINTER history: three reads per row shown, none for the others.
     const reads = (address: string) =>
       fetchCallsFor(`/addresses/${address}`).length +
-      fetchCallsFor(`/names/primary/${address}`).length;
-    await waitFor(() => expect(reads(many[13])).toBe(2));
-    expect(many.slice(0, 14).map(reads)).toEqual(new Array(14).fill(2));
+      fetchCallsFor(`/names/primary/${address}`).length +
+      fetchCallsFor(`/transactions/search?address=${address}`).length;
+    await waitFor(() => expect(reads(many[13])).toBe(3));
+    expect(many.slice(0, 14).map(reads)).toEqual(new Array(14).fill(3));
     expect(many.slice(14).map(reads)).toEqual(new Array(31).fill(0));
 
     await user.click(screen.getByRole('button', { name: 'Show 20 more' }));
@@ -107,16 +118,43 @@ describe('Ready to mint', () => {
     expect(document.activeElement).toHaveAccessibleName(
       `${shortAddress(many[14])}: open their page`
     );
-    await waitFor(() => expect(reads(many[33])).toBe(2));
-    expect(many.slice(14, 34).map(reads)).toEqual(new Array(20).fill(2));
+    await waitFor(() => expect(reads(many[33])).toBe(3));
+    expect(many.slice(14, 34).map(reads)).toEqual(new Array(20).fill(3));
     expect(many.slice(34).map(reads)).toEqual(new Array(11).fill(0));
     // Rows already read aren't read again.
-    expect(many.slice(0, 14).map(reads)).toEqual(new Array(14).fill(2));
+    expect(many.slice(0, 14).map(reads)).toEqual(new Array(14).fill(3));
 
     await user.click(screen.getByRole('button', { name: 'Show 11 more' }));
     expect(within(list).getAllByRole('listitem')).toHaveLength(51);
     expect(screen.getByText('51 of 51 shown')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Show \d+ more$/ })).toBeNull();
+  });
+
+  it('marks former members, kicked or left, and nobody who was never a member', async () => {
+    await open('nominator', (world) => {
+      world.joinRequests.push(joinRequest(ADDR.left), joinRequest(ADDR.kicked));
+      // Bram's ban ended: a former member again, removed by the ban.
+      world.bans = world.bans.filter((b: { offender: string }) => b.offender !== ADDR.banned);
+      world.joinRequests.push(joinRequest(ADDR.banned));
+    });
+    expect(
+      await within(await row('Lou Left')).findByText(
+        /^Former member: left MINTER on \d+ \w+ 2026$/,
+        {},
+        { timeout: 4000 }
+      )
+    ).toBeInTheDocument();
+    expect(
+      await within(await row('Kit Kicked')).findByText(
+        'Former member: removed from MINTER on 26 Aug 2026'
+      )
+    ).toBeInTheDocument();
+    expect(
+      await within(await row('Bram Banned')).findByText(/^Former member: removed from MINTER on /)
+    ).toBeInTheDocument();
+    const list = await readyList();
+    // The others never were members.
+    await waitFor(() => expect(within(list).getAllByText(/^Former member: /)).toHaveLength(3));
   });
 
   it('reads a row again on Refresh when its level could not be read', async () => {

@@ -7,14 +7,18 @@
  *   need every row's account.
  * - The join requests, members, admins and bans are the cached reads the
  *   nominations already make, so the list itself adds no GETs there.
- * - Each person's level, blocks minted and name are read only for the rows
- *   on screen, six reads at a time, and cached (loadReadyDetails).
+ * - Each person's level, blocks minted, name and whether they were a member
+ *   before are read only for the rows on screen, six reads at a time, and
+ *   cached (loadReadyDetails).
  */
+import { formerMember, type FormerMember } from '../rules/status';
 import { getAccount, getPrimaryName } from './accounts';
+import { getChainNow } from './chain';
 import { MINTER_GROUP_ID } from './constants';
 import { activeBanFor, getAdmins, getBans, getJoinRequests, getMembers } from './group';
 import { mapLimit } from './qdn';
 import { fetchQuery } from './query';
+import { getAddressHistory } from './txs';
 import type { BanRow, JoinRequestRow } from './types';
 
 export const READY_KEY = 'ready:list';
@@ -83,11 +87,37 @@ export function loadReadyToMint(options: { force?: boolean } = {}): Promise<Read
   );
 }
 
+/** The key a row's former-member mark is kept under. */
+export const formerKey = (address: string) => `former:${address}`;
+
 /**
- * Read the account (`account:<a>`) and primary name (`name:<a>`) of the rows
- * on screen into the read store, at most six reads at a time. Cached ones
- * cost nothing; a failed read leaves its key in error for the row to say so.
- * Once `signal` aborts, no new read starts.
+ * Whether someone on the list was a MINTER member before (kicked, banned
+ * once, or left), from their MINTER history: one history search per row,
+ * kept 10 minutes like the account. The tip it is dated by is the cached one
+ * the nominations already read.
+ */
+export function getFormerMember(address: string): Promise<FormerMember | null> {
+  return fetchQuery(
+    formerKey(address),
+    async () => {
+      const [history, now] = await Promise.all([getAddressHistory(address), getChainNow()]);
+      return formerMember(
+        address,
+        history.rows,
+        { height: now.height, timestamp: now.timestamp },
+        now.msPerBlock
+      );
+    },
+    { ttlMs: READY_ACCOUNT_TTL_MS }
+  );
+}
+
+/**
+ * Read the account (`account:<a>`), primary name (`name:<a>`) and
+ * former-member mark (`former:<a>`) of the rows on screen into the read
+ * store, at most six reads at a time. Cached ones cost nothing; a failed
+ * read leaves its key in error for the row to say so (or, for the mark, to
+ * show none). Once `signal` aborts, no new read starts.
  */
 export async function loadReadyDetails(
   addresses: string[],
@@ -96,6 +126,7 @@ export async function loadReadyDetails(
   const reads = addresses.flatMap((address) => [
     () => getAccount(address, { ttlMs: READY_ACCOUNT_TTL_MS }),
     () => getPrimaryName(address),
+    () => getFormerMember(address),
   ]);
   await mapLimit(reads, READY_READS_AT_ONCE, async (read) => {
     if (options.signal?.aborted) return;

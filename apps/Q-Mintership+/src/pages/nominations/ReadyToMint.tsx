@@ -3,7 +3,8 @@
  * MINTER, for everyone to see, so nominators can find them. Level 5+ members
  * and Minter Admins get Nominate on each row, or Add your support where an
  * open nomination already exists. Twenty rows at a time, in Core's order;
- * each row's level, blocks minted and name are read only once it is shown.
+ * each row's level, blocks minted, name and whether they were a member
+ * before ("Former member: left MINTER on …") are read only once it is shown.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -14,11 +15,12 @@ import { Section } from '../../components/common/Section';
 import { EmptyState, ErrorState, ListSkeleton } from '../../components/common/states';
 import { effectiveBlocksMinted } from '../../data/accounts';
 import type { Nomination } from '../../data/nominations';
-import { READY_PAGE, loadReadyDetails, type ReadyToMint } from '../../data/readyToMint';
+import { READY_PAGE, formerKey, loadReadyDetails, type ReadyToMint } from '../../data/readyToMint';
 import type { AccountInfo } from '../../data/types';
 import type { UseQueryResult } from '../../hooks/useQuery';
 import { nominatePath } from '../../routes/paths';
-import { displayName, formatCount } from '../../utils/format';
+import type { FormerMember } from '../../rules/status';
+import { displayName, formatCount, formatDate } from '../../utils/format';
 import { readable } from '../../utils/readable';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
 import { isStillOpenForSupport, myPart } from './filters';
@@ -166,6 +168,13 @@ function blocksMintedText(blocks: number): string {
   return `${formatCount(blocks)} ${blocks === 1 ? 'block' : 'blocks'} minted`;
 }
 
+/** "Former member: removed from MINTER on 26 Aug 2026", as the person page says it. */
+function formerText(former: FormerMember): string {
+  return former.kind === 'left'
+    ? `Former member: left MINTER on ${formatDate(former.at)}`
+    : `Former member: removed from MINTER on ${formatDate(former.at)}`;
+}
+
 /** One person: avatar, name or short address (to their page), level and blocks minted, the action. */
 function ReadyRow({
   address,
@@ -186,18 +195,29 @@ function ReadyRow({
   const navigate = useNavigate();
   const account = useStoredValue<AccountInfo>(`account:${address}`);
   const name = useStoredValue<string | null>(`name:${address}`);
+  const former = useStoredValue<FormerMember | null>(formerKey(address)).data ?? null;
   const supportPending = usePendingWrite(nomination ? writeKeys.support(address) : null);
   const nominatePending = usePendingWrite(writeKeys.nominate(address));
   // Never undefined: PersonChip would look the name up itself, outside the six-at-a-time reads.
   const shownName = name.data ?? null;
   const label = displayName(shownName, address);
 
-  const secondary = account.data ? (
+  const level = account.data ? (
     `Level ${account.data.level} · ${blocksMintedText(effectiveBlocksMinted(account.data))}`
   ) : account.status === 'error' ? (
     'Level not available right now'
   ) : (
     <Skeleton variant="text" width={180} aria-hidden />
+  );
+  const secondary = former ? (
+    <>
+      {level}
+      <Box component="span" sx={{ display: 'block' }}>
+        {formerText(former)}
+      </Box>
+    </>
+  ) : (
+    level
   );
 
   // `mine`: something the signed-in member did (green, with a tick); otherwise a plain fact.

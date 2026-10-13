@@ -159,6 +159,30 @@ export function wasMemberBefore(address: string, history: TxRow[], before: numbe
   );
 }
 
+/** How a former member last left MINTER: removed (a kick or a ban) or left, and when (ms). */
+export interface FormerMember {
+  kind: 'removed' | 'left';
+  at: number;
+}
+
+/**
+ * Whether the account was in MINTER once and isn't now: its newest removal
+ * (an approved kick or ban, or its own LEAVE_GROUP), counted only when it
+ * was a member before it, as the status engine counts `wasMember`. A kicked
+ * join request alone is not a former member. Null otherwise.
+ */
+export function formerMember(
+  address: string,
+  history: TxRow[],
+  tip: StatusInputs['tip'],
+  msPerBlock: number
+): FormerMember | null {
+  const removal = latestRemoval(address, history, tip, msPerBlock);
+  if (!removal) return null;
+  if (removal.kind !== 'leave' && !wasMemberBefore(address, history, removal.at)) return null;
+  return { kind: removal.kind === 'leave' ? 'left' : 'removed', at: removal.at };
+}
+
 export function resolveStatus(input: StatusInputs): MyStatus {
   const progress = levelProgress(input.level, input.blocksMinted, NOMINATOR_MIN_LEVEL);
   const removal =
