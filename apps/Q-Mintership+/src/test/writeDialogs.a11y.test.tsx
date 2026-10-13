@@ -209,6 +209,27 @@ describe('Write dialogs by keyboard: Propose', () => {
     expect(within(form).queryByRole('alert')).toBeNull();
   });
 
+  it('“Propose removing their admin role” moves focus to the form’s new title', async () => {
+    const u = user();
+    await decisions();
+    await choose(u, /^Remove a member/);
+    const form = await screen.findByRole('dialog', { name: 'Remove a member' }, T);
+    await u.type(within(form).getByRole('textbox', { name: 'Name or address' }), 'Admin B');
+    await u.keyboard('{Enter}');
+    const switchTo = await within(form).findByRole(
+      'button',
+      { name: 'Propose removing their admin role' },
+      T
+    );
+    switchTo.focus();
+    await u.keyboard('{Enter}');
+    const switched = await screen.findByRole('dialog', { name: 'Remove a Minter Admin' }, T);
+    // The button went with the old form: focus is on what the dialog is now.
+    await waitFor(() =>
+      expect(within(switched).getByRole('heading', { name: 'Remove a Minter Admin' })).toHaveFocus()
+    );
+  });
+
   it('Clean up stale invites opens the section and moves focus to it', async () => {
     const u = user();
     await decisions();

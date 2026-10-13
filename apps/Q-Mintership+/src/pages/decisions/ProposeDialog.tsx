@@ -53,6 +53,7 @@ import { ProposeSignDialog, type ProposalFacts } from './ProposeSignDialog';
 import { isRecentInvite } from './staleRules';
 import type { ShiftScenario } from '../../rules/targetShift';
 import type { LabelOf } from './targetShiftUi';
+import { focusDialogTitle } from '../../utils/focus';
 
 export interface ProposeContext extends ProposalFacts {
   totalAdmins: number;
@@ -300,7 +301,11 @@ export function ProposeDialog({
               <CheckResult
                 check={check}
                 kind={kind}
-                onSwitch={() => onSwitch('removeAdmin', person)}
+                onSwitch={() => {
+                  // The form becomes Remove a Minter Admin and this button goes: its new title says so.
+                  focusDialogTitle(document.activeElement);
+                  onSwitch('removeAdmin', person);
+                }}
               />
             </Box>
             {recent ? (
