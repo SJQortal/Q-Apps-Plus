@@ -16,7 +16,8 @@ import { nominatePath } from '../../../routes/paths';
 import type { MyStatus } from '../../../rules/status';
 import { formatCount } from '../../../utils/format';
 import { openQortalLink } from '../../../utils/links';
-import { MintingTipsDialog, NAMES_APP_LINK } from '../HelpDialogs';
+import { NAMES_APP_LINK } from '../../../components/ready/readyChecks';
+import { MintingTipsDialog } from '../HelpDialogs';
 import { Hero, HeroText, Num } from '../Hero';
 import { countStates, myNominations } from '../homeData';
 

@@ -39,6 +39,20 @@ function hubAcceptsJoin(address: string) {
   }));
 }
 
+/** Home's "Show you're ready to mint": the self-check ticked, then Continue to Hub. Returns the Hub step. */
+async function readyThroughTheCheck() {
+  await userEvent.click(screen.getByRole('button', { name: "Show you're ready to mint" }));
+  const dialog = await screen.findByRole('dialog', { name: "Show you're ready to mint" }, T);
+  await within(dialog).findByText(/so that's covered/, {}, T);
+  for (const box of within(dialog).getAllByRole('checkbox')) await userEvent.click(box);
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
+  const go = await screen.findByRole('button', { name: 'Continue to Hub' }, T);
+  const hub = go.closest<HTMLElement>('[role="dialog"]') as HTMLElement;
+  expect(within(hub).getByText('Fee: 0.01 QORT')).toBeInTheDocument();
+  await userEvent.click(go);
+  return hub;
+}
+
 describe('Home: outside Hub and signed out', () => {
   it('explains Mintership with live numbers outside Hub', async () => {
     await renderPage(<HomePage />, { persona: 'outside' });
@@ -167,6 +181,12 @@ describe('Home: members', () => {
     expect(await headline("You're minting, Leo Learner")).toBeInTheDocument();
   });
 
+  it('welcomes an account that had shown it was ready, once it becomes a member', async () => {
+    window.localStorage.setItem(`${STORAGE_PREFIX}last-status:${ADDR.learner}`, 'ready');
+    await renderPage(<HomePage />, { persona: 'learner' });
+    expect(await headline('Welcome to MINTER, Leo Learner!')).toBeInTheDocument();
+  });
+
   it('does not load the whole group for members who cannot nominate', async () => {
     await renderPage(<HomePage />, { persona: 'learner' });
     await headline("You're minting, Leo Learner");
@@ -177,20 +197,37 @@ describe('Home: members', () => {
 });
 
 describe('Home: not in MINTER yet', () => {
-  it('guides a newcomer without a name to a nominator', async () => {
-    const { address } = await renderPage(<HomePage />, { persona: 'newcomer' });
+  it('tells a newcomer nominators reach out, and offers to show they are ready', async () => {
+    const { address, posts } = await renderPage(<HomePage />, { persona: 'newcomer' });
     await headline("You're not in the MINTER group yet");
-    expect(await screen.findByText('0 QORT', {}, T)).toBeInTheDocument();
-    mockQortalRequest('OPEN_NEW_TAB', true);
-    await userEvent.click(screen.getByRole('button', { name: /Register a name/ }));
-    expect(qortalCallsFor('OPEN_NEW_TAB')[0]).toMatchObject({ qortalLink: 'qortal://APP/Names' });
-    await userEvent.click(screen.getByRole('button', { name: 'Find a nominator' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Find a nominator' });
-    expect(within(dialog).getByText(address)).toBeInTheDocument();
-    expect(within(dialog).getByRole('link', { name: 'See open nominations' })).toHaveAttribute(
+    const hero = screen.getByRole('region', { name: "You're not in the MINTER group yet" });
+    expect(hero).toHaveTextContent(
+      /Nominators, minters at level 5 or above, look for people who.d make good minters, and often reach out first\./
+    );
+    await waitFor(() =>
+      expect(hero).toHaveTextContent(/When one nominates you and 8 Minter Admins sign/)
+    );
+    expect(await within(hero).findByText('0 QORT', {}, T)).toBeInTheDocument();
+    expect(hero).toHaveTextContent(/ask someone you know on Qortal to send you a little QORT/);
+    expect(within(hero).getByRole('button', { name: 'Copy your address' })).toBeInTheDocument();
+    expect(within(hero).getByRole('link', { name: 'See open nominations' })).toHaveAttribute(
       'href',
       '/nominations'
     );
+    mockQortalRequest('OPEN_NEW_TAB', true);
+    await userEvent.click(within(hero).getByRole('button', { name: /Register a name/ }));
+    expect(qortalCallsFor('OPEN_NEW_TAB')[0]).toMatchObject({ qortalLink: 'qortal://APP/Names' });
+
+    // The self-check opens first; with 0 QORT it can't go on.
+    await userEvent.click(screen.getByRole('button', { name: "Show you're ready to mint" }));
+    const dialog = await screen.findByRole('dialog', { name: "Show you're ready to mint" }, T);
+    expect(
+      await within(dialog).findByText('You need 0.01 QORT for the fee first.', {}, T)
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText(address)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Continue' })).toBeDisabled();
+    expect(qortalCallsFor('JOIN_GROUP')).toHaveLength(0);
+    expect(posts).toEqual([]);
   });
 
   it('uses the name, and copies it to share with a nominator', async () => {
@@ -198,21 +235,71 @@ describe('Home: not in MINTER yet', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     await renderPage(<HomePage />, { persona: 'newcomerName' });
     await headline("Hi Zoë Newcomer, you're not in MINTER yet");
-    expect(await screen.findByText('12.5 QORT', {}, T)).toBeInTheDocument();
+    const hero = screen.getByRole('region', { name: /you're not in MINTER yet/ });
+    expect(await within(hero).findByText('12.5 QORT', {}, T)).toBeInTheDocument();
+    expect(hero).toHaveTextContent(/Nominators can find you by your name, Zoë Newcomer/);
+    expect(within(hero).queryByRole('button', { name: /Register a name/ })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Copy your name' }));
     expect(writeText).toHaveBeenCalledWith('Zoë Newcomer');
     expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'See open nominations' })).toBeInTheDocument();
   });
 
-  it('says what moves an open join request that no nomination backs', async () => {
+  it('changes nothing on Home when Hub is declined', async () => {
+    const { posts } = await renderPage(<HomePage />, { persona: 'newcomerName' });
+    await headline("Hi Zoë Newcomer, you're not in MINTER yet");
+    const hub = await readyThroughTheCheck();
+    expect(await within(hub).findByText(/Cancelled in Hub/, {}, T)).toBeInTheDocument();
+    await userEvent.click(within(hub).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(await headline("Hi Zoë Newcomer, you're not in MINTER yet")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: "Show you're ready to mint" })).toBeEnabled();
+    expect(qortalCallsFor('JOIN_GROUP')).toHaveLength(1);
+    expect(posts).toEqual([]);
+  }, 20_000);
+
+  it('shows "You\'ve shown you\'re ready to mint" once Hub sends the join request', async () => {
+    const { address, posts } = await renderPage(<HomePage />, { persona: 'newcomerName' });
+    await headline("Hi Zoë Newcomer, you're not in MINTER yet");
+    hubAcceptsJoin(address);
+    const hub = await readyThroughTheCheck();
+    expect(
+      await within(hub).findByText("You've shown you're ready to mint ✓", {}, T)
+    ).toBeInTheDocument();
+    await userEvent.click(within(hub).getByRole('button', { name: 'Done' }));
+    expect(await headline("Zoë Newcomer, you've shown you're ready to mint")).toBeInTheDocument();
+    const hero = screen.getByRole('region', { name: /you've shown you're ready to mint/ });
+    expect(hero).toHaveTextContent(/Your join request is on its way into a block/);
+    expect(within(hero).queryByRole('button', { name: "Show you're ready to mint" })).toBeNull();
+    expect(posts).toEqual([]);
+    getDefaultStore().set(pendingWritesAtom, {});
+  }, 20_000);
+
+  it('says what happens next once they have shown they are ready', async () => {
     const { world, address } = await renderPage(<HomePage />, { persona: 'newcomerName' });
     await headline("Hi Zoë Newcomer, you're not in MINTER yet");
     world.joinRequests.push({ groupId: 694, joiner: address });
     await userEvent.click(screen.getByRole('button', { name: 'Refresh' }));
-    expect(
-      await screen.findByText(/asked to join MINTER, and your join request is open/, {}, T)
-    ).toHaveTextContent(/once 8 Minter Admins sign it/);
+    expect(await headline("Zoë Newcomer, you've shown you're ready to mint")).toBeInTheDocument();
+    expect(screen.getByText('Ready to mint')).toBeInTheDocument();
+    // Remembered, so the welcome plays when an approved nomination makes them a member.
+    await waitFor(() =>
+      expect(window.localStorage.getItem(`${STORAGE_PREFIX}last-status:${address}`)).toBe('ready')
+    );
+    const hero = screen.getByRole('region', { name: /you've shown you're ready to mint/ });
+    expect(hero).toHaveTextContent(
+      /Your join request is open, so nominators and Minter Admins can see that you.d like to mint\./
+    );
+    expect(hero).toHaveTextContent(/It can.t be withdrawn/);
+    expect(hero).toHaveTextContent(
+      /may nominate you\. Then Minter Admins sign: once 8 have signed, you.re in at once/
+    );
+    expect(within(hero).queryByRole('button', { name: "Show you're ready to mint" })).toBeNull();
+    expect(within(hero).getByRole('button', { name: 'Copy your name' })).toBeInTheDocument();
+    // How it works says the same: nominators reach out, and being ready counts as accepting.
+    const how = screen.getByRole('region', { name: 'How joining MINTER works' });
+    expect(how).toHaveTextContent(/often reach out first/);
+    expect(how).toHaveTextContent(/shown you.re ready to mint, that request is in/);
   });
 });
 
@@ -316,9 +403,12 @@ describe('Home: former members', () => {
       /removed you on 26 Aug 2026 \(46 days ago\), proposed by Admin B/
     );
     expect(hero).toHaveTextContent(/level 3 with 210,000 blocks minted/);
-    expect(hero).toHaveTextContent(/A new nomination is possible/);
-    await userEvent.click(screen.getByRole('button', { name: 'See how to be nominated again' }));
-    expect(await screen.findByRole('dialog', { name: 'Getting nominated again' }));
+    expect(hero).toHaveTextContent(/A new nomination is possible\. Nominators, minters at level 5/);
+    expect(hero).toHaveTextContent(/often reach out first/);
+    expect(within(hero).getByRole('button', { name: 'Copy your name' })).toBeInTheDocument();
+    expect(within(hero).getByRole('link', { name: 'See your MINTER history' })).toBeInTheDocument();
+    await userEvent.click(within(hero).getByRole('button', { name: "Show you're ready to mint" }));
+    expect(await screen.findByRole('dialog', { name: "Show you're ready to mint" }, T));
   });
 
   it('words a removal right for an account that was never a member', async () => {
@@ -405,6 +495,25 @@ describe('Home: former members', () => {
     expect(hero).toHaveTextContent(/14 days ago/);
     expect(hero).toHaveTextContent(/level 5 with 640,000 blocks minted/);
     expect(hero).toHaveTextContent(/A new nomination is possible/);
+    expect(
+      within(hero).getByRole('button', { name: "Show you're ready to mint" })
+    ).toBeInTheDocument();
+  });
+
+  it("keeps a former member's story and says they have shown they are ready", async () => {
+    await renderPage(<HomePage />, {
+      persona: 'left',
+      setup: (world) => world.joinRequests.push({ groupId: 694, joiner: ADDR.left }),
+    });
+    await headline('Lou Left, you left MINTER');
+    const hero = screen.getByRole('region', { name: /you left MINTER/ });
+    expect(hero).toHaveTextContent(/14 days ago/);
+    expect(within(hero).getByRole('status')).toHaveTextContent(
+      'You’ve shown you’re ready to mint ✓'
+    );
+    expect(hero).toHaveTextContent(/see that you.d like to mint again/);
+    expect(hero).toHaveTextContent(/once 8 have signed, you.re in at once/);
+    expect(within(hero).queryByRole('button', { name: "Show you're ready to mint" })).toBeNull();
   });
 });
 
