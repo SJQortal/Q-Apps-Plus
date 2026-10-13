@@ -396,8 +396,10 @@ export function BulkDialog(props: BulkDialogProps) {
         })}
       </Box>
 
-      {/* The live region: the last outcome, the current stage, then the summary. */}
-      <Box role="status" aria-live="polite">
+      {/* The live region: the last outcome, the current stage, then the summary. Not
+          atomic (role="status" is by default), so each change is read on its own: a new
+          stage doesn't read the last outcome again. */}
+      <Box role="status" aria-live="polite" aria-atomic="false">
         <span className="qmp-visually-hidden">{outcomeLine}</span>
         {stageLine ? (
           <span className="qmp-visually-hidden">

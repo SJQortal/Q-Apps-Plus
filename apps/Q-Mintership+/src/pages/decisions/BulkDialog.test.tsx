@@ -55,6 +55,8 @@ describe('BulkDialog: what a screen reader hears', () => {
     expect(live).toHaveTextContent('2. Remove from MINTER: Bo: Cancelled in Hub. Stopped here.');
     expect(live).toHaveTextContent('1 of 2 sent.');
     expect(within(dialog).getByRole('status')).toBe(live);
+    // role="status" is atomic by default: every new stage would read the last outcome again.
+    expect(live).toHaveAttribute('aria-atomic', 'false');
   });
 
   it('says which of two steps runs, and what step 2 signs', async () => {
