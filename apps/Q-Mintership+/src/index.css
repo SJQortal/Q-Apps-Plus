@@ -70,6 +70,90 @@ html[data-motion='reduce'] *::after {
   transition-delay: 0s !important;
 }
 
+/* Content arriving (docs/DESIGN.md → Motion). An animation runs when its
+   element is inserted, never when React re-renders it, so a refresh that
+   keeps what is on screen stays still and only what is new moves: a page as
+   it opens, data in place of its skeleton, a list's first rows. Opacity,
+   translate and scale only: nothing shifts the layout. :where() keeps every
+   one weaker than a component's own animation. The reduced-motion rules
+   above cut them. */
+@keyframes qmp-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes qmp-rise-in {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}
+@keyframes qmp-pop-in {
+  from {
+    opacity: 0;
+    scale: 0.8;
+  }
+}
+
+/* One element as it appears: an empty state, an error. */
+:where(.qmp-fade) {
+  animation-name: qmp-fade-in;
+  animation-duration: 200ms;
+  animation-timing-function: ease-out;
+  animation-fill-mode: backwards;
+}
+
+/* A loading placeholder that waits a moment, so a quick load never flashes it. */
+:where(.qmp-fade-late) {
+  animation-name: qmp-fade-in;
+  animation-duration: 200ms;
+  animation-timing-function: ease-out;
+  animation-delay: 150ms;
+  animation-fill-mode: backwards;
+}
+
+/* A small thing that just turned up: a tick, an answer's chip. */
+:where(.qmp-pop) {
+  animation-name: qmp-pop-in;
+  animation-duration: 180ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  animation-fill-mode: backwards;
+}
+
+/* A page's blocks (PageBody): a fade and a 4 px rise. */
+:where(.qmp-reveal) > * {
+  animation-name: qmp-rise-in;
+  animation-duration: 240ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  animation-fill-mode: backwards;
+}
+
+/* A section's content and the page header's: a fade only, so nothing rises
+   twice. A list's first six rows follow one another; the rest come with
+   the list, so a long list costs no more than a short one. */
+:where(.qmp-reveal-fade) > *,
+:where(.qmp-reveal-fade > ul > li:nth-child(-n + 6)) {
+  animation-name: qmp-fade-in;
+  animation-duration: 200ms;
+  animation-timing-function: ease-out;
+  animation-fill-mode: backwards;
+}
+:where(.qmp-reveal-fade > ul > li:nth-child(2)) {
+  animation-delay: 30ms;
+}
+:where(.qmp-reveal-fade > ul > li:nth-child(3)) {
+  animation-delay: 60ms;
+}
+:where(.qmp-reveal-fade > ul > li:nth-child(4)) {
+  animation-delay: 90ms;
+}
+:where(.qmp-reveal-fade > ul > li:nth-child(5)) {
+  animation-delay: 120ms;
+}
+:where(.qmp-reveal-fade > ul > li:nth-child(6)) {
+  animation-delay: 150ms;
+}
+
 .qmp-visually-hidden {
   position: absolute !important;
   width: 1px;

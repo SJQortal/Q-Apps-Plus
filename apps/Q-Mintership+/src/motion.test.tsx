@@ -1,12 +1,17 @@
 /**
  * The app's motion rules in index.css, read through jsdom's own cascade:
  * Settings → Motion → Reduce (and the system's reduced motion) cut every
- * animation and transition, delays included.
+ * animation and transition, delays included; content fades in as it
+ * arrives, with nothing that moves the layout.
  *
  * jsdom treats `prefers-reduced-motion` as never matching, so the system
  * path is checked by comparing its rules with Reduce's.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { Section } from './components/common/Section';
+import { EmptyState } from './components/common/states';
+import { PageBody } from './components/layout/PageBody';
 import css from './index.css?raw';
 
 let sheet: HTMLStyleElement;
@@ -93,5 +98,106 @@ describe('reduced motion', () => {
       expect.stringMatching(/::before[^]*::after/),
     ]);
     for (const rule of [...reduceRules, ...systemRules]) expect(rule.style.cssText).toBe(reduce);
+  });
+});
+
+function animation(el: Element) {
+  const s = getComputedStyle(el);
+  return {
+    name: s.getPropertyValue('animation-name'),
+    duration: s.getPropertyValue('animation-duration'),
+    delay: s.getPropertyValue('animation-delay'),
+  };
+}
+
+function page() {
+  const rows = Array.from({ length: 8 }, (_, i) => <li key={i}>Row {i + 1}</li>);
+  return render(
+    <PageBody>
+      <p>A block</p>
+      <Section title="Open nominations" id="open">
+        <ul aria-label="Rows">{rows}</ul>
+      </Section>
+    </PageBody>
+  );
+}
+
+describe('content arriving', () => {
+  it('fades a page’s blocks in with a 4 px rise, and a section’s content with a fade', () => {
+    page();
+    expect(animation(screen.getByText('A block'))).toMatchObject({
+      name: 'qmp-rise-in',
+      duration: '240ms',
+    });
+    expect(animation(screen.getByRole('list', { name: 'Rows' }))).toMatchObject({
+      name: 'qmp-fade-in',
+      duration: '200ms',
+    });
+    // The section rises with the page; its title row, list and rows only fade.
+    expect(animation(screen.getByRole('region', { name: 'Open nominations' })).name).toBe(
+      'qmp-rise-in'
+    );
+  });
+
+  it('brings a list’s first six rows one after another, and the rest with the list', () => {
+    page();
+    const rows = screen.getAllByRole('listitem');
+    expect(rows.slice(0, 6).map((r) => animation(r).delay)).toEqual([
+      '',
+      '30ms',
+      '60ms',
+      '90ms',
+      '120ms',
+      '150ms',
+    ]);
+    expect(rows.slice(0, 6).every((r) => animation(r).name === 'qmp-fade-in')).toBe(true);
+    expect(rows.slice(6).map((r) => animation(r).name)).toEqual(['none', 'none']);
+  });
+
+  it('moves only what is new: a refresh keeps the elements on screen', () => {
+    const view = page();
+    const block = screen.getByText('A block');
+    const row = screen.getAllByRole('listitem')[0];
+    view.rerender(
+      <PageBody>
+        <p>A block</p>
+        <Section title="Open nominations" id="open">
+          <ul aria-label="Rows">
+            {Array.from({ length: 8 }, (_, i) => (
+              <li key={i}>Row {i + 1}, refreshed</li>
+            ))}
+          </ul>
+        </Section>
+      </PageBody>
+    );
+    // The same nodes: their animations ran once, when they were inserted.
+    expect(screen.getByText('A block')).toBe(block);
+    expect(screen.getAllByRole('listitem')[0]).toBe(row);
+  });
+
+  it('fades an empty state in where it appears', () => {
+    render(<EmptyState title="Nothing here" />);
+    expect(animation(screen.getByRole('status')).name).toBe('qmp-fade-in');
+  });
+
+  it('is cut by Motion → Reduce, delays included', () => {
+    page();
+    document.documentElement.setAttribute('data-motion', 'reduce');
+    const sixth = screen.getAllByRole('listitem')[5];
+    expect(animation(sixth)).toEqual({ name: 'qmp-fade-in', duration: '0.01ms', delay: '0s' });
+    expect(animation(screen.getByText('A block')).duration).toBe('0.01ms');
+  });
+
+  it('animates only opacity, translate and scale, so nothing shifts the layout', () => {
+    const keyframes = [...(sheet.sheet?.cssRules ?? [])].filter(
+      (r): r is CSSKeyframesRule => 'name' in r && String(r.name).startsWith('qmp-')
+    );
+    expect(keyframes.map((k) => k.name)).toEqual(['qmp-fade-in', 'qmp-rise-in', 'qmp-pop-in']);
+    for (const k of keyframes) {
+      for (const frame of [...k.cssRules] as CSSKeyframeRule[]) {
+        const props = Array.from({ length: frame.style.length }, (_, i) => frame.style.item(i));
+        expect(props.every((p) => ['opacity', 'translate', 'scale'].includes(p))).toBe(true);
+      }
+    }
   });
 });

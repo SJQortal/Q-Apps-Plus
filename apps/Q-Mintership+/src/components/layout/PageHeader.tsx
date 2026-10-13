@@ -3,6 +3,9 @@
  * on the right. On phones it slides away when scrolling down and comes back
  * when scrolling up (docs/DESIGN.md → Mobile).
  *
+ * A new page's title and actions fade in (index.css → .qmp-reveal-fade);
+ * the bar itself stays put.
+ *
  * After a route change it takes focus on its title, so a screen reader
  * announces the new page and Tab starts from its top, and it names the
  * document after the page. The app's first page keeps the browser's focus.
@@ -74,7 +77,13 @@ export function PageHeader({ title, subtitle, actions, back, children }: PageHea
   usePublishHeaderOffset(ref, hidden);
   const goBack = useSafeBack(back ?? '/');
   return (
-    <Header ref={ref} $hidden={hidden} $compact={compact} onFocus={reveal}>
+    <Header
+      ref={ref}
+      $hidden={hidden}
+      $compact={compact}
+      onFocus={reveal}
+      className="qmp-reveal-fade"
+    >
       {back !== undefined ? (
         <IconButton aria-label="Back" onClick={goBack} edge="start" sx={{ width: 44, height: 44 }}>
           <ArrowBackIcon />

@@ -15,7 +15,11 @@ export const SectionTitle = styled(Typography)(({ theme }) => ({
   padding: theme.spacing(0, 0.5),
 }));
 
-/** A titled section: small uppercase title, optional action on the right. */
+/**
+ * A titled section: small uppercase title, optional action on the right.
+ * What arrives in it fades in (its data in place of a skeleton, a list's
+ * first rows one after another; index.css → .qmp-reveal-fade).
+ */
 export function Section({
   title,
   action,
@@ -32,6 +36,7 @@ export function Section({
     <Box
       component="section"
       aria-labelledby={headingId}
+      className="qmp-reveal-fade"
       sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 32 }}>
