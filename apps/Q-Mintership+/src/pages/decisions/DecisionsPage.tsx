@@ -4,7 +4,8 @@
  * first, plus the nominations no Minter Admin has signed yet.
  *
  * Minter Admins sign here, one at a time or several in a row, reject, or
- * withdraw their signature (on chain both are a rejection), make the first
+ * withdraw their signature (on chain both are a rejection), say they are
+ * considering a decision or a waiting nomination (a QDN record), make the first
  * signature on a nomination, propose kicks, bans, admin changes and
  * cancelled invites (each with their own signature), and clean up stale
  * invites. Doing nothing lets a decision expire. Everyone else follows
@@ -33,6 +34,12 @@ import { BOTTOM_NAV_HEIGHT } from '../../components/layout/BottomNav';
 import { useBottomNavShown } from '../../components/layout/useBottomNav';
 import { BOTTOM_BAR_VAR, usePublishOverlay } from '../../hooks/useOverlayPadding';
 import { DoneChip } from '../../components/decision/DecisionParts';
+import {
+  ConsideringControls,
+  ConsideringDialog,
+  type ConsideringRequest,
+} from '../../components/decision/Considering';
+import { useConsideringFor } from '../../hooks/useConsidering';
 import { NominationCard } from '../../components/nomination/NominationCard';
 import { Card, Section } from '../../components/common/Section';
 import {
@@ -50,7 +57,7 @@ import { useDecisions, useMembers, useNominations } from '../../hooks/useData';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { KIND_LABEL, type Decision } from '../../rules/decision';
 import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
-import { useSession } from '../../state/session';
+import { signerOf, useSession } from '../../state/session';
 import { decisionsHideSignedAtom } from '../../state/settings';
 import { displayName, plural } from '../../utils/format';
 import { bulkSign } from '../../writes/flows';
@@ -147,6 +154,7 @@ export default function DecisionsPage() {
   const reduced = useReducedMotion();
 
   const [signTarget, setSignTarget] = useState<Decision | null>(null);
+  const [considerRequest, setConsiderRequest] = useState<ConsideringRequest | null>(null);
   const [rejectTarget, setRejectTarget] = useState<{
     decision: Decision;
     mode: RejectMode;
@@ -430,12 +438,14 @@ export default function DecisionsPage() {
                     decision={d}
                     now={data.now}
                     myPublicKey={myKey}
+                    myAddress={signer?.address ?? null}
                     canAct={isAdmin}
                     nomination={nominationFor(d)}
                     nominationsState={nominationsState}
                     onRetryNominations={retryNominations}
                     adminNames={adminNames}
                     subjectFacts={factsFor(d.subject)}
+                    onConsider={setConsiderRequest}
                     selecting={selecting}
                     selected={selected.has(d.signature)}
                     onToggleSelect={toggleSelect}
@@ -503,7 +513,14 @@ export default function DecisionsPage() {
                     compact
                     actions={
                       isAdmin ? (
-                        <FirstSignatureAction nomination={n} onStart={() => setFirstTarget(n)} />
+                        <>
+                          <WaitingConsidering
+                            nomination={n}
+                            myAddress={signer?.address ?? null}
+                            onConsider={setConsiderRequest}
+                          />
+                          <FirstSignatureAction nomination={n} onStart={() => setFirstTarget(n)} />
+                        </>
                       ) : null
                     }
                   />
@@ -580,6 +597,11 @@ export default function DecisionsPage() {
       </PageBody>
 
       <SignDialog decision={signTarget} signer={signer} onClose={() => setSignTarget(null)} />
+      <ConsideringDialog
+        request={considerRequest}
+        signer={signerOf(session)}
+        onClose={() => setConsiderRequest(null)}
+      />
       <RejectDialog
         decision={rejectTarget?.decision ?? null}
         mode={rejectTarget?.mode ?? 'reject'}
@@ -696,6 +718,34 @@ function SelectionBar({
         Sign {selected || ''}
       </Button>
     </Box>
+  );
+}
+
+/** An admin's Considering on a nomination still waiting for its first signature. */
+function WaitingConsidering({
+  nomination: n,
+  myAddress,
+  onConsider,
+}: {
+  nomination: Nomination;
+  myAddress: string | null;
+  onConsider: (request: ConsideringRequest) => void;
+}) {
+  const { mine, publishTarget } = useConsideringFor(
+    { nomineeAddress: n.nominee, since: n.publishedAt },
+    null,
+    { myAddress }
+  );
+  if (!mine || !publishTarget) return null;
+  const label = `Nomination of ${displayName(n.nomineeName, n.nominee)}`;
+  return (
+    <ConsideringControls
+      mine={mine}
+      label={label}
+      canStart
+      onSet={() => onConsider({ target: publishTarget, mode: 'set', label })}
+      onClear={() => onConsider({ target: publishTarget, mode: 'clear', label })}
+    />
   );
 }
 

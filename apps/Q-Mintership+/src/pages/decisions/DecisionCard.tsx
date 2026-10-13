@@ -4,7 +4,8 @@
  * nomination behind an invite), k of n with the time left to sign, who has
  * signed and who rejected (against the same target), and the admin's own
  * answer: Sign and Reject, Signed ✓ with Withdraw my signature, Rejected,
- * each "(confirming…)" until it is in a block.
+ * each "(confirming…)" until it is in a block. Next to the signers: which
+ * Minter Admins are considering it, and the admin's own Considering.
  */
 import { useState } from 'react';
 import { Box, Button, Checkbox, Skeleton, Typography } from '@mui/material';
@@ -18,6 +19,12 @@ import { useAccount } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { AvatarStack, PersonChip, PersonInline } from '../../components/common/Person';
 import { AnswerChip, SigningClock } from '../../components/decision/DecisionParts';
+import {
+  ConsideringControls,
+  ConsideringLine,
+  type ConsideringRequest,
+} from '../../components/decision/Considering';
+import { useConsideringFor } from '../../hooks/useConsidering';
 import { ProgressRing } from '../../components/common/ProgressRing';
 import { Card, DecisionPhaseChip } from '../../components/common/Section';
 import { primarySoft } from '../../hub-theme';
@@ -36,6 +43,15 @@ import {
   phaseLine,
   type AnswerIntent,
 } from './decisionUi';
+
+/** Phases in which a decision still collects answers (Considering shows then). */
+const COLLECTING_PHASES: ReadonlySet<Decision['phase']> = new Set([
+  'open',
+  'early',
+  'unconfirmed',
+  'thresholdMet',
+  'rejectedMet',
+]);
 
 const SENDING_TEXT: Record<AnswerIntent, string> = {
   sign: 'Signing…',
@@ -58,6 +74,8 @@ export interface DecisionCardProps {
   decision: Decision;
   now: ChainNow;
   myPublicKey: string | null;
+  /** The signed-in account (for the admin's own Considering). */
+  myAddress?: string | null;
   /** Minter Admins get Sign and the bulk checkbox; everyone else reads. */
   canAct: boolean;
   /** The nomination behind an invite, when there is one. */
@@ -81,6 +99,8 @@ export interface DecisionCardProps {
   onReject?: (decision: Decision) => void;
   /** Withdraw my signature (admins whose signature is in a block). */
   onWithdraw?: (decision: Decision) => void;
+  /** Considering, or No longer considering (admins). */
+  onConsider?: (request: ConsideringRequest) => void;
   highlighted?: boolean;
 }
 
@@ -89,6 +109,7 @@ export function DecisionCard(props: DecisionCardProps) {
     decision: d,
     now,
     myPublicKey,
+    myAddress,
     canAct,
     nomination,
     nominationsState = 'loaded',
@@ -101,6 +122,7 @@ export function DecisionCard(props: DecisionCardProps) {
     onSign,
     onReject,
     onWithdraw,
+    onConsider,
     highlighted,
   } = props;
   const pendingAnswers = usePendingAnswers(d.signature);
@@ -119,6 +141,23 @@ export function DecisionCard(props: DecisionCardProps) {
   );
   const fullTitle = d.subject ? `${title}, ${subject.label}` : title;
   const line = phaseLine(d, now);
+  // Considering is shown while it collects signatures; an invite's nomination carries over.
+  const considering = useConsideringFor(
+    {
+      pendingSignature: d.signature,
+      nomineeAddress: d.kind === 'invite' ? d.subject : null,
+      since: nomination?.publishedAt ?? d.createdAt,
+    },
+    tally,
+    { enabled: COLLECTING_PHASES.has(d.phase), myAddress: canAct ? myAddress : null }
+  );
+  const consider = (mode: ConsideringRequest['mode']) =>
+    considering.publishTarget &&
+    onConsider?.({
+      target: considering.publishTarget,
+      mode,
+      label: d.subject ? `${title}: ${subject.label}` : title,
+    });
 
   return (
     <Card
@@ -254,6 +293,8 @@ export function DecisionCard(props: DecisionCardProps) {
         </Box>
       ) : null}
 
+      <ConsideringLine people={considering.people} />
+
       {line ? (
         <Typography variant="body2" color="text.secondary">
           {line}
@@ -263,6 +304,15 @@ export function DecisionCard(props: DecisionCardProps) {
       {canAct ? (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
           <AnswerChip view={view} />
+          {considering.mine ? (
+            <ConsideringControls
+              mine={considering.mine}
+              label={fullTitle}
+              canStart={rejectable}
+              onSet={() => consider('set')}
+              onClear={() => consider('clear')}
+            />
+          ) : null}
           {view.sending ? (
             <Button variant="contained" disabled sx={{ minHeight: 44 }}>
               {SENDING_TEXT[view.sending]}

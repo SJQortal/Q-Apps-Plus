@@ -1,7 +1,8 @@
 /**
  * Someone nominated this account: who (and who supports it), where it
  * stands (waiting for a first Minter Admin, or k of n with the time left
- * to sign, and any rejections), and Accept, which sends the join request so
+ * to sign, any rejections, and how many Minter Admins are considering it),
+ * and Accept, which sends the join request so
  * approval makes the nominee a member at once. Once accepted: "You've
  * accepted ✓".
  */
@@ -23,6 +24,8 @@ import { usePendingWrite, writeKeys } from '../../../writes/optimistic';
 import { Hero, HeroText, Num, PeopleList, PersonLink } from '../Hero';
 import { LazyJoinDialog } from '../../../components/nomination/LazyJoinDialog';
 import { readable } from '../../../utils/readable';
+import { useConsideringFor } from '../../../hooks/useConsidering';
+import { consideringCountText } from '../../../rules/considering';
 import { whenApplied } from '../../decisions/decisionUi';
 
 export function NominatedHero({
@@ -53,6 +56,15 @@ export function NominatedHero({
   // Enough rejections: Core ends it as rejected in its next decision block.
   const rejectedEnd = !met && n.decision?.phase === 'rejectedMet';
   const rejections = tally?.rejectionCount ?? 0;
+  const considering = useConsideringFor(
+    {
+      pendingSignature: n.decision?.signature ?? null,
+      nomineeAddress: n.nominee,
+      since: n.publishedAt,
+    },
+    tally,
+    { enabled: n.state === 'waiting' || n.state === 'signing' }
+  ).people.length;
   // When Core applies it: the next block, or later while it is just proposed.
   const when = n.decision && now.data ? whenApplied(n.decision, now.data) : 'in the next block';
   const needNow = tally?.needed ?? needed;
@@ -176,6 +188,12 @@ export function NominatedHero({
                 signatures are counted first.
               </>
             )}
+          </HeroText>
+        ) : null}
+        {considering > 0 && !met && !rejectedEnd ? (
+          <HeroText>
+            {consideringCountText(considering)}: they&rsquo;ve looked at it and haven&rsquo;t
+            decided yet.
           </HeroText>
         ) : null}
         {signing && window && !met && !rejectedEnd && now.data ? (
