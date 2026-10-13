@@ -24,6 +24,10 @@ const scenario = (over: Partial<ShiftScenario> = {}): ShiftScenario => ({
   countThen: 20,
   neededNow: 9,
   neededThen: 8,
+  countLow: 20,
+  neededLow: 8,
+  countHigh: 21,
+  neededHigh: 9,
   effects: [],
   ...over,
 });
@@ -68,6 +72,27 @@ describe('the target in words', () => {
     expect(
       shiftSentence(scenario({ countThen: 19, neededThen: 8, neededNow: 8 }), 'If it passes')
     ).toBe('If it passes, MINTER has 19 admin seats; the target stays at 8 signatures.');
+  });
+
+  it('says when the count can dip lower on the way than where it ends up', () => {
+    // A removal brings an addition along: 8 seats again in the end, 7 on the way.
+    const dip = scenario({
+      countNow: 8,
+      countThen: 8,
+      neededNow: 4,
+      neededThen: 4,
+      countLow: 7,
+      neededLow: 3,
+      countHigh: 8,
+      neededHigh: 4,
+    });
+    expect(shiftSentence(dip, 'If this passes')).toBe(
+      'If this passes, MINTER has 8 admin seats; the target stays at 4 signatures, but on the way MINTER can drop to 7 admin seats (target 3).'
+    );
+    // No dip below both ends: nothing more to say.
+    expect(shiftSentence(scenario({ countLow: 20, neededLow: 8 }), 'If this passes')).not.toMatch(
+      /on the way/
+    );
   });
 
   it('leads with what passes', () => {
@@ -133,8 +158,36 @@ describe('the chip on an affected decision', () => {
 
   it('says where the target may go', () => {
     expect(riskChipLabel(risk())).toBe('Target may drop to 8');
-    expect(riskChipLabel(risk({ scenario: scenario({ neededNow: 8, neededThen: 9 }) }))).toBe(
-      'Target may rise to 9'
+    expect(
+      riskChipLabel(
+        risk({
+          effect: effect({ effect: 'needsMore', neededNow: 8, neededThen: 9, wasMet: true }),
+          scenario: scenario({ neededNow: 8, neededThen: 9 }),
+        })
+      )
+    ).toBe('Target may rise to 9');
+  });
+
+  it('names the target where the decision flips, not where the count ends up', () => {
+    // 8 seats now and in the end, 7 on the way: the target there is 3, not 4.
+    const dip = scenario({
+      followOn: ['rm2'],
+      countNow: 8,
+      countThen: 8,
+      neededNow: 4,
+      neededThen: 4,
+      countLow: 7,
+      neededLow: 3,
+      countHigh: 8,
+      neededHigh: 4,
+    });
+    const r = risk({
+      effect: effect({ approvals: 3, neededNow: 4, neededThen: 3 }),
+      scenario: dip,
+    });
+    expect(riskChipLabel(r)).toBe('Target may drop to 3');
+    expect(riskExplanation(r, labelOf)[0]).toBe(
+      'If Remove a Minter Admin: Dex Demote passes (with Remove a Minter Admin: Admin B, which would then apply at once too), MINTER can drop to 7 admin seats on the way, and then the target drops from 4 to 3 signatures.'
     );
   });
 
@@ -147,7 +200,7 @@ describe('the chip on an affected decision', () => {
       riskExplanation(
         risk({
           effect: effect({ effect: 'rejected', rejections: 8 }),
-          scenario: scenario({ followOn: ['rm2'], countThen: 19 }),
+          scenario: scenario({ followOn: ['rm2'], countThen: 19, countLow: 19 }),
         }),
         labelOf
       )
@@ -168,8 +221,15 @@ describe('the chip on an affected decision', () => {
     expect(
       riskExplanation(
         risk({
-          effect: effect({ effect: 'needsMore', approvals: 8, more: 1, wasMet: true }),
-          scenario: scenario({ neededNow: 8, neededThen: 9, countThen: 21 }),
+          effect: effect({
+            effect: 'needsMore',
+            approvals: 8,
+            neededNow: 8,
+            neededThen: 9,
+            more: 1,
+            wasMet: true,
+          }),
+          scenario: scenario({ neededNow: 8, neededThen: 9, countThen: 21, countHigh: 21 }),
         }),
         labelOf
       )[1]

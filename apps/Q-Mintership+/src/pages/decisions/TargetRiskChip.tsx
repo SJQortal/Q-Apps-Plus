@@ -32,7 +32,7 @@ export function TargetRiskChip({
   /** The id of the explanation (TargetRiskNote). */
   controls: string;
 }) {
-  const drop = risk.scenario.neededThen < risk.scenario.neededNow;
+  const drop = risk.effect.neededThen < risk.effect.neededNow;
   const tone = risk.effect.effect === 'needsMore' ? 'info' : 'warning';
   const Icon = drop ? TrendingDownOutlinedIcon : TrendingUpOutlinedIcon;
   return (

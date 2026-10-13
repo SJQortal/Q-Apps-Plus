@@ -47,7 +47,8 @@ export function TargetImpact({
   const othersShort = s.effects.filter((e) => e.effect === 'needsMore' && !e.wasMet);
   const flips = applies.length + rejected.length > 0;
   const affected = s.effects.length > 0;
-  const rise = s.neededThen - s.neededNow;
+  // Needing more is worked out at the highest count on the way.
+  const rise = s.neededHigh - s.neededNow;
 
   // Nothing would change: one quiet line, not an alert.
   if (!affected)

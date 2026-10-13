@@ -107,6 +107,20 @@ export interface ShiftScenario {
   countThen: number;
   neededNow: number;
   neededThen: number;
+  /**
+   * The lowest count on the way there (every removal first, those that
+   * follow included) and its target: where 'applies' and 'rejected' are
+   * worked out. Never above countNow.
+   */
+  countLow: number;
+  neededLow: number;
+  /**
+   * The highest count on the way there (every addition among `changes`
+   * first) and its target: where 'needsMore' is worked out. Never below
+   * countNow.
+   */
+  countHigh: number;
+  neededHigh: number;
   /** Most at risk first: applies, rejected, then needsMore (those met now first). */
   effects: ShiftEffect[];
 }
@@ -213,7 +227,10 @@ function sortEffects(effects: ShiftEffect[]): ShiftEffect[] {
  * target, and each decision that would apply at once, end as rejected at
  * once, or need more signatures. A waiting admin change that would itself
  * apply at once moves the count again; that is followed through
- * (`followOn`), and what only happens after it is marked `cascade`.
+ * (`followOn`), and what only happens after it is marked `cascade`. Each
+ * effect is worked out at the count where it can happen on the way there
+ * (`countLow` or `countHigh`), so an addition that brings the count back
+ * up doesn't hide what the drop before it does.
  */
 export function projectShift(
   state: ShiftState,
@@ -227,9 +244,43 @@ export function projectShift(
   const followOn: string[] = [];
   const bySignature = new Map(decisions.map((d) => [d.signature, d]));
 
-  let countThen = adminCountAfter(state, assumed);
-  let effects = effectsBetween(state.threshold, countNow, countThen, decisions, exclude);
+  // Core applies each admin change on its own approval, in any order and in
+  // any block, so the count can pass through values the net result hides.
+  // The lowest it can reach is every removal first (follow-ons included):
+  // the only count where a decision can newly apply or end as rejected. The
+  // highest is every addition among `changes` first: a follow-on addition
+  // only applies at a count below today's, so it never goes higher. That is
+  // the only count where a decision can need more.
+  const low = () =>
+    adminCountAfter(
+      state,
+      assumed.filter((c) => c.kind === 'removeAdmin')
+    );
+  const high = adminCountAfter(
+    state,
+    changes.filter((c) => c.kind === 'addAdmin')
+  );
+  const merged = () => {
+    const best = new Map<string, Omit<ShiftEffect, 'cascade'>>();
+    for (const e of [
+      ...effectsBetween(state.threshold, countNow, low(), decisions, exclude),
+      ...effectsBetween(state.threshold, countNow, high, decisions, exclude),
+    ]) {
+      const had = best.get(e.signature);
+      if (!had || RANK[e.effect] < RANK[had.effect]) best.set(e.signature, e);
+    }
+    const out: Array<Omit<ShiftEffect, 'cascade'>> = [];
+    for (const d of decisions) {
+      const e = best.get(d.signature);
+      if (!e) continue;
+      out.push(e);
+      best.delete(d.signature);
+    }
+    return out;
+  };
+  let effects = merged();
   const firstRound = new Map(effects.map((e) => [e.signature, e.effect]));
+  // A follow-on stays in `effects` as 'applies': the lowest count only falls.
   for (;;) {
     const next = effects
       .filter((e) => e.effect === 'applies' && !followOn.includes(e.signature))
@@ -240,11 +291,11 @@ export function projectShift(
       followOn.push(d.signature);
       assumed.push({ signature: d.signature, kind: d.kind as AdminChangeKind, subject: d.subject });
     }
-    const count = adminCountAfter(state, assumed);
-    if (count === countThen) continue;
-    countThen = count;
-    effects = effectsBetween(state.threshold, countNow, countThen, decisions, exclude);
+    effects = merged();
   }
+  const countThen = adminCountAfter(state, assumed);
+  const countLow = Math.min(low(), countNow);
+  const countHigh = Math.max(high, countNow);
 
   return {
     scope,
@@ -254,6 +305,10 @@ export function projectShift(
     countThen,
     neededNow: approvalsNeeded(state.threshold, countNow),
     neededThen: approvalsNeeded(state.threshold, countThen),
+    countLow,
+    neededLow: approvalsNeeded(state.threshold, countLow),
+    countHigh,
+    neededHigh: approvalsNeeded(state.threshold, countHigh),
     effects: sortEffects(
       effects.map((e) => ({
         ...e,
@@ -300,7 +355,7 @@ export function scenarioFor(
 
 /** True when the projection changes the outcome of at least one decision. */
 export function hasImpact(scenario: ShiftScenario | null | undefined): boolean {
-  return Boolean(scenario && scenario.effects.length);
+  return Boolean(scenario && (scenario.effects.length || scenario.followOn.length));
 }
 
 export interface DecisionRisk {
@@ -324,7 +379,8 @@ export function riskFor(
   const weight = (r: DecisionRisk) => [
     r.effect.effect === 'needsMore' ? 1 : 0,
     r.scenario.changes.length + r.scenario.followOn.length,
-    Math.abs(r.scenario.neededNow - r.scenario.neededThen),
+    // The target where this effect was worked out, not the net one.
+    Math.abs(r.effect.neededNow - r.effect.neededThen),
   ];
   for (const scenario of scenarios) {
     const effect = scenario.effects.find((e) => e.signature === signature);

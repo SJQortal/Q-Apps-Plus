@@ -304,11 +304,59 @@ describe('projectShift: if these admin changes pass', () => {
     expect(result.effects.map((e) => e.signature)).toEqual(['kick-a', 'kick-b']);
   });
 
-  it('additions and removals together net out', () => {
+  it('additions and removals together net out, but the drop on the way still counts', () => {
     const s = state(21);
     const changes = [remove('Qadmin1', 'r1'), add('Qnew', 'a1')];
     const result = projectShift(s, [decision('d', 8)], changes, 'all');
-    expect(result).toMatchObject({ countThen: 21, neededThen: 9, effects: [] });
+    // 21 seats in the end, but 20 (8 needed) if the removal comes first.
+    expect(result).toMatchObject({
+      countThen: 21,
+      neededThen: 9,
+      countLow: 20,
+      neededLow: 8,
+      countHigh: 22,
+      neededHigh: 9,
+    });
+    expect(result.effects).toEqual([
+      expect.objectContaining({ signature: 'd', effect: 'applies', neededThen: 8 }),
+    ]);
+  });
+
+  describe('a drop that brings an addition along back to the same count', () => {
+    // 8 admin rows, PCT40: 4 needed; at 7 rows, 3.
+    const s = state(8);
+    const rem = remove('Qadmin6', 'REM');
+    const addM1 = add('QM1', 'ADD');
+    const decisions = [
+      changeDecision('REM', rem, 3),
+      changeDecision('ADD', addM1, 3),
+      decision('INV', 3, 0, 'invite'),
+    ];
+
+    it('one change: what applies at 7 rows on the way is still reported', () => {
+      const result = projectShift(s, decisions, [rem]);
+      expect(result).toMatchObject({
+        followOn: ['ADD'],
+        countThen: 8,
+        neededThen: 4,
+        countLow: 7,
+        neededLow: 3,
+      });
+      expect(result.effects.map((e) => [e.signature, e.effect, e.neededThen])).toEqual([
+        ['ADD', 'applies', 3],
+        ['INV', 'applies', 3],
+      ]);
+      expect(hasImpact(result)).toBe(true);
+      const risk = riskFor('INV', shiftScenarios(s, decisions));
+      expect(risk?.effect).toMatchObject({ effect: 'applies', neededNow: 4, neededThen: 3 });
+    });
+
+    it('both together: their order in one block decides the count on the way', () => {
+      const result = projectShift(s, decisions, [rem, addM1], 'all');
+      expect(result).toMatchObject({ countThen: 8, countLow: 7, countHigh: 9, neededHigh: 4 });
+      expect(result.effects.map((e) => [e.signature, e.effect])).toEqual([['INV', 'applies']]);
+      expect(hasImpact(result)).toBe(true);
+    });
   });
 
   it('a duplicate removal of one admin counts once', () => {
