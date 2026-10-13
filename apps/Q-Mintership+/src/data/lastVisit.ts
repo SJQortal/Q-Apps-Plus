@@ -82,6 +82,7 @@ export function resetLastVisitSession(): void {
   baselines.clear();
   joinedSeen.clear();
   announced.clear();
+  decidedOutcomes.clear();
 }
 
 /** The cache key loadOutcomes uses for these signatures. */
@@ -89,16 +90,46 @@ export function outcomesKey(signatures: readonly string[]): string {
   return `lastvisit:outcomes:${[...new Set(signatures)].sort().join(',')}`;
 }
 
+/** Outcomes already decided, read this session: a decided transaction never changes. */
+const decidedOutcomes = new Map<string, TxRow>();
+
+function isFinal(tx: TxRow | null): tx is TxRow {
+  return (
+    tx?.approvalStatus === 'APPROVED' ||
+    tx?.approvalStatus === 'REJECTED' ||
+    tx?.approvalStatus === 'EXPIRED' ||
+    tx?.approvalStatus === 'INVALID'
+  );
+}
+
+/** The outcomes of `signatures` already known (no read), for the render while a new set loads. */
+export function knownOutcomes(signatures: readonly string[]): Map<string, TxRow | null> {
+  const map = new Map<string, TxRow | null>();
+  for (const signature of signatures) {
+    const tx = decidedOutcomes.get(signature);
+    if (tx) map.set(signature, tx);
+  }
+  return map;
+}
+
 /**
  * The decided transactions behind `signatures` (null when Core doesn't know
- * one), at most MAX_OUTCOME_LOOKUPS reads, 4 at a time, kept for the session.
+ * one), at most MAX_OUTCOME_LOOKUPS reads, 4 at a time. A decided one is
+ * kept for the session, so a set that grows by one reads only the new one;
+ * one not decided yet (or unknown) is read again with the next set.
  */
 export function loadOutcomes(signatures: readonly string[]): Promise<Map<string, TxRow | null>> {
   const list = [...new Set(signatures)].sort().slice(0, MAX_OUTCOME_LOOKUPS);
   return fetchQuery(
     outcomesKey(signatures),
     async () => {
-      const rows = await mapLimit(list, 4, (signature) => getTransaction(signature));
+      const rows = await mapLimit(list, 4, async (signature) => {
+        const known = decidedOutcomes.get(signature);
+        if (known) return known;
+        const tx = await getTransaction(signature);
+        if (isFinal(tx)) decidedOutcomes.set(signature, tx);
+        return tx;
+      });
       return new Map(list.map((signature, i) => [signature, rows[i]]));
     },
     { ttlMs: Number.POSITIVE_INFINITY }

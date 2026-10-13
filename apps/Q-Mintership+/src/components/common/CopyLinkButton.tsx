@@ -2,8 +2,10 @@
  * Copies a `qortal://APP/Q-Mintership+/…` link to one page (utils/links.ts
  * appLink: the `+` stays literal). An icon button for page headers, or a
  * "Copy link" text button for cards (every decision and nomination card).
- * The result is spoken: "Link copied", or "Couldn't copy" when the browser
- * refuses.
+ * The result is spoken once: "Link copied", or "Couldn't copy the link"
+ * when the browser refuses, from a status region beside the button. The
+ * button's name never changes, so going back to "Copy link" isn't read out
+ * as news.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Button, IconButton, Tooltip } from '@mui/material';
@@ -23,12 +25,20 @@ function useCopy(path: string) {
     []
   );
   const copy = async () => {
+    // Back to idle first, so a second press within the timeout is said again.
+    setState('idle');
     const ok = await copyText(appLink(path));
     setState(ok ? 'copied' : 'failed');
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setState('idle'), ok ? 1500 : 2500);
   };
-  return { state, copy };
+  // Emptied on idle: a removal, which isn't announced.
+  const status = (
+    <span role="status" className="qmp-visually-hidden">
+      {state === 'copied' ? 'Link copied' : state === 'failed' ? 'Couldn’t copy the link' : ''}
+    </span>
+  );
+  return { state, copy, status };
 }
 
 export interface CopyLinkButtonProps {
@@ -45,34 +55,44 @@ export function CopyLinkButton({
   what = 'this page',
   variant = 'icon',
 }: CopyLinkButtonProps) {
-  const { state, copy } = useCopy(path);
+  const { state, copy, status } = useCopy(path);
   if (variant === 'text') {
     const shown =
       state === 'copied' ? 'Link copied' : state === 'failed' ? 'Couldn’t copy' : 'Copy link';
     return (
-      <Button
-        size="small"
-        startIcon={state === 'copied' ? <CheckOutlinedIcon /> : <LinkOutlinedIcon />}
-        onClick={() => void copy()}
-        // The name starts with the visible words, then says what the link is to.
-        aria-label={state === 'idle' ? `Copy link to ${what}` : shown}
-        sx={{ minHeight: 44 }}
-      >
-        <span aria-live="polite">{shown}</span>
-      </Button>
+      <>
+        <Button
+          size="small"
+          startIcon={state === 'copied' ? <CheckOutlinedIcon /> : <LinkOutlinedIcon />}
+          onClick={() => void copy()}
+          // A fixed name: it starts with the visible words, then says what the link is to.
+          aria-label={`Copy link to ${what}`}
+          sx={{ minHeight: 44 }}
+        >
+          {shown}
+        </Button>
+        {status}
+      </>
     );
   }
-  const label =
+  const title =
     state === 'copied'
       ? 'Link copied'
       : state === 'failed'
         ? 'Couldn’t copy the link'
         : `Copy a link to ${what}`;
   return (
-    <Tooltip title={label}>
-      <IconButton aria-label={label} onClick={() => void copy()} sx={{ width: 44, height: 44 }}>
-        {state === 'copied' ? <CheckOutlinedIcon /> : <LinkOutlinedIcon />}
-      </IconButton>
-    </Tooltip>
+    <>
+      <Tooltip title={title}>
+        <IconButton
+          aria-label={`Copy a link to ${what}`}
+          onClick={() => void copy()}
+          sx={{ width: 44, height: 44 }}
+        >
+          {state === 'copied' ? <CheckOutlinedIcon /> : <LinkOutlinedIcon />}
+        </IconButton>
+      </Tooltip>
+      {status}
+    </>
   );
 }

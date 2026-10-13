@@ -3,8 +3,8 @@
  * last visit, or the last refresh). Says from what to what, and why (the
  * approved admin changes since, from one bounded read), then which waiting
  * decisions now have enough signatures (or enough rejections) because of
- * it, the soonest to apply first. Minter Admins also read what a withdrawal
- * does. Stays until dismissed.
+ * it, the soonest to apply first. Minter Admins also read, for each, whether
+ * a withdrawal can still count, and by which block. Stays until dismissed.
  *
  * A region with its own heading, not a live region: it fills in as its
  * reasons load, and would be read again each time. The page says its title
@@ -14,6 +14,7 @@ import { Fragment, useId, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Alert, Box, Button, Link, Typography } from '@mui/material';
 import { PersonInline } from '../../components/common/Person';
+import { focusPageTitle } from '../../components/layout/pageFocus';
 import { formatQort } from '../../data/accounts';
 import type { ChainNow } from '../../data/chain';
 import { adminChangesKey, loadAdminChangesBetween } from '../../data/targetChanges';
@@ -27,8 +28,8 @@ import {
 } from '../../rules/targetShift';
 import { describeThreshold, type ApprovalThreshold } from '../../rules/threshold';
 import { decisionPath } from '../../routes/paths';
-import { plural } from '../../utils/format';
-import { whenApplied } from './decisionUi';
+import { formatBlock, plural } from '../../utils/format';
+import { stillStoppable, whenApplied } from './decisionUi';
 import type { TargetChange } from './seenTarget';
 import {
   changeReason,
@@ -85,6 +86,19 @@ export function TargetChangedBanner({
   const rejected = effects.filter((e) => e.effect === 'rejected');
   const flipped = applies.length + rejected.length > 0;
   const moved = from.needed !== to.needed;
+  // A withdrawal sent now counts from two blocks on: only those Core applies
+  // no sooner than that can still be stopped.
+  const stoppable = applies
+    .map((e) => byId.get(e.signature))
+    .filter((d): d is Decision => Boolean(d && stillStoppable(d, now)));
+  const appliesAfter = (d: Decision | undefined): string => {
+    if (!d) return '';
+    const when = `Applies ${whenApplied(d, now)}`;
+    if (!isAdmin) return `${when}.`;
+    if (stillStoppable(d, now))
+      return `${when}; a withdrawal must be in ${formatBlock((d.applyAtHeight as number) - 1)} or earlier to count.`;
+    return `${when}; a withdrawal now would arrive too late to count.`;
+  };
 
   const because: ReactNode =
     reason.complete && approved ? (
@@ -122,9 +136,7 @@ export function TargetChangedBanner({
             items={applies.map((e) => ({
               signature: e.signature,
               text: `${labelOf(e.signature)}, ${e.approvals} of ${to.needed}`,
-              after: byId.get(e.signature)
-                ? `Applies ${whenApplied(byId.get(e.signature) as Decision, now)}.`
-                : '',
+              after: appliesAfter(byId.get(e.signature)),
             }))}
           />
         </Box>
@@ -152,19 +164,19 @@ export function TargetChangedBanner({
             : 'No waiting decision has enough signatures because of it.'}
         </Typography>
       ) : null}
-      {flipped && isAdmin ? (
+      {stoppable.length && isAdmin ? (
         <Typography variant="body2" sx={{ mt: 1 }}>
-          {withdrawAdvice(formatQort(fee.data?.qort ?? 0.01), 'Core applies it')}
+          {withdrawAdvice(
+            formatQort(fee.data?.qort ?? 0.01),
+            formatBlock(Math.min(...stoppable.map((d) => (d.applyAtHeight as number) - 1)))
+          )}
         </Typography>
       ) : null}
       <Button
         onClick={() => {
           onDismiss();
-          // The note goes away with the button: keep focus on the page.
-          (
-            document.querySelector<HTMLElement>('main h1') ??
-            document.querySelector<HTMLElement>('h1')
-          )?.focus();
+          // The banner goes away with the button: keep focus on the page.
+          focusPageTitle();
         }}
         sx={{ mt: 1, minHeight: 44, ml: -1 }}
       >

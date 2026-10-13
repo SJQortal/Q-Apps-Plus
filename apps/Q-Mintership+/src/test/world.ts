@@ -12,7 +12,7 @@ import {
   type World,
 } from '../../e2e/world.mjs';
 import { resetQueries } from '../data/query';
-import { setQdnRetryDelays } from '../data/qdn';
+import { resetQdnMisses, setQdnRetryDelays } from '../data/qdn';
 import { resetClaimedSignatures, setLookupDelays } from '../writes/runner';
 import { setTxWaitDelays } from '../writes/flows';
 import { mockFetchRoute, mockQortalRequest } from './setup';
@@ -54,6 +54,7 @@ export function installWorld(
   options: { fakeNow?: boolean } = {}
 ): InstalledWorld {
   resetQueries();
+  resetQdnMisses();
   setQdnRetryDelays([1, 1]);
   setLookupDelays([1, 1, 1]);
   resetClaimedSignatures();

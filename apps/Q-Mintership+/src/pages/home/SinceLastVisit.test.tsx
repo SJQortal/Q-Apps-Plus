@@ -16,6 +16,7 @@ import { renderPage } from '../../test/render';
 import { ADDR, NOW, TIP } from '../../test/world';
 import { lastVisitSnapshots, lastVisitStorageKey } from '../../../e2e/world.mjs';
 import type { World } from '../../../e2e/world.mjs';
+import { base58Encode } from '../../qortal/base58';
 import HomePage from './HomePage';
 
 const T = { timeout: 4000 };
@@ -83,12 +84,14 @@ describe('Since your last visit: Minter Admins', () => {
     ).toBeVisible();
     expect(fetchCallsFor(ONE_TX)).toHaveLength(3);
 
-    // One polite sentence, once it has settled.
+    // One polite sentence, once it has settled (other status regions on Home,
+    // such as each card's "Link copied", stay empty).
+    const summary = 'Since your last visit: 7 new decisions, 1 new nomination, 3 decided.';
     await waitFor(
       () =>
-        expect(screen.getByRole('status', { name: '' })).toHaveTextContent(
-          'Since your last visit: 7 new decisions, 1 new nomination, 3 decided.'
-        ),
+        expect(
+          screen.getAllByRole('status', { name: '' }).filter((el) => el.textContent === summary)
+        ).toHaveLength(1),
       T
     );
   });
@@ -172,6 +175,62 @@ describe('Since your last visit: Minter Admins', () => {
     expect(
       within(region).getByRole('link', { name: 'Review the new nominations' })
     ).toBeInTheDocument();
+  });
+});
+
+describe('Since your last visit: titles', () => {
+  it('names a member’s own Minter Admin proposal as its card does, new or decided', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'admin',
+      setup: (world) => {
+        // Pia Promote proposed herself since the last visit.
+        const own = world.pending.find((t: { type: string }) => t.type === 'ADD_GROUP_ADMIN');
+        // Nora Nominator's own proposal was waiting then, and has been approved since.
+        const approved = {
+          ...own,
+          signature: base58Encode(new Uint8Array(64).fill(77)),
+          blockHeight: TIP - 3_000,
+          approvalStatus: 'APPROVED',
+          approvalHeight: TIP - 200,
+          creatorAddress: ADDR.nominator,
+          member: ADDR.nominator,
+        };
+        world.decided.push(approved);
+        const decisions = [
+          ...world.pending
+            .filter((t: { signature: string }) => t.signature !== own.signature)
+            .map((t: { signature: string }) => ({
+              signature: t.signature,
+              kind: 'invite',
+              subject: null,
+              height: null,
+            })),
+          {
+            signature: approved.signature,
+            kind: 'addAdmin',
+            subject: ADDR.nominator,
+            height: TIP - 3_000,
+          },
+        ];
+        window.localStorage.setItem(
+          lastVisitStorageKey(ADDR.admin),
+          JSON.stringify({ v: 1, at: NOW - 3 * 86_400_000, height: TIP - 3_556, decisions })
+        );
+      },
+    });
+    const region = await panel();
+    expect(
+      await within(region).findByRole(
+        'link',
+        { name: 'Open: Become a Minter Admin: Pia Promote' },
+        T
+      )
+    ).toBeInTheDocument();
+    const decided = (await within(region).findByText('Approved in block 2,757,300', {}, T)).closest(
+      'li'
+    ) as HTMLElement;
+    expect(decided).toHaveTextContent(/^Become a Minter Admin: /);
+    expect(decided).not.toHaveTextContent('Make a Minter Admin');
   });
 });
 

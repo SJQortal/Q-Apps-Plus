@@ -158,7 +158,7 @@ export function DecisionCard(props: DecisionCardProps) {
   const view = answerView(d, myPublicKey, pendingAnswers);
   const signable = canAct && canSign(d, view);
   const rejectable = canAct && canReject(d, view);
-  const withdrawable = canAct && canWithdraw(d, view);
+  const withdrawable = canAct && canWithdraw(d, view, now);
   const tally = d.tally;
   const confirming = tally ? tally.inFlight.filter((x) => x.approval) : [];
   const rejecting = tally ? tally.inFlight.filter((x) => !x.approval) : [];
@@ -186,6 +186,8 @@ export function DecisionCard(props: DecisionCardProps) {
       target: considering.publishTarget,
       mode,
       label: d.subject ? `${title}: ${subject.label}` : title,
+      // Only an invite has a nominee who reads it too.
+      nominee: d.kind === 'invite',
     });
 
   return (
@@ -258,7 +260,13 @@ export function DecisionCard(props: DecisionCardProps) {
       </Box>
 
       {risk && labelOf && riskOpen ? (
-        <TargetRiskNote id={riskId} risk={risk} labelOf={labelOf} advice={canAct} />
+        <TargetRiskNote
+          id={riskId}
+          risk={risk}
+          labelOf={labelOf}
+          advice={canAct}
+          withdraw={withdrawable}
+        />
       ) : null}
 
       <KindDetails

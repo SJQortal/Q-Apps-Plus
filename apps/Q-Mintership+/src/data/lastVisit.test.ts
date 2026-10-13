@@ -7,6 +7,7 @@ import type { VisitSnapshot } from '../rules/sinceLastVisit';
 import {
   claimAnnouncement,
   isJoinedSeen,
+  knownOutcomes,
   lastVisitKey,
   loadOutcomes,
   markSeen,
@@ -100,6 +101,25 @@ describe('loadOutcomes', () => {
     await loadOutcomes([approved, expired, 'unknownSignature']);
     expect(fetchCallsFor('/transactions/signature/')).toHaveLength(3);
     expect(outcomesKey(['b', 'a', 'b'])).toBe('lastvisit:outcomes:a,b');
+  });
+
+  it('a set that grows by one reads only the new one, and knows the rest at once', async () => {
+    const { world } = installWorld('admin');
+    const [a, b, c] = world.decided
+      .filter(
+        (t: { approvalStatus?: string }) =>
+          t.approvalStatus === 'APPROVED' || t.approvalStatus === 'EXPIRED'
+      )
+      .slice(0, 3)
+      .map((t: { signature: string }) => t.signature) as string[];
+    expect(c).toBeDefined();
+    await loadOutcomes([a, b]);
+    expect(fetchCallsFor('/transactions/signature/')).toHaveLength(2);
+    // Past the 15 s a transaction read is kept: the decided ones are still known.
+    vi.setSystemTime(Date.now() + 60_000);
+    expect([...knownOutcomes([a, b, c]).keys()].sort()).toEqual([a, b].sort());
+    await loadOutcomes([a, b, c]);
+    expect(fetchCallsFor('/transactions/signature/')).toHaveLength(3);
   });
 
   it('reads at most a dozen', async () => {

@@ -150,12 +150,24 @@ function answerable(d: Decision): boolean {
 }
 
 /**
- * Sign is offered while a new signature can still count (early or open),
- * to an admin who hasn't signed, or whose rejection is in a block: only the
- * latest answer counts, so a signature replaces it.
+ * Enough rejections while it is just proposed: Core decides it no sooner
+ * than its earliest decision block, so a signature that lands before then
+ * still counts, and signatures are counted first.
+ */
+function signaturesCanStillWin(d: Decision): boolean {
+  return (
+    Boolean(d.tally) && !d.unusualRoute && d.phase === 'rejectedMet' && d.windowPhase === 'early'
+  );
+}
+
+/**
+ * Sign is offered while a new signature can still count (early or open, or
+ * early with enough rejections), to an admin who hasn't signed, or whose
+ * rejection is in a block: only the latest answer counts, so a signature
+ * replaces it.
  */
 export function canSign(d: Decision, view: AnswerView): boolean {
-  if (!answerable(d) || view.busy) return false;
+  if (!(answerable(d) || signaturesCanStillWin(d)) || view.busy) return false;
   return view.shown === 'none' || (view.shown === 'rejected' && view.settled);
 }
 
@@ -164,9 +176,33 @@ export function canReject(d: Decision, view: AnswerView): boolean {
   return answerable(d) && !view.busy && view.shown === 'none';
 }
 
-/** "Withdraw my signature" replaces Sign once the admin's signature is in a block. */
-export function canWithdraw(d: Decision, view: AnswerView): boolean {
-  return answerable(d) && !view.busy && view.shown === 'signed' && view.settled;
+/**
+ * Enough signatures, but Core applies it no sooner than two blocks from
+ * now: a withdrawal sent now lands in the next block at the earliest and
+ * counts from the one after, so it can still stop it.
+ */
+export function stillStoppable(d: Decision, now: Pick<ChainNow, 'height'>): boolean {
+  return (
+    d.phase === 'thresholdMet' &&
+    !d.unusualRoute &&
+    d.tally !== null &&
+    d.applyAtHeight !== null &&
+    d.applyAtHeight >= now.height + 2
+  );
+}
+
+/**
+ * "Withdraw my signature" replaces Sign once the admin's signature is in a
+ * block, while a withdrawal can still count (also with enough signatures,
+ * as long as it can still stop it).
+ */
+export function canWithdraw(d: Decision, view: AnswerView, now: Pick<ChainNow, 'height'>): boolean {
+  return (
+    (answerable(d) || stillStoppable(d, now)) &&
+    !view.busy &&
+    view.shown === 'signed' &&
+    view.settled
+  );
 }
 
 /** Waiting for this admin: they can sign it and haven't answered it at all. */

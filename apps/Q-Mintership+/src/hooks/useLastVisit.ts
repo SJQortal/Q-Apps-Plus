@@ -14,6 +14,7 @@ import type { ChainNow } from '../data/chain';
 import {
   claimAnnouncement,
   isJoinedSeen,
+  knownOutcomes,
   loadOutcomes,
   markSeen,
   outcomesKey,
@@ -138,6 +139,8 @@ export function useSinceLastVisit(
   const outcomes = useQuery(signatures.length ? outcomesKey(signatures) : null, () =>
     loadOutcomes(signatures)
   );
+  // While a grown set loads, the outcomes already read stay on screen.
+  const outcomeMap = outcomes.data ?? knownOutcomes(signatures);
 
   const admin =
     isAdmin && baseline && decisions.data && address
@@ -145,7 +148,7 @@ export function useSinceLastVisit(
           decisions: decisions.data.decisions,
           nominations: nominations.data?.open ?? null,
           me: address,
-          outcomes: outcomes.data ?? new Map(),
+          outcomes: outcomeMap,
         })
       : null;
   const current = mine.data ? newestNomination(mine.data) : null;
@@ -160,7 +163,10 @@ export function useSinceLastVisit(
     (!isAdmin ||
       !baseline ||
       (Boolean(decisions.data) &&
-        (signatures.length === 0 || outcomes.data !== undefined || outcomes.isError) &&
+        (signatures.length === 0 ||
+          outcomes.data !== undefined ||
+          outcomeMap.size === new Set(signatures).size ||
+          outcomes.isError) &&
         (nominations.data !== undefined || nominations.isError))) &&
     (!isNominee ||
       !baseline ||

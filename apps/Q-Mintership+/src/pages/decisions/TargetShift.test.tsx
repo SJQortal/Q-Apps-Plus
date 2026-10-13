@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage, type RenderPageOptions } from '../../test/render';
-import { addTargetShift, type World } from '../../../e2e/world.mjs';
+import { ADDR, addTargetShift, type World } from '../../../e2e/world.mjs';
 import { mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { base58Decode, base58Encode } from '../../qortal/base58';
 import DecisionsPage from './DecisionsPage';
@@ -105,6 +105,9 @@ describe('Decisions: an admin change about to apply', () => {
       'Remove a Minter Admin: Dex Demote has enough signatures: Core applies it in the next block. When it does, MINTER has 20 admin seats and the target drops from 9 to 8 signatures.'
     );
     expect(within(note).getByText('Add to MINTER: Mia Met (8 of 9)')).toBeVisible();
+    // It applies in the next block: a withdrawal sent now would land too late to count.
+    expect(within(note).getByText(/agree the order with the other Minter Admins/)).toBeVisible();
+    expect(note).not.toHaveTextContent(/withdraw your signature/);
   });
 
   it('is not there when no admin change is about to tip anything over', async () => {
@@ -116,8 +119,18 @@ describe('Decisions: an admin change about to apply', () => {
 describe('Decisions: the chip on a decision an admin change would tip over', () => {
   it('says where the target may go, and explains it one tap away', async () => {
     const u = user();
-    await openShifted();
+    await openShifted({
+      // One of Mia Met's eight signatures is this admin's: Withdraw is on the card.
+      more: (world, shift) => {
+        const mine = world.approvals.find(
+          (a: { pendingSignature: string }) => a.pendingSignature === shift.met
+        );
+        mine.creatorAddress = ADDR.admin;
+        mine.adminPublicKey = world.accounts.get(ADDR.admin).publicKey;
+      },
+    });
     const met = card(/^Add to MINTER, Mia Met/);
+    expect(within(met).getByRole('button', { name: /^Withdraw my signature/ })).toBeVisible();
     const chip = within(met).getByRole('button', { name: 'Target may drop to 8' });
     expect(chip).toHaveAttribute('aria-expanded', 'false');
     expect(within(met).queryByText(/Core would apply it at once/)).toBeNull();
@@ -137,6 +150,16 @@ describe('Decisions: the chip on a decision an admin change would tip over', () 
     await u.click(chip);
     expect(chip).toHaveAttribute('aria-expanded', 'false');
     expect(document.getElementById(id)).toBeNull();
+  });
+
+  it('says how to withdraw only to an admin whose signature is on it', async () => {
+    const u = user();
+    await openShifted();
+    const met = card(/^Add to MINTER, Mia Met/);
+    expect(within(met).queryByRole('button', { name: /^Withdraw my signature/ })).toBeNull();
+    await u.click(within(met).getByRole('button', { name: 'Target may drop to 8' }));
+    expect(within(met).getByText(/agree the order with the other Minter Admins/)).toBeVisible();
+    expect(within(met).queryByText(/withdraw your signature/)).toBeNull();
   });
 
   it('members see the chip and the reason, without the advice for admins', async () => {

@@ -3,6 +3,8 @@ import { APPROVAL_THRESHOLDS, approvalsNeeded, meetsThreshold } from './threshol
 import type { TxRow } from '../data/types';
 import {
   adminChangeDelta,
+  adminCountAt,
+  adminLeaves,
   approvedAdminChanges,
   adminCountAfter,
   effectsBetween,
@@ -107,6 +109,17 @@ describe('adminCountAfter: how a waiting admin change moves the count', () => {
   it('ignores changes whose subject Core left out, and never goes below zero', () => {
     expect(adminCountAfter(s, [remove(null), add(null)])).toBe(20);
     expect(adminCountAfter({ ...s, adminCount: 0, admins: ['Qx'] }, [remove('Qx')])).toBe(0);
+  });
+
+  it('an add for someone no longer in MINTER doesn’t move the count', () => {
+    const withMembers: ShiftState = { ...s, members: [...admins(20), 'Qmember'] };
+    expect(adminCountAfter(withMembers, [add('Qgone')])).toBe(20);
+    expect(adminCountAfter(withMembers, [add('Qmember')])).toBe(21);
+    // Admins are members: removing one still takes a row away.
+    expect(adminCountAfter(withMembers, [remove('Qadmin3')])).toBe(19);
+    // Members not known: every add for a non-admin counts.
+    expect(adminCountAfter(s, [add('Qgone')])).toBe(21);
+    expect(adminCountAfter({ ...s, members: null }, [add('Qgone')])).toBe(21);
   });
 
   it('takes the admin rows as a list or a set', () => {
@@ -304,11 +317,68 @@ describe('projectShift: if these admin changes pass', () => {
     expect(result.effects.map((e) => e.signature)).toEqual(['kick-a', 'kick-b']);
   });
 
-  it('additions and removals together net out', () => {
+  it('additions and removals together net out, but the drop on the way still counts', () => {
     const s = state(21);
     const changes = [remove('Qadmin1', 'r1'), add('Qnew', 'a1')];
     const result = projectShift(s, [decision('d', 8)], changes, 'all');
-    expect(result).toMatchObject({ countThen: 21, neededThen: 9, effects: [] });
+    // 21 seats in the end, but 20 (8 needed) if the removal comes first.
+    expect(result).toMatchObject({
+      countThen: 21,
+      neededThen: 9,
+      countLow: 20,
+      neededLow: 8,
+      countHigh: 22,
+      neededHigh: 9,
+    });
+    expect(result.effects).toEqual([
+      expect.objectContaining({ signature: 'd', effect: 'applies', neededThen: 8 }),
+    ]);
+  });
+
+  describe('a drop that brings an addition along back to the same count', () => {
+    // 8 admin rows, PCT40: 4 needed; at 7 rows, 3.
+    const s = state(8);
+    const rem = remove('Qadmin6', 'REM');
+    const addM1 = add('QM1', 'ADD');
+    const decisions = [
+      changeDecision('REM', rem, 3),
+      changeDecision('ADD', addM1, 3),
+      decision('INV', 3, 0, 'invite'),
+    ];
+
+    it('one change: what applies at 7 rows on the way is still reported', () => {
+      const result = projectShift(s, decisions, [rem]);
+      expect(result).toMatchObject({
+        followOn: ['ADD'],
+        countThen: 8,
+        neededThen: 4,
+        countLow: 7,
+        neededLow: 3,
+      });
+      expect(result.effects.map((e) => [e.signature, e.effect, e.neededThen])).toEqual([
+        ['ADD', 'applies', 3],
+        ['INV', 'applies', 3],
+      ]);
+      expect(hasImpact(result)).toBe(true);
+      const risk = riskFor('INV', shiftScenarios(s, decisions));
+      expect(risk?.effect).toMatchObject({ effect: 'applies', neededNow: 4, neededThen: 3 });
+    });
+
+    it('both together: their order in one block decides the count on the way', () => {
+      const result = projectShift(s, decisions, [rem, addM1], 'all');
+      expect(result).toMatchObject({ countThen: 8, countLow: 7, countHigh: 9, neededHigh: 4 });
+      expect(result.effects.map((e) => [e.signature, e.effect])).toEqual([['INV', 'applies']]);
+      expect(hasImpact(result)).toBe(true);
+    });
+  });
+
+  it('all together: a removal and an add for someone no longer in MINTER', () => {
+    const s: ShiftState = { ...state(21), members: new Set(admins(21)) };
+    const changes = [remove('Qadmin1', 'r1'), add('Qgone', 'a1')];
+    const result = projectShift(s, [decision('d', 8)], changes, 'all');
+    // The add can't apply: only the removal moves the count (21 → 20, 9 → 8 needed).
+    expect(result).toMatchObject({ countThen: 20, neededThen: 8, countHigh: 21 });
+    expect(result.effects.map((e) => [e.signature, e.effect])).toEqual([['d', 'applies']]);
   });
 
   it('a duplicate removal of one admin counts once', () => {
@@ -476,6 +546,7 @@ describe('the decisions the projection reads', () => {
     createdAt: 0,
     blockHeight: 1,
     window: null,
+    windowPhase: null,
     applyAtHeight: null,
     unusualRoute: false,
     tx: {} as Decision['tx'],
@@ -533,10 +604,166 @@ describe('targetSteps: the target before and after each approved admin change', 
     ]);
   });
 
+  it('counts an admin’s own leave, which takes their admin row away too', () => {
+    // 22 rows now. Y was made an admin at 500 and left at 1000; Z was made one at 900.
+    const changes = [
+      { signature: 'addY', address: 'QY', added: true, height: 500 },
+      { signature: 'addZ', address: 'QZ', added: true, height: 900 },
+    ];
+    const leaves = adminLeaves(
+      [
+        {
+          signature: 'leaveY',
+          type: 'LEAVE_GROUP',
+          creatorAddress: 'QY',
+          blockHeight: 1000,
+          groupId: 694,
+          txGroupId: 0,
+          timestamp: 0,
+        } as TxRow,
+      ],
+      changes
+    );
+    expect(leaves).toEqual([{ signature: 'leaveY', address: 'QY', height: 1000, wasAdmin: true }]);
+    const steps = targetSteps(changes, 22, 'PCT40', leaves);
+    expect(
+      steps.map((s) => [s.signature, s.countBefore, s.countAfter, s.neededBefore, s.neededAfter])
+    ).toEqual([
+      ['addZ', 22, 23, 9, 10],
+      ['addY', 21, 22, 9, 9],
+    ]);
+    expect(adminCountAt(changes, leaves, 22, 950)).toBe(23);
+    expect(adminCountAt(changes, leaves, 22, 1000)).toBe(22);
+  });
+
+  it('takes a leave with nothing on record as a member’s, and a signer’s as an admin’s', () => {
+    const changes = [{ signature: 'addZ', address: 'QZ', added: true, height: 900 }];
+    const leaveRow = {
+      signature: 'leaveY',
+      type: 'LEAVE_GROUP',
+      creatorAddress: 'QY',
+      blockHeight: 1000,
+      groupId: 694,
+      txGroupId: 0,
+      timestamp: 0,
+    } as TxRow;
+    const unknown = adminLeaves([leaveRow], changes);
+    expect(unknown[0].wasAdmin).toBeNull();
+    expect(targetSteps(changes, 22, 'PCT40', unknown)[0]).toMatchObject({
+      countBefore: 21,
+      countAfter: 22,
+    });
+    expect(adminCountAt(changes, unknown, 22, 950)).toBe(22);
+    // Y signed a MINTER decision before leaving: an admin then.
+    const signer = adminLeaves([leaveRow], changes, {
+      approvals: [
+        {
+          signature: 'apY',
+          type: 'GROUP_APPROVAL',
+          creatorAddress: 'QY',
+          blockHeight: 800,
+          txGroupId: 694,
+          timestamp: 0,
+        } as TxRow,
+      ],
+    });
+    expect(signer[0].wasAdmin).toBe(true);
+    expect(targetSteps(changes, 22, 'PCT40', signer)[0]).toMatchObject({
+      countBefore: 22,
+      countAfter: 23,
+      neededBefore: 9,
+      neededAfter: 10,
+    });
+  });
+
   it('has nothing to say without changes, and never counts below zero', () => {
     expect(targetSteps([], 20, 'PCT40')).toEqual([]);
     const steps = targetSteps([{ address: 'Qa', added: true, height: 1 }], 0, 'PCT40');
     expect(steps[0]).toMatchObject({ countBefore: 0, countAfter: 0 });
+  });
+});
+
+describe('adminLeaves: who left MINTER, and whether they were a Minter Admin then', () => {
+  const leave = (signature: string, address: string, height: number, groupId = 694): TxRow =>
+    ({
+      signature,
+      type: 'LEAVE_GROUP',
+      creatorAddress: address,
+      blockHeight: height,
+      groupId,
+      txGroupId: 0,
+      timestamp: 0,
+    }) as TxRow;
+  const join = (address: string, height: number): TxRow =>
+    ({
+      signature: `join-${address}-${height}`,
+      type: 'JOIN_GROUP',
+      creatorAddress: address,
+      blockHeight: height,
+      groupId: 694,
+      txGroupId: 0,
+      timestamp: 0,
+    }) as TxRow;
+  const approval = (address: string, height: number): TxRow =>
+    ({
+      signature: `ap-${address}-${height}`,
+      type: 'GROUP_APPROVAL',
+      creatorAddress: address,
+      blockHeight: height,
+      txGroupId: 694,
+      timestamp: 0,
+    }) as TxRow;
+
+  it('reads it from the newest approved admin change about them before the leave', () => {
+    const changes = [
+      { address: 'Qa', added: true, height: 100 },
+      { address: 'Qa', added: false, height: 300 },
+      { address: 'Qb', added: true, height: 200 },
+      { address: 'Qb', added: false, height: 600 }, // after the leave: doesn't count
+    ];
+    const out = adminLeaves([leave('la', 'Qa', 500), leave('lb', 'Qb', 500)], changes);
+    expect(out.map((l) => [l.address, l.wasAdmin])).toEqual([
+      ['Qa', false],
+      ['Qb', true],
+    ]);
+  });
+
+  it('someone who joined since their last admin change was a member, not an admin', () => {
+    const changes = [{ address: 'Qa', added: true, height: 100 }];
+    const out = adminLeaves(
+      [join('Qa', 200), leave('la', 'Qa', 500), leave('lc', 'Qc', 500), join('Qc', 50)],
+      changes
+    );
+    expect(out.map((l) => [l.address, l.wasAdmin])).toEqual([
+      ['Qa', false],
+      ['Qc', false],
+    ]);
+  });
+
+  it('a signature before the leave says they were an admin, when no change does', () => {
+    const out = adminLeaves([leave('la', 'Qa', 500), leave('lb', 'Qb', 500)], [], {
+      approvals: [approval('Qa', 400), approval('Qb', 700)],
+    });
+    expect(out.map((l) => [l.address, l.wasAdmin])).toEqual([
+      ['Qa', true],
+      ['Qb', null],
+    ]);
+  });
+
+  it('keeps MINTER’s confirmed leaves once each, newest first, and skips the owner', () => {
+    const out = adminLeaves(
+      [
+        leave('l1', 'Qa', 100),
+        leave('l1', 'Qa', 100),
+        leave('l2', 'Qb', 300),
+        leave('other', 'Qc', 200, 7),
+        { ...leave('pending', 'Qd', 0), blockHeight: undefined } as TxRow,
+        leave('own', 'Qowner', 250),
+      ],
+      [],
+      { owner: 'Qowner' }
+    );
+    expect(out.map((l) => l.signature)).toEqual(['l2', 'l1']);
   });
 });
 

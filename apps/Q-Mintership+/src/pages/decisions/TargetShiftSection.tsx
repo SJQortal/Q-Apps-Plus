@@ -9,6 +9,7 @@ import type { ChainNow } from '../../data/chain';
 import { Section } from '../../components/common/Section';
 import type { Decision } from '../../rules/decision';
 import type { ShiftScenario } from '../../rules/targetShift';
+import { formatBlock } from '../../utils/format';
 import { whenApplied } from './decisionUi';
 import { TargetImpact } from './TargetImpact';
 import { scenarioLead, type LabelOf } from './targetShiftUi';
@@ -46,6 +47,12 @@ export function TargetShiftSection({
       {urgent.map((s) => {
         const sig = s.changes[0]?.signature as string;
         const d = byId.get(sig) as Decision;
+        // A withdrawal sent now counts from two blocks on: in time only when
+        // the admin change applies no sooner than that.
+        const deadline =
+          d.applyAtHeight !== null && d.applyAtHeight > now.height + 1
+            ? formatBlock(d.applyAtHeight - 1)
+            : null;
         return (
           <TargetImpact
             key={sig}
@@ -53,6 +60,7 @@ export function TargetShiftSection({
             labelOf={labelOf}
             lead={`${labelOf(sig)} has enough signatures: Core applies it ${whenApplied(d, now)}. When it does`}
             advice={advice}
+            deadline={deadline}
           />
         );
       })}

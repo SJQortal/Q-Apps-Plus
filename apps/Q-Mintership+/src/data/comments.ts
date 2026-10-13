@@ -35,7 +35,15 @@ import {
   type HideRow,
 } from './commentThread';
 import { getAdmins } from './group';
-import { QdnDeletedError, fetchQdnJson, mapLimit, rowTime, searchQdn } from './qdn';
+import {
+  QdnDeletedError,
+  fetchQdnJson,
+  mapLimit,
+  quick,
+  rowTime,
+  searchQdn,
+  setBodyWait,
+} from './qdn';
 import { fetchQuery, getQueryState, setQueryData } from './query';
 import type { QdnRow } from './types';
 
@@ -47,13 +55,14 @@ const KEY_PAGES = 5;
 const HIDE_PAGES = 2;
 /** A thread shows this many comments, and this many more per "Show more". */
 export const COMMENTS_PAGE = 20;
-/** A body slower than this shows as "fetching" and fills in when it arrives. */
-let bodyWaitMs = 3_000;
 const HOUR = 3_600_000;
 
-/** Tests shorten the wait. */
+/**
+ * A body slower than the wait (3 s; qdn.ts → quick) shows as "fetching" and
+ * fills in when it arrives. Tests shorten the wait.
+ */
 export function setCommentBodyWait(ms: number): void {
-  bodyWaitMs = ms;
+  setBodyWait(ms);
 }
 
 export interface CommentIndex {
@@ -121,21 +130,6 @@ export function loadCommentRows(
     },
     { ttlMs: 3 * 60_000, force: options.force }
   );
-}
-
-type Quick<T> = { value: T; late: null } | { value: null; late: Promise<T> };
-
-/** `work`, or after `bodyWaitMs` the promise still running. */
-async function quick<T>(work: Promise<T>): Promise<Quick<T>> {
-  // Nobody may be waiting for it any more when it fails late.
-  work.catch(() => undefined);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const slow = new Promise<'slow'>((resolve) => {
-    timer = setTimeout(() => resolve('slow'), bodyWaitMs);
-  });
-  const first = await Promise.race([work, slow]);
-  clearTimeout(timer);
-  return first === 'slow' ? { value: null, late: work } : { value: first as T, late: null };
 }
 
 function readBody(row: CommentRow): Promise<CommentBody> {

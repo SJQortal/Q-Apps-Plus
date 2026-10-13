@@ -170,6 +170,10 @@ describe('CommentsSection', () => {
     await user.click(within(panel).getByRole('button', { name: 'Post' }));
     expect(within(panel).getByText('Write something first.')).toBeVisible();
     expect(screen.queryByRole('dialog')).toBeNull();
+    // Focus moves to the box, which now says what's wrong.
+    await waitFor(() => expect(box).toHaveFocus());
+    expect(box).toHaveAttribute('aria-invalid', 'true');
+    expect(box).toHaveAccessibleDescription(/Write something first\./);
 
     await user.type(box, 'Wren keeps a steady node.');
     await user.click(within(panel).getByRole('button', { name: 'Post' }));
@@ -228,6 +232,18 @@ describe('CommentsSection', () => {
     );
   });
 
+  it('Cancel on a reply puts focus back on the comment it answered', async () => {
+    const user = userEvent.setup();
+    const { ids } = await show('nominator', { open: true });
+    await region();
+    const li = await waitFor(() => commentLi(ids.answer) ?? Promise.reject(new Error('not yet')));
+    await user.click(within(li).getByRole('button', { name: 'Reply to Wren Waiting' }));
+    expect(screen.getByRole('textbox', { name: 'Reply to Wren Waiting' })).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('textbox', { name: 'Reply to Wren Waiting' })).toBeNull();
+    expect(commentLi(ids.answer)).toHaveFocus();
+  });
+
   it('edits your own comment: same identifier, marked edited, shown at once', async () => {
     const user = userEvent.setup();
     const { ids } = await show('nominator', { open: true });
@@ -243,6 +259,8 @@ describe('CommentsSection', () => {
     );
     await user.click(await screen.findByRole('menuitem', { name: 'Edit' }));
     const box = within(li).getByRole('textbox', { name: 'Edit your comment' });
+    // Focus ends in the box, not back on the More button.
+    await waitFor(() => expect(box).toHaveFocus());
     expect(box).toHaveValue(
       'Same experience here. Their node guide is worth a read: qortal://WEBSITE/WrenNodeGuide'
     );

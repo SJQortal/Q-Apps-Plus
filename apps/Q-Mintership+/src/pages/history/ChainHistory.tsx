@@ -20,7 +20,7 @@ import {
   type HistoryWindow,
 } from '../../data/timeline';
 import { useAdmins, useChainNow, useGroupInfo } from '../../hooks/useData';
-import { approvedAdminChanges, targetSteps } from '../../rules/targetShift';
+import { adminLeaves, approvedAdminChanges, targetSteps } from '../../rules/targetShift';
 import { useQuery } from '../../hooks/useQuery';
 import {
   EmptyState,
@@ -64,6 +64,7 @@ export function ChainHistory() {
   const msPerBlock = chain.data?.msPerBlock ?? FALLBACK_MS_PER_BLOCK;
   const maximumBlockDelay = group.data?.maximumBlockDelay ?? 10_080;
   const threshold = group.data?.approvalThreshold;
+  const owner = group.data?.owner;
   const adminCount = admins.data?.adminCount;
   // Decided only: what is still collecting signatures lives in Nominations and Decisions.
   const events = useMemo(() => {
@@ -76,11 +77,14 @@ export function ChainHistory() {
     // A change approved this long after the oldest window's start was confirmed inside the
     // windows read, so every change after it is in hand and its count is exact.
     const exactFrom = (windows[windows.length - 1]?.startHeight ?? 1) + maximumBlockDelay;
-    const steps = targetSteps(approvedAdminChanges(rows), adminCount, threshold).filter(
+    // An admin's own LEAVE_GROUP takes their admin row away too (the rows read have them).
+    const changes = approvedAdminChanges(rows);
+    const leaves = adminLeaves(rows, changes, { owner });
+    const steps = targetSteps(changes, adminCount, threshold, leaves).filter(
       (step) => step.height >= exactFrom
     );
     return withTargetSteps(decided, steps);
-  }, [windows, msPerBlock, maximumBlockDelay, adminCount, threshold]);
+  }, [windows, msPerBlock, maximumBlockDelay, adminCount, threshold, owner]);
 
   const loadingOlder = Boolean(windows && query.fetching && !query.data);
   const oldest = windows?.[windows.length - 1];

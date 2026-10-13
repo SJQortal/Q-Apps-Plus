@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage } from '../../test/render';
 import { ADDR } from '../../test/world';
@@ -36,11 +36,27 @@ describe('NominationCard', () => {
     );
     const writeText = vi.fn(() => Promise.resolve());
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-    await userEvent.click(
-      within(card).getByRole('button', { name: 'Copy link to the nomination of Mia Met' })
-    );
+    const button = within(card).getByRole('button', {
+      name: 'Copy link to the nomination of Mia Met',
+    });
+    await userEvent.click(button);
     expect(writeText).toHaveBeenCalledWith(`qortal://APP/Q-Mintership+/nominations/${ADDR.met}`);
-    expect(await within(card).findByText('Link copied')).toBeVisible();
+    // Said once, from a status region; the button shows it but keeps its name.
+    const said = () =>
+      within(card)
+        .getAllByRole('status')
+        .filter((el) => el.textContent === 'Link copied');
+    await waitFor(() => expect(said()).toHaveLength(1));
+    expect(button).toHaveTextContent('Link copied');
+    expect(button).toHaveAccessibleName('Copy link to the nomination of Mia Met');
+    // Back to "Copy link": the status empties rather than saying it.
+    await waitFor(() => expect(button).toHaveTextContent('Copy link'), { timeout: 3000 });
+    expect(said()).toHaveLength(0);
+    expect(
+      within(card)
+        .getAllByRole('status')
+        .some((el) => el.textContent === 'Copy link')
+    ).toBe(false);
   });
 });
 

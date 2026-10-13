@@ -78,6 +78,30 @@ describe('Settings → Notifications', () => {
     expect(added.map((r) => r.notificationId)).toEqual(['qmp-new-nomination']);
   });
 
+  it('keeps focus on the switch while Hub asks, and ignores another press meanwhile', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts();
+    let allow: (value: boolean) => void = () => undefined;
+    mockQortalRequest(
+      'NOTIFICATION_PERMISSION',
+      () => new Promise<boolean>((resolve) => (allow = resolve))
+    );
+    await renderPage(<NotificationSettings />, { persona: 'admin', path: '/settings' });
+    await waitFor(() => expect(hubSwitch()).toBeEnabled(), T);
+    await u.click(hubSwitch());
+    expect(await within(section()).findByText('Waiting for Hub…', {}, T)).toBeVisible();
+    expect(hubSwitch()).toBeEnabled();
+    expect(hubSwitch()).toHaveFocus();
+    expect(hubSwitch()).toHaveAttribute('aria-busy', 'true');
+    await u.click(hubSwitch());
+    expect(qortalCallsFor('NOTIFICATION_PERMISSION')).toHaveLength(1);
+    allow(true);
+    expect(await screen.findByText('Hub alerts are on.', {}, T)).toBeVisible();
+    expect(hubSwitch()).toBeChecked();
+    expect(hubSwitch()).toHaveFocus();
+    expect(qortalCallsFor('NOTIFICATION_ADD')).toHaveLength(1);
+  });
+
   it('turns them off again without asking for permission', async () => {
     const u = userEvent.setup();
     hubWithAlerts(['qmp-new-nomination']);
@@ -147,6 +171,24 @@ describe('Settings → Notifications', () => {
     expect(await within(section()).findByText(/set up for your earlier role/, {}, T)).toBeVisible();
     expect(hubSwitch()).toBeChecked();
     expect(hubSwitch()).toBeEnabled();
+  });
+
+  it('says to turn off alerts that no longer fit a role with nothing to alert about', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts(['qmp-nominated-you', 'qmp-supported-you']);
+    await renderPage(<NotificationSettings />, { persona: 'learner', path: '/settings' });
+    expect(
+      await within(section()).findByText(/no longer fit\. Turn them off\./, {}, T)
+    ).toBeVisible();
+    expect(within(section()).queryByText(/Turn them off and on/)).toBeNull();
+    expect(hubSwitch()).toBeChecked();
+    expect(hubSwitch()).toBeEnabled();
+    await u.click(hubSwitch());
+    expect(
+      await within(section()).findByText(/Nothing to alert you about now/, {}, T)
+    ).toBeVisible();
+    await waitFor(() => expect(hubSwitch()).toBeDisabled());
+    expect(hubSwitch()).not.toBeChecked();
   });
 
   it('points to Hub or GO outside Hub', async () => {

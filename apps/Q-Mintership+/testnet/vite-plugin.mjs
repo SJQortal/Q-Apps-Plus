@@ -8,6 +8,8 @@
  *   qortalRequest as the test account `as` would in Hub (lib/hub.mjs);
  * - /qmp-testnet-control/…    config (group id by key, public account info),
  *   Hub behaviours on demand, and the signer's log for the scenarios;
+ * - the signer and every control POST take same-origin JSON on a loopback
+ *   host only (lib/request-guard.mjs), so no other page can drive them;
  * - index.html loads testnet/browser/entry.ts instead of src/main.tsx.
  *
  * The node is reached only through the testnet's Unix socket (lib/node.mjs),
@@ -16,6 +18,7 @@
 import { rawGet, assertTestnet } from './lib/node.mjs';
 import { hubRequest, hubError, DIALOG_ACTIONS } from './lib/hub.mjs';
 import { account, publicAccounts, readWorld } from './lib/world.mjs';
+import { signerRequestRefusal } from './lib/request-guard.mjs';
 
 const HUB_TIMEOUT_MS = 30_000;
 
@@ -144,6 +147,9 @@ export function testnetPlugin() {
       await assertTestnet({ fresh: true });
       server.middlewares.use((req, res, next) => {
         const url = new URL(req.url ?? '/', 'http://localhost');
+        // Another page open in the browser must not drive the signer (lib/request-guard.mjs).
+        const refusal = signerRequestRefusal(req, url.pathname);
+        if (refusal) return sendJson(res, 403, { error: refusal });
         const handle = url.pathname.startsWith('/qmp-testnet-node')
           ? nodeProxy(req, res, url)
           : url.pathname === '/qmp-testnet-signer' && req.method === 'POST'

@@ -27,7 +27,7 @@ import type { Nomination } from '../../data/nominations';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { useAnnounceOnce, useSinceLastVisit } from '../../hooks/useLastVisit';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { KIND_LABEL, type Decision } from '../../rules/decision';
+import { decisionTitle, type Decision } from '../../rules/decision';
 import type { DecidedEntry, NomineeEvent } from '../../rules/sinceLastVisit';
 import type { MyStatus } from '../../rules/status';
 import { signerState } from '../../rules/tally';
@@ -36,6 +36,7 @@ import { useSession } from '../../state/session';
 import { sinceLastVisitAtom } from '../../state/notifications';
 import { formatBlock, formatRelative, plural } from '../../utils/format';
 import { PersonLink } from './Hero';
+import { focusPageTitle } from '../../components/layout/pageFocus';
 
 /** Decided rows before "And N more". */
 const TOP = 3;
@@ -101,9 +102,9 @@ function Item({
 }
 
 /** "Remove from MINTER: Kai Target". */
-function useDecisionTitle(kind: Decision['kind'], subject: string | null): string {
-  const who = useDisplayName(subject ?? '', subject ? undefined : null);
-  return `${KIND_LABEL[kind]}: ${subject ? who.label : 'an approved invite'}`;
+function useDecisionTitle(facts: Pick<Decision, 'kind' | 'subject' | 'creatorAddress'>): string {
+  const who = useDisplayName(facts.subject ?? '', facts.subject ? undefined : null);
+  return `${decisionTitle(facts)}: ${facts.subject ? who.label : 'an approved invite'}`;
 }
 
 /** Open, and not signed (or rejected) by this admin yet. */
@@ -114,7 +115,7 @@ function waitsFor(d: Decision, publicKey: string): boolean {
 
 /** A decision's title inside a sentence. */
 function DecisionTitle({ decision: d }: { decision: Decision }) {
-  return <>{useDecisionTitle(d.kind, d.subject)}</>;
+  return <>{useDecisionTitle(d)}</>;
 }
 
 /** "Ban from MINTER: Ben Target; Add to MINTER: bob+builder, and 5 more". */
@@ -160,7 +161,7 @@ function NewDecisionsItem({ decisions, publicKey }: { decisions: Decision[]; pub
 }
 
 function NewDecisionItem({ decision: d, publicKey }: { decision: Decision; publicKey: string }) {
-  const title = useDecisionTitle(d.kind, d.subject);
+  const title = useDecisionTitle(d);
   const waitsForMe = waitsFor(d, publicKey);
   return (
     <Item
@@ -258,7 +259,7 @@ function DecidedItem({ entry }: { entry: DecidedEntry }) {
       tone={outcome.tone}
       title={
         <>
-          {KIND_LABEL[entry.kind]}:{' '}
+          {decisionTitle(entry)}:{' '}
           {entry.subject ? <PersonLink address={entry.subject} /> : 'an approved invite'}
         </>
       }
@@ -391,10 +392,6 @@ export function SinceLastVisit({ status, welcome }: { status: MyStatus; welcome:
   if (!on || !since.visible) return null;
 
   const { joined, admin, nominee } = since.changes;
-  const focusTitle = () =>
-    (
-      document.querySelector<HTMLElement>('main h1') ?? document.querySelector<HTMLElement>('h1')
-    )?.focus();
 
   return (
     <Box sx={{ animation: reduced ? 'none' : `${appear} 200ms ease-out both` }}>
@@ -406,7 +403,7 @@ export function SinceLastVisit({ status, welcome }: { status: MyStatus; welcome:
             onClick={() => {
               since.markSeen();
               // The panel goes away with the button: keep focus on the page.
-              focusTitle();
+              focusPageTitle();
             }}
             sx={{ minHeight: 44 }}
           >

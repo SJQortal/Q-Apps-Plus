@@ -331,6 +331,8 @@ describe('Ready to mint: search', () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Clear the search' }));
     expect(searchBox()).toHaveValue('');
+    // The button went with the empty state: focus is on the search box, not lost.
+    expect(searchBox()).toHaveFocus();
     await waitFor(async () => expect(rowLabels(await readyList())).toHaveLength(6));
   });
 
@@ -430,5 +432,11 @@ describe('Ready to mint: search', () => {
     expect(
       screen.getByText('Try their full registered name, or their address.')
     ).toBeInTheDocument();
+    // The search's own status region says it too, worded apart from the empty state.
+    expect(
+      screen
+        .getAllByRole('status')
+        .some((el) => /^None of \d+ match “zzz”\.$/.test(el.textContent ?? ''))
+    ).toBe(true);
   });
 });

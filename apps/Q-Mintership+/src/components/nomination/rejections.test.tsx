@@ -11,6 +11,7 @@ import { fakeAddress } from '../../../e2e/world.mjs';
 import { base58Encode } from '../../qortal/base58';
 import { useChainNow, useNominations } from '../../hooks/useData';
 import HomePage from '../../pages/home/HomePage';
+import { READY_DONE, READY_DONE_NEXT } from '../../constants/words';
 import { NominationCard } from './NominationCard';
 
 afterEach(() => vi.useRealTimers());
@@ -80,6 +81,22 @@ describe('rejections on a nomination', () => {
     expect(
       within(card).getByText(/Enough Minter Admins have rejected it: it ends as rejected/)
     ).toBeVisible();
+    // No countdown "left to sign" beside it.
+    expect(within(card).queryByText('left to sign')).toBeNull();
+  });
+
+  it('the card counts down while it can still be signed', async () => {
+    await renderPage(<SigningCard />, {
+      persona: 'learner',
+      path: '/',
+      setup: (world) => rejectInvite(world, ADDR.nominatedSigning, 2),
+    });
+    const card = await screen.findByRole(
+      'article',
+      { name: /Nomination of bob\+builder/ },
+      { timeout: 4000 }
+    );
+    expect(within(card).getByText('left to sign')).toBeInTheDocument();
   });
 
   it("the nominee's Home says how many rejected it so far", async () => {
@@ -111,5 +128,28 @@ describe('rejections on a nomination', () => {
       )
     ).toBeVisible();
     expect(screen.getByText(/You can be nominated again later\./)).toBeVisible();
+    // Nothing to accept, and no promise of getting in when the admins approve.
+    expect(screen.queryByRole('button', { name: 'Accept nomination' })).toBeNull();
+    expect(screen.queryByText(/Accept now so you join/)).toBeNull();
+    expect(screen.queryByText(new RegExp(READY_DONE_NEXT))).toBeNull();
+  });
+
+  it('an accepted nominee isn’t told they’re in once the admins approve', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'nominatedSigning',
+      setup: (world) => {
+        rejectInvite(world, ADDR.nominatedSigning, 8);
+        world.joinRequests.push({ groupId: 694, joiner: ADDR.nominatedSigning });
+      },
+    });
+    await screen.findByRole(
+      'heading',
+      { name: 'Enough Minter Admins have rejected your nomination' },
+      { timeout: 4000 }
+    );
+    expect(
+      await screen.findByText(new RegExp(`^${READY_DONE}`), {}, { timeout: 4000 })
+    ).toBeVisible();
+    expect(screen.queryByText(new RegExp(READY_DONE_NEXT))).toBeNull();
   });
 });

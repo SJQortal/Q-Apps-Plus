@@ -32,7 +32,7 @@ export function TargetRiskChip({
   /** The id of the explanation (TargetRiskNote). */
   controls: string;
 }) {
-  const drop = risk.scenario.neededThen < risk.scenario.neededNow;
+  const drop = risk.effect.neededThen < risk.effect.neededNow;
   const tone = risk.effect.effect === 'needsMore' ? 'info' : 'warning';
   const Icon = drop ? TrendingDownOutlinedIcon : TrendingUpOutlinedIcon;
   return (
@@ -64,12 +64,18 @@ export function TargetRiskNote({
   risk,
   labelOf,
   advice,
+  withdraw = false,
 }: {
   id: string;
   risk: DecisionRisk;
   labelOf: LabelOf;
   /** Minter Admins also get what they can do about it. */
   advice: boolean;
+  /**
+   * This admin's signature is on it and Withdraw is on the card: the way
+   * back is said too (only when it would apply at once).
+   */
+  withdraw?: boolean;
 }) {
   const fee = useFee('GROUP_APPROVAL');
   const flips = risk.effect.effect !== 'needsMore';
@@ -92,13 +98,11 @@ export function TargetRiskNote({
           {line}
         </Typography>
       ))}
-      {flips && advice ? (
-        <>
-          <Typography variant="body2">{ORDER_ADVICE}</Typography>
-          <Typography variant="body2">
-            {withdrawAdvice(formatQort(fee.data?.qort ?? 0.01))}
-          </Typography>
-        </>
+      {flips && advice ? <Typography variant="body2">{ORDER_ADVICE}</Typography> : null}
+      {withdraw && risk.effect.effect === 'applies' ? (
+        <Typography variant="body2">
+          {withdrawAdvice(formatQort(fee.data?.qort ?? 0.01))}
+        </Typography>
       ) : null}
     </Box>
   );

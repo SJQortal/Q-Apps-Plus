@@ -7,7 +7,7 @@
  * and the fee. Withdraw also gives the count once the signature is gone.
  */
 import { Box, Typography } from '@mui/material';
-import { KIND_LABEL, type Decision } from '../../rules/decision';
+import { decisionTitle, type Decision } from '../../rules/decision';
 import { countsAfter } from '../../rules/tally';
 import { HubStepDialog } from '../../components/common/HubStepDialog';
 import { SignaturePrefix } from '../../components/common/SignaturePrefix';
@@ -44,11 +44,14 @@ export function RejectDialog({
   mode,
   signer,
   onClose,
+  returnFocus,
 }: {
   decision: Decision | null;
   mode: RejectMode;
   signer: Signer | null;
   onClose: () => void;
+  /** Where focus goes on close when the card that opened it is gone. */
+  returnFocus?: () => HTMLElement | null;
 }) {
   const subject = useDisplayName(d?.subject ?? '', d?.subject ? undefined : null);
   const who = d?.subject ? subject.label : 'an approved invite (Core doesn’t say for whom)';
@@ -60,12 +63,13 @@ export function RejectDialog({
     <HubStepDialog
       open={Boolean(d && signer)}
       onClose={onClose}
+      returnFocus={returnFocus}
       title={text.title}
       intro={
         d ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
-              {KIND_LABEL[d.kind]}: {who}
+              {decisionTitle(d)}: {who}
             </Typography>
             {mode === 'withdraw' ? (
               <Typography>

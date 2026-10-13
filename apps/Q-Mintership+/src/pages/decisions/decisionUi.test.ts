@@ -17,6 +17,7 @@ import {
   reasonProblem,
   secondStepProblem,
   signingWindowText,
+  stillStoppable,
   whenApplied,
 } from './decisionUi';
 
@@ -118,37 +119,77 @@ describe('when Sign, Reject and Withdraw are offered', () => {
   });
 
   it('Reject for admins with no answer yet; Withdraw once their signature is in a block', async () => {
-    const { by, publicKey } = await decisionsAs('admin');
+    const { data, by, publicKey } = await decisionsAs('admin');
     const open = by(ADDR.nominatedSigning);
     const signed = by(ADDR.urgent);
     expect(canReject(open, answerView(open, publicKey))).toBe(true);
-    expect(canWithdraw(open, answerView(open, publicKey))).toBe(false);
+    expect(canWithdraw(open, answerView(open, publicKey), data.now)).toBe(false);
     expect(canReject(signed, answerView(signed, publicKey))).toBe(false);
-    expect(canWithdraw(signed, answerView(signed, publicKey))).toBe(true);
-    // Not once it can no longer count, nor with enough signatures, nor unconfirmed.
+    expect(canWithdraw(signed, answerView(signed, publicKey), data.now)).toBe(true);
+    // Not once it can no longer count, nor unconfirmed, nor with enough
+    // signatures when Core applies it in the next block (a withdrawal would
+    // land in that block, too late to count).
+    expect(by(ADDR.met).applyAtHeight).toBe(data.now.height + 1);
+    expect(stillStoppable(by(ADDR.met), data.now)).toBe(false);
     for (const subject of [ADDR.late, ADDR.met, ADDR.demote]) {
       const d = by(subject);
       expect(canReject(d, answerView(d, publicKey))).toBe(false);
-      expect(canWithdraw(d, answerView(d, publicKey))).toBe(false);
+      expect(canWithdraw(d, answerView(d, publicKey), data.now)).toBe(false);
     }
   });
 
+  it('Withdraw also with enough signatures, while a withdrawal can still stop it', async () => {
+    const { data, by, publicKey } = await decisionsAs('admin');
+    const early = by(ADDR.early); // signed by this admin; Core can't decide it yet
+    const others = Array.from({ length: 8 }, (_, i) => ({
+      signature: `a${i}`,
+      pendingSignature: early.signature,
+      adminPublicKey: `pk${i}`,
+      creatorAddress: `Q${i}`,
+      approval: true,
+      timestamp: 1,
+      blockHeight: data.now.height,
+    }));
+    const met = buildDecision(early.tx, {
+      threshold: data.group.approvalThreshold,
+      totalAdmins: data.admins.adminCount,
+      delays: data.group,
+      tipHeight: data.now.height,
+      approvals: [...data.approvals, ...others],
+    });
+    expect(met.phase).toBe('thresholdMet');
+    expect(met.applyAtHeight).toBe(early.window!.earliestDecisionHeight);
+    expect(met.applyAtHeight).toBeGreaterThan(data.now.height + 1);
+    const view = answerView(met, publicKey);
+    expect(view).toMatchObject({ shown: 'signed', settled: true });
+    expect(met.windowPhase).toBe('early');
+    expect(stillStoppable(met, data.now)).toBe(true);
+    expect(canWithdraw(met, view, data.now)).toBe(true);
+    // More signatures or a rejection change nothing here: neither is offered.
+    const nobody = answerView(met, 'nobody');
+    expect(canSign(met, nobody) || canReject(met, nobody)).toBe(false);
+    // Once it applies in the next block, a withdrawal sent then is too late.
+    const later = { ...data.now, height: (met.applyAtHeight as number) - 1 };
+    expect(stillStoppable(met, later)).toBe(false);
+    expect(canWithdraw(met, view, later)).toBe(false);
+  });
+
   it('a confirmed rejection can be replaced by a signature, but not rejected again', async () => {
-    const { by, publicKey } = await decisionsAs('admin');
+    const { data, by, publicKey } = await decisionsAs('admin');
     const fresh = by(ADDR.nominatedSigning);
     const d = withAnswers(fresh, publicKey, [{ approval: false, confirmed: true, t: 5 }]);
     const view = answerView(d, publicKey);
     expect(view).toMatchObject({ shown: 'rejected', settled: true, label: 'Rejected' });
     expect(canSign(d, view)).toBe(true);
     expect(canReject(d, view)).toBe(false);
-    expect(canWithdraw(d, view)).toBe(false);
+    expect(canWithdraw(d, view, data.now)).toBe(false);
     // Signable, but no longer waiting for this admin: they answered.
     expect(isWaitingForMe(d, view)).toBe(false);
     expect(isWaitingForMe(fresh, answerView(fresh, publicKey))).toBe(true);
   });
 
   it('a rejection on its way from another device offers nothing until it is in', async () => {
-    const { by, publicKey } = await decisionsAs('admin');
+    const { data, by, publicKey } = await decisionsAs('admin');
     const d = withAnswers(by(ADDR.nominatedSigning), publicKey, [
       { approval: false, confirmed: false, t: 5 },
     ]);
@@ -158,7 +199,7 @@ describe('when Sign, Reject and Withdraw are offered', () => {
       settled: false,
       label: 'Rejected (confirming…)',
     });
-    expect(canSign(d, view) || canReject(d, view) || canWithdraw(d, view)).toBe(false);
+    expect(canSign(d, view) || canReject(d, view) || canWithdraw(d, view, data.now)).toBe(false);
   });
 });
 
@@ -378,10 +419,20 @@ describe('when a decision has enough rejections', () => {
       approvals: rejectRows(early.signature, data.now.height, 8),
     });
     expect(decision.phase).toBe('rejectedMet');
+    expect(decision.windowPhase).toBe('early');
     expect(decision.applyAtHeight).toBe(early.window!.earliestDecisionHeight);
     expect(phaseLine(decision, data.now)).toMatch(
       /^Enough rejections: Core ends it as rejected at block [\d,]+ \(in about .+\), unless it has 8 signatures by then \(signatures are counted first\)\./
     );
+    // So Sign is offered: to an admin who hasn't answered, and to one whose
+    // rejection is in a block (a signature replaces it). Another rejection
+    // changes nothing, so Reject isn't.
+    const nobody = answerView(decision, 'nobody');
+    expect(canSign(decision, nobody)).toBe(true);
+    expect(canReject(decision, nobody)).toBe(false);
+    const rejecter = answerView(decision, 'rk0');
+    expect(rejecter).toMatchObject({ shown: 'rejected', settled: true });
+    expect(canSign(decision, rejecter)).toBe(true);
   });
 
   it('is approved, not rejected, when both reach the target', async () => {

@@ -101,12 +101,16 @@ export function ReadyToMintSection({
     focusRow.current = null;
   }, [shown]);
 
+  // No match is said here too: the empty state below mounts already filled,
+  // which screen readers don't reliably read out.
   const found =
-    query && all?.length && people?.length
-      ? find.looking
+    !query || !all?.length || !people
+      ? ''
+      : find.looking
         ? 'Looking up names…'
-        : `${formatCount(people.length)} of ${formatCount(all.length)} ${people.length === 1 ? 'matches' : 'match'} “${query}”.${find.failed ? ' Names couldn’t be looked up just now, so only addresses and names already shown count.' : ''}`
-      : '';
+        : people.length === 0
+          ? `None of ${formatCount(all.length)} match “${query}”.`
+          : `${formatCount(people.length)} of ${formatCount(all.length)} ${people.length === 1 ? 'matches' : 'match'} “${query}”.${find.failed ? ' Names couldn’t be looked up just now, so only addresses and names already shown count.' : ''}`;
 
   let body: ReactNode;
   if (!people && ready.isError) {
@@ -216,12 +220,13 @@ export function ReadyToMintSection({
         People who asked to join MINTER. They need a nomination from a level 5+ minter or a Minter
         Admin. Join requests carry no date, so this is the order your node lists them in.
       </Typography>
-      {/* What the search found, read out as it changes. */}
+      {/* What the search found, read out as it changes; shown above the rows only
+          (the skeleton or the empty state already says the rest on screen). */}
       <Typography
         variant="body2"
         color="text.secondary"
         role="status"
-        className={found ? undefined : 'qmp-visually-hidden'}
+        className={found && people?.length ? undefined : 'qmp-visually-hidden'}
         sx={{ px: 0.5 }}
       >
         {found}

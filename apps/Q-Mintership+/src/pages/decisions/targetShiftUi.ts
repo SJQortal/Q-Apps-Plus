@@ -33,12 +33,18 @@ export function targetMove(neededNow: number, neededThen: number): string {
 
 /**
  * "If this passes, MINTER has 20 admin seats and the target drops from 9 to
- * 8 signatures." `lead` names what passes ("If this passes").
+ * 8 signatures." `lead` names what passes ("If this passes"). When the
+ * count can dip lower on the way (a removal first, an addition after), that
+ * is said too.
  */
 export function shiftSentence(s: ShiftScenario, lead: string): string {
   const seats = `MINTER has ${plural(s.countThen, 'admin seat')}`;
   const same = s.neededThen === s.neededNow;
-  return `${lead}, ${seats}${same ? ';' : ' and'} the target ${targetMove(s.neededNow, s.neededThen)}.`;
+  const dip =
+    s.neededLow < Math.min(s.neededNow, s.neededThen)
+      ? `, but on the way MINTER can drop to ${plural(s.countLow, 'admin seat')} (target ${s.neededLow})`
+      : '';
+  return `${lead}, ${seats}${same ? ';' : ' and'} the target ${targetMove(s.neededNow, s.neededThen)}${dip}.`;
 }
 
 /** What passes, for a scenario's lead: "If this passes", "If all 3 waiting removals pass", … */
@@ -79,9 +85,13 @@ export function changeNames(
   return joinAnd(changes.map((c) => (c.signature ? labelOf(c.signature) : proposal)));
 }
 
-/** The chip on an affected decision: "Target may drop to 8". */
+/**
+ * The chip on an affected decision: "Target may drop to 8". The target is
+ * the one this decision's effect was worked out at, which can be lower (or
+ * higher) on the way than once everything has passed.
+ */
 export function riskChipLabel(risk: DecisionRisk): string {
-  const { neededNow, neededThen } = risk.scenario;
+  const { neededNow, neededThen } = risk.effect;
   return neededThen < neededNow
     ? `Target may drop to ${neededThen}`
     : `Target may rise to ${neededThen}`;
@@ -95,7 +105,14 @@ export function riskExplanation(risk: DecisionRisk, labelOf: LabelOf): string[] 
   const via = s.followOn.length
     ? ` (with ${joinAnd(s.followOn.map(labelOf))}, which would then apply at once too)`
     : '';
-  const why = `If ${names} ${passes}${via}, MINTER has ${plural(s.countThen, 'admin seat')} and the target ${targetMove(s.neededNow, s.neededThen)}.`;
+  // A rising target is worked out at the highest count on the way, the rest
+  // at the lowest; either can differ from where the count ends up.
+  const count = e.effect === 'needsMore' ? s.countHigh : s.countLow;
+  const seats =
+    count === s.countThen
+      ? `MINTER has ${plural(count, 'admin seat')} and`
+      : `MINTER can ${count < s.countNow ? 'drop' : 'rise'} to ${plural(count, 'admin seat')} on the way, and then`;
+  const why = `If ${names} ${passes}${via}, ${seats} the target ${targetMove(e.neededNow, e.neededThen)}.`;
   switch (e.effect) {
     case 'applies':
       return [
@@ -121,10 +138,10 @@ export const ORDER_ADVICE =
 
 /**
  * The on-chain way back for an admin who signed a decision at risk, to do
- * before `deadline` ("the admin change passes", "Core applies it").
+ * before `deadline` ("the admin change passes", "block 1,233").
  */
 export function withdrawAdvice(fee: string, deadline = 'the admin change passes'): string {
-  return `Signed one of these and don’t want it to go through this way? You can withdraw your signature before ${deadline}. A withdrawal counts as a rejection, only each admin’s latest decision counts, and it costs ${fee}.`;
+  return `Signed one of these and don’t want it to go through this way? You can withdraw your signature before ${deadline}. A withdrawal counts as a rejection, only each admin’s latest answer counts, and it costs ${fee}.`;
 }
 
 /** The banner's title: "The target changed from 9 to 7 signatures". */

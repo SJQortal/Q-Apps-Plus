@@ -9,7 +9,6 @@ import { formatQort, getBalance, getFee, getLastReference } from '../data/accoun
 import { getChainNow } from '../data/chain';
 import { ATOMIC_PER_QORT, MINTER_GROUP_ID } from '../data/constants';
 import { getTransaction } from '../data/txs';
-import { invalidate } from '../data/query';
 import {
   buildConsidering,
   buildNomination,
@@ -55,41 +54,31 @@ import {
   signApprovalRequest,
   type HubRequest,
 } from './hubActions';
+import { CHAIN_PREFIXES, invalidateReads } from './chainReads';
 import { clearWrite, markWrite, writeKeys } from './optimistic';
 import { runWrite, type Signer, type WriteOutcome, type WriteStage } from './runner';
 
-/** Reads every chain write can change. */
-function invalidateChainReads(): void {
-  for (const prefix of [
-    'decisions:',
-    'pending:',
-    'unconfirmed:',
-    'approvals:',
-    'nominations:',
-    'status:',
-    'membership:',
-    'joinrequest:',
-    'invite:',
-    'group:',
-    'history:',
-    'tx:',
-    'balance:',
-    'qdnsearch:',
-    'considering:',
-  ]) {
-    invalidate(prefix);
-  }
-}
+/** A Considering record changes only who is considering (and the balance it costs). */
+const CONSIDERING_PREFIXES: readonly string[] = ['considering:', 'balance:'];
 
-async function tracked(key: string, run: () => Promise<WriteOutcome>): Promise<WriteOutcome> {
+/**
+ * Marks the write while it is sent and confirmed, and once Hub answers
+ * invalidates the reads it can change (`prefixes`, every chain read by
+ * default).
+ */
+async function tracked(
+  key: string,
+  run: () => Promise<WriteOutcome>,
+  prefixes: readonly string[] = CHAIN_PREFIXES
+): Promise<WriteOutcome> {
   markWrite(key, 'sending');
   const outcome = await run();
   if (outcome.status === 'sent') {
     markWrite(key, 'confirming', { signature: outcome.signature ?? undefined });
-    invalidateChainReads();
+    invalidateReads(prefixes);
   } else if (outcome.status === 'unknown') {
     markWrite(key, 'failed', { message: outcome.message });
-    invalidateChainReads();
+    invalidateReads(prefixes);
   } else {
     clearWrite(key);
   }
@@ -653,20 +642,28 @@ export async function publishConsidering(
     return { status: 'blocked', reason: error instanceof Error ? error.message : String(error) };
   }
   const writeKey = options.cleared ? writeKeys.notConsidering(key) : writeKeys.considering(key);
-  return tracked(writeKey, async () => {
-    let record;
-    try {
-      record = buildConsidering(target, options);
-    } catch (error) {
-      return { status: 'blocked', reason: error instanceof Error ? error.message : String(error) };
-    }
-    const identifier = consideringIdentifier(target);
-    return runWrite({
-      request: publishRecordRequest(signer.name ?? '', identifier, record),
-      signer,
-      precheck: () => guardConsidering(signer, target, Boolean(options.cleared)),
-      match: (tx) => tx.type === 'ARBITRARY' && tx.identifier === identifier,
-      onStage,
-    });
-  });
+  // Only the Considering reads change: the chain views keep their own pace.
+  return tracked(
+    writeKey,
+    async () => {
+      let record;
+      try {
+        record = buildConsidering(target, options);
+      } catch (error) {
+        return {
+          status: 'blocked',
+          reason: error instanceof Error ? error.message : String(error),
+        };
+      }
+      const identifier = consideringIdentifier(target);
+      return runWrite({
+        request: publishRecordRequest(signer.name ?? '', identifier, record),
+        signer,
+        precheck: () => guardConsidering(signer, target, Boolean(options.cleared)),
+        match: (tx) => tx.type === 'ARBITRARY' && tx.identifier === identifier,
+        onStage,
+      });
+    },
+    CONSIDERING_PREFIXES
+  );
 }

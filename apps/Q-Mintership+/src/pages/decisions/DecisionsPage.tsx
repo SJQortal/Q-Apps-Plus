@@ -41,9 +41,9 @@ import { BOTTOM_BAR_VAR, usePublishOverlay } from '../../hooks/useOverlayPadding
 import { DoneChip } from '../../components/decision/DecisionParts';
 import {
   ConsideringControls,
-  ConsideringDialog,
   type ConsideringRequest,
 } from '../../components/decision/Considering';
+import { ConsideringDialog } from '../../components/decision/ConsideringDialog';
 import { useConsideringFor } from '../../hooks/useConsidering';
 import { NominationCard } from '../../components/nomination/NominationCard';
 import { Card, Section } from '../../components/common/Section';
@@ -182,7 +182,7 @@ function DecisionsQueue() {
   const [targetChange, dismissTargetChange] = useSeenTargetChange(snapshot);
 
   // What waiting admin changes would do to the target (each, and together).
-  const shift = useShift(data);
+  const shift = useShift(data, membersQ.data);
 
   const adminNames = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -806,8 +806,8 @@ function WaitingConsidering({
       mine={mine}
       label={label}
       canStart
-      onSet={() => onConsider({ target: publishTarget, mode: 'set', label })}
-      onClear={() => onConsider({ target: publishTarget, mode: 'clear', label })}
+      onSet={() => onConsider({ target: publishTarget, mode: 'set', label, nominee: true })}
+      onClear={() => onConsider({ target: publishTarget, mode: 'clear', label, nominee: true })}
     />
   );
 }

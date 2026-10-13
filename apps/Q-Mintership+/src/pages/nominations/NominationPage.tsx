@@ -192,7 +192,7 @@ function NominationView({ address }: { address: string }) {
           <>
             <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
               A round starts with a Minter Admin’s first signature, and ends when enough of them
-              sign or the time runs out.
+              sign, as many reject it, or the time runs out.
             </Typography>
             <RoundsList rounds={rounds} msPerBlock={chain.data.msPerBlock} />
           </>
@@ -230,6 +230,7 @@ function CurrentActions({
       hasJoinRequest: viewer.hasJoinRequest || n.hasJoinRequest,
       storedInvite: Boolean(viewer.storedInvite) || n.hasStoredInvite,
       state: isOpenState(n.state) ? n.state : null,
+      rejectedEnd: n.decision?.phase === 'rejectedMet',
     });
     return step ? (
       <NomineeAction

@@ -217,7 +217,11 @@ export function NominationCard({
       ) : null}
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
-        {n.state === 'signing' && window ? (
+        {/* No "left to sign" once the count has decided it (as on the hero and decision cards). */}
+        {n.state === 'signing' &&
+        window &&
+        n.decision?.phase !== 'rejectedMet' &&
+        n.decision?.phase !== 'thresholdMet' ? (
           <Countdown
             now={now}
             height={window.lastUsefulSignatureHeight}

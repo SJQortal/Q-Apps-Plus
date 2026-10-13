@@ -109,6 +109,47 @@ describe('Considering on the Decisions page', () => {
     });
   }, 20_000);
 
+  it('keeps a note to its own decision: another one starts empty', async () => {
+    const u = user();
+    await openDecisions('admin');
+    const card = screen.getByRole('article', { name: /Add to MINTER, bob\+builder/ });
+    const open = async (button: HTMLElement) => {
+      await u.click(button);
+      const dialog = await screen.findByRole('dialog', { name: 'Mark as considering' });
+      return within(dialog);
+    };
+    let dialog = await open(within(card).getByRole('button', { name: /^Considering: / }));
+    await u.type(dialog.getByRole('textbox', { name: 'A note (optional)' }), 'Asking their node.');
+    await u.click(dialog.getByRole('button', { name: 'Not now' }));
+    // The same decision again: the draft is still there.
+    dialog = await open(await within(card).findByRole('button', { name: /^Considering: / }, T));
+    expect(dialog.getByRole('textbox', { name: 'A note (optional)' })).toHaveValue(
+      'Asking their node.'
+    );
+    await u.click(dialog.getByRole('button', { name: 'Not now' }));
+    // Another decision: an empty note, never the first one's.
+    const other = (await screen.findAllByRole('button', { name: /^Considering: / }, T)).find(
+      (b) => !card.contains(b)
+    ) as HTMLElement;
+    dialog = await open(other);
+    expect(dialog.getByRole('textbox', { name: 'A note (optional)' })).toHaveValue('');
+  }, 20_000);
+
+  it('mentions the nominee only where there is one', async () => {
+    const u = user();
+    await openDecisions('admin');
+    const invite = screen.getByRole('article', { name: /Add to MINTER, bob\+builder/ });
+    await u.click(within(invite).getByRole('button', { name: /^Considering: / }));
+    let dialog = await screen.findByRole('dialog', { name: 'Mark as considering' });
+    expect(dialog).toHaveTextContent(/Tell the other Minter Admins, and the nominee, that/);
+    await u.click(within(dialog).getByRole('button', { name: 'Not now' }));
+    const kick = await screen.findByRole('article', { name: /^Remove from MINTER, Kai Target/ });
+    await u.click(await within(kick).findByRole('button', { name: /^Considering: / }, T));
+    dialog = await screen.findByRole('dialog', { name: 'Mark as considering' });
+    expect(dialog).toHaveTextContent(/Tell the other Minter Admins that you’ve looked at this/);
+    expect(dialog).not.toHaveTextContent(/nominee/);
+  }, 20_000);
+
   it('offers Considering on a nomination waiting for its first signature', async () => {
     await openDecisions('admin');
     expect(

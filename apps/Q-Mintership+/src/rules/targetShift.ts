@@ -20,11 +20,13 @@
  * (History, Activity). Pure; the screens feed it.
  *
  * How a waiting admin change moves the count, checked against today's admin
- * rows: making someone a Minter Admin who isn't one adds a row; making an
- * admin an admin again changes nothing; removing an admin takes a row away;
+ * rows: making someone a Minter Admin who isn't one adds a row, if they are
+ * still in MINTER; making an admin an admin again changes nothing; removing
+ * an admin takes a row away;
  * removing someone who isn't an admin, or the group's owner (it can never be
  * removed), changes nothing. Several changes about one account count once.
  */
+import { MINTER_GROUP_ID } from '../data/constants';
 import type { TxRow } from '../data/types';
 import type { Decision, DecisionKind } from './decision';
 import { approvalsNeeded, meetsThreshold, type ApprovalThreshold } from './threshold';
@@ -61,6 +63,12 @@ export interface ShiftState {
   admins: ReadonlySet<string> | readonly string[];
   /** The group's owner: an admin row that can never be removed. */
   owner?: string | null;
+  /**
+   * Today's MINTER member rows, when known in full. An add whose subject
+   * isn't a member changes nothing (Core finds it invalid when it comes to
+   * apply it). Unknown: every add for a non-admin counts.
+   */
+  members?: ReadonlySet<string> | readonly string[] | null;
 }
 
 export type ShiftEffectKind =
@@ -107,6 +115,20 @@ export interface ShiftScenario {
   countThen: number;
   neededNow: number;
   neededThen: number;
+  /**
+   * The lowest count on the way there (every removal first, those that
+   * follow included) and its target: where 'applies' and 'rejected' are
+   * worked out. Never above countNow.
+   */
+  countLow: number;
+  neededLow: number;
+  /**
+   * The highest count on the way there (every addition among `changes`
+   * first) and its target: where 'needsMore' is worked out. Never below
+   * countNow.
+   */
+  countHigh: number;
+  neededHigh: number;
   /** Most at risk first: applies, rejected, then needsMore (those met now first). */
   effects: ShiftEffect[];
 }
@@ -117,9 +139,18 @@ function adminSet(state: ShiftState): ReadonlySet<string> {
     : new Set(state.admins as readonly string[]);
 }
 
-/** The admin count once `changes` have passed, checked against today's admin rows. */
+/** Today's member rows as a set, or null when they aren't known. */
+function memberSet(state: ShiftState): ReadonlySet<string> | null {
+  if (!state.members) return null;
+  return state.members instanceof Set
+    ? (state.members as ReadonlySet<string>)
+    : new Set(state.members as readonly string[]);
+}
+
+/** The admin count once `changes` have passed, checked against today's admin (and member) rows. */
 export function adminCountAfter(state: ShiftState, changes: readonly AdminChangeInput[]): number {
   const admins = adminSet(state);
+  const members = memberSet(state);
   const owner = state.owner ?? null;
   const touched = new Map<string, { add: boolean; remove: boolean }>();
   for (const change of changes) {
@@ -134,7 +165,7 @@ export function adminCountAfter(state: ShiftState, changes: readonly AdminChange
     if (address === owner) continue;
     if (admins.has(address)) {
       if (t.remove) delta -= 1;
-    } else if (t.add) delta += 1;
+    } else if (t.add && (!members || members.has(address))) delta += 1;
   }
   return Math.max(0, state.adminCount + delta);
 }
@@ -213,7 +244,10 @@ function sortEffects(effects: ShiftEffect[]): ShiftEffect[] {
  * target, and each decision that would apply at once, end as rejected at
  * once, or need more signatures. A waiting admin change that would itself
  * apply at once moves the count again; that is followed through
- * (`followOn`), and what only happens after it is marked `cascade`.
+ * (`followOn`), and what only happens after it is marked `cascade`. Each
+ * effect is worked out at the count where it can happen on the way there
+ * (`countLow` or `countHigh`), so an addition that brings the count back
+ * up doesn't hide what the drop before it does.
  */
 export function projectShift(
   state: ShiftState,
@@ -227,9 +261,43 @@ export function projectShift(
   const followOn: string[] = [];
   const bySignature = new Map(decisions.map((d) => [d.signature, d]));
 
-  let countThen = adminCountAfter(state, assumed);
-  let effects = effectsBetween(state.threshold, countNow, countThen, decisions, exclude);
+  // Core applies each admin change on its own approval, in any order and in
+  // any block, so the count can pass through values the net result hides.
+  // The lowest it can reach is every removal first (follow-ons included):
+  // the only count where a decision can newly apply or end as rejected. The
+  // highest is every addition among `changes` first: a follow-on addition
+  // only applies at a count below today's, so it never goes higher. That is
+  // the only count where a decision can need more.
+  const low = () =>
+    adminCountAfter(
+      state,
+      assumed.filter((c) => c.kind === 'removeAdmin')
+    );
+  const high = adminCountAfter(
+    state,
+    changes.filter((c) => c.kind === 'addAdmin')
+  );
+  const merged = () => {
+    const best = new Map<string, Omit<ShiftEffect, 'cascade'>>();
+    for (const e of [
+      ...effectsBetween(state.threshold, countNow, low(), decisions, exclude),
+      ...effectsBetween(state.threshold, countNow, high, decisions, exclude),
+    ]) {
+      const had = best.get(e.signature);
+      if (!had || RANK[e.effect] < RANK[had.effect]) best.set(e.signature, e);
+    }
+    const out: Array<Omit<ShiftEffect, 'cascade'>> = [];
+    for (const d of decisions) {
+      const e = best.get(d.signature);
+      if (!e) continue;
+      out.push(e);
+      best.delete(d.signature);
+    }
+    return out;
+  };
+  let effects = merged();
   const firstRound = new Map(effects.map((e) => [e.signature, e.effect]));
+  // A follow-on stays in `effects` as 'applies': the lowest count only falls.
   for (;;) {
     const next = effects
       .filter((e) => e.effect === 'applies' && !followOn.includes(e.signature))
@@ -240,11 +308,11 @@ export function projectShift(
       followOn.push(d.signature);
       assumed.push({ signature: d.signature, kind: d.kind as AdminChangeKind, subject: d.subject });
     }
-    const count = adminCountAfter(state, assumed);
-    if (count === countThen) continue;
-    countThen = count;
-    effects = effectsBetween(state.threshold, countNow, countThen, decisions, exclude);
+    effects = merged();
   }
+  const countThen = adminCountAfter(state, assumed);
+  const countLow = Math.min(low(), countNow);
+  const countHigh = Math.max(high, countNow);
 
   return {
     scope,
@@ -254,6 +322,10 @@ export function projectShift(
     countThen,
     neededNow: approvalsNeeded(state.threshold, countNow),
     neededThen: approvalsNeeded(state.threshold, countThen),
+    countLow,
+    neededLow: approvalsNeeded(state.threshold, countLow),
+    countHigh,
+    neededHigh: approvalsNeeded(state.threshold, countHigh),
     effects: sortEffects(
       effects.map((e) => ({
         ...e,
@@ -300,7 +372,7 @@ export function scenarioFor(
 
 /** True when the projection changes the outcome of at least one decision. */
 export function hasImpact(scenario: ShiftScenario | null | undefined): boolean {
-  return Boolean(scenario && scenario.effects.length);
+  return Boolean(scenario && (scenario.effects.length || scenario.followOn.length));
 }
 
 export interface DecisionRisk {
@@ -324,7 +396,8 @@ export function riskFor(
   const weight = (r: DecisionRisk) => [
     r.effect.effect === 'needsMore' ? 1 : 0,
     r.scenario.changes.length + r.scenario.followOn.length,
-    Math.abs(r.scenario.neededNow - r.scenario.neededThen),
+    // The target where this effect was worked out, not the net one.
+    Math.abs(r.effect.neededNow - r.effect.neededThen),
   ];
   for (const scenario of scenarios) {
     const effect = scenario.effects.find((e) => e.signature === signature);
@@ -400,6 +473,81 @@ export function approvedAdminChanges(rows: readonly TxRow[]): ApprovedAdminChang
   return out;
 }
 
+/** A MINTER LEAVE_GROUP, and whether the leaver was a Minter Admin when they left. */
+export interface AdminLeave {
+  signature?: string;
+  address: string;
+  /** The block it is in. */
+  height: number;
+  /**
+   * Null when nothing in the rows read says. targetSteps then takes it as a
+   * member's leave, as most are: with nothing on record either way, counting
+   * every such leave as unknown would leave almost no step with a number.
+   */
+  wasAdmin: boolean | null;
+}
+
+function isMinterRow(tx: TxRow): boolean {
+  return typeof tx.groupId === 'number'
+    ? tx.groupId === MINTER_GROUP_ID
+    : tx.txGroupId === MINTER_GROUP_ID;
+}
+
+/**
+ * The confirmed MINTER LEAVE_GROUP rows among `rows`, each once, newest
+ * first. Core deletes a leaving admin's admin row along with their member
+ * row, with no approval, so a leave can move the admin count too. Whether
+ * the leaver was an admin then: the newest approved admin change about them
+ * before the leave (an add: yes; a removal: no), or their own JOIN_GROUP
+ * after it (someone who joins is a member, not an admin); failing those,
+ * yes when they signed a GROUP_APPROVAL before it (`approvals`: the caller
+ * passes only those on MINTER decisions, which only its admins can sign).
+ * Null when none of these is in the rows read. MINTER's owner can't leave
+ * and is skipped.
+ */
+export function adminLeaves(
+  rows: readonly TxRow[],
+  changes: readonly ApprovedAdminChange[],
+  options: { owner?: string | null; approvals?: readonly TxRow[] } = {}
+): AdminLeave[] {
+  const confirmed = (tx: TxRow | null | undefined, type: string): tx is TxRow =>
+    Boolean(
+      tx &&
+      tx.type === type &&
+      typeof tx.blockHeight === 'number' &&
+      typeof tx.creatorAddress === 'string' &&
+      tx.creatorAddress
+    );
+  const joins = rows.filter((tx) => confirmed(tx, 'JOIN_GROUP') && isMinterRow(tx));
+  const signed = (options.approvals ?? []).filter((tx) => confirmed(tx, 'GROUP_APPROVAL'));
+  const seen = new Set<string>();
+  const out: AdminLeave[] = [];
+  for (const tx of rows) {
+    if (!confirmed(tx, 'LEAVE_GROUP') || !isMinterRow(tx) || seen.has(tx.signature)) continue;
+    const address = tx.creatorAddress as string;
+    const height = tx.blockHeight as number;
+    if (options.owner && address === options.owner) continue;
+    seen.add(tx.signature);
+    let newest: { height: number; wasAdmin: boolean } | null = null;
+    for (const c of changes) {
+      if (c.address !== address || c.height >= height) continue;
+      if (!newest || c.height > newest.height) newest = { height: c.height, wasAdmin: c.added };
+    }
+    for (const j of joins) {
+      const at = j.blockHeight as number;
+      if (j.creatorAddress !== address || at >= height) continue;
+      if (!newest || at > newest.height) newest = { height: at, wasAdmin: false };
+    }
+    const wasAdmin =
+      newest?.wasAdmin ??
+      (signed.some((a) => a.creatorAddress === address && (a.blockHeight as number) < height)
+        ? true
+        : null);
+    out.push({ signature: tx.signature, address, height, wasAdmin });
+  }
+  return out.sort((a, b) => b.height - a.height);
+}
+
 export interface TargetStep extends ApprovedAdminChange {
   countBefore: number;
   countAfter: number;
@@ -407,31 +555,76 @@ export interface TargetStep extends ApprovedAdminChange {
   neededAfter: number;
 }
 
+type CountEvent = { at: number; change: ApprovedAdminChange } | { at: number; leave: AdminLeave };
+
+/** Approved changes and leaves, newest first (in one block, a change after a leave). */
+function newestFirstEvents(
+  changes: readonly ApprovedAdminChange[],
+  leaves: readonly AdminLeave[]
+): CountEvent[] {
+  const events: CountEvent[] = [
+    ...changes.map((change) => ({ at: change.height, change })),
+    ...leaves.map((leave) => ({ at: leave.height, leave })),
+  ];
+  return events.sort((a, b) => b.at - a.at || Number('leave' in a) - Number('leave' in b));
+}
+
 /**
  * The admin count and target before and after each approved admin change,
  * newest first, worked back from today's count. Each approved change moved
- * the count by one. `changes` must hold every approved admin change from
- * the oldest one wanted up to now (one unbroken read), or the counts drift.
+ * the count by one, and so did each leave of an admin (`leaves`, with no
+ * step of its own). `changes` and `leaves` must hold every approved admin
+ * change and leave from the oldest one wanted up to now (one unbroken read),
+ * or the counts drift. A leave with nothing on record about the leaver
+ * (wasAdmin null) is taken as a member's.
  */
 export function targetSteps(
   changes: readonly ApprovedAdminChange[],
   currentCount: number,
-  threshold: ApprovalThreshold
+  threshold: ApprovalThreshold,
+  leaves: readonly AdminLeave[] = []
 ): TargetStep[] {
-  const newestFirst = [...changes].sort((a, b) => b.height - a.height);
   let running = Math.max(0, currentCount);
-  return newestFirst.map((change) => {
+  const steps: TargetStep[] = [];
+  for (const event of newestFirstEvents(changes, leaves)) {
+    if ('leave' in event) {
+      if (event.leave.wasAdmin === true) running += 1;
+      continue;
+    }
+    const { change } = event;
     const countAfter = running;
     const countBefore = Math.max(0, change.added ? countAfter - 1 : countAfter + 1);
     running = countBefore;
-    return {
+    steps.push({
       ...change,
       countBefore,
       countAfter,
       neededBefore: approvalsNeeded(threshold, countBefore),
       neededAfter: approvalsNeeded(threshold, countAfter),
-    };
-  });
+    });
+  }
+  return steps;
+}
+
+/**
+ * The admin count at the end of block `height`, worked back from today's
+ * count through the approved changes and leaves after it, as targetSteps
+ * does.
+ */
+export function adminCountAt(
+  changes: readonly ApprovedAdminChange[],
+  leaves: readonly AdminLeave[],
+  currentCount: number,
+  height: number
+): number {
+  let running = Math.max(0, currentCount);
+  for (const event of newestFirstEvents(changes, leaves)) {
+    if (event.at <= height) break;
+    if ('leave' in event) {
+      if (event.leave.wasAdmin === true) running += 1;
+    } else running = Math.max(0, event.change.added ? running - 1 : running + 1);
+  }
+  return running;
 }
 
 /** The steps that moved the target (not just the admin count). */

@@ -7,14 +7,14 @@
  *   MINTER's decisions from one approval window (10,080 blocks) before the
  *   window to its end, the pending ones, every GROUP_APPROVAL over the same
  *   blocks (joined to the decisions on pendingSignature), LEAVE_GROUP rows
- *   in the window, the member list (names and join times, shared with the
- *   other screens) and the join requests. A window that ends before the tip
- *   also reads the admin changes from its end to the tip, so who was an
- *   admin when is right for it.
+ *   from the window's start to the tip, the member list (names and join
+ *   times, shared with the other screens) and the join requests. A window
+ *   that ends before the tip also reads the admin changes from its end to
+ *   the tip, so who was an admin when is right for it.
  *
- * The approved admin changes among those reads also give the target's
- * changes in the window, worked back from today's admin count (no extra
- * read).
+ * The approved admin changes and the leaves among those reads also give
+ * the target's changes in the window, worked back from today's admin count
+ * (no extra read).
  *
  * Each search is paged at 100 with a ceiling; about 20 GETs for 30 days and
  * 30 for 180. The result is cached for 5 minutes per window. The level
@@ -29,7 +29,13 @@ import {
   type LevelSpread,
   type Pulse,
 } from '../rules/activity';
-import { approvedAdminChanges, targetSteps, type TargetStep } from '../rules/targetShift';
+import {
+  adminCountAt,
+  adminLeaves,
+  approvedAdminChanges,
+  targetSteps,
+  type TargetStep,
+} from '../rules/targetShift';
 import { approvalsNeeded, type ApprovalThreshold } from '../rules/threshold';
 import type { ActivityWindow } from '../state/settings';
 import { getAccount, primeNames } from './accounts';
@@ -201,7 +207,9 @@ export function loadActivity(
             Math.min(now.height, range.endBlock + max),
             { force, ttlMs: ACTIVITY_TTL_MS, slot: `${slot}:approvals` }
           ),
-          getGroupTxsInRange(['LEAVE_GROUP'], range.startBlock, range.endBlock, {
+          // To the tip, not just the window's end: an admin who left since moved the
+          // admin count the target's changes are worked back from.
+          getGroupTxsInRange(['LEAVE_GROUP'], range.startBlock, now.height, {
             force,
             slot: `${slot}:leaves`,
           }).catch(() => null),
@@ -244,17 +252,31 @@ export function loadActivity(
       });
 
       // Every admin change approved since the window's start is in the two reads
-      // (confirmed at most one approval window before its approval).
+      // (confirmed at most one approval window before its approval), and every
+      // leave since then in the third: an admin's own leave takes their row away.
       const needed = approvalsNeeded(group.approvalThreshold, admins.adminCount);
+      const changes = approvedAdminChanges([...decided.rows, ...laterAdminChanges.rows]);
+      // Someone who signed a MINTER decision before leaving was an admin then.
+      // Without the leaves (a failed or cut-short read) the counts aren't known.
+      const minterDecisions = new Set(
+        [...decided.rows, ...laterAdminChanges.rows, ...confirmedPending].map((tx) => tx.signature)
+      );
+      const adminLeft =
+        leaves && !leaves.truncated
+          ? adminLeaves(leaves.rows, changes, {
+              owner: group.owner,
+              approvals: approvals.rows.filter(
+                (a) => a.pendingSignature !== undefined && minterDecisions.has(a.pendingSignature)
+              ),
+            })
+          : null;
       const steps =
-        decided.truncated || laterAdminChanges.truncated
-          ? null
-          : targetSteps(
-              approvedAdminChanges([...decided.rows, ...laterAdminChanges.rows]),
-              admins.adminCount,
-              group.approvalThreshold
-            );
-      const after = steps?.filter((step) => step.height > range.endBlock) ?? [];
+        adminLeft && !decided.truncated && !laterAdminChanges.truncated
+          ? targetSteps(changes, admins.adminCount, group.approvalThreshold, adminLeft)
+          : null;
+      const countAtEnd = steps
+        ? adminCountAt(changes, adminLeft ?? [], admins.adminCount, range.endBlock)
+        : null;
 
       return {
         range,
@@ -272,7 +294,8 @@ export function loadActivity(
           steps?.filter(
             (step) => step.height >= range.startBlock && step.height <= range.endBlock
           ) ?? null,
-        neededAtEnd: after.length ? after[after.length - 1].neededBefore : needed,
+        neededAtEnd:
+          countAtEnd === null ? needed : approvalsNeeded(group.approvalThreshold, countAtEnd),
         joinRequests: joinRequests ? joinRequests.length : null,
         truncated: Boolean(
           decided.truncated ||

@@ -57,8 +57,11 @@ describe('Decisions: the target changed since the last visit', () => {
       'href',
       expect.stringMatching(/^\/decisions\/[1-9A-HJ-NP-Za-km-z]+$/)
     );
-    expect(alert).toHaveTextContent(/9 of 9Applies in the next block\./);
-    expect(alert).toHaveTextContent(/withdraw your signature before Core applies it/);
+    // It applies in the next block: too late for a withdrawal to count, so no advice to withdraw.
+    expect(alert).toHaveTextContent(
+      /9 of 9Applies in the next block; a withdrawal now would arrive too late to count\./
+    );
+    expect(alert).not.toHaveTextContent(/withdraw your signature/);
     // What this device saw is now the new target.
     expect(readSeenTarget()).toMatchObject({ adminCount: 21, needed: 9 });
   });
@@ -105,6 +108,8 @@ describe('Decisions: the target changed since the last visit', () => {
     const u = user();
     const { world } = await openShifted();
     expect(screen.queryByText(/^The target changed/)).toBeNull();
+    // The status region is there, empty, before anything changes.
+    expect(screen.getAllByRole('status').some((el) => el.textContent === '')).toBe(true);
     // Admin Q's row goes: 20 admin seats, 8 needed. Mia Met's invite has 8.
     world.admins.splice(world.admins.length - 2, 1);
     await u.click(screen.getByRole('button', { name: 'Refresh' }));

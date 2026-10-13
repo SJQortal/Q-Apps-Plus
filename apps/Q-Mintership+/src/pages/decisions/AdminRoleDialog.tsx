@@ -5,7 +5,9 @@
  *   Minter Admins sign, so it is one Hub step; then the Minter Admins decide.
  * - "Step down as Minter Admin": an admin proposes their own removal, and
  *   signs it straight after like any admin proposal. It still needs the
- *   other Minter Admins' signatures.
+ *   other Minter Admins' signatures. Like any admin removal it moves the
+ *   target: what it would tip over shows first, and Hub only opens once
+ *   "I've checked these" is ticked.
  *
  * Both are ProposeSignDialog with the app's words (rules/adminChange.ts).
  * The guards check again before Hub opens.
@@ -17,15 +19,21 @@
 import { useState } from 'react';
 import { TextField, Typography } from '@mui/material';
 import { decisionCommentKey } from '../../data/commentRecords';
+import type { DecisionsData } from '../../data/decisions';
+import { peekQuery } from '../../data/query';
 import { postComment } from '../../writes/comments';
 import {
   ADMIN_CHANGE_TITLE,
   OWN_ADMIN_ROLE_LEAD,
   type OwnAdminRole,
 } from '../../rules/adminChange';
-import { shortAddress } from '../../utils/format';
+import { decisionTitle } from '../../rules/decision';
+import { projectShift } from '../../rules/targetShift';
+import { displayName, shortAddress } from '../../utils/format';
 import type { Signer } from '../../writes/runner';
 import { ProposeSignDialog, type ProposalFacts } from './ProposeSignDialog';
+import type { LabelOf } from './targetShiftUi';
+import { useShift } from './useShift';
 
 /** A statement is a comment, and comments stay short. */
 const STATEMENT_MAX = 500;
@@ -37,6 +45,11 @@ export interface AdminRoleDialogProps {
   /** Their own registered name, if any. */
   name: string | null;
   facts: ProposalFacts;
+  /**
+   * The waiting decisions, for a step-down: what it would do to the target
+   * (and the "I've checked these" box when it tips any over), as Propose does.
+   */
+  queue?: DecisionsData | null;
   onClose: () => void;
   returnFocus?: () => HTMLElement | null;
 }
@@ -47,11 +60,24 @@ export function AdminRoleDialog({
   signer,
   name,
   facts,
+  queue,
   onClose,
   returnFocus,
 }: AdminRoleDialogProps) {
   const [statement, setStatement] = useState('');
+  const shift = useShift(mode === 'stepDown' ? queue : null);
   if (!signer) return null;
+  const impact = shift
+    ? projectShift(shift.state, shift.list, [{ kind: 'removeAdmin', subject: signer.address }])
+    : null;
+  const labelOf: LabelOf = (signature) => {
+    const d = queue?.decisions.find((x) => x.signature === signature);
+    if (!d) return 'A waiting decision';
+    if (!d.subject) return `${decisionTitle(d)} (Core doesn’t say for whom)`;
+    const admin = queue?.admins.admins.find((a) => a.member === d.subject);
+    const known = admin?.primaryName ?? peekQuery<string | null>(`name:${d.subject}`) ?? null;
+    return `${decisionTitle(d)}: ${displayName(known, d.subject)}`;
+  };
   const become = mode === 'become';
   const text = statement.trim();
   const followUp =
@@ -123,6 +149,8 @@ export function AdminRoleDialog({
         )
       }
       followUp={followUp}
+      impact={impact}
+      labelOf={impact ? labelOf : undefined}
       onClose={onClose}
       returnFocus={returnFocus}
     />
