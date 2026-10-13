@@ -1,7 +1,8 @@
 /**
  * The group's pulse: members and how that changed in the window, admins and
  * signatures needed, join requests, how invites fared, open nominations,
- * and (only on request, it reads every member's account) the level spread.
+ * the target's changes in the window (approved admin changes move it), and
+ * (only on request, it reads every member's account) the level spread.
  */
 import { useId, useState } from 'react';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
@@ -13,8 +14,18 @@ import { levelSpreadKey } from '../../data/activity';
 import { Card, Section, StatTile } from '../../components/common/Section';
 import { ProgressBar } from '../../components/common/ProgressRing';
 import { ErrorState } from '../../components/common/states';
+import { PersonInline } from '../../components/common/Person';
+import { targetMoves } from '../../rules/targetShift';
 import { formatCount, plural } from '../../utils/format';
-import { blocksAsTime, NONE, ofTotal, percent, quarterDone, windowWords } from './format';
+import {
+  blockDate,
+  blocksAsTime,
+  NONE,
+  ofTotal,
+  percent,
+  quarterDone,
+  windowWords,
+} from './format';
 import { useLevelProgress, useLevelSpread } from './useActivity';
 
 const tileGrid = {
@@ -116,8 +127,61 @@ export function GroupPulse({
           ))}
         </Box>
       )}
+      {data && data.targetSteps ? <TargetChangesCard data={data} /> : null}
       {data && data.members.length ? <LevelSpreadCard members={data.members} /> : null}
     </Section>
+  );
+}
+
+/** "Target changes": when approved admin changes moved the signatures needed, newest first. */
+function TargetChangesCard({ data }: { data: ActivityData }) {
+  const steps = data.targetSteps ?? [];
+  const moves = targetMoves(steps);
+  const seatsOnly = steps.length - moves.length;
+  return (
+    <Card sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <Typography component="h3" sx={{ fontWeight: 700 }}>
+        Target changes
+      </Typography>
+      {moves.length ? (
+        <Box
+          component="ul"
+          sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 1 }}
+        >
+          {moves.map((step) => (
+            <Typography
+              component="li"
+              variant="body2"
+              key={step.signature ?? `${step.address}:${step.height}`}
+            >
+              <Box component="span" sx={{ fontWeight: 700 }}>
+                {step.neededBefore} → {plural(step.neededAfter, 'signature')}
+              </Box>{' '}
+              on {blockDate(step.height, data.now)}:{' '}
+              <PersonInline address={step.address} name={data.names[step.address]} />{' '}
+              {step.added ? 'was made a Minter Admin' : 'was removed as a Minter Admin'} (
+              {step.countBefore} → {step.countAfter} admin seats).
+            </Typography>
+          ))}
+        </Box>
+      ) : (
+        <Typography variant="body2" color="text.secondary">
+          The target stayed at {plural(data.neededAtEnd, 'signature')}{' '}
+          {windowWords(data.range.days)}.
+        </Typography>
+      )}
+      {seatsOnly ? (
+        <Typography variant="body2" color="text.secondary">
+          {seatsOnly === 1
+            ? '1 other admin change moved the admin seats but not the target.'
+            : `${formatCount(seatsOnly)} other admin changes moved the admin seats but not the target.`}
+        </Typography>
+      ) : null}
+      <Typography variant="body2" color="text.secondary">
+        Each waiting decision is measured against the admin seats in every block, so a change here
+        moves the target for all of them, including ones that already have signatures.
+      </Typography>
+    </Card>
   );
 }
 
