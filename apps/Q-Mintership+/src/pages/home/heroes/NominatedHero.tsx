@@ -22,6 +22,7 @@ import { usePendingWrite, writeKeys } from '../../../writes/optimistic';
 import { Hero, HeroText, Num, PeopleList, PersonLink } from '../Hero';
 import { LazyJoinDialog } from '../../../components/nomination/LazyJoinDialog';
 import { readable } from '../../../utils/readable';
+import { whenApplied } from '../../decisions/decisionUi';
 
 export function NominatedHero({
   status,
@@ -48,6 +49,8 @@ export function NominatedHero({
   const window = n.decision?.window ?? null;
   const signing = n.state === 'signing';
   const met = Boolean(tally?.met) || n.decision?.phase === 'thresholdMet';
+  // When Core applies it: the next block, or later while it is just proposed.
+  const when = n.decision && now.data ? whenApplied(n.decision, now.data) : 'in the next block';
   const needNow = tally?.needed ?? needed;
   const by = n.nomination?.publisher ?? null;
   const supporters = n.supporters.map((s) => s.publisher);
@@ -70,7 +73,7 @@ export function NominatedHero({
   const next = !accepted
     ? `Accept, then wait for the Minter Admins: ${needNow ? `at ${needNow} signatures` : 'once enough have signed'} you're in, with no further step.`
     : met
-      ? "You're added to MINTER in the next block. Nothing more to do."
+      ? `You're added to MINTER ${when}. Nothing more to do.`
       : signing
         ? `At ${needNow ? `${needNow} signatures` : 'enough signatures'} you're added to MINTER automatically: nothing more to do. If time runs out, you can be nominated again.`
         : `When a Minter Admin signs first, the clock starts; at ${needNow ? `${needNow} signatures` : 'enough signatures'} you're added automatically.`;
@@ -138,9 +141,9 @@ export function NominatedHero({
             .
             {met ? (
               accepted ? (
-                " That's enough: you're added to MINTER in the next block."
+                ` That's enough: you're added to MINTER ${when}.`
               ) : (
-                " That's enough: once it's applied in the next block, press Join now to finish."
+                ` That's enough: once it's applied ${when}, press Join now to finish.`
               )
             ) : (
               <>

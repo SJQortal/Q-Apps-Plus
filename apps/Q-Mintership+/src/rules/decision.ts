@@ -145,6 +145,12 @@ export interface Decision {
   banSeconds?: number;
   window: DecisionWindow | null;
   phase: DecisionPhase;
+  /**
+   * With enough signatures: the block Core applies it in. The next block,
+   * or its earliest decision block when that is later (a decision is never
+   * applied before h + minimumBlockDelay + 1). Null otherwise.
+   */
+  applyAtHeight: number | null;
   /** Null for an unusual approval route (see isUnusualApprovalRoute). */
   tally: Tally | null;
   unusualRoute: boolean;
@@ -187,6 +193,10 @@ export function buildDecision(tx: TxRow, ctx: DecisionContext): Decision {
   let phase: DecisionPhase = window ? windowPhase(window, ctx.tipHeight) : 'unconfirmed';
   if (tally?.met && (phase === 'open' || phase === 'early' || phase === 'tooLate'))
     phase = 'thresholdMet';
+  const applyAtHeight =
+    phase === 'thresholdMet' && window
+      ? Math.max(ctx.tipHeight + 1, window.earliestDecisionHeight)
+      : null;
   return {
     signature: tx.signature,
     kind: decisionKind(tx),
@@ -199,6 +209,7 @@ export function buildDecision(tx: TxRow, ctx: DecisionContext): Decision {
     banSeconds: tx.type === 'GROUP_BAN' ? Number(tx.timeToLive ?? 0) : undefined,
     window,
     phase,
+    applyAtHeight,
     tally,
     unusualRoute,
     tx,

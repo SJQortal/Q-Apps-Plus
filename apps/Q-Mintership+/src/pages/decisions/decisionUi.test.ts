@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadDecisions } from '../../data/decisions';
-import type { Decision } from '../../rules/decision';
+import { buildDecision, type Decision } from '../../rules/decision';
 import { ADDR, installWorld } from '../../test/world';
 import type { PendingWrite } from '../../writes/optimistic';
 import {
@@ -12,6 +12,7 @@ import {
   phaseLine,
   reasonProblem,
   signedLabel,
+  whenApplied,
 } from './decisionUi';
 
 afterEach(() => vi.useRealTimers());
@@ -113,5 +114,38 @@ describe('when a timed ban ends', () => {
     );
     const threeDays = banEndLine({ ...ban, banSeconds: 3 * 86_400 }, data.now);
     expect(threeDays).toMatch(/^Its time has already run out \(it ended .+\)/);
+  });
+});
+
+describe('when a decision with enough signatures is applied', () => {
+  it('says the next block once it can be, and its first decision block while just proposed', async () => {
+    const { data, by } = await decisionsAs('admin');
+    const early = by(ADDR.early); // confirmed 2 blocks ago: Core can't decide it yet
+    const approvals = Array.from({ length: 8 }, (_, i) => ({
+      signature: `a${i}`,
+      pendingSignature: early.signature,
+      adminPublicKey: `pk${i}`,
+      creatorAddress: `Q${i}`,
+      approval: true,
+      timestamp: 1,
+      blockHeight: data.now.height,
+    }));
+    const ctx = {
+      threshold: data.group.approvalThreshold,
+      totalAdmins: data.admins.adminCount,
+      delays: data.group,
+      tipHeight: data.now.height,
+      approvals,
+    };
+    const met = buildDecision(early.tx, ctx);
+    expect(met.phase).toBe('thresholdMet');
+    expect(met.applyAtHeight).toBe(early.window!.earliestDecisionHeight);
+    expect(met.applyAtHeight).toBeGreaterThan(data.now.height + 1);
+    expect(phaseLine(met, data.now)).toMatch(
+      /^Enough signatures: Core applies it at block [\d,]+ \(in about \d+ minutes?\)\./
+    );
+    // An open decision with enough signatures: the next block.
+    expect(whenApplied(by(ADDR.met), data.now)).toBe('in the next block');
+    expect(phaseLine(by(ADDR.met), data.now)).toMatch(/Core applies it in the next block/);
   });
 });

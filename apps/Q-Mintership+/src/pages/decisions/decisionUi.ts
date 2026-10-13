@@ -45,6 +45,13 @@ export function isSignedByMe(answer: MyAnswer, pending: PendingWrite | null): bo
   return signedLabel(answer, pending) !== null;
 }
 
+/** When Core applies a decision with enough signatures: "in the next block", or "at block X (in about T)". */
+export function whenApplied(d: Pick<Decision, 'applyAtHeight'>, now: ChainNow): string {
+  const h = d.applyAtHeight;
+  if (h === null || h <= now.height + 1) return 'in the next block';
+  return `at ${formatBlock(h)} (in about ${formatDuration(Math.max(0, heightToTime(now, h) - now.timestamp))})`;
+}
+
 /** One plain line on where the decision stands, or null when the countdown says it all. */
 export function phaseLine(d: Decision, now: ChainNow): string | null {
   const w = d.window;
@@ -58,7 +65,7 @@ export function phaseLine(d: Decision, now: ChainNow): string | null {
     case 'open':
       return null;
     case 'thresholdMet':
-      return 'Enough signatures: Core applies it in the next block. Nobody has to do anything else.';
+      return `Enough signatures: Core applies it ${whenApplied(d, now)}. Nobody has to do anything else.`;
     case 'tooLate':
       return w
         ? `Too late to sign: the last block a signature could count in has passed. It expires at ${formatBlock(w.expiresAtHeight)}.`
