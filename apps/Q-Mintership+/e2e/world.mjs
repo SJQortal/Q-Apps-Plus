@@ -901,3 +901,49 @@ export function addRejections(world) {
     invitee,
   };
 }
+
+// ---- Considering (a Minter Admin's "not sure yet", on QDN) -------------------
+/**
+ * Add Considering records: on bob+builder's invite Admin K (with a note) and
+ * Admin L are considering, Admin N cleared theirs, and Admin B's record is
+ * older than their signature (so it no longer shows); Admin M is considering
+ * Wren Waiting's nomination; and three records that are ignored (a member
+ * who isn't an admin, a record from long ago, a body that doesn't match its
+ * identifier). Returns the keys used.
+ */
+export function addConsidering(world) {
+  const extra = (i) => fakeAddress(`admin-${i}`);
+  const nameOf = (address) => world.accounts.get(address)?.name;
+  const invite = world.pending.find((t) => t.invitee === ADDR.nominatedSigning);
+  const decisionKey = invite.signature.slice(0, 40);
+  const add = (name, key, body, ageMs, updatedAgeMs) =>
+    world.records.push({
+      name,
+      identifier: `qmp-considering-${key}`,
+      created: NOW - ageMs,
+      ...(updatedAgeMs !== undefined ? { updated: NOW - updatedAgeMs } : {}),
+      body: { v: 1, ...body },
+    });
+  const onInvite = { pendingSignature: invite.signature };
+  add(
+    nameOf(extra(10)),
+    decisionKey,
+    { ...onInvite, note: 'Waiting to hear back from them in Q-Chat about their node.' },
+    3 * 3_600_000
+  );
+  add(nameOf(extra(11)), decisionKey, onInvite, 2 * 3_600_000);
+  add(nameOf(extra(13)), decisionKey, { ...onInvite, cleared: true }, 5 * 3_600_000, 3_600_000);
+  // Admin B signed at block h + 38, after this record (h + 10): their signature replaces it.
+  add(nameOf(extra(1)), decisionKey, onInvite, NOW - blockTime(TIP - 2_990));
+  add(
+    nameOf(extra(12)),
+    ADDR.nominatedWaiting,
+    { nomineeAddress: ADDR.nominatedWaiting, note: 'Checking their minting history first.' },
+    12 * 3_600_000
+  );
+  // Ignored: not a Minter Admin; long ago; key and body disagree.
+  add(PEOPLE.nominator.name, decisionKey, onInvite, 3_600_000);
+  add(nameOf(extra(14)), ADDR.lapsed, { nomineeAddress: ADDR.lapsed }, 40 * 86_400_000);
+  add(nameOf(extra(15)), ADDR.urgent, { nomineeAddress: ADDR.nominatedWaiting }, 3_600_000);
+  return { decisionKey, inviteSignature: invite.signature, waitingKey: ADDR.nominatedWaiting };
+}

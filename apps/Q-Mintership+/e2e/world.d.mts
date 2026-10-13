@@ -20,6 +20,11 @@ export function addRejections(world: World): {
   rejectedInvite: string;
   invitee: string;
 };
+export function addConsidering(world: World): {
+  decisionKey: string;
+  inviteSignature: string;
+  waitingKey: string;
+};
 export function answerCore(
   world: World,
   pathname: string,
