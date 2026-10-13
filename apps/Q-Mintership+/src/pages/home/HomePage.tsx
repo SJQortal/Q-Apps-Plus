@@ -94,7 +94,6 @@ function StatusView({
           <AdminHero status={status} publicKey={publicKey} needed={needed} />
           <AdminSection publicKey={publicKey} />
           <MemberSection status={status} />
-          <AdminRoleAction status={status} layout="section" />
         </>
       );
     case 'memberNominator':

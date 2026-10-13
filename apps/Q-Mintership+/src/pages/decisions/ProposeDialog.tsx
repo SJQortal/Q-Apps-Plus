@@ -8,9 +8,12 @@
  * Minter Admin is offered as "remove their admin role first", because Core
  * refuses it otherwise. An invite approved in the last 30 days says they
  * may still press Join now. An admin change says, before Hub opens, what it
- * would do to the target of every waiting decision.
+ * would do to the target of every waiting decision. Picking yourself under
+ * Remove a Minter Admin points to Step down as Minter Admin on your own
+ * page instead: that is the one place to step down.
  */
 import { useEffect, useId, useRef, useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -29,8 +32,8 @@ import { loadStaleInviteDetails, loadStaleInvites, staleDetailsKey } from '../..
 import type { GroupMemberRow } from '../../data/types';
 import { useQuery } from '../../hooks/useQuery';
 import { useDisplayName } from '../../hooks/useDisplayName';
-import { ADMIN_CHANGE_TITLE, OWN_ADMIN_ROLE_LEAD } from '../../rules/adminChange';
 import { KIND_LABEL } from '../../rules/decision';
+import { personPath } from '../../routes/paths';
 import { displayName, formatDuration, formatRelative } from '../../utils/format';
 import type { Proposal } from '../../writes/flows';
 import type { Signer } from '../../writes/runner';
@@ -44,6 +47,7 @@ import {
 } from './decisionUi';
 import {
   PROPOSE_KINDS,
+  STEP_DOWN_ELSEWHERE,
   checkSubject,
   resolvePerson,
   type ProposeKind,
@@ -144,6 +148,8 @@ export function ProposeDialog({
   // Run the write's own check whenever the person changes (`signer` is stable per account).
   useEffect(() => {
     if (!kind || !signer || !person) return;
+    // Yourself under Remove a Minter Admin: nothing to check, it points to your own page.
+    if (kind === 'removeAdmin' && person.address === signer.address) return;
     let live = true;
     setCheck('checking');
     checkSubject(kind, signer, person.address)
@@ -172,15 +178,15 @@ export function ProposeDialog({
   const reasonError = needsReason ? reasonProblem(reason) : null;
   const ban = kind === 'ban' && banMode === 'days' ? parseBanDays(days) : { seconds: 0 };
   const banError = 'error' in ban ? ban.error : null;
+  // Removing yourself is stepping down: that is only on your own page, so it isn't proposed here.
+  const stepDown = kind === 'removeAdmin' && person?.address === signer.address;
   const personOk =
-    person !== null && check !== null && check !== 'checking' && check.status === 'ok';
+    !stepDown && person !== null && check !== null && check !== 'checking' && check.status === 'ok';
   const ready = personOk && !reasonError && !banError;
   // An invite approved in the last 30 days: they may still press Join now.
   const inviteDetail =
     kind === 'cancelInvite' && person ? invites.detailOf(person.address) : undefined;
   const recent = isRecentInvite(inviteDetail, Date.now()) ? inviteDetail?.approvedAt : null;
-  // Removing yourself is stepping down, and is worded so.
-  const stepDown = kind === 'removeAdmin' && person?.address === signer.address;
 
   // Review stays pressable while only the reason or length is missing, and says which.
   const review = () => {
@@ -298,25 +304,23 @@ export function ProposeDialog({
             <PersonChip address={person.address} name={person.name ?? undefined} size={40} />
             {/* One live region for the check, kept while it runs and when it answers. */}
             <Box role="status">
-              <CheckResult
-                check={check}
-                kind={kind}
-                onSwitch={() => {
-                  // The form becomes Remove a Minter Admin and this button goes: its new title says so.
-                  focusDialogTitle(document.activeElement);
-                  onSwitch('removeAdmin', person);
-                }}
-              />
+              {stepDown ? (
+                <StepDownElsewhere address={signer.address} />
+              ) : (
+                <CheckResult
+                  check={check}
+                  kind={kind}
+                  onSwitch={() => {
+                    // The form becomes Remove a Minter Admin and this button goes: its new title says so.
+                    focusDialogTitle(document.activeElement);
+                    onSwitch('removeAdmin', person);
+                  }}
+                />
+              )}
             </Box>
             {recent ? (
               <Alert severity="info" role="note">
                 Approved {formatRelative(recent)}: they may still press Join now.
-              </Alert>
-            ) : null}
-            {stepDown ? (
-              <Alert severity="info" role="note">
-                That’s you: this proposes that you step down as a Minter Admin. You stay a MINTER
-                member, and the other Minter Admins still have to sign it.
               </Alert>
             ) : null}
           </Box>
@@ -445,6 +449,23 @@ function CheckResult({
   );
 }
 
+/** Yourself under Remove a Minter Admin: Step down is on your own page, with what it would change. */
+function StepDownElsewhere({ address }: { address: string }) {
+  return (
+    <Alert severity="info" role="note">
+      <Typography variant="body2">That’s you. {STEP_DOWN_ELSEWHERE}</Typography>
+      <Button
+        component={RouterLink}
+        to={personPath(address)}
+        variant="outlined"
+        sx={{ mt: 1, minHeight: 44 }}
+      >
+        Open your page
+      </Button>
+    </Alert>
+  );
+}
+
 function AdminPicker({
   signers,
   self,
@@ -465,7 +486,7 @@ function AdminPicker({
         const row = signers.find((s) => s.member === e.target.value);
         onPick(row ? { address: row.member, name: row.primaryName ?? null } : null);
       }}
-      helperText="Pick yourself to step down. MINTER’s owner account isn’t listed: it can’t be removed."
+      helperText="MINTER’s owner account isn’t listed: it can’t be removed."
       fullWidth
       slotProps={{ select: { native: true } }}
     >
@@ -669,7 +690,6 @@ function ProposeHubStep({
   returnFocus?: () => HTMLElement | null;
 }) {
   const who = useDisplayName(person.address, person.name);
-  const stepDown = kind === 'removeAdmin' && person.address === signer.address;
   return (
     <ProposeSignDialog
       open={open}
@@ -677,8 +697,7 @@ function ProposeHubStep({
       who={who.label}
       signer={signer}
       facts={ctx}
-      title={stepDown ? ADMIN_CHANGE_TITLE.stepDown : `${KIND_LABEL[kind]}: ${who.label}`}
-      lead={stepDown ? OWN_ADMIN_ROLE_LEAD.stepDown : undefined}
+      title={`${KIND_LABEL[kind]}: ${who.label}`}
       impact={ctx.projectImpact?.(kind, person.address) ?? null}
       labelOf={ctx.labelOf}
       details={

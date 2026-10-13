@@ -52,6 +52,18 @@ describe('proposals: person and check', () => {
     });
   });
 
+  it('points an admin who picks themselves to remove to Step down on their own page', async () => {
+    const { address, publicKey } = installWorld('admin');
+    await expect(checkSubject('removeAdmin', { address, publicKey }, address)).resolves.toEqual({
+      status: 'blocked',
+      reason: 'To step down, use Step down as Minter Admin on your own page.',
+    });
+    // Another admin is still theirs to propose.
+    await expect(
+      checkSubject('removeAdmin', { address, publicKey }, ADDR.adminL4)
+    ).resolves.toEqual({ status: 'ok' });
+  });
+
   it('cancels only a stored invite, and not twice', async () => {
     const { address, publicKey } = installWorld('admin');
     const signer = { address, publicKey };

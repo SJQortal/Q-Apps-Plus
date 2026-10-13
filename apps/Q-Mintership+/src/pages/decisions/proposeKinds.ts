@@ -5,6 +5,7 @@
 import { getNameOwner, isAddress } from '../../data/accounts';
 import { getMembership } from '../../data/group';
 import type { GroupTxType } from '../../data/types';
+import { ADMIN_CHANGE_TITLE } from '../../rules/adminChange';
 import type { ProposalKind } from '../../writes/flows';
 import {
   guardAddAdmin,
@@ -95,12 +96,17 @@ export type SubjectCheck =
   /** Kick or ban of a Minter Admin: their admin role has to go first. */
   | { status: 'admin' };
 
+/** Propose doesn't step anyone down: that is on the admin's own page. */
+export const STEP_DOWN_ELSEWHERE = `To step down, use ${ADMIN_CHANGE_TITLE.stepDown} on your own page.`;
+
 /** The same guard the write runs, shown before Hub opens. */
 export async function checkSubject(
   kind: ProposeKind,
   signer: Signer,
   address: string
 ): Promise<SubjectCheck> {
+  if (kind === 'removeAdmin' && address === signer.address)
+    return { status: 'blocked', reason: STEP_DOWN_ELSEWHERE };
   if (kind === 'kick' || kind === 'ban') {
     const membership = await getMembership(address, { force: true });
     if (membership.isAdmin) return { status: 'admin' };

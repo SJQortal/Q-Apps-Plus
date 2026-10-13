@@ -3,8 +3,8 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
-import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../test/setup';
-import { fakeAddress } from '../../../e2e/world.mjs';
+import { fetchCallsFor, mockFetchRoute, qortalCalls, qortalCallsFor } from '../../test/setup';
+import { addTargetShift, fakeAddress } from '../../../e2e/world.mjs';
 import { ADDR, NOW, PEOPLE } from '../../test/world';
 import { CoreHttpError } from '../../qortal/client';
 import PersonPage from './PersonPage';
@@ -293,11 +293,80 @@ describe('Person page: one’s own admin role', () => {
     expect(screen.queryByText(/is suggested for Minter Admins/)).toBeNull();
   });
 
-  it('offers Step down as Minter Admin on an admin’s own page', async () => {
-    await visit(ADDR.admin, 'admin');
+  it('offers Step down as Minter Admin on an admin’s own page, and nobody else’s', async () => {
+    const own = await visit(ADDR.admin, 'admin');
     expect(
       await screen.findByRole('button', { name: 'Step down as Minter Admin' }, { timeout: 3000 })
     ).toBeInTheDocument();
+    own.unmount();
+    await visit(ADDR.adminL4, 'admin');
+    await screen.findByRole('heading', { level: 2, name: PEOPLE.adminL4.name as string });
+    expect(screen.queryByRole('button', { name: 'Step down as Minter Admin' })).toBeNull();
+  });
+
+  it('steps down: their proposal and their signature, worded as a resignation', async () => {
+    await visit(ADDR.adminL4, 'adminL4');
+    const button = await screen.findByRole(
+      'button',
+      { name: 'Step down as Minter Admin' },
+      { timeout: 3000 }
+    );
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: 'Step down as Minter Admin' },
+      { timeout: 3000 }
+    );
+    expect(
+      within(dialog).getByText(
+        /This proposes that you step down: you give up your Minter Admin role\./
+      )
+    ).toBeVisible();
+    expect(within(dialog).getByText(/You stay a MINTER member/)).toBeVisible();
+    expect(within(dialog).getByText('Step 2 of 2: Sign it')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
+    // Declined in Hub: nothing is signed.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(dialog).findByText(/cancelled/i, {}, { timeout: 3000 })).toBeVisible();
+    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')).toHaveLength(1);
+    expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
+  });
+
+  it('a step-down that would tip a waiting decision over needs “I’ve checked these” before Hub', async () => {
+    // 21 admin rows, 9 needed: stepping down leaves 20, and 8 are enough for Mia Met's invite.
+    await renderPage(<PersonPage />, {
+      persona: 'adminL4',
+      path: `/people/${ADDR.adminL4}`,
+      route: ROUTE,
+      setup: (world) => addTargetShift(world),
+    });
+    const button = await screen.findByRole(
+      'button',
+      { name: 'Step down as Minter Admin' },
+      { timeout: 3000 }
+    );
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: 'Step down as Minter Admin' },
+      { timeout: 3000 }
+    );
+    const note = within(dialog).getByRole('note');
+    expect(note).toHaveTextContent(
+      /^If this passes, MINTER has 20 admin seats and the target drops from 9 to 8 signatures\./
+    );
+    expect(within(note).getByText('Add to MINTER: Mia Met (8 of 9)')).toBeVisible();
+    // Not without the tick: Hub isn't asked, and the box takes focus.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')).toHaveLength(0);
+    const box = within(dialog).getByRole('checkbox', { name: 'I’ve checked these' });
+    expect(box).toHaveFocus();
+    await userEvent.click(box);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(dialog).findByText(/cancelled/i, {}, { timeout: 3000 })).toBeVisible();
+    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')).toHaveLength(1);
   });
 
   it('says when a step-down someone else proposed is waiting, instead of the button', async () => {

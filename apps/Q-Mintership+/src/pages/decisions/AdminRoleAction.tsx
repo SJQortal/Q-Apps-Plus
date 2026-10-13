@@ -1,15 +1,15 @@
 /**
- * The signed-in account's own admin-role action, on their Home and their
- * own person page: "Become a Minter Admin" for a MINTER member who isn't
- * one (suggested from level 5: below it, a note says so beside the
- * button), "Step down as Minter Admin" for an admin. When such a proposal is
- * already waiting (from this app or any other), it says so and links to
- * the decision instead.
+ * The signed-in account's own admin-role action: "Become a Minter Admin"
+ * for a MINTER member who isn't one, on their Home and their own person
+ * page (suggested from level 5: below it, a note says so beside the
+ * button); "Step down as Minter Admin" for an admin, only on their own
+ * person page. When such a proposal is already waiting (from this app or
+ * any other), it says so and links to the decision instead.
  *
  * Reads: MINTER's pending list (one GET, shared with the Decisions queue),
  * plus the group, admins and tip Home already has; for a step-down, the
- * Decisions queue an admin's Home already loads (what it would tip over).
- * The dialog and the write code load the first time it opens.
+ * Decisions queue (what it would tip over). The dialog and the write code
+ * load the first time it opens.
  */
 import { lazy, Suspense, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -78,16 +78,17 @@ function waitingText(mode: OwnAdminRole, own: boolean): string {
     : 'A proposal to remove your Minter Admin role is waiting for the Minter Admins’ signatures.';
 }
 
-function aboutText(mode: OwnAdminRole, needed: number | null): string {
-  if (mode === 'become')
-    return `Minter Admins sign MINTER’s decisions. Any member can propose themselves; the Minter Admins decide${needed !== null ? `, with ${plural(needed, 'signature')}` : ''}.`;
-  return `If you’d like to stop signing, you can step down and stay a MINTER member. Like any change to the Minter Admins, it needs ${needed !== null ? plural(needed, 'signature') : 'their signatures'}, yours included.`;
+function aboutText(needed: number | null): string {
+  return `Minter Admins sign MINTER’s decisions. Any member can propose themselves; the Minter Admins decide${needed !== null ? `, with ${plural(needed, 'signature')}` : ''}.`;
 }
 
 export interface AdminRoleActionProps {
   /** The signed-in account's own status. */
   status: MyStatus;
-  /** 'section': a titled card (Home); 'inline': the button or the waiting note (a person page). */
+  /**
+   * 'section': a titled card on a member's Home, Become only; 'inline': the
+   * button or the waiting note on their own person page, Become or Step down.
+   */
   layout?: 'section' | 'inline';
 }
 
@@ -95,7 +96,9 @@ export function AdminRoleAction({ status, layout = 'inline' }: AdminRoleActionPr
   const session = useSession();
   // Only ever about the signed-in account's own role.
   const signer = session.status === 'ready' && session.address === status.address ? session : null;
-  const mode = ownAdminRole(status);
+  const own = ownAdminRole(status);
+  // Step down is only on the admin's own person page.
+  const mode = layout === 'section' && own === 'stepDown' ? null : own;
   const waiting = usePendingAdminChange(status.address, mode);
   const kind = mode === 'become' ? 'addAdmin' : 'removeAdmin';
   const sent = usePendingWrite(mode ? writeKeys.propose(kind, status.address) : null);
@@ -103,7 +106,7 @@ export function AdminRoleAction({ status, layout = 'inline' }: AdminRoleActionPr
   const admins = useAdmins();
   const chain = useChainNow();
   // Stepping down moves the target for every waiting decision: the dialog shows
-  // what it would tip over (the queue an admin's Home already loads).
+  // what it would tip over (the Decisions queue, the same cached read).
   const stepDown = mode === 'stepDown' && Boolean(signer);
   const queue = useDecisions(stepDown);
   const [open, setOpen] = useState(false);
@@ -186,13 +189,10 @@ export function AdminRoleAction({ status, layout = 'inline' }: AdminRoleActionPr
       </>
     );
   return (
-    <Section
-      title={mode === 'become' ? 'Minter Admins' : 'Your Minter Admin role'}
-      id="home-admin-role"
-    >
+    <Section title="Minter Admins" id="home-admin-role">
       <Card sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
         <Typography variant="body2" color="text.secondary">
-          {aboutText(mode, needed)}
+          {aboutText(needed)}
         </Typography>
         {levelNote ? (
           <Typography variant="body2" color="text.secondary">
