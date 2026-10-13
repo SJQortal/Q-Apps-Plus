@@ -57,3 +57,9 @@ export function windowWords(days: number | null): string {
 export function blockTimeWords(now: Pick<ChainNow, 'msPerBlock'>): string {
   return `${(now.msPerBlock / 1000).toFixed(1)} s`;
 }
+
+/** Progress rounded down to a quarter (0, 25, 50, 75), so a live region changes rarely. */
+export function quarterDone(done: number, total: number): number {
+  if (!total) return 0;
+  return Math.min(75, Math.floor((done / total) * 4) * 25);
+}

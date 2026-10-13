@@ -14,7 +14,7 @@ import { Card, Section, StatTile } from '../../components/common/Section';
 import { ProgressBar } from '../../components/common/ProgressRing';
 import { ErrorState } from '../../components/common/states';
 import { formatCount, plural } from '../../utils/format';
-import { blocksAsTime, NONE, ofTotal, percent, windowWords } from './format';
+import { blocksAsTime, NONE, ofTotal, percent, quarterDone, windowWords } from './format';
 import { useLevelProgress, useLevelSpread } from './useActivity';
 
 const tileGrid = {
@@ -207,14 +207,20 @@ function LevelSpreadCard({ members }: { members: string[] }) {
               onRetry={() => void spread.refetch()}
             />
           ) : (
-            <Box role="status" sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {/* The exact count changes with every member read: shown, not announced. */}
               <Typography variant="body2" color="text.secondary">
                 Reading levels: {ofTotal(progress.done, progress.total || members.length)} members
               </Typography>
               <ProgressBar
                 value={progress.total ? progress.done / progress.total : 0}
                 label="Reading members' levels"
+                valueText={`${formatCount(progress.done)} of ${formatCount(progress.total || members.length)} members`}
               />
+              {/* Announced at most four times: 0, 25, 50 and 75 % done. */}
+              <span role="status" className="qmp-visually-hidden">
+                {`Reading members' levels: ${quarterDone(progress.done, progress.total)}% done.`}
+              </span>
             </Box>
           )}
         </Box>

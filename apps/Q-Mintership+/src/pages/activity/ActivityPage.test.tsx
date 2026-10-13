@@ -4,6 +4,7 @@ import { renderPage } from '../../test/render';
 import { fetchCalls, mockFetchRoute, qortalCalls } from '../../test/setup';
 import { SETTINGS_KEYS } from '../../state/settings';
 import ActivityPage from './ActivityPage';
+import { quarterDone } from './format';
 
 const originalMatchMedia = window.matchMedia;
 
@@ -130,6 +131,24 @@ describe('Activity', () => {
     // One read per member (the signed-in account's own read happened before).
     expect(accountReads() - before).toBeGreaterThanOrEqual(60);
     expect(screen.getByRole('button', { name: 'Hide' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('announces the level read a few times, not once per member', async () => {
+    await renderPage(<ActivityPage />, { persona: 'admin', path: '/activity' });
+    await admins();
+    fireEvent.click(screen.getByRole('button', { name: 'Show levels' }));
+    const live = await screen.findByText(/^Reading members' levels: \d+% done\.$/);
+    expect(live).toHaveAttribute('role', 'status');
+    const heard = new Set([live.textContent]);
+    const observer = new MutationObserver(() => heard.add(live.textContent));
+    observer.observe(live, { childList: true, characterData: true, subtree: true });
+    await screen.findByText(/members are level 5 or above/, {}, { timeout: 3000 });
+    observer.disconnect();
+    // 60+ member reads, at most four announcements (0, 25, 50, 75 %).
+    expect(heard.size).toBeLessThanOrEqual(4);
+    expect(quarterDone(10, 40)).toBe(25);
+    expect(quarterDone(40, 40)).toBe(75);
+    expect(quarterDone(0, 0)).toBe(0);
   });
 
   it('shows a sortable table from 900 px', async () => {

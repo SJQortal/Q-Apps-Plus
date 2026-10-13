@@ -115,12 +115,22 @@ export function ProgressRing({
 }
 
 /** A thin bar for progress that isn't signatures (level progress). */
-export function ProgressBar({ value, label }: { value: number; label: string }) {
+export function ProgressBar({
+  value,
+  label,
+  valueText,
+}: {
+  value: number;
+  label: string;
+  /** The value in words ("120 of 629 members"), read instead of the percentage. */
+  valueText?: string;
+}) {
   const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
   return (
     <Box
       role="progressbar"
       aria-label={label}
+      aria-valuetext={valueText}
       aria-valuenow={pct}
       aria-valuemin={0}
       aria-valuemax={100}
