@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
 import PersonRemoveOutlinedIcon from '@mui/icons-material/PersonRemoveOutlined';
+import PersonOffOutlinedIcon from '@mui/icons-material/PersonOffOutlined';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import RemoveModeratorOutlinedIcon from '@mui/icons-material/RemoveModeratorOutlined';
@@ -31,6 +32,7 @@ import { PROPOSE_KINDS, PROPOSE_ORDER, type ProposeKind } from './proposeKinds';
 
 const ICONS: Record<ProposeKind, ReactNode> = {
   kick: <PersonRemoveOutlinedIcon />,
+  decline: <PersonOffOutlinedIcon />,
   ban: <BlockOutlinedIcon />,
   addAdmin: <AdminPanelSettingsOutlinedIcon />,
   removeAdmin: <RemoveModeratorOutlinedIcon />,

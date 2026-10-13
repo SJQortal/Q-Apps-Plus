@@ -10,7 +10,9 @@
  * may still press Join now. An admin change says, before Hub opens, what it
  * would do to the target of every waiting decision. Picking yourself under
  * Remove a Minter Admin points to Step down as Minter Admin on your own
- * page instead: that is the one place to step down.
+ * page instead: that is the one place to step down. Decline a join request
+ * is a kick of someone on Ready to mint, worded as declining (it opens from
+ * a Ready to mint row too, with the person picked).
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -27,12 +29,15 @@ import {
 import { PersonChip } from '../../components/common/Person';
 import { ResponsiveDialog } from '../../components/common/ResponsiveDialog';
 import { CardSkeleton, ErrorState } from '../../components/common/states';
+import { formatQort } from '../../data/accounts';
 import { getBans, isBanActive } from '../../data/group';
 import { loadStaleInviteDetails, loadStaleInvites, staleDetailsKey } from '../../data/staleInvites';
 import type { GroupMemberRow } from '../../data/types';
 import { useQuery } from '../../hooks/useQuery';
 import { useDisplayName } from '../../hooks/useDisplayName';
+import { useFee } from '../../hooks/useFee';
 import { KIND_LABEL } from '../../rules/decision';
+import { DECLINE_TITLE } from '../../rules/decline';
 import { personPath } from '../../routes/paths';
 import { displayName, formatDuration, formatRelative } from '../../utils/format';
 import type { Proposal } from '../../writes/flows';
@@ -129,6 +134,7 @@ export function ProposeDialog({
   const reasonRef = useRef<HTMLInputElement | null>(null);
   const daysRef = useRef<HTMLInputElement | null>(null);
   const invites = useUnusedInvites(open && kind === 'cancelInvite');
+  const fee = useFee('GROUP_KICK');
 
   // A new kind or preset person starts a fresh form (React's adjust-while-rendering pattern).
   const presetKey = `${kind ?? ''}:${preset?.address ?? ''}`;
@@ -174,7 +180,7 @@ export function ProposeDialog({
 
   if (!kind || !signer) return null;
   const info = PROPOSE_KINDS[kind];
-  const needsReason = kind === 'kick' || kind === 'ban';
+  const needsReason = kind === 'kick' || kind === 'ban' || kind === 'decline';
   const reasonError = needsReason ? reasonProblem(reason) : null;
   const ban = kind === 'ban' && banMode === 'days' ? parseBanDays(days) : { seconds: 0 };
   const banError = 'error' in ban ? ban.error : null;
@@ -232,6 +238,14 @@ export function ProposeDialog({
         }
       >
         <Typography color="text.secondary">{info.description}</Typography>
+        {kind === 'decline' ? (
+          <Typography variant="body2" color="text.secondary">
+            Once {ctx.needed} Minter Admins sign it, like any decision, their join request goes and
+            they leave Ready to mint for everyone. They can send a new join request later. It costs{' '}
+            {formatQort((fee.data?.qort ?? 0.01) * 2)}: your proposal and your own signature on it,
+            two Hub steps.
+          </Typography>
+        ) : null}
         {kind === 'addAdmin' || kind === 'removeAdmin' ? (
           <Typography variant="body2" color="text.secondary">
             Every waiting decision is measured against the admin seats, so this can move the target
@@ -273,7 +287,12 @@ export function ProposeDialog({
                 setInputError(null);
               }}
               error={Boolean(inputError)}
-              helperText={inputError ?? 'A registered name, or a Q… address.'}
+              helperText={
+                inputError ??
+                (kind === 'decline'
+                  ? 'Someone on Ready to mint: a registered name, or a Q… address.'
+                  : 'A registered name, or a Q… address.')
+              }
               fullWidth
               autoComplete="off"
               slotProps={{ htmlInput: { autoCapitalize: 'none', spellCheck: false } }}
@@ -380,7 +399,7 @@ export function ProposeDialog({
             helperText={
               touched && reasonError
                 ? reasonError
-                : `The other Minter Admins and the account see it. ${utf8Length(reason.trim())} of ${REASON_MAX_BYTES} bytes.`
+                : `${kind === 'decline' ? 'Shown to everyone, the account included.' : 'The other Minter Admins and the account see it.'} ${utf8Length(reason.trim())} of ${REASON_MAX_BYTES} bytes.`
             }
             multiline
             minRows={2}
@@ -658,6 +677,8 @@ function toProposal(
   switch (kind) {
     case 'kick':
       return { kind, subject, reason };
+    case 'decline':
+      return { kind: 'kick', subject, reason, decline: true };
     case 'ban':
       return { kind, subject, reason, banSeconds };
     default:
@@ -697,7 +718,12 @@ function ProposeHubStep({
       who={who.label}
       signer={signer}
       facts={ctx}
-      title={`${KIND_LABEL[kind]}: ${who.label}`}
+      title={`${kind === 'decline' ? DECLINE_TITLE : KIND_LABEL[kind]}: ${who.label}`}
+      lead={
+        kind === 'decline'
+          ? 'This proposes declining their join request: once it passes, they leave Ready to mint for everyone, and they can send a new one later.'
+          : undefined
+      }
       impact={ctx.projectImpact?.(kind, person.address) ?? null}
       labelOf={ctx.labelOf}
       details={

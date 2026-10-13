@@ -6,18 +6,26 @@ import { getNameOwner, isAddress } from '../../data/accounts';
 import { getMembership } from '../../data/group';
 import type { GroupTxType } from '../../data/types';
 import { ADMIN_CHANGE_TITLE } from '../../rules/adminChange';
+import { DECLINE_TITLE } from '../../rules/decline';
 import type { ProposalKind } from '../../writes/flows';
 import {
   guardAddAdmin,
   guardBan,
   guardCancelBan,
   guardCancelInvite,
+  guardDecline,
   guardKick,
   guardRemoveAdmin,
 } from '../../writes/guards';
 import type { Signer } from '../../writes/runner';
 
-export type ProposeKind = ProposalKind;
+/** What can be proposed: the write's own kinds, and declining a join request (a kick). */
+export type ProposeKind = ProposalKind | 'decline';
+
+/** The write each kind sends: a decline is a kick, under its own guard. */
+export function proposalKindOf(kind: ProposeKind): ProposalKind {
+  return kind === 'decline' ? 'kick' : kind;
+}
 
 export interface ProposeKindInfo {
   /** Menu label. */
@@ -32,6 +40,12 @@ export const PROPOSE_KINDS: Record<ProposeKind, ProposeKindInfo> = {
   kick: {
     label: 'Remove a member',
     description: 'Out of MINTER, or decline a join request. They keep their level.',
+    action: 'KICK_FROM_GROUP',
+    txType: 'GROUP_KICK',
+  },
+  decline: {
+    label: DECLINE_TITLE,
+    description: 'Takes someone off Ready to mint. They can send a new join request later.',
     action: 'KICK_FROM_GROUP',
     txType: 'GROUP_KICK',
   },
@@ -69,6 +83,7 @@ export const PROPOSE_KINDS: Record<ProposeKind, ProposeKindInfo> = {
 
 export const PROPOSE_ORDER: ProposeKind[] = [
   'kick',
+  'decline',
   'ban',
   'addAdmin',
   'removeAdmin',
@@ -113,6 +128,7 @@ export async function checkSubject(
   }
   const reason = await {
     kick: () => guardKick(signer, address),
+    decline: () => guardDecline(signer, address),
     // The length is checked on its own in the form.
     ban: () => guardBan(signer, address, 0),
     addAdmin: () => guardAddAdmin(signer, address),
