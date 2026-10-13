@@ -471,5 +471,30 @@ export default {
     },
     // Settings → Notifications where Hub offers app alerts.
     { key: 'settings-alerts', path: '/?as=admin', after: hubAlertsOffered },
+    // Settings → Muted names, with three names muted on this device (one long).
+    {
+      key: 'settings-muted',
+      path: '/settings?as=admin',
+      after: async (page) => {
+        await page.addInitScript(
+          ([key, value]) => {
+            try {
+              localStorage.setItem(key, value);
+            } catch {
+              // No storage: the section shows its empty note.
+            }
+          },
+          [
+            'qmintershipplus-muted-names',
+            JSON.stringify(['Loud One', 'a-rather-long-registered-name-for-qortal', 'Member 7']),
+          ]
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+        const section = page.getByRole('region', { name: 'Muted names' });
+        await section.getByRole('button', { name: 'Unmute Member 7' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(300);
+      },
+    },
   ],
 };

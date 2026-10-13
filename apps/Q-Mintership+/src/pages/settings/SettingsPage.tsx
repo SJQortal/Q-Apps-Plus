@@ -1,6 +1,7 @@
 /**
  * Settings (docs/DESIGN.md → Settings page): Account, Appearance, the app's
- * own Mintership section, and About with the changelog.
+ * own Mintership section, Notifications, Muted names, and About with the
+ * changelog.
  */
 import { useEffect, useState } from 'react';
 import {
@@ -24,6 +25,7 @@ import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody } from '../../components/layout/PageBody';
 import { ChangelogDialog } from '../../components/Settings/ChangelogDialog';
 import { NotificationSettings } from './NotificationSettings';
+import { MutedNames } from './MutedNames';
 import { AddressText } from '../../components/common/Person';
 import { NameAvatar } from '../../components/common/NameAvatar';
 import { Section, ToneChip } from '../../components/common/Section';
@@ -308,6 +310,8 @@ export default function SettingsPage() {
         </Section>
 
         <NotificationSettings />
+
+        <MutedNames />
 
         <Section title="About" id="settings-about">
           <Card>

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { getDefaultStore } from 'jotai';
 import { renderPage } from '../../test/render';
+import { MUTED_NAMES_KEY, mutedNamesAtom } from '../../state/comments';
 import SettingsPage from './SettingsPage';
 
 afterEach(() => vi.useRealTimers());
@@ -54,5 +56,63 @@ describe('Settings', () => {
     expect(await screen.findByText('Copied: paste it in your browser.')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Q-Apps+ source link copied' })).toBeVisible();
     expect(writeText).toHaveBeenCalled();
+  });
+});
+
+describe('Settings → Muted names', () => {
+  const mute = (names: string[]) => getDefaultStore().set(mutedNamesAtom, names);
+  const stored = () => JSON.parse(window.localStorage.getItem(MUTED_NAMES_KEY) ?? '[]');
+  const EMPTY = "No muted names. Mute a name from a comment's menu.";
+
+  it('lists each muted name with Unmute, says it is per device, and keeps focus in the list', async () => {
+    const u = userEvent.setup();
+    mute(['Loud One', 'Member 7', 'Spam Bot']);
+    await renderPage(<SettingsPage />, { persona: 'admin', path: '/settings' });
+    const section = await screen.findByRole('region', { name: 'Muted names' });
+    expect(within(section).getByText(/folded away on this device only/)).toBeInTheDocument();
+    const rows = within(within(section).getByRole('list')).getAllByRole('listitem');
+    // Avatar letter, name, Unmute.
+    expect(rows.map((li) => li.textContent)).toEqual([
+      'LLoud OneUnmute',
+      'MMember 7Unmute',
+      'SSpam BotUnmute',
+    ]);
+
+    // The middle one: focus moves to the next name's Unmute.
+    await u.click(within(section).getByRole('button', { name: 'Unmute Member 7' }));
+    expect(within(section).queryByText('Member 7')).toBeNull();
+    expect(within(section).getByRole('button', { name: 'Unmute Spam Bot' })).toHaveFocus();
+    expect(within(section).getByRole('status')).toHaveTextContent('Unmuted Member 7.');
+    expect(stored()).toEqual(['Loud One', 'Spam Bot']);
+
+    // The last one in the list: focus moves back to the one before it.
+    await u.click(within(section).getByRole('button', { name: 'Unmute Spam Bot' }));
+    expect(within(section).getByRole('button', { name: 'Unmute Loud One' })).toHaveFocus();
+
+    // The only one left: focus moves to the empty note, never to the page.
+    await u.click(within(section).getByRole('button', { name: 'Unmute Loud One' }));
+    expect(within(section).getByText(EMPTY)).toHaveFocus();
+    expect(within(section).getByRole('status')).toHaveTextContent('Unmuted Loud One.');
+    expect(stored()).toEqual([]);
+  });
+
+  it('says how to mute a name when none is muted', async () => {
+    mute([]);
+    await renderPage(<SettingsPage />, { persona: 'signedOut', path: '/settings' });
+    const section = await screen.findByRole('region', { name: 'Muted names' });
+    expect(within(section).getByText(EMPTY)).toBeInTheDocument();
+    expect(within(section).queryByRole('button')).toBeNull();
+  });
+
+  it('shows 20 names at a time', async () => {
+    const u = userEvent.setup();
+    mute(Array.from({ length: 25 }, (_, i) => `Name ${i + 1}`));
+    await renderPage(<SettingsPage />, { persona: 'admin', path: '/settings' });
+    const section = await screen.findByRole('region', { name: 'Muted names' });
+    expect(within(section).getAllByRole('listitem')).toHaveLength(20);
+    await u.click(within(section).getByRole('button', { name: 'Show 5 more' }));
+    expect(within(section).getAllByRole('listitem')).toHaveLength(25);
+    // The button is gone: focus moves to the first name it added.
+    expect(within(section).getByRole('button', { name: 'Unmute Name 21' })).toHaveFocus();
   });
 });
