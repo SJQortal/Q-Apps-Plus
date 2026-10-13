@@ -3,12 +3,14 @@
  * Minter Admin", a removal of someone who isn't a Minter Admin, and the same
  * addition waiting twice (e2e/world.mjs addDoubles). Each says so on its
  * card and its own page, keeps Sign and Reject as secondary buttons, offers
- * no Considering, shows no target impact, and counts nowhere as waiting.
+ * no Considering, and counts nowhere as waiting. One that changes nothing
+ * shows no target impact; a repeat shows the same as the earlier one.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage } from '../../test/render';
+import { qortalCallsFor } from '../../test/setup';
 import { addDoubles } from '../../../e2e/world.mjs';
 import { formatBlock } from '../../utils/format';
 import { getAddressHistory } from '../../data/txs';
@@ -154,7 +156,7 @@ describe('Doubles on the Decisions page', () => {
     ).toBeVisible();
   });
 
-  it('shows no target impact or chip on a double, and Sign asks for no check', async () => {
+  it('shows no target impact or chip on a double that changes nothing, and Sign asks for no check', async () => {
     const u = user();
     await openQueue();
     for (const name of [ALREADY, NOT_ADMIN]) {
@@ -162,17 +164,38 @@ describe('Doubles on the Decisions page', () => {
       expect(within(double).queryByText(/^If this passes/)).toBeNull();
       expect(within(double).queryByRole('button', { name: /^Target may/ })).toBeNull();
     }
-    const [older, newer] = screen.getAllByRole('article', { name: MEMBER_9 });
-    // The older addition says what it does to the target; its double doesn't.
-    expect(within(older).getByText(/^If this passes/)).toBeInTheDocument();
-    expect(within(newer).queryByText(/^If this passes/)).toBeNull();
-    expect(within(newer).queryByRole('button', { name: /^Target may/ })).toBeNull();
 
     await u.click(within(card(ALREADY)).getByRole('button', { name: /^Sign: / }));
     const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
     expect(within(dialog).queryByText(/^If this passes/)).toBeNull();
     expect(within(dialog).queryByRole('checkbox', { name: 'I’ve checked these' })).toBeNull();
     // Hub opens (and declines in the mock) without a box to tick first.
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(dialog).findByText('Cancelled in Hub. Nothing was sent.', {}, T)
+    ).toBeVisible();
+  }, 20_000);
+
+  it('shows a repeated change’s target impact as on the earlier one, and Sign asks for the check', async () => {
+    const u = user();
+    await openQueue();
+    const [older, newer] = screen.getAllByRole('article', { name: MEMBER_9 });
+    // Either copy can pass first: both say what they do to the target.
+    const olderImpact = within(older).getByText(/^If this passes/);
+    const newerImpact = within(newer).getByText(/^If this passes/);
+    expect(newerImpact).toHaveTextContent(olderImpact.textContent ?? '');
+
+    await u.click(within(newer).getByRole('button', { name: /^Sign: / }));
+    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    expect(within(dialog).getByText(/^If this passes/)).toBeVisible();
+    const box = within(dialog).getByRole('checkbox', { name: 'I’ve checked these' });
+    expect(box).not.toBeChecked();
+    // Hub stays shut until the box is ticked.
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(dialog).findByText('Tick “I’ve checked these” to go on.')).toBeVisible();
+    expect(box).toHaveFocus();
+    expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
+    await u.click(box);
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(
       await within(dialog).findByText('Cancelled in Hub. Nothing was sent.', {}, T)
@@ -267,6 +290,8 @@ describe('A double’s own page', () => {
         name: 'The earlier proposal: Make a Minter Admin, Member 9',
       })
     ).toHaveAttribute('href', `/decisions/${older}`);
+    // Like the earlier one, it says what it does to the target.
+    expect(await within(page).findByText(/^If this passes/, {}, T)).toBeInTheDocument();
   });
 
   it('is shown to members too, read-only', async () => {
