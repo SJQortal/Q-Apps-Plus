@@ -217,6 +217,28 @@ describe('loadMyStatus', () => {
     expect(status.kind).toBe(kind);
   });
 
+  it('stops at membership for members and admins (nothing else changes their status)', async () => {
+    for (const persona of ['nominator', 'admin']) {
+      const { address } = installWorld(persona);
+      fetchCalls.length = 0;
+      await loadMyStatus(address, { force: true });
+      expect(fetchCalls.some((c) => c.startsWith('/transactions/'))).toBe(false);
+      expect(fetchCalls.some((c) => c.startsWith('/arbitrary/'))).toBe(false);
+      expect(fetchCalls.some((c) => c.startsWith('/groups/joinrequests/'))).toBe(false);
+      expect(fetchCalls.some((c) => c.startsWith('/groups/invites/'))).toBe(false);
+    }
+  });
+
+  it('a forced status refresh leaves the decisions queue to its own pollers', async () => {
+    const { address } = installWorld('nominatedWaiting');
+    await loadMyStatus(address);
+    const queueReads = () =>
+      fetchCalls.filter((c) => c.startsWith('/transactions/pending?txGroupId=694')).length;
+    const before = queueReads();
+    await loadMyStatus(address, { force: true });
+    expect(queueReads()).toBe(before);
+  });
+
   it('carries the real numbers each home needs', async () => {
     const { address } = installWorld('learner');
     const status = await loadMyStatus(address);

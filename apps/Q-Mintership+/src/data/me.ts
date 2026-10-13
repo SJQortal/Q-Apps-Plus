@@ -1,8 +1,10 @@
 /**
- * The signed-in account's status, from about a dozen cached GETs:
- * account (level), primary name, MINTER membership, own join request,
- * stored invite, bans, own MINTER history, own nominations, and the chain
- * tip. Admin- and member-only views load their own data on top.
+ * An account's status (the signed-in one, or anyone's for their page):
+ * account (level), primary name and MINTER membership first. Members and
+ * admins stop there: nothing else changes their status. Everyone else also
+ * gets their join request, stored invite, bans, MINTER history, open
+ * nominations and the chain tip. Admin- and member-only views load their
+ * own data on top.
  */
 import { isOpenState } from '../rules/nomination';
 import { resolveStatus, type MyStatus } from '../rules/status';
@@ -27,20 +29,35 @@ export function loadMyStatus(
     `status:${address}`,
     async () => {
       const force = options.force;
-      const [
-        account,
-        name,
-        membership,
-        joinRequest,
-        storedInvite,
-        bans,
-        history,
-        now,
-        nominations,
-      ] = await Promise.all([
+      const [account, name, membership] = await Promise.all([
         getAccount(address, { force }),
         getPrimaryName(address).catch(() => null),
         getMembership(address, { force }),
+      ]);
+      const base = {
+        hub: 'signedIn' as const,
+        address,
+        name,
+        level: account.level,
+        blocksMinted: effectiveBlocksMinted(account),
+        isMember: membership.isMember,
+        isAdmin: membership.isAdmin,
+      };
+      if (membership.isMember || membership.isAdmin) {
+        // The tip only dates removals, which members don't have: no forced read.
+        const now = await getChainNow();
+        return resolveStatus({
+          ...base,
+          hasJoinRequest: false,
+          activeBan: null,
+          storedInvite: null,
+          history: [],
+          nominations: [],
+          msPerBlock: now.msPerBlock,
+          tip: { height: now.height, timestamp: now.timestamp },
+        });
+      }
+      const [joinRequest, storedInvite, bans, history, now, nominations] = await Promise.all([
         getJoinRequestFor(address, { force }),
         getStoredInviteFor(address, { force }),
         getBans(),
@@ -49,13 +66,7 @@ export function loadMyStatus(
         loadNominationsFor(address, { force }),
       ]);
       return resolveStatus({
-        hub: 'signedIn',
-        address,
-        name,
-        level: account.level,
-        blocksMinted: effectiveBlocksMinted(account),
-        isMember: membership.isMember,
-        isAdmin: membership.isAdmin,
+        ...base,
         hasJoinRequest: Boolean(joinRequest),
         activeBan: activeBanFor(bans, address, now.timestamp),
         storedInvite,

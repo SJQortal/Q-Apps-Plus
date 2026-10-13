@@ -412,7 +412,8 @@ export function loadNominationsFor(
           { service: RECORD_SERVICE, identifier: supportIdentifier(address), maxPages: 2 },
           { force }
         ),
-        loadDecisions({ force }),
+        // The queue has its own pollers and a 45 s TTL: a status refresh doesn't force it.
+        loadDecisions(),
         getMembership(address, { force }),
         getJoinRequestFor(address, { force }),
         getStoredInviteFor(address, { force }),
