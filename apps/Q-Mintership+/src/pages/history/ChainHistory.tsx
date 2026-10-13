@@ -5,7 +5,8 @@
  * read stay cached, so only the new one is fetched. An approved admin change
  * says what it did to the target, worked back from today's admin count
  * (rules/targetShift.ts), where every later admin change is in the windows
- * read.
+ * read. Each decided change links to its decision's own page
+ * (parts/TimelineList.tsx), which reads its signatures only when opened.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';

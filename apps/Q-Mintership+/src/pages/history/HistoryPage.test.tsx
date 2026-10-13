@@ -57,6 +57,53 @@ describe('History page: on chain', () => {
   });
 });
 
+describe('History page: links to decisions', () => {
+  /** The list item that names `name` and has `title`. */
+  function itemOf(list: HTMLElement, title: string, name: string): HTMLElement {
+    return within(list)
+      .getAllByText(title)
+      .map((t) => t.closest('li') as HTMLElement)
+      .find((li) => within(li).queryByText(name)) as HTMLElement;
+  }
+
+  it('links each decided change to its decision’s own page, named for what it opens', async () => {
+    const { world } = await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
+    const list = await eventsList();
+    const signatureFor = (invitee: string) =>
+      (world.decided as Array<{ type: string; invitee?: string; signature: string }>).find(
+        (t) => t.type === 'GROUP_INVITE' && t.invitee === invitee
+      )?.signature;
+
+    const expiredName = PEOPLE.expired.name as string;
+    const joinedName = PEOPLE.recentlyJoined.name as string;
+    // Names come from the cached name reads, the link's name with them.
+    await within(list).findByText(expiredName);
+    await within(list).findByText(joinedName);
+    const expired = itemOf(list, 'Nominated for MINTER', expiredName);
+    const toExpired = within(expired).getByRole('link', {
+      name: new RegExp(
+        `^Open the decision: Nominated for MINTER, ${expiredName}, expired \\d{1,2} \\w{3} \\d{4}$`
+      ),
+    });
+    expect(toExpired).toHaveTextContent(/^Open the decision$/);
+    expect(toExpired).toHaveAttribute('href', `/decisions/${signatureFor(ADDR.expired)}`);
+
+    const approved = itemOf(list, 'Approved for MINTER', joinedName);
+    expect(
+      within(approved).getByRole('link', {
+        name: new RegExp(`^Open the decision: Approved for MINTER, ${joinedName}, \\d`),
+      })
+    ).toHaveAttribute('href', `/decisions/${signatureFor(ADDR.recentlyJoined)}`);
+
+    // Joins and leaves need no decision: no link.
+    const left = itemOf(list, 'Left MINTER', PEOPLE.left.name as string);
+    expect(within(left).queryByRole('link', { name: /Open the decision/ })).toBeNull();
+
+    await userEvent.click(toExpired);
+    expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
+  });
+});
+
 describe('History page: the target', () => {
   it('says what each approved admin change did to the target', async () => {
     await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });

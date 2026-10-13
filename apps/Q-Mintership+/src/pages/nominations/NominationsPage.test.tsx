@@ -328,3 +328,54 @@ describe('Nominations page', () => {
     );
   });
 });
+
+describe('Nominations page: Propose nomination at every width', () => {
+  const originalMatchMedia = window.matchMedia;
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  /** matchMedia for a frame of `width` × `height` (the min/max width and height queries). */
+  function frame(width: number, height: number) {
+    window.matchMedia = ((query: string) => {
+      const sizes = [...query.matchAll(/\((min|max)-(width|height):\s*([\d.]+)px\)/g)];
+      const matches =
+        sizes.length > 0 &&
+        sizes.every(([, edge, side, value]) => {
+          const size = side === 'width' ? width : height;
+          return edge === 'min' ? size >= Number(value) : size <= Number(value);
+        });
+      return { ...originalMatchMedia(query), matches };
+    }) as typeof window.matchMedia;
+  }
+
+  it('is a round floating button on a phone, icon only, named for screen readers', async () => {
+    frame(360, 780);
+    await open('nominator');
+    await card('Wren Waiting');
+    const fab = await screen.findByRole('button', { name: PROPOSE_NOMINATION });
+    // The only one: the header has no second button with the words.
+    expect(screen.getAllByRole('button', { name: PROPOSE_NOMINATION })).toHaveLength(1);
+    expect(fab).toHaveTextContent(/^$/);
+    // MUI's large round Fab: 56 px across.
+    expect(fab).toHaveClass('MuiFab-circular', 'MuiFab-sizeLarge');
+    expect(fab).not.toHaveClass('MuiFab-extended');
+    await userEvent.click(fab);
+    expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
+  });
+
+  it('keeps its words in the header on wider screens and in a landscape frame', async () => {
+    for (const [width, height] of [
+      [1280, 800],
+      [844, 390],
+    ]) {
+      frame(width, height);
+      const { unmount } = await open('nominator');
+      await card('Wren Waiting');
+      const button = await screen.findByRole('button', { name: PROPOSE_NOMINATION });
+      expect(button).toHaveTextContent(PROPOSE_NOMINATION);
+      expect(button).not.toHaveClass('MuiFab-root');
+      unmount();
+    }
+  });
+});

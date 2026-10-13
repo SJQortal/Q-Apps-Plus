@@ -318,15 +318,19 @@ describe('Nominate page: writing and publishing', () => {
     expect(
       await screen.findByRole('heading', { name: 'Let Zoë Newcomer know' })
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(`qortal://APP/Q-Mintership+/people/${ADDR.newcomerName}`)
-    ).toBeInTheDocument();
+    // The link opens the nomination's own page, where they find Accept.
+    const link = `qortal://APP/Q-Mintership+/nominations/${ADDR.newcomerName}`;
+    expect(screen.getByText(link)).toBeInTheDocument();
+    expect(screen.queryByText(/qortal:\/\/APP\/Q-Mintership\+\/people\//)).toBeNull();
     expect(screen.getByRole('article', { name: /Nomination of Zoë Newcomer/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
     // The form (and its button) went: focus is on the news, not on the page.
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'Nomination published' })).toHaveFocus()
     );
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    await user.click(screen.getByRole('button', { name: 'Copy link' }));
+    expect(writeText).toHaveBeenCalledWith(link);
     // "… for someone else" brings the form back, with focus in its first field.
     await user.click(screen.getByRole('button', { name: /for someone else$/ }));
     expect(await screen.findByRole('combobox', { name: 'Name or Qortal address' })).toHaveFocus();

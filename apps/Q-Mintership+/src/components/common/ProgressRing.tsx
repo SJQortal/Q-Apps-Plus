@@ -42,6 +42,11 @@ export function ProgressRing({
   const colour = theme.palette[tone ?? (met ? 'success' : 'primary')].main;
   const text =
     label ?? `${value} of ${target} signatures${pending ? `, ${pending} confirming` : ''}`;
+  // From 56 px (cards, pages, Home) "of 8" is a quarter of the ring, 14 px or more, on one
+  // line height; "100 of 99" still sits inside the ring in every theme's font (Inter, and
+  // the system fonts' widest). Smaller rings keep their size.
+  const large = size >= 56;
+  const targetFont = large ? size / 4 : Math.max(11, size * 0.2);
 
   return (
     <Box
@@ -105,7 +110,7 @@ export function ProgressRing({
         </Typography>
         <Typography
           component="span"
-          sx={{ fontSize: Math.max(11, size * 0.2), color: 'text.secondary', lineHeight: 1.1 }}
+          sx={{ fontSize: targetFont, color: 'text.secondary', lineHeight: large ? 1 : 1.1 }}
         >
           of {target}
         </Typography>

@@ -25,7 +25,10 @@ export interface PersonChipProps {
   link?: boolean;
   /** Bold name (default true). */
   strong?: boolean;
-  /** Inside a sentence (PersonInline): only the name is the link, at the text's size. */
+  /**
+   * Inside a sentence (PersonInline): only the name is the link, at the text's size,
+   * always underlined.
+   */
   inline?: boolean;
 }
 
@@ -76,13 +79,21 @@ export function PersonChip({
           <Link
             component={RouterLink}
             to={personPath(address)}
-            underline="hover"
+            // In a sentence the underline is what marks the name as a link (its colour
+            // is the sentence's); a chip's avatar and layout already do.
+            underline={inline ? 'always' : 'hover'}
             color="inherit"
             aria-label={`${shown.label}: open their page`}
             sx={
               stretch
                 ? { '&::after': { content: '""', position: 'absolute', inset: 0 } }
-                : undefined
+                : inline
+                  ? {
+                      textDecorationColor: 'currentColor',
+                      textUnderlineOffset: '0.15em',
+                      '&:hover': { textDecorationThickness: '2px' },
+                    }
+                  : undefined
             }
           >
             {label}
@@ -105,7 +116,10 @@ export function PersonChip({
   );
 }
 
-/** A person inside a sentence ("Nominated by [Ada] 2 days ago"): small avatar, the sentence's size. */
+/**
+ * A person inside a sentence ("Nominated by [Ada] 2 days ago"): small avatar,
+ * the sentence's size and colour, the name always underlined.
+ */
 export function PersonInline({ address, name }: { address: string; name?: string | null }) {
   return (
     <Box

@@ -10,7 +10,8 @@
  * 2. Say why (20–600 characters) and add up to five qortal:// links.
  * 3. Read what happens next, then publish the record through Hub
  *    (PUBLISH_QDN_RESOURCE, fee stated). Done: the new nomination, and the
- *    app link to send the nominee so they can accept.
+ *    app link to send the nominee so they can accept (the nomination's own
+ *    page, /nominations/<address>).
  *
  * The submit bar is sticky inside the page (never 100vh). With the phone's
  * keyboard open the bottom bar steps aside and the submit bar sits right
@@ -58,7 +59,7 @@ import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useQuery } from '../../hooks/useQuery';
 import { appParam } from '../../routes/hubLocation';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
-import { PATHS, personPath } from '../../routes/paths';
+import { PATHS, nominationPath, personPath } from '../../routes/paths';
 import { NOMINEE_BLOCK_TEXT, type NomineeBlock } from '../../rules/nomination';
 import type { MyStatus } from '../../rules/status';
 import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
@@ -709,7 +710,11 @@ function BlockNotice({
       ) : null}
       {block === 'stored' && info ? (
         <Box sx={{ mt: 1 }}>
-          <ShareLink address={info.address} label="Send them this link so they can join:" />
+          {/* Their page: it offers Join now, with or without a nomination. */}
+          <ShareLink
+            path={personPath(info.address)}
+            label="Send them this link so they can join:"
+          />
         </Box>
       ) : null}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
@@ -788,9 +793,10 @@ function WhatHappensNext({ name, named }: { name: string; named: boolean }) {
   );
 }
 
-function ShareLink({ address, label }: { address: string; label: string }) {
+/** A link to send someone, with Copy link. `path` is the app path it opens. */
+function ShareLink({ path, label }: { path: string; label: string }) {
   const [copied, setCopied] = useState(false);
-  const link = appLink(personPath(address));
+  const link = appLink(path);
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, minWidth: 0 }}>
       <Typography variant="body2">{label}</Typography>
@@ -881,7 +887,8 @@ function Done({
             it, they have to press Join now after the approval.
           </Typography>
         )}
-        <ShareLink address={nominee} label="Send them this link so they can accept:" />
+        {/* The nomination's own page: the nominee finds Accept there. */}
+        <ShareLink path={nominationPath(nominee)} label="Send them this link so they can accept:" />
       </Card>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
         <Button

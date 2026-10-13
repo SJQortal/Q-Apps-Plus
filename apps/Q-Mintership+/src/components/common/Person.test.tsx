@@ -45,3 +45,28 @@ describe('PersonChip: a 44 px tap target', () => {
     expect(rulesFor(link, '::after')).toBe('');
   });
 });
+
+describe('PersonInline: a link you can see without hovering', () => {
+  it('is always underlined, in the sentence’s own colour', () => {
+    show(
+      <p>
+        Proposed by <PersonInline address={ADA} name="Ada" />
+      </p>
+    );
+    const link = screen.getByRole('link', { name: 'Ada: open their page' });
+    const own = rulesFor(link);
+    expect(own).toMatch(/text-decoration:underline/);
+    expect(own).toMatch(/text-decoration-color:currentColor/);
+    expect(own).toMatch(/color:inherit/);
+    expect(link).toHaveClass('MuiLink-underlineAlways');
+    // The browser's own focus ring stays: nothing takes the outline away.
+    expect(own).not.toMatch(/outline:(none|0)/);
+  });
+
+  it('a chip’s name is underlined only on hover, as before', () => {
+    show(<PersonChip address={ADA} name="Ada" />);
+    const link = screen.getByRole('link', { name: 'Ada: open their page' });
+    expect(link).toHaveClass('MuiLink-underlineHover');
+    expect(rulesFor(link)).toMatch(/text-decoration:none/);
+  });
+});
