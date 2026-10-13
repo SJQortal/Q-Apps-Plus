@@ -66,7 +66,14 @@ export const PROPOSE_KINDS: Record<ProposeKind, ProposeKindInfo> = {
   },
 };
 
-export const PROPOSE_ORDER: ProposeKind[] = ['kick', 'ban', 'addAdmin', 'removeAdmin', 'cancelBan'];
+export const PROPOSE_ORDER: ProposeKind[] = [
+  'kick',
+  'ban',
+  'addAdmin',
+  'removeAdmin',
+  'cancelBan',
+  'cancelInvite',
+];
 
 export type Resolved = { address: string; name: string | null | undefined } | { error: string };
 

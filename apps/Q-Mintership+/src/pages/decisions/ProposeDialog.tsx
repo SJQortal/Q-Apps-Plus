@@ -1,9 +1,10 @@
 /**
- * Propose a kick, ban, admin change or lifted ban: pick the person (name
- * or address), see the same check the write will run, then the proposal
- * and the admin's own signature on it as one explained step of two Hub
- * confirmations. Kicking or banning a Minter Admin is offered as "remove
- * their admin role first", because Core refuses it otherwise.
+ * Propose a kick, ban, admin change, lifted ban or cancelled invite: pick
+ * the person (by name or address, or from the admins, bans in force or
+ * unused approved invites), see the same check the write will run, then the
+ * proposal and the admin's own signature on it as one explained step of two
+ * Hub confirmations. Kicking or banning a Minter Admin is offered as
+ * "remove their admin role first", because Core refuses it otherwise.
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import {
@@ -18,8 +19,9 @@ import {
 } from '@mui/material';
 import { PersonChip } from '../../components/common/Person';
 import { ResponsiveDialog } from '../../components/common/ResponsiveDialog';
-import { CardSkeleton } from '../../components/common/states';
+import { CardSkeleton, ErrorState } from '../../components/common/states';
 import { getBans, isBanActive } from '../../data/group';
+import { loadStaleInvites } from '../../data/staleInvites';
 import type { GroupMemberRow } from '../../data/types';
 import { useQuery } from '../../hooks/useQuery';
 import { useDisplayName } from '../../hooks/useDisplayName';
@@ -190,6 +192,12 @@ export function ProposeDialog({
           />
         ) : kind === 'cancelBan' ? (
           <BanPicker value={person?.address ?? ''} onPick={(p) => setPerson(p)} />
+        ) : kind === 'cancelInvite' ? (
+          <InvitePicker
+            admins={ctx.signers}
+            value={person?.address ?? ''}
+            onPick={(p) => setPerson(p)}
+          />
         ) : (
           <Box
             component="form"
@@ -442,6 +450,63 @@ function BanOption({
     <option value={address}>
       {name.label}, banned {formatRelative(banned)}
       {reason ? `: ${reason}` : ''}
+    </option>
+  );
+}
+
+/** Unused approved invites: the same list (and read) as Clean up stale invites. */
+function InvitePicker({
+  admins,
+  value,
+  onPick,
+}: {
+  admins: GroupMemberRow[];
+  value: string;
+  onPick: (p: Person | null) => void;
+}) {
+  const list = useQuery('staleinvites:list', (force) => loadStaleInvites({ force }));
+  if (list.isLoading) return <CardSkeleton lines={1} />;
+  if (list.isError && !list.data)
+    return (
+      <ErrorState
+        compact
+        title="Couldn’t load the approved invites."
+        error={list.error}
+        onRetry={list.refetch}
+      />
+    );
+  const rows = list.data?.rows ?? [];
+  if (!rows.length)
+    return (
+      <Alert severity="info" role="status">
+        There are no unused approved invites right now.
+      </Alert>
+    );
+  const adminName = (address: string) =>
+    displayName(admins.find((a) => a.member === address)?.primaryName, address);
+  return (
+    <TextField
+      select
+      label="Approved invite"
+      value={value}
+      onChange={(e) => onPick(e.target.value ? { address: e.target.value } : null)}
+      helperText="Approved invites nobody has used, as under Clean up stale invites."
+      fullWidth
+      slotProps={{ select: { native: true } }}
+    >
+      <option value="">Choose an account…</option>
+      {rows.map((row) => (
+        <InviteOption key={row.invitee} address={row.invitee} inviter={adminName(row.inviter)} />
+      ))}
+    </TextField>
+  );
+}
+
+function InviteOption({ address, inviter }: { address: string; inviter: string }) {
+  const name = useDisplayName(address);
+  return (
+    <option value={address}>
+      {name.label}, invited by {inviter}
     </option>
   );
 }
