@@ -144,3 +144,41 @@ describe('HubStepDialog: something to do before Hub opens', () => {
     expect(runs).toBe(1);
   });
 });
+
+/** A card whose button is disabled ("Sending…") by the time the dialog closes. */
+function DisabledOpener() {
+  const [open, setOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  return (
+    <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+      <article aria-label="The card" tabIndex={-1}>
+        <button disabled={sending} onClick={() => setOpen(true)}>
+          {sending ? 'Sending…' : 'Sign'}
+        </button>
+      </article>
+      <HubStepDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Sign this decision"
+        steps={[{ action: 'SIGN_TRANSACTION', title: 'Sign it', feeTxType: 'GROUP_APPROVAL' }]}
+        run={async () => {
+          setSending(true);
+          return { outcome: { status: 'sent', tx: null, signature: 'S', recovered: false } };
+        }}
+      />
+    </HubThemeProvider>
+  );
+}
+
+describe('HubStepDialog: closing when its button can no longer take focus', () => {
+  it('goes to the card around a disabled button, not to the page', async () => {
+    const u = userEvent.setup();
+    render(<DisabledOpener />);
+    await u.click(screen.getByRole('button', { name: 'Sign' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    await u.click(await within(dialog).findByRole('button', { name: 'Done' }));
+    expect(await screen.findByRole('article', { name: 'The card' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Sending…' })).toBeDisabled();
+  });
+});

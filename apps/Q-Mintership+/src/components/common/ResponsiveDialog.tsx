@@ -109,7 +109,8 @@ export function ResponsiveDialog({
     opener.current = { element: null, anchor: null };
     if (element?.isConnected) {
       element.focus({ preventScroll: true });
-      return;
+      // Still there but disabled (e.g. "Sending…"): it can't take focus, so go on below.
+      if (document.activeElement === element) return;
     }
     const target =
       returnFocus?.() ??
