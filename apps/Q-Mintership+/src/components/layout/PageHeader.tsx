@@ -2,8 +2,14 @@
  * The sticky, translucent page header: Back on sub-pages, the title, actions
  * on the right. On phones it slides away when scrolling down and comes back
  * when scrolling up (docs/DESIGN.md → Mobile).
+ *
+ * After a route change it takes focus on its title, so a screen reader
+ * announces the new page and Tab starts from its top, and it names the
+ * document after the page. The app's first page keeps the browser's focus,
+ * and a ?d= link leaves it to the decision it opens.
  */
-import { useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { IconButton, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -12,6 +18,8 @@ import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useHideOnScroll, usePublishHeaderOffset } from '../../hooks/useHideOnScroll';
 import { useSafeBack } from '../../hooks/useSafeBack';
 import { useLandscapeFrame } from '../../utils/hubFrame';
+import { APP_NAME } from '../../constants/plus';
+import { isFirstPage } from './pageFocus';
 
 const Header = styled('header', {
   shouldForwardProp: (prop) => prop !== '$hidden' && prop !== '$compact',
@@ -48,6 +56,22 @@ export interface PageHeaderProps {
 }
 
 export function PageHeader({ title, subtitle, actions, back, children }: PageHeaderProps) {
+  const { pathname, search } = useLocation();
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  // A ?d= link focuses its decision card instead (DecisionsPage).
+  const opensDecision = new URLSearchParams(search).has('d');
+  const opensDecisionRef = useRef(opensDecision);
+  opensDecisionRef.current = opensDecision;
+
+  useEffect(() => {
+    if (isFirstPage() || opensDecisionRef.current) return;
+    titleRef.current?.focus({ preventScroll: true });
+  }, [pathname]);
+
+  useEffect(() => {
+    document.title = `${title} · ${APP_NAME}`;
+  }, [title]);
+
   const phone = usePhoneLayout();
   const compact = useLandscapeFrame();
   const { hidden, reveal } = useHideOnScroll(phone);
@@ -63,8 +87,16 @@ export function PageHeader({ title, subtitle, actions, back, children }: PageHea
       ) : null}
       <div style={{ minWidth: 0, flex: 1 }}>
         <Typography
+          ref={titleRef}
           component="h1"
-          sx={{ fontSize: compact ? 18 : 20, fontWeight: 700, lineHeight: 1.2 }}
+          tabIndex={-1}
+          sx={{
+            fontSize: compact ? 18 : 20,
+            fontWeight: 700,
+            lineHeight: 1.2,
+            // Focused by the app on a route change, not by the user: no ring.
+            '&:focus': { outline: 'none' },
+          }}
           noWrap
         >
           {title}

@@ -15,6 +15,7 @@ import { HubThemeProvider } from '../hub-theme';
 import { themeConfig, THEME_STORAGE_KEY } from '../theme/qplus-theme';
 import { resetSessionStarter, signIn } from '../state/session';
 import { pendingWritesAtom } from '../writes/optimistic';
+import { resetPageFocus } from '../components/layout/pageFocus';
 import { installWorld, type InstalledWorld } from './world';
 
 export interface RenderPageOptions {
@@ -36,6 +37,7 @@ export async function renderPage(
   const installed = installWorld(persona === 'outside' ? 'admin' : persona);
   options.setup?.(installed.world);
   resetSessionStarter();
+  resetPageFocus();
   getDefaultStore().set(pendingWritesAtom, {});
   const saved = (globalThis as { qortalRequest?: unknown }).qortalRequest;
   if (persona === 'outside') (globalThis as { qortalRequest?: unknown }).qortalRequest = undefined;
