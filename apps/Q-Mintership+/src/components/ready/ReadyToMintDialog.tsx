@@ -14,7 +14,15 @@
  * Reusable: any screen can open it (Home does, through LazyReadyToMintDialog).
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Alert, Box, Button, Checkbox, FormControlLabel, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  Checkbox,
+  CircularProgress,
+  FormControlLabel,
+  Typography,
+} from '@mui/material';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
@@ -172,6 +180,7 @@ export function ReadyToMintDialog({
           feeQort={feeQort}
           balance={known}
           failed={balance.isError && known === undefined}
+          checking={balance.fetching}
           address={address}
           onRecheck={() => void refetch()}
         />
@@ -316,26 +325,46 @@ function FeeCheck({
   feeQort,
   balance,
   failed,
+  checking,
   address,
   onRecheck,
 }: {
   feeQort: number;
   balance: number | undefined;
   failed: boolean;
+  /** The balance is being read (a press of Check again, or the read on opening). */
+  checking: boolean;
   address: string | null;
   onRecheck: () => void;
 }) {
+  // The balance when Check again was last pressed, to say what the new read found.
+  const [pressedWith, setPressedWith] = useState<number | undefined | null>(null);
   const recheck = (
+    // Stays enabled while it reads, so focus stays on it; a second press waits for the first.
     <Button
       variant="outlined"
-      startIcon={<RefreshOutlinedIcon />}
-      onClick={onRecheck}
+      startIcon={
+        checking ? <CircularProgress size={18} color="inherit" /> : <RefreshOutlinedIcon />
+      }
+      onClick={() => {
+        if (checking) return;
+        setPressedWith(balance);
+        onRecheck();
+      }}
       sx={{ alignSelf: 'flex-start', minHeight: 44 }}
     >
-      Check again
+      {checking ? 'Checking…' : 'Check again'}
     </Button>
   );
   if (balance !== undefined && balance < feeQort) {
+    const pressed = pressedWith !== null;
+    const result = !pressed
+      ? ''
+      : checking
+        ? 'Checking your confirmed balance…'
+        : balance === pressedWith
+          ? `Checked just now: still ${formatQort(balance)} confirmed.`
+          : `Checked just now: ${formatQort(balance)} confirmed.`;
     return (
       <Alert severity="warning" role="note">
         <Typography variant="body2" sx={{ fontWeight: 700 }}>
@@ -352,6 +381,10 @@ function FeeCheck({
           </Box>
         ) : null}
         <Box sx={{ mt: 0.5 }}>{recheck}</Box>
+        {/* There from the start, so what a press found is spoken. */}
+        <Typography variant="body2" role="status" sx={{ mt: result ? 0.5 : 0 }}>
+          {result}
+        </Typography>
       </Alert>
     );
   }

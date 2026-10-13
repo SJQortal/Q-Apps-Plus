@@ -11,7 +11,7 @@ import userEvent from '@testing-library/user-event';
 import { getDefaultStore } from 'jotai';
 import { signerOf, useSession } from '../../state/session';
 import { renderPage } from '../../test/render';
-import { mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
+import { fetchCallsFor, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { getPendingWrite, pendingWritesAtom, writeKeys } from '../../writes/optimistic';
 import { ReadyToMintDialog } from './ReadyToMintDialog';
 
@@ -138,15 +138,54 @@ describe('ReadyToMintDialog: the self-check', () => {
     await tickAll(dialog);
     const go = within(dialog).getByRole('button', { name: 'Continue' });
     expect(go).toBeDisabled();
-    expect(within(dialog).getByRole('status')).toHaveTextContent(
-      'Continue opens once your confirmed balance covers the 0.01 QORT fee.'
-    );
+    expect(
+      within(dialog).getByText(
+        'Continue opens once your confirmed balance covers the 0.01 QORT fee.'
+      )
+    ).toHaveAttribute('role', 'status');
+
+    // Pressed before the QORT has confirmed: it says it checked, and what it found.
+    const recheck = within(dialog).getByRole('button', { name: 'Check again' });
+    await userEvent.click(recheck);
+    expect(
+      await within(dialog).findByText('Checked just now: still 0 QORT confirmed.', {}, T)
+    ).toHaveAttribute('role', 'status');
+    expect(recheck).toHaveFocus();
 
     // Someone sent a little QORT.
     world.accounts.get(address)!.balance = 1;
     await userEvent.click(within(dialog).getByRole('button', { name: 'Check again' }));
     expect(await within(dialog).findByText(/1 QORT, so that's covered/, {}, T)).toBeInTheDocument();
     expect(go).toBeEnabled();
+  }, 20_000);
+
+  it('shows Check again working on a slow node, and keeps focus on it', async () => {
+    let release: (() => void) | null = null;
+    const { address } = await renderPage(<Harness />, { persona: 'newcomer' });
+    const dialog = await checklist();
+    await within(dialog).findByText('You need 0.01 QORT for the fee first.', {}, T);
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: 'Check again' })).toBeInTheDocument()
+    );
+    mockFetchRoute('/addresses/balance/', async () => {
+      await new Promise<void>((resolve) => (release = resolve));
+      return '0';
+    });
+    const reads = () => fetchCallsFor(`/addresses/balance/${address}`).length;
+    const before = reads();
+    const recheck = within(dialog).getByRole('button', { name: 'Check again' });
+    await userEvent.click(recheck);
+    expect(await within(dialog).findByRole('button', { name: 'Checking…' }, T)).toBe(recheck);
+    expect(recheck).toBeEnabled();
+    expect(recheck).toHaveFocus();
+    expect(within(dialog).getByText('Checking your confirmed balance…')).toBeInTheDocument();
+    await userEvent.click(recheck);
+    expect(reads()).toBe(before + 1);
+    release!();
+    expect(
+      await within(dialog).findByText('Checked just now: still 0 QORT confirmed.', {}, T)
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Check again' })).toBe(recheck);
   }, 20_000);
 
   it('says the balance is still being checked, not Ready, while Continue waits for it', async () => {
