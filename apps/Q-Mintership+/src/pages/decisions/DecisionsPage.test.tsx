@@ -967,3 +967,22 @@ describe('Decisions: navigation and filters', () => {
     expect(await screen.findByText('Nothing waiting for signatures')).toBeVisible();
   });
 });
+
+describe('Decisions: headings', () => {
+  it('one h1, then h2 for each part of the page, h3 for each card: no level skipped', async () => {
+    await openPage('admin');
+    await screen.findByRole('heading', { level: 2, name: 'How signing works' });
+    const levels = screen.getAllByRole('heading').map((h) => Number(h.tagName.slice(1)));
+    expect(levels[0]).toBe(1);
+    expect(levels.filter((l) => l === 1)).toHaveLength(1);
+    // Never deeper than one level below the heading before it.
+    levels.forEach((level, i) => {
+      if (i > 0) expect(level).toBeLessThanOrEqual(levels[i - 1] + 1);
+    });
+    expect(
+      screen.getByRole('heading', { level: 2, name: /decisions? waiting for your signature$/ })
+    ).toBeVisible();
+    // How signing works is a part of its own, not under the stale invites before it.
+    expect(levels.at(-1)).toBe(2);
+  });
+});

@@ -392,7 +392,7 @@ function DecisionsQueue() {
 
             {isAdmin ? (
               <Card sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                <Typography sx={{ fontWeight: 700, fontSize: 18 }}>
+                <Typography component="h2" sx={{ fontWeight: 700, fontSize: 18 }}>
                   {signable.length
                     ? `${plural(signable.length, 'decision')} waiting for your signature`
                     : 'Nothing waiting for your signature'}
