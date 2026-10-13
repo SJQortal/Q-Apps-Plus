@@ -14,7 +14,9 @@ export const SETTINGS_KEYS = {
   timeDisplay: `${STORAGE_PREFIX}time-display`,
   celebrate: `${STORAGE_PREFIX}celebrate`,
   activityWindow: `${STORAGE_PREFIX}activity-window`,
-  decisionsHideSigned: `${STORAGE_PREFIX}decisions-hide-signed`,
+  // Still "hide-signed", from when it hid signatures only: the same key, so a
+  // device's choice carries over now that it hides rejections too.
+  decisionsHideAnswered: `${STORAGE_PREFIX}decisions-hide-signed`,
 } as const;
 
 /** Animations: follow the system, always reduce, or always play. */
@@ -29,8 +31,8 @@ export const celebrateAtom = atomWithStorage<boolean>(SETTINGS_KEYS.celebrate, t
 /** Minter Admin Activity's default window, in days. */
 export const activityWindowAtom = atomWithStorage<ActivityWindow>(SETTINGS_KEYS.activityWindow, 30);
 
-/** Decisions: hide the ones you have already signed. */
-export const decisionsHideSignedAtom = atomWithStorage<boolean>(
-  SETTINGS_KEYS.decisionsHideSigned,
+/** Decisions: hide the ones you have already answered (signed or rejected). */
+export const decisionsHideAnsweredAtom = atomWithStorage<boolean>(
+  SETTINGS_KEYS.decisionsHideAnswered,
   false
 );

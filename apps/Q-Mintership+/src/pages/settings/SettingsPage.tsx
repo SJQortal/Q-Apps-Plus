@@ -31,7 +31,7 @@ import { useMyStatus } from '../../hooks/useData';
 import { signIn, useSession } from '../../state/session';
 import {
   celebrateAtom,
-  decisionsHideSignedAtom,
+  decisionsHideAnsweredAtom,
   motionAtom,
   timeDisplayAtom,
   type MotionSetting,
@@ -158,7 +158,7 @@ export default function SettingsPage() {
   const [motion, setMotion] = useAtom(motionAtom);
   const [timeDisplay, setTimeDisplay] = useAtom(timeDisplayAtom);
   const [celebrate, setCelebrate] = useAtom(celebrateAtom);
-  const [hideSigned, setHideSigned] = useAtom(decisionsHideSignedAtom);
+  const [hideAnswered, setHideAnswered] = useAtom(decisionsHideAnsweredAtom);
 
   const roles = status
     ? [
@@ -290,14 +290,14 @@ export default function SettingsPage() {
             {status?.isAdmin ? (
               <SwitchRow>
                 <SettingText
-                  id="hide-signed-label"
-                  title="Hide decisions I signed"
-                  hint="Keep the Decisions queue to what still needs you."
+                  id="hide-answered-label"
+                  title="Hide decisions I answered"
+                  hint="Signed or rejected: keep the Decisions queue to what still needs you."
                 />
                 <Switch
-                  checked={hideSigned}
-                  onChange={(_, v) => setHideSigned(v)}
-                  slotProps={{ input: { 'aria-labelledby': 'hide-signed-label' } }}
+                  checked={hideAnswered}
+                  onChange={(_, v) => setHideAnswered(v)}
+                  slotProps={{ input: { 'aria-labelledby': 'hide-answered-label' } }}
                 />
               </SwitchRow>
             ) : null}

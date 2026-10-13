@@ -127,7 +127,7 @@ describe('Decisions: phases and actions', () => {
     expect(screen.queryByRole('button', { name: /First signature/ })).toBeNull();
     expect(screen.queryByText('Unusual approval route')).toBeNull();
     expect(screen.queryByText('Clean up stale invites')).toBeNull();
-    expect(screen.queryByText('Hide what I signed')).toBeNull();
+    expect(screen.queryByText('Hide what I answered')).toBeNull();
     // The waiting nomination is still listed.
     expect(await screen.findByText('Wren Waiting')).toBeInTheDocument();
     // Decisions isn't in their navigation, so the page offers Back.
@@ -947,19 +947,19 @@ describe('Decisions: navigation and filters', () => {
     ).toBeVisible();
   });
 
-  it('hides what I signed when asked', async () => {
+  it('hides what I answered when asked', async () => {
     const u = user();
     await openPage('admin');
     expect(await screen.findByRole('article', { name: /Uma Urgent/ })).toBeInTheDocument();
-    await u.click(screen.getByRole('switch', { name: 'Hide what I signed' }));
+    await u.click(screen.getByRole('switch', { name: 'Hide what I answered' }));
     expect(screen.queryByRole('article', { name: /Uma Urgent/ })).toBeNull();
-    expect(screen.getByText(/2 decisions you signed are hidden/)).toBeVisible();
-    await u.click(screen.getByRole('button', { name: 'Show the ones I signed' }));
+    expect(screen.getByText(/2 decisions you answered are hidden/)).toBeVisible();
+    await u.click(screen.getByRole('button', { name: 'Show the ones I answered' }));
     expect(await screen.findByRole('article', { name: /Uma Urgent/ })).toBeInTheDocument();
     // The button went with its note: focus is on the switch it turned off, not on the page.
-    expect(screen.queryByRole('button', { name: 'Show the ones I signed' })).toBeNull();
-    expect(screen.getByRole('switch', { name: 'Hide what I signed' })).toHaveFocus();
-    expect(screen.getByRole('switch', { name: 'Hide what I signed' })).not.toBeChecked();
+    expect(screen.queryByRole('button', { name: 'Show the ones I answered' })).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Hide what I answered' })).toHaveFocus();
+    expect(screen.getByRole('switch', { name: 'Hide what I answered' })).not.toBeChecked();
   });
 
   it('shows the empty state when nothing is waiting', async () => {
