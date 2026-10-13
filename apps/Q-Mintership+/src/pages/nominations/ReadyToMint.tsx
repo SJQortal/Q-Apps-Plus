@@ -10,7 +10,7 @@
  * through its owners (one small name search, cached), never by reading
  * every row's name.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
@@ -28,6 +28,7 @@ import {
   type ReadyToMint,
 } from '../../data/readyToMint';
 import type { AccountInfo } from '../../data/types';
+import { useInView } from '../../hooks/useInView';
 import type { UseQueryResult } from '../../hooks/useQuery';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { nominatePath } from '../../routes/paths';
@@ -83,7 +84,14 @@ export function ReadyToMintSection({
     setShown(READY_PAGE);
   }
   const visible = people ? people.slice(0, shown) : [];
-  const visibleKey = visible.join(',');
+  // Rows that have come near the screen: only theirs are read.
+  const [near, setNear] = useState<ReadonlySet<string>>(() => new Set());
+  const onNear = useCallback(
+    (address: string) =>
+      setNear((current) => (current.has(address) ? current : new Set(current).add(address))),
+    []
+  );
+  const visibleKey = visible.filter((address) => near.has(address)).join(',');
 
   // Only the rows on screen are read, six reads at a time; leaving stops new reads.
   // Each refresh of the list (every minute, or Refresh) reads again the rows whose
@@ -176,6 +184,7 @@ export function ReadyToMintSection({
               canNominate={canNominate}
               canSupport={canSupport}
               onSupport={onSupport}
+              onNear={onNear}
             />
           ))}
         </Box>
@@ -251,8 +260,11 @@ function ReadyRow({
   canNominate,
   canSupport,
   onSupport,
+  onNear,
 }: {
   address: string;
+  /** Called once the row comes near the screen, so its account and name are read. */
+  onNear: (address: string) => void;
   /** Their open nomination, null for none, undefined while the nominations load. */
   nomination: Nomination | null | undefined;
   me: string;
@@ -261,6 +273,11 @@ function ReadyRow({
   onSupport: (n: Nomination) => void;
 }) {
   const navigate = useNavigate();
+  const [row, setRow] = useState<HTMLLIElement | null>(null);
+  const near = useInView(row);
+  useEffect(() => {
+    if (near) onNear(address);
+  }, [near, onNear, address]);
   const account = useStoredValue<AccountInfo>(`account:${address}`);
   const name = useStoredValue<string | null>(`name:${address}`);
   const former = useStoredValue<FormerMember | null>(formerKey(address)).data ?? null;
@@ -336,6 +353,7 @@ function ReadyRow({
 
   return (
     <Box
+      ref={setRow}
       component="li"
       sx={{
         display: 'flex',

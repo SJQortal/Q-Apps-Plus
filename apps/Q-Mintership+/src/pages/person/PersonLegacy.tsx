@@ -2,6 +2,7 @@
  * A person's cards from the original app. Old cards only say who they are
  * about inside their body, so this reads the newest cards (plus any the
  * person posted themselves) and offers to look further back, 100 at a time.
+ * The first look starts only once the section scrolls near the screen.
  * Every body read is kept for the session and shared with History.
  */
 import { useEffect, useState } from 'react';
@@ -12,6 +13,7 @@ import {
   loadLegacyFor,
   type LegacyMatches,
 } from '../../data/legacy';
+import { useInView } from '../../hooks/useInView';
 import { useQuery } from '../../hooks/useQuery';
 import { ErrorState, ListSkeleton, TruncatedNote } from '../../components/common/states';
 import { Section } from '../../components/common/Section';
@@ -20,8 +22,12 @@ import { LegacyCardItem } from '../history/parts/LegacyCardItem';
 
 export function PersonLegacy({ address, name }: { address: string; name: string | null }) {
   const [scan, setScan] = useState(LEGACY_SCAN_FIRST);
-  const query = useQuery(`legacy:for:${address}:${scan}`, (force) =>
-    loadLegacyFor({ address, name }, scan, { force })
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+  const near = useInView(node);
+  const query = useQuery(
+    `legacy:for:${address}:${scan}`,
+    (force) => loadLegacyFor({ address, name }, scan, { force }),
+    { enabled: near }
   );
   // Keep what was found while looking further back.
   const [previous, setPrevious] = useState<LegacyMatches | undefined>(undefined);
@@ -93,7 +99,7 @@ export function PersonLegacy({ address, name }: { address: string; name: string 
 
   return (
     <Section title="From the original app" id="person-original">
-      {body}
+      <Box ref={setNode}>{body}</Box>
     </Section>
   );
 }

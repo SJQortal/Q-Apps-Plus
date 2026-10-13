@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
@@ -444,4 +444,33 @@ describe('person page words', () => {
     expect(isInvalidAddress(new CoreHttpError('/addresses/Q1', 500, 'boom'))).toBe(false);
     expect(isInvalidAddress(new Error('invalid address'))).toBe(false);
   });
+
+  it('reads the original app’s cards only once that section comes near the screen', async () => {
+    let trigger: (() => void) | null = null;
+    class FarAway {
+      constructor(private callback: IntersectionObserverCallback) {}
+      observe() {
+        trigger = () =>
+          this.callback(
+            [{ isIntersecting: true } as IntersectionObserverEntry],
+            this as unknown as IntersectionObserver
+          );
+      }
+      disconnect() {}
+      unobserve() {}
+      takeRecords() {
+        return [];
+      }
+    }
+    vi.stubGlobal('IntersectionObserver', FarAway);
+    await visit(ADDR.kicked, 'nominator');
+    await section('From the original app');
+    const cardReads = () => fetchCallsFor(/\/arbitrary\/(BLOG_POST|resources\/search\w*\?[^ ]*Minter-board-card)/);
+    expect(cardReads()).toEqual([]);
+    await waitFor(() => expect(trigger).not.toBeNull());
+    trigger!();
+    await waitFor(() => expect(cardReads().length).toBeGreaterThan(0));
+  });
 });
+
+afterEach(() => vi.unstubAllGlobals());
