@@ -17,6 +17,7 @@ import { PROPOSE_NOMINATION } from '../../constants/words';
 import { renderPage } from '../../test/render';
 import { fetchCalls, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { ADDR, installWorld } from '../../test/world';
+import { addTargetShift } from '../../../e2e/world.mjs';
 import { decisionPath } from '../../routes/paths';
 import HomePage from './HomePage';
 
@@ -345,6 +346,30 @@ describe('Home: the Minter Admin role', () => {
     expect(await within(dialog).findByText(/cancelled/i, {}, T)).toBeInTheDocument();
     expect(qortalCallsFor('REMOVE_GROUP_ADMIN')).toHaveLength(1);
     expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
+  });
+
+  it('a step-down that would tip a waiting decision over needs “I’ve checked these” before Hub', async () => {
+    // 21 admin rows, 9 needed: stepping down leaves 20, and 8 are enough for Mia Met's invite.
+    await renderPage(<HomePage />, { persona: 'adminL4', setup: (world) => addTargetShift(world) });
+    const role = await screen.findByRole('region', { name: 'Your Minter Admin role' }, T);
+    const button = within(role).getByRole('button', { name: 'Step down as Minter Admin' });
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+    const dialog = await screen.findByRole('dialog', { name: 'Step down as Minter Admin' }, T);
+    const note = within(dialog).getByRole('note');
+    expect(note).toHaveTextContent(
+      /^If this passes, MINTER has 20 admin seats and the target drops from 9 to 8 signatures\./
+    );
+    expect(within(note).getByText('Add to MINTER: Mia Met (8 of 9)')).toBeVisible();
+    // Not without the tick: Hub isn't asked, and the box takes focus.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')).toHaveLength(0);
+    const box = within(dialog).getByRole('checkbox', { name: 'I’ve checked these' });
+    expect(box).toHaveFocus();
+    await userEvent.click(box);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(dialog).findByText(/cancelled/i, {}, T)).toBeInTheDocument();
+    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')).toHaveLength(1);
   });
 
   it('offers nothing about the role to someone outside MINTER', async () => {

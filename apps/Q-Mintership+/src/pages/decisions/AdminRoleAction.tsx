@@ -6,8 +6,9 @@
  * the decision instead.
  *
  * Reads: MINTER's pending list (one GET, shared with the Decisions queue),
- * plus the group, admins and tip Home already has. The dialog and the
- * write code load the first time it opens.
+ * plus the group, admins and tip Home already has; for a step-down, the
+ * Decisions queue an admin's Home already loads (what it would tip over).
+ * The dialog and the write code load the first time it opens.
  */
 import { lazy, Suspense, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -17,7 +18,7 @@ import { DoneChip } from '../../components/decision/DecisionParts';
 import { Card, Section } from '../../components/common/Section';
 import { MINTER_GROUP_ID } from '../../data/constants';
 import { getPending } from '../../data/txs';
-import { useAdmins, useChainNow, useGroupInfo } from '../../hooks/useData';
+import { useAdmins, useChainNow, useDecisions, useGroupInfo } from '../../hooks/useData';
 import { useQuery } from '../../hooks/useQuery';
 import { decisionPath } from '../../routes/paths';
 import { ADMIN_CHANGE_TITLE, ownAdminRole, type OwnAdminRole } from '../../rules/adminChange';
@@ -95,6 +96,10 @@ export function AdminRoleAction({ status, layout = 'inline' }: AdminRoleActionPr
   const group = useGroupInfo();
   const admins = useAdmins();
   const chain = useChainNow();
+  // Stepping down moves the target for every waiting decision: the dialog shows
+  // what it would tip over (the queue an admin's Home already loads).
+  const stepDown = mode === 'stepDown' && Boolean(signer);
+  const queue = useDecisions(stepDown);
   const [open, setOpen] = useState(false);
   if (!mode || !signer) return null;
 
@@ -102,8 +107,9 @@ export function AdminRoleAction({ status, layout = 'inline' }: AdminRoleActionPr
     group.data && admins.data
       ? approvalsNeeded(group.data.approvalThreshold, admins.data.adminCount)
       : null;
+  // Not before the queue is in for a step-down: the dialog would open without it.
   const facts =
-    group.data && chain.data && needed !== null
+    group.data && chain.data && needed !== null && (!stepDown || queue.data)
       ? {
           needed,
           maximumBlockDelay: group.data.maximumBlockDelay,
@@ -151,6 +157,7 @@ export function AdminRoleAction({ status, layout = 'inline' }: AdminRoleActionPr
       signer={signer}
       name={status.name}
       facts={facts}
+      queue={stepDown ? (queue.data ?? null) : null}
       onClose={() => setOpen(false)}
     />
   ) : null;
