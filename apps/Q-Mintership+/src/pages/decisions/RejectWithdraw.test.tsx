@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage, type RenderPageOptions } from '../../test/render';
-import { ADDR } from '../../test/world';
+import { ADDR, TIP } from '../../test/world';
 import { addRejections } from '../../../e2e/world.mjs';
 import { mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { base58Decode, base58Encode } from '../../qortal/base58';
@@ -45,6 +45,35 @@ describe('Decisions: Reject and Withdraw my signature', () => {
     const late = await screen.findByRole('article', { name: /Lars Late/ });
     expect(within(late).queryByRole('button', { name: /^Reject: / })).toBeNull();
   });
+
+  it('names an admin change its subject proposed as its card does', async () => {
+    const u = user();
+    await openPage('admin', (world) => {
+      const remove = world.pending.find((t: { type: string }) => t.type === 'REMOVE_GROUP_ADMIN');
+      // Juniper L4 steps down (in a block, so it can be answered).
+      world.pending.push({
+        ...remove,
+        signature: base58Encode(new Uint8Array(64).fill(31)),
+        creatorAddress: ADDR.adminL4,
+        admin: ADDR.adminL4,
+        blockHeight: TIP - 50,
+      });
+    });
+    const steps = await screen.findByRole('article', {
+      name: 'Step down as Minter Admin, Juniper L4',
+    });
+    await u.click(within(steps).getByRole('button', { name: /^Reject: / }));
+    let dialog = await screen.findByRole('dialog', {}, T);
+    expect(within(dialog).getByText('Step down as Minter Admin: Juniper L4')).toBeVisible();
+    expect(within(dialog).queryByText(/^Remove a Minter Admin/)).toBeNull();
+    await u.click(within(dialog).getByRole('button', { name: 'Not now' }));
+    const pia = await screen.findByRole('article', { name: 'Become a Minter Admin, Pia Promote' });
+    await u.click(await within(pia).findByRole('button', { name: /^Reject: / }, T));
+    dialog = await screen.findByRole('dialog', {}, T);
+    expect(
+      await within(dialog).findByText('Become a Minter Admin: Pia Promote', {}, T)
+    ).toBeVisible();
+  }, 20_000);
 
   it('is read-only for members: no Reject, no Withdraw', async () => {
     await openPage('nominator');

@@ -183,6 +183,8 @@ export interface DecidedEntry {
   signature: string;
   kind: DecisionKind;
   subject: string | null;
+  /** Who proposed it, when known: an admin change about oneself has its own title. */
+  creatorAddress: string | null;
   outcome: Outcome;
   /** The block Core decided it in, when known. */
   height: number | null;
@@ -238,7 +240,10 @@ export function adminChanges(
     decisions: Decision[];
     nominations: Nomination[] | null;
     me: string;
-    outcomes: ReadonlyMap<string, Pick<TxRow, 'approvalStatus' | 'approvalHeight'> | null>;
+    outcomes: ReadonlyMap<
+      string,
+      Pick<TxRow, 'approvalStatus' | 'approvalHeight' | 'creatorAddress'> | null
+    >;
   }
 ): AdminChanges {
   const before = previous.decisions ? new Set(previous.decisions.map((d) => d.signature)) : null;
@@ -260,6 +265,7 @@ export function adminChanges(
         signature: d.signature,
         kind: d.kind,
         subject: d.subject,
+        creatorAddress: d.creatorAddress ?? null,
         outcome: 'expired',
         height: d.window?.expiresAtHeight ?? null,
       });
@@ -272,6 +278,7 @@ export function adminChanges(
         signature: d.signature,
         kind: d.kind,
         subject: d.subject,
+        creatorAddress: tx?.creatorAddress ?? null,
         outcome,
         height: typeof tx?.approvalHeight === 'number' ? tx.approvalHeight : null,
       });

@@ -474,6 +474,7 @@ describe('summary', () => {
           signature: 'd',
           kind: 'invite' as const,
           subject: null,
+          creatorAddress: null,
           outcome: 'approved' as const,
           height: 1,
         },
