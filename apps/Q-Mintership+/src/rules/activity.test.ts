@@ -5,6 +5,7 @@ import {
   computeActivity,
   computePulse,
   decisionSpan,
+  expiredDoubles,
   levelSpread,
   median,
   sortActivity,
@@ -496,6 +497,152 @@ describe('computeActivity', () => {
     // d1 and its own removal before; d2 after; not 'away' or the add itself.
     expect(r).toMatchObject({ current: true, adminSince: 150_000, adminAgain: true, eligible: 3 });
     expect(admin(run({ decisions, currentAdmins: ['Qa', 'Qr'] }), 'Qa').adminAgain).toBe(false);
+  });
+});
+
+describe('doubles that expired', () => {
+  const addAdmin = (
+    signature: string,
+    h: number,
+    status: TxRow['approvalStatus'],
+    approvalHeight: number,
+    member: string,
+    extra: Partial<TxRow> = {}
+  ) =>
+    decision(signature, h, status, approvalHeight, {
+      type: 'ADD_GROUP_ADMIN',
+      member,
+      invitee: undefined,
+      ...extra,
+    });
+  const removeAdmin = (
+    signature: string,
+    h: number,
+    status: TxRow['approvalStatus'],
+    approvalHeight: number,
+    who: string
+  ) =>
+    decision(signature, h, status, approvalHeight, {
+      type: 'REMOVE_GROUP_ADMIN',
+      admin: who,
+      invitee: undefined,
+    });
+
+  it('an addition of someone already a Minter Admin is neither eligible nor a miss when left alone', () => {
+    const decisions = [
+      addAdmin('c-first', 118_000, 'APPROVED', 120_000, 'Qc'),
+      // Confirmed after the first one made Qc a Minter Admin.
+      addAdmin('c-again', 121_000, 'EXPIRED', 131_081, 'Qc'),
+      decision('invite', 140_000, 'EXPIRED', 150_081),
+    ];
+    const approvals = [approval('Qa', 'c-again', 121_100)];
+    const report = run({ decisions, approvals, currentAdmins: ['Qa', 'Qb', 'Qc'] });
+    // Qb left both expired ones alone: only the invite is a miss.
+    expect(admin(report, 'Qb')).toMatchObject({ eligible: 2, answered: 0, missed: 1 });
+    // A signature on the double still counts.
+    expect(admin(report, 'Qa')).toMatchObject({ eligible: 3, signed: 1, missed: 1 });
+  });
+
+  it('the real case: a second "Become a Minter Admin" that kept waiting after the first passed', () => {
+    const decisions = [
+      addAdmin('first', 120_000, 'APPROVED', 124_000, 'Qm', { creatorAddress: 'Qm' }),
+      addAdmin('second', 120_050, 'EXPIRED', 130_131, 'Qm', { creatorAddress: 'Qm' }),
+    ];
+    const report = run({ decisions, currentAdmins: ['Qa', 'Qb', 'Qm'] });
+    // The first one passed without Qb; the second one ran out as the app said it would.
+    expect(admin(report, 'Qb')).toMatchObject({ eligible: 1, missed: 0 });
+    // Qm wasn't an admin while the first one waited, and the second one counts for no one.
+    expect(admin(report, 'Qm')).toMatchObject({ eligible: 0, missed: 0, proposed: 2 });
+  });
+
+  it('an addition is a miss when they became a Minter Admin only after its last useful block', () => {
+    const decisions = [
+      addAdmin('d-early', 120_000, 'EXPIRED', 130_081, 'Qd'),
+      addAdmin('d-later', 135_000, 'APPROVED', 136_000, 'Qd'),
+    ];
+    const report = run({ decisions, currentAdmins: ['Qa', 'Qb', 'Qd'] });
+    expect(admin(report, 'Qb')).toMatchObject({ eligible: 2, missed: 1 });
+  });
+
+  it('a removal of someone who isn’t a Minter Admin is neither eligible nor a miss when left alone', () => {
+    const decisions = [
+      removeAdmin('rm-e', 120_000, 'APPROVED', 121_000, 'Qe'),
+      // Confirmed after Qe's removal: there's nothing to remove.
+      removeAdmin('rm-e-again', 125_000, 'EXPIRED', 135_081, 'Qe'),
+      // A real removal that expired is a miss as usual.
+      removeAdmin('rm-f', 140_000, 'EXPIRED', 150_081, 'Qf'),
+    ];
+    const approvals = [approval('Qa', 'rm-e-again', 125_100, false)];
+    const report = run({ decisions, approvals, currentAdmins: ['Qa', 'Qb', 'Qf'] });
+    expect(admin(report, 'Qb')).toMatchObject({ eligible: 2, missed: 1 });
+    // A rejection of the double is an answer, as on any decision.
+    expect(admin(report, 'Qa')).toMatchObject({
+      eligible: 3,
+      answered: 1,
+      rejected: 1,
+      missed: 1,
+    });
+  });
+
+  it('a later copy confirmed while an earlier one could still pass is the double; the earlier one counts', () => {
+    const decisions = [
+      addAdmin('g-first', 120_000, 'EXPIRED', 130_081, 'Qg'),
+      addAdmin('g-again', 125_000, 'EXPIRED', 135_081, 'Qg'),
+      // Confirmed after both ran out: judged on its own.
+      addAdmin('g-after', 140_000, 'EXPIRED', 150_081, 'Qg'),
+    ];
+    const approvals = [approval('Qa', 'g-again', 125_100)];
+    const report = run({ decisions, approvals });
+    expect(admin(report, 'Qb')).toMatchObject({ eligible: 2, missed: 2 });
+    expect(admin(report, 'Qa')).toMatchObject({ eligible: 3, signed: 1, missed: 2 });
+  });
+
+  it('a copy confirmed after the earlier one was decided is not a double', () => {
+    const decisions = [
+      removeAdmin('rm-first', 120_000, 'REJECTED', 121_000, 'Qa'),
+      removeAdmin('rm-again', 122_000, 'EXPIRED', 132_081, 'Qa'),
+    ];
+    expect(admin(run({ decisions }), 'Qb')).toMatchObject({ eligible: 2, missed: 1 });
+  });
+
+  it('orders copies confirmed in the same block by time, then signature', () => {
+    const span = (signature: string, timestamp: number) =>
+      decisionSpan(addAdmin(signature, 120_000, 'EXPIRED', 130_081, 'Qx', { timestamp }), MAX, E)!;
+    const never = () => [];
+    expect(expiredDoubles([span('a', 2), span('b', 1)], never)).toEqual(new Set(['a']));
+    expect(expiredDoubles([span('b', 1), span('a', 1)], never)).toEqual(new Set(['b']));
+  });
+
+  it('only admin changes can be doubles, and only copies of the same kind', () => {
+    const spans = [
+      decision('i1', 120_000, 'EXPIRED', 130_081, { invitee: 'Qn' }),
+      decision('i2', 125_000, 'EXPIRED', 135_081, { invitee: 'Qn' }),
+      addAdmin('add-n', 120_000, 'EXPIRED', 130_081, 'Qn'),
+      removeAdmin('rm-n', 125_000, 'EXPIRED', 135_081, 'Qn'),
+    ].map((tx) => decisionSpan(tx, MAX, E)!);
+    // Qn is a Minter Admin throughout, so only the addition changes nothing.
+    const always = () => [[Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY] as const];
+    expect(expiredDoubles(spans, always)).toEqual(new Set(['add-n']));
+  });
+
+  it('a double still waiting counts as before: once an admin has answered it', () => {
+    const decisions = [
+      addAdmin('c-first', 118_000, 'APPROVED', 120_000, 'Qc'),
+      decision('c-open', 195_000, 'PENDING', undefined, {
+        type: 'ADD_GROUP_ADMIN',
+        member: 'Qc',
+        invitee: undefined,
+      }),
+    ];
+    const approvals = [approval('Qa', 'c-open', 195_100)];
+    const report = run({ decisions, approvals, currentAdmins: ['Qa', 'Qb', 'Qc'] });
+    expect(admin(report, 'Qb')).toMatchObject({ eligible: 1, missed: 0 });
+    expect(admin(report, 'Qa')).toMatchObject({ eligible: 2, signed: 1 });
+  });
+
+  it('nothing on the Unusual approval route is a double, as on Decisions', () => {
+    const decisions = [addAdmin('u', 121_000, 'EXPIRED', 131_081, 'Qa', { txGroupId: 4242 })];
+    expect(admin(run({ decisions }), 'Qb')).toMatchObject({ eligible: 1, missed: 1 });
   });
 });
 
