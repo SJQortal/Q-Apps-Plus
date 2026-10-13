@@ -23,6 +23,7 @@ import RemoveCircleOutlineOutlinedIcon from '@mui/icons-material/RemoveCircleOut
 import { FeeNote } from '../../components/common/FeeNote';
 import { SignaturePrefix } from '../../components/common/SignaturePrefix';
 import { friendlyError } from '../../utils/friendlyError';
+import { focusDialogTitle } from '../../utils/focus';
 import { ResponsiveDialog } from '../../components/common/ResponsiveDialog';
 import type { GroupTxType } from '../../data/types';
 import { HUB_DIALOGS, HUB_DIALOG_SECONDS } from '../../writes/explain';
@@ -184,6 +185,8 @@ export function BulkDialog(props: BulkDialogProps) {
   };
 
   const start = async () => {
+    // Its buttons go while it runs: focus waits on the title, never on the page.
+    focusDialogTitle(document.activeElement);
     setPhase('running');
     setStates(items.map(() => ({})));
     setLastDone(-1);

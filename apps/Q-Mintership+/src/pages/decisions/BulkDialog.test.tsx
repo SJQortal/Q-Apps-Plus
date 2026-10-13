@@ -34,6 +34,8 @@ describe('BulkDialog: what a screen reader hears', () => {
     const dialog = screen.getByRole('dialog', { name: 'Sign several' });
     const live = within(dialog).getByRole('status');
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    // Its buttons go while it runs: focus waits on the title, not on the page.
+    expect(within(dialog).getByRole('heading', { name: 'Sign several' })).toHaveFocus();
 
     act(() => report(0, null, 'waitingForHub'));
     expect(live).toHaveTextContent('1. Add to MINTER: Ada: Waiting for you in Hub…');

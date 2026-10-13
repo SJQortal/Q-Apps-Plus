@@ -52,6 +52,22 @@ describe('HubStepDialog: what a screen reader hears', () => {
     expect(within(dialog).getByRole('button', { name: 'Close' })).toHaveFocus();
   });
 
+  it('while it runs (no buttons), focus waits on its title, not on the page or the frame', async () => {
+    const u = userEvent.setup();
+    const answer = deferred<WriteOutcome>();
+    const dialog = open(() => answer.promise);
+    within(dialog).getByRole('button', { name: 'Continue to Hub' }).focus();
+    await u.keyboard('{Enter}');
+    expect(within(dialog).queryByRole('button', { name: 'Continue to Hub' })).toBeNull();
+    const title = within(dialog).getByRole('heading', { name: 'Sign this decision' });
+    expect(title).toHaveFocus();
+    // Still there a moment later: nothing pulls it back to the dialog's frame.
+    await act(() => new Promise((r) => setTimeout(r, 120)));
+    expect(title).toHaveFocus();
+    answer.resolve({ status: 'declined' });
+    expect(await within(dialog).findByRole('button', { name: 'Close' })).toHaveFocus();
+  });
+
   it('makes a failure an alert, and focuses the button that does not send again', async () => {
     const u = userEvent.setup();
     const dialog = open(async () => ({ status: 'failed', message: 'Core said no.' }));

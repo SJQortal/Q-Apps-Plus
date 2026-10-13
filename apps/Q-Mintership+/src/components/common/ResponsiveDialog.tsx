@@ -159,6 +159,8 @@ export function ResponsiveDialog({
             pr: phone && onClose ? 1 : 3,
             fontSize: '1.125rem',
             fontWeight: 700,
+            // Focused by the app while a write runs (utils/focus.ts), not by the user: no ring.
+            '&:focus': { outline: 'none' },
             ...(compactTitle ? { py: 0.5 } : {}),
           }}
         >
