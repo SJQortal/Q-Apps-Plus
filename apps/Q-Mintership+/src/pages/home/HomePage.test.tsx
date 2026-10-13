@@ -342,6 +342,36 @@ describe('Home: the Minter Admin role', () => {
     ).toBeVisible();
   });
 
+  it('suggests level 5+ to a member below it, without stopping them', async () => {
+    await renderPage(<HomePage />, { persona: 'learner' });
+    const role = await screen.findByRole('region', { name: 'Minter Admins' }, T);
+    expect(
+      within(role).getByText(
+        'Level 5+ is suggested for Minter Admins, and you’re level 2. You can still propose yourself.'
+      )
+    ).toBeVisible();
+    // A note, not a block: the button works as for anyone.
+    const become = within(role).getByRole('button', { name: 'Become a Minter Admin' });
+    await waitFor(() => expect(become).toBeEnabled());
+    await userEvent.click(become);
+    const dialog = await screen.findByRole('dialog', { name: 'Become a Minter Admin' }, T);
+    expect(
+      within(dialog).getByText(/^Level 5\+ is suggested for Minter Admins, and you’re level 2\./)
+    ).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Continue to Hub' })).toBeEnabled();
+  });
+
+  it('says nothing about the level to a member at level 5 or above', async () => {
+    await renderPage(<HomePage />, { persona: 'nominator' });
+    const role = await screen.findByRole('region', { name: 'Minter Admins' }, T);
+    const become = within(role).getByRole('button', { name: 'Become a Minter Admin' });
+    await waitFor(() => expect(become).toBeEnabled());
+    expect(within(role).queryByText(/is suggested for Minter Admins/)).toBeNull();
+    await userEvent.click(become);
+    const dialog = await screen.findByRole('dialog', { name: 'Become a Minter Admin' }, T);
+    expect(within(dialog).queryByText(/is suggested for Minter Admins/)).toBeNull();
+  });
+
   it('says when a member’s own proposal is already waiting, and links to it', async () => {
     const { world } = await renderPage(<HomePage />, { persona: 'promote' });
     const role = await screen.findByRole('region', { name: 'Minter Admins' }, T);

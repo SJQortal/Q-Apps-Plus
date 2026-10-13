@@ -1,7 +1,8 @@
 /**
  * The signed-in account's own admin-role action, on their Home and their
  * own person page: "Become a Minter Admin" for a MINTER member who isn't
- * one, "Step down as Minter Admin" for an admin. When such a proposal is
+ * one (suggested from level 5: below it, a note says so beside the
+ * button), "Step down as Minter Admin" for an admin. When such a proposal is
  * already waiting (from this app or any other), it says so and links to
  * the decision instead.
  *
@@ -21,7 +22,12 @@ import { getPending } from '../../data/txs';
 import { useAdmins, useChainNow, useDecisions, useGroupInfo } from '../../hooks/useData';
 import { useQuery } from '../../hooks/useQuery';
 import { decisionPath } from '../../routes/paths';
-import { ADMIN_CHANGE_TITLE, ownAdminRole, type OwnAdminRole } from '../../rules/adminChange';
+import {
+  ADMIN_CHANGE_TITLE,
+  becomeLevelNote,
+  ownAdminRole,
+  type OwnAdminRole,
+} from '../../rules/adminChange';
 import { decisionSubject } from '../../rules/decision';
 import type { MyStatus } from '../../rules/status';
 import { approvalsNeeded } from '../../rules/threshold';
@@ -117,6 +123,10 @@ export function AdminRoleAction({ status, layout = 'inline' }: AdminRoleActionPr
         }
       : null;
 
+  // Become is suggested from level 5: below it, a note beside the button, never a block.
+  const offered = !waiting && !(sent && sent.status !== 'failed');
+  const levelNote = mode === 'become' && offered ? becomeLevelNote(status.level) : null;
+
   const action = waiting ? (
     <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
       <Typography variant="body2" role="status" sx={{ flex: '1 1 220px' }}>
@@ -156,6 +166,7 @@ export function AdminRoleAction({ status, layout = 'inline' }: AdminRoleActionPr
       mode={mode}
       signer={signer}
       name={status.name}
+      level={status.level}
       facts={facts}
       queue={stepDown ? (queue.data ?? null) : null}
       onClose={() => setOpen(false)}
@@ -166,6 +177,11 @@ export function AdminRoleAction({ status, layout = 'inline' }: AdminRoleActionPr
     return (
       <>
         {action}
+        {levelNote ? (
+          <Typography variant="body2" color="text.secondary" sx={{ flex: '1 1 220px' }}>
+            {levelNote}
+          </Typography>
+        ) : null}
         {dialog}
       </>
     );
@@ -178,6 +194,11 @@ export function AdminRoleAction({ status, layout = 'inline' }: AdminRoleActionPr
         <Typography variant="body2" color="text.secondary">
           {aboutText(mode, needed)}
         </Typography>
+        {levelNote ? (
+          <Typography variant="body2" color="text.secondary">
+            {levelNote}
+          </Typography>
+        ) : null}
         {action}
       </Card>
       {dialog}

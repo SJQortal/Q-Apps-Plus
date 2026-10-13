@@ -3,6 +3,7 @@
  *
  * - "Become a Minter Admin": a MINTER member proposes themselves. Only
  *   Minter Admins sign, so it is one Hub step; then the Minter Admins decide.
+ *   Below level 5 a note says level 5+ is suggested; it doesn't stop them.
  * - "Step down as Minter Admin": an admin proposes their own removal, and
  *   signs it straight after like any admin proposal. It still needs the
  *   other Minter Admins' signatures. Like any admin removal it moves the
@@ -25,6 +26,7 @@ import { postComment } from '../../writes/comments';
 import {
   ADMIN_CHANGE_TITLE,
   OWN_ADMIN_ROLE_LEAD,
+  becomeLevelNote,
   type OwnAdminRole,
 } from '../../rules/adminChange';
 import { decisionTitle } from '../../rules/decision';
@@ -44,6 +46,8 @@ export interface AdminRoleDialogProps {
   signer: Signer | null;
   /** Their own registered name, if any. */
   name: string | null;
+  /** Their level: below 5, becoming one says level 5+ is suggested. */
+  level?: number;
   facts: ProposalFacts;
   /**
    * The waiting decisions, for a step-down: what it would do to the target
@@ -59,6 +63,7 @@ export function AdminRoleDialog({
   mode,
   signer,
   name,
+  level,
   facts,
   queue,
   onClose,
@@ -79,6 +84,7 @@ export function AdminRoleDialog({
     return `${decisionTitle(d)}: ${displayName(known, d.subject)}`;
   };
   const become = mode === 'become';
+  const levelNote = become && level !== undefined ? becomeLevelNote(level) : null;
   const text = statement.trim();
   const followUp =
     become && name && text
@@ -122,6 +128,11 @@ export function AdminRoleDialog({
               Minter Admins sign MINTER’s decisions: new minters, removals and bans, and changes to
               the Minter Admins. It works best when you can look at Decisions every few days.
             </Typography>
+            {levelNote ? (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {levelNote}
+              </Typography>
+            ) : null}
             {name ? (
               <TextField
                 label="A short statement (optional)"

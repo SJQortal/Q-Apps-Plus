@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
@@ -266,6 +266,31 @@ describe('Person page: one’s own admin role', () => {
     await visit(ADDR.learner, 'nominator');
     await screen.findByRole('heading', { level: 2, name: PEOPLE.learner.name as string });
     expect(screen.queryByRole('button', { name: 'Become a Minter Admin' })).toBeNull();
+  });
+
+  it('suggests level 5+ beside Become below it, and nothing from it', async () => {
+    const own = await visit(ADDR.learner, 'learner');
+    const become = await screen.findByRole(
+      'button',
+      { name: 'Become a Minter Admin' },
+      { timeout: 3000 }
+    );
+    expect(
+      screen.getByText(
+        'Level 5+ is suggested for Minter Admins, and you’re level 2. You can still propose yourself.'
+      )
+    ).toBeVisible();
+    // A note, not a block.
+    await waitFor(() => expect(become).toBeEnabled());
+    own.unmount();
+    await visit(ADDR.nominator, 'nominator');
+    const again = await screen.findByRole(
+      'button',
+      { name: 'Become a Minter Admin' },
+      { timeout: 3000 }
+    );
+    await waitFor(() => expect(again).toBeEnabled());
+    expect(screen.queryByText(/is suggested for Minter Admins/)).toBeNull();
   });
 
   it('offers Step down as Minter Admin on an admin’s own page', async () => {
