@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { addComments } from '../../../e2e/world.mjs';
+import { addComments, answerCore } from '../../../e2e/world.mjs';
 import { renderPage } from '../../test/render';
-import { fetchCallsFor, mockQortalRequest, qortalCallsFor } from '../../test/setup';
+import { fetchCallsFor, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
+import { invalidate } from '../../data/query';
 import { ADDR, NOW } from '../../test/world';
 import { commentTarget } from '../../data/commentThread';
 import { MUTED_NAMES_KEY, resetOptimisticComments } from '../../state/comments';
@@ -118,6 +119,36 @@ describe('CommentsSection', () => {
     expect(
       fetchCallsFor('/arbitrary/JSON/').filter((p) => p.includes('qmp-comment-'))
     ).toHaveLength(31);
+  });
+
+  it('Show more stays pressable while it reads, and again after a read that failed', async () => {
+    const user = userEvent.setup();
+    const { world } = await show('learner', { extra: 23 });
+    await user.click(
+      await screen.findByRole('button', { name: /^Comments \(31\): / }, { timeout: 4000 })
+    );
+    const panel = await region();
+    await within(panel).findByText('Extra comment 0');
+    // The next read fails (the rows are read again, and the node says no).
+    mockFetchRoute('/arbitrary/resources/searchsimple', () => new Response('', { status: 500 }));
+    invalidate('comments:rows:');
+    invalidate('qdnsearch:');
+    const more = within(panel).getByRole('button', { name: 'Show more comments (11)' });
+    await user.click(more);
+    // Never disabled (that would drop focus), and focus is still on it.
+    expect(more).toBeEnabled();
+    expect(more).toHaveFocus();
+    await waitFor(() =>
+      expect(fetchCallsFor('/arbitrary/resources/searchsimple').length).toBeGreaterThan(1)
+    );
+    await act(() => new Promise((r) => setTimeout(r, 300)));
+    // The node answers again: a second press reads the next comments.
+    mockFetchRoute('/arbitrary/resources/searchsimple', (url: URL) => {
+      const answer = answerCore(world, url.pathname, url.searchParams);
+      return new Response(JSON.stringify(answer?.body ?? []), { status: answer?.status ?? 404 });
+    });
+    await user.click(within(panel).getByRole('button', { name: /^Show more comments/ }));
+    expect(await within(panel).findByText('Extra comment 22', {}, { timeout: 4000 })).toBeVisible();
   });
 
   it('Show anyway unfolds a hidden comment and moves focus to it', async () => {

@@ -106,6 +106,8 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
   const listRef = useRef<HTMLUListElement | null>(null);
   useEffect(() => {
     const before = shownBefore.current;
+    // A failed read lets Show more be pressed again.
+    if (before && query.isError && !query.data) shownBefore.current = null;
     if (!before || !query.data || !threads) return;
     shownBefore.current = null;
     const fresh = threads.find((t) => !before.has(t.comment.ref));
@@ -113,7 +115,7 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
       ? document.querySelector<HTMLElement>(`[data-comment="${fresh.comment.identifier}"]`)
       : listRef.current;
     if (target) focusElement(target);
-  }, [threads, query.data]);
+  }, [threads, query.data, query.isError]);
   const showMore = () => {
     // Stays enabled while it reads (a disabled button would drop focus); a second press waits.
     if (shownBefore.current) return;
