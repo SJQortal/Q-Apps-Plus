@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadDecisions } from '../data/decisions';
 import { ADDR, installWorld } from '../test/world';
-import { mockQortalRequest, qortalCallsFor } from '../test/setup';
+import { fetchCalls, mockQortalRequest, qortalCallsFor } from '../test/setup';
 import { myConsideringState } from '../rules/considering';
 import { guardConsidering } from './guards';
 import { publishConsidering } from './flows';
@@ -46,6 +46,16 @@ describe('publishConsidering', () => {
     });
     expect(getPendingWrite(writeKeys.considering(pending.slice(0, 40)))?.status).toBe('confirming');
     expect(posts).toEqual([]);
+  });
+
+  it('leaves the chain reads alone: the decisions queue isn’t read again after it', async () => {
+    const { signer, of } = await setUp();
+    mockQortalRequest('PUBLISH_QDN_RESOURCE', () => ({ type: 'ARBITRARY', signature: 'Q3' }));
+    const outcome = await publishConsidering(signer, { pendingSignature: of(ADDR.kickTarget) });
+    expect(outcome.status).toBe('sent');
+    const before = fetchCalls.length;
+    await loadDecisions();
+    expect(fetchCalls.slice(before)).toEqual([]);
   });
 
   it('a waiting nomination is keyed by the nominee; clearing publishes cleared: true', async () => {

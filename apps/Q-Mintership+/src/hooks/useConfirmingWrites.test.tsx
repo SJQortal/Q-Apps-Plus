@@ -6,6 +6,7 @@ import {
   markWrite,
   pendingWritesAtom,
   useConfirmingWrites,
+  writeKeys,
 } from '../writes/optimistic';
 
 afterEach(() => getDefaultStore().set(pendingWritesAtom, {}));
@@ -20,6 +21,15 @@ describe('useConfirmingWrites: the live views refresh faster after a write', () 
     act(() => markWrite('sign:abc', 'sending'));
     expect(result.current).toBe(false);
     act(() => markWrite('sign:abc', 'confirming', { signature: 'abc' }));
+    expect(result.current).toBe(true);
+  });
+
+  it('is false for a Considering record: it changes none of the live views', () => {
+    const { result } = renderHook(() => useConfirmingWrites());
+    act(() => markWrite(writeKeys.considering('k'), 'confirming', { signature: 'c1' }));
+    act(() => markWrite(writeKeys.notConsidering('k'), 'confirming', { signature: 'c2' }));
+    expect(result.current).toBe(false);
+    act(() => markWrite(writeKeys.sign('abc'), 'confirming', { signature: 'abc' }));
     expect(result.current).toBe(true);
   });
 

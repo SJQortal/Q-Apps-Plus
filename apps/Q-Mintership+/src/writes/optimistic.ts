@@ -75,13 +75,17 @@ export const CONFIRMING_WINDOW_MS = 5 * 60_000;
  * True while a write this device sent in the last few minutes is still
  * waiting for its block: the live views then refresh every 15 s instead of
  * every minute, so "(confirming…)" settles soon after the block (about a
- * minute on mainnet) rather than up to a minute later.
+ * minute on mainnet) rather than up to a minute later. A Considering record
+ * doesn't count: it changes none of those views.
  */
 export function useConfirmingWrites(): boolean {
   const all = useAtomValue(pendingWritesAtom);
   const now = Date.now();
   return Object.values(all).some(
-    (entry) => entry.status === 'confirming' && now - entry.at <= CONFIRMING_WINDOW_MS
+    (entry) =>
+      entry.status === 'confirming' &&
+      now - entry.at <= CONFIRMING_WINDOW_MS &&
+      !QDN_NOTE_PREFIXES.some((prefix) => entry.key.startsWith(prefix))
   );
 }
 
@@ -131,3 +135,6 @@ export const writeKeys = {
   /** No longer considering. */
   notConsidering: (key: string) => `notconsidering:${key}`,
 };
+
+/** Writes that only publish a QDN note, which the chain views never show. */
+const QDN_NOTE_PREFIXES = [writeKeys.considering(''), writeKeys.notConsidering('')];
