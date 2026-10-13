@@ -347,7 +347,7 @@ _Done on the branch; Simon reviews in the morning._ Six branches built side by s
 | Sign through the screens on real blocks | `ui-sign` | approved at 121 | See "Optimistic states and animations" below |
 
 - **What went wrong first, honestly:** `ui-sign` and `reject` first "passed with notes", each from a mistake in the scenario's own check, not in the app. The reduced-motion check counted animations the app already cuts to 0.01 ms (it now counts real ones), and the rejected-state check read a cached queue (it now reads fresh; a separate check at block 131 read the nomination as rejected). Both were fixed and rerun clean. The first `shift-app` attempts failed on two scenario mistakes: they opened Sign as the proposer, who had already signed, and reloaded a page that had already recorded the new target, so its banner had nothing new to say. Both were fixed, and a fresh run passed (blocks 136–150).
-- **Full run:** (pending)
+- **Full run:** `npm run test:testnet`, all 12 scenarios at once on the final code, on blocks 307–370 (68 minutes, set by expiry's 62 blocks): **12 of 12 passed**, 222 checks, none failed. Every scenario that changes a group ran on its own fresh copy. It reproduced the admin-count trap the same way: the admin removal and the decision confirmed after it applied in block 333, the one confirmed before it in 334. "(confirming…)" settled 76 s after Sign, and nothing animated with reduced motion.
 - `npm run test:decode` now decodes a rejection too: approval and rejection bytes decode on a mainnet node's read-only endpoint to the same fields. `npm run test:live` (6 tests, GET only) passes.
 
 **The admin-count safeguards:** as described under The new process.
@@ -391,7 +391,7 @@ _Done on the branch; Simon reviews in the morning._ Six branches built side by s
 - **Focus never falls to the page:** Propose's form and Hub step give focus back to Propose; while a write runs, focus waits on the dialog's title, so the first stage is heard; a dialog whose button is gone or disabled hands focus to its card; Propose nomination's focus follows the pick, the result and the links; comments' Edit, Reply, Cancel and Show more keep focus where it belongs; Got it, Mark as seen and "Show the ones I signed" keep focus on the page.
 - **Heard once, never twice, never missed:** Sign several and cancel-all read each new stage once; the "target changed" note is a region with its own heading, said once; Propose's check on the person picked and Propose nomination's candidate check are read out; Ready to mint's search says "None of N match"; Copy link says "Link copied" once.
 - **Names, structure and touch:** buttons repeated on every card say whose card they are on; Decisions' summary and How signing works are h2; a person's chip is a 44 px tap target; Settings' switches turn with a tap anywhere on their row; the Become a Minter Admin statement shows how much is left.
-- **Screenshot check** (on the accessibility branch's last commit, `b39327cc`): 49 screens × 5 sizes × 4 themes = 980 captures per mode, dark and light both 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations, 0 small button targets. The small text that remains is the avatars' decorative letters, the 12 px section titles, bottom-bar labels and badge counts, the signature ring's "of 8", 12 px captions on Activity's tiles and Home's stale-invite tile, and the kit's 12 px field helper text.
+- **Screenshot check** (on the accessibility branch's last commit, and again on the branch tip after the review fixes): 49 screens × 5 sizes × 4 themes = 980 captures per mode, dark and light both 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations, 0 small button targets. The small text that remains is the avatars' decorative letters, the 12 px section titles, bottom-bar labels and badge counts, the signature ring's "of 8", 12 px captions on Activity's tiles and Home's stale-invite tile, and the kit's 12 px field helper text.
 
 **Review:** tonight's diff in 6 dimensions (Core rules, write safety, efficiency, phones and UX, accessibility, wording): 37 findings, each checked by a second reviewer trying to refute it; 34 confirmed and fixed (33 commits, as two shared a cause), 3 refuted.
 
@@ -419,10 +419,10 @@ _Done on the branch; Simon reviews in the morning._ Six branches built side by s
 
 ### Night 3
 
+0. **Build Simon's answers to the night 2 questions** (below: items 3–12, 17, 21, 25, 27, 28), with tests and the screenshot check.
 1. **Hub check, read-only, with real data** (docs/HUB-TESTING.md): every screen at the five sizes, touch on, against the original app side by side, with the request log per screen. Not done on night 2.
 2. **Then Simon's guided real actions, one at a time:** Simon presses each write in Hub with real accounts; the app's step, Hub's dialog (action, fee, `"approval"`, identifier) and the outcome are checked together before the next one. A comment's publish dialog should match what the step says.
-3. The screenshot matrix again on the branch tip (the last full run was on the accessibility branch, before the review fixes merged).
-4. A real screen-reader pass: NVDA or JAWS on desktop Hub, TalkBack in GO. Night 2's pass used jsdom, axe and Chromium.
+3. A real screen-reader pass: NVDA or JAWS on desktop Hub, TalkBack in GO. Night 2's pass used jsdom, axe and Chromium.
 
 ### Simon's answers (2026-10-13)
 
@@ -501,6 +501,39 @@ From building tonight's work; each is a choice, the app works either way.
 
 27. People named inside sentences ("Proposed by Admin B") are links in the sentence's own colour, underlined only on hover. Underline them, or use primary?
 28. The signature ring's "of 8" is 11–13 px; the ring has a full label for screen readers. Keep it, or enlarge it on 56 px rings?
+
+### Simon's answers to the night 2 questions (2026-10-13)
+
+Answered in the evening of 2026-10-13. To build in night 3, before the Hub check:
+
+1. Keep "I've checked these" for rises too. *(as built)*
+2. Sign several keeps the same tick. *(as built)*
+3. **Build:** a short line on an admin's Home when the target changed, linking to Decisions.
+4. **Build:** Activity counts any answer (signed or rejected) as taking part; only doing nothing is a miss.
+5. **Build:** rejected decisions stay out of the waiting lists, and "Hide what I signed" becomes "Hide what I answered".
+6. **Build:** an admin who rejected can mark Considering again (it shows until their next answer).
+7. **Build:** the nominee's Home keeps the numbers but says rejections more gently.
+8. **Build:** Become a Minter Admin is suggested from level 5; below that it is still possible, with a note saying level 5+ is suggested.
+9. **Build:** Step down only on the admin's own person page (not Home, not Propose).
+10. **Build:** the link a nominator copies opens `/nominations/<address>`.
+11. **Build:** History's decided events link to their decision's own page.
+12. **Build:** Settings gets a "Muted names" list with Unmute.
+13. Comment counts include deleted and hidden ones. *(as built)*
+14. "Publishing…" with no menu until QDN lists it. *(as built)*
+15. 45 days / 300 comments for the shared count. *(as built)*
+16. "Propose nomination", sentence case; descriptive "nominate" stays. *(as built)*
+17. **Build:** the floating "Propose nomination" button is icon-only on narrow screens, with its label for screen readers.
+18. "Ready to mint" / "Hasn't accepted yet" wording. *(as built)*
+19. Propose cancelling all stops before it starts when the balance is short. *(as built)*
+20. The Nominations search text is kept across views. *(as built)*
+21. **Build:** a former member whose ban ended or was lifted says so ("banned, ban ended" / "ban lifted"), not "removed from MINTER".
+22. Check in night 3 whether the desktop Hub has the `NOTIFICATION_*` requests.
+23. No Core track for group-approval alerts for now.
+24. Nominees without a name get no Hub alerts: accepted for now.
+25. **Build:** nominators get "Since your last visit" items for their nominations (approved, expired), and an opt-in Hub alert when someone supports one.
+26. The "Since your last visit" panel stays above the status. *(as built)*
+27. **Build:** people named inside sentences are always underlined.
+28. **Build:** the ring's "of 8" is larger on 56 px rings.
 
 ### Next-pass ideas
 
