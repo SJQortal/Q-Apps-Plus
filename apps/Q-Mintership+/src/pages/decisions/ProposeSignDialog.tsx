@@ -60,6 +60,9 @@ export function ProposeSignDialog({
   const info = PROPOSE_KINDS[proposal.kind];
   const txType = PROPOSAL_TX_TYPE[proposal.kind];
   const after = Math.max(0, facts.needed - 1);
+  // The address's start, unless `who` already is the short address.
+  const start = proposal.subject.slice(0, 6);
+  const shown = who.startsWith(start) ? who : `${who} (${start}…)`;
   return (
     <HubStepDialog
       open={open && Boolean(signer)}
@@ -90,11 +93,7 @@ export function ProposeSignDialog({
         {
           action: info.action,
           title: 'Propose it',
-          detail: (
-            <Typography variant="body2">
-              Hub shows {who} ({proposal.subject.slice(0, 6)}…) and the group MINTER.
-            </Typography>
-          ),
+          detail: <Typography variant="body2">Hub shows {shown} and the group MINTER.</Typography>,
           feeTxType: txType,
         },
         {

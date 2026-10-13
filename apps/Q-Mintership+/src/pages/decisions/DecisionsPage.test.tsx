@@ -429,6 +429,12 @@ describe('Decisions: stale invites', () => {
     );
     const hub = await screen.findByRole('dialog', { name: /^Cancel the invite for / });
     expect(within(hub).getByText(/This proposes cancelling their approved invite/)).toBeVisible();
+    // No name: the short address once, not twice.
+    expect(
+      within(hub).getByText(
+        `Hub shows ${invitee.slice(0, 6)}…${invitee.slice(-4)} and the group MINTER.`
+      )
+    ).toBeVisible();
     expect(within(hub).getByText('Step 2 of 2: Sign it')).toBeVisible();
     expect(within(hub).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
     await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
@@ -481,6 +487,9 @@ describe('Decisions: proposing', () => {
     expect(within(hub).getByText('Step 1 of 2: Propose it')).toBeVisible();
     expect(within(hub).getByText('Step 2 of 2: Sign it')).toBeVisible();
     expect(within(hub).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
+    expect(
+      within(hub).getByText(/^Hub shows Admin B \(Q\w{5}…\) and the group MINTER\.$/)
+    ).toBeVisible();
     expect(
       within(hub).getByText(/Your proposal doesn’t count as your signature, so you sign it/)
     ).toBeVisible();
