@@ -9,8 +9,10 @@ import { useState } from 'react';
 import { Typography } from '@mui/material';
 import { FeeNote } from '../../components/common/FeeNote';
 import { HubStepDialog } from '../../components/common/HubStepDialog';
+import { SignaturePrefix } from '../../components/common/SignaturePrefix';
 import type { Nomination } from '../../data/nominations';
 import { plural } from '../../utils/format';
+import { SIGN_NEW_TX_CHECK } from '../../writes/explain';
 import { firstSignature, type FirstSignatureOutcome } from '../../writes/flows';
 import type { Signer } from '../../writes/runner';
 import { useDisplayName } from '../../hooks/useDisplayName';
@@ -39,6 +41,8 @@ export function FirstSignatureDialog({
 }) {
   const nominee = useDisplayName(n?.nominee ?? '', n ? n.nomineeName : null);
   const [partial, setPartial] = useState<FirstSignatureOutcome | null>(null);
+  // The invite step 1 made, which step 2 signs: Hub shows it as "pendingSignature".
+  const [newSig, setNewSig] = useState<string | null>(null);
   const windowText = signingWindowText(facts.maximumBlockDelay, facts.msPerBlock);
   return (
     <HubStepDialog
@@ -84,6 +88,13 @@ export function FirstSignatureDialog({
               The &quot;pendingSignature&quot; is the new nomination’s own, made in step 1.
             </Typography>
           ),
+          check: SIGN_NEW_TX_CHECK,
+          running: newSig ? (
+            <>
+              For this nomination, &quot;pendingSignature&quot; starts with{' '}
+              <SignaturePrefix signature={newSig} />.
+            </>
+          ) : null,
           feeTxType: 'GROUP_APPROVAL',
         },
       ]}
@@ -91,7 +102,11 @@ export function FirstSignatureDialog({
         if (!n || !signer)
           return { outcome: { status: 'blocked', reason: 'Sign in to Hub first.' } };
         setPartial(null);
-        const result = await firstSignature(signer, n.nominee, (p) => report(p.step - 1, p.stage));
+        setNewSig(null);
+        const result = await firstSignature(signer, n.nominee, (p) => {
+          if (p.signature) setNewSig(p.signature);
+          report(p.step - 1, p.stage);
+        });
         if (result.invite.status !== 'sent') return { outcome: result.invite };
         if (result.approval?.status === 'sent') return { outcome: result.approval };
         // Step 1 went through, step 2 didn't: show step 1 as the one that is done.

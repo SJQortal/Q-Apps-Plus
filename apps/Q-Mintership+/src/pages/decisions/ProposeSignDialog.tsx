@@ -10,7 +10,9 @@ import { useState, type ReactNode } from 'react';
 import { Typography } from '@mui/material';
 import { FeeNote } from '../../components/common/FeeNote';
 import { HubStepDialog } from '../../components/common/HubStepDialog';
+import { SignaturePrefix } from '../../components/common/SignaturePrefix';
 import { plural } from '../../utils/format';
+import { SIGN_NEW_TX_CHECK } from '../../writes/explain';
 import { PROPOSAL_TX_TYPE, proposeAndSign, type Proposal } from '../../writes/flows';
 import type { Signer } from '../../writes/runner';
 import { secondStepProblem, signingWindowText } from './decisionUi';
@@ -56,6 +58,8 @@ export function ProposeSignDialog({
 }: ProposeSignDialogProps) {
   // Step 1 went through and step 2 didn't.
   const [partial, setPartial] = useState(false);
+  // The proposal step 1 made, which step 2 signs: Hub shows it as "pendingSignature".
+  const [newSig, setNewSig] = useState<string | null>(null);
   if (!proposal) return null;
   const info = PROPOSE_KINDS[proposal.kind];
   const txType = PROPOSAL_TX_TYPE[proposal.kind];
@@ -105,13 +109,24 @@ export function ProposeSignDialog({
               The &quot;pendingSignature&quot; is your new proposal’s own, made in step 1.
             </Typography>
           ),
+          check: SIGN_NEW_TX_CHECK,
+          running: newSig ? (
+            <>
+              For this proposal, &quot;pendingSignature&quot; starts with{' '}
+              <SignaturePrefix signature={newSig} />.
+            </>
+          ) : null,
           feeTxType: 'GROUP_APPROVAL',
         },
       ]}
       run={async (report) => {
         if (!signer) return { outcome: { status: 'blocked', reason: 'Sign in to Hub first.' } };
         setPartial(false);
-        const result = await proposeAndSign(signer, proposal, (p) => report(p.step - 1, p.stage));
+        setNewSig(null);
+        const result = await proposeAndSign(signer, proposal, (p) => {
+          if (p.signature) setNewSig(p.signature);
+          report(p.step - 1, p.stage);
+        });
         if (result.proposal.status !== 'sent') return { outcome: result.proposal };
         if (result.approval?.status === 'sent') return { outcome: result.approval };
         // Step 1 went through, step 2 didn't: show step 1 as the one that is done.

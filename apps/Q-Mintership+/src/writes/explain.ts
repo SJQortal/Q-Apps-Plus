@@ -72,5 +72,17 @@ export const HUB_DIALOGS: Record<string, HubDialogText> = {
   },
 };
 
+/**
+ * Hub's checks when step 2 signs the transaction step 1 just made (a
+ * proposal, or a nomination's invite): its signature only exists once step
+ * 1 is done, so step 2 shows its first characters while it runs.
+ */
+export const SIGN_NEW_TX_CHECK: string[] = [
+  'Tx type: GROUP_APPROVAL.',
+  '"approval": true.',
+  '"pendingSignature" starts with the characters this step shows once step 1 is done.',
+  'Tick the box, then Accept.',
+];
+
 /** Hub's approval queue gives up after this long; mention it so nobody waits on a closed dialog. */
 export const HUB_DIALOG_SECONDS = 60;

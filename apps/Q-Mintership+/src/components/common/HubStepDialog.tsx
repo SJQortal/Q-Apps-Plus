@@ -31,6 +31,10 @@ export interface HubStep {
   title: string;
   /** Extra things to check in Hub's dialog for this step. */
   detail?: ReactNode;
+  /** What to check in Hub's dialog, in place of the action's usual list. */
+  check?: string[];
+  /** Inline words shown (and spoken) under the stage while this step runs. */
+  running?: ReactNode;
   feeTxType: GroupTxType | 'ARBITRARY';
 }
 
@@ -173,6 +177,7 @@ export function HubStepDialog(props: HubStepDialogProps) {
       </Button>
     );
   const stageText = `${steps.length > 1 ? `Step ${active.step + 1} of ${steps.length}: ` : ''}${STAGE_TEXT[active.stage]}`;
+  const runningNow = phase === 'running' ? steps[active.step]?.running : null;
 
   return (
     <ResponsiveDialog
@@ -232,6 +237,11 @@ export function HubStepDialog(props: HubStepDialogProps) {
                       : ''}
                   </Typography>
                 ) : null}
+                {isActive && step.running ? (
+                  <Box sx={{ mt: 0.5, typography: 'body2', overflowWrap: 'anywhere' }}>
+                    {step.running}
+                  </Box>
+                ) : null}
                 {phase === 'intro' && dialog ? (
                   <Box sx={{ mt: 0.5 }}>
                     <Typography variant="body2" color="text.secondary">
@@ -240,7 +250,7 @@ export function HubStepDialog(props: HubStepDialogProps) {
                     <Typography variant="body2" color="text.secondary" component="div">
                       Check:
                       <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
-                        {dialog.check.map((c) => (
+                        {(step.check ?? dialog.check).map((c) => (
                           <li key={c}>{c}</li>
                         ))}
                       </Box>
@@ -264,7 +274,12 @@ export function HubStepDialog(props: HubStepDialogProps) {
 
       {/* One live region, there from the start: the stage while running, then the result. */}
       <Box role="status" aria-live="polite">
-        {phase === 'running' ? <span className="qmp-visually-hidden">{stageText}</span> : null}
+        {phase === 'running' ? (
+          <span className="qmp-visually-hidden">
+            {stageText}
+            {runningNow ? <> {runningNow}</> : null}
+          </span>
+        ) : null}
         {phase === 'done' && outcome && outcome.status !== 'failed' ? (
           <OutcomeMessage
             outcome={outcome}

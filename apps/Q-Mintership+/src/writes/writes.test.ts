@@ -537,10 +537,14 @@ describe('proposeAndSign: a proposal and the proposer’s own signature', () => 
     });
     mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'OWN1' }));
     const steps: string[] = [];
+    const step2Signatures = new Set<string | undefined>();
     const result = await proposeAndSign(
       admin,
       { kind: 'kick', subject: ADDR.learner, reason: 'Not minting' },
-      (p) => steps.push(`${p.step}:${p.stage}`)
+      (p) => {
+        steps.push(`${p.step}:${p.stage}`);
+        if (p.step === 2) step2Signatures.add(p.signature);
+      }
     );
     expect(result.proposal.status).toBe('sent');
     expect(result.approval).toMatchObject({ status: 'sent', signature: 'OWN1' });
@@ -558,6 +562,8 @@ describe('proposeAndSign: a proposal and the proposer’s own signature', () => 
     expect(steps[0]).toBe('1:checking');
     expect(steps.indexOf('1:waitingForHub')).toBeLessThan(steps.indexOf('2:checking'));
     expect(steps).toContain('2:waitingForHub');
+    // Step 2 names the transaction it signs, so the dialog can show it.
+    expect([...step2Signatures]).toEqual([kick!.signature]);
     // Both show as on their way.
     expect(getPendingWrite(writeKeys.propose('kick', ADDR.learner))?.status).toBe('confirming');
     expect(getPendingWrite(writeKeys.sign(kick!.signature))?.status).toBe('confirming');

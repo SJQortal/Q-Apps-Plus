@@ -3,10 +3,11 @@
  * (GROUP_APPROVAL, approval true, the pending signature, a tick box) and the
  * fee, then signDecision. The card turns "Signed ✓ (confirming…)" at once.
  */
-import { Box, Typography } from '@mui/material';
+import { Typography } from '@mui/material';
 import type { Decision } from '../../rules/decision';
 import { KIND_LABEL } from '../../rules/decision';
 import { HubStepDialog } from '../../components/common/HubStepDialog';
+import { SignaturePrefix } from '../../components/common/SignaturePrefix';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { signDecision } from '../../writes/flows';
 import type { Signer } from '../../writes/runner';
@@ -49,19 +50,7 @@ export function SignDialog({
           detail: d ? (
             <Typography variant="body2" component="div">
               For this decision, &quot;pendingSignature&quot; starts with{' '}
-              <Box
-                component="code"
-                sx={{
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                  fontWeight: 700,
-                  bgcolor: 'action.hover',
-                  px: 0.5,
-                  borderRadius: 0.5,
-                }}
-              >
-                {d.signature.slice(0, 8)}
-              </Box>
-              .
+              <SignaturePrefix signature={d.signature} />.
             </Typography>
           ) : null,
           feeTxType: 'GROUP_APPROVAL',

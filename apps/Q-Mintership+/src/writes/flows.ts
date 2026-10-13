@@ -126,6 +126,8 @@ export function signDecision(
 export interface OwnSignatureProgress {
   step: 1 | 2;
   stage: WriteStage;
+  /** Step 2: the signature of the transaction step 1 made, the one being signed. */
+  signature?: string;
 }
 
 export interface OwnSignatureOutcome {
@@ -189,7 +191,7 @@ async function withOwnSignature(
       },
       proposalSignature: null,
     };
-  onProgress?.({ step: 2, stage: 'checking' });
+  onProgress?.({ step: 2, stage: 'checking', signature });
   if (!(await waitForTransaction(signature)))
     return {
       proposal,
@@ -197,7 +199,7 @@ async function withOwnSignature(
       proposalSignature: signature,
     };
   const approval = await signDecision(signer, signature, (stage) =>
-    onProgress?.({ step: 2, stage })
+    onProgress?.({ step: 2, stage, signature })
   );
   return { proposal, approval, proposalSignature: signature };
 }

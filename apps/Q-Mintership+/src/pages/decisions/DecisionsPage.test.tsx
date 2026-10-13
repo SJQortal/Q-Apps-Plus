@@ -288,17 +288,33 @@ describe('Decisions: first signature', () => {
       world.pending.push(tx);
       return tx;
     });
-    mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'A2' }));
+    // What the step shows while Hub's raw-data dialog is open.
+    let shownInStep2 = '';
+    mockQortalRequest('SIGN_TRANSACTION', () => {
+      const step2 = screen.getByText('Step 2 of 2: Sign it').closest('li') as HTMLElement;
+      shownInStep2 = step2.textContent ?? '';
+      return { type: 'GROUP_APPROVAL', signature: 'A2' };
+    });
 
     await u.click(await screen.findByRole('button', { name: 'First signature: Wren Waiting' }));
     const dialog = await screen.findByRole('dialog', { name: 'First signature: Wren Waiting' });
     expect(within(dialog).getByText('Step 1 of 2: Create the nomination on chain')).toBeVisible();
     expect(within(dialog).getByText('Step 2 of 2: Sign it')).toBeVisible();
     expect(within(dialog).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
+    // Its signature doesn't exist yet: the check says when the characters show.
+    expect(
+      within(dialog).getByText(
+        '"pendingSignature" starts with the characters this step shows once step 1 is done.'
+      )
+    ).toBeVisible();
+    expect(within(dialog).queryByText(/starts with the characters shown here/)).toBeNull();
     expect(qortalCallsFor('INVITE_TO_GROUP')).toHaveLength(0);
 
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(await within(dialog).findByText('Signed: the clock has started')).toBeVisible();
+    expect(shownInStep2).toContain(
+      `For this nomination, "pendingSignature" starts with ${inviteSig.slice(0, 8)}.`
+    );
     expect(qortalCallsFor('INVITE_TO_GROUP')[0]).toMatchObject({
       inviteeAddress: ADDR.nominatedWaiting,
       groupId: 694,
@@ -467,7 +483,12 @@ describe('Decisions: proposing', () => {
         admin: req.qortalAddress,
       })
     );
-    mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'OWN' }));
+    let shownInStep2 = '';
+    mockQortalRequest('SIGN_TRANSACTION', () => {
+      const step2 = screen.getByText('Step 2 of 2: Sign it').closest('li') as HTMLElement;
+      shownInStep2 = step2.textContent ?? '';
+      return { type: 'GROUP_APPROVAL', signature: 'OWN' };
+    });
 
     await u.click(screen.getByRole('button', { name: 'Propose' }));
     await u.click(await screen.findByRole('menuitem', { name: /Remove a member/ }));
@@ -497,6 +518,10 @@ describe('Decisions: proposing', () => {
     await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
     expect(await within(hub).findByText('Proposed and signed', {}, T)).toBeVisible();
     expect(within(hub).getByText(/After yours it needs 7 more signatures/)).toBeVisible();
+    // While Hub asked for step 2, the step showed the proposal's first characters.
+    expect(shownInStep2).toContain(
+      `For this proposal, "pendingSignature" starts with ${removal.slice(0, 8)}.`
+    );
     expect(qortalCallsFor('REMOVE_GROUP_ADMIN')[0]).toMatchObject({
       groupId: 694,
       txGroupId: 694,
