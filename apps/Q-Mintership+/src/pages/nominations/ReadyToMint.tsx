@@ -177,9 +177,12 @@ export function ReadyToMintSection({
           sx={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
+            // On phones it starts at the left, clear of the floating Propose nomination button
+            // when a short (searched) list leaves it in that button's band.
+            justifyContent: { xs: 'flex-start', sm: 'center' },
             flexWrap: 'wrap',
             gap: 1.5,
+            px: { xs: 0.5, sm: 0 },
           }}
         >
           <Typography variant="body2" color="text.secondary">
