@@ -25,6 +25,12 @@ interface PendingBase {
 
 export interface PendingVote extends PendingBase {
   vote: PollVote;
+  /**
+   * The newest time of the viewer's own vote QDN showed before this one (0:
+   * none): it settles once QDN shows a newer one. Unset while sending.
+   * Row times only, never the device's clock.
+   */
+  after?: number;
 }
 
 export interface PendingPoll extends PendingBase {
@@ -35,6 +41,8 @@ export interface PendingPoll extends PendingBase {
 export interface PendingShare extends PendingBase {
   /** Who the copy was encrypted to. */
   readers: string[];
+  /** The viewer's own share row's time QDN showed before (0: none): settles on a newer one. */
+  after?: number;
 }
 
 export interface PendingPollComment {

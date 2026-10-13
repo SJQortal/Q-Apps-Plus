@@ -11,8 +11,11 @@ import {
 import {
   CLOCK_SLACK_MS,
   CLOSED_SHOWN_MS,
+  TIP_LEAD_MS,
+  VOTE_CUTOFF_MS,
   askedInTime,
   assemblePoll,
+  chainBoundNow,
   assemblePolls,
   copiedInTime,
   countVotes,
@@ -33,6 +36,7 @@ import {
   toCommentRecord,
   validShares,
   voteEntries,
+  voteTooLate,
   type BodyRead,
   type CountedVote,
   type PollContext,
@@ -217,6 +221,25 @@ describe('times: a body must fit its row', () => {
   it('a poll body that claims another time than its row is not shown', () => {
     const late = pollRead('Bea', ok(poll({ createdAt: T0 + DAY_MS, endsAt: T0 + 8 * DAY_MS })));
     expect(assemblePoll(sources({ polls: [late] }), ctx())).toBeNull();
+  });
+});
+
+describe('times a write uses: the chain’s, not only the device’s', () => {
+  it('a poll is dated by the device clock, kept between the tip and a few minutes past it', () => {
+    expect(chainBoundNow(T0, T0 + 30_000)).toBe(T0 + 30_000);
+    // A clock 20 minutes fast: no later than the tip and a few minutes.
+    expect(chainBoundNow(T0, T0 + 20 * 60_000)).toBe(T0 + TIP_LEAD_MS);
+    // A clock an hour slow: the tip's time.
+    expect(chainBoundNow(T0, T0 - 3_600_000)).toBe(T0);
+    // So its readers keep it: within the slack of the row the node stamps.
+    expect(askedInTime({ createdAt: chainBoundNow(T0, T0 + DAY_MS) }, T0)).toBe(true);
+  });
+
+  it('no vote is started in the last minutes, nor after the end', () => {
+    const END = T0 + 7 * DAY_MS;
+    expect(voteTooLate({ endsAt: END }, END - VOTE_CUTOFF_MS)).toBeNull();
+    expect(voteTooLate({ endsAt: END }, END - VOTE_CUTOFF_MS + 1)).toBe('closing');
+    expect(voteTooLate({ endsAt: END }, END)).toBe('ended');
   });
 });
 

@@ -4,12 +4,14 @@ import { fromData64, parsePoll, parseShare, parseVote } from '../data/adminPollR
 import { serveAdminPolls } from '../test/adminPolls';
 import { fetchCallsFor, fetchRequests, mockQortalRequest, qortalCallsFor } from '../test/setup';
 import { ADDR, MS_PER_BLOCK, NOW, PEOPLE, TIP, installWorld } from '../test/world';
+import { askedInTime } from '../rules/adminPolls';
 import { pendingPollWrites, resetPendingPollWrites } from '../state/adminPolls';
 import {
   commentAdminPoll,
   deleteAdminPollComment,
   editAdminPollComment,
   guardPollOpen,
+  guardVoteInTime,
   publishAdminPoll,
   shareAdminPoll,
   voteAdminPoll,
@@ -119,6 +121,20 @@ describe('publishAdminPoll: Ask the Minter Admins', () => {
       status: 'confirming',
       publisher: { name: 'Avery Admin', address: ADDR.admin },
     });
+  });
+
+  it('a device clock 20 minutes fast: the poll is dated by the chain, so its readers keep it', async () => {
+    const { me } = author();
+    sent();
+    vi.setSystemTime(new Date(NOW + 20 * 60_000));
+    const result = await publishAdminPoll(me, {
+      question: 'A long enough question?',
+      durationDays: 7,
+    });
+    expect(result.outcome).toMatchObject({ status: 'sent' });
+    // The mock chain's tip is at NOW.
+    expect(result.poll?.createdAt).toBe(NOW + 5 * 60_000);
+    expect(askedInTime(result.poll!, NOW)).toBe(true);
   });
 
   it('stops before Hub: a bad question, a member, no name, someone else’s name, no fee', async () => {
@@ -247,6 +263,44 @@ describe('voteAdminPoll', () => {
     expect(pendingPollWrites().votes).toEqual({});
     expect(guardPollOpen({ endsAt: 10 }, 9)).toBeNull();
     expect(guardPollOpen({ endsAt: 10 }, 10)).toMatch(/ended/);
+  });
+
+  it('judges the end by the later of the device clock and the chain tip, and stops a few minutes early', () => {
+    const end = NOW + DAY;
+    // The device's clock behind: the chain's tip says it has ended.
+    expect(guardVoteInTime({ endsAt: end }, end, end - 3_600_000)).toMatch(/has ended/);
+    // The tip behind: the device's clock says so.
+    expect(guardVoteInTime({ endsAt: end }, end - 3_600_000, end)).toMatch(/has ended/);
+    expect(guardVoteInTime({ endsAt: end }, end - 4 * 60_000, end - 4 * 60_000)).toBe(
+      'This poll ends in under 5 minutes: a vote published now could arrive after the end, and wouldn’t count.'
+    );
+    expect(guardVoteInTime({ endsAt: end }, end - 6 * 60_000, end - 6 * 60_000)).toBeNull();
+  });
+
+  it('a device clock days behind can’t vote on a poll the chain says has ended', async () => {
+    const { me } = author();
+    sent();
+    // Days slow: by the device's clock the closed poll is still open.
+    vi.setSystemTime(new Date(NOW - 5 * DAY));
+    expect((await voteAdminPoll(me, ADMIN_POLL_IDS.closed, 'yes')).outcome).toEqual({
+      status: 'blocked',
+      reason: 'This poll has ended: a vote can’t count any more.',
+    });
+    expect(publishes()).toHaveLength(0);
+  });
+
+  it('remembers the vote QDN showed before, so the new one settles on a newer row, not on clocks', async () => {
+    const { me } = author();
+    sent();
+    await voteAdminPoll(me, ADMIN_POLL_IDS.voted, 'yes');
+    const before = NOW - DAY + 1_800_000;
+    expect(pendingPollWrites().votes[ADMIN_POLL_IDS.voted]).toMatchObject({
+      vote: 'yes',
+      status: 'confirming',
+      after: before,
+    });
+    await voteAdminPoll(me, ADMIN_POLL_IDS.open, 'no');
+    expect(pendingPollWrites().votes[ADMIN_POLL_IDS.open]).toMatchObject({ after: 0 });
   });
 
   it('a decline clears the vote shown as on its way', async () => {

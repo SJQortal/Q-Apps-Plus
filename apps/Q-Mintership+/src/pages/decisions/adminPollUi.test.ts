@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fakeAddress } from '../../../e2e/world.mjs';
 import { DAY_MS, type PollRecord } from '../../data/adminPollRecords';
-import type { AdminPollView, CountedVote } from '../../rules/adminPolls';
+import { VOTE_CUTOFF_MS, type AdminPollView, type CountedVote } from '../../rules/adminPolls';
 import {
   adminPollCardId,
   countsText,
@@ -15,6 +15,7 @@ import {
   shareSettled,
   unlistedText,
   unreadText,
+  voteClosing,
   voteSettled,
   waitingText,
   withPublishing,
@@ -146,25 +147,46 @@ describe('the viewer’s vote', () => {
     expect(failed).toMatchObject({ vote: null, label: null, failed: true });
   });
 
-  it('settles once QDN shows the same vote, published since', () => {
-    const pending = { vote: 'yes' as const, at: T0 + 5000 };
+  it('settles once QDN shows the same vote, newer than the one it showed before', () => {
+    const pending = { vote: 'yes' as const, after: T0 + 1000 };
     expect(voteSettled(view({ myVote: vote('yes', T0 + 6000) }), pending)).toBe(true);
-    // A minute or two of clock difference is fine.
-    expect(voteSettled(view({ myVote: vote('yes', T0 - 60_000) }), pending)).toBe(true);
-    expect(voteSettled(view({ myVote: vote('yes', T0 - 20 * 60_000) }), pending)).toBe(false);
+    // Row times only: however far the device's clock is off, a newer row settles it.
+    expect(voteSettled(view({ myVote: vote('yes', T0 + 1001) }), pending)).toBe(true);
+    // The vote QDN showed before (or an older one) isn't this one.
+    expect(voteSettled(view({ myVote: vote('yes', T0 + 1000) }), pending)).toBe(false);
     expect(voteSettled(view({ myVote: vote('no', T0 + 6000) }), pending)).toBe(false);
     expect(voteSettled(view(), pending)).toBe(false);
+    // While sending nothing settles it.
+    expect(voteSettled(view({ myVote: vote('yes', T0 + 6000) }), { vote: 'yes' })).toBe(false);
+    // A first vote: any of the viewer's settles it, a late one too.
     expect(
-      myVoteView(view({ myVote: vote('yes', T0 + 6000) }), { ...pending, status: 'confirming' })
-        .label
+      voteSettled(view({ open: false, myLate: vote('yes', T0 + 9 * DAY_MS) }), {
+        vote: 'yes',
+        after: 0,
+      })
+    ).toBe(true);
+    expect(
+      myVoteView(view({ myVote: vote('yes', T0 + 6000) }), {
+        ...pending,
+        status: 'confirming',
+        at: T0,
+      }).label
     ).toBe('Your vote: Yes ✓');
   });
 
-  it('a share settles once QDN lists the viewer’s', () => {
+  it('a share settles once QDN lists the viewer’s, newer than before', () => {
     const shares = [{ name: 'Avery Admin', address: A, sharedAt: T0, readers: [A], at: T0 + 10 }];
-    expect(shareSettled(view({ shares }), A, { at: T0 })).toBe(true);
-    expect(shareSettled(view({ shares }), B, { at: T0 })).toBe(false);
-    expect(shareSettled(view(), A, { at: T0 })).toBe(false);
+    expect(shareSettled(view({ shares }), A, { after: 0 })).toBe(true);
+    expect(shareSettled(view({ shares }), A, { after: T0 + 10 })).toBe(false);
+    expect(shareSettled(view({ shares }), B, { after: 0 })).toBe(false);
+    expect(shareSettled(view(), A, { after: 0 })).toBe(false);
+  });
+
+  it('in the last minutes no vote is offered', () => {
+    const end = poll().endsAt;
+    expect(voteClosing(view(), end - VOTE_CUTOFF_MS)).toBe(false);
+    expect(voteClosing(view(), end - VOTE_CUTOFF_MS + 1)).toBe(true);
+    expect(voteClosing(view({ open: false }), end + 1)).toBe(false);
   });
 });
 

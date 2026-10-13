@@ -4,15 +4,15 @@
  * which name, and the fee. One PUBLISH_QDN_RESOURCE each (service
  * DOCUMENT_PRIVATE, Hub shows "isEncrypted: true").
  */
-import { Box, Typography } from '@mui/material';
+import { Alert, Box, Typography } from '@mui/material';
 import { HubStepDialog } from '../../components/common/HubStepDialog';
 import { PersonInline } from '../../components/common/Person';
 import type { PollVote } from '../../data/adminPollRecords';
 import type { AdminPollView } from '../../rules/adminPolls';
-import { formatDateTime, plural } from '../../utils/format';
+import { formatDateTime, formatRelative, plural } from '../../utils/format';
 import type { PollAuthor, PollWrite } from '../../writes/adminPolls';
 import type { WriteStage } from '../../writes/runner';
-import { ADVISORY, VOTE_LABEL, encryptedCheck, encryptedTo } from './adminPollUi';
+import { ADVISORY, CHANGE_WARN_MS, VOTE_LABEL, encryptedCheck, encryptedTo } from './adminPollUi';
 
 type Publish = (onStage: (stage: WriteStage) => void) => Promise<PollWrite>;
 type ReturnFocus = () => HTMLElement | null;
@@ -62,6 +62,7 @@ export function VotePollDialog({
   returnFocus?: ReturnFocus;
 }) {
   const label = VOTE_LABEL[vote];
+  const now = Date.now();
   return (
     <HubStepDialog
       open={open}
@@ -77,6 +78,12 @@ export function VotePollDialog({
               ? 'It replaces your earlier vote: only your latest vote counts.'
               : 'You can change it until the poll ends: only your latest vote counts.'}
           </Typography>
+          {changing && view.poll.endsAt - now < CHANGE_WARN_MS ? (
+            <Alert severity="warning" role="note">
+              Voting ends {formatRelative(view.poll.endsAt, now)}. If your new vote is published
+              after the end, it doesn’t count, and your earlier vote doesn’t count any more either.
+            </Alert>
+          ) : null}
           <Typography variant="body2" color="text.secondary">
             Votes published after {formatDateTime(view.poll.endsAt)} don’t count.{' '}
             {encryptedTo(admins)}

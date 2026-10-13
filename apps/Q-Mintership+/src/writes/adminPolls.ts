@@ -8,7 +8,8 @@
  *
  * Before Hub opens: the writer is still a Minter Admin (read fresh), has a
  * registered name of their own, the poll is one they can read and, for a
- * vote, still open; the runner checks the fee against the confirmed balance
+ * vote, still open for more than a few minutes by the later of the device's
+ * clock and the chain tip's time; the runner checks the fee against the confirmed balance
  * and Core's 25-unconfirmed limit. The admins' public keys are read fresh
  * (each key once per session). Once Hub sends it, the write shows at once
  * (state/adminPolls.ts). These are the flows the testnet calls too
@@ -51,8 +52,11 @@ import { getChainNow } from '../data/chain';
 import { mapLimit } from '../data/qdn';
 import { invalidate } from '../data/query';
 import {
+  VOTE_CUTOFF_MS,
   assemblePoll,
+  chainBoundNow,
   pollThreadSources,
+  voteTooLate,
   type AdminPollView,
   type BodyRead,
 } from '../rules/adminPolls';
@@ -98,6 +102,31 @@ export async function guardPollAuthor(
 /** Voting ends at the poll's end: a vote published later doesn't count. */
 export function guardPollOpen(poll: Pick<PollRecord, 'endsAt'>, now = Date.now()): string | null {
   return now < poll.endsAt ? null : 'This poll has ended: a vote can’t count any more.';
+}
+
+/**
+ * Before a vote: the poll is open, and not about to close, by the later of
+ * the device's clock and the chain tip's time (`tipTimestamp`).
+ */
+export function guardVoteInTime(
+  poll: Pick<PollRecord, 'endsAt'>,
+  tipTimestamp: number,
+  deviceNow = Date.now()
+): string | null {
+  const now = Math.max(deviceNow, tipTimestamp);
+  const late = voteTooLate(poll, now);
+  if (late === 'ended') return guardPollOpen(poll, now);
+  if (late === 'closing')
+    return `This poll ends in under ${VOTE_CUTOFF_MS / 60_000} minutes: a vote published now could arrive after the end, and wouldn’t count.`;
+  return null;
+}
+
+/** The newest time of the author's own vote on this poll, as the view has it (0: none). */
+function ownVoteAt(view: AdminPollView, address: string): number {
+  let at = 0;
+  for (const v of [...view.votes, ...view.late, ...view.unread])
+    if (v.address === address) at = Math.max(at, v.at);
+  return at;
 }
 
 /** A poll as the author reads it now (the shared list read), or null. */
@@ -207,7 +236,8 @@ export async function publishAdminPoll(
     identifier,
     build: async (targets) => {
       const clock = await getChainNow({ force: true });
-      const createdAt = Date.now();
+      // Readers check it against the poll row's time, which the node sets.
+      const createdAt = chainBoundNow(clock.timestamp);
       const end = pollEnd(clock, input.durationDays, createdAt);
       return buildPoll({ ...input, id: pollId, createdAt, ...end, readers: targets.readers });
     },
@@ -243,18 +273,23 @@ export async function voteAdminPoll(
     return { outcome: blocked((error as Error).message), identifier: '' };
   }
   setPendingVote(pollId, { vote, status: 'sending', at: Date.now() });
+  // The author's vote QDN showed before this one: this one settles once a newer one shows.
+  let after = 0;
   const { outcome } = await publishEncrypted({
     author,
     identifier,
     guard: async () => {
       const view = await findPoll(author, pollId);
-      return view ? guardPollOpen(view.poll) : NOT_READABLE;
+      if (!view) return NOT_READABLE;
+      after = ownVoteAt(view, author.address);
+      const tip = await getChainNow({ force: true });
+      return guardVoteInTime(view.poll, tip.timestamp);
     },
     build: () => buildVote(pollId, vote),
     onStage,
   });
   if (outcome.status === 'sent')
-    setPendingVote(pollId, { vote, status: 'confirming', at: Date.now() });
+    setPendingVote(pollId, { vote, status: 'confirming', at: Date.now(), after });
   else if (outcome.status === 'unknown')
     setPendingVote(pollId, { vote, status: 'failed', at: Date.now(), message: outcome.message });
   else setPendingVote(pollId, null);
@@ -426,11 +461,13 @@ export async function shareAdminPoll(
     return { outcome: blocked((error as Error).message), identifier: '', readers: [] };
   }
   let view: AdminPollView | null = null;
+  let after = 0;
   const { outcome, targets } = await publishEncrypted({
     author,
     identifier,
     guard: async () => {
       view = await findPoll(author, pollId);
+      after = view?.shares.find((s) => s.address === author.address)?.at ?? 0;
       return view ? null : NOT_READABLE;
     },
     build: async (fresh) => {
@@ -453,6 +490,6 @@ export async function shareAdminPoll(
   });
   const readers = targets?.readers ?? [];
   if (outcome.status === 'sent')
-    setPendingShare(pollId, { readers, status: 'confirming', at: Date.now() });
+    setPendingShare(pollId, { readers, status: 'confirming', at: Date.now(), after });
   return { outcome, identifier, readers };
 }

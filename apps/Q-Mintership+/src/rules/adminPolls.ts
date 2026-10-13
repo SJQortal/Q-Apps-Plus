@@ -49,6 +49,37 @@ import type { CommentBody, CommentRow } from '../data/commentThread';
 
 /** Allowance for clocks between the app that wrote a body and the node that took it. */
 export const CLOCK_SLACK_MS = 10 * 60_000;
+/** How far past the chain tip's timestamp "now" is taken to be, at most, for a write. */
+export const TIP_LEAD_MS = 5 * 60_000;
+/**
+ * No vote is started this close to the end: Hub's dialog and the publish take
+ * time, and the node stamps a vote when it takes it, so one sent now could
+ * land after the end (and a changed vote then counts for nothing).
+ */
+export const VOTE_CUTOFF_MS = 5 * 60_000;
+
+/**
+ * The time a write puts in a poll: the device's clock, kept between the chain
+ * tip's timestamp (a block's, so never ahead of the node) and a few minutes
+ * past it, so a device clock that is off can't date a poll where its readers
+ * would drop it.
+ */
+export function chainBoundNow(tipTimestamp: number, deviceNow = Date.now()): number {
+  return Math.min(Math.max(deviceNow, tipTimestamp), tipTimestamp + TIP_LEAD_MS);
+}
+
+/**
+ * Whether it is too late to start a vote, judged by the later of the device's
+ * clock and the chain tip's time (so neither a slow clock nor a stale tip
+ * lets one through): null while there is time.
+ */
+export function voteTooLate(
+  poll: Pick<PollRecord, 'endsAt'>,
+  now: number
+): 'ended' | 'closing' | null {
+  if (now >= poll.endsAt) return 'ended';
+  return poll.endsAt - now < VOTE_CUTOFF_MS ? 'closing' : null;
+}
 /** Closed polls stay listed this long after they end. */
 export const CLOSED_SHOWN_MS = 31 * DAY_MS;
 /**

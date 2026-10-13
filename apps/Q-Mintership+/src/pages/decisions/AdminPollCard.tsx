@@ -27,6 +27,8 @@ import { formatCount, formatRelative } from '../../utils/format';
 import type { PollAuthor } from '../../writes/adminPolls';
 import {
   ADVISORY,
+  CLOSING_TEXT,
+  MY_LATE_TEXT,
   VOTE_LABEL,
   adminPollCardId,
   endBlockText,
@@ -36,6 +38,7 @@ import {
   shareLabel,
   unlistedText,
   unreadText,
+  voteClosing,
   type ShownPoll,
 } from './adminPollUi';
 
@@ -77,6 +80,8 @@ export function AdminPollCard({
   // Votes the viewer can't read are votes all the same.
   const voted = view.votes.length + view.unread.length;
   const unlisted = view.votes.filter((v) => v.unlisted).length;
+  // In the last minutes no vote is started: it could land after the end.
+  const closing = voteClosing(view, now);
 
   return (
     <Card
@@ -167,10 +172,14 @@ export function AdminPollCard({
           <DoneChip label={mine.label} settled={mine.settled} />
         ) : !view.open ? (
           <Typography variant="body2" color="text.secondary">
-            You didn’t vote.
+            {view.myLate ? MY_LATE_TEXT : 'You didn’t vote.'}
           </Typography>
         ) : null}
-        {view.open && !view.publishing ? (
+        {closing && !view.publishing ? (
+          <Typography variant="body2" color="text.secondary" sx={{ flexBasis: '100%' }}>
+            {CLOSING_TEXT}
+          </Typography>
+        ) : view.open && !view.publishing ? (
           <VoteButtons
             question={poll.question}
             current={mine.vote}

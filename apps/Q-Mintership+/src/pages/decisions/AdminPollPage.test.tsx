@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ADMIN_POLL_IDS } from '../../../e2e/world.mjs';
+import { ADMIN_POLL_IDS, NULL_OWNER, type World } from '../../../e2e/world.mjs';
 import { fromData64 } from '../../data/adminPollRecords';
 import { resetPendingPollWrites } from '../../state/adminPolls';
 import { withAdminPolls } from '../../test/adminPolls';
@@ -103,5 +103,86 @@ describe('a Minter Admin poll’s own page', () => {
     expect(await screen.findByText('This is for Minter Admins only', {}, T)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeVisible();
     expect(privateReads()).toHaveLength(0);
+  });
+});
+
+describe('near the end of voting', () => {
+  const DAY = 86_400_000;
+  const SOON_Q = 'A poll that ends in a few minutes?';
+  /** A 1-day poll by Admin B that ends `endsIn` from now; Avery voted `voted` an hour ago. */
+  const endingSoon = (id: string, endsIn: number, voted?: 'yes') => (world: World) => {
+    const signers = world.admins.filter((a: string) => a !== NULL_OWNER);
+    const createdAt = Date.now() - DAY + endsIn;
+    world.adminPollRecords.push({
+      name: 'Admin B',
+      identifier: `qmp-adminpoll-${id}`,
+      created: createdAt + 20_000,
+      readers: signers,
+      body: {
+        v: 1,
+        id,
+        question: SOON_Q,
+        durationDays: 1,
+        createdAt,
+        endsAt: createdAt + DAY,
+        endHeight: 2_800_000,
+        readers: signers,
+      },
+    });
+    if (voted)
+      world.adminPollRecords.push({
+        name: 'Avery Admin',
+        identifier: `qmp-adminvote-${id}`,
+        created: Date.now() - 3_600_000,
+        readers: signers,
+        body: { v: 1, pollId: id, vote: voted },
+      });
+  };
+  const open = (id: string, more: (world: World) => void) =>
+    renderPage(<AdminPollPage />, {
+      persona: 'admin',
+      path: `/decisions/polls/${id}`,
+      route: '/decisions/polls/:id',
+      setup: withAdminPolls('admin', more),
+    });
+
+  it('in the last minutes no vote is offered: it could land after the end', async () => {
+    await open('closing7', endingSoon('closing7', 3 * 60_000));
+    const card = await screen.findByRole('article', { name: `Minter Admin poll: ${SOON_Q}` }, T);
+    expect(within(card).getByText(/^Voting ends in under 5 minutes/)).toBeVisible();
+    expect(within(card).queryByRole('button', { name: /^Vote / })).toBeNull();
+  });
+
+  it('changing a vote close to the end warns that a late change counts for nothing', async () => {
+    const u = userEvent.setup();
+    await open('changes8', endingSoon('changes8', 20 * 60_000, 'yes'));
+    const card = await screen.findByRole('article', { name: `Minter Admin poll: ${SOON_Q}` }, T);
+    await u.click(within(card).getByRole('button', { name: `Change your vote to No: ${SOON_Q}` }));
+    const dialog = await screen.findByRole('dialog', { name: 'Change your vote to No' });
+    expect(
+      within(dialog).getByText(
+        /^Voting ends in 20 minutes\. If your new vote is published after the end, it doesn’t count, and your earlier vote doesn’t count any more either\.$/
+      )
+    ).toBeVisible();
+  });
+
+  it('a closed poll whose latest vote from the viewer came late says so', async () => {
+    await open(ADMIN_POLL_IDS.closed, (world: World) => {
+      const mine = world.adminPollRecords.find(
+        (r: { name: string; identifier: string }) =>
+          r.name === 'Avery Admin' && r.identifier === `qmp-adminvote-${ADMIN_POLL_IDS.closed}`
+      );
+      // Changed after the end: the earlier, on-time version no longer counts.
+      mine.updated = Date.now() - 2 * DAY;
+    });
+    const card = await screen.findByRole(
+      'article',
+      { name: /^Minter Admin poll: Should Minter Admins review/ },
+      T
+    );
+    expect(
+      within(card).getByText('Your vote came after the end, so it doesn’t count.')
+    ).toBeVisible();
+    expect(within(card).queryByText(/^You voted/)).toBeNull();
   });
 });

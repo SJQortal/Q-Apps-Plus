@@ -5,7 +5,7 @@
  */
 import { DAY_MS, type PollRecord, type PollVote } from '../../data/adminPollRecords';
 import {
-  CLOCK_SLACK_MS,
+  VOTE_CUTOFF_MS,
   isPollOpen,
   sortPolls,
   tallyVotes,
@@ -94,6 +94,19 @@ export function undecryptedText(count: number): string {
     : `${formatCount(count)} more polls couldn’t be decrypted just now.`;
 }
 
+/** A change of vote this close to the end is warned about: one landing after it counts for nothing. */
+export const CHANGE_WARN_MS = 30 * 60_000;
+
+/** Too close to the end to start a vote here (writes check it again before Hub). */
+export function voteClosing(view: Pick<AdminPollView, 'poll' | 'open'>, now: number): boolean {
+  return view.open && view.poll.endsAt - now < VOTE_CUTOFF_MS;
+}
+
+export const CLOSING_TEXT = `Voting ends in under ${VOTE_CUTOFF_MS / 60_000} minutes: too close to the end to publish a vote that would arrive in time.`;
+
+/** Said when the viewer's latest vote came after the end. */
+export const MY_LATE_TEXT = 'Your vote came after the end, so it doesn’t count.';
+
 /** "Share with 2 Minter Admins added since". */
 export function shareLabel(missing: number): string {
   return `Share with ${plural(missing, 'Minter Admin')} added since`;
@@ -106,15 +119,18 @@ export function waitingText(count: number): string {
     : `${formatCount(count)} Minter Admin polls are waiting for your vote`;
 }
 
-/** The pending vote is in what QDN shows now: the same vote, published since. */
+/**
+ * The pending vote is in what QDN shows now: the viewer's latest vote (on
+ * time or late) is the same vote, in a version newer than the one QDN showed
+ * before. Row times against row times: the device's clock plays no part.
+ */
 export function voteSettled(
-  view: Pick<AdminPollView, 'myVote'>,
-  pending: Pick<PendingVote, 'vote' | 'at'>
+  view: Pick<AdminPollView, 'myVote' | 'myLate'>,
+  pending: Pick<PendingVote, 'vote' | 'after'>
 ): boolean {
+  const mine = view.myVote ?? view.myLate;
   return Boolean(
-    view.myVote &&
-    view.myVote.vote === pending.vote &&
-    view.myVote.at >= pending.at - CLOCK_SLACK_MS
+    mine && pending.after !== undefined && mine.vote === pending.vote && mine.at > pending.after
   );
 }
 
@@ -133,7 +149,7 @@ export interface MyVoteView {
 
 /** The viewer's own vote as the card shows it. */
 export function myVoteView(
-  view: Pick<AdminPollView, 'myVote' | 'open'>,
+  view: Pick<AdminPollView, 'myVote' | 'myLate' | 'open'>,
   pending: PendingVote | null | undefined
 ): MyVoteView {
   const counted = view.myVote;
@@ -174,13 +190,13 @@ export function myVoteView(
   };
 }
 
-/** A share from this device is in what QDN shows now. */
+/** A share from this device is in what QDN shows now: the viewer's, newer than before. */
 export function shareSettled(
   view: Pick<AdminPollView, 'shares'>,
   viewer: string,
-  pending: Pick<PendingShare, 'at'>
+  pending: Pick<PendingShare, 'after'>
 ): boolean {
-  return view.shares.some((s) => s.address === viewer && s.at >= pending.at - CLOCK_SLACK_MS);
+  return view.shares.some((s) => s.address === viewer && s.at > (pending.after ?? 0));
 }
 
 /** A listed poll, or one this device just published that QDN doesn't list yet. */
