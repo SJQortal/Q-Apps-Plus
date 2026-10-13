@@ -24,12 +24,13 @@ Who joins the MINTER group (694), and therefore who mints QORT: nominate, then M
 
 | Step | Who | What happens | On chain |
 |---|---|---|---|
-| 1. Nominate | any **MINTER member at level 5+**, or any Minter Admin | Pick the candidate by name or address, write a short reason and optional `qortal://` links. Blocked: self-nomination, current members, banned accounts, anyone with an open nomination (support it instead). | A small QDN **nomination** record (see Data contract) |
-| 2. Accept (nominee, recommended) | the candidate | "Accept your nomination" sends **JOIN_GROUP** (0.01 QORT), so approval later makes them a member at once. The app explains the fee, and what to do with a 0 balance. | JOIN_GROUP → join request |
+| 1. Nominate | any **MINTER member at level 5+**, or any Minter Admin | Nominators look for people who'd make good minters and reach out; Nominations → **Ready to mint** lists those who asked to join. Pick the candidate by name or address, write a short reason and optional `qortal://` links. Blocked: self-nomination, current members, banned accounts, anyone with an open nomination (support it instead). | A small QDN **nomination** record (see Data contract) |
+| 2. Accept (nominee, recommended) | the candidate | "Accept your nomination" sends **JOIN_GROUP** (0.01 QORT), so approval later makes them a member at once. The app explains the fee, and what to do with a 0 balance. Already done if they showed they're ready to mint. | JOIN_GROUP → join request |
 | 3. First signature | the first Minter Admin who signs | Creates the GROUP_INVITE (txGroupId 694) and their own GROUP_APPROVAL, two Hub confirmations shown as one guided step. **The clock starts here.** | GROUP_INVITE + GROUP_APPROVAL |
 | 4. Signatures | other Minter Admins | **Sign**, or do nothing and let it expire. A ring shows `k of n` and a countdown; it updates at once ("Signed ✓, confirming…"). | GROUP_APPROVAL |
 | 5. Done | Core | At the threshold Core applies it by itself: the nominee is in (or, with no join request, gets "Join now"). Without enough signatures it expires and can be nominated again. | automatic |
 
+- **Ready to mint, before any nomination:** anyone not in MINTER (newcomers and former members who left or were kicked) can press "Show you're ready to mint" on Home. A short self-check comes first: three boxes (own node synced and online, a minting key once in, the request can't be withdrawn), the 0.01 QORT fee against the confirmed balance, and an optional registered name. Then it sends the same JOIN_GROUP as Accept. Nominators find them on Nominations → Ready to mint, and an approved nomination makes them a member at once. The self-check's answers are not published or saved.
 - **Before the first admin signature**, a nomination waits on the open list for at most **10,080 blocks** (an app rule, the length of MINTER's own window), then moves to History.
 - **One open nomination per candidate.** Other eligible members add their **support** ("Nominated by X, also supported by Y and Z").
 - **No reject or withdraw button.** On chain, "withdrawing" a signature would be a rejection, and rejections count towards ending a nomination. Admins sign, or let it expire; the help text says so.
@@ -42,7 +43,8 @@ Who joins the MINTER group (694), and therefore who mints QORT: nominate, then M
 - **The window,** for a decision confirmed at block h: earliest decision h+6, last signature that counts h+10,079, expired at h+10,081. Times come from the measured block time (72.9 s on 2026-10-12, so about 8.5 days), never an assumed 60 s.
 - **Joining:** with a join request, the approved invite makes the nominee a member at once; otherwise they press Join. JOIN_GROUP needs 0.01 QORT of confirmed balance.
 - **Kicks and bans** go through the same signatures. An admin must lose the admin role before a kick or ban. A ban is permanent or up to 24 days. Kicked members keep their level.
-- **Fees:** 0.01 QORT for every group transaction and for the QDN record; the first signature costs two.
+- **Proposals** (kick, ban, admin changes, lifting a ban, cancelling an approved invite) are made from Decisions → Propose, as one guided step of two Hub confirmations: the proposal, then the proposer's own signature on it, because a proposal doesn't count as its proposer's signature.
+- **Fees:** 0.01 QORT for every group transaction and for the QDN record; the first signature and every proposal cost two, and both fees are checked against the confirmed balance before Hub is asked.
 
 ## Statuses (the status-tailored Home)
 
@@ -57,8 +59,9 @@ The status engine (`src/rules/status.ts`, loaded by `src/data/me.ts`) resolves t
 | Banned | `/groups/bans/694` (in force) | when; that admins must lift the ban first |
 | Approved, not joined | `/groups/invites/{a}` | one step left: Join now |
 | Nominated | the person's open nomination (record or pending invite) | who nominated, k of n or "waiting for a Minter Admin", Accept |
-| Former member: kicked / left | the address's MINTER history (approved kick, own LEAVE_GROUP) | when; that a new nomination is possible; level kept |
-| Not in MINTER yet | none of the above (with or without a name; with or without a join request) | how minting and nomination work; find a nominator; optional name |
+| Former member: kicked / left | the address's MINTER history (approved kick, own LEAVE_GROUP) | when; that a new nomination is possible; level kept; Show you're ready to mint |
+| Not in MINTER yet | none of the above (with or without a name) | how minting and nomination work; that nominators reach out; Show you're ready to mint; optional name |
+| … ready to mint | not in MINTER (new or former), with a join request (`/groups/joinrequests/address/{a}`) | "you've shown you're ready to mint", that it can't be withdrawn, what happens next; their name to share. Once a nomination makes them a member, the welcome |
 
 ## Data contract
 
@@ -79,7 +82,7 @@ The status engine (`src/rules/status.ts`, loaded by `src/data/me.ts`) resolves t
 |---|---|
 | First signature | `INVITE_TO_GROUP { groupId: 694, inviteeAddress, inviteTime: 864000, txGroupId: 694 }`, then the admin's own approval (below) |
 | Sign | `SIGN_TRANSACTION { unsignedBytes, process: true }` with GROUP_APPROVAL bytes built in the app (`src/qortal/approvalBytes.ts`: type 33, txGroupId 0, approval 1) |
-| Accept nomination / Join now | `JOIN_GROUP { groupId: 694 }` |
+| Accept nomination / Join now / Show you're ready to mint | `JOIN_GROUP { groupId: 694 }` |
 | Kick | `KICK_FROM_GROUP { groupId: 694, qortalAddress, reason, txGroupId: 694 }` |
 | Ban | `BAN_FROM_GROUP { groupId: 694, qortalAddress, reason, banTime: 0 or ≤ 2,073,600 s, txGroupId: 694 }` |
 | Lift a ban | `CANCEL_GROUP_BAN { groupId: 694, qortalAddress, txGroupId: 694 }` |
@@ -87,6 +90,8 @@ The status engine (`src/rules/status.ts`, loaded by `src/data/me.ts`) resolves t
 | Add / remove a Minter Admin | `ADD_GROUP_ADMIN` / `REMOVE_GROUP_ADMIN { groupId: 694, qortalAddress, txGroupId: 694 }` |
 | Nominate / support | `PUBLISH_QDN_RESOURCE { name, service: 'JSON', identifier, data64 }` |
 
+- **A proposal and its proposer's signature** (`proposeAndSign` in `src/writes/flows.ts`): the kick, ban, admin change, lift or cancellation above, then, once the node knows it, `SIGN_TRANSACTION` on it as for Sign. If the proposal goes through and the signature doesn't, the proposal waits in the queue like any other.
+- **Ready to mint adds no QDN data:** it is MINTER's join request on chain.
 - `inviteTime` 864000 is what the original app sends; Hub refuses 0.
 - Hub has no GROUP_APPROVAL action, so the bytes are built here. Tests rebuild three mainnet approvals byte for byte, and `npm run test:decode` sends built bytes to a local node's read-only `POST /transactions/decode?ignoreValidityChecks=true` (it only parses; nothing is stored or broadcast).
 - **Before every write** the app re-reads the chain (`src/writes/guards.ts`): still pending, still an admin, not already signed, not too late to count, no duplicate waiting, no stored invite, the fee balance, and Core's limit of 25 unconfirmed transactions per account. Hub hides Core's reason when SIGN_TRANSACTION fails validation, so these checks come first.
@@ -101,6 +106,7 @@ The status engine (`src/rules/status.ts`, loaded by `src/data/me.ts`) resolves t
 | Members with names | `/groups/members/694?limit=100&offset=…` (7 pages today, only where the whole group is needed) |
 | Membership, join request, stored invite | `/groups/member/{a}`, `/groups/joinrequests/address/{a}`, `/groups/invites/{a}` |
 | Join requests, stored invites, bans | `/groups/joinrequests/694`, `/groups/invites/group/694`, `/groups/bans/694` |
+| Ready to mint (Nominations) | the join requests above less members, admins and bans in force (reads the nominations already make), in Core's order, 20 rows at a time; each row's account and name only once it is shown, 6 at a time, kept 10 minutes |
 | Decisions | `/transactions/pending?txGroupId=694` |
 | A pending or decided invite cancellation's group and invitee (Core's JSON leaves them out) | `/transactions/signature/{sig}/raw`, decoded in `src/qortal/groupTxBytes.ts`, read once per transaction |
 | Signatures | `/transactions/search?txType=GROUP_APPROVAL&confirmationStatus=CONFIRMED&startBlock=…&blockLimit=…` over the blocks the pending ones can have signatures in, plus `/transactions/unconfirmed?txType=GROUP_APPROVAL`; joined on `pendingSignature` |
@@ -163,30 +169,54 @@ _Done on the branch; Simon reviews in the morning._
   - First load in the screenshot check (390×844, GETs including lazily loaded avatars; Hub requests): a learner's Home 7 GETs; a newcomer's 21; an admin's 36; Decisions 62; Activity 38; Nominations 38. The original app downloads every GROUP_APPROVAL since block 1,990,000 (about 13,400 rows, 7.9 MB) every 15 s while its board is open, and makes about 21 unlimited searches.
   - Review: 6 dimensions (Core rules, write safety, efficiency, phones and UX, accessibility, wording), 38 findings, each checked by a second reviewer trying to refute it: 37 confirmed and fixed, 1 refuted.
 
+### Simon's answers built (2026-10-13)
+
+Three branches built side by side, merged one at a time with every check after each.
+
+- **Proposals with the proposer's signature:** Propose → kick, ban, admin change, lifting a ban or cancelling an approved invite is one guided step of two Hub confirmations (propose it, sign it), both fees stated and checked against the confirmed balance first. If the proposal goes through and the signature doesn't, the dialog says so plainly, and the proposal can be signed from the queue.
+- **Cancel an approved invite** is in Propose: pick one of the invites nobody used, the same chain checks as the write (one already waiting for signatures can't be proposed again), then the two steps.
+- **Show you're ready to mint** on Home, for newcomers and former members who left or were kicked: the self-check, then the join request. Home then says they've shown they're ready, that it can't be withdrawn and what happens next; the welcome plays once a nomination makes them a member. How it works says nominators reach out and that being ready counts as accepting. The "find a nominator" help is replaced.
+- **Nominations → Ready to mint:** everyone who asked to join, less members and bans in force, 20 at a time in Core's order, with Nominate or Add your support for level 5+ members and Minter Admins, and what you already did ("You nominated them").
+- **Tests:** 462 passed, 7 skipped, in 49 files (two clean runs after each merge). The page tests now have 15 s each, as some passed vitest's 5 s on a busy machine.
+- **Screenshot check:** 32 screens × 5 sizes × 4 themes = 640 captures per mode, dark and light: 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations. New screens: `home-ready` (the mock world's Rae Ready has a join request), `home-ready-dialog`, `nominations-ready` and `nominations-ready-admin`, `decisions-propose` (the menu or the phone sheet) and `decisions-cancel-invite` (up to the two Hub steps). First load at 390×844: a ready newcomer's Home 21 GETs; Ready to mint 44.
+
 ## Follow-ups
 
 ### Night 2 (must)
 
-1. **Private testnet end to end** for every write: from Core's `testnet/` folder, on its own data directory, ports and keys, never peering with mainnet (its `testchain.json` has `nullGroupMembershipHeight 0` and short delays, so expiry can be watched in minutes). A dev-only test signer drives the app's real write paths. Never commit test keys; never load mainnet keys. Prove at least: nominate → accept → first signature (invite + own approval, including signing the invite while it is still unconfirmed) → signatures → approval → member; the same without a join request (Join now); expiry; kick (and the "remove admin first" path); ban and lift; add/remove admin; cancel a stale invite; bulk sign; a Hub timeout followed by the lookup.
+1. **Private testnet end to end** for every write: from Core's `testnet/` folder, on its own data directory, ports and keys, never peering with mainnet (its `testchain.json` has `nullGroupMembershipHeight 0` and short delays, so expiry can be watched in minutes). A dev-only test signer drives the app's real write paths. Never commit test keys; never load mainnet keys. Prove at least: nominate → accept → first signature (invite + own approval, including signing the invite while it is still unconfirmed) → signatures → approval → member; the same without a join request (Join now); expiry; kick (and the "remove admin first" path); ban and lift; add/remove admin; each of those proposals followed by the proposer's own signature; cancel a stale invite, and one approved invite from Propose; show you're ready to mint, then a nomination of that account approved (a member at once); bulk sign; a Hub timeout followed by the lookup.
 2. **Hub check, read-only,** at the five sizes with real data, against the original app (docs/HUB-TESTING.md). Not done on night 1; `npm run test:live` covered the data layer against mainnet instead.
 3. Notifications (in-app, optional Hub alerts), and the optimistic states and animations checked against real confirmations on the testnet.
 
-### Questions for Simon
+### Simon's answers (2026-10-13)
 
-1. **Wording on the bottom bar:** "Nominees" (Nominations doesn't fit 72 px at 360). OK?
-2. **Classic light colours:** the light accents are darker shades of the original (teal `#186d64`, gold `#8b6016`) so text and buttons pass 4.5:1. OK?
-3. **Stale invites:** invites approved in the last 30 days are listed but left out of "Propose cancelling all", since those people may still press Join. Is 30 days right, and should Home count only those older invites?
-4. **Proposals and their creator's signature:** proposing a kick, ban or admin change does not chain the proposer's own signature (the first signature of a nomination does); the dialog tells them to sign it in the queue. Chain it too?
-5. **Reasons:** a reason is required for kicks and bans (Core doesn't need one; capped at Core's 128 bytes). Keep it required?
-6. **Signing an unconfirmed decision:** Sign is offered only once a decision is in a block (the first signature signs its own invite while unconfirmed, which night 2 proves on the testnet). Offer Sign earlier too?
-7. **Cancel one invite directly:** Propose offers kick, ban, admin changes and lifting a ban; cancelling an approved invite is only in the stale-invite clean-up. Add it to Propose?
-8. **"Other transactions waiting for Minter Admins":** pending transactions with MINTER's approval that aren't MINTER group changes are listed apart, admins only, without Sign ("This isn't a MINTER group change, so it can't be signed here."). Wording OK?
-9. **Activity counting:** open decisions count for an admin only once they sign them; the median time to sign leaves out decisions the admin proposed; "missed" = expired while they were an admin, neither signed nor rejected; a signature landing after the last useful block is not counted; confirmed cancellations count as MINTER's without decoding each one (one GET each). Agree with each?
-10. **Activity's 180-day window** re-reads the whole range on each forced refresh; caching settled blocks and re-reading only the tail would save GETs. Worth it?
-11. **History:** proposals still collecting signatures are left out of the group History (they're in Nominations and Decisions); a person's own timeline shows them. Old cards whose poll isn't the publisher's are listed (the original app hid them) and noted on the card page. A person page reads the newest 40 old cards plus that person's own, with "Search older cards". OK?
-12. **Minting tips and where to find a nominator:** the copy is generic ("check in Hub that your minting key is active on your node"; "ask in Q-Chat or on open nominations"). Is there exact wording for Hub's and GO's minting screens, or an official MINTER chat group to point to?
-13. **The welcome to new minters** is remembered per device; someone who never opened Home while nominated won't see it. Fine?
-14. **History hygiene:** done on 2026-10-13. The branch history was rewritten once, with your OK, to drop a Claude attribution trailer from the old scaffold commit and to reword a few comments. The superseded branch `q-mintership-plus/rewrite-phase-1` on GitHub still has that scaffold commit with its trailer: delete it?
+1. **Bottom bar:** "Nominees" stays.
+2. **Classic light colours:** keep the darker shades (teal `#186d64`, gold `#8b6016`).
+3. **Stale invites:** stale means approved more than 30 days ago, as built. Home's tile counts every approved invite not used, and says so.
+4. **Proposals chain the proposer's signature,** as the first signature does. Built (see Done).
+5. **Reasons** for kicks and bans stay required.
+6. **Sign on unconfirmed decisions** waits for the testnet proof (night 2).
+7. **Cancel an approved invite** is added to Propose. Built.
+8. **"Other transactions waiting for Minter Admins":** the wording stays.
+9. **Activity counting:** each rule agreed.
+10. **Activity's tail cache:** later, if the 180-day refresh is slow in Hub.
+11. **History:** as built.
+12. **Ready to mint:** nominators find quality users and reach out; newcomers can show they're ready with a join request, after a readiness checklist. Built, in place of the generic "find a nominator" help.
+13. **The welcome per device:** fine.
+14. **History clean-up:** done, and the old `q-mintership-plus/rewrite-phase-1` branch is deleted from GitHub.
+
+### Open questions (2026-10-13)
+
+From building the answers above:
+
+1. Should "Propose cancelling all" (stale invites) also add your signature to each cancellation, as a single proposal now does?
+2. A proposal checks the confirmed balance for both fees (0.02 QORT) before step 1. Right?
+3. Propose → Cancel an approved invite lists only invites nobody used. Should it also list invites of people who are already members?
+4. Accept's chain check still says "You've already accepted" when a join request is open, even when it came from "Show you're ready to mint". Reword it to cover both?
+5. A nominee's Home says "You've accepted ✓" even when they showed they were ready first. Keep it?
+6. The "Find a nominator" dialog is gone: Show you're ready to mint replaces it. OK?
+7. Ready to mint doesn't mark former members (one history search per row). Worth adding?
+8. Search is hidden on the Ready to mint view. Add a search by name or address?
 
 ### Next-pass ideas
 
