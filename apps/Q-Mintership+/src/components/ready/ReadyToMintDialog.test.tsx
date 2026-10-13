@@ -11,7 +11,7 @@ import userEvent from '@testing-library/user-event';
 import { getDefaultStore } from 'jotai';
 import { signerOf, useSession } from '../../state/session';
 import { renderPage } from '../../test/render';
-import { mockQortalRequest, qortalCallsFor } from '../../test/setup';
+import { mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { getPendingWrite, pendingWritesAtom, writeKeys } from '../../writes/optimistic';
 import { ReadyToMintDialog } from './ReadyToMintDialog';
 
@@ -147,6 +147,33 @@ describe('ReadyToMintDialog: the self-check', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Check again' }));
     expect(await within(dialog).findByText(/1 QORT, so that's covered/, {}, T)).toBeInTheDocument();
     expect(go).toBeEnabled();
+  }, 20_000);
+
+  it('says the balance is still being checked, not Ready, while Continue waits for it', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    await renderPage(<Harness />, {
+      persona: 'newcomerName',
+      setup: () =>
+        mockFetchRoute('/addresses/balance/', async () => {
+          await gate;
+          return '12.5';
+        }),
+    });
+    const dialog = await checklist();
+    await tickAll(dialog);
+    expect(within(dialog).getByRole('status')).toHaveTextContent(
+      'Checking your balance for the 0.01 QORT fee…'
+    );
+    expect(within(dialog).getByRole('button', { name: 'Continue' })).toBeDisabled();
+    release();
+    expect(
+      await within(dialog).findByText(/12\.5 QORT, so that's covered/, {}, T)
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole('status')).toHaveTextContent(
+      'Ready. Next, Hub asks you to confirm.'
+    );
+    expect(within(dialog).getByRole('button', { name: 'Continue' })).toBeEnabled();
   }, 20_000);
 
   it('offers a name as optional, through the Names app', async () => {

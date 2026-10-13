@@ -52,13 +52,22 @@ export interface ReadyHintInput {
   feeQort: number;
   /** Continue was pressed with something missing. */
   attempted: boolean;
+  /** The balance is still being read, so Continue waits. */
+  checking?: boolean;
 }
 
 /** The one line under the checklist: what's still needed, in plain words. */
-export function readyHint({ ticks, balance, feeQort, attempted }: ReadyHintInput): string {
+export function readyHint({
+  ticks,
+  balance,
+  feeQort,
+  attempted,
+  checking,
+}: ReadyHintInput): string {
   if (typeof balance === 'number' && balance < feeQort)
     return `Continue opens once your confirmed balance covers the ${formatQort(feeQort)} fee.`;
   const missing = missingChecks(ticks).length;
+  if (missing === 0 && checking) return `Checking your balance for the ${formatQort(feeQort)} fee…`;
   if (missing === 0) return 'Ready. Next, Hub asks you to confirm.';
   const boxes = missing === 1 ? '1 more box' : `${missing} more boxes`;
   if (attempted) return `Can't continue yet: tick ${boxes} above.`;

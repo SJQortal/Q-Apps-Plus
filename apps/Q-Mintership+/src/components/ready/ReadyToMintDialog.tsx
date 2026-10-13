@@ -110,7 +110,7 @@ export function ReadyToMintDialog({
   const short = known !== undefined && known < feeQort;
   const checkingBalance = Boolean(address) && known === undefined && !balance.isError;
   const missing = missingChecks(ticks);
-  const hint = readyHint({ ticks, balance: known, feeQort, attempted });
+  const hint = readyHint({ ticks, balance: known, feeQort, attempted, checking: checkingBalance });
 
   const next = () => {
     if (missing.length) {
