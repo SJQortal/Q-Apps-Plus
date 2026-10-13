@@ -31,6 +31,11 @@ export interface TargetImpactProps {
   advice?: boolean;
   /** The "I've checked these" box, when Hub opens next. */
   ack?: Acknowledge | null;
+  /**
+   * What a withdrawal has to come before ("the admin change passes", by
+   * default); null when one sent now would land too late to count.
+   */
+  deadline?: string | null;
 }
 
 export function TargetImpact({
@@ -39,6 +44,7 @@ export function TargetImpact({
   lead,
   advice = true,
   ack,
+  deadline,
 }: TargetImpactProps) {
   const fee = useFee('GROUP_APPROVAL');
   const applies = s.effects.filter((e) => e.effect === 'applies');
@@ -98,9 +104,11 @@ export function TargetImpact({
           <Typography variant="body2" sx={{ mt: 1 }}>
             {ORDER_ADVICE}
           </Typography>
-          <Typography variant="body2" sx={{ mt: 0.5 }}>
-            {withdrawAdvice(formatQort(fee.data?.qort ?? 0.01))}
-          </Typography>
+          {deadline !== null ? (
+            <Typography variant="body2" sx={{ mt: 0.5 }}>
+              {withdrawAdvice(formatQort(fee.data?.qort ?? 0.01), deadline)}
+            </Typography>
+          ) : null}
         </>
       ) : null}
       {ack ? <CheckedBox ack={ack} /> : null}

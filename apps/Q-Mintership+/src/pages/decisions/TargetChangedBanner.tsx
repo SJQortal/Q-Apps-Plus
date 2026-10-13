@@ -3,8 +3,8 @@
  * last visit, or the last refresh). Says from what to what, and why (the
  * approved admin changes since, from one bounded read), then which waiting
  * decisions now have enough signatures (or enough rejections) because of
- * it, the soonest to apply first. Minter Admins also read what a withdrawal
- * does. Stays until dismissed.
+ * it, the soonest to apply first. Minter Admins also read, for each, whether
+ * a withdrawal can still count, and by which block. Stays until dismissed.
  */
 import { Fragment, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -23,8 +23,8 @@ import {
 } from '../../rules/targetShift';
 import { describeThreshold, type ApprovalThreshold } from '../../rules/threshold';
 import { decisionPath } from '../../routes/paths';
-import { plural } from '../../utils/format';
-import { whenApplied } from './decisionUi';
+import { formatBlock, plural } from '../../utils/format';
+import { stillStoppable, whenApplied } from './decisionUi';
 import type { TargetChange } from './seenTarget';
 import {
   changeReason,
@@ -80,6 +80,19 @@ export function TargetChangedBanner({
   const rejected = effects.filter((e) => e.effect === 'rejected');
   const flipped = applies.length + rejected.length > 0;
   const moved = from.needed !== to.needed;
+  // A withdrawal sent now counts from two blocks on: only those Core applies
+  // no sooner than that can still be stopped.
+  const stoppable = applies
+    .map((e) => byId.get(e.signature))
+    .filter((d): d is Decision => Boolean(d && stillStoppable(d, now)));
+  const appliesAfter = (d: Decision | undefined): string => {
+    if (!d) return '';
+    const when = `Applies ${whenApplied(d, now)}`;
+    if (!isAdmin) return `${when}.`;
+    if (stillStoppable(d, now))
+      return `${when}; a withdrawal must be in ${formatBlock((d.applyAtHeight as number) - 1)} or earlier to count.`;
+    return `${when}; a withdrawal now would arrive too late to count.`;
+  };
 
   const because: ReactNode =
     reason.complete && approved ? (
@@ -114,9 +127,7 @@ export function TargetChangedBanner({
             items={applies.map((e) => ({
               signature: e.signature,
               text: `${labelOf(e.signature)}, ${e.approvals} of ${to.needed}`,
-              after: byId.get(e.signature)
-                ? `Applies ${whenApplied(byId.get(e.signature) as Decision, now)}.`
-                : '',
+              after: appliesAfter(byId.get(e.signature)),
             }))}
           />
         </Box>
@@ -144,9 +155,12 @@ export function TargetChangedBanner({
             : 'No waiting decision has enough signatures because of it.'}
         </Typography>
       ) : null}
-      {flipped && isAdmin ? (
+      {stoppable.length && isAdmin ? (
         <Typography variant="body2" sx={{ mt: 1 }}>
-          {withdrawAdvice(formatQort(fee.data?.qort ?? 0.01), 'Core applies it')}
+          {withdrawAdvice(
+            formatQort(fee.data?.qort ?? 0.01),
+            formatBlock(Math.min(...stoppable.map((d) => (d.applyAtHeight as number) - 1)))
+          )}
         </Typography>
       ) : null}
       <Button onClick={onDismiss} sx={{ mt: 1, minHeight: 44, ml: -1 }}>

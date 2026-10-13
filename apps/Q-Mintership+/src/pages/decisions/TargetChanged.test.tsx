@@ -55,8 +55,11 @@ describe('Decisions: the target changed since the last visit', () => {
       'href',
       expect.stringMatching(/^\/decisions\/[1-9A-HJ-NP-Za-km-z]+$/)
     );
-    expect(alert).toHaveTextContent(/9 of 9Applies in the next block\./);
-    expect(alert).toHaveTextContent(/withdraw your signature before Core applies it/);
+    // It applies in the next block: too late for a withdrawal to count, so no advice to withdraw.
+    expect(alert).toHaveTextContent(
+      /9 of 9Applies in the next block; a withdrawal now would arrive too late to count\./
+    );
+    expect(alert).not.toHaveTextContent(/withdraw your signature/);
     // What this device saw is now the new target.
     expect(readSeenTarget()).toMatchObject({ adminCount: 21, needed: 9 });
   });

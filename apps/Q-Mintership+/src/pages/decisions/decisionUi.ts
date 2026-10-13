@@ -164,9 +164,33 @@ export function canReject(d: Decision, view: AnswerView): boolean {
   return answerable(d) && !view.busy && view.shown === 'none';
 }
 
-/** "Withdraw my signature" replaces Sign once the admin's signature is in a block. */
-export function canWithdraw(d: Decision, view: AnswerView): boolean {
-  return answerable(d) && !view.busy && view.shown === 'signed' && view.settled;
+/**
+ * Enough signatures, but Core applies it no sooner than two blocks from
+ * now: a withdrawal sent now lands in the next block at the earliest and
+ * counts from the one after, so it can still stop it.
+ */
+export function stillStoppable(d: Decision, now: Pick<ChainNow, 'height'>): boolean {
+  return (
+    d.phase === 'thresholdMet' &&
+    !d.unusualRoute &&
+    d.tally !== null &&
+    d.applyAtHeight !== null &&
+    d.applyAtHeight >= now.height + 2
+  );
+}
+
+/**
+ * "Withdraw my signature" replaces Sign once the admin's signature is in a
+ * block, while a withdrawal can still count (also with enough signatures,
+ * as long as it can still stop it).
+ */
+export function canWithdraw(d: Decision, view: AnswerView, now: Pick<ChainNow, 'height'>): boolean {
+  return (
+    (answerable(d) || stillStoppable(d, now)) &&
+    !view.busy &&
+    view.shown === 'signed' &&
+    view.settled
+  );
 }
 
 /** Waiting for this admin: they can sign it and haven't answered it at all. */

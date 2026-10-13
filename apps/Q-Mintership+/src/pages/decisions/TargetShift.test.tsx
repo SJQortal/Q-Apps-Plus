@@ -105,6 +105,9 @@ describe('Decisions: an admin change about to apply', () => {
       'Remove a Minter Admin: Dex Demote has enough signatures: Core applies it in the next block. When it does, MINTER has 20 admin seats and the target drops from 9 to 8 signatures.'
     );
     expect(within(note).getByText('Add to MINTER: Mia Met (8 of 9)')).toBeVisible();
+    // It applies in the next block: a withdrawal sent now would land too late to count.
+    expect(within(note).getByText(/agree the order with the other Minter Admins/)).toBeVisible();
+    expect(note).not.toHaveTextContent(/withdraw your signature/);
   });
 
   it('is not there when no admin change is about to tip anything over', async () => {

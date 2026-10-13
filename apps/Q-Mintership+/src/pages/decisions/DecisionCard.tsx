@@ -158,7 +158,7 @@ export function DecisionCard(props: DecisionCardProps) {
   const view = answerView(d, myPublicKey, pendingAnswers);
   const signable = canAct && canSign(d, view);
   const rejectable = canAct && canReject(d, view);
-  const withdrawable = canAct && canWithdraw(d, view);
+  const withdrawable = canAct && canWithdraw(d, view, now);
   const tally = d.tally;
   const confirming = tally ? tally.inFlight.filter((x) => x.approval) : [];
   const rejecting = tally ? tally.inFlight.filter((x) => !x.approval) : [];
