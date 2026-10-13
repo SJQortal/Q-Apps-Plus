@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderPage } from '../../test/render';
 import { ADDR } from '../../test/world';
 import { useChainNow, useNominations } from '../../hooks/useData';
@@ -24,6 +25,22 @@ describe('NominationCard', () => {
       { timeout: 4000 }
     );
     expect(within(card).getByRole('link', { name: 'Mia Met: open their page' })).toBeVisible();
+  });
+
+  it('copies a link to the nomination’s own page, and says so', async () => {
+    await renderPage(<NamelessCard />, { persona: 'admin', path: '/' });
+    const card = await screen.findByRole(
+      'article',
+      { name: 'Nomination of Mia Met' },
+      { timeout: 4000 }
+    );
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    await userEvent.click(
+      within(card).getByRole('button', { name: 'Copy link to the nomination of Mia Met' })
+    );
+    expect(writeText).toHaveBeenCalledWith(`qortal://APP/Q-Mintership+/nominations/${ADDR.met}`);
+    expect(await within(card).findByText('Link copied')).toBeVisible();
   });
 });
 

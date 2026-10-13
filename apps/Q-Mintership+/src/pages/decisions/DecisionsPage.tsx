@@ -10,9 +10,8 @@
  * withdraw: an admin signs or lets it expire.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { appParam } from '../../routes/hubLocation';
-import { PATHS } from '../../routes/paths';
+import { Navigate, useLocation } from 'react-router-dom';
+import { PATHS, legacyDecisionPath } from '../../routes/paths';
 import {
   Alert,
   Box,
@@ -57,7 +56,7 @@ import { pendingWritesAtom, writeKeys, type PendingWrite } from '../../writes/op
 import type { Signer } from '../../writes/runner';
 import { BulkDialog } from './BulkDialog';
 import { DecisionCard, type NominationsState, type SubjectFacts } from './DecisionCard';
-import { canSign, decisionCardId, isSignedByMe, myAnswer } from './decisionUi';
+import { canSign, isSignedByMe, myAnswer } from './decisionUi';
 import { FirstSignatureDialog } from './FirstSignatureDialog';
 import { HowSigningWorks } from './HowSigningWorks';
 import { ProposeDialog } from './ProposeDialog';
@@ -126,15 +125,21 @@ function useTargetChange(current: TargetSnapshot | null): TargetSnapshot | null 
     : null;
 }
 
+/** `/decisions`. An old `/decisions?d=<signature>` link opens that decision's own page. */
 export default function DecisionsPage() {
+  const { search } = useLocation();
+  const target = legacyDecisionPath(search);
+  if (target) return <Navigate to={target} replace />;
+  return <DecisionsQueue />;
+}
+
+function DecisionsQueue() {
   const session = useSession();
   const decisionsQ = useDecisions();
   const nominationsQ = useNominations();
   const membersQ = useMembers();
   const [hideSigned, setHideSigned] = useAtom(decisionsHideSignedAtom);
   const writes = useAtomValue(pendingWritesAtom);
-  const [params] = useSearchParams();
-  const target = appParam(params, 'd');
   // Sticky bars sit above the phone's bottom bar while it is on screen.
   const bottomBar = useBottomNavShown();
   const reduced = useReducedMotion();
@@ -149,8 +154,6 @@ export default function DecisionsPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkList, setBulkList] = useState<Decision[] | null>(null);
   const [staleExpanded, setStaleExpanded] = useState(false);
-  const [highlight, setHighlight] = useState<string | null>(null);
-  const [handledTarget, setHandledTarget] = useState<string | null>(null);
 
   const data = decisionsQ.data;
   const ready = session.status === 'ready';
@@ -231,38 +234,12 @@ export default function DecisionsPage() {
   const collecting = decisions.filter((d) => COLLECTING.has(d.phase));
   const closed = decisions.filter((d) => !COLLECTING.has(d.phase));
   const signedByMe = (d: Decision) => isAdmin && isSignedByMe(myAnswer(d, myKey), pendingOf(d));
-  const shown =
-    isAdmin && hideSigned
-      ? collecting.filter((d) => !signedByMe(d) || d.signature === target)
-      : collecting;
+  const shown = isAdmin && hideSigned ? collecting.filter((d) => !signedByMe(d)) : collecting;
   const hiddenCount = collecting.length - shown.length;
   const signable = isAdmin
     ? collecting.filter((d) => canSign(d, myAnswer(d, myKey), pendingOf(d)))
     : [];
   const waiting = (nominationsQ.data?.open ?? []).filter((n) => n.state === 'waiting');
-  const targetKnown =
-    !target ||
-    !data ||
-    decisions.some((d) => d.signature === target) ||
-    (isAdmin &&
-      (data.unusual.some((d) => d.signature === target) ||
-        data.others.some((o) => o.signature === target)));
-
-  // ?d=<signature>: scroll to that decision once, and light it up for a moment.
-  useEffect(() => {
-    if (!target || !data || handledTarget === target) return;
-    const el = document.getElementById(decisionCardId(target));
-    setHandledTarget(target);
-    if (!el) return;
-    el.scrollIntoView?.({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
-    el.focus?.({ preventScroll: true });
-    setHighlight(target);
-  }, [target, data, handledTarget, reduced]);
-  useEffect(() => {
-    if (!highlight) return;
-    const timer = setTimeout(() => setHighlight(null), 2500);
-    return () => clearTimeout(timer);
-  }, [highlight]);
 
   const toggleSelect = (signature: string) =>
     setSelected((current) => {
@@ -347,12 +324,6 @@ export default function DecisionsPage() {
           />
         ) : data ? (
           <>
-            {!targetKnown ? (
-              <Alert severity="info" role="status">
-                That decision isn’t waiting any more: it was applied, or it expired. Its outcome is
-                in History.
-              </Alert>
-            ) : null}
             {targetChange ? (
               <Alert severity="info" role="status">
                 The target changed from {targetChange.needed} to {needed} signatures: MINTER now has{' '}
@@ -430,7 +401,6 @@ export default function DecisionsPage() {
                     selected={selected.has(d.signature)}
                     onToggleSelect={toggleSelect}
                     onSign={setSignTarget}
-                    highlighted={highlight === d.signature}
                   />
                 ))}
                 {hiddenCount ? (
@@ -513,7 +483,6 @@ export default function DecisionsPage() {
                     onRetryNominations={retryNominations}
                     adminNames={adminNames}
                     subjectFacts={factsFor(d.subject)}
-                    highlighted={highlight === d.signature}
                   />
                 ))}
               </Section>

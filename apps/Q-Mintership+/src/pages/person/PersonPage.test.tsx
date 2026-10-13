@@ -40,7 +40,7 @@ describe('Person page', () => {
     // Admins are already signing: no Nominate button, a way to the decision instead.
     expect(screen.queryByRole('link', { name: /^Nominate/ })).toBeNull();
     expect(screen.getByRole('link', { name: 'Open in Decisions' }).getAttribute('href')).toMatch(
-      /^\/decisions\?d=/
+      /^\/decisions\/\w+$/
     );
     expect(
       screen.getByText('Minter Admins are already signing a nomination for this person.')

@@ -14,8 +14,10 @@ import { routerBaseForPage } from './routes/hubLocation';
 // Home is the first screen almost everyone sees; the rest load on demand.
 import HomePage from './pages/home/HomePage';
 const NominationsPage = lazy(() => import('./pages/nominations/NominationsPage'));
+const NominationPage = lazy(() => import('./pages/nominations/NominationPage'));
 const NominatePage = lazy(() => import('./pages/nominations/NominatePage'));
 const DecisionsPage = lazy(() => import('./pages/decisions/DecisionsPage'));
+const DecisionPage = lazy(() => import('./pages/decisions/DecisionPage'));
 const PersonPage = lazy(() => import('./pages/person/PersonPage'));
 const HistoryPage = lazy(() => import('./pages/history/HistoryPage'));
 const LegacyCardPage = lazy(() => import('./pages/history/LegacyCardPage'));
@@ -46,8 +48,12 @@ const router = createBrowserRouter(
       children: [
         { index: true, element: <HomePage /> },
         { path: 'nominations', element: <NominationsPage /> },
+        // Shareable links: one nomination, one decision (also once it is decided).
+        { path: 'nominations/:address', element: <NominationPage /> },
         { path: 'nominate', element: <NominatePage /> },
+        // Old /decisions?d=<signature> links open /decisions/<signature> (DecisionsPage).
         { path: 'decisions', element: <DecisionsPage /> },
+        { path: 'decisions/:signature', element: <DecisionPage /> },
         { path: 'people/:address', element: <PersonPage /> },
         { path: 'history', element: <HistoryPage /> },
         { path: 'history/card/:card', element: <LegacyCardPage /> },

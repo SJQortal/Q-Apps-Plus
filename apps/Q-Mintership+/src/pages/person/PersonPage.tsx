@@ -50,7 +50,7 @@ import {
 } from '../../components/common/states';
 import { PATHS, personPath } from '../../routes/paths';
 import { shortAddress } from '../../utils/format';
-import { CopyLinkButton } from '../history/parts/CopyLinkButton';
+import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { PersonSearch } from '../history/parts/PersonSearch';
 import { TimelineList } from '../history/parts/TimelineList';
 import { AdminProposals } from './AdminProposals';

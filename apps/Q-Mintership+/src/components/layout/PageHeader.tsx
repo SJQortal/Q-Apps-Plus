@@ -5,8 +5,7 @@
  *
  * After a route change it takes focus on its title, so a screen reader
  * announces the new page and Tab starts from its top, and it names the
- * document after the page. The app's first page keeps the browser's focus,
- * and a ?d= link leaves it to the decision it opens.
+ * document after the page. The app's first page keeps the browser's focus.
  */
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -56,15 +55,11 @@ export interface PageHeaderProps {
 }
 
 export function PageHeader({ title, subtitle, actions, back, children }: PageHeaderProps) {
-  const { pathname, search } = useLocation();
+  const { pathname } = useLocation();
   const titleRef = useRef<HTMLHeadingElement>(null);
-  // A ?d= link focuses its decision card instead (DecisionsPage).
-  const opensDecision = new URLSearchParams(search).has('d');
-  const opensDecisionRef = useRef(opensDecision);
-  opensDecisionRef.current = opensDecision;
 
   useEffect(() => {
-    if (isFirstPage() || opensDecisionRef.current) return;
+    if (isFirstPage()) return;
     titleRef.current?.focus({ preventScroll: true });
   }, [pathname]);
 

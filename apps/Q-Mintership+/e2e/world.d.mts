@@ -24,3 +24,5 @@ export function answerQortal(
   persona: string,
   request: Record<string, unknown>
 ): unknown;
+// Shareable links (decision and nomination pages).
+export function addDecidedSignatures(world: World): string;

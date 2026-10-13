@@ -15,7 +15,9 @@ import type { NominationState } from '../../rules/nomination';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { formatDuration, formatRelative } from '../../utils/format';
 import { openQortalLink } from '../../utils/links';
+import { nominationPath } from '../../routes/paths';
 import { Countdown } from '../common/Countdown';
+import { CopyLinkButton } from '../common/CopyLinkButton';
 import { PersonChip, PersonInline } from '../common/Person';
 import { ProgressRing } from '../common/ProgressRing';
 import { Card, NominationStateChip } from '../common/Section';
@@ -31,6 +33,8 @@ export interface NominationCardProps {
   hideNominee?: boolean;
   /** When a decided nomination ended (ms), for "Expired 3 days ago". */
   endedAt?: number | null;
+  /** A "Copy link" to the nomination's own page (default; its page has one in the header). */
+  copyLink?: boolean;
 }
 
 const ENDED_TEXT: Partial<Record<NominationState, string>> = {
@@ -47,6 +51,7 @@ export function NominationCard({
   compact,
   hideNominee,
   endedAt,
+  copyLink = true,
 }: NominationCardProps) {
   const tally = n.decision?.tally ?? null;
   const window = n.decision?.window ?? null;
@@ -224,8 +229,18 @@ export function NominationCard({
             {endedAt ? ` ${formatRelative(endedAt, now.timestamp)}` : ''}.
           </Typography>
         ) : null}
-        {actions ? (
-          <Box sx={{ ml: 'auto', display: 'flex', gap: 1, flexWrap: 'wrap' }}>{actions}</Box>
+        {copyLink || actions ? (
+          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            {actions}
+            {/* After the screen's own actions: the link is the quieter one. */}
+            {copyLink ? (
+              <CopyLinkButton
+                variant="text"
+                path={nominationPath(n.nominee)}
+                what={`the nomination of ${nominee.label}`}
+              />
+            ) : null}
+          </Box>
         ) : null}
       </Box>
     </Card>

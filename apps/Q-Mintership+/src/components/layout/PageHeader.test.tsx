@@ -19,12 +19,12 @@ function app(start: string) {
               <>
                 <PageHeader title="Home" />
                 <Link to="/history">History</Link>
-                <Link to="/decisions?d=abc">A decision</Link>
+                <Link to="/decisions/abc">A decision</Link>
               </>
             }
           />
           <Route path="/history" element={<PageHeader title="History" />} />
-          <Route path="/decisions" element={<PageHeader title="Decisions" />} />
+          <Route path="/decisions/:signature" element={<PageHeader title="Decision" />} />
         </Routes>
       </MemoryRouter>
     </HubThemeProvider>
@@ -43,9 +43,9 @@ describe('PageHeader on a route change', () => {
     expect(document.title).toBe('History · Q-Mintership+');
   });
 
-  it('leaves focus to the decision a ?d= link opens', async () => {
+  it('gives a decision’s own page the focus on its title, like any page', async () => {
     app('/');
     await userEvent.setup().click(screen.getByRole('link', { name: 'A decision' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'Decisions' })).not.toHaveFocus();
+    expect(screen.getByRole('heading', { level: 1, name: 'Decision' })).toHaveFocus();
   });
 });

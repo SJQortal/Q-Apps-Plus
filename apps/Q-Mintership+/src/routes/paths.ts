@@ -1,4 +1,6 @@
 /** Client routes. Person and card paths take an address or a card identifier. */
+import { appParam } from './hubLocation';
+
 export const PATHS = {
   home: '/',
   nominations: '/nominations',
@@ -27,9 +29,27 @@ export function nominatePath(address?: string): string {
   return address ? `${PATHS.nominate}?who=${encodeURIComponent(address)}` : PATHS.nominate;
 }
 
-/** `/decisions?d=<signature>`: the Decisions queue opened at one decision. */
+/**
+ * `/decisions/<signature>`: one decision, waiting or decided (its shareable
+ * link); `/decisions` without one. The older `/decisions?d=<signature>`
+ * form still opens it (see legacyDecisionPath).
+ */
 export function decisionPath(signature?: string): string {
-  return signature ? `${PATHS.decisions}?d=${encodeURIComponent(signature)}` : PATHS.decisions;
+  return signature ? `${PATHS.decisions}/${encodeURIComponent(signature)}` : PATHS.decisions;
+}
+
+/** `/nominations/<address>`: one person's nomination, its rounds and outcomes (its shareable link). */
+export function nominationPath(address: string): string {
+  return `${PATHS.nominations}/${encodeURIComponent(address)}`;
+}
+
+/**
+ * Where an old `/decisions?d=<signature>` link goes now: the decision's own
+ * page. Null when `d` is missing (appParam drops a query Hub appended).
+ */
+export function legacyDecisionPath(search: string): string | null {
+  const signature = appParam(new URLSearchParams(search), 'd');
+  return signature ? decisionPath(signature) : null;
 }
 
 export type BoardKey = 'minter' | 'admin' | 'ar' | 'stats';

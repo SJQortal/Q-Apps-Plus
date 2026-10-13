@@ -15,6 +15,8 @@ import { decisionTitle, isOwnAdminChange, type Decision } from '../../rules/deci
 import { useAccount } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { AvatarStack, PersonChip, PersonInline } from '../../components/common/Person';
+import { CopyLinkButton } from '../../components/common/CopyLinkButton';
+import { decisionPath } from '../../routes/paths';
 import { DoneChip, SigningClock } from '../../components/decision/DecisionParts';
 import { ProgressRing } from '../../components/common/ProgressRing';
 import { Card, DecisionPhaseChip } from '../../components/common/Section';
@@ -68,6 +70,8 @@ export interface DecisionCardProps {
   onToggleSelect?: (signature: string) => void;
   onSign?: (decision: Decision) => void;
   highlighted?: boolean;
+  /** A "Copy link" to the decision's own page (default; its page has one in the header). */
+  copyLink?: boolean;
 }
 
 export function DecisionCard(props: DecisionCardProps) {
@@ -86,6 +90,7 @@ export function DecisionCard(props: DecisionCardProps) {
     onToggleSelect,
     onSign,
     highlighted,
+    copyLink = true,
   } = props;
   const pending = usePendingWrite(writeKeys.sign(d.signature));
   const answer = myAnswer(d, myPublicKey);
@@ -259,6 +264,16 @@ export function DecisionCard(props: DecisionCardProps) {
               </Button>
             </>
           ) : null}
+        </Box>
+      ) : null}
+
+      {copyLink ? (
+        <Box sx={{ display: 'flex', mt: -0.5, ml: -1 }}>
+          <CopyLinkButton
+            variant="text"
+            path={decisionPath(d.signature)}
+            what={`the decision ${fullTitle}`}
+          />
         </Box>
       ) : null}
     </Card>

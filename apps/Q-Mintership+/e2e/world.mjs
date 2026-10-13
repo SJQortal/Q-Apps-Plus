@@ -832,3 +832,35 @@ export function answerQortal(world, persona, request) {
       return null;
   }
 }
+
+// ---- shareable links (decision and nomination pages) ------------------------
+/**
+ * Signatures on a decided decision, for its own page (/decisions/<sig>):
+ * eight Minter Admins signed Nora Nominator's old approved invite, long
+ * before the windows Activity reads, so no other screen's numbers change.
+ * Returns that invite's signature.
+ */
+export function addDecidedSignatures(world) {
+  const invite = world.decided.find(
+    (t) => t.type === 'GROUP_INVITE' && t.invitee === ADDR.nominator
+  );
+  const signers = world.admins.filter((a) => a !== NULL_OWNER).slice(3, 11);
+  signers.forEach((admin, i) => {
+    const h = invite.blockHeight + 10 + i * 50;
+    world.approvals.push({
+      type: 'GROUP_APPROVAL',
+      timestamp: blockTime(h) - 10_000,
+      reference: sig(`ar:${admin}:${invite.signature}`),
+      fee: '0.01000000',
+      signature: sig(`a:${admin}:${invite.signature}:${h}`),
+      txGroupId: 0,
+      blockHeight: h,
+      approvalStatus: 'NOT_REQUIRED',
+      creatorAddress: admin,
+      adminPublicKey: pk(admin),
+      pendingSignature: invite.signature,
+      approval: true,
+    });
+  });
+  return invite.signature;
+}

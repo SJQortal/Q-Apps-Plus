@@ -816,7 +816,7 @@ describe('Decisions: admin changes from anywhere', () => {
 });
 
 describe('Decisions: navigation and filters', () => {
-  it('scrolls to and focuses the decision named in ?d=', async () => {
+  it('sends an old ?d= link on to the decision’s own page', async () => {
     const sig = createWorld().pending.find((t: { type: string }) => t.type === 'GROUP_KICK')
       .signature as string;
     await renderPage(<DecisionsPage />, {
@@ -824,13 +824,19 @@ describe('Decisions: navigation and filters', () => {
       path: `/decisions?d=${encodeURIComponent(sig)}`,
       route: '/decisions',
     });
-    const kick = await screen.findByRole('article', { name: /Remove from MINTER, Kai Target/ });
-    await vi.waitFor(() => expect(document.activeElement).toBe(kick));
+    // The test router has no /decisions/:signature route: it left the queue.
+    expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Decisions' })).toBeNull();
   });
 
-  it('says when the decision in ?d= is no longer waiting', async () => {
-    await openPage('admin', '/decisions?d=gone');
-    expect(await screen.findByText(/That decision isn’t waiting any more/)).toBeVisible();
+  it('gives every card a Copy link to its own page', async () => {
+    await openPage('admin');
+    const kick = await screen.findByRole('article', { name: /Remove from MINTER, Kai Target/ });
+    expect(
+      within(kick).getByRole('button', {
+        name: 'Copy link to the decision Remove from MINTER, Kai Target',
+      })
+    ).toBeVisible();
   });
 
   it('hides what I signed when asked', async () => {
