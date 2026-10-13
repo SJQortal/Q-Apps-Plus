@@ -57,8 +57,8 @@ export function ConsideringDialog({
             ) : (
               <>
                 <Typography>
-                  Tell the other Minter Admins, and the nominee, that you’ve looked at this and
-                  haven’t decided yet. It changes nothing on chain.
+                  Tell the other Minter Admins{request.nominee ? ', and the nominee,' : ''} that
+                  you’ve looked at this and haven’t decided yet. It changes nothing on chain.
                 </Typography>
                 <TextField
                   label="A note (optional)"

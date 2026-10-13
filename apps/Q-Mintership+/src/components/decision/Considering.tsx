@@ -121,4 +121,6 @@ export interface ConsideringRequest {
   mode: 'set' | 'clear';
   /** What it is about, e.g. "Add to MINTER: bob+builder". */
   label: string;
+  /** It is about a nominee: a waiting nomination or an invite. */
+  nominee?: boolean;
 }

@@ -186,6 +186,8 @@ export function DecisionCard(props: DecisionCardProps) {
       target: considering.publishTarget,
       mode,
       label: d.subject ? `${title}: ${subject.label}` : title,
+      // Only an invite has a nominee who reads it too.
+      nominee: d.kind === 'invite',
     });
 
   return (

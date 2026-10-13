@@ -782,8 +782,8 @@ function WaitingConsidering({
       mine={mine}
       label={label}
       canStart
-      onSet={() => onConsider({ target: publishTarget, mode: 'set', label })}
-      onClear={() => onConsider({ target: publishTarget, mode: 'clear', label })}
+      onSet={() => onConsider({ target: publishTarget, mode: 'set', label, nominee: true })}
+      onClear={() => onConsider({ target: publishTarget, mode: 'clear', label, nominee: true })}
     />
   );
 }
