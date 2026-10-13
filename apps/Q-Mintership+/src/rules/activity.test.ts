@@ -243,6 +243,38 @@ describe('computeActivity', () => {
     expect(admin(report, 'Qa').adminSince).toBeNull();
   });
 
+  it('uses admin changes approved after a past window to say who was an admin in it', () => {
+    const decisions = [decision('exp', 120_000, 'EXPIRED', 130_081)];
+    const later = [
+      // Qc became an admin after the window; Qa was removed after it and added again.
+      decision('add-c', 210_000, 'APPROVED', 211_000, {
+        type: 'ADD_GROUP_ADMIN',
+        member: 'Qc',
+        invitee: undefined,
+      }),
+      decision('rm-a', 212_000, 'APPROVED', 213_000, {
+        type: 'REMOVE_GROUP_ADMIN',
+        admin: 'Qa',
+        invitee: undefined,
+      }),
+      decision('add-a', 214_000, 'APPROVED', 215_000, {
+        type: 'ADD_GROUP_ADMIN',
+        member: 'Qa',
+        invitee: undefined,
+      }),
+    ];
+    const report = run({
+      decisions,
+      adminChangeRows: later,
+      tipHeight: 220_000,
+      currentAdmins: ['Qa', 'Qc'],
+    });
+    // Qc wasn't an admin yet: nothing eligible, nothing missed.
+    expect(admin(report, 'Qc')).toMatchObject({ adminSince: 211_000, eligible: 0, missed: 0 });
+    // Qa was an admin all through the window, so the expired one is their miss.
+    expect(admin(report, 'Qa')).toMatchObject({ eligible: 1, missed: 1 });
+  });
+
   it('lists an admin removed mid-window under former admins, judged until the removal', () => {
     const decisions = [
       decision('d1', 120_000, 'APPROVED', 121_000),

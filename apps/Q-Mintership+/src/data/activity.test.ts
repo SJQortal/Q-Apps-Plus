@@ -114,6 +114,20 @@ describe('Minter Admin Activity reads (mock world)', () => {
     expect(activityKey(choice)).toBe(`activity:custom:${choice.fromMs}:${choice.toMs}`);
   });
 
+  it('knows an admin added after a past custom range was not one in it', async () => {
+    const { world } = installWorld();
+    const now = 1_791_830_000_000;
+    const data = await loadActivity({
+      fromMs: now - 60 * 86_400_000,
+      toMs: now - 30 * 86_400_000,
+    });
+    const late = data.report.current.find(
+      (a) => a.address === world.activity.addedAdmins.lateAdded
+    )!;
+    expect(late.adminSince).toBe(TIP - 20 * DAY);
+    expect(late).toMatchObject({ eligible: 0, missed: 0, participation: null });
+  });
+
   it('keeps going when the member list or departures can’t be read', async () => {
     const { world } = installWorld();
     mockFetchRoute(/^\/groups\/members\/694$/, (url: URL) => {

@@ -201,6 +201,12 @@ export interface ActivityInput {
   maxDelay: number;
   /** MINTER decisions (txGroupId 694), any status; later rows replace earlier ones with the same signature. */
   decisions: TxRow[];
+  /**
+   * ADD_GROUP_ADMIN / REMOVE_GROUP_ADMIN decisions up to the tip, for who was
+   * an admin when (a change approved after the window still shapes it).
+   * Defaults to `decisions`.
+   */
+  adminChangeRows?: TxRow[];
   /** Confirmed GROUP_APPROVALs (any group's; the rest are ignored). */
   approvals: TxRow[];
   /** Admins now, null owner left out. */
@@ -263,7 +269,7 @@ export function computeActivity(input: ActivityInput): ActivityReport {
     if (!current || isNewerDecision(row, current)) perAdmin.set(who, row);
   }
 
-  const changes = adminChanges(input.decisions);
+  const changes = adminChanges(input.adminChangeRows ?? input.decisions);
   const currentSet = new Set(input.currentAdmins.filter((a) => !exclude.has(a)));
   // Anyone who signed or had an admin change could have been an admin in the window.
   const candidates = new Set<string>(currentSet);

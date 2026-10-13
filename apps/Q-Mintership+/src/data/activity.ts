@@ -8,7 +8,9 @@
  *   window to its end, the pending ones, every GROUP_APPROVAL over the same
  *   blocks (joined to the decisions on pendingSignature), LEAVE_GROUP rows
  *   in the window, the member list (names and join times, shared with the
- *   other screens) and the join requests.
+ *   other screens) and the join requests. A window that ends before the tip
+ *   also reads the admin changes from its end to the tip, so who was an
+ *   admin when is right for it.
  *
  * Each search is paged at 100 with a ceiling; about 20 GETs for 30 days and
  * 30 for 180. The result is cached for 5 minutes per window. The level
@@ -38,7 +40,8 @@ import {
   getPending,
   isMinterTx,
 } from './txs';
-import { APPROVAL_GATED_TYPES } from './types';
+import type { PagedResult } from './core';
+import { APPROVAL_GATED_TYPES, type TxRow } from './types';
 
 export const ACTIVITY_TTL_MS = 5 * 60_000;
 const HOUR_MS = 3_600_000;
@@ -137,7 +140,13 @@ export async function resolveRange(choice: ActivityChoice, now: ChainNow): Promi
   };
 }
 
-const NONE = { rows: [], truncated: false, pages: 0 };
+const NONE: PagedResult<TxRow> = { rows: [], truncated: false, pages: 0 };
+
+const ADMIN_CHANGE_TYPES = ['ADD_GROUP_ADMIN', 'REMOVE_GROUP_ADMIN'] as const;
+
+function isAdminChange(tx: TxRow): boolean {
+  return tx.type === 'ADD_GROUP_ADMIN' || tx.type === 'REMOVE_GROUP_ADMIN';
+}
 
 export function loadActivity(
   choice: ActivityChoice,
@@ -156,23 +165,31 @@ export function loadActivity(
       const max = group.maximumBlockDelay;
       // Decisions confirmed up to one window before the start were still waiting in it.
       const from = Math.max(1, range.startBlock - max);
-      const [decided, pending, approvals, leaves, members, joinRequests] = await Promise.all([
-        getDecisionsInRange(APPROVAL_GATED_TYPES, from, range.endBlock, {
-          force,
-          ttlMs: ACTIVITY_TTL_MS,
-        }),
-        getPending({ force }).catch(() => NONE),
-        getApprovalsInRange(
-          from - APPROVAL_SLACK_BLOCKS,
-          Math.min(now.height, range.endBlock + max),
-          { force, ttlMs: ACTIVITY_TTL_MS }
-        ),
-        getGroupTxsInRange(['LEAVE_GROUP'], range.startBlock, range.endBlock, { force }).catch(
-          () => null
-        ),
-        getMembers().catch(() => null),
-        getJoinRequests({ force }).catch(() => null),
-      ]);
+      const [decided, laterAdminChanges, pending, approvals, leaves, members, joinRequests] =
+        await Promise.all([
+          getDecisionsInRange(APPROVAL_GATED_TYPES, from, range.endBlock, {
+            force,
+            ttlMs: ACTIVITY_TTL_MS,
+          }),
+          // A past window: admin changes after its end still say who was an admin in it.
+          range.endBlock < now.height
+            ? getDecisionsInRange(ADMIN_CHANGE_TYPES, range.endBlock + 1, now.height, {
+                force,
+                ttlMs: ACTIVITY_TTL_MS,
+              })
+            : Promise.resolve(NONE),
+          getPending({ force }).catch(() => NONE),
+          getApprovalsInRange(
+            from - APPROVAL_SLACK_BLOCKS,
+            Math.min(now.height, range.endBlock + max),
+            { force, ttlMs: ACTIVITY_TTL_MS }
+          ),
+          getGroupTxsInRange(['LEAVE_GROUP'], range.startBlock, range.endBlock, { force }).catch(
+            () => null
+          ),
+          getMembers().catch(() => null),
+          getJoinRequests({ force }).catch(() => null),
+        ]);
 
       const names: Record<string, string> = {};
       for (const row of [...(members?.members ?? []), ...admins.admins]) {
@@ -194,6 +211,10 @@ export function loadActivity(
         tipHeight: now.height,
         maxDelay: max,
         decisions: [...decided.rows, ...confirmedPending],
+        adminChangeRows: [
+          ...decided.rows.filter(isAdminChange),
+          ...laterAdminChanges.rows,
+        ],
         approvals: approvals.rows,
         currentAdmins: admins.signers.map((row) => row.member),
         exclude: [NULL_OWNER],
@@ -222,6 +243,7 @@ export function loadActivity(
         joinRequests: joinRequests ? joinRequests.length : null,
         truncated: Boolean(
           decided.truncated ||
+          laterAdminChanges.truncated ||
           approvals.truncated ||
           pending.truncated ||
           leaves?.truncated ||
