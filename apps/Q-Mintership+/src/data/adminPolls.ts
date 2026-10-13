@@ -36,6 +36,7 @@ import {
   fromData64,
   parseShare,
 } from './adminPollRecords';
+import { adminPollsKey } from './adminPollKeys';
 import { getText, seg } from './core';
 import { getAdmins } from './group';
 import { QdnDeletedError, fetchQdnText, mapLimit, quick, searchQdn } from './qdn';
@@ -76,9 +77,7 @@ export interface AdminPollsData {
   loadedAt: number;
 }
 
-export function adminPollsKey(viewer: string): string {
-  return `adminpolls:list:${viewer}`;
-}
+export { adminPollsKey };
 
 /** The context the pure rules need, from what the loader read. */
 export function pollContext(data: AdminPollsData, now = Date.now()): PollContext {

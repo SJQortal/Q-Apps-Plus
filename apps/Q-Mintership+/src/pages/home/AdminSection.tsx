@@ -4,6 +4,7 @@
  * their activity (signed k of the open decisions, approved invites nobody
  * used, the neutral integrity flag). Everything links to Decisions.
  */
+import { lazy, Suspense, useSyncExternalStore } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Alert, Box, Button, Typography } from '@mui/material';
 import { DecisionRow } from '../../components/decision/DecisionRow';
@@ -15,8 +16,11 @@ import {
   ListSkeleton,
   TruncatedNote,
 } from '../../components/common/states';
+import { adminPollsKey } from '../../data/adminPollKeys';
+import { getQueryState, subscribeQuery } from '../../data/query';
 import { useDecisions, useNominations } from '../../hooks/useData';
 import { decisionPath } from '../../routes/paths';
+import { useSession } from '../../state/session';
 import { formatCount, formatRelative } from '../../utils/format';
 import {
   adminSummary,
@@ -26,6 +30,28 @@ import {
 } from './homeData';
 
 const TOP = 3;
+
+const PollsWaiting = lazy(() => import('./PollsWaiting'));
+
+/**
+ * "N Minter Admin polls are waiting for your vote", once Decisions has read
+ * them this session: until then nothing is read, decrypted or loaded for it.
+ */
+function PollsWaitingLine() {
+  const session = useSession();
+  const address = session.status === 'ready' ? session.address : '';
+  const key = address ? adminPollsKey(address) : '__idle__';
+  const read = useSyncExternalStore(
+    (listener) => subscribeQuery(key, listener),
+    () => getQueryState(key).data !== undefined
+  );
+  if (!address || !read) return null;
+  return (
+    <Suspense fallback={null}>
+      <PollsWaiting address={address} />
+    </Suspense>
+  );
+}
 
 export function AdminSection({ publicKey }: { publicKey: string }) {
   const decisions = useDecisions(true);
@@ -76,6 +102,8 @@ export function AdminSection({ publicKey }: { publicKey: string }) {
         )}
         {data?.truncated ? <TruncatedNote what="the decisions" /> : null}
       </Section>
+
+      <PollsWaitingLine />
 
       {firstSignature.length ? (
         <Section title="Waiting for a first signature" id="home-first">
