@@ -33,22 +33,41 @@ body {
 }
 
 /* The system setting (unless Settings → Appearance → Motion is Full), or
-   Motion → Reduce. useApplyMotionSetting sets html[data-motion]. */
+   Motion → Reduce. useApplyMotionSetting sets html[data-motion]. Delays go
+   too, so nothing staggered waits before it shows. Elements and their
+   pseudo-elements in separate rules: the same in a browser, and the
+   element rules stay readable to jsdom (motion.test.tsx). */
 @media (prefers-reduced-motion: reduce) {
-  html:not([data-motion='full']) *,
+  html:not([data-motion='full']) * {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
   html:not([data-motion='full']) *::before,
   html:not([data-motion='full']) *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
   }
 }
-html[data-motion='reduce'] *,
+html[data-motion='reduce'] * {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0s !important;
+}
 html[data-motion='reduce'] *::before,
 html[data-motion='reduce'] *::after {
   animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
+  transition-delay: 0s !important;
 }
 
 .qmp-visually-hidden {
