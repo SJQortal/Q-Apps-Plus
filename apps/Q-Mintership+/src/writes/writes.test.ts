@@ -3,6 +3,7 @@ import { base58Decode, base58Encode } from '../qortal/base58';
 import { GROUP_APPROVAL_UNSIGNED_LENGTH } from '../qortal/approvalBytes';
 import { loadDecisions } from '../data/decisions';
 import { ADDR, addOtherPending, installWorld } from '../test/world';
+import { fakeAddress } from '../../e2e/world.mjs';
 import { mockQortalRequest, qortalCalls, qortalCallsFor } from '../test/setup';
 import {
   addAdminRequest,
@@ -18,6 +19,7 @@ import {
 } from './hubActions';
 import {
   guardBan,
+  guardCancelInvite,
   guardInvite,
   guardJoin,
   guardKick,
@@ -31,6 +33,7 @@ import {
   bulkSign,
   firstSignature,
   joinMinter,
+  proposeAndSign,
   proposeBan,
   publishNomination,
   signDecision,
@@ -175,6 +178,21 @@ describe('guards re-read the chain before a write', () => {
     expect(await guardBan(admin, ADDR.learner, 25 * 86_400)).toMatch(/24 days/);
     expect(await guardBan(admin, ADDR.banned, 0)).toBe('Already banned.');
     expect(await guardRemoveAdmin(admin, 'QdSnUy6sUiEnaN87dWmE92g1uQjrvPgrWG')).toMatch(/owner/);
+  });
+
+  it('cancel invite: needs a stored invite, and no cancellation already waiting', async () => {
+    const admin = signerFor('admin');
+    expect(await guardCancelInvite(admin, ADDR.learner)).toBe(
+      'There is no approved invite stored for this account.'
+    );
+    // Its waiting cancellation names the invitee only in its raw bytes.
+    expect(await guardCancelInvite(admin, fakeAddress('stale-1'))).toBe(
+      'Cancelling this invite is already waiting for signatures.'
+    );
+    expect(await guardCancelInvite(admin, fakeAddress('stale-2'))).toBeNull();
+    expect(await guardCancelInvite(signerFor('nominator'), fakeAddress('stale-2'))).toMatch(
+      /Only Minter Admins/
+    );
   });
 
   it('join: refuses members, banned accounts and a second request', async () => {
@@ -356,6 +374,17 @@ describe('flows', () => {
     expect(result.approval).toBeNull();
   });
 
+  it('firstSignature stops before Hub when the balance cannot pay both fees', async () => {
+    const { world, address, publicKey } = installWorld('admin');
+    world.accounts.get(address).balance = 0.015;
+    const result = await firstSignature({ address, publicKey }, ADDR.nominatedWaiting);
+    expect(result.invite).toEqual({
+      status: 'blocked',
+      reason: 'This needs 0.02 QORT for the two fees, and your confirmed balance is 0.015 QORT.',
+    });
+    expect(qortalCalls.filter((c) => c.action !== 'GET_USER_ACCOUNT')).toHaveLength(0);
+  });
+
   it('bulkSign signs one after another and stops at a decline', async () => {
     const { address, publicKey } = installWorld('admin');
     const data = await loadDecisions();
@@ -421,5 +450,156 @@ describe('flows', () => {
       data.decisions.find((d) => d.subject === ADDR.nominatedSigning)!.signature
     );
     expect(w.posts).toEqual([]);
+  });
+});
+
+/** A just-sent, still unconfirmed MINTER proposal, as the node shows it. */
+function sentProposal(
+  world: ReturnType<typeof installWorld>['world'],
+  admin: Signer,
+  type: string,
+  fields: Record<string, unknown>,
+  fill: number
+) {
+  const tx = {
+    type,
+    timestamp: Date.now(),
+    reference: base58Encode(new Uint8Array(64).fill(fill + 1)),
+    signature: base58Encode(new Uint8Array(64).fill(fill)),
+    txGroupId: 694,
+    approvalStatus: 'PENDING',
+    creatorAddress: admin.address,
+    adminPublicKey: admin.publicKey,
+    ...fields,
+  };
+  world.pending.push(tx);
+  return tx;
+}
+
+describe('proposeAndSign: a proposal and the proposer’s own signature', () => {
+  it('sends the proposal, waits for it on the node, then signs exactly that transaction', async () => {
+    const { world, address, publicKey, posts } = installWorld('admin');
+    const admin = { address, publicKey };
+    let kick: { signature: string } | null = null;
+    mockQortalRequest('KICK_FROM_GROUP', (req: Record<string, unknown>) => {
+      kick = sentProposal(
+        world,
+        admin,
+        'GROUP_KICK',
+        { groupId: 694, member: req.qortalAddress, reason: req.reason },
+        11
+      );
+      return kick;
+    });
+    mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'OWN1' }));
+    const steps: string[] = [];
+    const result = await proposeAndSign(
+      admin,
+      { kind: 'kick', subject: ADDR.learner, reason: 'Not minting' },
+      (p) => steps.push(`${p.step}:${p.stage}`)
+    );
+    expect(result.proposal.status).toBe('sent');
+    expect(result.approval).toMatchObject({ status: 'sent', signature: 'OWN1' });
+    expect(result.proposalSignature).toBe(kick!.signature);
+    expect(qortalCallsFor('KICK_FROM_GROUP')).toEqual([
+      expect.objectContaining({ groupId: 694, qortalAddress: ADDR.learner, txGroupId: 694 }),
+    ]);
+    const calls = qortalCallsFor('SIGN_TRANSACTION');
+    expect(calls).toHaveLength(1);
+    const bytes = base58Decode(String(calls[0].unsignedBytes));
+    expect(base58Encode(bytes.slice(80, 112))).toBe(publicKey);
+    expect(base58Encode(bytes.slice(112, 176))).toBe(kick!.signature);
+    expect(bytes[176]).toBe(1);
+    // Step 1 first, then step 2 waits for Hub.
+    expect(steps[0]).toBe('1:checking');
+    expect(steps.indexOf('1:waitingForHub')).toBeLessThan(steps.indexOf('2:checking'));
+    expect(steps).toContain('2:waitingForHub');
+    // Both show as on their way.
+    expect(getPendingWrite(writeKeys.propose('kick', ADDR.learner))?.status).toBe('confirming');
+    expect(getPendingWrite(writeKeys.sign(kick!.signature))?.status).toBe('confirming');
+    expect(posts).toEqual([]);
+  });
+
+  it('signs a new invite cancellation, whose invitee the node shows only in its raw bytes', async () => {
+    const { world, address, publicKey } = installWorld('admin');
+    const admin = { address, publicKey };
+    const invitee = fakeAddress('stale-2');
+    let cancel: { signature: string } | null = null;
+    mockQortalRequest('CANCEL_GROUP_INVITE', (req: Record<string, unknown>) => {
+      // Core's JSON leaves out the group and invitee.
+      cancel = sentProposal(world, admin, 'CANCEL_GROUP_INVITE', {}, 12);
+      world.cancelTargets.set(cancel.signature, { groupId: 694, invitee: req.qortalAddress });
+      return cancel;
+    });
+    mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'OWN2' }));
+    const result = await proposeAndSign(admin, { kind: 'cancelInvite', subject: invitee });
+    expect(qortalCallsFor('CANCEL_GROUP_INVITE')[0]).toMatchObject({
+      groupId: 694,
+      qortalAddress: invitee,
+      txGroupId: 694,
+    });
+    expect(result.approval?.status).toBe('sent');
+    const bytes = base58Decode(String(qortalCallsFor('SIGN_TRANSACTION')[0].unsignedBytes));
+    expect(base58Encode(bytes.slice(112, 176))).toBe(cancel!.signature);
+  });
+
+  it('stops when the proposal is cancelled in Hub, and never asks for a signature', async () => {
+    const { address, publicKey } = installWorld('admin');
+    const result = await proposeAndSign(
+      { address, publicKey },
+      { kind: 'ban', subject: ADDR.learner, reason: 'Spam', banSeconds: 0 }
+    );
+    expect(result).toEqual({
+      proposal: { status: 'declined' },
+      approval: null,
+      proposalSignature: null,
+    });
+    expect(qortalCallsFor('BAN_FROM_GROUP')).toHaveLength(1);
+    expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
+  });
+
+  it('stops at the proposal’s own guard, before Hub', async () => {
+    const { address, publicKey } = installWorld('admin');
+    const result = await proposeAndSign(
+      { address, publicKey },
+      { kind: 'cancelInvite', subject: fakeAddress('stale-1') }
+    );
+    expect(result.proposal).toEqual({
+      status: 'blocked',
+      reason: 'Cancelling this invite is already waiting for signatures.',
+    });
+    expect(result.approval).toBeNull();
+    expect(qortalCallsFor('CANCEL_GROUP_INVITE')).toHaveLength(0);
+  });
+
+  it('does not sign a proposal the node never shows, and says so', async () => {
+    const { address, publicKey } = installWorld('admin');
+    const signature = base58Encode(new Uint8Array(64).fill(13));
+    mockQortalRequest('ADD_GROUP_ADMIN', () => ({ type: 'ADD_GROUP_ADMIN', signature }));
+    const result = await proposeAndSign(
+      { address, publicKey },
+      { kind: 'addAdmin', subject: ADDR.nominator }
+    );
+    expect(result.proposal.status).toBe('sent');
+    expect(result.proposalSignature).toBe(signature);
+    expect(result.approval).toEqual({
+      status: 'blocked',
+      reason: 'Your node doesn’t show it yet.',
+    });
+    expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
+  });
+
+  it('checks both fees before Hub opens', async () => {
+    const { world, address, publicKey } = installWorld('admin');
+    world.accounts.get(address).balance = 0.01;
+    const result = await proposeAndSign(
+      { address, publicKey },
+      { kind: 'cancelBan', subject: ADDR.banned }
+    );
+    expect(result.proposal).toMatchObject({
+      status: 'blocked',
+      reason: expect.stringMatching(/0.02 QORT for the two fees/),
+    });
+    expect(qortalCallsFor('CANCEL_GROUP_BAN')).toHaveLength(0);
   });
 });

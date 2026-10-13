@@ -5,9 +5,9 @@
  *
  * Nothing here runs in tests against a node: every qortalRequest is mocked.
  */
-import { getFee, getLastReference } from '../data/accounts';
+import { formatQort, getBalance, getFee, getLastReference } from '../data/accounts';
 import { getChainNow } from '../data/chain';
-import { MINTER_GROUP_ID } from '../data/constants';
+import { ATOMIC_PER_QORT, MINTER_GROUP_ID } from '../data/constants';
 import { getTransaction } from '../data/txs';
 import { invalidate } from '../data/query';
 import {
@@ -17,7 +17,7 @@ import {
   supportIdentifier,
   type NominationInput,
 } from '../data/records';
-import type { TxRow } from '../data/types';
+import type { GroupTxType, TxRow } from '../data/types';
 import { decisionSubject } from '../rules/decision';
 import { groupApprovalUnsignedBase58 } from '../qortal/approvalBytes';
 import {
@@ -123,10 +123,86 @@ export function signDecision(
   );
 }
 
-export interface FirstSignatureProgress {
+export interface OwnSignatureProgress {
   step: 1 | 2;
   stage: WriteStage;
 }
+
+export interface OwnSignatureOutcome {
+  /** Step 1: the proposal (or a nomination's invite). */
+  proposal: WriteOutcome;
+  /** Step 2: the admin's own signature on it. Null when step 1 didn't send. */
+  approval: WriteOutcome | null;
+  /** The new transaction's signature, once step 1 sent it. */
+  proposalSignature: string | null;
+}
+
+/** Why the balance can't pay both fees (step 1's and the signature's), or null. */
+async function bothFeesProblem(signer: Signer, txType: GroupTxType): Promise<string | null> {
+  if (!signer.address) return null;
+  try {
+    const [first, second, balance] = await Promise.all([
+      getFee(txType),
+      getFee('GROUP_APPROVAL'),
+      getBalance(signer.address, { force: true }),
+    ]);
+    const total = (first.atomic + second.atomic) / ATOMIC_PER_QORT;
+    return balance < total
+      ? `This needs ${formatQort(total)} for the two fees, and your confirmed balance is ${formatQort(balance)}.`
+      : null;
+  } catch {
+    // Step 1's own check reads the balance again and says what went wrong.
+    return null;
+  }
+}
+
+/**
+ * Step 1 makes a MINTER transaction; step 2 is the admin's own signature on
+ * exactly that transaction, because in MINTER an admin's own proposal is not
+ * approved by itself. Step 2 waits until the node knows the new transaction.
+ * If step 1 goes through and step 2 doesn't, the transaction is still
+ * waiting for signatures and can be signed from the queue like any other.
+ */
+async function withOwnSignature(
+  signer: Signer,
+  txType: GroupTxType,
+  step1: (onStage: (s: WriteStage) => void) => Promise<WriteOutcome>,
+  onProgress?: (p: OwnSignatureProgress) => void
+): Promise<OwnSignatureOutcome> {
+  onProgress?.({ step: 1, stage: 'checking' });
+  const short = await bothFeesProblem(signer, txType);
+  if (short)
+    return {
+      proposal: { status: 'blocked', reason: short },
+      approval: null,
+      proposalSignature: null,
+    };
+  const proposal = await step1((stage) => onProgress?.({ step: 1, stage }));
+  if (proposal.status !== 'sent') return { proposal, approval: null, proposalSignature: null };
+  const signature = proposal.signature;
+  if (!signature)
+    return {
+      proposal,
+      approval: {
+        status: 'blocked',
+        reason: 'Hub didn’t say which transaction it sent, so it can’t be signed from here.',
+      },
+      proposalSignature: null,
+    };
+  onProgress?.({ step: 2, stage: 'checking' });
+  if (!(await waitForTransaction(signature)))
+    return {
+      proposal,
+      approval: { status: 'blocked', reason: 'Your node doesn’t show it yet.' },
+      proposalSignature: signature,
+    };
+  const approval = await signDecision(signer, signature, (stage) =>
+    onProgress?.({ step: 2, stage })
+  );
+  return { proposal, approval, proposalSignature: signature };
+}
+
+export type FirstSignatureProgress = OwnSignatureProgress;
 
 export interface FirstSignatureOutcome {
   invite: WriteOutcome;
@@ -137,33 +213,34 @@ export interface FirstSignatureOutcome {
 
 /**
  * The first Minter Admin's signature: step 1 creates the GROUP_INVITE
- * (txGroupId 694), step 2 approves it, because in MINTER an admin's own
- * proposal is not approved automatically. The clock starts when the invite
- * is in a block. If step 2 doesn't go through, the invite is still waiting
- * and the admin can sign it like any other decision.
+ * (txGroupId 694), step 2 is their own signature on it. The clock starts
+ * when the invite is in a block.
  */
 export async function firstSignature(
   signer: Signer,
   nominee: string,
   onProgress?: (p: FirstSignatureProgress) => void
 ): Promise<FirstSignatureOutcome> {
-  const invite = await tracked(writeKeys.invite(nominee), () =>
-    runWrite({
-      request: inviteRequest(nominee),
-      signer,
-      precheck: () => guardInvite(signer, nominee),
-      match: (tx) => tx.type === 'GROUP_INVITE' && decisionSubject(tx) === nominee,
-      onStage: (stage) => onProgress?.({ step: 1, stage }),
-    })
+  const result = await withOwnSignature(
+    signer,
+    'GROUP_INVITE',
+    (onStage) =>
+      tracked(writeKeys.invite(nominee), () =>
+        runWrite({
+          request: inviteRequest(nominee),
+          signer,
+          precheck: () => guardInvite(signer, nominee),
+          match: (tx) => tx.type === 'GROUP_INVITE' && decisionSubject(tx) === nominee,
+          onStage,
+        })
+      ),
+    onProgress
   );
-  const inviteSignature = invite.status === 'sent' ? invite.signature : null;
-  if (!inviteSignature) return { invite, approval: null, inviteSignature: null };
-  onProgress?.({ step: 2, stage: 'checking' });
-  await waitForTransaction(inviteSignature);
-  const approval = await signDecision(signer, inviteSignature, (stage) =>
-    onProgress?.({ step: 2, stage })
-  );
-  return { invite, approval, inviteSignature };
+  return {
+    invite: result.proposal,
+    approval: result.approval,
+    inviteSignature: result.proposalSignature,
+  };
 }
 
 let txWaitDelays = [1_000, 2_000, 3_000, 4_000];
@@ -304,6 +381,63 @@ export function proposeRemoveAdmin(
       match: subjectMatch('REMOVE_GROUP_ADMIN', admin),
       onStage,
     })
+  );
+}
+
+/** What a Minter Admin can propose about one account, with what each kind needs. */
+export type Proposal =
+  | { kind: 'kick'; subject: string; reason: string }
+  | { kind: 'ban'; subject: string; reason: string; banSeconds: number }
+  | { kind: 'addAdmin' | 'removeAdmin' | 'cancelBan' | 'cancelInvite'; subject: string };
+
+export type ProposalKind = Proposal['kind'];
+
+/** The MINTER transaction each kind of proposal creates. */
+export const PROPOSAL_TX_TYPE: Record<ProposalKind, GroupTxType> = {
+  kick: 'GROUP_KICK',
+  ban: 'GROUP_BAN',
+  addAdmin: 'ADD_GROUP_ADMIN',
+  removeAdmin: 'REMOVE_GROUP_ADMIN',
+  cancelBan: 'CANCEL_GROUP_BAN',
+  cancelInvite: 'CANCEL_GROUP_INVITE',
+};
+
+/** Send one proposal through its own guard (step 1 of proposeAndSign). */
+export function propose(
+  signer: Signer,
+  p: Proposal,
+  onStage?: (s: WriteStage) => void
+): Promise<WriteOutcome> {
+  switch (p.kind) {
+    case 'kick':
+      return proposeKick(signer, p.subject, p.reason, onStage);
+    case 'ban':
+      return proposeBan(signer, p.subject, p.reason, p.banSeconds, onStage);
+    case 'addAdmin':
+      return proposeAddAdmin(signer, p.subject, onStage);
+    case 'removeAdmin':
+      return proposeRemoveAdmin(signer, p.subject, onStage);
+    case 'cancelBan':
+      return proposeCancelBan(signer, p.subject, onStage);
+    case 'cancelInvite':
+      return proposeCancelInvite(signer, p.subject, onStage);
+  }
+}
+
+/**
+ * A Minter Admin's proposal and their own signature on it: two Hub
+ * confirmations as one guided step, as for a nomination's first signature.
+ */
+export function proposeAndSign(
+  signer: Signer,
+  p: Proposal,
+  onProgress?: (progress: OwnSignatureProgress) => void
+): Promise<OwnSignatureOutcome> {
+  return withOwnSignature(
+    signer,
+    PROPOSAL_TX_TYPE[p.kind],
+    (onStage) => propose(signer, p, onStage),
+    onProgress
   );
 }
 
