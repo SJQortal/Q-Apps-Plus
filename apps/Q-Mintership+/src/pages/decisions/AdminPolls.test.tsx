@@ -50,6 +50,11 @@ const sent = () =>
   }));
 const publishes = () => qortalCallsFor('PUBLISH_QDN_RESOURCE');
 const signerCount = 19;
+/** The Yes / No / Neutral counts of a card's "Votes" list, in order. */
+const counts = (votes: HTMLElement) =>
+  within(votes)
+    .getAllByText(/^(Yes|No|Neutral): \d+$/)
+    .map((e) => e.textContent);
 
 describe('Decisions → Minter Admin polls', () => {
   it('lists the polls an admin can read: open first (soonest end), then closed', async () => {
@@ -84,11 +89,9 @@ describe('Decisions → Minter Admin polls', () => {
     expect(within(card).getByText(/^Asked by/)).toHaveTextContent(/Admin B\s*1 day 23 hours ago/);
     expect(within(card).getByText(/^Ends in 5 days · .*\(about block 2,763,427\)$/)).toBeVisible();
     const votes = within(card).getByRole('list', { name: 'Votes' });
-    expect(
-      within(votes)
-        .getAllByRole('listitem')
-        .map((li) => li.textContent)
-    ).toEqual(['Yes: 3', 'No: 2', 'Neutral: 1']);
+    expect(counts(votes)).toEqual(['Yes: 3', 'No: 2', 'Neutral: 1']);
+    // Each count with who voted that, in words too.
+    expect(votes).toHaveTextContent(/No: 2.*Juniper L4 and Admin F.*Neutral: 1/);
     const yes = within(card).getByRole('list', { name: 'Voted Yes' });
     expect(
       within(yes)
@@ -113,12 +116,11 @@ describe('Decisions → Minter Admin polls', () => {
     expect(within(shared).getByText(/Shared by/)).toHaveTextContent(
       /Shared by\s*A?Admin D ΑΩ: you read their copy\./
     );
-    expect(
-      within(shared)
-        .getAllByRole('listitem')
-        .slice(0, 3)
-        .map((li) => li.textContent)
-    ).toEqual(['Yes: 1', 'No: 1', 'Neutral: 1']);
+    expect(counts(within(shared).getByRole('list', { name: 'Votes' }))).toEqual([
+      'Yes: 1',
+      'No: 1',
+      'Neutral: 1',
+    ]);
     const closed = await pollCard(CLOSED_Q);
     expect(within(closed).getByText('Closed')).toBeVisible();
     expect(within(closed).getByText(/^Ended 4 days ago · /)).toBeVisible();

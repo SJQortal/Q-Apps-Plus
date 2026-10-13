@@ -66,8 +66,8 @@ export default function AdminPollsSection({
       id={ADMIN_POLLS_SECTION_ID}
     >
       <Typography variant="body2" color="text.secondary">
-        Questions for the Minter Admins. Their questions, votes and comments are encrypted to the
-        Minter Admins: only you and they can read them. {ADVISORY}
+        Questions for the Minter Admins. Questions, votes and comments here are encrypted to the
+        Minter Admins: only Minter Admins can read them. {ADVISORY}
       </Typography>
       {!views && query.isError ? (
         <ErrorState

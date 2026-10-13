@@ -250,39 +250,40 @@ function Details({ text }: { text: string }) {
   );
 }
 
-/** The counts, and who voted what (in words as well as avatars). */
+/** The counts, and beside each who voted that (in words as well as avatars). */
 function Votes({ view }: { view: ShownPoll }) {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-      <Box
-        component="ul"
-        aria-label="Votes"
-        sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexWrap: 'wrap', gap: 1 }}
-      >
-        {POLL_VOTES.map((v) => (
-          <Box component="li" key={v}>
+    <Box
+      component="ul"
+      aria-label="Votes"
+      sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 0.5 }}
+    >
+      {POLL_VOTES.map((v) => {
+        const people = view.votes.filter((x) => x.vote === v);
+        return (
+          <Box
+            component="li"
+            key={v}
+            sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, minWidth: 0 }}
+          >
             <Chip
               variant="outlined"
               label={`${VOTE_LABEL[v]}: ${formatCount(view.counts[v])}`}
-              sx={{ fontWeight: 700 }}
+              sx={{ fontWeight: 700, minWidth: 96, mt: '6px', flexShrink: 0 }}
             />
-          </Box>
-        ))}
-      </Box>
-      {POLL_VOTES.map((v) => {
-        const people = view.votes.filter((x) => x.vote === v);
-        if (!people.length) return null;
-        return (
-          <Box key={v} sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-            <Typography variant="body2" color="text.secondary">
-              Voted {VOTE_LABEL[v]}
-            </Typography>
-            <AvatarStack
-              people={people.map((p) => ({ address: p.address, name: p.name }))}
-              label={`Voted ${VOTE_LABEL[v]}`}
-              max={10}
-              showNames
-            />
+            {people.length ? (
+              <AvatarStack
+                people={people.map((p) => ({ address: p.address, name: p.name }))}
+                label={`Voted ${VOTE_LABEL[v]}`}
+                max={10}
+                size={24}
+                showNames
+              />
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: '11px' }}>
+                {view.open ? 'No one yet' : 'No one'}
+              </Typography>
+            )}
           </Box>
         );
       })}
