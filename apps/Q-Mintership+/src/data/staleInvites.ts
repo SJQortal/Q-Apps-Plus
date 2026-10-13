@@ -1,7 +1,8 @@
 /**
  * Approved MINTER invites nobody used, for the Minter Admins' clean-up:
  * the stored invites (`/groups/invites/group/694`, 8 rows today) whose
- * invitee is not a member, and per row when it was approved.
+ * invitee is not a member, and per row when it was approved. The stored
+ * invites of people who are members already come apart, for Propose.
  *
  * Reads: the stored invites plus the member list (both shared and cached);
  * the approval dates only when the list is opened, one history read per
@@ -20,6 +21,8 @@ export interface StaleInviteList {
   rows: InviteRow[];
   /** Stored invites left out because the invitee is a member already. */
   alreadyMembers: number;
+  /** Those invites, for Propose → Cancel an approved invite, which lists them too. */
+  memberRows: InviteRow[];
 }
 
 export function loadStaleInvites(options: { force?: boolean } = {}): Promise<StaleInviteList> {
@@ -39,7 +42,8 @@ export function loadStaleInvites(options: { force?: boolean } = {}): Promise<Sta
         );
         rows = checked.filter((row): row is InviteRow => row !== null);
       }
-      return { rows, alreadyMembers: invites.length - rows.length };
+      const memberRows = invites.filter((row) => !rows.includes(row));
+      return { rows, alreadyMembers: memberRows.length, memberRows };
     },
     { ttlMs: 2 * 60_000, force: options.force }
   );

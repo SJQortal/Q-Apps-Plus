@@ -704,7 +704,7 @@ describe('Decisions: proposing', () => {
     // The two invite choices say how they differ.
     expect(
       await screen.findByRole('menuitem', {
-        name: /Cancel an approved invite.*One unused invite you pick, with your signature added\./,
+        name: /Cancel an approved invite.*One approved invite you pick, with your signature added\./,
       })
     ).toBeVisible();
     expect(
@@ -715,19 +715,33 @@ describe('Decisions: proposing', () => {
     await u.click(await screen.findByRole('menuitem', { name: /Cancel an approved invite/ }));
     const form = await screen.findByRole('dialog', { name: 'Cancel an approved invite' });
     const picker = await within(form).findByRole('combobox', { name: 'Approved invite' });
-    // The four unused invites, not the one of a member.
-    expect(within(picker).getAllByRole('option')).toHaveLength(5);
+    // The four unused invites, then the one of a member, marked.
+    expect(within(picker).getAllByRole('option')).toHaveLength(6);
     expect(
       await within(picker).findByRole('option', { name: /^Ada Approved, invited by / })
     ).toBeInTheDocument();
-    // Each says when it was approved, the oldest first: Ada's, the newest, comes last.
+    const member = await within(picker).findByRole(
+      'option',
+      { name: /^Member 6, invited by .+, already a member$/ },
+      T
+    );
+    expect(within(picker).getByRole('group', { name: 'Already in MINTER' })).toContainElement(
+      member
+    );
+    // Each unused one says when it was approved, the oldest first: Ada's, the newest, comes last.
     const ada = await within(picker).findByRole(
       'option',
       { name: /^Ada Approved, invited by .+, approved \d+ days ago$/ },
       T
     );
     const options = within(picker).getAllByRole('option');
-    expect(options[options.length - 1]).toBe(ada);
+    expect(options[options.length - 2]).toBe(ada);
+    expect(options[options.length - 1]).toBe(member);
+
+    // A member's invite: no "approved recently" note, and the same check as the write.
+    await u.selectOptions(picker, member);
+    expect(await within(form).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
+    expect(within(form).queryByText(/they may still press Join now/)).toBeNull();
 
     // Approved recently: the same words as Clean up stale invites.
     await u.selectOptions(picker, ADDR.approved);
@@ -765,7 +779,7 @@ describe('Decisions: proposing', () => {
     expect(base58Encode(bytes.slice(112, 176))).toBe(cancel);
   }, 20_000);
 
-  it('says so when there is no unused approved invite to cancel', async () => {
+  it('says so when there is no approved invite to cancel', async () => {
     const u = user();
     await openPage('admin', '/decisions', (world) => {
       world.storedInvites.length = 0;
@@ -774,9 +788,24 @@ describe('Decisions: proposing', () => {
     await u.click(await screen.findByRole('menuitem', { name: /Cancel an approved invite/ }));
     const form = await screen.findByRole('dialog', { name: 'Cancel an approved invite' });
     expect(
-      await within(form).findByText('There are no unused approved invites right now.')
+      await within(form).findByText('There are no approved invites stored right now.')
     ).toBeVisible();
     expect(within(form).getByRole('button', { name: 'Review' })).toBeDisabled();
+  });
+
+  it('lists a member’s invite when it is the only one stored', async () => {
+    const u = user();
+    await openPage('admin', '/decisions', (world) => {
+      world.storedInvites.splice(0, world.storedInvites.length - 1);
+    });
+    await u.click(screen.getByRole('button', { name: 'Propose' }));
+    await u.click(await screen.findByRole('menuitem', { name: /Cancel an approved invite/ }));
+    const form = await screen.findByRole('dialog', { name: 'Cancel an approved invite' });
+    const picker = await within(form).findByRole('combobox', { name: 'Approved invite' }, T);
+    expect(
+      await within(picker).findByRole('option', { name: /^Member 6, .+, already a member$/ }, T)
+    ).toBeInTheDocument();
+    expect(within(picker).getAllByRole('option')).toHaveLength(2);
   });
 
   it('marks the reason required, and Review says when it is missing', async () => {

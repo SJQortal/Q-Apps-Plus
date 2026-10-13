@@ -44,6 +44,8 @@ describe('stale invites', () => {
     expect(list.rows.map((r) => r.invitee)).toContain(ADDR.approved);
     expect(list.rows).toHaveLength(4);
     expect(list.alreadyMembers).toBe(1);
+    // The member's own stored invite comes apart, for Propose.
+    expect(list.memberRows.map((r) => r.invitee)).toEqual([fakeAddress('member-5')]);
   });
 
   it('finds when each was approved, from the invitee history', async () => {
