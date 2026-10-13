@@ -186,7 +186,7 @@ _Done on the branch; Simon reviews in the morning._
 11. **History:** proposals still collecting signatures are left out of the group History (they're in Nominations and Decisions); a person's own timeline shows them. Old cards whose poll isn't the publisher's are listed (the original app hid them) and noted on the card page. A person page reads the newest 40 old cards plus that person's own, with "Search older cards". OK?
 12. **Minting tips and where to find a nominator:** the copy is generic ("check in Hub that your minting key is active on your node"; "ask in Q-Chat or on open nominations"). Is there exact wording for Hub's and GO's minting screens, or an official MINTER chat group to point to?
 13. **The welcome to new minters** is remembered per device; someone who never opened Home while nominated won't see it. Fine?
-14. **History hygiene:** the old scaffold commit `afca556d` (2026-09-29) carries a Claude attribution trailer. Removing it needs a history rewrite of the pushed branch; `scripts/upstream-pr.sh` drops such lines for the upstream PR anyway. Your call.
+14. **History hygiene:** done on 2026-10-13. The branch history was rewritten once, with your OK, to drop a Claude attribution trailer from the old scaffold commit and to reword a few comments. The superseded branch `q-mintership-plus/rewrite-phase-1` on GitHub still has that scaffold commit with its trailer: delete it?
 
 ### Next-pass ideas
 
