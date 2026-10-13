@@ -162,8 +162,12 @@ describe('when Sign, Reject and Withdraw are offered', () => {
     expect(met.applyAtHeight).toBeGreaterThan(data.now.height + 1);
     const view = answerView(met, publicKey);
     expect(view).toMatchObject({ shown: 'signed', settled: true });
+    expect(met.windowPhase).toBe('early');
     expect(stillStoppable(met, data.now)).toBe(true);
     expect(canWithdraw(met, view, data.now)).toBe(true);
+    // More signatures or a rejection change nothing here: neither is offered.
+    const nobody = answerView(met, 'nobody');
+    expect(canSign(met, nobody) || canReject(met, nobody)).toBe(false);
     // Once it applies in the next block, a withdrawal sent then is too late.
     const later = { ...data.now, height: (met.applyAtHeight as number) - 1 };
     expect(stillStoppable(met, later)).toBe(false);
@@ -415,10 +419,20 @@ describe('when a decision has enough rejections', () => {
       approvals: rejectRows(early.signature, data.now.height, 8),
     });
     expect(decision.phase).toBe('rejectedMet');
+    expect(decision.windowPhase).toBe('early');
     expect(decision.applyAtHeight).toBe(early.window!.earliestDecisionHeight);
     expect(phaseLine(decision, data.now)).toMatch(
       /^Enough rejections: Core ends it as rejected at block [\d,]+ \(in about .+\), unless it has 8 signatures by then \(signatures are counted first\)\./
     );
+    // So Sign is offered: to an admin who hasn't answered, and to one whose
+    // rejection is in a block (a signature replaces it). Another rejection
+    // changes nothing, so Reject isn't.
+    const nobody = answerView(decision, 'nobody');
+    expect(canSign(decision, nobody)).toBe(true);
+    expect(canReject(decision, nobody)).toBe(false);
+    const rejecter = answerView(decision, 'rk0');
+    expect(rejecter).toMatchObject({ shown: 'rejected', settled: true });
+    expect(canSign(decision, rejecter)).toBe(true);
   });
 
   it('is approved, not rejected, when both reach the target', async () => {

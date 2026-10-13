@@ -60,6 +60,7 @@ function decision(signature: string, over: Partial<Decision> = {}): Decision {
       expiresAtHeight: 11_081,
     },
     phase: 'open',
+    windowPhase: 'open',
     applyAtHeight: null,
     tally: tally(1),
     unusualRoute: false,

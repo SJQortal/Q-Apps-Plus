@@ -524,6 +524,7 @@ describe('the decisions the projection reads', () => {
     createdAt: 0,
     blockHeight: 1,
     window: null,
+    windowPhase: null,
     applyAtHeight: null,
     unusualRoute: false,
     tx: {} as Decision['tx'],

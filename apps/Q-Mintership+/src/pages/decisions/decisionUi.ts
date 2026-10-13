@@ -150,12 +150,24 @@ function answerable(d: Decision): boolean {
 }
 
 /**
- * Sign is offered while a new signature can still count (early or open),
- * to an admin who hasn't signed, or whose rejection is in a block: only the
- * latest answer counts, so a signature replaces it.
+ * Enough rejections while it is just proposed: Core decides it no sooner
+ * than its earliest decision block, so a signature that lands before then
+ * still counts, and signatures are counted first.
+ */
+function signaturesCanStillWin(d: Decision): boolean {
+  return (
+    Boolean(d.tally) && !d.unusualRoute && d.phase === 'rejectedMet' && d.windowPhase === 'early'
+  );
+}
+
+/**
+ * Sign is offered while a new signature can still count (early or open, or
+ * early with enough rejections), to an admin who hasn't signed, or whose
+ * rejection is in a block: only the latest answer counts, so a signature
+ * replaces it.
  */
 export function canSign(d: Decision, view: AnswerView): boolean {
-  if (!answerable(d) || view.busy) return false;
+  if (!(answerable(d) || signaturesCanStillWin(d)) || view.busy) return false;
   return view.shown === 'none' || (view.shown === 'rejected' && view.settled);
 }
 

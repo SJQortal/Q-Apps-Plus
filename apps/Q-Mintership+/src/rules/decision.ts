@@ -175,6 +175,11 @@ export interface Decision {
   window: DecisionWindow | null;
   phase: DecisionPhase;
   /**
+   * The clock's own phase, before the count can override it with
+   * thresholdMet or rejectedMet. Null while unconfirmed.
+   */
+  windowPhase: WindowPhase | null;
+  /**
    * With enough signatures: the block Core applies it in (with enough
    * rejections: the block Core ends it as rejected). The next block, or its
    * earliest decision block when that is later (a decision is never made
@@ -220,7 +225,8 @@ export function buildDecision(tx: TxRow, ctx: DecisionContext): Decision {
         threshold: ctx.threshold,
         totalAdmins: ctx.totalAdmins,
       });
-  let phase: DecisionPhase = window ? windowPhase(window, ctx.tipHeight) : 'unconfirmed';
+  const clock = window ? windowPhase(window, ctx.tipHeight) : null;
+  let phase: DecisionPhase = clock ?? 'unconfirmed';
   const decidable = phase === 'open' || phase === 'early' || phase === 'tooLate';
   if (decidable && tally?.met) phase = 'thresholdMet';
   else if (decidable && tally?.rejectedMet) phase = 'rejectedMet';
@@ -240,6 +246,7 @@ export function buildDecision(tx: TxRow, ctx: DecisionContext): Decision {
     banSeconds: tx.type === 'GROUP_BAN' ? Number(tx.timeToLive ?? 0) : undefined,
     window,
     phase,
+    windowPhase: clock,
     applyAtHeight,
     tally,
     unusualRoute,
