@@ -15,11 +15,21 @@ import { getAddressHistory } from '../data/txs';
 import type { MyStatus } from '../rules/status';
 import { useSession } from '../state/session';
 import { useQuery, type UseQueryResult } from './useQuery';
+import { useConfirmingWrites } from '../writes/optimistic';
 
 export const LIVE_REFRESH_MS = 60_000;
 
+/** While a write from this device waits for its block (writes/optimistic.ts). */
+export const CONFIRMING_REFRESH_MS = 15_000;
+
+/** The live views' refresh: every minute, or every 15 s while a write is confirming. */
+function useLiveRefreshMs(): number {
+  return useConfirmingWrites() ? CONFIRMING_REFRESH_MS : LIVE_REFRESH_MS;
+}
+
 export function useChainNow() {
-  return useQuery('chain:now', (force) => getChainNow({ force }), { refreshMs: LIVE_REFRESH_MS });
+  const refreshMs = useLiveRefreshMs();
+  return useQuery('chain:now', (force) => getChainNow({ force }), { refreshMs });
 }
 
 export function useGroupInfo() {
@@ -36,26 +46,27 @@ export function useMembers(enabled = true) {
 }
 
 export function useDecisions(enabled = true) {
+  const refreshMs = useLiveRefreshMs();
   return useQuery('decisions:queue', (force) => loadDecisions({ force }), {
-    refreshMs: LIVE_REFRESH_MS,
+    refreshMs,
     enabled,
   });
 }
 
 export function useNominations(enabled = true) {
+  const refreshMs = useLiveRefreshMs();
   return useQuery('nominations:all', (force) => loadNominations({ force }), {
-    refreshMs: LIVE_REFRESH_MS,
+    refreshMs,
     enabled,
   });
 }
 
 export function useNominationsFor(address: string | null) {
+  const refreshMs = useLiveRefreshMs();
   return useQuery(
     address ? `nominations:for:${address}` : null,
     (force) => loadNominationsFor(address as string, { force }),
-    {
-      refreshMs: LIVE_REFRESH_MS,
-    }
+    { refreshMs }
   );
 }
 
@@ -112,7 +123,8 @@ export interface MyStatusResult extends Pick<
 export function useMyStatus(): MyStatusResult {
   const session = useSession();
   const address = session.status === 'ready' ? session.address : null;
-  const query = useStatusQuery(address, 90_000);
+  const confirming = useConfirmingWrites();
+  const query = useStatusQuery(address, confirming ? CONFIRMING_REFRESH_MS : 90_000);
   if (session.status === 'outside')
     return { ...query, status: anonymousStatus('outside'), isLoading: false };
   if (session.status === 'signedOut' || session.status === 'error') {

@@ -68,6 +68,23 @@ export function usePendingWrite(key: string | null): PendingWrite | null {
   return entry && Date.now() - entry.at <= EXPIRE_MS ? entry : null;
 }
 
+/** How long after a write the live views refresh faster, while it waits for its block. */
+export const CONFIRMING_WINDOW_MS = 5 * 60_000;
+
+/**
+ * True while a write this device sent in the last few minutes is still
+ * waiting for its block: the live views then refresh every 15 s instead of
+ * every minute, so "(confirming…)" settles soon after the block (about a
+ * minute on mainnet) rather than up to a minute later.
+ */
+export function useConfirmingWrites(): boolean {
+  const all = useAtomValue(pendingWritesAtom);
+  const now = Date.now();
+  return Object.values(all).some(
+    (entry) => entry.status === 'confirming' && now - entry.at <= CONFIRMING_WINDOW_MS
+  );
+}
+
 /** An admin's answers on one decision from this device: Sign, Reject, Withdraw my signature. */
 export interface PendingAnswers {
   sign: PendingWrite | null;
