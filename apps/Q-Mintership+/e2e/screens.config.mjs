@@ -11,8 +11,10 @@
  * nothing can be sent.
  */
 import {
+  addConsidering,
   addOtherPending,
   addReady,
+  addRejections,
   answerCore,
   createWorld,
   fakeAddress,
@@ -27,6 +29,10 @@ const world = createWorld();
 addOtherPending(world);
 // Rae Ready has shown they're ready to mint (a join request, no nomination).
 addReady(world);
+// Rejections (one a withdrawn signature, one on its way, a ban lift with enough of them, a
+// rejected invite in History) and Minter Admins considering (with notes) on the cards.
+addRejections(world);
+addConsidering(world);
 // A moving target: screens whose path starts with `?world=shift` read this world.
 const shiftWorld = createWorld();
 addOtherPending(shiftWorld);
@@ -215,6 +221,28 @@ export default {
           .waitFor({ timeout: 8000 });
         await page.waitForTimeout(400);
       },
+    },
+    // Reject, Withdraw my signature and Considering: each explained, with its fee, before Hub.
+    {
+      key: 'decisions-reject',
+      path: '/decisions?as=admin',
+      overlay: true,
+      after: open('Reject: Add to MINTER, bob+builder', 'Reject this decision'),
+    },
+    {
+      key: 'decisions-withdraw',
+      path: '/decisions?as=admin',
+      overlay: true,
+      after: open(
+        'Withdraw my signature (counts as a rejection): Add to MINTER, Uma Urgent',
+        'Withdraw your signature'
+      ),
+    },
+    {
+      key: 'decisions-considering',
+      path: '/decisions?as=admin',
+      overlay: true,
+      after: open('Considering: Add to MINTER, bob+builder', 'Mark as considering'),
     },
     { key: 'person', path: `/people/${ADDR.nominatedSigning}?as=admin`, after: settle },
     { key: 'history', path: '/history?as=learner', after: settle },

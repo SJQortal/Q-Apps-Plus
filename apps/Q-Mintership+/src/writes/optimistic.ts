@@ -1,7 +1,8 @@
 /**
- * Writes in flight, for optimistic UI: "Signed ✓ (confirming…)" from the
- * moment Hub answers until the chain shows the signature. Keyed by what the
- * write is about, e.g. `sign:<pendingSignature>` or `join:<address>`.
+ * Writes in flight, for optimistic UI: "Signed ✓ (confirming…)", "Rejected
+ * (confirming…)" or "Withdrawn (confirming…)" from the moment Hub answers
+ * until the chain shows the answer. Keyed by what the write is about, e.g.
+ * `sign:<pendingSignature>` or `join:<address>`.
  * Entries expire after 15 minutes so a lost transaction never sticks.
  */
 import { atom, getDefaultStore, useAtomValue } from 'jotai';
@@ -67,11 +68,49 @@ export function usePendingWrite(key: string | null): PendingWrite | null {
   return entry && Date.now() - entry.at <= EXPIRE_MS ? entry : null;
 }
 
+/** An admin's answers on one decision from this device: Sign, Reject, Withdraw my signature. */
+export interface PendingAnswers {
+  sign: PendingWrite | null;
+  reject: PendingWrite | null;
+  withdraw: PendingWrite | null;
+}
+
+function fresh(entry: PendingWrite | undefined, now: number): PendingWrite | null {
+  return entry && now - entry.at <= EXPIRE_MS ? entry : null;
+}
+
+/** The answers on `pendingSignature` in a snapshot of the writes (pages that read the atom). */
+export function pendingAnswersIn(
+  all: Record<string, PendingWrite>,
+  pendingSignature: string,
+  now = Date.now()
+): PendingAnswers {
+  return {
+    sign: fresh(all[writeKeys.sign(pendingSignature)], now),
+    reject: fresh(all[writeKeys.reject(pendingSignature)], now),
+    withdraw: fresh(all[writeKeys.withdraw(pendingSignature)], now),
+  };
+}
+
+/** React: the admin's answers on a decision still on their way from this device. */
+export function usePendingAnswers(pendingSignature: string): PendingAnswers {
+  const all = useAtomValue(pendingWritesAtom);
+  return pendingAnswersIn(all, pendingSignature);
+}
+
 export const writeKeys = {
   sign: (pendingSignature: string) => `sign:${pendingSignature}`,
+  /** Reject: a rejection from an admin who hadn't signed. */
+  reject: (pendingSignature: string) => `reject:${pendingSignature}`,
+  /** Withdraw my signature: a rejection after the admin's own signature. */
+  withdraw: (pendingSignature: string) => `withdraw:${pendingSignature}`,
   invite: (nominee: string) => `invite:${nominee}`,
   join: (address: string) => `join:${address}`,
   nominate: (nominee: string) => `nominate:${nominee}`,
   support: (nominee: string) => `support:${nominee}`,
   propose: (kind: string, subject: string) => `propose:${kind}:${subject}`,
+  /** Considering, by its record's key (a pending signature's first 40 characters, or an address). */
+  considering: (key: string) => `considering:${key}`,
+  /** No longer considering. */
+  notConsidering: (key: string) => `notconsidering:${key}`,
 };

@@ -1,11 +1,12 @@
 /**
  * Small parts of a decision, shared by the full card (Decisions) and the
  * compact DecisionRow: the signing clock (the shared Countdown with the
- * signing words) and the "Signed ✓" chip. The signers' avatars are the
- * shared AvatarStack (components/common/Person).
+ * signing words), the "Signed ✓" chip and the admin's own answer. The
+ * signers' avatars are the shared AvatarStack (components/common/Person).
  */
 import { Chip } from '@mui/material';
 import type { ChainNow } from '../../data/chain';
+import type { AnswerView } from '../../pages/decisions/decisionUi';
 import { Countdown } from '../common/Countdown';
 
 /** Time left to sign: until the last block in which a signature still counts. */
@@ -57,6 +58,33 @@ export function DoneChip({
       size={size}
       label={label}
       sx={{ fontWeight: 700, borderColor: 'success.main' }}
+    />
+  );
+}
+
+/**
+ * The admin's own answer: a signature as DoneChip; a rejection (or a
+ * withdrawn signature) in neutral grey, filled once it is in a block and
+ * outlined while it is on its way. Nothing when there is no answer.
+ */
+export function AnswerChip({
+  view,
+  size = 'medium',
+}: {
+  view: Pick<AnswerView, 'shown' | 'settled' | 'label'>;
+  size?: 'small' | 'medium';
+}) {
+  if (!view.label) return null;
+  if (view.shown === 'signed')
+    return <DoneChip label={view.label} settled={view.settled} size={size} />;
+  return view.settled ? (
+    <Chip size={size} label={view.label} sx={{ fontWeight: 700 }} />
+  ) : (
+    <Chip
+      variant="outlined"
+      size={size}
+      label={view.label}
+      sx={{ fontWeight: 700, borderColor: 'text.secondary' }}
     />
   );
 }

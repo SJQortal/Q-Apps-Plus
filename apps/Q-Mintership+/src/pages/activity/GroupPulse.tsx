@@ -98,7 +98,9 @@ export function GroupPulse({
                     data.pulse.invitesApproved +
                       data.pulse.invitesExpired +
                       data.pulse.invitesRejected
-                  )} decided ${windowWords(data.range.days)}`
+                  )} decided ${windowWords(data.range.days)}${
+                    data.pulse.invitesRejected ? `, ${data.pulse.invitesRejected} rejected` : ''
+                  }`
             }
           />
           <StatTile

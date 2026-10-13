@@ -16,6 +16,7 @@ import { BAN_MAX_SECONDS, INVITE_TIME_SECONDS, MINTER_GROUP_ID } from '../data/c
 import {
   RECORD_SERVICE,
   toData64,
+  type ConsideringRecord,
   type NominationRecord,
   type SupportRecord,
 } from '../data/records';
@@ -85,7 +86,7 @@ export function signApprovalRequest(unsignedBytes: string): HubRequest {
 export function publishRecordRequest(
   name: string,
   identifier: string,
-  record: NominationRecord | SupportRecord
+  record: NominationRecord | SupportRecord | ConsideringRecord
 ): HubRequest {
   return {
     action: 'PUBLISH_QDN_RESOURCE',

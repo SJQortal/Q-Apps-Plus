@@ -37,6 +37,33 @@ describe('adminSummary', () => {
     expect(summary.signed).toBe(3);
     expect(summary.waiting.map((d) => d.signature)).not.toContain(first.signature);
   });
+
+  it('a rejection is an answer: not waiting for the admin, and not counted as signed', async () => {
+    const { world, address, publicKey } = installWorld('admin');
+    const kick = world.pending.find((t: { type: string }) => t.type === 'GROUP_KICK');
+    world.approvals.push({
+      type: 'GROUP_APPROVAL',
+      timestamp: kick.timestamp + 60_000,
+      signature: 'REJECTION1',
+      txGroupId: 0,
+      blockHeight: kick.blockHeight + 3,
+      approvalStatus: 'NOT_REQUIRED',
+      creatorAddress: address,
+      adminPublicKey: publicKey,
+      pendingSignature: kick.signature,
+      approval: false,
+    });
+    const data = await loadDecisions();
+    const summary = adminSummary(data, publicKey);
+    expect(summary.waiting.map((d) => d.signature)).not.toContain(kick.signature);
+    expect(summary.waiting).toHaveLength(5);
+    expect(summary.signed).toBe(2);
+    // One on its way from this device counts the same.
+    const ban = summary.waiting.find((d) => d.kind === 'ban')!;
+    const next = adminSummary(data, publicKey, undefined, (sig) => sig === ban.signature);
+    expect(next.waiting.map((d) => d.signature)).not.toContain(ban.signature);
+    expect(next.signed).toBe(2);
+  });
 });
 
 describe('nominations on Home', () => {

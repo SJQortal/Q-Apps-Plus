@@ -15,10 +15,11 @@
  * - Only each admin's latest approval on a decision counts, as Core does,
  *   and only one that landed in time. `approval: false` is a rejection:
  *   counted apart, never as a signature.
- * - Decisions still waiting count once the admin has acted on them; an
- *   unsigned open decision is neither a miss nor a gap yet.
+ * - Decisions still waiting count once the admin has acted on them (signed
+ *   or rejected); an unanswered open decision is neither a miss nor a gap yet.
  * - Missed: it expired, they were an admin until its last useful block,
- *   and they neither signed nor rejected it.
+ *   and they neither signed nor rejected it. A rejection (Reject, or a
+ *   withdrawn signature) is an answer, never a miss.
  * - Time to sign leaves out decisions the admin proposed themselves (the
  *   proposer signs in the next block, which says nothing about response).
  */

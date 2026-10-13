@@ -337,6 +337,25 @@ describe('computeActivity', () => {
     });
   });
 
+  it('a rejection is an answer: it counts on a decision still waiting, and is never a miss', () => {
+    const decisions = [
+      decision('open', 195_000, 'PENDING'),
+      decision('ended', 120_000, 'REJECTED', 121_000),
+      decision('withdrawn', 140_000, 'EXPIRED', 150_081),
+    ];
+    const approvals = [
+      approval('Qa', 'open', 195_100, false),
+      approval('Qa', 'ended', 120_100, false),
+      // Signed, then withdrew the signature: a rejection, not a signature and not a miss.
+      approval('Qa', 'withdrawn', 140_100, true),
+      approval('Qa', 'withdrawn', 140_300, false),
+    ];
+    const report = run({ decisions, approvals });
+    expect(admin(report, 'Qa')).toMatchObject({ eligible: 3, signed: 0, rejected: 3, missed: 0 });
+    // Nobody misses a decision that ended as rejected: only expired ones are missed.
+    expect(admin(report, 'Qb')).toMatchObject({ missed: 1, rejected: 0 });
+  });
+
   it('ignores approvals of other groups’ transactions', () => {
     const decisions = [decision('d1', 120_000, 'APPROVED', 121_000)];
     const approvals = [approval('Qa', 'someone-elses-tx', 120_100), approval('Qb', 'd1', 120_200)];

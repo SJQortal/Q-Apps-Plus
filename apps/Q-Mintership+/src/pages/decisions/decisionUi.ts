@@ -1,13 +1,14 @@
 /**
  * The Decisions screen's small rules and words, kept pure so tests can pin
- * them: when Sign is offered, what each phase says, ban lengths and reasons.
+ * them: the admin's own answer and when Sign, Reject and Withdraw are
+ * offered, what each phase says, ban lengths and reasons.
  */
 import { BAN_MAX_SECONDS } from '../../data/constants';
 import { heightToTime, type ChainNow } from '../../data/chain';
 import type { Decision } from '../../rules/decision';
-import { signerState } from '../../rules/tally';
+import { signerState, withdrewSignature } from '../../rules/tally';
 import { formatBlock, formatCount, formatDateTime, formatDuration } from '../../utils/format';
-import type { PendingWrite } from '../../writes/optimistic';
+import type { PendingAnswers, PendingWrite } from '../../writes/optimistic';
 import type { WriteOutcome } from '../../writes/runner';
 
 export type MyAnswer = ReturnType<typeof signerState>;
@@ -45,28 +46,132 @@ export function myAnswer(d: Decision, publicKey: string | null | undefined): MyA
   return d.tally && publicKey ? signerState(d.tally, publicKey) : 'none';
 }
 
-/**
- * Sign is offered only while a new signature can still count (early or
- * open) and the admin hasn't signed. A rejection can be replaced, because
- * only the latest answer counts.
- */
-export function canSign(d: Decision, answer: MyAnswer, pending: PendingWrite | null): boolean {
-  if (!d.tally || d.unusualRoute) return false;
-  if (d.phase !== 'open' && d.phase !== 'early') return false;
-  if (pending && (pending.status === 'sending' || pending.status === 'confirming')) return false;
-  return answer === 'none' || answer === 'rejected';
+export type AnswerIntent = keyof PendingAnswers;
+
+const INTENTS: AnswerIntent[] = ['sign', 'reject', 'withdraw'];
+
+/** The newest answer this device is sending or waiting on, or null (a failed try doesn't count). */
+export function newestPending(
+  pending: PendingAnswers
+): { intent: AnswerIntent; write: PendingWrite } | null {
+  let newest: { intent: AnswerIntent; write: PendingWrite } | null = null;
+  for (const intent of INTENTS) {
+    const write = pending[intent];
+    if (!write || (write.status !== 'sending' && write.status !== 'confirming')) continue;
+    if (!newest || write.at >= newest.write.at) newest = { intent, write };
+  }
+  return newest;
 }
 
-/** "Signed ✓", "Signed ✓ (confirming…)", or null when the admin hasn't signed. */
-export function signedLabel(answer: MyAnswer, pending: PendingWrite | null): string | null {
-  if (answer === 'signed') return 'Signed ✓';
-  if (answer === 'confirming' || pending?.status === 'confirming') return 'Signed ✓ (confirming…)';
+/** The admin's own answer on a decision, as the card and the lists show it. */
+export interface AnswerView {
+  /** Signed, rejected (or withdrawn), or no answer. */
+  shown: 'none' | 'signed' | 'rejected';
+  /** In a block; false while it is on its way. */
+  settled: boolean;
+  /** The rejection withdrew the admin's own signature. */
+  withdrew: boolean;
+  /** An answer from this device is still being sent or confirmed: no new one until it is in. */
+  busy: boolean;
+  /** Being sent right now (the checks, or Hub's dialog). */
+  sending: AnswerIntent | null;
+  /** "Signed ✓", "Rejected (confirming…)", "Signature withdrawn", … or null. */
+  label: string | null;
+  /** The chain's word for the admin's answer. */
+  chain: MyAnswer;
+  /** A try from this device that hasn't shown up (Hub stopped waiting). */
+  failed: boolean;
+}
+
+const NO_ANSWERS: PendingAnswers = { sign: null, reject: null, withdraw: null };
+
+/**
+ * The admin's answer: the chain's (confirmed, or on its way), unless an
+ * answer sent from this device is newer and not in a block yet. That one
+ * shows as "(confirming…)" until the chain has it, then settles.
+ */
+export function answerView(
+  d: Decision,
+  publicKey: string | null | undefined,
+  pending: PendingAnswers = NO_ANSWERS
+): AnswerView {
+  const chain = myAnswer(d, publicKey);
+  const chainWithdrew = Boolean(d.tally && publicKey && withdrewSignature(d.tally, publicKey));
+  const newest = newestPending(pending);
+  let shown: AnswerView['shown'];
+  let settled: boolean;
+  let withdrew: boolean;
+  let busy = false;
+  if (newest && newest.write.status === 'confirming') {
+    shown = newest.intent === 'sign' ? 'signed' : 'rejected';
+    settled = chain === shown;
+    withdrew = shown === 'rejected' && (newest.intent === 'withdraw' || (settled && chainWithdrew));
+    busy = !settled;
+  } else {
+    shown =
+      chain === 'signed' || chain === 'confirming'
+        ? 'signed'
+        : chain === 'rejected' || chain === 'rejecting'
+          ? 'rejected'
+          : 'none';
+    settled = chain === 'signed' || chain === 'rejected';
+    withdrew = shown === 'rejected' && chainWithdrew;
+    busy = newest?.write.status === 'sending';
+  }
+  return {
+    shown,
+    settled: shown === 'none' ? false : settled,
+    withdrew,
+    busy,
+    sending: newest?.write.status === 'sending' ? newest.intent : null,
+    label: answerLabel(shown, settled, withdrew),
+    chain,
+    failed: INTENTS.some((i) => pending[i]?.status === 'failed') && !newest,
+  };
+}
+
+function answerLabel(
+  shown: AnswerView['shown'],
+  settled: boolean,
+  withdrew: boolean
+): string | null {
+  if (shown === 'signed') return settled ? 'Signed ✓' : 'Signed ✓ (confirming…)';
+  if (shown === 'rejected') {
+    if (withdrew) return settled ? 'Signature withdrawn' : 'Withdrawn (confirming…)';
+    return settled ? 'Rejected' : 'Rejected (confirming…)';
+  }
   return null;
 }
 
-/** True when the admin's signature is in, or on its way (for "hide what I signed"). */
-export function isSignedByMe(answer: MyAnswer, pending: PendingWrite | null): boolean {
-  return signedLabel(answer, pending) !== null;
+/** A new answer can still count: early or open, with a tally, on the usual route. */
+function answerable(d: Decision): boolean {
+  if (!d.tally || d.unusualRoute) return false;
+  return d.phase === 'open' || d.phase === 'early';
+}
+
+/**
+ * Sign is offered while a new signature can still count (early or open),
+ * to an admin who hasn't signed, or whose rejection is in a block: only the
+ * latest answer counts, so a signature replaces it.
+ */
+export function canSign(d: Decision, view: AnswerView): boolean {
+  if (!answerable(d) || view.busy) return false;
+  return view.shown === 'none' || (view.shown === 'rejected' && view.settled);
+}
+
+/** Reject is offered to an admin with no answer yet, while it can still count. */
+export function canReject(d: Decision, view: AnswerView): boolean {
+  return answerable(d) && !view.busy && view.shown === 'none';
+}
+
+/** "Withdraw my signature" replaces Sign once the admin's signature is in a block. */
+export function canWithdraw(d: Decision, view: AnswerView): boolean {
+  return answerable(d) && !view.busy && view.shown === 'signed' && view.settled;
+}
+
+/** Waiting for this admin: they can sign it and haven't answered it at all. */
+export function isWaitingForMe(d: Decision, view: AnswerView): boolean {
+  return canSign(d, view) && view.shown === 'none';
 }
 
 /** When Core applies a decision with enough signatures: "in the next block", or "at block X (in about T)". */
@@ -90,6 +195,12 @@ export function phaseLine(d: Decision, now: ChainNow): string | null {
       return null;
     case 'thresholdMet':
       return `Enough signatures: Core applies it ${whenApplied(d, now)}. Nobody has to do anything else.`;
+    case 'rejectedMet': {
+      const when = whenApplied(d, now);
+      return when === 'in the next block'
+        ? `Enough rejections: Core ends it as rejected in the next block. It can be proposed again.`
+        : `Enough rejections: Core ends it as rejected ${when}, unless it has ${d.tally?.needed ?? 'enough'} signatures by then (signatures are counted first). It can be proposed again.`;
+    }
     case 'tooLate':
       return w
         ? `Too late to sign: the last block a signature could count in has passed. It expires at ${formatBlock(w.expiresAtHeight)}.`

@@ -930,3 +930,117 @@ export function addTargetShift(world) {
     outgoing,
   };
 }
+// ---- rejections (Reject, Withdraw my signature) ------------------------------
+/**
+ * Add rejections to the world: on the kick, one admin withdrew their
+ * signature and another rejected it (1 of 8 signatures left, 2 rejections);
+ * on the ban, a rejection is still on its way; the lifted ban has 8
+ * rejections (enough to end it); and an invite in the history was rejected.
+ * Returns the signatures involved.
+ */
+export function addRejections(world) {
+  const extra = (i) => fakeAddress(`admin-${i}`);
+  const answer = (pendingTx, who, h, approval, seed) => {
+    const row = {
+      type: 'GROUP_APPROVAL',
+      timestamp: h === null ? NOW - 20_000 : blockTime(h) - 5_000,
+      reference: sig(`rr:${seed}`),
+      fee: '0.01000000',
+      signature: sig(`reject:${seed}`),
+      txGroupId: 0,
+      ...(h === null ? {} : { blockHeight: h }),
+      approvalStatus: 'NOT_REQUIRED',
+      creatorAddress: who,
+      adminPublicKey: pk(who),
+      pendingSignature: pendingTx.signature,
+      approval,
+    };
+    (h === null ? world.unconfirmedApprovals : world.approvals).push(row);
+    return row;
+  };
+  const kick = world.pending.find((t) => t.type === 'GROUP_KICK');
+  const ban = world.pending.find((t) => t.type === 'GROUP_BAN');
+  const lift = world.pending.find((t) => t.type === 'CANCEL_GROUP_BAN');
+  // Kick: admin-5 signed at TIP - 1,099, then withdrew; admin-8 rejected.
+  answer(kick, extra(5), TIP - 900, false, 'kick-5');
+  answer(kick, extra(8), TIP - 800, false, 'kick-8');
+  // Ban: a rejection on its way.
+  answer(ban, extra(10), null, false, 'ban-10');
+  // Lift a ban: 8 rejections, the target.
+  [0, 1, 2, 3, 6, 7, 8, 9].forEach((i, n) =>
+    answer(lift, extra(i), TIP - 500 + n, false, `lift-${i}`)
+  );
+  // A rejected invite in the history.
+  const invitee = fakeAddress('rejected-1');
+  const h = TIP - 4_500;
+  const rejected = {
+    type: 'GROUP_INVITE',
+    timestamp: blockTime(h) - 20_000,
+    reference: sig('r:rejected-invite'),
+    fee: '0.01000000',
+    signature: sig('rejected-invite'),
+    txGroupId: GROUP,
+    blockHeight: h,
+    approvalStatus: 'REJECTED',
+    approvalHeight: h + 400,
+    creatorAddress: extra(7),
+    adminPublicKey: pk(extra(7)),
+    groupId: GROUP,
+    invitee,
+    timeToLive: 864_000,
+  };
+  world.decided.push(rejected);
+  return {
+    kick: kick.signature,
+    ban: ban.signature,
+    lift: lift.signature,
+    rejectedInvite: rejected.signature,
+    invitee,
+  };
+}
+
+// ---- Considering (a Minter Admin's "not sure yet", on QDN) -------------------
+/**
+ * Add Considering records: on bob+builder's invite Admin K (with a note) and
+ * Admin L are considering, Admin N cleared theirs, and Admin B's record is
+ * older than their signature (so it no longer shows); Admin M is considering
+ * Wren Waiting's nomination; and three records that are ignored (a member
+ * who isn't an admin, a record from long ago, a body that doesn't match its
+ * identifier). Returns the keys used.
+ */
+export function addConsidering(world) {
+  const extra = (i) => fakeAddress(`admin-${i}`);
+  const nameOf = (address) => world.accounts.get(address)?.name;
+  const invite = world.pending.find((t) => t.invitee === ADDR.nominatedSigning);
+  const decisionKey = invite.signature.slice(0, 40);
+  const add = (name, key, body, ageMs, updatedAgeMs) =>
+    world.records.push({
+      name,
+      identifier: `qmp-considering-${key}`,
+      created: NOW - ageMs,
+      ...(updatedAgeMs !== undefined ? { updated: NOW - updatedAgeMs } : {}),
+      body: { v: 1, ...body },
+    });
+  const onInvite = { pendingSignature: invite.signature };
+  add(
+    nameOf(extra(10)),
+    decisionKey,
+    { ...onInvite, note: 'Waiting to hear back from them in Q-Chat about their node.' },
+    3 * 3_600_000
+  );
+  add(nameOf(extra(11)), decisionKey, onInvite, 2 * 3_600_000);
+  add(nameOf(extra(13)), decisionKey, { ...onInvite, cleared: true }, 5 * 3_600_000, 3_600_000);
+  // Admin B signed at block h + 38, after this record (h + 10): their signature replaces it.
+  add(nameOf(extra(1)), decisionKey, onInvite, NOW - blockTime(TIP - 2_990));
+  add(
+    nameOf(extra(12)),
+    ADDR.nominatedWaiting,
+    { nomineeAddress: ADDR.nominatedWaiting, note: 'Checking their minting history first.' },
+    12 * 3_600_000
+  );
+  // Ignored: not a Minter Admin; long ago; key and body disagree.
+  add(PEOPLE.nominator.name, decisionKey, onInvite, 3_600_000);
+  add(nameOf(extra(14)), ADDR.lapsed, { nomineeAddress: ADDR.lapsed }, 40 * 86_400_000);
+  add(nameOf(extra(15)), ADDR.urgent, { nomineeAddress: ADDR.nominatedWaiting }, 3_600_000);
+  return { decisionKey, inviteSignature: invite.signature, waitingKey: ADDR.nominatedWaiting };
+}

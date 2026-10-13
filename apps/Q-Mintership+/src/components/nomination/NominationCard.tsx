@@ -1,9 +1,9 @@
 /**
  * One nomination, as everyone sees it: the nominee, who nominated and who
  * supports (with their notes), the reason and links, and where it stands
- * (waiting for a Minter Admin, k of n signatures with the countdown,
- * approved, or how it ended). Screens add their own buttons through
- * `actions`.
+ * (waiting for a Minter Admin, k of n signatures with the countdown and any
+ * rejections, how many Minter Admins are considering it, approved, or how
+ * it ended). Screens add their own buttons through `actions`.
  */
 import type { ReactNode } from 'react';
 import { Box, Button, Typography } from '@mui/material';
@@ -13,7 +13,10 @@ import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
 import type { NominationState } from '../../rules/nomination';
 import { useDisplayName } from '../../hooks/useDisplayName';
-import { formatDuration, formatRelative } from '../../utils/format';
+import { formatDuration, formatRelative, plural } from '../../utils/format';
+import { whenApplied } from '../../pages/decisions/decisionUi';
+import { useConsideringFor } from '../../hooks/useConsidering';
+import { ConsideringCount } from '../decision/Considering';
 import { openQortalLink } from '../../utils/links';
 import { Countdown } from '../common/Countdown';
 import { PersonChip, PersonInline } from '../common/Person';
@@ -60,6 +63,16 @@ export function NominationCard({
   const ended = ENDED_TEXT[n.state];
   // No name in the record or the member list (a chain-only nomination): look it up.
   const nominee = useDisplayName(n.nominee, n.nomineeName ?? undefined);
+  // Read only while it is open: the shared Considering read, filtered for this nomination.
+  const considering = useConsideringFor(
+    {
+      pendingSignature: n.decision?.signature ?? null,
+      nomineeAddress: n.nominee,
+      since: n.publishedAt,
+    },
+    tally,
+    { enabled: n.state === 'waiting' || n.state === 'signing' }
+  );
   return (
     <Card
       as="article"
@@ -202,6 +215,17 @@ export function NominationCard({
             detailVisible
           />
         ) : null}
+        {n.state === 'signing' && n.decision?.phase === 'rejectedMet' ? (
+          <Typography variant="body2" color="text.secondary">
+            Enough Minter Admins have rejected it: it ends as rejected{' '}
+            {whenApplied(n.decision, now)}.
+          </Typography>
+        ) : n.state === 'signing' && tally?.rejectionCount ? (
+          <Typography variant="body2" color="text.secondary">
+            {plural(tally.rejectionCount, 'rejection')} of the {tally.needed} that would end it.
+          </Typography>
+        ) : null}
+        <ConsideringCount count={considering.people.length} />
         {n.state === 'signing' && !window ? (
           <Typography variant="body2" color="text.secondary">
             On its way into a block; the clock starts then.

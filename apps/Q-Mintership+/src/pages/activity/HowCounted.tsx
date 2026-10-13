@@ -63,12 +63,14 @@ export function HowCounted({ data }: { data: ActivityData | undefined }) {
           admins count until they stopped.
         </Typography>
         <Typography component="li" variant="body2">
-          Only an admin's latest signature on a decision counts, as on chain, and only if it landed
-          in time. Rejections are shown apart and never count as signatures.
+          Only an admin's latest answer on a decision counts, as on chain, and only if it landed in
+          time. Rejections (a withdrawn signature is one too) are shown apart and never count as
+          signatures.
         </Typography>
         <Typography component="li" variant="body2">
-          Missed means a decision expired while they were an admin and they didn't act on it.
-          Decisions still collecting signatures count for an admin once they have signed.
+          Missed means a decision expired while they were an admin and they neither signed nor
+          rejected it: a rejection is an answer, not a miss. Decisions still collecting signatures
+          count for an admin once they have signed or rejected.
         </Typography>
         <Typography component="li" variant="body2">
           Time to sign is the median from a decision's block to their signature's block, at the live

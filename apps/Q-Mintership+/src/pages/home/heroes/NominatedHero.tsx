@@ -1,8 +1,9 @@
 /**
  * Someone nominated this account: who (and who supports it), where it
  * stands (waiting for a first Minter Admin, or k of n with the time left
- * to sign), and Accept, which sends the join request so approval makes the
- * nominee a member at once. Once accepted: "You've accepted ✓".
+ * to sign, any rejections, and how many Minter Admins are considering it),
+ * and Accept, which sends the join request so approval makes the nominee a
+ * member at once. Once accepted: "You've accepted ✓".
  */
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -17,11 +18,13 @@ import { useFee } from '../../../hooks/useFee';
 import { personPath } from '../../../routes/paths';
 import type { MyStatus } from '../../../rules/status';
 import { signerOf, useSession } from '../../../state/session';
-import { formatDuration, formatRelative } from '../../../utils/format';
+import { formatDuration, formatRelative, plural } from '../../../utils/format';
 import { usePendingWrite, writeKeys } from '../../../writes/optimistic';
 import { Hero, HeroText, Num, PeopleList, PersonLink } from '../Hero';
 import { LazyJoinDialog } from '../../../components/nomination/LazyJoinDialog';
 import { readable } from '../../../utils/readable';
+import { useConsideringFor } from '../../../hooks/useConsidering';
+import { consideringCountText } from '../../../rules/considering';
 import { whenApplied } from '../../decisions/decisionUi';
 
 export function NominatedHero({
@@ -49,6 +52,18 @@ export function NominatedHero({
   const window = n.decision?.window ?? null;
   const signing = n.state === 'signing';
   const met = Boolean(tally?.met) || n.decision?.phase === 'thresholdMet';
+  // Enough rejections: Core ends it as rejected in its next decision block.
+  const rejectedEnd = !met && n.decision?.phase === 'rejectedMet';
+  const rejections = tally?.rejectionCount ?? 0;
+  const considering = useConsideringFor(
+    {
+      pendingSignature: n.decision?.signature ?? null,
+      nomineeAddress: n.nominee,
+      since: n.publishedAt,
+    },
+    tally,
+    { enabled: n.state === 'waiting' || n.state === 'signing' }
+  ).people.length;
   // When Core applies it: the next block, or later while it is just proposed.
   const when = n.decision && now.data ? whenApplied(n.decision, now.data) : 'in the next block';
   const needNow = tally?.needed ?? needed;
@@ -62,21 +77,25 @@ export function NominatedHero({
 
   const title = met
     ? 'Enough Minter Admins have signed'
-    : signing
-      ? name
-        ? `${name}, Minter Admins are signing your nomination`
-        : 'Minter Admins are signing your nomination'
-      : name
-        ? `${name}, you've been nominated for MINTER`
-        : "You've been nominated for MINTER";
-
-  const next = !accepted
-    ? `Accept, then wait for the Minter Admins: ${needNow ? `at ${needNow} signatures` : 'once enough have signed'} you're in, with no further step.`
-    : met
-      ? `You're added to MINTER ${when}. Nothing more to do.`
+    : rejectedEnd
+      ? 'Enough Minter Admins have rejected your nomination'
       : signing
-        ? `At ${needNow ? `${needNow} signatures` : 'enough signatures'} you're added to MINTER automatically: nothing more to do. If time runs out, you can be nominated again.`
-        : `When a Minter Admin signs first, the clock starts; at ${needNow ? `${needNow} signatures` : 'enough signatures'} you're added automatically.`;
+        ? name
+          ? `${name}, Minter Admins are signing your nomination`
+          : 'Minter Admins are signing your nomination'
+        : name
+          ? `${name}, you've been nominated for MINTER`
+          : "You've been nominated for MINTER";
+
+  const next = rejectedEnd
+    ? `It ends as rejected ${when}. You can be nominated again later.`
+    : !accepted
+      ? `Accept, then wait for the Minter Admins: ${needNow ? `at ${needNow} signatures` : 'once enough have signed'} you're in, with no further step.`
+      : met
+        ? `You're added to MINTER ${when}. Nothing more to do.`
+        : signing
+          ? `At ${needNow ? `${needNow} signatures` : 'enough signatures'} you're added to MINTER automatically: nothing more to do. If time runs out, you can be nominated again.`
+          : `When a Minter Admin signs first, the clock starts; at ${needNow ? `${needNow} signatures` : 'enough signatures'} you're added automatically.`;
 
   return (
     <>
@@ -145,7 +164,7 @@ export function NominatedHero({
               ) : (
                 ` That's enough: once it's applied ${when}, press Join now to finish.`
               )
-            ) : (
+            ) : rejectedEnd ? null : (
               <>
                 {' '}
                 <Num>{Math.max(0, tally.needed - tally.projectedApprovalCount)}</Num> more needed
@@ -154,7 +173,29 @@ export function NominatedHero({
             )}
           </HeroText>
         ) : null}
-        {signing && window && !met && now.data ? (
+        {signing && tally && rejections > 0 && !met ? (
+          <HeroText muted>
+            {rejectedEnd ? (
+              <>
+                <Num>{rejections}</Num> Minter Admins have rejected it, as many as the{' '}
+                <Num>{tally.needed}</Num> that end it.
+              </>
+            ) : (
+              <>
+                <Num>{plural(rejections, 'Minter Admin')}</Num> {rejections === 1 ? 'has' : 'have'}{' '}
+                rejected it so far. It ends as rejected only if <Num>{tally.needed}</Num> do, and
+                signatures are counted first.
+              </>
+            )}
+          </HeroText>
+        ) : null}
+        {considering > 0 && !met && !rejectedEnd ? (
+          <HeroText>
+            {consideringCountText(considering)}: they&rsquo;ve looked at it and haven&rsquo;t
+            decided yet.
+          </HeroText>
+        ) : null}
+        {signing && window && !met && !rejectedEnd && now.data ? (
           <Box>
             <Countdown
               now={now.data}

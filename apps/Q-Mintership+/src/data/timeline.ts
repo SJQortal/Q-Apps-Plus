@@ -148,7 +148,11 @@ export function buildTimeline(rows: TxRow[], ctx: TimelineContext): TimelineEven
     if (kind === 'ban' && outcome === 'done') detail = banLength(Number(tx.timeToLive ?? 0));
     if (kind === 'invite' && outcome === 'expired')
       detail = 'Not enough signatures in time. They can be nominated again.';
-    if (outcome === 'rejected') detail = 'Rejected by Minter Admins.';
+    if (outcome === 'rejected')
+      detail =
+        kind === 'invite'
+          ? 'Enough Minter Admins rejected it. They can be nominated again.'
+          : 'Enough Minter Admins rejected it.';
     base.push({
       signature: tx.signature,
       kind,

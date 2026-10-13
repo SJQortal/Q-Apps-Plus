@@ -1,6 +1,7 @@
 /**
  * A compact decision: what it does, who it is about, k of n and the time
- * left, and whether you have signed. Links to the decision in the queue.
+ * left, and your answer (signed, rejected or withdrawn). Links to the
+ * decision in the queue.
  * (The full card with Sign lives on the Decisions screen.)
  *
  * The link's name is its visible text; the ring is decorative here, so its
@@ -10,14 +11,14 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Box, Typography } from '@mui/material';
 import type { ChainNow } from '../../data/chain';
 import { KIND_LABEL, type Decision } from '../../rules/decision';
-import { signerState } from '../../rules/tally';
 import { decisionPath } from '../../routes/paths';
-import { usePendingWrite, writeKeys } from '../../writes/optimistic';
+import { answerView } from '../../pages/decisions/decisionUi';
+import { usePendingAnswers } from '../../writes/optimistic';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { NameAvatar } from '../common/NameAvatar';
 import { ProgressRing } from '../common/ProgressRing';
 import { DecisionPhaseChip } from '../common/Section';
-import { DoneChip, SigningClock } from './DecisionParts';
+import { AnswerChip, SigningClock } from './DecisionParts';
 
 export function DecisionRow({
   decision: d,
@@ -29,9 +30,7 @@ export function DecisionRow({
   myPublicKey?: string;
 }) {
   const subject = useDisplayName(d.subject ?? '', d.subject ? undefined : null);
-  const pending = usePendingWrite(writeKeys.sign(d.signature));
-  const mine = d.tally && myPublicKey ? signerState(d.tally, myPublicKey) : 'none';
-  const signed = mine === 'signed' || mine === 'confirming' || pending?.status === 'confirming';
+  const view = answerView(d, myPublicKey, usePendingAnswers(d.signature));
   const who = d.subject ? subject.label : 'an approved invite (Core doesn’t say for whom)';
   return (
     <Box
@@ -70,13 +69,7 @@ export function DecisionRow({
           ) : (
             <DecisionPhaseChip phase={d.phase} />
           )}
-          {signed ? (
-            <DoneChip
-              label={mine === 'signed' ? 'Signed ✓' : 'Signed ✓ (confirming…)'}
-              settled={mine === 'signed'}
-              size="small"
-            />
-          ) : null}
+          <AnswerChip view={view} size="small" />
         </Box>
       </Box>
       {d.tally ? (

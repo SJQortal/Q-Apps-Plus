@@ -11,27 +11,34 @@ import { ATOMIC_PER_QORT, MINTER_GROUP_ID } from '../data/constants';
 import { getTransaction } from '../data/txs';
 import { invalidate } from '../data/query';
 import {
+  buildConsidering,
   buildNomination,
   buildSupport,
+  consideringIdentifier,
+  consideringKey,
   nominationIdentifier,
   supportIdentifier,
+  type ConsideringTarget,
   type NominationInput,
 } from '../data/records';
 import type { GroupTxType, TxRow } from '../data/types';
 import { decisionSubject } from '../rules/decision';
-import { groupApprovalUnsignedBase58 } from '../qortal/approvalBytes';
+import { groupApprovalUnsignedBase58, groupRejectionUnsignedBase58 } from '../qortal/approvalBytes';
 import {
   guardAddAdmin,
   guardBan,
   guardCancelBan,
   guardCancelInvite,
+  guardConsidering,
   guardInvite,
   guardJoin,
   guardKick,
   guardNominate,
+  guardReject,
   guardRemoveAdmin,
   guardSign,
   guardSupport,
+  guardWithdraw,
 } from './guards';
 import {
   addAdminRequest,
@@ -66,6 +73,7 @@ function invalidateChainReads(): void {
     'tx:',
     'balance:',
     'qdnsearch:',
+    'considering:',
   ]) {
     invalidate(prefix);
   }
@@ -106,6 +114,35 @@ export async function buildApprovalRequest(
   return signApprovalRequest(unsignedBytes);
 }
 
+/**
+ * The GROUP_APPROVAL request with approval false (Reject, or Withdraw my
+ * signature), built from fresh reads with the rejection's own builder.
+ */
+export async function buildRejectionRequest(
+  signer: Signer,
+  pendingSignature: string
+): Promise<HubRequest> {
+  const [reference, fee] = await Promise.all([
+    getLastReference(signer.address),
+    getFee('GROUP_APPROVAL'),
+  ]);
+  const unsignedBytes = groupRejectionUnsignedBase58({
+    timestamp: Date.now(),
+    reference,
+    adminPublicKey: signer.publicKey,
+    pendingSignature,
+    approval: false,
+    feeAtomic: fee.atomic,
+  });
+  return signApprovalRequest(unsignedBytes);
+}
+
+/** This write's GROUP_APPROVAL on `pendingSignature`, with this answer (after a Hub timeout). */
+const answerMatch = (pendingSignature: string, approval: boolean) => (tx: TxRow) =>
+  tx.type === 'GROUP_APPROVAL' &&
+  tx.pendingSignature === pendingSignature &&
+  tx.approval === approval;
+
 /** Sign (approve) a pending MINTER transaction. */
 export function signDecision(
   signer: Signer,
@@ -117,7 +154,51 @@ export function signDecision(
       request: () => buildApprovalRequest(signer, pendingSignature),
       signer,
       precheck: () => guardSign(signer, pendingSignature),
-      match: (tx) => tx.type === 'GROUP_APPROVAL' && tx.pendingSignature === pendingSignature,
+      match: answerMatch(pendingSignature, true),
+      onStage,
+    })
+  );
+}
+
+/**
+ * Reject a pending MINTER transaction the admin hasn't signed: a
+ * GROUP_APPROVAL with approval false. It counts towards ending it as
+ * rejected (against the same target as signatures) and cancels nobody
+ * else's signature. The admin can still sign later: only their latest
+ * answer counts.
+ */
+export function rejectDecision(
+  signer: Signer,
+  pendingSignature: string,
+  onStage?: (s: WriteStage) => void
+): Promise<WriteOutcome> {
+  return tracked(writeKeys.reject(pendingSignature), () =>
+    runWrite({
+      request: () => buildRejectionRequest(signer, pendingSignature),
+      signer,
+      precheck: () => guardReject(signer, pendingSignature),
+      match: answerMatch(pendingSignature, false),
+      onStage,
+    })
+  );
+}
+
+/**
+ * Withdraw the admin's signature: on chain the same GROUP_APPROVAL with
+ * approval false, sent after their signature. Only the latest answer
+ * counts, so the signature stops counting and a rejection counts instead.
+ */
+export function withdrawSignature(
+  signer: Signer,
+  pendingSignature: string,
+  onStage?: (s: WriteStage) => void
+): Promise<WriteOutcome> {
+  return tracked(writeKeys.withdraw(pendingSignature), () =>
+    runWrite({
+      request: () => buildRejectionRequest(signer, pendingSignature),
+      signer,
+      precheck: () => guardWithdraw(signer, pendingSignature),
+      match: answerMatch(pendingSignature, false),
       onStage,
     })
   );
@@ -510,6 +591,42 @@ export async function publishSupport(
       signer,
       precheck: () => guardSupport(signer, nomineeAddress),
       match: (tx) => tx.type === 'ARBITRARY' && tx.identifier === supportIdentifier(nomineeAddress),
+      onStage,
+    });
+  });
+}
+
+/**
+ * Considering ("I've looked at this, not sure yet"), or with `cleared`
+ * "No longer considering": a small QDN record under the admin's name. It
+ * changes nothing on chain; a later signature or rejection replaces it.
+ */
+export async function publishConsidering(
+  signer: Signer & { name: string | null },
+  target: ConsideringTarget,
+  options: { note?: string; cleared?: boolean } = {},
+  onStage?: (s: WriteStage) => void
+): Promise<WriteOutcome> {
+  let key: string;
+  try {
+    key = consideringKey(target);
+  } catch (error) {
+    return { status: 'blocked', reason: error instanceof Error ? error.message : String(error) };
+  }
+  const writeKey = options.cleared ? writeKeys.notConsidering(key) : writeKeys.considering(key);
+  return tracked(writeKey, async () => {
+    let record;
+    try {
+      record = buildConsidering(target, options);
+    } catch (error) {
+      return { status: 'blocked', reason: error instanceof Error ? error.message : String(error) };
+    }
+    const identifier = consideringIdentifier(target);
+    return runWrite({
+      request: publishRecordRequest(signer.name ?? '', identifier, record),
+      signer,
+      precheck: () => guardConsidering(signer, target, Boolean(options.cleared)),
+      match: (tx) => tx.type === 'ARBITRARY' && tx.identifier === identifier,
       onStage,
     });
   });
