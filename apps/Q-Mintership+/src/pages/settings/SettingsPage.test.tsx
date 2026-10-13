@@ -74,11 +74,11 @@ describe('Settings → Muted names', () => {
     const section = await screen.findByRole('region', { name: 'Muted names' });
     expect(within(section).getByText(/folded away on this device only/)).toBeInTheDocument();
     const rows = within(within(section).getByRole('list')).getAllByRole('listitem');
-    // Avatar letter, name, Unmute.
+    // Avatar (its image once on screen), name, Unmute.
     expect(rows.map((li) => li.textContent)).toEqual([
-      'LLoud OneUnmute',
-      'MMember 7Unmute',
-      'SSpam BotUnmute',
+      'Loud OneUnmute',
+      'Member 7Unmute',
+      'Spam BotUnmute',
     ]);
 
     // The middle one: focus moves to the next name's Unmute.

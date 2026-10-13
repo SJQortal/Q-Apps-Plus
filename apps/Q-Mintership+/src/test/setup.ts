@@ -143,13 +143,29 @@ if (typeof window.ResizeObserver === 'undefined') {
   });
 }
 
+/**
+ * jsdom has no layout: every observed element counts as near the screen, a
+ * moment after it is observed (as on a page short enough to show it all).
+ */
 class IntersectionObserverStub {
   readonly root = null;
   readonly rootMargin = '';
   readonly thresholds = [];
-  observe() {}
+  private live = true;
+  constructor(private readonly callback: IntersectionObserverCallback) {}
+  observe(target: Element) {
+    queueMicrotask(() => {
+      if (!this.live) return;
+      this.callback(
+        [{ isIntersecting: true, target } as unknown as IntersectionObserverEntry],
+        this as unknown as IntersectionObserver
+      );
+    });
+  }
   unobserve() {}
-  disconnect() {}
+  disconnect() {
+    this.live = false;
+  }
   takeRecords() {
     return [];
   }

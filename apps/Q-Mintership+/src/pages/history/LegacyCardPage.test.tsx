@@ -41,8 +41,9 @@ describe('Original card page', () => {
       )
     ).toBeInTheDocument();
     expect(within(card).getByText('• Node online 24/7')).toBeInTheDocument();
-    // No markup, no scripts: the HTML was read as text.
-    expect(card.innerHTML).not.toMatch(/<script|<img|onerror|<strong/);
+    // No markup, no scripts: the HTML was read as text (the app's own avatars aside).
+    const html = card.innerHTML.replace(/<img [^>]*src="[^"]*\/arbitrary\/THUMBNAIL\/[^"]*"[^>]*>/g, '');
+    expect(html).not.toMatch(/<script|<img|onerror|<strong/);
     expect((window as { __legacyScriptRan?: boolean }).__legacyScriptRan).toBeUndefined();
     expect(within(card).getAllByRole('button', { name: /APP\/Q-Tube\/channel/ })).toHaveLength(1);
     expect(within(card).queryByText(/example\.com/)).toBeNull();
