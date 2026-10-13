@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage, type RenderPageOptions } from '../../test/render';
-import { addTargetShift } from '../../../e2e/world.mjs';
+import { addTargetShift, type World } from '../../../e2e/world.mjs';
 import { mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { base58Decode, base58Encode } from '../../qortal/base58';
 import DecisionsPage from './DecisionsPage';
@@ -15,10 +15,13 @@ const T = { timeout: 4000 };
 type Shift = ReturnType<typeof addTargetShift>;
 
 /** Decisions in the moving-target world (21 admin rows, 9 needed). */
-async function openShifted(options: { persona?: string } = {}) {
+async function openShifted(
+  options: { persona?: string; more?: (world: World, shift: Shift) => void } = {}
+) {
   let shift: Shift | null = null;
   const setup: RenderPageOptions['setup'] = (world) => {
     shift = addTargetShift(world);
+    options.more?.(world, shift);
   };
   const rendered = await renderPage(<DecisionsPage />, {
     persona: options.persona ?? 'admin',
@@ -77,6 +80,36 @@ describe('Decisions: an admin change says what it does to the target', () => {
     // Mia Met's card: the chip says the target may rise.
     const met = card(/^Add to MINTER, Mia Met/);
     expect(within(met).getByRole('button', { name: 'Target may rise to 9' })).toBeVisible();
+  });
+});
+
+describe('Decisions: an admin change about to apply', () => {
+  it('says above the queue what it will tip over when it applies', async () => {
+    await openShifted({
+      // Dex Demote's removal gets the kick's nine signers too: enough signatures.
+      more: (world, shift) => {
+        const signers = world.approvals.filter(
+          (a: { pendingSignature: string }) => a.pendingSignature === shift.kick
+        );
+        for (const a of signers)
+          world.approvals.push({
+            ...a,
+            pendingSignature: shift.demote,
+            signature: `${a.signature.slice(0, -3)}zzz`,
+          });
+      },
+    });
+    const section = screen.getByRole('region', { name: 'Admin changes and the target' });
+    const note = within(section).getByRole('note');
+    expect(note).toHaveTextContent(
+      'Remove a Minter Admin: Dex Demote has enough signatures: Core applies it in the next block. When it does, MINTER has 20 admin seats and the target drops from 9 to 8 signatures.'
+    );
+    expect(within(note).getByText('Add to MINTER: Mia Met (8 of 9)')).toBeVisible();
+  });
+
+  it('is not there when no admin change is about to tip anything over', async () => {
+    await openShifted();
+    expect(screen.queryByRole('region', { name: 'Admin changes and the target' })).toBeNull();
   });
 });
 
