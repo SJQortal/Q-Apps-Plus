@@ -1,0 +1,230 @@
+/**
+ * Home's "Since your last visit" against the mock MINTER world: what an
+ * admin and a nominee see after an earlier visit (e2e/world.mjs →
+ * lastVisitSnapshots), "Mark as seen", and that nothing shows (or is read)
+ * without an earlier visit.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { getDefaultStore } from 'jotai';
+import { STORAGE_PREFIX } from '../../constants/plus';
+import { resetLastVisitSession } from '../../data/lastVisit';
+import { sinceLastVisitAtom } from '../../state/notifications';
+import { fetchCallsFor } from '../../test/setup';
+import { renderPage } from '../../test/render';
+import { ADDR } from '../../test/world';
+import { lastVisitSnapshots, lastVisitStorageKey } from '../../../e2e/world.mjs';
+import type { World } from '../../../e2e/world.mjs';
+import HomePage from './HomePage';
+
+const T = { timeout: 4000 };
+/** `GET /transactions/signature/{sig}` (not the `/raw` read a cancellation needs). */
+const ONE_TX = /^\/transactions\/signature\/[^/?]+$/;
+
+beforeEach(() => resetLastVisitSession());
+afterEach(() => {
+  vi.useRealTimers();
+  getDefaultStore().set(sinceLastVisitAtom, true);
+});
+
+type Persona = 'admin' | 'nominatedSigning' | 'nominatedWaiting';
+
+/** Seed the earlier visit the mock world describes for `persona`. */
+function seed(persona: Persona) {
+  return (world: World) => {
+    const { address, snapshot } = lastVisitSnapshots(world)[persona];
+    window.localStorage.setItem(lastVisitStorageKey(address), JSON.stringify(snapshot));
+  };
+}
+
+/** Seed a nominee's earlier visit by hand. */
+function seedNomination(address: string, nomination: unknown, at = 1_791_400_000_000) {
+  window.localStorage.setItem(
+    lastVisitStorageKey(address),
+    JSON.stringify({ v: 1, at, height: 2_751_000, nomination })
+  );
+}
+
+const panel = () => screen.findByRole('region', { name: 'Since your last visit' }, T);
+
+describe('Since your last visit: Minter Admins', () => {
+  it('lists new decisions, a new nomination and the decided ones', async () => {
+    await renderPage(<HomePage />, { persona: 'admin', setup: seed('admin') });
+    const region = await panel();
+    expect(within(region).getByText(/Your last visit on this device was 5 days ago/)).toBeVisible();
+
+    // Seven new decisions (Avery's own proposal is left out): three, then "And 4 more".
+    const open = await within(region).findAllByRole('link', { name: /^Open: / }, T);
+    expect(open).toHaveLength(3);
+    expect(open[0]).toHaveAccessibleName('Open: Ban from MINTER: Ben Target');
+    expect(within(region).getByText('And 4 more new decisions')).toBeInTheDocument();
+    expect(within(region).getByRole('link', { name: 'See all new decisions' })).toHaveAttribute(
+      'href',
+      '/decisions'
+    );
+    expect(within(region).queryByText(/Eli Early/)).toBeNull();
+
+    // Wren Waiting was nominated since, and waits for a first signature.
+    expect(await within(region).findByText('New nomination: Wren Waiting', {}, T)).toBeVisible();
+    expect(
+      within(region).getByRole('link', { name: 'Review the nomination of Wren Waiting' })
+    ).toBeInTheDocument();
+
+    // Decided since (two more expired than approved): read once each.
+    expect(
+      await within(region).findByText('Expired without enough signatures in block 2,752,581', {}, T)
+    ).toBeVisible();
+    expect(within(region).getByText('Approved in block 2,752,300')).toBeVisible();
+    expect(within(region).getByRole('link', { name: 'Remy Recent' })).toBeInTheDocument();
+    expect(
+      within(region).getByText('Expired without enough signatures in block 2,752,048')
+    ).toBeVisible();
+    expect(fetchCallsFor(ONE_TX)).toHaveLength(3);
+
+    // One polite sentence, once it has settled.
+    await waitFor(
+      () =>
+        expect(screen.getByRole('status', { name: '' })).toHaveTextContent(
+          'Since your last visit: 7 new decisions, 1 new nomination, 3 decided.'
+        ),
+      T
+    );
+  });
+
+  it('goes away on "Mark as seen" and keeps focus on the page', async () => {
+    const u = userEvent.setup();
+    await renderPage(<HomePage />, { persona: 'admin', setup: seed('admin') });
+    const region = await panel();
+    await within(region).findAllByRole('link', { name: /^Open: / }, T);
+    await u.click(within(region).getByRole('button', { name: 'Mark as seen' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'Since your last visit' })).toBeNull()
+    );
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
+    // The new baseline is saved: the next visit compares with now.
+    const saved = JSON.parse(window.localStorage.getItem(lastVisitStorageKey(ADDR.admin)) ?? '{}');
+    expect(saved.decisions.length).toBeGreaterThan(5);
+  });
+
+  it('shows nothing, and reads nothing extra, on a first visit', async () => {
+    await renderPage(<HomePage />, { persona: 'admin' });
+    await screen.findByRole('region', { name: 'Waiting for your signature' }, T);
+    await screen.findAllByRole('link', { name: /signatures/ }, T);
+    expect(screen.queryByRole('region', { name: 'Since your last visit' })).toBeNull();
+    expect(fetchCallsFor(ONE_TX)).toHaveLength(0);
+  });
+
+  it('can be switched off in Settings', async () => {
+    getDefaultStore().set(sinceLastVisitAtom, false);
+    await renderPage(<HomePage />, { persona: 'admin', setup: seed('admin') });
+    await screen.findByRole('region', { name: 'Waiting for your signature' }, T);
+    await screen.findAllByRole('link', { name: /signatures/ }, T);
+    expect(screen.queryByRole('region', { name: 'Since your last visit' })).toBeNull();
+    expect(fetchCallsFor(ONE_TX)).toHaveLength(0);
+  });
+});
+
+describe('Since your last visit: nominees', () => {
+  it('counts the new signatures on your nomination', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'nominatedSigning',
+      setup: seed('nominatedSigning'),
+    });
+    const region = await panel();
+    expect(within(region).getByText('2 new signatures')).toBeVisible();
+    expect(within(region).getByText('Your nomination has 5 of 8 signatures now.')).toBeVisible();
+    expect(within(region).getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('says who nominated you when there was no nomination before', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'nominatedWaiting',
+      setup: seed('nominatedWaiting'),
+    });
+    const region = await panel();
+    expect(within(region).getByText("You've been nominated")).toBeVisible();
+    expect(within(region).getByRole('link', { name: 'Nora Nominator' })).toBeInTheDocument();
+    // Juniper's support came with the nomination: not news on its own.
+    expect(within(region).getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('reports the first signature', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'nominatedSigning',
+      setup: (world) => {
+        const record = world.records.find(
+          (r: { identifier: string }) => r.identifier === `qmp-nomination-${ADDR.nominatedSigning}`
+        );
+        seedNomination(ADDR.nominatedSigning, {
+          decision: null,
+          state: 'waiting',
+          signed: 0,
+          needed: null,
+          supporters: 0,
+          publishedAt: record.created,
+        });
+      },
+    });
+    const region = await panel();
+    expect(within(region).getByText('A Minter Admin signed first')).toBeVisible();
+    expect(
+      within(region).getByText('The clock has started: 5 of 8 signatures so far.')
+    ).toBeVisible();
+  });
+
+  it('reports an expired nomination with the count it had', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'expired',
+      setup: (world) => {
+        const invite = world.decided.find((t: { invitee?: string }) => t.invitee === ADDR.expired);
+        const record = world.records.find(
+          (r: { identifier: string }) => r.identifier === `qmp-nomination-${ADDR.expired}`
+        );
+        seedNomination(ADDR.expired, {
+          decision: invite.signature,
+          state: 'signing',
+          signed: 5,
+          needed: 8,
+          supporters: 0,
+          publishedAt: record.created,
+        });
+      },
+    });
+    const region = await panel();
+    expect(within(region).getByText('Your nomination expired')).toBeVisible();
+    expect(
+      within(region).getByText(
+        'It had 5 of 8 signatures at your last visit. You can be nominated again.'
+      )
+    ).toBeVisible();
+  });
+
+  it('reports an approval from the history when no nomination record shows it', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'approved',
+      setup: (world) => {
+        const invite = world.decided.find((t: { invitee?: string }) => t.invitee === ADDR.approved);
+        seedNomination(ADDR.approved, {
+          decision: invite.signature,
+          state: 'signing',
+          signed: 7,
+          needed: 8,
+          supporters: 0,
+          publishedAt: invite.timestamp,
+        });
+      },
+    });
+    const region = await panel();
+    expect(within(region).getByText('Your nomination was approved')).toBeVisible();
+    expect(within(region).getByText('One step left: press Join now.')).toBeVisible();
+  });
+
+  it("says you're in when Home welcomes a new member", async () => {
+    window.localStorage.setItem(`${STORAGE_PREFIX}last-status:${ADDR.learner}`, 'nominated');
+    await renderPage(<HomePage />, { persona: 'learner' });
+    const region = await panel();
+    expect(within(region).getByText("You're in")).toBeVisible();
+    expect(within(region).getByText('You’re a MINTER member now.')).toBeVisible();
+  });
+});

@@ -832,3 +832,83 @@ export function answerQortal(world, persona, request) {
       return null;
   }
 }
+
+// ---- Since your last visit (Home) -------------------------------------------
+/** The block of the earlier visit lastVisitSnapshots() describes (about 5 days before NOW). */
+export const LAST_VISIT_HEIGHT = TIP - 6_000;
+export const LAST_VISIT_AT = blockTime(LAST_VISIT_HEIGHT);
+
+/** Where the app keeps an account's last visit (src/data/lastVisit.ts). */
+export function lastVisitStorageKey(address, groupId = GROUP) {
+  return `qmintershipplus-last-visit-${address}-${groupId}`;
+}
+
+const SNAP_KIND = {
+  GROUP_INVITE: 'invite',
+  CANCEL_GROUP_INVITE: 'cancelInvite',
+  GROUP_KICK: 'kick',
+  GROUP_BAN: 'ban',
+  CANCEL_GROUP_BAN: 'cancelBan',
+  ADD_GROUP_ADMIN: 'addAdmin',
+  REMOVE_GROUP_ADMIN: 'removeAdmin',
+};
+
+/**
+ * What this device saved at an earlier visit, in the app's snapshot shape
+ * (src/rules/sinceLastVisit.ts → VisitSnapshot), per persona:
+ *
+ * - admin: the decisions open at LAST_VISIT_HEIGHT. Since then seven came
+ *   (an eighth is Avery's own), Remy Recent's invite was approved, Ünïcode
+ *   Ñame's and one from the Activity history expired, and Wren Waiting was
+ *   nominated.
+ * - nominatedSigning: 3 of 8 signatures then, 5 now.
+ * - nominatedWaiting: no nomination then (Nora nominated them since).
+ */
+export function lastVisitSnapshots(world) {
+  const openThen = [...world.pending, ...world.decided].filter(
+    (t) =>
+      t.type in SNAP_KIND &&
+      typeof t.blockHeight === 'number' &&
+      t.blockHeight <= LAST_VISIT_HEIGHT &&
+      (t.approvalStatus === 'PENDING' || (t.approvalHeight ?? 0) > LAST_VISIT_HEIGHT)
+  );
+  const signing = world.pending.find(
+    (t) => t.type === 'GROUP_INVITE' && t.invitee === ADDR.nominatedSigning
+  );
+  const signingRecord = world.records.find(
+    (r) => r.identifier === `qmp-nomination-${ADDR.nominatedSigning}`
+  );
+  const base = { v: 1, at: LAST_VISIT_AT, height: LAST_VISIT_HEIGHT };
+  return {
+    admin: {
+      address: ADDR.admin,
+      snapshot: {
+        ...base,
+        decisions: openThen.map((t) => ({
+          signature: t.signature,
+          kind: SNAP_KIND[t.type],
+          subject: subjectOf(t),
+          height: t.blockHeight,
+        })),
+      },
+    },
+    nominatedSigning: {
+      address: ADDR.nominatedSigning,
+      snapshot: {
+        ...base,
+        nomination: {
+          decision: signing.signature,
+          state: 'signing',
+          signed: 3,
+          needed: 8,
+          supporters: 0,
+          publishedAt: signingRecord.created,
+        },
+      },
+    },
+    nominatedWaiting: {
+      address: ADDR.nominatedWaiting,
+      snapshot: { ...base, nomination: null },
+    },
+  };
+}

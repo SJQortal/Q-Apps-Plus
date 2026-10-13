@@ -8,6 +8,7 @@ import { useTrackInAppHistory } from '../../hooks/useSafeBack';
 import { useApplyMotionSetting } from '../../hooks/useReducedMotion';
 import { BOTTOM_NAV_VAR, usePublishOffset } from '../../hooks/useOverlayPadding';
 import { useDecisions, useMyStatus } from '../../hooks/useData';
+import { useRecordVisit } from '../../hooks/useLastVisit';
 import { notifyHubDisplayedPath } from '../../routes/hubLocation';
 import { useLegacyRouteRedirect } from '../../routes/useLegacyRouteRedirect';
 import { useSession, useStartSession } from '../../state/session';
@@ -69,6 +70,7 @@ export function AppShell() {
   useTrackInAppHistory();
   useAppViewport();
   useApplyMotionSetting();
+  useRecordVisit();
 
   useEffect(() => {
     notifyHubDisplayedPath(pathname);

@@ -29,6 +29,7 @@ import { LearnerHero, NominatorHero } from './heroes/MemberHero';
 import { NewcomerHero } from './heroes/NewcomerHero';
 import { NominatedHero } from './heroes/NominatedHero';
 import { useNeededSignatures, type NeededSignatures } from './homeData';
+import { SinceLastVisit } from './SinceLastVisit';
 import { useBecameMinter } from './welcome';
 
 /** What the Refresh button reloads (only the keys Home shows; immutable blocks stay). */
@@ -171,6 +172,7 @@ export default function HomePage() {
             onRetry={() => void my.refetch()}
           />
         ) : null}
+        {status ? <SinceLastVisit status={status} welcome={welcome} /> : null}
         {status ? (
           <StatusView
             status={status}
