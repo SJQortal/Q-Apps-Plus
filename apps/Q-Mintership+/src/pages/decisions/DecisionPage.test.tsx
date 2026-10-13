@@ -107,9 +107,10 @@ describe('A decision’s own page: decided', () => {
       'href',
       `/nominations/${ADDR.nominator}`
     );
-    // Its own blocks only: one bounded search, never the whole history.
+    // Its own blocks only, up to the one before its decision block (the last
+    // whose signatures counted): one bounded search, never the whole history.
     const searches = fetchCalls.filter((p) => p.includes('txType=GROUP_APPROVAL'));
-    expect(searches.some((p) => /startBlock=2299990&blockLimit=1411/.test(p))).toBe(true);
+    expect(searches.some((p) => /startBlock=2299990&blockLimit=1410/.test(p))).toBe(true);
     expect(fetchCalls.some((p) => /limit=0(&|$)/.test(p))).toBe(false);
   });
 

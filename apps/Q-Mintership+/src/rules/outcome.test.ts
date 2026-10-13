@@ -53,17 +53,20 @@ describe('decidedHeight', () => {
 });
 
 describe('signatureRange', () => {
-  it('reads from just before its block to its decision block', () => {
+  it('reads from just before its block to the block before its decision', () => {
+    // Core counts only answers confirmed before the decision block: one that
+    // landed in it (or later) didn't count, so it isn't read.
     expect(
       signatureRange(
         { approvalStatus: 'APPROVED', approvalHeight: 900, blockHeight: 100 },
         MAX,
         5e6
       )
-    ).toEqual({ start: 90, end: 900 });
+    ).toEqual({ start: 90, end: 899 });
+    // Expired at h + max + 1: the last signature that could count was in h + max - 1.
     expect(signatureRange({ approvalStatus: 'EXPIRED', blockHeight: 100 }, MAX, 5e6)).toEqual({
       start: 90,
-      end: 10_181,
+      end: 10_179,
     });
   });
 
@@ -78,7 +81,7 @@ describe('signatureRange', () => {
         MAX,
         5e6
       )
-    ).toEqual({ start: 90, end: 10_181 });
+    ).toEqual({ start: 90, end: 10_179 });
     expect(signatureRange({ approvalStatus: 'PENDING', blockHeight: 4 }, MAX, 50)).toEqual({
       start: 1,
       end: 50,
