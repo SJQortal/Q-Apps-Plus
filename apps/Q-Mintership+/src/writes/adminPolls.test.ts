@@ -481,6 +481,32 @@ describe('shareAdminPoll', () => {
     expect(publishes()).toHaveLength(0);
   });
 
+  it('a vote or comment not on the node yet: no copy that leaves it out for good', async () => {
+    const incomplete = {
+      status: 'blocked',
+      reason:
+        'Some of its votes or comments haven’t reached your node yet, so the copy would leave them out. Try again in a minute.',
+    };
+    const missing = (name: string, identifier: string) =>
+      mockFetchRoute(
+        `/arbitrary/DOCUMENT_PRIVATE/${encodeURIComponent(name)}/${identifier}`,
+        () => new Response('', { status: 404 })
+      );
+    {
+      const { me } = author();
+      sent();
+      missing('Admin C', `qmp-admincomment-${ADMIN_POLL_IDS.open}-c1a2b3`);
+      expect((await shareAdminPoll(me, ADMIN_POLL_IDS.open)).outcome).toEqual(incomplete);
+    }
+    {
+      const { me } = author();
+      sent();
+      missing('Admin E', `qmp-adminvote-${ADMIN_POLL_IDS.open}`);
+      expect((await shareAdminPoll(me, ADMIN_POLL_IDS.open)).outcome).toEqual(incomplete);
+    }
+    expect(publishes()).toHaveLength(0);
+  });
+
   it('never POSTs to Core', async () => {
     const { me, posts } = author();
     sent();

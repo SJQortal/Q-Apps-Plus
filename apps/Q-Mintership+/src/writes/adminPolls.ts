@@ -153,6 +153,9 @@ export async function findPoll(author: Signer, pollId: string): Promise<AdminPol
   return (await readPoll(author, pollId))?.view ?? null;
 }
 
+const INCOMPLETE_COPY =
+  'Some of its votes or comments haven’t reached your node yet, so the copy would leave them out. Try again in a minute.';
+
 /** A share this recent that the author can't read yet may be one made a moment ago. */
 const RECENT_SHARE_MS = 60 * 60_000;
 
@@ -422,14 +425,25 @@ export function deleteAdminPollComment(
  * vote the viewer knows, with its row's time (late ones too), and every
  * comment the viewer can read or a share carried to them. Readers use a copy
  * only where they can't read the row of that same version themselves.
+ * `unavailable`: the votes and comments of current admins that the viewer
+ * could read but that aren't on their node yet (or Hub didn't decrypt this
+ * time), which the copy would leave out for good. Ones not encrypted to the
+ * viewer can't be in any copy of theirs.
  */
 export async function shareCopy(
   viewer: string,
-  view: AdminPollView
-): Promise<{ votes: ShareVote[]; comments: ShareComment[] }> {
+  view: AdminPollView,
+  src: Pick<PollSources, 'votes'>
+): Promise<{ votes: ShareVote[]; comments: ShareComment[]; unavailable: number }> {
   const votes: ShareVote[] = [];
   for (const v of [...view.votes, ...view.late])
     if (v.vote) votes.push({ name: v.name, vote: v.vote, updated: v.at });
+  const unknown = new Set(
+    [...view.unread, ...view.late].filter((v) => v.vote === null).map((v) => v.name)
+  );
+  let unavailable = src.votes.filter(
+    (r) => unknown.has(r.row.name) && r.body.status === 'unavailable'
+  ).length;
   const reads = await mapLimit(view.commentRows, 6, async (row) => ({
     ref: row.ref,
     body: await readPollBody(viewer, {
@@ -448,6 +462,7 @@ export async function shareCopy(
   const comments: ShareComment[] = [];
   for (const row of rows) {
     const body = bodies.get(row.ref);
+    if (body?.status === 'unavailable') unavailable += 1;
     if (body?.status !== 'ok') continue;
     const r = body.record;
     comments.push({
@@ -461,7 +476,7 @@ export async function shareCopy(
       ...(r.deleted ? { deleted: true as const } : {}),
     });
   }
-  return { votes, comments };
+  return { votes, comments, unavailable };
 }
 
 /**
@@ -481,6 +496,7 @@ export async function shareAdminPoll(
     return { outcome: blocked((error as Error).message), identifier: '', readers: [] };
   }
   let view: AdminPollView | null = null;
+  let src: PollSources | null = null;
   let after = 0;
   const { outcome, targets } = await publishEncrypted({
     author,
@@ -490,6 +506,7 @@ export async function shareAdminPoll(
       const read = await readPoll(author, pollId, { force: true });
       if (!read) return NOT_READABLE;
       view = read.view;
+      src = read.src;
       after = view.shares.find((s) => s.address === author.address)?.at ?? 0;
       // (Its shares are read only where something is missing: otherwise none to wait for.)
       const tip = await getChainNow({ force: true });
@@ -507,11 +524,14 @@ export async function shareAdminPoll(
     },
     build: async (fresh) => {
       const found = view as AdminPollView | null;
-      if (!found) throw new Error(NOT_READABLE);
+      const from = src as PollSources | null;
+      if (!found || !from) throw new Error(NOT_READABLE);
       const covered = new Set(found.readers);
       if (fresh.readers.every((a) => covered.has(a)))
         throw new Error('Every Minter Admin can already read this poll.');
-      const { votes, comments } = await shareCopy(author.address, found);
+      const { votes, comments, unavailable } = await shareCopy(author.address, found, from);
+      // A copy is for good: one that leaves out what is only slow to arrive isn't worth its fee.
+      if (unavailable) throw new Error(INCOMPLETE_COPY);
       return buildShare({
         poll: found.poll,
         pollPublisher: found.publisher.name,
