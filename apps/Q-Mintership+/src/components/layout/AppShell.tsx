@@ -6,6 +6,7 @@ import { useHubMessages } from '../../hooks/useHubMessages';
 import { useAppViewport } from '../../hooks/useAppViewport';
 import { useTrackInAppHistory } from '../../hooks/useSafeBack';
 import { useApplyMotionSetting } from '../../hooks/useReducedMotion';
+import { BOTTOM_NAV_VAR, usePublishOffset } from '../../hooks/useOverlayPadding';
 import { useDecisions, useMyStatus } from '../../hooks/useData';
 import { notifyHubDisplayedPath } from '../../routes/hubLocation';
 import { useLegacyRouteRedirect } from '../../routes/useLegacyRouteRedirect';
@@ -76,6 +77,10 @@ export function AppShell() {
   // The bottom-bar layout keeps the rail away; the bar itself steps aside for the keyboard.
   const bottomBar = isBottomBarLayout(frame);
   const navShown = isBottomNavShown(frame);
+  usePublishOffset(
+    BOTTOM_NAV_VAR,
+    navShown ? `calc(${BOTTOM_NAV_HEIGHT}px + var(--qp-safe-bottom))` : null
+  );
   return (
     <Frame>
       {bottomBar ? null : <NavRail isAdmin={isAdmin} decisionsBadge={badge} />}

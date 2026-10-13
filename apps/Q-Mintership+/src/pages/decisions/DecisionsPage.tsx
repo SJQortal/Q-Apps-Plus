@@ -29,6 +29,7 @@ import { PageBody } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { BOTTOM_NAV_HEIGHT } from '../../components/layout/BottomNav';
 import { useBottomNavShown } from '../../components/layout/useBottomNav';
+import { BOTTOM_BAR_VAR, usePublishOverlay } from '../../hooks/useOverlayPadding';
 import { DoneChip } from '../../components/decision/DecisionParts';
 import { NominationCard } from '../../components/nomination/NominationCard';
 import { Card, Section } from '../../components/common/Section';
@@ -446,51 +447,19 @@ export default function DecisionsPage() {
             ) : null}
 
             {selecting ? (
-              <Box
-                role="region"
-                aria-label="Sign several"
-                sx={(theme) => ({
-                  position: 'sticky',
-                  bottom: bottomBar
-                    ? `calc(${BOTTOM_NAV_HEIGHT}px + var(--qp-safe-bottom) + 8px)`
-                    : 16,
-                  zIndex: theme.zIndex.appBar - 2,
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  alignItems: 'center',
-                  gap: 1,
-                  p: 1.5,
-                  borderRadius: 1,
-                  border: 1,
-                  borderColor: 'primary.main',
-                  bgcolor: 'background.paper',
-                  boxShadow: theme.shadows[6],
-                })}
-              >
-                <Typography sx={{ fontWeight: 600, mr: 'auto' }} role="status">
-                  {selectedList.length} of {signable.length} selected
-                </Typography>
-                <Button
-                  onClick={() =>
-                    setSelected(
-                      selectedList.length === signable.length
-                        ? new Set()
-                        : new Set(signable.map((d) => d.signature))
-                    )
-                  }
-                  sx={{ minHeight: 44 }}
-                >
-                  {selectedList.length === signable.length ? 'Clear' : 'Select all'}
-                </Button>
-                <Button
-                  variant="contained"
-                  disabled={!selectedList.length}
-                  onClick={() => setBulkList(selectedList)}
-                  sx={{ minHeight: 44 }}
-                >
-                  Sign {selectedList.length || ''}
-                </Button>
-              </Box>
+              <SelectionBar
+                selected={selectedList.length}
+                total={signable.length}
+                aboveNav={bottomBar}
+                onToggleAll={() =>
+                  setSelected(
+                    selectedList.length === signable.length
+                      ? new Set()
+                      : new Set(signable.map((d) => d.signature))
+                  )
+                }
+                onSign={() => setBulkList(selectedList)}
+              />
             ) : null}
 
             {waiting.length || nominationsQ.isLoading || nominationsQ.isError ? (
@@ -651,6 +620,58 @@ export default function DecisionsPage() {
         returnFocus={() => sectionOf('collecting')}
       />
     </>
+  );
+}
+
+/** The "Sign several" bar: sticky at the bottom, its height kept clear for focus. */
+function SelectionBar({
+  selected,
+  total,
+  aboveNav,
+  onToggleAll,
+  onSign,
+}: {
+  selected: number;
+  total: number;
+  /** The phone's bottom bar is on screen: sit above it. */
+  aboveNav: boolean;
+  onToggleAll: () => void;
+  onSign: () => void;
+}) {
+  const [bar, setBar] = useState<HTMLElement | null>(null);
+  // Its height plus its gap from the bottom (16 px, or 8 above the bottom bar).
+  usePublishOverlay(bar, BOTTOM_BAR_VAR, { gap: aboveNav ? 8 : 16 });
+  return (
+    <Box
+      ref={setBar}
+      role="region"
+      aria-label="Sign several"
+      sx={(theme) => ({
+        position: 'sticky',
+        bottom: aboveNav ? `calc(${BOTTOM_NAV_HEIGHT}px + var(--qp-safe-bottom) + 8px)` : 16,
+        zIndex: theme.zIndex.appBar - 2,
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 1,
+        p: 1.5,
+        borderRadius: 1,
+        border: 1,
+        borderColor: 'primary.main',
+        bgcolor: 'background.paper',
+        boxShadow: theme.shadows[6],
+      })}
+    >
+      <Typography sx={{ fontWeight: 600, mr: 'auto' }} role="status">
+        {selected} of {total} selected
+      </Typography>
+      <Button onClick={onToggleAll} sx={{ minHeight: 44 }}>
+        {selected === total ? 'Clear' : 'Select all'}
+      </Button>
+      <Button variant="contained" disabled={!selected} onClick={onSign} sx={{ minHeight: 44 }}>
+        Sign {selected || ''}
+      </Button>
+    </Box>
   );
 }
 

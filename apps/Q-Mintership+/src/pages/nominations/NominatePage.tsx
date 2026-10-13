@@ -31,6 +31,7 @@ import { Card, Section } from '../../components/common/Section';
 import { EmptyState, ErrorState, HeroSkeleton } from '../../components/common/states';
 import { BOTTOM_NAV_HEIGHT } from '../../components/layout/BottomNav';
 import { useBottomNavShown } from '../../components/layout/useBottomNav';
+import { BOTTOM_BAR_VAR, usePublishOverlay } from '../../hooks/useOverlayPadding';
 import { PageBody } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { NominationCard } from '../../components/nomination/NominationCard';
@@ -176,12 +177,15 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
   const pickerRef = useRef<HTMLInputElement | null>(null);
   const reasonRef = useRef<HTMLInputElement | null>(null);
   const linkRefs = useRef<Array<HTMLInputElement | null>>([]);
+  // The sticky submit bar's height is kept clear for focus (not in landscape, where it isn't sticky).
+  const [submitBar, setSubmitBar] = useState<HTMLElement | null>(null);
 
   const chainNow = useChainNow().data;
   const group = useGroupInfo().data;
   const phone = usePhoneLayout();
   const landscape = useLandscapeFrame();
   const navShown = useBottomNavShown();
+  usePublishOverlay(submitBar, BOTTOM_BAR_VAR, { enabled: !landscape && !published });
 
   const candidate = useQuery(picked ? `${CANDIDATE_KEY}${picked.address}` : null, (force) =>
     loadCandidate((picked as PickedCandidate).address, { force })
@@ -364,6 +368,7 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
           <WhatHappensNext name={picked ? shownName : 'they'} named={Boolean(picked)} />
 
           <Box
+            ref={setSubmitBar}
             sx={{
               position: landscape ? 'static' : 'sticky',
               bottom: navShown ? `calc(${BOTTOM_NAV_HEIGHT}px + var(--qp-safe-bottom))` : 0,

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useState, type RefObject } from 'react';
+import { HEADER_HEIGHT_VAR } from './useOverlayPadding';
 
 const THRESHOLD = 24;
 
@@ -84,7 +85,11 @@ export function usePublishHeaderOffset(
     const el = header.current;
     if (!el) return;
     const root = document.documentElement.style;
-    const publish = () => root.setProperty(HEADER_OFFSET_VAR, `${hidden ? 0 : el.offsetHeight}px`);
+    const publish = () => {
+      root.setProperty(HEADER_OFFSET_VAR, `${hidden ? 0 : el.offsetHeight}px`);
+      // Its full height even while hidden: it comes back as the page scrolls up.
+      root.setProperty(HEADER_HEIGHT_VAR, `${el.offsetHeight}px`);
+    };
     publish();
     if (hidden || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(publish);
@@ -95,6 +100,7 @@ export function usePublishHeaderOffset(
   useEffect(
     () => () => {
       document.documentElement.style.removeProperty(HEADER_OFFSET_VAR);
+      document.documentElement.style.removeProperty(HEADER_HEIGHT_VAR);
     },
     []
   );

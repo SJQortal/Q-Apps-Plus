@@ -15,6 +15,13 @@ body {
   overflow-x: clip;
 }
 
+/* Keep a focused control clear of the sticky header and the bars at the
+   bottom (WCAG 2.4.11); the variables come from hooks/useOverlayPadding.ts. */
+html {
+  scroll-padding-top: calc(var(--qmp-header-height, 0px) + 8px);
+  scroll-padding-bottom: calc(var(--qmp-bottom-nav, 0px) + var(--qmp-bottom-bar, 0px) + 8px);
+}
+
 body {
   margin: 0;
   /* Hub's frame, not the screen (pitfall 3); set by useAppViewport. */
