@@ -640,6 +640,25 @@ export default {
         await page.waitForTimeout(400);
       },
     },
+    // Declines (e2e/world.mjs addDecline): Ready to mint as a Minter Admin, with Decline on
+    // the rows without a nomination and one row whose decline is waiting.
+    {
+      key: 'nominations-ready-decline',
+      path: '/nominations?show=ready&as=admin',
+      after: withDecline(async (page) => {
+        await settle(page);
+        const waiting = page.getByRole('link', { name: /^A decline is waiting for Minter Admins/ });
+        await waiting.waitFor({ timeout: 8000 });
+        await page
+          .getByRole('button', { name: /^Propose to decline / })
+          .first()
+          .waitFor({
+            timeout: 8000,
+          });
+        await waiting.evaluate((link) => link.closest('li')?.scrollIntoView({ block: 'center' }));
+        await page.waitForTimeout(300);
+      }),
+    },
   ],
 };
 
@@ -689,6 +708,49 @@ function withDoubles(pick, then) {
       url.pathname = `/decisions/${pick(made)}`;
       await page.goto(url.toString(), { waitUntil: 'load' });
     } else await page.reload({ waitUntil: 'load' });
+    await then(page);
+  };
+}
+
+// ---- declines: a world of their own, for the screen above --------------------
+import { addDecline } from './world.mjs';
+
+/** The default world plus addReady() and addDecline(), made once, on first use. */
+function declineWorld() {
+  if (!declineWorld.made) {
+    const made = createWorld();
+    addOtherPending(made);
+    addReady(made);
+    addDecline(made);
+    declineWorld.made = made;
+  }
+  return declineWorld.made;
+}
+
+/** Answer the page from the declines world from now on, then load it again (as withDoubles). */
+function withDecline(then) {
+  return async (page) => {
+    const declines = declineWorld();
+    await settle(page);
+    await page.route(
+      /\/(arbitrary|names|addresses|transactions|blocks|groups)\//,
+      async (route) => {
+        const url = new URL(route.request().url());
+        const answer =
+          answerNameSearch(declines, url.pathname, url.searchParams) ??
+          answerCore(declines, url.pathname, url.searchParams);
+        if (!answer) return route.fallback();
+        page.__fetches?.push(url.pathname + url.search);
+        if (answer.text !== undefined)
+          return route.fulfill({
+            status: answer.status,
+            contentType: 'text/plain',
+            body: answer.text,
+          });
+        return json(route, answer.status, answer.body);
+      }
+    );
+    await page.reload({ waitUntil: 'load' });
     await then(page);
   };
 }
