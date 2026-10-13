@@ -503,8 +503,14 @@ export default {
       key: 'home-target-changed',
       path: '/?as=admin',
       after: async (page) => {
+        // A last visit left by a screen with its own world (the doubles) would make Since
+        // your last visit ask the default world about decisions it never had.
         await page.addInitScript(
-          ([key, value]) => window.localStorage.setItem(key, value),
+          ([key, value]) => {
+            for (const k of Object.keys(window.localStorage))
+              if (k.startsWith('qmintershipplus-last-visit-')) window.localStorage.removeItem(k);
+            window.localStorage.setItem(key, value);
+          },
           ['qmintershipplus-seen-target-694', JSON.stringify({ adminCount: 21, needed: 9 })]
         );
         await page.reload({ waitUntil: 'load' });
