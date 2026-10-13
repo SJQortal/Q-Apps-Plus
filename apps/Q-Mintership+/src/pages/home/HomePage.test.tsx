@@ -264,7 +264,8 @@ describe('Home: nominated', () => {
     const hero = screen.getByRole('region', { name: /signing your nomination/ });
     expect(within(hero).getByRole('img', { name: '5 of 8 signatures, 1 confirming' }));
     expect(hero).toHaveTextContent(/5 of 8 signatures so far, 1 more confirming\. 2 more needed/);
-    expect(within(hero).getByLabelText(/left to sign/)).toBeInTheDocument();
+    expect(within(hero).getByText('left to sign')).toBeInTheDocument();
+    expect(within(hero).getByText(/^Last block a signature counts in: /)).toBeVisible();
     expect(within(hero).getByText(/accepted ✓/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Accept nomination' })).toBeNull();
     // The full nomination below, with its reason.

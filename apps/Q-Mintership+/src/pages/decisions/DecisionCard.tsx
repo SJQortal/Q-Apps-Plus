@@ -181,7 +181,7 @@ export function DecisionCard(props: DecisionCardProps) {
 
       {d.window && (d.phase === 'open' || d.phase === 'early') ? (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-          <SigningClock now={now} height={d.window.lastUsefulSignatureHeight} />
+          <SigningClock now={now} height={d.window.lastUsefulSignatureHeight} detailVisible />
           <Typography variant="body2" color="text.secondary">
             {expiryLine(d, now)}
           </Typography>

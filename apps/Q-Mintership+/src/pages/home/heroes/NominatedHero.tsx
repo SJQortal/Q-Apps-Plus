@@ -161,6 +161,8 @@ export function NominatedHero({
               height={window.lastUsefulSignatureHeight}
               suffix="left to sign"
               doneText="Signing time is over"
+              blockLabel="Last block a signature counts in:"
+              detailVisible
             />
           </Box>
         ) : null}

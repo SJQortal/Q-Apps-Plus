@@ -42,10 +42,16 @@ export interface CountdownProps {
   /** How the tooltip names the block: "Block", "Last block a signature counts in:". */
   blockLabel?: string;
   /**
-   * Inside a link: no label of its own, so the link's name is the visible
-   * words ("6d 12h left to sign"); the block and date stay in the tooltip.
+   * Inside a link: nothing extra, so the link's name is the visible words
+   * ("6d 12h left to sign"); the block and date stay in the tooltip.
    */
   plain?: boolean;
+  /**
+   * Show the block and date as a line under the clock, for everyone (touch
+   * and keyboard users can't open a tooltip). Otherwise a mouse gets them in
+   * a tooltip and screen readers read them with the clock.
+   */
+  detailVisible?: boolean;
 }
 
 export function Countdown({
@@ -55,6 +61,7 @@ export function Countdown({
   doneText = 'Time is up',
   blockLabel = 'Block',
   plain = false,
+  detailVisible = false,
 }: CountdownProps) {
   const clock = useNow(1000);
   const display = useAtomValue(timeDisplayAtom);
@@ -77,45 +84,57 @@ export function Countdown({
           ? `${time} · ${blockText}`
           : time;
   const detail = `${blockLabel} ${formatCount(height)}, about ${formatDateTime(target)}${now.estimated ? ' (block time estimated)' : ''}`;
+  // What screen readers get on top of the visible words (no aria-label: a
+  // plain span can't carry one, and readers skip it in browse mode).
+  const blocksShown = display !== 'time' || late;
+  const spoken =
+    plain || urgency === 'over'
+      ? ''
+      : `${blocksShown ? '' : `, ${blockText}`}${detailVisible ? '' : `. ${detail}`}`;
 
-  return (
-    <Tooltip title={detail} describeChild={plain}>
-      <Box
+  const line = (
+    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+      <ScheduleOutlinedIcon
+        aria-hidden
+        sx={{ fontSize: 18, color: ICON_TONE[urgency], transition: 'color 400ms ease' }}
+      />
+      <Typography
         component="span"
-        aria-label={
-          plain
-            ? undefined
-            : urgency === 'over'
-              ? doneText
-              : late
-                ? `${blockText} ${suffix}. ${detail}`
-                : `${time} ${suffix}, ${blockText}. ${detail}`
-        }
-        sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+        variant="body2"
+        sx={{
+          fontWeight: 700,
+          color: TEXT_TONE[urgency],
+          fontVariantNumeric: 'tabular-nums',
+          transition: 'color 400ms ease',
+        }}
       >
-        <ScheduleOutlinedIcon
-          aria-hidden
-          sx={{ fontSize: 18, color: ICON_TONE[urgency], transition: 'color 400ms ease' }}
-        />
-        <Typography
-          component="span"
-          variant="body2"
-          sx={{
-            fontWeight: 700,
-            color: TEXT_TONE[urgency],
-            fontVariantNumeric: 'tabular-nums',
-            transition: 'color 400ms ease',
-          }}
-        >
-          {main}
+        {main}
+      </Typography>
+      {/* A space for screen readers; the flex row ignores it. */}{' '}
+      {urgency !== 'over' ? (
+        <Typography component="span" variant="body2" sx={{ color: 'text.secondary' }}>
+          {suffix}
         </Typography>
-        {/* A space for screen readers; the flex row ignores it. */}{' '}
+      ) : null}
+      {spoken ? <span className="qmp-visually-hidden">{spoken}</span> : null}
+    </Box>
+  );
+  if (detailVisible) {
+    return (
+      <Box component="span" sx={{ display: 'inline-flex', flexDirection: 'column', gap: 0.25 }}>
+        {line}
         {urgency !== 'over' ? (
-          <Typography component="span" variant="body2" sx={{ color: 'text.secondary' }}>
-            {suffix}
+          <Typography component="span" variant="body2" color="text.secondary">
+            {detail}
           </Typography>
         ) : null}
       </Box>
+    );
+  }
+  // describeChild: MUI would otherwise put the title on the span as an aria-label.
+  return (
+    <Tooltip title={detail} describeChild>
+      {line}
     </Tooltip>
   );
 }

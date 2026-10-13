@@ -13,11 +13,14 @@ export function SigningClock({
   now,
   height,
   plain,
+  detailVisible,
 }: {
   now: ChainNow;
   height: number;
-  /** Inside a link: no label of its own (see Countdown). */
+  /** Inside a link: nothing extra (see Countdown). */
   plain?: boolean;
+  /** The last block and its date as a visible line (see Countdown). */
+  detailVisible?: boolean;
 }) {
   return (
     <Countdown
@@ -27,6 +30,7 @@ export function SigningClock({
       doneText="Signing time is over"
       blockLabel="Last block a signature counts in:"
       plain={plain}
+      detailVisible={detailVisible}
     />
   );
 }

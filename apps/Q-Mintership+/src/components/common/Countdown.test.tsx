@@ -11,9 +11,27 @@ describe('Countdown', () => {
   it('counts time down to the block, with the blocks in its label', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(T + 60_000);
-    render(<Countdown now={now(100)} height={160} suffix="left to sign" />);
+    const { container } = render(<Countdown now={now(100)} height={160} suffix="left to sign" />);
     expect(screen.getByText('59m')).toBeInTheDocument();
-    expect(screen.getByLabelText(/^59m left to sign, 60 blocks\./)).toBeInTheDocument();
+    // Read as text (no aria-label on a plain span): the blocks and the date included.
+    const clock = container.firstElementChild as HTMLElement;
+    expect(clock).not.toHaveAttribute('aria-label');
+    expect(clock).toHaveTextContent(/^59m left to sign, 60 blocks\. Block 160, about /);
+  });
+
+  it('can show the block and date as a line, for touch and keyboard users', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(T + 60_000);
+    render(
+      <Countdown
+        now={now(100)}
+        height={160}
+        suffix="left to sign"
+        blockLabel="Last block a signature counts in:"
+        detailVisible
+      />
+    );
+    expect(screen.getByText(/^Last block a signature counts in: 160, about /)).toBeVisible();
   });
 
   it('shows the blocks still to go when the time estimate runs out before the chain does', () => {
