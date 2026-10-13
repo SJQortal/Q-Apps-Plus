@@ -21,6 +21,7 @@ import {
   guardAddAdmin,
   guardBan,
   guardCancelInvite,
+  guardDecline,
   guardInvite,
   guardJoin,
   guardKick,
@@ -215,6 +216,33 @@ describe('guards re-read the chain before a write', () => {
     expect(await guardBan(admin, ADDR.learner, 25 * 86_400)).toMatch(/24 days/);
     expect(await guardBan(admin, ADDR.banned, 0)).toBe('Already banned.');
     expect(await guardRemoveAdmin(admin, 'QdSnUy6sUiEnaN87dWmE92g1uQjrvPgrWG')).toMatch(/owner/);
+  });
+
+  it('decline: only a join request from someone not in MINTER, once, by a Minter Admin', async () => {
+    const admin = signerFor('admin');
+    expect(await guardDecline(admin, fakeAddress('jr-1'))).toBeNull();
+    expect(await guardDecline(admin, ADDR.learner)).toBe(
+      'Already in MINTER, so there’s no join request to decline. To remove them, use Remove a member.'
+    );
+    expect(await guardDecline(admin, ADDR.demote)).toMatch(/Minter Admin, in MINTER already/);
+    expect(await guardDecline(admin, NULL_OWNER)).toMatch(/Minter Admin, in MINTER already/);
+    expect(await guardDecline(admin, fakeAddress('never-asked'))).toBe(
+      'This account hasn’t asked to join MINTER, so there’s no join request to decline.'
+    );
+    // A nomination collecting signatures is answered there instead.
+    expect(await guardDecline(admin, ADDR.nominatedSigning)).toMatch(/Reject that one instead/);
+    expect(await guardDecline(signerFor('nominator'), fakeAddress('jr-1'))).toMatch(
+      /Only Minter Admins/
+    );
+  });
+
+  it('decline: refused while a kick or decline about them is waiting', async () => {
+    const { world, address, publicKey } = installWorld('admin');
+    const jr2 = fakeAddress('jr-2');
+    sentProposal(world, { address, publicKey }, 'GROUP_KICK', { groupId: 694, member: jr2 }, 21);
+    expect(await guardDecline({ address, publicKey }, jr2)).toBe(
+      'Declining this join request is already waiting for signatures.'
+    );
   });
 
   it('add admin: members propose themselves, admins also another member', async () => {
@@ -706,6 +734,57 @@ describe('proposeAndSign: a proposal and the proposer’s own signature', () => 
     });
     expect(qortalCallsFor('BAN_FROM_GROUP')).toHaveLength(1);
     expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
+  });
+
+  it('declines a join request: the same KICK_FROM_GROUP, then the proposer’s signature', async () => {
+    const { world, address, publicKey } = installWorld('admin');
+    const admin = { address, publicKey };
+    const jr1 = fakeAddress('jr-1');
+    let kick: { signature: string } | null = null;
+    mockQortalRequest('KICK_FROM_GROUP', (req: Record<string, unknown>) => {
+      kick = sentProposal(
+        world,
+        admin,
+        'GROUP_KICK',
+        { groupId: 694, member: req.qortalAddress, reason: req.reason },
+        22
+      );
+      return kick;
+    });
+    mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'OWN3' }));
+    const result = await proposeAndSign(admin, {
+      kind: 'kick',
+      subject: jr1,
+      reason: 'Asked to join with no node running',
+      decline: true,
+    });
+    expect(result.proposal.status).toBe('sent');
+    expect(result.approval).toMatchObject({ status: 'sent', signature: 'OWN3' });
+    expect(qortalCallsFor('KICK_FROM_GROUP')).toEqual([
+      {
+        action: 'KICK_FROM_GROUP',
+        groupId: 694,
+        qortalAddress: jr1,
+        reason: 'Asked to join with no node running',
+        txGroupId: 694,
+      },
+    ]);
+    const bytes = base58Decode(String(qortalCallsFor('SIGN_TRANSACTION')[0].unsignedBytes));
+    expect(base58Encode(bytes.slice(112, 176))).toBe(kick!.signature);
+  });
+
+  it('a decline of someone in MINTER stops at its guard, before Hub', async () => {
+    const { address, publicKey } = installWorld('admin');
+    const result = await proposeAndSign(
+      { address, publicKey },
+      { kind: 'kick', subject: ADDR.learner, reason: 'Not minting', decline: true }
+    );
+    expect(result.proposal).toEqual({
+      status: 'blocked',
+      reason:
+        'Already in MINTER, so there’s no join request to decline. To remove them, use Remove a member.',
+    });
+    expect(qortalCallsFor('KICK_FROM_GROUP')).toHaveLength(0);
   });
 
   it('stops at the proposal’s own guard, before Hub', async () => {
