@@ -18,6 +18,7 @@ import {
   type NominationInput,
 } from '../data/records';
 import type { GroupTxType, TxRow } from '../data/types';
+import { chainsOwnSignature } from '../rules/adminChange';
 import { decisionSubject } from '../rules/decision';
 import { groupApprovalUnsignedBase58 } from '../qortal/approvalBytes';
 import {
@@ -32,6 +33,7 @@ import {
   guardRemoveAdmin,
   guardSign,
   guardSupport,
+  isMinterAdmin,
 } from './guards';
 import {
   addAdminRequest,
@@ -386,7 +388,10 @@ export function proposeRemoveAdmin(
   );
 }
 
-/** What a Minter Admin can propose about one account, with what each kind needs. */
+/**
+ * What can be proposed about one account, with what each kind needs: all of
+ * it by Minter Admins, and an admin role for themselves by any MINTER member.
+ */
 export type Proposal =
   | { kind: 'kick'; subject: string; reason: string }
   | { kind: 'ban'; subject: string; reason: string; banSeconds: number }
@@ -426,21 +431,43 @@ export function propose(
   }
 }
 
+export interface ProposalOutcome extends OwnSignatureOutcome {
+  /**
+   * Whether the proposer's own signature was part of it. Only a Minter
+   * Admin's is: a member who isn't one can't sign (rules/adminChange.ts).
+   */
+  withSignature: boolean;
+}
+
 /**
- * A Minter Admin's proposal and their own signature on it: two Hub
- * confirmations as one guided step, as for a nomination's first signature.
+ * A proposal, then the proposer's own signature on it when they are a
+ * Minter Admin (read fresh): two Hub confirmations as one guided step, as
+ * for a nomination's first signature. A member who isn't an admin (Become
+ * a Minter Admin) can't sign, so for them it is the proposal alone, and the
+ * Minter Admins decide.
  */
-export function proposeAndSign(
+export async function proposeAndSign(
   signer: Signer,
   p: Proposal,
   onProgress?: (progress: OwnSignatureProgress) => void
-): Promise<OwnSignatureOutcome> {
-  return withOwnSignature(
+): Promise<ProposalOutcome> {
+  onProgress?.({ step: 1, stage: 'checking' });
+  if (!chainsOwnSignature(await isMinterAdmin(signer.address))) {
+    const proposal = await propose(signer, p, (stage) => onProgress?.({ step: 1, stage }));
+    return {
+      proposal,
+      approval: null,
+      proposalSignature: proposal.status === 'sent' ? proposal.signature : null,
+      withSignature: false,
+    };
+  }
+  const result = await withOwnSignature(
     signer,
     PROPOSAL_TX_TYPE[p.kind],
     (onStage) => propose(signer, p, onStage),
     onProgress
   );
+  return { ...result, withSignature: true };
 }
 
 /** The nominee's JOIN_GROUP: "Accept nomination" before approval, "Join now" after it. */

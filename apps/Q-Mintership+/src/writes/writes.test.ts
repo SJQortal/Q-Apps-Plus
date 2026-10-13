@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { base58Decode, base58Encode } from '../qortal/base58';
 import { GROUP_APPROVAL_UNSIGNED_LENGTH } from '../qortal/approvalBytes';
 import { loadDecisions } from '../data/decisions';
-import { ADDR, addOtherPending, installWorld } from '../test/world';
+import { ADDR, NULL_OWNER, addOtherPending, installWorld } from '../test/world';
 import { fakeAddress } from '../../e2e/world.mjs';
 import { mockFetchRoute, mockQortalRequest, qortalCalls, qortalCallsFor } from '../test/setup';
 import {
@@ -18,6 +18,7 @@ import {
   signApprovalRequest,
 } from './hubActions';
 import {
+  guardAddAdmin,
   guardBan,
   guardCancelInvite,
   guardInvite,
@@ -178,6 +179,52 @@ describe('guards re-read the chain before a write', () => {
     expect(await guardBan(admin, ADDR.learner, 25 * 86_400)).toMatch(/24 days/);
     expect(await guardBan(admin, ADDR.banned, 0)).toBe('Already banned.');
     expect(await guardRemoveAdmin(admin, 'QdSnUy6sUiEnaN87dWmE92g1uQjrvPgrWG')).toMatch(/owner/);
+  });
+
+  it('add admin: members propose themselves, admins also another member', async () => {
+    const leo = signerFor('learner');
+    // A member, level 2, not an admin: may propose themselves, and no one else.
+    expect(await guardAddAdmin(leo, ADDR.learner)).toBeNull();
+    expect(await guardAddAdmin(leo, ADDR.nominator)).toMatch(
+      /^Only Minter Admins can propose another member\. Any member can propose themselves/
+    );
+    const admin = signerFor('admin');
+    expect(await guardAddAdmin(admin, ADDR.nominator)).toBeNull();
+    expect(await guardAddAdmin(admin, ADDR.newcomerName)).toBe(
+      'Only MINTER members can become Minter Admins.'
+    );
+    expect(await guardAddAdmin(admin, ADDR.admin)).toBe('You’re already a Minter Admin.');
+    expect(await guardAddAdmin(admin, ADDR.adminL4)).toBe('Already a Minter Admin.');
+    // Pia Promote proposed herself, from another app: it is waiting for signatures.
+    expect(await guardAddAdmin(admin, ADDR.promote)).toBe(
+      'Making this member an admin is already waiting for signatures.'
+    );
+    expect(await guardAddAdmin(signerFor('promote'), ADDR.promote)).toBe(
+      'Your proposal to become a Minter Admin is already waiting for signatures.'
+    );
+    // Not in MINTER: not even for themselves.
+    expect(await guardAddAdmin(signerFor('newcomerName'), ADDR.newcomerName)).toMatch(
+      /your account isn’t in MINTER/
+    );
+  });
+
+  it('remove admin: admins remove another admin or step down; never the owner', async () => {
+    const admin = signerFor('admin');
+    expect(await guardRemoveAdmin(admin, ADDR.adminL4)).toBeNull();
+    // Stepping down: their own removal.
+    expect(await guardRemoveAdmin(admin, ADDR.admin)).toBeNull();
+    expect(await guardRemoveAdmin(admin, ADDR.nominator)).toBe('Not a Minter Admin.');
+    // Dex Demote's removal is already on its way.
+    expect(await guardRemoveAdmin(admin, ADDR.demote)).toBe(
+      'Removing this admin is already waiting for signatures.'
+    );
+    expect(await guardRemoveAdmin(admin, NULL_OWNER)).toBe(
+      "MINTER's owner account can't be removed."
+    );
+    const leo = signerFor('learner');
+    expect(await guardRemoveAdmin(leo, ADDR.adminL4)).toMatch(/^Only Minter Admins can do this/);
+    expect(await guardRemoveAdmin(leo, ADDR.learner)).toBe('You’re not a Minter Admin right now.');
+    expect(await guardRemoveAdmin(leo, NULL_OWNER)).toMatch(/owner account/);
   });
 
   it('cancel invite: needs a stored invite, and no cancellation already waiting', async () => {
@@ -603,6 +650,7 @@ describe('proposeAndSign: a proposal and the proposer’s own signature', () => 
       proposal: { status: 'declined' },
       approval: null,
       proposalSignature: null,
+      withSignature: true,
     });
     expect(qortalCallsFor('BAN_FROM_GROUP')).toHaveLength(1);
     expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
@@ -637,6 +685,70 @@ describe('proposeAndSign: a proposal and the proposer’s own signature', () => 
       reason: 'Your node doesn’t show it yet.',
     });
     expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
+  });
+
+  it('a member who isn’t an admin proposes themselves in one step: they can’t sign', async () => {
+    const { world, address, publicKey, posts } = installWorld('learner');
+    const leo = { address, publicKey };
+    // One fee is enough: there is no signature to pay for.
+    world.accounts.get(address).balance = 0.01;
+    mockQortalRequest('ADD_GROUP_ADMIN', (req: Record<string, unknown>) =>
+      sentProposal(world, leo, 'ADD_GROUP_ADMIN', { groupId: 694, member: req.qortalAddress }, 14)
+    );
+    const steps: string[] = [];
+    const result = await proposeAndSign(leo, { kind: 'addAdmin', subject: address }, (p) =>
+      steps.push(`${p.step}:${p.stage}`)
+    );
+    expect(result.withSignature).toBe(false);
+    expect(result.proposal.status).toBe('sent');
+    expect(result.approval).toBeNull();
+    expect(result.proposalSignature).toBe(base58Encode(new Uint8Array(64).fill(14)));
+    expect(qortalCallsFor('ADD_GROUP_ADMIN')).toEqual([
+      expect.objectContaining({ groupId: 694, qortalAddress: address, txGroupId: 694 }),
+    ]);
+    expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
+    expect(steps.every((s) => s.startsWith('1:'))).toBe(true);
+    expect(posts).toEqual([]);
+  });
+
+  it('a member can’t propose anyone else, and Hub is never asked', async () => {
+    const { address, publicKey } = installWorld('learner');
+    const result = await proposeAndSign(
+      { address, publicKey },
+      { kind: 'addAdmin', subject: ADDR.nominator }
+    );
+    expect(result.proposal).toMatchObject({
+      status: 'blocked',
+      reason: expect.stringMatching(/^Only Minter Admins can propose another member/),
+    });
+    expect(qortalCallsFor('ADD_GROUP_ADMIN')).toHaveLength(0);
+  });
+
+  it('an admin stepping down proposes it and signs it, like any admin proposal', async () => {
+    const { world, address, publicKey } = installWorld('admin');
+    const admin = { address, publicKey };
+    let removal: { signature: string } | null = null;
+    mockQortalRequest('REMOVE_GROUP_ADMIN', (req: Record<string, unknown>) => {
+      removal = sentProposal(
+        world,
+        admin,
+        'REMOVE_GROUP_ADMIN',
+        { groupId: 694, admin: req.qortalAddress },
+        15
+      );
+      return removal;
+    });
+    mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'OWN3' }));
+    const result = await proposeAndSign(admin, { kind: 'removeAdmin', subject: address });
+    expect(result.withSignature).toBe(true);
+    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')[0]).toMatchObject({
+      groupId: 694,
+      qortalAddress: address,
+      txGroupId: 694,
+    });
+    expect(result.approval).toMatchObject({ status: 'sent', signature: 'OWN3' });
+    const bytes = base58Decode(String(qortalCallsFor('SIGN_TRANSACTION')[0].unsignedBytes));
+    expect(base58Encode(bytes.slice(112, 176))).toBe(removal!.signature);
   });
 
   it('checks both fees before Hub opens', async () => {

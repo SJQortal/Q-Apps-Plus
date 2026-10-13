@@ -32,12 +32,14 @@ import {
   isUnusualApprovalRoute,
   toApprovalRow,
 } from '../rules/decision';
+import { adminChangeBlock, adminChangeBlockText, type AdminChangeKind } from '../rules/adminChange';
 import { NOMINEE_BLOCK_TEXT, isOpenState, nomineeBlock, nominatorBlock } from '../rules/nomination';
 import { latestPerSigner, type ApprovalRow } from '../rules/tally';
 import { decisionWindow, windowPhase } from '../rules/timing';
 import type { Signer } from './runner';
 
-async function isAdmin(address: string): Promise<boolean> {
+/** Whether `address` is a Minter Admin right now (a fresh read). */
+export async function isMinterAdmin(address: string): Promise<boolean> {
   const admins = await getAdmins({ force: true });
   return admins.admins.some((a) => a.member === address);
 }
@@ -72,7 +74,7 @@ export async function findWaiting(type: GroupTxType, subject: string): Promise<T
 }
 
 async function requireAdmin(signer: Signer): Promise<string | null> {
-  return (await isAdmin(signer.address))
+  return (await isMinterAdmin(signer.address))
     ? null
     : 'Only Minter Admins can do this, and your account is not one right now.';
 }
@@ -223,32 +225,44 @@ export async function guardCancelInvite(signer: Signer, invitee: string): Promis
   return null;
 }
 
-/** Before proposing a new Minter Admin. */
-export async function guardAddAdmin(signer: Signer, member: string): Promise<string | null> {
-  const notAdmin = await requireAdmin(signer);
-  if (notAdmin) return notAdmin;
-  const [membership, waiting] = await Promise.all([
-    getMembership(member, { force: true }),
-    findWaiting('ADD_GROUP_ADMIN', member),
+/**
+ * Before a change to the Minter Admins, under the app's rules
+ * (rules/adminChange.ts): a member may propose themselves, an admin may
+ * propose another member or step down, and only admins may propose
+ * removing another admin.
+ */
+async function guardAdminChange(
+  signer: Signer,
+  kind: AdminChangeKind,
+  subject: string
+): Promise<string | null> {
+  const self = subject === signer.address;
+  const [proposerIsAdmin, membership, waiting] = await Promise.all([
+    isMinterAdmin(signer.address),
+    getMembership(subject, { force: true }),
+    findWaiting(kind === 'addAdmin' ? 'ADD_GROUP_ADMIN' : 'REMOVE_GROUP_ADMIN', subject),
   ]);
-  if (!membership.isMember) return 'Only MINTER members can become Minter Admins.';
-  if (membership.isAdmin) return 'Already a Minter Admin.';
-  if (waiting) return 'Making this member an admin is already waiting for signatures.';
-  return null;
+  const block = adminChangeBlock({
+    kind,
+    self,
+    proposerIsAdmin,
+    subjectIsMember: membership.isMember,
+    subjectIsAdmin: membership.isAdmin,
+    subjectIsOwner: subject === NULL_OWNER,
+    waiting: Boolean(waiting),
+  });
+  return block ? adminChangeBlockText(block, kind, self) : null;
 }
 
-/** Before proposing to remove a Minter Admin. */
+/** Before proposing a new Minter Admin: yourself as a member, or another member as an admin. */
+export function guardAddAdmin(signer: Signer, member: string): Promise<string | null> {
+  return guardAdminChange(signer, 'addAdmin', member);
+}
+
+/** Before proposing to remove a Minter Admin: another one as an admin, or yourself (stepping down). */
 export async function guardRemoveAdmin(signer: Signer, admin: string): Promise<string | null> {
-  const notAdmin = await requireAdmin(signer);
-  if (notAdmin) return notAdmin;
-  if (admin === NULL_OWNER) return "MINTER's owner account can't be removed.";
-  const [membership, waiting] = await Promise.all([
-    getMembership(admin, { force: true }),
-    findWaiting('REMOVE_GROUP_ADMIN', admin),
-  ]);
-  if (!membership.isAdmin) return 'Not a Minter Admin.';
-  if (waiting) return 'Removing this admin is already waiting for signatures.';
-  return null;
+  if (admin === NULL_OWNER) return adminChangeBlockText('owner', 'removeAdmin', false);
+  return guardAdminChange(signer, 'removeAdmin', admin);
 }
 
 /**
