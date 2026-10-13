@@ -13,7 +13,8 @@
  * before; this is worked out from the transactions in hand, oldest first.
  */
 import { KIND_LABEL, decisionKind, decisionSubject, type DecisionKind } from '../rules/decision';
-import { formatDuration } from '../utils/format';
+import type { TargetStep } from '../rules/targetShift';
+import { formatDuration, plural } from '../utils/format';
 import { getBlockAtTime } from './chain';
 import { fetchQuery } from './query';
 import { getDecisionsInRange, getGroupTxsInRange, isMinterTx } from './txs';
@@ -238,6 +239,28 @@ export function buildTimeline(rows: TxRow[], ctx: TimelineContext): TimelineEven
     (a, b) =>
       b.at - a.at || (b.atHeight ?? b.proposedHeight ?? 0) - (a.atHeight ?? a.proposedHeight ?? 0)
   );
+}
+
+/** "Target 9 → 8 signatures (21 → 20 admin seats)": what an approved admin change did to the target. */
+export function targetStepDetail(step: TargetStep): string {
+  return step.neededBefore !== step.neededAfter
+    ? `Target ${step.neededBefore} → ${plural(step.neededAfter, 'signature')} (${step.countBefore} → ${step.countAfter} admin seats)`
+    : `Admin seats ${step.countBefore} → ${step.countAfter}; the target stayed at ${plural(step.neededAfter, 'signature')}`;
+}
+
+/**
+ * Approved admin changes say what they did to the target (from
+ * rules/targetShift.ts targetSteps); other events are left as they are.
+ */
+export function withTargetSteps(events: TimelineEvent[], steps: TargetStep[]): TimelineEvent[] {
+  if (!steps.length) return events;
+  const bySignature = new Map(steps.map((step) => [step.signature, step]));
+  return events.map((event) => {
+    const step = bySignature.get(event.signature);
+    if (!step || event.outcome !== 'done') return event;
+    if (event.kind !== 'addAdmin' && event.kind !== 'removeAdmin') return event;
+    return { ...event, detail: targetStepDetail(step) };
+  });
 }
 
 /**

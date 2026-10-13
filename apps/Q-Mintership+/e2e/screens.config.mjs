@@ -20,12 +20,27 @@ import {
   NOW,
   PEOPLE,
 } from './world.mjs';
+import { addTargetShift } from './world.mjs';
 
 const world = createWorld();
 // Admins' Decisions also shows the transactions that aren't MINTER group changes.
 addOtherPending(world);
 // Rae Ready has shown they're ready to mint (a join request, no nomination).
 addReady(world);
+// A moving target: screens whose path starts with `?world=shift` read this world.
+const shiftWorld = createWorld();
+addOtherPending(shiftWorld);
+const shift = addTargetShift(shiftWorld);
+/** The world a request's page reads: `?world=shift` picks the moving-target one. */
+function worldFor(route) {
+  let page = '';
+  try {
+    page = route.request().frame().url();
+  } catch {
+    // Not from a page frame: the default world.
+  }
+  return /[?&]world=shift\b/.test(page) ? shiftWorld : world;
+}
 // Replaced in setup() by a visible 64×64 gradient, so avatars show in the shots.
 let PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAQklEQVR42u3OMQEAAAgDINc/9Mzg14MGLUmHCgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFbzwB2GwADvYAAAAASUVORK5CYII=',
@@ -124,7 +139,7 @@ export default {
       await route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
       return true;
     }
-    const answer = answerCore(world, url.pathname, url.searchParams);
+    const answer = answerCore(worldFor(route), url.pathname, url.searchParams);
     if (!answer) return false;
     if (answer.text !== undefined) {
       await route.fulfill({ status: answer.status, contentType: 'text/plain', body: answer.text });
@@ -218,5 +233,40 @@ export default {
     { key: 'activity', path: '/activity?as=admin', after: settle },
     { key: 'activity-member', path: '/activity?as=learner', after: settle },
     { key: 'settings', path: '/settings?as=admin', after: settle },
+    // A moving target (e2e/world.mjs addTargetShift): the "target changed" note
+    // (this device last saw 23 admin seats), the chips, and an admin change's impact.
+    {
+      key: 'decisions-target-shift',
+      path: '/decisions?world=shift&as=admin',
+      after: async (page) => {
+        // Set before the app starts, so its first read is the old target.
+        await page.addInitScript(
+          ([key, value]) => window.localStorage.setItem(key, value),
+          ['qmintershipplus-seen-target-694', JSON.stringify(shift.seenBefore)]
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+        await page
+          .getByText('The target changed from 10 to 9 signatures')
+          .waitFor({ timeout: 8000 });
+      },
+    },
+    // Signing that admin change: the impact, and the box to tick before Hub opens.
+    {
+      key: 'decisions-admin-impact',
+      path: '/decisions?world=shift&as=admin',
+      overlay: true,
+      after: async (page) => {
+        await settle(page);
+        await page
+          .getByRole('button', { name: /^Sign: Remove a Minter Admin, Dex Demote/ })
+          .click({ timeout: 4000 });
+        const dialog = page.getByRole('dialog', { name: 'Sign this decision' });
+        await dialog.waitFor({ timeout: 8000 });
+        await dialog.getByRole('button', { name: 'Continue to Hub' }).click({ timeout: 4000 });
+        await dialog.getByText('Tick “I’ve checked these” to go on.').waitFor({ timeout: 4000 });
+        await page.waitForTimeout(300);
+      },
+    },
   ],
 };

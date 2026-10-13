@@ -1,7 +1,9 @@
 /**
  * "How signing works", folded away: the rules every Minter Admin should
  * know, with today's real numbers (target, admins, window, block time),
- * including that proposing comes with the proposer's own signature.
+ * including that proposing comes with the proposer's own signature, and
+ * that admin changes move the target for everything waiting (sign them in
+ * a planned order).
  */
 import { Accordion, AccordionDetails, AccordionSummary, Box, Typography } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -37,6 +39,8 @@ export function HowSigningWorks({
     `Core applies a decision by itself in the block where it reaches the target. Nobody has to press anything afterwards.`,
     `It can be applied at the earliest ${formatCount(group.minimumBlockDelay + 1)} blocks after the block it went into; signatures sent before then still count.`,
     `The target is ${describeThreshold(group.approvalThreshold)}, recounted every block: ${needed} of ${totalAdmins} today. MINTER’s owner account counts as an admin but can’t sign, so ${signers} people can.`,
+    `Adding or removing a Minter Admin moves the target for every waiting decision, also the ones that already have signatures. When the target drops to what a decision already has, Core applies it at once, in the same block or the next, with no new signature.`,
+    `So before signing an admin change, look at what it would tip over (its card says, and a chip marks each one): settle those first or let them expire, or agree the order with the other Minter Admins.`,
   ];
   return (
     <Accordion

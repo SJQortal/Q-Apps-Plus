@@ -57,6 +57,26 @@ describe('History page: on chain', () => {
   });
 });
 
+describe('History page: the target', () => {
+  it('says what each approved admin change did to the target', async () => {
+    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
+    const list = await eventsList();
+    // Fern was removed 12 days ago (21 → 20 admin seats); an admin was added 20 days ago.
+    await within(list).findAllByText('Fern Former');
+    const fern = within(list)
+      .getAllByText('No longer a Minter Admin')
+      .map((title) => title.closest('li') as HTMLElement)
+      .find((item) => within(item).queryByText('Fern Former')) as HTMLElement;
+    expect(within(fern).getByText('No longer a Minter Admin')).toBeInTheDocument();
+    expect(
+      await within(fern).findByText('Target 9 → 8 signatures (21 → 20 admin seats)')
+    ).toBeInTheDocument();
+    expect(
+      within(list).getByText('Target 8 → 9 signatures (20 → 21 admin seats)')
+    ).toBeInTheDocument();
+  });
+});
+
 describe('History page: the original app', () => {
   it('lists the old cards newest first, 20 at a time, without the copy under a card id', async () => {
     await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });

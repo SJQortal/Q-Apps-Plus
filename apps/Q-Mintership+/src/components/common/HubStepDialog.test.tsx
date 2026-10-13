@@ -95,3 +95,36 @@ describe('HubStepDialog: opening again', () => {
     expect(within(dialog).getByText('Cancelled in Hub. Nothing was sent.')).toBeVisible();
   });
 });
+
+describe('HubStepDialog: something to do before Hub opens', () => {
+  it('stays on the intro while beforeStart says no, and runs once it says yes', async () => {
+    const u = userEvent.setup();
+    let ready = false;
+    let runs = 0;
+    render(
+      <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+        <HubStepDialog
+          open
+          onClose={() => {}}
+          title="Sign this decision"
+          intro="Tick the box first."
+          steps={[{ action: 'SIGN_TRANSACTION', title: 'Sign it', feeTxType: 'GROUP_APPROVAL' }]}
+          beforeStart={() => ready}
+          run={async () => {
+            runs++;
+            return { outcome: { status: 'declined' } };
+          }}
+        />
+      </HubThemeProvider>
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Sign this decision' });
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(runs).toBe(0);
+    expect(within(dialog).getByText('Tick the box first.')).toBeVisible();
+
+    ready = true;
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(dialog).findByText('Cancelled in Hub. Nothing was sent.')).toBeVisible();
+    expect(runs).toBe(1);
+  });
+});

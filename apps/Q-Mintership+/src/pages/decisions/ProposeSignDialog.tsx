@@ -5,9 +5,11 @@
  * proposer's signature. Both fees are stated up front. If the proposal goes
  * through and the signature doesn't, the result says so plainly: the
  * proposal is waiting, and can be signed from the queue like any decision.
+ * An admin change first says what it does to the target; when that changes
+ * any waiting decision, "I've checked these" must be ticked before Hub opens.
  */
 import { useState, type ReactNode } from 'react';
-import { Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { FeeNote } from '../../components/common/FeeNote';
 import { HubStepDialog } from '../../components/common/HubStepDialog';
 import { SignaturePrefix } from '../../components/common/SignaturePrefix';
@@ -17,6 +19,10 @@ import { PROPOSAL_TX_TYPE, proposeAndSign, type Proposal } from '../../writes/fl
 import type { Signer } from '../../writes/runner';
 import { secondStepProblem, signingWindowText } from './decisionUi';
 import { PROPOSE_KINDS } from './proposeKinds';
+import { hasImpact, type ShiftScenario } from '../../rules/targetShift';
+import { TargetImpact } from './TargetImpact';
+import type { LabelOf } from './targetShiftUi';
+import { useAcknowledge } from './useAcknowledge';
 
 /** The numbers a proposal's words need. */
 export interface ProposalFacts {
@@ -41,6 +47,9 @@ export interface ProposeSignDialogProps {
   /** Back to the form, keeping what was typed. */
   onBack?: () => void;
   returnFocus?: () => HTMLElement | null;
+  /** An admin change: what it does to the target if it passes. */
+  impact?: ShiftScenario | null;
+  labelOf?: LabelOf;
 }
 
 export function ProposeSignDialog({
@@ -55,11 +64,18 @@ export function ProposeSignDialog({
   onClose,
   onBack,
   returnFocus,
+  impact,
+  labelOf,
 }: ProposeSignDialogProps) {
   // Step 1 went through and step 2 didn't.
   const [partial, setPartial] = useState(false);
   // The proposal step 1 made, which step 2 signs: Hub shows it as "pendingSignature".
   const [newSig, setNewSig] = useState<string | null>(null);
+  const shift = impact && labelOf ? impact : null;
+  const ack = useAcknowledge(
+    open && proposal && shift ? `${proposal.kind}:${proposal.subject}` : null
+  );
+  const mustCheck = hasImpact(shift);
   if (!proposal) return null;
   const info = PROPOSE_KINDS[proposal.kind];
   const txType = PROPOSAL_TX_TYPE[proposal.kind];
@@ -91,8 +107,19 @@ export function ProposeSignDialog({
           <Typography sx={{ mt: 1 }}>
             <FeeNote txType={txType} times={2} prefix="Fees in total" />
           </Typography>
+          {shift && labelOf ? (
+            <Box sx={{ mt: 1.5 }}>
+              <TargetImpact
+                scenario={shift}
+                labelOf={labelOf}
+                lead="If this passes"
+                ack={mustCheck ? ack : null}
+              />
+            </Box>
+          ) : null}
         </>
       }
+      beforeStart={mustCheck ? ack.confirm : undefined}
       steps={[
         {
           action: info.action,

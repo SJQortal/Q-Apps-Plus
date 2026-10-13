@@ -50,7 +50,8 @@ describe('Activity', () => {
     await admins();
     const former = cardsIn('Former admins');
     expect(former).toHaveLength(1);
-    expect(await screen.findByText('Fern Former')).toBeInTheDocument();
+    const formerSection = screen.getByRole('region', { name: 'Former admins' });
+    expect(await within(formerSection).findByText('Fern Former')).toBeInTheDocument();
     expect(screen.getByText(/^Removed \d+ \w+ 2026$/)).toBeInTheDocument();
   });
 
@@ -84,6 +85,22 @@ describe('Activity', () => {
     expect(cardsIn('Minter Admin Activity').at(-1)).toMatch(/^Dex Demote:/);
   });
 
+  it('lists the target’s changes in the window: when, from what to what, and why', async () => {
+    await renderPage(<ActivityPage />, { persona: 'learner', path: '/activity' });
+    await admins();
+    const card = screen.getByRole('heading', { name: 'Target changes' })
+      .parentElement as HTMLElement;
+    const items = within(card).getAllByRole('listitem');
+    // Newest first: Fern removed 12 days ago (21 → 20 seats), an admin added 20 days ago.
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent(
+      /^9 → 8 signatures on \d+ \w+ 2026: .*Fern Former was removed as a Minter Admin \(21 → 20 admin seats\)\.$/
+    );
+    expect(items[1]).toHaveTextContent(
+      /^8 → 9 signatures on .+ was made a Minter Admin \(20 → 21 admin seats\)\.$/
+    );
+  });
+
   it('switches the window and remembers the choice', async () => {
     await renderPage(<ActivityPage />, { persona: 'admin', path: '/activity' });
     await admins();
@@ -91,7 +108,9 @@ describe('Activity', () => {
     expect(screen.queryByText('Gus Gone')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: '180 days' }));
-    expect(await screen.findByText('Gus Gone', {}, { timeout: 3000 })).toBeInTheDocument();
+    expect((await screen.findAllByText('Gus Gone', {}, { timeout: 3000 })).length).toBeGreaterThan(
+      0
+    );
     expect(screen.getByRole('button', { name: '180 days' })).toHaveAttribute(
       'aria-pressed',
       'true'

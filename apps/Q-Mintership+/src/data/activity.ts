@@ -12,6 +12,10 @@
  *   also reads the admin changes from its end to the tip, so who was an
  *   admin when is right for it.
  *
+ * The approved admin changes among those reads also give the target's
+ * changes in the window, worked back from today's admin count (no extra
+ * read).
+ *
  * Each search is paged at 100 with a ceiling; about 20 GETs for 30 days and
  * 30 for 180. The result is cached for 5 minutes per window. The level
  * spread is a separate read, only when someone asks for it.
@@ -25,6 +29,7 @@ import {
   type LevelSpread,
   type Pulse,
 } from '../rules/activity';
+import { approvedAdminChanges, targetSteps, type TargetStep } from '../rules/targetShift';
 import { approvalsNeeded, type ApprovalThreshold } from '../rules/threshold';
 import type { ActivityWindow } from '../state/settings';
 import { getAccount, primeNames } from './accounts';
@@ -83,6 +88,14 @@ export interface ActivityData {
   signerCount: number;
   threshold: ApprovalThreshold;
   needed: number;
+  /**
+   * Approved admin changes in the window with the target before and after,
+   * newest first; null when a read stopped at its ceiling (the counts would
+   * be off).
+   */
+  targetSteps: TargetStep[] | null;
+  /** The signatures needed at the window's end. */
+  neededAtEnd: number;
   joinRequests: number | null;
   /** A paged read stopped at its ceiling. */
   truncated: boolean;
@@ -230,6 +243,19 @@ export function loadActivity(
         members: members?.members ?? [],
       });
 
+      // Every admin change approved since the window's start is in the two reads
+      // (confirmed at most one approval window before its approval).
+      const needed = approvalsNeeded(group.approvalThreshold, admins.adminCount);
+      const steps =
+        decided.truncated || laterAdminChanges.truncated
+          ? null
+          : targetSteps(
+              approvedAdminChanges([...decided.rows, ...laterAdminChanges.rows]),
+              admins.adminCount,
+              group.approvalThreshold
+            );
+      const after = steps?.filter((step) => step.height > range.endBlock) ?? [];
+
       return {
         range,
         now,
@@ -241,7 +267,12 @@ export function loadActivity(
         adminCount: admins.adminCount,
         signerCount: admins.signers.length,
         threshold: group.approvalThreshold,
-        needed: approvalsNeeded(group.approvalThreshold, admins.adminCount),
+        needed,
+        targetSteps:
+          steps?.filter(
+            (step) => step.height >= range.startBlock && step.height <= range.endBlock
+          ) ?? null,
+        neededAtEnd: after.length ? after[after.length - 1].neededBefore : needed,
         joinRequests: joinRequests ? joinRequests.length : null,
         truncated: Boolean(
           decided.truncated ||
