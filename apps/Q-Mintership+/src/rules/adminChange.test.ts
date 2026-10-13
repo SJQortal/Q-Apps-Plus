@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   ADMIN_CHANGE_TITLE,
+  OWN_ADMIN_ROLE_LEAD,
   adminChangeBlock,
   adminChangeBlockText,
   adminChangeMode,
   chainsOwnSignature,
+  ownAdminRole,
   type AdminChangeBlock,
   type AdminChangeFacts,
   type AdminChangeKind,
@@ -135,6 +137,15 @@ describe('adminChangeBlockText', () => {
       /Any member can propose themselves with Become a Minter Admin/
     );
     expect(adminChangeBlockText('adminsOnly', 'removeAdmin', false)).toMatch(/Only Minter Admins/);
+  });
+});
+
+describe('ownAdminRole', () => {
+  it('offers members Become, admins Step down, and anyone else nothing', () => {
+    expect(ownAdminRole({ isMember: true, isAdmin: false })).toBe('become');
+    expect(ownAdminRole({ isMember: true, isAdmin: true })).toBe('stepDown');
+    expect(ownAdminRole({ isMember: false, isAdmin: false })).toBeNull();
+    expect(OWN_ADMIN_ROLE_LEAD.stepDown).toMatch(/step down/);
   });
 });
 

@@ -177,7 +177,10 @@ export function DecisionCard(props: DecisionCardProps) {
           ) : (
             <>
               Proposed by{' '}
-              <PersonInline address={d.creatorAddress} name={adminNames.get(d.creatorAddress)} />{' '}
+              <PersonInline
+                address={d.creatorAddress}
+                name={adminNames.get(d.creatorAddress)}
+              />{' '}
             </>
           )}
           {formatRelative(d.createdAt, now.timestamp)}

@@ -27,6 +27,7 @@ import { loadStaleInviteDetails, loadStaleInvites, staleDetailsKey } from '../..
 import type { GroupMemberRow } from '../../data/types';
 import { useQuery } from '../../hooks/useQuery';
 import { useDisplayName } from '../../hooks/useDisplayName';
+import { ADMIN_CHANGE_TITLE, OWN_ADMIN_ROLE_LEAD } from '../../rules/adminChange';
 import { KIND_LABEL } from '../../rules/decision';
 import { displayName, formatDuration, formatRelative } from '../../utils/format';
 import type { Proposal } from '../../writes/flows';
@@ -164,6 +165,8 @@ export function ProposeDialog({
   const inviteDetail =
     kind === 'cancelInvite' && person ? invites.detailOf(person.address) : undefined;
   const recent = isRecentInvite(inviteDetail, Date.now()) ? inviteDetail?.approvedAt : null;
+  // Removing yourself is stepping down, and is worded so.
+  const stepDown = kind === 'removeAdmin' && person?.address === signer.address;
 
   // Review stays pressable while only the reason or length is missing, and says which.
   const review = () => {
@@ -279,6 +282,12 @@ export function ProposeDialog({
             {recent ? (
               <Alert severity="info" role="note">
                 Approved {formatRelative(recent)}: they may still press Join now.
+              </Alert>
+            ) : null}
+            {stepDown ? (
+              <Alert severity="info" role="note">
+                That’s you: this proposes that you step down as a Minter Admin. You stay a MINTER
+                member, and the other Minter Admins still have to sign it.
               </Alert>
             ) : null}
           </Box>
@@ -426,7 +435,7 @@ function AdminPicker({
         const row = signers.find((s) => s.member === e.target.value);
         onPick(row ? { address: row.member, name: row.primaryName ?? null } : null);
       }}
-      helperText="MINTER’s owner account isn’t listed: it can’t be removed."
+      helperText="Pick yourself to step down. MINTER’s owner account isn’t listed: it can’t be removed."
       fullWidth
       slotProps={{ select: { native: true } }}
     >
@@ -602,6 +611,7 @@ function ProposeHubStep({
   onBack: () => void;
 }) {
   const who = useDisplayName(person.address, person.name);
+  const stepDown = kind === 'removeAdmin' && person.address === signer.address;
   return (
     <ProposeSignDialog
       open={open}
@@ -609,7 +619,8 @@ function ProposeHubStep({
       who={who.label}
       signer={signer}
       facts={ctx}
-      title={`${KIND_LABEL[kind]}: ${who.label}`}
+      title={stepDown ? ADMIN_CHANGE_TITLE.stepDown : `${KIND_LABEL[kind]}: ${who.label}`}
+      lead={stepDown ? OWN_ADMIN_ROLE_LEAD.stepDown : undefined}
       details={
         kind === 'ban' || reason ? (
           <>

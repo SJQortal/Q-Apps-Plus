@@ -17,6 +17,7 @@ import { useChainNow, useMyStatus } from '../../hooks/useData';
 import type { MyStatus } from '../../rules/status';
 import { useSession } from '../../state/session';
 import { displayName } from '../../utils/format';
+import { AdminRoleAction } from '../decisions/AdminRoleAction';
 import { AdminSection } from './AdminSection';
 import { HowItWorks } from './HowItWorks';
 import { LiveStats } from './LiveStats';
@@ -92,6 +93,7 @@ function StatusView({
           <AdminHero status={status} publicKey={publicKey} needed={needed} />
           <AdminSection publicKey={publicKey} />
           <MemberSection status={status} />
+          <AdminRoleAction status={status} layout="section" />
         </>
       );
     case 'memberNominator':
@@ -99,10 +101,16 @@ function StatusView({
         <>
           <NominatorHero status={status} needed={needed.needed} welcome={welcome} />
           <MemberSection status={status} />
+          <AdminRoleAction status={status} layout="section" />
         </>
       );
     case 'member':
-      return <LearnerHero status={status} welcome={welcome} />;
+      return (
+        <>
+          <LearnerHero status={status} welcome={welcome} />
+          <AdminRoleAction status={status} layout="section" />
+        </>
+      );
     case 'nominated':
       if (!status.nomination) break;
       return (

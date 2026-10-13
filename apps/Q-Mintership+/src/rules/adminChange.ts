@@ -32,12 +32,27 @@ export function adminChangeMode(kind: AdminChangeKind, self: boolean): AdminChan
   return self ? 'stepDown' : 'remove';
 }
 
+/** What a person can propose about their own role. */
+export type OwnAdminRole = Extract<AdminChangeMode, 'become' | 'stepDown'>;
+
+/** Become one (a MINTER member), step down (a Minter Admin), or nothing (anyone else). */
+export function ownAdminRole(facts: { isMember: boolean; isAdmin: boolean }): OwnAdminRole | null {
+  if (facts.isAdmin) return 'stepDown';
+  return facts.isMember ? 'become' : null;
+}
+
 /** The button and dialog title for each mode. */
 export const ADMIN_CHANGE_TITLE: Record<AdminChangeMode, string> = {
   become: 'Become a Minter Admin',
   promote: 'Make a Minter Admin',
   stepDown: 'Step down as Minter Admin',
   remove: 'Remove a Minter Admin',
+};
+
+/** What a proposal about one's own role does, in one sentence, before Hub opens. */
+export const OWN_ADMIN_ROLE_LEAD: Record<OwnAdminRole, string> = {
+  become: 'This proposes you as a Minter Admin.',
+  stepDown: 'This proposes that you step down: you give up your Minter Admin role.',
 };
 
 export interface AdminChangeFacts {

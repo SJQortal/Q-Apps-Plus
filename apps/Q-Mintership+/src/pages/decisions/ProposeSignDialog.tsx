@@ -5,11 +5,15 @@
  * proposer's signature. Both fees are stated up front. If the proposal goes
  * through and the signature doesn't, the result says so plainly: the
  * proposal is waiting, and can be signed from the queue like any decision.
+ *
+ * A member who isn't a Minter Admin (Become a Minter Admin) can't sign, so
+ * for them (`withSignature` false) it is the proposal alone, one Hub step,
+ * and the dialog says the Minter Admins decide from there.
  */
 import { useState, type ReactNode } from 'react';
 import { Typography } from '@mui/material';
 import { FeeNote } from '../../components/common/FeeNote';
-import { HubStepDialog } from '../../components/common/HubStepDialog';
+import { HubStepDialog, type HubStep } from '../../components/common/HubStepDialog';
 import { SignaturePrefix } from '../../components/common/SignaturePrefix';
 import { plural } from '../../utils/format';
 import { SIGN_NEW_TX_CHECK } from '../../writes/explain';
@@ -37,11 +41,19 @@ export interface ProposeSignDialogProps {
   lead?: string;
   /** Extra lines before it (ban length, reason). */
   details?: ReactNode;
+  /**
+   * The proposer is a Minter Admin, so their own signature follows (default).
+   * False for a member who isn't one: one Hub step, then the admins decide.
+   */
+  withSignature?: boolean;
   onClose: () => void;
   /** Back to the form, keeping what was typed. */
   onBack?: () => void;
   returnFocus?: () => HTMLElement | null;
 }
+
+/** How the last run ended, for the result's words. */
+type Ending = 'both' | 'partial' | 'proposalOnly';
 
 export function ProposeSignDialog({
   open,
@@ -52,27 +64,52 @@ export function ProposeSignDialog({
   title,
   lead = 'This proposes it.',
   details,
+  withSignature = true,
   onClose,
   onBack,
   returnFocus,
 }: ProposeSignDialogProps) {
-  // Step 1 went through and step 2 didn't.
-  const [partial, setPartial] = useState(false);
+  const [ending, setEnding] = useState<Ending>(withSignature ? 'both' : 'proposalOnly');
   // The proposal step 1 made, which step 2 signs: Hub shows it as "pendingSignature".
   const [newSig, setNewSig] = useState<string | null>(null);
   if (!proposal) return null;
   const info = PROPOSE_KINDS[proposal.kind];
   const txType = PROPOSAL_TX_TYPE[proposal.kind];
   const after = Math.max(0, facts.needed - 1);
+  const window = signingWindowText(facts.maximumBlockDelay, facts.msPerBlock);
   // The address's start, unless `who` already is the short address.
   const start = proposal.subject.slice(0, 6);
   const shown = who.startsWith(start) ? who : `${who} (${start}…)`;
+  const proposeStep: HubStep = {
+    action: info.action,
+    title: 'Propose it',
+    detail: <Typography variant="body2">Hub shows {shown} and the group MINTER.</Typography>,
+    feeTxType: txType,
+  };
+  const signStep: HubStep = {
+    action: 'SIGN_TRANSACTION',
+    title: 'Sign it',
+    detail: (
+      <Typography variant="body2">
+        Hub will show Tx type GROUP_APPROVAL, &quot;approval&quot;: true and a box to tick. The
+        &quot;pendingSignature&quot; is your new proposal’s own, made in step 1.
+      </Typography>
+    ),
+    check: SIGN_NEW_TX_CHECK,
+    running: newSig ? (
+      <>
+        For this proposal, &quot;pendingSignature&quot; starts with{' '}
+        <SignaturePrefix signature={newSig} />.
+      </>
+    ) : null,
+    feeTxType: 'GROUP_APPROVAL',
+  };
   return (
     <HubStepDialog
       open={open && Boolean(signer)}
       onClose={() => {
         onClose();
-        setPartial(false);
+        setEnding(withSignature ? 'both' : 'proposalOnly');
       }}
       onBack={onBack}
       returnFocus={returnFocus}
@@ -81,56 +118,44 @@ export function ProposeSignDialog({
         <>
           {details}
           <Typography sx={details ? { mt: 1 } : undefined}>
-            {lead} It happens only if {facts.needed} Minter Admins sign within{' '}
-            {signingWindowText(facts.maximumBlockDelay, facts.msPerBlock)}.
+            {lead} It happens only if {facts.needed} Minter Admins sign within {window}.
           </Typography>
-          <Typography sx={{ mt: 1 }}>
-            Your proposal doesn’t count as your signature, so you sign it straight after: two Hub
-            confirmations, one after the other.
-          </Typography>
-          <Typography sx={{ mt: 1 }}>
-            <FeeNote txType={txType} times={2} prefix="Fees in total" />
-          </Typography>
+          {withSignature ? (
+            <Typography sx={{ mt: 1 }}>
+              Your proposal doesn’t count as your signature, so you sign it straight after: two Hub
+              confirmations, one after the other.
+            </Typography>
+          ) : (
+            <Typography sx={{ mt: 1 }}>
+              Only Minter Admins sign, so this is one Hub confirmation: once it is proposed, the
+              Minter Admins decide.
+            </Typography>
+          )}
+          {/* One step states its own fee; two add up here. */}
+          {withSignature ? (
+            <Typography sx={{ mt: 1 }}>
+              <FeeNote txType={txType} times={2} prefix="Fees in total" />
+            </Typography>
+          ) : null}
         </>
       }
-      steps={[
-        {
-          action: info.action,
-          title: 'Propose it',
-          detail: <Typography variant="body2">Hub shows {shown} and the group MINTER.</Typography>,
-          feeTxType: txType,
-        },
-        {
-          action: 'SIGN_TRANSACTION',
-          title: 'Sign it',
-          detail: (
-            <Typography variant="body2">
-              Hub will show Tx type GROUP_APPROVAL, &quot;approval&quot;: true and a box to tick.
-              The &quot;pendingSignature&quot; is your new proposal’s own, made in step 1.
-            </Typography>
-          ),
-          check: SIGN_NEW_TX_CHECK,
-          running: newSig ? (
-            <>
-              For this proposal, &quot;pendingSignature&quot; starts with{' '}
-              <SignaturePrefix signature={newSig} />.
-            </>
-          ) : null,
-          feeTxType: 'GROUP_APPROVAL',
-        },
-      ]}
+      steps={withSignature ? [proposeStep, signStep] : [proposeStep]}
       run={async (report) => {
         if (!signer) return { outcome: { status: 'blocked', reason: 'Sign in to Hub first.' } };
-        setPartial(false);
+        setEnding(withSignature ? 'both' : 'proposalOnly');
         setNewSig(null);
         const result = await proposeAndSign(signer, proposal, (p) => {
           if (p.signature) setNewSig(p.signature);
           report(p.step - 1, p.stage);
         });
         if (result.proposal.status !== 'sent') return { outcome: result.proposal };
+        if (!result.withSignature) {
+          setEnding('proposalOnly');
+          return { outcome: result.proposal };
+        }
         if (result.approval?.status === 'sent') return { outcome: result.approval };
         // Step 1 went through, step 2 didn't: show step 1 as the one that is done.
-        setPartial(true);
+        setEnding('partial');
         report(0, 'done');
         return {
           outcome: result.proposal,
@@ -143,9 +168,21 @@ export function ProposeSignDialog({
           ),
         };
       }}
-      successTitle={partial ? 'Step 1 done: proposed' : 'Proposed and signed'}
+      successTitle={
+        ending === 'partial'
+          ? 'Step 1 done: proposed'
+          : ending === 'proposalOnly'
+            ? 'Proposed'
+            : 'Proposed and signed'
+      }
       successText={
-        partial ? null : (
+        ending === 'partial' ? null : ending === 'proposalOnly' ? (
+          <Typography variant="body2">
+            Your proposal counts once it is in a block, usually within a couple of minutes. The
+            Minter Admins will now decide: it needs {plural(facts.needed, 'signature')} within{' '}
+            {window}, or it expires.
+          </Typography>
+        ) : (
           <Typography variant="body2">
             Your proposal and your signature count once they are in a block, usually within a couple
             of minutes. After yours it needs{' '}

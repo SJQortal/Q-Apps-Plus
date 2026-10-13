@@ -256,6 +256,39 @@ describe('Person page', () => {
   });
 });
 
+describe('Person page: one’s own admin role', () => {
+  it('offers Become a Minter Admin on a member’s own page only', async () => {
+    const own = await visit(ADDR.learner, 'learner');
+    expect(
+      await screen.findByRole('button', { name: 'Become a Minter Admin' }, { timeout: 3000 })
+    ).toBeInTheDocument();
+    own.unmount();
+    await visit(ADDR.learner, 'nominator');
+    await screen.findByRole('heading', { level: 2, name: PEOPLE.learner.name as string });
+    expect(screen.queryByRole('button', { name: 'Become a Minter Admin' })).toBeNull();
+  });
+
+  it('offers Step down as Minter Admin on an admin’s own page', async () => {
+    await visit(ADDR.admin, 'admin');
+    expect(
+      await screen.findByRole('button', { name: 'Step down as Minter Admin' }, { timeout: 3000 })
+    ).toBeInTheDocument();
+  });
+
+  it('says when a step-down someone else proposed is waiting, instead of the button', async () => {
+    // Dex Demote's removal was proposed by another admin.
+    await visit(ADDR.demote, 'demote');
+    expect(
+      await screen.findByText(
+        'A proposal to remove your Minter Admin role is waiting for the Minter Admins’ signatures.',
+        {},
+        { timeout: 3000 }
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Step down as Minter Admin' })).toBeNull();
+  });
+});
+
 describe('person page words', () => {
   it('recognises Core’s answer for an address that fails its checksum', () => {
     expect(
