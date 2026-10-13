@@ -1,12 +1,14 @@
 /**
  * The Nominations page's list logic, pure so it is tested on its own: the
- * state filters, the name/address search, and which decided nominations
- * count as "recently decided" (and when each one ended).
+ * state filters, the name/address search, which decided nominations count
+ * as "recently decided" (and when each one ended), and what the signed-in
+ * member already did for a nomination.
  */
 import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
 import { decidedAt, isOpenState, waitingEndsAt } from '../../rules/nomination';
 import { waitingWindowBlocks, type GroupDelays } from '../../rules/timing';
+import type { PendingWrite } from '../../writes/optimistic';
 
 export type NominationFilter = 'all' | 'waiting' | 'signing' | 'approved';
 
@@ -92,6 +94,29 @@ export function recentlyDecided(
 /** "Nominate again" makes sense once a round ran out without a decision. */
 export function canNominateAgain(n: Nomination): boolean {
   return n.state === 'expired' || n.state === 'lapsed';
+}
+
+/**
+ * What the signed-in member already did for a nomination, in their words
+ * ("You nominated them", "Support sent ✓ (confirming…)"), or null. `pending`
+ * is their support write in flight, if any.
+ */
+export function myPart(
+  n: Nomination,
+  me: string,
+  pending: Pick<PendingWrite, 'status'> | null
+): { label: string; inFlight: boolean } | null {
+  if (me && n.nomination?.publisher.address === me)
+    return { label: 'You nominated them', inFlight: false };
+  if (me && n.supporters.some((s) => s.publisher.address === me))
+    return { label: 'You support this', inFlight: false };
+  if (pending && pending.status !== 'failed') {
+    return {
+      label: pending.status === 'sending' ? 'Sending…' : 'Support sent ✓ (confirming…)',
+      inFlight: true,
+    };
+  }
+  return null;
 }
 
 /**

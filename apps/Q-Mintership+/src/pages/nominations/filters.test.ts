@@ -11,6 +11,7 @@ import {
   isStillOpenForSupport,
   matchesFilter,
   matchesSearch,
+  myPart,
   parseFilter,
   recentlyDecided,
 } from './filters';
@@ -137,5 +138,40 @@ describe('Nominations filters', () => {
     expect(isStillOpenForSupport(signing('tooLate'))).toBe(false);
     expect(isStillOpenForSupport(nom({ nominee: ADDR.approved, state: 'approved' }))).toBe(false);
     expect(isStillOpenForSupport(nom({ nominee: ADDR.banned, state: 'blocked' }))).toBe(false);
+  });
+  it('says what the signed-in member already did for a nomination', () => {
+    const n = nom({
+      nominee: ADDR.nominatedWaiting,
+      state: 'waiting',
+      nomination: {
+        publisher: publisher('Nora Nominator', ADDR.nominator),
+        record: { v: 1, nomineeAddress: ADDR.nominatedWaiting, reason: 'x'.repeat(20), links: [] },
+        publishedAt: NOW,
+        identifier: `qmp-nomination-${ADDR.nominatedWaiting}`,
+      },
+      supporters: [
+        {
+          publisher: publisher('Juniper L4', ADDR.adminL4),
+          record: { v: 1, nomineeAddress: ADDR.nominatedWaiting },
+          publishedAt: NOW,
+        },
+      ],
+    });
+    expect(myPart(n, ADDR.nominator, null)).toEqual({
+      label: 'You nominated them',
+      inFlight: false,
+    });
+    expect(myPart(n, ADDR.adminL4, null)?.label).toBe('You support this');
+    expect(myPart(n, ADDR.admin, null)).toBeNull();
+    expect(myPart(n, ADDR.admin, { status: 'sending' })).toEqual({
+      label: 'Sending…',
+      inFlight: true,
+    });
+    expect(myPart(n, ADDR.admin, { status: 'confirming' })?.label).toBe(
+      'Support sent ✓ (confirming…)'
+    );
+    expect(myPart(n, ADDR.admin, { status: 'failed' })).toBeNull();
+    // Signed out: nothing is theirs.
+    expect(myPart(n, '', null)).toBeNull();
   });
 });

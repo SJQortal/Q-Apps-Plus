@@ -62,6 +62,7 @@ import {
   isStillOpenForSupport,
   matchesFilter,
   matchesSearch,
+  myPart,
   parseFilter,
   recentlyDecided,
   type NominationFilter,
@@ -443,22 +444,16 @@ function CardActions({
   onSupport: () => void;
 }) {
   const pending = usePendingWrite(writeKeys.support(n.nominee));
-  const nominatedByMe = Boolean(me) && n.nomination?.publisher.address === me;
-  const supportedByMe = Boolean(me) && n.supporters.some((s) => s.publisher.address === me);
   const collecting = n.state === 'waiting' || n.state === 'signing';
-  const inFlight = Boolean(pending && pending.status !== 'failed');
-  let mine = null;
-  if (nominatedByMe) mine = 'You nominated them';
-  else if (supportedByMe) mine = 'You support this';
-  else if (inFlight)
-    mine = pending?.status === 'sending' ? 'Sending…' : 'Support sent ✓ (confirming…)';
+  const part = myPart(n, me, pending);
+  const mine = part?.label ?? null;
 
   return (
     <>
       {mine ? (
         <Typography
           variant="body2"
-          role={inFlight ? 'status' : undefined}
+          role={part?.inFlight ? 'status' : undefined}
           sx={{
             display: 'inline-flex',
             alignItems: 'center',
