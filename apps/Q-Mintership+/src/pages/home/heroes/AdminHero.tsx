@@ -118,7 +118,7 @@ export function AdminHero({
           Review decisions
         </Button>
       }
-      next="There's no reject button: if you don't support something, don't sign it and it runs out. A signature can't be withdrawn, because on chain that would count as a rejection."
+      next="Sign what you support. If you don't, reject it or let it run out. You can withdraw a signature later, but on chain that counts as a rejection."
     >
       {count ? (
         <MostUrgent decision={summary.waiting[0]} now={decisions.data.now} />

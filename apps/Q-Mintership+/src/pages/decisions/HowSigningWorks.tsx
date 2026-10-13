@@ -1,7 +1,8 @@
 /**
  * "How signing works", folded away: the rules every Minter Admin should
  * know, with today's real numbers (target, admins, window, block time),
- * including that proposing comes with the proposer's own signature.
+ * including that proposing comes with the proposer's own signature, and
+ * what Reject and Withdraw my signature do on chain.
  */
 import { Accordion, AccordionDetails, AccordionSummary, Box, Typography } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -26,13 +27,15 @@ export function HowSigningWorks({
   signers: number;
 }) {
   const fee = useFee('GROUP_APPROVAL');
+  const feeText = formatQort(fee.data?.qort ?? 0.01);
   const blockSeconds = Math.round(now.msPerBlock / 100) / 10;
   const window = group.maximumBlockDelay;
   const points = [
-    `A signature counts once it is in a block. Each one is a Hub confirmation and costs ${formatQort(fee.data?.qort ?? 0.01)}.`,
+    `A signature counts once it is in a block. Each one is a Hub confirmation and costs ${feeText}.`,
     `A proposal doesn’t count as its proposer’s signature, so when you propose something here you sign it straight after: two Hub confirmations, one after the other. A nomination’s first signature works the same way.`,
     `Only your latest answer counts.`,
-    `There is no reject or withdraw button: on chain, taking a signature back counts as a rejection. If you don’t agree, do nothing and let it expire.`,
+    `If you don’t agree, press Reject, or do nothing and let it expire. A rejection costs ${feeText} too and counts once it is in a block. Rejections are measured against the same target as signatures: ${needed} of them end it as rejected. Signatures are counted first, so with ${needed} of both it is approved. A rejection takes nothing from anyone else’s signature.`,
+    `Withdraw my signature takes yours back. On chain that is a rejection: it replaces your signature, because only your latest answer counts. You can still sign again later while there is time.`,
     `Doing nothing lets it expire ${formatCount(window + 1)} blocks after the block it went into (about ${formatDuration((window + 1) * now.msPerBlock, { precise: true })} at today’s ${blockSeconds} s a block). The last block a signature can count in is two blocks before that.`,
     `Core applies a decision by itself in the block where it reaches the target. Nobody has to press anything afterwards.`,
     `It can be applied at the earliest ${formatCount(group.minimumBlockDelay + 1)} blocks after the block it went into; signatures sent before then still count.`,

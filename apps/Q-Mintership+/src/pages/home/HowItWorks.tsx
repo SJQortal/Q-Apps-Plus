@@ -48,7 +48,7 @@ export function HowItWorks({ needed }: { needed: number | null }) {
             ) : (
               'Enough Minter Admins sign.'
             )}{' '}
-            There are no votes or polls: admins sign, or let it run out.
+            There are no votes or polls: admins sign, reject, or let it run out.
           </Step>
           <Step n={5} title="You're in">
             With enough signatures you&rsquo;re added automatically if you accepted first, or you

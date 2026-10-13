@@ -188,3 +188,15 @@ describe('Decisions: rejections on the cards', () => {
     expect(screen.getByText('5 decisions waiting for your signature')).toBeInTheDocument();
   });
 });
+
+describe('Decisions: the help says what Reject and Withdraw do', () => {
+  it('How signing works explains both, with the target', async () => {
+    const u = user();
+    await openPage('admin');
+    await u.click(screen.getByRole('button', { name: 'How signing works' }));
+    expect(screen.getByText(/If you don’t agree, press Reject, or do nothing/)).toBeVisible();
+    expect(screen.getByText(/8 of them end it as rejected/)).toBeVisible();
+    expect(screen.getByText(/Withdraw my signature takes yours back/)).toBeVisible();
+    expect(screen.queryByText(/There is no reject or withdraw button/)).toBeNull();
+  });
+});

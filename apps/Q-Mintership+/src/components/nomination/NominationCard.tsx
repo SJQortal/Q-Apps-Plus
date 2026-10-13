@@ -1,9 +1,9 @@
 /**
  * One nomination, as everyone sees it: the nominee, who nominated and who
  * supports (with their notes), the reason and links, and where it stands
- * (waiting for a Minter Admin, k of n signatures with the countdown,
- * approved, or how it ended). Screens add their own buttons through
- * `actions`.
+ * (waiting for a Minter Admin, k of n signatures with the countdown and any
+ * rejections, approved, or how it ended). Screens add their own buttons
+ * through `actions`.
  */
 import type { ReactNode } from 'react';
 import { Box, Button, Typography } from '@mui/material';
@@ -13,7 +13,8 @@ import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
 import type { NominationState } from '../../rules/nomination';
 import { useDisplayName } from '../../hooks/useDisplayName';
-import { formatDuration, formatRelative } from '../../utils/format';
+import { formatDuration, formatRelative, plural } from '../../utils/format';
+import { whenApplied } from '../../pages/decisions/decisionUi';
 import { openQortalLink } from '../../utils/links';
 import { Countdown } from '../common/Countdown';
 import { PersonChip, PersonInline } from '../common/Person';
@@ -201,6 +202,16 @@ export function NominationCard({
             blockLabel="Last block a signature counts in:"
             detailVisible
           />
+        ) : null}
+        {n.state === 'signing' && n.decision?.phase === 'rejectedMet' ? (
+          <Typography variant="body2" color="text.secondary">
+            Enough Minter Admins have rejected it: it ends as rejected{' '}
+            {whenApplied(n.decision, now)}.
+          </Typography>
+        ) : n.state === 'signing' && tally?.rejectionCount ? (
+          <Typography variant="body2" color="text.secondary">
+            {plural(tally.rejectionCount, 'rejection')} of the {tally.needed} that would end it.
+          </Typography>
         ) : null}
         {n.state === 'signing' && !window ? (
           <Typography variant="body2" color="text.secondary">

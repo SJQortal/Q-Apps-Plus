@@ -706,12 +706,12 @@ function WhatHappensNext({ name, named }: { name: string; named: boolean }) {
           </li>
           <li>
             <Typography variant="body2">
-              <strong>The other Minter Admins sign, or let it run out.</strong>{' '}
+              <strong>The other Minter Admins sign, reject, or let it run out.</strong>{' '}
               {needed && group
                 ? `It needs ${plural(needed, 'signature')} right now (${describeThreshold(group.approvalThreshold)}). `
                 : ''}
-              Once enough have signed it is approved automatically. If not, it expires and they can
-              be nominated again.
+              Once enough have signed it is approved automatically. If as many reject it, or time
+              runs out, it ends and they can be nominated again.
             </Typography>
           </li>
         </Box>
