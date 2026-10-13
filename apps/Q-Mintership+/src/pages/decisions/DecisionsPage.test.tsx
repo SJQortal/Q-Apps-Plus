@@ -756,6 +756,43 @@ describe('Decisions: proposing', () => {
   });
 });
 
+describe('Decisions: admin changes from anywhere', () => {
+  it('lists a member’s own proposal from another app like any decision, with Sign', async () => {
+    await openPage('admin');
+    // Pia Promote, a member, proposed herself (the mock world's ADD_GROUP_ADMIN).
+    const pia = await screen.findByRole('article', {
+      name: 'Become a Minter Admin, Pia Promote',
+    });
+    expect(within(pia).getByText(/^Their own proposal, /)).toBeVisible();
+    expect(within(pia).getByRole('button', { name: /^Sign: Become a Minter Admin/ })).toBeVisible();
+  });
+
+  it('shows a step-down proposed in another app, and a removal by another admin', async () => {
+    await openPage('admin', '/decisions', (world) => {
+      const remove = world.pending.find((t: { type: string }) => t.type === 'REMOVE_GROUP_ADMIN');
+      // A second removal: Juniper L4 steps down, from another app.
+      world.pending.push({
+        ...remove,
+        signature: base58Encode(new Uint8Array(64).fill(31)),
+        creatorAddress: ADDR.adminL4,
+        admin: ADDR.adminL4,
+      });
+    });
+    expect(
+      await screen.findByRole('article', { name: 'Step down as Minter Admin, Juniper L4' })
+    ).toBeInTheDocument();
+    expect(card(/^Remove a Minter Admin, Dex Demote/)).toBeInTheDocument();
+  });
+
+  it('shows them to members read-only', async () => {
+    await openPage('learner');
+    const pia = await screen.findByRole('article', {
+      name: 'Become a Minter Admin, Pia Promote',
+    });
+    expect(within(pia).queryByRole('button', { name: /^Sign/ })).toBeNull();
+  });
+});
+
 describe('Decisions: navigation and filters', () => {
   it('scrolls to and focuses the decision named in ?d=', async () => {
     const sig = createWorld().pending.find((t: { type: string }) => t.type === 'GROUP_KICK')

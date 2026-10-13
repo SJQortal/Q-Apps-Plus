@@ -52,6 +52,21 @@ describe('timeline wording', () => {
     expect(events.map((e) => e.tone)).toEqual(['good', 'good', 'good', 'neutral']);
   });
 
+  it('words admin changes people proposed about themselves', () => {
+    const rows = [
+      tx('ADD_GROUP_ADMIN', 100, { creatorAddress: A, member: A, approvalStatus: 'PENDING' }),
+      tx('ADD_GROUP_ADMIN', 110, { member: B, approvalStatus: 'PENDING' }),
+      tx('REMOVE_GROUP_ADMIN', 120, { creatorAddress: B, admin: B, approvalHeight: 130 }),
+      tx('REMOVE_GROUP_ADMIN', 140, { admin: A, approvalHeight: 150 }),
+    ];
+    expect(buildTimeline(rows, CTX).map((e) => e.title)).toEqual([
+      'No longer a Minter Admin',
+      'Stepped down as Minter Admin',
+      'Proposed: Make a Minter Admin',
+      'Proposed: Become a Minter Admin',
+    ]);
+  });
+
   it('dates an approval at its approval block, from the proposal time and the block pace', () => {
     const [event] = buildTimeline(
       [tx('GROUP_INVITE', 200, { invitee: A, approvalHeight: 260 })],

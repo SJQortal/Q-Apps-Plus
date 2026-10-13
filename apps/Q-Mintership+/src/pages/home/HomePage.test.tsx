@@ -96,7 +96,7 @@ describe('Home: Minter Admins', () => {
     const waiting = screen.getByRole('region', { name: 'Waiting for your signature' });
     const rows = within(waiting).getAllByRole('link', { name: /signatures\./ });
     expect(rows).toHaveLength(3);
-    expect(rows[0]).toHaveAccessibleName(/Make a Minter Admin: Pia Promote\. 5 of 8 signatures/);
+    expect(rows[0]).toHaveAccessibleName(/Become a Minter Admin: Pia Promote\. 5 of 8 signatures/);
     // Activity: signed 2 of the 8 open ones; 4 approved invites nobody used.
     const activity = screen.getByRole('region', { name: 'Your activity' });
     expect(within(activity).getByText('2 of 8')).toBeInTheDocument();

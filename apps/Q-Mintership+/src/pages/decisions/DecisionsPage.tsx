@@ -47,7 +47,7 @@ import { invalidate, peekQuery } from '../../data/query';
 import { useNavHas } from '../../components/layout/useNavHas';
 import { useDecisions, useMembers, useNominations } from '../../hooks/useData';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { KIND_LABEL, type Decision } from '../../rules/decision';
+import { decisionTitle, type Decision } from '../../rules/decision';
 import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
 import { useSession } from '../../state/session';
 import { decisionsHideSignedAtom } from '../../state/settings';
@@ -278,14 +278,14 @@ export default function DecisionsPage() {
   const selectedList = signable.filter((d) => selected.has(d.signature));
 
   const labelFor = (d: Decision) => {
-    if (!d.subject) return `${KIND_LABEL[d.kind]} (Core doesn’t say for whom)`;
+    if (!d.subject) return `${decisionTitle(d)} (Core doesn’t say for whom)`;
     const name =
       nominationFor(d)?.nomineeName ??
       members.get(d.subject)?.primaryName ??
       adminNames.get(d.subject) ??
       peekQuery<string | null>(`name:${d.subject}`) ??
       null;
-    return `${KIND_LABEL[d.kind]}: ${displayName(name, d.subject)}`;
+    return `${decisionTitle(d)}: ${displayName(name, d.subject)}`;
   };
 
   const refresh = () => {

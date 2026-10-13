@@ -12,7 +12,13 @@
  * whether an approved invite added them at once, depends on what came
  * before; this is worked out from the transactions in hand, oldest first.
  */
-import { KIND_LABEL, decisionKind, decisionSubject, type DecisionKind } from '../rules/decision';
+import {
+  decisionKind,
+  decisionSubject,
+  decisionTitle,
+  isOwnAdminChange,
+  type DecisionKind,
+} from '../rules/decision';
 import { formatDuration } from '../utils/format';
 import { getBlockAtTime } from './chain';
 import { fetchQuery } from './query';
@@ -191,11 +197,11 @@ export function buildTimeline(rows: TxRow[], ctx: TimelineContext): TimelineEven
     let becameMember = false;
     let endedMembership = false;
     const s = e.subject ? stateOf(e.subject) : null;
+    const own = { kind: e.kind as DecisionKind, subject: e.subject, creatorAddress: e.creator };
     if (e.outcome !== 'done') {
-      title =
-        e.kind === 'invite'
-          ? 'Nominated for MINTER'
-          : `Proposed: ${KIND_LABEL[e.kind as DecisionKind]}`;
+      title = e.kind === 'invite' ? 'Nominated for MINTER' : `Proposed: ${decisionTitle(own)}`;
+    } else if (e.kind === 'removeAdmin' && isOwnAdminChange(own)) {
+      title = 'Stepped down as Minter Admin';
     } else if (e.kind === 'invite') {
       const old = e.tx.approvalStatus === 'NOT_REQUIRED';
       if (s?.request) {

@@ -11,7 +11,7 @@ import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutli
 import type { ChainNow } from '../../data/chain';
 import { effectiveBlocksMinted } from '../../data/accounts';
 import type { Nomination } from '../../data/nominations';
-import { KIND_LABEL, type Decision } from '../../rules/decision';
+import { decisionTitle, isOwnAdminChange, type Decision } from '../../rules/decision';
 import { useAccount } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { AvatarStack, PersonChip, PersonInline } from '../../components/common/Person';
@@ -93,7 +93,7 @@ export function DecisionCard(props: DecisionCardProps) {
   const signed = canAct ? signedLabel(answer, pending) : null;
   const tally = d.tally;
   const confirming = tally ? tally.inFlight.filter((x) => x.approval) : [];
-  const title = KIND_LABEL[d.kind];
+  const title = decisionTitle(d);
   const subject = useDisplayName(
     d.subject ?? '',
     d.subject ? (nomination?.nomineeName ?? subjectFacts?.name) : null
@@ -172,8 +172,14 @@ export function DecisionCard(props: DecisionCardProps) {
 
       {d.creatorAddress ? (
         <Typography component="div" variant="body2" color="text.secondary">
-          Proposed by{' '}
-          <PersonInline address={d.creatorAddress} name={adminNames.get(d.creatorAddress)} />{' '}
+          {isOwnAdminChange(d) ? (
+            'Their own proposal, '
+          ) : (
+            <>
+              Proposed by{' '}
+              <PersonInline address={d.creatorAddress} name={adminNames.get(d.creatorAddress)} />{' '}
+            </>
+          )}
           {formatRelative(d.createdAt, now.timestamp)}
           {d.blockHeight ? ` (block ${formatCount(d.blockHeight)})` : ''}.
         </Typography>

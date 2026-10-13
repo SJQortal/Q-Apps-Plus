@@ -4,7 +4,7 @@
  */
 import { Box, Typography } from '@mui/material';
 import type { ChainNow } from '../../data/chain';
-import { KIND_LABEL, type Decision } from '../../rules/decision';
+import { decisionTitle, type Decision } from '../../rules/decision';
 import { PersonChip } from '../../components/common/Person';
 import { Card } from '../../components/common/Section';
 import { formatRelative } from '../../utils/format';
@@ -23,7 +23,7 @@ export function UnusualList({ decisions, now }: { decisions: Decision[]; now: Ch
           sx={{ display: 'flex', flexDirection: 'column', gap: 1, borderColor: 'warning.main' }}
         >
           <Typography sx={{ fontWeight: 700 }}>
-            {KIND_LABEL[d.kind]}
+            {decisionTitle(d)}
             <Typography component="span" variant="body2" color="text.secondary">
               {' '}
               · {formatRelative(d.createdAt, now.timestamp)}

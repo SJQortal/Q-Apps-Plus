@@ -9,7 +9,7 @@
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Typography } from '@mui/material';
 import type { ChainNow } from '../../data/chain';
-import { KIND_LABEL, type Decision } from '../../rules/decision';
+import { decisionTitle, type Decision } from '../../rules/decision';
 import { signerState } from '../../rules/tally';
 import { decisionPath } from '../../routes/paths';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
@@ -57,7 +57,7 @@ export function DecisionRow({
       <NameAvatar name={d.subject ? subject.name : null} size={36} />
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
-          {KIND_LABEL[d.kind]}: {who}
+          {decisionTitle(d)}: {who}
           {d.tally ? (
             <span className="qmp-visually-hidden">
               . {d.tally.approvalCount} of {d.tally.needed} signatures.
