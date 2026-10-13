@@ -34,6 +34,8 @@ import {
   myVoteView,
   notVotedText,
   shareLabel,
+  unlistedText,
+  unreadText,
   type ShownPoll,
 } from './adminPollUi';
 
@@ -72,7 +74,9 @@ export function AdminPollCard({
   const title = `Minter Admin poll: ${poll.question}`;
   const mine = myVoteView(view, pendingVote);
   const sharing = pendingShare && pendingShare.status !== 'failed';
-  const voted = view.votes.length;
+  // Votes the viewer can't read are votes all the same.
+  const voted = view.votes.length + view.unread.length;
+  const unlisted = view.votes.filter((v) => v.unlisted).length;
 
   return (
     <Card
@@ -132,6 +136,16 @@ export function AdminPollCard({
       </Typography>
 
       <Votes view={view} />
+      {view.unread.length ? (
+        <Typography variant="body2" color="text.secondary">
+          {unreadText(view.unread.length)}
+        </Typography>
+      ) : null}
+      {unlisted ? (
+        <Typography variant="body2" color="text.secondary">
+          {unlistedText(unlisted)}
+        </Typography>
+      ) : null}
       {view.open && !view.publishing ? (
         <Typography variant="body2" color="text.secondary">
           {notVotedText(voted, admins) ?? 'Every Minter Admin has voted.'}

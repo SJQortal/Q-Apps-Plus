@@ -141,6 +141,8 @@ export function CommentItem(props: CommentItemProps) {
         {formatRelative(c.postedAt, now)}
       </time>
       {!c.deleted && (c.edited || c.editedAt !== null) ? ' · edited' : ''}
+      {/* A poll comment the viewer can't read directly, shown from a share. */}
+      {c.from ? ` · from ${c.from}’s copy` : ''}
     </>
   );
 

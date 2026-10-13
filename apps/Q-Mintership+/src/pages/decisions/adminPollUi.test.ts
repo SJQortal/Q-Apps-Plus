@@ -13,6 +13,8 @@ import {
   notVotedText,
   shareLabel,
   shareSettled,
+  unlistedText,
+  unreadText,
   voteSettled,
   waitingText,
   withPublishing,
@@ -53,8 +55,10 @@ const view = (over: Partial<AdminPollView> = {}): AdminPollView => ({
   open: true,
   votes: [],
   late: [],
+  unread: [],
   counts: { yes: 0, no: 0, neutral: 0 },
   myVote: null,
+  myLate: null,
   readers: [A, B],
   missing: [],
   commentRows: [],
@@ -76,6 +80,10 @@ describe('words', () => {
     expect(notVotedText(19, 19)).toBeNull();
     expect(shareLabel(1)).toBe('Share with 1 Minter Admin added since');
     expect(shareLabel(2)).toBe('Share with 2 Minter Admins added since');
+    expect(unreadText(1)).toBe('1 vote you can’t read yet isn’t in these counts.');
+    expect(unreadText(2)).toBe('2 votes you can’t read yet aren’t in these counts.');
+    expect(unlistedText(1)).toMatch(/^1 of these votes is only in a share’s copy/);
+    expect(unlistedText(3)).toMatch(/^3 of these votes are only in a share’s copy/);
     expect(waitingText(1)).toBe('1 Minter Admin poll is waiting for your vote');
     expect(waitingText(3)).toBe('3 Minter Admin polls are waiting for your vote');
     expect(adminPollCardId('k3x9m2pq')).toBe('admin-poll-k3x9m2pq');

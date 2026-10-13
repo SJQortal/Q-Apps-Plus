@@ -178,7 +178,8 @@ export function commentRowsFor(target: CommentTarget, rows: readonly QdnRow[]): 
 }
 
 export type CommentBody =
-  | { status: 'ok'; record: CommentRecord }
+  /** `from`: shown from that Minter Admin's copy (a poll's share), not read directly. */
+  | { status: 'ok'; record: CommentRecord; from?: string }
   /** Couldn't be read from QDN; `fetching` while the node still asks its peers. */
   | { status: 'unavailable'; fetching?: boolean }
   /** Not a valid comment: never shown. */
@@ -268,6 +269,8 @@ export interface CommentView {
   muted: boolean;
   /** Published from here, not on QDN yet (or this version isn't). */
   pending: boolean;
+  /** Shown from this Minter Admin's copy (a poll's share): the viewer can't read it directly. */
+  from?: string;
 }
 
 export interface CommentThread {
@@ -302,7 +305,7 @@ export function buildThreads(input: BuildThreadsInput): CommentThread[] {
   const view = (
     base: Pick<CommentView, 'ref' | 'name' | 'identifier' | 'key' | 'postedAt'>,
     record: CommentRecord | null,
-    extra: { editedAt: number | null; pending: boolean; fetching?: boolean }
+    extra: { editedAt: number | null; pending: boolean; fetching?: boolean; from?: string }
   ): CommentView => ({
     ...base,
     editedAt: extra.editedAt,
@@ -316,6 +319,7 @@ export function buildThreads(input: BuildThreadsInput): CommentThread[] {
     hidden: input.optimisticHides?.get(base.ref) ?? input.hides.get(base.ref) ?? false,
     muted: input.muted.has(base.name),
     pending: extra.pending,
+    ...(extra.from && !extra.pending ? { from: extra.from } : {}),
   });
 
   const listed = new Set<string>();
@@ -332,6 +336,7 @@ export function buildThreads(input: BuildThreadsInput): CommentThread[] {
         editedAt: newer ? newer.at : row.updatedAt > row.postedAt + 60_000 ? row.updatedAt : null,
         pending: Boolean(newer),
         fetching: body.status === 'unavailable' && body.fetching,
+        from: body.status === 'ok' ? body.from : undefined,
       })
     );
   }

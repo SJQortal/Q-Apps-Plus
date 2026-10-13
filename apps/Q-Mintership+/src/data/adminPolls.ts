@@ -86,6 +86,7 @@ export function pollContext(data: AdminPollsData, now = Date.now()): PollContext
     signers: data.signers,
     publisherOf: (name) => data.publishers[name] ?? null,
     viewer: data.viewer,
+    truncated: data.truncated,
   };
 }
 
@@ -204,11 +205,13 @@ export function loadAdminPolls(
       await resolve(
         [...polls.rows, ...votes.rows, ...comments.rows, ...shares.rows].map((r) => r.name)
       );
+      const truncated = [polls, votes, comments, shares].some((r) => r.truncated);
       const ctx: PollContext = {
         now,
         signers,
         publisherOf: (name) => publishers.get(name) ?? null,
         viewer,
+        truncated,
       };
       const fromAdmin = (rows: readonly PollRow[]) =>
         rows.filter((row) => trustedName(row.name, ctx) !== null);
@@ -298,7 +301,7 @@ export function loadAdminPolls(
         signers,
         publishers: Object.fromEntries(publishers),
         sources: listed,
-        truncated: [polls, votes, comments, shares].some((r) => r.truncated),
+        truncated,
         loadedAt: Date.now(),
       };
     },

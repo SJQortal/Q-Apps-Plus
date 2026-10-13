@@ -384,6 +384,121 @@ describe('counting votes', () => {
   });
 });
 
+describe('votes: the rows decide, a share only fills in what the viewer can’t read', () => {
+  const END = T0 + 7 * DAY_MS;
+  const shareOf = (
+    votes: Array<{ name: string; vote: string; updated: number }>,
+    at = T0 + DAY_MS
+  ) => shareRead('Bea', share({ votes }), at);
+
+  it('a share can’t change a vote the viewer reads, whatever time it claims', () => {
+    // A Minter Admin was added since, so every admin reads the shares.
+    const src = sources({
+      votes: [voteRead('Cal', 'no', T0 + 5)],
+      shares: [shareOf([{ name: 'Cal', vote: 'yes', updated: END - 1 }])],
+    });
+    for (const viewer of [ADDR.Avery, ADDR.Bea, ADDR.Cal]) {
+      const view = assemblePoll(src, ctx({ viewer, signers: [...SIGNERS, NEW_ADMIN] }))!;
+      expect(view.votes).toEqual([
+        { name: 'Cal', address: ADDR.Cal, vote: 'no', at: T0 + 5, via: 'direct' },
+      ]);
+      expect(view.counts).toEqual({ yes: 0, no: 1, neutral: 0 });
+    }
+  });
+
+  it('a copy fills in a row the viewer can’t read only for that very version', () => {
+    const same = sources({
+      votes: [voteRead('Cal', 'no', T0 + 200, locked)],
+      shares: [shareOf([{ name: 'Cal', vote: 'yes', updated: T0 + 200 }])],
+    });
+    expect(assemblePoll(same, ctx())?.votes).toEqual([
+      { name: 'Cal', address: ADDR.Cal, vote: 'yes', at: T0 + 200, via: 'share', sharedBy: 'Bea' },
+    ]);
+    // Cal voted again since the share: the old copy isn’t Cal’s vote any more.
+    const changed = sources({
+      votes: [voteRead('Cal', 'no', T0 + 900, { status: 'unavailable' })],
+      shares: [shareOf([{ name: 'Cal', vote: 'yes', updated: T0 + 200 }])],
+    });
+    const view = assemblePoll(changed, ctx())!;
+    expect(view.votes).toEqual([]);
+    expect(view.counts).toEqual({ yes: 0, no: 0, neutral: 0 });
+    // Voted, all the same: not among those who haven't.
+    expect(view.unread).toEqual([
+      { name: 'Cal', address: ADDR.Cal, vote: null, at: T0 + 900, via: 'direct' },
+    ]);
+  });
+
+  it('a copy dated after its share was published isn’t one it could have made', () => {
+    const src = sources({
+      votes: [voteRead('Cal', 'no', T0 + 3 * DAY_MS, locked)],
+      shares: [shareOf([{ name: 'Cal', vote: 'yes', updated: T0 + 3 * DAY_MS }], T0 + DAY_MS)],
+    });
+    expect(assemblePoll(src, ctx())?.votes).toEqual([]);
+  });
+
+  it('too late is judged from the row, even when the viewer can’t read it', () => {
+    const src = sources({
+      votes: [voteRead('Cal', 'no', END + 20_000, locked)],
+      shares: [shareOf([{ name: 'Cal', vote: 'yes', updated: T0 + 200 }])],
+    });
+    const view = assemblePoll(src, ctx({ now: END + DAY_MS }))!;
+    // Cal's latest version came after the end: the older copy doesn't count either.
+    expect(view.votes).toEqual([]);
+    expect(view.late).toEqual([
+      { name: 'Cal', address: ADDR.Cal, vote: null, at: END + 20_000, via: 'direct' },
+    ]);
+  });
+
+  it('a copy with no row is dropped, unless a search stopped early', () => {
+    const src = sources({ shares: [shareOf([{ name: 'Cal', vote: 'yes', updated: T0 + 200 }])] });
+    expect(assemblePoll(src, ctx())?.votes).toEqual([]);
+    expect(assemblePoll(src, ctx({ truncated: true }))?.votes).toEqual([
+      {
+        name: 'Cal',
+        address: ADDR.Cal,
+        vote: 'yes',
+        at: T0 + 200,
+        via: 'share',
+        sharedBy: 'Bea',
+        unlisted: true,
+      },
+    ]);
+  });
+
+  it('a vote whose latest version isn’t a valid vote is no vote', () => {
+    const src = sources({
+      votes: [voteRead('Cal', 'no', T0 + 200, { status: 'invalid' })],
+      shares: [shareOf([{ name: 'Cal', vote: 'yes', updated: T0 + 200 }])],
+    });
+    const view = assemblePoll(src, ctx())!;
+    expect([view.votes, view.unread, view.late]).toEqual([[], [], []]);
+  });
+
+  it('the viewer’s own vote after the end: theirs, and late', () => {
+    const view = assemblePoll(
+      sources({ votes: [voteRead('Avery', 'yes', END + 1)] }),
+      ctx({ now: END + DAY_MS })
+    )!;
+    expect(view.myVote).toBeNull();
+    expect(view.myLate).toMatchObject({ name: 'Avery', vote: 'yes', at: END + 1 });
+  });
+
+  it('a share whose copy of the poll was asked at another time than its row is ignored', () => {
+    const src = sources({
+      polls: [pollRead('Bea', locked, T0 + 5_000)],
+      shares: [
+        shareRead(
+          'Cal',
+          share({ poll: poll({ createdAt: T0 - 2 * DAY_MS, endsAt: T0 + 5 * DAY_MS }) }),
+          T0 + DAY_MS
+        ),
+      ],
+    });
+    expect(validShares(src, ctx())).toEqual([]);
+    expect(assemblePoll(src, ctx())).toBeNull();
+  });
+});
+
 describe('readers', () => {
   it('the poll’s and every share’s; current admins outside them are missing', () => {
     const src = sources({
@@ -419,34 +534,67 @@ describe('comments', () => {
     expect(rows[0]).toMatchObject({ key: ID, ref: `Cal\n${commentIdent('bbbbbb')}` });
   });
 
-  it('copies from shares: current admins’ comments only, the newest copy of each', () => {
-    const c = (name: string, cid: string, updatedAt: number, text = 'Hi') => ({
+  it('copies from shares: current admins’ comments only, each a copy of its row’s version', () => {
+    const c = (name: string, cid: string, postedAt: number, updatedAt: number, text = 'Hi') => ({
       name,
       identifier: commentIdent(cid),
-      postedAt: T0 + 1,
+      postedAt,
       updatedAt,
       text,
     });
+    const rows = pollCommentRows(
+      ID,
+      [
+        row('Bea', commentIdent('aaaaaa'), T0 + 5, T0 + 9),
+        row('Cal', commentIdent('cccccc'), T0 + 7),
+        row('Eve', commentIdent('eeeeee'), T0 + 8),
+      ],
+      ctx()
+    );
     const shares = validShares(
       sources({
         shares: [
           shareRead(
             'Cal',
-            share({ comments: [c('Bea', 'aaaaaa', T0 + 5, 'old'), c('Member', 'bbbbbb', T0 + 5)] }),
+            share({
+              comments: [
+                // An older version than the row: not a copy of it.
+                c('Bea', 'aaaaaa', T0 + 5, T0 + 5, 'old'),
+                c('Member', 'bbbbbb', T0 + 5, T0 + 5),
+                c('Cal', 'cccccc', T0 + 7, T0 + 7, 'Cal, as Cal’s share saw it'),
+                // No row for it.
+                c('Dee', 'dddddd', T0 + 6, T0 + 6, 'Only in a share'),
+              ],
+            }),
             T0 + DAY_MS
           ),
           shareRead(
             'Dee',
-            share({ comments: [c('Bea', 'aaaaaa', T0 + 9, 'new')] }),
+            share({
+              comments: [
+                c('Bea', 'aaaaaa', T0 + 5, T0 + 9, 'new'),
+                c('Cal', 'cccccc', T0 + 7, T0 + 7, 'Cal, as Dee’s share saw it'),
+                // Dated after the share itself: not a copy it could have made.
+                c('Eve', 'eeeeee', T0 + 8, T0 + 3 * DAY_MS, 'From the future'),
+              ],
+            }),
             T0 + 2 * DAY_MS
           ),
         ],
       }),
       ctx()
     );
-    expect(shareCommentCopies(shares, ctx())).toEqual([
-      { ...c('Bea', 'aaaaaa', T0 + 9, 'new'), sharedBy: 'Dee' },
+    // The newest share first: its copy of each version.
+    expect(shareCommentCopies(shares, rows, ctx())).toEqual([
+      { ...c('Bea', 'aaaaaa', T0 + 5, T0 + 9, 'new'), sharedBy: 'Dee' },
+      { ...c('Cal', 'cccccc', T0 + 7, T0 + 7, 'Cal, as Dee’s share saw it'), sharedBy: 'Dee' },
     ]);
+    // A search that stopped early: a copy with no row is kept, marked as only in a share.
+    expect(shareCommentCopies(shares, rows, ctx({ truncated: true }))).toContainEqual({
+      ...c('Dee', 'dddddd', T0 + 6, T0 + 6, 'Only in a share'),
+      sharedBy: 'Cal',
+      unlisted: true,
+    });
   });
 
   it('as the public thread shows them', () => {
@@ -467,7 +615,7 @@ describe('comments', () => {
     });
   });
 
-  it('the thread: what the viewer read, else a share’s copy; unreadable ones left out', () => {
+  it('the thread: what the viewer read; a share’s copy only for a row they can’t read', () => {
     const rows = pollCommentRows(
       ID,
       [
@@ -477,18 +625,30 @@ describe('comments', () => {
         row('Eve', commentIdent('dddddd'), T0 + 40),
         row('Avery', commentIdent('eeeeee'), T0 + 50),
         row('Bea', commentIdent('ffffff'), T0 + 60),
+        row('Cal', commentIdent('gggggg'), T0 + 70, T0 + 80),
+        row('Eve', commentIdent('hhhhhh'), T0 + 90),
       ],
       ctx()
     );
-    const copy = (name: string, cid: string, updatedAt: number, text: string) => ({
+    const copy = (
+      name: string,
+      cid: string,
+      postedAt: number,
+      updatedAt: number,
+      text: string
+    ) => ({
       name,
       identifier: commentIdent(cid),
-      postedAt: T0 + 1,
+      postedAt,
       updatedAt,
       text,
-      sharedBy: 'Cal',
+      sharedBy: 'Dee',
     });
-    const { rows: shown, bodies } = pollThreadSources({
+    const {
+      rows: shown,
+      bodies,
+      unreadable,
+    } = pollThreadSources({
       pollId: ID,
       rows,
       bodies: new Map<string, BodyRead & { fetching?: boolean }>([
@@ -496,12 +656,18 @@ describe('comments', () => {
         [`Cal\n${commentIdent('bbbbbb')}`, locked],
         [`Dee\n${commentIdent('cccccc')}`, locked],
         [`Eve\n${commentIdent('dddddd')}`, { status: 'unavailable', fetching: true }],
-        [`Avery\n${commentIdent('eeeeee')}`, ok({ v: 1, pollId: ID, text: 'Old version' })],
+        [`Avery\n${commentIdent('eeeeee')}`, ok({ v: 1, pollId: ID, text: 'What I read' })],
+        [`Cal\n${commentIdent('gggggg')}`, locked],
+        [`Eve\n${commentIdent('hhhhhh')}`, { status: 'unavailable' }],
       ]),
       copies: [
-        copy('Cal', 'bbbbbb', T0 + 20, 'From the share'),
-        copy('Avery', 'eeeeee', T0 + 99, 'Edited, as the share saw it'),
-        copy('Bea', '999999', T0 + 5, 'Only in the share'),
+        copy('Cal', 'bbbbbb', T0 + 20, T0 + 20, 'From the share'),
+        // Claims a newer version than the one the viewer read: never replaces it.
+        copy('Avery', 'eeeeee', T0 + 50, T0 + 99, 'I support this'),
+        // A copy of an older version than the row: not used.
+        copy('Cal', 'gggggg', T0 + 70, T0 + 70, 'Before the edit'),
+        copy('Eve', 'hhhhhh', T0 + 90, T0 + 90, 'Not on my node yet'),
+        { ...copy('Bea', '999999', T0 + 5, T0 + 5, 'Only in the share'), unlisted: true as const },
       ],
     });
     const text = (name: string, cid: string) => {
@@ -509,17 +675,26 @@ describe('comments', () => {
       return b?.status === 'ok' ? b.record.text : b?.status;
     };
     expect(text('Bea', 'aaaaaa')).toBe('Read it myself');
+    expect(bodies.get(`Bea\n${commentIdent('aaaaaa')}`)).not.toHaveProperty('from');
     expect(text('Cal', 'bbbbbb')).toBe('From the share');
+    // Shown as from the admin whose share carried it.
+    expect(bodies.get(`Cal\n${commentIdent('bbbbbb')}`)).toMatchObject({ from: 'Dee' });
     expect(text('Dee', 'cccccc')).toBe('invalid');
     expect(bodies.get(`Eve\n${commentIdent('dddddd')}`)).toEqual({
       status: 'unavailable',
       fetching: true,
     });
-    expect(text('Avery', 'eeeeee')).toBe('Edited, as the share saw it');
+    expect(text('Avery', 'eeeeee')).toBe('What I read');
+    expect(text('Cal', 'gggggg')).toBe('invalid');
+    expect(text('Eve', 'hhhhhh')).toBe('Not on my node yet');
+    // Locked, and no share carries that version: left out, and counted.
+    expect(unreadable).toBe(2);
     // Not read yet: listed without a body (the thread shows it once read).
     expect(bodies.has(`Bea\n${commentIdent('ffffff')}`)).toBe(false);
     expect(text('Bea', '999999')).toBe('Only in the share');
     expect(shown.map((r) => r.identifier.slice(-6))).toEqual([
+      'hhhhhh',
+      'gggggg',
       'ffffff',
       'eeeeee',
       'dddddd',
@@ -536,6 +711,37 @@ describe('comments', () => {
       copies: [],
     });
     expect(bad.bodies.get(rows[0].ref)).toEqual({ status: 'invalid' });
+  });
+
+  it('a poll’s view: copies of other versions, or with no row, aren’t passed on to the thread', () => {
+    const cRow = row('Cal', commentIdent('bbbbbb'), T0 + 20, T0 + 30);
+    const shareBody = share({
+      comments: [
+        {
+          name: 'Cal',
+          identifier: commentIdent('bbbbbb'),
+          postedAt: T0 + 20,
+          updatedAt: T0 + 25,
+          text: 'Old',
+        },
+        {
+          name: 'Bea',
+          identifier: commentIdent('cccccc'),
+          postedAt: T0 + 9,
+          updatedAt: T0 + 9,
+          text: 'No row',
+        },
+      ],
+    });
+    const src = sources({
+      polls: [pollRead('Bea', locked)],
+      shares: [shareRead('Dee', shareBody)],
+      comments: [cRow],
+    });
+    expect(assemblePoll(src, ctx())?.shareComments).toEqual([]);
+    expect(assemblePoll(src, ctx({ truncated: true }))?.shareComments).toEqual([
+      expect.objectContaining({ name: 'Bea', text: 'No row', unlisted: true }),
+    ]);
   });
 });
 

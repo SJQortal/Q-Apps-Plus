@@ -131,6 +131,35 @@ describe('Decisions → Minter Admin polls', () => {
     expect(within(closed).queryByRole('button', { name: /^Change your vote/ })).toBeNull();
   });
 
+  it('a vote the viewer can’t read, and no share carries, is a vote, not in the counts', async () => {
+    await openDecisions(
+      'admin',
+      withAdminPolls('admin', (world) => {
+        const signers = world.admins.filter((a: string) => a !== NULL_OWNER);
+        world.adminPollRecords.push({
+          name: 'Admin N',
+          identifier: `qmp-adminvote-${ADMIN_POLL_IDS.shared}`,
+          created: Date.now() - 2 * 86_400_000,
+          // Encrypted to everyone but Avery (the first admin row), and in no share.
+          readers: signers.filter((a: string) => a !== world.admins[0]),
+          body: { v: 1, pollId: ADMIN_POLL_IDS.shared, vote: 'yes' },
+        });
+      })
+    );
+    const shared = await pollCard(SHARED_Q);
+    expect(counts(within(shared).getByRole('list', { name: 'Votes' }))).toEqual([
+      'Yes: 1',
+      'No: 1',
+      'Neutral: 1',
+    ]);
+    expect(
+      within(shared).getByText('1 vote you can’t read yet isn’t in these counts.')
+    ).toBeVisible();
+    expect(
+      within(shared).getByText(`15 of ${signerCount} Minter Admins haven't voted`)
+    ).toBeVisible();
+  });
+
   it('reads: four searches of 100 for the whole section, bodies decrypted in Hub', async () => {
     await openDecisions();
     await pollCard(OPEN_Q);
@@ -394,6 +423,8 @@ describe('comments on a poll', () => {
         T
       )
     ).toBeVisible();
+    // Said to be the sharer's copy, not the comment as its author's own record.
+    expect(within(thread).getByText(/from Admin D ΑΩ’s copy/)).toBeVisible();
   });
 });
 

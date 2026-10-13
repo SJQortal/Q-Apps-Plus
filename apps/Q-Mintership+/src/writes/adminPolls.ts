@@ -364,18 +364,17 @@ export function deleteAdminPollComment(
 
 /**
  * What a share carries: the poll as the viewer reads it, each voter's latest
- * vote (late ones too, so readers count them the same way), and every
- * comment the viewer can read or a share carried to them.
+ * vote the viewer knows, with its row's time (late ones too), and every
+ * comment the viewer can read or a share carried to them. Readers use a copy
+ * only where they can't read the row of that same version themselves.
  */
 export async function shareCopy(
   viewer: string,
   view: AdminPollView
 ): Promise<{ votes: ShareVote[]; comments: ShareComment[] }> {
-  const votes: ShareVote[] = [...view.votes, ...view.late].map((v) => ({
-    name: v.name,
-    vote: v.vote,
-    updated: v.at,
-  }));
+  const votes: ShareVote[] = [];
+  for (const v of [...view.votes, ...view.late])
+    if (v.vote) votes.push({ name: v.name, vote: v.vote, updated: v.at });
   const reads = await mapLimit(view.commentRows, 6, async (row) => ({
     ref: row.ref,
     body: await readPollBody(viewer, {

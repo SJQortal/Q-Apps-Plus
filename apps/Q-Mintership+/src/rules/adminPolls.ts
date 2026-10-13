@@ -12,10 +12,18 @@
  *   later one with the same id under another name is not this poll). Its
  *   own body when the viewer can read it; otherwise the newest share's copy,
  *   shown as "Shared by <name>". Bodies that can't be decrypted are skipped.
+ * - **Rows decide, shares only fill in:** every vote's and comment's latest
+ *   version comes from its QDN search row, whose time anyone can see. A
+ *   share's copy never replaces what the viewer read, and is used only for a
+ *   row the viewer can't read (yet), and only when it is a copy of that very
+ *   version (the same time) made by the time the share was published. A
+ *   copy with no row is dropped, unless a search stopped early: then it is
+ *   kept, marked as only in a share.
  * - **Votes:** Yes, No or Neutral. Per voter name, the latest version counts
  *   only if it was published by the poll's end (the QDN row's updated time,
- *   else created); per admin, the latest that counts. Votes the viewer can't
- *   read come from shares; a vote the viewer can read wins a tie.
+ *   else created, so "too late" holds whether or not the viewer can read
+ *   it); per admin, the latest that counts. A latest version on time that
+ *   the viewer can't read and no share fills in is a vote they can't count.
  * - **Readers:** the poll's and every share's; current admins outside them
  *   can be shared with ("Share with N Minter Admins added since").
  * - **Lists:** open polls first (soonest end first), then those that ended
@@ -34,6 +42,7 @@ import {
   type PollVote,
   type ShareComment,
   type ShareRecord,
+  type ShareVote,
 } from '../data/adminPollRecords';
 import type { CommentRecord } from '../data/commentRecords';
 import type { CommentBody, CommentRow } from '../data/commentThread';
@@ -90,6 +99,8 @@ export interface PollContext {
   publisherOf: (name: string) => string | null;
   /** The signed-in admin. */
   viewer: string;
+  /** A search stopped at its ceiling: rows may be missing, so copies without one are kept. */
+  truncated?: boolean;
 }
 
 export interface Publisher {
@@ -97,12 +108,22 @@ export interface Publisher {
   address: string;
 }
 
-export interface CountedVote extends Publisher {
-  vote: PollVote;
+/** A voter name's latest version. */
+export interface VoteEntry extends Publisher {
+  /** Null when the viewer can't read this version and no share carries it. */
+  vote: PollVote | null;
   /** When this version was published (the QDN row's updated time, else created). */
   at: number;
-  /** Read by the viewer, or taken from a share. */
+  /** Read by the viewer, or filled in from a share's copy of this same version. */
   via: 'direct' | 'share';
+  /** The admin whose share carried it. */
+  sharedBy?: string;
+  /** Only in a share: its own row wasn't among the rows a search returned. */
+  unlisted?: true;
+}
+
+export interface CountedVote extends VoteEntry {
+  vote: PollVote;
 }
 
 export interface PollShareInfo extends Publisher {
@@ -115,6 +136,8 @@ export interface PollShareInfo extends Publisher {
 export interface ShareCommentCopy extends ShareComment {
   /** The admin whose share carried it. */
   sharedBy: string;
+  /** Only in a share: its own row wasn't among the rows a search returned. */
+  unlisted?: true;
 }
 
 export interface AdminPollView {
@@ -130,17 +153,24 @@ export interface AdminPollView {
   open: boolean;
   /** The votes that count: one per admin. */
   votes: CountedVote[];
-  /** Latest versions published after the end: not counted. */
-  late: CountedVote[];
+  /** Latest versions published after the end: not counted (`vote` null when unreadable). */
+  late: VoteEntry[];
+  /** Admins whose vote is on time but the viewer can't read it (yet): not in the counts. */
+  unread: VoteEntry[];
   counts: Record<PollVote, number>;
   myVote: CountedVote | null;
+  /** The viewer's latest vote came after the end (and none of theirs counts). */
+  myLate: VoteEntry | null;
   /** Everyone it (or a share of it) was encrypted to. */
   readers: string[];
   /** Current Minter Admins none of those copies were encrypted to. */
   missing: string[];
   /** Its comments' rows from current Minter Admins, newest first. */
   commentRows: CommentRow[];
-  /** Comments as shares carried them (for the ones the viewer can't read). */
+  /**
+   * Comments as shares carried them, for the ones the viewer can't read:
+   * each a copy of its row's version (or `unlisted`, when a search stopped early).
+   */
   shareComments: ShareCommentCopy[];
 }
 
@@ -247,7 +277,7 @@ export interface ValidShare {
 /**
  * The shares that count, newest first: from a current Minter Admin, readable
  * and valid, about a poll whose asker is a current admin and, when the poll's
- * own row is known, the same name.
+ * own row is known, the same name and a copy asked when that row says.
  */
 export function validShares(src: PollSources, ctx: PollContext): ValidShare[] {
   const pollRow = pollRowFor(src, ctx);
@@ -259,6 +289,7 @@ export function validShares(src: PollSources, ctx: PollContext): ValidShare[] {
     if (!record || record.pollId !== src.pollId) continue;
     if (!trustedName(record.pollPublisher, ctx)) continue;
     if (pollRow && record.pollPublisher !== pollRow.row.name) continue;
+    if (pollRow && !askedInTime(record.poll, pollRow.row.created)) continue;
     if (!copiedInTime(record.poll, read.row.created)) continue;
     shares.push({ publisher, row: read.row, record });
   }
@@ -298,52 +329,102 @@ export function resolvePoll(
   };
 }
 
-/** Every vote known for a poll: read directly, or carried by a share (from current admins only). */
+/**
+ * Each voter name's latest version, from its search row (current admins
+ * only): what the viewer read, else a share's copy of that same version
+ * (same time, shared after it), else unknown (`vote: null`). A version that
+ * isn't a valid vote is no vote. Copies with no row count only when a
+ * search stopped early (`unlisted`).
+ */
 export function voteEntries(
   src: PollSources,
   ctx: PollContext,
   shares: ValidShare[] = validShares(src, ctx)
-): CountedVote[] {
-  const entries: CountedVote[] = [];
+): VoteEntry[] {
+  const rows = new Map<string, ReadRow & { publisher: Publisher }>();
   for (const read of src.votes) {
     const publisher = trusted(read.row, ctx);
-    if (!publisher || read.body.status !== 'ok') continue;
-    const record = parseVote(read.body.value, read.row.identifier);
-    if (!record || record.pollId !== src.pollId) continue;
-    entries.push({ ...publisher, vote: record.vote, at: pollRowTime(read.row), via: 'direct' });
+    if (!publisher) continue;
+    const current = rows.get(read.row.name);
+    if (!current || pollRowTime(read.row) > pollRowTime(current.row))
+      rows.set(read.row.name, { ...read, publisher });
   }
+  // The shares' copies by voter name, newest share first.
+  const copies = new Map<string, Array<ShareVote & { sharedBy: string }>>();
   for (const share of shares) {
+    const sharedUntil = pollRowTime(share.row) + CLOCK_SLACK_MS;
     for (const vote of share.record.votes) {
-      const address = trustedName(vote.name, ctx);
+      if (vote.updated > sharedUntil) continue;
+      const list = copies.get(vote.name) ?? [];
+      list.push({ ...vote, sharedBy: share.publisher.name });
+      copies.set(vote.name, list);
+    }
+  }
+  const entries: VoteEntry[] = [];
+  for (const [name, read] of rows) {
+    const at = pollRowTime(read.row);
+    const base = { ...read.publisher, at };
+    if (read.body.status === 'ok') {
+      const record = parseVote(read.body.value, read.row.identifier);
+      if (record && record.pollId === src.pollId)
+        entries.push({ ...base, vote: record.vote, via: 'direct' });
+      continue;
+    }
+    if (read.body.status === 'invalid') continue;
+    const copy = copies.get(name)?.find((c) => c.updated === at);
+    entries.push(
+      copy
+        ? { ...base, vote: copy.vote, via: 'share', sharedBy: copy.sharedBy }
+        : { ...base, vote: null, via: 'direct' }
+    );
+  }
+  if (ctx.truncated) {
+    for (const [name, list] of copies) {
+      const address = rows.has(name) ? null : trustedName(name, ctx);
       if (!address) continue;
-      entries.push({ name: vote.name, address, vote: vote.vote, at: vote.updated, via: 'share' });
+      const newest = list.reduce((a, b) => (b.updated > a.updated ? b : a));
+      entries.push({
+        name,
+        address,
+        vote: newest.vote,
+        at: newest.updated,
+        via: 'share',
+        sharedBy: newest.sharedBy,
+        unlisted: true,
+      });
     }
   }
   return entries;
 }
 
-function newer(a: CountedVote, b: CountedVote): boolean {
+/** Read beats a share's copy, which beats unknown. */
+function rank(entry: VoteEntry): number {
+  return entry.vote === null ? 0 : entry.via === 'share' ? 1 : 2;
+}
+
+function newer(a: VoteEntry, b: VoteEntry): boolean {
   if (a.at !== b.at) return a.at > b.at;
-  if (a.via !== b.via) return a.via === 'direct';
+  if (rank(a) !== rank(b)) return rank(a) > rank(b);
   return a.name < b.name;
 }
 
 /**
  * The votes that count: per voter name its latest version, which counts only
  * if it was published by `endsAt`; per admin, the latest of those. Returns
- * them oldest first, and the latest versions that came too late.
+ * them oldest first, the latest versions that came too late, and the admins
+ * whose vote is on time but unknown to the viewer.
  */
 export function countVotes(
-  entries: readonly CountedVote[],
+  entries: readonly VoteEntry[],
   endsAt: number
-): { counted: CountedVote[]; late: CountedVote[] } {
-  const byName = new Map<string, CountedVote>();
+): { counted: CountedVote[]; late: VoteEntry[]; unread: VoteEntry[] } {
+  const byName = new Map<string, VoteEntry>();
   for (const entry of entries) {
     const current = byName.get(entry.name);
     if (!current || newer(entry, current)) byName.set(entry.name, entry);
   }
-  const late: CountedVote[] = [];
-  const byAdmin = new Map<string, CountedVote>();
+  const late: VoteEntry[] = [];
+  const byAdmin = new Map<string, VoteEntry>();
   for (const entry of byName.values()) {
     if (entry.at > endsAt) {
       late.push(entry);
@@ -352,8 +433,14 @@ export function countVotes(
     const current = byAdmin.get(entry.address);
     if (!current || newer(entry, current)) byAdmin.set(entry.address, entry);
   }
-  const order = (a: CountedVote, b: CountedVote) => a.at - b.at || (a.name < b.name ? -1 : 1);
-  return { counted: [...byAdmin.values()].sort(order), late: late.sort(order) };
+  const counted: CountedVote[] = [];
+  const unread: VoteEntry[] = [];
+  for (const entry of byAdmin.values()) {
+    if (entry.vote) counted.push(entry as CountedVote);
+    else unread.push(entry);
+  }
+  const order = (a: VoteEntry, b: VoteEntry) => a.at - b.at || (a.name < b.name ? -1 : 1);
+  return { counted: counted.sort(order), late: late.sort(order), unread: unread.sort(order) };
 }
 
 /** Yes / No / Neutral counts. */
@@ -406,16 +493,32 @@ export function pollCommentRows(
   );
 }
 
-/** Comments carried by shares, from current Minter Admins, each once (the newest copy). */
-export function shareCommentCopies(shares: readonly ValidShare[], ctx: PollContext) {
+/**
+ * Comments carried by shares, from current Minter Admins, each once: a copy
+ * of the version its row is (same times, shared after it; the newest share's
+ * when several carry it). One with no row only when a search stopped early,
+ * then the newest copy, marked `unlisted`.
+ */
+export function shareCommentCopies(
+  shares: readonly ValidShare[],
+  rows: readonly CommentRow[],
+  ctx: PollContext
+): ShareCommentCopy[] {
+  const listed = new Map(rows.map((row) => [row.ref, row]));
   const byRef = new Map<string, ShareCommentCopy>();
   for (const share of shares) {
+    const sharedUntil = pollRowTime(share.row) + CLOCK_SLACK_MS;
     for (const comment of share.record.comments) {
-      if (!trustedName(comment.name, ctx)) continue;
+      if (!trustedName(comment.name, ctx) || comment.updatedAt > sharedUntil) continue;
       const ref = `${comment.name}\n${comment.identifier}`;
+      const row = listed.get(ref);
       const current = byRef.get(ref);
-      if (!current || comment.updatedAt > current.updatedAt)
-        byRef.set(ref, { ...comment, sharedBy: share.publisher.name });
+      if (row) {
+        if (comment.updatedAt !== row.updatedAt || comment.postedAt !== row.postedAt) continue;
+        if (!current) byRef.set(ref, { ...comment, sharedBy: share.publisher.name });
+      } else if (ctx.truncated && (!current || comment.updatedAt > current.updatedAt)) {
+        byRef.set(ref, { ...comment, sharedBy: share.publisher.name, unlisted: true });
+      }
     }
   }
   return [...byRef.values()];
@@ -427,8 +530,10 @@ export function assemblePoll(src: PollSources, ctx: PollContext): AdminPollView 
   const resolved = resolvePoll(src, ctx, shares);
   if (!resolved) return null;
   const { poll } = resolved;
-  const { counted, late } = countVotes(voteEntries(src, ctx, shares), poll.endsAt);
+  const { counted, late, unread } = countVotes(voteEntries(src, ctx, shares), poll.endsAt);
+  const myVote = counted.find((v) => v.address === ctx.viewer) ?? null;
   const readers = pollReaders(poll, shares);
+  const commentRows = pollCommentRows(src.pollId, src.comments, ctx);
   return {
     id: src.pollId,
     poll,
@@ -444,12 +549,14 @@ export function assemblePoll(src: PollSources, ctx: PollContext): AdminPollView 
     open: isPollOpen(poll, ctx.now),
     votes: counted,
     late,
+    unread,
     counts: tallyVotes(counted),
-    myVote: counted.find((v) => v.address === ctx.viewer) ?? null,
+    myVote,
+    myLate: myVote ? null : (late.filter((v) => v.address === ctx.viewer).pop() ?? null),
     readers,
     missing: missingReaders(ctx.signers, readers),
-    commentRows: pollCommentRows(src.pollId, src.comments, ctx),
-    shareComments: shareCommentCopies(shares, ctx),
+    commentRows,
+    shareComments: shareCommentCopies(shares, commentRows, ctx),
   };
 }
 
@@ -521,47 +628,61 @@ export function toCommentRecord(
 
 /**
  * The rows and bodies a poll's thread shows (data/commentThread.ts
- * buildThreads): each comment the viewer read, or the newest copy a share
- * carried when that is newer or the viewer can't read it. One the viewer
- * can't read and no share carries is left out. Rows not read yet stay
- * without a body (and aren't shown) unless a share carried them.
+ * buildThreads): each comment as the viewer read it. A share's copy only
+ * stands in for a row the viewer can't read (locked, or not available on
+ * their node), and only when it is a copy of that row's version; it is shown
+ * as from that admin's copy. One the viewer can't read and no share carries
+ * is left out (`unreadable` says how many). Rows not read yet stay without a
+ * body (and aren't shown); `unlisted` copies (no row: a search stopped
+ * early) are added.
  */
 export function pollThreadSources(input: {
   pollId: string;
   rows: readonly CommentRow[];
   bodies: ReadonlyMap<string, BodyRead & { fetching?: boolean }>;
   copies: readonly ShareCommentCopy[];
-}): { rows: CommentRow[]; bodies: Map<string, CommentBody> } {
+}): { rows: CommentRow[]; bodies: Map<string, CommentBody>; unreadable: number } {
   const copies = new Map(input.copies.map((c) => [`${c.name}\n${c.identifier}`, c]));
   const rows: CommentRow[] = [];
   const bodies = new Map<string, CommentBody>();
   const fromCopy = (copy: ShareCommentCopy): CommentBody => ({
     status: 'ok',
     record: toCommentRecord(input.pollId, copy),
+    from: copy.sharedBy,
   });
   const listed = new Set<string>();
+  let unreadable = 0;
   for (const row of input.rows) {
     listed.add(row.ref);
-    const copy = copies.get(row.ref);
+    const found = copies.get(row.ref);
+    const copy =
+      found &&
+      !found.unlisted &&
+      found.updatedAt === row.updatedAt &&
+      found.postedAt === row.postedAt
+        ? found
+        : null;
     const body = input.bodies.get(row.ref);
     let shown: CommentBody | null = null;
     if (body?.status === 'ok') {
       const record = parsePollComment(body.value, row.identifier);
-      if (record && record.pollId === input.pollId) {
-        shown =
-          copy && copy.updatedAt > row.updatedAt
-            ? fromCopy(copy)
-            : { status: 'ok', record: toCommentRecord(input.pollId, record) };
-      } else shown = copy ? fromCopy(copy) : { status: 'invalid' };
-    } else if (copy) shown = fromCopy(copy);
+      shown =
+        record && record.pollId === input.pollId
+          ? { status: 'ok', record: toCommentRecord(input.pollId, record) }
+          : { status: 'invalid' };
+    } else if (copy && (body?.status === 'locked' || body?.status === 'unavailable'))
+      shown = fromCopy(copy);
     else if (body?.status === 'unavailable')
       shown = { status: 'unavailable', fetching: Boolean(body.fetching) };
-    else if (body) shown = { status: 'invalid' };
+    else if (body) {
+      if (body.status === 'locked') unreadable += 1;
+      shown = { status: 'invalid' };
+    }
     rows.push(row);
     if (shown) bodies.set(row.ref, shown);
   }
   for (const [ref, copy] of copies) {
-    if (listed.has(ref)) continue;
+    if (listed.has(ref) || !copy.unlisted) continue;
     rows.push({
       ref,
       name: copy.name,
@@ -574,5 +695,5 @@ export function pollThreadSources(input: {
     bodies.set(ref, fromCopy(copy));
   }
   rows.sort((a, b) => b.postedAt - a.postedAt || (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0));
-  return { rows, bodies };
+  return { rows, bodies, unreadable };
 }

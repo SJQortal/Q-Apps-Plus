@@ -69,6 +69,20 @@ export function notVotedText(voted: number, admins: number): string | null {
   return `${formatCount(left)} of ${plural(admins, 'Minter Admin')} ${left === 1 ? "hasn't" : "haven't"} voted`;
 }
 
+/** On-time votes the viewer can't read: voted, but not in the counts. */
+export function unreadText(count: number): string {
+  return count === 1
+    ? '1 vote you can’t read yet isn’t in these counts.'
+    : `${formatCount(count)} votes you can’t read yet aren’t in these counts.`;
+}
+
+/** Votes known only from a share's copy (a search stopped before their own records). */
+export function unlistedText(count: number): string {
+  return count === 1
+    ? '1 of these votes is only in a share’s copy: the search stopped before its own record.'
+    : `${formatCount(count)} of these votes are only in a share’s copy: the search stopped before their own records.`;
+}
+
 /** "Share with 2 Minter Admins added since". */
 export function shareLabel(missing: number): string {
   return `Share with ${plural(missing, 'Minter Admin')} added since`;
@@ -184,8 +198,10 @@ export function withPublishing(
       open: isPollOpen(p.poll, now),
       votes: [],
       late: [],
+      unread: [],
       counts: tallyVotes([]),
       myVote: null,
+      myLate: null,
       readers: p.poll.readers,
       missing: signers.filter((a) => !p.poll.readers.includes(a)),
       commentRows: [],
