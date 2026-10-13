@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { renderPage, type RenderPageOptions } from '../../test/render';
 import { ADDR, addOtherPending } from '../../test/world';
 import { createWorld } from '../../../e2e/world.mjs';
-import { mockQortalRequest, qortalCallsFor } from '../../test/setup';
+import { mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { base58Decode, base58Encode } from '../../qortal/base58';
 import DecisionsPage from './DecisionsPage';
 
@@ -76,7 +76,9 @@ describe('Decisions: phases and actions', () => {
     const ban = await screen.findByRole('article', { name: /Ban from MINTER, Ben Target/ });
     expect(within(ban).getByText('Permanent')).toBeInTheDocument();
     const cancel = card(/^Cancel an approved invite, QgFT6i…1cnG/);
-    expect(within(cancel).getByRole('link', { name: /QgFT6i…1cnG: open their page/ })).toBeVisible();
+    expect(
+      within(cancel).getByRole('link', { name: /QgFT6i…1cnG: open their page/ })
+    ).toBeVisible();
     // Ring, countdown and signers on an open invite.
     const signing = card(/bob\+builder/);
     expect(
@@ -122,6 +124,32 @@ describe('Decisions: unusual approval route', () => {
       )
     ).toBeInTheDocument();
     expect(within(list).queryByRole('button')).toBeNull();
+  });
+});
+
+describe('Decisions: the nomination behind an invite', () => {
+  it('never calls an invite record-less when the nominations could not be read', async () => {
+    await openPage('admin', '/decisions', () =>
+      mockFetchRoute(
+        '/arbitrary/resources/searchsimple',
+        () => new Response('down', { status: 500 })
+      )
+    );
+    // Mia Met's invite has no record; with the nominations unread, the card says so plainly.
+    const met = await screen.findByRole('article', { name: /Mia Met/ });
+    expect(
+      await within(met).findByText('Couldn’t load the nomination behind this invite.')
+    ).toBeVisible();
+    expect(within(met).getByRole('button', { name: 'Retry' })).toBeVisible();
+    expect(screen.queryByText(/without a nomination record/)).toBeNull();
+  });
+
+  it('says an invite has no record once the nominations are in', async () => {
+    await openPage('admin');
+    const met = await screen.findByRole('article', { name: /Mia Met/ });
+    expect(
+      await within(met).findByText('Proposed directly on chain, without a nomination record.')
+    ).toBeVisible();
   });
 });
 

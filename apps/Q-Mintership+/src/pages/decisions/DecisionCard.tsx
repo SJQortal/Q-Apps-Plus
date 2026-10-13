@@ -5,7 +5,7 @@
  * signed, and Sign / Signed ✓ / Signed ✓ (confirming…).
  */
 import { useState } from 'react';
-import { Box, Button, Checkbox, Typography } from '@mui/material';
+import { Box, Button, Checkbox, Skeleton, Typography } from '@mui/material';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import type { ChainNow } from '../../data/chain';
@@ -42,6 +42,8 @@ export interface SubjectFacts {
   name?: string | null;
 }
 
+export type NominationsState = 'loaded' | 'loading' | 'error';
+
 export interface DecisionCardProps {
   decision: Decision;
   now: ChainNow;
@@ -50,6 +52,13 @@ export interface DecisionCardProps {
   canAct: boolean;
   /** The nomination behind an invite, when there is one. */
   nomination: Nomination | null;
+  /**
+   * Whether the nominations are in: until then (or after a failed read) an
+   * invite without one is not called record-less. Default 'loaded'.
+   */
+  nominationsState?: NominationsState;
+  /** Read the nominations again (after a failed read). */
+  onRetryNominations?: () => void;
   /** Admin addresses → primary names, for the signers. */
   adminNames: Map<string, string | null>;
   /** The subject's MINTER standing, or null while unknown. */
@@ -68,6 +77,8 @@ export function DecisionCard(props: DecisionCardProps) {
     myPublicKey,
     canAct,
     nomination,
+    nominationsState = 'loaded',
+    onRetryNominations,
     adminNames,
     subjectFacts,
     selecting,
@@ -151,7 +162,13 @@ export function DecisionCard(props: DecisionCardProps) {
         ) : null}
       </Box>
 
-      <KindDetails decision={d} nomination={nomination} now={now} />
+      <KindDetails
+        decision={d}
+        nomination={nomination}
+        nominationsState={nominationsState}
+        onRetryNominations={onRetryNominations}
+        now={now}
+      />
 
       {d.creatorAddress ? (
         <Typography component="div" variant="body2" color="text.secondary">
@@ -266,16 +283,22 @@ function SubjectLine({
 function KindDetails({
   decision: d,
   nomination: n,
+  nominationsState,
+  onRetryNominations,
   now,
 }: {
   decision: Decision;
   nomination: Nomination | null;
+  nominationsState: NominationsState;
+  onRetryNominations?: () => void;
   now: ChainNow;
 }) {
   if (d.kind === 'invite')
     return (
       <InviteDetails
         nomination={n}
+        nominationsState={nominationsState}
+        onRetryNominations={onRetryNominations}
         now={now}
         // Whether they accepted only matters while it can still be approved.
         showAccepted={d.phase !== 'tooLate' && d.phase !== 'expired'}
@@ -312,10 +335,14 @@ function KindDetails({
 
 function InviteDetails({
   nomination: n,
+  nominationsState,
+  onRetryNominations,
   now,
   showAccepted,
 }: {
   nomination: Nomination | null;
+  nominationsState: NominationsState;
+  onRetryNominations?: () => void;
   now: ChainNow;
   showAccepted: boolean;
 }) {
@@ -388,6 +415,24 @@ function InviteDetails({
             </Box>
           ) : null}
         </>
+      ) : nominationsState === 'loading' ? (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Skeleton variant="text" width={160} aria-hidden />
+          <Typography variant="body2" color="text.secondary">
+            Looking up its nomination…
+          </Typography>
+        </Box>
+      ) : nominationsState === 'error' ? (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Couldn’t load the nomination behind this invite.
+          </Typography>
+          {onRetryNominations ? (
+            <Button size="small" onClick={onRetryNominations} sx={{ minHeight: 44 }}>
+              Retry
+            </Button>
+          ) : null}
+        </Box>
       ) : (
         <Typography variant="body2" color="text.secondary">
           Proposed directly on chain, without a nomination record.

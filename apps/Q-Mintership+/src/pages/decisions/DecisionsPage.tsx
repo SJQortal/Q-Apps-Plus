@@ -55,7 +55,7 @@ import { bulkSign } from '../../writes/flows';
 import { pendingWritesAtom, writeKeys, type PendingWrite } from '../../writes/optimistic';
 import type { Signer } from '../../writes/runner';
 import { BulkDialog } from './BulkDialog';
-import { DecisionCard, type SubjectFacts } from './DecisionCard';
+import { DecisionCard, type NominationsState, type SubjectFacts } from './DecisionCard';
 import { canSign, decisionCardId, isSignedByMe, myAnswer } from './decisionUi';
 import { FirstSignatureDialog } from './FirstSignatureDialog';
 import { HowSigningWorks } from './HowSigningWorks';
@@ -207,6 +207,14 @@ export default function DecisionsPage() {
       null
     );
   };
+
+  // Until the nominations are in, an invite is never called record-less.
+  const nominationsState: NominationsState = nominationsQ.data
+    ? 'loaded'
+    : nominationsQ.isError
+      ? 'error'
+      : 'loading';
+  const retryNominations = () => void nominationsQ.refetch();
 
   const pendingOf = (d: Decision): PendingWrite | null => {
     const entry = writes[writeKeys.sign(d.signature)];
@@ -409,6 +417,8 @@ export default function DecisionsPage() {
                     myPublicKey={myKey}
                     canAct={isAdmin}
                     nomination={nominationFor(d)}
+                    nominationsState={nominationsState}
+                    onRetryNominations={retryNominations}
                     adminNames={adminNames}
                     subjectFacts={factsFor(d.subject)}
                     selecting={selecting}
@@ -526,6 +536,8 @@ export default function DecisionsPage() {
                     myPublicKey={myKey}
                     canAct={isAdmin}
                     nomination={nominationFor(d)}
+                    nominationsState={nominationsState}
+                    onRetryNominations={retryNominations}
                     adminNames={adminNames}
                     subjectFacts={factsFor(d.subject)}
                     highlighted={highlight === d.signature}
