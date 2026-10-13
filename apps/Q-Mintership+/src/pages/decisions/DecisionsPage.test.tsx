@@ -345,6 +345,11 @@ describe('Decisions: bulk sign', () => {
     expect(within(items[1]).getByText('Cancelled in Hub. Stopped here.')).toBeVisible();
     expect(within(items[2]).getByText('Not sent.')).toBeVisible();
     expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(2);
+    // Screen readers: one live region, there from the start, with the last outcome and the summary.
+    const live = within(dialog).getByRole('status');
+    expect(live).toHaveTextContent(/^2\. .+: Cancelled in Hub\. Stopped here\./);
+    expect(live).toHaveTextContent(/1 of 3 sent\./);
+    expect(within(dialog).getByRole('button', { name: 'Done' })).toHaveFocus();
   });
 });
 

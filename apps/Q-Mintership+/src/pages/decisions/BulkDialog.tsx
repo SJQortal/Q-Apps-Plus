@@ -3,6 +3,10 @@
  * the intro says each one is its own Hub confirmation and what they cost in
  * total, then a progress list shows each outcome. A cancel in Hub stops the
  * run; the rest are not sent.
+ *
+ * Screen readers follow it through one live region that is there from the
+ * start: each item's outcome as it lands, the current item's stage, and the
+ * summary at the end. Focus then moves to Done.
  */
 import { useState, type ReactNode } from 'react';
 import { Alert, Box, Button, CircularProgress, Typography } from '@mui/material';
@@ -84,25 +88,36 @@ export function BulkDialog(props: BulkDialogProps) {
   const [phase, setPhase] = useState<'intro' | 'running' | 'done'>('intro');
   const [states, setStates] = useState<ItemState[]>([]);
   const [active, setActive] = useState(-1);
+  /** The item whose outcome came in last (for the live region). */
+  const [lastDone, setLastDone] = useState(-1);
   const dialog = HUB_DIALOGS[action];
+
+  // Each opening starts at the intro (a timer after closing could wipe a quick reopen's run).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open && phase !== 'running') {
+      setPhase('intro');
+      setStates([]);
+      setActive(-1);
+      setLastDone(-1);
+    }
+  }
 
   const close = () => {
     if (phase === 'running') return;
     onClose();
-    setTimeout(() => {
-      setPhase('intro');
-      setStates([]);
-      setActive(-1);
-    }, 300);
   };
 
   const start = async () => {
     setPhase('running');
     setStates(items.map(() => ({})));
+    setLastDone(-1);
     let outcomes: WriteOutcome[] = [];
     try {
       outcomes = await run((index, outcome, stage) => {
         setActive(index);
+        if (outcome) setLastDone(index);
         setStates((current) => {
           const next = [...current];
           next[index] = outcome ? { outcome } : { stage };
@@ -130,6 +145,19 @@ export function BulkDialog(props: BulkDialogProps) {
 
   const sent = states.filter((s) => s.outcome?.status === 'sent').length;
   const stopped = states.some((s) => s.outcome?.status === 'declined');
+  const summary = `${sent} of ${items.length} sent.${stopped ? ' You cancelled one in Hub, so the rest were not sent.' : ''}${sent ? ' Each counts once it is in a block.' : ''}`;
+
+  // Two parts, so a screen reader reads only the one that changed.
+  const doneOutcome = states[lastDone]?.outcome;
+  const outcomeLine =
+    doneOutcome && items[lastDone]
+      ? `${lastDone + 1}. ${items[lastDone].label}: ${outcomeText(doneOutcome)}`
+      : '';
+  const activeStage = active >= 0 && !states[active]?.outcome ? states[active]?.stage : undefined;
+  const stageLine =
+    phase === 'running' && activeStage && items[active]
+      ? `${active + 1}. ${items[active].label}: ${STAGE_TEXT[activeStage]}`
+      : '';
 
   const actions =
     phase === 'intro' ? (
@@ -140,7 +168,7 @@ export function BulkDialog(props: BulkDialogProps) {
         </Button>
       </>
     ) : phase === 'running' ? null : (
-      <Button variant="contained" onClick={close}>
+      <Button variant="contained" onClick={close} autoFocus>
         Done
       </Button>
     );
@@ -242,7 +270,6 @@ export function BulkDialog(props: BulkDialogProps) {
                 {line ? (
                   <Typography
                     variant="body2"
-                    role={isActive ? 'status' : undefined}
                     sx={{
                       color: isActive
                         ? 'primary.main'
@@ -261,13 +288,16 @@ export function BulkDialog(props: BulkDialogProps) {
         })}
       </Box>
 
-      {phase === 'done' ? (
-        <Alert severity={sent === items.length ? 'success' : 'info'} role="status">
-          {sent} of {items.length} sent.
-          {stopped ? ' You cancelled one in Hub, so the rest were not sent.' : ''}
-          {sent ? ' Each counts once it is in a block.' : ''}
-        </Alert>
-      ) : null}
+      {/* The live region: the last outcome, the current stage, then the summary. */}
+      <Box role="status" aria-live="polite">
+        <span className="qmp-visually-hidden">{outcomeLine}</span>
+        {stageLine ? <span className="qmp-visually-hidden"> {stageLine}</span> : null}
+        {phase === 'done' ? (
+          <Alert severity={sent === items.length ? 'success' : 'info'} role="note">
+            {summary}
+          </Alert>
+        ) : null}
+      </Box>
     </ResponsiveDialog>
   );
 }
