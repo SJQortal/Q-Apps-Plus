@@ -33,5 +33,7 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
     css: false,
+    // The page tests take about a second each; on a busy machine some passed 5 s.
+    testTimeout: 15_000,
   },
 });
