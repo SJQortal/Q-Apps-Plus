@@ -25,6 +25,7 @@ import type { PendingShare, PendingVote } from '../../state/adminPolls';
 import { usePendingPollWrites } from '../../state/adminPolls';
 import { formatCount, formatRelative } from '../../utils/format';
 import type { PollAuthor } from '../../writes/adminPolls';
+import { NeedsName } from './NeedsName';
 import {
   ADVISORY,
   CLOSING_TEXT,
@@ -82,6 +83,8 @@ export function AdminPollCard({
   const unlisted = view.votes.filter((v) => v.unlisted).length;
   // In the last minutes no vote is started: it could land after the end.
   const closing = voteClosing(view, now);
+  // Votes and shares are published under a name: without one, say so instead.
+  const nameless = !author.name;
 
   return (
     <Card
@@ -179,6 +182,12 @@ export function AdminPollCard({
           <Typography variant="body2" color="text.secondary" sx={{ flexBasis: '100%' }}>
             {CLOSING_TEXT}
           </Typography>
+        ) : nameless && (view.open || view.missing.length) && !view.publishing ? (
+          <NeedsName
+            address={author.address}
+            title="Voting and sharing need a registered name"
+            text="Votes and shared copies are published on QDN under a name, so the Minter Admins can see whose they are."
+          />
         ) : view.open && !view.publishing ? (
           <VoteButtons
             question={poll.question}
@@ -194,7 +203,7 @@ export function AdminPollCard({
         ) : null}
       </Box>
 
-      {view.missing.length && !view.publishing ? (
+      {view.missing.length && !view.publishing && !nameless ? (
         <Box>
           {sharing ? (
             <DoneChip label="Shared ✓ (confirming…)" settled={false} />

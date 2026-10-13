@@ -319,6 +319,23 @@ describe('voting', () => {
   });
 });
 
+describe('an admin without a registered name', () => {
+  it('is told voting and sharing need one, with where to get it, before any Hub step', async () => {
+    await openDecisions('admin', (world) => {
+      withAdminPolls('admin')(world);
+      world.accounts.get(world.admins[0]).name = null;
+    });
+    const card = await pollCard(OPEN_Q);
+    const note = within(card).getByRole('note', {
+      name: 'Voting and sharing need a registered name',
+    });
+    expect(note).toBeVisible();
+    expect(within(note).getByRole('button', { name: 'Register a name' })).toBeVisible();
+    expect(within(card).queryByRole('button', { name: /^Vote / })).toBeNull();
+    expect(within(card).queryByRole('button', { name: /^Share with/ })).toBeNull();
+  });
+});
+
 describe('sharing with Minter Admins added since', () => {
   it('names who can’t read it yet, then publishes a copy encrypted to every admin', async () => {
     const u = user();

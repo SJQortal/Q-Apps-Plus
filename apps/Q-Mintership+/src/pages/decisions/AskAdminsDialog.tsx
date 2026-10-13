@@ -8,10 +8,8 @@
  */
 import { useId, useRef, useState } from 'react';
 import { Alert, Box, Button, TextField, Typography } from '@mui/material';
-import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import { HubStepDialog } from '../../components/common/HubStepDialog';
 import { ResponsiveDialog } from '../../components/common/ResponsiveDialog';
-import { NAMES_APP_LINK } from '../../components/ready/readyChecks';
 import {
   DETAILS_MAX,
   DURATION_DEFAULT_DAYS,
@@ -23,12 +21,10 @@ import {
   normaliseQuestion,
   pollEnd,
 } from '../../data/adminPollRecords';
-import { invalidate } from '../../data/query';
 import { useChainNow } from '../../hooks/useData';
-import { signIn } from '../../state/session';
 import { formatCount, formatDateTime, plural } from '../../utils/format';
-import { openQortalLink } from '../../utils/links';
 import { publishAdminPoll, type PollAuthor } from '../../writes/adminPolls';
+import { NeedsName } from './NeedsName';
 import { ADVISORY, encryptedCheck, encryptedTo } from './adminPollUi';
 
 const DAYS = Array.from(
@@ -118,7 +114,11 @@ export default function AskAdminsDialog({
           {ADVISORY}
         </Alert>
         {!hasName ? (
-          <NeedsName address={author.address} />
+          <NeedsName
+            address={author.address}
+            title="Asking needs a registered name"
+            text="A poll is published on QDN under a name, so the Minter Admins can see who asked."
+          />
         ) : (
           <>
             <TextField
@@ -243,47 +243,5 @@ export default function AskAdminsDialog({
         }}
       />
     </>
-  );
-}
-
-/** Asking publishes under a registered name: what that is, and where to get one. */
-function NeedsName({ address }: { address: string }) {
-  return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 1,
-        p: 1.5,
-        border: 1,
-        borderColor: 'divider',
-        borderRadius: 1,
-      }}
-    >
-      <Typography sx={{ fontWeight: 700 }}>Asking needs a registered name</Typography>
-      <Typography variant="body2" color="text.secondary">
-        A poll is published on QDN under a name, so the Minter Admins can see who asked. A name is a
-        short public name for your Qortal account; you register it once, in the Names app.
-      </Typography>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-        <Button
-          variant="outlined"
-          endIcon={<OpenInNewOutlinedIcon />}
-          onClick={() => void openQortalLink(NAMES_APP_LINK)}
-          sx={{ minHeight: 44 }}
-        >
-          Register a name
-        </Button>
-        <Button
-          onClick={() => {
-            invalidate(`name:${address}`);
-            void signIn();
-          }}
-          sx={{ minHeight: 44 }}
-        >
-          I’ve registered one
-        </Button>
-      </Box>
-    </Box>
   );
 }
