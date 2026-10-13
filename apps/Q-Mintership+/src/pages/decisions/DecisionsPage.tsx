@@ -77,6 +77,11 @@ const PENDING_MAX_AGE_MS = 15 * 60_000;
 const TARGET_KEY = `${STORAGE_PREFIX}decisions-last-target`;
 const STALE_SECTION_ID = 'stale-invites';
 
+/** A page section by its Section id, to return focus to. */
+function sectionOf(id: string): HTMLElement | null {
+  return document.getElementById(`${id}-title`)?.closest('section') ?? null;
+}
+
 const spin = keyframes`
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -599,6 +604,7 @@ export default function DecisionsPage() {
             msPerBlock: data.now.msPerBlock,
           }}
           onClose={() => setFirstTarget(null)}
+          returnFocus={() => sectionOf('waiting') ?? sectionOf('collecting')}
         />
       ) : null}
       {data ? (
@@ -641,6 +647,8 @@ export default function DecisionsPage() {
             : Promise.resolve([])
         }
         onFinished={stopSelecting}
+        // The "Sign several" bar that opened it is gone once the run is over.
+        returnFocus={() => sectionOf('collecting')}
       />
     </>
   );

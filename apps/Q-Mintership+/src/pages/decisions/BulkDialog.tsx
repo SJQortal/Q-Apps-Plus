@@ -37,6 +37,8 @@ export interface BulkDialogProps {
   confirmLabel: string;
   /** Called once the run is over (to clear a selection). */
   onFinished?: (outcomes: WriteOutcome[]) => void;
+  /** Where focus goes on close when the button that opened it is gone. */
+  returnFocus?: () => HTMLElement | null;
 }
 
 const STAGE_TEXT: Record<WriteStage, string> = {
@@ -66,8 +68,19 @@ function outcomeText(outcome: WriteOutcome): string {
 }
 
 export function BulkDialog(props: BulkDialogProps) {
-  const { open, onClose, title, intro, action, feeTxType, items, run, confirmLabel, onFinished } =
-    props;
+  const {
+    open,
+    onClose,
+    title,
+    intro,
+    action,
+    feeTxType,
+    items,
+    run,
+    confirmLabel,
+    onFinished,
+    returnFocus,
+  } = props;
   const [phase, setPhase] = useState<'intro' | 'running' | 'done'>('intro');
   const [states, setStates] = useState<ItemState[]>([]);
   const [active, setActive] = useState(-1);
@@ -138,6 +151,7 @@ export function BulkDialog(props: BulkDialogProps) {
       onClose={phase === 'running' ? undefined : close}
       title={title}
       actions={actions}
+      returnFocus={returnFocus}
     >
       {phase === 'intro' ? (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>

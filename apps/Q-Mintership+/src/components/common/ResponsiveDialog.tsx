@@ -3,8 +3,12 @@
  * wider layouts, full screen under 600 px (sized to Hub's frame, not 100vh),
  * 44 px actions, a labelled title and a close button on phones.
  * Adapted from Q-Mail+.
+ *
+ * Focus comes back when it closes, even when the button that opened it is
+ * gone (Sign turns into "Signed ✓", Accept into "Sending…"): then to the
+ * card or section that held it, or to `returnFocus()`, never to <body>.
  */
-import { useId, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import {
   Dialog,
   DialogActions,
@@ -28,6 +32,17 @@ export interface ResponsiveDialogProps {
   /** Full screen on every layout. */
   fullScreen?: boolean;
   describedBy?: string;
+  /** Where focus goes on close when the opener and its card are gone. */
+  returnFocus?: () => HTMLElement | null;
+}
+
+/** The containers a dialog's opener sits in that usually outlive it. */
+const ANCHOR = 'article, [role="article"], li, section, [role="region"], main';
+
+function focusBack(target: HTMLElement): void {
+  if (!target.hasAttribute('tabindex') && target.tabIndex < 0)
+    target.setAttribute('tabindex', '-1');
+  target.focus({ preventScroll: false });
 }
 
 export function ResponsiveDialog({
@@ -39,12 +54,51 @@ export function ResponsiveDialog({
   maxWidth = 'sm',
   fullScreen = false,
   describedBy,
+  returnFocus,
 }: ResponsiveDialogProps) {
   const phone = usePhoneLayout() || fullScreen;
   const compactTitle = useLandscapeFrame() && phone;
   const id = useId();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const opener = useRef<{ element: HTMLElement | null; anchor: HTMLElement | null }>({
+    element: null,
+    anchor: null,
+  });
+
+  // Before the focus trap moves focus in (layout effects run first): who opened it.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const active = document.activeElement;
+    const element = active instanceof HTMLElement && active !== document.body ? active : null;
+    opener.current = { element, anchor: element?.closest<HTMLElement>(ANCHOR) ?? null };
+  }, [open]);
+
+  const restoreFocus = () => {
+    const active = document.activeElement;
+    // Another dialog or field already has focus: leave it there.
+    if (
+      active instanceof HTMLElement &&
+      active !== document.body &&
+      active.isConnected &&
+      !rootRef.current?.contains(active)
+    )
+      return;
+    const { element, anchor } = opener.current;
+    opener.current = { element: null, anchor: null };
+    if (element?.isConnected) {
+      element.focus({ preventScroll: true });
+      return;
+    }
+    const target =
+      returnFocus?.() ??
+      (anchor?.isConnected ? anchor : null) ??
+      document.querySelector<HTMLElement>('main');
+    if (target) focusBack(target);
+  };
+
   return (
     <Dialog
+      ref={rootRef}
       open={open}
       onClose={onClose ? () => onClose() : undefined}
       fullScreen={phone}
@@ -52,7 +106,10 @@ export function ResponsiveDialog({
       maxWidth={maxWidth}
       aria-labelledby={title ? id : undefined}
       aria-describedby={describedBy}
+      // MUI would focus the opener even when it is gone (focus then falls to <body>).
+      disableRestoreFocus
       slotProps={{
+        transition: { onExited: restoreFocus },
         paper: {
           sx: {
             display: 'flex',

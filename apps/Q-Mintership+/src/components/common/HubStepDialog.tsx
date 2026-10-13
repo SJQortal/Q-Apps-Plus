@@ -58,6 +58,8 @@ export interface HubStepDialogProps {
    * in place of "Not now", and after a cancel in Hub, a stop or a failure.
    */
   onBack?: () => void;
+  /** Where focus goes on close when the button that opened it is gone (ResponsiveDialog). */
+  returnFocus?: () => HTMLElement | null;
 }
 
 type Phase = 'intro' | 'running' | 'done';
@@ -82,6 +84,7 @@ export function HubStepDialog(props: HubStepDialogProps) {
     confirmLabel = 'Continue to Hub',
     onSuccess,
     onBack,
+    returnFocus,
   } = props;
   const [phase, setPhase] = useState<Phase>('intro');
   const [active, setActive] = useState<{ step: number; stage: WriteStage }>({
@@ -177,6 +180,7 @@ export function HubStepDialog(props: HubStepDialogProps) {
       onClose={phase === 'running' ? undefined : close}
       title={title}
       actions={actions}
+      returnFocus={returnFocus}
     >
       {phase === 'intro' && intro ? <Box sx={{ typography: 'body1' }}>{intro}</Box> : null}
 

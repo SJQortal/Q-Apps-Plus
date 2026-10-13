@@ -41,11 +41,14 @@ export function FirstSignatureDialog({
   signer,
   facts,
   onClose,
+  returnFocus,
 }: {
   nomination: Nomination | null;
   signer: Signer | null;
   facts: FirstSignatureFacts;
   onClose: () => void;
+  /** Where focus goes on close once the nomination's card has left its list. */
+  returnFocus?: () => HTMLElement | null;
 }) {
   const nominee = useDisplayName(n?.nominee ?? '', n ? n.nomineeName : null);
   const [partial, setPartial] = useState<FirstSignatureOutcome | null>(null);
@@ -56,6 +59,7 @@ export function FirstSignatureDialog({
   return (
     <HubStepDialog
       open={Boolean(n && signer)}
+      returnFocus={returnFocus}
       onClose={() => {
         onClose();
         setPartial(null);

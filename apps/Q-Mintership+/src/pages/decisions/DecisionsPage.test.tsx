@@ -177,6 +177,33 @@ describe('Decisions: other transactions waiting for Minter Admins', () => {
   });
 });
 
+describe('Decisions: focus after a dialog', () => {
+  it('returns to the decision card when its Sign button was replaced meanwhile', async () => {
+    const u = user();
+    await openPage('admin');
+    const signing = card(/bob\+builder/);
+    await u.click(within(signing).getByRole('button', { name: /^Sign: / }));
+    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    // The mock world declines it in Hub; meanwhile the card's Sign button was swapped.
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(dialog).findByText('Cancelled in Hub. Nothing was sent.', {}, T)
+    ).toBeVisible();
+    await u.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(card(/bob\+builder/)).toHaveFocus(), T);
+  }, 20_000);
+
+  it('returns to the button that opened it when it is still there', async () => {
+    const u = user();
+    await openPage('admin');
+    const button = within(card(/bob\+builder/)).getByRole('button', { name: /^Sign: / });
+    await u.click(button);
+    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    await u.click(within(dialog).getByRole('button', { name: 'Not now' }));
+    await waitFor(() => expect(button).toHaveFocus(), T);
+  });
+});
+
 describe('Decisions: signing', () => {
   it('explains the Hub dialog, then signs the pending signature, then shows confirming', async () => {
     const u = user();
