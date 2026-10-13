@@ -43,6 +43,10 @@ describe('A nomination’s own page', () => {
 
     const rounds = await screen.findByRole('region', { name: 'Rounds' }, T);
     const list = await within(rounds).findByRole('list', { name: 'Rounds, newest first' }, T);
+    // The three ways a round ends, as the list below can show them.
+    expect(rounds).toHaveTextContent(
+      'ends when enough of them sign, as many reject it, or the time runs out.'
+    );
     const items = within(list).getAllByRole('listitem');
     expect(items).toHaveLength(1);
     expect(within(items[0]).getByText('Round 1')).toBeInTheDocument();
