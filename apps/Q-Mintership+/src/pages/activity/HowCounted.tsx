@@ -5,6 +5,7 @@
  */
 import { Box, Typography } from '@mui/material';
 import ExpandMoreOutlinedIcon from '@mui/icons-material/ExpandMoreOutlined';
+import { CHEVRON_TURN } from '../../components/common/ExpandChevron';
 import type { ActivityData } from '../../data/activity';
 import { formatCount } from '../../utils/format';
 import { blockTimeWords } from './format';
@@ -32,7 +33,8 @@ export function HowCounted({ data }: { data: ActivityData | undefined }) {
           '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}` },
           '&:hover': { bgcolor: 'action.hover' },
         },
-        '& > summary svg': { ml: 'auto', transition: 'transform 160ms ease' },
+        // Turns like the Show / Hide chevrons (ExpandChevron).
+        '& > summary svg': { ml: 'auto', transition: CHEVRON_TURN },
         '&[open] > summary svg': { transform: 'rotate(180deg)' },
       })}
     >

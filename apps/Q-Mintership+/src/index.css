@@ -104,6 +104,15 @@ html[data-motion='reduce'] {
   scale: var(--qmp-press-icon);
 }
 
+/* Motion's timing, set once (docs/DESIGN.md → Motion: 150–200 ms): what
+   appears, a chevron that turns, the navigation's highlight. Opacity alone
+   eases out; what moves, grows or turns starts quickly and settles. */
+:root {
+  --qmp-motion-enter: 200ms;
+  --qmp-ease-fade: ease-out;
+  --qmp-ease-enter: cubic-bezier(0.2, 0, 0, 1);
+}
+
 /* Content arriving (docs/DESIGN.md → Motion). An animation runs when its
    element is inserted, never when React re-renders it, so a refresh that
    keeps what is on screen stays still and only what is new moves: a page as
@@ -132,16 +141,16 @@ html[data-motion='reduce'] {
 /* One element as it appears: an empty state, an error. */
 :where(.qmp-fade) {
   animation-name: qmp-fade-in;
-  animation-duration: 200ms;
-  animation-timing-function: ease-out;
+  animation-duration: var(--qmp-motion-enter);
+  animation-timing-function: var(--qmp-ease-fade);
   animation-fill-mode: backwards;
 }
 
 /* A loading placeholder that waits a moment, so a quick load never flashes it. */
 :where(.qmp-fade-late) {
   animation-name: qmp-fade-in;
-  animation-duration: 200ms;
-  animation-timing-function: ease-out;
+  animation-duration: var(--qmp-motion-enter);
+  animation-timing-function: var(--qmp-ease-fade);
   animation-delay: 150ms;
   animation-fill-mode: backwards;
 }
@@ -149,8 +158,8 @@ html[data-motion='reduce'] {
 /* A small thing that just turned up: a tick, an answer's chip. */
 :where(.qmp-pop) {
   animation-name: qmp-pop-in;
-  animation-duration: 180ms;
-  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  animation-duration: var(--qmp-motion-enter);
+  animation-timing-function: var(--qmp-ease-enter);
   animation-fill-mode: backwards;
 }
 
@@ -170,8 +179,8 @@ html[data-motion='reduce'] {
 }
 :where(.MuiDialog-paper) {
   animation-name: qmp-dialog-in;
-  animation-duration: 225ms;
-  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  animation-duration: var(--qmp-motion-enter);
+  animation-timing-function: var(--qmp-ease-enter);
   animation-fill-mode: backwards;
 }
 :where(.MuiDialog-paperFullScreen) {
@@ -181,8 +190,8 @@ html[data-motion='reduce'] {
 /* A page's blocks (PageBody): a fade and a 4 px rise. */
 :where(.qmp-reveal) > * {
   animation-name: qmp-rise-in;
-  animation-duration: 240ms;
-  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  animation-duration: var(--qmp-motion-enter);
+  animation-timing-function: var(--qmp-ease-enter);
   animation-fill-mode: backwards;
 }
 
@@ -195,11 +204,11 @@ html[data-motion='reduce'] {
    filtered or moved up stays still. */
 :where(.qmp-reveal-fade > :not([data-qmp-shown]):nth-child(-n + 8)),
 :where(
-    .qmp-reveal-fade > ul:not([data-qmp-rows-shown]) > li:nth-child(-n + 6):not([data-qmp-shown])
-  ) {
+  .qmp-reveal-fade > ul:not([data-qmp-rows-shown]) > li:nth-child(-n + 6):not([data-qmp-shown])
+) {
   animation-name: qmp-fade-in;
-  animation-duration: 200ms;
-  animation-timing-function: ease-out;
+  animation-duration: var(--qmp-motion-enter);
+  animation-timing-function: var(--qmp-ease-fade);
   animation-fill-mode: backwards;
 }
 :where(.qmp-reveal-fade > ul > li:nth-child(2)) {

@@ -69,7 +69,8 @@ const Pill = styled('span', {
     backgroundColor: primarySoft(theme),
     opacity: $active ? 1 : 0,
     scale: $active ? '1' : '0.5 1',
-    transition: 'opacity 200ms ease-out, scale 240ms cubic-bezier(0.2, 0, 0, 1)',
+    transition:
+      'opacity var(--qmp-motion-enter) var(--qmp-ease-fade), scale var(--qmp-motion-enter) var(--qmp-ease-enter)',
   },
 }));
 

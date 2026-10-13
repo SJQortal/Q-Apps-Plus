@@ -38,7 +38,10 @@ describe('the selected item’s highlight', () => {
     expect(current).toHaveAttribute('aria-current', 'page');
     expect(layer(rulesFor(current))).toMatch(/opacity:1;scale:1;/);
     expect(layer(rulesFor(other))).toMatch(/opacity:0;scale:0\.92;/);
-    expect(layer(rulesFor(other))).toMatch(/transition:opacity 200ms ease-out,scale 240ms/);
+    // The app's timing (index.css → --qmp-motion-enter).
+    expect(layer(rulesFor(other))).toMatch(
+      /transition:opacity var\(--qmp-motion-enter\) var\(--qmp-ease-fade\),scale var\(--qmp-motion-enter\) var\(--qmp-ease-enter\);/
+    );
   });
 
   it('in the bottom bar: the pill grows from the middle, the size it was', () => {

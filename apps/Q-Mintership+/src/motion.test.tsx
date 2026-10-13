@@ -108,11 +108,19 @@ describe('reduced motion', () => {
   });
 });
 
+/** A value as the browser uses it: jsdom leaves `var(--x)` unresolved. */
+function resolved(value: string): string {
+  const token = /^var\((--[\w-]+)\)$/.exec(value.trim());
+  return token
+    ? getComputedStyle(document.documentElement).getPropertyValue(token[1]).trim()
+    : value;
+}
+
 function animation(el: Element) {
   const s = getComputedStyle(el);
   return {
     name: s.getPropertyValue('animation-name'),
-    duration: s.getPropertyValue('animation-duration'),
+    duration: resolved(s.getPropertyValue('animation-duration')),
     delay: s.getPropertyValue('animation-delay'),
   };
 }
@@ -152,7 +160,7 @@ describe('content arriving', () => {
     page();
     expect(animation(screen.getByText('A block'))).toMatchObject({
       name: 'qmp-rise-in',
-      duration: '240ms',
+      duration: '200ms',
     });
     expect(animation(screen.getByRole('list', { name: 'Rows' }))).toMatchObject({
       name: 'qmp-fade-in',
@@ -290,6 +298,28 @@ describe('content arriving', () => {
     expect(animation(screen.getByText('A block')).duration).toBe('0.01ms');
   });
 
+  it('times every entrance from one place, inside the 150–200 ms of docs/DESIGN.md', () => {
+    // Every rule that times an animation, except Reduce's, which cuts them.
+    const rules = [...(sheet.sheet?.cssRules ?? [])].filter(
+      (r): r is CSSStyleRule =>
+        r instanceof CSSStyleRule &&
+        r.style.getPropertyValue('animation-duration') !== '' &&
+        !r.selectorText.startsWith("html[data-motion='reduce']")
+    );
+    expect(rules.length).toBeGreaterThanOrEqual(6);
+    for (const rule of rules) {
+      expect(rule.style.getPropertyValue('animation-duration')).toBe('var(--qmp-motion-enter)');
+      expect(rule.style.getPropertyValue('animation-timing-function')).toMatch(
+        /^var\(--qmp-ease-(fade|enter)\)$/
+      );
+    }
+    const root = getComputedStyle(document.documentElement);
+    expect(root.getPropertyValue('--qmp-motion-enter').trim()).toBe('200ms');
+    expect(root.getPropertyValue('--qmp-ease-enter').replace(/\s/g, '')).toBe(
+      'cubic-bezier(0.2,0,0,1)'
+    );
+  });
+
   it('animates only opacity, translate and scale, so nothing shifts the layout', () => {
     const keyframes = [...(sheet.sheet?.cssRules ?? [])].filter(
       (r): r is CSSKeyframesRule => 'name' in r && String(r.name).startsWith('qmp-')
@@ -359,7 +389,7 @@ describe('small things that turn up', () => {
     expect(animation(button.querySelector('svg') as Element).name).toBe('none');
     await userEvent.click(button);
     const tick = await screen.findByTestId('CheckOutlinedIcon');
-    expect(animation(tick)).toMatchObject({ name: 'qmp-pop-in', duration: '180ms' });
+    expect(animation(tick)).toMatchObject({ name: 'qmp-pop-in', duration: '200ms' });
     document.documentElement.setAttribute('data-motion', 'reduce');
     expect(animation(tick).duration).toBe('0.01ms');
   });
@@ -409,7 +439,7 @@ describe('dialogs', () => {
       </ResponsiveDialog>
     );
     const paper = (await screen.findByRole('dialog', { name: 'Sign' })) as Element;
-    expect(animation(paper)).toMatchObject({ name: 'qmp-dialog-in', duration: '225ms' });
+    expect(animation(paper)).toMatchObject({ name: 'qmp-dialog-in', duration: '200ms' });
   });
 
   it('rise a little further where they fill the screen (phones)', async () => {
