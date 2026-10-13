@@ -1,19 +1,21 @@
 /**
  * Former members (and accounts removed before they ever joined): when it
  * happened, who proposed it and why, that the level stays, and what it
- * takes to come back: a new nomination, or for a ban, the Minter Admins
+ * takes to come back. After a kick or leaving: a new nomination, which
+ * nominators often start themselves, and they can show they're ready to
+ * mint again (MINTER's join request). After a ban: the Minter Admins
  * lifting it first.
  */
-import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Button } from '@mui/material';
-import PersonSearchOutlinedIcon from '@mui/icons-material/PersonSearchOutlined';
 import { NOMINATOR_MIN_LEVEL } from '../../../data/constants';
 import { personPath } from '../../../routes/paths';
 import type { MyStatus } from '../../../rules/status';
 import { formatCount, formatDate, formatDateTime, formatRelative } from '../../../utils/format';
-import { FindNominatorDialog } from '../HelpDialogs';
 import { Hero, HeroText, Num, PersonLink } from '../Hero';
+import { ReadyButton, ReadyDialog, ReadyDone, ReadyNext, ReadyUnknown, ShareButton } from './ready';
+import { useReadyToMint, type ReadyToMint } from './useReadyToMint';
 
 function When({ at }: { at: number }) {
   return (
@@ -38,15 +40,51 @@ function Reason({ reason }: { reason?: string }) {
   return <HeroText muted>Reason given: &ldquo;{reason.trim()}&rdquo;</HeroText>;
 }
 
-const nominateAgain = (
-  <HeroText>
-    A new nomination is possible: a MINTER member at level {NOMINATOR_MIN_LEVEL} or above, or a
-    Minter Admin, can nominate you, and you accept as before.
-  </HeroText>
-);
+/** The way back after a kick or leaving: a new nomination, and showing they're ready. */
+function ComeBack({ ready }: { ready: ReadyToMint }) {
+  if (ready.ready) {
+    return (
+      <>
+        <ReadyDone ready={ready} />
+        <HeroText muted>
+          {ready.confirming
+            ? 'Your join request is on its way into a block. Then nominators and Minter Admins can see that you’d like to mint again.'
+            : 'Your join request is open, so nominators and Minter Admins can see that you’d like to mint again.'}{' '}
+          It can&rsquo;t be withdrawn: it stays open until you&rsquo;re approved, or Minter Admins
+          remove it.
+        </HeroText>
+        <ReadyUnknown ready={ready} />
+      </>
+    );
+  }
+  return (
+    <>
+      <HeroText>
+        A new nomination is possible. Nominators, minters at level {NOMINATOR_MIN_LEVEL} or above,
+        look for people who&rsquo;d make good minters, and often reach out first. You can also show
+        you&rsquo;re ready to mint: then an approved nomination makes you a member at once.
+      </HeroText>
+      <ReadyUnknown ready={ready} />
+    </>
+  );
+}
+
+/** Show you're ready (until it's done), share the name or address, and the history. */
+function comeBackActions(ready: ReadyToMint, status: MyStatus, historyLink: ReactNode) {
+  return (
+    <>
+      {ready.ready ? null : <ReadyButton ready={ready} />}
+      <ShareButton status={status} />
+      {historyLink}
+    </>
+  );
+}
+
+const NOMINATED_NEXT =
+  'When someone nominates you, this page shows who did, and how the signing goes.';
 
 export function FormerHero({ status, needed }: { status: MyStatus; needed: number | null }) {
-  const [helpOpen, setHelpOpen] = useState(false);
+  const ready = useReadyToMint(status);
   const name = status.name;
   const removal = status.removal;
   const historyLink = (
@@ -108,25 +146,28 @@ export function FormerHero({ status, needed }: { status: MyStatus; needed: numbe
 
   if (status.kind === 'formerLeft') {
     return (
-      <Hero
-        eyebrow="Former member"
-        title={name ? `${name}, you left MINTER` : 'You left MINTER'}
-        actions={historyLink}
-        next="If someone nominates you, this page shows it with an Accept button."
-      >
-        <HeroText>
-          You left MINTER
-          {removal ? (
-            <>
-              {' '}
-              <When at={removal.at} />
-            </>
-          ) : null}
-          .
-        </HeroText>
-        <LevelKept status={status} />
-        {nominateAgain}
-      </Hero>
+      <>
+        <Hero
+          eyebrow="Former member"
+          title={name ? `${name}, you left MINTER` : 'You left MINTER'}
+          actions={comeBackActions(ready, status, historyLink)}
+          next={ready.ready ? <ReadyNext needed={needed} /> : NOMINATED_NEXT}
+        >
+          <HeroText>
+            You left MINTER
+            {removal ? (
+              <>
+                {' '}
+                <When at={removal.at} />
+              </>
+            ) : null}
+            .
+          </HeroText>
+          <LevelKept status={status} />
+          <ComeBack ready={ready} />
+        </Hero>
+        <ReadyDialog ready={ready} needed={needed} />
+      </>
     );
   }
 
@@ -144,19 +185,8 @@ export function FormerHero({ status, needed }: { status: MyStatus; needed: numbe
       <Hero
         eyebrow={status.wasMember ? 'Former member' : 'Not in MINTER'}
         title={title}
-        actions={
-          <>
-            <Button
-              variant="contained"
-              startIcon={<PersonSearchOutlinedIcon />}
-              onClick={() => setHelpOpen(true)}
-            >
-              See how to be nominated again
-            </Button>
-            {historyLink}
-          </>
-        }
-        next="If someone nominates you, this page shows it with an Accept button."
+        actions={comeBackActions(ready, status, historyLink)}
+        next={ready.ready ? <ReadyNext needed={needed} /> : NOMINATED_NEXT}
       >
         {removal ? (
           <HeroText>
@@ -188,15 +218,9 @@ export function FormerHero({ status, needed }: { status: MyStatus; needed: numbe
         ) : null}
         <Reason reason={removal?.reason} />
         <LevelKept status={status} />
-        {nominateAgain}
+        <ComeBack ready={ready} />
       </Hero>
-      <FindNominatorDialog
-        open={helpOpen}
-        onClose={() => setHelpOpen(false)}
-        address={status.address}
-        name={name}
-        again
-      />
+      <ReadyDialog ready={ready} needed={needed} />
     </>
   );
 }
