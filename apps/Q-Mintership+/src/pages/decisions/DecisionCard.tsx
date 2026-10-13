@@ -324,7 +324,7 @@ export function DecisionCard(props: DecisionCardProps) {
               answer counts.
             </Typography>
           ) : null}
-          {view.failed && (signable || withdrawable) ? (
+          {view.failed && (signable || rejectable || withdrawable) ? (
             <Typography variant="body2" sx={{ flexBasis: '100%' }}>
               Your last try hasn’t shown up yet. Wait a minute before trying again.
             </Typography>

@@ -2,9 +2,8 @@
  * Someone nominated this account: who (and who supports it), where it
  * stands (waiting for a first Minter Admin, or k of n with the time left
  * to sign, any rejections, and how many Minter Admins are considering it),
- * and Accept, which sends the join request so
- * approval makes the nominee a member at once. Once accepted: "You've
- * accepted ✓".
+ * and Accept, which sends the join request so approval makes the nominee a
+ * member at once. Once accepted: "You've accepted ✓".
  */
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';

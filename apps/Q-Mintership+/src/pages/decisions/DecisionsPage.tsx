@@ -388,7 +388,7 @@ export default function DecisionsPage() {
                   Each needs {plural(needed, 'signature')}:{' '}
                   {describeThreshold(data.group.approvalThreshold)}, counting all {totalAdmins}{' '}
                   admin seats. Sign the ones you agree with. Reject the ones you don’t, or let them
-                  expire: as many rejections end one as rejected.
+                  expire: {plural(needed, 'rejection')} end one as rejected.
                 </Typography>
               </Card>
             ) : (
