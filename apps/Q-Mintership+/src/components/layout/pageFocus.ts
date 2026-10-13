@@ -16,3 +16,14 @@ export function isFirstPage(): boolean {
 export function resetPageFocus(): void {
   pageShown = false;
 }
+
+/**
+ * Focus the page's title (PageHeader's h1, which takes focus without a tab
+ * stop or an outline), for a control that goes away as it is pressed ("Mark
+ * as seen", "Got it"): the next Tab goes on from the page, not from the top.
+ */
+export function focusPageTitle(): void {
+  (
+    document.querySelector<HTMLElement>('main h1') ?? document.querySelector<HTMLElement>('h1')
+  )?.focus();
+}

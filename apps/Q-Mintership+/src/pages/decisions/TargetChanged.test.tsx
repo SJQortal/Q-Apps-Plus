@@ -76,12 +76,15 @@ describe('Decisions: the target changed since the last visit', () => {
     expect(readSeenTarget()).toMatchObject({ adminCount: 21, needed: 9 });
   });
 
-  it('goes away with Got it', async () => {
+  it('goes away with Got it, and keeps focus on the page', async () => {
     const u = user();
     await openShifted({ seen: 'before' });
     await findBanner('The target changed from 10 to 9 signatures');
     await u.click(screen.getByRole('button', { name: 'Got it' }));
     expect(screen.queryByText('The target changed from 10 to 9 signatures')).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole('heading', { level: 1, name: 'Decisions' })
+    );
   });
 
   it('says nothing on the first visit', async () => {

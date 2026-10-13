@@ -36,6 +36,7 @@ import { useSession } from '../../state/session';
 import { sinceLastVisitAtom } from '../../state/notifications';
 import { formatBlock, formatRelative, plural } from '../../utils/format';
 import { PersonLink } from './Hero';
+import { focusPageTitle } from '../../components/layout/pageFocus';
 
 /** Decided rows before "And N more". */
 const TOP = 3;
@@ -391,10 +392,6 @@ export function SinceLastVisit({ status, welcome }: { status: MyStatus; welcome:
   if (!on || !since.visible) return null;
 
   const { joined, admin, nominee } = since.changes;
-  const focusTitle = () =>
-    (
-      document.querySelector<HTMLElement>('main h1') ?? document.querySelector<HTMLElement>('h1')
-    )?.focus();
 
   return (
     <Box sx={{ animation: reduced ? 'none' : `${appear} 200ms ease-out both` }}>
@@ -406,7 +403,7 @@ export function SinceLastVisit({ status, welcome }: { status: MyStatus; welcome:
             onClick={() => {
               since.markSeen();
               // The panel goes away with the button: keep focus on the page.
-              focusTitle();
+              focusPageTitle();
             }}
             sx={{ minHeight: 44 }}
           >

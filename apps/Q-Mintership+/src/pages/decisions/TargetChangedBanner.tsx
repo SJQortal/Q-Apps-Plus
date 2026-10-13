@@ -10,6 +10,7 @@ import { Fragment, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Alert, Box, Button, Link, Typography } from '@mui/material';
 import { PersonInline } from '../../components/common/Person';
+import { focusPageTitle } from '../../components/layout/pageFocus';
 import { formatQort } from '../../data/accounts';
 import type { ChainNow } from '../../data/chain';
 import { adminChangesKey, loadAdminChangesBetween } from '../../data/targetChanges';
@@ -165,7 +166,14 @@ export function TargetChangedBanner({
           )}
         </Typography>
       ) : null}
-      <Button onClick={onDismiss} sx={{ mt: 1, minHeight: 44, ml: -1 }}>
+      <Button
+        onClick={() => {
+          onDismiss();
+          // The banner goes away with the button: keep focus on the page.
+          focusPageTitle();
+        }}
+        sx={{ mt: 1, minHeight: 44, ml: -1 }}
+      >
         Got it
       </Button>
     </Alert>
