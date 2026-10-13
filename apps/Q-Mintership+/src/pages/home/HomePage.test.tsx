@@ -220,6 +220,9 @@ describe('Home: not in MINTER yet', () => {
       'href',
       '/nominations'
     );
+    // "Show you're ready to mint" replaced "Find a nominator": nothing offers it any more.
+    expect(screen.queryByText(/find a nominator/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /nominator/i })).toBeNull();
     mockQortalRequest('OPEN_NEW_TAB', true);
     await userEvent.click(within(hero).getByRole('button', { name: /Register a name/ }));
     expect(qortalCallsFor('OPEN_NEW_TAB')[0]).toMatchObject({ qortalLink: 'qortal://APP/Names' });
@@ -442,6 +445,8 @@ describe('Home: former members', () => {
     expect(hero).toHaveTextContent(/often reach out first/);
     expect(within(hero).getByRole('button', { name: 'Copy your name' })).toBeInTheDocument();
     expect(within(hero).getByRole('link', { name: 'See your MINTER history' })).toBeInTheDocument();
+    // Former members are offered "Show you're ready to mint", not "Find a nominator".
+    expect(screen.queryByText(/find a nominator/i)).toBeNull();
     await userEvent.click(within(hero).getByRole('button', { name: "Show you're ready to mint" }));
     expect(await screen.findByRole('dialog', { name: "Show you're ready to mint" }, T));
   });
