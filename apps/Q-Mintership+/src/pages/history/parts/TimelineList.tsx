@@ -1,7 +1,10 @@
 /**
  * MINTER events as a list, grouped by month: what happened (or was only
  * proposed), to whom, when, and which Minter Admin proposed it. Proposals
- * that didn't happen carry a chip saying so; open ones link to Decisions.
+ * that didn't happen carry a chip saying so. Every decision links to its own
+ * page (/decisions/<signature>): open ones to sign or follow, decided ones
+ * to see how they ended and whose answers counted. Joins and leaves need no
+ * decision, so they have no link.
  */
 import { Fragment } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -23,6 +26,7 @@ import { primarySoft } from '../../../hub-theme';
 import { OUTCOME_LABEL, type TimelineEvent, type TimelineKind } from '../../../data/timeline';
 import { PersonChip, PersonInline } from '../../../components/common/Person';
 import { ToneChip } from '../../../components/common/Section';
+import { useDisplayName } from '../../../hooks/useDisplayName';
 import { decisionPath } from '../../../routes/paths';
 import { formatDate, formatRelative } from '../../../utils/format';
 
@@ -89,12 +93,50 @@ function EventIcon({ event }: { event: TimelineEvent }) {
   );
 }
 
+/** "12 Oct 2026", "expired 12 Oct 2026" or "rejected 12 Oct 2026": when it was decided. */
+function decidedOn(event: TimelineEvent): string {
+  const date = formatDate(event.at);
+  if (event.outcome === 'expired') return `expired ${date}`;
+  if (event.outcome === 'rejected') return `rejected ${date}`;
+  return date;
+}
+
 function when(event: TimelineEvent, nowMs: number): string {
   if (event.outcome === 'pending') return `Proposed ${formatRelative(event.proposedAt, nowMs)}`;
-  const date = formatDate(event.at);
-  if (event.outcome === 'expired') return `Expired ${date}`;
-  if (event.outcome === 'rejected') return `Rejected ${date}`;
-  return date;
+  const decided = decidedOn(event);
+  return decided.charAt(0).toUpperCase() + decided.slice(1);
+}
+
+/** A link under the event, with a 44 px tap target that doesn't widen the row's gaps. */
+const ROW_LINK_SX = {
+  alignSelf: 'flex-start',
+  display: 'inline-flex',
+  alignItems: 'center',
+  minHeight: 44,
+  my: -1,
+} as const;
+
+/**
+ * A decided event's link to its decision's page. Its name says which one
+ * ("Open the decision: Approved for MINTER, Ada, 3 Oct 2026"), as a list
+ * can hold several of the same kind; it starts with the words on screen.
+ */
+function DecidedLink({ event }: { event: TimelineEvent }) {
+  const who = useDisplayName(event.subject ?? '', event.subject ? undefined : null);
+  const what = [event.title, event.subject ? who.label : null, decidedOn(event)]
+    .filter(Boolean)
+    .join(', ');
+  return (
+    <Link
+      component={RouterLink}
+      to={decisionPath(event.signature)}
+      variant="body2"
+      aria-label={`Open the decision: ${what}`}
+      sx={ROW_LINK_SX}
+    >
+      Open the decision
+    </Link>
+  );
 }
 
 function TimelineItem({
@@ -159,16 +201,12 @@ function TimelineItem({
             component={RouterLink}
             to={decisionPath(event.signature)}
             variant="body2"
-            sx={{
-              alignSelf: 'flex-start',
-              display: 'inline-flex',
-              alignItems: 'center',
-              minHeight: 44,
-              my: -1,
-            }}
+            sx={ROW_LINK_SX}
           >
             See it in Decisions
           </Link>
+        ) : event.kind !== 'join' && event.kind !== 'leave' ? (
+          <DecidedLink event={event} />
         ) : null}
       </Box>
     </Box>
