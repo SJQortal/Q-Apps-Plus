@@ -25,6 +25,8 @@ export const CHANGELOG: Release[] = [
           'Home speaks to you: what your MINTER status is, with your real numbers, and the one thing to do next.',
           'Nominations show who nominated, who supports, the signatures so far and the time left.',
           'Nominees accept with one step, so approval makes them a minter straight away.',
+          "Not nominated yet? Show you're ready to mint: a short self-check, then a join request nominators can see.",
+          'Nominations has a Ready to mint list of everyone who asked to join, so nominators can reach out.',
         ],
       },
       {
@@ -32,6 +34,7 @@ export const CHANGELOG: Release[] = [
         notes: [
           'One Decisions queue for nominations, removals, bans and admin changes, most urgent first, with k of n and a live countdown.',
           'Sign in one step, or several in a row. Every Hub confirmation is explained before it opens, with its fee.',
+          'Propose a removal, a ban, an admin change, lifting a ban or cancelling an approved invite, and add your own signature in the same step.',
         ],
       },
       {
