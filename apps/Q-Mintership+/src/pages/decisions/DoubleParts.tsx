@@ -19,6 +19,7 @@ export function DoubleChip({ decision: d, double }: { decision: Decision; double
   const full = doubleChipText({ kind: d.kind, double });
   return (
     <ToneChip
+      className="qmp-pop"
       size="small"
       variant="outlined"
       color="info"

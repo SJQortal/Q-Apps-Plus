@@ -39,7 +39,8 @@ export function SigningClock({
 /**
  * "Signed ✓" once it is in a block (filled green), or "… (confirming…)"
  * while it is on its way: a green outline with the words in the text
- * colour, which stays readable on every theme.
+ * colour, which stays readable on every theme. It pops in as it appears
+ * (index.css → .qmp-pop) and settles in place: the same chip, recoloured.
  */
 export function DoneChip({
   label,
@@ -51,9 +52,10 @@ export function DoneChip({
   size?: 'small' | 'medium';
 }) {
   return settled ? (
-    <Chip color="success" size={size} label={label} sx={{ fontWeight: 700 }} />
+    <Chip className="qmp-pop" color="success" size={size} label={label} sx={{ fontWeight: 700 }} />
   ) : (
     <Chip
+      className="qmp-pop"
       variant="outlined"
       size={size}
       label={label}
@@ -78,9 +80,10 @@ export function AnswerChip({
   if (view.shown === 'signed')
     return <DoneChip label={view.label} settled={view.settled} size={size} />;
   return view.settled ? (
-    <Chip size={size} label={view.label} sx={{ fontWeight: 700 }} />
+    <Chip className="qmp-pop" size={size} label={view.label} sx={{ fontWeight: 700 }} />
   ) : (
     <Chip
+      className="qmp-pop"
       variant="outlined"
       size={size}
       label={view.label}

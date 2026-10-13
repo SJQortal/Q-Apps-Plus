@@ -7,10 +7,13 @@
  * jsdom treats `prefers-reduced-motion` as never matching, so the system
  * path is checked by comparing its rules with Reduce's.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Button, Chip, IconButton, Switch, ToggleButton } from '@mui/material';
+import { CopyLinkButton } from './components/common/CopyLinkButton';
 import { Section } from './components/common/Section';
+import { AnswerChip, DoneChip } from './components/decision/DecisionParts';
 import { EmptyState } from './components/common/states';
 import { PageBody } from './components/layout/PageBody';
 import css from './index.css?raw';
@@ -242,5 +245,34 @@ describe('press', () => {
     expect(press()).toBe('1');
     document.documentElement.setAttribute('data-motion', 'full');
     expect(press()).toBe('0.98');
+  });
+});
+
+describe('small things that turn up', () => {
+  it('pops the Copy link tick in', async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    render(<CopyLinkButton path="/decisions" what="the decisions" variant="text" />);
+    const button = screen.getByRole('button', { name: 'Copy link to the decisions' });
+    expect(animation(button.querySelector('svg') as Element).name).toBe('none');
+    await userEvent.click(button);
+    const tick = await screen.findByTestId('CheckOutlinedIcon');
+    expect(animation(tick)).toMatchObject({ name: 'qmp-pop-in', duration: '180ms' });
+    document.documentElement.setAttribute('data-motion', 'reduce');
+    expect(animation(tick).duration).toBe('0.01ms');
+  });
+
+  it('pops an answer’s chip in, and settles it in place', () => {
+    const view = render(<DoneChip label="Signed ✓ (confirming…)" settled={false} />);
+    const chip = screen.getByText('Signed ✓ (confirming…)').closest('.MuiChip-root') as Element;
+    expect(animation(chip).name).toBe('qmp-pop-in');
+    view.rerender(<DoneChip label="Signed ✓" settled />);
+    // The same chip, recoloured: it doesn't pop again.
+    expect(screen.getByText('Signed ✓').closest('.MuiChip-root')).toBe(chip);
+    view.rerender(
+      <AnswerChip view={{ shown: 'rejected', settled: false, label: 'Rejected (confirming…)' }} />
+    );
+    const rejected = screen.getByText('Rejected (confirming…)').closest('.MuiChip-root');
+    expect(animation(rejected as Element).name).toBe('qmp-pop-in');
   });
 });
