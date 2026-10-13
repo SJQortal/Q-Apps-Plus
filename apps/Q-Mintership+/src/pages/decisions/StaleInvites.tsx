@@ -3,17 +3,15 @@
  * who invited and when it was approved, "Propose cancelling" per row, and
  * "Propose for all" one Hub confirmation after another. Invites approved in
  * the last 30 days are marked recent and left out of "for all": those
- * people may still press Join now.
- *
- * Core's answers leave the invitee out of pending cancellations, so the
- * screen says how many are already waiting instead of matching them.
+ * people may still press Join now. An invite whose cancellation is already
+ * waiting for signatures is marked, and never offered again.
  */
 import { useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { Alert, Box, Button, Typography } from '@mui/material';
 import { BulkDialog } from './BulkDialog';
 import { DoneChip } from '../../components/decision/DecisionParts';
-import { cancelAll, isRecentInvite, waitingCancels } from './staleRules';
+import { cancelAll, isRecentInvite, unmatchedCancels, waitingCancelInvitees } from './staleRules';
 import { HubStepDialog } from '../../components/common/HubStepDialog';
 import { PersonChip } from '../../components/common/Person';
 import { Card } from '../../components/common/Section';
@@ -59,7 +57,8 @@ export function StaleInvites({
   // Frozen when the dialog opens: rows proposed during the run must not leave its list.
   const [bulkRows, setBulkRows] = useState<InviteRow[] | null>(null);
   const writes = useAtomValue(pendingWritesAtom);
-  const cancels = waitingCancels(decisions);
+  const waitingFor = waitingCancelInvitees(decisions);
+  const unmatched = unmatchedCancels(decisions);
   const nowMs = now.timestamp;
 
   const detailOf = (invitee: string) => details.data?.find((d) => d.invitee === invitee);
@@ -71,6 +70,7 @@ export function StaleInvites({
     ? sorted.filter(
         (r) =>
           !isRecentInvite(detailOf(r.invitee), nowMs) &&
+          !waitingFor.has(r.invitee) &&
           !writes[writeKeys.propose('cancelInvite', r.invitee)]
       )
     : [];
@@ -99,13 +99,19 @@ export function StaleInvites({
           ? ` Left out: ${plural(list.data.alreadyMembers, 'invite')} for people already in MINTER.`
           : ''}
       </Typography>
-      {cancels ? (
+      {waitingFor.size ? (
+        <Typography variant="body2" color="text.secondary">
+          {waitingFor.size === 1
+            ? '1 of them already has a cancellation waiting for signatures.'
+            : `${waitingFor.size} of them already have a cancellation waiting for signatures.`}
+        </Typography>
+      ) : null}
+      {unmatched ? (
         <Alert severity="info" role="note">
-          {cancels === 1
-            ? '1 cancellation is already waiting for signatures.'
-            : `${cancels} cancellations are already waiting for signatures.`}{' '}
-          Core’s answers don’t say whom they are for, so check the queue before proposing the same
-          one again.
+          {unmatched === 1
+            ? '1 cancellation is waiting whose invitee your node couldn’t show.'
+            : `${unmatched} cancellations are waiting whose invitee your node couldn’t show.`}{' '}
+          Check the queue before proposing the same one again.
         </Alert>
       ) : null}
 
@@ -144,6 +150,7 @@ export function StaleInvites({
                 detail={detailOf(row.invitee)}
                 now={now}
                 inviterName={adminNames.get(row.inviter)}
+                cancelWaiting={waitingFor.has(row.invitee)}
                 onPropose={() => setSingle(row)}
               />
             ))}
@@ -190,12 +197,15 @@ function StaleRow({
   detail,
   now,
   inviterName,
+  cancelWaiting,
   onPropose,
 }: {
   row: InviteRow;
   detail: StaleInviteDetail | undefined;
   now: ChainNow;
   inviterName: string | null | undefined;
+  /** A cancellation of this invite is already waiting for signatures. */
+  cancelWaiting: boolean;
   onPropose: () => void;
 }) {
   const pending = usePendingWrite(writeKeys.propose('cancelInvite', row.invitee));
@@ -234,7 +244,9 @@ function StaleRow({
           </Typography>
         ) : null}
       </Box>
-      {pending?.status === 'confirming' ? (
+      {cancelWaiting ? (
+        <DoneChip label="Cancellation waiting for signatures" settled={false} />
+      ) : pending?.status === 'confirming' ? (
         <DoneChip label="Proposed (confirming…)" settled={false} />
       ) : (
         <Button

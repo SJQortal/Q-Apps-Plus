@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ADDR, NULL_OWNER, TIP, addOtherPending, installWorld } from '../test/world';
-import { fakeKey } from '../../e2e/world.mjs';
+import { fakeAddress, fakeKey } from '../../e2e/world.mjs';
 import { fetchCalls } from '../test/setup';
 import { getChainNow, heightToTime } from './chain';
 import { loadDecisions } from './decisions';
@@ -82,7 +82,10 @@ describe('loadDecisions', () => {
     expect(byKind(ADDR.demote)?.phase).toBe('unconfirmed');
     expect(byKind(ADDR.kickTarget)?.reason).toBe('Not minting for 6 months');
     expect(byKind(ADDR.banTarget)?.banSeconds).toBe(0);
-    expect(data.decisions.find((d) => d.kind === 'cancelInvite')?.subject).toBeNull();
+    // A cancelled invite's invitee comes from its raw bytes (Core's JSON leaves it out).
+    expect(data.decisions.find((d) => d.kind === 'cancelInvite')?.subject).toBe(
+      fakeAddress('stale-1')
+    );
     // Most urgent first: the open ones by expiry.
     expect(data.decisions[0].subject).toBe(ADDR.urgent);
   });

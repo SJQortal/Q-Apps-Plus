@@ -152,16 +152,16 @@ export function getCancelInviteTarget(signature: string): Promise<CancelInviteTa
 }
 
 /**
- * Rows with the group filled in for CANCEL_GROUP_INVITE rows that lack it.
- * A row whose bytes can't be read stays without a group, so it is never
- * taken for a MINTER group change.
+ * Rows with the group and invitee filled in for CANCEL_GROUP_INVITE rows
+ * that lack them. A row whose bytes can't be read stays without a group, so
+ * it is never taken for a MINTER group change.
  */
 export async function withCancelInviteTargets(rows: TxRow[]): Promise<TxRow[]> {
   return mapLimit(rows, 4, async (tx) => {
     if (tx.type !== 'CANCEL_GROUP_INVITE' || typeof tx.groupId === 'number') return tx;
     try {
       const target = await getCancelInviteTarget(tx.signature);
-      return { ...tx, groupId: target.groupId };
+      return { ...tx, groupId: target.groupId, invitee: target.invitee };
     } catch {
       return tx;
     }

@@ -79,10 +79,10 @@ describe('Home: Minter Admins', () => {
     const rows = within(waiting).getAllByRole('link', { name: /signatures\./ });
     expect(rows).toHaveLength(3);
     expect(rows[0]).toHaveAccessibleName(/Make a Minter Admin: Pia Promote\. 5 of 8 signatures/);
-    // Activity: signed 2 of the 8 open ones; 3 approved invites nobody used.
+    // Activity: signed 2 of the 8 open ones; 4 approved invites nobody used.
     const activity = screen.getByRole('region', { name: 'Your activity' });
     expect(within(activity).getByText('2 of 8')).toBeInTheDocument();
-    expect(await within(activity).findByText('3', {}, T)).toBeInTheDocument();
+    expect(await within(activity).findByText('4', {}, T)).toBeInTheDocument();
     expect(within(activity).getByText('Unusual approval route')).toBeInTheDocument();
     // A nomination still waiting for its first signature.
     const hero = screen.getByRole('region', { name: /waiting for your signature$/ });

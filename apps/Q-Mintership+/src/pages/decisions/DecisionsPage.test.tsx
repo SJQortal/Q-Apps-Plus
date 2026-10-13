@@ -69,14 +69,14 @@ describe('Decisions: phases and actions', () => {
     expect(within(early).getByText(/Just proposed. Signatures count already/)).toBeInTheDocument();
   });
 
-  it('describes every kind in plain words: reason, ban length, a cancel without a subject', async () => {
+  it('describes every kind in plain words: reason, ban length, whose invite is cancelled', async () => {
     await openPage('admin');
     const kick = await screen.findByRole('article', { name: /Remove from MINTER, Kai Target/ });
     expect(within(kick).getByText('Not minting for 6 months')).toBeInTheDocument();
     const ban = await screen.findByRole('article', { name: /Ban from MINTER, Ben Target/ });
     expect(within(ban).getByText('Permanent')).toBeInTheDocument();
-    const cancel = card(/^Cancel an approved invite$/);
-    expect(within(cancel).getByText(/Core doesn’t say for whom/)).toBeInTheDocument();
+    const cancel = card(/^Cancel an approved invite, QgFT6i…1cnG/);
+    expect(within(cancel).getByRole('link', { name: /QgFT6i…1cnG: open their page/ })).toBeVisible();
     // Ring, countdown and signers on an open invite.
     const signing = card(/bob\+builder/);
     expect(
@@ -292,17 +292,19 @@ describe('Decisions: bulk sign', () => {
 });
 
 describe('Decisions: stale invites', () => {
-  it('lists approved invites of non-members only, marks recent ones, and counts waiting cancels', async () => {
+  it('lists approved invites of non-members only, marks recent ones and waiting cancellations', async () => {
     const u = user();
     await openPage('admin');
-    expect(await screen.findByText('3 approved invites never used')).toBeVisible();
+    expect(await screen.findByText('4 approved invites never used')).toBeVisible();
     expect(screen.getByText(/Left out: 1 invite for people already in MINTER/)).toBeVisible();
-    expect(screen.getByText(/1 cancellation is already waiting for signatures/)).toBeVisible();
+    expect(
+      screen.getByText('1 of them already has a cancellation waiting for signatures.')
+    ).toBeVisible();
 
     await u.click(screen.getByRole('button', { name: 'Show them' }));
     const list = await screen.findByRole('list', { name: 'Approved invites never used' });
     const rows = within(list).getAllByRole('listitem');
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(4);
     expect(within(list).queryByText(/Member 6/)).toBeNull();
     const ada = await within(list).findByText('Ada Approved');
     expect(
@@ -310,7 +312,10 @@ describe('Decisions: stale invites', () => {
         /Approved recently: they may still press Join/
       )
     ).toBeVisible();
-    // Only the two older ones go into "for all".
+    // The one whose cancellation is already waiting can't be proposed again.
+    const waiting = within(list).getByText('Cancellation waiting for signatures').closest('li')!;
+    expect(within(waiting as HTMLElement).queryByRole('button')).toBeNull();
+    // Only the two older ones without a waiting cancellation go into "for all".
     expect(
       await screen.findByRole('button', { name: 'Propose cancelling all 2 older ones' })
     ).toBeVisible();

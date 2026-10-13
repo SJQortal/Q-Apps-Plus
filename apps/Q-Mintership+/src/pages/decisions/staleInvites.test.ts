@@ -8,7 +8,9 @@ import {
 import type { TxRow } from '../../data/types';
 import { ADDR, NOW, installWorld } from '../../test/world';
 import { mockQortalRequest, qortalCallsFor } from '../../test/setup';
-import { cancelAll, isRecentInvite, waitingCancels } from './staleRules';
+import { cancelAll, isRecentInvite, waitingCancelInvitees } from './staleRules';
+import { guardCancelInvite } from '../../writes/guards';
+import { fakeAddress } from '../../../e2e/world.mjs';
 
 afterEach(() => vi.useRealTimers());
 
@@ -17,7 +19,7 @@ describe('stale invites', () => {
     installWorld('admin');
     const list = await loadStaleInvites();
     expect(list.rows.map((r) => r.invitee)).toContain(ADDR.approved);
-    expect(list.rows).toHaveLength(3);
+    expect(list.rows).toHaveLength(4);
     expect(list.alreadyMembers).toBe(1);
   });
 
@@ -55,10 +57,15 @@ describe('stale invites', () => {
     expect(findApprovedInvite([], row)).toBeNull();
   });
 
-  it('counts cancellations already waiting (Core does not say for whom)', async () => {
-    installWorld('admin');
+  it('knows whose invite already has a cancellation waiting, and refuses a second one', async () => {
+    const { address, publicKey } = installWorld('admin');
     const data = await loadDecisions();
-    expect(waitingCancels(data.decisions)).toBe(1);
+    expect([...waitingCancelInvitees(data.decisions)]).toEqual([fakeAddress('stale-1')]);
+    const admin = { address, publicKey };
+    expect(await guardCancelInvite(admin, fakeAddress('stale-1'))).toBe(
+      'Cancelling this invite is already waiting for signatures.'
+    );
+    expect(await guardCancelInvite(admin, fakeAddress('stale-2'))).toBeNull();
   });
 
   it('"Propose cancelling all" goes one by one and stops at a cancel in Hub', async () => {
@@ -74,8 +81,10 @@ describe('stale invites', () => {
     const outcomes = await cancelAll({ address, publicKey }, list.rows, (i, o) => {
       if (o) seen.push(`${i}:${o.status}`);
     });
-    expect(outcomes.map((o) => o.status)).toEqual(['sent', 'declined']);
-    expect(seen).toEqual(['0:sent', '1:declined']);
+    // The second row's cancellation is already waiting: stopped before Hub.
+    expect(list.rows[1].invitee).toBe(fakeAddress('stale-1'));
+    expect(outcomes.map((o) => o.status)).toEqual(['sent', 'blocked', 'declined']);
+    expect(seen).toEqual(['0:sent', '1:blocked', '2:declined']);
     expect(qortalCallsFor('CANCEL_GROUP_INVITE')).toHaveLength(2);
     expect(qortalCallsFor('CANCEL_GROUP_INVITE')[0]).toMatchObject({
       groupId: 694,

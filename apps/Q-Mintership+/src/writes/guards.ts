@@ -47,7 +47,9 @@ export async function findWaiting(type: GroupTxType, subject: string): Promise<T
     getPending({ force: true }),
     getUnconfirmedOfTypes([type], { force: true }),
   ]);
-  const all = [...pending.rows, ...unconfirmed.rows];
+  // Cancelled invites carry their group and invitee only in their raw bytes.
+  const rows = [...pending.rows, ...unconfirmed.rows];
+  const all = type === 'CANCEL_GROUP_INVITE' ? await withCancelInviteTargets(rows) : rows;
   return (
     all.find(
       (tx) =>
@@ -196,16 +198,16 @@ export async function guardCancelBan(signer: Signer, member: string): Promise<st
   return null;
 }
 
-/**
- * Before proposing to cancel an approved invite. Core's answers leave the
- * invitee out of CANCEL_GROUP_INVITE rows, so other admins' proposals can't
- * be matched by person; the caller shows how many are waiting.
- */
+/** Before proposing to cancel an approved invite. */
 export async function guardCancelInvite(signer: Signer, invitee: string): Promise<string | null> {
   const notAdmin = await requireAdmin(signer);
   if (notAdmin) return notAdmin;
-  const stored = await getStoredInviteFor(invitee, { force: true });
+  const [stored, waiting] = await Promise.all([
+    getStoredInviteFor(invitee, { force: true }),
+    findWaiting('CANCEL_GROUP_INVITE', invitee),
+  ]);
   if (!stored) return 'There is no approved invite stored for this account.';
+  if (waiting) return 'Cancelling this invite is already waiting for signatures.';
   return null;
 }
 

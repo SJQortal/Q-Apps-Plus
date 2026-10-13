@@ -430,6 +430,12 @@ function buildWorld() {
     },
     {
       groupId: GROUP,
+      inviter: extraAdmins[4],
+      invitee: fakeAddress('stale-3'),
+      expiry: 1_765_000_000_000,
+    },
+    {
+      groupId: GROUP,
       inviter: extraAdmins[2],
       invitee: plainMembers[5],
       expiry: 1_770_000_000_000,

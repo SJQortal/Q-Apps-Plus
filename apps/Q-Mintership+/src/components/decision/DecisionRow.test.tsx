@@ -39,10 +39,9 @@ describe('DecisionRow', () => {
     });
     expect(within(open).getByText('left to sign')).toBeInTheDocument();
     expect(within(open).queryByRole('img')).toBeNull();
+    // A cancelled invite names its invitee (read from the raw bytes).
     expect(
-      screen.getByRole('link', {
-        name: /Cancel an approved invite: an approved invite \(Core doesn’t say for whom\)/,
-      })
+      screen.getByRole('link', { name: /^Cancel an approved invite: QgFT6i…1cnG\./ })
     ).toBeInTheDocument();
   });
 });
