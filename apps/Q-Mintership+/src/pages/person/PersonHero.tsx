@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Chip, Typography, type ChipProps } from '@mui/material';
 import type { Nomination } from '../../data/nominations';
+import { ownAdminRole } from '../../rules/adminChange';
 import { NOMINEE_BLOCK_TEXT, nomineeBlock } from '../../rules/nomination';
 import type { MyStatus, StatusKind } from '../../rules/status';
 import { AddressText } from '../../components/common/Person';
@@ -15,6 +16,7 @@ import { Card, LevelBadge, ToneChip } from '../../components/common/Section';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { decisionPath, nominatePath } from '../../routes/paths';
 import { formatCount, formatDate } from '../../utils/format';
+import { AdminRoleAction } from '../decisions/AdminRoleAction';
 import { statusSentence } from './personWords';
 
 const STATUS_CHIP: Record<
@@ -95,6 +97,10 @@ export function PersonHero({
 
   const actions: ReactNode[] = [];
   if (action) actions.push(<Box key="own">{action}</Box>);
+  // Their own page: Become a Minter Admin, or Step down as Minter Admin.
+  if (self && viewer?.address === address && ownAdminRole(viewer)) {
+    actions.push(<AdminRoleAction key="role" status={viewer} />);
+  }
   if (canNominate && (block === null || (block === 'open' && !mine))) {
     actions.push(
       <Button

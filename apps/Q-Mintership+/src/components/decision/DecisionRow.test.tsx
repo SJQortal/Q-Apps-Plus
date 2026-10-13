@@ -32,7 +32,7 @@ describe('DecisionRow', () => {
     const urgent = await screen.findByRole('link', {
       name: /^Add to MINTER: Uma Urgent\. 7 of 8 signatures\. \d+h \d+m left to sign Signed ✓$/,
     });
-    expect(urgent.getAttribute('href')).toMatch(/^\/decisions\?d=/);
+    expect(urgent.getAttribute('href')).toMatch(/^\/decisions\/\w+$/);
     expect(within(urgent).getByText('Signed ✓')).toBeInTheDocument();
     const open = await screen.findByRole('link', {
       name: /^Add to MINTER: bob\+builder\. 5 of 8 signatures\. \d+d \d+h left to sign$/,

@@ -4,6 +4,7 @@
  */
 import type { TxRow } from '../data/types';
 import { MINTER_GROUP_ID } from '../data/constants';
+import { ADMIN_CHANGE_TITLE, adminChangeMode, type AdminChangeKind } from './adminChange';
 import { tallyApprovals, type ApprovalRow, type Tally } from './tally';
 import {
   decisionWindow,
@@ -41,6 +42,28 @@ export const KIND_LABEL: Record<DecisionKind, string> = {
 
 export function decisionKind(tx: Pick<TxRow, 'type'>): DecisionKind {
   return KIND_BY_TYPE[tx.type] ?? 'other';
+}
+
+/** An admin change its subject proposed about themselves (in this app or any other). */
+export function isOwnAdminChange(
+  d: Pick<Decision, 'kind' | 'subject' | 'creatorAddress'>
+): boolean {
+  return (
+    (d.kind === 'addAdmin' || d.kind === 'removeAdmin') &&
+    d.subject !== null &&
+    d.subject === d.creatorAddress
+  );
+}
+
+/**
+ * A decision's title: its kind in plain words, or, for an admin change its
+ * subject proposed about themselves, "Become a Minter Admin" or "Step down
+ * as Minter Admin" (the same words as the buttons that propose them).
+ */
+export function decisionTitle(d: Pick<Decision, 'kind' | 'subject' | 'creatorAddress'>): string {
+  if (isOwnAdminChange(d))
+    return ADMIN_CHANGE_TITLE[adminChangeMode(d.kind as AdminChangeKind, true)];
+  return KIND_LABEL[d.kind];
 }
 
 /** The account a transaction is about (null when Core's answer leaves it out). */

@@ -472,6 +472,28 @@ describe('Decisions: stale invites', () => {
   });
 });
 
+describe('Decisions: proposing your own step-down', () => {
+  it('words removing yourself as stepping down', async () => {
+    const u = user();
+    const { address } = await openPage('admin');
+    await u.click(screen.getByRole('button', { name: 'Propose' }));
+    await u.click(await screen.findByRole('menuitem', { name: /Remove a Minter Admin/ }));
+    const form = await screen.findByRole('dialog', { name: 'Remove a Minter Admin' });
+    expect(within(form).getByText(/Pick yourself to step down\./)).toBeVisible();
+    await u.selectOptions(within(form).getByRole('combobox', { name: 'Minter Admin' }), address);
+    expect(await within(form).findByText('Nothing stops this proposal.')).toBeVisible();
+    expect(within(form).getByText(/That’s you: this proposes that you step down/)).toBeVisible();
+    await u.click(within(form).getByRole('button', { name: 'Review' }));
+    const hub = await screen.findByRole('dialog', { name: 'Step down as Minter Admin' });
+    expect(
+      within(hub).getByText(
+        /This proposes that you step down: you give up your Minter Admin role\./
+      )
+    ).toBeVisible();
+    expect(within(hub).getByText('Step 2 of 2: Sign it')).toBeVisible();
+  });
+});
+
 describe('Decisions: proposing', () => {
   it('offers removing the admin role first when the member to remove is a Minter Admin', async () => {
     const u = user();
@@ -756,8 +778,45 @@ describe('Decisions: proposing', () => {
   });
 });
 
+describe('Decisions: admin changes from anywhere', () => {
+  it('lists a member’s own proposal from another app like any decision, with Sign', async () => {
+    await openPage('admin');
+    // Pia Promote, a member, proposed herself (the mock world's ADD_GROUP_ADMIN).
+    const pia = await screen.findByRole('article', {
+      name: 'Become a Minter Admin, Pia Promote',
+    });
+    expect(within(pia).getByText(/^Their own proposal, /)).toBeVisible();
+    expect(within(pia).getByRole('button', { name: /^Sign: Become a Minter Admin/ })).toBeVisible();
+  });
+
+  it('shows a step-down proposed in another app, and a removal by another admin', async () => {
+    await openPage('admin', '/decisions', (world) => {
+      const remove = world.pending.find((t: { type: string }) => t.type === 'REMOVE_GROUP_ADMIN');
+      // A second removal: Juniper L4 steps down, from another app.
+      world.pending.push({
+        ...remove,
+        signature: base58Encode(new Uint8Array(64).fill(31)),
+        creatorAddress: ADDR.adminL4,
+        admin: ADDR.adminL4,
+      });
+    });
+    expect(
+      await screen.findByRole('article', { name: 'Step down as Minter Admin, Juniper L4' })
+    ).toBeInTheDocument();
+    expect(card(/^Remove a Minter Admin, Dex Demote/)).toBeInTheDocument();
+  });
+
+  it('shows them to members read-only', async () => {
+    await openPage('learner');
+    const pia = await screen.findByRole('article', {
+      name: 'Become a Minter Admin, Pia Promote',
+    });
+    expect(within(pia).queryByRole('button', { name: /^Sign/ })).toBeNull();
+  });
+});
+
 describe('Decisions: navigation and filters', () => {
-  it('scrolls to and focuses the decision named in ?d=', async () => {
+  it('sends an old ?d= link on to the decision’s own page', async () => {
     const sig = createWorld().pending.find((t: { type: string }) => t.type === 'GROUP_KICK')
       .signature as string;
     await renderPage(<DecisionsPage />, {
@@ -765,13 +824,19 @@ describe('Decisions: navigation and filters', () => {
       path: `/decisions?d=${encodeURIComponent(sig)}`,
       route: '/decisions',
     });
-    const kick = await screen.findByRole('article', { name: /Remove from MINTER, Kai Target/ });
-    await vi.waitFor(() => expect(document.activeElement).toBe(kick));
+    // The test router has no /decisions/:signature route: it left the queue.
+    expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Decisions' })).toBeNull();
   });
 
-  it('says when the decision in ?d= is no longer waiting', async () => {
-    await openPage('admin', '/decisions?d=gone');
-    expect(await screen.findByText(/That decision isn’t waiting any more/)).toBeVisible();
+  it('gives every card a Copy link to its own page', async () => {
+    await openPage('admin');
+    const kick = await screen.findByRole('article', { name: /Remove from MINTER, Kai Target/ });
+    expect(
+      within(kick).getByRole('button', {
+        name: 'Copy link to the decision Remove from MINTER, Kai Target',
+      })
+    ).toBeVisible();
   });
 
   it('hides what I signed when asked', async () => {

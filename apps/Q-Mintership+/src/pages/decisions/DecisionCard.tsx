@@ -16,7 +16,7 @@ import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutli
 import type { ChainNow } from '../../data/chain';
 import { effectiveBlocksMinted } from '../../data/accounts';
 import type { Nomination } from '../../data/nominations';
-import { KIND_LABEL, type Decision } from '../../rules/decision';
+import { decisionTitle, isOwnAdminChange, type Decision } from '../../rules/decision';
 import { useAccount } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { AvatarStack, PersonChip, PersonInline } from '../../components/common/Person';
@@ -27,6 +27,8 @@ import {
   type ConsideringRequest,
 } from '../../components/decision/Considering';
 import { useConsideringFor } from '../../hooks/useConsidering';
+import { CopyLinkButton } from '../../components/common/CopyLinkButton';
+import { decisionPath } from '../../routes/paths';
 import { ProgressRing } from '../../components/common/ProgressRing';
 import { Card, DecisionPhaseChip } from '../../components/common/Section';
 import { primarySoft } from '../../hub-theme';
@@ -114,6 +116,8 @@ export interface DecisionCardProps {
   risk?: DecisionRisk | null;
   /** Decisions' labels by signature, for the two above. */
   labelOf?: LabelOf;
+  /** A "Copy link" to the decision's own page (default; its page has one in the header). */
+  copyLink?: boolean;
 }
 
 export function DecisionCard(props: DecisionCardProps) {
@@ -139,6 +143,7 @@ export function DecisionCard(props: DecisionCardProps) {
     impact,
     risk,
     labelOf,
+    copyLink = true,
   } = props;
   const [riskOpen, setRiskOpen] = useState(false);
   const riskId = useId();
@@ -151,7 +156,7 @@ export function DecisionCard(props: DecisionCardProps) {
   const confirming = tally ? tally.inFlight.filter((x) => x.approval) : [];
   const rejecting = tally ? tally.inFlight.filter((x) => !x.approval) : [];
   const withdrawn = tally ? tally.rejections.filter((x) => x.withdrew).length : 0;
-  const title = KIND_LABEL[d.kind];
+  const title = decisionTitle(d);
   const subject = useDisplayName(
     d.subject ?? '',
     d.subject ? (nomination?.nomineeName ?? subjectFacts?.name) : null
@@ -263,8 +268,17 @@ export function DecisionCard(props: DecisionCardProps) {
 
       {d.creatorAddress ? (
         <Typography component="div" variant="body2" color="text.secondary">
-          Proposed by{' '}
-          <PersonInline address={d.creatorAddress} name={adminNames.get(d.creatorAddress)} />{' '}
+          {isOwnAdminChange(d) ? (
+            'Their own proposal, '
+          ) : (
+            <>
+              Proposed by{' '}
+              <PersonInline
+                address={d.creatorAddress}
+                name={adminNames.get(d.creatorAddress)}
+              />{' '}
+            </>
+          )}
           {formatRelative(d.createdAt, now.timestamp)}
           {d.blockHeight ? ` (block ${formatCount(d.blockHeight)})` : ''}.
         </Typography>
@@ -399,6 +413,16 @@ export function DecisionCard(props: DecisionCardProps) {
               ) : null}
             </Box>
           ) : null}
+        </Box>
+      ) : null}
+
+      {copyLink ? (
+        <Box sx={{ display: 'flex', mt: -0.5, ml: -1 }}>
+          <CopyLinkButton
+            variant="text"
+            path={decisionPath(d.signature)}
+            what={`the decision ${fullTitle}`}
+          />
         </Box>
       ) : null}
     </Card>

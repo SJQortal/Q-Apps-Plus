@@ -39,7 +39,7 @@ import {
 import { PATHS, legacyCardPath } from '../../routes/paths';
 import { formatCount, formatDate, formatDateTime, plural } from '../../utils/format';
 import { ORIGINAL_APP_LINK, openQortalLink } from '../../utils/links';
-import { CopyLinkButton } from './parts/CopyLinkButton';
+import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { legacyKindLabel, legacyProblem } from './parts/legacyWords';
 import { LegacyTextView, QortalLinks } from './parts/LegacyText';
 import { PersonByName } from './parts/PersonByName';

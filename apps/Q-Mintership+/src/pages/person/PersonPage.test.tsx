@@ -40,7 +40,7 @@ describe('Person page', () => {
     // Admins are already signing: no Nominate button, a way to the decision instead.
     expect(screen.queryByRole('link', { name: /^Nominate/ })).toBeNull();
     expect(screen.getByRole('link', { name: 'Open in Decisions' }).getAttribute('href')).toMatch(
-      /^\/decisions\?d=/
+      /^\/decisions\/\w+$/
     );
     expect(
       screen.getByText('Minter Admins are already signing a nomination for this person.')
@@ -253,6 +253,39 @@ describe('Person page', () => {
     await userEvent.click(within(original).getByRole('button', { name: 'Search older cards' }));
     expect(await within(original).findByText('Member 22 for MINTER')).toBeInTheDocument();
     expect(within(original).getByText(/Looked through all \d+ cards/)).toBeInTheDocument();
+  });
+});
+
+describe('Person page: one’s own admin role', () => {
+  it('offers Become a Minter Admin on a member’s own page only', async () => {
+    const own = await visit(ADDR.learner, 'learner');
+    expect(
+      await screen.findByRole('button', { name: 'Become a Minter Admin' }, { timeout: 3000 })
+    ).toBeInTheDocument();
+    own.unmount();
+    await visit(ADDR.learner, 'nominator');
+    await screen.findByRole('heading', { level: 2, name: PEOPLE.learner.name as string });
+    expect(screen.queryByRole('button', { name: 'Become a Minter Admin' })).toBeNull();
+  });
+
+  it('offers Step down as Minter Admin on an admin’s own page', async () => {
+    await visit(ADDR.admin, 'admin');
+    expect(
+      await screen.findByRole('button', { name: 'Step down as Minter Admin' }, { timeout: 3000 })
+    ).toBeInTheDocument();
+  });
+
+  it('says when a step-down someone else proposed is waiting, instead of the button', async () => {
+    // Dex Demote's removal was proposed by another admin.
+    await visit(ADDR.demote, 'demote');
+    expect(
+      await screen.findByText(
+        'A proposal to remove your Minter Admin role is waiting for the Minter Admins’ signatures.',
+        {},
+        { timeout: 3000 }
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Step down as Minter Admin' })).toBeNull();
   });
 });
 

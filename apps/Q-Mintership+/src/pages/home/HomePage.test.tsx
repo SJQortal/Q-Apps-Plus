@@ -16,6 +16,7 @@ import { markWrite, pendingWritesAtom, writeKeys } from '../../writes/optimistic
 import { renderPage } from '../../test/render';
 import { fetchCalls, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { ADDR, installWorld } from '../../test/world';
+import { decisionPath } from '../../routes/paths';
 import HomePage from './HomePage';
 
 afterEach(() => vi.useRealTimers());
@@ -96,7 +97,7 @@ describe('Home: Minter Admins', () => {
     const waiting = screen.getByRole('region', { name: 'Waiting for your signature' });
     const rows = within(waiting).getAllByRole('link', { name: /signatures\./ });
     expect(rows).toHaveLength(3);
-    expect(rows[0]).toHaveAccessibleName(/Make a Minter Admin: Pia Promote\. 5 of 8 signatures/);
+    expect(rows[0]).toHaveAccessibleName(/Become a Minter Admin: Pia Promote\. 5 of 8 signatures/);
     // Activity: signed 2 of the 8 open ones; 4 approved invites nobody used.
     const activity = screen.getByRole('region', { name: 'Your activity' });
     expect(within(activity).getByText('2 of 8')).toBeInTheDocument();
@@ -197,6 +198,103 @@ describe('Home: members', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(fetchCalls.some((p) => p.startsWith('/groups/members/694?limit='))).toBe(false);
     expect(fetchCalls.some((p) => p.includes('identifier=qmp-nomination-&'))).toBe(false);
+  });
+});
+
+describe('Home: the Minter Admin role', () => {
+  it('lets any member propose themselves in one Hub step, and says the admins decide', async () => {
+    const { world, address } = await renderPage(<HomePage />, { persona: 'learner' });
+    await headline("You're minting, Leo Learner");
+    const role = await screen.findByRole('region', { name: 'Minter Admins' }, T);
+    expect(
+      within(role).getByText(
+        /Any member can propose themselves; the Minter Admins decide, with 8 signatures\./
+      )
+    ).toBeVisible();
+    mockQortalRequest('ADD_GROUP_ADMIN', (req: Record<string, unknown>) => {
+      const tx = {
+        type: 'ADD_GROUP_ADMIN',
+        timestamp: Date.now(),
+        reference: 'r',
+        signature: 'becomeSignature111111111111111111111111111111111111111111111111',
+        txGroupId: 694,
+        groupId: 694,
+        approvalStatus: 'PENDING',
+        creatorAddress: address,
+        member: req.qortalAddress,
+      };
+      world.pending.push(tx);
+      return tx;
+    });
+    await waitFor(() =>
+      expect(within(role).getByRole('button', { name: 'Become a Minter Admin' })).toBeEnabled()
+    );
+    await userEvent.click(within(role).getByRole('button', { name: 'Become a Minter Admin' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Become a Minter Admin' }, T);
+    expect(within(dialog).getByText(/This proposes you as a Minter Admin\./)).toBeVisible();
+    expect(
+      within(dialog).getByText(
+        /this is one Hub confirmation: once it is proposed, the Minter Admins decide/
+      )
+    ).toBeVisible();
+    // One step, one fee: a member can't sign.
+    expect(within(dialog).getByText('Fee: 0.01 QORT')).toBeInTheDocument();
+    expect(within(dialog).getByText('Propose it')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Sign it/)).toBeNull();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(dialog).findByText('Proposed', {}, T)).toBeVisible();
+    expect(within(dialog).getByText(/The Minter Admins will now decide/)).toBeVisible();
+    expect(qortalCallsFor('ADD_GROUP_ADMIN')).toEqual([
+      expect.objectContaining({ groupId: 694, qortalAddress: address, txGroupId: 694 }),
+    ]);
+    expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+    // The queue shows it at once: Home says it is waiting, and links to it.
+    expect(
+      await within(role).findByText(/Your proposal to become a Minter Admin is waiting/, {}, T)
+    ).toBeVisible();
+  });
+
+  it('says when a member’s own proposal is already waiting, and links to it', async () => {
+    const { world } = await renderPage(<HomePage />, { persona: 'promote' });
+    const role = await screen.findByRole('region', { name: 'Minter Admins' }, T);
+    expect(
+      await within(role).findByText(/Your proposal to become a Minter Admin is waiting/, {}, T)
+    ).toBeVisible();
+    const add = world.pending.find((t: { type: string }) => t.type === 'ADD_GROUP_ADMIN');
+    expect(within(role).getByRole('link', { name: 'Open the decision' })).toHaveAttribute(
+      'href',
+      decisionPath(add.signature)
+    );
+    expect(within(role).queryByRole('button', { name: 'Become a Minter Admin' })).toBeNull();
+  });
+
+  it('lets an admin step down: their proposal and their signature, worded as a resignation', async () => {
+    await renderPage(<HomePage />, { persona: 'adminL4' });
+    const role = await screen.findByRole('region', { name: 'Your Minter Admin role' }, T);
+    const button = within(role).getByRole('button', { name: 'Step down as Minter Admin' });
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+    const dialog = await screen.findByRole('dialog', { name: 'Step down as Minter Admin' }, T);
+    expect(
+      within(dialog).getByText(
+        /This proposes that you step down: you give up your Minter Admin role\./
+      )
+    ).toBeVisible();
+    expect(within(dialog).getByText(/You stay a MINTER member/)).toBeVisible();
+    expect(within(dialog).getByText('Step 2 of 2: Sign it')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
+    // Declined in Hub: nothing is signed.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(dialog).findByText(/cancelled/i, {}, T)).toBeInTheDocument();
+    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')).toHaveLength(1);
+    expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
+  });
+
+  it('offers nothing about the role to someone outside MINTER', async () => {
+    await renderPage(<HomePage />, { persona: 'newcomerName' });
+    await headline(/Zoë/);
+    expect(screen.queryByRole('button', { name: 'Become a Minter Admin' })).toBeNull();
   });
 });
 
@@ -379,6 +477,10 @@ describe('Home: nominated', () => {
     expect(within(hero).getByText(/^Last block a signature counts in: /)).toBeVisible();
     expect(within(hero).getByText(/accepted ✓/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Accept nomination' })).toBeNull();
+    expect(within(hero).getByRole('link', { name: 'See your nomination' })).toHaveAttribute(
+      'href',
+      `/nominations/${ADDR.nominatedSigning}`
+    );
     // The full nomination below, with its reason.
     expect(screen.getByRole('region', { name: 'Your nomination' })).toHaveTextContent(
       /reliable node/

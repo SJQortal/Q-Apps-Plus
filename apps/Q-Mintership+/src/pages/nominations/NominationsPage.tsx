@@ -49,7 +49,7 @@ import { peekQuery } from '../../data/query';
 import { useMyStatus, useNominations } from '../../hooks/useData';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { appParam } from '../../routes/hubLocation';
-import { PATHS, decisionPath, nominatePath, personPath } from '../../routes/paths';
+import { PATHS, decisionPath, nominatePath, nominationPath } from '../../routes/paths';
 import type { MyStatus } from '../../rules/status';
 import { approvalsNeeded } from '../../rules/threshold';
 import { signIn, signerOf, useSession, type Session } from '../../state/session';
@@ -500,7 +500,7 @@ function CardActions({
       ) : null}
       <Button
         component={RouterLink}
-        to={personPath(n.nominee)}
+        to={nominationPath(n.nominee)}
         variant="text"
         aria-label={`Details about ${displayName(n.nomineeName, n.nominee)}`}
         sx={{ minHeight: 44 }}

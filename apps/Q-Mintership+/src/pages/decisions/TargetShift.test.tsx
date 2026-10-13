@@ -66,7 +66,7 @@ describe('Decisions: an admin change says what it does to the target', () => {
 
   it('a new admin raises the target: what has enough signatures now would fall short', async () => {
     await openPage();
-    const add = card(/^Make a Minter Admin, Pia Promote/);
+    const add = card(/^(Make|Become) a Minter Admin, Pia Promote/);
     const note = within(add).getByRole('note');
     expect(note).toHaveTextContent(
       'If this passes, MINTER has 21 admin seats and the target rises from 8 to 9 signatures.'

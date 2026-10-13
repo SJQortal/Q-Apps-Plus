@@ -11,7 +11,7 @@ import { ErrorState, HeroSkeleton } from '../../../components/common/states';
 import { useDecisions, useNominations } from '../../../hooks/useData';
 import { useDisplayName } from '../../../hooks/useDisplayName';
 import { decisionPath } from '../../../routes/paths';
-import { KIND_LABEL, type Decision } from '../../../rules/decision';
+import { decisionTitle, type Decision } from '../../../rules/decision';
 import type { MyStatus } from '../../../rules/status';
 import { formatDuration, plural } from '../../../utils/format';
 import { Hero, HeroText, Num } from '../Hero';
@@ -30,7 +30,7 @@ function MostUrgent({ decision: d, now }: { decision: Decision; now: ChainNow })
     : null;
   return (
     <HeroText>
-      The most urgent, &ldquo;{KIND_LABEL[d.kind]}
+      The most urgent, &ldquo;{decisionTitle(d)}
       {d.subject ? `: ${subject.label}` : ''}&rdquo;,{' '}
       {left !== null ? (
         <>

@@ -51,7 +51,10 @@ describe('Decisions: the target changed since the last visit', () => {
     const link = within(alert).getByRole('link', {
       name: 'Remove from MINTER: Kai Target, 9 of 9',
     });
-    expect(link).toHaveAttribute('href', expect.stringMatching(/^\/decisions\?d=/));
+    expect(link).toHaveAttribute(
+      'href',
+      expect.stringMatching(/^\/decisions\/[1-9A-HJ-NP-Za-km-z]+$/)
+    );
     expect(alert).toHaveTextContent(/9 of 9Applies in the next block\./);
     expect(alert).toHaveTextContent(/withdraw your signature before Core applies it/);
     // What this device saw is now the new target.

@@ -44,3 +44,5 @@ export function addTargetShift(world: World): {
   removed: string[];
   outgoing: string[];
 };
+// Shareable links (decision and nomination pages).
+export function addDecidedSignatures(world: World): string;

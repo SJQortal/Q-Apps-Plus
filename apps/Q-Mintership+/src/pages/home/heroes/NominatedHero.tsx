@@ -15,7 +15,7 @@ import { Countdown } from '../../../components/common/Countdown';
 import { ProgressRing } from '../../../components/common/ProgressRing';
 import { useBalance, useChainNow } from '../../../hooks/useData';
 import { useFee } from '../../../hooks/useFee';
-import { personPath } from '../../../routes/paths';
+import { nominationPath } from '../../../routes/paths';
 import type { MyStatus } from '../../../rules/status';
 import { signerOf, useSession } from '../../../state/session';
 import { formatDuration, formatRelative, plural } from '../../../utils/format';
@@ -124,7 +124,7 @@ export function NominatedHero({
                 Accept nomination
               </Button>
             )}
-            <Button component={RouterLink} to={personPath(status.address)}>
+            <Button component={RouterLink} to={nominationPath(status.address)}>
               See your nomination
             </Button>
           </>

@@ -12,6 +12,7 @@
  */
 import {
   addConsidering,
+  addDecidedSignatures,
   addOtherPending,
   addReady,
   addRejections,
@@ -47,6 +48,9 @@ function worldFor(route) {
   }
   return /[?&]world=shift\b/.test(page) ? shiftWorld : world;
 }
+// Shareable links: a decision still waiting, one decided (with its signatures), a nomination.
+const DECIDED_SIG = addDecidedSignatures(world);
+const PENDING_SIG = world.pending.find((t) => t.type === 'GROUP_KICK').signature;
 // Replaced in setup() by a visible 64×64 gradient, so avatars show in the shots.
 let PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAQklEQVR42u3OMQEAAAgDINc/9Mzg14MGLUmHCgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFbzwB2GwADvYAAAAASUVORK5CYII=',
@@ -295,6 +299,22 @@ export default {
         await dialog.getByText('Tick “I’ve checked these” to go on.').waitFor({ timeout: 4000 });
         await page.waitForTimeout(300);
       },
+    },
+    // Shareable links: one decision waiting (Sign), one decided, and one nomination with its rounds.
+    {
+      key: 'decision-pending',
+      path: `/decisions/${PENDING_SIG}?as=admin`,
+      after: wait('main article'),
+    },
+    {
+      key: 'decision-decided',
+      path: `/decisions/${DECIDED_SIG}?as=learner`,
+      after: wait('main [aria-label^="Signed by"]'),
+    },
+    {
+      key: 'nomination',
+      path: `/nominations/${ADDR.nominatedSigning}?as=nominator`,
+      after: wait('main ol[aria-label="Rounds, newest first"]'),
     },
   ],
 };

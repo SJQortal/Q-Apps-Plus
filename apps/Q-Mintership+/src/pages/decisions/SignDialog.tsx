@@ -7,7 +7,7 @@
  */
 import { Box, Typography } from '@mui/material';
 import type { Decision } from '../../rules/decision';
-import { KIND_LABEL } from '../../rules/decision';
+import { decisionTitle } from '../../rules/decision';
 import { HubStepDialog } from '../../components/common/HubStepDialog';
 import { SignaturePrefix } from '../../components/common/SignaturePrefix';
 import { useDisplayName } from '../../hooks/useDisplayName';
@@ -47,7 +47,7 @@ export function SignDialog({
         d ? (
           <>
             <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
-              {KIND_LABEL[d.kind]}: {who}
+              {decisionTitle(d)}: {who}
             </Typography>
             <Typography sx={{ mt: 0.5 }}>
               Your signature approves it. It counts once it is in a block
