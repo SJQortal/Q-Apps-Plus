@@ -4,7 +4,7 @@ import { GROUP_APPROVAL_UNSIGNED_LENGTH } from '../qortal/approvalBytes';
 import { loadDecisions } from '../data/decisions';
 import { ADDR, addOtherPending, installWorld } from '../test/world';
 import { fakeAddress } from '../../e2e/world.mjs';
-import { mockQortalRequest, qortalCalls, qortalCallsFor } from '../test/setup';
+import { mockFetchRoute, mockQortalRequest, qortalCalls, qortalCallsFor } from '../test/setup';
 import {
   addAdminRequest,
   banRequest,
@@ -193,6 +193,27 @@ describe('guards re-read the chain before a write', () => {
     expect(await guardCancelInvite(signerFor('nominator'), fakeAddress('stale-2'))).toMatch(
       /Only Minter Admins/
     );
+  });
+
+  it("cancel invite: stops when a waiting cancellation's invitee can't be read", async () => {
+    const { address, publicKey } = installWorld('admin');
+    mockFetchRoute(/\/raw$/, () => new Response('', { status: 500 }));
+    const admin = { address, publicKey };
+    // stale-2 has no cancellation waiting, but the one that is waiting can't be read.
+    await expect(guardCancelInvite(admin, fakeAddress('stale-2'))).rejects.toThrow(
+      "Couldn't check the cancellations already waiting. Try again in a moment."
+    );
+    const result = await proposeAndSign(admin, {
+      kind: 'cancelInvite',
+      subject: fakeAddress('stale-2'),
+    });
+    expect(result.proposal).toEqual({
+      status: 'failed',
+      message: "Couldn't check the cancellations already waiting. Try again in a moment.",
+    });
+    expect(qortalCallsFor('CANCEL_GROUP_INVITE')).toHaveLength(0);
+    // Other proposals don't depend on it.
+    expect(await guardKick(admin, ADDR.learner)).toBeNull();
   });
 
   it('join: refuses members, banned accounts and a second request', async () => {

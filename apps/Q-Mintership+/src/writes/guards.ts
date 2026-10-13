@@ -42,7 +42,11 @@ async function isAdmin(address: string): Promise<boolean> {
   return admins.admins.some((a) => a.member === address);
 }
 
-/** A waiting (pending or still unconfirmed) MINTER transaction of `type` about `subject`. */
+/**
+ * A waiting (pending or still unconfirmed) MINTER transaction of `type`
+ * about `subject`. Throws when a waiting invite cancellation's invitee can't
+ * be read: it could be this one, so nothing goes ahead on a guess.
+ */
 export async function findWaiting(type: GroupTxType, subject: string): Promise<TxRow | null> {
   const [pending, unconfirmed] = await Promise.all([
     getPending({ force: true }),
@@ -51,6 +55,11 @@ export async function findWaiting(type: GroupTxType, subject: string): Promise<T
   // Cancelled invites carry their group and invitee only in their raw bytes.
   const rows = [...pending.rows, ...unconfirmed.rows];
   const all = type === 'CANCEL_GROUP_INVITE' ? await withCancelInviteTargets(rows) : rows;
+  if (
+    type === 'CANCEL_GROUP_INVITE' &&
+    all.some((tx) => tx.type === 'CANCEL_GROUP_INVITE' && typeof tx.groupId !== 'number')
+  )
+    throw new Error("Couldn't check the cancellations already waiting. Try again in a moment.");
   return (
     all.find(
       (tx) =>
