@@ -1,6 +1,6 @@
 /**
  * The admin-count safeguards against the chain, on a fresh MINTER-like
- * group ("shift3": 13 admin rows, 6 needed; 12 rows, 5 needed):
+ * group ("shift4": 13 admin rows, 6 needed; 12 rows, 5 needed):
  *
  * - before: a removal at 5 of 6 (D1) and an admin removal at 5 of 6 (R).
  *   The app projects that D1 would apply at once if R passes: the chip on
@@ -20,12 +20,12 @@ const range = (prefix, from, to) =>
 export default {
   name: 'shift-app',
   title: 'The app flags the trap before it happens, withdrawing defuses it, and the banner explains it after',
-  group: 'shift3',
+  group: 'shift4',
   async run(ctx) {
-    const g = await makeGroup('shift3', { owner: 'admin14', admins: range('admin', 14, 25), members: ['mem13', 'mem14'] });
+    const g = await makeGroup('shift4', { owner: 'admin14', admins: range('admin', 14, 25), members: ['mem13', 'mem14'] });
     const groupId = g.groupId;
     ctx.record('groupId', groupId);
-    const page = pages(ctx, 'shift3');
+    const page = pages(ctx, 'shift4');
     const A = (l) => ctx.account(l).address;
     const propose = async (proposer, proposal, signers) => {
       const out = await (await page(proposer)).flow('proposeAndSign', proposal);
@@ -44,11 +44,14 @@ export default {
     }, { label: 'both at 5 of 6' });
 
     // A device that sees the old target now (for the banner later).
-    const watcher = await ctx.open('admin17', { group: 'shift3', route: '/decisions' });
+    const watcher = await ctx.open('admin17', { group: 'shift4', route: '/decisions' });
     await watcher.page.locator(`[id="decision-${d1}"]`).waitFor({ timeout: 120_000 });
+    // Then it leaves Decisions (Home doesn't record the target), to come back after the change.
+    const at = (path) => new URL(`${path}?as=admin17&group=shift4`, watcher.page.url()).toString();
+    await watcher.page.goto(at('/'));
 
     // Before: the chip on D1 and the impact panel on R.
-    const admin = await ctx.open('admin14', { group: 'shift3', route: '/decisions' });
+    const admin = await ctx.open('admin14', { group: 'shift4', route: '/decisions' });
     const d1Card = admin.page.locator(`[id="decision-${d1}"]`);
     const rCard = admin.page.locator(`[id="decision-${r}"]`);
     await d1Card.waitFor({ timeout: 120_000 });
@@ -59,7 +62,7 @@ export default {
     ctx.expect(panel, "R's card says the target would drop from 6 to 5");
 
     // Signing R from the dialog (as an admin who hasn't signed it) needs "I've checked these" before Hub.
-    const signer = await ctx.open('admin24', { group: 'shift3', route: '/decisions' });
+    const signer = await ctx.open('admin24', { group: 'shift4', route: '/decisions' });
     const rCard24 = signer.page.locator(`[id="decision-${r}"]`);
     await rCard24.waitFor({ timeout: 120_000 });
     await rCard24.getByRole('button', { name: /^Sign/ }).first().click();
@@ -105,8 +108,8 @@ export default {
     ctx.record('D1afterR', d1Tx.approvalStatus);
     ctx.expect(d1Tx.approvalStatus === 'PENDING', 'D1 did not apply: the withdrawal kept it at 4 of 5');
 
-    // After: the device that last saw 6 explains the change.
-    await watcher.page.reload();
+    // After: the device that last saw 6 comes back to Decisions and is told why it changed.
+    await watcher.page.goto(at('/decisions'));
     const banner = watcher.page.getByText(/target changed from 6 to 5/i).first();
     await banner.waitFor({ timeout: 3 * 60_000 });
     ctx.record('banner', await banner.textContent());
