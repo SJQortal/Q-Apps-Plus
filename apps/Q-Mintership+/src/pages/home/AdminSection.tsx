@@ -18,7 +18,12 @@ import {
 import { useDecisions, useNominations } from '../../hooks/useData';
 import { decisionPath } from '../../routes/paths';
 import { formatCount, formatRelative } from '../../utils/format';
-import { adminSummary, useSendingSignature, useUnusedInvites } from './homeData';
+import {
+  adminSummary,
+  useSendingRejection,
+  useSendingSignature,
+  useUnusedInvites,
+} from './homeData';
 
 const TOP = 3;
 
@@ -27,9 +32,10 @@ export function AdminSection({ publicKey }: { publicKey: string }) {
   const nominations = useNominations(true);
   const unused = useUnusedInvites(true);
   const sending = useSendingSignature();
+  const rejecting = useSendingRejection();
 
   const data = decisions.data;
-  const summary = data ? adminSummary(data, publicKey, sending) : null;
+  const summary = data ? adminSummary(data, publicKey, sending, rejecting) : null;
   const firstSignature = nominations.data?.open.filter((n) => n.state === 'waiting') ?? [];
 
   return (

@@ -3,11 +3,12 @@
  * kicks, bans, admin changes, cancelled invites and bans), most urgent
  * first, plus the nominations no Minter Admin has signed yet.
  *
- * Minter Admins sign here, one at a time or several in a row, make the first
+ * Minter Admins sign here, one at a time or several in a row, reject, or
+ * withdraw their signature (on chain both are a rejection), make the first
  * signature on a nomination, propose kicks, bans, admin changes and
  * cancelled invites (each with their own signature), and clean up stale
- * invites. Everyone else follows along read-only. There is no reject or
- * withdraw: an admin signs or lets it expire.
+ * invites. Doing nothing lets a decision expire. Everyone else follows
+ * along read-only.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -53,16 +54,22 @@ import { useSession } from '../../state/session';
 import { decisionsHideSignedAtom } from '../../state/settings';
 import { displayName, plural } from '../../utils/format';
 import { bulkSign } from '../../writes/flows';
-import { pendingWritesAtom, writeKeys, type PendingWrite } from '../../writes/optimistic';
+import {
+  pendingAnswersIn,
+  pendingWritesAtom,
+  writeKeys,
+  type PendingAnswers,
+} from '../../writes/optimistic';
 import type { Signer } from '../../writes/runner';
 import { BulkDialog } from './BulkDialog';
 import { DecisionCard, type NominationsState, type SubjectFacts } from './DecisionCard';
-import { canSign, decisionCardId, isSignedByMe, myAnswer } from './decisionUi';
+import { answerView, decisionCardId, isWaitingForMe } from './decisionUi';
 import { FirstSignatureDialog } from './FirstSignatureDialog';
 import { HowSigningWorks } from './HowSigningWorks';
 import { ProposeDialog } from './ProposeDialog';
 import { ProposeMenu, type ProposeChoice } from './ProposeMenu';
 import type { ProposeKind } from './proposeKinds';
+import { RejectDialog, type RejectMode } from './RejectDialog';
 import { SignDialog } from './SignDialog';
 import { StaleInvites } from './StaleInvites';
 import { OtherPendingList } from './OtherPendingList';
@@ -76,7 +83,6 @@ const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
   'unconfirmed',
 ]);
 
-const PENDING_MAX_AGE_MS = 15 * 60_000;
 const TARGET_KEY = `${STORAGE_PREFIX}decisions-last-target`;
 const STALE_SECTION_ID = 'stale-invites';
 
@@ -141,6 +147,10 @@ export default function DecisionsPage() {
   const reduced = useReducedMotion();
 
   const [signTarget, setSignTarget] = useState<Decision | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<{
+    decision: Decision;
+    mode: RejectMode;
+  } | null>(null);
   const [firstTarget, setFirstTarget] = useState<Nomination | null>(null);
   const [propose, setPropose] = useState<{
     kind: ProposeKind;
@@ -223,23 +233,20 @@ export default function DecisionsPage() {
       : 'loading';
   const retryNominations = () => void nominationsQ.refetch();
 
-  const pendingOf = (d: Decision): PendingWrite | null => {
-    const entry = writes[writeKeys.sign(d.signature)];
-    return entry && Date.now() - entry.at <= PENDING_MAX_AGE_MS ? entry : null;
-  };
+  const pendingOf = (d: Decision): PendingAnswers => pendingAnswersIn(writes, d.signature);
+  const viewOf = (d: Decision) => answerView(d, myKey, pendingOf(d));
 
   const decisions = data?.decisions ?? [];
   const collecting = decisions.filter((d) => COLLECTING.has(d.phase));
   const closed = decisions.filter((d) => !COLLECTING.has(d.phase));
-  const signedByMe = (d: Decision) => isAdmin && isSignedByMe(myAnswer(d, myKey), pendingOf(d));
+  const signedByMe = (d: Decision) => isAdmin && viewOf(d).shown === 'signed';
   const shown =
     isAdmin && hideSigned
       ? collecting.filter((d) => !signedByMe(d) || d.signature === target)
       : collecting;
   const hiddenCount = collecting.length - shown.length;
-  const signable = isAdmin
-    ? collecting.filter((d) => canSign(d, myAnswer(d, myKey), pendingOf(d)))
-    : [];
+  // Waiting for this admin: no answer yet (a rejection can still be replaced on its card).
+  const signable = isAdmin ? collecting.filter((d) => isWaitingForMe(d, viewOf(d))) : [];
   const waiting = (nominationsQ.data?.open ?? []).filter((n) => n.state === 'waiting');
   const targetKnown =
     !target ||
@@ -372,13 +379,15 @@ export default function DecisionsPage() {
                 <Typography variant="body2" color="text.secondary">
                   Each needs {plural(needed, 'signature')}:{' '}
                   {describeThreshold(data.group.approvalThreshold)}, counting all {totalAdmins}{' '}
-                  admin seats. Sign the ones you agree with; the rest expire by themselves.
+                  admin seats. Sign the ones you agree with. Reject the ones you don’t, or let them
+                  expire: as many rejections end one as rejected.
                 </Typography>
               </Card>
             ) : (
               <Alert severity="info" role="note">
                 Only Minter Admins sign decisions. Here you can follow each one: who proposed it,
-                who has signed, and how long is left. Each needs {needed} Minter Admin signatures.
+                who has signed or rejected it, and how long is left. Each needs {needed} Minter
+                Admin signatures.
               </Alert>
             )}
 
@@ -431,6 +440,8 @@ export default function DecisionsPage() {
                     selected={selected.has(d.signature)}
                     onToggleSelect={toggleSelect}
                     onSign={setSignTarget}
+                    onReject={(decision) => setRejectTarget({ decision, mode: 'reject' })}
+                    onWithdraw={(decision) => setRejectTarget({ decision, mode: 'withdraw' })}
                     highlighted={highlight === d.signature}
                   />
                 ))}
@@ -569,6 +580,12 @@ export default function DecisionsPage() {
       </PageBody>
 
       <SignDialog decision={signTarget} signer={signer} onClose={() => setSignTarget(null)} />
+      <RejectDialog
+        decision={rejectTarget?.decision ?? null}
+        mode={rejectTarget?.mode ?? 'reject'}
+        signer={signer}
+        onClose={() => setRejectTarget(null)}
+      />
       {data ? (
         <FirstSignatureDialog
           nomination={firstTarget}

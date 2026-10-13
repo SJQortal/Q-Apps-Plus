@@ -118,7 +118,7 @@ export function useUnusedInvites(enabled: boolean) {
 export interface AdminSummary {
   /** Decisions still collecting signatures that count (with a tally). */
   open: Decision[];
-  /** Of those, the ones this admin hasn't signed: most urgent first. */
+  /** Of those, the ones this admin hasn't answered (signed or rejected): most urgent first. */
   waiting: Decision[];
   /** Of the open ones, how many this admin has signed (or is confirming). */
   signed: number;
@@ -128,35 +128,52 @@ export interface AdminSummary {
 
 /**
  * The admin's slice of the Decisions data. `sending(sig)` says a signature
- * from this device is already on its way (optimistic), so it doesn't ask again.
+ * from this device is already on its way (optimistic), so it doesn't ask
+ * again; `rejecting(sig)` the same for a rejection (Reject or Withdraw). A
+ * rejection is an answer too: it isn't waiting for this admin any more.
  */
 export function adminSummary(
   data: Pick<DecisionsData, 'decisions' | 'unusual'>,
   publicKey: string,
-  sending: (signature: string) => boolean = () => false
+  sending: (signature: string) => boolean = () => false,
+  rejecting: (signature: string) => boolean = () => false
 ): AdminSummary {
   const open = data.decisions.filter(
     (d) => d.tally !== null && (d.phase === 'open' || d.phase === 'early')
   );
-  const mine = (d: Decision) => {
-    const state = d.tally ? signerState(d.tally, publicKey) : 'none';
-    return state === 'signed' || state === 'confirming' || sending(d.signature);
+  const state = (d: Decision) => (d.tally ? signerState(d.tally, publicKey) : 'none');
+  const signed = (d: Decision) => {
+    const s = state(d);
+    return s === 'signed' || s === 'confirming';
   };
+  const answered = (d: Decision) =>
+    state(d) !== 'none' || sending(d.signature) || rejecting(d.signature);
   return {
     open,
-    waiting: open.filter((d) => !mine(d)),
-    signed: open.filter(mine).length,
+    waiting: open.filter((d) => !answered(d)),
+    signed: open.filter((d) => signed(d) || sending(d.signature)).length,
     unusual: data.unusual.length,
   };
+}
+
+function onItsWay(writes: Record<string, { status: string }>, keys: string[]): boolean {
+  return keys.some((key) => {
+    const w = writes[key];
+    return Boolean(w && (w.status === 'sending' || w.status === 'confirming'));
+  });
 }
 
 /** True while a signature from this device is on its way (optimistic). */
 export function useSendingSignature(): (signature: string) => boolean {
   const writes = useAtomValue(pendingWritesAtom);
-  return (signature) => {
-    const w = writes[writeKeys.sign(signature)];
-    return Boolean(w && (w.status === 'sending' || w.status === 'confirming'));
-  };
+  return (signature) => onItsWay(writes, [writeKeys.sign(signature)]);
+}
+
+/** True while a rejection from this device (Reject, or Withdraw my signature) is on its way. */
+export function useSendingRejection(): (signature: string) => boolean {
+  const writes = useAtomValue(pendingWritesAtom);
+  return (signature) =>
+    onItsWay(writes, [writeKeys.reject(signature), writeKeys.withdraw(signature)]);
 }
 
 /** True when `address` nominated, supported, or (as an admin) proposed this nomination. */

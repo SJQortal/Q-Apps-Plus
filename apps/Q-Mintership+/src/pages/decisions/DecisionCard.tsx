@@ -2,7 +2,9 @@
  * One decision in full, for the Minter Admins and everyone following along:
  * what it does and to whom, who proposed it, the subject's profile (and the
  * nomination behind an invite), k of n with the time left to sign, who has
- * signed, and Sign / Signed ✓ / Signed ✓ (confirming…).
+ * signed and who rejected (against the same target), and the admin's own
+ * answer: Sign and Reject, Signed ✓ with Withdraw my signature, Rejected,
+ * each "(confirming…)" until it is in a block.
  */
 import { useState } from 'react';
 import { Box, Button, Checkbox, Skeleton, Typography } from '@mui/material';
@@ -15,23 +17,31 @@ import { KIND_LABEL, type Decision } from '../../rules/decision';
 import { useAccount } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { AvatarStack, PersonChip, PersonInline } from '../../components/common/Person';
-import { DoneChip, SigningClock } from '../../components/decision/DecisionParts';
+import { AnswerChip, SigningClock } from '../../components/decision/DecisionParts';
 import { ProgressRing } from '../../components/common/ProgressRing';
 import { Card, DecisionPhaseChip } from '../../components/common/Section';
 import { primarySoft } from '../../hub-theme';
 import { formatCount, formatDate, formatRelative, plural } from '../../utils/format';
 import { openQortalLink } from '../../utils/links';
-import { usePendingWrite, writeKeys } from '../../writes/optimistic';
+import { usePendingAnswers } from '../../writes/optimistic';
 import {
+  answerView,
   banEndLine,
   banLengthText,
+  canReject,
   canSign,
+  canWithdraw,
   decisionCardId,
   expiryLine,
-  myAnswer,
   phaseLine,
-  signedLabel,
+  type AnswerIntent,
 } from './decisionUi';
+
+const SENDING_TEXT: Record<AnswerIntent, string> = {
+  sign: 'Signing…',
+  reject: 'Rejecting…',
+  withdraw: 'Withdrawing…',
+};
 
 export interface SubjectFacts {
   isMember: boolean;
@@ -67,6 +77,10 @@ export interface DecisionCardProps {
   selected?: boolean;
   onToggleSelect?: (signature: string) => void;
   onSign?: (decision: Decision) => void;
+  /** Reject (admins who haven't answered). */
+  onReject?: (decision: Decision) => void;
+  /** Withdraw my signature (admins whose signature is in a block). */
+  onWithdraw?: (decision: Decision) => void;
   highlighted?: boolean;
 }
 
@@ -85,14 +99,19 @@ export function DecisionCard(props: DecisionCardProps) {
     selected,
     onToggleSelect,
     onSign,
+    onReject,
+    onWithdraw,
     highlighted,
   } = props;
-  const pending = usePendingWrite(writeKeys.sign(d.signature));
-  const answer = myAnswer(d, myPublicKey);
-  const signable = canAct && canSign(d, answer, pending);
-  const signed = canAct ? signedLabel(answer, pending) : null;
+  const pendingAnswers = usePendingAnswers(d.signature);
+  const view = answerView(d, myPublicKey, pendingAnswers);
+  const signable = canAct && canSign(d, view);
+  const rejectable = canAct && canReject(d, view);
+  const withdrawable = canAct && canWithdraw(d, view);
   const tally = d.tally;
   const confirming = tally ? tally.inFlight.filter((x) => x.approval) : [];
+  const rejecting = tally ? tally.inFlight.filter((x) => !x.approval) : [];
+  const withdrawn = tally ? tally.rejections.filter((x) => x.withdrew).length : 0;
   const title = KIND_LABEL[d.kind];
   const subject = useDisplayName(
     d.subject ?? '',
@@ -124,7 +143,7 @@ export function DecisionCard(props: DecisionCardProps) {
       })}
     >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-        {selecting && signable ? (
+        {selecting && signable && view.shown === 'none' ? (
           <Checkbox
             checked={Boolean(selected)}
             onChange={() => onToggleSelect?.(d.signature)}
@@ -188,7 +207,11 @@ export function DecisionCard(props: DecisionCardProps) {
         </Box>
       ) : null}
 
-      {tally && (tally.approvals.length || confirming.length || tally.rejections.length) ? (
+      {tally &&
+      (tally.approvals.length ||
+        confirming.length ||
+        tally.rejections.length ||
+        rejecting.length) ? (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
           {tally.approvals.length ? (
             <Signers
@@ -206,8 +229,26 @@ export function DecisionCard(props: DecisionCardProps) {
             />
           ) : null}
           {tally.rejections.length ? (
+            <Signers
+              label={`Rejected by ${plural(tally.rejections.length, 'Minter Admin')}${
+                withdrawn ? ` (${withdrawn} withdrew a signature)` : ''
+              }`}
+              people={tally.rejections}
+              names={adminNames}
+            />
+          ) : null}
+          {rejecting.length ? (
+            <Signers
+              label={`Confirming: ${plural(rejecting.length, 'rejection')} on the way`}
+              people={rejecting}
+              names={adminNames}
+              faded
+            />
+          ) : null}
+          {tally.rejections.length ? (
             <Typography variant="body2" color="text.secondary">
-              {plural(tally.rejections.length, 'rejection')} on chain.
+              Rejections: {tally.rejectionCount} of the {tally.needed} that would end it (signatures
+              are counted first).
             </Typography>
           ) : null}
         </Box>
@@ -221,34 +262,54 @@ export function DecisionCard(props: DecisionCardProps) {
 
       {canAct ? (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
-          {signed ? <DoneChip label={signed} settled={answer === 'signed'} /> : null}
-          {pending?.status === 'sending' ? (
+          <AnswerChip view={view} />
+          {view.sending ? (
             <Button variant="contained" disabled sx={{ minHeight: 44 }}>
-              Signing…
+              {SENDING_TEXT[view.sending]}
+            </Button>
+          ) : null}
+          {signable && view.shown === 'rejected' ? (
+            <Typography variant="body2" color="text.secondary" sx={{ flexBasis: '100%' }}>
+              Your latest answer on chain is a rejection. Signing replaces it: only your latest
+              answer counts.
+            </Typography>
+          ) : null}
+          {view.failed && (signable || withdrawable) ? (
+            <Typography variant="body2" sx={{ flexBasis: '100%' }}>
+              Your last try hasn’t shown up yet. Wait a minute before trying again.
+            </Typography>
+          ) : null}
+          {withdrawable ? (
+            <Button
+              variant="outlined"
+              color="inherit"
+              onClick={() => onWithdraw?.(d)}
+              aria-label={`Withdraw my signature (counts as a rejection): ${fullTitle}`}
+              sx={{ minHeight: 44, ml: 'auto', textAlign: 'left' }}
+            >
+              Withdraw my signature (counts as a rejection)
+            </Button>
+          ) : null}
+          {rejectable ? (
+            <Button
+              variant="outlined"
+              color="inherit"
+              onClick={() => onReject?.(d)}
+              aria-label={`Reject: ${fullTitle}`}
+              sx={{ minHeight: 44, minWidth: 96, ml: 'auto' }}
+            >
+              Reject
             </Button>
           ) : null}
           {signable ? (
-            <>
-              {answer === 'rejected' ? (
-                <Typography variant="body2" color="text.secondary" sx={{ flexBasis: '100%' }}>
-                  Your latest answer on chain is a rejection. Signing replaces it: only your latest
-                  answer counts.
-                </Typography>
-              ) : null}
-              {pending?.status === 'failed' ? (
-                <Typography variant="body2" sx={{ flexBasis: '100%' }}>
-                  Your last try hasn’t shown up yet. Wait a minute before signing again.
-                </Typography>
-              ) : null}
-              <Button
-                variant="contained"
-                onClick={() => onSign?.(d)}
-                aria-label={`Sign: ${fullTitle}`}
-                sx={{ minHeight: 44, minWidth: 96, ml: 'auto' }}
-              >
-                Sign
-              </Button>
-            </>
+            <Button
+              variant="contained"
+              onClick={() => onSign?.(d)}
+              aria-label={`Sign: ${fullTitle}`}
+              sx={{ minHeight: 44, minWidth: 96, ml: rejectable ? 0 : 'auto' }}
+            >
+              Sign
+            </Button>
           ) : null}
         </Box>
       ) : null}

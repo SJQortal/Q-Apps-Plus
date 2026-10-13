@@ -13,6 +13,13 @@ export type World = any;
 export function createWorld(): World;
 export function addOtherPending(world: World): string[];
 export function addReady(world: World): void;
+export function addRejections(world: World): {
+  kick: string;
+  ban: string;
+  lift: string;
+  rejectedInvite: string;
+  invitee: string;
+};
 export function answerCore(
   world: World,
   pathname: string,

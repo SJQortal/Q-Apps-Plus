@@ -832,3 +832,72 @@ export function answerQortal(world, persona, request) {
       return null;
   }
 }
+
+// ---- rejections (Reject, Withdraw my signature) ------------------------------
+/**
+ * Add rejections to the world: on the kick, one admin withdrew their
+ * signature and another rejected it (1 of 8 signatures left, 2 rejections);
+ * on the ban, a rejection is still on its way; the lifted ban has 8
+ * rejections (enough to end it); and an invite in the history was rejected.
+ * Returns the signatures involved.
+ */
+export function addRejections(world) {
+  const extra = (i) => fakeAddress(`admin-${i}`);
+  const answer = (pendingTx, who, h, approval, seed) => {
+    const row = {
+      type: 'GROUP_APPROVAL',
+      timestamp: h === null ? NOW - 20_000 : blockTime(h) - 5_000,
+      reference: sig(`rr:${seed}`),
+      fee: '0.01000000',
+      signature: sig(`reject:${seed}`),
+      txGroupId: 0,
+      ...(h === null ? {} : { blockHeight: h }),
+      approvalStatus: 'NOT_REQUIRED',
+      creatorAddress: who,
+      adminPublicKey: pk(who),
+      pendingSignature: pendingTx.signature,
+      approval,
+    };
+    (h === null ? world.unconfirmedApprovals : world.approvals).push(row);
+    return row;
+  };
+  const kick = world.pending.find((t) => t.type === 'GROUP_KICK');
+  const ban = world.pending.find((t) => t.type === 'GROUP_BAN');
+  const lift = world.pending.find((t) => t.type === 'CANCEL_GROUP_BAN');
+  // Kick: admin-5 signed at TIP - 1,099, then withdrew; admin-8 rejected.
+  answer(kick, extra(5), TIP - 900, false, 'kick-5');
+  answer(kick, extra(8), TIP - 800, false, 'kick-8');
+  // Ban: a rejection on its way.
+  answer(ban, extra(10), null, false, 'ban-10');
+  // Lift a ban: 8 rejections, the target.
+  [0, 1, 2, 3, 6, 7, 8, 9].forEach((i, n) =>
+    answer(lift, extra(i), TIP - 500 + n, false, `lift-${i}`)
+  );
+  // A rejected invite in the history.
+  const invitee = fakeAddress('rejected-1');
+  const h = TIP - 4_500;
+  const rejected = {
+    type: 'GROUP_INVITE',
+    timestamp: blockTime(h) - 20_000,
+    reference: sig('r:rejected-invite'),
+    fee: '0.01000000',
+    signature: sig('rejected-invite'),
+    txGroupId: GROUP,
+    blockHeight: h,
+    approvalStatus: 'REJECTED',
+    approvalHeight: h + 400,
+    creatorAddress: extra(7),
+    adminPublicKey: pk(extra(7)),
+    groupId: GROUP,
+    invitee,
+    timeToLive: 864_000,
+  };
+  world.decided.push(rejected);
+  return {
+    kick: kick.signature,
+    ban: ban.signature,
+    lift: lift.signature,
+    rejectedInvite: rejected.signature,
+    invitee,
+  };
+}

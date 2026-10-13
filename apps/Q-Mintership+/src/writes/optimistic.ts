@@ -68,6 +68,36 @@ export function usePendingWrite(key: string | null): PendingWrite | null {
   return entry && Date.now() - entry.at <= EXPIRE_MS ? entry : null;
 }
 
+/** An admin's answers on one decision from this device: Sign, Reject, Withdraw my signature. */
+export interface PendingAnswers {
+  sign: PendingWrite | null;
+  reject: PendingWrite | null;
+  withdraw: PendingWrite | null;
+}
+
+function fresh(entry: PendingWrite | undefined, now: number): PendingWrite | null {
+  return entry && now - entry.at <= EXPIRE_MS ? entry : null;
+}
+
+/** The answers on `pendingSignature` in a snapshot of the writes (pages that read the atom). */
+export function pendingAnswersIn(
+  all: Record<string, PendingWrite>,
+  pendingSignature: string,
+  now = Date.now()
+): PendingAnswers {
+  return {
+    sign: fresh(all[writeKeys.sign(pendingSignature)], now),
+    reject: fresh(all[writeKeys.reject(pendingSignature)], now),
+    withdraw: fresh(all[writeKeys.withdraw(pendingSignature)], now),
+  };
+}
+
+/** React: the admin's answers on a decision still on their way from this device. */
+export function usePendingAnswers(pendingSignature: string): PendingAnswers {
+  const all = useAtomValue(pendingWritesAtom);
+  return pendingAnswersIn(all, pendingSignature);
+}
+
 export const writeKeys = {
   sign: (pendingSignature: string) => `sign:${pendingSignature}`,
   /** Reject: a rejection from an admin who hadn't signed. */

@@ -15,7 +15,12 @@ import { KIND_LABEL, type Decision } from '../../../rules/decision';
 import type { MyStatus } from '../../../rules/status';
 import { formatDuration, plural } from '../../../utils/format';
 import { Hero, HeroText, Num } from '../Hero';
-import { adminSummary, useSendingSignature, type NeededSignatures } from '../homeData';
+import {
+  adminSummary,
+  useSendingRejection,
+  useSendingSignature,
+  type NeededSignatures,
+} from '../homeData';
 
 function MostUrgent({ decision: d, now }: { decision: Decision; now: ChainNow }) {
   const subject = useDisplayName(d.subject ?? '', d.subject ? undefined : null);
@@ -74,6 +79,7 @@ export function AdminHero({
   const decisions = useDecisions(true);
   const nominations = useNominations(true);
   const sending = useSendingSignature();
+  const rejecting = useSendingRejection();
 
   if (!decisions.data) {
     if (decisions.isError) {
@@ -88,7 +94,7 @@ export function AdminHero({
     return <HeroSkeleton />;
   }
 
-  const summary = adminSummary(decisions.data, publicKey, sending);
+  const summary = adminSummary(decisions.data, publicKey, sending, rejecting);
   const count = summary.waiting.length;
   const firstSignature = nominations.data?.open.filter((n) => n.state === 'waiting').length ?? 0;
   const name = status.name;
