@@ -8,6 +8,11 @@
  *    for you in Hub…", "Hub stopped waiting: looking for the transaction…").
  * 3. Result: sent (or found after a timeout), cancelled, stopped by a guard
  *    (with the reason), unknown (check again before retrying), or failed.
+ *
+ * Screen readers hear each stage and the result through one live region
+ * that is there from the start (a region that appears already filled is
+ * not reliably read); a failure is an alert. When the result shows, focus
+ * moves to its main button, never left on the dialog's frame.
  */
 import { useState, type ReactNode } from 'react';
 import { Alert, Box, Button, CircularProgress, Typography } from '@mui/material';
@@ -118,9 +123,11 @@ export function HubStepDialog(props: HubStepDialogProps) {
   };
 
   const outcome = result?.outcome;
-  const backButton = (variant: 'text' | 'contained') =>
+  // The buttons that appear with the result take focus (autoFocus): after a
+  // failure the one that doesn't send again.
+  const backButton = (variant: 'text' | 'contained', focus = false) =>
     back ? (
-      <Button variant={variant} onClick={back}>
+      <Button variant={variant} onClick={back} autoFocus={focus}>
         Back to the form
       </Button>
     ) : null;
@@ -134,7 +141,13 @@ export function HubStepDialog(props: HubStepDialogProps) {
       </>
     ) : phase === 'running' ? null : outcome?.status === 'failed' ? (
       <>
-        {back ? backButton('text') : <Button onClick={close}>Close</Button>}
+        {back ? (
+          backButton('text', true)
+        ) : (
+          <Button onClick={close} autoFocus>
+            Close
+          </Button>
+        )}
         <Button variant="contained" onClick={start}>
           Try again
         </Button>
@@ -142,13 +155,14 @@ export function HubStepDialog(props: HubStepDialogProps) {
     ) : back && (outcome?.status === 'declined' || outcome?.status === 'blocked') ? (
       <>
         <Button onClick={close}>Close</Button>
-        {backButton('contained')}
+        {backButton('contained', true)}
       </>
     ) : (
-      <Button variant="contained" onClick={close}>
+      <Button variant="contained" onClick={close} autoFocus>
         {outcome?.status === 'sent' ? 'Done' : 'Close'}
       </Button>
     );
+  const stageText = `${steps.length > 1 ? `Step ${active.step + 1} of ${steps.length}: ` : ''}${STAGE_TEXT[active.stage]}`;
 
   return (
     <ResponsiveDialog
@@ -200,7 +214,7 @@ export function HubStepDialog(props: HubStepDialogProps) {
                   {step.title}
                 </Typography>
                 {isActive ? (
-                  <Typography variant="body2" role="status" sx={{ color: 'primary.main', mt: 0.5 }}>
+                  <Typography variant="body2" sx={{ color: 'primary.main', mt: 0.5 }}>
                     {STAGE_TEXT[active.stage]}
                     {active.stage === 'waitingForHub'
                       ? ` Hub's dialog closes by itself after ${HUB_DIALOG_SECONDS} seconds.`
@@ -237,13 +251,21 @@ export function HubStepDialog(props: HubStepDialogProps) {
         })}
       </Box>
 
-      {phase === 'done' && outcome ? (
-        <OutcomeMessage
-          outcome={outcome}
-          successTitle={successTitle}
-          successText={successText}
-          extra={result?.message}
-        />
+      {/* One live region, there from the start: the stage while running, then the result. */}
+      <Box role="status" aria-live="polite">
+        {phase === 'running' ? <span className="qmp-visually-hidden">{stageText}</span> : null}
+        {phase === 'done' && outcome && outcome.status !== 'failed' ? (
+          <OutcomeMessage
+            outcome={outcome}
+            successTitle={successTitle}
+            successText={successText}
+            extra={result?.message}
+          />
+        ) : null}
+      </Box>
+      {/* A failure is an alert of its own. */}
+      {phase === 'done' && outcome?.status === 'failed' ? (
+        <OutcomeMessage outcome={outcome} extra={result?.message} />
       ) : null}
     </ResponsiveDialog>
   );
@@ -263,7 +285,7 @@ function OutcomeMessage({
   switch (outcome.status) {
     case 'sent':
       return (
-        <Alert severity="success" role="status">
+        <Alert severity="success" role="note">
           <Typography sx={{ fontWeight: 700 }}>{successTitle ?? 'Sent'}</Typography>
           {successText}
           {outcome.recovered ? (
@@ -276,21 +298,21 @@ function OutcomeMessage({
       );
     case 'declined':
       return (
-        <Alert severity="info" role="status">
+        <Alert severity="info" role="note">
           Cancelled in Hub. Nothing was sent.
           {extra}
         </Alert>
       );
     case 'blocked':
       return (
-        <Alert severity="warning" role="status">
+        <Alert severity="warning" role="note">
           {outcome.reason}
           {extra}
         </Alert>
       );
     case 'unknown':
       return (
-        <Alert severity="warning" role="status">
+        <Alert severity="warning" role="note">
           {outcome.message}
           {extra}
         </Alert>
