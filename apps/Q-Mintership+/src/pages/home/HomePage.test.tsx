@@ -203,6 +203,61 @@ describe('Home: members', () => {
 });
 
 describe('Home: the Minter Admin role', () => {
+  it("posts an optional statement as the proposal's first comment, one more Hub step", async () => {
+    const { world, address } = await renderPage(<HomePage />, { persona: 'learner' });
+    await headline("You're minting, Leo Learner");
+    const role = await screen.findByRole('region', { name: 'Minter Admins' }, T);
+    const proposal = 'statementSignature1111111111111111111111111111111111111111111111';
+    mockQortalRequest('ADD_GROUP_ADMIN', (req: Record<string, unknown>) => {
+      const tx = {
+        type: 'ADD_GROUP_ADMIN',
+        timestamp: Date.now(),
+        reference: 'r',
+        signature: proposal,
+        txGroupId: 694,
+        groupId: 694,
+        approvalStatus: 'PENDING',
+        creatorAddress: address,
+        member: req.qortalAddress,
+      };
+      world.pending.push(tx);
+      return tx;
+    });
+    mockQortalRequest('PUBLISH_QDN_RESOURCE', (req: Record<string, unknown>) => ({
+      type: 'ARBITRARY',
+      timestamp: Date.now(),
+      signature: 'statementPublish11111111111111111111111111111111111111111111111',
+      identifier: req.identifier,
+    }));
+    await waitFor(() =>
+      expect(within(role).getByRole('button', { name: 'Become a Minter Admin' })).toBeEnabled()
+    );
+    await userEvent.click(within(role).getByRole('button', { name: 'Become a Minter Admin' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Become a Minter Admin' }, T);
+    await userEvent.type(
+      within(dialog).getByRole('textbox', { name: 'A short statement (optional)' }),
+      'I check Decisions every day.'
+    );
+    expect(within(dialog).getByText(/Step 2 of 2: Post your statement/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(dialog).findByText('Proposed', {}, T)).toBeVisible();
+    const [published] = qortalCallsFor('PUBLISH_QDN_RESOURCE') as Array<Record<string, unknown>>;
+    expect(published).toEqual(
+      expect.objectContaining({
+        service: 'JSON',
+        identifier: expect.stringMatching(new RegExp(`^qmp-comment-${proposal.slice(0, 40)}-`)),
+      })
+    );
+    const body = JSON.parse(atob(String(published.data64)));
+    expect(body).toEqual(
+      expect.objectContaining({
+        v: 1,
+        key: proposal.slice(0, 40),
+        text: 'I check Decisions every day.',
+      })
+    );
+  });
+
   it('lets any member propose themselves in one Hub step, and says the admins decide', async () => {
     const { world, address } = await renderPage(<HomePage />, { persona: 'learner' });
     await headline("You're minting, Leo Learner");

@@ -20,7 +20,7 @@ import { SignaturePrefix } from '../../components/common/SignaturePrefix';
 import { plural } from '../../utils/format';
 import { SIGN_NEW_TX_CHECK } from '../../writes/explain';
 import { PROPOSAL_TX_TYPE, proposeAndSign, type Proposal } from '../../writes/flows';
-import type { Signer } from '../../writes/runner';
+import type { Signer, WriteOutcome, WriteStage } from '../../writes/runner';
 import { secondStepProblem, signingWindowText } from './decisionUi';
 import { PROPOSE_KINDS } from './proposeKinds';
 import { hasImpact, type ShiftScenario } from '../../rules/targetShift';
@@ -58,6 +58,15 @@ export interface ProposeSignDialogProps {
   returnFocus?: () => HTMLElement | null;
   /** An admin change: what it does to the target if it passes. */
   impact?: ShiftScenario | null;
+  /**
+   * One more Hub step after the proposal (and the proposer's signature):
+   * e.g. a statement posted as the proposal's first comment. Its failure
+   * never undoes the proposal.
+   */
+  followUp?: {
+    step: HubStep;
+    run: (proposalSignature: string, onStage: (stage: WriteStage) => void) => Promise<WriteOutcome>;
+  } | null;
   labelOf?: LabelOf;
 }
 
@@ -79,6 +88,7 @@ export function ProposeSignDialog({
   returnFocus,
   impact,
   labelOf,
+  followUp = null,
 }: ProposeSignDialogProps) {
   const [ending, setEnding] = useState<Ending>(withSignature ? 'both' : 'proposalOnly');
   // The proposal step 1 made, which step 2 signs: Hub shows it as "pendingSignature".
@@ -166,7 +176,10 @@ export function ProposeSignDialog({
         </>
       }
       beforeStart={mustCheck ? ack.confirm : undefined}
-      steps={withSignature ? [proposeStep, signStep] : [proposeStep]}
+      steps={[
+        ...(withSignature ? [proposeStep, signStep] : [proposeStep]),
+        ...(followUp ? [followUp.step] : []),
+      ]}
       run={async (report) => {
         if (!signer) return { outcome: { status: 'blocked', reason: 'Sign in to Hub first.' } };
         setEnding(withSignature ? 'both' : 'proposalOnly');
@@ -176,11 +189,30 @@ export function ProposeSignDialog({
           report(p.step - 1, p.stage);
         });
         if (result.proposal.status !== 'sent') return { outcome: result.proposal };
+        const done = !result.withSignature || result.approval?.status === 'sent';
+        // The follow-up (e.g. a statement) after a proposal that went through.
+        const followed = async (outcome: WriteOutcome) => {
+          if (!followUp || !result.proposalSignature) return { outcome };
+          const index = result.withSignature ? 2 : 1;
+          const extra = await followUp.run(result.proposalSignature, (stage) =>
+            report(index, stage)
+          );
+          if (extra.status === 'sent') return { outcome };
+          return {
+            outcome,
+            message: (
+              <Typography variant="body2" sx={{ mt: 0.5 }}>
+                {followUp.step.title} didn’t go through: {followUpProblem(extra)} Your proposal is
+                in; you can still add a comment to it from Decisions.
+              </Typography>
+            ),
+          };
+        };
         if (!result.withSignature) {
           setEnding('proposalOnly');
-          return { outcome: result.proposal };
+          return followed(result.proposal);
         }
-        if (result.approval?.status === 'sent') return { outcome: result.approval };
+        if (done && result.approval) return followed(result.approval);
         // Step 1 went through, step 2 didn't: show step 1 as the one that is done.
         setEnding('partial');
         report(0, 'done');
@@ -219,4 +251,19 @@ export function ProposeSignDialog({
       }
     />
   );
+}
+
+/** Why a follow-up step (after the proposal) didn't go through, in plain words. */
+function followUpProblem(outcome: WriteOutcome): string {
+  switch (outcome.status) {
+    case 'declined':
+      return 'you cancelled it in Hub.';
+    case 'blocked':
+      return outcome.reason;
+    case 'failed':
+    case 'unknown':
+      return outcome.message;
+    default:
+      return 'it was not sent.';
+  }
 }

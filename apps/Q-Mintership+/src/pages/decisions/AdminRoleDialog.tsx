@@ -9,8 +9,15 @@
  *
  * Both are ProposeSignDialog with the app's words (rules/adminChange.ts).
  * The guards check again before Hub opens.
+ *
+ * Becoming one can come with a short statement, posted under the member's
+ * registered name as the proposal's first public comment: one more Hub step
+ * (PUBLISH_QDN_RESOURCE, 0.01 QORT), only when something is written.
  */
-import { Typography } from '@mui/material';
+import { useState } from 'react';
+import { TextField, Typography } from '@mui/material';
+import { decisionCommentKey } from '../../data/commentRecords';
+import { postComment } from '../../writes/comments';
 import {
   ADMIN_CHANGE_TITLE,
   OWN_ADMIN_ROLE_LEAD,
@@ -19,6 +26,9 @@ import {
 import { shortAddress } from '../../utils/format';
 import type { Signer } from '../../writes/runner';
 import { ProposeSignDialog, type ProposalFacts } from './ProposeSignDialog';
+
+/** A statement is a comment, and comments stay short. */
+const STATEMENT_MAX = 500;
 
 export interface AdminRoleDialogProps {
   open: boolean;
@@ -40,8 +50,34 @@ export function AdminRoleDialog({
   onClose,
   returnFocus,
 }: AdminRoleDialogProps) {
+  const [statement, setStatement] = useState('');
   if (!signer) return null;
   const become = mode === 'become';
+  const text = statement.trim();
+  const followUp =
+    become && name && text
+      ? {
+          step: {
+            action: 'PUBLISH_QDN_RESOURCE',
+            title: 'Post your statement',
+            detail: (
+              <Typography variant="body2">
+                Hub shows a small JSON record published under {name}: your statement, as the first
+                comment on your proposal.
+              </Typography>
+            ),
+            feeTxType: 'ARBITRARY' as const,
+          },
+          run: async (proposalSignature: string, onStage: Parameters<typeof postComment>[2]) =>
+            (
+              await postComment(
+                { ...signer, name },
+                { key: decisionCommentKey(proposalSignature), text },
+                onStage
+              )
+            ).outcome,
+        }
+      : null;
   return (
     <ProposeSignDialog
       open={open}
@@ -60,7 +96,24 @@ export function AdminRoleDialog({
               Minter Admins sign MINTER’s decisions: new minters, removals and bans, and changes to
               the Minter Admins. It works best when you can look at Decisions every few days.
             </Typography>
-            {/* An optional short statement (published as a public comment) goes here. */}
+            {name ? (
+              <TextField
+                label="A short statement (optional)"
+                helperText={`Published under ${name} as the first comment on your proposal, for everyone to read: one more Hub step, 0.01 QORT. Leave it empty to skip it.`}
+                value={statement}
+                onChange={(e) => setStatement(e.target.value.slice(0, STATEMENT_MAX))}
+                multiline
+                minRows={2}
+                fullWidth
+                sx={{ mt: 2 }}
+                slotProps={{ htmlInput: { maxLength: STATEMENT_MAX } }}
+              />
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                With a registered name you could add a short statement, posted as a public comment.
+                You can propose without one.
+              </Typography>
+            )}
           </>
         ) : (
           <Typography>
@@ -69,6 +122,7 @@ export function AdminRoleDialog({
           </Typography>
         )
       }
+      followUp={followUp}
       onClose={onClose}
       returnFocus={returnFocus}
     />
