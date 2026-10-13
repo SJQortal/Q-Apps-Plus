@@ -8,7 +8,7 @@
  * It serves only: it refuses to build, so no build can ever contain any of it.
  */
 import { defineConfig, mergeConfig } from 'vite';
-import base from './vite.config';
+import base from './vite.config.ts';
 import { testnetPlugin } from './testnet/vite-plugin.mjs';
 
 export default defineConfig(({ command }) => {
