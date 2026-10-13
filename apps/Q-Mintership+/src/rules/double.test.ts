@@ -297,11 +297,11 @@ describe('markDoubles and isDouble', () => {
   });
 
   it('clears a flag that no longer holds', () => {
-    const stale = {
+    const outdated = {
       ...decision('addAdmin', MEMBER),
       double: { reason: 'alreadyInEffect' as const },
     };
-    const [after] = markDoubles([stale], { admins: ADMINS });
+    const [after] = markDoubles([outdated], { admins: ADMINS });
     expect(after.double).toBeNull();
     expect(isDouble(after)).toBe(false);
   });
