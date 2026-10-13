@@ -180,6 +180,21 @@ describe('Write dialogs by keyboard: Propose', () => {
     }
   });
 
+  it('Clean up stale invites opens the section and moves focus to it', async () => {
+    const u = user();
+    await decisions();
+    await choose(u, /^Clean up stale invites/);
+    const section = screen.getByRole('region', { name: 'Clean up stale invites' });
+    await waitFor(() => expect(section).toHaveFocus());
+    expect(within(section).getByRole('button', { name: 'Hide the list' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    // The next Tab goes on from there, into the list.
+    await u.tab();
+    expect(section).toContainElement(document.activeElement as HTMLElement);
+  });
+
   it('the Hub step after Review, and its result, put focus back on Propose', async () => {
     const u = user();
     await decisions();

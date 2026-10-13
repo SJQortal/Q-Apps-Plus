@@ -17,7 +17,7 @@
  * checked these" before Hub opens when anything would change, and a banner
  * says when the target changed since this device last looked.
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { PATHS, legacyDecisionPath } from '../../routes/paths';
 import {
@@ -64,6 +64,7 @@ import { hasImpact, isAdminChangeKind, projectShift } from '../../rules/targetSh
 import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
 import { signerOf, useSession } from '../../state/session';
 import { decisionsHideSignedAtom } from '../../state/settings';
+import { focusElement } from '../../utils/focus';
 import { displayName, plural } from '../../utils/format';
 import { bulkSign } from '../../writes/flows';
 import {
@@ -149,6 +150,13 @@ function DecisionsQueue() {
   const [bulkList, setBulkList] = useState<Decision[] | null>(null);
   const [staleExpanded, setStaleExpanded] = useState(false);
   const proposeButton = useRef<HTMLButtonElement | null>(null);
+  // Propose → Clean up stale invites: the section takes focus, after the menu
+  // (or the phone's sheet) has put it back on Propose as it closed.
+  const [staleFocus, setStaleFocus] = useState(0);
+  useEffect(() => {
+    const section = staleFocus ? sectionOf('stale') : null;
+    if (section) focusElement(section, { preventScroll: true });
+  }, [staleFocus]);
 
   const data = decisionsQ.data;
   const ready = session.status === 'ready';
@@ -314,6 +322,7 @@ function DecisionsQueue() {
   const chooseProposal = (choice: ProposeChoice) => {
     if (choice === 'stale') {
       setStaleExpanded(true);
+      setStaleFocus((n) => n + 1);
       document
         .getElementById(STALE_SECTION_ID)
         ?.scrollIntoView?.({ block: 'start', behavior: reduced ? 'auto' : 'smooth' });
