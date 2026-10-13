@@ -3,7 +3,7 @@
  * kept in this browser) and Hub alerts (off until you turn them on; Hub
  * keeps them for your account: qortal/hubAlerts.ts).
  */
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Switch, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useAtom } from 'jotai';
@@ -66,6 +66,8 @@ function HubAlertsRow() {
   const supported = supportsHubAlerts(actions.data);
   const alerts = useQuery(inHub && supported ? 'hub:alerts' : null, () => getHubAlertIds());
   const [busy, setBusy] = useState(false);
+  // Two quick presses before the re-render: the second is ignored too.
+  const busyRef = useRef(false);
   const [note, setNote] = useState<Note>(null);
 
   const role = alertRole(status);
@@ -87,9 +89,13 @@ function HubAlertsRow() {
   else hint = ROLE_HINT[role];
 
   const ready = inHub && supported && !alerts.isLoading && !alerts.isError;
-  const disabled = busy || !ready || (!on && role === 'none') || !status;
+  // Not disabled while its own request runs: a disabled control loses focus.
+  // Presses meanwhile are ignored instead.
+  const disabled = !ready || (!on && role === 'none') || !status;
 
   const toggle = async (next: boolean) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setNote(null);
     try {
@@ -116,6 +122,7 @@ function HubAlertsRow() {
         });
       }
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -159,7 +166,11 @@ function HubAlertsRow() {
         disabled={disabled}
         onChange={(_, next) => void toggle(next)}
         slotProps={{
-          input: { 'aria-labelledby': labelId, 'aria-describedby': hintId },
+          input: {
+            'aria-labelledby': labelId,
+            'aria-describedby': hintId,
+            'aria-busy': busy || undefined,
+          },
         }}
       />
     </Row>

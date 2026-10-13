@@ -78,6 +78,30 @@ describe('Settings → Notifications', () => {
     expect(added.map((r) => r.notificationId)).toEqual(['qmp-new-nomination']);
   });
 
+  it('keeps focus on the switch while Hub asks, and ignores another press meanwhile', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts();
+    let allow: (value: boolean) => void = () => undefined;
+    mockQortalRequest(
+      'NOTIFICATION_PERMISSION',
+      () => new Promise<boolean>((resolve) => (allow = resolve))
+    );
+    await renderPage(<NotificationSettings />, { persona: 'admin', path: '/settings' });
+    await waitFor(() => expect(hubSwitch()).toBeEnabled(), T);
+    await u.click(hubSwitch());
+    expect(await within(section()).findByText('Waiting for Hub…', {}, T)).toBeVisible();
+    expect(hubSwitch()).toBeEnabled();
+    expect(hubSwitch()).toHaveFocus();
+    expect(hubSwitch()).toHaveAttribute('aria-busy', 'true');
+    await u.click(hubSwitch());
+    expect(qortalCallsFor('NOTIFICATION_PERMISSION')).toHaveLength(1);
+    allow(true);
+    expect(await screen.findByText('Hub alerts are on.', {}, T)).toBeVisible();
+    expect(hubSwitch()).toBeChecked();
+    expect(hubSwitch()).toHaveFocus();
+    expect(qortalCallsFor('NOTIFICATION_ADD')).toHaveLength(1);
+  });
+
   it('turns them off again without asking for permission', async () => {
     const u = userEvent.setup();
     hubWithAlerts(['qmp-new-nomination']);
