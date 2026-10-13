@@ -340,26 +340,31 @@ export function DecisionCard(props: DecisionCardProps) {
               Withdraw my signature (counts as a rejection)
             </Button>
           ) : null}
-          {rejectable ? (
-            <Button
-              variant="outlined"
-              color="inherit"
-              onClick={() => onReject?.(d)}
-              aria-label={`Reject: ${fullTitle}`}
-              sx={{ minHeight: 44, minWidth: 96, ml: 'auto' }}
-            >
-              Reject
-            </Button>
-          ) : null}
-          {signable ? (
-            <Button
-              variant="contained"
-              onClick={() => onSign?.(d)}
-              aria-label={`Sign: ${fullTitle}`}
-              sx={{ minHeight: 44, minWidth: 96, ml: rejectable ? 0 : 'auto' }}
-            >
-              Sign
-            </Button>
+          {rejectable || signable ? (
+            // Reject and Sign stay side by side, at the end, when the row wraps on phones.
+            <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
+              {rejectable ? (
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  onClick={() => onReject?.(d)}
+                  aria-label={`Reject: ${fullTitle}`}
+                  sx={{ minHeight: 44, minWidth: 96 }}
+                >
+                  Reject
+                </Button>
+              ) : null}
+              {signable ? (
+                <Button
+                  variant="contained"
+                  onClick={() => onSign?.(d)}
+                  aria-label={`Sign: ${fullTitle}`}
+                  sx={{ minHeight: 44, minWidth: 96 }}
+                >
+                  Sign
+                </Button>
+              ) : null}
+            </Box>
           ) : null}
         </Box>
       ) : null}

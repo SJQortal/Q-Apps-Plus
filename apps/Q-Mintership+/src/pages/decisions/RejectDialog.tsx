@@ -82,8 +82,9 @@ export function RejectDialog({
               </Typography>
             )}
             <Typography>
-              It doesn’t cancel anyone else’s signature, and you can still sign later while there is
-              time: only your latest answer counts.
+              {mode === 'withdraw'
+                ? 'It doesn’t cancel anyone else’s signature, and you can sign again later while there is time.'
+                : 'It doesn’t cancel anyone else’s signature, and you can still sign later while there is time: only your latest answer counts.'}
             </Typography>
             {after && needed !== null ? (
               <Typography sx={{ fontWeight: 600 }}>
