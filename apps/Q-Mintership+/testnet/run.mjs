@@ -108,8 +108,11 @@ function makeContext(browser, scenario, results) {
       return (await fetch(`${BASE}/qmp-testnet-control/log?since=${since}`)).json();
     },
     /** The app in a browser, signed in as `as`, using group `group`. */
-    async open(as, { group = scenario.group ?? 'main', route = '/', viewport } = {}) {
-      const context = await browser.newContext({ viewport: viewport ?? { width: 1280, height: 900 } });
+    async open(as, { group = scenario.group ?? 'main', route = '/', viewport, reducedMotion } = {}) {
+      const context = await browser.newContext({
+        viewport: viewport ?? { width: 1280, height: 900 },
+        ...(reducedMotion ? { reducedMotion } : {}),
+      });
       const page = await context.newPage();
       const errors = [];
       page.on('pageerror', (e) => errors.push(String(e)));
