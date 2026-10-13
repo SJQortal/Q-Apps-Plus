@@ -102,13 +102,14 @@ The status engine (`src/rules/status.ts`, loaded by `src/data/me.ts`) resolves t
 | Membership, join request, stored invite | `/groups/member/{a}`, `/groups/joinrequests/address/{a}`, `/groups/invites/{a}` |
 | Join requests, stored invites, bans | `/groups/joinrequests/694`, `/groups/invites/group/694`, `/groups/bans/694` |
 | Decisions | `/transactions/pending?txGroupId=694` |
+| A pending or decided invite cancellation's group and invitee (Core's JSON leaves them out) | `/transactions/signature/{sig}/raw`, decoded in `src/qortal/groupTxBytes.ts`, read once per transaction |
 | Signatures | `/transactions/search?txType=GROUP_APPROVAL&confirmationStatus=CONFIRMED&startBlock=…&blockLimit=…` over the blocks the pending ones can have signatures in, plus `/transactions/unconfirmed?txType=GROUP_APPROVAL`; joined on `pendingSignature` |
 | Tip and block time | `/blocks/last`, `/blocks/byheight/{h}` (1,000 blocks back) |
 | Accounts, names, fees | `/addresses/{a}`, `/names/primary/{a}`, `/names/{name}`, `/addresses/balance/{a}`, `/addresses/lastreference/{a}`, `/transactions/unitfee` |
 | A person's MINTER history | `/transactions/search?address=…&txType=JOIN_GROUP&…&confirmationStatus=CONFIRMED`, reduced to group 694 |
 | Records | `/arbitrary/resources/searchsimple?service=JSON&identifier=qmp-…&prefix=true`, bodies `/arbitrary/JSON/{name}/{identifier}` cached per version |
 
-The Decisions queue costs about 8 GETs, however many decisions there are.
+The Decisions queue costs about 8 GETs, however many decisions there are (plus one raw read the first time a cancellation is seen). It lists MINTER group changes (groupId 694) as decisions; other pending transactions that wait for MINTER's admins are shown apart, to Minter Admins only, as "Other transactions waiting for Minter Admins", without Sign.
 
 ### Legacy reads (History, read-only)
 
@@ -144,8 +145,14 @@ _Done on the branch; Simon reviews in the morning._
   - **One of each:** one Accept / Join dialog (Home and Nominations), one countdown, one inline person, one avatar row; the same words for the same things (Minter Admin, signatures, admin seats, Join now).
   - **Behaviour:** countdowns show the blocks still to go when the time estimate runs out first; Settings → Motion → Full now overrides the system's reduced motion; Home welcomes a nominee who became a member ("Welcome to MINTER", with the small celebration, once); Back wherever a page isn't in the navigation on screen.
   - **Cleanup:** the scaffold's `src/qortal/constants.ts`, `cache.ts` and `util.ts` are gone; `usePersonStatus` and `useBalance` are shared hooks.
-- **Screenshot check** (`scripts/screens.mjs`, 26 screens × 5 sizes × 4 themes = 520 captures per mode, the page clock pinned to the mock world's time): dark and light both 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations. The `small-text` counts that remain are the 12 px section titles and bottom-bar labels, badge counts and the avatars' decorative letters.
-- **Tests:** 369 passed, 1 skipped (the node decode test, `npm run test:decode`), in 39 files.
+- **Review fixes (2026-10-13):** the 30 confirmed findings of the adversarial review, one commit each.
+  - **Rules:** the Decisions queue lists only MINTER group changes (groupId 694); other pending transactions that wait for MINTER's admins are shown apart, to Minter Admins, without Sign, and the Sign guard refuses them. A pending cancellation names its invitee (from its raw bytes), and the same invite can't be proposed for cancellation twice. Activity's past ranges read the admin changes made after them. A timed ban says it counts from its proposal. "Applies in the next block" only when Core can apply it then.
+  - **Writes:** after a Hub timeout, a cancellation is matched by its invitee, only among transactions made after the write started, never one an earlier write returned. A write dialog reopened quickly starts fresh.
+  - **Efficiency:** one poll per key however many views watch it; members' and admins' status stops at membership, and a status refresh no longer forces the queue; range reads that move with the tip keep one store entry; nominations skip admins' levels and keep members' for 30 minutes.
+  - **Phones and words:** the link a nominator sends opens a page with Accept / Join now; invite cards wait for the nominations before saying "without a nomination record"; `Q-Mintership%2B` deep links open; a failed name lookup is never "no such name"; signers' names show under 44 px avatars; the bottom bar steps aside for the keyboard and Nominate stays in view; Propose keeps the form after "Not now" or a cancel in Hub; never-members are told "join", not "rejoin"; a lifted ban isn't one that "ran out"; picking yourself on Nominate reads "That's your own account".
+  - **Accessibility:** focus returns after a dialog even when its button is gone; write dialogs and bulk runs speak each stage and result through one live region; a Nominate that can't go yet says why and moves to the fix; scroll padding keeps focus clear of sticky bars; the level read is announced at quarters; a deadline's block and date are visible or spoken; Propose's Reason is marked required and Review says what's missing; a new page takes focus on its title and names the document.
+- **Screenshot check** (`scripts/screens.mjs`, 26 screens × 5 sizes × 4 themes = 520 captures per mode, the page clock pinned to the mock world's time): dark and light both 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations (rerun after the review fixes; the mock world now also has transactions that aren't MINTER group changes, a named pending cancellation and a third stale invite). The `small-text` counts that remain are the 12 px section titles and bottom-bar labels, badge counts and the avatars' decorative letters.
+- **Tests:** 418 passed, 7 skipped (the node decode and live-node tests), in 46 files.
 
 ## Follow-ups
 
