@@ -74,3 +74,7 @@ export function addDoubles(world: World): {
   notAdmin: { signature: string; subject: string };
   duplicate: { signature: string; older: string; subject: string };
 };
+
+// A nominator's last visit (activity-alerts).
+export function addNominatorHistory(world: World): string;
+export function nominatorLastVisit(world: World): { address: string; snapshot: unknown };

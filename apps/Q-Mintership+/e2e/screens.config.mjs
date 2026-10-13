@@ -30,6 +30,7 @@ import {
   PEOPLE,
 } from './world.mjs';
 import { addTargetShift } from './world.mjs';
+import { nominatorLastVisit } from './world.mjs';
 
 const world = createWorld();
 // Admins' Decisions also shows the transactions that aren't MINTER group changes.
@@ -544,6 +545,99 @@ export default {
           .selectOption(ADDR.admin, { timeout: 8000 });
         await page.getByRole('link', { name: 'Open your page' }).waitFor({ timeout: 8000 });
         await page.waitForTimeout(300);
+      },
+    },
+    // Settings → Muted names, with three names muted on this device (one long, none of
+    // them a commenter in the mock world). The list is cleared again before the
+    // capture (the page keeps what it read), so later screens see no muted names.
+    {
+      key: 'settings-muted',
+      path: '/settings?as=admin',
+      after: async (page) => {
+        const KEY = 'qmintershipplus-muted-names';
+        await page.addInitScript(
+          ([key, value]) => {
+            try {
+              localStorage.setItem(key, value);
+            } catch {
+              // No storage: the section shows its empty note.
+            }
+          },
+          [
+            KEY,
+            JSON.stringify(['Loud One', 'a-rather-long-registered-name-for-qortal', 'Spam Bot 42']),
+          ]
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+        const section = page.getByRole('region', { name: 'Muted names' });
+        await section
+          .getByRole('button', { name: 'Unmute Spam Bot 42' })
+          .waitFor({ timeout: 8000 });
+        await page.evaluate((key) => {
+          try {
+            localStorage.removeItem(key);
+          } catch {
+            // Nothing was stored.
+          }
+        }, KEY);
+        await page.waitForTimeout(300);
+      },
+    },
+    // A nominator's Home after an earlier visit: how the nominations she made ended.
+    {
+      key: 'home-since-nominator',
+      path: '/?as=nominator',
+      after: async (page) => {
+        const { address, snapshot } = nominatorLastVisit(world);
+        await page.addInitScript(
+          ([key, value]) => {
+            try {
+              localStorage.setItem(key, value);
+            } catch {
+              // No storage: the screen shows no panel, and the wait below says so.
+            }
+          },
+          [lastVisitStorageKey(address), JSON.stringify(snapshot)]
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+        await page
+          .getByRole('region', { name: 'Since your last visit' })
+          .getByText(/^Your nomination of .+ expired$/)
+          .waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
+    // Settings → Notifications for a level 5+ nominator, in a Hub that offers app alerts.
+    {
+      key: 'settings-alerts-nominator',
+      path: '/?as=nominator',
+      after: async (page) => {
+        await settle(page);
+        await page.evaluate(() => {
+          const answer = window.__qplusAnswer;
+          window.__qplusAnswer = async (p) => {
+            if (p.action === 'SHOW_ACTIONS')
+              return [
+                'GET_USER_ACCOUNT',
+                'NOTIFICATION_PERMISSION',
+                'NOTIFICATION_ADD',
+                'NOTIFICATION_GET',
+                'NOTIFICATION_REMOVE',
+              ];
+            if (p.action === 'NOTIFICATION_GET') return [];
+            return answer(p);
+          };
+        });
+        await page
+          .getByRole('button', { name: 'Settings', exact: true })
+          .first()
+          .click({ timeout: 4000 });
+        await page.getByText(/^Support alerts cover the nominations you made/).waitFor({
+          timeout: 8000,
+        });
+        await page.waitForTimeout(400);
       },
     },
   ],

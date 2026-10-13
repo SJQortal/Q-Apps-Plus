@@ -1,8 +1,8 @@
 /**
  * Home's "Since your last visit" against the mock MINTER world: what an
- * admin and a nominee see after an earlier visit (e2e/world.mjs →
- * lastVisitSnapshots), "Mark as seen", and that nothing shows (or is read)
- * without an earlier visit.
+ * admin, a nominee and a nominator see after an earlier visit
+ * (e2e/world.mjs → lastVisitSnapshots, nominatorLastVisit), "Mark as seen",
+ * and that nothing shows (or is read) without an earlier visit.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
@@ -14,7 +14,12 @@ import { sinceLastVisitAtom } from '../../state/notifications';
 import { fetchCallsFor } from '../../test/setup';
 import { renderPage } from '../../test/render';
 import { ADDR, NOW, TIP } from '../../test/world';
-import { lastVisitSnapshots, lastVisitStorageKey } from '../../../e2e/world.mjs';
+import {
+  addNominatorHistory,
+  lastVisitSnapshots,
+  lastVisitStorageKey,
+  nominatorLastVisit,
+} from '../../../e2e/world.mjs';
 import type { World } from '../../../e2e/world.mjs';
 import { base58Encode } from '../../qortal/base58';
 import HomePage from './HomePage';
@@ -335,5 +340,83 @@ describe('Since your last visit: nominees', () => {
     const region = await panel();
     expect(within(region).getByText("You're in")).toBeVisible();
     expect(within(region).getByText('You’re a MINTER member now.')).toBeVisible();
+  });
+});
+
+describe('Since your last visit: nominators', () => {
+  /** Nora Nominator's earlier visit (e2e/world.mjs → nominatorLastVisit). */
+  const seedNominator = (world: World) => {
+    const { address, snapshot } = nominatorLastVisit(world);
+    window.localStorage.setItem(lastVisitStorageKey(address), JSON.stringify(snapshot));
+  };
+  /** Home's own list of Nora's nominations, once it has loaded. */
+  const homeLoaded = async () => {
+    const mine = await screen.findByRole('region', { name: 'Your nominations' }, T);
+    await within(mine).findAllByText(/Wren Waiting|bob\+builder|Uma Urgent/, {}, T);
+  };
+
+  it('says how the nominations you made ended, the good news first, each with a link', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'nominator',
+      setup: (world) => {
+        addNominatorHistory(world);
+        seedNominator(world);
+      },
+    });
+    const region = await panel();
+    const joined = (await within(region).findByText('Remy Recent joined MINTER', {}, T)).closest(
+      'li'
+    ) as HTMLElement;
+    expect(joined).toHaveTextContent('Your nomination was approved.');
+    expect(
+      within(region).getByRole('link', { name: 'Open the nomination of Remy Recent' })
+    ).toHaveAttribute('href', `/nominations/${ADDR.recentlyJoined}`);
+    expect(within(region).getByText('Your nomination of Ünïcode Ñame expired')).toBeVisible();
+    expect(
+      within(region).getByText(
+        'Your nomination of Lapsed Person With A Very Long Name That Wraps On Phones closed'
+      )
+    ).toBeVisible();
+    // Uma Urgent's is still collecting signatures: not news.
+    expect(within(region).queryByText(/Uma Urgent/)).toBeNull();
+    expect(
+      within(region)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent)
+    ).toEqual([
+      expect.stringMatching(/^Remy Recent joined MINTER/),
+      expect.stringMatching(/^Your nomination of Ünïcode Ñame expired/),
+      expect.stringMatching(/^Your nomination of Lapsed Person/),
+    ]);
+    const summary =
+      'Since your last visit: 1 nomination you made was approved, 2 nominations you made ran out.';
+    await waitFor(
+      () =>
+        expect(
+          screen.getAllByRole('status', { name: '' }).filter((el) => el.textContent === summary)
+        ).toHaveLength(1),
+      T
+    );
+  });
+
+  it('has nothing to compare from a visit saved before nominations were kept', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'nominator',
+      setup: (world) => {
+        const { address, snapshot } = nominatorLastVisit(world);
+        const older = { ...(snapshot as Record<string, unknown>) };
+        delete older.made;
+        window.localStorage.setItem(lastVisitStorageKey(address), JSON.stringify(older));
+      },
+    });
+    await homeLoaded();
+    expect(screen.queryByRole('region', { name: 'Since your last visit' })).toBeNull();
+  });
+
+  it('can be switched off in Settings', async () => {
+    getDefaultStore().set(sinceLastVisitAtom, false);
+    await renderPage(<HomePage />, { persona: 'nominator', setup: seedNominator });
+    await homeLoaded();
+    expect(screen.queryByRole('region', { name: 'Since your last visit' })).toBeNull();
   });
 });

@@ -49,11 +49,18 @@ export function visitBaseline(address: string): VisitSnapshot | null {
   return baselines.get(key) ?? null;
 }
 
-/** Save what the app shows now (the baseline from before is kept for this session). */
+/**
+ * Save what the app shows now (the baseline from before is kept for this
+ * session). The nominations a nominator made are only known where a screen
+ * read every nomination: without them, the ones saved last are kept.
+ */
 export function recordVisit(address: string, snapshot: VisitSnapshot): void {
   visitBaseline(address);
+  const key = lastVisitKey(address);
+  const made = snapshot.made ?? readStored(key)?.made;
+  const save = made ? { ...snapshot, made } : snapshot;
   try {
-    window.localStorage.setItem(lastVisitKey(address), JSON.stringify(snapshot));
+    window.localStorage.setItem(key, JSON.stringify(save));
   } catch {
     // Private windows: the panel is a convenience only.
   }

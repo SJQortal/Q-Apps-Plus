@@ -1453,3 +1453,67 @@ export function addDoubles(world) {
     duplicate: { signature: newer.signature, older: older.signature, subject: member9 },
   };
 }
+
+// ---- a nominator's last visit (activity-alerts) ---------------------------
+
+/**
+ * Nora Nominator also nominated Remy Recent, a week ago: Remy's invite was
+ * still collecting signatures at LAST_VISIT_HEIGHT and was approved since
+ * (Remy is a member now). Returns the record's identifier.
+ */
+export function addNominatorHistory(world) {
+  const nominee = ADDR.recentlyJoined;
+  const created = NOW - 7 * 86_400_000;
+  const identifier = `qmp-nomination-${nominee}`;
+  world.records.push({
+    name: PEOPLE.nominator.name,
+    identifier,
+    created,
+    body: {
+      v: 1,
+      nomineeAddress: nominee,
+      nomineeName: PEOPLE.recentlyJoined.name,
+      reason: 'Remy has run a steady node for months and helps newcomers set up theirs.',
+      links: [],
+      createdHeight: TIP - Math.round((NOW - created) / MS_PER_BLOCK),
+      created,
+    },
+  });
+  return identifier;
+}
+
+/**
+ * What this device saved for Nora Nominator at LAST_VISIT_AT, in the app's
+ * snapshot shape (`made`: the nominations she had made then, with each
+ * one's state). Since then Ünïcode Ñame's invite expired and the
+ * long-named Lapsed Person's nomination closed without a first signature
+ * (and, with addNominatorHistory, Remy Recent joined); Uma Urgent's is
+ * still collecting signatures.
+ */
+export function nominatorLastVisit(world) {
+  const made = [];
+  for (const record of world.records) {
+    const nominee = record.body?.nomineeAddress;
+    if (record.name !== PEOPLE.nominator.name || !nominee) continue;
+    if (!record.identifier.startsWith('qmp-nomination-') || record.created > LAST_VISIT_AT)
+      continue;
+    const invite = [...world.pending, ...world.decided].find(
+      (t) =>
+        t.type === 'GROUP_INVITE' &&
+        t.invitee === nominee &&
+        typeof t.blockHeight === 'number' &&
+        t.blockHeight <= LAST_VISIT_HEIGHT &&
+        (t.approvalStatus === 'PENDING' || (t.approvalHeight ?? 0) > LAST_VISIT_HEIGHT)
+    );
+    made.push({
+      nominee,
+      decision: invite?.signature ?? null,
+      state: invite ? 'signing' : 'waiting',
+      publishedAt: record.created,
+    });
+  }
+  return {
+    address: ADDR.nominator,
+    snapshot: { v: 1, at: LAST_VISIT_AT, height: LAST_VISIT_HEIGHT, made },
+  };
+}
