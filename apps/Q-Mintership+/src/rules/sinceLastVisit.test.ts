@@ -516,7 +516,7 @@ describe('summary', () => {
       { kind: 'lapsed' },
     ];
     expect(sinceSummary({ joined: false, admin: null, nominee: kinds })).toBe(
-      "Since your last visit: you've been nominated, a Minter Admin signed your nomination first, your nomination was approved, your nomination expired, your nomination was rejected, your nomination closed without a first signature."
+      "Since your last visit: you've been nominated, a Minter Admin signed your nomination first, your nomination was approved, your nomination expired, your nomination didn't go through this time, your nomination closed without a first signature."
     );
   });
 });

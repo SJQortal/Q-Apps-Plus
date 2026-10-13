@@ -173,6 +173,7 @@ function NominationView({ address }: { address: string }) {
             hideNominee
             copyLink={false}
             comments="open"
+            forNominee={viewer.status?.address === current.nominee}
             actions={<CurrentActions nomination={current} viewer={viewer.status} />}
           />
         </Section>

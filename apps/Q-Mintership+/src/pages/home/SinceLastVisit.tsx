@@ -429,9 +429,15 @@ function NomineeItem({ event: e }: { event: NomineeEvent }) {
         </Item>
       );
     case 'rejected':
+      // The nominee's own words, as on their Home and their own card.
       return (
-        <Item Icon={HighlightOffOutlinedIcon} tone="error" title="Your nomination was rejected">
-          Enough Minter Admins rejected it. You can be nominated again later.
+        <Item
+          Icon={HighlightOffOutlinedIcon}
+          tone="neutral"
+          title="Your nomination didn't go through this time"
+        >
+          Enough Minter Admins said no. Your account and your level stay as they are, and you can be
+          nominated again later.
         </Item>
       );
     case 'lapsed':

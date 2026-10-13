@@ -364,6 +364,36 @@ describe('Since your last visit: nominees', () => {
     ).toBeVisible();
   });
 
+  it('says gently that the nomination didn’t go through', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'expired',
+      setup: (world) => {
+        // Enough Minter Admins said no to Ünïcode Ñame's invite since the last visit.
+        const invite = world.decided.find((t: { invitee?: string }) => t.invitee === ADDR.expired);
+        invite.approvalStatus = 'REJECTED';
+        const record = world.records.find(
+          (r: { identifier: string }) => r.identifier === `qmp-nomination-${ADDR.expired}`
+        );
+        seedNomination(ADDR.expired, {
+          decision: invite.signature,
+          state: 'signing',
+          signed: 2,
+          needed: 8,
+          supporters: 0,
+          publishedAt: record.created,
+        });
+      },
+    });
+    const region = await panel();
+    const item = within(region)
+      .getByText("Your nomination didn't go through this time")
+      .closest('li') as HTMLElement;
+    expect(item).toHaveTextContent(
+      'Enough Minter Admins said no. Your account and your level stay as they are, and you can be nominated again later.'
+    );
+    expect(item).not.toHaveTextContent(/reject/i);
+  });
+
   it('reports an approval from the history when no nomination record shows it', async () => {
     await renderPage(<HomePage />, {
       persona: 'approved',

@@ -5,7 +5,8 @@ import { fakeAddress } from '../../../e2e/world.mjs';
 import { PROPOSE_NOMINATION } from '../../constants/words';
 import { renderPage } from '../../test/render';
 import { mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
-import { ADDR } from '../../test/world';
+import { ADDR, TIP } from '../../test/world';
+import { base58Encode } from '../../qortal/base58';
 import NominationsPage from './NominationsPage';
 import { renderWithWorld } from './testRender';
 
@@ -229,6 +230,41 @@ describe('Nominations page', () => {
       within(mine).getByText("You're ready ✓: when the admins approve, you're in at once.")
     ).toBeInTheDocument();
     expect(within(mine).queryByRole('button', { name: 'Accept nomination' })).toBeNull();
+  });
+
+  it('says rejections on the nominee’s own nomination gently', async () => {
+    await renderWithWorld(<NominationsPage />, {
+      persona: 'nominatedSigning',
+      path: '/nominations',
+      route: '/nominations',
+      before: (world) => {
+        const invite = world.pending.find(
+          (t: { invitee?: string }) => t.invitee === ADDR.nominatedSigning
+        );
+        const admin = fakeAddress('admin-10');
+        world.approvals.push({
+          type: 'GROUP_APPROVAL',
+          timestamp: invite.timestamp + 60_000,
+          signature: base58Encode(new Uint8Array(64).fill(100)),
+          txGroupId: 0,
+          blockHeight: TIP - 100,
+          approvalStatus: 'NOT_REQUIRED',
+          creatorAddress: admin,
+          adminPublicKey: world.accounts.get(admin).publicKey,
+          pendingSignature: invite.signature,
+          approval: false,
+        });
+      },
+    });
+    const mine = await screen.findByRole('region', { name: 'Your nomination' }, { timeout: 4000 });
+    expect(
+      await within(mine).findByText(
+        '1 Minter Admin has said no so far, of the 8 it takes to end it.',
+        {},
+        { timeout: 4000 }
+      )
+    ).toBeVisible();
+    expect(within(mine).getByRole('article')).not.toHaveTextContent(/rejection/i);
   });
 
   it('offers Join now to an approved person, even without a nomination card', async () => {
