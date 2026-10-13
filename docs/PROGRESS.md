@@ -17,7 +17,7 @@ Each app moves through the stages in docs/RELEASE.md: **build** (local, the roun
 | Q-Trade+ | build | `q-trade-plus/pass-1` (no PR) | 1 in progress (kit and shell, part 1) | – | – | finish round 1 |
 | Q-Support+ | build | `q-support-plus/pass-1` (no PR) | 1 in progress (upgrade) | – | – | finish round 1 |
 | Q-Fund+ | build | `q-fund-plus/pass-1` (no PR) | 1 in progress (upgrade) | – | – | finish round 1 |
-| Q-Mintership+ | build | `q-mintership-plus/rewrite-phase-1` (no PR) | rewrite phase 1 in progress | – | – | phases 1–5 of the rewrite plan; publish only at parity |
+| Q-Mintership+ | build | `q-mintership-plus/rewrite`, [#23](https://github.com/SJQortal/Q-Apps-Plus/pull/23) | 2.0 rewrite: night 1 done (all screens, writes behind mocks) | – | – | night 2: every write on a private testnet, then a read-only Hub check |
 | Q-Apps+ | build | `q-apps-plus/first-version` (no PR) | brief and plan | – | n/a (new app) | after the others |
 
 Shared work:
