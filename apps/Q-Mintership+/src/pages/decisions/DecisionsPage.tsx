@@ -160,6 +160,8 @@ function DecisionsQueue() {
   const [bulkList, setBulkList] = useState<Decision[] | null>(null);
   const [staleExpanded, setStaleExpanded] = useState(false);
   const [asking, setAsking] = useState(false);
+  // What opened Ask: null for Propose's menu, else the polls section's own button.
+  const askFrom = useRef<HTMLElement | null>(null);
   const proposeButton = useRef<HTMLButtonElement | null>(null);
   const hideAnsweredSwitch = useRef<HTMLInputElement | null>(null);
   // Propose → Clean up stale invites: the section takes focus, after the menu
@@ -351,6 +353,7 @@ function DecisionsQueue() {
 
   const chooseProposal = (choice: ProposeChoice) => {
     if (choice === 'poll') {
+      askFrom.current = null;
       setAsking(true);
       return;
     }
@@ -603,7 +606,13 @@ function DecisionsQueue() {
 
             {isAdmin && pollAuthor ? (
               <Suspense fallback={<CardSkeleton lines={2} />}>
-                <AdminPollsSection author={pollAuthor} onAsk={() => setAsking(true)} />
+                <AdminPollsSection
+                  author={pollAuthor}
+                  onAsk={(from) => {
+                    askFrom.current = from;
+                    setAsking(true);
+                  }}
+                />
               </Suspense>
             ) : null}
 
@@ -735,7 +744,15 @@ function DecisionsQueue() {
             onClose={() => setAsking(false)}
             author={pollAuthor}
             admins={data.admins.signers.length}
-            returnFocus={() => proposeButton.current}
+            // Back where it was opened: Propose, or the polls section's button (the
+            // section itself once a new poll has replaced its empty state, while
+            // this page is still here).
+            returnFocus={() => {
+              const from = askFrom.current;
+              if (!from || from.isConnected) return from ?? proposeButton.current;
+              const here = proposeButton.current?.isConnected;
+              return (here ? sectionOf('admin-polls') : null) ?? proposeButton.current;
+            }}
           />
         </Suspense>
       ) : null}

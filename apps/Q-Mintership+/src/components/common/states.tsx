@@ -3,7 +3,7 @@
  * skeletons shaped like the content, one plain line about why a view is
  * empty plus the next action, and errors in plain words with Retry.
  */
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { Alert, Box, Button, Skeleton, Typography } from '@mui/material';
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import ErrorOutlineOutlinedIcon from '@mui/icons-material/ErrorOutlineOutlined';
@@ -13,7 +13,8 @@ interface EmptyStateProps {
   title: string;
   description?: ReactNode;
   actionLabel?: string;
-  onAction?: () => void;
+  /** Gets the click, so a dialog it opens can give focus back to this button. */
+  onAction?: (event: MouseEvent<HTMLButtonElement>) => void;
   icon?: ReactNode;
   /** Plain (no card border), for use inside a card. */
   plain?: boolean;
