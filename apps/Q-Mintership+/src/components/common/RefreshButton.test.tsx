@@ -1,7 +1,8 @@
 /**
- * RefreshButton: the icon turns while the read runs, at least once a press,
- * and rests on a whole turn; reduced motion keeps it still. jsdom runs no
- * animations, so the tests send the animation events a browser would.
+ * RefreshButton: the icon turns while the read a press started runs, at
+ * least once a press, and rests on a whole turn; the page's own reads leave
+ * it still; reduced motion keeps it still. jsdom runs no animations, so the
+ * tests send the animation events a browser would.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
@@ -96,12 +97,21 @@ describe('RefreshButton', () => {
     expect(animation()).toBe('none');
   });
 
-  it("turns for the page's own refresh too", () => {
+  it("stays still for the page's own reads (its polls), while the reader is idle", () => {
     const r = show(false);
     r.setFetching(true);
-    expect(turn()).toBe('start');
+    expect(turn()).toBeNull();
+    expect(animation()).toBe('none');
     r.setFetching(false);
+    expect(turn()).toBeNull();
+  });
+
+  it('comes to rest after a press even when a poll starts as it slows down', async () => {
+    const r = show(false);
+    await userEvent.click(r.button());
     ended();
+    expect(turn()).toBe('stop');
+    r.setFetching(true);
     ended();
     expect(turn()).toBeNull();
   });
@@ -141,6 +151,9 @@ describe('RefreshButton', () => {
     expect(turn()).toBeNull();
     expect(icon()).toHaveStyle({ opacity: '0.6' });
     r.setFetching(false);
+    expect(icon()).toHaveStyle({ opacity: '1' });
+    // A poll, with no press: it stays as it is.
+    r.setFetching(true);
     expect(icon()).toHaveStyle({ opacity: '1' });
   });
 });
