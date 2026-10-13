@@ -37,7 +37,7 @@ import { sinceLastVisitAtom } from '../../state/notifications';
 import { formatBlock, formatRelative, plural } from '../../utils/format';
 import { PersonLink } from './Hero';
 
-/** Rows of each kind before "And N more". */
+/** Decided rows before "And N more". */
 const TOP = 3;
 
 const appear = keyframes`
@@ -106,11 +106,62 @@ function useDecisionTitle(kind: Decision['kind'], subject: string | null): strin
   return `${KIND_LABEL[kind]}: ${subject ? who.label : 'an approved invite'}`;
 }
 
+/** Open, and not signed (or rejected) by this admin yet. */
+function waitsFor(d: Decision, publicKey: string): boolean {
+  if (!d.tally || !(d.phase === 'open' || d.phase === 'early')) return false;
+  return !publicKey || signerState(d.tally, publicKey) === 'none';
+}
+
+/** A decision's title inside a sentence. */
+function DecisionTitle({ decision: d }: { decision: Decision }) {
+  return <>{useDecisionTitle(d.kind, d.subject)}</>;
+}
+
+/** "Ban from MINTER: Ben Target; Add to MINTER: bob+builder, and 5 more". */
+function DecisionNames({ decisions }: { decisions: Decision[] }) {
+  const shown = decisions.slice(0, 2);
+  return (
+    <>
+      {shown.map((d, i) => (
+        <span key={d.signature}>
+          {i > 0 ? '; ' : ''}
+          <DecisionTitle decision={d} />
+        </span>
+      ))}
+      {decisions.length > shown.length ? `, and ${decisions.length - shown.length} more` : ''}
+    </>
+  );
+}
+
+/**
+ * New decisions: one row with the decision when there is one, else a count
+ * and the first names (the Home list below already shows the urgent ones).
+ */
+function NewDecisionsItem({ decisions, publicKey }: { decisions: Decision[]; publicKey: string }) {
+  if (decisions.length === 1) {
+    return <NewDecisionItem decision={decisions[0]} publicKey={publicKey} />;
+  }
+  const waiting = decisions.filter((d) => waitsFor(d, publicKey)).length;
+  return (
+    <Item
+      Icon={FiberNewOutlinedIcon}
+      tone="primary"
+      title={plural(decisions.length, 'new decision')}
+      action={
+        <Button component={RouterLink} to={decisionPath()} aria-label="Review the new decisions">
+          Review
+        </Button>
+      }
+    >
+      <DecisionNames decisions={decisions} />.
+      {waiting ? ` ${plural(waiting, 'is', 'are')} waiting for your signature.` : ''}
+    </Item>
+  );
+}
+
 function NewDecisionItem({ decision: d, publicKey }: { decision: Decision; publicKey: string }) {
   const title = useDecisionTitle(d.kind, d.subject);
-  const mine = d.tally && publicKey ? signerState(d.tally, publicKey) : 'none';
-  const waitsForMe =
-    mine === 'none' && d.tally !== null && (d.phase === 'open' || d.phase === 'early');
+  const waitsForMe = waitsFor(d, publicKey);
   return (
     <Item
       Icon={FiberNewOutlinedIcon}
@@ -151,6 +202,37 @@ function NewNominationItem({ nomination: n }: { nomination: Nomination }) {
     >
       {by ? `Nominated by ${by.name} ${formatRelative(n.publishedAt)}` : 'Nominated'} · waiting for
       a first signature
+    </Item>
+  );
+}
+
+function NomineeName({ nomination: n }: { nomination: Nomination }) {
+  return <>{useDisplayName(n.nominee, n.nomineeName ?? undefined).label}</>;
+}
+
+/** New nominations: the one, or a count and the first names. */
+function NewNominationsItem({ nominations }: { nominations: Nomination[] }) {
+  if (nominations.length === 1) return <NewNominationItem nomination={nominations[0]} />;
+  const shown = nominations.slice(0, 2);
+  return (
+    <Item
+      Icon={HowToRegOutlinedIcon}
+      tone="primary"
+      title={plural(nominations.length, 'new nomination')}
+      action={
+        <Button component={RouterLink} to={decisionPath()} aria-label="Review the new nominations">
+          Review
+        </Button>
+      }
+    >
+      {shown.map((n, i) => (
+        <span key={n.nominee}>
+          {i > 0 ? ', ' : ''}
+          <NomineeName nomination={n} />
+        </span>
+      ))}
+      {nominations.length > shown.length ? `, and ${nominations.length - shown.length} more` : ''} ·
+      waiting for a first signature
     </Item>
   );
 }
@@ -347,29 +429,11 @@ export function SinceLastVisit({ status, welcome }: { status: MyStatus; welcome:
             {nominee.map((e) => (
               <NomineeItem key={e.kind} event={e} />
             ))}
-            {admin?.newDecisions.slice(0, TOP).map((d) => (
-              <NewDecisionItem key={d.signature} decision={d} publicKey={session.publicKey} />
-            ))}
-            {admin && admin.newDecisions.length > TOP ? (
-              <MoreItem
-                Icon={FiberNewOutlinedIcon}
-                text={`And ${plural(admin.newDecisions.length - TOP, 'more new decision')}`}
-                to={decisionPath()}
-                label="See all"
-                ariaLabel="See all new decisions"
-              />
+            {admin?.newDecisions.length ? (
+              <NewDecisionsItem decisions={admin.newDecisions} publicKey={session.publicKey} />
             ) : null}
-            {admin?.newNominations.slice(0, TOP).map((n) => (
-              <NewNominationItem key={n.nominee} nomination={n} />
-            ))}
-            {admin && admin.newNominations.length > TOP ? (
-              <MoreItem
-                Icon={HowToRegOutlinedIcon}
-                text={`And ${plural(admin.newNominations.length - TOP, 'more new nomination')}`}
-                to={PATHS.nominations}
-                label="See all"
-                ariaLabel="See all new nominations"
-              />
+            {admin?.newNominations.length ? (
+              <NewNominationsItem nominations={admin.newNominations} />
             ) : null}
             {admin?.decided.slice(0, TOP).map((entry) => (
               <DecidedItem key={entry.signature} entry={entry} />

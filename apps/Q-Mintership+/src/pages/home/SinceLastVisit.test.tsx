@@ -13,7 +13,7 @@ import { resetLastVisitSession } from '../../data/lastVisit';
 import { sinceLastVisitAtom } from '../../state/notifications';
 import { fetchCallsFor } from '../../test/setup';
 import { renderPage } from '../../test/render';
-import { ADDR } from '../../test/world';
+import { ADDR, NOW, TIP } from '../../test/world';
 import { lastVisitSnapshots, lastVisitStorageKey } from '../../../e2e/world.mjs';
 import type { World } from '../../../e2e/world.mjs';
 import HomePage from './HomePage';
@@ -54,12 +54,13 @@ describe('Since your last visit: Minter Admins', () => {
     const region = await panel();
     expect(within(region).getByText(/Your last visit on this device was 5 days ago/)).toBeVisible();
 
-    // Seven new decisions (Avery's own proposal is left out): three, then "And 4 more".
-    const open = await within(region).findAllByRole('link', { name: /^Open: / }, T);
-    expect(open).toHaveLength(3);
-    expect(open[0]).toHaveAccessibleName('Open: Ban from MINTER: Ben Target');
-    expect(within(region).getByText('And 4 more new decisions')).toBeInTheDocument();
-    expect(within(region).getByRole('link', { name: 'See all new decisions' })).toHaveAttribute(
+    // Seven new decisions (Avery's own proposal is left out), in one row: the
+    // list under the hero already shows the urgent ones.
+    const row = (await within(region).findByText('7 new decisions', {}, T)).closest('li');
+    expect(row).toHaveTextContent(
+      'Ban from MINTER: Ben Target; Add to MINTER: bob+builder, and 5 more. 5 are waiting for your signature.'
+    );
+    expect(within(region).getByRole('link', { name: 'Review the new decisions' })).toHaveAttribute(
       'href',
       '/decisions'
     );
@@ -71,7 +72,7 @@ describe('Since your last visit: Minter Admins', () => {
       within(region).getByRole('link', { name: 'Review the nomination of Wren Waiting' })
     ).toBeInTheDocument();
 
-    // Decided since (two more expired than approved): read once each.
+    // Decided since (one approved, two expired): read once each.
     expect(
       await within(region).findByText('Expired without enough signatures in block 2,752,581', {}, T)
     ).toBeVisible();
@@ -96,7 +97,7 @@ describe('Since your last visit: Minter Admins', () => {
     const u = userEvent.setup();
     await renderPage(<HomePage />, { persona: 'admin', setup: seed('admin') });
     const region = await panel();
-    await within(region).findAllByRole('link', { name: /^Open: / }, T);
+    await within(region).findByText('7 new decisions', {}, T);
     await u.click(within(region).getByRole('button', { name: 'Mark as seen' }));
     await waitFor(() =>
       expect(screen.queryByRole('region', { name: 'Since your last visit' })).toBeNull()
@@ -122,6 +123,55 @@ describe('Since your last visit: Minter Admins', () => {
     await screen.findAllByRole('link', { name: /signatures/ }, T);
     expect(screen.queryByRole('region', { name: 'Since your last visit' })).toBeNull();
     expect(fetchCallsFor(ONE_TX)).toHaveLength(0);
+  });
+
+  it('opens a single new decision directly, and counts several new nominations', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'admin',
+      setup: (world) => {
+        // Everything but the kick was there at the last visit, three days ago.
+        const decisions = world.pending
+          .filter((t: { groupId?: number; member?: string }) => t.member !== ADDR.kickTarget)
+          .map((t: { signature: string }) => ({
+            signature: t.signature,
+            kind: 'invite',
+            subject: null,
+            height: null,
+          }));
+        window.localStorage.setItem(
+          lastVisitStorageKey(ADDR.admin),
+          JSON.stringify({ v: 1, at: NOW - 3 * 86_400_000, height: TIP - 3_556, decisions })
+        );
+        // A second nomination published since, by an eligible nominator.
+        world.records.push({
+          name: 'Nora Nominator',
+          identifier: `qmp-nomination-${ADDR.newcomerName}`,
+          created: NOW - 3_600_000,
+          body: {
+            v: 1,
+            nomineeAddress: ADDR.newcomerName,
+            reason: 'Runs a reliable node and helps in the minting chat every week.',
+            links: [],
+          },
+        });
+      },
+    });
+    const region = await panel();
+    const open = await within(region).findByRole(
+      'link',
+      { name: 'Open: Remove from MINTER: Kai Target' },
+      T
+    );
+    expect(open.closest('li')).toHaveTextContent(
+      'New · 2 of 8 signatures · waiting for your signature'
+    );
+    const nominations = (await within(region).findByText('2 new nominations', {}, T)).closest('li');
+    expect(nominations).toHaveTextContent(
+      'Zoë Newcomer, Wren Waiting · waiting for a first signature'
+    );
+    expect(
+      within(region).getByRole('link', { name: 'Review the new nominations' })
+    ).toBeInTheDocument();
   });
 });
 
