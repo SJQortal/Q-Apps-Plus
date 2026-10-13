@@ -77,16 +77,32 @@ describe('how a ban ended', () => {
   });
 
   it('a lifted ban was lifted, whatever its length', () => {
+    // Approved about 4 days after the ban took effect, before a 10-day ban runs out.
+    const early = tx('CANCEL_GROUP_BAN', 1_905_000, { member: me, approvalHeight: 1_907_200 });
     for (const days of [0, 10]) {
-      expect(banEnd(removal([invite, ban(days), lift])!)).toEqual({
+      expect(banEnd(removal([invite, ban(days), early])!)).toEqual({
         how: 'lifted',
-        at: at(1_950_200),
+        at: at(1_907_200),
       });
     }
+    expect(banEnd(removal([invite, ban(0), lift])!)).toEqual({ how: 'lifted', at: at(1_950_200) });
     expect(former([invite, ban(0), lift])).toEqual({
       kind: 'banned',
       at: at(1_901_440),
       ban: { how: 'lifted', at: at(1_950_200) },
+    });
+  });
+
+  it('a timed ban that ran out before its lift was approved ended then', () => {
+    const tenDays = ban(10);
+    const end = tenDays.timestamp + 10 * DAY;
+    // `lift` was approved weeks after the 10-day end.
+    expect(at(1_950_200)).toBeGreaterThan(end);
+    expect(banEnd(removal([invite, tenDays, lift])!)).toEqual({ how: 'ended', at: end });
+    expect(former([invite, tenDays, lift])).toEqual({
+      kind: 'banned',
+      at: at(1_901_440),
+      ban: { how: 'ended', at: end },
     });
   });
 

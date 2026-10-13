@@ -55,13 +55,17 @@ export interface BanEnd {
 
 /**
  * How a removal by a ban ended, for an account the ban no longer holds:
- * lifted by the Minter Admins, or a timed ban past its end. Null for a kick
- * or leaving.
+ * lifted by the Minter Admins, or a timed ban past its end (whichever came
+ * first). Null for a kick or leaving.
  */
 export function banEnd(removal: Removal): BanEnd | null {
   if (removal.kind !== 'ban') return null;
-  if (removal.liftedAt !== undefined) return { how: 'lifted', at: removal.liftedAt };
-  return { how: 'ended', at: removal.endedAt ?? null };
+  // A timed ban that ran out before the lift was approved ended then.
+  const { endedAt, liftedAt } = removal;
+  if (endedAt !== undefined && (liftedAt === undefined || endedAt <= liftedAt))
+    return { how: 'ended', at: endedAt };
+  if (liftedAt !== undefined) return { how: 'lifted', at: liftedAt };
+  return { how: 'ended', at: null };
 }
 
 export interface MyStatus {
