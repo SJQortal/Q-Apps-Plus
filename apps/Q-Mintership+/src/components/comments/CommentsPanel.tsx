@@ -527,7 +527,13 @@ function Composer({
     <Box
       component="form"
       noValidate
-      onSubmit={onSubmit}
+      onSubmit={(event: FormEvent) => {
+        onSubmit(event);
+        // Something to fix: move to the box once the reason shows, so it is read
+        // out with it (invalid, and why) and typing can start there.
+        if (commentTextProblems(value).length)
+          requestAnimationFrame(() => inputRef.current?.focus());
+      }}
       sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}
     >
       <TextField

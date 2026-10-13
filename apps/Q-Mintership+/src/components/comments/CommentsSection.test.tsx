@@ -135,6 +135,10 @@ describe('CommentsSection', () => {
     await user.click(within(panel).getByRole('button', { name: 'Post' }));
     expect(within(panel).getByText('Write something first.')).toBeVisible();
     expect(screen.queryByRole('dialog')).toBeNull();
+    // Focus moves to the box, which now says what's wrong.
+    await waitFor(() => expect(box).toHaveFocus());
+    expect(box).toHaveAttribute('aria-invalid', 'true');
+    expect(box).toHaveAccessibleDescription(/Write something first\./);
 
     await user.type(box, 'Wren keeps a steady node.');
     await user.click(within(panel).getByRole('button', { name: 'Post' }));
