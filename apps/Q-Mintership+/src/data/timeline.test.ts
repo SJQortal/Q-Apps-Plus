@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fetchCallsFor } from '../test/setup';
 import { ADDR, MS_PER_BLOCK, NOW, TIP, installWorld } from '../test/world';
+import { DECLINED, addDecline } from '../../e2e/world.mjs';
 import { getAddressHistory } from './txs';
 import {
   banLength,
@@ -147,6 +148,68 @@ describe('timeline wording', () => {
     expect(memberSince(events, A)).toBeNull();
   });
 
+  it('a kick of someone who asked to join and isn’t a member declined their join request', () => {
+    const join = (h: number) =>
+      tx('JOIN_GROUP', h, { creatorAddress: A, txGroupId: 0, approvalStatus: 'NOT_REQUIRED' });
+    const rows = [
+      // A was a member once, removed, asked again and was declined; asked again since.
+      tx('GROUP_INVITE', 10, { invitee: A, approvalHeight: 20 }),
+      join(30),
+      tx('GROUP_KICK', 40, { member: A, approvalHeight: 50 }),
+      join(60),
+      tx('GROUP_KICK', 70, { member: A, approvalHeight: 80, reason: 'No node' }),
+      join(90),
+      // A decline proposed while A was asking, that ran out.
+      tx('GROUP_KICK', 100, { member: A, approvalStatus: 'EXPIRED' }),
+    ];
+    const events = buildTimeline(rows, CTX);
+    expect(events.map((e) => [e.title, e.tone, e.endedMembership])).toEqual([
+      ['Proposed: Decline a join request', 'neutral', false],
+      ['Asked to join MINTER', 'neutral', false],
+      ['Join request declined', 'neutral', false],
+      ['Asked to join MINTER', 'neutral', false],
+      ['Removed from MINTER', 'bad', true],
+      ['Joined MINTER', 'good', false],
+      ['Approved for MINTER', 'good', false],
+    ]);
+    expect(events.find((e) => e.title === 'Join request declined')?.reason).toBe('No node');
+  });
+
+  it('a former member whose joining isn’t in the rows asks again, and is declined', () => {
+    const rows = [
+      tx('GROUP_INVITE', 10, { invitee: A, approvalHeight: 20 }),
+      tx('GROUP_KICK', 40, { member: A, approvalHeight: 50 }),
+      tx('JOIN_GROUP', 60, { creatorAddress: A, txGroupId: 0, approvalStatus: 'NOT_REQUIRED' }),
+      tx('GROUP_KICK', 70, { member: A, approvalHeight: 80 }),
+    ];
+    expect(buildTimeline(rows, CTX).map((e) => e.title)).toEqual([
+      'Join request declined',
+      'Asked to join MINTER',
+      'Removed from MINTER',
+      'Approved for MINTER',
+    ]);
+  });
+
+  it('trusts a kick marked from the person’s own history over the rows in hand', () => {
+    const declined = {
+      ...tx('GROUP_KICK', 70, { member: A, approvalHeight: 80 }),
+      declinesJoinRequest: true,
+    };
+    const removed = {
+      ...tx('GROUP_KICK', 70, { member: B, approvalHeight: 80 }),
+      declinesJoinRequest: false,
+    };
+    const asked = tx('JOIN_GROUP', 60, {
+      creatorAddress: B,
+      txGroupId: 0,
+      approvalStatus: 'NOT_REQUIRED',
+    });
+    const titleOf = (rows: TxRow[], who: string) =>
+      buildTimeline(rows, CTX).find((e) => e.subject === who && e.kind === 'kick')?.title;
+    expect(titleOf([declined], A)).toBe('Join request declined');
+    expect(titleOf([asked, removed], B)).toBe('Removed from MINTER');
+  });
+
   it('leaves out approvals, other groups and duplicates', () => {
     const invite = tx('GROUP_INVITE', 10, { invitee: A });
     const rows = [
@@ -240,6 +303,8 @@ describe('timeline from the mock node', () => {
     for (const path of fetchCallsFor('/transactions/search')) {
       const params = new URL(path, 'http://x').searchParams;
       expect(Number(params.get('limit'))).toBeGreaterThan(0);
+      // A kicked person's own history (a declined join request?) is paged by address.
+      if (params.get('address')) continue;
       expect(Number(params.get('blockLimit'))).toBeGreaterThan(0);
       expect(Number(params.get('startBlock'))).toBeGreaterThan(0);
     }
@@ -298,5 +363,32 @@ describe('withTargetSteps: what an approved admin change did to the target', () 
   it('leaves the events alone without steps', () => {
     const events = buildTimeline(rows, CTX);
     expect(withTargetSteps(events, [])).toBe(events);
+  });
+});
+
+describe('History: declined join requests', () => {
+  it('reads each kicked person’s own history, so a decline whose join request is older says so', async () => {
+    const { world } = installWorld('learner');
+    const { waiting } = addDecline(world);
+    const anchor = { height: TIP, timestamp: NOW };
+    const first = await loadHistoryWindow(anchor, 0);
+    // Dee's join request is months older than the window.
+    expect(
+      first.rows.some((r) => r.type === 'JOIN_GROUP' && r.creatorAddress === DECLINED.address)
+    ).toBe(false);
+    const events = buildTimeline(first.rows, {
+      msPerBlock: MS_PER_BLOCK,
+      maximumBlockDelay: 10_080,
+    });
+    const about = (who: string) => events.find((e) => e.subject === who && e.kind === 'kick');
+    expect(about(DECLINED.address)).toMatchObject({
+      title: 'Join request declined',
+      tone: 'neutral',
+      reason: 'No node, and no answer in the chat',
+    });
+    expect(about(waiting.subject)?.title).toBe('Proposed: Decline a join request');
+    // One history read per kicked person, paged.
+    expect(fetchCallsFor(`/transactions/search?address=${DECLINED.address}`)).toHaveLength(1);
+    expect(fetchCallsFor(`/transactions/search?address=${waiting.subject}`)).toHaveLength(1);
   });
 });

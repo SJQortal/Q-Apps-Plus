@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { fakeAddress, type World } from '../../../e2e/world.mjs';
+import { DECLINED, addDecline, fakeAddress, type World } from '../../../e2e/world.mjs';
 import { formatDate, shortAddress } from '../../utils/format';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
-import { fetchCallsFor, mockFetchRoute } from '../../test/setup';
+import { fetchCallsFor, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
+import { base58Decode, base58Encode } from '../../qortal/base58';
 import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../test/world';
 import NominationsPage from './NominationsPage';
 
@@ -168,6 +169,53 @@ describe('Ready to mint', () => {
     await waitFor(() => expect(within(list).getAllByText(/^Former member: /)).toHaveLength(3));
   });
 
+  it('never marks a declined join request as a removal from MINTER', async () => {
+    await open('nominator', (world) => {
+      const { declined } = addDecline(world);
+      const kick = world.decided.find(
+        (tx: { signature: string }) => tx.signature === declined.kick
+      );
+      // Kit, removed on 26 Aug 2026, asked again and was declined too.
+      world.decided.push(
+        { ...kick, signature: `${kick.signature.slice(0, -4)}KitD`, member: ADDR.kicked },
+        ...[DECLINED.address, ADDR.kicked].map((who, i) => ({
+          type: 'JOIN_GROUP',
+          timestamp: kick.timestamp - 86_400_000 * (i + 2),
+          signature: `${kick.signature.slice(0, -4)}Jn${i}x`,
+          txGroupId: 0,
+          blockHeight: kick.blockHeight - 2_000 * (i + 1),
+          approvalStatus: 'NOT_REQUIRED',
+          creatorAddress: who,
+          groupId: 694,
+        })),
+        // Both asked again since.
+        ...[DECLINED.address, ADDR.kicked].map((who, i) => ({
+          type: 'JOIN_GROUP',
+          timestamp: kick.timestamp + 86_400_000 * (i + 2),
+          signature: `${kick.signature.slice(0, -4)}Ag${i}x`,
+          txGroupId: 0,
+          blockHeight: kick.approvalHeight + 1_000 * (i + 1),
+          approvalStatus: 'NOT_REQUIRED',
+          creatorAddress: who,
+          groupId: 694,
+        }))
+      );
+      world.joinRequests.push(joinRequest(DECLINED.address), joinRequest(ADDR.kicked));
+    });
+    const dee = await row(DECLINED.name);
+    expect(
+      await within(await row('Kit Kicked')).findByText(
+        'Former member: removed from MINTER on 26 Aug 2026',
+        {},
+        { timeout: 4000 }
+      )
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(fetchCallsFor(`/transactions/search?address=${DECLINED.address}`)).toHaveLength(1)
+    );
+    expect(within(dee).queryByText(/Former member/)).toBeNull();
+  });
+
   it('says when a former member’s ban was lifted', async () => {
     let liftedAt = 0;
     await open('nominator', (world) => {
@@ -230,6 +278,62 @@ describe('Ready to mint', () => {
     expect(reads()).toBe(kitBefore + 1);
     // Rows read a moment ago aren't read again.
     expect(others()).toBe(othersBefore);
+  });
+
+  it('reads a failed row again once per list refresh, not each time another row comes near', async () => {
+    const user = userEvent.setup();
+    // Rows come near only when the test says so, one at a time, as when scrolling.
+    const watchers = new Map<Element, IntersectionObserverCallback>();
+    class OneAtATime {
+      constructor(private readonly callback: IntersectionObserverCallback) {}
+      observe(target: Element) {
+        watchers.set(target, this.callback);
+      }
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    }
+    vi.stubGlobal('IntersectionObserver', OneAtATime);
+    const comeNear = (target: Element) =>
+      act(() =>
+        watchers.get(target)?.(
+          [{ isIntersecting: true, target } as unknown as IntersectionObserverEntry],
+          {} as IntersectionObserver
+        )
+      );
+    const later = Array.from({ length: 8 }, (_, i) => fakeAddress(`near-jr-${i}`));
+    try {
+      await open('nominator', (world) => {
+        world.joinRequests.push(joinRequest(ADDR.kicked), ...later.map(joinRequest));
+        mockFetchRoute(`/addresses/${ADDR.kicked}`, () => new Response('', { status: 500 }));
+      });
+      // Not near yet: nothing is read, so the row shows the short address.
+      const kit = await row(shortAddress(ADDR.kicked));
+      expect(fetchCallsFor(`/addresses/${ADDR.kicked}`)).toHaveLength(0);
+      await comeNear(kit);
+      expect(
+        await within(kit).findByText('Level not available right now', {}, { timeout: 4000 })
+      ).toBeInTheDocument();
+      const reads = () => fetchCallsFor(`/addresses/${ADDR.kicked}`).length;
+      const before = reads();
+      // Scrolling on: each row below comes near and is read, and Kit's failed row isn't.
+      for (const address of later) {
+        await comeNear(await row(shortAddress(address)));
+        await waitFor(() => expect(fetchCallsFor(`/addresses/${address}`)).toHaveLength(1));
+      }
+      expect(reads()).toBe(before);
+
+      // A refresh of the list reads it again, once.
+      vi.setSystemTime(Date.now() + 2 * 60_000);
+      await user.click(screen.getByRole('button', { name: 'Refresh nominations' }));
+      await waitFor(() => expect(reads()).toBe(before + 1));
+      await comeNear(await row(shortAddress(later[0])));
+      expect(reads()).toBe(before + 1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('offers Propose nomination to a level 5+ member, and says where they already nominated', async () => {
@@ -475,4 +579,141 @@ describe('Ready to mint: search', () => {
         .some((el) => /^None of \d+ match “zzz”\.$/.test(el.textContent ?? ''))
     ).toBe(true);
   });
+});
+
+describe('Ready to mint: declining a join request', () => {
+  const declineButtons = async () =>
+    within(await readyList()).queryAllByRole('button', { name: /^Propose to decline / });
+
+  it('offers Decline to Minter Admins only, where no nomination is open', async () => {
+    await open('admin');
+    const jr1 = await row(shortAddress(fakeAddress('jr-1')));
+    expect(
+      await within(jr1).findByRole(
+        'button',
+        { name: `Propose to decline ${shortAddress(fakeAddress('jr-1'))}’s join request` },
+        { timeout: 4000 }
+      )
+    ).toHaveTextContent('Decline');
+    // jr-1, jr-2 and jr-3: the others have a nomination open.
+    expect(await declineButtons()).toHaveLength(3);
+    expect(within(await row('Uma Urgent')).queryByRole('button', { name: /declining/ })).toBeNull();
+  });
+
+  it('offers it to nobody else', async () => {
+    await open('nominator');
+    await row(shortAddress(fakeAddress('jr-1')));
+    await within(await row('Uma Urgent')).findByText('You nominated them', {}, { timeout: 4000 });
+    expect(await declineButtons()).toHaveLength(0);
+  });
+
+  it('says so where a decline is waiting, with a link to it, to everyone', async () => {
+    let signature = '';
+    await open('nominator', (world) => {
+      signature = addDecline(world).waiting.signature;
+    });
+    const jr2 = await row(shortAddress(fakeAddress('jr-2')));
+    const link = await within(jr2).findByRole(
+      'link',
+      {
+        name: `A decline is waiting for Minter Admins’ signatures: open the decision about ${shortAddress(fakeAddress('jr-2'))}`,
+      },
+      { timeout: 4000 }
+    );
+    expect(link).toHaveTextContent('A decline is waiting for Minter Admins’ signatures');
+    expect(link).toHaveAttribute('href', `/decisions/${signature}`);
+  });
+
+  it('a Minter Admin proposes it and signs it, in two Hub steps, from the row', async () => {
+    const user = userEvent.setup();
+    const jr1 = fakeAddress('jr-1');
+    const { world, address, publicKey } = await open('admin', (w) => void addDecline(w));
+    const signature = base58Encode(new Uint8Array(64).fill(9));
+    mockQortalRequest('KICK_FROM_GROUP', (req: Record<string, unknown>) => {
+      const tx = {
+        type: 'GROUP_KICK',
+        timestamp: Date.now(),
+        reference: base58Encode(new Uint8Array(64).fill(1)),
+        signature,
+        txGroupId: 694,
+        groupId: 694,
+        approvalStatus: 'PENDING',
+        creatorAddress: address,
+        adminPublicKey: publicKey,
+        member: req.qortalAddress,
+        reason: req.reason,
+      };
+      world.pending.push(tx);
+      return tx;
+    });
+    mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'OWN' }));
+    // jr-2's decline waits already: no Decline there.
+    const jr2 = await row(shortAddress(fakeAddress('jr-2')));
+    await within(jr2).findByRole('link', { name: /^A decline is waiting/ }, { timeout: 4000 });
+    expect(within(jr2).queryByRole('button', { name: /declining/ })).toBeNull();
+
+    const label = shortAddress(jr1);
+    const mine = await row(label);
+    await user.click(
+      await within(mine).findByRole(
+        'button',
+        { name: `Propose to decline ${label}’s join request` },
+        { timeout: 4000 }
+      )
+    );
+    const form = await screen.findByRole(
+      'dialog',
+      { name: 'Decline a join request' },
+      { timeout: 4000 }
+    );
+    expect(
+      within(form).getByText(
+        'Once 8 Minter Admins sign it, like any decision, their join request goes and they leave Ready to mint for everyone. They can send a new join request later. It costs 0.02 QORT: your proposal and your own signature on it, two Hub steps.'
+      )
+    ).toBeVisible();
+    // The person is picked already, and checked.
+    expect(
+      await within(form).findByText('Nothing stops this proposal.', {}, { timeout: 4000 })
+    ).toBeVisible();
+    // A reason is required.
+    await user.click(within(form).getByRole('button', { name: 'Review' }));
+    expect(within(form).getByRole('textbox', { name: 'Reason' })).toHaveFocus();
+    await user.type(within(form).getByRole('textbox', { name: 'Reason' }), 'No node, asked twice');
+    await user.click(within(form).getByRole('button', { name: 'Review' }));
+
+    const hub = await screen.findByRole(
+      'dialog',
+      { name: `Decline a join request: ${label}` },
+      { timeout: 4000 }
+    );
+    expect(within(hub).getByText('Step 1 of 2: Propose it')).toBeVisible();
+    expect(within(hub).getByText('Step 2 of 2: Sign it')).toBeVisible();
+    expect(within(hub).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
+    expect(within(hub).getByText(/^Reason:/).parentElement).toHaveTextContent(
+      'Reason: No node, asked twice'
+    );
+    await user.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(hub).findByText('Proposed and signed', {}, { timeout: 4000 })
+    ).toBeVisible();
+    expect(qortalCallsFor('KICK_FROM_GROUP')).toEqual([
+      {
+        action: 'KICK_FROM_GROUP',
+        groupId: 694,
+        qortalAddress: jr1,
+        reason: 'No node, asked twice',
+        txGroupId: 694,
+      },
+    ]);
+    const bytes = base58Decode(String(qortalCallsFor('SIGN_TRANSACTION')[0].unsignedBytes));
+    expect(base58Encode(bytes.slice(112, 176))).toBe(signature);
+
+    await user.click(within(hub).getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // Focus is back on the row, which says the decline is on its way.
+    expect(
+      within(await row(label)).getByRole('link', { name: `${label}: open their page` })
+    ).toHaveFocus();
+    expect(within(await row(label)).getByText('Decline sent ✓ (confirming…)')).toBeInTheDocument();
+  }, 30_000);
 });

@@ -2,7 +2,9 @@
  * Ready to mint (`/nominations?show=ready`): the people who asked to join
  * MINTER, for everyone to see, so nominators can find them. Level 5+ members
  * and Minter Admins get Propose nomination on each row, or Add your support where an
- * open nomination already exists. Twenty rows at a time, in Core's order;
+ * open nomination already exists. Minter Admins can also Decline a join
+ * request (readyDeclines.ts); a row whose decline waits says so. Twenty rows
+ * at a time, in Core's order;
  * each row's level, blocks minted, name and whether they were a member
  * before ("Former member: left MINTER on …", "… ban lifted on …") are read
  * only once it is shown.
@@ -11,15 +13,15 @@
  * every row's name.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Box, Button, Skeleton, Typography } from '@mui/material';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Box, Button, Link, Skeleton, Typography } from '@mui/material';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import { PersonChip } from '../../components/common/Person';
 import { Section } from '../../components/common/Section';
 import { EmptyState, ErrorState, ListSkeleton } from '../../components/common/states';
 import { effectiveBlocksMinted, isAddress } from '../../data/accounts';
 import type { Nomination } from '../../data/nominations';
-import { peekQuery } from '../../data/query';
+import { getQueryState, peekQuery } from '../../data/query';
 import {
   READY_PAGE,
   formerKey,
@@ -29,19 +31,30 @@ import {
 } from '../../data/readyToMint';
 import type { AccountInfo } from '../../data/types';
 import { useInView } from '../../hooks/useInView';
+import { useMyStatus } from '../../hooks/useData';
 import type { UseQueryResult } from '../../hooks/useQuery';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
-import { nominatePath } from '../../routes/paths';
+import { decisionPath, nominatePath } from '../../routes/paths';
 import type { FormerMember } from '../../rules/status';
 import { formerMemberLine } from '../person/personWords';
 import { displayName, formatCount } from '../../utils/format';
 import { readable } from '../../utils/readable';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
+import type { Signer } from '../../writes/runner';
+import { useSession } from '../../state/session';
 import { isStillOpenForSupport, myPart } from './filters';
+import { LazyDeclineDialog } from './LazyDeclineDialog';
+import { DECLINE_WAITING, useReadyDeclines } from './readyDeclines';
 import { useReadySearch, useStoredValue } from './useReadyToMint';
 
 /** A name already read for a row on screen (searching never reads one). */
 const knownName = (address: string) => peekQuery<string | null>(`name:${address}`);
+
+/** One of a row's reads (account, name, former-member mark) failed last time. */
+const readFailed = (address: string) =>
+  [`account:${address}`, `name:${address}`, formerKey(address)].some(
+    (key) => getQueryState(key).error !== undefined
+  );
 
 export interface ReadyToMintSectionProps {
   ready: UseQueryResult<ReadyToMint>;
@@ -69,6 +82,25 @@ export function ReadyToMintSection({
 }: ReadyToMintSectionProps) {
   const [shown, setShown] = useState(READY_PAGE);
   const listRef = useRef<HTMLUListElement | null>(null);
+  // Minter Admins can decline a join request (a stable signer: the dialog checks per account).
+  const session = useSession();
+  const { status } = useMyStatus();
+  const signedIn = session.status === 'ready';
+  const signer: Signer | null = useMemo(
+    () => (signedIn ? { address: session.address, publicKey: session.publicKey } : null),
+    [signedIn, session.address, session.publicKey]
+  );
+  const isAdmin = Boolean(me && status?.isAdmin && signer);
+  const declines = useReadyDeclines();
+  const [declining, setDeclining] = useState<{ address: string; name: string | null } | null>(null);
+  const declineFrom = useRef<HTMLElement | null>(null);
+  const onDecline = useCallback(
+    (person: { address: string; name: string | null }, from: HTMLElement) => {
+      declineFrom.current = from.closest('li');
+      setDeclining(person);
+    },
+    []
+  );
   const focusRow = useRef<number | null>(null);
   const find = useReadySearch(search);
   const query = find.query;
@@ -96,11 +128,21 @@ export function ReadyToMintSection({
   // Only the rows on screen are read, six reads at a time; leaving stops new reads.
   // Each refresh of the list (every minute, or Refresh) reads again the rows whose
   // read failed or is older than 10 minutes; the rest are cached and cost nothing.
+  // A row whose read failed waits for that refresh: another row coming near doesn't
+  // read it again.
   const listUpdatedAt = ready.updatedAt;
+  const tried = useRef<{ at: number; rows: Set<string> }>({ at: -1, rows: new Set() });
   useEffect(() => {
     if (!visibleKey) return;
+    if (tried.current.at !== listUpdatedAt) tried.current = { at: listUpdatedAt, rows: new Set() };
+    const { rows } = tried.current;
+    const toRead = visibleKey
+      .split(',')
+      .filter((address) => !rows.has(address) || !readFailed(address));
+    for (const address of toRead) rows.add(address);
+    if (!toRead.length) return;
     const controller = new AbortController();
-    void loadReadyDetails(visibleKey.split(','), { signal: controller.signal });
+    void loadReadyDetails(toRead, { signal: controller.signal });
     return () => controller.abort();
   }, [visibleKey, listUpdatedAt]);
 
@@ -185,6 +227,8 @@ export function ReadyToMintSection({
               canSupport={canSupport}
               onSupport={onSupport}
               onNear={onNear}
+              declineWaiting={declines.waiting.get(address) ?? null}
+              onDecline={isAdmin && declines.ctx ? onDecline : null}
             />
           ))}
         </Box>
@@ -243,6 +287,21 @@ export function ReadyToMintSection({
         {found}
       </Typography>
       {body}
+      {signer && declines.ctx ? (
+        <LazyDeclineDialog
+          open={declining !== null}
+          signer={signer}
+          ctx={declines.ctx}
+          preset={declining}
+          onClose={() => setDeclining(null)}
+          // Back to the row it came from (its Decline may be gone by then), or the list.
+          returnFocus={() =>
+            declineFrom.current?.isConnected
+              ? declineFrom.current.querySelector<HTMLElement>('a, button')
+              : listRef.current
+          }
+        />
+      ) : null}
     </Section>
   );
 }
@@ -261,10 +320,16 @@ function ReadyRow({
   canSupport,
   onSupport,
   onNear,
+  declineWaiting,
+  onDecline,
 }: {
   address: string;
   /** Called once the row comes near the screen, so its account and name are read. */
   onNear: (address: string) => void;
+  /** The waiting decline of their join request (its signature), if any. */
+  declineWaiting: string | null;
+  /** Minter Admins: open Decline a join request for this person (null for everyone else). */
+  onDecline: ((person: { address: string; name: string | null }, from: HTMLElement) => void) | null;
   /** Their open nomination, null for none, undefined while the nominations load. */
   nomination: Nomination | null | undefined;
   me: string;
@@ -283,6 +348,7 @@ function ReadyRow({
   const former = useStoredValue<FormerMember | null>(formerKey(address)).data ?? null;
   const supportPending = usePendingWrite(nomination ? writeKeys.support(address) : null);
   const nominatePending = usePendingWrite(writeKeys.nominate(address));
+  const declinePending = usePendingWrite(onDecline ? writeKeys.propose('kick', address) : null);
   // Never undefined: PersonChip would look the name up itself, outside the six-at-a-time reads.
   const shownName = name.data ?? null;
   const label = displayName(shownName, address);
@@ -351,6 +417,43 @@ function ReadyRow({
     );
   }
 
+  // Declining their join request: one waiting, one on its way, or Decline for Minter Admins.
+  let decline: ReactNode = null;
+  if (declinePending && declinePending.status !== 'failed') {
+    decline = (
+      <Typography
+        variant="body2"
+        role="status"
+        sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: readable('success') }}
+      >
+        <CheckCircleOutlineOutlinedIcon aria-hidden sx={{ fontSize: 18 }} />
+        {declinePending.status === 'sending' ? 'Sending…' : 'Decline sent ✓ (confirming…)'}
+      </Typography>
+    );
+  } else if (declineWaiting) {
+    decline = (
+      <Link
+        component={RouterLink}
+        to={decisionPath(declineWaiting)}
+        variant="body2"
+        aria-label={`${DECLINE_WAITING}: open the decision about ${label}`}
+        sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 44 }}
+      >
+        {DECLINE_WAITING}
+      </Link>
+    );
+  } else if (onDecline && nomination === null && address !== me) {
+    decline = (
+      <Button
+        onClick={(e) => onDecline({ address, name: shownName }, e.currentTarget)}
+        aria-label={`Propose to decline ${label}’s join request`}
+        sx={{ minHeight: 44 }}
+      >
+        Decline
+      </Button>
+    );
+  }
+
   return (
     <Box
       ref={setRow}
@@ -370,7 +473,7 @@ function ReadyRow({
       <Box sx={{ flex: '1 1 220px', minWidth: 0 }}>
         <PersonChip address={address} name={shownName} size={40} secondary={secondary} />
       </Box>
-      {done || action ? (
+      {done || action || decline ? (
         <Box
           sx={{
             display: 'flex',
@@ -400,6 +503,7 @@ function ReadyRow({
             </Typography>
           ) : null}
           {action}
+          {decline}
         </Box>
       ) : null}
     </Box>

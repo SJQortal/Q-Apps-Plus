@@ -10,6 +10,8 @@
  * Reads: the same cached status read Home uses (account, name, membership,
  * join request, stored invite, bans, MINTER history, nominations), plus the
  * chain tip and group settings. The original app's cards load on their own.
+ * A Minter Admin's kicks of others also read each kicked person's history,
+ * to tell a declined join request from a removal.
  */
 import { useMemo, type ReactNode } from 'react';
 import { Link as RouterLink, Navigate, useParams } from 'react-router-dom';
@@ -19,8 +21,10 @@ import { getNameOwner, isAddress } from '../../data/accounts';
 import {
   buildTimeline,
   eventsAbout,
+  loadDeclineMarks,
   memberSince,
   proposalsBy,
+  withDeclineMarks,
   withOwnSubject,
 } from '../../data/timeline';
 import { isOpenState } from '../../rules/nomination';
@@ -133,15 +137,23 @@ function PersonView({ address }: { address: string }) {
   const person = status.data;
   const msPerBlock = chain.data?.msPerBlock;
   const maximumBlockDelay = group.data?.maximumBlockDelay ?? 10_080;
+  // Kicks they proposed for others: whether each declined a join request, from
+  // that person's own history (read only when there are such kicks).
+  const kickedOthers = Boolean(
+    history.data?.rows.some((tx) => tx.type === 'GROUP_KICK' && tx.member && tx.member !== address)
+  );
+  const marks = useQuery(kickedOthers ? `declinemarks:${address}` : null, (force) =>
+    loadDeclineMarks(address, history.data?.rows ?? [], { force })
+  );
   const events = useMemo(
     () =>
       history.data && msPerBlock
-        ? buildTimeline(withOwnSubject(history.data.rows, address), {
-            msPerBlock,
-            maximumBlockDelay,
-          })
+        ? buildTimeline(
+            withOwnSubject(withDeclineMarks(history.data.rows, marks.data ?? new Map()), address),
+            { msPerBlock, maximumBlockDelay }
+          )
         : null,
-    [history.data, msPerBlock, maximumBlockDelay, address]
+    [history.data, marks.data, msPerBlock, maximumBlockDelay, address]
   );
   const about = events ? eventsAbout(events, address) : null;
   const proposals = events ? proposalsBy(events, address) : [];

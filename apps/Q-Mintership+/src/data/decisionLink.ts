@@ -9,8 +9,14 @@
  * window), kept 30 minutes. A waiting one is shown from the Decisions queue
  * itself (hooks/useData.ts → useDecisions), which already has its
  * signatures and clock.
+ *
+ * A kick says whether it declines a join request (rules/decline.ts): while
+ * it waits, from the join requests (the cached list the nominations read);
+ * once decided, from the person's own MINTER history (the cached read their
+ * page makes).
  */
 import { isMinterGroupChange, isUnusualApprovalRoute, toApprovalRow } from '../rules/decision';
+import { isDeclineIn, joinRequestStory } from '../rules/decline';
 import {
   decidedHeight,
   decisionOutcome,
@@ -19,9 +25,14 @@ import {
 } from '../rules/outcome';
 import { latestPerSigner, type ApprovalRow } from '../rules/tally';
 import { getChainNow } from './chain';
-import { getGroupInfo } from './group';
+import { getGroupInfo, getJoinRequests } from './group';
 import { fetchQuery } from './query';
-import { getApprovalsInRange, getTransaction, withCancelInviteTargets } from './txs';
+import {
+  getAddressHistory,
+  getApprovalsInRange,
+  getTransaction,
+  withCancelInviteTargets,
+} from './txs';
 import type { TxRow } from './types';
 
 export type DecisionLink =
@@ -32,10 +43,12 @@ export type DecisionLink =
   /** A MINTER change on an unusual approval route (shown to Minter Admins only). */
   | { kind: 'unusual'; tx: TxRow }
   /** Still collecting signatures: the queue has its card. */
-  | { kind: 'pending'; tx: TxRow }
+  | { kind: 'pending'; tx: TxRow; decline?: boolean }
   | {
       kind: 'decided';
       tx: TxRow;
+      /** A kick that declined (or proposed to decline) a join request. */
+      decline?: boolean;
       outcome: Exclude<DecisionOutcome, 'pending'>;
       /** The block it was decided in, when the chain says. */
       decidedAt: number | null;
@@ -66,6 +79,18 @@ async function decidedSignatures(
   };
 }
 
+/** Whether a kick declines a join request: false for anything else, or when it can't be read. */
+async function declines(tx: TxRow, waiting: boolean): Promise<boolean> {
+  const member = tx.type === 'GROUP_KICK' ? tx.member : undefined;
+  if (!member) return false;
+  try {
+    if (waiting) return (await getJoinRequests()).some((r) => r.joiner === member);
+    return isDeclineIn(joinRequestStory(member, (await getAddressHistory(member)).rows), tx);
+  } catch {
+    return false;
+  }
+}
+
 /** Key `decisionlink:<signature>`. */
 export function loadDecisionLink(
   signature: string,
@@ -81,8 +106,8 @@ export function loadDecisionLink(
       if (isUnusualApprovalRoute(tx)) return { kind: 'unusual', tx };
       if (!isMinterGroupChange(tx)) return { kind: 'other', tx };
       const outcome = decisionOutcome(tx);
-      if (outcome === 'pending') return { kind: 'pending', tx };
-      const group = await getGroupInfo();
+      if (outcome === 'pending') return { kind: 'pending', tx, decline: await declines(tx, true) };
+      const [group, decline] = await Promise.all([getGroupInfo(), declines(tx, false)]);
       let signatures = { approvals: [] as ApprovalRow[], rejections: [] as ApprovalRow[] };
       let signaturesUnread = false;
       if (outcome !== 'applied') {
@@ -95,6 +120,7 @@ export function loadDecisionLink(
       return {
         kind: 'decided',
         tx,
+        decline,
         outcome,
         decidedAt: decidedHeight(tx, group.maximumBlockDelay),
         ...signatures,

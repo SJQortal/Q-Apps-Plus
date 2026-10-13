@@ -30,6 +30,7 @@ import {
   guardCancelBan,
   guardCancelInvite,
   guardConsidering,
+  guardDecline,
   guardInvite,
   guardJoin,
   guardKick,
@@ -367,17 +368,19 @@ export async function bulkSign(
 const subjectMatch = (type: string, subject: string) => (tx: TxRow) =>
   tx.type === type && decisionSubject(tx) === subject;
 
+/** A kick; with `decline`, of someone who asked to join and isn't a member (guardDecline). */
 export function proposeKick(
   signer: Signer,
   member: string,
   reason: string,
-  onStage?: (s: WriteStage) => void
+  onStage?: (s: WriteStage) => void,
+  decline = false
 ): Promise<WriteOutcome> {
   return tracked(writeKeys.propose('kick', member), () =>
     runWrite({
       request: kickRequest(member, reason),
       signer,
-      precheck: () => guardKick(signer, member),
+      precheck: () => (decline ? guardDecline(signer, member) : guardKick(signer, member)),
       match: subjectMatch('GROUP_KICK', member),
       onStage,
     })
@@ -475,7 +478,8 @@ export function proposeRemoveAdmin(
  * it by Minter Admins, and an admin role for themselves by any MINTER member.
  */
 export type Proposal =
-  | { kind: 'kick'; subject: string; reason: string }
+  /** `decline`: their join request, under guardDecline (the same KICK_FROM_GROUP). */
+  | { kind: 'kick'; subject: string; reason: string; decline?: boolean }
   | { kind: 'ban'; subject: string; reason: string; banSeconds: number }
   | { kind: 'addAdmin' | 'removeAdmin' | 'cancelBan' | 'cancelInvite'; subject: string };
 
@@ -499,7 +503,7 @@ export function propose(
 ): Promise<WriteOutcome> {
   switch (p.kind) {
     case 'kick':
-      return proposeKick(signer, p.subject, p.reason, onStage);
+      return proposeKick(signer, p.subject, p.reason, onStage, p.decline);
     case 'ban':
       return proposeBan(signer, p.subject, p.reason, p.banSeconds, onStage);
     case 'addAdmin':

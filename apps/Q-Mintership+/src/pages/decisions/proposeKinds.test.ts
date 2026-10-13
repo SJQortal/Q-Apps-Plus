@@ -4,7 +4,7 @@ import { ADDR, installWorld } from '../../test/world';
 import { fakeAddress } from '../../../e2e/world.mjs';
 import { TX_TYPE_OF_ACTION } from '../../writes/hubActions';
 import { PROPOSAL_TX_TYPE } from '../../writes/flows';
-import { PROPOSE_KINDS, checkSubject, resolvePerson } from './proposeKinds';
+import { PROPOSE_KINDS, checkSubject, proposalKindOf, resolvePerson } from './proposeKinds';
 
 afterEach(() => vi.useRealTimers());
 
@@ -12,9 +12,21 @@ describe('proposals: kinds', () => {
   it('opens the Hub action that creates the transaction each proposal pays for', () => {
     for (const [kind, info] of Object.entries(PROPOSE_KINDS)) {
       expect(TX_TYPE_OF_ACTION[info.action], kind).toBe(info.txType);
-      expect(PROPOSAL_TX_TYPE[kind as keyof typeof PROPOSAL_TX_TYPE], kind).toBe(info.txType);
+      expect(PROPOSAL_TX_TYPE[proposalKindOf(kind as keyof typeof PROPOSE_KINDS)], kind).toBe(
+        info.txType
+      );
     }
-    expect(Object.keys(PROPOSE_KINDS).sort()).toEqual(Object.keys(PROPOSAL_TX_TYPE).sort());
+    expect(Object.keys(PROPOSE_KINDS).sort()).toEqual(
+      [...Object.keys(PROPOSAL_TX_TYPE), 'decline'].sort()
+    );
+  });
+
+  it('declines a join request with a kick', () => {
+    expect(proposalKindOf('decline')).toBe('kick');
+    expect(PROPOSE_KINDS.decline).toMatchObject({
+      label: 'Decline a join request',
+      action: 'KICK_FROM_GROUP',
+    });
   });
 });
 
@@ -49,6 +61,22 @@ describe('proposals: person and check', () => {
     await expect(checkSubject('removeAdmin', signer, owner)).resolves.toMatchObject({
       status: 'blocked',
       reason: expect.stringMatching(/owner/),
+    });
+  });
+
+  it('declines only a join request from someone not in MINTER', async () => {
+    const { address, publicKey } = installWorld('admin');
+    const signer = { address, publicKey };
+    await expect(checkSubject('decline', signer, fakeAddress('jr-1'))).resolves.toEqual({
+      status: 'ok',
+    });
+    // An admin isn't switched to "remove their admin role first": there's no request to decline.
+    await expect(checkSubject('decline', signer, ADDR.demote)).resolves.toMatchObject({
+      status: 'blocked',
+    });
+    await expect(checkSubject('decline', signer, ADDR.learner)).resolves.toMatchObject({
+      status: 'blocked',
+      reason: expect.stringMatching(/^Already in MINTER/),
     });
   });
 

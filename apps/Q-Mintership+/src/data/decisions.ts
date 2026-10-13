@@ -20,6 +20,10 @@
  * (rules/double.ts) from the admin rows read here. The approved addition
  * that made someone a Minter Admin is named only when their history is
  * already in this session's cache: no read is made for it.
+ *
+ * A waiting kick of someone with a join request is marked as a decline
+ * (rules/decline.ts), from the join requests the nominations read already
+ * (cached, and read only while a kick waits).
  */
 import {
   buildDecision,
@@ -31,10 +35,11 @@ import {
   type Decision,
   type OtherPending,
 } from '../rules/decision';
+import { markDeclines } from '../rules/decline';
 import { approvedAddFor, markDoubles } from '../rules/double';
 import type { ApprovalRow } from '../rules/tally';
 import { getChainNow, type ChainNow } from './chain';
-import { getAdmins, getGroupInfo, type AdminList } from './group';
+import { getAdmins, getGroupInfo, getJoinRequests, type AdminList } from './group';
 import type { PagedResult } from './core';
 import { fetchQuery, peekQuery } from './query';
 import {
@@ -105,8 +110,16 @@ export function loadDecisions(options: { force?: boolean } = {}): Promise<Decisi
       };
       const built = minterRows.map((tx) => buildDecision(tx, ctx));
       const adminSet = new Set(admins.admins.map((a) => a.member));
+      const asking = await askingToJoin(built);
       const decisions = sortDecisions(
-        markDoubles(built, { admins: adminSet, approvedAdds: knownApprovedAdds(built, adminSet) })
+        markDeclines(
+          markDoubles(built, {
+            admins: adminSet,
+            approvedAdds: knownApprovedAdds(built, adminSet),
+          }),
+          asking,
+          adminSet
+        )
       );
       const unusual = allPending.rows
         .filter(isUnusualApprovalRoute)
@@ -126,6 +139,16 @@ export function loadDecisions(options: { force?: boolean } = {}): Promise<Decisi
     },
     { ttlMs: 45_000, force: options.force }
   );
+}
+
+/**
+ * Who has a join request, read only while a kick waits (the cached list the
+ * nominations read). Empty when it can't be read: the kicks keep their title.
+ */
+async function askingToJoin(decisions: readonly Decision[]): Promise<Set<string>> {
+  if (!decisions.some((d) => d.kind === 'kick')) return new Set();
+  const rows = await getJoinRequests().catch(() => []);
+  return new Set(rows.map((r) => r.joiner));
 }
 
 /**

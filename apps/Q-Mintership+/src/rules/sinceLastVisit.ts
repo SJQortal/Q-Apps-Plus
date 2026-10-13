@@ -40,6 +40,8 @@ export interface SnapDecision {
   subject: string | null;
   /** The block it was confirmed in (null while unconfirmed). */
   height: number | null;
+  /** A kick that declines a join request (added on night 3; older snapshots have none). */
+  decline?: true;
 }
 
 /** The account's newest nomination as the snapshot keeps it. */
@@ -110,7 +112,13 @@ export function newestNomination(list: readonly Nomination[]): Nomination | null
 }
 
 export function snapDecision(d: Decision): SnapDecision {
-  return { signature: d.signature, kind: d.kind, subject: d.subject, height: d.blockHeight };
+  return {
+    signature: d.signature,
+    kind: d.kind,
+    subject: d.subject,
+    height: d.blockHeight,
+    ...(d.decline ? { decline: true as const } : {}),
+  };
 }
 
 export function snapNomination(n: Nomination | null): SnapNomination | null {
@@ -185,7 +193,13 @@ function parseSnapDecision(raw: unknown): SnapDecision | null {
   if (typeof d.kind !== 'string' || !KINDS.has(d.kind)) return null;
   if (!(d.subject === null || typeof d.subject === 'string')) return null;
   if (!isHeight(d.height)) return null;
-  return { signature: d.signature, kind: d.kind, subject: d.subject, height: d.height };
+  return {
+    signature: d.signature,
+    kind: d.kind,
+    subject: d.subject,
+    height: d.height,
+    ...(d.decline === true ? { decline: true as const } : {}),
+  };
 }
 
 function parseSnapNomination(raw: unknown): SnapNomination | null | undefined {
@@ -253,6 +267,8 @@ export interface DecidedEntry {
   subject: string | null;
   /** Who proposed it, when known: an admin change about oneself has its own title. */
   creatorAddress: string | null;
+  /** A kick that declined (or proposed to decline) a join request: it has its own title. */
+  decline?: boolean;
   outcome: Outcome;
   /** The block Core decided it in, when known. */
   height: number | null;
@@ -334,6 +350,7 @@ export function adminChanges(
         kind: d.kind,
         subject: d.subject,
         creatorAddress: d.creatorAddress ?? null,
+        ...(d.decline ? { decline: true } : {}),
         outcome: 'expired',
         height: d.window?.expiresAtHeight ?? null,
       });
@@ -347,6 +364,7 @@ export function adminChanges(
         kind: d.kind,
         subject: d.subject,
         creatorAddress: tx?.creatorAddress ?? null,
+        ...(d.decline ? { decline: true } : {}),
         outcome,
         height: typeof tx?.approvalHeight === 'number' ? tx.approvalHeight : null,
       });

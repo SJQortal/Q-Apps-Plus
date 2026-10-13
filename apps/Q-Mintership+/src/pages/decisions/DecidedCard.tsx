@@ -61,7 +61,7 @@ export function DecidedCard({
   const kind = decisionKind(tx);
   const subject = decisionSubject(tx);
   const creator = tx.creatorAddress ?? null;
-  const facts = { kind, subject, creatorAddress: creator };
+  const facts = { kind, subject, creatorAddress: creator, decline: link.decline };
   const title = decisionTitle(facts);
   const who = useDisplayName(subject ?? '', subject ? undefined : null);
   const chip = OUTCOME_CHIP[outcome];

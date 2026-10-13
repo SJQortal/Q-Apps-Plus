@@ -257,6 +257,32 @@ export async function guardKick(signer: Signer, member: string): Promise<string 
   return null;
 }
 
+/**
+ * Before proposing to decline a join request: a kick of someone who asked to
+ * join MINTER and isn't a member, which takes their request away once the
+ * Minter Admins sign it.
+ */
+export async function guardDecline(signer: Signer, address: string): Promise<string | null> {
+  const notAdmin = await requireAdmin(signer);
+  if (notAdmin) return notAdmin;
+  const [membership, joinRequest, kick, invite] = await Promise.all([
+    getMembership(address, { force: true }),
+    getJoinRequestFor(address, { force: true }),
+    findWaiting('GROUP_KICK', address),
+    findWaiting('GROUP_INVITE', address),
+  ]);
+  if (membership.isAdmin)
+    return 'This is a Minter Admin, in MINTER already: there’s no join request to decline.';
+  if (membership.isMember)
+    return 'Already in MINTER, so there’s no join request to decline. To remove them, use Remove a member.';
+  if (!joinRequest)
+    return 'This account hasn’t asked to join MINTER, so there’s no join request to decline.';
+  if (kick) return 'Declining this join request is already waiting for signatures.';
+  if (invite)
+    return 'A nomination for them is collecting signatures. Reject that one instead, or let it run out.';
+  return null;
+}
+
 /** Before proposing a ban. `banSeconds` 0 = permanent. */
 export async function guardBan(
   signer: Signer,

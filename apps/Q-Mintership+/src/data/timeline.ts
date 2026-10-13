@@ -11,6 +11,10 @@
  * Whether a JOIN_GROUP made someone a member or only asked to join, and
  * whether an approved invite added them at once, depends on what came
  * before; this is worked out from the transactions in hand, oldest first.
+ * So is whether a kick declined a join request ("Join request declined",
+ * rules/decline.ts) or removed a member; History's windows also mark each
+ * kick from the person's own history (withDeclines), since the window
+ * rarely holds their join request.
  */
 import {
   decisionKind,
@@ -19,11 +23,18 @@ import {
   isOwnAdminChange,
   type DecisionKind,
 } from '../rules/decision';
+import {
+  DECLINED_TITLE,
+  isDeclineIn,
+  joinRequestStory,
+  type JoinRequestStory,
+} from '../rules/decline';
 import type { TargetStep } from '../rules/targetShift';
 import { formatDuration, plural } from '../utils/format';
 import { getBlockAtTime } from './chain';
+import { mapLimit } from './qdn';
 import { fetchQuery } from './query';
-import { getDecisionsInRange, getGroupTxsInRange, isMinterTx } from './txs';
+import { getAddressHistory, getDecisionsInRange, getGroupTxsInRange, isMinterTx } from './txs';
 import { APPROVAL_GATED_TYPES, type TxRow } from './types';
 
 export type TimelineOutcome = 'done' | 'pending' | 'expired' | 'rejected';
@@ -202,9 +213,22 @@ export function buildTimeline(rows: TxRow[], ctx: TimelineContext): TimelineEven
     let becameMember = false;
     let endedMembership = false;
     const s = e.subject ? stateOf(e.subject) : null;
-    const own = { kind: e.kind as DecisionKind, subject: e.subject, creatorAddress: e.creator };
+    // A kick of someone who asked to join and isn't a member declines their join request.
+    const marked = e.tx.declinesJoinRequest;
+    const decline =
+      e.kind === 'kick' &&
+      (typeof marked === 'boolean' ? marked : Boolean(s?.request && !s.member));
+    const own = {
+      kind: e.kind as DecisionKind,
+      subject: e.subject,
+      creatorAddress: e.creator,
+      decline,
+    };
     if (e.outcome !== 'done') {
       title = e.kind === 'invite' ? 'Nominated for MINTER' : `Proposed: ${decisionTitle(own)}`;
+    } else if (decline) {
+      title = DECLINED_TITLE;
+      if (s) s.request = false;
     } else if (e.kind === 'removeAdmin' && isOwnAdminChange(own)) {
       title = 'Stepped down as Minter Admin';
     } else if (e.kind === 'invite') {
@@ -228,19 +252,20 @@ export function buildTimeline(rows: TxRow[], ctx: TimelineContext): TimelineEven
       }
     } else {
       title = DONE_TITLE[e.kind];
+      // Whatever let a member in was used, even when these rows don't show it.
       if (s && (e.kind === 'kick' || e.kind === 'ban')) {
         endedMembership = s.member || e.kind === 'kick';
-        Object.assign(s, { member: false, request: false });
+        Object.assign(s, { member: false, request: false, invite: false });
       }
       if (s && e.kind === 'leave') {
         endedMembership = true;
-        s.member = false;
+        Object.assign(s, { member: false, invite: false });
       }
     }
     return {
       ...e,
       title,
-      tone: e.kind === 'join' && title !== 'Joined MINTER' ? 'neutral' : e.tone,
+      tone: (e.kind === 'join' && title !== 'Joined MINTER') || decline ? 'neutral' : e.tone,
       becameMember,
       endedMembership,
     };
@@ -365,12 +390,68 @@ export function loadHistoryWindow(
         endHeight,
         startMs,
         endMs,
-        rows: [...decisions.rows, ...joins.rows],
+        rows: await withDeclines([...decisions.rows, ...joins.rows]),
         truncated: decisions.truncated || joins.truncated,
       };
     },
     { ttlMs: index === 0 ? 2 * 60_000 : 30 * 60_000, force: options.force }
   );
+}
+
+/**
+ * Whether each MINTER kick among `rows` declined (or, not applied, proposed
+ * to decline) a join request, by signature, from the kicked person's own
+ * MINTER history (the cached read their page makes, four at a time). Kicks
+ * whose person's history can't be read, or about `skip`, are left out.
+ */
+export async function declineMarks(
+  rows: readonly TxRow[],
+  skip?: string
+): Promise<Map<string, boolean>> {
+  const kicks = rows.filter((tx) => tx.type === 'GROUP_KICK' && tx.member && tx.member !== skip);
+  const kicked = [...new Set(kicks.map((tx) => tx.member as string))];
+  const stories = new Map<string, JoinRequestStory>();
+  await mapLimit(kicked, 4, async (address) => {
+    try {
+      stories.set(address, joinRequestStory(address, (await getAddressHistory(address)).rows));
+    } catch {
+      // Unread: the kick is read from the rows in hand alone.
+    }
+  });
+  const marks = new Map<string, boolean>();
+  for (const tx of kicks) {
+    const story = stories.get(tx.member as string);
+    if (story) marks.set(tx.signature, isDeclineIn(story, tx));
+  }
+  return marks;
+}
+
+/**
+ * declineMarks for the kicks in an account's own history that are about
+ * others (the ones a Minter Admin proposed), key `declinemarks:<address>`.
+ */
+export function loadDeclineMarks(
+  address: string,
+  rows: readonly TxRow[],
+  options: { force?: boolean } = {}
+): Promise<Map<string, boolean>> {
+  return fetchQuery(`declinemarks:${address}`, () => declineMarks(rows, address), {
+    ttlMs: 2 * 60_000,
+    force: options.force,
+  });
+}
+
+/** The rows with each marked kick's `declinesJoinRequest` set (buildTimeline reads it). */
+export function withDeclineMarks(rows: TxRow[], marks: ReadonlyMap<string, boolean>): TxRow[] {
+  if (!marks.size) return rows;
+  return rows.map((tx) =>
+    marks.has(tx.signature) ? { ...tx, declinesJoinRequest: marks.get(tx.signature) } : tx
+  );
+}
+
+/** `rows` with every kick marked (declineMarks), for History's windows. */
+export async function withDeclines(rows: TxRow[]): Promise<TxRow[]> {
+  return withDeclineMarks(rows, await declineMarks(rows));
 }
 
 /**

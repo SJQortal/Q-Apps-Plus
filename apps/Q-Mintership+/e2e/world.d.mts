@@ -78,3 +78,10 @@ export function addDoubles(world: World): {
 // A nominator's last visit (activity-alerts).
 export function addNominatorHistory(world: World): string;
 export function nominatorLastVisit(world: World): { address: string; snapshot: unknown };
+
+// Declines: a kick of someone who asked to join and isn't a member.
+export const DECLINED: { address: string; name: string };
+export function addDecline(world: World): {
+  waiting: { signature: string; subject: string };
+  declined: { address: string; join: string; kick: string };
+};
