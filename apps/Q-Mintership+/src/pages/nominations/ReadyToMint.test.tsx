@@ -5,7 +5,8 @@ import { DECLINED, addDecline, fakeAddress, type World } from '../../../e2e/worl
 import { formatDate, shortAddress } from '../../utils/format';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
-import { fetchCallsFor, mockFetchRoute } from '../../test/setup';
+import { fetchCallsFor, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
+import { base58Decode, base58Encode } from '../../qortal/base58';
 import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../test/world';
 import NominationsPage from './NominationsPage';
 
@@ -578,4 +579,141 @@ describe('Ready to mint: search', () => {
         .some((el) => /^None of \d+ match “zzz”\.$/.test(el.textContent ?? ''))
     ).toBe(true);
   });
+});
+
+describe('Ready to mint: declining a join request', () => {
+  const declineButtons = async () =>
+    within(await readyList()).queryAllByRole('button', { name: /^Propose to decline / });
+
+  it('offers Decline to Minter Admins only, where no nomination is open', async () => {
+    await open('admin');
+    const jr1 = await row(shortAddress(fakeAddress('jr-1')));
+    expect(
+      await within(jr1).findByRole(
+        'button',
+        { name: `Propose to decline ${shortAddress(fakeAddress('jr-1'))}’s join request` },
+        { timeout: 4000 }
+      )
+    ).toHaveTextContent('Decline');
+    // jr-1, jr-2 and jr-3: the others have a nomination open.
+    expect(await declineButtons()).toHaveLength(3);
+    expect(within(await row('Uma Urgent')).queryByRole('button', { name: /declining/ })).toBeNull();
+  });
+
+  it('offers it to nobody else', async () => {
+    await open('nominator');
+    await row(shortAddress(fakeAddress('jr-1')));
+    await within(await row('Uma Urgent')).findByText('You nominated them', {}, { timeout: 4000 });
+    expect(await declineButtons()).toHaveLength(0);
+  });
+
+  it('says so where a decline is waiting, with a link to it, to everyone', async () => {
+    let signature = '';
+    await open('nominator', (world) => {
+      signature = addDecline(world).waiting.signature;
+    });
+    const jr2 = await row(shortAddress(fakeAddress('jr-2')));
+    const link = await within(jr2).findByRole(
+      'link',
+      {
+        name: `A decline is waiting for Minter Admins’ signatures: open the decision about ${shortAddress(fakeAddress('jr-2'))}`,
+      },
+      { timeout: 4000 }
+    );
+    expect(link).toHaveTextContent('A decline is waiting for Minter Admins’ signatures');
+    expect(link).toHaveAttribute('href', `/decisions/${signature}`);
+  });
+
+  it('a Minter Admin proposes it and signs it, in two Hub steps, from the row', async () => {
+    const user = userEvent.setup();
+    const jr1 = fakeAddress('jr-1');
+    const { world, address, publicKey } = await open('admin', (w) => void addDecline(w));
+    const signature = base58Encode(new Uint8Array(64).fill(9));
+    mockQortalRequest('KICK_FROM_GROUP', (req: Record<string, unknown>) => {
+      const tx = {
+        type: 'GROUP_KICK',
+        timestamp: Date.now(),
+        reference: base58Encode(new Uint8Array(64).fill(1)),
+        signature,
+        txGroupId: 694,
+        groupId: 694,
+        approvalStatus: 'PENDING',
+        creatorAddress: address,
+        adminPublicKey: publicKey,
+        member: req.qortalAddress,
+        reason: req.reason,
+      };
+      world.pending.push(tx);
+      return tx;
+    });
+    mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'OWN' }));
+    // jr-2's decline waits already: no Decline there.
+    const jr2 = await row(shortAddress(fakeAddress('jr-2')));
+    await within(jr2).findByRole('link', { name: /^A decline is waiting/ }, { timeout: 4000 });
+    expect(within(jr2).queryByRole('button', { name: /declining/ })).toBeNull();
+
+    const label = shortAddress(jr1);
+    const mine = await row(label);
+    await user.click(
+      await within(mine).findByRole(
+        'button',
+        { name: `Propose to decline ${label}’s join request` },
+        { timeout: 4000 }
+      )
+    );
+    const form = await screen.findByRole(
+      'dialog',
+      { name: 'Decline a join request' },
+      { timeout: 4000 }
+    );
+    expect(
+      within(form).getByText(
+        'Once 8 Minter Admins sign it, like any decision, their join request goes and they leave Ready to mint for everyone. They can send a new join request later. It costs 0.02 QORT: your proposal and your own signature on it, two Hub steps.'
+      )
+    ).toBeVisible();
+    // The person is picked already, and checked.
+    expect(
+      await within(form).findByText('Nothing stops this proposal.', {}, { timeout: 4000 })
+    ).toBeVisible();
+    // A reason is required.
+    await user.click(within(form).getByRole('button', { name: 'Review' }));
+    expect(within(form).getByRole('textbox', { name: 'Reason' })).toHaveFocus();
+    await user.type(within(form).getByRole('textbox', { name: 'Reason' }), 'No node, asked twice');
+    await user.click(within(form).getByRole('button', { name: 'Review' }));
+
+    const hub = await screen.findByRole(
+      'dialog',
+      { name: `Decline a join request: ${label}` },
+      { timeout: 4000 }
+    );
+    expect(within(hub).getByText('Step 1 of 2: Propose it')).toBeVisible();
+    expect(within(hub).getByText('Step 2 of 2: Sign it')).toBeVisible();
+    expect(within(hub).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
+    expect(within(hub).getByText(/^Reason:/).parentElement).toHaveTextContent(
+      'Reason: No node, asked twice'
+    );
+    await user.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(hub).findByText('Proposed and signed', {}, { timeout: 4000 })
+    ).toBeVisible();
+    expect(qortalCallsFor('KICK_FROM_GROUP')).toEqual([
+      {
+        action: 'KICK_FROM_GROUP',
+        groupId: 694,
+        qortalAddress: jr1,
+        reason: 'No node, asked twice',
+        txGroupId: 694,
+      },
+    ]);
+    const bytes = base58Decode(String(qortalCallsFor('SIGN_TRANSACTION')[0].unsignedBytes));
+    expect(base58Encode(bytes.slice(112, 176))).toBe(signature);
+
+    await user.click(within(hub).getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // Focus is back on the row, which says the decline is on its way.
+    expect(
+      within(await row(label)).getByRole('link', { name: `${label}: open their page` })
+    ).toHaveFocus();
+    expect(within(await row(label)).getByText('Decline sent ✓ (confirming…)')).toBeInTheDocument();
+  }, 30_000);
 });
