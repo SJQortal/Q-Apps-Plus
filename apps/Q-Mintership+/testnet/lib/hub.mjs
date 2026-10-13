@@ -10,6 +10,12 @@
  *   REMOVE_GROUP_ADMIN, JOIN_GROUP, LEAVE_GROUP, SIGN_TRANSACTION,
  *   PUBLISH_QDN_RESOURCE, plus Hub's no-op notices.
  *
+ * Encryption is Hub's own (lib/encryption.mjs), with the account's key:
+ * PUBLISH_QDN_RESOURCE with `encrypt: true` encrypts its data to
+ * `publicKeys` and the publisher before the dialog opens, as Hub does;
+ * ENCRYPT_DATA and DECRYPT_DATA answer without a dialog, and DECRYPT_DATA
+ * fails with Hub's "Unable to decrypt" when the account isn't a reader.
+ *
  * Like Hub, every failure rejects with { error, message } (the same text),
  * a decline with "User declined request", and SIGN_TRANSACTION hides Core's
  * reason behind "Failed to decode transaction". The dialog's answer is a
@@ -29,6 +35,7 @@ import {
   unitFeeAtomic,
 } from './tx.mjs';
 import { post } from './node.mjs';
+import { decryptDataRequest, encryptDataRequest, hubKeyPair, publishData64 } from './encryption.mjs';
 
 export const HUB_TEXT = {
   declined: 'User declined request',
@@ -95,6 +102,21 @@ const NOTICES = new Set([
   'SHOW_ACTIONS',
 ]);
 
+/** Hub answers these with the account's key and no dialog (`mode` doesn't apply). */
+const KEY_ACTIONS = new Set(['ENCRYPT_DATA', 'DECRYPT_DATA']);
+
+/** ENCRYPT_DATA or DECRYPT_DATA as Hub does them (get.ts encryptData, decryptData). */
+function keyAction(account, data) {
+  const keyPair = hubKeyPair(account.seed);
+  try {
+    return data.action === 'ENCRYPT_DATA'
+      ? encryptDataRequest(data, keyPair)
+      : decryptDataRequest(data, keyPair);
+  } catch (error) {
+    throw hubError(String(error?.message ?? error));
+  }
+}
+
 /** Actions that open a Hub dialog (the ones `mode` applies to). */
 export const DIALOG_ACTIONS = new Set([
   'INVITE_TO_GROUP',
@@ -123,6 +145,7 @@ export async function hubRequest(account, request, { mode = 'accept', beforeAcce
     if (mode === 'decline') throw hubError('Unable to get user account');
     return { address: account.address, publicKey: account.publicKey };
   }
+  if (KEY_ACTIONS.has(action)) return keyAction(account, data);
   if (!DIALOG_ACTIONS.has(action)) throw hubError(`The test signer does not do ${action}`);
 
   // Hub validates and reads before its dialog opens.
@@ -235,17 +258,24 @@ async function prepare(account, data) {
     }
     case 'PUBLISH_QDN_RESOURCE': {
       missing(data, ['service']);
+      if (!data.data64 && !data.base64) throw hubError('No data or file was submitted');
       if (!data.name) throw hubError('Missing fields: name');
       const name = await getJson(`/names/${encodeURIComponent(data.name)}`).catch(() => null);
       if (!name) throw hubError(HUB_TEXT.name);
       if (name.owner !== account.address) throw hubError('You do not own this name');
-      if (!data.data64) throw hubError('Missing fields: data64');
+      // Hub encrypts (encrypt: true) before its dialog opens, with the publisher's key.
+      let data64;
+      try {
+        data64 = publishData64(data, hubKeyPair(account.seed));
+      } catch (error) {
+        throw hubError(String(error?.message ?? error));
+      }
       return async () => {
         const fee = await unitFeeAtomic('ARBITRARY');
         const identifier = data.identifier ? `/${encodeURIComponent(data.identifier)}` : '';
         const res = await post(
           `/arbitrary/${encodeURIComponent(data.service)}/${encodeURIComponent(data.name)}${identifier}/base64?fee=${fee}`,
-          data.data64,
+          data64,
           { contentType: 'text/plain' }
         );
         if (res.status !== 200 || !res.text || res.json?.error) {

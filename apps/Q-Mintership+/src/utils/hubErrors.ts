@@ -48,6 +48,21 @@ export function isHubTimeout(error: unknown): boolean {
   return /timed out/i.test(allText(error));
 }
 
+// Hub's question:message.error.decrypt in its twelve languages
+// (Qortal-Hub/src/i18n/locales/*/question.json): what DECRYPT_DATA throws when
+// none of the data's keys is the account's (qdn/encryption/group-encryption.ts).
+const NOT_DECRYPTABLE =
+  /unable to decrypt|entschlüsselung nicht möglich|no se pudo descifrar|ei suuda dekrüpteerida|salauksen purkaminen ei onnistu|impossible de déchiffrer|impossibile decriptare|復号できません|não foi possível descriptografar|не удалось расшифровать|无法解密|أفك التشفير/i;
+
+/**
+ * True when DECRYPT_DATA said the data isn't encrypted to this account. Not
+ * for anything else Hub can answer (its wallet locked, a timeout, outside
+ * Hub, missing fields): those can work on a later try.
+ */
+export function isHubNotDecryptable(error: unknown): boolean {
+  return !isHubTimeout(error) && NOT_DECRYPTABLE.test(allText(error));
+}
+
 // Hub's no_action_public_node string in its twelve languages
 // (get.ts getListItems/addListItems/deleteListItems throw it on a gateway node).
 const PUBLIC_NODE =

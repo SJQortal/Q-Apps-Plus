@@ -45,6 +45,8 @@ export interface CommentItemProps {
   onMute: (name: string, mute: boolean) => void;
   /** The replies (and a reply being written), under a top-level comment. */
   children?: ReactNode;
+  /** Under a comment that isn't on QDN yet (who sees it once it is). */
+  pendingText?: string;
 }
 
 function Muted({ children }: { children: ReactNode }) {
@@ -139,6 +141,8 @@ export function CommentItem(props: CommentItemProps) {
         {formatRelative(c.postedAt, now)}
       </time>
       {!c.deleted && (c.edited || c.editedAt !== null) ? ' · edited' : ''}
+      {/* A poll comment the viewer can't read directly, shown from a share. */}
+      {c.from ? ` · from ${c.from}’s copy` : ''}
     </>
   );
 
@@ -187,7 +191,7 @@ export function CommentItem(props: CommentItemProps) {
           )}
         </Box>
         {c.pending ? (
-          <Muted>Publishing… everyone sees it once QDN has it.</Muted>
+          <Muted>{props.pendingText ?? 'Publishing… everyone sees it once QDN has it.'}</Muted>
         ) : readable && !editor && props.onReply ? (
           <Box>
             <Button

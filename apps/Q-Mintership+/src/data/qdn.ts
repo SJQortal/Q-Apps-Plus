@@ -83,13 +83,19 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** The raw text of a resource, retrying while the node fetches it from peers. */
+/**
+ * The raw text of a resource, retrying while the node fetches it from peers.
+ * `encoding: 'base64'` asks Core for the bytes as base64 (encrypted data).
+ */
 export async function fetchQdnText(
   service: string,
   name: string,
-  identifier: string
+  identifier: string,
+  options: { encoding?: 'base64' } = {}
 ): Promise<string> {
-  const path = `/arbitrary/${seg(service)}/${seg(name)}/${seg(identifier)}`;
+  const path = `/arbitrary/${seg(service)}/${seg(name)}/${seg(identifier)}${
+    options.encoding ? `?${query({ encoding: options.encoding })}` : ''
+  }`;
   for (let attempt = 0; ; attempt++) {
     let response: Response | null = null;
     try {

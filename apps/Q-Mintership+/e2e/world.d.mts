@@ -85,3 +85,24 @@ export function addDecline(world: World): {
   waiting: { signature: string; subject: string };
   declined: { address: string; join: string; kick: string };
 };
+// Minter Admin polls: DOCUMENT_PRIVATE records encrypted to the Minter Admins.
+export function mockEncrypt(publicKeys: string[], data64: string): string;
+export function mockDecrypt(encryptedData: string, publicKey: string): string;
+export function answerDecrypt(
+  world: World,
+  persona: string,
+  request: Record<string, unknown>
+): string;
+export const ADMIN_POLL_IDS: Record<
+  'open' | 'voted' | 'closed' | 'shared' | 'locked' | 'notAdmin',
+  string
+>;
+export function addAdminPolls(world: World): {
+  ids: typeof ADMIN_POLL_IDS;
+  comments: { reply: string; shared: string };
+};
+export function answerAdminPolls(
+  world: World,
+  pathname: string,
+  searchParams: URLSearchParams
+): { status: number; body?: unknown; text?: string } | undefined;

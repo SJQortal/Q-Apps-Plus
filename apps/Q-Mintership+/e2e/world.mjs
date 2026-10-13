@@ -1631,3 +1631,316 @@ export function addDecline(world) {
     declined: { address: who, join: join.signature, kick: kick.signature },
   };
 }
+// ---- Minter Admin polls (encrypted to the Minter Admins) ---------------------
+
+/**
+ * The mock's stand-in for Hub's group encryption (PUBLISH_QDN_RESOURCE with
+ * `encrypt: true`): the same "qortalGroupEncryptedData" prefix Core checks
+ * for, then the public keys it was encrypted to and the data in the clear.
+ * Only for the mock world: it hides nothing.
+ */
+export function mockEncrypt(publicKeys, data64) {
+  const sealed = JSON.stringify({ k: [...new Set(publicKeys)], d: data64 });
+  return btoa(`qortalGroupEncryptedData${sealed}`);
+}
+
+/** DECRYPT_DATA for the holder of `publicKey`: the data64, or Hub's "Unable to decrypt". */
+export function mockDecrypt(encryptedData, publicKey) {
+  let parsed = null;
+  try {
+    const text = atob(String(encryptedData));
+    if (text.startsWith('qortalGroupEncryptedData'))
+      parsed = JSON.parse(text.slice('qortalGroupEncryptedData'.length));
+  } catch {
+    parsed = null;
+  }
+  if (!parsed || !Array.isArray(parsed.k) || !parsed.k.includes(publicKey))
+    throw new Error('Unable to decrypt');
+  return parsed.d;
+}
+
+/** UTF-8 JSON as base64 (the app's data64). */
+function data64Of(value) {
+  const bytes = new TextEncoder().encode(JSON.stringify(value));
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+/** Answer DECRYPT_DATA as the persona's Hub would. */
+export function answerDecrypt(world, persona, request) {
+  const address = personaAddress(persona);
+  return mockDecrypt(request.encryptedData, world.accounts.get(address)?.publicKey ?? pk(address));
+}
+
+/** The poll ids addAdminPolls() publishes. */
+export const ADMIN_POLL_IDS = {
+  open: 'lvl5adm1',
+  voted: 'inactv02',
+  closed: 'review03',
+  shared: 'shared04',
+  locked: 'locked05',
+  notAdmin: 'notadm06',
+};
+
+/**
+ * Minter Admin polls (DOCUMENT_PRIVATE, each encrypted to its readers and
+ * its publisher), as Avery Admin sees them:
+ *
+ * - open, waiting for Avery's vote: Admin B asks whether only level 5+
+ *   minters should become Minter Admins; 6 votes (one changed), 3 comments
+ *   (one a reply), encrypted to every Minter Admin but Admin O and Admin P,
+ *   who were "added since";
+ * - open, asked by Avery, who voted No;
+ * - closed 5 days ago, with a vote that came after the end;
+ * - open, not encrypted to Avery, but shared with every Minter Admin by
+ *   Admin D ΑΩ, with the votes Avery can't read;
+ * - one encrypted to the others only, never shared (Avery can't see it);
+ * - one published by Nora Nominator, who isn't a Minter Admin (ignored).
+ *
+ * Returns the ids and two comment identifiers.
+ */
+export function addAdminPolls(world) {
+  const DAY = 86_400_000;
+  const extra = (i) => fakeAddress(`admin-${i}`);
+  const nameOf = (address) => world.accounts.get(address)?.name;
+  const signers = world.admins.filter((a) => a !== NULL_OWNER);
+  const records = (world.adminPollRecords = world.adminPollRecords ?? []);
+  const publish = (address, identifier, created, body, readers, updated) =>
+    records.push({
+      name: nameOf(address),
+      identifier,
+      created,
+      ...(updated ? { updated } : {}),
+      readers: [...new Set([...readers, address])],
+      body,
+    });
+  const ends = (created, days) => {
+    const blocks = Math.ceil((days * DAY) / MS_PER_BLOCK);
+    const endsAt = created + blocks * MS_PER_BLOCK;
+    return { endsAt, endHeight: TIP + Math.round((endsAt - NOW) / MS_PER_BLOCK) };
+  };
+  const ask = (id, by, created, days, question, readers, details) => {
+    const body = {
+      v: 1,
+      id,
+      question,
+      ...(details ? { details } : {}),
+      durationDays: days,
+      createdAt: created,
+      ...ends(created, days),
+      readers,
+    };
+    publish(by, `qmp-adminpoll-${id}`, created + 20_000, body, readers);
+    return body;
+  };
+  const vote = (id, by, choice, created, readers, updated) =>
+    publish(
+      by,
+      `qmp-adminvote-${id}`,
+      created,
+      { v: 1, pollId: id, vote: choice },
+      readers,
+      updated
+    );
+  const comment = (id, cid, by, created, text, readers, replyTo) => {
+    const identifier = `qmp-admincomment-${id}-${cid}`;
+    const body = { v: 1, pollId: id, text, ...(replyTo ? { replyTo } : {}) };
+    publish(by, identifier, created, body, readers);
+    return identifier;
+  };
+
+  // 1. Open, waiting for Avery's vote; Admin O and Admin P were added since.
+  const P1 = ADMIN_POLL_IDS.open;
+  const before = signers.filter((a) => a !== extra(14) && a !== extra(15));
+  const t1 = NOW - 2 * DAY;
+  ask(
+    P1,
+    extra(1),
+    t1,
+    7,
+    'Should only level 5+ minters become Minter Admins?',
+    before,
+    'Several recent proposals came from members at level 2 or 3. Nothing changes on chain from this: it is to see where we stand before anyone proposes a rule.'
+  );
+  vote(P1, extra(1), 'yes', t1 + 3_600_000, before);
+  vote(P1, extra(2), 'yes', t1 + 5_000_000, before);
+  vote(P1, ADDR.adminL4, 'no', t1 + 9_000_000, before);
+  vote(P1, extra(4), 'neutral', t1 + DAY, before);
+  vote(P1, ADDR.demote, 'yes', t1 + DAY + 600_000, before);
+  vote(P1, extra(5), 'no', t1 + 2_000_000, before, t1 + DAY + 3_600_000);
+  const c1 = comment(
+    P1,
+    'c1a2b3',
+    extra(2),
+    t1 + 6_000_000,
+    "Level 5 means they've minted for about a year: they know how the network works.",
+    before
+  );
+  comment(
+    P1,
+    'd4e5f6',
+    ADDR.adminL4,
+    t1 + 9_100_000,
+    "Level isn't everything: some of the newer minters run the steadiest nodes.",
+    before,
+    c1
+  );
+  comment(
+    P1,
+    'g7h8i9',
+    extra(1),
+    t1 + DAY + 7_200_000,
+    'Advisory only: let’s see where everyone stands first. qortal://APP/Q-Mintership+/decisions',
+    before
+  );
+
+  // 2. Open, asked by Avery, who voted No.
+  const P2 = ADMIN_POLL_IDS.voted;
+  const t2 = NOW - DAY;
+  ask(
+    P2,
+    ADDR.admin,
+    t2,
+    14,
+    'Should we remove members who were active before joining MINTER and went inactive after?',
+    signers
+  );
+  vote(P2, ADDR.admin, 'no', t2 + 1_800_000, signers);
+  vote(P2, extra(0), 'yes', t2 + 3_600_000, signers);
+  vote(P2, extra(6), 'neutral', t2 + 7_200_000, signers);
+
+  // 3. Closed five days ago; Admin I voted after the end (not counted).
+  const P3 = ADMIN_POLL_IDS.closed;
+  const t3 = NOW - 12 * DAY;
+  const p3 = ask(
+    P3,
+    extra(2),
+    t3,
+    7,
+    'Should Minter Admins review the stale invites together once a month?',
+    signers
+  );
+  vote(P3, extra(0), 'yes', t3 + DAY, signers);
+  vote(P3, extra(1), 'yes', t3 + 2 * DAY, signers);
+  vote(P3, extra(2), 'yes', t3 + 3_600_000, signers);
+  vote(P3, extra(7), 'no', t3 + 3 * DAY, signers);
+  vote(P3, ADDR.admin, 'neutral', t3 + 4 * DAY, signers);
+  vote(P3, extra(8), 'no', t3 + DAY, signers, p3.endsAt + DAY);
+
+  // 4. Not encrypted to Avery; Admin D ΑΩ shared it with every Minter Admin.
+  const P4 = ADMIN_POLL_IDS.shared;
+  const t4 = NOW - 3 * DAY;
+  const withoutAvery = signers.filter((a) => a !== ADDR.admin);
+  const sharedText = 'Two days gives everyone time to look before the clock starts.';
+  const p4 = ask(
+    P4,
+    extra(10),
+    t4,
+    10,
+    'Should a nomination wait 48 hours before its first signature?',
+    withoutAvery
+  );
+  vote(P4, extra(10), 'yes', t4 + 3_600_000, withoutAvery);
+  vote(P4, extra(11), 'no', t4 + 7_200_000, withoutAvery);
+  const c4 = comment(P4, 'j1k2l3', extra(10), t4 + 4_000_000, sharedText, withoutAvery);
+  const sharedAt = NOW - DAY;
+  publish(
+    extra(3),
+    `qmp-adminshare-${P4}`,
+    sharedAt,
+    {
+      v: 1,
+      pollId: P4,
+      poll: p4,
+      pollPublisher: nameOf(extra(10)),
+      votes: [
+        { name: nameOf(extra(10)), vote: 'yes', updated: t4 + 3_600_000 },
+        { name: nameOf(extra(11)), vote: 'no', updated: t4 + 7_200_000 },
+      ],
+      comments: [
+        {
+          name: nameOf(extra(10)),
+          identifier: c4,
+          postedAt: t4 + 4_000_000,
+          updatedAt: t4 + 4_000_000,
+          text: sharedText,
+        },
+      ],
+      readers: signers,
+      sharedAt,
+    },
+    signers
+  );
+  // After the share, encrypted to everyone.
+  vote(P4, extra(12), 'neutral', sharedAt + 3_600_000, signers);
+
+  // 5. Encrypted to the others only, never shared: Avery can't see it.
+  ask(
+    ADMIN_POLL_IDS.locked,
+    extra(13),
+    NOW - DAY,
+    7,
+    'A poll that was never encrypted to Avery Admin?',
+    withoutAvery
+  );
+
+  // 6. Nora Nominator isn't a Minter Admin: ignored, even though it reads fine.
+  ask(
+    ADMIN_POLL_IDS.notAdmin,
+    ADDR.nominator,
+    NOW - DAY,
+    7,
+    'A poll from someone who is not a Minter Admin?',
+    signers
+  );
+
+  return { ids: ADMIN_POLL_IDS, comments: { reply: c1, shared: c4 } };
+}
+
+/**
+ * Answer the reads of Minter Admin polls: DOCUMENT_PRIVATE searches, their
+ * bodies (`?encoding=base64`, encrypted with mockEncrypt to each record's
+ * readers) and public keys. Undefined for anything else.
+ */
+export function answerAdminPolls(world, pathname, sp) {
+  const text = (value, status = 200) => ({ status, text: String(value) });
+  const records = world.adminPollRecords ?? [];
+  let m;
+  if (pathname === '/arbitrary/resources/searchsimple') {
+    if (sp.get('service') !== 'DOCUMENT_PRIVATE') return undefined;
+    const ident = sp.get('identifier') || '';
+    let rows = records
+      .filter((r) =>
+        sp.get('prefix') === 'true' ? r.identifier.startsWith(ident) : r.identifier === ident
+      )
+      .map((r) => ({
+        name: r.name,
+        service: 'DOCUMENT_PRIVATE',
+        identifier: r.identifier,
+        latestSignature: sig(`qdn:${r.name}:${r.identifier}${r.updated ? `:${r.updated}` : ''}`),
+        size: 600,
+        created: r.created,
+        ...(r.updated ? { updated: r.updated } : {}),
+      }));
+    const names = sp.getAll('name');
+    if (names.length) rows = rows.filter((r) => names.includes(r.name));
+    const after = Number(sp.get('after') || 0);
+    if (after) rows = rows.filter((r) => r.created > after);
+    rows.sort((a, b) => a.created - b.created);
+    return { status: 200, body: page(rows, sp) };
+  }
+  if ((m = pathname.match(/^\/arbitrary\/DOCUMENT_PRIVATE\/([^/]+)\/([^/]+)$/))) {
+    const name = decodeURIComponent(m[1]);
+    const identifier = decodeURIComponent(m[2]);
+    const r = records.find((x) => x.name === name && x.identifier === identifier);
+    if (!r) return { status: 404, body: { error: 1401, message: 'not found' } };
+    const keys = r.readers.map((a) => world.accounts.get(a)?.publicKey ?? pk(a));
+    const encrypted = mockEncrypt(keys, data64Of(r.body));
+    return text(sp.get('encoding') === 'base64' ? encrypted : atob(encrypted));
+  }
+  if ((m = pathname.match(/^\/addresses\/publickey\/(Q\w+)$/))) {
+    return text(world.accounts.get(m[1])?.publicKey ?? 'false');
+  }
+  return undefined;
+}

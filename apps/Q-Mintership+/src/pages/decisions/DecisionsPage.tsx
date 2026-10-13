@@ -16,8 +16,12 @@
  * would tip over carries a chip, Sign / Propose / Sign several need "I've
  * checked these" before Hub opens when anything would change, and a banner
  * says when the target changed since this device last looked.
+ *
+ * Minter Admins also ask each other advisory questions here (Propose → Ask
+ * the Minter Admins) and vote on them under "Minter Admin polls": encrypted
+ * to the Minter Admins, and loaded only for them.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { PATHS, legacyDecisionPath } from '../../routes/paths';
 import { Alert, Box, Button, FormControlLabel, Switch, Typography } from '@mui/material';
@@ -45,6 +49,7 @@ import {
   ListSkeleton,
   TruncatedNote,
 } from '../../components/common/states';
+import { retryPollDecrypts } from '../../data/adminPollKeys';
 import type { Nomination } from '../../data/nominations';
 import { invalidate, peekQuery } from '../../data/query';
 import { useNavHas } from '../../components/layout/useNavHas';
@@ -86,6 +91,10 @@ import { targetChangedTitle, type LabelOf } from './targetShiftUi';
 import { TargetImpact } from './TargetImpact';
 import { TargetShiftSection } from './TargetShiftSection';
 import { useAcknowledge } from './useAcknowledge';
+
+// Minter Admins only: nobody else downloads the polls' code or reads them.
+const AdminPollsSection = lazy(() => import('./AdminPollsSection'));
+const AskAdminsDialog = lazy(() => import('./AskAdminsDialog'));
 
 const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
   'open',
@@ -136,6 +145,9 @@ function DecisionsQueue() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkList, setBulkList] = useState<Decision[] | null>(null);
   const [staleExpanded, setStaleExpanded] = useState(false);
+  const [asking, setAsking] = useState(false);
+  // What opened Ask: null for Propose's menu, else the polls section's own button.
+  const askFrom = useRef<HTMLElement | null>(null);
   const proposeButton = useRef<HTMLButtonElement | null>(null);
   const hideAnsweredSwitch = useRef<HTMLInputElement | null>(null);
   // The decision Sign, Reject or Withdraw was opened on, for where focus goes
@@ -167,6 +179,11 @@ function DecisionsQueue() {
   );
   const isAdmin = Boolean(
     data && signer && data.admins.admins.some((a) => a.member === signer.address)
+  );
+  // The name a Minter Admin poll is published under.
+  const pollAuthor = useMemo(
+    () => (signer ? { ...signer, name: session.name } : null),
+    [signer, session.name]
   );
   const myKey = signer?.publicKey ?? null;
   const inNav = useNavHas('decisions');
@@ -326,9 +343,18 @@ function DecisionsQueue() {
     void decisionsQ.refetch();
     void nominationsQ.refetch();
     invalidate('staleinvites:');
+    // The Minter Admin polls too (read only for admins, so nothing for anyone else),
+    // asking Hub again for any it didn't decrypt.
+    retryPollDecrypts();
+    invalidate('adminpolls:list:');
   };
 
   const chooseProposal = (choice: ProposeChoice) => {
+    if (choice === 'poll') {
+      askFrom.current = null;
+      setAsking(true);
+      return;
+    }
     if (choice === 'stale') {
       setStaleExpanded(true);
       setStaleFocus((n) => n + 1);
@@ -563,6 +589,18 @@ function DecisionsQueue() {
               </Section>
             ) : null}
 
+            {isAdmin && pollAuthor ? (
+              <Suspense fallback={<CardSkeleton lines={2} />}>
+                <AdminPollsSection
+                  author={pollAuthor}
+                  onAsk={(from) => {
+                    askFrom.current = from;
+                    setAsking(true);
+                  }}
+                />
+              </Suspense>
+            ) : null}
+
             {closed.length ? (
               <Section title={`Too late to sign · ${closed.length}`} id="closed">
                 {closed.map((d) => (
@@ -685,6 +723,25 @@ function DecisionsQueue() {
           onSwitch={(kind, person) => setPropose({ kind, preset: person })}
           returnFocus={() => proposeButton.current}
         />
+      ) : null}
+      {asking && pollAuthor && data ? (
+        <Suspense fallback={null}>
+          <AskAdminsDialog
+            open
+            onClose={() => setAsking(false)}
+            author={pollAuthor}
+            admins={data.admins.signers.length}
+            // Back where it was opened: Propose, or the polls section's button (the
+            // section itself once a new poll has replaced its empty state, while
+            // this page is still here).
+            returnFocus={() => {
+              const from = askFrom.current;
+              if (!from || from.isConnected) return from ?? proposeButton.current;
+              const here = proposeButton.current?.isConnected;
+              return (here ? sectionOf('admin-polls') : null) ?? proposeButton.current;
+            }}
+          />
+        </Suspense>
       ) : null}
       <BulkDialog
         open={bulkList !== null}

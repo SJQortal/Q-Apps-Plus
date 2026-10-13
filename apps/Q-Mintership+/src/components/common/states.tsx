@@ -4,7 +4,7 @@
  * empty plus the next action, and errors in plain words with Retry. Each
  * fades in as it appears (index.css → .qmp-fade).
  */
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { Alert, Box, Button, Skeleton, Typography } from '@mui/material';
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import ErrorOutlineOutlinedIcon from '@mui/icons-material/ErrorOutlineOutlined';
@@ -14,7 +14,8 @@ interface EmptyStateProps {
   title: string;
   description?: ReactNode;
   actionLabel?: string;
-  onAction?: () => void;
+  /** Gets the click, so a dialog it opens can give focus back to this button. */
+  onAction?: (event: MouseEvent<HTMLButtonElement>) => void;
   icon?: ReactNode;
   /** Plain (no card border), for use inside a card. */
   plain?: boolean;

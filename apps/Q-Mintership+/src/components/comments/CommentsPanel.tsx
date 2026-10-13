@@ -523,7 +523,7 @@ function Gate({
   return null;
 }
 
-function Composer({
+export function Composer({
   label,
   value,
   error,

@@ -38,6 +38,11 @@ export function decisionPath(signature?: string): string {
   return signature ? `${PATHS.decisions}/${encodeURIComponent(signature)}` : PATHS.decisions;
 }
 
+/** `/decisions/polls/<id>`: one Minter Admin poll (its shareable link; Minter Admins only). */
+export function adminPollPath(id: string): string {
+  return `${PATHS.decisions}/polls/${encodeURIComponent(id)}`;
+}
+
 /** `/nominations/<address>`: one person's nomination, its rounds and outcomes (its shareable link). */
 export function nominationPath(address: string): string {
   return `${PATHS.nominations}/${encodeURIComponent(address)}`;

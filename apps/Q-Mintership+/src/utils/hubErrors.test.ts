@@ -3,6 +3,7 @@ import {
   errorMessage,
   isAccountRefusal,
   isHubDecline,
+  isHubNotDecryptable,
   isHubTimeout,
   isPublicNodeRefusal,
 } from './hubErrors';
@@ -91,5 +92,37 @@ describe('Hub error shapes', () => {
     ).toBe(true);
     expect(isAccountRefusal('unable to fetch user account')).toBe(true);
     expect(isAccountRefusal('The request timed out')).toBe(false);
+  });
+
+  it("recognises Hub's 'unable to decrypt' in its twelve languages, and nothing else", () => {
+    // Qortal-Hub/src/i18n/locales/*/question.json → message.error.decrypt, first letter capitalised.
+    for (const msg of [
+      'Unable to decrypt',
+      'Entschlüsselung nicht möglich',
+      'No se pudo descifrar',
+      'Ei suuda dekrüpteerida',
+      'Salauksen purkaminen ei onnistu',
+      'Impossible de déchiffrer',
+      'Impossibile decriptare',
+      '復号できません',
+      'Não foi possível descriptografar',
+      'Не удалось расшифровать',
+      '无法解密',
+      'مش عارف أفك التشفير',
+    ]) {
+      expect(isHubNotDecryptable(msg)).toBe(true);
+      expect(isHubNotDecryptable({ error: msg, message: msg })).toBe(true);
+      expect(isHubNotDecryptable(new Error(msg))).toBe(true);
+    }
+    // Hub not decrypting right now, for any reason but "not yours": worth trying again.
+    for (const other of [
+      new Error('Wallet not authenticated'),
+      'Missing fields: encryptedData',
+      { error: 'timeout', message: 'Request timed out after 30000 ms (action: DECRYPT_DATA)' },
+      new Error('qortalRequest is not available. Open this app in Qortal Hub or GO.'),
+      'Unable to retrieve keys',
+      undefined,
+    ])
+      expect(isHubNotDecryptable(other)).toBe(false);
   });
 });

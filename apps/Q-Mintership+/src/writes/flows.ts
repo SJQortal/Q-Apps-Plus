@@ -671,3 +671,17 @@ export async function publishConsidering(
     CONSIDERING_PREFIXES
   );
 }
+
+/** Minter Admin polls (writes/adminPolls.ts): asked, voted, commented and shared through Hub. */
+export {
+  commentAdminPoll,
+  deleteAdminPollComment,
+  editAdminPollComment,
+  publishAdminPoll,
+  shareAdminPoll,
+  voteAdminPoll,
+  type AskInput,
+  type PollAuthor,
+  type PollCommentRef,
+  type PollWrite,
+} from './adminPolls';
