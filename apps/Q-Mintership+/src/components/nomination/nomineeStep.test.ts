@@ -16,8 +16,8 @@ describe("the nominee's next step", () => {
   });
 
   it('is done once a join request is open', () => {
-    expect(nomineeStep({ ...base, hasJoinRequest: true })).toBe('accepted');
-    expect(nomineeStep({ ...base, state: 'signing', hasJoinRequest: true })).toBe('accepted');
+    expect(nomineeStep({ ...base, hasJoinRequest: true })).toBe('ready');
+    expect(nomineeStep({ ...base, state: 'signing', hasJoinRequest: true })).toBe('ready');
   });
 
   it('is Join once approved, with or without a nomination record', () => {

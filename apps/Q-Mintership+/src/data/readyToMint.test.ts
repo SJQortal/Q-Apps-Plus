@@ -7,11 +7,15 @@ import { loadNominations } from './nominations';
 import { peekQuery } from './query';
 import {
   READY_READS_AT_ONCE,
+  formerKey,
+  getFormerMember,
   loadReadyDetails,
   loadReadyToMint,
+  matchReady,
   pickReadyToMint,
 } from './readyToMint';
-import type { AccountInfo, BanRow } from './types';
+import { formerMember } from '../rules/status';
+import type { AccountInfo, BanRow, TxRow } from './types';
 
 afterEach(() => vi.useRealTimers());
 
@@ -35,6 +39,39 @@ describe('pickReadyToMint', () => {
     });
     // b is a member, d is banned; e's ban ran out; another group's request is ignored.
     expect(people).toEqual([c, a, e]);
+  });
+});
+
+describe('matchReady', () => {
+  const [a, b, c, d] = ['a', 'b', 'c', 'd'].map((s) => fakeAddress(`match-${s}`));
+  const people = [a, b, c, d];
+  const names: Record<string, string> = { [b]: 'Kit Kicked' };
+  const nameOf = (address: string) => names[address] ?? null;
+  const none = new Set<string>();
+
+  it('keeps everyone, in Core’s order, for an empty search', () => {
+    expect(matchReady(people, '', none)).toEqual(people);
+    expect(matchReady(people, '   ', none)).toEqual(people);
+  });
+
+  it('matches a whole address only to that person, and nobody for an address not listed', () => {
+    expect(matchReady(people, ` ${c} `, none)).toEqual([c]);
+    expect(matchReady(people, fakeAddress('elsewhere'), none)).toEqual([]);
+  });
+
+  it('matches part of an address, from 4 characters, case kept', () => {
+    expect(matchReady(people, d.slice(0, 6), none)).toContain(d);
+    expect(matchReady(people, d.slice(-4), none)).toContain(d);
+    expect(matchReady(people, d.slice(-4).toLowerCase() + '!', none)).toEqual([]);
+    // Too short to tell addresses apart.
+    expect(matchReady(people, d.slice(0, 3), none)).toEqual([]);
+  });
+
+  it('matches the owners of a typed name, and names already read, in Core’s order', () => {
+    expect(matchReady(people, 'lou', new Set([d, a, fakeAddress('not-listed')]))).toEqual([a, d]);
+    expect(matchReady(people, 'kick', none, nameOf)).toEqual([b]);
+    expect(matchReady(people, '@KIT', none, nameOf)).toEqual([b]);
+    expect(matchReady(people, 'kit', new Set([c]), nameOf)).toEqual([b, c]);
   });
 });
 
@@ -76,12 +113,74 @@ describe('loadReadyToMint', () => {
   });
 });
 
+describe('formerMember', () => {
+  const me = fakeAddress('former-rule');
+  const tip = { height: 2_000_000, timestamp: NOW };
+  const msPerBlock = 60_000;
+  const at = (height: number) => NOW - (tip.height - height) * msPerBlock;
+  const tx = (type: string, height: number, extra: Partial<TxRow> = {}): TxRow => ({
+    type,
+    timestamp: at(height) - 10_000,
+    signature: `${type}-${height}`,
+    txGroupId: MINTER_GROUP_ID,
+    groupId: MINTER_GROUP_ID,
+    blockHeight: height,
+    approvalStatus: 'APPROVED',
+    ...extra,
+  });
+  const invite = tx('GROUP_INVITE', 1_000_000, { invitee: me });
+  const kick = tx('GROUP_KICK', 1_500_000, { member: me, approvalHeight: 1_500_100 });
+  const ban = tx('GROUP_BAN', 1_600_000, { offender: me, approvalHeight: 1_600_050 });
+  const leave = tx('LEAVE_GROUP', 1_700_000, {
+    creatorAddress: me,
+    txGroupId: 0,
+    approvalStatus: 'NOT_REQUIRED',
+  });
+  const former = (history: TxRow[]) => formerMember(me, history, tip, msPerBlock);
+
+  it('marks a member who was kicked, banned once or left, dated by when it took effect', () => {
+    expect(former([invite, kick])).toEqual({ kind: 'removed', at: at(1_500_100) });
+    expect(former([invite, ban])).toEqual({ kind: 'removed', at: at(1_600_050) });
+    expect(former([invite, leave])).toEqual({ kind: 'left', at: at(1_700_000) });
+    // The newest way out counts.
+    expect(former([invite, kick, leave])).toMatchObject({ kind: 'left' });
+    expect(former([leave, invite, ban])).toMatchObject({ kind: 'left' });
+  });
+
+  it('leaves out anyone who was never a member', () => {
+    expect(former([])).toBeNull();
+    // A kicked join request is not a membership.
+    expect(former([kick])).toBeNull();
+    expect(former([ban])).toBeNull();
+    // An invite only after the kick: no membership before it.
+    expect(former([kick, tx('GROUP_INVITE', 1_800_000, { invitee: me })])).toBeNull();
+    // A kick still waiting for signatures removed nobody.
+    expect(former([invite, { ...kick, approvalStatus: 'PENDING' }])).toBeNull();
+    // Someone else's kick.
+    expect(former([invite, { ...kick, member: fakeAddress('other') }])).toBeNull();
+  });
+});
+
+describe('getFormerMember', () => {
+  it('reads one history per person, and keeps the answer', async () => {
+    installWorld();
+    const histories = () => fetchCallsFor(/^\/transactions\/search\?address=/);
+    expect(await getFormerMember(ADDR.kicked)).toMatchObject({ kind: 'removed' });
+    expect(await getFormerMember(ADDR.left)).toMatchObject({ kind: 'left' });
+    expect(await getFormerMember(fakeAddress('jr-1'))).toBeNull();
+    expect(histories()).toHaveLength(3);
+    await getFormerMember(ADDR.kicked);
+    expect(histories()).toHaveLength(3);
+  });
+});
+
 describe('loadReadyDetails', () => {
-  it('reads each row’s account and name, six at a time, and only once', async () => {
+  it('reads each row’s account, name and history, six at a time, and only once', async () => {
     const { world } = installWorld();
     let active = 0;
     let most = 0;
-    mockFetchRoute(/^\/(addresses|names\/primary)\//, async (url: URL) => {
+    const histories = () => fetchCallsFor(/^\/transactions\/search\?address=/);
+    mockFetchRoute(/^\/(addresses\/|names\/primary\/|transactions\/search)/, async (url: URL) => {
       active++;
       most = Math.max(most, active);
       await new Promise((resolve) => setTimeout(resolve, 5));
@@ -94,16 +193,25 @@ describe('loadReadyDetails', () => {
     expect(most).toBe(READY_READS_AT_ONCE);
     expect(fetchCallsFor('/addresses/')).toHaveLength(10);
     expect(fetchCallsFor('/names/primary/')).toHaveLength(10);
+    // One history search per row, bounded and paged.
+    expect(histories()).toHaveLength(10);
+    for (const call of histories()) {
+      expect(call).toMatch(/[?&]limit=100(&|$)/);
+      expect(call).toMatch(/[?&]confirmationStatus=CONFIRMED(&|$)/);
+    }
     expect(peekQuery<AccountInfo>(`account:${ADDR.kicked}`)).toMatchObject({
       level: 3,
       blocksMinted: 210_000,
     });
     expect(peekQuery(`name:${ADDR.kicked}`)).toBe('Kit Kicked');
     expect(peekQuery(`name:${rows[1]}`)).toBeNull();
+    expect(peekQuery(formerKey(ADDR.kicked))).toMatchObject({ kind: 'removed' });
+    expect(peekQuery(formerKey(rows[1]))).toBeNull();
 
     // Cached: the same rows again cost nothing.
     await loadReadyDetails(rows);
     expect(fetchCallsFor('/addresses/')).toHaveLength(10);
+    expect(histories()).toHaveLength(10);
   });
 
   it('starts no new reads once the rows leave the screen', async () => {
@@ -113,10 +221,12 @@ describe('loadReadyDetails', () => {
     const done = loadReadyDetails(rows, { signal: controller.signal });
     controller.abort();
     await done;
-    // Only the first batch had started.
-    expect(fetchCallsFor('/addresses/').length + fetchCallsFor('/names/primary/').length).toBe(
-      READY_READS_AT_ONCE
-    );
+    // Only the first batch had started: two rows' account, name and history.
+    expect(
+      fetchCallsFor('/addresses/').length +
+        fetchCallsFor('/names/primary/').length +
+        fetchCallsFor(/^\/transactions\/search\?address=/).length
+    ).toBe(READY_READS_AT_ONCE);
   });
 
   it('keeps going when one read fails, and leaves that key in error', async () => {

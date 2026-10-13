@@ -114,7 +114,9 @@ describe('Decisions: phases and actions', () => {
     expect(within(signing).getByText(/Confirming: 1 signature on the way/)).toBeInTheDocument();
     // The nomination behind it.
     expect(within(signing).getByText(/Nominated by/)).toBeInTheDocument();
-    expect(within(signing).getByText(/Has accepted/)).toBeInTheDocument();
+    expect(
+      within(signing).getByText('Ready to mint: approval makes them a member at once.')
+    ).toBeInTheDocument();
   });
 
   it('is read-only for people who are not Minter Admins', async () => {
@@ -460,16 +462,62 @@ describe('Decisions: stale invites', () => {
     expect(base58Encode(bytes.slice(112, 176))).toBe(cancel);
   }, 20_000);
 
-  it('says in "for all" that the proposer’s own signatures come later', async () => {
+  it('"for all" signs each cancellation straight after proposing it, two Hub steps each', async () => {
     const u = user();
-    await openPage('admin');
+    const { world, address, publicKey } = await openPage('admin');
+    let n = 0;
+    mockQortalRequest('CANCEL_GROUP_INVITE', (req: Record<string, unknown>) => {
+      n++;
+      const signature = base58Encode(new Uint8Array(64).fill(20 + n));
+      const tx = newProposal(world, { address, publicKey }, signature, {
+        type: 'CANCEL_GROUP_INVITE',
+        groupId: undefined,
+      });
+      world.cancelTargets.set(signature, { groupId: 694, invitee: req.qortalAddress });
+      return tx;
+    });
+    mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'OWN' }));
+
     await u.click(await screen.findByRole('button', { name: 'Show them' }));
     await u.click(
       await screen.findByRole('button', { name: 'Propose cancelling all 2 older ones' }, T)
     );
     const dialog = await screen.findByRole('dialog', { name: 'Cancel stale invites' });
-    expect(within(dialog).getByText(/Your own signatures aren’t part of this run/)).toBeVisible();
-  });
+    expect(within(dialog).getByText(/so you sign each one straight after it/)).toBeVisible();
+    expect(
+      within(dialog).getByText('4 Hub confirmations, two for each, one after another:')
+    ).toBeVisible();
+    expect(within(dialog).getByText('1. Propose it.')).toBeVisible();
+    expect(within(dialog).getByText('2. Sign it.')).toBeVisible();
+    expect(within(dialog).getByText(/Fees in total: 0.04 QORT \(4 × 0.01 QORT\)/)).toBeVisible();
+    // Nothing about the balance unless it can't pay.
+    expect(within(dialog).queryByText(/balance/)).toBeNull();
+    expect(qortalCallsFor('CANCEL_GROUP_INVITE')).toHaveLength(0);
+
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(dialog).findByText(
+        '2 of 2 proposed and signed. Each counts once it is in a block.',
+        {},
+        T
+      )
+    ).toBeVisible();
+    const progress = within(dialog).getByRole('list', { name: 'Progress' });
+    expect(within(progress).getAllByText('Proposed and signed ✓')).toHaveLength(2);
+    expect(qortalCallsFor('CANCEL_GROUP_INVITE').map((c) => c.qortalAddress)).toEqual([
+      fakeAddress('stale-2'),
+      fakeAddress('stale-3'),
+    ]);
+    // Each signature is on the cancellation just proposed.
+    const signed = qortalCallsFor('SIGN_TRANSACTION').map((c) =>
+      base58Encode(base58Decode(String(c.unsignedBytes)).slice(112, 176))
+    );
+    expect(signed).toEqual([
+      base58Encode(new Uint8Array(64).fill(21)),
+      base58Encode(new Uint8Array(64).fill(22)),
+    ]);
+    expect(within(dialog).getByRole('button', { name: 'Done' })).toHaveFocus();
+  }, 20_000);
 });
 
 describe('Decisions: proposing your own step-down', () => {
@@ -588,6 +636,37 @@ describe('Decisions: proposing', () => {
     expect(within(hub).queryByRole('button', { name: 'Back to the form' })).toBeNull();
   }, 20_000);
 
+  it('checks both fees quietly: says nothing about the balance until it can’t pay them', async () => {
+    const u = user();
+    const { world, address } = await openPage('admin');
+    await u.click(screen.getByRole('button', { name: 'Propose' }));
+    await u.click(await screen.findByRole('menuitem', { name: /Lift a ban/ }));
+    const form = await screen.findByRole('dialog', { name: 'Lift a ban' });
+    await u.selectOptions(
+      await within(form).findByRole('combobox', { name: 'Banned account' }, T),
+      ADDR.banned
+    );
+    expect(await within(form).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
+    await u.click(within(form).getByRole('button', { name: 'Review' }));
+    const hub = await screen.findByRole('dialog', { name: /^Lift a ban: / }, T);
+    // The fees are stated; the balance isn't mentioned.
+    expect(within(hub).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
+    expect(within(hub).queryByText(/balance/i)).toBeNull();
+
+    // It can't pay both: the one message, before Hub is asked anything.
+    world.accounts.get(address).balance = 0.015;
+    await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(hub).findByText(
+        'This needs 0.02 QORT for the two fees, and your confirmed balance is 0.015 QORT.',
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(qortalCallsFor('CANCEL_GROUP_BAN')).toHaveLength(0);
+    expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
+  }, 20_000);
+
   it('goes back to the form, with everything typed, from the Hub step or after a cancel in Hub', async () => {
     const u = user();
     await openPage('admin');
@@ -649,7 +728,7 @@ describe('Decisions: proposing', () => {
     // The two invite choices say how they differ.
     expect(
       await screen.findByRole('menuitem', {
-        name: /Cancel an approved invite.*One unused invite you pick, with your signature added\./,
+        name: /Cancel an approved invite.*One approved invite you pick, with your signature added\./,
       })
     ).toBeVisible();
     expect(
@@ -660,19 +739,33 @@ describe('Decisions: proposing', () => {
     await u.click(await screen.findByRole('menuitem', { name: /Cancel an approved invite/ }));
     const form = await screen.findByRole('dialog', { name: 'Cancel an approved invite' });
     const picker = await within(form).findByRole('combobox', { name: 'Approved invite' });
-    // The four unused invites, not the one of a member.
-    expect(within(picker).getAllByRole('option')).toHaveLength(5);
+    // The four unused invites, then the one of a member, marked.
+    expect(within(picker).getAllByRole('option')).toHaveLength(6);
     expect(
       await within(picker).findByRole('option', { name: /^Ada Approved, invited by / })
     ).toBeInTheDocument();
-    // Each says when it was approved, the oldest first: Ada's, the newest, comes last.
+    const member = await within(picker).findByRole(
+      'option',
+      { name: /^Member 6, invited by .+, already a member$/ },
+      T
+    );
+    expect(within(picker).getByRole('group', { name: 'Already in MINTER' })).toContainElement(
+      member
+    );
+    // Each unused one says when it was approved, the oldest first: Ada's, the newest, comes last.
     const ada = await within(picker).findByRole(
       'option',
       { name: /^Ada Approved, invited by .+, approved \d+ days ago$/ },
       T
     );
     const options = within(picker).getAllByRole('option');
-    expect(options[options.length - 1]).toBe(ada);
+    expect(options[options.length - 2]).toBe(ada);
+    expect(options[options.length - 1]).toBe(member);
+
+    // A member's invite: no "approved recently" note, and the same check as the write.
+    await u.selectOptions(picker, member);
+    expect(await within(form).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
+    expect(within(form).queryByText(/they may still press Join now/)).toBeNull();
 
     // Approved recently: the same words as Clean up stale invites.
     await u.selectOptions(picker, ADDR.approved);
@@ -710,7 +803,7 @@ describe('Decisions: proposing', () => {
     expect(base58Encode(bytes.slice(112, 176))).toBe(cancel);
   }, 20_000);
 
-  it('says so when there is no unused approved invite to cancel', async () => {
+  it('says so when there is no approved invite to cancel', async () => {
     const u = user();
     await openPage('admin', '/decisions', (world) => {
       world.storedInvites.length = 0;
@@ -719,9 +812,24 @@ describe('Decisions: proposing', () => {
     await u.click(await screen.findByRole('menuitem', { name: /Cancel an approved invite/ }));
     const form = await screen.findByRole('dialog', { name: 'Cancel an approved invite' });
     expect(
-      await within(form).findByText('There are no unused approved invites right now.')
+      await within(form).findByText('There are no approved invites stored right now.')
     ).toBeVisible();
     expect(within(form).getByRole('button', { name: 'Review' })).toBeDisabled();
+  });
+
+  it('lists a member’s invite when it is the only one stored', async () => {
+    const u = user();
+    await openPage('admin', '/decisions', (world) => {
+      world.storedInvites.splice(0, world.storedInvites.length - 1);
+    });
+    await u.click(screen.getByRole('button', { name: 'Propose' }));
+    await u.click(await screen.findByRole('menuitem', { name: /Cancel an approved invite/ }));
+    const form = await screen.findByRole('dialog', { name: 'Cancel an approved invite' });
+    const picker = await within(form).findByRole('combobox', { name: 'Approved invite' }, T);
+    expect(
+      await within(picker).findByRole('option', { name: /^Member 6, .+, already a member$/ }, T)
+    ).toBeInTheDocument();
+    expect(within(picker).getAllByRole('option')).toHaveLength(2);
   });
 
   it('marks the reason required, and Review says when it is missing', async () => {

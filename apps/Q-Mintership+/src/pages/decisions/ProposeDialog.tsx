@@ -1,7 +1,8 @@
 /**
  * Propose a kick, ban, admin change, lifted ban or cancelled invite: pick
  * the person (by name or address, or from the admins, bans in force or
- * unused approved invites with when each was approved), see the same check
+ * stored approved invites: the unused ones with when each was approved,
+ * then those of people already a member), see the same check
  * the write will run, then the proposal and the admin's own signature on it
  * as one explained step of two Hub confirmations. Kicking or banning a
  * Minter Admin is offered as "remove their admin role first", because Core
@@ -77,19 +78,21 @@ export interface ProposeDialogProps {
 type Person = { address: string; name?: string | null };
 
 /**
- * Unused approved invites and when each was approved: the same reads (and
- * cache) as Clean up stale invites, made only for "Cancel an approved invite".
+ * Stored approved invites: the unused ones with when each was approved (the
+ * same reads and cache as Clean up stale invites), then those of people
+ * already in MINTER. Made only for "Cancel an approved invite".
  */
 function useUnusedInvites(enabled: boolean) {
   const list = useQuery(enabled ? 'staleinvites:list' : null, (force) =>
     loadStaleInvites({ force })
   );
   const rows = list.data?.rows ?? [];
+  const memberRows = list.data?.memberRows ?? [];
   const details = useQuery(enabled && rows.length ? staleDetailsKey(rows) : null, (force) =>
     loadStaleInviteDetails(rows, { force })
   );
   const detailOf = (invitee: string) => details.data?.find((d) => d.invitee === invitee);
-  return { list, rows, detailOf };
+  return { list, rows, memberRows, detailOf };
 }
 
 type UnusedInvites = ReturnType<typeof useUnusedInvites>;
@@ -509,7 +512,11 @@ function BanOption({
   );
 }
 
-/** Unused approved invites, the oldest first once the dates are in, as under Clean up stale invites. */
+/**
+ * Unused approved invites, the oldest first once the dates are in, as under
+ * Clean up stale invites; then the stored invites of people already in
+ * MINTER, each marked "already a member".
+ */
 function InvitePicker({
   invites,
   admins,
@@ -536,10 +543,11 @@ function InvitePicker({
   const rows = [...invites.rows].sort(
     (a, b) => (approvedAt(a.invitee) ?? 0) - (approvedAt(b.invitee) ?? 0)
   );
-  if (!rows.length)
+  const memberRows = invites.memberRows;
+  if (!rows.length && !memberRows.length)
     return (
       <Alert severity="info" role="status">
-        There are no unused approved invites right now.
+        There are no approved invites stored right now.
       </Alert>
     );
   const adminName = (address: string) =>
@@ -550,7 +558,11 @@ function InvitePicker({
       label="Approved invite"
       value={value}
       onChange={(e) => onPick(e.target.value ? { address: e.target.value } : null)}
-      helperText="Approved invites nobody has used, as under Clean up stale invites."
+      helperText={
+        memberRows.length
+          ? 'Unused invites first, as under Clean up stale invites, then those of people already in MINTER.'
+          : 'Approved invites nobody has used, as under Clean up stale invites.'
+      }
       fullWidth
       slotProps={{ select: { native: true } }}
     >
@@ -563,6 +575,19 @@ function InvitePicker({
           approvedAt={approvedAt(row.invitee)}
         />
       ))}
+      {memberRows.length ? (
+        <optgroup label="Already in MINTER">
+          {memberRows.map((row) => (
+            <InviteOption
+              key={row.invitee}
+              address={row.invitee}
+              inviter={adminName(row.inviter)}
+              approvedAt={null}
+              member
+            />
+          ))}
+        </optgroup>
+      ) : null}
     </TextField>
   );
 }
@@ -571,16 +596,20 @@ function InviteOption({
   address,
   inviter,
   approvedAt,
+  member = false,
 }: {
   address: string;
   inviter: string;
   approvedAt: number | null;
+  /** The invitee is in MINTER already. */
+  member?: boolean;
 }) {
   const name = useDisplayName(address);
   return (
     <option value={address}>
       {name.label}, invited by {inviter}
       {approvedAt ? `, approved ${formatRelative(approvedAt)}` : ''}
+      {member ? ', already a member' : ''}
     </option>
   );
 }

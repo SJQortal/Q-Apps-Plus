@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { searchNames } from '../../data/nameSearch';
+import { findNameOwners, nameMatchKey, searchNames } from '../../data/nameSearch';
 import { resetQueries } from '../../data/query';
 import { fetchCallsFor, mockFetchRoute } from '../../test/setup';
 import { ADDR } from '../../test/world';
@@ -55,5 +55,49 @@ describe('name search (src/data/nameSearch.ts)', () => {
   it('turns an odd answer into no hits', async () => {
     mockFetchRoute('/names/search', () => ({ error: 'nope' }));
     expect(await searchNames('xyz')).toEqual([]);
+  });
+});
+
+describe('findNameOwners (Ready to mint’s search)', () => {
+  beforeEach(() => resetQueries());
+
+  it('takes the owners from one small prefix page, cached per query', async () => {
+    mockFetchRoute('/names/search', () => [
+      { name: 'Lou Left', owner: ADDR.left },
+      { name: 'Lou Two', owner: ADDR.left },
+      { name: 'Louise', owner: ADDR.learner },
+    ]);
+    expect(await findNameOwners(' lou ')).toEqual([ADDR.left, ADDR.learner]);
+    await findNameOwners('LOU');
+    expect(fetchCallsFor('/names/search')).toHaveLength(1);
+    // The page had room, so an exact name would have been on it: no exact lookup.
+    expect(fetchCallsFor(/^\/names\/(?!search|primary)/)).toHaveLength(0);
+  });
+
+  it('looks the exact name up when the page is full without it', async () => {
+    mockFetchRoute('/names/search', () =>
+      Array.from({ length: 10 }, (_, i) => ({ name: `Bob ${i}`, owner: ADDR.learner }))
+    );
+    mockFetchRoute('/names/Bob', () => ({ name: 'Bob', owner: ADDR.left }));
+    expect(await findNameOwners('Bob')).toEqual([ADDR.learner, ADDR.left]);
+    expect(fetchCallsFor('/names/Bob')).toHaveLength(1);
+  });
+
+  it('skips the exact lookup when the full page has the name', async () => {
+    mockFetchRoute('/names/search', () => [
+      { name: 'bob', owner: ADDR.left },
+      ...Array.from({ length: 9 }, (_, i) => ({ name: `bob ${i}`, owner: ADDR.learner })),
+    ]);
+    expect(await findNameOwners('Bob')).toEqual([ADDR.left, ADDR.learner]);
+    expect(fetchCallsFor(/^\/names\/(?!search)/)).toHaveLength(0);
+  });
+
+  it('asks nothing for blank, one-letter or overlong text', async () => {
+    expect(await findNameOwners('')).toEqual([]);
+    expect(await findNameOwners('a')).toEqual([]);
+    expect(await findNameOwners('x'.repeat(81))).toEqual([]);
+    expect(nameMatchKey('a')).toBeNull();
+    expect(nameMatchKey(' Lou ')).toBe('namematch:lou');
+    expect(fetchCallsFor('/names/')).toHaveLength(0);
   });
 });

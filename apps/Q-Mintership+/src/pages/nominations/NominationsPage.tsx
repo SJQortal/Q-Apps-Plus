@@ -1,12 +1,13 @@
 /**
  * Nominations: everyone who is up for MINTER right now, newest first, with
  * filters by state and a search by name or address. Level 5+ members and
- * Minter Admins nominate from here (a floating button on phones, a header
- * button elsewhere) and add their support to open nominations; the nominee
+ * Minter Admins propose a nomination from here (a floating button on phones,
+ * a header button elsewhere) and add their support to open nominations; the nominee
  * sees their own nomination first, with Accept or Join now. Recently decided
- * ones sit in a collapsed section below, with "Nominate again" where a round
+ * ones sit in a collapsed section below, with "Propose nomination again" where a round
  * ran out of time. "Ready to mint" (`?show=ready`) lists the people who asked
- * to join, to nominate from (ReadyToMint.tsx).
+ * to join, to nominate from (ReadyToMint.tsx); the same search box searches
+ * it there, by address or by a name looked up on the node.
  */
 import { useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
@@ -49,6 +50,7 @@ import { peekQuery } from '../../data/query';
 import { useMyStatus, useNominations } from '../../hooks/useData';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { appParam } from '../../routes/hubLocation';
+import { PROPOSE_NOMINATION } from '../../constants/words';
 import { PATHS, decisionPath, nominatePath, nominationPath } from '../../routes/paths';
 import type { MyStatus } from '../../rules/status';
 import { approvalsNeeded } from '../../rules/threshold';
@@ -122,8 +124,8 @@ export default function NominationsPage() {
 
   const others = useMemo(() => (data ? data.open.filter((n) => n.nominee !== me) : []), [data, me]);
   const counts = useMemo(() => countByFilter(others), [others]);
-  // Ready to mint shows each person's open nomination; if they can't be read, Nominate
-  // still shows (the form checks again).
+  // Ready to mint shows each person's open nomination; if they can't be read, Propose
+  // nomination still shows (the form checks again).
   const nominationsFailed = !data && nominations.isError;
   const openByNominee = useMemo(
     () =>
@@ -177,7 +179,7 @@ export default function NominationsPage() {
                 onClick={() => navigate(PATHS.nominate)}
                 sx={{ minHeight: 44 }}
               >
-                Nominate someone
+                {PROPOSE_NOMINATION}
               </Button>
             ) : null}
           </>
@@ -230,32 +232,34 @@ export default function NominationsPage() {
         ) : null}
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {view === 'ready' ? null : (
-            <TextField
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name or address"
-              size="small"
-              fullWidth
-              slotProps={{
-                htmlInput: {
-                  'aria-label': 'Search nominations by name or address',
-                  enterKeyHint: 'search',
-                  autoCapitalize: 'none',
-                  spellCheck: false,
-                },
-                input: {
-                  sx: { minHeight: 44 },
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchOutlinedIcon aria-hidden />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-          )}
+          {/* One search for both views: Ready to mint matches addresses and looks up names. */}
+          <TextField
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or address"
+            size="small"
+            fullWidth
+            slotProps={{
+              htmlInput: {
+                'aria-label':
+                  view === 'ready'
+                    ? 'Search the people ready to mint by name or address'
+                    : 'Search nominations by name or address',
+                enterKeyHint: 'search',
+                autoCapitalize: 'none',
+                spellCheck: false,
+              },
+              input: {
+                sx: { minHeight: 44 },
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchOutlinedIcon aria-hidden />
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
           <Box
             role="group"
             aria-label="Show nominations or the people ready to mint"
@@ -301,6 +305,8 @@ export default function NominationsPage() {
             canNominate={canNominate}
             canSupport={canNominate && Boolean(publishSigner)}
             onSupport={openSupport}
+            search={search}
+            onClearSearch={() => setSearch('')}
           />
         ) : (
           <Section title="Open nominations" id="open">
@@ -317,10 +323,10 @@ export default function NominationsPage() {
                 title="No open nominations right now"
                 description={
                   canNominate
-                    ? 'Know someone who should mint? Nominate them, and the Minter Admins take it from there.'
-                    : 'When a level 5+ minter or a Minter Admin nominates someone, it shows up here.'
+                    ? 'Know someone who should mint? Propose a nomination, and the Minter Admins take it from there.'
+                    : 'When a level 5+ minter or a Minter Admin proposes a nomination, it shows up here.'
                 }
-                actionLabel={canNominate ? 'Nominate someone' : undefined}
+                actionLabel={canNominate ? PROPOSE_NOMINATION : undefined}
                 onAction={canNominate ? () => navigate(PATHS.nominate) : undefined}
               />
             ) : shown.length === 0 ? (
@@ -404,7 +410,7 @@ export default function NominationsPage() {
           }}
         >
           <PersonAddAlt1OutlinedIcon aria-hidden sx={{ mr: 1 }} />
-          Nominate
+          {PROPOSE_NOMINATION}
         </Fab>
       ) : null}
 
@@ -422,7 +428,7 @@ export default function NominationsPage() {
   );
 }
 
-/** Why there is no Nominate button, said politely (nothing for those who can, or for nominees). */
+/** Why there is no Propose nomination button, said politely (nothing for those who can, or for nominees). */
 function NominateNote({
   session,
   status,
@@ -436,7 +442,7 @@ function NominateNote({
   if (session.status === 'outside') {
     return (
       <Alert severity="info" variant="outlined">
-        Open Q-Mintership+ in Qortal Hub or GO to nominate someone or add your support.
+        Open Q-Mintership+ in Qortal Hub or GO to propose a nomination or add your support.
       </Alert>
     );
   }
@@ -451,7 +457,7 @@ function NominateNote({
           </Button>
         }
       >
-        Sign in to nominate someone or add your support.
+        Sign in to propose a nomination or add your support.
       </Alert>
     );
   }
@@ -599,7 +605,7 @@ function RecentlyDecided({
                           onClick={() => navigate(nominatePath(n.nominee))}
                           sx={{ minHeight: 44 }}
                         >
-                          Nominate again
+                          {PROPOSE_NOMINATION} again
                         </Button>
                       ) : null
                     }

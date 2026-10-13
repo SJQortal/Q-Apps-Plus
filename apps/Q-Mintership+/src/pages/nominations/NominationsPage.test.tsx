@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { fakeAddress } from '../../../e2e/world.mjs';
+import { PROPOSE_NOMINATION } from '../../constants/words';
 import { renderPage } from '../../test/render';
 import { mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { ADDR } from '../../test/world';
@@ -32,7 +33,7 @@ function decode(data64: unknown): unknown {
 }
 
 describe('Nominations page', () => {
-  it('lists open nominations newest first, and offers Nominate to a level 5+ member', async () => {
+  it('lists open nominations newest first, and offers Propose nomination to a level 5+ member', async () => {
     await open('nominator');
     await card('Wren Waiting');
     const list = screen.getByRole('list', { name: 'Open nominations' });
@@ -41,9 +42,13 @@ describe('Nominations page', () => {
     expect(names.indexOf('bob+builder')).toBeLessThan(names.indexOf('Uma Urgent'));
     // Decided ones are not in the open list.
     expect(names).not.toContain('Ünïcode Ñame');
-    expect(screen.getByRole('button', { name: /Nominate someone/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: PROPOSE_NOMINATION })).toBeInTheDocument();
     // Nora nominated these herself.
     expect(within(await card('Wren Waiting')).getByText('You nominated them')).toBeInTheDocument();
+    // A nominee whose join request is in reads as ready, in the same words everywhere.
+    expect(within(await card('bob\\+builder')).getByText('Ready to mint')).toBeInTheDocument();
+    expect(within(await card('Wren Waiting')).queryByText('Ready to mint')).toBeNull();
+    expect(within(list).queryByText(/accepted/i)).toBeNull();
   });
 
   it('filters by state and shows the count on each filter', async () => {
@@ -97,14 +102,14 @@ describe('Nominations page', () => {
       await screen.findByText(/Members can nominate from level 5\. You're level 2\./)
     ).toBeInTheDocument();
     expect(screen.getByText(/527,900 more blocks minted to reach level 5/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Nominate someone/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: PROPOSE_NOMINATION })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Add your support' })).toBeNull();
   });
 
   it('asks a signed-out visitor to sign in', async () => {
     await open('signedOut');
     await card('Wren Waiting');
-    expect(screen.getByText(/Sign in to nominate someone/)).toBeInTheDocument();
+    expect(screen.getByText(/Sign in to propose a nomination/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 
@@ -184,11 +189,11 @@ describe('Nominations page', () => {
     expect(within(dialog).getByText(/Fee: 0.01 QORT/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(
-      await within(dialog).findByText('Accepted ✓', {}, { timeout: 4000 })
+      await within(dialog).findByText("You're ready ✓", {}, { timeout: 4000 })
     ).toBeInTheDocument();
     expect(qortalCallsFor('JOIN_GROUP')).toEqual([{ action: 'JOIN_GROUP', groupId: 694 }]);
     await user.click(within(dialog).getByRole('button', { name: 'Done' }));
-    expect(await within(mine).findByText(/Accepted ✓ \(confirming…\)/)).toBeInTheDocument();
+    expect(await within(mine).findByText("You're ready ✓ (confirming…)")).toBeInTheDocument();
   });
 
   it('says how to get the fee when the nominee has no QORT, and sends nothing', async () => {
@@ -211,11 +216,11 @@ describe('Nominations page', () => {
     expect(qortalCallsFor('JOIN_GROUP')).toHaveLength(0);
   });
 
-  it('shows a nominee who already accepted that approval will make them a member', async () => {
+  it('shows a nominee whose join request is in that approval will make them a member', async () => {
     await open('nominatedSigning');
     const mine = await screen.findByRole('region', { name: 'Your nomination' }, { timeout: 4000 });
     expect(
-      within(mine).getByText(/You accepted: approval makes you a member at once/)
+      within(mine).getByText("You're ready ✓: when the admins approve, you're in at once.")
     ).toBeInTheDocument();
     expect(within(mine).queryByRole('button', { name: 'Accept nomination' })).toBeNull();
   });
@@ -235,7 +240,7 @@ describe('Nominations page', () => {
     expect(qortalCallsFor('JOIN_GROUP')).toHaveLength(1);
   });
 
-  it('keeps recently decided ones collapsed, with Nominate again for expired and lapsed', async () => {
+  it('keeps recently decided ones collapsed, with Propose nomination again for expired and lapsed', async () => {
     const user = userEvent.setup();
     await open('nominator');
     await card('Wren Waiting');
@@ -249,13 +254,13 @@ describe('Nominations page', () => {
       'Ünïcode Ñame',
     ]);
     expect(within(decided).getByText(/Expired 4 days ago/)).toBeInTheDocument();
-    const again = within(decided).getAllByRole('button', { name: 'Nominate again' });
+    const again = within(decided).getAllByRole('button', { name: `${PROPOSE_NOMINATION} again` });
     expect(again).toHaveLength(2);
     await user.click(again[1]);
     expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
   });
 
-  it('says so when nothing is open, and offers Nominate to those who can', async () => {
+  it('says so when nothing is open, and offers Propose nomination to those who can', async () => {
     const user = userEvent.setup();
     await renderWithWorld(<NominationsPage />, {
       persona: 'nominator',
@@ -270,7 +275,7 @@ describe('Nominations page', () => {
       await screen.findByText('No open nominations right now', {}, { timeout: 4000 })
     ).toBeInTheDocument();
     const region = screen.getByRole('region', { name: 'Open nominations' });
-    await user.click(within(region).getByRole('button', { name: 'Nominate someone' }));
+    await user.click(within(region).getByRole('button', { name: PROPOSE_NOMINATION }));
     expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
   });
 

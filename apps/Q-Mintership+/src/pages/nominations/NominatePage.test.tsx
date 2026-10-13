@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
 import { fetchCallsFor, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { ADDR, TIP } from '../../test/world';
@@ -38,13 +39,15 @@ describe('Nominate page: who may nominate', () => {
 
   it('asks a signed-out visitor to sign in', async () => {
     await open('signedOut');
-    expect(await screen.findByText('Sign in to nominate')).toBeInTheDocument();
+    expect(await screen.findByText('Sign in to propose a nomination')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 
   it('gives a level 5+ member the form, with the live numbers of what happens next', async () => {
     await open('nominator');
     await who();
+    // The page is named after the action that leads to it.
+    expect(screen.getByRole('heading', { level: 1, name: PROPOSE_NOMINATION })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Name or Qortal address' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /Why should they mint/ })).toBeInTheDocument();
     const next = screen.getByRole('region', { name: 'What happens next' });
@@ -174,7 +177,7 @@ describe('Nominate page: writing and publishing', () => {
     const reason = screen.getByRole('textbox', { name: /Why should they mint/ });
     await user.type(reason, 'Too short');
     expect(screen.getByText(/9 \/ 600 · at least 20 characters/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Nominate Zoë Newcomer/ }));
+    await user.click(screen.getByRole('button', { name: proposeNominationFor('Zoë Newcomer') }));
     // Said, not only recoloured, and focus goes to the field to fix.
     expect(
       screen.getByText('Can’t publish yet: Write at least 20 characters about why.')
@@ -189,7 +192,7 @@ describe('Nominate page: writing and publishing', () => {
     expect(
       screen.getByText(/Start with qortal:\/\/\. Web links can’t open inside Qortal/)
     ).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Nominate Zoë Newcomer/ }));
+    await user.click(screen.getByRole('button', { name: proposeNominationFor('Zoë Newcomer') }));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getByRole('textbox', { name: 'Link 1' })).toHaveFocus();
     await user.click(screen.getByRole('button', { name: 'Remove link 1' }));
@@ -197,11 +200,11 @@ describe('Nominate page: writing and publishing', () => {
     expect(qortalCallsFor('PUBLISH_QDN_RESOURCE')).toHaveLength(0);
   });
 
-  it('takes you to the name field when Nominate is pressed before picking anyone', async () => {
+  it('takes you to the name field when Propose nomination is pressed before picking anyone', async () => {
     const user = userEvent.setup();
     await open('nominator');
     await who();
-    await user.click(await screen.findByRole('button', { name: 'Nominate' }));
+    await user.click(await screen.findByRole('button', { name: PROPOSE_NOMINATION }));
     expect(screen.getByText('Can’t publish yet: Pick someone first.')).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Name or Qortal address' })).toHaveFocus();
   });
@@ -232,7 +235,7 @@ describe('Nominate page: writing and publishing', () => {
       'qortal://APP/Q-Tube/channel/Zoe'
     );
     expect(screen.getByText('Ready to publish.')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Nominate Zoë Newcomer/ }));
+    await user.click(screen.getByRole('button', { name: proposeNominationFor('Zoë Newcomer') }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Publish your nomination' });
     expect(within(dialog).getByText(/You’re nominating/)).toBeInTheDocument();
@@ -279,7 +282,7 @@ describe('Nominate page: writing and publishing', () => {
     await open('nominator', ADDR.newcomerName);
     await screen.findByText(/Can be nominated/, undefined, { timeout: 4000 });
     await user.type(screen.getByRole('textbox', { name: /Why should they mint/ }), REASON);
-    await user.click(screen.getByRole('button', { name: /Nominate Zoë Newcomer/ }));
+    await user.click(screen.getByRole('button', { name: proposeNominationFor('Zoë Newcomer') }));
     const dialog = await screen.findByRole('dialog', { name: 'Publish your nomination' });
     await user.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(

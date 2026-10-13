@@ -1186,3 +1186,94 @@ export function addComments(world) {
   });
   return { waitingKey, decisionKey, ids };
 }
+// ---- answers-wording (night 2): former members ready to mint, name search ----
+
+/** Two former members who have asked to join again: one removed, one who left. */
+export const FORMER_READY = {
+  removed: { address: fakeAddress('former-ready-removed'), name: 'Fern Former' },
+  left: { address: fakeAddress('former-ready-left'), name: 'Leif Left Before' },
+};
+
+/**
+ * Add FORMER_READY to the world: their accounts, their MINTER history (an
+ * approved invite, then an approved kick or their own LEAVE_GROUP, all
+ * older than Activity's longest range) and their join requests, so Ready to
+ * mint shows them marked as former members.
+ */
+export function addFormerReady(world) {
+  const admin = world.admins[3];
+  for (const [i, who] of [FORMER_READY.removed, FORMER_READY.left].entries()) {
+    world.accounts.set(who.address, {
+      address: who.address,
+      name: who.name,
+      level: 2 + i,
+      blocks: 90_000 + i * 120_000,
+      publicKey: pk(who.address),
+      reference: sig(`ref:${who.address}`),
+      balance: 1,
+    });
+    world.names.set(who.name, who.address);
+    world.decided.push({
+      type: 'GROUP_INVITE',
+      timestamp: blockTime(2_300_000 + i) - 20_000,
+      reference: sig(`r:former-invite:${i}`),
+      fee: '0.01000000',
+      signature: sig(`former-invite:${i}`),
+      txGroupId: GROUP,
+      blockHeight: 2_300_000 + i,
+      approvalStatus: 'APPROVED',
+      approvalHeight: 2_301_000 + i,
+      creatorAddress: admin,
+      adminPublicKey: pk(admin),
+      groupId: GROUP,
+      invitee: who.address,
+      timeToLive: 864_000,
+    });
+    world.joinRequests.push({ groupId: GROUP, joiner: who.address });
+  }
+  world.decided.push({
+    type: 'GROUP_KICK',
+    timestamp: blockTime(2_480_000) - 20_000,
+    reference: sig('r:former-kick'),
+    fee: '0.01000000',
+    signature: sig('former-kick'),
+    txGroupId: GROUP,
+    blockHeight: 2_480_000,
+    approvalStatus: 'APPROVED',
+    approvalHeight: 2_481_200,
+    creatorAddress: admin,
+    adminPublicKey: pk(admin),
+    groupId: GROUP,
+    member: FORMER_READY.removed.address,
+    reason: 'Not minting',
+  });
+  world.decided.push({
+    type: 'LEAVE_GROUP',
+    timestamp: blockTime(2_490_000) - 20_000,
+    reference: sig('r:former-leave'),
+    fee: '0.01000000',
+    signature: sig('former-leave'),
+    txGroupId: 0,
+    blockHeight: 2_490_000,
+    approvalStatus: 'NOT_REQUIRED',
+    creatorAddress: FORMER_READY.left.address,
+    leaverPublicKey: pk(FORMER_READY.left.address),
+    groupId: GROUP,
+  });
+}
+
+/**
+ * Core's `GET /names/search?query=&prefix=true&limit=`: the world's names
+ * that start with the query (any case), one page. Undefined for other paths.
+ */
+export function answerNameSearch(world, pathname, sp) {
+  if (pathname !== '/names/search') return undefined;
+  const q = (sp.get('query') || '').toLowerCase();
+  const limit = Number(sp.get('limit') || 0);
+  if (!limit) throw new Error('limit=0 is not allowed in this app');
+  const rows = [...world.names.entries()]
+    .filter(([name]) => name.toLowerCase().startsWith(q))
+    .slice(0, limit)
+    .map(([name, owner]) => ({ name, owner }));
+  return { status: 200, body: rows };
+}

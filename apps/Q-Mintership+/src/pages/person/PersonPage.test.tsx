@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
 import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../test/setup';
 import { fakeAddress } from '../../../e2e/world.mjs';
@@ -34,11 +35,11 @@ describe('Person page', () => {
     expect(screen.getByText('Nominated')).toBeInTheDocument();
     expect(screen.getByText('Join request sent')).toBeInTheDocument();
     expect(
-      screen.getByText("Nominated for MINTER, and they've accepted: approval adds them at once.")
+      screen.getByText("Nominated for MINTER, and they're ready: approval adds them at once.")
     ).toBeInTheDocument();
     expect(screen.getByText('7,200 blocks')).toBeInTheDocument();
-    // Admins are already signing: no Nominate button, a way to the decision instead.
-    expect(screen.queryByRole('link', { name: /^Nominate/ })).toBeNull();
+    // Admins are already signing: no Propose nomination button, a way to the decision instead.
+    expect(screen.queryByRole('link', { name: new RegExp(`^${PROPOSE_NOMINATION}`) })).toBeNull();
     expect(screen.getByRole('link', { name: 'Open in Decisions' }).getAttribute('href')).toMatch(
       /^\/decisions\/\w+$/
     );
@@ -94,10 +95,9 @@ describe('Person page', () => {
     expect(titles).toEqual(['Removed from MINTER', 'Approved for MINTER']);
     expect(within(timeline).getByText(/Reason: “Kicked by Minter Admins”/)).toBeInTheDocument();
     // A level 5+ member can nominate them again.
-    expect(screen.getByRole('link', { name: `Nominate ${PEOPLE.kicked.name}` })).toHaveAttribute(
-      'href',
-      `/nominate?who=${ADDR.kicked}`
-    );
+    expect(
+      screen.getByRole('link', { name: proposeNominationFor(PEOPLE.kicked.name as string) })
+    ).toHaveAttribute('href', `/nominate?who=${ADDR.kicked}`);
     const original = await section('From the original app');
     expect(await within(original).findByText('Please invite me to MINTER')).toBeInTheDocument();
     expect(within(original).getByText(/Posted by Kit Kicked for themselves/)).toBeInTheDocument();
@@ -125,7 +125,7 @@ describe('Person page', () => {
   it('tells a member below level 5 why they cannot nominate', async () => {
     await visit(ADDR.kicked, 'learner');
     expect(await screen.findByText('Former member')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /^Nominate/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: new RegExp(`^${PROPOSE_NOMINATION}`) })).toBeNull();
     expect(
       screen.getByText("Members can nominate from level 5. You're level 2.")
     ).toBeInTheDocument();
@@ -140,7 +140,7 @@ describe('Person page', () => {
         'Banned from MINTER: Minter Admins must lift the ban before a nomination can go ahead.'
       )
     ).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /^Nominate/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: new RegExp(`^${PROPOSE_NOMINATION}`) })).toBeNull();
     const timeline = await section('MINTER timeline');
     expect(
       within(timeline).getByText(/^Permanent · Reason: “Banned by Minter Admins”/)

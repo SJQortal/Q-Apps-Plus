@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
+import { READY_LABEL } from '../../constants/words';
 import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
 import { nominationCommentTarget } from '../../data/commentThread';
@@ -106,7 +107,7 @@ export function NominationCard({
                 }}
               >
                 <CheckCircleOutlineOutlinedIcon aria-hidden sx={{ fontSize: 18 }} />
-                Accepted
+                {READY_LABEL}
               </Typography>
             ) : null}
           </Box>

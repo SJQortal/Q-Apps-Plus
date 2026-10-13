@@ -103,7 +103,7 @@ export function recentlyDecided(
     .sort((a, b) => b.endedAt - a.endedAt);
 }
 
-/** "Nominate again" makes sense once a round ran out without a decision. */
+/** "Propose nomination again" makes sense once a round ran out without a decision. */
 export function canNominateAgain(n: Nomination): boolean {
   return n.state === 'expired' || n.state === 'lapsed';
 }

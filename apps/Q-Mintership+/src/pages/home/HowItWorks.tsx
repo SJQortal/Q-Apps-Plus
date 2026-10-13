@@ -51,8 +51,9 @@ export function HowItWorks({ needed }: { needed: number | null }) {
             There are no votes or polls: admins sign, reject, or let it run out.
           </Step>
           <Step n={5} title="You're in">
-            With enough signatures you&rsquo;re added automatically if you accepted first, or you
-            press Join now if you didn&rsquo;t. If time runs out, you can simply be nominated again.
+            With enough signatures you&rsquo;re in at once if you&rsquo;re ready (you accepted, or
+            showed you&rsquo;re ready to mint), or you press Join now if not. If time runs out, you
+            can simply be nominated again.
           </Step>
         </StepList>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>

@@ -51,3 +51,11 @@ export function addComments(world: World): {
   decisionKey: string;
   ids: Record<string, string>;
 };
+// answers-wording (night 2): former members ready to mint, name search.
+export const FORMER_READY: Record<'removed' | 'left', { address: string; name: string }>;
+export function addFormerReady(world: World): void;
+export function answerNameSearch(
+  world: World,
+  pathname: string,
+  searchParams: URLSearchParams
+): { status: number; body: unknown } | undefined;

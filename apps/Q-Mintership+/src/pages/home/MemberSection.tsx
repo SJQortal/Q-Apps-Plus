@@ -18,6 +18,7 @@ import {
 } from '../../components/common/states';
 import { NOMINATOR_MIN_LEVEL } from '../../data/constants';
 import { useChainNow, useNominations } from '../../hooks/useData';
+import { PROPOSE_NOMINATION } from '../../constants/words';
 import { PATHS, nominatePath, personPath } from '../../routes/paths';
 import type { MyStatus } from '../../rules/status';
 import { formatCount } from '../../utils/format';
@@ -98,7 +99,7 @@ export function MemberSection({ status }: { status: MyStatus }) {
         action={
           status.canNominate ? (
             <Button component={RouterLink} to={nominatePath()} sx={{ minHeight: 44 }}>
-              Nominate someone
+              {PROPOSE_NOMINATION}
             </Button>
           ) : undefined
         }
@@ -124,8 +125,8 @@ export function MemberSection({ status }: { status: MyStatus }) {
           ) : (
             <EmptyState
               title="You haven't nominated anyone yet"
-              description="Know someone who runs a node and should mint? Nominate them with a short reason."
-              actionLabel={status.canNominate ? 'Nominate someone' : undefined}
+              description="Know someone who runs a node and should mint? Propose a nomination, with a short reason."
+              actionLabel={status.canNominate ? PROPOSE_NOMINATION : undefined}
               onAction={() => navigate(nominatePath())}
             />
           ))}

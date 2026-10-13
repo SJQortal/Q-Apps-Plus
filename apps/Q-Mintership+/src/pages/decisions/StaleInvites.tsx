@@ -1,18 +1,27 @@
 /**
  * Clean up stale invites (Minter Admins): approved invites nobody used, with
  * who invited and when it was approved, "Propose cancelling" per row (the
- * proposal and the admin's own signature), and "Propose for all" one Hub
- * confirmation after another (proposals only). Invites approved in the last
- * 30 days are marked recent and left out of "for all": those people may
- * still press Join now. An invite whose cancellation is already waiting for
- * signatures is marked, and never offered again.
+ * proposal and the admin's own signature), and "Propose cancelling all" for
+ * the older ones, one after another, each with the admin's own signature
+ * too (two Hub confirmations each). Invites approved in the last 30 days are
+ * marked recent and left out of "all": those people may still press Join
+ * now. An invite whose cancellation is already waiting for signatures is
+ * marked, and never offered again.
  */
 import { useMemo, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { Alert, Box, Button, Typography } from '@mui/material';
 import { BulkDialog } from './BulkDialog';
 import { DoneChip } from '../../components/decision/DecisionParts';
-import { cancelAll, isRecentInvite, unmatchedCancels, waitingCancelInvitees } from './staleRules';
+import { signingWindowText } from './decisionUi';
+import {
+  CANCEL_AND_SIGN_STEPS,
+  cancelAll,
+  cancelAllSummary,
+  isRecentInvite,
+  unmatchedCancels,
+  waitingCancelInvitees,
+} from './staleRules';
 import { ProposeSignDialog, type ProposalFacts } from './ProposeSignDialog';
 import { PersonChip } from '../../components/common/Person';
 import { Card } from '../../components/common/Section';
@@ -180,19 +189,21 @@ export function StaleInvites({
           <>
             <Typography>
               Proposes cancelling {plural(bulkRows?.length ?? 0, 'approved invite')} not approved in
-              the last 30 days, one after another. Each happens only if enough Minter Admins sign
-              it.
+              the last 30 days, one after another. Each happens only if {facts.needed} Minter Admins
+              sign it within {signingWindowText(facts.maximumBlockDelay, facts.msPerBlock)}.
             </Typography>
             <Typography sx={{ mt: 1 }}>
-              Your own signatures aren’t part of this run: once the proposals are in a block, sign
-              them in the queue with Sign several.
+              A proposal doesn’t count as your signature, so you sign each one straight after it, as
+              for a single proposal.
             </Typography>
           </>
         }
-        action="CANCEL_GROUP_INVITE"
+        steps={CANCEL_AND_SIGN_STEPS}
         feeTxType="CANCEL_GROUP_INVITE"
         items={(bulkRows ?? []).map((row) => ({ key: row.invitee, label: inviteeLabel(row) }))}
         confirmLabel="Continue to Hub"
+        sentLabel="Proposed and signed ✓"
+        summarize={cancelAllSummary}
         run={(report) => cancelAll(signer, bulkRows ?? [], report)}
       />
     </Card>

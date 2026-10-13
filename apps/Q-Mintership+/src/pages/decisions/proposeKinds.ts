@@ -60,7 +60,7 @@ export const PROPOSE_KINDS: Record<ProposeKind, ProposeKindInfo> = {
   },
   cancelInvite: {
     label: 'Cancel an approved invite',
-    description: 'One unused invite you pick, with your signature added.',
+    description: 'One approved invite you pick, with your signature added.',
     action: 'CANCEL_GROUP_INVITE',
     txType: 'CANCEL_GROUP_INVITE',
   },

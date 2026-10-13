@@ -14,10 +14,13 @@ import {
   addConsidering,
   addDecidedSignatures,
   addComments,
+  addFormerReady,
   addOtherPending,
   addReady,
   addRejections,
   answerCore,
+  answerNameSearch,
+  FORMER_READY,
   createWorld,
   fakeAddress,
   ADDR,
@@ -54,6 +57,8 @@ const DECIDED_SIG = addDecidedSignatures(world);
 const PENDING_SIG = world.pending.find((t) => t.type === 'GROUP_KICK').signature;
 // Public comments on Wren Waiting's nomination and bob+builder's invite, and a hidden one.
 addComments(world);
+// Two former members have asked to join again: Ready to mint marks them.
+addFormerReady(world);
 // Replaced in setup() by a visible 64×64 gradient, so avatars show in the shots.
 let PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAQklEQVR42u3OMQEAAAgDINc/9Mzg14MGLUmHCgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFbzwB2GwADvYAAAAASUVORK5CYII=',
@@ -161,7 +166,9 @@ export default {
       await route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
       return true;
     }
-    const answer = answerCore(worldFor(route), url.pathname, url.searchParams);
+    const answer =
+      answerNameSearch(worldFor(route), url.pathname, url.searchParams) ??
+      answerCore(worldFor(route), url.pathname, url.searchParams);
     if (!answer) return false;
     if (answer.text !== undefined) {
       await route.fulfill({ status: answer.status, contentType: 'text/plain', body: answer.text });
@@ -197,6 +204,21 @@ export default {
     // Who is ready to mint: join requests without a nomination.
     { key: 'nominations-ready', path: '/nominations?show=ready&as=nominator', after: settle },
     { key: 'nominations-ready-admin', path: '/nominations?show=ready&as=admin', after: settle },
+    // Ready to mint searched by a name, resolved to its owner on the node.
+    {
+      key: 'nominations-ready-search',
+      path: '/nominations?show=ready&as=nominator',
+      after: async (page) => {
+        await settle(page);
+        await page
+          .getByRole('searchbox', { name: 'Search the people ready to mint by name or address' })
+          .fill('fern', { timeout: 4000 });
+        await page
+          .getByRole('link', { name: `${FORMER_READY.removed.name}: open their page` })
+          .waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
     // The nominee's own card comes first, with Accept nomination.
     { key: 'nominations-nominee', path: '/nominations?as=nominatedWaiting', after: settle },
     { key: 'nominate', path: '/nominate?as=nominator', after: settle },
@@ -259,6 +281,21 @@ export default {
       path: '/decisions?as=admin',
       overlay: true,
       after: open('Considering: Add to MINTER, bob+builder', 'Mark as considering'),
+    },
+    // Propose cancelling all: two Hub steps for each stale invite (the intro).
+    {
+      key: 'decisions-cancel-all',
+      path: '/decisions?as=admin',
+      overlay: true,
+      after: async (page) => {
+        await settle(page);
+        await page.getByRole('button', { name: 'Show them', exact: true }).click({ timeout: 4000 });
+        await page
+          .getByRole('button', { name: /^Propose cancelling all \d+ older ones$/ })
+          .click({ timeout: 8000 });
+        await page.getByRole('dialog', { name: 'Cancel stale invites' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
     },
     { key: 'person', path: `/people/${ADDR.nominatedSigning}?as=admin`, after: settle },
     { key: 'history', path: '/history?as=learner', after: settle },

@@ -14,6 +14,7 @@ import { AddressText } from '../../components/common/Person';
 import { NameAvatar } from '../../components/common/NameAvatar';
 import { Card, LevelBadge, ToneChip } from '../../components/common/Section';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
+import { proposeNominationFor } from '../../constants/words';
 import { decisionPath, nominatePath } from '../../routes/paths';
 import { formatCount, formatDate } from '../../utils/format';
 import { AdminRoleAction } from '../decisions/AdminRoleAction';
@@ -110,7 +111,7 @@ export function PersonHero({
         variant="contained"
         sx={{ minHeight: 44 }}
       >
-        {block === 'open' ? 'Add your support' : `Nominate ${shownName ?? 'this account'}`}
+        {block === 'open' ? 'Add your support' : proposeNominationFor(shownName ?? 'this account')}
       </Button>
     );
   }

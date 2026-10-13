@@ -3,7 +3,7 @@ import { base58Decode, base58Encode } from '../qortal/base58';
 import { GROUP_APPROVAL_UNSIGNED_LENGTH } from '../qortal/approvalBytes';
 import { loadDecisions } from '../data/decisions';
 import { ADDR, NULL_OWNER, addOtherPending, installWorld } from '../test/world';
-import { fakeAddress } from '../../e2e/world.mjs';
+import { addReady, fakeAddress } from '../../e2e/world.mjs';
 import { mockFetchRoute, mockQortalRequest, qortalCalls, qortalCallsFor } from '../test/setup';
 import {
   addAdminRequest,
@@ -266,8 +266,24 @@ describe('guards re-read the chain before a write', () => {
   it('join: refuses members, banned accounts and a second request', async () => {
     expect(await guardJoin(signerFor('nominator'))).toMatch(/already in MINTER/);
     expect(await guardJoin(signerFor('banned'))).toMatch(/banned/);
-    expect(await guardJoin(signerFor('nominatedSigning'))).toMatch(/already accepted/);
+    expect(await guardJoin(signerFor('nominatedSigning'))).toBe(
+      "Your join request is already in: you're ready. Nothing more to send."
+    );
     expect(await guardJoin(signerFor('nominatedWaiting'))).toBeNull();
+  });
+
+  it('join: one wording for an open join request, however it was sent', async () => {
+    // Rae showed she's ready to mint, with no nomination: the same words as an accepted one.
+    const { world, address, publicKey } = installWorld('ready');
+    addReady(world);
+    expect(await guardJoin({ address, publicKey })).toBe(
+      "Your join request is already in: you're ready. Nothing more to send."
+    );
+    expect(await joinMinter({ address, publicKey })).toEqual({
+      status: 'blocked',
+      reason: "Your join request is already in: you're ready. Nothing more to send.",
+    });
+    expect(qortalCallsFor('JOIN_GROUP')).toHaveLength(0);
   });
 
   it('join: refuses while their own join request is still on its way into a block', async () => {

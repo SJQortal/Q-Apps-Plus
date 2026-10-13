@@ -36,7 +36,7 @@ export function statusSentence(
       return `Approved for MINTER: ${they} only need to press Join now.`;
     case 'nominated':
       return person.hasJoinRequest
-        ? `Nominated for MINTER, and ${they}'ve accepted: approval adds ${them} at once.`
+        ? `Nominated for MINTER, and ${they}'re ready: approval adds ${them} at once.`
         : 'Nominated for MINTER.';
     case 'formerKicked': {
       // Someone who was never a member: a ban, or a kick of their join request.

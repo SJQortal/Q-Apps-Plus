@@ -3,6 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { fakeAddress, type World } from '../../../e2e/world.mjs';
 import { shortAddress } from '../../utils/format';
+import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
 import { fetchCallsFor, mockFetchRoute } from '../../test/setup';
 import { ADDR } from '../../test/world';
@@ -68,6 +69,15 @@ describe('Ready to mint', () => {
     expect(
       await within(await row('bob+builder')).findByText('Level 0 · no blocks minted yet')
     ).toBeInTheDocument();
+    // Kit was a member once: the row says so, from their MINTER history.
+    expect(
+      await within(kit).findByText(
+        'Former member: removed from MINTER on 26 Aug 2026',
+        {},
+        { timeout: 4000 }
+      )
+    ).toBeInTheDocument();
+    expect(within(await row('bob+builder')).queryByText(/Former member/)).toBeNull();
     expect(screen.getByText(/They need a nomination from a level 5\+ minter/)).toBeInTheDocument();
     expect(screen.getByText(/this is the order your node lists them in/)).toBeInTheDocument();
     expect(screen.getByText('8 of 8 shown')).toBeInTheDocument();
@@ -75,8 +85,11 @@ describe('Ready to mint', () => {
       'aria-pressed',
       'true'
     );
-    // Nominations' own search and lists step aside; nobody signed out can nominate.
-    expect(screen.queryByRole('searchbox')).toBeNull();
+    // The search box searches this list; the nominations' lists step aside; nobody
+    // signed out can nominate.
+    expect(
+      screen.getByRole('searchbox', { name: 'Search the people ready to mint by name or address' })
+    ).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Open nominations' })).toBeNull();
     expect(
       await within(await row('Uma Urgent')).findByText('Nominated', {}, { timeout: 4000 })
@@ -94,11 +107,13 @@ describe('Ready to mint', () => {
     // 6 from the mock world, then 14 of these.
     await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(20));
     expect(screen.getByText('20 of 51 shown')).toBeInTheDocument();
+    // Account, name and MINTER history: three reads per row shown, none for the others.
     const reads = (address: string) =>
       fetchCallsFor(`/addresses/${address}`).length +
-      fetchCallsFor(`/names/primary/${address}`).length;
-    await waitFor(() => expect(reads(many[13])).toBe(2));
-    expect(many.slice(0, 14).map(reads)).toEqual(new Array(14).fill(2));
+      fetchCallsFor(`/names/primary/${address}`).length +
+      fetchCallsFor(`/transactions/search?address=${address}`).length;
+    await waitFor(() => expect(reads(many[13])).toBe(3));
+    expect(many.slice(0, 14).map(reads)).toEqual(new Array(14).fill(3));
     expect(many.slice(14).map(reads)).toEqual(new Array(31).fill(0));
 
     await user.click(screen.getByRole('button', { name: 'Show 20 more' }));
@@ -107,16 +122,43 @@ describe('Ready to mint', () => {
     expect(document.activeElement).toHaveAccessibleName(
       `${shortAddress(many[14])}: open their page`
     );
-    await waitFor(() => expect(reads(many[33])).toBe(2));
-    expect(many.slice(14, 34).map(reads)).toEqual(new Array(20).fill(2));
+    await waitFor(() => expect(reads(many[33])).toBe(3));
+    expect(many.slice(14, 34).map(reads)).toEqual(new Array(20).fill(3));
     expect(many.slice(34).map(reads)).toEqual(new Array(11).fill(0));
     // Rows already read aren't read again.
-    expect(many.slice(0, 14).map(reads)).toEqual(new Array(14).fill(2));
+    expect(many.slice(0, 14).map(reads)).toEqual(new Array(14).fill(3));
 
     await user.click(screen.getByRole('button', { name: 'Show 11 more' }));
     expect(within(list).getAllByRole('listitem')).toHaveLength(51);
     expect(screen.getByText('51 of 51 shown')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Show \d+ more$/ })).toBeNull();
+  });
+
+  it('marks former members, kicked or left, and nobody who was never a member', async () => {
+    await open('nominator', (world) => {
+      world.joinRequests.push(joinRequest(ADDR.left), joinRequest(ADDR.kicked));
+      // Bram's ban ended: a former member again, removed by the ban.
+      world.bans = world.bans.filter((b: { offender: string }) => b.offender !== ADDR.banned);
+      world.joinRequests.push(joinRequest(ADDR.banned));
+    });
+    expect(
+      await within(await row('Lou Left')).findByText(
+        /^Former member: left MINTER on \d+ \w+ 2026$/,
+        {},
+        { timeout: 4000 }
+      )
+    ).toBeInTheDocument();
+    expect(
+      await within(await row('Kit Kicked')).findByText(
+        'Former member: removed from MINTER on 26 Aug 2026'
+      )
+    ).toBeInTheDocument();
+    expect(
+      await within(await row('Bram Banned')).findByText(/^Former member: removed from MINTER on /)
+    ).toBeInTheDocument();
+    const list = await readyList();
+    // The others never were members.
+    await waitFor(() => expect(within(list).getAllByText(/^Former member: /)).toHaveLength(3));
   });
 
   it('reads a row again on Refresh when its level could not be read', async () => {
@@ -154,7 +196,7 @@ describe('Ready to mint', () => {
     expect(others()).toBe(othersBefore);
   });
 
-  it('offers Nominate to a level 5+ member, and says where they already nominated', async () => {
+  it('offers Propose nomination to a level 5+ member, and says where they already nominated', async () => {
     const user = userEvent.setup();
     await open('nominator');
     const jr1 = await row(shortAddress(fakeAddress('jr-1')));
@@ -166,12 +208,16 @@ describe('Ready to mint', () => {
     expect(within(mia).getByText('Nominated')).toBeInTheDocument();
     // Enough Minter Admins have signed already: support would change nothing.
     expect(within(mia).queryByRole('button')).toBeNull();
-    expect(within(await readyList()).getAllByRole('button', { name: /^Nominate / })).toHaveLength(
-      3
-    );
+    expect(
+      within(await readyList()).getAllByRole('button', {
+        name: new RegExp(`^${PROPOSE_NOMINATION} for `),
+      })
+    ).toHaveLength(3);
 
     await user.click(
-      within(jr1).getByRole('button', { name: `Nominate ${shortAddress(fakeAddress('jr-1'))}` })
+      within(jr1).getByRole('button', {
+        name: proposeNominationFor(shortAddress(fakeAddress('jr-1'))),
+      })
     );
     expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
   });
@@ -245,5 +291,144 @@ describe('Ready to mint', () => {
     expect(screen.getByRole('searchbox')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^Ready to mint\s*6/ }));
     expect(await readyList()).toBeInTheDocument();
+  });
+});
+
+describe('Ready to mint: search', () => {
+  const searchBox = () =>
+    screen.getByRole('searchbox', { name: 'Search the people ready to mint by name or address' });
+  const nameLookups = () => fetchCallsFor(/^\/names\/(?!primary\/)/);
+
+  it('finds a typed address directly, without looking up any name', async () => {
+    const user = userEvent.setup();
+    await open('nominator', (world) => {
+      world.joinRequests.push(joinRequest(ADDR.kicked));
+    });
+    await row('Kit Kicked');
+    await user.click(searchBox());
+    await user.paste(ADDR.kicked);
+    const list = await readyList();
+    await waitFor(() => expect(rowLabels(list)).toEqual(['Kit Kicked']));
+    expect(screen.getByText(`1 of 7 matches “${ADDR.kicked}”.`)).toBeInTheDocument();
+    expect(nameLookups()).toHaveLength(0);
+  });
+
+  it('says so when a typed address isn’t on the list, and clears the search', async () => {
+    const user = userEvent.setup();
+    await open('nominator');
+    await readyList();
+    await user.click(searchBox());
+    await user.paste(ADDR.learner);
+    expect(
+      await screen.findByText(
+        `No one on this list matches “${ADDR.learner}”`,
+        {},
+        { timeout: 4000 }
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('This address hasn’t asked to join MINTER, or is a member already.')
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Clear the search' }));
+    expect(searchBox()).toHaveValue('');
+    await waitFor(async () => expect(rowLabels(await readyList())).toHaveLength(6));
+  });
+
+  it('matches part of an address, as the short address on a row shows it', async () => {
+    const user = userEvent.setup();
+    await open('nominator', () => {
+      mockFetchRoute('/names/search', () => []);
+    });
+    const jr2 = fakeAddress('jr-2');
+    await row(shortAddress(jr2));
+    await user.type(searchBox(), jr2.slice(-6));
+    await waitFor(async () => expect(rowLabels(await readyList())).toEqual([shortAddress(jr2)]));
+  });
+
+  it('resolves a typed name to its owner, without reading every row’s name', async () => {
+    const user = userEvent.setup();
+    const many = Array.from({ length: 45 }, (_, i) => fakeAddress(`many-jr-${i}`));
+    const searched: Array<string | null> = [];
+    await open('nominator', (world) => {
+      // Lou is row 52: far below the first page, never read before the search.
+      world.joinRequests.push(...many.map(joinRequest), joinRequest(ADDR.left));
+      mockFetchRoute('/names/search', (url: URL) => {
+        searched.push(url.searchParams.get('query'));
+        return [
+          { name: 'Lou Left', owner: ADDR.left },
+          { name: 'Lou Elsewhere', owner: fakeAddress('not-ready') },
+        ];
+      });
+    });
+    const list = await readyList();
+    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(20));
+    // The first page's rows are read (the 20th is many[13]).
+    await waitFor(() => expect(fetchCallsFor(`/names/primary/${many[13]}`)).toHaveLength(1));
+    const namesRead = fetchCallsFor('/names/primary/').length;
+
+    await user.type(searchBox(), 'lou');
+    // While the name is looked up nothing on the page matches: the list makes way for a skeleton.
+    await waitFor(async () => expect(rowLabels(await readyList())).toEqual(['Lou Left']), {
+      timeout: 4000,
+    });
+    expect(screen.getByText('1 of 52 matches “lou”.')).toBeInTheDocument();
+    // One small name search once typing paused; no exact lookup (the page had room).
+    expect(searched).toEqual(['lou']);
+    expect(fetchCallsFor('/names/search')[0]).toMatch(/[?&]limit=10(&|$)/);
+    expect(nameLookups()).toHaveLength(1);
+    // Only Lou's own row was read; the 32 rows the search hid never were.
+    await waitFor(() => expect(fetchCallsFor(`/names/primary/${ADDR.left}`)).toHaveLength(1));
+    expect(fetchCallsFor('/names/primary/')).toHaveLength(namesRead + 1);
+    expect(many.slice(14).flatMap((a) => fetchCallsFor(`/names/primary/${a}`))).toEqual([]);
+  });
+
+  it('looks up the exact name when the name search page is full without it', async () => {
+    const user = userEvent.setup();
+    await open('nominator', (world) => {
+      world.joinRequests.push(joinRequest(ADDR.left));
+      mockFetchRoute('/names/search', () =>
+        Array.from({ length: 10 }, (_, i) => ({
+          name: `Lou Left ${i + 1}`,
+          owner: fakeAddress(`lou-${i}`),
+        }))
+      );
+    });
+    await row('Lou Left');
+    await user.type(searchBox(), 'Lou Left');
+    await waitFor(async () => expect(rowLabels(await readyList())).toEqual(['Lou Left']));
+    expect(fetchCallsFor('/names/Lou%20Left')).toHaveLength(1);
+  });
+
+  it('still matches names already shown when the name search fails', async () => {
+    const user = userEvent.setup();
+    await open('nominator', (world) => {
+      world.joinRequests.push(joinRequest(ADDR.kicked));
+      mockFetchRoute('/names/search', () => new Response('', { status: 500 }));
+    });
+    await row('Kit Kicked');
+    await user.type(searchBox(), 'kit');
+    await waitFor(async () => expect(rowLabels(await readyList())).toEqual(['Kit Kicked']), {
+      timeout: 4000,
+    });
+    expect(
+      await screen.findByText(
+        '1 of 7 matches “kit”. Names couldn’t be looked up just now, so only addresses and names already shown count.'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('says what to try when nothing matches', async () => {
+    const user = userEvent.setup();
+    await open('nominator', () => {
+      mockFetchRoute('/names/search', () => []);
+    });
+    await readyList();
+    await user.type(searchBox(), 'zzz');
+    expect(
+      await screen.findByText('No one on this list matches “zzz”', {}, { timeout: 4000 })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Try their full registered name, or their address.')
+    ).toBeInTheDocument();
   });
 });

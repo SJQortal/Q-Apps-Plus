@@ -222,23 +222,35 @@ export interface OwnSignatureOutcome {
   proposalSignature: string | null;
 }
 
-/** Why the balance can't pay both fees (step 1's and the signature's), or null. */
-async function bothFeesProblem(signer: Signer, txType: GroupTxType): Promise<string | null> {
-  if (!signer.address) return null;
+/**
+ * The fees of several transactions against the confirmed balance: the total
+ * and the balance when the balance can't pay them all, otherwise null (and
+ * null when they can't be read: each write's own check reads them again and
+ * says what went wrong). Quiet by design: nothing is shown unless it is short.
+ */
+export async function feesShortfall(
+  signer: Signer,
+  txTypes: GroupTxType[]
+): Promise<{ total: string; balance: string } | null> {
+  if (!signer.address || !txTypes.length) return null;
   try {
-    const [first, second, balance] = await Promise.all([
-      getFee(txType),
-      getFee('GROUP_APPROVAL'),
+    const [fees, balance] = await Promise.all([
+      Promise.all(txTypes.map((type) => getFee(type))),
       getBalance(signer.address, { force: true }),
     ]);
-    const total = (first.atomic + second.atomic) / ATOMIC_PER_QORT;
-    return balance < total
-      ? `This needs ${formatQort(total)} for the two fees, and your confirmed balance is ${formatQort(balance)}.`
-      : null;
+    const total = fees.reduce((sum, fee) => sum + fee.atomic, 0) / ATOMIC_PER_QORT;
+    return balance < total ? { total: formatQort(total), balance: formatQort(balance) } : null;
   } catch {
-    // Step 1's own check reads the balance again and says what went wrong.
     return null;
   }
+}
+
+/** Why the balance can't pay both fees (step 1's and the signature's), or null. */
+async function bothFeesProblem(signer: Signer, txType: GroupTxType): Promise<string | null> {
+  const short = await feesShortfall(signer, [txType, 'GROUP_APPROVAL']);
+  return short
+    ? `This needs ${short.total} for the two fees, and your confirmed balance is ${short.balance}.`
+    : null;
 }
 
 /**
