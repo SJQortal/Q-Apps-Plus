@@ -101,6 +101,7 @@ import { TargetShiftSection } from './TargetShiftSection';
 import { useAcknowledge } from './useAcknowledge';
 
 // Minter Admins only: nobody else downloads the polls' code or reads them.
+const AdminPollsSection = lazy(() => import('./AdminPollsSection'));
 const AskAdminsDialog = lazy(() => import('./AskAdminsDialog'));
 
 const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
@@ -593,6 +594,12 @@ function DecisionsQueue() {
                   />
                 ))}
               </Section>
+            ) : null}
+
+            {isAdmin && pollAuthor ? (
+              <Suspense fallback={<CardSkeleton lines={2} />}>
+                <AdminPollsSection author={pollAuthor} onAsk={() => setAsking(true)} />
+              </Suspense>
             ) : null}
 
             {closed.length ? (

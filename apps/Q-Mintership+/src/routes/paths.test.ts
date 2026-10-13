@@ -1,7 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { appLink } from '../utils/links';
 import { notifyHubDisplayedPath } from './hubLocation';
-import { decisionPath, legacyDecisionPath, nominationPath, PATHS } from './paths';
+import { adminPollPath, decisionPath, legacyDecisionPath, nominationPath, PATHS } from './paths';
+
+describe('a Minter Admin poll’s path', () => {
+  it('is /decisions/polls/<id>, copied as a qortal:// link with a literal +', () => {
+    expect(adminPollPath('lvl5adm1')).toBe('/decisions/polls/lvl5adm1');
+    expect(appLink(adminPollPath('lvl5adm1'))).toBe(
+      'qortal://APP/Q-Mintership+/decisions/polls/lvl5adm1'
+    );
+  });
+});
 
 const SIG =
   '4mYb2yQkXvJ1sL9pW3tE7uN5rC8dF6gH2jK4mZ1xA9bV3nQ7wE5rT8yU2io6pL1aS3dF5gH7jK9LZ2xC4vB6nM8';
