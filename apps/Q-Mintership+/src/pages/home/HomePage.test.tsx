@@ -16,9 +16,10 @@ import { markWrite, pendingWritesAtom, writeKeys } from '../../writes/optimistic
 import { PROPOSE_NOMINATION } from '../../constants/words';
 import { renderPage } from '../../test/render';
 import { fetchCalls, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
-import { ADDR, installWorld } from '../../test/world';
+import { ADDR, TIP, installWorld } from '../../test/world';
 import { addTargetShift } from '../../../e2e/world.mjs';
 import { decisionPath } from '../../routes/paths';
+import { seenTargetKey } from '../decisions/seenTarget';
 import HomePage from './HomePage';
 
 afterEach(() => vi.useRealTimers());
@@ -129,13 +130,42 @@ describe('Home: Minter Admins', () => {
     expect(screen.getByText('217,400')).toBeInTheDocument();
   });
 
-  it('explains when the number of signatures needed changed since the last visit', async () => {
-    window.localStorage.setItem(`${STORAGE_PREFIX}home-signatures-needed`, '7');
+  it('says the target changed since Decisions last showed it, and links there', async () => {
+    // Decisions last showed 21 admin seats and 9 signatures; today it is 20 and 8.
+    const seen = JSON.stringify({ adminCount: 21, needed: 9, height: TIP - 100 });
+    window.localStorage.setItem(seenTargetKey(), seen);
     await renderPage(<HomePage />, { persona: 'admin' });
-    expect(await screen.findByText(/up from/, {}, T)).toHaveTextContent(
-      /up from 7 on your last visit, because the number of Minter Admins changed/
+    const hero = await screen.findByRole('region', { name: /waiting for your signature$/ }, T);
+    await waitFor(() =>
+      expect(hero).toHaveTextContent(
+        /The target changed from 9 to 8 signatures since you last looked at Decisions\. See what changed/
+      )
     );
-    expect(window.localStorage.getItem(`${STORAGE_PREFIX}home-signatures-needed`)).toBe('8');
+    expect(within(hero).getByRole('link', { name: 'See what changed' })).toHaveAttribute(
+      'href',
+      '/decisions'
+    );
+    // Only Decisions keeps the seen target: Home leaves it as it was.
+    expect(window.localStorage.getItem(seenTargetKey())).toBe(seen);
+  });
+
+  it('says nothing about the target when it has not moved, or Decisions was never opened', async () => {
+    const seen = JSON.stringify({ adminCount: 20, needed: 8, height: TIP - 100 });
+    window.localStorage.setItem(seenTargetKey(), seen);
+    const first = await renderPage(<HomePage />, { persona: 'admin' });
+    const hero = await screen.findByRole('region', { name: /waiting for your signature$/ }, T);
+    await waitFor(() => expect(hero).toHaveTextContent(/Each decision needs 8 signatures/));
+    expect(hero).not.toHaveTextContent(/target changed/);
+    expect(within(hero).queryByRole('link', { name: 'See what changed' })).toBeNull();
+    expect(window.localStorage.getItem(seenTargetKey())).toBe(seen);
+    first.unmount();
+
+    window.localStorage.removeItem(seenTargetKey());
+    await renderPage(<HomePage />, { persona: 'admin' });
+    const again = await screen.findByRole('region', { name: /waiting for your signature$/ }, T);
+    await waitFor(() => expect(again).toHaveTextContent(/Each decision needs 8 signatures/));
+    expect(again).not.toHaveTextContent(/target changed/);
+    expect(window.localStorage.getItem(seenTargetKey())).toBeNull();
   });
 });
 

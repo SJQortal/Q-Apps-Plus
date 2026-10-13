@@ -1,20 +1,18 @@
 /**
  * Home's own reads and sums, on top of the shared hooks: the signatures
- * needed right now (and whether that changed since the last visit), the
- * account's confirmed balance, approved invites nobody used, and the
- * admin's and nominator's slices of the decisions and nominations.
+ * needed right now, the account's confirmed balance, approved invites
+ * nobody used, and the admin's and nominator's slices of the decisions and
+ * nominations.
  *
  * Every read here uses the same cache key as its data/ loader, so Home
  * shares results with the rest of the app instead of reading twice.
  */
-import { useEffect, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { CUMULATIVE_BLOCKS_BY_LEVEL } from '../../data/constants';
 import type { DecisionsData } from '../../data/decisions';
 import { getStoredInvites } from '../../data/group';
 import type { Nomination } from '../../data/nominations';
 import type { TxRow } from '../../data/types';
-import { STORAGE_PREFIX } from '../../constants/plus';
 import { useAdmins, useGroupInfo, useMembers } from '../../hooks/useData';
 import { useQuery } from '../../hooks/useQuery';
 import type { Decision } from '../../rules/decision';
@@ -22,19 +20,6 @@ import { isOpenState, type NominationState } from '../../rules/nomination';
 import { signerState } from '../../rules/tally';
 import { approvalsNeeded, thresholdPercent } from '../../rules/threshold';
 import { pendingWritesAtom, writeKeys } from '../../writes/optimistic';
-
-/** The account's confirmed balance in QORT (the fee check), refreshed while visible. */
-const NEEDED_KEY = `${STORAGE_PREFIX}home-signatures-needed`;
-
-function readStoredNeeded(): number | null {
-  try {
-    const raw = window.localStorage.getItem(NEEDED_KEY);
-    const value = raw === null ? Number.NaN : Number(raw);
-    return Number.isFinite(value) ? value : null;
-  } catch {
-    return null;
-  }
-}
 
 export interface NeededSignatures {
   /** Signatures a decision needs now (null until loaded). */
@@ -46,8 +31,6 @@ export interface NeededSignatures {
   memberCount: number | null;
   /** "40" for PCT40, null for NONE/ONE. */
   percent: number | null;
-  /** What it was on this device's last visit, when it has changed since. */
-  changedFrom: number | null;
   isLoading: boolean;
   error: unknown;
   refetch: () => void;
@@ -55,32 +38,23 @@ export interface NeededSignatures {
 
 /**
  * Signatures needed now, computed the way Core does from the live threshold
- * and admin count (it moves when admins are added or removed), plus the
- * value this device saw last time so Home can say when it changed.
+ * and admin count (it moves when admins are added or removed). Whether it
+ * moved since Decisions last showed it is the admin's hero's to say
+ * (readSeenTarget).
  */
 export function useNeededSignatures(): NeededSignatures {
   const group = useGroupInfo();
   const admins = useAdmins();
-  const [previous] = useState(readStoredNeeded);
   const needed =
     group.data && admins.data
       ? approvalsNeeded(group.data.approvalThreshold, admins.data.adminCount)
       : null;
-  useEffect(() => {
-    if (needed === null) return;
-    try {
-      window.localStorage.setItem(NEEDED_KEY, String(needed));
-    } catch {
-      // Private windows: the change note is a convenience only.
-    }
-  }, [needed]);
   return {
     needed,
     adminSeats: admins.data?.adminCount ?? null,
     signers: admins.data?.signers.length ?? null,
     memberCount: admins.data?.memberCount || group.data?.memberCount || null,
     percent: group.data ? thresholdPercent(group.data.approvalThreshold) : null,
-    changedFrom: needed !== null && previous !== null && previous !== needed ? previous : null,
     isLoading: group.isLoading || admins.isLoading,
     error: group.error ?? admins.error,
     refetch: () => {
