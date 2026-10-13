@@ -307,6 +307,80 @@ export function loadAdminPolls(
   );
 }
 
+/** A thread shows this many comments, and this many more per "Show more". */
+export const POLL_COMMENTS_PAGE = 20;
+
+/** A body as the thread keeps it: still fetching when it was slower than the wait. */
+export type ThreadBody = BodyRead & { fetching?: boolean };
+
+/** Rows as a thread lists them (rules/adminPolls.ts pollCommentRows). */
+export interface ThreadRow {
+  ref: string;
+  name: string;
+  identifier: string;
+  postedAt: number;
+  updatedAt: number;
+}
+
+/** One key per thread, page and set of versions, so a new comment reads anew. */
+export function pollThreadKey(
+  viewer: string,
+  pollId: string,
+  rows: readonly ThreadRow[],
+  limit: number
+): string {
+  let newest = 0;
+  for (const row of rows) newest = Math.max(newest, row.updatedAt);
+  return `adminpolls:thread:${viewer}:${pollId}:${limit}:${rows.length}:${newest}`;
+}
+
+/**
+ * A poll's thread, once opened: the bodies of its newest `limit` comments
+ * and of the comments their replies answer (threads are one level deep),
+ * decrypted once per version like every poll body. A body slower than the
+ * wait shows as fetching until the next read.
+ */
+export function loadPollThread(
+  viewer: string,
+  pollId: string,
+  rows: readonly ThreadRow[],
+  limit: number,
+  options: { force?: boolean } = {}
+): Promise<Map<string, ThreadBody>> {
+  return fetchQuery(
+    pollThreadKey(viewer, pollId, rows, limit),
+    async () => {
+      const bodies = new Map<string, ThreadBody>();
+      const read = (list: readonly ThreadRow[]) =>
+        mapLimit([...list], 6, async (row) => {
+          const result = await quick(
+            readPollBody(viewer, {
+              name: row.name,
+              identifier: row.identifier,
+              created: row.postedAt,
+              updated: row.updatedAt,
+            })
+          );
+          bodies.set(row.ref, result.value ?? { status: 'unavailable', fetching: true });
+        });
+      await read(rows.slice(0, limit));
+      for (let round = 0; round < 3; round++) {
+        const wanted = new Set<string>();
+        for (const body of bodies.values()) {
+          if (body.status !== 'ok') continue;
+          const replyTo = (body.value as { replyTo?: unknown } | null)?.replyTo;
+          if (typeof replyTo === 'string') wanted.add(replyTo);
+        }
+        const parents = rows.filter((r) => wanted.has(r.identifier) && !bodies.has(r.ref));
+        if (!parents.length) break;
+        await read(parents);
+      }
+      return bodies;
+    },
+    { ttlMs: 60_000, force: options.force }
+  );
+}
+
 /** A base58 public key: 32 bytes. */
 function isPublicKey(value: string): boolean {
   try {

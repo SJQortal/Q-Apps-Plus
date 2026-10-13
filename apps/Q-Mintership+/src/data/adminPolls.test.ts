@@ -11,8 +11,46 @@ import { serveAdminPolls } from '../test/adminPolls';
 import { fetchCallsFor, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../test/setup';
 import { ADDR, installWorld } from '../test/world';
 import { assemblePolls } from '../rules/adminPolls';
-import { encryptionTargets, getPublicKey, loadAdminPolls, pollContext } from './adminPolls';
+import {
+  encryptionTargets,
+  getPublicKey,
+  loadAdminPolls,
+  loadPollThread,
+  pollContext,
+  pollThreadKey,
+} from './adminPolls';
 import { invalidate } from './query';
+
+describe('loadPollThread: a poll’s comments, once opened', () => {
+  it('decrypts the newest comments and the ones their replies answer, once per version', async () => {
+    const { address, made } = (() => {
+      const installed = installWorld('admin');
+      const made = addAdminPolls(installed.world);
+      serveAdminPolls(installed.world, 'admin');
+      return { ...installed, made };
+    })();
+    const data = await loadAdminPolls(address);
+    const views = assemblePolls(data.sources, pollContext(data));
+    const open = views.find((v) => v.id === ADMIN_POLL_IDS.open)!;
+    expect(open.commentRows).toHaveLength(3);
+    const before = qortalCallsFor('DECRYPT_DATA').length;
+    // Only the newest comment: the reply's parent isn't among them, so it is read too.
+    const newestOnly = await loadPollThread(address, open.id, open.commentRows.slice(1), 1);
+    const reply = open.commentRows.find((r) => r.name === 'Juniper L4')!;
+    const parent = open.commentRows.find((r) => r.identifier === made.comments.reply)!;
+    expect(open.commentRows.slice(1)[0].ref).toBe(reply.ref);
+    expect(newestOnly.get(reply.ref)?.status).toBe('ok');
+    expect(newestOnly.get(parent.ref)?.status).toBe('ok');
+    const read = qortalCallsFor('DECRYPT_DATA').length - before;
+    expect(read).toBe(2);
+    // The same bodies again: nothing new is decrypted.
+    await loadPollThread(address, open.id, open.commentRows, 3);
+    expect(qortalCallsFor('DECRYPT_DATA').length - before).toBe(3);
+    expect(pollThreadKey(address, open.id, open.commentRows, 20)).toMatch(
+      new RegExp(`^adminpolls:thread:${address}:${open.id}:20:3:\\d+$`)
+    );
+  });
+});
 
 afterEach(() => vi.useRealTimers());
 
