@@ -796,7 +796,9 @@ function withPolls(then, pathname) {
         (route) => {
           const url = new URL(route.request().url());
           if (url.pathname === pathname) return route.continue();
-          return route.continue({ url: `${url.origin}/${url.pathname.slice(dir.length)}${url.search}` });
+          return route.continue({
+            url: `${url.origin}/${url.pathname.slice(dir.length)}${url.search}`,
+          });
         }
       );
     }

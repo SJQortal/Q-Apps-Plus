@@ -1622,7 +1622,14 @@ export function addAdminPolls(world) {
     return body;
   };
   const vote = (id, by, choice, created, readers, updated) =>
-    publish(by, `qmp-adminvote-${id}`, created, { v: 1, pollId: id, vote: choice }, readers, updated);
+    publish(
+      by,
+      `qmp-adminvote-${id}`,
+      created,
+      { v: 1, pollId: id, vote: choice },
+      readers,
+      updated
+    );
   const comment = (id, cid, by, created, text, readers, replyTo) => {
     const identifier = `qmp-admincomment-${id}-${cid}`;
     const body = { v: 1, pollId: id, text, ...(replyTo ? { replyTo } : {}) };
