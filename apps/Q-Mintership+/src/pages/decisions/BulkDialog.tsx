@@ -43,6 +43,11 @@ export interface BulkDialogProps {
   onFinished?: (outcomes: WriteOutcome[]) => void;
   /** Where focus goes on close when the button that opened it is gone. */
   returnFocus?: () => HTMLElement | null;
+  /**
+   * Called when the confirm button is pressed: return false to stay on the
+   * intro (it should say why and move focus, e.g. to a box to tick).
+   */
+  beforeStart?: () => boolean;
 }
 
 const STAGE_TEXT: Record<WriteStage, string> = {
@@ -84,6 +89,7 @@ export function BulkDialog(props: BulkDialogProps) {
     confirmLabel,
     onFinished,
     returnFocus,
+    beforeStart,
   } = props;
   const [phase, setPhase] = useState<'intro' | 'running' | 'done'>('intro');
   const [states, setStates] = useState<ItemState[]>([]);
@@ -163,7 +169,14 @@ export function BulkDialog(props: BulkDialogProps) {
     phase === 'intro' ? (
       <>
         <Button onClick={close}>Not now</Button>
-        <Button variant="contained" onClick={start} disabled={items.length === 0}>
+        <Button
+          variant="contained"
+          onClick={() => {
+            if (beforeStart && !beforeStart()) return;
+            void start();
+          }}
+          disabled={items.length === 0}
+        >
           {confirmLabel}
         </Button>
       </>

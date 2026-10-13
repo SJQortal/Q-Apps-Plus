@@ -64,6 +64,11 @@ export interface HubStepDialogProps {
   onBack?: () => void;
   /** Where focus goes on close when the button that opened it is gone (ResponsiveDialog). */
   returnFocus?: () => HTMLElement | null;
+  /**
+   * Called when the intro's confirm button is pressed: return false to stay
+   * on the intro (it should say why and move focus, e.g. to a box to tick).
+   */
+  beforeStart?: () => boolean;
 }
 
 type Phase = 'intro' | 'running' | 'done';
@@ -89,6 +94,7 @@ export function HubStepDialog(props: HubStepDialogProps) {
     onSuccess,
     onBack,
     returnFocus,
+    beforeStart,
   } = props;
   const [phase, setPhase] = useState<Phase>('intro');
   const [active, setActive] = useState<{ step: number; stage: WriteStage }>({
@@ -149,7 +155,13 @@ export function HubStepDialog(props: HubStepDialogProps) {
     phase === 'intro' ? (
       <>
         {back ? backButton('text') : <Button onClick={close}>Not now</Button>}
-        <Button variant="contained" onClick={start}>
+        <Button
+          variant="contained"
+          onClick={() => {
+            if (beforeStart && !beforeStart()) return;
+            void start();
+          }}
+        >
           {confirmLabel}
         </Button>
       </>
