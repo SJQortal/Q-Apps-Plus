@@ -116,7 +116,7 @@ export function useUnusedInvites(enabled: boolean) {
 }
 
 export interface AdminSummary {
-  /** Decisions still collecting signatures that count (with a tally). */
+  /** Decisions still collecting signatures that count (with a tally), doubles left out. */
   open: Decision[];
   /** Of those, the ones this admin hasn't answered (signed or rejected): most urgent first. */
   waiting: Decision[];
@@ -138,8 +138,9 @@ export function adminSummary(
   sending: (signature: string) => boolean = () => false,
   rejecting: (signature: string) => boolean = () => false
 ): AdminSummary {
+  // A double (rules/double.ts) needs no signature: it doesn't count here.
   const open = data.decisions.filter(
-    (d) => d.tally !== null && (d.phase === 'open' || d.phase === 'early')
+    (d) => d.tally !== null && !d.double && (d.phase === 'open' || d.phase === 'early')
   );
   const state = (d: Decision) => (d.tally ? signerState(d.tally, publicKey) : 'none');
   const signed = (d: Decision) => {

@@ -63,7 +63,7 @@ import { decisionTitle, type Decision } from '../../rules/decision';
 import { hasImpact, isAdminChangeKind, projectShift } from '../../rules/targetShift';
 import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
 import { signerOf, useSession } from '../../state/session';
-import { decisionsHideSignedAtom } from '../../state/settings';
+import { decisionsHideAnsweredAtom } from '../../state/settings';
 import { focusElement } from '../../utils/focus';
 import { displayName, plural } from '../../utils/format';
 import { bulkSign } from '../../writes/flows';
@@ -76,7 +76,8 @@ import {
 import type { Signer } from '../../writes/runner';
 import { BulkDialog } from './BulkDialog';
 import { DecisionCard, type NominationsState, type SubjectFacts } from './DecisionCard';
-import { answerView, isWaitingForMe } from './decisionUi';
+import { answerView, canSign, isWaitingForMe } from './decisionUi';
+import { doubleLeftOutText, doublesAsideText } from './doubleUi';
 import { FirstSignatureDialog } from './FirstSignatureDialog';
 import { HowSigningWorks } from './HowSigningWorks';
 import { ProposeDialog } from './ProposeDialog';
@@ -128,7 +129,7 @@ function DecisionsQueue() {
   const decisionsQ = useDecisions();
   const nominationsQ = useNominations();
   const membersQ = useMembers();
-  const [hideSigned, setHideSigned] = useAtom(decisionsHideSignedAtom);
+  const [hideAnswered, setHideAnswered] = useAtom(decisionsHideAnsweredAtom);
   const writes = useAtomValue(pendingWritesAtom);
   // Sticky bars sit above the phone's bottom bar while it is on screen.
   const bottomBar = useBottomNavShown();
@@ -150,7 +151,7 @@ function DecisionsQueue() {
   const [bulkList, setBulkList] = useState<Decision[] | null>(null);
   const [staleExpanded, setStaleExpanded] = useState(false);
   const proposeButton = useRef<HTMLButtonElement | null>(null);
-  const hideSignedSwitch = useRef<HTMLInputElement | null>(null);
+  const hideAnsweredSwitch = useRef<HTMLInputElement | null>(null);
   // Propose → Clean up stale invites: the section takes focus, after the menu
   // (or the phone's sheet) has put it back on Propose as it closed.
   const [staleFocus, setStaleFocus] = useState(0);
@@ -239,11 +240,19 @@ function DecisionsQueue() {
   const decisions = data?.decisions ?? [];
   const collecting = decisions.filter((d) => COLLECTING.has(d.phase));
   const closed = decisions.filter((d) => !COLLECTING.has(d.phase));
-  const signedByMe = (d: Decision) => isAdmin && viewOf(d).shown === 'signed';
-  const shown = isAdmin && hideSigned ? collecting.filter((d) => !signedByMe(d)) : collecting;
+  // Answered: signed or rejected (a withdrawn signature too), in a block or on its way.
+  const answeredByMe = (d: Decision) => isAdmin && viewOf(d).shown !== 'none';
+  const shown = isAdmin && hideAnswered ? collecting.filter((d) => !answeredByMe(d)) : collecting;
   const hiddenCount = collecting.length - shown.length;
   // Waiting for this admin: no answer yet (a rejection can still be replaced on its card).
   const signable = isAdmin ? collecting.filter((d) => isWaitingForMe(d, viewOf(d))) : [];
+  // Doubles this admin hasn't answered: not waiting for them, and left out of Sign several.
+  const doubles = isAdmin
+    ? collecting.filter((d) => {
+        const view = viewOf(d);
+        return d.double && canSign(d, view) && view.shown === 'none';
+      })
+    : [];
   const waiting = (nominationsQ.data?.open ?? []).filter((n) => n.state === 'waiting');
 
   const toggleSelect = (signature: string) =>
@@ -404,6 +413,11 @@ function DecisionsQueue() {
                   admin seats. Sign the ones you agree with. Reject the ones you don’t, or let them
                   expire: {plural(needed, 'rejection')} end one as rejected.
                 </Typography>
+                {doubles.length ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {doublesAsideText(doubles.length)}
+                  </Typography>
+                ) : null}
               </Card>
             ) : (
               <Alert severity="info" role="note">
@@ -418,12 +432,12 @@ function DecisionsQueue() {
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={hideSigned}
-                      onChange={(e) => setHideSigned(e.target.checked)}
-                      slotProps={{ input: { ref: hideSignedSwitch } }}
+                      checked={hideAnswered}
+                      onChange={(e) => setHideAnswered(e.target.checked)}
+                      slotProps={{ input: { ref: hideAnsweredSwitch } }}
                     />
                   }
-                  label="Hide what I signed"
+                  label="Hide what I answered"
                   sx={{ minHeight: 44, mr: 'auto' }}
                 />
                 {selecting || signable.length > 1 ? (
@@ -485,18 +499,18 @@ function DecisionsQueue() {
                 {hiddenCount ? (
                   <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                     <Typography variant="body2" color="text.secondary">
-                      {plural(hiddenCount, 'decision')} you signed{' '}
+                      {plural(hiddenCount, 'decision')} you answered{' '}
                       {hiddenCount === 1 ? 'is' : 'are'} hidden.
                     </Typography>
                     <Button
                       onClick={() => {
                         // This button goes with the note: focus to the switch it turned off.
-                        hideSignedSwitch.current?.focus();
-                        setHideSigned(false);
+                        hideAnsweredSwitch.current?.focus();
+                        setHideAnswered(false);
                       }}
                       sx={{ minHeight: 44 }}
                     >
-                      Show the ones I signed
+                      Show the ones I answered
                     </Button>
                   </Box>
                 ) : null}
@@ -714,6 +728,11 @@ function DecisionsQueue() {
         action="SIGN_TRANSACTION"
         feeTxType="GROUP_APPROVAL"
         items={(bulkList ?? []).map((d) => ({ key: d.signature, label: labelFor(d) }))}
+        leftOut={doubles.map((d) => ({
+          key: d.signature,
+          label: labelFor(d),
+          reason: d.double ? doubleLeftOutText(d.double) : '',
+        }))}
         confirmLabel="Continue to Hub"
         run={(report) =>
           signer && bulkList

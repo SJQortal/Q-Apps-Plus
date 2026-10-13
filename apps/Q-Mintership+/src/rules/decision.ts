@@ -14,6 +14,7 @@ import {
   type WindowPhase,
 } from './timing';
 import type { ApprovalThreshold } from './threshold';
+import type { DecisionDouble } from './double';
 
 export type DecisionKind =
   'invite' | 'cancelInvite' | 'kick' | 'ban' | 'cancelBan' | 'addAdmin' | 'removeAdmin' | 'other';
@@ -189,6 +190,12 @@ export interface Decision {
   /** Null for an unusual approval route (see isUnusualApprovalRoute). */
   tally: Tally | null;
   unusualRoute: boolean;
+  /**
+   * Why this waiting admin change is a double (rules/double.ts): it changes
+   * nothing, or the same change is waiting in an earlier one. Set by the
+   * Decisions loader; absent or null otherwise.
+   */
+  double?: DecisionDouble | null;
   tx: TxRow;
 }
 
@@ -264,9 +271,14 @@ const PHASE_ORDER: Record<DecisionPhase, number> = {
   expired: 4,
 };
 
-/** Most urgent first: open decisions by expiry, then the rest. */
+/**
+ * Most urgent first: open decisions by expiry, then the rest. Doubles
+ * (rules/double.ts) come after every other decision, in the same order.
+ */
 export function sortDecisions(decisions: Decision[]): Decision[] {
   return [...decisions].sort((a, b) => {
+    const double = Number(Boolean(a.double)) - Number(Boolean(b.double));
+    if (double !== 0) return double;
     const phase = PHASE_ORDER[a.phase] - PHASE_ORDER[b.phase];
     if (phase !== 0) return phase;
     const ea = a.window?.expiresAtHeight ?? Number.MAX_SAFE_INTEGER;

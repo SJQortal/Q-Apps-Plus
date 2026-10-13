@@ -9,6 +9,10 @@
  * admin change says what it does to the target; a decision a waiting admin
  * change would tip over carries a "Target may drop to …" chip. Its public
  * comments sit behind a "Comments (n)" toggle.
+ *
+ * A double (rules/double.ts) says so with a chip and a note, keeps Sign and
+ * Reject as plain secondary buttons, offers no Considering and stays out of
+ * Sign several.
  */
 import { useId, useState } from 'react';
 import { Box, Button, Checkbox, Skeleton, Typography } from '@mui/material';
@@ -40,6 +44,8 @@ import { formatCount, formatDate, formatRelative, plural } from '../../utils/for
 import { openQortalLink } from '../../utils/links';
 import { usePendingAnswers } from '../../writes/optimistic';
 import type { DecisionRisk, ShiftScenario } from '../../rules/targetShift';
+import { DoubleChip, DoubleNote } from './DoubleParts';
+import { doubleLeftOutText } from './doubleUi';
 import { TargetImpact } from './TargetImpact';
 import { TargetRiskChip, TargetRiskNote } from './TargetRiskChip';
 import type { LabelOf } from './targetShiftUi';
@@ -159,6 +165,9 @@ export function DecisionCard(props: DecisionCardProps) {
   const signable = canAct && canSign(d, view);
   const rejectable = canAct && canReject(d, view);
   const withdrawable = canAct && canWithdraw(d, view, now);
+  const double = d.double ?? null;
+  // Rejected (in a block) and it can still count: they may say they are reconsidering.
+  const reconsiderable = signable && view.shown === 'rejected' && view.settled;
   const tally = d.tally;
   const confirming = tally ? tally.inFlight.filter((x) => x.approval) : [];
   const rejecting = tally ? tally.inFlight.filter((x) => !x.approval) : [];
@@ -188,6 +197,7 @@ export function DecisionCard(props: DecisionCardProps) {
       label: d.subject ? `${title}: ${subject.label}` : title,
       // Only an invite has a nominee who reads it too.
       nominee: d.kind === 'invite',
+      again: reconsiderable,
     });
 
   return (
@@ -213,7 +223,7 @@ export function DecisionCard(props: DecisionCardProps) {
       })}
     >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-        {selecting && signable && view.shown === 'none' ? (
+        {selecting && signable && view.shown === 'none' && !double ? (
           <Checkbox
             checked={Boolean(selected)}
             onChange={() => onToggleSelect?.(d.signature)}
@@ -227,6 +237,7 @@ export function DecisionCard(props: DecisionCardProps) {
               {title}
             </Typography>
             <DecisionPhaseChip phase={d.phase} />
+            {double ? <DoubleChip double={double} /> : null}
             {risk && labelOf ? (
               <TargetRiskChip
                 risk={risk}
@@ -267,6 +278,10 @@ export function DecisionCard(props: DecisionCardProps) {
           advice={canAct}
           withdraw={withdrawable}
         />
+      ) : null}
+
+      {double ? (
+        <DoubleNote decision={d} double={double} name={subject.label} label={fullTitle} now={now} />
       ) : null}
 
       <KindDetails
@@ -370,7 +385,9 @@ export function DecisionCard(props: DecisionCardProps) {
             <ConsideringControls
               mine={considering.mine}
               label={fullTitle}
-              canStart={rejectable}
+              // Never on a double.
+              canStart={(rejectable || reconsiderable) && !double}
+              again={reconsiderable}
               onSet={() => consider('set')}
               onClear={() => consider('clear')}
             />
@@ -384,6 +401,11 @@ export function DecisionCard(props: DecisionCardProps) {
             <Typography variant="body2" color="text.secondary" sx={{ flexBasis: '100%' }}>
               Your latest answer on chain is a rejection. Signing replaces it: only your latest
               answer counts.
+            </Typography>
+          ) : null}
+          {selecting && double && signable && view.shown === 'none' ? (
+            <Typography variant="body2" color="text.secondary" sx={{ flexBasis: '100%' }}>
+              {doubleLeftOutText(double)}.
             </Typography>
           ) : null}
           {view.failed && (signable || rejectable || withdrawable) ? (
@@ -418,7 +440,8 @@ export function DecisionCard(props: DecisionCardProps) {
               ) : null}
               {signable ? (
                 <Button
-                  variant="contained"
+                  // A double needs no signature: Sign stays, as a secondary button.
+                  variant={double ? 'outlined' : 'contained'}
                   onClick={() => onSign?.(d)}
                   aria-label={`Sign: ${fullTitle}`}
                   sx={{ minHeight: 44, minWidth: 96 }}

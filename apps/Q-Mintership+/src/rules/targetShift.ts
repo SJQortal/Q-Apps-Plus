@@ -430,10 +430,16 @@ export function toShiftDecision(d: Decision): ShiftDecision | null {
   };
 }
 
-/** The decisions Core still evaluates: everything waiting but the expired ones. */
+/**
+ * The decisions Core still evaluates: everything waiting but the expired
+ * ones. A double that changes nothing (rules/double.ts: an addition of a
+ * Minter Admin, or a removal of someone who isn't one) is left out: whether
+ * it passes or not, no seat moves and nothing else changes. A repeat of a
+ * change already waiting stays: it is the same change, counted once.
+ */
 export function shiftDecisionsOf(decisions: readonly Decision[]): ShiftDecision[] {
   return decisions
-    .filter((d) => d.phase !== 'expired')
+    .filter((d) => d.phase !== 'expired' && d.double?.reason !== 'alreadyInEffect')
     .map(toShiftDecision)
     .filter((d): d is ShiftDecision => d !== null);
 }

@@ -1,0 +1,125 @@
+/**
+ * A decision this Minter Admin answered (signed or rejected, in a block or
+ * on its way) waits for them nowhere: not in "Waiting for your signature"
+ * (Decisions and Home), not in the Decisions badge, not in Sign several.
+ * "Hide what I answered" hides both kinds of answer, and keeps the device's
+ * choice from when it was "Hide what I signed".
+ */
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { renderPage } from '../../test/render';
+import { ADDR, type InstalledWorld } from '../../test/world';
+import { base58Encode } from '../../qortal/base58';
+import { STORAGE_PREFIX } from '../../constants/plus';
+import { AppShell } from '../../components/layout/AppShell';
+import HomePage from '../home/HomePage';
+import DecisionsPage from './DecisionsPage';
+
+afterEach(() => vi.useRealTimers());
+
+const user = () => userEvent.setup();
+const T = { timeout: 4000 };
+
+type World = InstalledWorld['world'];
+
+/** Avery Admin rejects the kick (in a block) and the ban (still on its way). */
+function averyRejects(world: World) {
+  const publicKey = world.accounts.get(ADDR.admin).publicKey;
+  const reject = (type: string, confirmed: boolean, seed: number) => {
+    const tx = world.pending.find((t: { type: string }) => t.type === type);
+    const row = {
+      type: 'GROUP_APPROVAL',
+      timestamp: confirmed ? tx.timestamp + 120_000 : Date.now() - 30_000,
+      signature: base58Encode(new Uint8Array(64).fill(seed)),
+      txGroupId: 0,
+      ...(confirmed ? { blockHeight: tx.blockHeight + 2 } : {}),
+      approvalStatus: 'NOT_REQUIRED',
+      creatorAddress: ADDR.admin,
+      adminPublicKey: publicKey,
+      pendingSignature: tx.signature,
+      approval: false,
+    };
+    (confirmed ? world.approvals : world.unconfirmedApprovals).push(row);
+  };
+  reject('GROUP_KICK', true, 41);
+  reject('GROUP_BAN', false, 42);
+}
+
+async function openQueue() {
+  const rendered = await renderPage(<DecisionsPage />, {
+    persona: 'admin',
+    path: '/decisions',
+    route: '/decisions',
+    setup: averyRejects,
+  });
+  await screen.findByRole('article', { name: /Add to MINTER, bob\+builder/ });
+  return rendered;
+}
+
+const card = (name: RegExp) => screen.getByRole('article', { name });
+const KICK = /^Remove from MINTER, Kai Target/;
+const BAN = /^Ban from MINTER, Ben Target/;
+
+describe('Rejected decisions stay out of the waiting lists', () => {
+  it('Decisions: the summary and Sign several leave them out', async () => {
+    const u = user();
+    await openQueue();
+    expect(within(card(KICK)).getByText('Rejected')).toBeInTheDocument();
+    expect(within(card(BAN)).getByText('Rejected (confirming…)')).toBeInTheDocument();
+    // Six without the rejections; one in a block and one on its way leave four.
+    expect(screen.getByText('4 decisions waiting for your signature')).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: 'Sign several' }));
+    expect(within(card(KICK)).queryByRole('checkbox')).toBeNull();
+    expect(within(card(BAN)).queryByRole('checkbox')).toBeNull();
+    await u.click(screen.getByRole('button', { name: 'Select all' }));
+    expect(screen.getByText('4 of 4 selected')).toBeInTheDocument();
+  });
+
+  it('Home: the headline and the rows leave them out', async () => {
+    await renderPage(<HomePage />, { persona: 'admin', setup: averyRejects });
+    await screen.findByRole(
+      'heading',
+      { level: 2, name: 'Avery Admin, 4 decisions are waiting for your signature' },
+      T
+    );
+    const waiting = screen.getByRole('region', { name: 'Waiting for your signature' });
+    expect(within(waiting).queryByRole('link', { name: /Kai Target/ })).toBeNull();
+    expect(within(waiting).queryByRole('link', { name: /Ben Target/ })).toBeNull();
+  });
+
+  it('the Decisions badge leaves them out', async () => {
+    await renderPage(<AppShell />, { persona: 'admin', setup: averyRejects });
+    await waitFor(
+      () =>
+        expect(
+          screen.getAllByRole('button', { name: /^Decisions, 4 waiting for you$/ }).length
+        ).toBeGreaterThan(0),
+      T
+    );
+  });
+});
+
+describe('Hide what I answered', () => {
+  it('hides signed and rejected ones, in a block or on their way', async () => {
+    const u = user();
+    await openQueue();
+    await u.click(screen.getByRole('switch', { name: 'Hide what I answered' }));
+    expect(screen.queryByRole('article', { name: KICK })).toBeNull();
+    expect(screen.queryByRole('article', { name: BAN })).toBeNull();
+    expect(screen.queryByRole('article', { name: /Uma Urgent/ })).toBeNull();
+    // Uma Urgent and Eli Early (signed), the kick and the ban (rejected).
+    expect(screen.getByText(/4 decisions you answered are hidden/)).toBeVisible();
+    expect(card(/bob\+builder/)).toBeInTheDocument();
+    expect(window.localStorage.getItem(`${STORAGE_PREFIX}decisions-hide-signed`)).toBe('true');
+    await u.click(screen.getByRole('button', { name: 'Show the ones I answered' }));
+    expect(await screen.findByRole('article', { name: KICK })).toBeInTheDocument();
+  });
+
+  it('keeps the choice this device made as "Hide what I signed"', async () => {
+    window.localStorage.setItem(`${STORAGE_PREFIX}decisions-hide-signed`, 'true');
+    await openQueue();
+    expect(await screen.findByRole('switch', { name: 'Hide what I answered' }, T)).toBeChecked();
+    expect(screen.queryByRole('article', { name: KICK })).toBeNull();
+  });
+});

@@ -1356,3 +1356,100 @@ export function lastVisitSnapshots(world) {
     },
   };
 }
+// ---- doubles (admin changes that change nothing, or repeat one waiting) -----
+/**
+ * Add three kinds of double to the queue, none signed by Avery Admin:
+ *
+ * - Admin C's own second "Become a Minter Admin", 5 of 8, while the first
+ *   one (approved long ago, older than Activity's longest range) made them
+ *   a Minter Admin already;
+ * - removing Nora Nominator as a Minter Admin, which she isn't, 2 of 8;
+ * - making Member 9 a Minter Admin twice: the older one 3 of 8, the newer
+ *   one 1 of 8 (the double).
+ *
+ * Returns the signatures and the people.
+ */
+export function addDoubles(world) {
+  const extra = (i) => fakeAddress(`admin-${i}`);
+  const member9 = fakeAddress('member-8');
+  const row = (type, h, seed, fields) => ({
+    type,
+    timestamp: blockTime(h) - 20_000,
+    reference: sig(`r:double:${seed}`),
+    fee: '0.01000000',
+    signature: sig(`double:${seed}`),
+    txGroupId: GROUP,
+    blockHeight: h,
+    approvalStatus: 'PENDING',
+    groupId: GROUP,
+    ...fields,
+  });
+  const signBy = (pendingTx, admins, from) =>
+    admins.forEach((who, i) => {
+      const h = from + i * 40;
+      world.approvals.push({
+        type: 'GROUP_APPROVAL',
+        timestamp: blockTime(h) - 10_000,
+        reference: sig(`ar:double:${who}:${pendingTx.signature}`),
+        fee: '0.01000000',
+        signature: sig(`a:double:${who}:${pendingTx.signature}:${h}`),
+        txGroupId: 0,
+        blockHeight: h,
+        approvalStatus: 'NOT_REQUIRED',
+        creatorAddress: who,
+        adminPublicKey: pk(who),
+        pendingSignature: pendingTx.signature,
+        approval: true,
+      });
+    });
+
+  // Admin C: the approved first proposal, then the second one, still waiting.
+  const adminC = extra(2);
+  const approved = {
+    ...row('ADD_GROUP_ADMIN', 2_200_000, 'admin-c-first', {
+      creatorAddress: adminC,
+      ownerPublicKey: pk(adminC),
+      member: adminC,
+    }),
+    approvalStatus: 'APPROVED',
+    approvalHeight: 2_201_500,
+  };
+  world.decided.push(approved);
+  const again = row('ADD_GROUP_ADMIN', TIP - 7_000, 'admin-c-again', {
+    creatorAddress: adminC,
+    ownerPublicKey: pk(adminC),
+    member: adminC,
+  });
+  world.pending.push(again);
+  signBy(again, [extra(4), extra(5), extra(6), extra(7), extra(8)], TIP - 6_900);
+
+  // Nora Nominator isn't a Minter Admin.
+  const notAdmin = row('REMOVE_GROUP_ADMIN', TIP - 2_500, 'not-admin', {
+    creatorAddress: extra(9),
+    ownerPublicKey: pk(extra(9)),
+    admin: ADDR.nominator,
+  });
+  world.pending.push(notAdmin);
+  signBy(notAdmin, [extra(9), extra(10)], TIP - 2_490);
+
+  // Member 9, twice.
+  const older = row('ADD_GROUP_ADMIN', TIP - 3_200, 'member-9-first', {
+    creatorAddress: extra(11),
+    ownerPublicKey: pk(extra(11)),
+    member: member9,
+  });
+  const newer = row('ADD_GROUP_ADMIN', TIP - 800, 'member-9-again', {
+    creatorAddress: extra(12),
+    ownerPublicKey: pk(extra(12)),
+    member: member9,
+  });
+  world.pending.push(older, newer);
+  signBy(older, [extra(11), extra(13), extra(14)], TIP - 3_190);
+  signBy(newer, [extra(12)], TIP - 790);
+
+  return {
+    alreadyAdmin: { signature: again.signature, approved: approved.signature, subject: adminC },
+    notAdmin: { signature: notAdmin.signature, subject: ADDR.nominator },
+    duplicate: { signature: newer.signature, older: older.signature, subject: member9 },
+  };
+}

@@ -567,6 +567,47 @@ describe('the decisions the projection reads', () => {
     ]);
     expect(toShiftDecision(decisions[3])).toBeNull();
   });
+
+  it('leaves out doubles that change nothing, and counts a repeated change once', () => {
+    const open = { ...base, phase: 'open' as const };
+    const decisions: Decision[] = [
+      {
+        ...open,
+        signature: 'again',
+        kind: 'addAdmin',
+        subject: 'Qadmin2',
+        tally: tally(5, 0),
+        double: { reason: 'alreadyInEffect' },
+      },
+      {
+        ...open,
+        signature: 'gone',
+        kind: 'removeAdmin',
+        subject: 'Qnobody',
+        tally: tally(2, 0),
+        double: { reason: 'alreadyInEffect' },
+      },
+      { ...open, signature: 'first', kind: 'addAdmin', subject: 'Qnew', tally: tally(3, 0) },
+      {
+        ...open,
+        signature: 'second',
+        kind: 'addAdmin',
+        subject: 'Qnew',
+        tally: tally(1, 0),
+        double: { reason: 'duplicate', otherSignature: 'first' },
+      },
+      { ...open, signature: 'k', kind: 'kick', tally: tally(8, 0) },
+    ];
+    const list = shiftDecisionsOf(decisions);
+    expect(list.map((d) => d.signature)).toEqual(['first', 'second', 'k']);
+    const s = state(20);
+    // An addition of a Minter Admin adds no seat, a removal of someone who isn't one removes none.
+    expect(adminCountAfter(s, [add('Qadmin2', 'again'), remove('Qnobody', 'gone')])).toBe(20);
+    // Both copies of one addition add one seat, not two: 21 rows, 9 needed.
+    const adds = shiftScenarios(s, list).find((x) => x.scope === 'adds');
+    expect(adds).toMatchObject({ countThen: 21, neededThen: 9 });
+    expect(scenarioFor(shiftScenarios(s, list), 'second')).toMatchObject({ countThen: 21 });
+  });
 });
 
 describe('targetSteps: the target before and after each approved admin change', () => {

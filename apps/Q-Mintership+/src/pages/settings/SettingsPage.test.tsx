@@ -12,13 +12,13 @@ describe('Settings', () => {
     expect(await screen.findByText('Avery Admin')).toBeInTheDocument();
     expect(await screen.findByText('Minter Admin')).toBeInTheDocument();
     expect(screen.getByText('Level 7')).toBeInTheDocument();
-    expect(screen.getByText(/Hide decisions I signed/)).toBeInTheDocument();
+    expect(screen.getByText(/Hide decisions I answered/)).toBeInTheDocument();
   });
 
   it('offers Sign in when Hub declined the account request', async () => {
     await renderPage(<SettingsPage />, { persona: 'signedOut', path: '/settings' });
     expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument();
-    expect(screen.queryByText(/Hide decisions I signed/)).toBeNull();
+    expect(screen.queryByText(/Hide decisions I answered/)).toBeNull();
   });
 
   it('explains what works outside Hub', async () => {
@@ -31,7 +31,10 @@ describe('Settings', () => {
     await renderPage(<SettingsPage />, { persona: 'admin', path: '/settings' });
     for (const [name, hint] of [
       ['Celebrate joining MINTER', 'A small burst on Home when you become a minter.'],
-      ['Hide decisions I signed', 'Keep the Decisions queue to what still needs you.'],
+      [
+        'Hide decisions I answered',
+        'Signed or rejected: keep the Decisions queue to what still needs you.',
+      ],
       ['Since your last visit', /^Home lists what changed since you last opened the app/],
     ] as const) {
       const toggle = await screen.findByRole('switch', { name });

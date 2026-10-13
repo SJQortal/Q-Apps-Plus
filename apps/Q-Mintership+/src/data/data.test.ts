@@ -9,7 +9,7 @@ import { getAdmins, getGroupInfo, getMembers } from './group';
 import { loadMyStatus } from './me';
 import { loadNominations, loadNominationsFor } from './nominations';
 import { fetchQuery, invalidate, peekQuery, queryLoadCounts, resetQueries } from './query';
-import { getApprovalsInRange } from './txs';
+import { getAddressHistory, getApprovalsInRange } from './txs';
 
 afterEach(() => vi.useRealTimers());
 
@@ -179,6 +179,82 @@ describe('loadDecisions', () => {
     expect(start).toBe(TIP - 10_079 - 10);
     expect(search).toContain('confirmationStatus=CONFIRMED');
     expect(search).toContain('limit=100');
+  });
+});
+
+describe('loadDecisions: doubles', () => {
+  /** A MINTER admin change in the world, about `subject`, proposed by `creator`. */
+  function adminChange(
+    type: 'ADD_GROUP_ADMIN' | 'REMOVE_GROUP_ADMIN',
+    subject: string,
+    h: number,
+    extra: Record<string, unknown> = {}
+  ) {
+    const row = {
+      type,
+      timestamp: Date.now() - (TIP - h) * 72_900,
+      reference: fakeKey(`ref:double:${type}:${subject}:${h}`, 64),
+      fee: '0.01000000',
+      signature: fakeKey(`double:${type}:${subject}:${h}`, 64),
+      txGroupId: 694,
+      blockHeight: h,
+      approvalStatus: 'PENDING',
+      creatorAddress: subject,
+      ownerPublicKey: fakeKey(`pk:${subject}`),
+      groupId: 694,
+      ...(type === 'ADD_GROUP_ADMIN' ? { member: subject } : { admin: subject }),
+      ...extra,
+    };
+    return row;
+  }
+
+  it('marks admin changes that change nothing', async () => {
+    const { world } = installWorld();
+    const admin = fakeAddress('admin-2');
+    const already = adminChange('ADD_GROUP_ADMIN', admin, TIP - 2_000);
+    const notAdmin = adminChange('REMOVE_GROUP_ADMIN', ADDR.nominator, TIP - 1_500);
+    const promote = world.pending.find((t: { member?: string }) => t.member === ADDR.promote);
+    const copy = adminChange('ADD_GROUP_ADMIN', ADDR.promote, TIP - 1_000);
+    world.pending.push(already, notAdmin, copy);
+    const data = await loadDecisions();
+    const of = (signature: string) => data.decisions.find((d) => d.signature === signature)!;
+    expect(of(already.signature).double).toEqual({ reason: 'alreadyInEffect' });
+    expect(of(notAdmin.signature).double).toEqual({ reason: 'alreadyInEffect' });
+    expect(of(copy.signature).double).toEqual({
+      reason: 'duplicate',
+      otherSignature: promote.signature,
+    });
+    expect(of(promote.signature).double).toBeFalsy();
+    // Nothing else is a double: invites, kicks and bans never are.
+    expect(data.decisions.filter((d) => d.double)).toHaveLength(3);
+    // They stay in the queue, after the others.
+    expect(data.decisions.slice(-3).every((d) => d.double)).toBe(true);
+  });
+
+  it('names the approved addition only when their history is already read', async () => {
+    const { world } = installWorld();
+    const admin = fakeAddress('admin-2');
+    const approved = adminChange('ADD_GROUP_ADMIN', admin, TIP - 3_000, {
+      approvalStatus: 'APPROVED',
+      approvalHeight: TIP - 1_900,
+    });
+    world.decided.push(approved);
+    const waiting = adminChange('ADD_GROUP_ADMIN', admin, TIP - 2_000);
+    world.pending.push(waiting);
+    let data = await loadDecisions();
+    expect(data.decisions.find((d) => d.signature === waiting.signature)?.double).toEqual({
+      reason: 'alreadyInEffect',
+    });
+    // The queue never reads anyone's history for it.
+    expect(fetchCalls.some((c) => c.includes(`address=${admin}`))).toBe(false);
+
+    // Their page read it (the same cached key): the next queue read names it.
+    await getAddressHistory(admin);
+    data = await loadDecisions({ force: true });
+    expect(data.decisions.find((d) => d.signature === waiting.signature)?.double).toEqual({
+      reason: 'alreadyInEffect',
+      otherSignature: approved.signature,
+    });
   });
 });
 

@@ -471,5 +471,81 @@ export default {
     },
     // Settings → Notifications where Hub offers app alerts.
     { key: 'settings-alerts', path: '/?as=admin', after: hubAlertsOffered },
+    // Doubles (e2e/world.mjs addDoubles): Decisions as an admin, with the three doubles
+    // after the real decisions, and Admin C's second "Become a Minter Admin" on its own page.
+    {
+      key: 'decisions-double',
+      path: '/decisions?as=admin',
+      after: withDoubles(null, async (page) => {
+        await settle(page);
+        const first = page.getByRole('article', { name: 'Become a Minter Admin, Admin C' });
+        await first.getByRole('note').waitFor({ timeout: 8000 });
+        // Landscape phones take the viewport: the first double's card from its top.
+        await first.evaluate((card) => card.scrollIntoView({ block: 'start' }));
+        await page.waitForTimeout(300);
+      }),
+    },
+    {
+      key: 'decision-double',
+      path: '/decisions?as=admin',
+      after: withDoubles(
+        (d) => d.alreadyAdmin.signature,
+        async (page) => {
+          await settle(page);
+          await page.getByRole('main').getByRole('note').first().waitFor({ timeout: 8000 });
+          await page.waitForTimeout(300);
+        }
+      ),
+    },
   ],
 };
+
+// ---- doubles: a world of their own, for the two screens above ----------------
+import { addDoubles } from './world.mjs';
+
+/** The default world plus addDoubles(), made once, on first use. */
+function doublesWorld() {
+  if (!doublesWorld.made) {
+    const made = createWorld();
+    addOtherPending(made);
+    doublesWorld.made = { world: made, doubles: addDoubles(made) };
+  }
+  return doublesWorld.made;
+}
+
+/**
+ * Answer the page from the doubles world from now on (a route added later
+ * comes first), then load it again: at `pick(doubles)`'s decision page, or
+ * where it is. The first load is a screen of the default world, so nothing
+ * fails while the route isn't there yet.
+ */
+function withDoubles(pick, then) {
+  return async (page) => {
+    const { world: doubles, doubles: made } = doublesWorld();
+    await settle(page);
+    await page.route(
+      /\/(arbitrary|names|addresses|transactions|blocks|groups)\//,
+      async (route) => {
+        const url = new URL(route.request().url());
+        const answer =
+          answerNameSearch(doubles, url.pathname, url.searchParams) ??
+          answerCore(doubles, url.pathname, url.searchParams);
+        if (!answer) return route.fallback();
+        page.__fetches?.push(url.pathname + url.search);
+        if (answer.text !== undefined)
+          return route.fulfill({
+            status: answer.status,
+            contentType: 'text/plain',
+            body: answer.text,
+          });
+        return json(route, answer.status, answer.body);
+      }
+    );
+    if (pick) {
+      const url = new URL(page.url());
+      url.pathname = `/decisions/${pick(made)}`;
+      await page.goto(url.toString(), { waitUntil: 'load' });
+    } else await page.reload({ waitUntil: 'load' });
+    await then(page);
+  };
+}

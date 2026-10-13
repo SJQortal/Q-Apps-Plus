@@ -68,3 +68,9 @@ export function lastVisitSnapshots(
   'admin' | 'nominatedSigning' | 'nominatedWaiting',
   { address: string; snapshot: unknown }
 >;
+// Doubles: admin changes that change nothing, or repeat one already waiting.
+export function addDoubles(world: World): {
+  alreadyAdmin: { signature: string; approved: string; subject: string };
+  notAdmin: { signature: string; subject: string };
+  duplicate: { signature: string; older: string; subject: string };
+};

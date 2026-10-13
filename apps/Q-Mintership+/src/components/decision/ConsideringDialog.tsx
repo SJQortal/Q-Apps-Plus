@@ -41,12 +41,17 @@ export function ConsideringDialog({
   }
   const trimmed = note.trim();
   const clear = request?.mode === 'clear';
+  const again = !clear && Boolean(request?.again);
+  // After a rejection, only a signature is left to answer with.
+  const replacedBy = again ? 'Signing' : 'Signing, rejecting or withdrawing';
   return (
     <HubStepDialog
       open={Boolean(request && signer)}
       onClose={onClose}
       returnFocus={returnFocus}
-      title={clear ? 'No longer considering' : 'Mark as considering'}
+      title={
+        clear ? 'No longer considering' : again ? 'Mark as reconsidering' : 'Mark as considering'
+      }
       intro={
         request ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -60,10 +65,18 @@ export function ConsideringDialog({
               </Typography>
             ) : (
               <>
-                <Typography>
-                  Tell the other Minter Admins{request.nominee ? ', and the nominee,' : ''} that
-                  you’ve looked at this and haven’t decided yet. It changes nothing on chain.
-                </Typography>
+                {again ? (
+                  <Typography>
+                    Tell the other Minter Admins{request.nominee ? ', and the nominee,' : ''} that
+                    you’re looking at this again after rejecting it, and haven’t decided yet. Your
+                    rejection still counts until you sign. This changes nothing on chain.
+                  </Typography>
+                ) : (
+                  <Typography>
+                    Tell the other Minter Admins{request.nominee ? ', and the nominee,' : ''} that
+                    you’ve looked at this and haven’t decided yet. It changes nothing on chain.
+                  </Typography>
+                )}
                 <TextField
                   label="A note (optional)"
                   placeholder="What are you waiting for?"
@@ -77,9 +90,9 @@ export function ConsideringDialog({
                   slotProps={{ htmlInput: { maxLength: NOTE_MAX } }}
                 />
                 <Typography variant="body2" color="text.secondary">
-                  It is a small public record under your name ({signer?.name ?? 'none yet'}) on QDN.
-                  Signing, rejecting or withdrawing later replaces it, and you can say you’re no
-                  longer considering at any time.
+                  It is a small public record under your name ({signer?.name ?? 'none yet'}) on QDN.{' '}
+                  {replacedBy} later replaces it, and you can say you’re no longer considering at
+                  any time.
                 </Typography>
               </>
             )}
@@ -89,7 +102,11 @@ export function ConsideringDialog({
       steps={[
         {
           action: 'PUBLISH_QDN_RESOURCE',
-          title: clear ? 'Publish the update' : 'Publish that you’re considering',
+          title: clear
+            ? 'Publish the update'
+            : again
+              ? 'Publish that you’re reconsidering'
+              : 'Publish that you’re considering',
           feeTxType: 'ARBITRARY',
         },
       ]}
@@ -104,7 +121,7 @@ export function ConsideringDialog({
         );
         return { outcome };
       }}
-      successTitle={clear ? 'Updated' : 'Marked as considering'}
+      successTitle={clear ? 'Updated' : again ? 'Marked as reconsidering' : 'Marked as considering'}
       successText={
         <Typography variant="body2">
           It shows on the card once QDN has it, usually within a minute or two.

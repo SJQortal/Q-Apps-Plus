@@ -14,6 +14,7 @@ import {
 } from './records';
 import { consideringCountText, consideringFor, type ConsideringEntry } from '../rules/considering';
 import { answersFromTally, loadConsidering } from './considering';
+import { tallyApprovals } from '../rules/tally';
 import { loadDecisions } from './decisions';
 
 afterEach(() => vi.useRealTimers());
@@ -141,6 +142,36 @@ describe('who is considering', () => {
     expect(consideringFor(entries, { pendingSignature: SIG }, answers).map((p) => p.name)).toEqual([
       'Admin B',
     ]);
+  });
+
+  it('after a rejection: a record from before it stays hidden, one from after shows until the next answer', () => {
+    const answer = (approval: boolean, timestamp: number, seed: number) => ({
+      signature: `answer-${seed}`,
+      pendingSignature: SIG,
+      adminPublicKey: 'pk-A',
+      creatorAddress: 'QA',
+      approval,
+      timestamp,
+      blockHeight: seed,
+    });
+    const tally = (rows: ReturnType<typeof answer>[]) =>
+      tallyApprovals({ pendingSignature: SIG, rows, threshold: 'PCT40', totalAdmins: 20 });
+    const before = entry(A, { v: 1, pendingSignature: SIG, note: 'before' }, 50);
+    const after = entry(A, { v: 1, pendingSignature: SIG, note: 'again' }, 150);
+    const rejected = tally([answer(false, 100, 1)]);
+    // Considering, then a rejection: the rejection replaces it.
+    expect(consideringFor([before], { pendingSignature: SIG }, answersFromTally(rejected))).toEqual(
+      []
+    );
+    // Considering again after the rejection: it shows.
+    expect(
+      consideringFor([before, after], { pendingSignature: SIG }, answersFromTally(rejected))
+    ).toEqual([{ address: 'QA', name: 'Admin A', note: 'again', publishedAt: 150 }]);
+    // Then a signature: it is gone again.
+    const signed = tally([answer(false, 100, 1), answer(true, 200, 2)]);
+    expect(
+      consideringFor([before, after], { pendingSignature: SIG }, answersFromTally(signed))
+    ).toEqual([]);
   });
 
   it('matches its own target only', () => {

@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage, type RenderPageOptions } from '../../test/render';
 import { ADDR } from '../../test/world';
-import { addConsidering } from '../../../e2e/world.mjs';
+import { addConsidering, addDoubles } from '../../../e2e/world.mjs';
+import { base58Encode } from '../../qortal/base58';
 import { fetchCallsFor, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import HomePage from '../home/HomePage';
 import PersonPage from '../person/PersonPage';
@@ -155,6 +156,134 @@ describe('Considering on the Decisions page', () => {
     expect(
       await screen.findByRole('button', { name: 'Considering: Nomination of Wren Waiting' }, T)
     ).toBeVisible();
+  });
+});
+
+describe('Considering again after a rejection', () => {
+  type World = Parameters<NonNullable<RenderPageOptions['setup']>>[0];
+  const KICK = /^Remove from MINTER, Kai Target/;
+  /** Avery Admin's answer on the kick, `after` ms after it was proposed (in a block, or on its way). */
+  const answerKick = (world: World, approval: boolean, after: number, confirmed = true) => {
+    const kick = world.pending.find((t: { type: string }) => t.type === 'GROUP_KICK');
+    (confirmed ? world.approvals : world.unconfirmedApprovals).push({
+      type: 'GROUP_APPROVAL',
+      timestamp: kick.timestamp + after,
+      signature: base58Encode(new Uint8Array(64).fill(50 + after / 60_000)),
+      txGroupId: 0,
+      ...(confirmed ? { blockHeight: kick.blockHeight + 2 + after / 60_000 } : {}),
+      approvalStatus: 'NOT_REQUIRED',
+      creatorAddress: ADDR.admin,
+      adminPublicKey: world.accounts.get(ADDR.admin).publicKey,
+      pendingSignature: kick.signature,
+      approval,
+    });
+    return kick;
+  };
+  /** Avery Admin's Considering record on the kick, published `after` ms after it was proposed. */
+  const consideringKick = (world: World, after: number) => {
+    const kick = world.pending.find((t: { type: string }) => t.type === 'GROUP_KICK');
+    world.records.push({
+      name: 'Avery Admin',
+      identifier: `qmp-considering-${kick.signature.slice(0, 40)}`,
+      created: kick.timestamp + after,
+      body: { v: 1, pendingSignature: kick.signature, note: 'Looking again.' },
+    });
+  };
+
+  it('offers Reconsidering to an admin whose rejection is in a block, worded for it', async () => {
+    const u = user();
+    let pending = '';
+    await openDecisions('admin', (world) => {
+      pending = answerKick(world, false, 120_000).signature;
+    });
+    mockQortalRequest('PUBLISH_QDN_RESOURCE', () => ({ type: 'ARBITRARY', signature: 'C3' }));
+    const kick = screen.getByRole('article', { name: KICK });
+    expect(within(kick).getByText('Rejected')).toBeInTheDocument();
+    await u.click(
+      await within(kick).findByRole(
+        'button',
+        { name: 'Reconsidering: Remove from MINTER, Kai Target' },
+        T
+      )
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Mark as reconsidering' });
+    expect(within(dialog).getByText(/looking at this again after rejecting it/)).toBeVisible();
+    expect(within(dialog).getByText(/Your rejection still counts until you sign\./)).toBeVisible();
+    expect(within(dialog).getByText(/Signing later replaces it/)).toBeVisible();
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(dialog).findByText('Marked as reconsidering', {}, T)).toBeInTheDocument();
+    expect(JSON.parse(atob(String(qortalCallsFor('PUBLISH_QDN_RESOURCE')[0].data64)))).toEqual({
+      v: 1,
+      pendingSignature: pending,
+    });
+    await u.click(within(dialog).getByRole('button', { name: 'Done' }));
+    const after = await screen.findByRole('article', { name: KICK });
+    expect(await within(after).findByText('Considering (publishing…)')).toBeInTheDocument();
+  }, 20_000);
+
+  it('a record from before the rejection stays hidden; one from after shows', async () => {
+    await openDecisions('admin', (world) => {
+      consideringKick(world, 60_000);
+      answerKick(world, false, 120_000);
+    });
+    let kick = screen.getByRole('article', { name: KICK });
+    expect(
+      await within(kick).findByRole('button', { name: /^Reconsidering: / }, T)
+    ).toBeInTheDocument();
+    expect(within(kick).queryByText(/^Considering:/)).toBeNull();
+    cleanup();
+
+    await openDecisions('admin', (world) => {
+      answerKick(world, false, 120_000);
+      consideringKick(world, 180_000);
+    });
+    kick = screen.getByRole('article', { name: KICK });
+    expect(await within(kick).findByText(/^Considering:/, {}, T)).toHaveTextContent('Avery Admin');
+    expect(within(kick).getByText('Considering')).toBeInTheDocument();
+    expect(within(kick).getByRole('button', { name: /^No longer considering: / })).toBeVisible();
+    expect(within(kick).getByRole('button', { name: /^Sign: / })).toBeVisible();
+  }, 20_000);
+
+  it('a signature after the record hides it again', async () => {
+    await openDecisions('admin', (world) => {
+      answerKick(world, false, 120_000);
+      consideringKick(world, 180_000);
+      answerKick(world, true, 240_000);
+    });
+    const kick = screen.getByRole('article', { name: KICK });
+    expect(await within(kick).findByText('Signed ✓', {}, T)).toBeInTheDocument();
+    expect(within(kick).queryByText(/^Considering:/)).toBeNull();
+    expect(within(kick).queryByRole('button', { name: /^(Re)?[Cc]onsidering: / })).toBeNull();
+  });
+
+  it('waits until the rejection is in a block, and is never offered on a double', async () => {
+    await openDecisions('admin', (world) => {
+      answerKick(world, false, 120_000, false);
+      const { alreadyAdmin } = addDoubles(world);
+      const double = world.pending.find(
+        (t: { signature: string }) => t.signature === alreadyAdmin.signature
+      );
+      world.approvals.push({
+        type: 'GROUP_APPROVAL',
+        timestamp: double.timestamp + 60_000,
+        signature: base58Encode(new Uint8Array(64).fill(77)),
+        txGroupId: 0,
+        blockHeight: double.blockHeight + 1,
+        approvalStatus: 'NOT_REQUIRED',
+        creatorAddress: ADDR.admin,
+        adminPublicKey: world.accounts.get(ADDR.admin).publicKey,
+        pendingSignature: double.signature,
+        approval: false,
+      });
+    });
+    const kick = screen.getByRole('article', { name: KICK });
+    expect(within(kick).getByText('Rejected (confirming…)')).toBeInTheDocument();
+    const double = screen.getByRole('article', { name: 'Become a Minter Admin, Admin C' });
+    expect(within(double).getByText('Rejected')).toBeInTheDocument();
+    // Considering is offered elsewhere, so the shared read is in.
+    await screen.findAllByRole('button', { name: /^Considering: / }, T);
+    expect(within(kick).queryByRole('button', { name: /^(Re)?[Cc]onsidering: / })).toBeNull();
+    expect(within(double).queryByRole('button', { name: /^(Re)?[Cc]onsidering: / })).toBeNull();
   });
 });
 
