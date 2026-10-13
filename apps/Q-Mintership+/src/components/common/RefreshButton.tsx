@@ -16,7 +16,8 @@
  * (in a page header, a read a press started).
  * Screen readers hear only the button's name; the pages say what changed.
  * The button stays enabled while it reads, so focus stays on it; a press
- * then does nothing, so a read is never started twice.
+ * then does nothing, so a read is never started twice, unless the press
+ * reloads more than that read (pressWhileFetching: Home).
  */
 import { useState, type AnimationEvent } from 'react';
 import { flushSync } from 'react-dom';
@@ -134,6 +135,12 @@ export interface RefreshButtonProps {
    * until it ends; the same read running on its own (a poll) doesn't turn it.
    */
   fetching?: boolean;
+  /**
+   * A press goes through while `fetching`: for a button that reloads more
+   * than the read its icon follows (Home's reloads every section, its icon
+   * follows the status). Otherwise a press then does nothing.
+   */
+  pressWhileFetching?: boolean;
   /** The button's name, also its tooltip: "Refresh", "Refresh nominations". */
   label?: string;
 }
@@ -142,6 +149,7 @@ export interface RefreshButtonProps {
 export function RefreshButton({
   onClick,
   fetching = false,
+  pressWhileFetching = false,
   label = 'Refresh',
 }: RefreshButtonProps) {
   const [presses, setPresses] = useState(0);
@@ -150,7 +158,7 @@ export function RefreshButton({
       <IconButton
         aria-label={label}
         onClick={() => {
-          if (fetching) return;
+          if (fetching && !pressWhileFetching) return;
           setPresses((n) => n + 1);
           onClick();
         }}

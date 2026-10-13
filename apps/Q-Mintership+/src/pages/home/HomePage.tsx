@@ -167,7 +167,7 @@ export default function HomePage() {
       <PageHeader
         title="Home"
         subtitle={subtitleFor(status, session.status)}
-        actions={<RefreshButton onClick={refresh} fetching={my.fetching} />}
+        actions={<RefreshButton onClick={refresh} fetching={my.fetching} pressWhileFetching />}
       />
       <PageBody>
         {status && my.isError ? (

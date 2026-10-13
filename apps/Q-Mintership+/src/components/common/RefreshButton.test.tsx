@@ -122,6 +122,21 @@ describe('RefreshButton', () => {
     expect(r.onClick).not.toHaveBeenCalled();
   });
 
+  it('takes a press while the read runs when it reloads more than that read (Home)', async () => {
+    const onClick = vi.fn();
+    render(
+      <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+        <RefreshButton onClick={onClick} fetching pressWhileFetching />
+      </HubThemeProvider>
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    // The press turns it, and the read keeps it turning.
+    expect(turn()).toBe('start');
+    ended();
+    expect(turn()).toBe('loop');
+  });
+
   it('owes a press made while it slows down another turn', async () => {
     const r = show(false);
     await userEvent.click(r.button());

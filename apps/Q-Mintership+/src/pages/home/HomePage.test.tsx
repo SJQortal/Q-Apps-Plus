@@ -4,13 +4,14 @@
  * the mock, or answered by the test) without anything reaching a node.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { getDefaultStore } from 'jotai';
 import { HubThemeProvider } from '../../hub-theme';
 import { THEME_STORAGE_KEY, themeConfig } from '../../theme/qplus-theme';
 import { STORAGE_PREFIX } from '../../constants/plus';
+import { invalidate, queryLoadCounts } from '../../data/query';
 import { resetSessionStarter, signIn } from '../../state/session';
 import { markWrite, pendingWritesAtom, writeKeys } from '../../writes/optimistic';
 import { PROPOSE_NOMINATION } from '../../constants/words';
@@ -117,6 +118,18 @@ describe('Home: Minter Admins', () => {
     // The member view below: their own minting numbers.
     expect(screen.getByText('1,730,799')).toBeInTheDocument();
     expect(posts).toEqual([]);
+  });
+
+  it('reloads every section on Refresh, even while the status is being read', async () => {
+    await renderPage(<HomePage />, { persona: 'admin' });
+    await headline('Avery Admin, 6 decisions are waiting for your signature');
+    const decisionReads = () => queryLoadCounts().decisions ?? 0;
+    await waitFor(() => expect(decisionReads()).toBeGreaterThan(0));
+    const before = decisionReads();
+    // The status poll is reading when Refresh is pressed.
+    act(() => invalidate('status:'));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(decisionReads()).toBeGreaterThan(before));
   });
 
   it('lets an admin below level 5 nominate too', async () => {
