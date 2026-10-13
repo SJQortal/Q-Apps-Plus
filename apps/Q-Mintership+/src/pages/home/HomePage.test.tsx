@@ -181,6 +181,12 @@ describe('Home: members', () => {
     expect(await headline("You're minting, Leo Learner")).toBeInTheDocument();
   });
 
+  it('welcomes an account that had shown it was ready, once it becomes a member', async () => {
+    window.localStorage.setItem(`${STORAGE_PREFIX}last-status:${ADDR.learner}`, 'ready');
+    await renderPage(<HomePage />, { persona: 'learner' });
+    expect(await headline('Welcome to MINTER, Leo Learner!')).toBeInTheDocument();
+  });
+
   it('does not load the whole group for members who cannot nominate', async () => {
     await renderPage(<HomePage />, { persona: 'learner' });
     await headline("You're minting, Leo Learner");
@@ -276,6 +282,10 @@ describe('Home: not in MINTER yet', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(await headline("Zoë Newcomer, you've shown you're ready to mint")).toBeInTheDocument();
     expect(screen.getByText('Ready to mint')).toBeInTheDocument();
+    // Remembered, so the welcome plays when an approved nomination makes them a member.
+    await waitFor(() =>
+      expect(window.localStorage.getItem(`${STORAGE_PREFIX}last-status:${address}`)).toBe('ready')
+    );
     const hero = screen.getByRole('region', { name: /you've shown you're ready to mint/ });
     expect(hero).toHaveTextContent(
       /Your join request is open, so nominators and Minter Admins can see that you.d like to mint\./
