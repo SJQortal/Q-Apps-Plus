@@ -419,12 +419,13 @@ export interface EncryptionTargets {
  * can sign (MINTER's null owner left out), plus the writer's own key. An
  * admin whose account has no public key can't be encrypted to and is left
  * out (they can be shared with later). Throws when a key can't be read.
+ * `force: false` reuses an admin list read fresh a moment ago (a write's guard).
  */
-export async function encryptionTargets(writer: {
-  address: string;
-  publicKey: string;
-}): Promise<EncryptionTargets> {
-  const admins = await getAdmins({ force: true });
+export async function encryptionTargets(
+  writer: { address: string; publicKey: string },
+  options: { force?: boolean } = {}
+): Promise<EncryptionTargets> {
+  const admins = await getAdmins({ force: options.force ?? true });
   const signers = admins.signers.map((a) => a.member);
   const keys = await mapLimit(signers, 6, async (address) =>
     address === writer.address ? writer.publicKey : getPublicKey(address)

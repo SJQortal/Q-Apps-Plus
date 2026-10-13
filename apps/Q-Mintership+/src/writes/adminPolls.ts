@@ -150,7 +150,8 @@ async function publishEncrypted<
     };
   }
   try {
-    targets = await encryptionTargets(author);
+    // The guard has just read the admins fresh: the same list.
+    targets = await encryptionTargets(author, { force: false });
   } catch {
     return {
       outcome: {
