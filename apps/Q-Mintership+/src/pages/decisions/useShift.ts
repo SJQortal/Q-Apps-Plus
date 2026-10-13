@@ -5,6 +5,7 @@
 import { useMemo } from 'react';
 import { NULL_OWNER } from '../../data/constants';
 import type { DecisionsData } from '../../data/decisions';
+import type { MemberList } from '../../data/group';
 import type { Decision } from '../../rules/decision';
 import {
   isAdminChangeKind,
@@ -15,7 +16,12 @@ import {
   type ShiftState,
 } from '../../rules/targetShift';
 
-export function useShift(data: DecisionsData | null | undefined) {
+/**
+ * `members`: MINTER's member list (the shared 'group:members' read), so an
+ * addition for someone no longer in MINTER doesn't count as a new seat.
+ * While it is unknown or cut short, every addition for a non-admin does.
+ */
+export function useShift(data: DecisionsData | null | undefined, members?: MemberList | null) {
   return useMemo(() => {
     if (!data) return null;
     const state: ShiftState = {
@@ -23,10 +29,12 @@ export function useShift(data: DecisionsData | null | undefined) {
       adminCount: data.admins.adminCount,
       admins: new Set(data.admins.admins.map((a) => a.member)),
       owner: data.group.owner || NULL_OWNER,
+      members:
+        members && !members.truncated ? new Set(members.members.map((m) => m.member)) : undefined,
     };
     const list = shiftDecisionsOf(data.decisions);
     return { state, list, scenarios: shiftScenarios(state, list) };
-  }, [data]);
+  }, [data, members]);
 }
 
 export type Shift = NonNullable<ReturnType<typeof useShift>>;

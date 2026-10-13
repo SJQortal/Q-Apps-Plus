@@ -111,6 +111,17 @@ describe('adminCountAfter: how a waiting admin change moves the count', () => {
     expect(adminCountAfter({ ...s, adminCount: 0, admins: ['Qx'] }, [remove('Qx')])).toBe(0);
   });
 
+  it('an add for someone no longer in MINTER doesn’t move the count', () => {
+    const withMembers: ShiftState = { ...s, members: [...admins(20), 'Qmember'] };
+    expect(adminCountAfter(withMembers, [add('Qgone')])).toBe(20);
+    expect(adminCountAfter(withMembers, [add('Qmember')])).toBe(21);
+    // Admins are members: removing one still takes a row away.
+    expect(adminCountAfter(withMembers, [remove('Qadmin3')])).toBe(19);
+    // Members not known: every add for a non-admin counts.
+    expect(adminCountAfter(s, [add('Qgone')])).toBe(21);
+    expect(adminCountAfter({ ...s, members: null }, [add('Qgone')])).toBe(21);
+  });
+
   it('takes the admin rows as a list or a set', () => {
     const asSet: ShiftState = { ...s, admins: new Set(admins(20)) };
     expect(adminCountAfter(asSet, [remove('Qadmin4'), add('Qnew')])).toBe(20);
@@ -359,6 +370,15 @@ describe('projectShift: if these admin changes pass', () => {
       expect(result.effects.map((e) => [e.signature, e.effect])).toEqual([['INV', 'applies']]);
       expect(hasImpact(result)).toBe(true);
     });
+  });
+
+  it('all together: a removal and an add for someone no longer in MINTER', () => {
+    const s: ShiftState = { ...state(21), members: new Set(admins(21)) };
+    const changes = [remove('Qadmin1', 'r1'), add('Qgone', 'a1')];
+    const result = projectShift(s, [decision('d', 8)], changes, 'all');
+    // The add can't apply: only the removal moves the count (21 → 20, 9 → 8 needed).
+    expect(result).toMatchObject({ countThen: 20, neededThen: 8, countHigh: 21 });
+    expect(result.effects.map((e) => [e.signature, e.effect])).toEqual([['d', 'applies']]);
   });
 
   it('a duplicate removal of one admin counts once', () => {

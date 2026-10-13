@@ -172,7 +172,7 @@ function DecisionsQueue() {
   const [targetChange, dismissTargetChange] = useSeenTargetChange(snapshot);
 
   // What waiting admin changes would do to the target (each, and together).
-  const shift = useShift(data);
+  const shift = useShift(data, membersQ.data);
 
   const adminNames = useMemo(() => {
     const map = new Map<string, string | null>();

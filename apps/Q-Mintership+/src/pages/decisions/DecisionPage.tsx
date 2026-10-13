@@ -21,7 +21,13 @@ import { PageBody } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { loadDecisionLink, type DecisionLink } from '../../data/decisionLink';
 import { getMembership } from '../../data/group';
-import { useAdmins, useChainNow, useDecisions, useNominationsFor } from '../../hooks/useData';
+import {
+  useAdmins,
+  useChainNow,
+  useDecisions,
+  useMembers,
+  useNominationsFor,
+} from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { useQuery } from '../../hooks/useQuery';
 import { PATHS, decisionPath, nominationPath } from '../../routes/paths';
@@ -267,8 +273,10 @@ function PendingView({
   );
 
   const data = queue.data;
+  // The member list (the shared, cached read) only matters to a waiting addition.
+  const membersQ = useMembers(Boolean(data?.decisions.some((d) => d.kind === 'addAdmin')));
   // An admin change's impact, and the chip on a decision an admin change would tip over.
-  const shift = useShift(data);
+  const shift = useShift(data, membersQ.data);
   const decision = data?.decisions.find((d) => d.signature === signature) ?? null;
   const gone = Boolean(data && !decision && data.loadedAt > since);
   // The queue no longer lists it: read it again, to show how it ended.

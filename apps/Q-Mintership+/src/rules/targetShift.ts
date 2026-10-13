@@ -20,8 +20,9 @@
  * (History, Activity). Pure; the screens feed it.
  *
  * How a waiting admin change moves the count, checked against today's admin
- * rows: making someone a Minter Admin who isn't one adds a row; making an
- * admin an admin again changes nothing; removing an admin takes a row away;
+ * rows: making someone a Minter Admin who isn't one adds a row, if they are
+ * still in MINTER; making an admin an admin again changes nothing; removing
+ * an admin takes a row away;
  * removing someone who isn't an admin, or the group's owner (it can never be
  * removed), changes nothing. Several changes about one account count once.
  */
@@ -62,6 +63,12 @@ export interface ShiftState {
   admins: ReadonlySet<string> | readonly string[];
   /** The group's owner: an admin row that can never be removed. */
   owner?: string | null;
+  /**
+   * Today's MINTER member rows, when known in full. An add whose subject
+   * isn't a member changes nothing (Core finds it invalid when it comes to
+   * apply it). Unknown: every add for a non-admin counts.
+   */
+  members?: ReadonlySet<string> | readonly string[] | null;
 }
 
 export type ShiftEffectKind =
@@ -132,9 +139,18 @@ function adminSet(state: ShiftState): ReadonlySet<string> {
     : new Set(state.admins as readonly string[]);
 }
 
-/** The admin count once `changes` have passed, checked against today's admin rows. */
+/** Today's member rows as a set, or null when they aren't known. */
+function memberSet(state: ShiftState): ReadonlySet<string> | null {
+  if (!state.members) return null;
+  return state.members instanceof Set
+    ? (state.members as ReadonlySet<string>)
+    : new Set(state.members as readonly string[]);
+}
+
+/** The admin count once `changes` have passed, checked against today's admin (and member) rows. */
 export function adminCountAfter(state: ShiftState, changes: readonly AdminChangeInput[]): number {
   const admins = adminSet(state);
+  const members = memberSet(state);
   const owner = state.owner ?? null;
   const touched = new Map<string, { add: boolean; remove: boolean }>();
   for (const change of changes) {
@@ -149,7 +165,7 @@ export function adminCountAfter(state: ShiftState, changes: readonly AdminChange
     if (address === owner) continue;
     if (admins.has(address)) {
       if (t.remove) delta -= 1;
-    } else if (t.add) delta += 1;
+    } else if (t.add && (!members || members.has(address))) delta += 1;
   }
   return Math.max(0, state.adminCount + delta);
 }
