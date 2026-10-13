@@ -46,3 +46,8 @@ export function addTargetShift(world: World): {
 };
 // Shareable links (decision and nomination pages).
 export function addDecidedSignatures(world: World): string;
+export function addComments(world: World): {
+  waitingKey: string;
+  decisionKey: string;
+  ids: Record<string, string>;
+};

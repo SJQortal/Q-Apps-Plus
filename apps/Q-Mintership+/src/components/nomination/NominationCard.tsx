@@ -3,7 +3,8 @@
  * supports (with their notes), the reason and links, and where it stands
  * (waiting for a Minter Admin, k of n signatures with the countdown and any
  * rejections, how many Minter Admins are considering it, approved, or how
- * it ended). Screens add their own buttons through `actions`.
+ * it ended). Screens add their own buttons through `actions`, and its
+ * public comments with `comments`.
  */
 import type { ReactNode } from 'react';
 import { Box, Button, Typography } from '@mui/material';
@@ -11,6 +12,7 @@ import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
+import { nominationCommentTarget } from '../../data/commentThread';
 import type { NominationState } from '../../rules/nomination';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { formatDuration, formatRelative, plural } from '../../utils/format';
@@ -24,6 +26,7 @@ import { CopyLinkButton } from '../common/CopyLinkButton';
 import { PersonChip, PersonInline } from '../common/Person';
 import { ProgressRing } from '../common/ProgressRing';
 import { Card, NominationStateChip } from '../common/Section';
+import { CommentsSection } from '../comments/CommentsSection';
 import { readable } from '../../utils/readable';
 
 export interface NominationCardProps {
@@ -38,6 +41,8 @@ export interface NominationCardProps {
   endedAt?: number | null;
   /** A "Copy link" to the nomination's own page (default; its page has one in the header). */
   copyLink?: boolean;
+  /** Its public comments behind a "Comments (n)" toggle; 'open' starts open. */
+  comments?: boolean | 'open';
 }
 
 const ENDED_TEXT: Partial<Record<NominationState, string>> = {
@@ -55,6 +60,7 @@ export function NominationCard({
   hideNominee,
   endedAt,
   copyLink = true,
+  comments,
 }: NominationCardProps) {
   const tally = n.decision?.tally ?? null;
   const window = n.decision?.window ?? null;
@@ -267,6 +273,14 @@ export function NominationCard({
           </Box>
         ) : null}
       </Box>
+
+      {comments ? (
+        <CommentsSection
+          target={nominationCommentTarget(n)}
+          label={`the nomination of ${nominee.label}`}
+          defaultOpen={comments === 'open'}
+        />
+      ) : null}
     </Card>
   );
 }

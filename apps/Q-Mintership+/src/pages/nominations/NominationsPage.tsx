@@ -192,6 +192,7 @@ export default function NominationsPage() {
               <NominationCard
                 nomination={own}
                 now={data.decisions.now}
+                comments
                 actions={
                   <NomineeAction
                     step={step}
@@ -355,6 +356,7 @@ export default function NominationsPage() {
                       nomination={n}
                       now={data.decisions.now}
                       compact
+                      comments
                       actions={
                         <CardActions
                           n={n}
@@ -589,6 +591,7 @@ function RecentlyDecided({
                     now={now}
                     compact
                     endedAt={endedAt}
+                    comments
                     actions={
                       canNominate && canNominateAgain(n) && n.nominee !== me ? (
                         <Button

@@ -7,7 +7,8 @@
  * each "(confirming…)" until it is in a block. Next to the signers: which
  * Minter Admins are considering it, and the admin's own Considering. An
  * admin change says what it does to the target; a decision a waiting admin
- * change would tip over carries a "Target may drop to …" chip.
+ * change would tip over carries a "Target may drop to …" chip. Its public
+ * comments sit behind a "Comments (n)" toggle.
  */
 import { useId, useState } from 'react';
 import { Box, Button, Checkbox, Skeleton, Typography } from '@mui/material';
@@ -16,10 +17,12 @@ import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutli
 import type { ChainNow } from '../../data/chain';
 import { effectiveBlocksMinted } from '../../data/accounts';
 import type { Nomination } from '../../data/nominations';
+import { decisionCommentTarget } from '../../data/commentThread';
 import { decisionTitle, isOwnAdminChange, type Decision } from '../../rules/decision';
 import { useAccount } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { AvatarStack, PersonChip, PersonInline } from '../../components/common/Person';
+import { CommentsSection } from '../../components/comments/CommentsSection';
 import { AnswerChip, SigningClock } from '../../components/decision/DecisionParts';
 import {
   ConsideringControls,
@@ -425,6 +428,8 @@ export function DecisionCard(props: DecisionCardProps) {
           />
         </Box>
       ) : null}
+
+      <CommentsSection target={decisionCommentTarget(d, nomination)} label={fullTitle} />
     </Card>
   );
 }

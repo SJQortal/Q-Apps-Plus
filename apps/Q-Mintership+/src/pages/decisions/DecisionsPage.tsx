@@ -522,6 +522,7 @@ function DecisionsQueue() {
                     nomination={n}
                     now={data.now}
                     compact
+                    comments
                     actions={
                       isAdmin ? (
                         <>

@@ -13,6 +13,7 @@
 import {
   addConsidering,
   addDecidedSignatures,
+  addComments,
   addOtherPending,
   addReady,
   addRejections,
@@ -51,6 +52,8 @@ function worldFor(route) {
 // Shareable links: a decision still waiting, one decided (with its signatures), a nomination.
 const DECIDED_SIG = addDecidedSignatures(world);
 const PENDING_SIG = world.pending.find((t) => t.type === 'GROUP_KICK').signature;
+// Public comments on Wren Waiting's nomination and bob+builder's invite, and a hidden one.
+addComments(world);
 // Replaced in setup() by a visible 64×64 gradient, so avatars show in the shots.
 let PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAQklEQVR42u3OMQEAAAgDINc/9Mzg14MGLUmHCgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFbzwB2GwADvYAAAAASUVORK5CYII=',
@@ -99,6 +102,15 @@ const open = (button, dialog) => async (page) => {
   await page.getByRole('dialog', { name: dialog }).waitFor({ timeout: 8000 });
   await page.waitForTimeout(400);
 };
+
+/** Open a card's comments (its "Comments (n)" toggle) and wait for the thread. */
+const comments = (toggle, text) => async (page) => {
+  await settle(page);
+  await page.getByRole('button', { name: toggle }).first().click({ timeout: 8000 });
+  await page.getByText(text).first().waitFor({ timeout: 8000 });
+  await page.waitForTimeout(300);
+};
+const WREN_COMMENTS = /^Comments \(\d+\): the nomination of Wren Waiting$/;
 
 /** Propose (a menu, or a sheet on phones), then one of its choices. */
 const propose = (choice) => async (page) => {
@@ -315,6 +327,46 @@ export default {
       key: 'nomination',
       path: `/nominations/${ADDR.nominatedSigning}?as=nominator`,
       after: wait('main ol[aria-label="Rounds, newest first"]'),
+    },
+    // Public comments: a thread with replies, a deleted one and a hidden one (folded).
+    {
+      key: 'comments-thread',
+      path: `/people/${ADDR.nominatedWaiting}?as=nominator`,
+      after: comments(WREN_COMMENTS, 'Wren helped me set up my node'),
+    },
+    // A Minter Admin's view of the hidden comment, unfolded with Show anyway.
+    {
+      key: 'comments-hidden',
+      path: `/people/${ADDR.nominatedWaiting}?as=admin`,
+      after: async (page) => {
+        await comments(WREN_COMMENTS, 'Wren helped me set up my node')(page);
+        await page.getByRole('button', { name: 'Show anyway: hidden comment' }).click();
+        await page.getByText('Hidden by a Minter Admin. You chose to show it.').waitFor();
+      },
+    },
+    // Posting: what is published, under which name, and the fee, before Hub opens.
+    {
+      key: 'comments-post',
+      path: `/people/${ADDR.nominatedWaiting}?as=nominator`,
+      overlay: true,
+      after: async (page) => {
+        await comments(WREN_COMMENTS, 'Wren helped me set up my node')(page);
+        await page
+          .getByRole('textbox', { name: 'Write a comment' })
+          .fill('Wren keeps a steady node and helps newcomers: qortal://WEBSITE/WrenNodeGuide');
+        await page.getByRole('button', { name: 'Post', exact: true }).click();
+        await page.getByRole('dialog', { name: 'Post your comment' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
+    // A decision's comments include its nomination's from before the first signature.
+    {
+      key: 'decisions-comments',
+      path: '/decisions?as=admin',
+      after: comments(
+        /^Comments \(\d+\): Add to MINTER, bob\+builder$/,
+        'Their node has been steady all month'
+      ),
     },
   ],
 };

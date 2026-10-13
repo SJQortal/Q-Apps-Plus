@@ -781,13 +781,17 @@ export function answerCore(world, pathname, sp) {
         name: r.name,
         service: 'JSON',
         identifier: r.identifier,
-        latestSignature: sig(`qdn:${r.name}:${r.identifier}`),
+        // A republished resource has a new latest signature, as on a node.
+        latestSignature: sig(`qdn:${r.name}:${r.identifier}${r.updated ? `:${r.updated}` : ''}`),
         size: 300,
         created: r.created,
         ...(r.updated ? { updated: r.updated } : {}),
       }));
     const names = sp.getAll('name');
     if (names.length) rows = rows.filter((r) => names.includes(r.name));
+    // Core: `after` keeps resources created after that time.
+    const after = Number(sp.get('after') || 0);
+    if (after) rows = rows.filter((r) => r.created > after);
     rows.sort((a, b) => a.created - b.created);
     return json(page(rows, sp));
   }
@@ -1074,4 +1078,111 @@ export function addDecidedSignatures(world) {
     });
   });
   return invite.signature;
+}
+// ---- comments (Q-Mintership+ 2.0: public comments and Minter Admin hides) ----
+/**
+ * Add public comments and hide records (JSON `qmp-comment-<key>-<id>` and
+ * `qmp-hide-<key>-<id>`) to `world.records`:
+ *
+ * - Wren Waiting's nomination (waiting, keyed by their address): a thread
+ *   with replies (one answering a reply), an edited comment the nominee
+ *   answered, a deleted comment with a reply still readable, a comment a
+ *   Minter Admin hid, and a hide by a member that doesn't count;
+ * - bob+builder's invite (signing): one comment from before the first
+ *   signature (their address) and two under the decision (first 40
+ *   characters of its signature).
+ *
+ * Returns the keys and identifiers, for tests.
+ */
+export function addComments(world) {
+  const HOUR = 3_600_000;
+  const waitingKey = ADDR.nominatedWaiting;
+  const signingTx = world.pending.find(
+    (t) => t.type === 'GROUP_INVITE' && t.invitee === ADDR.nominatedSigning
+  );
+  const decisionKey = signingTx.signature.slice(0, 40);
+  const id = (key, suffix) => `qmp-comment-${key}-${suffix}`;
+  const comment = (name, key, suffix, hoursAgo, body, updatedHoursAgo) =>
+    world.records.push({
+      name,
+      identifier: id(key, suffix),
+      created: NOW - hoursAgo * HOUR,
+      ...(updatedHoursAgo !== undefined ? { updated: NOW - updatedHoursAgo * HOUR } : {}),
+      body: { v: 1, key, ...body },
+    });
+  world.names.set('Spam Name', fakeAddress('spam-name'));
+
+  const ids = {
+    helped: id(waitingKey, 'wren01'),
+    sameHere: id(waitingKey, 'wren02'),
+    thanks: id(waitingKey, 'wren03'),
+    online: id(waitingKey, 'wren04'),
+    answer: id(waitingKey, 'wren05'),
+    deleted: id(waitingKey, 'wren06'),
+    civil: id(waitingKey, 'wren07'),
+    spam: id(waitingKey, 'wren08'),
+    beforeSigning: id(ADDR.nominatedSigning, 'bob001'),
+    signed: id(decisionKey, 'bob002'),
+    agreed: id(decisionKey, 'bob003'),
+  };
+
+  comment('Member 7', waitingKey, 'wren01', 26, {
+    text: 'Wren helped me set up my node last month. Patient, clear, and they checked back a week later to see it was still minting.',
+  });
+  comment('Nora Nominator', waitingKey, 'wren02', 20, {
+    text: 'Same experience here. Their node guide is worth a read: qortal://WEBSITE/WrenNodeGuide',
+    replyTo: ids.helped,
+  });
+  comment('Zoë Newcomer', waitingKey, 'wren03', 18, {
+    text: 'Thanks for the link, that guide got me going too.',
+    replyTo: ids.sameHere,
+  });
+  comment(
+    'Lou Left',
+    waitingKey,
+    'wren04',
+    30,
+    {
+      text: 'Do they keep their node online most of the day? That matters more than anything else for minting.',
+      edited: true,
+    },
+    28
+  );
+  comment('Wren Waiting', waitingKey, 'wren05', 27, {
+    text: 'Yes: it runs on a small home server and has been online since spring.',
+    replyTo: ids.online,
+  });
+  comment('Member 3', waitingKey, 'wren06', 40, { text: '', deleted: true }, 39);
+  comment('Member 9', waitingKey, 'wren07', 38, {
+    text: 'Please keep it about minting, everyone.',
+    replyTo: ids.deleted,
+  });
+  comment('Spam Name', waitingKey, 'wren08', 10, {
+    text: 'Cheap QORT here, message me!!! qortal://APP/NotARealApp',
+  });
+  // Avery Admin hid the spam; a member's hide of Member 7's comment doesn't count.
+  world.records.push({
+    name: PEOPLE.admin.name,
+    identifier: `qmp-hide-${waitingKey}-hide01`,
+    created: NOW - 9 * HOUR,
+    body: { v: 1, commentName: 'Spam Name', commentIdentifier: ids.spam, hidden: true },
+  });
+  world.records.push({
+    name: PEOPLE.learner.name,
+    identifier: `qmp-hide-${waitingKey}-hide02`,
+    created: NOW - 8 * HOUR,
+    body: { v: 1, commentName: 'Member 7', commentIdentifier: ids.helped, hidden: true },
+  });
+
+  comment('Member 2', ADDR.nominatedSigning, 'bob001', 80, {
+    text: 'bob+builder answers questions in the minting chat almost every day.',
+  });
+  comment('Admin C', decisionKey, 'bob002', 3, {
+    text: 'Signed. Their node has been steady all month.',
+  });
+  comment('Member 5', decisionKey, 'bob003', 2, {
+    text: 'Agreed, I see them online every day.',
+    replyTo: ids.signed,
+  });
+  return { waitingKey, decisionKey, ids };
 }

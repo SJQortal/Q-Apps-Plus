@@ -21,6 +21,7 @@ import {
   type SupportRecord,
 } from '../data/records';
 import type { GroupTxType } from '../data/types';
+import { COMMENT_SERVICE, type CommentRecord, type HideRecord } from '../data/commentRecords';
 
 export interface HubRequest {
   action: string;
@@ -92,6 +93,21 @@ export function publishRecordRequest(
     action: 'PUBLISH_QDN_RESOURCE',
     name,
     service: RECORD_SERVICE,
+    identifier,
+    data64: toData64(record),
+  };
+}
+
+/** A comment (or its edit or deletion) or a Minter Admin's hide record, under `name`. */
+export function publishCommentRequest(
+  name: string,
+  identifier: string,
+  record: CommentRecord | HideRecord
+): HubRequest {
+  return {
+    action: 'PUBLISH_QDN_RESOURCE',
+    name,
+    service: COMMENT_SERVICE,
     identifier,
     data64: toData64(record),
   };
