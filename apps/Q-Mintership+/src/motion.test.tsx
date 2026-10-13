@@ -9,6 +9,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { Button, Chip, IconButton, Switch, ToggleButton } from '@mui/material';
 import { Section } from './components/common/Section';
 import { EmptyState } from './components/common/states';
 import { PageBody } from './components/layout/PageBody';
@@ -82,10 +83,12 @@ describe('reduced motion', () => {
     expect(media).toBeDefined();
     const styleRules = (within: CSSRuleList | CSSRule[]) =>
       [...within].filter((r): r is CSSStyleRule => r instanceof CSSStyleRule);
-    const reduceRules = styleRules(rules).filter((r) =>
-      r.selectorText.startsWith("html[data-motion='reduce']")
+    // The rules that cut animations (others under the same conditions set variables).
+    const cuts = (r: CSSStyleRule) => r.style.getPropertyValue('animation-duration') !== '';
+    const reduceRules = styleRules(rules).filter(
+      (r) => r.selectorText.startsWith("html[data-motion='reduce']") && cuts(r)
     );
-    const systemRules = styleRules((media as CSSMediaRule).cssRules);
+    const systemRules = styleRules((media as CSSMediaRule).cssRules).filter(cuts);
     const reduce = reduceRules[0]?.style.cssText;
     expect(reduce).toMatch(/animation-delay: 0s !important/);
     // Elements, then their ::before and ::after, in both.
@@ -199,5 +202,45 @@ describe('content arriving', () => {
         expect(props.every((p) => ['opacity', 'translate', 'scale'].includes(p))).toBe(true);
       }
     }
+  });
+});
+
+describe('press', () => {
+  const press = () =>
+    getComputedStyle(document.documentElement).getPropertyValue('--qmp-press').trim();
+
+  it('buttons, icon buttons and clickable chips give a little as they are pressed', () => {
+    const rules = [...(sheet.sheet?.cssRules ?? [])].filter(
+      (r): r is CSSStyleRule => r instanceof CSSStyleRule && r.selectorText.endsWith(':active')
+    );
+    expect(rules.map((r) => r.style.getPropertyValue('scale'))).toEqual([
+      'var(--qmp-press)',
+      'var(--qmp-press-icon)',
+    ]);
+    expect(press()).toBe('0.98');
+    render(
+      <>
+        <Button>Sign</Button>
+        <IconButton aria-label="Back">←</IconButton>
+        <Chip label="Open" onClick={() => {}} />
+        <Switch slotProps={{ input: { 'aria-label': 'Celebrate' } }} />
+        <ToggleButton value="all">All</ToggleButton>
+      </>
+    );
+    const eases = (el: Element) =>
+      getComputedStyle(el).getPropertyValue('transition-property').includes('scale');
+    expect(eases(screen.getByRole('button', { name: 'Sign' }))).toBe(true);
+    expect(eases(screen.getByRole('button', { name: 'Back' }))).toBe(true);
+    expect(eases(screen.getByRole('button', { name: 'Open' }))).toBe(true);
+    // Switches and toggles keep MUI's own feel.
+    expect(eases(screen.getByRole('switch').closest('.MuiButtonBase-root') as Element)).toBe(false);
+    expect(eases(screen.getByRole('button', { name: 'All' }))).toBe(false);
+  });
+
+  it('stays still with Motion → Reduce, and presses on Full', () => {
+    document.documentElement.setAttribute('data-motion', 'reduce');
+    expect(press()).toBe('1');
+    document.documentElement.setAttribute('data-motion', 'full');
+    expect(press()).toBe('0.98');
   });
 });

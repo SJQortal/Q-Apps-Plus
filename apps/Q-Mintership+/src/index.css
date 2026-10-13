@@ -70,6 +70,40 @@ html[data-motion='reduce'] *::after {
   transition-delay: 0s !important;
 }
 
+/* Press: buttons, icon buttons and clickable chips give a little under the
+   finger or the mouse (MUI's ripple stays). `scale` joins the transitions
+   MUI and the theme kit already give them, at their own pace; switches,
+   checkboxes and toggles keep MUI's. With reduced motion they stay still. */
+:root {
+  --qmp-press: 0.98;
+  --qmp-press-icon: 0.92;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='full']) {
+    --qmp-press: 1;
+    --qmp-press-icon: 1;
+  }
+}
+html[data-motion='reduce'] {
+  --qmp-press: 1;
+  --qmp-press-icon: 1;
+}
+.MuiButtonBase-root:is(.MuiButton-root, .MuiFab-root) {
+  transition-property: background, background-color, box-shadow, border-color, color, scale;
+}
+.MuiButtonBase-root.MuiIconButton-root {
+  transition-property: background-color, color, border-color, box-shadow, opacity, scale;
+}
+.MuiButtonBase-root.MuiChip-clickable {
+  transition-property: background-color, box-shadow, scale;
+}
+.MuiButtonBase-root:is(.MuiButton-root, .MuiFab-root, .MuiChip-clickable):active {
+  scale: var(--qmp-press);
+}
+.MuiButtonBase-root.MuiIconButton-root:active {
+  scale: var(--qmp-press-icon);
+}
+
 /* Content arriving (docs/DESIGN.md → Motion). An animation runs when its
    element is inserted, never when React re-renders it, so a refresh that
    keeps what is on screen stays still and only what is new moves: a page as
