@@ -74,6 +74,51 @@ describe('Decisions: an admin change says what it does to the target', () => {
     expect(note).toHaveTextContent(
       /The other \d+ decisions still collecting would each need 1 more signature than now\./
     );
+    // Mia Met's card: the chip says the target may rise.
+    const met = card(/^Add to MINTER, Mia Met/);
+    expect(within(met).getByRole('button', { name: 'Target may rise to 9' })).toBeVisible();
+  });
+});
+
+describe('Decisions: the chip on a decision an admin change would tip over', () => {
+  it('says where the target may go, and explains it one tap away', async () => {
+    const u = user();
+    await openShifted();
+    const met = card(/^Add to MINTER, Mia Met/);
+    const chip = within(met).getByRole('button', { name: 'Target may drop to 8' });
+    expect(chip).toHaveAttribute('aria-expanded', 'false');
+    expect(within(met).queryByText(/Core would apply it at once/)).toBeNull();
+
+    await u.click(chip);
+    expect(chip).toHaveAttribute('aria-expanded', 'true');
+    const id = chip.getAttribute('aria-controls') as string;
+    const note = document.getElementById(id) as HTMLElement;
+    expect(note).toHaveTextContent(
+      'If Remove a Minter Admin: Dex Demote passes, MINTER has 20 admin seats and the target drops from 9 to 8 signatures.'
+    );
+    expect(note).toHaveTextContent(
+      'This decision has 8 signatures, so Core would apply it at once, in the same block or the next, with no new signature.'
+    );
+    expect(note).toHaveTextContent(/withdraw your signature before the admin change passes/);
+
+    await u.click(chip);
+    expect(chip).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById(id)).toBeNull();
+  });
+
+  it('members see the chip and the reason, without the advice for admins', async () => {
+    const u = user();
+    await openShifted({ persona: 'learner' });
+    const met = card(/^Add to MINTER, Mia Met/);
+    await u.click(within(met).getByRole('button', { name: 'Target may drop to 8' }));
+    expect(within(met).getByText(/Core would apply it at once/)).toBeVisible();
+    expect(within(met).queryByText(/withdraw your signature/)).toBeNull();
+  });
+
+  it('no chip where no admin change would tip it over', async () => {
+    await openShifted();
+    const urgent = card(/^Add to MINTER, Uma Urgent/);
+    expect(within(urgent).queryByRole('button', { name: /^Target may/ })).toBeNull();
   });
 });
 
@@ -127,7 +172,7 @@ describe('Decisions: signing an admin change that would tip others over', () => 
     expect(within(dialog).getByRole('checkbox', { name: 'I’ve checked these' })).not.toBeChecked();
   });
 
-  it('signing a decision that isn’t an admin change needs no tick', async () => {
+  it('signing a decision that only carries a chip needs no tick', async () => {
     const u = user();
     await openShifted();
     await u.click(within(card(/^Add to MINTER, Mia Met/)).getByRole('button', { name: /^Sign: / }));

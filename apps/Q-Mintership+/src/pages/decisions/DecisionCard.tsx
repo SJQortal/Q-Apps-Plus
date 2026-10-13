@@ -3,9 +3,10 @@
  * what it does and to whom, who proposed it, the subject's profile (and the
  * nomination behind an invite), k of n with the time left to sign, who has
  * signed, and Sign / Signed ✓ / Signed ✓ (confirming…). An admin change
- * says what it does to the target.
+ * says what it does to the target; a decision a waiting admin change would
+ * tip over carries a "Target may drop to …" chip.
  */
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Box, Button, Checkbox, Skeleton, Typography } from '@mui/material';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
@@ -23,8 +24,9 @@ import { primarySoft } from '../../hub-theme';
 import { formatCount, formatDate, formatRelative, plural } from '../../utils/format';
 import { openQortalLink } from '../../utils/links';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
-import type { ShiftScenario } from '../../rules/targetShift';
+import type { DecisionRisk, ShiftScenario } from '../../rules/targetShift';
 import { TargetImpact } from './TargetImpact';
+import { TargetRiskChip, TargetRiskNote } from './TargetRiskChip';
 import type { LabelOf } from './targetShiftUi';
 import {
   banEndLine,
@@ -74,7 +76,9 @@ export interface DecisionCardProps {
   highlighted?: boolean;
   /** An admin change: what it does to the target if it passes. */
   impact?: ShiftScenario | null;
-  /** Decisions' labels by signature, for the impact. */
+  /** A waiting admin change would tip this decision over (the chip). */
+  risk?: DecisionRisk | null;
+  /** Decisions' labels by signature, for the two above. */
   labelOf?: LabelOf;
 }
 
@@ -95,8 +99,11 @@ export function DecisionCard(props: DecisionCardProps) {
     onSign,
     highlighted,
     impact,
+    risk,
     labelOf,
   } = props;
+  const [riskOpen, setRiskOpen] = useState(false);
+  const riskId = useId();
   const pending = usePendingWrite(writeKeys.sign(d.signature));
   const answer = myAnswer(d, myPublicKey);
   const signable = canAct && canSign(d, answer, pending);
@@ -148,6 +155,14 @@ export function DecisionCard(props: DecisionCardProps) {
               {title}
             </Typography>
             <DecisionPhaseChip phase={d.phase} />
+            {risk && labelOf ? (
+              <TargetRiskChip
+                risk={risk}
+                open={riskOpen}
+                onToggle={() => setRiskOpen((v) => !v)}
+                controls={riskId}
+              />
+            ) : null}
           </Box>
           {d.subject ? (
             <PersonChip
@@ -171,6 +186,10 @@ export function DecisionCard(props: DecisionCardProps) {
           />
         ) : null}
       </Box>
+
+      {risk && labelOf && riskOpen ? (
+        <TargetRiskNote id={riskId} risk={risk} labelOf={labelOf} advice={canAct} />
+      ) : null}
 
       <KindDetails
         decision={d}

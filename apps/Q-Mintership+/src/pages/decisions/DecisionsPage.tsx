@@ -10,9 +10,9 @@
  * withdraw: an admin signs or lets it expire.
  *
  * The target moves with the admin count (rules/targetShift.ts): an admin
- * change says what it would do to every waiting decision, and Sign /
- * Propose / Sign several need "I've checked these" before Hub opens when
- * anything would change.
+ * change says what it would do to every waiting decision, a decision it
+ * would tip over carries a chip, and Sign / Propose / Sign several need
+ * "I've checked these" before Hub opens when anything would change.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -58,6 +58,7 @@ import {
   hasImpact,
   isAdminChangeKind,
   projectShift,
+  riskFor,
   scenarioFor,
   shiftDecisionsOf,
   shiftScenarios,
@@ -330,6 +331,7 @@ export default function DecisionsPage() {
   };
   const impactOf = (d: Decision) =>
     shift && isAdminChangeKind(d.kind) ? scenarioFor(shift.scenarios, d.signature) : null;
+  const riskOf = (d: Decision) => (shift ? riskFor(d.signature, shift.scenarios) : null);
   const projectImpact = useCallback(
     (kind: ProposeKind, subject: string) =>
       shift && (kind === 'addAdmin' || kind === 'removeAdmin')
@@ -518,6 +520,7 @@ export default function DecisionsPage() {
                     onSign={setSignTarget}
                     highlighted={highlight === d.signature}
                     impact={impactOf(d)}
+                    risk={riskOf(d)}
                     labelOf={labelOf}
                   />
                 ))}
@@ -603,6 +606,7 @@ export default function DecisionsPage() {
                     subjectFacts={factsFor(d.subject)}
                     highlighted={highlight === d.signature}
                     impact={impactOf(d)}
+                    risk={riskOf(d)}
                     labelOf={labelOf}
                   />
                 ))}
