@@ -34,6 +34,7 @@ import {
 } from '../../components/decision/Considering';
 import { ConsideringDialog } from '../../components/decision/ConsideringDialog';
 import { useConsideringFor } from '../../hooks/useConsidering';
+import { useChangedSinceMount } from '../../hooks/useChangedSinceMount';
 import { NominationCard } from '../../components/nomination/NominationCard';
 import { RefreshButton } from '../../components/common/RefreshButton';
 import { Card, Section } from '../../components/common/Section';
@@ -813,8 +814,10 @@ function FirstSignatureAction({
 }) {
   const writes = useAtomValue(pendingWritesAtom);
   const pending = writes[writeKeys.invite(n.nominee)];
+  // The chip pops in when it takes the button's place, not when the page opens with it.
+  const pop = useChangedSinceMount(pending?.status === 'confirming');
   if (pending?.status === 'confirming')
-    return <DoneChip label="On chain ✓ (confirming…)" settled={false} />;
+    return <DoneChip label="On chain ✓ (confirming…)" settled={false} pop={pop} />;
   return (
     <Button
       variant="contained"

@@ -35,6 +35,7 @@ import {
   type StaleInviteDetail,
 } from '../../data/staleInvites';
 import type { InviteRow } from '../../data/types';
+import { useChangedSinceMount } from '../../hooks/useChangedSinceMount';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { useQuery } from '../../hooks/useQuery';
 import type { Decision } from '../../rules/decision';
@@ -231,6 +232,10 @@ function StaleRow({
   onPropose: () => void;
 }) {
   const pending = usePendingWrite(writeKeys.propose('cancelInvite', row.invitee));
+  // The chip pops in when it takes the button's place, not when the list opens with it.
+  const pop = useChangedSinceMount(
+    cancelWaiting ? 'waiting' : pending?.status === 'confirming' ? 'confirming' : null
+  );
   const inviter = useDisplayName(row.inviter, inviterName);
   // The name the row shows (its avatar chip reads the same), not the bare address.
   const invitee = useDisplayName(row.invitee);
@@ -269,9 +274,9 @@ function StaleRow({
         ) : null}
       </Box>
       {cancelWaiting ? (
-        <DoneChip label="Cancellation waiting for signatures" settled={false} />
+        <DoneChip label="Cancellation waiting for signatures" settled={false} pop={pop} />
       ) : pending?.status === 'confirming' ? (
-        <DoneChip label="Proposed (confirming…)" settled={false} />
+        <DoneChip label="Proposed (confirming…)" settled={false} pop={pop} />
       ) : (
         <Button
           variant="outlined"

@@ -364,18 +364,40 @@ describe('small things that turn up', () => {
     expect(animation(tick).duration).toBe('0.01ms');
   });
 
-  it('pops an answer’s chip in, and settles it in place', () => {
-    const view = render(<DoneChip label="Signed ✓ (confirming…)" settled={false} />);
+  it('pops an answer’s chip in as it is given, and settles it in place', () => {
+    const view = render(<AnswerChip view={{ shown: 'none', settled: false, label: '' }} />);
+    view.rerender(
+      <AnswerChip view={{ shown: 'signed', settled: false, label: 'Signed ✓ (confirming…)' }} />
+    );
     const chip = screen.getByText('Signed ✓ (confirming…)').closest('.MuiChip-root') as Element;
     expect(animation(chip).name).toBe('qmp-pop-in');
-    view.rerender(<DoneChip label="Signed ✓" settled />);
+    view.rerender(<AnswerChip view={{ shown: 'signed', settled: true, label: 'Signed ✓' }} />);
     // The same chip, recoloured: it doesn't pop again.
     expect(screen.getByText('Signed ✓').closest('.MuiChip-root')).toBe(chip);
+    // A changed answer pops in too.
     view.rerender(
       <AnswerChip view={{ shown: 'rejected', settled: false, label: 'Rejected (confirming…)' }} />
     );
     const rejected = screen.getByText('Rejected (confirming…)').closest('.MuiChip-root');
     expect(animation(rejected as Element).name).toBe('qmp-pop-in');
+  });
+
+  it('leaves the chips a page opens with still', () => {
+    render(
+      <>
+        <AnswerChip view={{ shown: 'signed', settled: true, label: 'Signed ✓' }} />
+        <AnswerChip view={{ shown: 'rejected', settled: false, label: 'Rejected (confirming…)' }} />
+        <DoneChip label="Cancellation waiting for signatures" settled={false} />
+      </>
+    );
+    for (const text of [
+      'Signed ✓',
+      'Rejected (confirming…)',
+      'Cancellation waiting for signatures',
+    ])
+      expect(animation(screen.getByText(text).closest('.MuiChip-root') as Element).name).toBe(
+        'none'
+      );
   });
 });
 

@@ -19,6 +19,7 @@ import { DoneChip } from '../../components/decision/DecisionParts';
 import { Card, Section } from '../../components/common/Section';
 import { MINTER_GROUP_ID } from '../../data/constants';
 import { getPending } from '../../data/txs';
+import { useChangedSinceMount } from '../../hooks/useChangedSinceMount';
 import { useAdmins, useChainNow, useDecisions, useGroupInfo } from '../../hooks/useData';
 import { useQuery } from '../../hooks/useQuery';
 import { decisionPath } from '../../routes/paths';
@@ -102,6 +103,8 @@ export function AdminRoleAction({ status, layout = 'inline' }: AdminRoleActionPr
   const waiting = usePendingAdminChange(status.address, mode);
   const kind = mode === 'become' ? 'addAdmin' : 'removeAdmin';
   const sent = usePendingWrite(mode ? writeKeys.propose(kind, status.address) : null);
+  // Its chip pops in when it takes the button's place, not when the page opens with it.
+  const pop = useChangedSinceMount(sent?.status);
   const group = useGroupInfo();
   const admins = useAdmins();
   const chain = useChainNow();
@@ -149,6 +152,7 @@ export function AdminRoleAction({ status, layout = 'inline' }: AdminRoleActionPr
       <DoneChip
         label={sent.status === 'sending' ? 'Sending…' : 'Proposed ✓ (confirming…)'}
         settled={false}
+        pop={pop}
       />
     </Box>
   ) : (
