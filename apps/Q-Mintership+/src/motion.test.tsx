@@ -2,13 +2,13 @@
  * The app's motion rules in index.css, read through jsdom's own cascade:
  * Settings → Motion → Reduce (and the system's reduced motion) cut every
  * animation and transition, delays included; content fades in as it
- * arrives, with nothing that moves the layout.
+ * arrives, once, with nothing that moves the layout.
  *
  * jsdom treats `prefers-reduced-motion` as never matching, so the system
  * path is checked by comparing its rules with Reduce's.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Button, Chip, IconButton, Switch, ToggleButton } from '@mui/material';
 import { CopyLinkButton } from './components/common/CopyLinkButton';
@@ -117,16 +117,34 @@ function animation(el: Element) {
   };
 }
 
-function page() {
-  const rows = Array.from({ length: 8 }, (_, i) => <li key={i}>Row {i + 1}</li>);
-  return render(
+function page(order = [1, 2, 3, 4, 5, 6, 7, 8]) {
+  const ui = (rows: number[]) => (
     <PageBody>
       <p>A block</p>
       <Section title="Open nominations" id="open">
-        <ul aria-label="Rows">{rows}</ul>
+        <ul aria-label="Rows">
+          {rows.map((n) => (
+            <li key={n}>Row {n}</li>
+          ))}
+        </ul>
       </Section>
     </PageBody>
   );
+  const view = render(ui(order));
+  return { ...view, show: (rows: number[]) => view.rerender(ui(rows)) };
+}
+
+/**
+ * What a browser sends as an element's animation ends. jsdom runs no
+ * animations and has no AnimationEvent, so React listens for the prefixed
+ * name there; both are sent, React hears one.
+ */
+function ended(el: Element, animationName = 'qmp-fade-in') {
+  for (const type of ['animationend', 'webkitAnimationEnd']) {
+    const event = new Event(type, { bubbles: true });
+    Object.defineProperty(event, 'animationName', { value: animationName });
+    fireEvent(el, event);
+  }
 }
 
 describe('content arriving', () => {
@@ -171,7 +189,7 @@ describe('content arriving', () => {
         <Section title="Open nominations" id="open">
           <ul aria-label="Rows">
             {Array.from({ length: 8 }, (_, i) => (
-              <li key={i}>Row {i + 1}, refreshed</li>
+              <li key={i + 1}>Row {i + 1}, refreshed</li>
             ))}
           </ul>
         </Section>
@@ -180,6 +198,62 @@ describe('content arriving', () => {
     // The same nodes: their animations ran once, when they were inserted.
     expect(screen.getByText('A block')).toBe(block);
     expect(screen.getAllByRole('listitem')[0]).toBe(row);
+  });
+
+  it('fades a list in once: rows that are re-sorted or move up stay still', () => {
+    const view = page();
+    const list = screen.getByRole('list', { name: 'Rows' });
+    const rows = screen.getAllByRole('listitem');
+    // Another animation ending in a row (a chip's pop) doesn't count.
+    ended(rows[0], 'qmp-pop-in');
+    expect(animation(rows[0]).name).toBe('qmp-fade-in');
+    // The list and its first six rows fade in.
+    ended(list);
+    for (const row of rows.slice(0, 6)) ended(row);
+    // Sorted the other way, and row 2 gone (a poll took it away): React moves
+    // the rows, and rows 8 and 7, never faded in, move up into the first six.
+    view.show([8, 7, 6, 5, 4, 3, 1]);
+    expect(screen.getByRole('list', { name: 'Rows' })).toBe(list);
+    expect(screen.getAllByRole('listitem')[0]).toBe(rows[7]);
+    expect(screen.getAllByRole('listitem').map((r) => animation(r).name)).toEqual(
+      Array(7).fill('none')
+    );
+    expect(animation(list).name).toBe('none');
+  });
+
+  it('still fades in what is new: data in place of a skeleton, a card that turns up', () => {
+    const cards = (keys: string[]) =>
+      keys.map((k) => (
+        <article key={k} aria-label={k}>
+          {k}
+        </article>
+      ));
+    const view = render(
+      <Section title="Collecting signatures" id="collecting">
+        <p>Loading</p>
+      </Section>
+    );
+    ended(screen.getByText('Loading'));
+    expect(animation(screen.getByText('Loading')).name).toBe('none');
+    const show = (keys: string[]) =>
+      view.rerender(
+        <Section title="Collecting signatures" id="collecting">
+          {cards(keys)}
+        </Section>
+      );
+    show(['A', 'B', 'C']);
+    const a = screen.getByRole('article', { name: 'A' });
+    expect(animation(a).name).toBe('qmp-fade-in');
+    for (const card of screen.getAllByRole('article')) ended(card);
+    // A re-sort moves cards that are in; a new one fades in.
+    show(['C', 'D', 'A', 'B']);
+    expect(screen.getByRole('article', { name: 'A' })).toBe(a);
+    expect(screen.getAllByRole('article').map((c) => animation(c).name)).toEqual([
+      'none',
+      'qmp-fade-in',
+      'none',
+      'none',
+    ]);
   });
 
   it('fades an empty state in where it appears', () => {

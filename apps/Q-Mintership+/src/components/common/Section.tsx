@@ -1,5 +1,5 @@
 /** Page building blocks: titled sections, cards, stat tiles, chips. */
-import type { ReactNode } from 'react';
+import type { AnimationEvent, ReactNode } from 'react';
 import { Box, Chip, Typography, type ChipProps } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import type { NominationState } from '../../rules/nomination';
@@ -16,9 +16,35 @@ export const SectionTitle = styled(Typography)(({ theme }) => ({
 }));
 
 /**
+ * Marks what has faded in, so it stays still from then on (index.css →
+ * .qmp-reveal-fade). Without it, a row or card React moves (a re-sort, a
+ * search, a row above it leaving) would fade in again: React moves an
+ * element by taking it out and putting it back, and a row that moves up
+ * into a list's first six starts to match their rule. Only what React adds
+ * is unmarked, so new content, like data in place of a skeleton, still
+ * fades in. React leaves these attributes alone: it never set them.
+ */
+function markShown(event: AnimationEvent<HTMLElement>) {
+  if (event.animationName !== 'qmp-fade-in') return;
+  const section = event.currentTarget;
+  const el = event.target as HTMLElement;
+  const list = el.parentElement;
+  if (list === section) {
+    el.dataset.qmpShown = '';
+  } else if (el.tagName === 'LI' && list?.tagName === 'UL' && list.parentElement === section) {
+    el.dataset.qmpShown = '';
+    // Once its first rows are in, the list has arrived: none of its rows fade in again.
+    if (!list.querySelector(':scope > li:nth-child(-n + 6):not([data-qmp-shown])')) {
+      list.dataset.qmpRowsShown = '';
+    }
+  }
+}
+
+/**
  * A titled section: small uppercase title, optional action on the right.
- * What arrives in it fades in (its data in place of a skeleton, a list's
- * first rows one after another; index.css → .qmp-reveal-fade).
+ * What arrives in it fades in once (its data in place of a skeleton, a
+ * list's first rows one after another; index.css → .qmp-reveal-fade), and
+ * stays still when it is re-sorted or filtered (markShown).
  */
 export function Section({
   title,
@@ -37,6 +63,7 @@ export function Section({
       component="section"
       aria-labelledby={headingId}
       className="qmp-reveal-fade"
+      onAnimationEnd={markShown}
       sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 32 }}>

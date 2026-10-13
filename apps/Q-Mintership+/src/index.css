@@ -188,9 +188,14 @@ html[data-motion='reduce'] {
 
 /* A section's content and the page header's: a fade only, so nothing rises
    twice. A list's first six rows follow one another; the rest come with
-   the list, so a long list costs no more than a short one. */
-:where(.qmp-reveal-fade) > *,
-:where(.qmp-reveal-fade > ul > li:nth-child(-n + 6)) {
+   the list, so a long list costs no more than a short one. Each fades in
+   once: Section marks what has faded in (data-qmp-shown, and
+   data-qmp-rows-shown on a list once its first rows are in), so a row or
+   card that is re-sorted, filtered or moved up stays still. */
+:where(.qmp-reveal-fade > :not([data-qmp-shown])),
+:where(
+    .qmp-reveal-fade > ul:not([data-qmp-rows-shown]) > li:nth-child(-n + 6):not([data-qmp-shown])
+  ) {
   animation-name: qmp-fade-in;
   animation-duration: 200ms;
   animation-timing-function: ease-out;
