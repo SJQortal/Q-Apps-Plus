@@ -91,7 +91,7 @@ import { useSeenTargetChange } from './seenTarget';
 import { TargetChangedBanner } from './TargetChangedBanner';
 import { TargetImpact } from './TargetImpact';
 import { TargetShiftSection } from './TargetShiftSection';
-import type { LabelOf } from './targetShiftUi';
+import { targetChangedTitle, type LabelOf } from './targetShiftUi';
 import { useAcknowledge } from './useAcknowledge';
 
 const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
@@ -353,6 +353,11 @@ function DecisionsQueue() {
         }
       />
       <PageBody>
+        {/* Says a new target once, when it is found. The banner itself is a note, so
+            its countdowns and the names filling in aren't read out on every refresh. */}
+        <span role="status" className="qmp-visually-hidden">
+          {targetChange ? targetChangedTitle(targetChange.from.needed, targetChange.to.needed) : ''}
+        </span>
         {decisionsQ.isLoading && !data ? (
           <ListSkeleton count={4} ring label="Loading decisions" />
         ) : decisionsQ.isError && !data ? (

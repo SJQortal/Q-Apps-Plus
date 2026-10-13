@@ -106,7 +106,9 @@ export function TargetChangedBanner({
   return (
     <Alert
       severity={flipped ? 'warning' : 'info'}
-      role="status"
+      // Not a live region: some lines change with every refresh. DecisionsPage
+      // says the new target once, in a region of its own.
+      role="note"
       sx={{ '& .MuiAlert-message': { minWidth: 0, width: '100%' }, overflowWrap: 'anywhere' }}
     >
       <Typography sx={{ fontWeight: 700 }}>{targetChangedTitle(from.needed, to.needed)}</Typography>

@@ -35,11 +35,23 @@ async function openShifted(options: { seen?: 'before' | 'unknown height' | null 
   return rendered;
 }
 
+/** The banner (a note) by its title; the page's status region says the same title once. */
+async function findBanner(title: string, options: { timeout?: number } = {}) {
+  const matches = await screen.findAllByText(title, {}, options);
+  return matches.map((el) => el.closest('[role="note"]')).find(Boolean) as HTMLElement;
+}
+
+/** The page's status region that says the new target. */
+const said = (title: string) =>
+  screen.getAllByRole('status').filter((el) => el.textContent === title);
+
 describe('Decisions: the target changed since the last visit', () => {
   it('says from what to what, who was removed, and what now has enough signatures', async () => {
     await openShifted({ seen: 'before' });
-    const banner = await screen.findByText('The target changed from 10 to 9 signatures');
-    const alert = banner.closest('[role="status"]') as HTMLElement;
+    const alert = await findBanner('The target changed from 10 to 9 signatures');
+    // Said once, in the page's own status region; the banner is a note, not live.
+    expect(said('The target changed from 10 to 9 signatures')).toHaveLength(1);
+    expect(alert.closest('[role="status"], [aria-live]')).toBeNull();
     expect(
       await within(alert).findByText(/because 2 Minter Admins were removed/, {}, T)
     ).toBeVisible();
@@ -67,7 +79,7 @@ describe('Decisions: the target changed since the last visit', () => {
   it('goes away with Got it', async () => {
     const u = user();
     await openShifted({ seen: 'before' });
-    await screen.findByText('The target changed from 10 to 9 signatures');
+    await findBanner('The target changed from 10 to 9 signatures');
     await u.click(screen.getByRole('button', { name: 'Got it' }));
     expect(screen.queryByText('The target changed from 10 to 9 signatures')).toBeNull();
   });
@@ -82,11 +94,13 @@ describe('Decisions: the target changed since the last visit', () => {
     const u = user();
     const { world } = await openShifted();
     expect(screen.queryByText(/^The target changed/)).toBeNull();
+    // The status region is there, empty, before anything changes.
+    expect(screen.getAllByRole('status').some((el) => el.textContent === '')).toBe(true);
     // Admin Q's row goes: 20 admin seats, 8 needed. Mia Met's invite has 8.
     world.admins.splice(world.admins.length - 2, 1);
     await u.click(screen.getByRole('button', { name: 'Refresh' }));
-    const banner = await screen.findByText('The target changed from 9 to 8 signatures', {}, T);
-    const alert = banner.closest('[role="status"]') as HTMLElement;
+    const alert = await findBanner('The target changed from 9 to 8 signatures', T);
+    expect(said('The target changed from 9 to 8 signatures')).toHaveLength(1);
     expect(
       within(alert).getByRole('link', { name: 'Add to MINTER: Mia Met, 8 of 8' })
     ).toBeVisible();
@@ -95,8 +109,8 @@ describe('Decisions: the target changed since the last visit', () => {
 
   it('keeps to the count when the change is too long ago to read', async () => {
     await openShifted({ seen: 'unknown height' });
-    const banner = await screen.findByText('The target changed from 10 to 9 signatures');
-    expect(banner.closest('[role="status"]')).toHaveTextContent(
+    const banner = await findBanner('The target changed from 10 to 9 signatures');
+    expect(banner).toHaveTextContent(
       'It changed because MINTER has 2 fewer admin seats (21; it had 23).'
     );
   });
