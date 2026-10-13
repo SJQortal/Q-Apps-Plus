@@ -23,6 +23,19 @@ export function ConsideringDialog({
   onClose: () => void;
 }) {
   const [note, setNote] = useState('');
+  // A note belongs to one decision or nomination: start empty when the target
+  // changes (adjust-while-rendering, like HubStepDialog's reset on open). The
+  // same target again, after "Not now" or a cancel in Hub, keeps the draft.
+  const targetKey = request
+    ? 'pendingSignature' in request.target
+      ? request.target.pendingSignature
+      : request.target.nomineeAddress
+    : null;
+  const [noteFor, setNoteFor] = useState<string | null>(targetKey);
+  if (targetKey !== null && targetKey !== noteFor) {
+    setNoteFor(targetKey);
+    setNote('');
+  }
   const trimmed = note.trim();
   const clear = request?.mode === 'clear';
   return (
