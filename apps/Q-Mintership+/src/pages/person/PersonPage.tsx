@@ -237,6 +237,7 @@ function PersonView({ address }: { address: string }) {
                 hideNominee
                 compact={!open}
                 comments
+                forNominee={self}
                 actions={open ? nomineeAction : null}
               />
             </Section>

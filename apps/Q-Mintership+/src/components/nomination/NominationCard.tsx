@@ -44,6 +44,8 @@ export interface NominationCardProps {
   copyLink?: boolean;
   /** Its public comments behind a "Comments (n)" toggle; 'open' starts open. */
   comments?: boolean | 'open';
+  /** The nominee's own view (their Home, their own page): rejections said gently. */
+  forNominee?: boolean;
 }
 
 const ENDED_TEXT: Partial<Record<NominationState, string>> = {
@@ -62,6 +64,7 @@ export function NominationCard({
   endedAt,
   copyLink = true,
   comments,
+  forNominee,
 }: NominationCardProps) {
   const tally = n.decision?.tally ?? null;
   const window = n.decision?.window ?? null;
@@ -233,12 +236,16 @@ export function NominationCard({
         ) : null}
         {n.state === 'signing' && n.decision?.phase === 'rejectedMet' ? (
           <Typography variant="body2" color="text.secondary">
-            Enough Minter Admins have rejected it: it ends as rejected{' '}
+            {forNominee
+              ? 'Enough Minter Admins have said no: it closes'
+              : 'Enough Minter Admins have rejected it: it ends as rejected'}{' '}
             {whenApplied(n.decision, now)}.
           </Typography>
         ) : n.state === 'signing' && tally?.rejectionCount ? (
           <Typography variant="body2" color="text.secondary">
-            {plural(tally.rejectionCount, 'rejection')} of the {tally.needed} that would end it.
+            {forNominee
+              ? `${plural(tally.rejectionCount, 'Minter Admin')} ${tally.rejectionCount === 1 ? 'has' : 'have'} said no so far, of the ${tally.needed} it takes to end it.`
+              : `${plural(tally.rejectionCount, 'rejection')} of the ${tally.needed} that would end it.`}
           </Typography>
         ) : null}
         <ConsideringCount count={considering.people.length} />

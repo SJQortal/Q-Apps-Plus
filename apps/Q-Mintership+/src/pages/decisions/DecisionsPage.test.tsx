@@ -521,24 +521,26 @@ describe('Decisions: stale invites', () => {
 });
 
 describe('Decisions: proposing your own step-down', () => {
-  it('words removing yourself as stepping down', async () => {
+  it('points to Step down on your own page instead of proposing it here', async () => {
     const u = user();
     const { address } = await openPage('admin');
     await u.click(screen.getByRole('button', { name: 'Propose' }));
     await u.click(await screen.findByRole('menuitem', { name: /Remove a Minter Admin/ }));
     const form = await screen.findByRole('dialog', { name: 'Remove a Minter Admin' });
-    expect(within(form).getByText(/Pick yourself to step down\./)).toBeVisible();
     await u.selectOptions(within(form).getByRole('combobox', { name: 'Minter Admin' }), address);
-    expect(await within(form).findByText('Nothing stops this proposal.')).toBeVisible();
-    expect(within(form).getByText(/That’s you: this proposes that you step down/)).toBeVisible();
-    await u.click(within(form).getByRole('button', { name: 'Review' }));
-    const hub = await screen.findByRole('dialog', { name: 'Step down as Minter Admin' });
     expect(
-      within(hub).getByText(
-        /This proposes that you step down: you give up your Minter Admin role\./
+      within(form).getByText(
+        'That’s you. To step down, use Step down as Minter Admin on your own page.'
       )
     ).toBeVisible();
-    expect(within(hub).getByText('Step 2 of 2: Sign it')).toBeVisible();
+    expect(within(form).getByRole('link', { name: 'Open your page' })).toHaveAttribute(
+      'href',
+      `/people/${address}`
+    );
+    // Nothing to review or send from here.
+    expect(within(form).queryByText('Nothing stops this proposal.')).toBeNull();
+    expect(within(form).getByRole('button', { name: 'Review' })).toBeDisabled();
+    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')).toHaveLength(0);
   });
 });
 

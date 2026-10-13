@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { fakeAddress, type World } from '../../../e2e/world.mjs';
-import { shortAddress } from '../../utils/format';
+import { formatDate, shortAddress } from '../../utils/format';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
 import { fetchCallsFor, mockFetchRoute } from '../../test/setup';
-import { ADDR } from '../../test/world';
+import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../test/world';
 import NominationsPage from './NominationsPage';
 
 afterEach(() => vi.useRealTimers());
@@ -134,10 +134,14 @@ describe('Ready to mint', () => {
     expect(screen.queryByRole('button', { name: /^Show \d+ more$/ })).toBeNull();
   });
 
-  it('marks former members, kicked or left, and nobody who was never a member', async () => {
+  it('marks former members, kicked, banned or left, and nobody who was never a member', async () => {
+    let banEnded = 0;
     await open('nominator', (world) => {
       world.joinRequests.push(joinRequest(ADDR.left), joinRequest(ADDR.kicked));
-      // Bram's ban ended: a former member again, removed by the ban.
+      // Bram's 3-day ban ended: a former member again, and the row says it was a ban.
+      const ban = world.decided.find((tx: { type: string }) => tx.type === 'GROUP_BAN');
+      ban.timeToLive = 3 * 86_400;
+      banEnded = ban.timestamp + 3 * 86_400_000;
       world.bans = world.bans.filter((b: { offender: string }) => b.offender !== ADDR.banned);
       world.joinRequests.push(joinRequest(ADDR.banned));
     });
@@ -153,12 +157,44 @@ describe('Ready to mint', () => {
         'Former member: removed from MINTER on 26 Aug 2026'
       )
     ).toBeInTheDocument();
+    // A kick stays "removed from MINTER"; a ban that ended says so, with its end.
     expect(
-      await within(await row('Bram Banned')).findByText(/^Former member: removed from MINTER on /)
+      await within(await row('Bram Banned')).findByText(
+        `Former member: banned, ban ended on ${formatDate(banEnded)}`
+      )
     ).toBeInTheDocument();
     const list = await readyList();
     // The others never were members.
     await waitFor(() => expect(within(list).getAllByText(/^Former member: /)).toHaveLength(3));
+  });
+
+  it('says when a former member’s ban was lifted', async () => {
+    let liftedAt = 0;
+    await open('nominator', (world) => {
+      const ban = world.decided.find((tx: { type: string }) => tx.type === 'GROUP_BAN');
+      world.bans = world.bans.filter((b: { offender: string }) => b.offender !== ADDR.banned);
+      const lift = {
+        ...ban,
+        type: 'CANCEL_GROUP_BAN',
+        signature: `${ban.signature.slice(0, -4)}Lift`,
+        member: ban.offender,
+        offender: undefined,
+        timeToLive: undefined,
+        blockHeight: ban.approvalHeight + 1000,
+        approvalHeight: ban.approvalHeight + 1500,
+      };
+      world.decided.push(lift);
+      // When block approvalHeight was, as the app dates it from the tip.
+      liftedAt = NOW - (TIP - lift.approvalHeight) * MS_PER_BLOCK;
+      world.joinRequests.push(joinRequest(ADDR.banned));
+    });
+    expect(
+      await within(await row('Bram Banned')).findByText(
+        `Former member: ban lifted on ${formatDate(liftedAt)}`,
+        {},
+        { timeout: 4000 }
+      )
+    ).toBeInTheDocument();
   });
 
   it('reads a row again on Refresh when its level could not be read', async () => {

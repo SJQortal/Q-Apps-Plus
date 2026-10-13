@@ -1,10 +1,12 @@
 /**
  * Minter Admins: how many decisions wait for their signature, how long the
  * most urgent one has left, how many signatures decide each one right now
- * (and why that number moved, when it did), and Review decisions.
+ * (and that it moved since Decisions last showed it, with a link there),
+ * and Review decisions.
  */
+import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Button } from '@mui/material';
+import { Button, Link } from '@mui/material';
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import { heightToTime, type ChainNow } from '../../../data/chain';
 import { ErrorState, HeroSkeleton } from '../../../components/common/states';
@@ -14,6 +16,8 @@ import { decisionPath } from '../../../routes/paths';
 import { decisionTitle, type Decision } from '../../../rules/decision';
 import type { MyStatus } from '../../../rules/status';
 import { formatDuration, plural } from '../../../utils/format';
+import { readable } from '../../../utils/readable';
+import { readSeenTarget } from '../../decisions/seenTarget';
 import { Hero, HeroText, Num } from '../Hero';
 import {
   adminSummary,
@@ -55,14 +59,38 @@ export function NeededLine({ needed }: { needed: NeededSignatures }) {
         </>
       ) : null}
       .
-      {needed.changedFrom !== null ? (
-        <>
-          {' '}
-          That&rsquo;s {needed.needed > needed.changedFrom ? 'up' : 'down'} from{' '}
-          <Num>{needed.changedFrom}</Num> on your last visit, because the number of Minter Admins
-          changed.
-        </>
-      ) : null}
+    </HeroText>
+  );
+}
+
+/**
+ * "The target changed from 9 to 8 signatures since you last looked at
+ * Decisions": the target this device last saw on Decisions against today's.
+ * Only Decisions keeps that target (and says why it moved); Home only reads
+ * it, so the line stays until Decisions is opened again. Nothing before
+ * Decisions has been opened on this device.
+ */
+export function TargetChangedLine({ needed }: { needed: number | null }) {
+  const [seen] = useState(() => readSeenTarget());
+  if (!seen || needed === null || seen.needed === needed) return null;
+  return (
+    <HeroText>
+      The target changed from <Num>{seen.needed}</Num> to <Num>{needed}</Num>{' '}
+      {needed === 1 ? 'signature' : 'signatures'} since you last looked at Decisions.{' '}
+      <Link
+        component={RouterLink}
+        to={decisionPath()}
+        underline="always"
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          minHeight: 44,
+          fontWeight: 600,
+          color: readable('primary'),
+        }}
+      >
+        See what changed
+      </Link>
     </HeroText>
   );
 }
@@ -132,6 +160,7 @@ export function AdminHero({
         </HeroText>
       ) : null}
       <NeededLine needed={needed} />
+      <TargetChangedLine needed={needed.needed} />
     </Hero>
   );
 }

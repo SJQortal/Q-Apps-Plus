@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
-import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../test/setup';
-import { fakeAddress } from '../../../e2e/world.mjs';
+import { fetchCallsFor, mockFetchRoute, qortalCalls, qortalCallsFor } from '../../test/setup';
+import { addTargetShift, fakeAddress } from '../../../e2e/world.mjs';
 import { ADDR, NOW, PEOPLE } from '../../test/world';
 import { CoreHttpError } from '../../qortal/client';
+import { formatDate } from '../../utils/format';
 import PersonPage from './PersonPage';
 import { isInvalidAddress } from './personWords';
 
@@ -147,6 +148,56 @@ describe('Person page', () => {
     ).toBeInTheDocument();
   });
 
+  it('says how a former member’s ban ended, or that it was lifted, not that they were removed', async () => {
+    let ended = 0;
+    const timed = await renderPage(<PersonPage />, {
+      persona: 'nominator',
+      path: `/people/${ADDR.banned}`,
+      route: ROUTE,
+      setup: (world) => {
+        const ban = world.decided.find((tx: { type: string }) => tx.type === 'GROUP_BAN');
+        ban.timeToLive = 3 * 86_400;
+        ended = ban.timestamp + 3 * 86_400_000;
+        world.bans = world.bans.filter((b: { offender: string }) => b.offender !== ADDR.banned);
+      },
+    });
+    expect(
+      await screen.findByText(
+        new RegExp(
+          `^Was banned from MINTER on .+; the ban ended on ${formatDate(ended)}, so they can be nominated again\\.$`
+        )
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText('Former member')).toBeInTheDocument();
+    timed.unmount();
+
+    await renderPage(<PersonPage />, {
+      persona: 'nominator',
+      path: `/people/${ADDR.banned}`,
+      route: ROUTE,
+      setup: (world) => {
+        const ban = world.decided.find((tx: { type: string }) => tx.type === 'GROUP_BAN');
+        world.bans = world.bans.filter((b: { offender: string }) => b.offender !== ADDR.banned);
+        world.decided.push({
+          ...ban,
+          type: 'CANCEL_GROUP_BAN',
+          signature: `${ban.signature.slice(0, -4)}Lift`,
+          member: ban.offender,
+          offender: undefined,
+          timeToLive: undefined,
+          blockHeight: ban.approvalHeight + 1000,
+          approvalHeight: ban.approvalHeight + 1500,
+        });
+      },
+    });
+    expect(
+      await screen.findByText(
+        /^Was banned from MINTER on .+; Minter Admins lifted the ban on .+, so they can be nominated again\.$/
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Removed from MINTER on/)).toBeNull();
+  });
+
   it('lets an eligible viewer support an open nomination', async () => {
     await visit(ADDR.nominatedWaiting, 'admin');
     expect(await screen.findByText('Nominated')).toBeInTheDocument();
@@ -268,11 +319,105 @@ describe('Person page: one’s own admin role', () => {
     expect(screen.queryByRole('button', { name: 'Become a Minter Admin' })).toBeNull();
   });
 
-  it('offers Step down as Minter Admin on an admin’s own page', async () => {
-    await visit(ADDR.admin, 'admin');
+  it('suggests level 5+ beside Become below it, and nothing from it', async () => {
+    const own = await visit(ADDR.learner, 'learner');
+    const become = await screen.findByRole(
+      'button',
+      { name: 'Become a Minter Admin' },
+      { timeout: 3000 }
+    );
+    expect(
+      screen.getByText(
+        'Level 5+ is suggested for Minter Admins, and you’re level 2. You can still propose yourself.'
+      )
+    ).toBeVisible();
+    // A note, not a block.
+    await waitFor(() => expect(become).toBeEnabled());
+    own.unmount();
+    await visit(ADDR.nominator, 'nominator');
+    const again = await screen.findByRole(
+      'button',
+      { name: 'Become a Minter Admin' },
+      { timeout: 3000 }
+    );
+    await waitFor(() => expect(again).toBeEnabled());
+    expect(screen.queryByText(/is suggested for Minter Admins/)).toBeNull();
+  });
+
+  it('offers Step down as Minter Admin on an admin’s own page, and nobody else’s', async () => {
+    const own = await visit(ADDR.admin, 'admin');
     expect(
       await screen.findByRole('button', { name: 'Step down as Minter Admin' }, { timeout: 3000 })
     ).toBeInTheDocument();
+    own.unmount();
+    await visit(ADDR.adminL4, 'admin');
+    await screen.findByRole('heading', { level: 2, name: PEOPLE.adminL4.name as string });
+    expect(screen.queryByRole('button', { name: 'Step down as Minter Admin' })).toBeNull();
+  });
+
+  it('steps down: their proposal and their signature, worded as a resignation', async () => {
+    await visit(ADDR.adminL4, 'adminL4');
+    const button = await screen.findByRole(
+      'button',
+      { name: 'Step down as Minter Admin' },
+      { timeout: 3000 }
+    );
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: 'Step down as Minter Admin' },
+      { timeout: 3000 }
+    );
+    expect(
+      within(dialog).getByText(
+        /This proposes that you step down: you give up your Minter Admin role\./
+      )
+    ).toBeVisible();
+    expect(within(dialog).getByText(/You stay a MINTER member/)).toBeVisible();
+    expect(within(dialog).getByText('Step 2 of 2: Sign it')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
+    // Declined in Hub: nothing is signed.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(dialog).findByText(/cancelled/i, {}, { timeout: 3000 })).toBeVisible();
+    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')).toHaveLength(1);
+    expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
+  });
+
+  it('a step-down that would tip a waiting decision over needs “I’ve checked these” before Hub', async () => {
+    // 21 admin rows, 9 needed: stepping down leaves 20, and 8 are enough for Mia Met's invite.
+    await renderPage(<PersonPage />, {
+      persona: 'adminL4',
+      path: `/people/${ADDR.adminL4}`,
+      route: ROUTE,
+      setup: (world) => addTargetShift(world),
+    });
+    const button = await screen.findByRole(
+      'button',
+      { name: 'Step down as Minter Admin' },
+      { timeout: 3000 }
+    );
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: 'Step down as Minter Admin' },
+      { timeout: 3000 }
+    );
+    const note = within(dialog).getByRole('note');
+    expect(note).toHaveTextContent(
+      /^If this passes, MINTER has 20 admin seats and the target drops from 9 to 8 signatures\./
+    );
+    expect(within(note).getByText('Add to MINTER: Mia Met (8 of 9)')).toBeVisible();
+    // Not without the tick: Hub isn't asked, and the box takes focus.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')).toHaveLength(0);
+    const box = within(dialog).getByRole('checkbox', { name: 'I’ve checked these' });
+    expect(box).toHaveFocus();
+    await userEvent.click(box);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(dialog).findByText(/cancelled/i, {}, { timeout: 3000 })).toBeVisible();
+    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')).toHaveLength(1);
   });
 
   it('says when a step-down someone else proposed is waiting, instead of the button', async () => {

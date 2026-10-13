@@ -1,0 +1,96 @@
+import { describe, expect, it } from 'vitest';
+import { fakeAddress } from '../../e2e/world.mjs';
+import type { TxRow } from '../data/types';
+import { banEnd, formerMember, latestRemoval } from './status';
+
+const NOW = 1_791_830_000_000;
+const DAY = 86_400_000;
+const me = fakeAddress('status-ban-end');
+const tip = { height: 2_000_000, timestamp: NOW };
+const msPerBlock = 60_000;
+/** When block `height` was, at one block a minute. */
+const at = (height: number) => NOW - (tip.height - height) * msPerBlock;
+const tx = (type: string, height: number, extra: Partial<TxRow> = {}): TxRow => ({
+  type,
+  timestamp: at(height) - 10_000,
+  signature: `${type}-${height}`,
+  txGroupId: 694,
+  groupId: 694,
+  blockHeight: height,
+  approvalStatus: 'APPROVED',
+  ...extra,
+});
+
+const invite = tx('GROUP_INVITE', 1_000_000, { invitee: me });
+const kick = tx('GROUP_KICK', 1_900_000, { member: me, approvalHeight: 1_900_100 });
+/** Banned for `days` (0: permanent), proposed at block 1,900,000, approved 1,440 blocks (a day) later. */
+const ban = (days: number) =>
+  tx('GROUP_BAN', 1_900_000, {
+    offender: me,
+    approvalHeight: 1_901_440,
+    timeToLive: days * 86_400,
+  });
+const lift = tx('CANCEL_GROUP_BAN', 1_950_000, { member: me, approvalHeight: 1_950_200 });
+
+const removal = (history: TxRow[]) => latestRemoval(me, history, tip, msPerBlock);
+const former = (history: TxRow[]) => formerMember(me, history, tip, msPerBlock);
+
+describe('how a ban ended', () => {
+  it('a kick has no ban end, and stays a removal', () => {
+    const r = removal([invite, kick]);
+    expect(r?.kind).toBe('kick');
+    expect(banEnd(r!)).toBeNull();
+    expect(former([invite, kick])).toEqual({ kind: 'removed', at: at(1_900_100) });
+  });
+
+  it('a timed ban past its end ended then, counted from when it was proposed', () => {
+    const tenDays = ban(10);
+    const end = tenDays.timestamp + 10 * DAY;
+    expect(end).toBeLessThan(NOW);
+    expect(removal([invite, tenDays])).toMatchObject({
+      kind: 'ban',
+      banSeconds: 864_000,
+      endedAt: end,
+    });
+    expect(banEnd(removal([invite, tenDays])!)).toEqual({ how: 'ended', at: end });
+    expect(former([invite, tenDays])).toEqual({
+      kind: 'banned',
+      at: at(1_901_440),
+      ban: { how: 'ended', at: end },
+    });
+  });
+
+  it('never ends before it took effect', () => {
+    // A 12-hour ban approved a day after it was proposed: over as it took effect.
+    const short = { ...ban(0), timeToLive: 43_200 };
+    expect(removal([invite, short])?.endedAt).toBe(at(1_901_440));
+  });
+
+  it('a timed ban still running has no end yet', () => {
+    // Proposed about a week ago (10,000 blocks at a minute), for 24 days.
+    const recent = tx('GROUP_BAN', 1_990_000, {
+      offender: me,
+      approvalHeight: 1_990_100,
+      timeToLive: 24 * 86_400,
+    });
+    expect(removal([invite, recent])?.endedAt).toBeUndefined();
+  });
+
+  it('a lifted ban was lifted, whatever its length', () => {
+    for (const days of [0, 10]) {
+      expect(banEnd(removal([invite, ban(days), lift])!)).toEqual({
+        how: 'lifted',
+        at: at(1_950_200),
+      });
+    }
+    expect(former([invite, ban(0), lift])).toEqual({
+      kind: 'banned',
+      at: at(1_901_440),
+      ban: { how: 'lifted', at: at(1_950_200) },
+    });
+  });
+
+  it('a permanent ban with no lift on record has ended without a date', () => {
+    expect(banEnd(removal([invite, ban(0)])!)).toEqual({ how: 'ended', at: null });
+  });
+});

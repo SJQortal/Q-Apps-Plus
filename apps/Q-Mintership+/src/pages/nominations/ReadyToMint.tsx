@@ -4,7 +4,8 @@
  * and Minter Admins get Propose nomination on each row, or Add your support where an
  * open nomination already exists. Twenty rows at a time, in Core's order;
  * each row's level, blocks minted, name and whether they were a member
- * before ("Former member: left MINTER on …") are read only once it is shown.
+ * before ("Former member: left MINTER on …", "… ban lifted on …") are read
+ * only once it is shown.
  * The page's search box filters it: a typed address directly, a typed name
  * through its owners (one small name search, cached), never by reading
  * every row's name.
@@ -31,7 +32,8 @@ import type { UseQueryResult } from '../../hooks/useQuery';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { nominatePath } from '../../routes/paths';
 import type { FormerMember } from '../../rules/status';
-import { displayName, formatCount, formatDate } from '../../utils/format';
+import { formerMemberLine } from '../person/personWords';
+import { displayName, formatCount } from '../../utils/format';
 import { readable } from '../../utils/readable';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
 import { isStillOpenForSupport, myPart } from './filters';
@@ -241,13 +243,6 @@ function blocksMintedText(blocks: number): string {
   return `${formatCount(blocks)} ${blocks === 1 ? 'block' : 'blocks'} minted`;
 }
 
-/** "Former member: removed from MINTER on 26 Aug 2026", as the person page says it. */
-function formerText(former: FormerMember): string {
-  return former.kind === 'left'
-    ? `Former member: left MINTER on ${formatDate(former.at)}`
-    : `Former member: removed from MINTER on ${formatDate(former.at)}`;
-}
-
 /** One person: avatar, name or short address (to their page), level and blocks minted, the action. */
 function ReadyRow({
   address,
@@ -286,7 +281,7 @@ function ReadyRow({
     <>
       {level}
       <Box component="span" sx={{ display: 'block' }}>
-        {formerText(former)}
+        {formerMemberLine(former)}
       </Box>
     </>
   ) : (

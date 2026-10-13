@@ -3,6 +3,7 @@
  *
  * - "Become a Minter Admin": a MINTER member proposes themselves. Only
  *   Minter Admins sign, so it is one Hub step; then the Minter Admins decide.
+ *   Below level 5 a note says level 5+ is suggested; it doesn't stop them.
  * - "Step down as Minter Admin": an admin proposes their own removal, and
  *   signs it straight after like any admin proposal. It still needs the
  *   other Minter Admins' signatures. Like any admin removal it moves the
@@ -18,17 +19,20 @@
  */
 import { useState } from 'react';
 import { TextField, Typography } from '@mui/material';
+import { getPrimaryName } from '../../data/accounts';
 import { decisionCommentKey } from '../../data/commentRecords';
 import type { DecisionsData } from '../../data/decisions';
 import { peekQuery } from '../../data/query';
+import { useQuery } from '../../hooks/useQuery';
 import { postComment } from '../../writes/comments';
 import {
   ADMIN_CHANGE_TITLE,
   OWN_ADMIN_ROLE_LEAD,
+  becomeLevelNote,
   type OwnAdminRole,
 } from '../../rules/adminChange';
 import { decisionTitle } from '../../rules/decision';
-import { projectShift } from '../../rules/targetShift';
+import { projectShift, type ShiftScenario } from '../../rules/targetShift';
 import { displayName, shortAddress } from '../../utils/format';
 import type { Signer } from '../../writes/runner';
 import { ProposeSignDialog, type ProposalFacts } from './ProposeSignDialog';
@@ -38,12 +42,37 @@ import { useShift } from './useShift';
 /** A statement is a comment, and comments stay short. */
 const STATEMENT_MAX = 500;
 
+/**
+ * The names of the people a step-down's impact lists, so each line names
+ * them. Decisions has most of them read already; the admin's own page
+ * hasn't: one cached name read each, only while there is an impact.
+ */
+function useListedNames(
+  impact: ShiftScenario | null,
+  queue: DecisionsData | null | undefined
+): Map<string, string | null> | undefined {
+  const admins = new Set(queue?.admins.admins.map((a) => a.member));
+  const listed = impact ? [...impact.effects.map((e) => e.signature), ...impact.followOn] : [];
+  const subjects = [
+    ...new Set(listed.map((sig) => queue?.decisions.find((d) => d.signature === sig)?.subject)),
+  ]
+    .filter((a): a is string => Boolean(a) && !admins.has(a as string))
+    .sort();
+  const names = useQuery(subjects.length ? `impactnames:${subjects.join(',')}` : null, async () => {
+    const found = await Promise.all(subjects.map((a) => getPrimaryName(a).catch(() => null)));
+    return new Map(subjects.map((a, i) => [a, found[i]]));
+  });
+  return names.data;
+}
+
 export interface AdminRoleDialogProps {
   open: boolean;
   mode: OwnAdminRole;
   signer: Signer | null;
   /** Their own registered name, if any. */
   name: string | null;
+  /** Their level: below 5, becoming one says level 5+ is suggested. */
+  level?: number;
   facts: ProposalFacts;
   /**
    * The waiting decisions, for a step-down: what it would do to the target
@@ -59,6 +88,7 @@ export function AdminRoleDialog({
   mode,
   signer,
   name,
+  level,
   facts,
   queue,
   onClose,
@@ -66,19 +96,26 @@ export function AdminRoleDialog({
 }: AdminRoleDialogProps) {
   const [statement, setStatement] = useState('');
   const shift = useShift(mode === 'stepDown' ? queue : null);
+  const impact =
+    shift && signer
+      ? projectShift(shift.state, shift.list, [{ kind: 'removeAdmin', subject: signer.address }])
+      : null;
+  const names = useListedNames(impact, queue);
   if (!signer) return null;
-  const impact = shift
-    ? projectShift(shift.state, shift.list, [{ kind: 'removeAdmin', subject: signer.address }])
-    : null;
   const labelOf: LabelOf = (signature) => {
     const d = queue?.decisions.find((x) => x.signature === signature);
     if (!d) return 'A waiting decision';
     if (!d.subject) return `${decisionTitle(d)} (Core doesn’t say for whom)`;
     const admin = queue?.admins.admins.find((a) => a.member === d.subject);
-    const known = admin?.primaryName ?? peekQuery<string | null>(`name:${d.subject}`) ?? null;
+    const known =
+      admin?.primaryName ??
+      names?.get(d.subject) ??
+      peekQuery<string | null>(`name:${d.subject}`) ??
+      null;
     return `${decisionTitle(d)}: ${displayName(known, d.subject)}`;
   };
   const become = mode === 'become';
+  const levelNote = become && level !== undefined ? becomeLevelNote(level) : null;
   const text = statement.trim();
   const followUp =
     become && name && text
@@ -122,6 +159,11 @@ export function AdminRoleDialog({
               Minter Admins sign MINTER’s decisions: new minters, removals and bans, and changes to
               the Minter Admins. It works best when you can look at Decisions every few days.
             </Typography>
+            {levelNote ? (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {levelNote}
+              </Typography>
+            ) : null}
             {name ? (
               <TextField
                 label="A short statement (optional)"

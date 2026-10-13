@@ -4,7 +4,8 @@
  *
  * - Adding a Minter Admin: any MINTER member may propose themselves
  *   ("Become a Minter Admin"); a Minter Admin may also propose another
- *   MINTER member.
+ *   MINTER member. Becoming one is suggested from level 5: below it, it is
+ *   still possible, and a note says level 5+ is suggested.
  * - Removing a Minter Admin: only Minter Admins may propose removing another
  *   admin; any admin may step down (their own removal, which still needs
  *   the other admins' signatures). MINTER's owner account, never.
@@ -48,6 +49,15 @@ export const ADMIN_CHANGE_TITLE: Record<AdminChangeMode, string> = {
   stepDown: 'Step down as Minter Admin',
   remove: 'Remove a Minter Admin',
 };
+
+/** Becoming a Minter Admin is suggested from this level. Below it, it is still possible. */
+export const BECOME_SUGGESTED_LEVEL = 5;
+
+/** The note beside Become a Minter Admin for a member below the suggested level; null from it. */
+export function becomeLevelNote(level: number): string | null {
+  if (level >= BECOME_SUGGESTED_LEVEL) return null;
+  return `Level ${BECOME_SUGGESTED_LEVEL}+ is suggested for Minter Admins, and you’re level ${level}. You can still propose yourself.`;
+}
 
 /** What a proposal about one's own role does, in one sentence, before Hub opens. */
 export const OWN_ADMIN_ROLE_LEAD: Record<OwnAdminRole, string> = {

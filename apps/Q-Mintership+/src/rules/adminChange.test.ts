@@ -5,6 +5,7 @@ import {
   adminChangeBlock,
   adminChangeBlockText,
   adminChangeMode,
+  becomeLevelNote,
   chainsOwnSignature,
   ownAdminRole,
   type AdminChangeBlock,
@@ -146,6 +147,17 @@ describe('ownAdminRole', () => {
     expect(ownAdminRole({ isMember: true, isAdmin: true })).toBe('stepDown');
     expect(ownAdminRole({ isMember: false, isAdmin: false })).toBeNull();
     expect(OWN_ADMIN_ROLE_LEAD.stepDown).toMatch(/step down/);
+  });
+});
+
+describe('becomeLevelNote', () => {
+  it('suggests level 5+ below it, as a note rather than a block, and says nothing from it', () => {
+    expect(becomeLevelNote(0)).toBe(
+      'Level 5+ is suggested for Minter Admins, and you’re level 0. You can still propose yourself.'
+    );
+    expect(becomeLevelNote(4)).toMatch(/you’re level 4\. You can still propose yourself\.$/);
+    expect(becomeLevelNote(5)).toBeNull();
+    expect(becomeLevelNote(10)).toBeNull();
   });
 });
 

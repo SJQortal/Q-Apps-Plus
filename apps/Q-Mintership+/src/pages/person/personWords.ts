@@ -1,7 +1,7 @@
 /** Plain sentences for a person page: where someone stands, and what they proposed. */
 import type { TimelineEvent } from '../../data/timeline';
 import { CoreHttpError } from '../../qortal/client';
-import type { MyStatus } from '../../rules/status';
+import { banEnd, type FormerMember, type MyStatus } from '../../rules/status';
 import { formatDate, plural } from '../../utils/format';
 
 /** The status in one sentence, with real dates. `self` speaks to the viewer. */
@@ -41,10 +41,14 @@ export function statusSentence(
     case 'formerKicked': {
       // Someone who was never a member: a ban, or a kick of their join request.
       const again = person.wasMember ? ' again' : '';
-      if (person.removal?.kind === 'ban') {
-        const ended = person.removal.liftedAt
-          ? `Minter Admins lifted the ban on ${formatDate(person.removal.liftedAt)}`
-          : 'the ban has ended';
+      const end = person.removal ? banEnd(person.removal) : null;
+      if (end) {
+        const ended =
+          end.how === 'lifted' && end.at !== null
+            ? `Minter Admins lifted the ban on ${formatDate(end.at)}`
+            : end.at !== null
+              ? `the ban ended on ${formatDate(end.at)}`
+              : 'the ban has ended';
         return `Was banned from MINTER${removedOn}; ${ended}, so ${they} can be nominated${again}.`;
       }
       return person.wasMember
@@ -58,6 +62,22 @@ export function statusSentence(
         ? `Not in MINTER yet. ${They}'ve asked to join, so an approved nomination adds ${them} at once.`
         : 'Not in MINTER yet.';
   }
+}
+
+/**
+ * A former member in one line: "Former member: removed from MINTER on
+ * 26 Aug 2026" (a kick), "… banned, ban ended on …", "… ban lifted on …",
+ * or "… left MINTER on …".
+ */
+export function formerMemberLine(former: FormerMember): string {
+  if (former.kind === 'left') return `Former member: left MINTER on ${formatDate(former.at)}`;
+  if (former.kind === 'removed')
+    return `Former member: removed from MINTER on ${formatDate(former.at)}`;
+  const end = former.ban;
+  if (end?.how === 'lifted' && end.at !== null)
+    return `Former member: ban lifted on ${formatDate(end.at)}`;
+  if (end?.at) return `Former member: banned, ban ended on ${formatDate(end.at)}`;
+  return `Former member: banned on ${formatDate(former.at)}, ban ended`;
 }
 
 /** "Proposed 4 changes for others: 3 approved, 1 collecting signatures." */

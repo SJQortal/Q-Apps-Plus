@@ -1,16 +1,18 @@
 /**
  * Rejections where nominees and everyone else look: the nomination card and
  * the nominee's Home say how many Minter Admins rejected it, against the
- * same target as signatures, and when enough did.
+ * same target as signatures, and when enough did. The nominee reads the
+ * same numbers in gentler words ("said no"); everyone else's card is as it was.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { renderPage } from '../../test/render';
 import { ADDR, TIP, type InstalledWorld } from '../../test/world';
 import { fakeAddress } from '../../../e2e/world.mjs';
 import { base58Encode } from '../../qortal/base58';
 import { useChainNow, useNominations } from '../../hooks/useData';
 import HomePage from '../../pages/home/HomePage';
+import PersonPage from '../../pages/person/PersonPage';
 import { READY_DONE, READY_DONE_NEXT } from '../../constants/words';
 import { NominationCard } from './NominationCard';
 
@@ -99,23 +101,83 @@ describe('rejections on a nomination', () => {
     expect(within(card).getByText('left to sign')).toBeInTheDocument();
   });
 
-  it("the nominee's Home says how many rejected it so far", async () => {
+  it("the nominee's Home keeps the numbers so far, said gently", async () => {
+    await renderPage(<HomePage />, {
+      persona: 'nominatedSigning',
+      setup: (world) => rejectInvite(world, ADDR.nominatedSigning, 2),
+    });
+    const hero = await screen.findByRole(
+      'region',
+      { name: /signing your nomination/ },
+      { timeout: 4000 }
+    );
+    await waitFor(
+      () =>
+        expect(hero).toHaveTextContent(
+          /2 Minter Admins have said no so far; it needs 8 to end it, and signatures are counted first\./
+        ),
+      { timeout: 4000 }
+    );
+    expect(hero).not.toHaveTextContent(/reject/i);
+    // Their own card below says it the same way.
+    const card = screen.getByRole('article', { name: /Nomination of bob\+builder/ });
+    expect(
+      within(card).getByText('2 Minter Admins have said no so far, of the 8 it takes to end it.')
+    ).toBeVisible();
+    expect(card).not.toHaveTextContent(/rejection/i);
+  });
+
+  it("the nominee's Home says one admin's no in the singular", async () => {
     await renderPage(<HomePage />, {
       persona: 'nominatedSigning',
       setup: (world) => rejectInvite(world, ADDR.nominatedSigning, 1),
     });
+    const hero = await screen.findByRole(
+      'region',
+      { name: /signing your nomination/ },
+      { timeout: 4000 }
+    );
+    await waitFor(
+      () =>
+        expect(hero).toHaveTextContent(/1 Minter Admin has said no so far; it needs 8 to end it/),
+      { timeout: 4000 }
+    );
+  });
+
+  it("the nominee's own page says it gently; others' view of it doesn't change", async () => {
+    const path = `/people/${ADDR.nominatedSigning}`;
+    const own = await renderPage(<PersonPage />, {
+      persona: 'nominatedSigning',
+      path,
+      route: '/people/:address',
+      setup: (world) => rejectInvite(world, ADDR.nominatedSigning, 2),
+    });
+    const section = await screen.findByRole('region', { name: 'Nomination' }, { timeout: 4000 });
     expect(
-      await screen.findByText(
-        /has rejected it so far\. It ends as rejected only if/,
+      await within(section).findByText(
+        '2 Minter Admins have said no so far, of the 8 it takes to end it.',
         {},
-        {
-          timeout: 4000,
-        }
+        { timeout: 4000 }
+      )
+    ).toBeVisible();
+    own.unmount();
+    await renderPage(<PersonPage />, {
+      persona: 'admin',
+      path,
+      route: '/people/:address',
+      setup: (world) => rejectInvite(world, ADDR.nominatedSigning, 2),
+    });
+    const theirs = await screen.findByRole('region', { name: 'Nomination' }, { timeout: 4000 });
+    expect(
+      await within(theirs).findByText(
+        '2 rejections of the 8 that would end it.',
+        {},
+        { timeout: 4000 }
       )
     ).toBeVisible();
   });
 
-  it("the nominee's Home says when enough have rejected it", async () => {
+  it("the nominee's Home says kindly when enough have said no", async () => {
     await renderPage(<HomePage />, {
       persona: 'nominatedSigning',
       setup: (world) => rejectInvite(world, ADDR.nominatedSigning, 8),
@@ -123,11 +185,18 @@ describe('rejections on a nomination', () => {
     expect(
       await screen.findByRole(
         'heading',
-        { name: 'Enough Minter Admins have rejected your nomination' },
+        { name: "Your nomination won't go through this time" },
         { timeout: 4000 }
       )
     ).toBeVisible();
-    expect(screen.getByText(/You can be nominated again later\./)).toBeVisible();
+    const hero = screen.getByRole('region', { name: "Your nomination won't go through this time" });
+    expect(hero).toHaveTextContent(/8 Minter Admins have said no, as many as it takes to end it\./);
+    expect(hero).toHaveTextContent(
+      /Your account and your level stay as they are, and you can be nominated again later\./
+    );
+    expect(hero).not.toHaveTextContent(/reject/i);
+    const card = screen.getByRole('article', { name: /Nomination of bob\+builder/ });
+    expect(within(card).getByText(/^Enough Minter Admins have said no: it closes /)).toBeVisible();
     // Nothing to accept, and no promise of getting in when the admins approve.
     expect(screen.queryByRole('button', { name: 'Accept nomination' })).toBeNull();
     expect(screen.queryByText(/Accept now so you join/)).toBeNull();
@@ -144,7 +213,7 @@ describe('rejections on a nomination', () => {
     });
     await screen.findByRole(
       'heading',
-      { name: 'Enough Minter Admins have rejected your nomination' },
+      { name: "Your nomination won't go through this time" },
       { timeout: 4000 }
     );
     expect(

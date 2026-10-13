@@ -13,6 +13,7 @@ import DecisionsPage from '../pages/decisions/DecisionsPage';
 import HomePage from '../pages/home/HomePage';
 import NominatePage from '../pages/nominations/NominatePage';
 import NominationsPage from '../pages/nominations/NominationsPage';
+import PersonPage from '../pages/person/PersonPage';
 import { resetOptimisticComments } from '../state/comments';
 import {
   checkDialogByKeyboard,
@@ -209,6 +210,21 @@ describe('Write dialogs by keyboard: Propose', () => {
     expect(within(form).queryByRole('alert')).toBeNull();
   });
 
+  it('picking yourself to remove says where Step down is, in the same live region', async () => {
+    const u = user();
+    const { address } = await decisions();
+    await choose(u, /^Remove a Minter Admin/);
+    const form = await screen.findByRole('dialog', { name: 'Remove a Minter Admin' }, T);
+    await u.selectOptions(within(form).getByRole('combobox', { name: 'Minter Admin' }), address);
+    const live = within(form).getByRole('status');
+    expect(
+      within(live).getByText(/To step down, use Step down as Minter Admin on your own page\./)
+    ).toBeVisible();
+    expect(within(live).getByRole('link', { name: 'Open your page' })).toBeVisible();
+    expect(live.querySelector('[role="status"], [role="alert"], [aria-live]')).toBeNull();
+    await expectNamedControls(form);
+  });
+
   it('“Propose removing their admin role” moves focus to the form’s new title', async () => {
     const u = user();
     await decisions();
@@ -278,17 +294,21 @@ describe('Write dialogs by keyboard: Propose', () => {
   });
 });
 
-describe('Write dialogs by keyboard: Home', () => {
+describe('Write dialogs by keyboard: one’s own page', () => {
   it('Step down as Minter Admin', async () => {
     const u = user();
-    await renderPage(<HomePage />, { persona: 'admin' });
-    await checkDialogByKeyboard(
-      u,
-      await screen.findByRole('button', { name: 'Step down as Minter Admin' }, T),
-      'Step down as Minter Admin'
-    );
+    await renderPage(<PersonPage />, {
+      persona: 'admin',
+      path: `/people/${ADDR.admin}`,
+      route: '/people/:address',
+    });
+    const opener = await screen.findByRole('button', { name: 'Step down as Minter Admin' }, T);
+    await waitFor(() => expect(opener).toBeEnabled(), T);
+    await checkDialogByKeyboard(u, opener, 'Step down as Minter Admin');
   });
+});
 
+describe('Write dialogs by keyboard: Home', () => {
   it('Become a Minter Admin, with its statement', async () => {
     const u = user();
     await renderPage(<HomePage />, { persona: 'nominator' });

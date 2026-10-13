@@ -16,9 +16,10 @@ import { markWrite, pendingWritesAtom, writeKeys } from '../../writes/optimistic
 import { PROPOSE_NOMINATION } from '../../constants/words';
 import { renderPage } from '../../test/render';
 import { fetchCalls, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
-import { ADDR, installWorld } from '../../test/world';
-import { addTargetShift } from '../../../e2e/world.mjs';
+import { ADDR, TIP, installWorld } from '../../test/world';
 import { decisionPath } from '../../routes/paths';
+import { formatDate } from '../../utils/format';
+import { seenTargetKey } from '../decisions/seenTarget';
 import HomePage from './HomePage';
 
 afterEach(() => vi.useRealTimers());
@@ -129,13 +130,42 @@ describe('Home: Minter Admins', () => {
     expect(screen.getByText('217,400')).toBeInTheDocument();
   });
 
-  it('explains when the number of signatures needed changed since the last visit', async () => {
-    window.localStorage.setItem(`${STORAGE_PREFIX}home-signatures-needed`, '7');
+  it('says the target changed since Decisions last showed it, and links there', async () => {
+    // Decisions last showed 21 admin seats and 9 signatures; today it is 20 and 8.
+    const seen = JSON.stringify({ adminCount: 21, needed: 9, height: TIP - 100 });
+    window.localStorage.setItem(seenTargetKey(), seen);
     await renderPage(<HomePage />, { persona: 'admin' });
-    expect(await screen.findByText(/up from/, {}, T)).toHaveTextContent(
-      /up from 7 on your last visit, because the number of Minter Admins changed/
+    const hero = await screen.findByRole('region', { name: /waiting for your signature$/ }, T);
+    await waitFor(() =>
+      expect(hero).toHaveTextContent(
+        /The target changed from 9 to 8 signatures since you last looked at Decisions\. See what changed/
+      )
     );
-    expect(window.localStorage.getItem(`${STORAGE_PREFIX}home-signatures-needed`)).toBe('8');
+    expect(within(hero).getByRole('link', { name: 'See what changed' })).toHaveAttribute(
+      'href',
+      '/decisions'
+    );
+    // Only Decisions keeps the seen target: Home leaves it as it was.
+    expect(window.localStorage.getItem(seenTargetKey())).toBe(seen);
+  });
+
+  it('says nothing about the target when it has not moved, or Decisions was never opened', async () => {
+    const seen = JSON.stringify({ adminCount: 20, needed: 8, height: TIP - 100 });
+    window.localStorage.setItem(seenTargetKey(), seen);
+    const first = await renderPage(<HomePage />, { persona: 'admin' });
+    const hero = await screen.findByRole('region', { name: /waiting for your signature$/ }, T);
+    await waitFor(() => expect(hero).toHaveTextContent(/Each decision needs 8 signatures/));
+    expect(hero).not.toHaveTextContent(/target changed/);
+    expect(within(hero).queryByRole('link', { name: 'See what changed' })).toBeNull();
+    expect(window.localStorage.getItem(seenTargetKey())).toBe(seen);
+    first.unmount();
+
+    window.localStorage.removeItem(seenTargetKey());
+    await renderPage(<HomePage />, { persona: 'admin' });
+    const again = await screen.findByRole('region', { name: /waiting for your signature$/ }, T);
+    await waitFor(() => expect(again).toHaveTextContent(/Each decision needs 8 signatures/));
+    expect(again).not.toHaveTextContent(/target changed/);
+    expect(window.localStorage.getItem(seenTargetKey())).toBeNull();
   });
 });
 
@@ -312,6 +342,36 @@ describe('Home: the Minter Admin role', () => {
     ).toBeVisible();
   });
 
+  it('suggests level 5+ to a member below it, without stopping them', async () => {
+    await renderPage(<HomePage />, { persona: 'learner' });
+    const role = await screen.findByRole('region', { name: 'Minter Admins' }, T);
+    expect(
+      within(role).getByText(
+        'Level 5+ is suggested for Minter Admins, and you’re level 2. You can still propose yourself.'
+      )
+    ).toBeVisible();
+    // A note, not a block: the button works as for anyone.
+    const become = within(role).getByRole('button', { name: 'Become a Minter Admin' });
+    await waitFor(() => expect(become).toBeEnabled());
+    await userEvent.click(become);
+    const dialog = await screen.findByRole('dialog', { name: 'Become a Minter Admin' }, T);
+    expect(
+      within(dialog).getByText(/^Level 5\+ is suggested for Minter Admins, and you’re level 2\./)
+    ).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Continue to Hub' })).toBeEnabled();
+  });
+
+  it('says nothing about the level to a member at level 5 or above', async () => {
+    await renderPage(<HomePage />, { persona: 'nominator' });
+    const role = await screen.findByRole('region', { name: 'Minter Admins' }, T);
+    const become = within(role).getByRole('button', { name: 'Become a Minter Admin' });
+    await waitFor(() => expect(become).toBeEnabled());
+    expect(within(role).queryByText(/is suggested for Minter Admins/)).toBeNull();
+    await userEvent.click(become);
+    const dialog = await screen.findByRole('dialog', { name: 'Become a Minter Admin' }, T);
+    expect(within(dialog).queryByText(/is suggested for Minter Admins/)).toBeNull();
+  });
+
   it('says when a member’s own proposal is already waiting, and links to it', async () => {
     const { world } = await renderPage(<HomePage />, { persona: 'promote' });
     const role = await screen.findByRole('region', { name: 'Minter Admins' }, T);
@@ -326,50 +386,15 @@ describe('Home: the Minter Admin role', () => {
     expect(within(role).queryByRole('button', { name: 'Become a Minter Admin' })).toBeNull();
   });
 
-  it('lets an admin step down: their proposal and their signature, worded as a resignation', async () => {
+  it('leaves Step down off an admin’s Home: it is on their own page', async () => {
     await renderPage(<HomePage />, { persona: 'adminL4' });
-    const role = await screen.findByRole('region', { name: 'Your Minter Admin role' }, T);
-    const button = within(role).getByRole('button', { name: 'Step down as Minter Admin' });
-    await waitFor(() => expect(button).toBeEnabled());
-    await userEvent.click(button);
-    const dialog = await screen.findByRole('dialog', { name: 'Step down as Minter Admin' }, T);
-    expect(
-      within(dialog).getByText(
-        /This proposes that you step down: you give up your Minter Admin role\./
-      )
-    ).toBeVisible();
-    expect(within(dialog).getByText(/You stay a MINTER member/)).toBeVisible();
-    expect(within(dialog).getByText('Step 2 of 2: Sign it')).toBeInTheDocument();
-    expect(within(dialog).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
-    // Declined in Hub: nothing is signed.
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
-    expect(await within(dialog).findByText(/cancelled/i, {}, T)).toBeInTheDocument();
-    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')).toHaveLength(1);
-    expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
-  });
-
-  it('a step-down that would tip a waiting decision over needs “I’ve checked these” before Hub', async () => {
-    // 21 admin rows, 9 needed: stepping down leaves 20, and 8 are enough for Mia Met's invite.
-    await renderPage(<HomePage />, { persona: 'adminL4', setup: (world) => addTargetShift(world) });
-    const role = await screen.findByRole('region', { name: 'Your Minter Admin role' }, T);
-    const button = within(role).getByRole('button', { name: 'Step down as Minter Admin' });
-    await waitFor(() => expect(button).toBeEnabled());
-    await userEvent.click(button);
-    const dialog = await screen.findByRole('dialog', { name: 'Step down as Minter Admin' }, T);
-    const note = within(dialog).getByRole('note');
-    expect(note).toHaveTextContent(
-      /^If this passes, MINTER has 20 admin seats and the target drops from 9 to 8 signatures\./
-    );
-    expect(within(note).getByText('Add to MINTER: Mia Met (8 of 9)')).toBeVisible();
-    // Not without the tick: Hub isn't asked, and the box takes focus.
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
-    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')).toHaveLength(0);
-    const box = within(dialog).getByRole('checkbox', { name: 'I’ve checked these' });
-    expect(box).toHaveFocus();
-    await userEvent.click(box);
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
-    expect(await within(dialog).findByText(/cancelled/i, {}, T)).toBeInTheDocument();
-    expect(qortalCallsFor('REMOVE_GROUP_ADMIN')).toHaveLength(1);
+    await headline(/Juniper L4, 8 decisions are waiting/);
+    // The member view below the admin's is in: nothing about the role follows it.
+    expect(await screen.findByRole('region', { name: 'Your minting' }, T)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Your Minter Admin role' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Minter Admins' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Step down as Minter Admin' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Become a Minter Admin' })).toBeNull();
   });
 
   it('offers nothing about the role to someone outside MINTER', async () => {
@@ -692,10 +717,29 @@ describe('Home: former members', () => {
         });
       },
     });
+    await headline('Your ban from MINTER was lifted');
+    const hero = screen.getByRole('region', { name: /ban from MINTER was lifted/ });
+    expect(hero).toHaveTextContent(/The Minter Admins banned this account on /);
+    expect(hero).toHaveTextContent(/The Minter Admins lifted it on /);
+    expect(hero).not.toHaveTextContent(/run out|removed/);
+  });
+
+  it('says when a timed ban ended, not that they were removed', async () => {
+    let ended = 0;
+    await renderPage(<HomePage />, {
+      persona: 'banned',
+      setup: (world) => {
+        const ban = world.decided.find((tx: { type: string }) => tx.type === 'GROUP_BAN');
+        ban.timeToLive = 3 * 86_400;
+        // Counted from when it was proposed, as Core counts it.
+        ended = ban.timestamp + 3 * 86_400_000;
+        world.bans = world.bans.filter((b: { offender: string }) => b.offender !== ban.offender);
+      },
+    });
     await headline('Your ban from MINTER has ended');
     const hero = screen.getByRole('region', { name: /ban from MINTER has ended/ });
-    expect(hero).toHaveTextContent(/The Minter Admins lifted it on /);
-    expect(hero).not.toHaveTextContent(/run out/);
+    expect(hero).toHaveTextContent(new RegExp(`The ban ended on ${formatDate(ended)} \\(`));
+    expect(hero).not.toHaveTextContent(/run out|removed/);
   });
 
   it('says a permanent ban that is no longer in force has ended, not run out', async () => {

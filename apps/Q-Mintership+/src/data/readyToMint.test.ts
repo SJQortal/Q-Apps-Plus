@@ -140,7 +140,12 @@ describe('formerMember', () => {
 
   it('marks a member who was kicked, banned once or left, dated by when it took effect', () => {
     expect(former([invite, kick])).toEqual({ kind: 'removed', at: at(1_500_100) });
-    expect(former([invite, ban])).toEqual({ kind: 'removed', at: at(1_600_050) });
+    // A ban says how it ended (a permanent one with no lift on record: no date).
+    expect(former([invite, ban])).toEqual({
+      kind: 'banned',
+      at: at(1_600_050),
+      ban: { how: 'ended', at: null },
+    });
     expect(former([invite, leave])).toEqual({ kind: 'left', at: at(1_700_000) });
     // The newest way out counts.
     expect(former([invite, kick, leave])).toMatchObject({ kind: 'left' });

@@ -497,6 +497,55 @@ export default {
         }
       ),
     },
+    // An admin's Home when the target moved since Decisions last showed it (9 then, 8 now).
+    {
+      key: 'home-target-changed',
+      path: '/?as=admin',
+      after: async (page) => {
+        await page.addInitScript(
+          ([key, value]) => window.localStorage.setItem(key, value),
+          ['qmintershipplus-seen-target-694', JSON.stringify({ adminCount: 21, needed: 9 })]
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+        await page.getByRole('link', { name: 'See what changed' }).waitFor({ timeout: 8000 });
+      },
+    },
+    // Step down as Minter Admin lives on the admin's own page.
+    {
+      key: 'person-own-admin',
+      path: `/people/${ADDR.adminL4}?as=adminL4`,
+      after: async (page) => {
+        await settle(page);
+        await page
+          .getByRole('button', { name: 'Step down as Minter Admin' })
+          .waitFor({ timeout: 8000 });
+      },
+    },
+    // A member below level 5: Become a Minter Admin, with the level 5+ note beside it.
+    {
+      key: 'person-own-member',
+      path: `/people/${ADDR.learner}?as=learner`,
+      after: async (page) => {
+        await settle(page);
+        await page.getByText(/is suggested for Minter Admins/).waitFor({ timeout: 8000 });
+      },
+    },
+    // Picking yourself under Remove a Minter Admin points to your own page.
+    {
+      key: 'decisions-remove-self',
+      path: '/decisions?as=admin',
+      overlay: true,
+      after: async (page) => {
+        await propose('Remove a Minter Admin')(page);
+        await page
+          .getByRole('dialog', { name: 'Remove a Minter Admin' })
+          .getByRole('combobox', { name: 'Minter Admin' })
+          .selectOption(ADDR.admin, { timeout: 8000 });
+        await page.getByRole('link', { name: 'Open your page' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(300);
+      },
+    },
   ],
 };
 
