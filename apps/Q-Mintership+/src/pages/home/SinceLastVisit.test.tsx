@@ -15,6 +15,7 @@ import { fetchCallsFor } from '../../test/setup';
 import { renderPage } from '../../test/render';
 import { ADDR, NOW, TIP } from '../../test/world';
 import {
+  addDoubles,
   addNominatorHistory,
   lastVisitSnapshots,
   lastVisitStorageKey,
@@ -180,6 +181,55 @@ describe('Since your last visit: Minter Admins', () => {
     expect(
       within(region).getByRole('link', { name: 'Review the new nominations' })
     ).toBeInTheDocument();
+  });
+});
+
+describe('Since your last visit: doubles', () => {
+  it('never says a new double is waiting for your signature', async () => {
+    let doubles = {} as ReturnType<typeof addDoubles>;
+    await renderPage(<HomePage />, {
+      persona: 'admin',
+      setup: (world) => {
+        doubles = addDoubles(world);
+        // Everything but the removal of Nora Nominator was there at the last visit.
+        const decisions = world.pending
+          .filter((t: { signature: string }) => t.signature !== doubles.notAdmin.signature)
+          .map((t: { signature: string }) => ({
+            signature: t.signature,
+            kind: 'invite',
+            subject: null,
+            height: null,
+          }));
+        window.localStorage.setItem(
+          lastVisitStorageKey(ADDR.admin),
+          JSON.stringify({ v: 1, at: NOW - 3 * 86_400_000, height: TIP - 3_556, decisions })
+        );
+      },
+    });
+    const region = await panel();
+    const open = await within(region).findByRole(
+      'link',
+      { name: 'Open: Remove a Minter Admin: Nora Nominator' },
+      T
+    );
+    const row = open.closest('li') as HTMLElement;
+    expect(row).toHaveTextContent(/New · 2 of \d+ signatures/);
+    expect(row).not.toHaveTextContent('waiting for your signature');
+  });
+
+  it('leaves doubles out of the new decisions waiting for your signature', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'admin',
+      setup: (world) => {
+        // Admin C's second proposal was there at the last visit; the other three are new.
+        addDoubles(world);
+        seed('admin')(world);
+      },
+    });
+    const region = await panel();
+    // Five as before, and the older of Member 9's two additions; not the two doubles.
+    const row = (await within(region).findByText('10 new decisions', {}, T)).closest('li');
+    expect(row).toHaveTextContent('and 8 more. 6 are waiting for your signature.');
   });
 });
 

@@ -112,9 +112,9 @@ function useDecisionTitle(facts: Pick<Decision, 'kind' | 'subject' | 'creatorAdd
   return `${decisionTitle(facts)}: ${facts.subject ? who.label : 'an approved invite'}`;
 }
 
-/** Open, and not signed (or rejected) by this admin yet. */
+/** Open, not a double (rules/double.ts), and not signed (or rejected) by this admin yet. */
 function waitsFor(d: Decision, publicKey: string): boolean {
-  if (!d.tally || !(d.phase === 'open' || d.phase === 'early')) return false;
+  if (!d.tally || d.double || !(d.phase === 'open' || d.phase === 'early')) return false;
   return !publicKey || signerState(d.tally, publicKey) === 'none';
 }
 
