@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { fakeAddress, type World } from '../../../e2e/world.mjs';
 import { formatDate, shortAddress } from '../../utils/format';
@@ -230,6 +230,62 @@ describe('Ready to mint', () => {
     expect(reads()).toBe(kitBefore + 1);
     // Rows read a moment ago aren't read again.
     expect(others()).toBe(othersBefore);
+  });
+
+  it('reads a failed row again once per list refresh, not each time another row comes near', async () => {
+    const user = userEvent.setup();
+    // Rows come near only when the test says so, one at a time, as when scrolling.
+    const watchers = new Map<Element, IntersectionObserverCallback>();
+    class OneAtATime {
+      constructor(private readonly callback: IntersectionObserverCallback) {}
+      observe(target: Element) {
+        watchers.set(target, this.callback);
+      }
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    }
+    vi.stubGlobal('IntersectionObserver', OneAtATime);
+    const comeNear = (target: Element) =>
+      act(() =>
+        watchers.get(target)?.(
+          [{ isIntersecting: true, target } as unknown as IntersectionObserverEntry],
+          {} as IntersectionObserver
+        )
+      );
+    const later = Array.from({ length: 8 }, (_, i) => fakeAddress(`near-jr-${i}`));
+    try {
+      await open('nominator', (world) => {
+        world.joinRequests.push(joinRequest(ADDR.kicked), ...later.map(joinRequest));
+        mockFetchRoute(`/addresses/${ADDR.kicked}`, () => new Response('', { status: 500 }));
+      });
+      // Not near yet: nothing is read, so the row shows the short address.
+      const kit = await row(shortAddress(ADDR.kicked));
+      expect(fetchCallsFor(`/addresses/${ADDR.kicked}`)).toHaveLength(0);
+      await comeNear(kit);
+      expect(
+        await within(kit).findByText('Level not available right now', {}, { timeout: 4000 })
+      ).toBeInTheDocument();
+      const reads = () => fetchCallsFor(`/addresses/${ADDR.kicked}`).length;
+      const before = reads();
+      // Scrolling on: each row below comes near and is read, and Kit's failed row isn't.
+      for (const address of later) {
+        await comeNear(await row(shortAddress(address)));
+        await waitFor(() => expect(fetchCallsFor(`/addresses/${address}`)).toHaveLength(1));
+      }
+      expect(reads()).toBe(before);
+
+      // A refresh of the list reads it again, once.
+      vi.setSystemTime(Date.now() + 2 * 60_000);
+      await user.click(screen.getByRole('button', { name: 'Refresh nominations' }));
+      await waitFor(() => expect(reads()).toBe(before + 1));
+      await comeNear(await row(shortAddress(later[0])));
+      expect(reads()).toBe(before + 1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('offers Propose nomination to a level 5+ member, and says where they already nominated', async () => {

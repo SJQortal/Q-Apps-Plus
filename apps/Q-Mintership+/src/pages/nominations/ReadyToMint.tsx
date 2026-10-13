@@ -19,7 +19,7 @@ import { Section } from '../../components/common/Section';
 import { EmptyState, ErrorState, ListSkeleton } from '../../components/common/states';
 import { effectiveBlocksMinted, isAddress } from '../../data/accounts';
 import type { Nomination } from '../../data/nominations';
-import { peekQuery } from '../../data/query';
+import { getQueryState, peekQuery } from '../../data/query';
 import {
   READY_PAGE,
   formerKey,
@@ -42,6 +42,12 @@ import { useReadySearch, useStoredValue } from './useReadyToMint';
 
 /** A name already read for a row on screen (searching never reads one). */
 const knownName = (address: string) => peekQuery<string | null>(`name:${address}`);
+
+/** One of a row's reads (account, name, former-member mark) failed last time. */
+const readFailed = (address: string) =>
+  [`account:${address}`, `name:${address}`, formerKey(address)].some(
+    (key) => getQueryState(key).error !== undefined
+  );
 
 export interface ReadyToMintSectionProps {
   ready: UseQueryResult<ReadyToMint>;
@@ -96,11 +102,21 @@ export function ReadyToMintSection({
   // Only the rows on screen are read, six reads at a time; leaving stops new reads.
   // Each refresh of the list (every minute, or Refresh) reads again the rows whose
   // read failed or is older than 10 minutes; the rest are cached and cost nothing.
+  // A row whose read failed waits for that refresh: another row coming near doesn't
+  // read it again.
   const listUpdatedAt = ready.updatedAt;
+  const tried = useRef<{ at: number; rows: Set<string> }>({ at: -1, rows: new Set() });
   useEffect(() => {
     if (!visibleKey) return;
+    if (tried.current.at !== listUpdatedAt) tried.current = { at: listUpdatedAt, rows: new Set() };
+    const { rows } = tried.current;
+    const toRead = visibleKey
+      .split(',')
+      .filter((address) => !rows.has(address) || !readFailed(address));
+    for (const address of toRead) rows.add(address);
+    if (!toRead.length) return;
     const controller = new AbortController();
-    void loadReadyDetails(visibleKey.split(','), { signal: controller.signal });
+    void loadReadyDetails(toRead, { signal: controller.signal });
     return () => controller.abort();
   }, [visibleKey, listUpdatedAt]);
 
