@@ -154,6 +154,30 @@ html[data-motion='reduce'] {
   animation-fill-mode: backwards;
 }
 
+/* Dialogs ease in while MUI fades them in (its fade, timing and exit stay):
+   a slight rise and growth, or on phones, where they fill the screen, a
+   short rise. */
+@keyframes qmp-dialog-in {
+  from {
+    translate: 0 8px;
+    scale: 0.97;
+  }
+}
+@keyframes qmp-sheet-in {
+  from {
+    translate: 0 24px;
+  }
+}
+:where(.MuiDialog-paper) {
+  animation-name: qmp-dialog-in;
+  animation-duration: 225ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  animation-fill-mode: backwards;
+}
+:where(.MuiDialog-paperFullScreen) {
+  animation-name: qmp-sheet-in;
+}
+
 /* A page's blocks (PageBody): a fade and a 4 px rise. */
 :where(.qmp-reveal) > * {
   animation-name: qmp-rise-in;

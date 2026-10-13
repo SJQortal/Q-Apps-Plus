@@ -12,6 +12,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Button, Chip, IconButton, Switch, ToggleButton } from '@mui/material';
 import { CopyLinkButton } from './components/common/CopyLinkButton';
+import { ResponsiveDialog } from './components/common/ResponsiveDialog';
 import { Section } from './components/common/Section';
 import { AnswerChip, DoneChip } from './components/decision/DecisionParts';
 import { EmptyState } from './components/common/states';
@@ -198,7 +199,13 @@ describe('content arriving', () => {
     const keyframes = [...(sheet.sheet?.cssRules ?? [])].filter(
       (r): r is CSSKeyframesRule => 'name' in r && String(r.name).startsWith('qmp-')
     );
-    expect(keyframes.map((k) => k.name)).toEqual(['qmp-fade-in', 'qmp-rise-in', 'qmp-pop-in']);
+    expect(keyframes.map((k) => k.name)).toEqual([
+      'qmp-fade-in',
+      'qmp-rise-in',
+      'qmp-pop-in',
+      'qmp-dialog-in',
+      'qmp-sheet-in',
+    ]);
     for (const k of keyframes) {
       for (const frame of [...k.cssRules] as CSSKeyframeRule[]) {
         const props = Array.from({ length: frame.style.length }, (_, i) => frame.style.item(i));
@@ -274,5 +281,29 @@ describe('small things that turn up', () => {
     );
     const rejected = screen.getByText('Rejected (confirming…)').closest('.MuiChip-root');
     expect(animation(rejected as Element).name).toBe('qmp-pop-in');
+  });
+});
+
+describe('dialogs', () => {
+  it('ease in as MUI fades them in: a slight rise and growth', async () => {
+    render(
+      <ResponsiveDialog open title="Sign">
+        Body
+      </ResponsiveDialog>
+    );
+    const paper = (await screen.findByRole('dialog', { name: 'Sign' })) as Element;
+    expect(animation(paper)).toMatchObject({ name: 'qmp-dialog-in', duration: '225ms' });
+  });
+
+  it('rise a little further where they fill the screen (phones)', async () => {
+    render(
+      <ResponsiveDialog open fullScreen title="Sign">
+        Body
+      </ResponsiveDialog>
+    );
+    const paper = (await screen.findByRole('dialog', { name: 'Sign' })) as Element;
+    expect(animation(paper).name).toBe('qmp-sheet-in');
+    document.documentElement.setAttribute('data-motion', 'reduce');
+    expect(animation(paper).duration).toBe('0.01ms');
   });
 });
