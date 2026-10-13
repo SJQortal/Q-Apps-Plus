@@ -81,6 +81,22 @@ describe('rejections on a nomination', () => {
     expect(
       within(card).getByText(/Enough Minter Admins have rejected it: it ends as rejected/)
     ).toBeVisible();
+    // No countdown "left to sign" beside it.
+    expect(within(card).queryByText('left to sign')).toBeNull();
+  });
+
+  it('the card counts down while it can still be signed', async () => {
+    await renderPage(<SigningCard />, {
+      persona: 'learner',
+      path: '/',
+      setup: (world) => rejectInvite(world, ADDR.nominatedSigning, 2),
+    });
+    const card = await screen.findByRole(
+      'article',
+      { name: /Nomination of bob\+builder/ },
+      { timeout: 4000 }
+    );
+    expect(within(card).getByText('left to sign')).toBeInTheDocument();
   });
 
   it("the nominee's Home says how many rejected it so far", async () => {
