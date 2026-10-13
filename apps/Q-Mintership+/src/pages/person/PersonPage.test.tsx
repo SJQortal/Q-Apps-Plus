@@ -103,6 +103,25 @@ describe('Person page', () => {
     expect(within(original).getByText(/Posted by Kit Kicked for themselves/)).toBeInTheDocument();
   });
 
+  it('never calls an account that was never a member a former member', async () => {
+    await renderPage(<PersonPage />, {
+      persona: 'nominator',
+      path: `/people/${ADDR.kicked}`,
+      route: ROUTE,
+      setup: (world) => {
+        world.decided = world.decided.filter(
+          (tx: { type: string; invitee?: string }) =>
+            !(tx.type === 'GROUP_INVITE' && tx.invitee === ADDR.kicked)
+        );
+      },
+    });
+    expect(
+      await screen.findByText(/^Removed from MINTER's join list on .+\. They can be nominated\.$/)
+    ).toBeInTheDocument();
+    expect(screen.getByText('Not in MINTER')).toBeInTheDocument();
+    expect(screen.queryByText('Former member')).toBeNull();
+  });
+
   it('tells a member below level 5 why they cannot nominate', async () => {
     await visit(ADDR.kicked, 'learner');
     expect(await screen.findByText('Former member')).toBeInTheDocument();

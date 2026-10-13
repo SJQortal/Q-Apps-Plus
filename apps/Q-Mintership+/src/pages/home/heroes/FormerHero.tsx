@@ -97,9 +97,9 @@ export function FormerHero({ status, needed }: { status: MyStatus; needed: numbe
         </HeroText>
         <Reason reason={ban?.reason ?? removal?.reason} />
         <HeroText>
-          Before you can rejoin, Minter Admins must lift the ban: one of them proposes it, and it
-          needs {needed ? <Num>{needed}</Num> : 'enough'} signatures like any decision. After that,
-          a new nomination is possible.
+          Before you can {status.wasMember ? 'rejoin' : 'join'}, Minter Admins must lift the ban:
+          one of them proposes it, and it needs {needed ? <Num>{needed}</Num> : 'enough'} signatures
+          like any decision. After that, a new nomination is possible.
         </HeroText>
         <LevelKept status={status} />
       </Hero>

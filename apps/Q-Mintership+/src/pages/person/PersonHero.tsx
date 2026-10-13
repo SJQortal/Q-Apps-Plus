@@ -68,7 +68,9 @@ export function PersonHero({
   action,
 }: PersonHeroProps) {
   const phone = usePhoneLayout();
-  const chip = STATUS_CHIP[person.kind as keyof typeof STATUS_CHIP] ?? STATUS_CHIP.newcomer;
+  // "Former member" only for someone who was one (not a removed join request or ban).
+  const kind = person.kind === 'formerKicked' && !person.wasMember ? 'newcomer' : person.kind;
+  const chip = STATUS_CHIP[kind as keyof typeof STATUS_CHIP] ?? STATUS_CHIP.newcomer;
   const next = person.progress;
   const block = nomineeBlock({
     self,

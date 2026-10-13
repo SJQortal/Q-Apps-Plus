@@ -343,6 +343,23 @@ describe('Home: former members', () => {
     expect(within(hero).queryByRole('button')).toBeNull();
   });
 
+  it('tells a banned account that was never a member it can join, not rejoin', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'banned',
+      setup: (world) => {
+        world.decided = world.decided.filter(
+          (tx: { type: string; invitee?: string }) =>
+            !(tx.type === 'GROUP_INVITE' && tx.invitee === world.bans[0].offender)
+        );
+      },
+    });
+    await headline('Bram Banned, your account is banned from MINTER');
+    const hero = screen.getByRole('region', { name: /banned from MINTER/ });
+    expect(hero).toHaveTextContent(/Before you can join, Minter Admins must lift the ban/);
+    expect(hero).not.toHaveTextContent(/rejoin/);
+    expect(screen.getByText('Not in MINTER')).toBeInTheDocument();
+  });
+
   it('tells a member who left when, and that a new nomination is possible', async () => {
     await renderPage(<HomePage />, { persona: 'left' });
     await headline('Lou Left, you left MINTER');

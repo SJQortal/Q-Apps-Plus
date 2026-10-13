@@ -29,7 +29,8 @@ export function statusSentence(
       const at = (person.removal?.kind === 'ban' ? person.removal.at : null) ?? ban?.banned;
       const when = at ? ` on ${formatDate(at)}` : '';
       const until = ban?.expiry ? `, until ${formatDate(ban.expiry)}` : ', permanently';
-      return `Banned from MINTER${when}${until}. Minter Admins must lift the ban before ${they} can rejoin.`;
+      const join = person.wasMember ? 'rejoin' : 'join';
+      return `Banned from MINTER${when}${until}. Minter Admins must lift the ban before ${they} can ${join}.`;
     }
     case 'approvedInvite':
       return `Approved for MINTER: ${they} only need to press Join now.`;
@@ -37,10 +38,15 @@ export function statusSentence(
       return person.hasJoinRequest
         ? `Nominated for MINTER, and ${they}'ve accepted: approval adds ${them} at once.`
         : 'Nominated for MINTER.';
-    case 'formerKicked':
-      return person.removal?.kind === 'ban'
-        ? `Was banned from MINTER${removedOn}; the ban has ended, so ${they} can be nominated again.`
-        : `Removed from MINTER${removedOn}. ${They} keep ${their} level and can be nominated again.`;
+    case 'formerKicked': {
+      // Someone who was never a member: a ban, or a kick of their join request.
+      const again = person.wasMember ? ' again' : '';
+      if (person.removal?.kind === 'ban')
+        return `Was banned from MINTER${removedOn}; the ban has ended, so ${they} can be nominated${again}.`;
+      return person.wasMember
+        ? `Removed from MINTER${removedOn}. ${They} keep ${their} level and can be nominated again.`
+        : `Removed from MINTER's join list${removedOn}. ${They} can be nominated.`;
+    }
     case 'formerLeft':
       return `Left MINTER${removedOn}. ${They} can be nominated again.`;
     default:
