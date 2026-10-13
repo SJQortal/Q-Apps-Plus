@@ -187,18 +187,18 @@ describe('computeActivity', () => {
     ];
     const approvals = [approval('Qa', 'd1', 120_100), approval('Qa', 'd2', 130_300)];
     const a = admin(run({ decisions, approvals }), 'Qa');
-    expect(a).toMatchObject({ eligible: 3, answered: 2, signed: 2, missed: 1, rejected: 0 });
+    expect(a).toMatchObject({ eligible: 3, answered: 2, signed: 2, missed: 0, rejected: 0 });
     expect(a.participation).toBeCloseTo(2 / 3);
     expect(admin(run({ decisions, approvals }), 'Qb')).toMatchObject({
       eligible: 3,
       answered: 0,
       signed: 0,
-      missed: 3,
+      missed: 0,
       participation: 0,
     });
   });
 
-  it('counts a rejection as taking part: only doing nothing is a miss', () => {
+  it('counts a rejection as taking part; a miss is one that expired with no answer', () => {
     const decisions = [
       decision('signed', 120_000, 'APPROVED', 121_000),
       decision('rejected', 130_000, 'EXPIRED', 140_081),
@@ -215,8 +215,9 @@ describe('computeActivity', () => {
     ];
     const report = run({ decisions, approvals });
     const a = admin(report, 'Qa');
-    // Two answers of four; the two decisions they did nothing on are misses, however they ended.
-    expect(a).toMatchObject({ eligible: 4, answered: 2, signed: 1, rejected: 1, missed: 2 });
+    // Two answers of four. Of the two they did nothing on, the expired one is a miss; the
+    // one that passed without them isn't.
+    expect(a).toMatchObject({ eligible: 4, answered: 2, signed: 1, rejected: 1, missed: 1 });
     expect(a.participation).toBe(0.5);
     // Three signatures and a rejection: every decision answered.
     expect(admin(report, 'Qb')).toMatchObject({
@@ -264,8 +265,8 @@ describe('computeActivity', () => {
     const report = run({ decisions, currentAdmins: ['Qa', 'Qb', 'Qc'] });
     const c = admin(report, 'Qc');
     expect(c.adminSince).toBe(150_000);
-    // 'before' and the add itself closed before Qc was an admin; the two after are misses.
-    expect(c).toMatchObject({ eligible: 2, missed: 2, signed: 0, current: true });
+    // 'before' and the add itself closed before Qc was an admin.
+    expect(c).toMatchObject({ eligible: 2, missed: 1, signed: 0, current: true });
     expect(admin(report, 'Qa').eligible).toBe(4);
     expect(admin(report, 'Qa').adminSince).toBeNull();
   });
@@ -320,8 +321,7 @@ describe('computeActivity', () => {
     expect(report.current.map((a) => a.address).sort()).toEqual(['Qa', 'Qb']);
     expect(report.former.map((a) => a.address)).toEqual(['Qd']);
     const d = admin(report, 'Qd');
-    // The removal itself ended unanswered while Qd was an admin; d2 ended after.
-    expect(d).toMatchObject({ current: false, removedAt: 130_000, signed: 1, missed: 1 });
+    expect(d).toMatchObject({ current: false, removedAt: 130_000, signed: 1, missed: 0 });
     // d1, the removal itself and d2 were waiting while Qd was an admin; d3 wasn't.
     expect(d.eligible).toBe(3);
     expect(admin(report, 'Qa').proposedByKind).toEqual({ removeAdmin: 1 });
@@ -388,8 +388,8 @@ describe('computeActivity', () => {
       missed: 0,
       participation: 1,
     });
-    // Qb answered none: both decisions that ended are misses, the open one isn't yet.
-    expect(admin(report, 'Qb')).toMatchObject({ eligible: 2, missed: 2, rejected: 0 });
+    // Qb answered none: only the expired one is a miss, and the open one isn't yet.
+    expect(admin(report, 'Qb')).toMatchObject({ eligible: 2, missed: 1, rejected: 0 });
   });
 
   it('ignores approvals of other groups’ transactions', () => {

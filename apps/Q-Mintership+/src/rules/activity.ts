@@ -20,9 +20,9 @@
  *   answer is taking part.
  * - Decisions still waiting count once the admin has answered them; an
  *   unanswered open decision is neither a miss nor a gap yet.
- * - Missed: it ended (approved, rejected or expired), they were an admin
- *   until its last useful block, and they never answered it. Only doing
- *   nothing is a miss.
+ * - Missed: it expired, they were an admin until its last useful block,
+ *   and they never answered it. Only doing nothing is a miss: a rejection
+ *   (Reject, or a withdrawn signature) is an answer.
  * - Time to sign leaves out decisions the admin proposed themselves (the
  *   proposer signs in the next block, which says nothing about response).
  */
@@ -188,7 +188,7 @@ export interface AdminActivity {
   signed: number;
   /** Their latest answer on it was a rejection (not a signature). */
   rejected: number;
-  /** Ended while they were an admin, and they never answered it. */
+  /** Expired while they were an admin, and they never answered it. */
   missed: number;
   /** answered / eligible, or null when nothing was eligible. */
   participation: number | null;
@@ -321,7 +321,7 @@ export function computeActivity(input: ActivityInput): ActivityReport {
       } else if (row) {
         rejected++;
       } else if (
-        span.outcome !== 'pending' &&
+        span.outcome === 'expired' &&
         span.lastSignatureHeight >= S &&
         span.lastSignatureHeight <= E &&
         contains(tenure, span.lastSignatureHeight)

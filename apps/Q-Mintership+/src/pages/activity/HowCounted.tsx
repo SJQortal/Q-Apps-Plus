@@ -72,9 +72,9 @@ export function HowCounted({ data }: { data: ActivityData | undefined }) {
           time.
         </Typography>
         <Typography component="li" variant="body2">
-          Missed means a decision ended (approved, rejected or expired) while they were an admin and
-          they never answered it: only doing nothing is a miss. Decisions still collecting
-          signatures count for an admin once they have answered.
+          Missed means a decision expired while they were an admin and they never answered it:
+          only doing nothing is a miss. Decisions still collecting signatures count for an admin
+          once they have answered.
         </Typography>
         <Typography component="li" variant="body2">
           Time to sign is the median from a decision's block to their signature's block, at the live
