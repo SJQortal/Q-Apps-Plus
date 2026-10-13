@@ -13,6 +13,7 @@ import {
   matchesSearch,
   myPart,
   parseFilter,
+  parseView,
   recentlyDecided,
 } from './filters';
 
@@ -43,6 +44,13 @@ describe('Nominations filters', () => {
     expect(parseFilter('signing')).toBe('signing');
     expect(parseFilter(null)).toBe('all');
     expect(parseFilter('rejected')).toBe('all');
+  });
+
+  it('reads the Ready to mint view from the address too, and only there', () => {
+    expect(parseView('ready')).toBe('ready');
+    expect(parseView('waiting')).toBe('waiting');
+    expect(parseView('nonsense')).toBe('all');
+    expect(parseFilter('ready')).toBe('all');
   });
 
   it('counts and filters by state', () => {
@@ -139,6 +147,7 @@ describe('Nominations filters', () => {
     expect(isStillOpenForSupport(nom({ nominee: ADDR.approved, state: 'approved' }))).toBe(false);
     expect(isStillOpenForSupport(nom({ nominee: ADDR.banned, state: 'blocked' }))).toBe(false);
   });
+
   it('says what the signed-in member already did for a nomination', () => {
     const n = nom({
       nominee: ADDR.nominatedWaiting,

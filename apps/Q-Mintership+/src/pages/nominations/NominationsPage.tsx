@@ -5,7 +5,8 @@
  * button elsewhere) and add their support to open nominations; the nominee
  * sees their own nomination first, with Accept or Join now. Recently decided
  * ones sit in a collapsed section below, with "Nominate again" where a round
- * ran out of time.
+ * ran out of time. "Ready to mint" (`?show=ready`) lists the people who asked
+ * to join, to nominate from (ReadyToMint.tsx).
  */
 import { useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
@@ -56,17 +57,19 @@ import { displayName, formatCount } from '../../utils/format';
 import { useLandscapeFrame, useShortFrame } from '../../utils/hubFrame';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
 import {
-  FILTERS,
+  VIEWS,
   canNominateAgain,
   countByFilter,
   isStillOpenForSupport,
   matchesFilter,
   matchesSearch,
   myPart,
-  parseFilter,
+  parseView,
   recentlyDecided,
-  type NominationFilter,
+  type NominationsView,
 } from './filters';
+import { ReadyToMintSection } from './ReadyToMint';
+import { useReadyToMint } from './useReadyToMint';
 
 const DECIDED_PAGE = 10;
 /** The floating button (48 px, 16 px above the bar) plus a margin. */
@@ -85,7 +88,9 @@ export default function NominationsPage() {
   const shortFrame = useShortFrame();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const filter = parseFilter(appParam(params, 'show'));
+  const view = parseView(appParam(params, 'show'));
+  const filter = view === 'ready' ? 'all' : view;
+  const ready = useReadyToMint(data?.loadedAt);
   const [search, setSearch] = useState('');
   const [decidedShown, setDecidedShown] = useState(0);
   const [support, setSupport] = useState<{
@@ -117,13 +122,21 @@ export default function NominationsPage() {
 
   const others = useMemo(() => (data ? data.open.filter((n) => n.nominee !== me) : []), [data, me]);
   const counts = useMemo(() => countByFilter(others), [others]);
+  // Ready to mint shows each person's open nomination; if they can't be read, Nominate
+  // still shows (the form checks again).
+  const nominationsFailed = !data && nominations.isError;
+  const openByNominee = useMemo(
+    () =>
+      data ? new Map(data.open.map((n) => [n.nominee, n])) : nominationsFailed ? new Map() : null,
+    [data, nominationsFailed]
+  );
   const shown = others.filter((n) => matchesFilter(n, filter) && matchesSearch(n, search, nameOf));
   const decided = useMemo(
     () => (data ? recentlyDecided(data.all, data.decisions.now, data.decisions.group) : []),
     [data]
   ).filter((d) => matchesSearch(d.nomination, search, nameOf));
 
-  const setFilter = (key: NominationFilter) =>
+  const setFilter = (key: NominationsView) =>
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -136,6 +149,11 @@ export default function NominationsPage() {
 
   const openSupport = (n: Nomination) =>
     setSupport({ nominee: n.nominee, name: n.nomineeName, open: true });
+  const refresh = () => {
+    void nominations.refetch();
+    // The list follows the nominations' reads; after a failure it reads again itself.
+    if (ready.isError) void ready.refetch();
+  };
 
   return (
     <>
@@ -146,7 +164,7 @@ export default function NominationsPage() {
           <>
             <IconButton
               aria-label="Refresh nominations"
-              onClick={() => void nominations.refetch()}
+              onClick={refresh}
               disabled={nominations.fetching}
               sx={{ width: 44, height: 44 }}
             >
@@ -211,37 +229,41 @@ export default function NominationsPage() {
         ) : null}
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          <TextField
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name or address"
-            size="small"
-            fullWidth
-            slotProps={{
-              htmlInput: {
-                'aria-label': 'Search nominations by name or address',
-                enterKeyHint: 'search',
-                autoCapitalize: 'none',
-                spellCheck: false,
-              },
-              input: {
-                sx: { minHeight: 44 },
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchOutlinedIcon aria-hidden />
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
+          {view === 'ready' ? null : (
+            <TextField
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or address"
+              size="small"
+              fullWidth
+              slotProps={{
+                htmlInput: {
+                  'aria-label': 'Search nominations by name or address',
+                  enterKeyHint: 'search',
+                  autoCapitalize: 'none',
+                  spellCheck: false,
+                },
+                input: {
+                  sx: { minHeight: 44 },
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchOutlinedIcon aria-hidden />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+          )}
           <Box
             role="group"
-            aria-label="Show nominations"
+            aria-label="Show nominations or the people ready to mint"
             sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}
           >
-            {FILTERS.map((f) => {
-              const active = filter === f.key;
+            {VIEWS.map((f) => {
+              const active = view === f.key;
+              const count =
+                f.key === 'ready' ? ready.data?.people.length : data ? counts[f.key] : undefined;
               return (
                 <Chip
                   key={f.key}
@@ -253,11 +275,11 @@ export default function NominationsPage() {
                   label={
                     <>
                       {f.label}
-                      {data ? (
+                      {count !== undefined ? (
                         <>
                           {' '}
                           <Box component="span" sx={{ ml: 0.5, fontWeight: 700 }}>
-                            {formatCount(counts[f.key])}
+                            {formatCount(count)}
                           </Box>
                         </>
                       ) : null}
@@ -270,77 +292,88 @@ export default function NominationsPage() {
           </Box>
         </Box>
 
-        <Section title="Open nominations" id="open">
-          {!data && nominations.isError ? (
-            <ErrorState
-              title="Couldn’t load the nominations."
-              error={nominations.error}
-              onRetry={() => void nominations.refetch()}
-            />
-          ) : !data ? (
-            <ListSkeleton count={3} ring label="Loading nominations" />
-          ) : others.length === 0 ? (
-            <EmptyState
-              title="No open nominations right now"
-              description={
-                canNominate
-                  ? 'Know someone who should mint? Nominate them, and the Minter Admins take it from there.'
-                  : 'When a level 5+ minter or a Minter Admin nominates someone, it shows up here.'
-              }
-              actionLabel={canNominate ? 'Nominate someone' : undefined}
-              onAction={canNominate ? () => navigate(PATHS.nominate) : undefined}
-            />
-          ) : shown.length === 0 ? (
-            <EmptyState
-              title="No nominations match"
-              description={
-                search.trim()
-                  ? `Nothing here matches “${search.trim()}”.`
-                  : 'None in this view right now.'
-              }
-              actionLabel="Show all"
-              onAction={() => {
-                setSearch('');
-                setFilter('all');
-              }}
-            />
-          ) : (
-            <Box
-              component="ul"
-              aria-label="Open nominations"
-              sx={{
-                listStyle: 'none',
-                m: 0,
-                p: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 1.5,
-              }}
-            >
-              {shown.map((n) => (
-                <li key={n.nominee}>
-                  <NominationCard
-                    nomination={n}
-                    now={data.decisions.now}
-                    compact
-                    actions={
-                      <CardActions
-                        n={n}
-                        me={me}
-                        canSupport={canNominate && Boolean(publishSigner)}
-                        isAdmin={isAdmin}
-                        onSupport={() => openSupport(n)}
-                      />
-                    }
-                  />
-                </li>
-              ))}
-            </Box>
-          )}
-          {data?.truncated ? <TruncatedNote what="the nominations" /> : null}
-        </Section>
+        {view === 'ready' ? (
+          <ReadyToMintSection
+            ready={ready}
+            open={openByNominee}
+            me={me}
+            canNominate={canNominate}
+            canSupport={canNominate && Boolean(publishSigner)}
+            onSupport={openSupport}
+          />
+        ) : (
+          <Section title="Open nominations" id="open">
+            {!data && nominations.isError ? (
+              <ErrorState
+                title="Couldn’t load the nominations."
+                error={nominations.error}
+                onRetry={() => void nominations.refetch()}
+              />
+            ) : !data ? (
+              <ListSkeleton count={3} ring label="Loading nominations" />
+            ) : others.length === 0 ? (
+              <EmptyState
+                title="No open nominations right now"
+                description={
+                  canNominate
+                    ? 'Know someone who should mint? Nominate them, and the Minter Admins take it from there.'
+                    : 'When a level 5+ minter or a Minter Admin nominates someone, it shows up here.'
+                }
+                actionLabel={canNominate ? 'Nominate someone' : undefined}
+                onAction={canNominate ? () => navigate(PATHS.nominate) : undefined}
+              />
+            ) : shown.length === 0 ? (
+              <EmptyState
+                title="No nominations match"
+                description={
+                  search.trim()
+                    ? `Nothing here matches “${search.trim()}”.`
+                    : 'None in this view right now.'
+                }
+                actionLabel="Show all"
+                onAction={() => {
+                  setSearch('');
+                  setFilter('all');
+                }}
+              />
+            ) : (
+              <Box
+                component="ul"
+                aria-label="Open nominations"
+                sx={{
+                  listStyle: 'none',
+                  m: 0,
+                  p: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1.5,
+                }}
+              >
+                {shown.map((n) => (
+                  <li key={n.nominee}>
+                    <NominationCard
+                      nomination={n}
+                      now={data.decisions.now}
+                      compact
+                      actions={
+                        <CardActions
+                          n={n}
+                          me={me}
+                          canSupport={canNominate && Boolean(publishSigner)}
+                          isAdmin={isAdmin}
+                          onSupport={() => openSupport(n)}
+                        />
+                      }
+                    />
+                  </li>
+                ))}
+              </Box>
+            )}
+            {data?.truncated ? <TruncatedNote what="the nominations" /> : null}
+          </Section>
+        )}
 
-        {data && decided.length ? (
+        {data && decided.length && view !== 'ready' ? (
           <RecentlyDecided
             decided={decided}
             now={data.decisions.now}

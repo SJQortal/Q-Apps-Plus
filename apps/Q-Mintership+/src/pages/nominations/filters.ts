@@ -1,8 +1,8 @@
 /**
  * The Nominations page's list logic, pure so it is tested on its own: the
- * state filters, the name/address search, which decided nominations count
- * as "recently decided" (and when each one ended), and what the signed-in
- * member already did for a nomination.
+ * state filters and the Ready to mint view, the name/address search, which
+ * decided nominations count as "recently decided" (and when each one ended),
+ * and what the signed-in member already did for a nomination.
  */
 import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
@@ -21,6 +21,18 @@ export const FILTERS: Array<{ key: NominationFilter; label: string }> = [
 
 export function parseFilter(value: string | null): NominationFilter {
   return FILTERS.some((f) => f.key === value) ? (value as NominationFilter) : 'all';
+}
+
+/** What the page shows: open nominations by state, or the people ready to mint (`?show=ready`). */
+export type NominationsView = NominationFilter | 'ready';
+
+export const VIEWS: Array<{ key: NominationsView; label: string }> = [
+  ...FILTERS,
+  { key: 'ready', label: 'Ready to mint' },
+];
+
+export function parseView(value: string | null): NominationsView {
+  return value === 'ready' ? 'ready' : parseFilter(value);
 }
 
 export function matchesFilter(n: Nomination, filter: NominationFilter): boolean {
