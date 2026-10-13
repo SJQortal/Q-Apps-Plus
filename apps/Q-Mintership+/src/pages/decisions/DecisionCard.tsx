@@ -11,7 +11,8 @@
  * comments sit behind a "Comments (n)" toggle.
  *
  * A double (rules/double.ts) says so with a chip and a note, keeps Sign and
- * Reject as plain secondary buttons and offers no Considering.
+ * Reject as plain secondary buttons, offers no Considering and stays out of
+ * Sign several.
  */
 import { useId, useState } from 'react';
 import { Box, Button, Checkbox, Skeleton, Typography } from '@mui/material';
@@ -44,6 +45,7 @@ import { openQortalLink } from '../../utils/links';
 import { usePendingAnswers } from '../../writes/optimistic';
 import type { DecisionRisk, ShiftScenario } from '../../rules/targetShift';
 import { DoubleChip, DoubleNote } from './DoubleParts';
+import { doubleLeftOutText } from './doubleUi';
 import { TargetImpact } from './TargetImpact';
 import { TargetRiskChip, TargetRiskNote } from './TargetRiskChip';
 import type { LabelOf } from './targetShiftUi';
@@ -218,7 +220,7 @@ export function DecisionCard(props: DecisionCardProps) {
       })}
     >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-        {selecting && signable && view.shown === 'none' ? (
+        {selecting && signable && view.shown === 'none' && !double ? (
           <Checkbox
             checked={Boolean(selected)}
             onChange={() => onToggleSelect?.(d.signature)}
@@ -395,6 +397,11 @@ export function DecisionCard(props: DecisionCardProps) {
             <Typography variant="body2" color="text.secondary" sx={{ flexBasis: '100%' }}>
               Your latest answer on chain is a rejection. Signing replaces it: only your latest
               answer counts.
+            </Typography>
+          ) : null}
+          {selecting && double && signable && view.shown === 'none' ? (
+            <Typography variant="body2" color="text.secondary" sx={{ flexBasis: '100%' }}>
+              {doubleLeftOutText(double)}.
             </Typography>
           ) : null}
           {view.failed && (signable || rejectable || withdrawable) ? (

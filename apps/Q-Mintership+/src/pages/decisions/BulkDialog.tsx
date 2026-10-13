@@ -34,6 +34,11 @@ export interface BulkItem {
   label: string;
 }
 
+/** Something the run leaves out, and why ("Left out: a double, it changes nothing"). */
+export interface BulkLeftOut extends BulkItem {
+  reason: string;
+}
+
 /** One Hub confirmation each item takes, in a run of two per item. */
 export interface BulkStep {
   /** The Hub action (a key of HUB_DIALOGS). */
@@ -89,6 +94,8 @@ export interface BulkDialogProps {
   /** Every confirmation's fee type (the fee is counted once per confirmation). */
   feeTxType: GroupTxType;
   items: BulkItem[];
+  /** Listed before the run with the reason each is left out (Sign several: doubles). */
+  leftOut?: BulkLeftOut[];
   run: (report: BulkReport) => Promise<BulkOutcome[]>;
   confirmLabel: string;
   /** An item whose every step went through (default "Sent ✓"). */
@@ -150,6 +157,7 @@ export function BulkDialog(props: BulkDialogProps) {
     steps,
     feeTxType,
     items,
+    leftOut = [],
     run,
     confirmLabel,
     sentLabel = 'Sent ✓',
@@ -302,6 +310,29 @@ export function BulkDialog(props: BulkDialogProps) {
               <Typography variant="body2" color="text.secondary">
                 If you cancel one in Hub, the rest are not sent.
               </Typography>
+            </Box>
+          ) : null}
+          {leftOut.length ? (
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                Not in this run:
+              </Typography>
+              <Box
+                component="ul"
+                sx={{
+                  m: 0,
+                  pl: 2.5,
+                  typography: 'body2',
+                  color: 'text.secondary',
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                {leftOut.map((item) => (
+                  <li key={item.key}>
+                    {item.label}. {item.reason}.
+                  </li>
+                ))}
+              </Box>
             </Box>
           ) : null}
           <FeeNote

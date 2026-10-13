@@ -205,9 +205,12 @@ export function canWithdraw(d: Decision, view: AnswerView, now: Pick<ChainNow, '
   );
 }
 
-/** Waiting for this admin: they can sign it and haven't answered it at all. */
+/**
+ * Waiting for this admin: they can sign it and haven't answered it at all.
+ * A double (rules/double.ts) never is: there's no need to sign it.
+ */
 export function isWaitingForMe(d: Decision, view: AnswerView): boolean {
-  return canSign(d, view) && view.shown === 'none';
+  return !d.double && canSign(d, view) && view.shown === 'none';
 }
 
 /** When Core applies a decision with enough signatures: "in the next block", or "at block X (in about T)". */

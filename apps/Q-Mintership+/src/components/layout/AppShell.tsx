@@ -36,13 +36,14 @@ const Main = styled('main', {
   paddingBottom: $phone ? `calc(${BOTTOM_NAV_HEIGHT}px + var(--qp-safe-bottom))` : 0,
 }));
 
-/** Decisions the signed-in admin can still sign: open, not signed by them. */
+/** Decisions the signed-in admin can still sign: open, not answered by them, not a double. */
 function useDecisionsBadge(isAdmin: boolean, publicKey: string): number {
   const decisions = useDecisions(isAdmin);
   if (!isAdmin || !decisions.data) return 0;
   return decisions.data.decisions.filter(
     (d) =>
       d.tally &&
+      !d.double &&
       (d.phase === 'open' || d.phase === 'early') &&
       signerState(d.tally, publicKey) === 'none'
   ).length;

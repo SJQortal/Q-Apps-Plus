@@ -76,7 +76,8 @@ import {
 import type { Signer } from '../../writes/runner';
 import { BulkDialog } from './BulkDialog';
 import { DecisionCard, type NominationsState, type SubjectFacts } from './DecisionCard';
-import { answerView, isWaitingForMe } from './decisionUi';
+import { answerView, canSign, isWaitingForMe } from './decisionUi';
+import { doubleLeftOutText, doublesAsideText } from './doubleUi';
 import { FirstSignatureDialog } from './FirstSignatureDialog';
 import { HowSigningWorks } from './HowSigningWorks';
 import { ProposeDialog } from './ProposeDialog';
@@ -244,6 +245,13 @@ function DecisionsQueue() {
   const hiddenCount = collecting.length - shown.length;
   // Waiting for this admin: no answer yet (a rejection can still be replaced on its card).
   const signable = isAdmin ? collecting.filter((d) => isWaitingForMe(d, viewOf(d))) : [];
+  // Doubles this admin hasn't answered: not waiting for them, and left out of Sign several.
+  const doubles = isAdmin
+    ? collecting.filter((d) => {
+        const view = viewOf(d);
+        return d.double && canSign(d, view) && view.shown === 'none';
+      })
+    : [];
   const waiting = (nominationsQ.data?.open ?? []).filter((n) => n.state === 'waiting');
 
   const toggleSelect = (signature: string) =>
@@ -404,6 +412,11 @@ function DecisionsQueue() {
                   admin seats. Sign the ones you agree with. Reject the ones you don’t, or let them
                   expire: {plural(needed, 'rejection')} end one as rejected.
                 </Typography>
+                {doubles.length ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {doublesAsideText(doubles.length)}
+                  </Typography>
+                ) : null}
               </Card>
             ) : (
               <Alert severity="info" role="note">
@@ -714,6 +727,11 @@ function DecisionsQueue() {
         action="SIGN_TRANSACTION"
         feeTxType="GROUP_APPROVAL"
         items={(bulkList ?? []).map((d) => ({ key: d.signature, label: labelFor(d) }))}
+        leftOut={doubles.map((d) => ({
+          key: d.signature,
+          label: labelFor(d),
+          reason: d.double ? doubleLeftOutText(d.double) : '',
+        }))}
         confirmLabel="Continue to Hub"
         run={(report) =>
           signer && bulkList

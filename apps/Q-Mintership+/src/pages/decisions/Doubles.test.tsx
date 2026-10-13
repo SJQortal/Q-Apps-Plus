@@ -2,21 +2,25 @@
  * Doubles (rules/double.ts) on the screens: an admin's own second "Become a
  * Minter Admin", a removal of someone who isn't a Minter Admin, and the same
  * addition waiting twice (e2e/world.mjs addDoubles). Each says so on its
- * card and its own page, keeps Sign and Reject as secondary buttons and
- * offers no Considering.
+ * card and its own page, keeps Sign and Reject as secondary buttons, offers
+ * no Considering, and counts nowhere as waiting.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderPage } from '../../test/render';
 import { addDoubles } from '../../../e2e/world.mjs';
 import { formatBlock } from '../../utils/format';
 import { TIP } from '../../test/world';
 import type { InstalledWorld } from '../../test/world';
+import HomePage from '../home/HomePage';
+import { AppShell } from '../../components/layout/AppShell';
 import DecisionPage from './DecisionPage';
 import DecisionsPage from './DecisionsPage';
 
 afterEach(() => vi.useRealTimers());
 
+const user = () => userEvent.setup();
 const T = { timeout: 4000 };
 
 type World = InstalledWorld['world'];
@@ -118,6 +122,59 @@ describe('Doubles on the Decisions page', () => {
     // The older Member 9 addition is a real decision, before them.
     expect(titles.indexOf('Make a Minter Admin, Member 9')).toBeLessThan(titles.length - 3);
   });
+
+  it('doesn’t count them as waiting, and says so quietly', async () => {
+    await openQueue();
+    // Six as before, plus the older Member 9 addition; the three doubles don't count.
+    expect(screen.getByText('7 decisions waiting for your signature')).toBeInTheDocument();
+    expect(
+      screen.getByText('Plus 3 doubles, marked on their cards: no need to sign them.')
+    ).toBeVisible();
+  });
+});
+
+describe('Doubles and Sign several', () => {
+  it('leaves doubles out, with the reason, on their cards and in the run', async () => {
+    const u = user();
+    await openQueue();
+    await u.click(screen.getByRole('button', { name: 'Sign several' }));
+    // No box to tick on a double: it says why.
+    const already = card(ALREADY);
+    expect(within(already).queryByRole('checkbox')).toBeNull();
+    expect(
+      within(already).getByText('Left out: a double, it changes nothing.')
+    ).toBeInTheDocument();
+    const newer = screen.getAllByRole('article', { name: MEMBER_9 })[1];
+    expect(
+      within(newer).getByText('Left out: a double, the same change is already waiting.')
+    ).toBeInTheDocument();
+
+    await u.click(screen.getByRole('button', { name: 'Select all' }));
+    expect(screen.getByText('7 of 7 selected')).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: 'Sign 7' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Sign several' });
+    expect(within(dialog).getByText(/7 Hub confirmations, one for each/)).toBeVisible();
+    expect(within(dialog).getByText('Not in this run:')).toBeVisible();
+    expect(
+      within(dialog).getByText(
+        'Become a Minter Admin: Admin C. Left out: a double, it changes nothing.'
+      )
+    ).toBeVisible();
+    expect(
+      within(dialog).getByText(
+        'Remove a Minter Admin: Nora Nominator. Left out: a double, it changes nothing.'
+      )
+    ).toBeVisible();
+    expect(
+      within(dialog).getByText(
+        'Make a Minter Admin: Member 9. Left out: a double, the same change is already waiting.'
+      )
+    ).toBeVisible();
+    // The run itself holds the seven real ones only.
+    expect(
+      within(within(dialog).getByRole('list', { name: 'Progress' })).getAllByRole('listitem')
+    ).toHaveLength(7);
+  }, 20_000);
 });
 
 describe('A double’s own page', () => {
@@ -172,5 +229,38 @@ describe('A double’s own page', () => {
     expect(within(page).getByText('Double')).toBeInTheDocument();
     expect(doubleNote(page)).toHaveTextContent(/isn’t a Minter Admin/);
     expect(within(page).queryByRole('button', { name: /^Sign: / })).toBeNull();
+  });
+});
+
+describe('Doubles don’t count on Home or in the navigation', () => {
+  it('Home: the waiting count and the activity leave them out', async () => {
+    await renderPage(<HomePage />, {
+      persona: 'admin',
+      setup: (world: World) => void addDoubles(world),
+    });
+    // Six as without doubles, plus the older Member 9 addition.
+    await screen.findByRole(
+      'heading',
+      { level: 2, name: 'Avery Admin, 7 decisions are waiting for your signature' },
+      T
+    );
+    const waiting = screen.getByRole('region', { name: 'Waiting for your signature' });
+    expect(within(waiting).getByRole('link', { name: 'See all 7' })).toBeVisible();
+    const activity = screen.getByRole('region', { name: 'Your activity' });
+    expect(within(activity).getByText('2 of 9')).toBeInTheDocument();
+  });
+
+  it('the Decisions badge counts the same', async () => {
+    await renderPage(<AppShell />, {
+      persona: 'admin',
+      setup: (world: World) => void addDoubles(world),
+    });
+    await waitFor(
+      () =>
+        expect(
+          screen.getAllByRole('button', { name: /^Decisions, 7 waiting for you$/ }).length
+        ).toBeGreaterThan(0),
+      T
+    );
   });
 });
