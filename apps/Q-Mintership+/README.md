@@ -1,10 +1,10 @@
 # Q-Mintership+ (2.0)
 
-**Q-Mintership+** is a rewrite of Q-Mintership on React 19.3 + MUI 9.4 with a simpler process for joining the MINTER group (694): **level 5+ minters and Minter Admins nominate; Minter Admins sign, or let it expire.** No polls or votes. It is built in [Q-Apps+](https://github.com/SJQortal/Q-Apps-Plus), tested with the community as `Q-Mintership+` on QDN, and offered back here as a pull request once it has proven itself.
+**Q-Mintership+** is a rewrite of Q-Mintership on React 19.3 + MUI 9.4 with a simpler process for joining the MINTER group (694): **level 5+ minters and Minter Admins nominate; Minter Admins sign, reject, or let it expire.** No polls or votes. It is built in [Q-Apps+](https://github.com/SJQortal/Q-Apps-Plus), tested with the community as `Q-Mintership+` on QDN, and offered back here as a pull request once it has proven itself.
 
 - **Home speaks to you:** your MINTER status (not in MINTER yet, nominated, approved, member, former member, Minter Admin) with your real numbers and the one thing to do next.
-- **Nominations:** who nominated, who supports, the signatures so far and the time left; nominees accept with one step, so approval makes them a minter at once.
-- **Decisions (Minter Admins):** one queue for nominations, removals, bans and admin changes, most urgent first, with k of n and a live countdown; sign one or several; every Hub confirmation is explained before it opens, with its fee.
+- **Nominations:** who nominated, who supports, the signatures and rejections so far, how many Minter Admins are considering, and the time left; nominees accept with one step, so approval makes them a minter at once.
+- **Decisions (Minter Admins):** one queue for nominations, removals, bans and admin changes, most urgent first, with k of n and a live countdown; sign one or several, reject, withdraw a signature, or say you're considering; every Hub confirmation is explained before it opens, with its fee.
 - **Activity and History:** Minter Admin participation and the group's pulse, computed live from the chain; the original app's cards, polls and comments stay readable.
 
 Develop and check (from this folder):
@@ -18,7 +18,7 @@ npm run build
 npm run test:decode   # optional: GROUP_APPROVAL bytes checked by a local node's read-only decode endpoint
 ```
 
-The new data (two small QDN JSON records), every chain write and every read are listed in [docs/apps/Q-Mintership+.md](https://github.com/SJQortal/Q-Apps-Plus/blob/main/docs/apps/Q-Mintership+.md). The original app is kept in `legacy/` for reference.
+The new data (small QDN JSON records), every chain write and every read are listed in [docs/apps/Q-Mintership+.md](https://github.com/SJQortal/Q-Apps-Plus/blob/main/docs/apps/Q-Mintership+.md). The original app is kept in `legacy/` for reference.
 
 ---
 

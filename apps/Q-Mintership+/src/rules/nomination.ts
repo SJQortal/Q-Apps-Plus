@@ -9,9 +9,10 @@
  *    makes them a member at once.
  * 3. The first Minter Admin who signs creates the GROUP_INVITE (txGroupId
  *    694) and approves it; the clock starts.
- * 4. Other admins sign, or let it expire.
- * 5. Core approves it at the threshold, or it expires; it can be nominated
- *    again.
+ * 4. Other admins sign, reject, or let it expire (rejections count against
+ *    the same target, signatures first).
+ * 5. Core approves it at the threshold, ends it as rejected at as many
+ *    rejections, or it expires; it can be nominated again.
  *
  * Before the first admin signature a nomination waits on the open list for
  * at most one approval window (10,080 blocks), then moves to History.
