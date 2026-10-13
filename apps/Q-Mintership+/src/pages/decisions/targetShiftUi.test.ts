@@ -240,10 +240,10 @@ describe('the chip on an affected decision', () => {
 
   it('says what a withdrawal does and costs', () => {
     expect(withdrawAdvice('0.01 QORT')).toMatch(
-      /withdraw your signature before the admin change passes\. A withdrawal counts as a rejection, only each admin’s latest decision counts, and it costs 0\.01 QORT\.$/
+      /withdraw your signature before the admin change passes\. A withdrawal counts as a rejection, only each admin’s latest answer counts, and it costs 0\.01 QORT\.$/
     );
-    expect(withdrawAdvice('0.01 QORT', 'Core applies it')).toMatch(
-      /withdraw your signature before Core applies it\./
+    expect(withdrawAdvice('0.01 QORT', 'block 1,233')).toMatch(
+      /withdraw your signature before block 1,233\./
     );
   });
 });

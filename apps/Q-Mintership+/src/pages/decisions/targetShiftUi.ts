@@ -138,10 +138,10 @@ export const ORDER_ADVICE =
 
 /**
  * The on-chain way back for an admin who signed a decision at risk, to do
- * before `deadline` ("the admin change passes", "Core applies it").
+ * before `deadline` ("the admin change passes", "block 1,233").
  */
 export function withdrawAdvice(fee: string, deadline = 'the admin change passes'): string {
-  return `Signed one of these and don’t want it to go through this way? You can withdraw your signature before ${deadline}. A withdrawal counts as a rejection, only each admin’s latest decision counts, and it costs ${fee}.`;
+  return `Signed one of these and don’t want it to go through this way? You can withdraw your signature before ${deadline}. A withdrawal counts as a rejection, only each admin’s latest answer counts, and it costs ${fee}.`;
 }
 
 /** The banner's title: "The target changed from 9 to 7 signatures". */

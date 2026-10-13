@@ -181,7 +181,7 @@ export interface AdminActivity {
   /** Decisions they could have signed in the window. */
   eligible: number;
   signed: number;
-  /** Their latest decision on it was a rejection (not a signature). */
+  /** Their latest answer on it was a rejection (not a signature). */
   rejected: number;
   /** Expired while they were an admin, and they didn't act on it. */
   missed: number;
