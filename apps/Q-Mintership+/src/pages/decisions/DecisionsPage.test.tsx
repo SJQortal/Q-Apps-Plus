@@ -459,6 +459,25 @@ describe('Decisions: proposing', () => {
     expect(within(form).getByText('Leo Learner')).toBeVisible();
   }, 20_000);
 
+  it('marks the reason required, and Review says when it is missing', async () => {
+    const u = user();
+    await openPage('admin');
+    await u.click(screen.getByRole('button', { name: 'Propose' }));
+    await u.click(await screen.findByRole('menuitem', { name: /Remove a member/ }));
+    const form = await screen.findByRole('dialog', { name: 'Remove a member' });
+    const reason = within(form).getByRole('textbox', { name: 'Reason' });
+    expect(reason).toBeRequired();
+    await u.type(within(form).getByRole('textbox', { name: 'Name or address' }), 'Leo Learner');
+    await u.click(within(form).getByRole('button', { name: 'Find' }));
+    expect(await within(form).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
+    const review = within(form).getByRole('button', { name: 'Review' });
+    expect(review).toBeEnabled();
+    await u.click(review);
+    expect(reason).toHaveFocus();
+    expect(reason).toHaveAccessibleDescription(/Say why, in a few words/);
+    expect(screen.queryByRole('dialog', { name: /Remove from MINTER/ })).toBeNull();
+  });
+
   it('refuses a ban longer than 24 days before Hub is asked', async () => {
     const u = user();
     await openPage('admin');
@@ -474,7 +493,10 @@ describe('Decisions: proposing', () => {
     await u.clear(days);
     await u.type(days, '25');
     expect(within(form).getByText(/A ban can last up to 24 days/)).toBeVisible();
-    expect(within(form).getByRole('button', { name: 'Review' })).toBeDisabled();
+    // Review says what is wrong: focus goes to the length, and Hub isn't next.
+    await u.click(within(form).getByRole('button', { name: 'Review' }));
+    expect(days).toHaveFocus();
+    expect(screen.queryByRole('dialog', { name: /Ban from MINTER/ })).toBeNull();
     await u.clear(days);
     await u.type(days, '24');
     expect(within(form).getByRole('button', { name: 'Review' })).toBeEnabled();

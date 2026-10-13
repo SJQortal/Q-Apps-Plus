@@ -4,7 +4,7 @@
  * Hub confirmation. Kicking or banning a Minter Admin is offered as
  * "remove their admin role first", because Core refuses it otherwise.
  */
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -92,6 +92,8 @@ export function ProposeDialog({
   const [touched, setTouched] = useState(false);
   const [presetFor, setPresetFor] = useState<string | null>(null);
   const banLabelId = useId();
+  const reasonRef = useRef<HTMLInputElement | null>(null);
+  const daysRef = useRef<HTMLInputElement | null>(null);
 
   // A new kind or preset person starts a fresh form (React's adjust-while-rendering pattern).
   const presetKey = `${kind ?? ''}:${preset?.address ?? ''}`;
@@ -139,13 +141,17 @@ export function ProposeDialog({
   const reasonError = needsReason ? reasonProblem(reason) : null;
   const ban = kind === 'ban' && banMode === 'days' ? parseBanDays(days) : { seconds: 0 };
   const banError = 'error' in ban ? ban.error : null;
-  const ready =
-    person !== null &&
-    check !== null &&
-    check !== 'checking' &&
-    check.status === 'ok' &&
-    !reasonError &&
-    !banError;
+  const personOk =
+    person !== null && check !== null && check !== 'checking' && check.status === 'ok';
+  const ready = personOk && !reasonError && !banError;
+
+  // Review stays pressable while only the reason or length is missing, and says which.
+  const review = () => {
+    setTouched(true);
+    if (ready) setPhase('hub');
+    else if (reasonError) reasonRef.current?.focus();
+    else if (banError) daysRef.current?.focus();
+  };
 
   const find = async () => {
     setInputError(null);
@@ -179,14 +185,7 @@ export function ProposeDialog({
         actions={
           <>
             <Button onClick={close}>Cancel</Button>
-            <Button
-              variant="contained"
-              disabled={!ready}
-              onClick={() => {
-                setTouched(true);
-                if (ready) setPhase('hub');
-              }}
-            >
+            <Button variant="contained" disabled={!personOk} onClick={review}>
               Review
             </Button>
           </>
@@ -283,6 +282,8 @@ export function ProposeDialog({
             {banMode === 'days' ? (
               <TextField
                 label="Days"
+                required
+                inputRef={daysRef}
                 value={days}
                 onChange={(e) => setDays(e.target.value)}
                 error={Boolean(banError)}
@@ -300,6 +301,8 @@ export function ProposeDialog({
         {needsReason ? (
           <TextField
             label="Reason"
+            required
+            inputRef={reasonRef}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             onBlur={() => setTouched(true)}
