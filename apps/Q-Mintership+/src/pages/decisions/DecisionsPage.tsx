@@ -150,6 +150,7 @@ function DecisionsQueue() {
   const [bulkList, setBulkList] = useState<Decision[] | null>(null);
   const [staleExpanded, setStaleExpanded] = useState(false);
   const proposeButton = useRef<HTMLButtonElement | null>(null);
+  const hideSignedSwitch = useRef<HTMLInputElement | null>(null);
   // Propose → Clean up stale invites: the section takes focus, after the menu
   // (or the phone's sheet) has put it back on Propose as it closed.
   const [staleFocus, setStaleFocus] = useState(0);
@@ -419,6 +420,7 @@ function DecisionsQueue() {
                     <Switch
                       checked={hideSigned}
                       onChange={(e) => setHideSigned(e.target.checked)}
+                      slotProps={{ input: { ref: hideSignedSwitch } }}
                     />
                   }
                   label="Hide what I signed"
@@ -486,7 +488,14 @@ function DecisionsQueue() {
                       {plural(hiddenCount, 'decision')} you signed{' '}
                       {hiddenCount === 1 ? 'is' : 'are'} hidden.
                     </Typography>
-                    <Button onClick={() => setHideSigned(false)} sx={{ minHeight: 44 }}>
+                    <Button
+                      onClick={() => {
+                        // This button goes with the note: focus to the switch it turned off.
+                        hideSignedSwitch.current?.focus();
+                        setHideSigned(false);
+                      }}
+                      sx={{ minHeight: 44 }}
+                    >
                       Show the ones I signed
                     </Button>
                   </Box>

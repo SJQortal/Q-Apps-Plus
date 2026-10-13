@@ -956,6 +956,10 @@ describe('Decisions: navigation and filters', () => {
     expect(screen.getByText(/2 decisions you signed are hidden/)).toBeVisible();
     await u.click(screen.getByRole('button', { name: 'Show the ones I signed' }));
     expect(await screen.findByRole('article', { name: /Uma Urgent/ })).toBeInTheDocument();
+    // The button went with its note: focus is on the switch it turned off, not on the page.
+    expect(screen.queryByRole('button', { name: 'Show the ones I signed' })).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Hide what I signed' })).toHaveFocus();
+    expect(screen.getByRole('switch', { name: 'Hide what I signed' })).not.toBeChecked();
   });
 
   it('shows the empty state when nothing is waiting', async () => {
