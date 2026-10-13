@@ -601,13 +601,41 @@ function newestFirstEvents(
 }
 
 /**
- * The admin count and target before and after each approved admin change,
- * newest first, worked back from today's count. Each approved change moved
- * the count by one, and so did each leave of an admin (`leaves`, with no
- * step of its own). `changes` and `leaves` must hold every approved admin
- * change and leave from the oldest one wanted up to now (one unbroken read),
- * or the counts drift. A leave with nothing on record about the leaver
- * (wasAdmin null) is taken as a member's.
+ * The approved changes that moved a seat, oldest first through `changes`
+ * and `leaves` (in one block, a leave before a change). An approved
+ * addition of someone already a Minter Admin (an earlier approved addition,
+ * with no removal or leave since) moves no seat, so it is left out. Before
+ * the oldest change read, who was an admin isn't known: a first addition
+ * counts.
+ */
+function seatChanges(
+  changes: readonly ApprovedAdminChange[],
+  leaves: readonly AdminLeave[]
+): ApprovedAdminChange[] {
+  const isAdmin = new Map<string, boolean>();
+  const kept = new Set<ApprovedAdminChange>();
+  for (const event of newestFirstEvents(changes, leaves).reverse()) {
+    if ('leave' in event) {
+      // Whoever leaves MINTER has no admin row afterwards.
+      isAdmin.set(event.leave.address, false);
+      continue;
+    }
+    const { change } = event;
+    if (change.added && isAdmin.get(change.address) === true) continue;
+    isAdmin.set(change.address, change.added);
+    kept.add(change);
+  }
+  return changes.filter((change) => kept.has(change));
+}
+
+/**
+ * The admin count and target before and after each approved admin change
+ * that moved a seat (seatChanges), newest first, worked back from today's
+ * count. Each one moved the count by one, and so did each leave of an
+ * admin (`leaves`, with no step of its own). `changes` and `leaves` must
+ * hold every approved admin change and leave from the oldest one wanted up
+ * to now (one unbroken read), or the counts drift. A leave with nothing on
+ * record about the leaver (wasAdmin null) is taken as a member's.
  */
 export function targetSteps(
   changes: readonly ApprovedAdminChange[],
@@ -617,7 +645,7 @@ export function targetSteps(
 ): TargetStep[] {
   let running = Math.max(0, currentCount);
   const steps: TargetStep[] = [];
-  for (const event of newestFirstEvents(changes, leaves)) {
+  for (const event of newestFirstEvents(seatChanges(changes, leaves), leaves)) {
     if ('leave' in event) {
       if (event.leave.wasAdmin === true) running += 1;
       continue;
@@ -649,7 +677,7 @@ export function adminCountAt(
   height: number
 ): number {
   let running = Math.max(0, currentCount);
-  for (const event of newestFirstEvents(changes, leaves)) {
+  for (const event of newestFirstEvents(seatChanges(changes, leaves), leaves)) {
     if (event.at <= height) break;
     if ('leave' in event) {
       if (event.leave.wasAdmin === true) running += 1;

@@ -18,6 +18,7 @@ import {
   targetSteps,
   toShiftDecision,
   type AdminChangeInput,
+  type AdminLeave,
   type ShiftDecision,
   type ShiftState,
 } from './targetShift';
@@ -765,6 +766,43 @@ describe('targetSteps: the target before and after each approved admin change', 
       neededBefore: 9,
       neededAfter: 10,
     });
+  });
+
+  it('gives no step to an approved addition of someone already a Minter Admin', () => {
+    // X was made an admin at 100, and a second addition of X was approved at 200.
+    const changes = [
+      { signature: 'first', address: 'QX', added: true, height: 100 },
+      { signature: 'again', address: 'QX', added: true, height: 200 },
+    ];
+    const steps = targetSteps(changes, 21, 'PCT40');
+    expect(
+      steps.map((s) => [s.signature, s.countBefore, s.countAfter, s.neededBefore, s.neededAfter])
+    ).toEqual([['first', 20, 21, 8, 9]]);
+    expect(adminCountAt(changes, [], 21, 150)).toBe(21);
+    expect(adminCountAt(changes, [], 21, 50)).toBe(20);
+  });
+
+  it('counts an addition again after a removal or a leave of the same person', () => {
+    const removed = [
+      { signature: 'add1', address: 'QX', added: true, height: 100 },
+      { signature: 'out', address: 'QX', added: false, height: 200 },
+      { signature: 'add2', address: 'QX', added: true, height: 300 },
+    ];
+    expect(targetSteps(removed, 21, 'PCT40').map((s) => [s.signature, s.countAfter])).toEqual([
+      ['add2', 21],
+      ['out', 20],
+      ['add1', 21],
+    ]);
+    const added = [
+      { signature: 'add1', address: 'QX', added: true, height: 100 },
+      { signature: 'add2', address: 'QX', added: true, height: 300 },
+    ];
+    const left: AdminLeave[] = [{ address: 'QX', height: 200, wasAdmin: true }];
+    expect(targetSteps(added, 21, 'PCT40', left).map((s) => [s.signature, s.countAfter])).toEqual([
+      ['add2', 21],
+      ['add1', 21],
+    ]);
+    expect(adminCountAt(added, left, 21, 250)).toBe(20);
   });
 
   it('has nothing to say without changes, and never counts below zero', () => {
