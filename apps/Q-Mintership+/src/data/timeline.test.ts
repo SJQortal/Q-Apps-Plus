@@ -78,12 +78,28 @@ describe('timeline wording', () => {
         'expired',
         'Not enough signatures in time. They can be nominated again.',
       ],
-      ['Proposed: Ban from MINTER', 'rejected', 'Rejected by Minter Admins.'],
+      ['Proposed: Ban from MINTER', 'rejected', 'Enough Minter Admins rejected it.'],
       ['Proposed: Remove from MINTER', 'pending', null],
     ]);
     expect(events[0].atHeight).toBe(100 + 10_081);
     expect(events[2].reason).toBe('Inactive');
     expect(events.every((e) => e.tone === 'neutral')).toBe(true);
+  });
+
+  it('dates a rejected nomination when Core ended it, and says it can come again', () => {
+    const events = buildTimeline(
+      [tx('GROUP_INVITE', 500, { invitee: A, approvalStatus: 'REJECTED', approvalHeight: 530 })],
+      CTX
+    );
+    expect(events.map((e) => [e.title, e.outcome, e.detail, e.atHeight])).toEqual([
+      [
+        'Nominated for MINTER',
+        'rejected',
+        'Enough Minter Admins rejected it. They can be nominated again.',
+        530,
+      ],
+    ]);
+    expect(events[0].becameMember).toBe(false);
   });
 
   it('names removals, bans, admin changes and leaving', () => {
