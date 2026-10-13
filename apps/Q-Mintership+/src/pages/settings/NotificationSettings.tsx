@@ -6,13 +6,15 @@
  * nominations here, without a Hub dialog.
  */
 import { useEffect, useId, useRef, useState } from 'react';
-import { Switch, Typography } from '@mui/material';
+import { Box, Button, Switch, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useAtom } from 'jotai';
 import { Section } from '../../components/common/Section';
+import { focusPageTitle } from '../../components/layout/pageFocus';
 import { useMyStatus } from '../../hooks/useData';
 import { useQuery } from '../../hooks/useQuery';
 import { loadNominations } from '../../data/nominations';
+import { getQueryState } from '../../data/query';
 import { hasQortalRequest } from '../../qortal/client';
 import {
   MAX_SUPPORT_ALERTS,
@@ -80,6 +82,7 @@ function HubAlertsRow() {
   const { status } = useMyStatus();
   const labelId = useId();
   const hintId = useId();
+  const switchId = useId();
   const inHub = hasQortalRequest() && session.status === 'ready';
   const actions = useQuery(inHub ? 'hub:actions' : null, () => getHubActions());
   const supported = supportsHubAlerts(actions.data);
@@ -100,6 +103,8 @@ function HubAlertsRow() {
   );
   const nominees = all.data ? supportAlertNominees(all.data.all, session.address) : null;
   const noneOpen = role === 'nominator' && nominees !== null && nominees.length === 0;
+  // A nominator's switch needs their open nominations: until they are read, nothing to turn on.
+  const nominationsFailed = !on && role === 'nominator' && all.isError;
 
   let hint: string;
   if (!inHub) hint = 'Open this app in Qortal Hub or GO, signed in, to use Hub alerts.';
@@ -112,6 +117,10 @@ function HubAlertsRow() {
       role === 'none'
         ? 'These alerts were set up for your earlier role and no longer fit. Turn them off.'
         : 'These alerts were set up for your earlier role. Turn them off and on to update them.';
+  else if (nominationsFailed)
+    hint = "Couldn't read the nominations you made, so there's nothing to turn on yet.";
+  else if (!on && role === 'nominator' && all.isLoading)
+    hint = 'Checking the nominations you made…';
   else if (noneOpen)
     hint =
       'Hub tells you when someone adds their support to a nomination you made. You have no open nominations now.';
@@ -142,6 +151,36 @@ function HubAlertsRow() {
       )
       .finally(() => setChecked(syncKey));
   }, [ready, on, stale, nominator, role, nomineesKey, syncKey]);
+  // Try again stays while it reads, so focus stays on it; once the nominations are read it
+  // goes, and focus moves on to the switch (or the page, when there is nothing to turn on).
+  const [retrying, setRetrying] = useState(false);
+  const retryingRef = useRef(false);
+  const refocus = useRef(false);
+  const retry = async () => {
+    if (retryingRef.current) return;
+    retryingRef.current = true;
+    setRetrying(true);
+    setNote(null);
+    await all.refetch();
+    if (getQueryState('nominations:all').status === 'error') {
+      setNote({
+        tone: 'warning',
+        text: "Still couldn't read the nominations you made. Try again in a moment.",
+      });
+    }
+    retryingRef.current = false;
+    refocus.current = true;
+    setRetrying(false);
+  };
+  useEffect(() => {
+    if (retrying || !refocus.current) return;
+    refocus.current = false;
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const input = document.getElementById(switchId);
+    if (input instanceof HTMLInputElement && !input.disabled) input.focus();
+    else focusPageTitle();
+  }, [retrying, switchId]);
+
   // Open nominations still without a rule once that is done (Hub didn't let the app add them).
   const missing =
     on && !stale && nominees && checked === syncKey
@@ -183,66 +222,82 @@ function HubAlertsRow() {
   };
 
   return (
-    <Row>
-      <Copy>
-        <Typography id={labelId} component="span" sx={{ display: 'block', fontWeight: 600 }}>
-          Hub alerts
-        </Typography>
-        <Typography id={hintId} variant="body2" color="text.secondary" {...LINE}>
-          {hint}
-        </Typography>
-        {ready && role === 'nominee' && !session.name ? (
-          <Typography variant="body2" color="text.secondary" {...LINE}>
-            Hub listens for app alerts only on accounts with a registered name.
+    <>
+      <Row>
+        <Copy>
+          <Typography id={labelId} component="span" sx={{ display: 'block', fontWeight: 600 }}>
+            Hub alerts
           </Typography>
-        ) : null}
-        {/* With alerts on and none open, it still says how the next ones get their alerts. */}
-        {ready && nominator && (on || !noneOpen) ? (
-          <Typography variant="body2" color="text.secondary" {...LINE}>
-            {SUPPORT_SCOPE}
+          <Typography id={hintId} variant="body2" color="text.secondary" {...LINE}>
+            {hint}
           </Typography>
-        ) : null}
-        {missing ? (
-          <Typography variant="body2" color="text.secondary" {...LINE}>
-            Alerts for {plural(missing, 'open nomination')} you made aren&apos;t set up yet: turn
-            alerts off and on to add them.
+          {ready && role === 'nominee' && !session.name ? (
+            <Typography variant="body2" color="text.secondary" {...LINE}>
+              Hub listens for app alerts only on accounts with a registered name.
+            </Typography>
+          ) : null}
+          {/* With alerts on and none open, it still says how the next ones get their alerts. */}
+          {ready && nominator && nominees !== null && (on || !noneOpen) ? (
+            <Typography variant="body2" color="text.secondary" {...LINE}>
+              {SUPPORT_SCOPE}
+            </Typography>
+          ) : null}
+          {missing ? (
+            <Typography variant="body2" color="text.secondary" {...LINE}>
+              Alerts for {plural(missing, 'open nomination')} you made aren&apos;t set up yet: turn
+              alerts off and on to add them.
+            </Typography>
+          ) : null}
+          {ready && role !== 'none' ? (
+            <Typography variant="body2" color="text.secondary" {...LINE}>
+              Signatures, approvals and expiry show on Home: Hub can only alert about published
+              records.
+            </Typography>
+          ) : null}
+          <Typography
+            variant="body2"
+            role="status"
+            component="span"
+            sx={{
+              display: 'block',
+              color: (theme) =>
+                !note || note.tone === 'neutral'
+                  ? theme.palette.text.secondary
+                  : readable(note.tone)(theme),
+              fontWeight: note && note.tone !== 'neutral' ? 600 : 400,
+            }}
+          >
+            {busy ? 'Waiting for Hub…' : (note?.text ?? '')}
           </Typography>
-        ) : null}
-        {ready && role !== 'none' ? (
-          <Typography variant="body2" color="text.secondary" {...LINE}>
-            Signatures, approvals and expiry show on Home: Hub can only alert about published
-            records.
-          </Typography>
-        ) : null}
-        <Typography
-          variant="body2"
-          role="status"
-          component="span"
-          sx={{
-            display: 'block',
-            color: (theme) =>
-              !note || note.tone === 'neutral'
-                ? theme.palette.text.secondary
-                : readable(note.tone)(theme),
-            fontWeight: note && note.tone !== 'neutral' ? 600 : 400,
+        </Copy>
+        <Switch
+          checked={on}
+          disabled={disabled}
+          onChange={(_, next) => void toggle(next)}
+          slotProps={{
+            input: {
+              id: switchId,
+              'aria-labelledby': labelId,
+              'aria-describedby': hintId,
+              'aria-busy': busy || undefined,
+            },
           }}
-        >
-          {busy ? 'Waiting for Hub…' : (note?.text ?? '')}
-        </Typography>
-      </Copy>
-      <Switch
-        checked={on}
-        disabled={disabled}
-        onChange={(_, next) => void toggle(next)}
-        slotProps={{
-          input: {
-            'aria-labelledby': labelId,
-            'aria-describedby': hintId,
-            'aria-busy': busy || undefined,
-          },
-        }}
-      />
-    </Row>
+        />
+      </Row>
+      {/* Outside the row: a button inside its label would take the row's taps from the switch. */}
+      {nominationsFailed || retrying ? (
+        <Box sx={{ px: 2, pb: 1.25, mt: -1 }}>
+          <Button
+            onClick={() => void retry()}
+            aria-busy={retrying || undefined}
+            aria-label="Try again to read the nominations you made"
+            sx={{ minHeight: 44, ml: -1 }}
+          >
+            Try again
+          </Button>
+        </Box>
+      ) : null}
+    </>
   );
 }
 
