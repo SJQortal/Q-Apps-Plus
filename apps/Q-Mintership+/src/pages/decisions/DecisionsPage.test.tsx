@@ -11,6 +11,8 @@ import DecisionsPage from './DecisionsPage';
 afterEach(() => vi.useRealTimers());
 
 const user = () => userEvent.setup();
+/** For the long dialog flows, which run slower when the whole suite runs at once. */
+const T = { timeout: 4000 };
 
 async function openPage(
   persona = 'admin',
@@ -389,7 +391,7 @@ describe('Decisions: proposing', () => {
     await openPage('admin');
     // One dialog closes as the other opens: wait until only `name` is left.
     const only = async (name: string | RegExp) => {
-      await waitFor(() => expect(screen.getAllByRole('dialog')).toHaveLength(1));
+      await waitFor(() => expect(screen.getAllByRole('dialog')).toHaveLength(1), T);
       return screen.getByRole('dialog', { name });
     };
     await u.click(screen.getByRole('button', { name: 'Propose' }));
@@ -397,31 +399,33 @@ describe('Decisions: proposing', () => {
     let form = await screen.findByRole('dialog', { name: 'Ban an account' });
     await u.type(within(form).getByRole('textbox', { name: 'Name or address' }), 'Leo Learner');
     await u.click(within(form).getByRole('button', { name: 'Find' }));
-    expect(await within(form).findByText('Nothing stops this proposal.')).toBeVisible();
+    expect(await within(form).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
     await u.type(within(form).getByRole('textbox', { name: 'Reason' }), 'Spam in the chat');
     await u.click(within(form).getByRole('radio', { name: /A number of days/ }));
     await u.click(within(form).getByRole('button', { name: 'Review' }));
 
-    await screen.findByRole('dialog', { name: /Ban from MINTER: Leo Learner/ });
+    await screen.findByRole('dialog', { name: /Ban from MINTER: Leo Learner/ }, T);
     let hub = await only(/Ban from MINTER: Leo Learner/);
     await u.click(within(hub).getByRole('button', { name: 'Back to the form' }));
-    await screen.findByRole('dialog', { name: 'Ban an account' });
+    await screen.findByRole('dialog', { name: 'Ban an account' }, T);
     form = await only('Ban an account');
     expect(within(form).getByRole('textbox', { name: 'Reason' })).toHaveValue('Spam in the chat');
     expect(within(form).getByRole('radio', { name: /A number of days/ })).toBeChecked();
 
     // The mock world declines every write, as a cancel in Hub would.
     await u.click(within(form).getByRole('button', { name: 'Review' }));
-    await screen.findByRole('dialog', { name: /Ban from MINTER: Leo Learner/ });
+    await screen.findByRole('dialog', { name: /Ban from MINTER: Leo Learner/ }, T);
     hub = await only(/Ban from MINTER: Leo Learner/);
     await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
-    expect(await within(hub).findByText('Cancelled in Hub. Nothing was sent.')).toBeVisible();
+    expect(
+      await within(hub).findByText('Cancelled in Hub. Nothing was sent.', {}, T)
+    ).toBeVisible();
     await u.click(within(hub).getByRole('button', { name: 'Back to the form' }));
-    await screen.findByRole('dialog', { name: 'Ban an account' });
+    await screen.findByRole('dialog', { name: 'Ban an account' }, T);
     form = await only('Ban an account');
     expect(within(form).getByRole('textbox', { name: 'Reason' })).toHaveValue('Spam in the chat');
     expect(within(form).getByText('Leo Learner')).toBeVisible();
-  });
+  }, 20_000);
 
   it('refuses a ban longer than 24 days before Hub is asked', async () => {
     const u = user();

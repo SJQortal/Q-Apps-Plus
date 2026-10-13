@@ -90,14 +90,21 @@ export function HubStepDialog(props: HubStepDialogProps) {
   });
   const [result, setResult] = useState<StepRunResult | null>(null);
 
+  // Each opening starts at the intro (React's adjust-while-rendering pattern).
+  // Not a timer after closing: one could fire after a quick reopen and
+  // wipe that run's result.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open && phase !== 'running') {
+      setPhase('intro');
+      setResult(null);
+    }
+  }
+
   const leave = (to: () => void) => {
     if (phase === 'running') return;
     to();
-    // Reset after the closing animation.
-    setTimeout(() => {
-      setPhase('intro');
-      setResult(null);
-    }, 300);
   };
   const close = () => leave(onClose);
   const back = onBack ? () => leave(onBack) : null;
