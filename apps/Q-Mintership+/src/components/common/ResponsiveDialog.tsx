@@ -6,7 +6,8 @@
  *
  * Focus comes back when it closes, even when the button that opened it is
  * gone (Sign turns into "Signed ✓", Accept into "Sending…"): then to the
- * card or section that held it, or to `returnFocus()`, never to <body>.
+ * card or section that held it, or to `returnFocus()`, never to <body>;
+ * also when its parent stops rendering it instead of closing it.
  */
 import { useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import {
@@ -65,15 +66,36 @@ export function ResponsiveDialog({
     anchor: null,
   });
 
+  // Open, or closing: focus still has to come back.
+  const shown = useRef(false);
+  const mounted = useRef(false);
+  const restoreLater = useRef<() => void>(() => {});
+
   // Before the focus trap moves focus in (layout effects run first): who opened it.
   useLayoutEffect(() => {
     if (!open) return;
     const active = document.activeElement;
     const element = active instanceof HTMLElement && active !== document.body ? active : null;
     opener.current = { element, anchor: element?.closest<HTMLElement>(ANCHOR) ?? null };
+    shown.current = true;
   }, [open]);
 
+  // A dialog whose parent stops rendering it (rather than closing it) never
+  // gets onExited: it puts focus back once it is gone.
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (!shown.current) return;
+      // After React has removed it (and not for React's dev-only remount).
+      setTimeout(() => {
+        if (!mounted.current) restoreLater.current();
+      }, 0);
+    };
+  }, []);
+
   const restoreFocus = () => {
+    shown.current = false;
     const active = document.activeElement;
     // Another dialog or field already has focus: leave it there.
     if (
@@ -87,7 +109,8 @@ export function ResponsiveDialog({
     opener.current = { element: null, anchor: null };
     if (element?.isConnected) {
       element.focus({ preventScroll: true });
-      return;
+      // Still there but disabled (e.g. "Sending…"): it can't take focus, so go on below.
+      if (document.activeElement === element) return;
     }
     const target =
       returnFocus?.() ??
@@ -95,6 +118,7 @@ export function ResponsiveDialog({
       document.querySelector<HTMLElement>('main');
     if (target) focusBack(target);
   };
+  restoreLater.current = restoreFocus;
 
   return (
     <Dialog
@@ -136,6 +160,8 @@ export function ResponsiveDialog({
             pr: phone && onClose ? 1 : 3,
             fontSize: '1.125rem',
             fontWeight: 700,
+            // Focused by the app while a write runs (utils/focus.ts), not by the user: no ring.
+            '&:focus': { outline: 'none' },
             ...(compactTitle ? { py: 0.5 } : {}),
           }}
         >

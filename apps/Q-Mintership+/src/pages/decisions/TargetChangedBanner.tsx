@@ -5,8 +5,12 @@
  * decisions now have enough signatures (or enough rejections) because of
  * it, the soonest to apply first. Minter Admins also read what a withdrawal
  * does. Stays until dismissed.
+ *
+ * A region with its own heading, not a live region: it fills in as its
+ * reasons load, and would be read again each time. The page says its title
+ * once instead (DecisionsPage).
  */
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useId, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Alert, Box, Button, Link, Typography } from '@mui/material';
 import { PersonInline } from '../../components/common/Person';
@@ -58,6 +62,7 @@ export function TargetChangedBanner({
   onDismiss,
 }: TargetChangedBannerProps) {
   const fee = useFee('GROUP_APPROVAL');
+  const titleId = useId();
   const read = from.height > 0 && to.height > from.height;
   const changes = useQuery(read ? adminChangesKey(from.height, to.height) : null, (force) =>
     loadAdminChangesBetween(from.height, to.height, maximumBlockDelay, { force })
@@ -93,10 +98,13 @@ export function TargetChangedBanner({
   return (
     <Alert
       severity={flipped ? 'warning' : 'info'}
-      role="status"
+      role="region"
+      aria-labelledby={titleId}
       sx={{ '& .MuiAlert-message': { minWidth: 0, width: '100%' }, overflowWrap: 'anywhere' }}
     >
-      <Typography sx={{ fontWeight: 700 }}>{targetChangedTitle(from.needed, to.needed)}</Typography>
+      <Typography id={titleId} component="h2" sx={{ fontWeight: 700, fontSize: '1rem' }}>
+        {targetChangedTitle(from.needed, to.needed)}
+      </Typography>
       <Typography component="div" variant="body2" sx={{ mt: 0.5 }}>
         {moved ? 'It changed ' : 'They changed '}
         {because}. The target is {describeThreshold(threshold)}, recounted every block
@@ -149,7 +157,17 @@ export function TargetChangedBanner({
           {withdrawAdvice(formatQort(fee.data?.qort ?? 0.01), 'Core applies it')}
         </Typography>
       ) : null}
-      <Button onClick={onDismiss} sx={{ mt: 1, minHeight: 44, ml: -1 }}>
+      <Button
+        onClick={() => {
+          onDismiss();
+          // The note goes away with the button: keep focus on the page.
+          (
+            document.querySelector<HTMLElement>('main h1') ??
+            document.querySelector<HTMLElement>('h1')
+          )?.focus();
+        }}
+        sx={{ mt: 1, minHeight: 44, ml: -1 }}
+      >
         Got it
       </Button>
     </Alert>

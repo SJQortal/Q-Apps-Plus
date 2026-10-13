@@ -22,6 +22,7 @@ import type { GroupTxType } from '../../data/types';
 import { HUB_DIALOGS, HUB_DIALOG_SECONDS } from '../../writes/explain';
 import type { WriteOutcome, WriteStage } from '../../writes/runner';
 import { friendlyError } from '../../utils/friendlyError';
+import { focusDialogTitle } from '../../utils/focus';
 import { FeeNote } from './FeeNote';
 import { ResponsiveDialog } from './ResponsiveDialog';
 
@@ -123,6 +124,8 @@ export function HubStepDialog(props: HubStepDialogProps) {
   const back = onBack ? () => leave(onBack) : null;
 
   const start = async () => {
+    // Its buttons go while it runs: focus waits on the title, never on the page.
+    focusDialogTitle(document.activeElement);
     setPhase('running');
     setResult(null);
     setActive({ step: 0, stage: 'checking' });

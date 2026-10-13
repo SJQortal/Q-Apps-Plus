@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
@@ -114,6 +114,33 @@ describe('Nominate page: picking the candidate', () => {
     ).toBeInTheDocument();
   });
 
+  it('by keyboard: focus goes to the card picked, its check is read out, and Change goes back', async () => {
+    const user = userEvent.setup();
+    await open('nominator');
+    await who();
+    const input = screen.getByRole('combobox', { name: 'Name or Qortal address' });
+    await user.click(input);
+    await user.paste(ADDR.newcomer);
+    const region = await who();
+    // The field is gone: focus is on the card that replaced it, never on the page.
+    const card = within(region).getByText(ADDR.newcomer).closest('[tabindex="-1"]');
+    expect(card).toHaveFocus();
+    // The check's answer lands in a live region that was there while it ran.
+    const live = within(card as HTMLElement).getByRole('status');
+    expect(await within(live).findByText(/Can be nominated/)).toBeInTheDocument();
+
+    within(region).getByRole('button', { name: 'Change' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('combobox', { name: 'Name or Qortal address' })).toHaveFocus();
+  });
+
+  it('a candidate who can’t be nominated says why in the same live region', async () => {
+    await open('nominator', ADDR.learner);
+    const region = await who();
+    const live = within(region).getByRole('status');
+    expect(await within(live).findByText(/Already in MINTER/)).toBeInTheDocument();
+  });
+
   it('says when the link held no valid address', async () => {
     await open('nominator', 'not-an-address');
     expect(await screen.findByText(/didn’t hold a valid Qortal address/)).toBeInTheDocument();
@@ -219,6 +246,27 @@ describe('Nominate page: writing and publishing', () => {
     expect(screen.getAllByRole('button', { name: /Remove link/ })).toHaveLength(5);
   });
 
+  it('by keyboard: a new link field takes focus, and removing one never drops it on the page', async () => {
+    const user = userEvent.setup();
+    await open('nominator', ADDR.newcomerName);
+    await screen.findByText(/Can be nominated/, undefined, { timeout: 4000 });
+    screen.getByRole('button', { name: 'Add a link' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('textbox', { name: 'Link 1' })).toHaveFocus();
+    screen.getByRole('button', { name: 'Add a link' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('textbox', { name: 'Link 2' })).toHaveFocus();
+    // Removing the first: the field now first (the old second) takes focus.
+    screen.getByRole('button', { name: 'Remove link 1' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('textbox', { name: 'Link 1' })).toHaveFocus();
+    // Removing the last one: back to Add a link.
+    screen.getByRole('button', { name: 'Remove link 1' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.queryByRole('textbox', { name: /^Link / })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add a link' })).toHaveFocus();
+  });
+
   it('publishes the nomination record through Hub and offers the link for the nominee', async () => {
     const user = userEvent.setup();
     await open('nominator', ADDR.newcomerName);
@@ -275,6 +323,13 @@ describe('Nominate page: writing and publishing', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('article', { name: /Nomination of Zoë Newcomer/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+    // The form (and its button) went: focus is on the news, not on the page.
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Nomination published' })).toHaveFocus()
+    );
+    // "… for someone else" brings the form back, with focus in its first field.
+    await user.click(screen.getByRole('button', { name: /for someone else$/ }));
+    expect(await screen.findByRole('combobox', { name: 'Name or Qortal address' })).toHaveFocus();
   });
 
   it('treats a decline in Hub as a cancel and keeps what was written', async () => {

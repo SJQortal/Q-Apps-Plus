@@ -48,6 +48,8 @@ export function HowSigningWorks({
     <Accordion
       disableGutters
       elevation={0}
+      // A part of the page of its own, like the sections above it (not under the last one).
+      slotProps={{ heading: { component: 'h2' } }}
       sx={{
         bgcolor: 'background.paper',
         border: 1,

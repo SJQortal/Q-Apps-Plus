@@ -3,7 +3,7 @@
  * sheet on phones (docs/DESIGN.md → Mobile: menus open as sheets). The
  * sheet is a plain Drawer, mounted only while open (docs/QORTAL.md pitfall 4).
  */
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, type Ref } from 'react';
 import {
   Box,
   Button,
@@ -55,7 +55,14 @@ const ITEMS: Array<{ key: ProposeChoice; label: string; description: string; ico
   },
 ];
 
-export function ProposeMenu({ onChoose }: { onChoose: (choice: ProposeChoice) => void }) {
+export function ProposeMenu({
+  onChoose,
+  buttonRef,
+}: {
+  onChoose: (choice: ProposeChoice) => void;
+  /** The Propose button, where focus comes back after a proposal's dialogs. */
+  buttonRef?: Ref<HTMLButtonElement>;
+}) {
   const phone = usePhoneLayout();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [sheet, setSheet] = useState(false);
@@ -67,6 +74,7 @@ export function ProposeMenu({ onChoose }: { onChoose: (choice: ProposeChoice) =>
   return (
     <>
       <Button
+        ref={buttonRef}
         variant="contained"
         startIcon={<AddOutlinedIcon />}
         aria-haspopup={phone ? 'dialog' : 'menu'}

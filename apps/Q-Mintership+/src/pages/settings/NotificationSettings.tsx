@@ -34,16 +34,21 @@ const Card = styled('div')(({ theme }) => ({
   overflow: 'hidden',
 }));
 
-const Row = styled('div')(({ theme }) => ({
+/** The whole row turns its switch on and off (the switch alone is under 44 px). */
+const Row = styled('label')(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   gap: theme.spacing(1.5),
   minHeight: 56,
   padding: theme.spacing(1.25, 2),
+  cursor: 'pointer',
   '& + &': { borderTop: `1px solid ${theme.palette.divider}` },
 }));
 
-const Copy = styled('div')({ flex: 1, minWidth: 0 });
+const Copy = styled('span')({ display: 'block', flex: 1, minWidth: 0 });
+
+/** Text inside a row (a label holds no paragraphs). */
+const LINE = { component: 'span', sx: { display: 'block' } } as const;
 
 /** What the Hub alerts switch says for each role. */
 const ROLE_HINT: Record<AlertRole, string> = {
@@ -119,19 +124,19 @@ function HubAlertsRow() {
   return (
     <Row>
       <Copy>
-        <Typography id={labelId} sx={{ fontWeight: 600 }}>
+        <Typography id={labelId} component="span" sx={{ display: 'block', fontWeight: 600 }}>
           Hub alerts
         </Typography>
-        <Typography id={hintId} variant="body2" color="text.secondary">
+        <Typography id={hintId} variant="body2" color="text.secondary" {...LINE}>
           {hint}
         </Typography>
         {ready && role === 'nominee' && !session.name ? (
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" {...LINE}>
             Hub listens for app alerts only on accounts with a registered name.
           </Typography>
         ) : null}
         {ready && role !== 'none' ? (
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" {...LINE}>
             Signatures, approvals and expiry show on Home: Hub can only alert about published
             records.
           </Typography>
@@ -139,7 +144,9 @@ function HubAlertsRow() {
         <Typography
           variant="body2"
           role="status"
+          component="span"
           sx={{
+            display: 'block',
             color: (theme) =>
               !note || note.tone === 'neutral'
                 ? theme.palette.text.secondary
@@ -171,10 +178,10 @@ export function NotificationSettings() {
       <Card>
         <Row>
           <Copy>
-            <Typography id={labelId} sx={{ fontWeight: 600 }}>
+            <Typography id={labelId} component="span" sx={{ display: 'block', fontWeight: 600 }}>
               Since your last visit
             </Typography>
-            <Typography id={hintId} variant="body2" color="text.secondary">
+            <Typography id={hintId} variant="body2" color="text.secondary" {...LINE}>
               Home lists what changed since you last opened the app on this device: new decisions,
               your nomination&apos;s progress.
             </Typography>

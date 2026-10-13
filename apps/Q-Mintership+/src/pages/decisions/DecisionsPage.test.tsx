@@ -956,6 +956,10 @@ describe('Decisions: navigation and filters', () => {
     expect(screen.getByText(/2 decisions you signed are hidden/)).toBeVisible();
     await u.click(screen.getByRole('button', { name: 'Show the ones I signed' }));
     expect(await screen.findByRole('article', { name: /Uma Urgent/ })).toBeInTheDocument();
+    // The button went with its note: focus is on the switch it turned off, not on the page.
+    expect(screen.queryByRole('button', { name: 'Show the ones I signed' })).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Hide what I signed' })).toHaveFocus();
+    expect(screen.getByRole('switch', { name: 'Hide what I signed' })).not.toBeChecked();
   });
 
   it('shows the empty state when nothing is waiting', async () => {
@@ -965,5 +969,24 @@ describe('Decisions: navigation and filters', () => {
     world.records.length = 0;
     await u.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(await screen.findByText('Nothing waiting for signatures')).toBeVisible();
+  });
+});
+
+describe('Decisions: headings', () => {
+  it('one h1, then h2 for each part of the page, h3 for each card: no level skipped', async () => {
+    await openPage('admin');
+    await screen.findByRole('heading', { level: 2, name: 'How signing works' });
+    const levels = screen.getAllByRole('heading').map((h) => Number(h.tagName.slice(1)));
+    expect(levels[0]).toBe(1);
+    expect(levels.filter((l) => l === 1)).toHaveLength(1);
+    // Never deeper than one level below the heading before it.
+    levels.forEach((level, i) => {
+      if (i > 0) expect(level).toBeLessThanOrEqual(levels[i - 1] + 1);
+    });
+    expect(
+      screen.getByRole('heading', { level: 2, name: /decisions? waiting for your signature$/ })
+    ).toBeVisible();
+    // How signing works is a part of its own, not under the stale invites before it.
+    expect(levels.at(-1)).toBe(2);
   });
 });

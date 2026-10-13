@@ -53,6 +53,7 @@ import { ProposeSignDialog, type ProposalFacts } from './ProposeSignDialog';
 import { isRecentInvite } from './staleRules';
 import type { ShiftScenario } from '../../rules/targetShift';
 import type { LabelOf } from './targetShiftUi';
+import { focusDialogTitle } from '../../utils/focus';
 
 export interface ProposeContext extends ProposalFacts {
   totalAdmins: number;
@@ -73,6 +74,8 @@ export interface ProposeDialogProps {
   onClose: () => void;
   /** Switch to another kind for the same person. */
   onSwitch: (kind: ProposeKind, person: { address: string; name?: string | null }) => void;
+  /** Where focus goes once it is over (the menu item that opened it is gone by then). */
+  returnFocus?: () => HTMLElement | null;
 }
 
 type Person = { address: string; name?: string | null };
@@ -104,6 +107,7 @@ export function ProposeDialog({
   preset,
   onClose,
   onSwitch,
+  returnFocus,
 }: ProposeDialogProps) {
   const open = Boolean(kind && signer);
   const [phase, setPhase] = useState<'form' | 'hub'>('form');
@@ -210,6 +214,7 @@ export function ProposeDialog({
       <ResponsiveDialog
         open={open && phase === 'form'}
         onClose={close}
+        returnFocus={returnFocus}
         title={info.label}
         actions={
           <>
@@ -291,11 +296,18 @@ export function ProposeDialog({
             }}
           >
             <PersonChip address={person.address} name={person.name ?? undefined} size={40} />
-            <CheckResult
-              check={check}
-              kind={kind}
-              onSwitch={() => onSwitch('removeAdmin', person)}
-            />
+            {/* One live region for the check, kept while it runs and when it answers. */}
+            <Box role="status">
+              <CheckResult
+                check={check}
+                kind={kind}
+                onSwitch={() => {
+                  // The form becomes Remove a Minter Admin and this button goes: its new title says so.
+                  focusDialogTitle(document.activeElement);
+                  onSwitch('removeAdmin', person);
+                }}
+              />
+            </Box>
             {recent ? (
               <Alert severity="info" role="note">
                 Approved {formatRelative(recent)}: they may still press Join now.
@@ -384,6 +396,7 @@ export function ProposeDialog({
           ctx={ctx}
           onClose={close}
           onBack={() => setPhase('form')}
+          returnFocus={returnFocus}
         />
       ) : null}
     </>
@@ -401,25 +414,25 @@ function CheckResult({
 }) {
   if (check === null || check === 'checking') {
     return (
-      <Typography variant="body2" color="text.secondary" role="status">
+      <Typography variant="body2" color="text.secondary">
         Checking this account on your node…
       </Typography>
     );
   }
   if (check.status === 'ok')
     return (
-      <Alert severity="success" role="status">
+      <Alert severity="success" role="note">
         Nothing stops this proposal.
       </Alert>
     );
   if (check.status === 'blocked')
     return (
-      <Alert severity="warning" role="status">
+      <Alert severity="warning" role="note">
         {check.reason}
       </Alert>
     );
   return (
-    <Alert severity="info" role="status">
+    <Alert severity="info" role="note">
       <Typography variant="body2">
         This is a Minter Admin. Core doesn’t let admins be{' '}
         {kind === 'ban' ? 'banned' : 'removed from MINTER'} directly: propose removing their admin
@@ -641,6 +654,7 @@ function ProposeHubStep({
   ctx,
   onClose,
   onBack,
+  returnFocus,
 }: {
   open: boolean;
   kind: ProposeKind;
@@ -652,6 +666,7 @@ function ProposeHubStep({
   onClose: () => void;
   /** Back to the form, with the person, reason and length kept. */
   onBack: () => void;
+  returnFocus?: () => HTMLElement | null;
 }) {
   const who = useDisplayName(person.address, person.name);
   const stepDown = kind === 'removeAdmin' && person.address === signer.address;
@@ -685,6 +700,7 @@ function ProposeHubStep({
       }
       onClose={onClose}
       onBack={onBack}
+      returnFocus={returnFocus}
     />
   );
 }

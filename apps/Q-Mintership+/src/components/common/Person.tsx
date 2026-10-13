@@ -25,9 +25,15 @@ export interface PersonChipProps {
   link?: boolean;
   /** Bold name (default true). */
   strong?: boolean;
+  /** Inside a sentence (PersonInline): only the name is the link, at the text's size. */
+  inline?: boolean;
 }
 
-/** Avatar + name (+ a second line), linking to the person's page. */
+/**
+ * Avatar + name (+ a second line), linking to the person's page. The whole
+ * chip, at least 44 px tall, is the link's tap area (docs/DESIGN.md → Touch),
+ * while the link itself stays the name, so the second line is still read.
+ */
 export function PersonChip({
   address,
   name,
@@ -35,8 +41,10 @@ export function PersonChip({
   secondary,
   link = true,
   strong = true,
+  inline = false,
 }: PersonChipProps) {
   const shown = useDisplayName(address, name);
+  const stretch = link && !inline;
   const label = (
     <Typography
       component="span"
@@ -51,7 +59,17 @@ export function PersonChip({
     </Typography>
   );
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.25,
+        minWidth: 0,
+        ...(stretch
+          ? { position: 'relative', width: 'fit-content', maxWidth: '100%', minHeight: 44 }
+          : {}),
+      }}
+    >
       <NameAvatar name={shown.name} size={size} />
       <Box sx={{ minWidth: 0 }}>
         {link ? (
@@ -61,6 +79,11 @@ export function PersonChip({
             underline="hover"
             color="inherit"
             aria-label={`${shown.label}: open their page`}
+            sx={
+              stretch
+                ? { '&::after': { content: '""', position: 'absolute', inset: 0 } }
+                : undefined
+            }
           >
             {label}
           </Link>
@@ -96,7 +119,7 @@ export function PersonInline({ address, name }: { address: string; name?: string
         '& .MuiTypography-root': { fontSize: 'inherit' },
       }}
     >
-      <PersonChip address={address} name={name} size={20} strong={false} />
+      <PersonChip address={address} name={name} size={20} strong={false} inline />
     </Box>
   );
 }

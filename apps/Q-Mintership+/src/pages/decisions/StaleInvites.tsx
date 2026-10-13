@@ -232,6 +232,8 @@ function StaleRow({
 }) {
   const pending = usePendingWrite(writeKeys.propose('cancelInvite', row.invitee));
   const inviter = useDisplayName(row.inviter, inviterName);
+  // The name the row shows (its avatar chip reads the same), not the bare address.
+  const invitee = useDisplayName(row.invitee);
   const recent = isRecentInvite(detail, now.timestamp);
   const when = detail?.approvedAt
     ? `approved ${formatDate(detail.approvedAt)} (${formatRelative(detail.approvedAt, now.timestamp)}${
@@ -276,7 +278,7 @@ function StaleRow({
           onClick={onPropose}
           disabled={pending?.status === 'sending'}
           sx={{ minHeight: 44 }}
-          aria-label={`Propose cancelling the invite for ${displayName(null, row.invitee)}`}
+          aria-label={`Propose cancelling the invite for ${invitee.label}`}
         >
           Propose cancelling
         </Button>

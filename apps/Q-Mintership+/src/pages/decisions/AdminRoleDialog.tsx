@@ -99,7 +99,7 @@ export function AdminRoleDialog({
             {name ? (
               <TextField
                 label="A short statement (optional)"
-                helperText={`Published under ${name} as the first comment on your proposal, for everyone to read: one more Hub step, 0.01 QORT. Leave it empty to skip it.`}
+                helperText={`Published under ${name} as the first comment on your proposal, for everyone to read: one more Hub step, 0.01 QORT. Leave it empty to skip it. ${text.length} / ${STATEMENT_MAX}`}
                 value={statement}
                 onChange={(e) => setStatement(e.target.value.slice(0, STATEMENT_MAX))}
                 multiline

@@ -6,7 +6,7 @@
  * device). Every write is explained in its Hub step first, and shows at once
  * once Hub sends it. Refreshes every minute while open and visible.
  */
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Box, Button, TextField, Typography } from '@mui/material';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import { COMMENT_MAX, commentTextProblems, type CommentRecord } from '../../data/commentRecords';
@@ -26,6 +26,7 @@ import { formatCount } from '../../utils/format';
 import { openQortalLink } from '../../utils/links';
 import { deleteComment, editComment, postComment, setCommentHidden } from '../../writes/comments';
 import type { WriteStage } from '../../writes/runner';
+import { focusElement } from '../../utils/focus';
 import { ErrorState, ListSkeleton, TruncatedNote } from '../common/states';
 import { NAMES_APP_LINK } from '../ready/readyChecks';
 import {
@@ -99,6 +100,29 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
         : null,
     [data, muted, optimistic]
   );
+  // Show more: once the next comments are in, focus goes to the first of them
+  // (the button may have gone with the last page).
+  const shownBefore = useRef<Set<string> | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
+  useEffect(() => {
+    const before = shownBefore.current;
+    // A failed read lets Show more be pressed again.
+    if (before && query.isError && !query.data) shownBefore.current = null;
+    if (!before || !query.data || !threads) return;
+    shownBefore.current = null;
+    const fresh = threads.find((t) => !before.has(t.comment.ref));
+    const target = fresh
+      ? document.querySelector<HTMLElement>(`[data-comment="${fresh.comment.identifier}"]`)
+      : listRef.current;
+    if (target) focusElement(target);
+  }, [threads, query.data, query.isError]);
+  const showMore = () => {
+    // Stays enabled while it reads (a disabled button would drop focus); a second press waits.
+    if (shownBefore.current) return;
+    shownBefore.current = new Set(threads?.map((t) => t.comment.ref) ?? []);
+    setLimit((n) => n + COMMENTS_PAGE);
+  };
+
   useEffect(() => {
     if (!data) return;
     const loaded = new Map<string, CommentRecord>();
@@ -118,22 +142,32 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
   };
   const closeDialog = () => setDialogOpen(false);
 
+  // False when the text can't go: the field then takes focus, and its description says why.
   const submitDraft = (event: FormEvent) => {
     event.preventDefault();
     const problems = commentTextProblems(draft);
     setDraftError(problems[0] ?? null);
-    if (!problems.length) openDialog({ kind: 'publish', mode: 'post', text: draft, about: null });
+    if (problems.length) return false;
+    openDialog({ kind: 'publish', mode: 'post', text: draft, about: null });
+    return true;
   };
   const submitInline = (event: FormEvent) => {
     event.preventDefault();
-    if (!inline) return;
+    if (!inline) return true;
     const problems = commentTextProblems(inline.text);
     if (problems.length) {
       setInline({ ...inline, error: problems[0] });
-      return;
+      return false;
     }
     setInline({ ...inline, error: null });
     openDialog({ kind: 'publish', mode: inline.mode, text: inline.text, about: inline.comment });
+    return true;
+  };
+  // Cancel on a reply or an edit: back to the comment it was about (the editor goes away).
+  const cancelInline = () => {
+    if (inline)
+      document.querySelector<HTMLElement>(`[data-comment="${inline.comment.identifier}"]`)?.focus();
+    setInline(null);
   };
 
   const publish = (onStage: (stage: WriteStage) => void) => {
@@ -194,7 +228,7 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
         error={inline.error}
         onChange={(text) => setInline({ ...inline, text })}
         onSubmit={submitInline}
-        onCancel={() => setInline(null)}
+        onCancel={cancelInline}
         submitLabel="Save"
         autoFocus
       />
@@ -225,6 +259,7 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
       <>
         <Box
           component="ul"
+          ref={listRef}
           aria-label={`Comments on ${label}, newest first`}
           sx={{ listStyle: 'none', m: 0, p: 0 }}
         >
@@ -299,7 +334,7 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
                       error={replying.error}
                       onChange={(text) => setInline({ ...replying, text })}
                       onSubmit={submitInline}
-                      onCancel={() => setInline(null)}
+                      onCancel={cancelInline}
                       submitLabel="Post reply"
                       autoFocus
                     />
@@ -312,12 +347,7 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
         {data.truncated ? <TruncatedNote what="the comments" /> : null}
         {unread > 0 ? (
           <Box>
-            <Button
-              variant="outlined"
-              onClick={() => setLimit((n) => n + COMMENTS_PAGE)}
-              disabled={query.fetching && !query.data}
-              sx={{ minHeight: 44 }}
-            >
+            <Button variant="outlined" onClick={showMore} sx={{ minHeight: 44 }}>
               Show more comments ({formatCount(unread)})
             </Button>
           </Box>
@@ -508,17 +538,26 @@ function Composer({
   value: string;
   error: string | null;
   onChange: (text: string) => void;
-  onSubmit: (event: FormEvent) => void;
+  /** False when the text can't go: focus then moves to the field. */
+  onSubmit: (event: FormEvent) => boolean;
   onCancel?: () => void;
   submitLabel: string;
   hint?: string;
   autoFocus?: boolean;
 }) {
+  const field = useRef<HTMLTextAreaElement | null>(null);
+  // In an effect, not autoFocus: a menu that opened it (More → Edit) puts focus
+  // back on its own button as it closes, after autoFocus has run.
+  useEffect(() => {
+    if (autoFocus) field.current?.focus();
+  }, [autoFocus]);
   return (
     <Box
       component="form"
       noValidate
-      onSubmit={onSubmit}
+      onSubmit={(event: FormEvent) => {
+        if (!onSubmit(event)) field.current?.focus();
+      }}
       sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}
     >
       <TextField
@@ -529,7 +568,7 @@ function Composer({
         minRows={2}
         maxRows={8}
         fullWidth
-        autoFocus={autoFocus}
+        inputRef={field}
         error={Boolean(error)}
         helperText={
           error ??

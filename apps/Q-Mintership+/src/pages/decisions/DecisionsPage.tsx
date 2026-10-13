@@ -17,7 +17,7 @@
  * checked these" before Hub opens when anything would change, and a banner
  * says when the target changed since this device last looked.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { PATHS, legacyDecisionPath } from '../../routes/paths';
 import {
@@ -64,6 +64,7 @@ import { hasImpact, isAdminChangeKind, projectShift } from '../../rules/targetSh
 import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
 import { signerOf, useSession } from '../../state/session';
 import { decisionsHideSignedAtom } from '../../state/settings';
+import { focusElement } from '../../utils/focus';
 import { displayName, plural } from '../../utils/format';
 import { bulkSign } from '../../writes/flows';
 import {
@@ -89,9 +90,9 @@ import { OtherPendingList } from './OtherPendingList';
 import { UnusualList } from './UnusualList';
 import { useSeenTargetChange } from './seenTarget';
 import { TargetChangedBanner } from './TargetChangedBanner';
+import { targetChangedTitle, type LabelOf } from './targetShiftUi';
 import { TargetImpact } from './TargetImpact';
 import { TargetShiftSection } from './TargetShiftSection';
-import type { LabelOf } from './targetShiftUi';
 import { useAcknowledge } from './useAcknowledge';
 
 const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
@@ -148,6 +149,15 @@ function DecisionsQueue() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkList, setBulkList] = useState<Decision[] | null>(null);
   const [staleExpanded, setStaleExpanded] = useState(false);
+  const proposeButton = useRef<HTMLButtonElement | null>(null);
+  const hideSignedSwitch = useRef<HTMLInputElement | null>(null);
+  // Propose → Clean up stale invites: the section takes focus, after the menu
+  // (or the phone's sheet) has put it back on Propose as it closed.
+  const [staleFocus, setStaleFocus] = useState(0);
+  useEffect(() => {
+    const section = staleFocus ? sectionOf('stale') : null;
+    if (section) focusElement(section, { preventScroll: true });
+  }, [staleFocus]);
 
   const data = decisionsQ.data;
   const ready = session.status === 'ready';
@@ -313,6 +323,7 @@ function DecisionsQueue() {
   const chooseProposal = (choice: ProposeChoice) => {
     if (choice === 'stale') {
       setStaleExpanded(true);
+      setStaleFocus((n) => n + 1);
       document
         .getElementById(STALE_SECTION_ID)
         ?.scrollIntoView?.({ block: 'start', behavior: reduced ? 'auto' : 'smooth' });
@@ -348,11 +359,15 @@ function DecisionsQueue() {
                 </IconButton>
               </span>
             </Tooltip>
-            {isAdmin ? <ProposeMenu onChoose={chooseProposal} /> : null}
+            {isAdmin ? <ProposeMenu onChoose={chooseProposal} buttonRef={proposeButton} /> : null}
           </>
         }
       />
       <PageBody>
+        {/* There from the start: says once that the target changed (the note below isn't live). */}
+        <span role="status" className="qmp-visually-hidden">
+          {targetChange ? targetChangedTitle(targetChange.from.needed, targetChange.to.needed) : ''}
+        </span>
         {decisionsQ.isLoading && !data ? (
           <ListSkeleton count={4} ring label="Loading decisions" />
         ) : decisionsQ.isError && !data ? (
@@ -378,7 +393,7 @@ function DecisionsQueue() {
 
             {isAdmin ? (
               <Card sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                <Typography sx={{ fontWeight: 700, fontSize: 18 }}>
+                <Typography component="h2" sx={{ fontWeight: 700, fontSize: 18 }}>
                   {signable.length
                     ? `${plural(signable.length, 'decision')} waiting for your signature`
                     : 'Nothing waiting for your signature'}
@@ -405,6 +420,7 @@ function DecisionsQueue() {
                     <Switch
                       checked={hideSigned}
                       onChange={(e) => setHideSigned(e.target.checked)}
+                      slotProps={{ input: { ref: hideSignedSwitch } }}
                     />
                   }
                   label="Hide what I signed"
@@ -472,7 +488,14 @@ function DecisionsQueue() {
                       {plural(hiddenCount, 'decision')} you signed{' '}
                       {hiddenCount === 1 ? 'is' : 'are'} hidden.
                     </Typography>
-                    <Button onClick={() => setHideSigned(false)} sx={{ minHeight: 44 }}>
+                    <Button
+                      onClick={() => {
+                        // This button goes with the note: focus to the switch it turned off.
+                        hideSignedSwitch.current?.focus();
+                        setHideSigned(false);
+                      }}
+                      sx={{ minHeight: 44 }}
+                    >
                       Show the ones I signed
                     </Button>
                   </Box>
@@ -658,6 +681,7 @@ function DecisionsQueue() {
           }}
           onClose={() => setPropose(null)}
           onSwitch={(kind, person) => setPropose({ kind, preset: person })}
+          returnFocus={() => proposeButton.current}
         />
       ) : null}
       <BulkDialog
