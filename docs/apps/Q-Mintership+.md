@@ -1,10 +1,10 @@
 # Q-Mintership+
 
-Who joins the MINTER group (694), and therefore who mints QORT: nominate, then Minter Admins sign or let it expire.
+Who joins the MINTER group (694), and therefore who mints QORT: propose a nomination, then Minter Admins sign, reject or let it expire.
 
 **Published:** not yet.
 
-**Version on the branch:** `1.0.0` (not published), Q-Mintership+ 2.0, a rewrite on React 19.3 + MUI 9.4. Night 1 is [SJQortal/Q-Apps-Plus#23](https://github.com/SJQortal/Q-Apps-Plus/pull/23). Night 2 proves every write on a private testnet before anyone publishes it.
+**Version on the branch:** `1.0.0` (not published), Q-Mintership+ 2.0, a rewrite on React 19.3 + MUI 9.4. Nights 1 and 2 are done on the branch: [SJQortal/Q-Apps-Plus#23](https://github.com/SJQortal/Q-Apps-Plus/pull/23). Night 2 added Simon's answers and proved every write on a private testnet. Night 3 is the read-only Hub check with real data, then Simon's guided real actions.
 
 ## Baseline at import
 
@@ -19,32 +19,67 @@ Who joins the MINTER group (694), and therefore who mints QORT: nominate, then M
 - **Decided (Simon, 2026-10-12): a new, simpler process**, in `src/` from scratch, replacing the scaffold's port of the old boards. The plan that decided it is Simon's; the facts it rests on were checked against Qortal Core 6.1.4–6.1.9, Qortal Hub's source and a mainnet node, and are pinned by tests here.
 - **No votes, no polls, no threshold feature.** Changing MINTER's approval percentage is not possible in today's Core (the group's owner is the null account, and its `UPDATE_GROUP` would need that owner). Simon decided the app offers nothing for it, not even an advisory vote, until Core can apply such a change. A Core change is a separate track.
 - **A clean break from the old cards and polls.** What happens on chain (invite, approvals, join) works in every app; the old cards, polls, comments and AR cards stay readable in History.
+- **Added by Simon (2026-10-13), built on night 2:** Reject, Withdraw my signature and Considering; safeguards for the admin-count trap; who may propose admin changes; comments; a shareable link for every decision and nomination; "Propose nomination"; notifications. Every write is proven on a private testnet (see Testnet).
 
 ## The new process
 
 | Step | Who | What happens | On chain |
 |---|---|---|---|
-| 1. Nominate | any **MINTER member at level 5+**, or any Minter Admin | Nominators look for people who'd make good minters and reach out; Nominations → **Ready to mint** lists those who asked to join. Pick the candidate by name or address, write a short reason and optional `qortal://` links. Blocked: self-nomination, current members, banned accounts, anyone with an open nomination (support it instead). | A small QDN **nomination** record (see Data contract) |
+| 1. Propose nomination | any **MINTER member at level 5+**, or any Minter Admin | Nominators look for people who'd make good minters and reach out; Nominations → **Ready to mint** lists those who asked to join. **Propose nomination**: pick the candidate by name or address, write a short reason and optional `qortal://` links. Blocked: self-nomination, current members, banned accounts, anyone with an open nomination (support it instead). | A small QDN **nomination** record (see Data contract) |
 | 2. Accept (nominee, recommended) | the candidate | "Accept your nomination" sends **JOIN_GROUP** (0.01 QORT), so approval later makes them a member at once. The app explains the fee, and what to do with a 0 balance. Already done if they showed they're ready to mint. | JOIN_GROUP → join request |
 | 3. First signature | the first Minter Admin who signs | Creates the GROUP_INVITE (txGroupId 694) and their own GROUP_APPROVAL, two Hub confirmations shown as one guided step. **The clock starts here.** | GROUP_INVITE + GROUP_APPROVAL |
-| 4. Signatures | other Minter Admins | **Sign**, or do nothing and let it expire. A ring shows `k of n` and a countdown; it updates at once ("Signed ✓, confirming…"). | GROUP_APPROVAL |
-| 5. Done | Core | At the threshold Core applies it by itself: the nominee is in (or, with no join request, gets "Join now"). Without enough signatures it expires and can be nominated again. | automatic |
+| 4. Signatures | other Minter Admins | **Sign**, **Reject**, or do nothing and let it expire. An admin who signed can **Withdraw my signature (counts as a rejection)**, and one who rejected can still sign later: only each admin's latest answer counts. An admin can also mark a decision, or a nomination waiting for its first signature, as **Considering** ("I've looked at this, not sure yet"). A ring shows `k of n` and a countdown. Answers show at once as "Signed ✓ (confirming…)", "Rejected (confirming…)" or "Withdrawn (confirming…)", and settle once they are in a block. | GROUP_APPROVAL (approval true for Sign, false for Reject and Withdraw); Considering is a QDN record |
+| 5. Done | Core | At the threshold Core applies it by itself: the nominee is in (or, with no join request, gets "Join now"). With as many rejections Core ends it as REJECTED; signatures are counted first, so with enough of both it is approved. Otherwise it expires. Either way they can be nominated again. | automatic |
 
 - **Ready to mint, before any nomination:** anyone not in MINTER (newcomers and former members who left or were kicked) can press "Show you're ready to mint" on Home. A short self-check comes first: three boxes (own node synced and online, a minting key once in, the request can't be withdrawn), the 0.01 QORT fee against the confirmed balance, and an optional registered name. Then it sends the same JOIN_GROUP as Accept. Nominators find them on Nominations → Ready to mint, and an approved nomination makes them a member at once. The self-check's answers are not published or saved.
+  - Rows of people who were in MINTER before say so under their level: "Former member: left MINTER on …" or "Former member: removed from MINTER on …" (a kick, or a ban that has ended).
+  - The Nominations search box searches this view too: a typed address (or 4+ characters of one) matches directly; a typed name is looked up on the node and matches its owner.
+- **One wording for an open join request,** however it was sent (Accept nomination, or Show you're ready to mint): the check before joining says "Your join request is already in: you're ready. Nothing more to send."; the nominee's Home and own card say "You're ready ✓: when the admins approve, you're in at once."; others see "Ready to mint" on the nomination card and in Decisions. "You've accepted ✓" is gone.
+- **"Propose nomination"** is the main action's name everywhere (Home, Nominations and its floating button, the page title and submit button, Ready to mint, person pages, empty states). It is one constant, `PROPOSE_NOMINATION` in `src/constants/words.ts`, in sentence case; changing it there to "Propose Nomination" changes every label, and the tests read it too.
 - **Before the first admin signature**, a nomination waits on the open list for at most **10,080 blocks** (an app rule, the length of MINTER's own window), then moves to History.
 - **One open nomination per candidate.** Other eligible members add their **support** ("Nominated by X, also supported by Y and Z").
-- **No reject or withdraw button.** On chain, "withdrawing" a signature would be a rejection, and rejections count towards ending a nomination. Admins sign, or let it expire; the help text says so.
+- **Reject, Withdraw and Considering (Simon, 2026-10-13).** On chain, Reject and Withdraw are both a GROUP_APPROVAL with approval false:
+  - only each admin's latest confirmed answer counts;
+  - rejections are measured against the same target as signatures (8 of 20 admin rows today), and enough of them end the decision as REJECTED;
+  - approvals are checked first, so they win a tie;
+  - one rejection cancels nobody else's signature;
+  - each costs 0.01 QORT.
+
+  Considering changes nothing on chain: it is a small public QDN record under the admin's name, visible to everyone, nominee included.
 - **Re-nominations are normal:** 37 of the 48 people whose invites expired were approved on a later nomination.
+- **Comments:** every decision and every nomination has public comments behind a "Comments (n)" toggle, so lists stay light; a decision's and a nomination's own page show them open. Anyone with a registered name can comment, reply, edit or delete their own, each a small QDN record under their name (0.01 QORT, explained before Hub opens). Without a name, the section says what a name is and links to the Names app; signed out, it offers Sign in. Text is plain (no HTML or markdown), and `qortal://` links become buttons. Comments show newest first, 20 at a time, with replies one level deep. A nomination keeps the comments from before its first signature.
+  - **Moderation:** anyone can mute a name on their own device. A Minter Admin can hide a comment for everyone ("Hidden by a Minter Admin", with Show anyway), and any Minter Admin can show it again.
+- **Shareable links:** `qortal://APP/Q-Mintership+/decisions/<signature>` opens one decision: the queue's own card while it waits (Sign for Minter Admins), and once decided how it ended, its decision block and date, and which Minter Admins' answers counted. `…/nominations/<address>` (or a name) opens one person's nomination in full, then every round ("Round 1", "Round 2"…) with how it ended and a link to its decision. **Copy link** is on every decision and nomination card and in each page's header; the app reports each path to Hub, so Hub's own copy link gives the same link. Old `/decisions?d=<signature>` links open the decision page.
+- **Since your last visit** (Home, per device, per account): Minter Admins see new decisions and new nominations in one row each, and what was decided since (approved, rejected, expired, at most 3, then a link to History); nominees see their nomination's progress (nominated, first signature, new signatures, supporters, approved, expired, rejected); new members see "You're in". "Mark as seen" clears it; Settings → Notifications turns it off.
+- **Hub alerts (opt-in, off by default):** Settings → Notifications → Hub alerts. Hub asks once; there is no fee, and Hub keeps the rules for the account and alerts even when the app is closed. Minter Admins are alerted to new nominations; people not in MINTER when someone nominates or supports them. Hub can only alert about published QDN records, so signatures, approvals, expiry and joining show in the Home panel instead. Hub doesn't check who published a record, so an alert only says one was published; the app checks it when opened.
 
-**Core facts the app follows** (each pinned by a test in `src/rules/`):
+**Who may propose admin changes** (app rules; Core allows more):
 
-- **Signatures needed:** `approvals × 100 ≥ adminCount × 40` for MINTER's PCT40, where `adminCount` includes the null owner (it counts, but can't sign). With 20 admin rows that is **8**. The count is re-read every refresh, because Core re-reads it every block.
-- **Only confirmed signatures count**, and only each admin's latest one.
+- **Adding a Minter Admin:** any MINTER member may propose themselves ("Become a Minter Admin", on their own Home and their own person page), with an optional statement (up to 500 characters) posted as the proposal's first comment. A Minter Admin may also propose another MINTER member (Decisions → Propose → Make a Minter Admin).
+- **Removing a Minter Admin:** only Minter Admins may propose removing another admin. Any admin may "Step down as Minter Admin": on their own Home and person page, or by picking themselves in Propose → Remove a Minter Admin. It is worded as giving up the role (they stay a MINTER member), and it still needs the Minter Admins' signatures. MINTER's owner account can never be proposed for removal.
+- **The proposer's own signature** follows a proposal only when the proposer is a Minter Admin (read fresh before Hub opens). A member who isn't one can't sign, so Become a Minter Admin is one Hub step with one fee (0.01 QORT; the statement is one more step and fee), and the dialog says the Minter Admins decide from there. Step down is two steps like any admin proposal (0.02 QORT in total).
+- **Admin changes proposed in other apps** are listed and signed like any decision. One proposed about oneself is titled "Become a Minter Admin" or "Step down as Minter Admin", and the card says "Their own proposal". When such a proposal is waiting, Home and the person page say so and link to the decision.
+- The rules are pure (`src/rules/adminChange.ts`); the guards feed them fresh reads.
+
+**Core facts the app follows** (each pinned by a test in `src/rules/`, and each write proven on the testnet):
+
+- **Signatures needed:** `approvals × 100 ≥ adminCount × 40` for MINTER's PCT40, where `adminCount` includes the null owner (it counts, but can't sign). With 20 admin rows that is **8**. The count is re-read every refresh, because Core re-reads it every block. Rejections are measured against the same target.
+- **Only confirmed answers count, and only each admin's latest one.** A later rejection replaces a signature (Withdraw); a later signature replaces a rejection.
+- **Admin changes move the target for everything waiting.** Core recounts MINTER's admin rows (the null owner included) each time it checks a waiting decision, in every block, and an approved admin change applies within that same pass. So a new count reaches every waiting decision in the same block or the next, including decisions that already have signatures. When the target drops to what a decision already has, Core applies it with no new signature. Core gives no order for decisions checked in the same block, so the app says "in the same block or the next" and never promises which goes first (on the testnet, the one confirmed after the admin change applied in the same block, the one confirmed before it in the next).
 - **The window,** for a decision confirmed at block h: earliest decision h+6, last signature that counts h+10,079, expired at h+10,081. Times come from the measured block time (72.9 s on 2026-10-12, so about 8.5 days), never an assumed 60 s.
 - **Joining:** with a join request, the approved invite makes the nominee a member at once; otherwise they press Join. JOIN_GROUP needs 0.01 QORT of confirmed balance.
 - **Kicks and bans** go through the same signatures. An admin must lose the admin role before a kick or ban. A ban is permanent or up to 24 days. Kicked members keep their level.
-- **Proposals** (kick, ban, admin changes, lifting a ban, cancelling an approved invite) are made from Decisions → Propose, as one guided step of two Hub confirmations: the proposal, then the proposer's own signature on it, because a proposal doesn't count as its proposer's signature.
-- **Fees:** 0.01 QORT for every group transaction and for the QDN record; the first signature and every proposal cost two, and both fees are checked against the confirmed balance before Hub is asked.
+- **Proposals** (kick, ban, admin changes, lifting a ban, cancelling an approved invite) are made from Decisions → Propose, as one guided step of two Hub confirmations: the proposal, then the proposer's own signature on it, because a proposal doesn't count as its proposer's signature. "Propose cancelling all" (Clean up stale invites) does the same for each older stale invite, one after another; a cancel in Hub at either step stops the run.
+- **Fees:** 0.01 QORT for every group transaction and for every QDN record; the first signature and every proposal cost two, and the fees (of a whole cancel-all run, too) are checked against the confirmed balance before Hub is asked. The check stays quiet: nothing is said about the balance unless it can't pay.
+
+**The admin-count safeguards:**
+
+- **Before Hub opens on an admin change**, its card, Sign, Propose, Sign several and Step down (on Home and the person page too) show what it would do: the new admin seats and target; each decision that would apply at once, end as rejected at once, or fall short of a target that rises; and any admin change that would then apply too and move the target again. Effects are worked out at the lowest and the highest admin count reachable on the way, not only where the count ends up. If anything would change, Hub opens only once "I've checked these" is ticked.
+- **Affected decisions** carry a chip, "Target may drop to 8" (or "may rise to 9"), with the reason one tap away.
+- **Waiting admin changes are projected** one by one, all removals together, all additions together, and all together. "Admin changes and the target" above the queue appears when an admin change with enough signatures would tip others over, or only a combination would. A waiting addition for someone no longer in MINTER doesn't count as a new seat.
+- **Ordering:** before an admin change passes, settle the decisions it would flip (or let them expire), or agree the order with the other Minter Admins. An admin who signed a decision at risk can withdraw their signature while it can still count; the advice names the block it must be in, and appears only where a withdrawal can still land in time.
+- **After the fact:** when the target has changed since this device last looked, Decisions says from what to what and why (who was added or removed), and lists the decisions that now have enough signatures, the soonest to apply first, and those that now end as rejected.
+- **History** gives each approved admin change the target before and after ("Target 9 → 8 signatures (21 → 20 admin seats)"), counting admins' own leaves from MINTER too. **Activity's pulse** lists the target's changes in the window.
 
 ## Statuses (the status-tailored Home)
 
@@ -53,12 +88,12 @@ The status engine (`src/rules/status.ts`, loaded by `src/data/me.ts`) resolves t
 | Status | From | Home shows |
 |---|---|---|
 | Outside Hub / signed out | no `qortalRequest` / Hub declined the account request | what Mintership is, live MINTER numbers, Sign in |
-| Minter Admin | `/groups/member/{a}` admin flag | decisions waiting for you, your activity, stale invites; then the member view |
-| Member, level 5+ | membership + `/addresses/{a}` level | you can nominate; your nominations; open ones to support |
-| Member, level 0–4 | same | progress to level 5 (618,400 blocks), what level 5 unlocks, minting tips |
+| Minter Admin | `/groups/member/{a}` admin flag | since your last visit; decisions waiting for you; your activity; stale invites; Step down as Minter Admin; then the member view |
+| Member, level 5+ | membership + `/addresses/{a}` level | you can propose nominations; your nominations; open ones to support; Become a Minter Admin |
+| Member, level 0–4 | same | progress to level 5 (618,400 blocks), what level 5 unlocks, minting tips; Become a Minter Admin |
 | Banned | `/groups/bans/694` (in force) | when; that admins must lift the ban first |
 | Approved, not joined | `/groups/invites/{a}` | one step left: Join now |
-| Nominated | the person's open nomination (record or pending invite) | who nominated, k of n or "waiting for a Minter Admin", Accept |
+| Nominated | the person's open nomination (record or pending invite) | since your last visit; who nominated, k of n or "waiting for a Minter Admin", rejections and Considering so far; Accept, or "You're ready ✓" once the join request is in |
 | Former member: kicked / left | the address's MINTER history (approved kick, own LEAVE_GROUP) | when; that a new nomination is possible; level kept; Show you're ready to mint |
 | Not in MINTER yet | none of the above (with or without a name) | how minting and nomination work; that nominators reach out; Show you're ready to mint; optional name |
 | … ready to mint | not in MINTER (new or former), with a join request (`/groups/joinrequests/address/{a}`) | "you've shown you're ready to mint", that it can't be withdrawn, what happens next; their name to share. Once a nomination makes them a member, the welcome |
@@ -71,31 +106,64 @@ The status engine (`src/rules/status.ts`, loaded by `src/data/me.ts`) resolves t
 |---|---|---|---|
 | JSON | `qmp-nomination-<nomineeAddress>` | the nominator, under their name | `{ v: 1, nomineeAddress, nomineeName?, reason (20–600 chars), links: qortal:// only (≤ 5), createdHeight?, created? }` |
 | JSON | `qmp-support-<nomineeAddress>` | a supporter | `{ v: 1, nomineeAddress, note? (≤ 280) }` |
+| JSON | `qmp-considering-<key>` | a Minter Admin, under their name | `{ v: 1, pendingSignature?, nomineeAddress?, note? (≤ 280), cleared?: true }` |
+| JSON | `qmp-comment-<key>-<id>` | anyone with a registered name, under that name | `{ v: 1, key, text (1–1000 chars, plain text; empty when deleted), replyTo?: identifier, edited?: true, deleted?: true }` |
+| JSON | `qmp-hide-<key>-<id>` | a Minter Admin, under their name | `{ v: 1, commentName, commentIdentifier, hidden: true \| false }` |
 
 - **JSON** is Core's validated service for small JSON (valid JSON, at most 25 KB).
 - One identifier per nominee: a publisher has at most one nomination and one support per person; publishing again replaces it (and restarts that nomination's waiting window).
-- **Nothing in a record is trusted on its own.** The publisher comes from the QDN search row, and is re-checked on every read: a MINTER member at level 5+, or a Minter Admin, at the time of reading. Records that fail (an ineligible publisher, a self-nomination, a malformed body, an identifier that doesn't match the body) are ignored. Builders and parsers: `src/data/records.ts`, pinned by tests.
+- **`key`** is what a Considering record or a comment is about: the first 40 characters of the pending transaction's signature for a decision, or the nominee's address for a nomination still waiting for its first signature. `id` is 6 letters or digits. Identifiers stay within QDN's 64 characters (at most 59).
+- **Nothing in a record is trusted on its own.** The publisher comes from the QDN search row, and is re-checked on every read: a MINTER member at level 5+, or a Minter Admin, at the time of reading. Records that fail (an ineligible publisher, a self-nomination, a malformed body, an identifier that doesn't match the body) are ignored. Builders and parsers: `src/data/records.ts` and `src/data/commentRecords.ts`, pinned by tests.
+- **Considering** counts only from a current Minter Admin who can sign (the null owner left out). A decision's record must carry the whole pending signature, whose first 40 characters are the key; a waiting nomination's must carry the nominee address that is the key. Each admin's latest publish wins; "No longer considering" publishes the record again with `cleared: true`, because QDN can't delete; a later Sign, Reject or Withdraw on chain by the same admin hides it. A nomination's record carries over to its invite once the first signature lands, if it was published in this round. Selection: `src/rules/considering.ts`.
+- **Comments:** an edit or a deletion republishes the same identifier, and the newest version wins. A deleted comment keeps its place and shows "Deleted", so its replies still make sense. A reply's `replyTo` is the identifier it answers; threads are one level deep, and a reply to a reply shows under the first comment, saying whom it answers.
+- **Hides:** one admin's hide identifier is the same for one comment each time, so hiding and showing again republish one record. Per comment, the newest hide counts, and only when the name that published it belongs to a Minter Admin at the time of reading.
 
 ### Chain writes (all through Hub; the app never POSTs to the node)
 
 | Action | Hub request (`src/writes/hubActions.ts`, pinned by tests) |
 |---|---|
 | First signature | `INVITE_TO_GROUP { groupId: 694, inviteeAddress, inviteTime: 864000, txGroupId: 694 }`, then the admin's own approval (below) |
-| Sign | `SIGN_TRANSACTION { unsignedBytes, process: true }` with GROUP_APPROVAL bytes built in the app (`src/qortal/approvalBytes.ts`: type 33, txGroupId 0, approval 1) |
+| Sign | `SIGN_TRANSACTION { unsignedBytes, process: true }` with GROUP_APPROVAL bytes built in the app (`src/qortal/approvalBytes.ts`, `groupApprovalBytes`: type 33, txGroupId 0, approval byte 176 = 1) |
+| Reject / Withdraw my signature | `SIGN_TRANSACTION { unsignedBytes, process: true }` with GROUP_APPROVAL bytes from `groupRejectionBytes`: the same 185 bytes as Sign with byte 176 = 0, from its own builder typed to approval false (pinned against the three mainnet fixtures) |
 | Accept nomination / Join now / Show you're ready to mint | `JOIN_GROUP { groupId: 694 }` |
 | Kick | `KICK_FROM_GROUP { groupId: 694, qortalAddress, reason, txGroupId: 694 }` |
 | Ban | `BAN_FROM_GROUP { groupId: 694, qortalAddress, reason, banTime: 0 or ≤ 2,073,600 s, txGroupId: 694 }` |
 | Lift a ban | `CANCEL_GROUP_BAN { groupId: 694, qortalAddress, txGroupId: 694 }` |
 | Cancel an approved invite | `CANCEL_GROUP_INVITE { groupId: 694, qortalAddress, txGroupId: 694 }` |
 | Add / remove a Minter Admin | `ADD_GROUP_ADMIN` / `REMOVE_GROUP_ADMIN { groupId: 694, qortalAddress, txGroupId: 694 }` |
+| Become a Minter Admin (a member) | `ADD_GROUP_ADMIN { groupId: 694, qortalAddress: <own address>, txGroupId: 694 }`, one step; then, if written, the statement as the proposal's first comment (below) |
+| Step down as Minter Admin | `REMOVE_GROUP_ADMIN { groupId: 694, qortalAddress: <own address>, txGroupId: 694 }`, then the admin's own `SIGN_TRANSACTION` on it |
 | Nominate / support | `PUBLISH_QDN_RESOURCE { name, service: 'JSON', identifier, data64 }` |
+| Considering / No longer considering | `PUBLISH_QDN_RESOURCE { name, service: 'JSON', identifier: 'qmp-considering-<key>', data64 }` |
+| Comment, reply, edit, delete; hide or show again (Minter Admins) | `PUBLISH_QDN_RESOURCE { name, service: 'JSON', identifier: qmp-comment-… or qmp-hide-…, data64 }` (`publishCommentRequest`) |
 
-- **A proposal and its proposer's signature** (`proposeAndSign` in `src/writes/flows.ts`): the kick, ban, admin change, lift or cancellation above, then, once the node knows it, `SIGN_TRANSACTION` on it as for Sign. If the proposal goes through and the signature doesn't, the proposal waits in the queue like any other.
+- **A proposal and its proposer's signature** (`proposeAndSign` in `src/writes/flows.ts`): the kick, ban, admin change, lift or cancellation above, then, once the node knows it and only when the proposer is a Minter Admin, `SIGN_TRANSACTION` on it as for Sign. If the proposal goes through and the signature doesn't, the proposal waits in the queue like any other.
 - **Ready to mint adds no QDN data:** it is MINTER's join request on chain.
 - `inviteTime` 864000 is what the original app sends; Hub refuses 0.
-- Hub has no GROUP_APPROVAL action, so the bytes are built here. Tests rebuild three mainnet approvals byte for byte, and `npm run test:decode` sends built bytes to a local node's read-only `POST /transactions/decode?ignoreValidityChecks=true` (it only parses; nothing is stored or broadcast).
+- Hub has no GROUP_APPROVAL action, so the bytes are built here. Tests rebuild three mainnet approvals byte for byte (and the rejections with only byte 176 changed), and `npm run test:decode` sends built approval and rejection bytes to a node's read-only `POST /transactions/decode?ignoreValidityChecks=true` (it only parses; nothing is stored or broadcast).
 - **Before every write** the app re-reads the chain (`src/writes/guards.ts`): still pending, still an admin, not already signed, not too late to count, no duplicate waiting, no stored invite, the fee balance, and Core's limit of 25 unconfirmed transactions per account. Hub hides Core's reason when SIGN_TRANSACTION fails validation, so these checks come first.
-- **After Hub's 30-second timeout** the app does not offer Retry at once: Hub keeps its dialog up for 60 s and still applies a late Accept, so the app looks for the transaction for about a minute first (`src/writes/runner.ts`).
+  - Reject and Withdraw make the same checks as Sign, then check the admin's own answers: Reject goes only to an admin with no answer yet (one who signed is pointed to Withdraw); Withdraw only to an admin whose signature is in a block, while a withdrawal can still count. Nothing new is sent while one of the admin's answers is still on its way.
+  - Admin changes: the rules above (`guardAddAdmin`, `guardRemoveAdmin`), and the owner account can't be proposed for removal.
+  - Considering: the publisher must be a Minter Admin with a registered name, and the decision still pending and in time (or the nomination still waiting). Clearing is always allowed.
+- **After Hub's 30-second timeout** the app does not offer Retry at once: Hub keeps its dialog up for 60 s and still applies a late Accept, so the app looks for the transaction for about a minute first (`src/writes/runner.ts`). The lookup matches an answer's approval flag, so a rejection is never taken for a signature or the other way round.
+- **After a write** the answer shows at once ("Signed ✓ (confirming…)"); the live views (queue, nominations, chain tip, own status) refresh every 15 s, still paused while the app is hidden, until the transaction is in a block, then reload once and settle. A Considering publish re-reads only who is considering.
+
+### Hub requests that aren't writes (no fee)
+
+| Request | When |
+|---|---|
+| `SHOW_ACTIONS` | once a session, on Settings, to check whether Hub offers alerts |
+| `NOTIFICATION_GET` | on Settings, to read whether alerts are on |
+| `NOTIFICATION_PERMISSION`, then `NOTIFICATION_ADD { notifications }`, then `NOTIFICATION_REMOVE { notificationIds }` | only when you turn alerts on (the last drops rules that no longer fit your role) |
+| `NOTIFICATION_REMOVE` | only when you turn alerts off |
+
+The rules registered with Hub (all `service: 'JSON'`, `prefix: true`, `excludeBlocked: true`, link `qortal://APP/Q-Mintership+/…`):
+
+| Rule id | For | Identifier |
+|---|---|---|
+| `qmp-new-nomination` | Minter Admins | `qmp-nomination-` |
+| `qmp-nominated-you` | not in MINTER | `qmp-nomination-<address>` |
+| `qmp-supported-you` | not in MINTER | `qmp-support-<address>` |
 
 ### Reads (all GET, paged at 100 with a ceiling, deduped, cached)
 
@@ -106,20 +174,97 @@ The status engine (`src/rules/status.ts`, loaded by `src/data/me.ts`) resolves t
 | Members with names | `/groups/members/694?limit=100&offset=…` (7 pages today, only where the whole group is needed) |
 | Membership, join request, stored invite | `/groups/member/{a}`, `/groups/joinrequests/address/{a}`, `/groups/invites/{a}` |
 | Join requests, stored invites, bans | `/groups/joinrequests/694`, `/groups/invites/group/694`, `/groups/bans/694` |
-| Ready to mint (Nominations) | the join requests above less members, admins and bans in force (reads the nominations already make), in Core's order, 20 rows at a time; each row's account and name only once it is shown, 6 at a time, kept 10 minutes |
-| Decisions | `/transactions/pending?txGroupId=694` |
+| Ready to mint (Nominations) | the join requests above less members, admins and bans in force (reads the nominations already make), in Core's order, 20 rows at a time; each row's account, name and MINTER history only once it is shown, 6 at a time, kept 10 minutes |
+| Ready to mint search | a typed address needs no read; a typed name, once typing pauses: `/names/search?query=…&prefix=true&limit=10`, plus `/names/{name}` only when that page is full without the exact name; cached per query |
+| Decisions | `/transactions/pending?txGroupId=694` (also "your proposal is waiting" on Home and one's own page, from the same cached read) |
 | A pending or decided invite cancellation's group and invitee (Core's JSON leaves them out) | `/transactions/signature/{sig}/raw`, decoded in `src/qortal/groupTxBytes.ts`, read once per transaction |
-| Signatures | `/transactions/search?txType=GROUP_APPROVAL&confirmationStatus=CONFIRMED&startBlock=…&blockLimit=…` over the blocks the pending ones can have signatures in, plus `/transactions/unconfirmed?txType=GROUP_APPROVAL`; joined on `pendingSignature` |
+| Signatures and rejections | `/transactions/search?txType=GROUP_APPROVAL&confirmationStatus=CONFIRMED&startBlock=…&blockLimit=…` over the blocks the pending ones can have answers in, plus `/transactions/unconfirmed?txType=GROUP_APPROVAL`; joined on `pendingSignature` |
+| A decision by its link | `/transactions/signature/{sig}`; while it waits, the Decisions reads above |
+| Whose answers counted on a decided decision | the GROUP_APPROVAL search above over that decision's own blocks only, ending before its decision block (at most one window), kept 30 minutes |
+| A nomination's rounds | the person's MINTER history (below), reduced to MINTER invites for them |
+| Approved admin changes since the target this device saw (Decisions, only when the target changed) | `/transactions/search?txGroupId=694&txType=ADD_GROUP_ADMIN&txType=REMOVE_GROUP_ADMIN&confirmationStatus=CONFIRMED&startBlock=…&blockLimit=…&limit=100`, one search, cached 5 minutes (`src/data/targetChanges.ts`); it starts one window before the last-seen block and never reaches back more than 5 windows (about 6 weeks) |
+| The target's past changes (History, Activity) | the cached admins read, the decided and later admin-change reads they already make, and admins' own leaves from MINTER |
+| Since your last visit: how decisions that left the queue ended | `/transactions/signature/{sig}`, at most 12, once a session, only when there is an earlier visit; each final outcome kept for the session |
 | Tip and block time | `/blocks/last`, `/blocks/byheight/{h}` (1,000 blocks back) |
 | Accounts, names, fees | `/addresses/{a}`, `/names/primary/{a}`, `/names/{name}`, `/addresses/balance/{a}`, `/addresses/lastreference/{a}`, `/transactions/unitfee` |
 | A person's MINTER history | `/transactions/search?address=…&txType=JOIN_GROUP&…&confirmationStatus=CONFIRMED`, reduced to group 694 |
-| Records | `/arbitrary/resources/searchsimple?service=JSON&identifier=qmp-…&prefix=true`, bodies `/arbitrary/JSON/{name}/{identifier}` cached per version |
+| Records | `/arbitrary/resources/searchsimple?service=JSON&identifier=qmp-…&prefix=true`, bodies `/arbitrary/JSON/{name}/{identifier}` cached per version; a body that isn't on the node is tried again after 2, 4 and 8 minutes, then every 15 |
+| Considering | `searchsimple?service=JSON&identifier=qmp-considering-&prefix=true&reverse=true`, pages of 100, at most 3, one read shared by every card (cached 60 s, refreshed while visible). Bodies only for rows published within the last two signing windows, keyed by a decision still pending or by an address, under a current Minter Admin's name |
+| Comment counts | `searchsimple?service=JSON&identifier=qmp-comment-&prefix=true&after=<45 days ago>` (100 a page, at most 3 pages), one search shared by every card. An item that can be older, or a full list, searches `identifier=qmp-comment-<key>-` itself, only once its card is on screen |
+| A thread, once opened | `identifier=qmp-comment-<key>-` and `identifier=qmp-hide-<key>-` searches, the bodies of the newest 20 comments (20 more per Show more) and the comments their replies answer, `/names/{name}` per author and per hide publisher; refreshed every minute while open |
 
-The Decisions queue costs about 8 GETs, however many decisions there are (plus one raw read the first time a cancellation is seen). It lists MINTER group changes (groupId 694) as decisions; other pending transactions that wait for MINTER's admins are shown apart, to Minter Admins only, as "Other transactions waiting for Minter Admins", without Sign.
+The Decisions queue costs about 8 GETs, however many decisions there are (plus one raw read the first time a cancellation is seen, and the shared Considering and comment-count searches). It lists MINTER group changes (groupId 694) as decisions; other pending transactions that wait for MINTER's admins are shown apart, to Minter Admins only, as "Other transactions waiting for Minter Admins", without Sign.
+
+### Device storage (localStorage, per browser)
+
+Every key starts with `qmintershipplus-`. Nothing here is published; a later Settings sync could carry it across devices.
+
+| Key | What |
+|---|---|
+| `ui-theme` | the theme |
+| `motion`, `time-display`, `celebrate`, `activity-window`, `decisions-hide-signed` | Settings: animations, countdowns as time or blocks, the celebration, Activity's window, Hide what I signed |
+| `since-last-visit` | Home's "Since your last visit" on or off (default on) |
+| `last-visit-<address>-<groupId>` | the last visit's snapshot `{ v: 1, at, height, decisions?: [{ signature, kind, subject, height }] (Minter Admins, ≤ 100), nomination?: { decision, state, signed, needed, supporters, publishedAt } \| null (accounts not in MINTER) }`, saved whenever the app has new data; the one from before the session is the baseline |
+| `seen-target-<groupId>` | the target this device saw last, `{ adminCount, needed, height }`, for "The target changed" on Decisions |
+| `muted-names` | names muted in comments |
+| `last-status:<address>` | the last status Home showed, so the welcome plays once |
+| `home-signatures-needed` | the last known number of signatures needed, for Home's first paint |
+
+Hub alerts are not on the device: Hub keeps the rules for the account.
 
 ### Legacy reads (History, read-only)
 
 The original app's data stays readable: nomination cards (`BLOG_POST` `Minter-board-card-*`), their polls (`<card>-poll`) and comments (`comment-<card>-*`), and AR cards (`QM-AR-card-*`). The admin board (`MAIL_PRIVATE` `card-MAC-*`) is encrypted to admins: History links to the original app for it. Old deep links (`#/minter/<card>/<section>`) open the card in History.
+
+## Testnet (dev-only)
+
+Every write is proven on a private, one-node Qortal testnet before anyone publishes the app. None of it is in the app's build. Keys and chain data live in `~/.qmp-testnet/` (mode 700, key files 600), never in the repo; nothing prints a key.
+
+**What it is**
+
+- **Core:** the 6.1.9 jar already on this machine (`~/qortal/qortal.jar`, `qortal-6.1.9-c68fc4a`), copied into the testnet home. It is a Reticulum test build whose Reticulum and wallet clients try to reach outside hosts; the network namespace below stops them.
+- **Home:** `~/.qmp-testnet/`: the jar, `settings.json`, `testchain.json` (built from that jar's own `blockchain.json`: today's mainnet rules from block 1, a fresh genesis, 60-second blocks), the database, QDN data, logs, results, and `keys.json` with fresh keys.
+- **Accounts:** a minter, a faucet and 108 test accounts made in the genesis block with levels (7, 5, 4, 2 and 0), plus fresh level-0 accounts the scenarios make and fund. 68 of them have registered names, some with spaces and `+`.
+- **Groups:** five standard MINTER-like groups (`testnet/lib/groups.mjs`), made the way MINTER was: created closed with PCT40 and delays of 5 and 60 blocks, members invited and joined, admins added, then the owner handed to the null account by `UPDATE_GROUP` (the old owner stays an admin, as on MINTER). Scenarios that kick, ban or change admins make a fresh copy of their group for each run, so every scenario can run again; the bulk scenario makes its own.
+
+| Key | Admin rows | Needed | Used for |
+|---|---|---|---|
+| main | 9 | 4 | nominations, signatures, joins, guards, Hub timeouts and declines, expiry, signing through the screens |
+| ops | 6 | 3 | kicks, bans, lifting bans, admin changes, cancelling an approved invite |
+| shift | 13 | 6 | the admin-count trap, on chain and in the app |
+| reject | 7 | 3 | Reject, Withdraw, Considering |
+| rules | 5 | 2 | who may propose admin changes, comments, links |
+| bulk (its own) | 5 | 2 | bulk sign and Core's 25-unconfirmed limit |
+
+**How it stays private** (in layers)
+
+1. The node runs under `unshare -rn`: a Linux network namespace with nothing but loopback. It can't reach any peer, mainnet or otherwise. A Unix socket in the testnet home is the only way in.
+2. Its settings: `isTestNet`, its own chain config and genesis, its own repository and data folders, ports 24391–24394 bound to 127.0.0.1, a fixed network of one address nobody listens on, Reticulum off, no archive, no auto-update. `GET /peers` shows 0 connected peers.
+3. Every write the tools make (`/transactions/process`, QDN uploads) first checks that `GET /admin/info` says `"isTestNet": true`, and refuses otherwise. The tools have no TCP address for a node at all: only the socket.
+
+**The test signer**
+
+`testnet/lib/hub.mjs` answers `qortalRequest` the way Hub does: the same actions with the same payloads (`GET_USER_ACCOUNT`, `INVITE_TO_GROUP`, `KICK_FROM_GROUP`, `BAN_FROM_GROUP`, `CANCEL_GROUP_BAN`, `CANCEL_GROUP_INVITE`, `ADD_GROUP_ADMIN`, `REMOVE_GROUP_ADMIN`, `JOIN_GROUP`, `LEAVE_GROUP`, `SIGN_TRANSACTION` with Core's validity-checked decode first, `PUBLISH_QDN_RESOURCE` with the fee), the same reference, fee and process steps, and Hub's error texts. On demand it behaves like Hub's worst moments: a decline, the 30-second timeout with a late accept, and the generic "Failed to decode transaction"; these are queued per account and group, so scenarios running side by side never take each other's. The signer and its controls take same-origin JSON on a loopback host only, so no other page open in the browser can drive them.
+
+**The app in testnet mode**
+
+`npm run dev:testnet` serves the app with `vite.testnet.config.ts`: the test signer as `qortalRequest` (each tab picks its account with `?as=admin01`), Core reads through a GET-only proxy to the testnet, and the group to treat as MINTER from `?group=main`. `__QMP_TESTNET__` is false in every build and test run, and the testnet config refuses to build: the production bundle was byte-for-byte unchanged by the switch, and `grep` finds none of the testnet names in `dist/` or the zip.
+
+**Commands** (from `apps/Q-Mintership+`)
+
+```bash
+node testnet/testnet.mjs init     # fresh keys, chain config and settings in ~/.qmp-testnet (once)
+node testnet/testnet.mjs start    # the node, isolated; adds its minting key
+node testnet/setup.mjs            # names and the groups above (about 6 blocks)
+npm run test:testnet              # every scenario; -- --only shift,ops   -- --list
+npm run dev:testnet               # the app against the testnet: http://127.0.0.1:5176/?as=admin01&group=main
+node testnet/testnet.mjs status   # height, peers, isTestNet
+node testnet/testnet.mjs stop     # data and keys stay
+```
+
+Each run prints its block heights and outcomes and saves them in `~/.qmp-testnet/results/`. `npm test` never runs the scenarios: they take minutes of real 60-second blocks.
+
+**A Core 6.1.9 quirk:** a brand-new chain can't start on its own. With no QDN resources yet, its "latest signatures" start-up step runs an empty database batch and stops the node before its API starts. `testnet/lib/PrimeChain.java` makes the database and the genesis block offline with Core's own classes and marks that step done; `start` runs it once.
 
 ## Dropped, and why (CLAUDE.md rule 6)
 
@@ -127,9 +272,9 @@ Agreed with Simon (2026-10-12):
 
 | Feature of the original | Why |
 |---|---|
-| Forum (rooms, replies, attachments) | Not part of deciding mintership; Q-Chat and Q-Mail cover discussion. Old forum links open Home. |
+| Forum (rooms, replies, attachments) | Not part of deciding mintership; Q-Chat and Q-Mail cover discussion, and every decision and nomination now has its own comments. Old forum links open Home. |
 | Polls and voting on cards | Replaced by the process above: only Minter Admins' signatures decide on chain, and polls duplicated them. |
-| The notification broadcast modal after every action | Friction after every vote, comment and approval; in-app state replaces it (Hub alerts are a night-2 idea). |
+| The notification broadcast modal after every action | Friction after every vote, comment and approval; in-app state and "Since your last visit" replace it, with opt-in Hub alerts. |
 | Stats snapshot publishing | The Activity page computes everything live from the chain. |
 | The encrypted Admin Board discussion | Admin discussion moves to admins' own channels; old admin cards are linked to in the original app. |
 | The account explorer modal | Becomes the person page. |
@@ -180,13 +325,104 @@ Three branches built side by side, merged one at a time with every check after e
 - **Tests:** 462 passed, 7 skipped, in 49 files (two clean runs after each merge). The page tests now have 15 s each, as some passed vitest's 5 s on a busy machine.
 - **Screenshot check:** 32 screens × 5 sizes × 4 themes = 640 captures per mode, dark and light: 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations. New screens: `home-ready` (the mock world's Rae Ready has a join request), `home-ready-dialog`, `nominations-ready` and `nominations-ready-admin`, `decisions-propose` (the menu or the phone sheet) and `decisions-cancel-invite` (up to the two Hub steps). First load at 390×844: a ready newcomer's Home 21 GETs; Ready to mint 44.
 
+### Night 2 (2026-10-13): every write on a private testnet, and Simon's additions
+
+_Done on the branch; Simon reviews in the morning._ Six branches built side by side in their own worktrees (the admin-count safeguards, Reject/Withdraw/Considering, admin rules and links, comments, Simon's answers and wording, notifications), merged one at a time with build, lint and tests after each; then the accessibility pass and the review, each on its own branch.
+
+**Every write on the testnet** (`npm run test:testnet`; 60-second blocks; h is the block a decision was confirmed in; every outcome is Core's own, read back from the node):
+
+| Proven | Scenario | Blocks | Outcome |
+|---|---|---|---|
+| Propose nomination → Accept → first signature, signing the invite while it was still unconfirmed → signatures → member at once | `nominate-join` | join request 16; invite and its first approval both in 17; approved at 23 (h+6) | 9 admin rows, 4 needed, the same in the app and Core. The app's window: earliest 23, last useful signature 76, expiry 78. A member at once; the join request used up. |
+| Approved without a join request, then Join now | `join-now` | invite 22; approved 28; Join now 29 | Home said "approved, Join now"; a member in block 29; joining again refused before Hub ("You're already in MINTER.") |
+| Show you're ready to mint, then a nomination and a support, approved | `ready` | join request 22; invite 23; approved 29 | A second join request refused before Hub; listed in Ready to mint; a member at once |
+| Expiry, the too-late guard, Propose nomination again | `expiry` | invite 19; the app's window: earliest 25, last useful 78, expiry 80; Core expired it at 80 (h+max+1) | A late signature refused before Hub; the nomination shown as expired; a new record and a new invite after it |
+| Hub's worst moments | `hub-behaviours` | 20–24 | A decline is a cancel and sends nothing; "Failed to decode transaction" is reported and sends nothing; after the 30 s timeout the lookup found the late transaction at 50 s, signing again was refused, and there is exactly one signature; a proposal whose signature step was declined waits, and was signed from the queue |
+| Sign several, 26 decisions | `bulk` | 21–26 | 25 sent; the 26th stopped before Hub with Core's 25-unconfirmed limit in plain words |
+| Kick, permanent and one-day bans, lift, add and remove admin, the remove-admin-first path, cancel an approved invite | `ops` | proposals 21, each approved at 27; lift, cancellation and add admin approved at 34; remove admin 41; the kick after it 48 | 6 admin rows, 3 needed. Each proposal is two Hub steps. A duplicate proposal, a second signature from the same admin, inviting a banned account or a member, and kicking an admin are each refused before Hub; the kick went through once the admin role was removed |
+| The admin-count trap, on chain | `shift` | D1 (a kick) 19, R (an admin removal) 20, D2 (a kick) 21, all at 5 of 6; R's 6th signature at 29; R approved at 30 | Admin rows 13 → 12, so 5 needed: D2 (confirmed after R) approved in the same block, 30; D1 (confirmed before R) in the next, 31; no new signatures on either |
+| The safeguards, in the app | `shift-app` | D1 confirmed 141; R approved 148 | Before: D1 carries "Target may drop to 5", R's card says the target would drop from 6 to 5, and Continue to Hub waits for "I've checked these". A withdrawal on D1 (4 signatures, 1 rejection) defuses it: D1 stays PENDING at 4 of 5 after R. After: the returning device reads "The target changed from 6 to 5 signatures", and why |
+| Reject, Withdraw, Considering, rejections reaching the target, a tie | `reject` | D 114, approved at 120; E 121, REJECTED at 127 (h+6); F 128, approved at 134 | 7 admin rows, 3 needed. On D, signatures/rejections went 2/1 → 1/2 (Withdraw) → 2/1 (signed again); a second Reject and a Withdraw without a signature refused before Hub. Considering shown with its note, cleared, then superseded by the same admin's signature. E: three rejections end it as REJECTED, and the nomination reads as rejected. F: 3 signatures and 3 rejections, approved (signatures win a tie) |
+| Who may propose admin changes, comments, links | `rules` | Become a Minter Admin approved 119; an admin's proposal of another member 126; Step down 133 | Become is one Hub step, with the statement posted as its first comment; admin rows 5 → 6 → 7 → 6. A member proposing someone else, a member proposing to remove an admin, and removing the owner account are refused before Hub. A thread of 5 comments (a reply, an edit, a deletion) and 1 hide by a Minter Admin. A decided decision, an old `?d=` link and a nomination open on their own pages, with no console errors |
+| Sign through the screens on real blocks | `ui-sign` | approved at 121 | See "Optimistic states and animations" below |
+
+- **What went wrong first, honestly:** `ui-sign` and `reject` first "passed with notes", each from a mistake in the scenario's own check, not in the app. The reduced-motion check counted animations the app already cuts to 0.01 ms (it now counts real ones), and the rejected-state check read a cached queue (it now reads fresh; a separate check at block 131 read the nomination as rejected). Both were fixed and rerun clean. The first `shift-app` attempts failed on two scenario mistakes: they opened Sign as the proposer, who had already signed, and reloaded a page that had already recorded the new target, so its banner had nothing new to say. Both were fixed, and a fresh run passed (blocks 136–150).
+- **Full run:** (pending)
+- `npm run test:decode` now decodes a rejection too: approval and rejection bytes decode on a mainnet node's read-only endpoint to the same fields. `npm run test:live` (6 tests, GET only) passes.
+
+**The admin-count safeguards:** as described under The new process.
+
+- The projection rules (`src/rules/targetShift.ts`) are pure, with tests of every threshold from NONE to PCT100 against a reference formula, the real case where 21 admin rows became 17 and 9 needed became 7, ties, rejections, rises, duplicates, the owner, cascades and combinations.
+- The impact panel with "I've checked these" on the admin change's card, Sign, Propose, Sign several and Step down; the "Target may drop to …" chip; "Admin changes and the target" above the queue; "The target changed from 10 to 9 signatures" on Decisions, kept per device; the target's changes in History and Activity; two new points in How signing works.
+
+**Reject, Withdraw and Considering (B2):**
+
+- Reject sits next to Sign; Withdraw my signature replaces Sign once the signature is in a block, and stays while a withdrawal can still count, also on a decision with enough signatures that Core applies two or more blocks from now. Each opens a dialog first that says what it does on chain, the target, that signatures are counted first, that it cancels nobody else's signature, the fee, and what to check in Hub (`"approval": false` and the start of the pendingSignature).
+- Cards show who rejected, how many of them withdrew a signature, rejections on their way, and "Rejections: r of the 8 that would end it (signatures are counted first)". "Enough rejections" is a decision state, with when Core ends it; Sign stays on a just-proposed one, since signatures that land before its first decision block still win.
+- Nomination cards and the nominee's Home show the rejections so far; once enough have rejected, the nominee is no longer offered Accept or told they're in when the admins approve. History says a rejected nomination can come again; Activity counts a rejection as an answer, never a miss, and its pulse lists rejected invites.
+- Considering on decisions and on nominations waiting for a first signature, with an optional note (up to 280 characters): "Considering: A ("note"), B" next to the signers, and "N Minter Admins are considering" on nomination cards, person pages and the nominee's Home.
+
+**Admin roles, links and comments (B3):**
+
+- Become a Minter Admin and Step down as Minter Admin on one's own Home and person page, with the rules above; the statement is optional, up to 500 characters, posted as the proposal's first comment (one more Hub step).
+- A page for every decision (waiting or decided) and every nomination (with its rounds), Copy link on every card and page header, old `?d=` links redirected, paths reported to Hub. A decision decided while its page is open says how it ended and keeps focus and any open dialog. A decided decision lists only the answers Core counted (those in a block before its decision block).
+- Comments on every decision card, nomination card and person page, open on the decision's and the nomination's own page: posting, replying, editing and deleting each one Hub step, shown at once; mute per device; hide for everyone by Minter Admins. With comments closed a page costs one shared count search; opening a thread on a person page in the mock world cost 20 GETs (2 searches, 10 small bodies, 8 names), and the thread's code loads on demand.
+
+**Simon's answers and wording (B4, C):** the eight open questions of 2026-10-13, each answered and built (see Follow-ups). "Propose nomination" replaces "Nominate someone" everywhere, from one constant.
+
+**Optimistic states and animations on real blocks (D):** measured by `ui-sign` on the testnet's 60-second blocks.
+
+- "Signed ✓ (confirming…)" showed 1 s after the click (Hub answered in 1 s).
+- It settled 120 s after the click with the old once-a-minute refresh. Since then the live views refresh every 15 s while a write waits for its block, and it settled in 76 s, one block later. After the review, the faster refresh also ends once the transaction is in a block, and the views reload once then.
+- The ring moved from 1 of 4 to 2 of 4 as the signature landed; the celebration for the new member had 24 pieces; with reduced motion, 0 real animations (the app cuts every one to 0.01 ms). No console errors on the Decisions page.
+
+**Notifications (E):** "Since your last visit" on Home and opt-in Hub alerts, as described above. On a first visit the panel shows nothing and reads nothing extra; after an earlier visit an admin's costs at most 12 extra GETs per session (3 in the mock world). The Decisions item in the navigation already shows the number of decisions waiting for your signature, so no second badge was added.
+
+- **Hub's alert API** (read-only, the Qortal GO checkout of Qortal-Hub, branch `feature/hub-3.0.3-go`):
+  - `NOTIFICATION_PERMISSION` (`src/qortal/qortal-requests.ts:618` → `src/qortal/get.ts:665`; Hub asks "Allow this app to send you GO notifications?" at `get.ts:698`), `NOTIFICATION_HAS_PERMISSION` (`qortal-requests.ts:647`), `NOTIFICATION_ADD` (`qortal-requests.ts:2048` → `get.ts:5723`; it needs the permission first, `get.ts:5734`, forces every rule to `event: 'RESOURCE_PUBLISHED'`, `get.ts:5770`, and accepts only the filter keys at `get.ts:5667`), `NOTIFICATION_GET` (`qortal-requests.ts:2077` → `get.ts:6090`), `NOTIFICATION_MARK_SEEN` (`qortal-requests.ts:2106`) and `NOTIFICATION_REMOVE` (`qortal-requests.ts:2132` → `get.ts:5829`). All are allowed from Q-Apps (`src/hooks/useQortalMessageListener.tsx:274–279` and `:360–365`); `SHOW_ACTIONS` returns that list (`qortal-requests.ts:2023`).
+  - **`SET_TAB_NOTIFICATIONS` is not implemented:** the only mention is a comment at `qortal-requests.ts:572`.
+  - **Only QDN publishes can alert:** Core's notifications socket sends only RESOURCE_PUBLISHED (`ArbitraryTransaction.java:542`, `:551`) and PAYMENT_RECEIVED (`PaymentTransaction.java:98–99`); Hub turns a matching RESOURCE_PUBLISHED into an OS alert that opens the app (`src/components/Group/WebsocketNotifications.tsx:1111–1145`). Signatures, approvals, expiry and membership changes can't trigger one.
+  - **No name, no alerts:** Hub starts its alert listener only for accounts with a registered name (`WebsocketNotifications.tsx:867`); Settings says so.
+  - **Alerts can't pile up:** Hub skips records published by your own names (`:1113`) and keeps one alert per identifier for 3 days (`:1119`); Core sends a resource at most once per 5 minutes per connection (`NotificationManager.java:47`).
+
+**Accessibility (F):** keyboard and screen-reader pass of every write dialog and the new panels.
+
+- **How it was checked:** every write dialog opened from its button with Enter in the test harness (Testing Library, jsdom, axe-core): focus goes in and stays in under Tab and Shift+Tab, every control has a name, axe finds nothing, and Escape puts focus back (`src/test/writeDialogs.a11y.test.tsx`, 23 tests). Then in Chromium: visible focus at every Tab stop of Decisions, Home and Settings and inside the dialogs and the Propose menu, in all four themes; tap targets at 390 px; the heading outline of every screen (one h1, no level skipped).
+- **Focus never falls to the page:** Propose's form and Hub step give focus back to Propose; while a write runs, focus waits on the dialog's title, so the first stage is heard; a dialog whose button is gone or disabled hands focus to its card; Propose nomination's focus follows the pick, the result and the links; comments' Edit, Reply, Cancel and Show more keep focus where it belongs; Got it, Mark as seen and "Show the ones I signed" keep focus on the page.
+- **Heard once, never twice, never missed:** Sign several and cancel-all read each new stage once; the "target changed" note is a region with its own heading, said once; Propose's check on the person picked and Propose nomination's candidate check are read out; Ready to mint's search says "None of N match"; Copy link says "Link copied" once.
+- **Names, structure and touch:** buttons repeated on every card say whose card they are on; Decisions' summary and How signing works are h2; a person's chip is a 44 px tap target; Settings' switches turn with a tap anywhere on their row; the Become a Minter Admin statement shows how much is left.
+- **Screenshot check** (on the accessibility branch's last commit, `b39327cc`): 49 screens × 5 sizes × 4 themes = 980 captures per mode, dark and light both 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations, 0 small button targets. The small text that remains is the avatars' decorative letters, the 12 px section titles, bottom-bar labels and badge counts, the signature ring's "of 8", 12 px captions on Activity's tiles and Home's stale-invite tile, and the kit's 12 px field helper text.
+
+**Review:** tonight's diff in 6 dimensions (Core rules, write safety, efficiency, phones and UX, accessibility, wording): 37 findings, each checked by a second reviewer trying to refute it; 34 confirmed and fixed (33 commits, as two shared a cause), 3 refuted.
+
+- **Core rules (6, all fixed):** an admin change's impact is worked out at the lowest and highest reachable counts, so a removal that triggers a waiting addition no longer shows "no impact"; Withdraw stays offered while it can still count, and the withdraw advice appears only where it can, with the block it must be in; a decided page counts only answers in a block before its decision block; Sign stays on a just-proposed decision with enough rejections; History and Activity count admins who left MINTER themselves; a waiting addition only counts as a new seat for someone still in MINTER.
+- **Write safety (2 of 3):** Step down on Home and the person page shows the impact panel and needs "I've checked these", as Propose does; the test signer takes same-origin JSON on a loopback host only. Refuted: a cancelled publish reported as sent (the only publish the app sends rejects on a cancel in Hub, and the runner reads that as declined).
+- **Efficiency (5 of 7):** Considering re-reads only who is considering; the faster refresh ends once the write is in a block; Home's first paint no longer loads the write code; a QDN body that isn't on the node is retried after 2, 4 and 8 minutes, then every 15, not on every refresh; Since your last visit reads each decided outcome once a session. Refuted: an N+1 on comment authors (the same cached read the author's chip already makes) and an unbounded Considering search (it is bounded at 3 pages, and a time filter would drop records republished in a new round).
+- **Phones and UX (11, all fixed):** a Considering note no longer shows up pre-filled on the next decision; a decision's own page offers Considering; the nominee's Home stops offering Accept once enough have rejected; no "left to sign" countdown next to "ends as rejected"; Reject, Withdraw and Since your last visit name own admin changes as their cards do; the Considering dialog mentions a nominee only where there is one; Rounds mention rejection; the stale-alerts hint fits the role; "latest answer" everywhere; the withdraw line only for an admin who signed.
+- **Accessibility (10, all fixed):** the focus and announcement fixes listed above for comments, the target-changed banner, a decision decided while open, Ready to mint's search, the Hub alerts switch and Copy link.
+- **Wording:** no findings.
+
+**Tests and checks:**
+
+- **Tests:** 960 passed, 8 skipped (the node decode and live-node tests), in 87 files (85 + 2 skipped), from 462 at the end of night 1. `npm run build`, `npm run lint` and `scripts/sync-theme.sh --check` pass.
+- **Bundle:** dist 1.6 MB (426 KB of fonts included); biggest chunks `mui-core` 374 KB (116 KB gzip), `react-vendor` 322 KB (102 KB), app entry 103 KB (31 KB), Decisions 51 KB; the comment thread (17 KB), the Considering dialog (18 KB) and every write dialog load on demand. The production build is byte-identical to before the testnet switch was added, and contains none of the testnet names.
+- **First load in the screenshot check** (390×844, GETs including lazily loaded avatars): a learner's Home 8 (was 7: "your proposal is waiting" reads the pending list); a newcomer's 21; an admin's 44 (was 36); Decisions 69 (was 62); Activity 38; Nominations 46 (was 38); Ready to mint 57 for 9 rows (was 44: one history read per row); a waiting decision's page 32 and a decided one's 21 (comments open); a nomination's page 46; an admin's Home with Since your last visit 55.
+
+**Night 2 by the numbers:**
+
+- 122 commits on the branch since night 1 (one logical change each) and 8 merges: the testnet and its scenarios, six feature branches, the accessibility pass (22 commits) and the review fixes.
+- 12 testnet scenarios, every write proven with Core's own outcome and block heights; no transaction on mainnet, 0 QORT spent.
+- Tests: 960 passing (from 462). Screenshot check: 49 screens, 980 captures per mode, 0 findings.
+- Review: 37 findings, 34 confirmed and fixed, 3 refuted.
+
 ## Follow-ups
 
-### Night 2 (must)
+### Night 3
 
-1. **Private testnet end to end** for every write: from Core's `testnet/` folder, on its own data directory, ports and keys, never peering with mainnet (its `testchain.json` has `nullGroupMembershipHeight 0` and short delays, so expiry can be watched in minutes). A dev-only test signer drives the app's real write paths. Never commit test keys; never load mainnet keys. Prove at least: nominate → accept → first signature (invite + own approval, including signing the invite while it is still unconfirmed) → signatures → approval → member; the same without a join request (Join now); expiry; kick (and the "remove admin first" path); ban and lift; add/remove admin; each of those proposals followed by the proposer's own signature; cancel a stale invite, and one approved invite from Propose; show you're ready to mint, then a nomination of that account approved (a member at once); bulk sign; a Hub timeout followed by the lookup.
-2. **Hub check, read-only,** at the five sizes with real data, against the original app (docs/HUB-TESTING.md). Not done on night 1; `npm run test:live` covered the data layer against mainnet instead.
-3. Notifications (in-app, optional Hub alerts), and the optimistic states and animations checked against real confirmations on the testnet.
+1. **Hub check, read-only, with real data** (docs/HUB-TESTING.md): every screen at the five sizes, touch on, against the original app side by side, with the request log per screen. Not done on night 2.
+2. **Then Simon's guided real actions, one at a time:** Simon presses each write in Hub with real accounts; the app's step, Hub's dialog (action, fee, `"approval"`, identifier) and the outcome are checked together before the next one. A comment's publish dialog should match what the step says.
+3. The screenshot matrix again on the branch tip (the last full run was on the accessibility branch, before the review fixes merged).
+4. A real screen-reader pass: NVDA or JAWS on desktop Hub, TalkBack in GO. Night 2's pass used jsdom, axe and Chromium.
 
 ### Simon's answers (2026-10-13)
 
@@ -195,7 +431,7 @@ Three branches built side by side, merged one at a time with every check after e
 3. **Stale invites:** stale means approved more than 30 days ago, as built. Home's tile counts every approved invite not used, and says so.
 4. **Proposals chain the proposer's signature,** as the first signature does. Built (see Done).
 5. **Reasons** for kicks and bans stay required.
-6. **Sign on unconfirmed decisions** waits for the testnet proof (night 2).
+6. **Sign on unconfirmed decisions:** proven on the testnet (night 2): an invite and its first approval were confirmed in the same block (17).
 7. **Cancel an approved invite** is added to Propose. Built.
 8. **"Other transactions waiting for Minter Admins":** the wording stays.
 9. **Activity counting:** each rule agreed.
@@ -205,21 +441,74 @@ Three branches built side by side, merged one at a time with every check after e
 13. **The welcome per device:** fine.
 14. **History clean-up:** done, and the old `q-mintership-plus/rewrite-phase-1` branch is deleted from GitHub.
 
-### Open questions (2026-10-13)
+### Open questions of 2026-10-13: answered and built (night 2)
 
-From building the answers above:
+1. **"Propose cancelling all" adds your signature to each cancellation:** yes. Two Hub steps per invite; the whole run's fees are checked first.
+2. **The two-fee check before a proposal:** right, and it stays quiet unless the balance can't pay.
+3. **Cancel an approved invite** also lists invites of people already in MINTER, after the unused ones, marked "already a member".
+4. **Accept's check** now reads "Your join request is already in: you're ready. Nothing more to send.", however the request was sent.
+5. **"You've accepted ✓"** is replaced by "You're ready ✓: when the admins approve, you're in at once."
+6. **"Find a nominator"** is gone; tests pin that nothing offers it.
+7. **Ready to mint marks former members:** one history read per row on screen, kept 10 minutes.
+8. **Search on Ready to mint:** by address, or by name through one cached name search.
 
-1. Should "Propose cancelling all" (stale invites) also add your signature to each cancellation, as a single proposal now does?
-2. A proposal checks the confirmed balance for both fees (0.02 QORT) before step 1. Right?
-3. Propose → Cancel an approved invite lists only invites nobody used. Should it also list invites of people who are already members?
-4. Accept's chain check still says "You've already accepted" when a join request is open, even when it came from "Show you're ready to mint". Reword it to cover both?
-5. A nominee's Home says "You've accepted ✓" even when they showed they were ready first. Keep it?
-6. The "Find a nominator" dialog is gone: Show you're ready to mint replaces it. OK?
-7. Ready to mint doesn't mark former members (one history search per row). Worth adding?
-8. Search is hidden on the Ready to mint view. Add a search by name or address?
+### Open questions for Simon (night 2)
+
+From building tonight's work; each is a choice, the app works either way.
+
+**Signing and the target**
+
+1. "I've checked these" is also required when an admin change only raises the target. Keep it, or ask only when the target drops?
+2. In Sign several, an admin change with an impact needs the same tick. Keep it, or leave such changes out of a bulk run with a reason?
+3. Only Decisions says "The target changed". Should Home's admin section show a short line linking to it?
+4. Activity counts participation as signatures ÷ eligible, so a deliberate rejection lowers it. Count any answer as taking part?
+5. "Waiting for your signature", the Decisions badge and Sign several leave out decisions you rejected (each can still be signed from its card). Right? And should "Hide what I signed" become "Hide what I answered"?
+6. Considering is offered only to admins who haven't answered. Should one who rejected be able to say they're reconsidering?
+7. The nominee's Home shows how many Minter Admins have rejected so far and how many are considering. Is the wording gentle enough?
+
+**Admin roles and links**
+
+8. Become a Minter Admin is offered to every member, level 0 included. Should it need a level, such as 5+?
+9. Step down is on an admin's Home, their own page and in Propose. Right, or only the person page?
+10. The link a nominator copies after Propose nomination opens the nominee's person page. Open `/nominations/<address>` instead?
+11. Should History's decided events link to their decision page too?
+
+**Comments**
+
+12. Add a "Muted names" list with Unmute to Settings? Today you unmute from a muted comment's own menu.
+13. Comment counts include deleted and hidden comments. Count only readable ones? Every body would have to be read, so counts would no longer be one shared search.
+14. A just-posted comment shows "Publishing…" with no menu until QDN lists it, so it can't be edited at once. OK?
+15. The shared count search covers 45 days and up to 300 comments; older items search per card once on screen. Are those the right numbers?
+
+**Nominations and wording**
+
+16. "Propose nomination" (sentence case), or "Propose Nomination"? It is one constant. And should descriptive uses ("You can nominate new minters") change too?
+17. The floating "Propose nomination" button is about 200 px wide on phones. Make it icon-only, with a label for screen readers, on narrow screens?
+18. Others' nomination cards say "Ready to mint" for an open join request; Decisions keeps "Hasn't accepted yet: after approval they still need to press Join now." when there is none. OK?
+19. Propose cancelling all stops before it starts if the balance can't pay every fee. OK, or run as many as it can pay?
+20. The Nominations search text is kept when switching between open nominations and Ready to mint. Clear it instead?
+21. A former member whose ban ended or was lifted reads "removed from MINTER". Should a ban get its own word?
+
+**Notifications**
+
+22. The Hub evidence comes from GO's source. Please confirm the desktop Hub people use also has the NOTIFICATION_* requests (the app checks with SHOW_ACTIONS either way, and says "Your Hub doesn't offer app alerts" without them).
+23. Alerts for signatures, approvals or a new decision would need Core's notifications socket to send group-approval events. Raise it as a Core track?
+24. Nominees without a registered name get no Hub alert, as Hub only listens for named accounts. Accept it, or ask the Hub team?
+25. Should nominators get "Since your last visit" items for the nominations they made (approved, expired), and an alert when someone supports one?
+26. The "Since your last visit" panel sits above Home's status hero. Keep it there, or put it under?
+
+**Look**
+
+27. People named inside sentences ("Proposed by Admin B") are links in the sentence's own colour, underlined only on hover. Underline them, or use primary?
+28. The signature ring's "of 8" is 11–13 px; the ring has a full label for screen readers. Keep it, or enlarge it on 56 px rings?
 
 ### Next-pass ideas
 
-- Settings sync to QDN (like Q-Share+'s `settingsQdn.ts`); the settings stay in the browser for now.
+- Settings sync to QDN (like Q-Share+'s `settingsQdn.ts`); the settings, the last-visit snapshot, the seen target and muted names stay in the browser for now.
 - Hub's `SHOW_ACTIONS` feature detection, to switch to a GROUP_APPROVAL action if Hub adds one.
 - The level spread on Activity reads each member's account on request; a Core endpoint for levels of a group's members would make it one call.
+- A Core issue for the fresh-chain start-up (the empty "latest signatures" batch on a chain with no QDN resources), with `testnet/lib/PrimeChain.java` as the workaround it would retire.
+- Opt-in Hub alerts for comments and Considering ("someone commented on your nomination"), as both are QDN records.
+- Theme kit, for every app: the light themes' off-state switch track is about 2.7:1 (a control's boundary needs 3:1); captions and field helper text are 12 px where docs/DESIGN.md asks 14 px on phones; Hub 3.0 light's success, warning and info colours are 2.4–3.5:1 on paper (this app only uses them beside words); a kit-level focus ring, as docs/DESIGN.md describes.
+- The page tests are sensitive to a heavily loaded machine: a vitest `maxWorkers` limit, or longer timeouts on the heaviest page files, for overnight runs.
+- Cleanup: DecisionCard's `highlighted` prop and `decisionCardId` anchor are unused now that `?d=` links redirect.
