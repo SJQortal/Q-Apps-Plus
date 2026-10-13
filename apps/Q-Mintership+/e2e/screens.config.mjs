@@ -472,11 +472,14 @@ export default {
     },
     // Settings → Notifications where Hub offers app alerts.
     { key: 'settings-alerts', path: '/?as=admin', after: hubAlertsOffered },
-    // Settings → Muted names, with three names muted on this device (one long).
+    // Settings → Muted names, with three names muted on this device (one long, none of
+    // them a commenter in the mock world). The list is cleared again before the
+    // capture (the page keeps what it read), so later screens see no muted names.
     {
       key: 'settings-muted',
       path: '/settings?as=admin',
       after: async (page) => {
+        const KEY = 'qmintershipplus-muted-names';
         await page.addInitScript(
           ([key, value]) => {
             try {
@@ -486,14 +489,23 @@ export default {
             }
           },
           [
-            'qmintershipplus-muted-names',
-            JSON.stringify(['Loud One', 'a-rather-long-registered-name-for-qortal', 'Member 7']),
+            KEY,
+            JSON.stringify(['Loud One', 'a-rather-long-registered-name-for-qortal', 'Spam Bot 42']),
           ]
         );
         await page.reload({ waitUntil: 'load' });
         await settle(page);
         const section = page.getByRole('region', { name: 'Muted names' });
-        await section.getByRole('button', { name: 'Unmute Member 7' }).waitFor({ timeout: 8000 });
+        await section
+          .getByRole('button', { name: 'Unmute Spam Bot 42' })
+          .waitFor({ timeout: 8000 });
+        await page.evaluate((key) => {
+          try {
+            localStorage.removeItem(key);
+          } catch {
+            // Nothing was stored.
+          }
+        }, KEY);
         await page.waitForTimeout(300);
       },
     },
