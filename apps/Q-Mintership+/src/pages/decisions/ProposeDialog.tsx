@@ -327,6 +327,7 @@ export function ProposeDialog({
           ctx={ctx}
           windowText={windowText}
           onClose={close}
+          onBack={() => setPhase('form')}
         />
       ) : null}
     </>
@@ -465,6 +466,7 @@ function ProposeHubStep({
   ctx,
   windowText,
   onClose,
+  onBack,
 }: {
   open: boolean;
   kind: ProposeKind;
@@ -475,6 +477,8 @@ function ProposeHubStep({
   ctx: ProposeContext;
   windowText: string;
   onClose: () => void;
+  /** Back to the form, with the person, reason and length kept. */
+  onBack: () => void;
 }) {
   const who = useDisplayName(person.address, person.name);
   const info = PROPOSE_KINDS[kind];
@@ -496,6 +500,7 @@ function ProposeHubStep({
     <HubStepDialog
       open={open}
       onClose={onClose}
+      onBack={onBack}
       title={`${KIND_LABEL[kind]}: ${who.label}`}
       intro={
         <>

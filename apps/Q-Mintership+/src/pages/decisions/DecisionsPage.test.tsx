@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage, type RenderPageOptions } from '../../test/render';
 import { ADDR, addOtherPending } from '../../test/world';
@@ -382,6 +382,45 @@ describe('Decisions: proposing', () => {
       txGroupId: 694,
     });
     expect(qortalCallsFor('KICK_FROM_GROUP')).toHaveLength(0);
+  });
+
+  it('goes back to the form, with everything typed, from the Hub step or after a cancel in Hub', async () => {
+    const u = user();
+    await openPage('admin');
+    // One dialog closes as the other opens: wait until only `name` is left.
+    const only = async (name: string | RegExp) => {
+      await waitFor(() => expect(screen.getAllByRole('dialog')).toHaveLength(1));
+      return screen.getByRole('dialog', { name });
+    };
+    await u.click(screen.getByRole('button', { name: 'Propose' }));
+    await u.click(await screen.findByRole('menuitem', { name: /Ban an account/ }));
+    let form = await screen.findByRole('dialog', { name: 'Ban an account' });
+    await u.type(within(form).getByRole('textbox', { name: 'Name or address' }), 'Leo Learner');
+    await u.click(within(form).getByRole('button', { name: 'Find' }));
+    expect(await within(form).findByText('Nothing stops this proposal.')).toBeVisible();
+    await u.type(within(form).getByRole('textbox', { name: 'Reason' }), 'Spam in the chat');
+    await u.click(within(form).getByRole('radio', { name: /A number of days/ }));
+    await u.click(within(form).getByRole('button', { name: 'Review' }));
+
+    await screen.findByRole('dialog', { name: /Ban from MINTER: Leo Learner/ });
+    let hub = await only(/Ban from MINTER: Leo Learner/);
+    await u.click(within(hub).getByRole('button', { name: 'Back to the form' }));
+    await screen.findByRole('dialog', { name: 'Ban an account' });
+    form = await only('Ban an account');
+    expect(within(form).getByRole('textbox', { name: 'Reason' })).toHaveValue('Spam in the chat');
+    expect(within(form).getByRole('radio', { name: /A number of days/ })).toBeChecked();
+
+    // The mock world declines every write, as a cancel in Hub would.
+    await u.click(within(form).getByRole('button', { name: 'Review' }));
+    await screen.findByRole('dialog', { name: /Ban from MINTER: Leo Learner/ });
+    hub = await only(/Ban from MINTER: Leo Learner/);
+    await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(hub).findByText('Cancelled in Hub. Nothing was sent.')).toBeVisible();
+    await u.click(within(hub).getByRole('button', { name: 'Back to the form' }));
+    await screen.findByRole('dialog', { name: 'Ban an account' });
+    form = await only('Ban an account');
+    expect(within(form).getByRole('textbox', { name: 'Reason' })).toHaveValue('Spam in the chat');
+    expect(within(form).getByText('Leo Learner')).toBeVisible();
   });
 
   it('refuses a ban longer than 24 days before Hub is asked', async () => {

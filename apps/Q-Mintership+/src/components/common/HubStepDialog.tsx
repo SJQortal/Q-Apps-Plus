@@ -48,6 +48,11 @@ export interface HubStepDialogProps {
   successText?: ReactNode;
   confirmLabel?: string;
   onSuccess?: (result: StepRunResult) => void;
+  /**
+   * Back to the form this dialog came from, keeping what was typed: offered
+   * in place of "Not now", and after a cancel in Hub, a stop or a failure.
+   */
+  onBack?: () => void;
 }
 
 type Phase = 'intro' | 'running' | 'done';
@@ -71,6 +76,7 @@ export function HubStepDialog(props: HubStepDialogProps) {
     successText,
     confirmLabel = 'Continue to Hub',
     onSuccess,
+    onBack,
   } = props;
   const [phase, setPhase] = useState<Phase>('intro');
   const [active, setActive] = useState<{ step: number; stage: WriteStage }>({
@@ -79,15 +85,17 @@ export function HubStepDialog(props: HubStepDialogProps) {
   });
   const [result, setResult] = useState<StepRunResult | null>(null);
 
-  const close = () => {
+  const leave = (to: () => void) => {
     if (phase === 'running') return;
-    onClose();
+    to();
     // Reset after the closing animation.
     setTimeout(() => {
       setPhase('intro');
       setResult(null);
     }, 300);
   };
+  const close = () => leave(onClose);
+  const back = onBack ? () => leave(onBack) : null;
 
   const start = async () => {
     setPhase('running');
@@ -110,20 +118,31 @@ export function HubStepDialog(props: HubStepDialogProps) {
   };
 
   const outcome = result?.outcome;
+  const backButton = (variant: 'text' | 'contained') =>
+    back ? (
+      <Button variant={variant} onClick={back}>
+        Back to the form
+      </Button>
+    ) : null;
   const actions =
     phase === 'intro' ? (
       <>
-        <Button onClick={close}>Not now</Button>
+        {back ? backButton('text') : <Button onClick={close}>Not now</Button>}
         <Button variant="contained" onClick={start}>
           {confirmLabel}
         </Button>
       </>
     ) : phase === 'running' ? null : outcome?.status === 'failed' ? (
       <>
-        <Button onClick={close}>Close</Button>
+        {back ? backButton('text') : <Button onClick={close}>Close</Button>}
         <Button variant="contained" onClick={start}>
           Try again
         </Button>
+      </>
+    ) : back && (outcome?.status === 'declined' || outcome?.status === 'blocked') ? (
+      <>
+        <Button onClick={close}>Close</Button>
+        {backButton('contained')}
       </>
     ) : (
       <Button variant="contained" onClick={close}>
