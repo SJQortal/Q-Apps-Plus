@@ -55,10 +55,15 @@ import {
   VOTE_CUTOFF_MS,
   assemblePoll,
   chainBoundNow,
+  needsShareRead,
+  pollRowTime,
   pollThreadSources,
+  trustedName,
   voteTooLate,
   type AdminPollView,
   type BodyRead,
+  type PollContext,
+  type PollSources,
 } from '../rules/adminPolls';
 import {
   setPendingPoll,
@@ -129,12 +134,27 @@ function ownVoteAt(view: AdminPollView, address: string): number {
   return at;
 }
 
+/** A poll as the author reads it (the shared list read; `force`: read fresh), and what it came from. */
+async function readPoll(
+  author: Signer,
+  pollId: string,
+  options: { force?: boolean } = {}
+): Promise<{ view: AdminPollView; src: PollSources; ctx: PollContext } | null> {
+  const data = await loadAdminPolls(author.address, options);
+  const src = data.sources.find((s) => s.pollId === pollId);
+  if (!src) return null;
+  const ctx = pollContext(data);
+  const view = assemblePoll(src, ctx);
+  return view ? { view, src, ctx } : null;
+}
+
 /** A poll as the author reads it now (the shared list read), or null. */
 export async function findPoll(author: Signer, pollId: string): Promise<AdminPollView | null> {
-  const data = await loadAdminPolls(author.address);
-  const src = data.sources.find((s) => s.pollId === pollId);
-  return src ? assemblePoll(src, pollContext(data)) : null;
+  return (await readPoll(author, pollId))?.view ?? null;
 }
+
+/** A share this recent that the author can't read yet may be one made a moment ago. */
+const RECENT_SHARE_MS = 60 * 60_000;
 
 const NOT_READABLE = 'This poll isn’t among the Minter Admin polls you can read.';
 
@@ -466,9 +486,24 @@ export async function shareAdminPoll(
     author,
     identifier,
     guard: async () => {
-      view = await findPoll(author, pollId);
-      after = view?.shares.find((s) => s.address === author.address)?.at ?? 0;
-      return view ? null : NOT_READABLE;
+      // Read fresh, as every write guard does: another admin may have shared it a moment ago.
+      const read = await readPoll(author, pollId, { force: true });
+      if (!read) return NOT_READABLE;
+      view = read.view;
+      after = view.shares.find((s) => s.address === author.address)?.at ?? 0;
+      // (Its shares are read only where something is missing: otherwise none to wait for.)
+      const tip = await getChainNow({ force: true });
+      const pending =
+        needsShareRead(read.src, read.ctx) &&
+        read.src.shares.some(
+          (r) =>
+            trustedName(r.row.name, read.ctx) !== null &&
+            r.body.status === 'unavailable' &&
+            pollRowTime(r.row) > tip.timestamp - RECENT_SHARE_MS
+        );
+      return pending
+        ? 'This poll was shared a moment ago, and that copy hasn’t reached your node yet. Try again in a minute: it may already cover everyone.'
+        : null;
     },
     build: async (fresh) => {
       const found = view as AdminPollView | null;

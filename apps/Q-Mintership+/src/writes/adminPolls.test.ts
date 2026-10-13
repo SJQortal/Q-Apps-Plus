@@ -2,8 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ADMIN_POLL_IDS, NULL_OWNER, addAdminPolls, fakeAddress } from '../../e2e/world.mjs';
 import { fromData64, parsePoll, parseShare, parseVote } from '../data/adminPollRecords';
 import { serveAdminPolls } from '../test/adminPolls';
-import { fetchCallsFor, fetchRequests, mockQortalRequest, qortalCallsFor } from '../test/setup';
+import {
+  fetchCallsFor,
+  fetchRequests,
+  mockFetchRoute,
+  mockQortalRequest,
+  qortalCallsFor,
+} from '../test/setup';
 import { ADDR, MS_PER_BLOCK, NOW, PEOPLE, TIP, installWorld } from '../test/world';
+import { loadAdminPolls } from '../data/adminPolls';
 import { askedInTime } from '../rules/adminPolls';
 import { pendingPollWrites, resetPendingPollWrites } from '../state/adminPolls';
 import {
@@ -414,6 +421,62 @@ describe('shareAdminPoll', () => {
     expect((await shareAdminPoll(me, ADMIN_POLL_IDS.voted)).outcome).toEqual({
       status: 'blocked',
       reason: 'Every Minter Admin can already read this poll.',
+    });
+    expect(publishes()).toHaveLength(0);
+  });
+
+  it('reads fresh before deciding: a share another admin published since the list was read covers them', async () => {
+    const { me, world } = author();
+    sent();
+    // The list as Decisions read it a moment ago.
+    await loadAdminPolls(me.address);
+    const signers = world.admins.filter((a: string) => a !== NULL_OWNER);
+    const poll = world.adminPollRecords.find(
+      (r: { identifier: string }) => r.identifier === `qmp-adminpoll-${ADMIN_POLL_IDS.open}`
+    ).body;
+    world.adminPollRecords.push({
+      name: 'Admin D ΑΩ',
+      identifier: `qmp-adminshare-${ADMIN_POLL_IDS.open}`,
+      created: Date.now() - 60_000,
+      readers: signers,
+      body: {
+        v: 1,
+        pollId: ADMIN_POLL_IDS.open,
+        poll,
+        pollPublisher: 'Admin B',
+        votes: [],
+        comments: [],
+        readers: signers,
+        sharedAt: Date.now() - 60_000,
+      },
+    });
+    expect((await shareAdminPoll(me, ADMIN_POLL_IDS.open)).outcome).toEqual({
+      status: 'blocked',
+      reason: 'Every Minter Admin can already read this poll.',
+    });
+    expect(publishes()).toHaveLength(0);
+  });
+
+  it('a share published a moment ago that hasn’t reached the node yet: wait, don’t pay twice', async () => {
+    const { me, world } = author();
+    sent();
+    const signers = world.admins.filter((a: string) => a !== NULL_OWNER);
+    const identifier = `qmp-adminshare-${ADMIN_POLL_IDS.open}`;
+    world.adminPollRecords.push({
+      name: 'Admin D ΑΩ',
+      identifier,
+      created: Date.now() - 60_000,
+      readers: signers,
+      body: { v: 1 },
+    });
+    mockFetchRoute(
+      `/arbitrary/DOCUMENT_PRIVATE/${encodeURIComponent('Admin D ΑΩ')}/${identifier}`,
+      () => new Response('', { status: 404 })
+    );
+    expect((await shareAdminPoll(me, ADMIN_POLL_IDS.open)).outcome).toEqual({
+      status: 'blocked',
+      reason:
+        'This poll was shared a moment ago, and that copy hasn’t reached your node yet. Try again in a minute: it may already cover everyone.',
     });
     expect(publishes()).toHaveLength(0);
   });
