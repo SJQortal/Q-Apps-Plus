@@ -1517,3 +1517,102 @@ export function nominatorLastVisit(world) {
     snapshot: { v: 1, at: LAST_VISIT_AT, height: LAST_VISIT_HEIGHT, made },
   };
 }
+
+// ---- declines (a kick of someone who asked to join and isn't a member) -----
+
+/** Someone whose join request the Minter Admins declined (addDecline). */
+export const DECLINED = { address: fakeAddress('declined-1'), name: 'Dee Declined' };
+
+/**
+ * Add declines to the world:
+ *
+ * - a waiting one: Admin G proposes declining jr-2's join request (jr-2 is
+ *   on Ready to mint), with a reason, 2 of 8 signatures;
+ * - a decided one: Dee Declined asked to join long ago (older than History's
+ *   first 30 days), and an approved kick declined it 19,000 blocks ago.
+ *
+ * Returns the signatures and the people.
+ */
+export function addDecline(world) {
+  const extra = (i) => fakeAddress(`admin-${i}`);
+  const subject = fakeAddress('jr-2');
+  const h = TIP - 900;
+  const waiting = {
+    type: 'GROUP_KICK',
+    timestamp: blockTime(h) - 20_000,
+    reference: sig('r:decline:waiting'),
+    fee: '0.01000000',
+    signature: sig('decline:waiting'),
+    txGroupId: GROUP,
+    blockHeight: h,
+    approvalStatus: 'PENDING',
+    creatorAddress: extra(6),
+    adminPublicKey: pk(extra(6)),
+    groupId: GROUP,
+    member: subject,
+    reason: 'Asked to join, but no node online for months',
+  };
+  world.pending.push(waiting);
+  [extra(6), extra(7)].forEach((who, i) =>
+    world.approvals.push({
+      type: 'GROUP_APPROVAL',
+      timestamp: blockTime(h + 1 + i) - 10_000,
+      reference: sig(`ar:decline:${who}`),
+      fee: '0.01000000',
+      signature: sig(`a:decline:${who}`),
+      txGroupId: 0,
+      blockHeight: h + 1 + i,
+      approvalStatus: 'NOT_REQUIRED',
+      creatorAddress: who,
+      adminPublicKey: pk(who),
+      pendingSignature: waiting.signature,
+      approval: true,
+    })
+  );
+
+  const who = DECLINED.address;
+  world.accounts.set(who, {
+    address: who,
+    name: DECLINED.name,
+    level: 0,
+    blocks: 0,
+    publicKey: pk(who),
+    reference: sig(`ref:${who}`),
+    balance: 0.5,
+  });
+  world.names.set(DECLINED.name, who);
+  const join = {
+    type: 'JOIN_GROUP',
+    timestamp: blockTime(2_600_000) - 20_000,
+    reference: sig('r:declined-join'),
+    fee: '0.01000000',
+    signature: sig('declined-join'),
+    txGroupId: 0,
+    blockHeight: 2_600_000,
+    approvalStatus: 'NOT_REQUIRED',
+    creatorAddress: who,
+    joinerPublicKey: pk(who),
+    groupId: GROUP,
+  };
+  const kick = {
+    type: 'GROUP_KICK',
+    timestamp: blockTime(TIP - 20_000) - 20_000,
+    reference: sig('r:declined-kick'),
+    fee: '0.01000000',
+    signature: sig('declined-kick'),
+    txGroupId: GROUP,
+    blockHeight: TIP - 20_000,
+    approvalStatus: 'APPROVED',
+    approvalHeight: TIP - 19_000,
+    creatorAddress: extra(6),
+    adminPublicKey: pk(extra(6)),
+    groupId: GROUP,
+    member: who,
+    reason: 'No node, and no answer in the chat',
+  };
+  world.decided.push(join, kick);
+  return {
+    waiting: { signature: waiting.signature, subject },
+    declined: { address: who, join: join.signature, kick: kick.signature },
+  };
+}

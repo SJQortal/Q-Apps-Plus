@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ADDR, NULL_OWNER, TIP, addOtherPending, installWorld } from '../test/world';
-import { fakeAddress, fakeKey } from '../../e2e/world.mjs';
+import { addDecline, fakeAddress, fakeKey } from '../../e2e/world.mjs';
 import { fetchCalls, mockFetchRoute } from '../test/setup';
 import { getNameOwner } from './accounts';
 import { getChainNow, heightToTime } from './chain';
 import { loadDecisions } from './decisions';
+import { decisionTitle } from '../rules/decision';
 import { getAdmins, getGroupInfo, getMembers } from './group';
 import { loadMyStatus } from './me';
 import { loadNominations, loadNominationsFor } from './nominations';
@@ -255,6 +256,34 @@ describe('loadDecisions: doubles', () => {
       reason: 'alreadyInEffect',
       otherSignature: approved.signature,
     });
+  });
+});
+
+describe('loadDecisions: declines', () => {
+  const joinRequestReads = () => fetchCalls.filter((c) => c.startsWith('/groups/joinrequests/694'));
+
+  it('titles a waiting kick of someone with a join request "Decline a join request"', async () => {
+    const { world } = installWorld();
+    const { waiting } = addDecline(world);
+    const data = await loadDecisions();
+    const decline = data.decisions.find((d) => d.signature === waiting.signature)!;
+    expect(decline).toMatchObject({ kind: 'kick', subject: waiting.subject, decline: true });
+    expect(decisionTitle(decline)).toBe('Decline a join request');
+    // Kai Target is a member: removing him stays a removal.
+    const removal = data.decisions.find((d) => d.subject === ADDR.kickTarget)!;
+    expect(removal.decline).toBeFalsy();
+    expect(decisionTitle(removal)).toBe('Remove from MINTER');
+    // One read of the join requests, cached for the nominations too.
+    expect(joinRequestReads()).toHaveLength(1);
+    await loadDecisions({ force: true });
+    expect(joinRequestReads()).toHaveLength(1);
+  });
+
+  it('reads no join requests while no kick waits', async () => {
+    const { world } = installWorld();
+    world.pending = world.pending.filter((t: { type: string }) => t.type !== 'GROUP_KICK');
+    await loadDecisions();
+    expect(joinRequestReads()).toHaveLength(0);
   });
 });
 

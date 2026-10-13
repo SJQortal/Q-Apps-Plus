@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Nomination } from '../data/nominations';
 import type { TxRow } from '../data/types';
-import type { Decision } from './decision';
+import { decisionTitle, type Decision } from './decision';
 import type { Tally } from './tally';
 import {
   MAX_OUTCOME_LOOKUPS,
@@ -147,6 +147,32 @@ describe('snapshots', () => {
       nomination: nomination(),
     });
     expect(parseSnapshot(JSON.parse(JSON.stringify(s)))).toEqual(s);
+  });
+
+  it('keeps a decline a decline, through JSON, and titles it once it has left the queue', () => {
+    const s = buildSnapshot({
+      at: AT,
+      height: 1200,
+      decisions: [
+        decision('declined', { kind: 'kick', decline: true }),
+        decision('removed', { kind: 'kick' }),
+      ],
+    });
+    const back = parseSnapshot(JSON.parse(JSON.stringify(s)))!;
+    expect(back.decisions?.map((d) => d.decline)).toEqual([true, undefined]);
+    const changes = adminChanges(back, {
+      decisions: [],
+      nominations: null,
+      me: ME,
+      outcomes: new Map([
+        ['declined', { approvalStatus: 'APPROVED', approvalHeight: 1300 }],
+        ['removed', { approvalStatus: 'APPROVED', approvalHeight: 1290 }],
+      ]),
+    });
+    expect(changes.decided.map((e) => decisionTitle(e))).toEqual([
+      'Decline a join request',
+      'Remove from MINTER',
+    ]);
   });
 
   it('refuses what it did not write', () => {

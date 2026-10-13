@@ -15,6 +15,7 @@ import {
 } from './timing';
 import type { ApprovalThreshold } from './threshold';
 import type { DecisionDouble } from './double';
+import { DECLINE_TITLE } from './decline';
 
 export type DecisionKind =
   'invite' | 'cancelInvite' | 'kick' | 'ban' | 'cancelBan' | 'addAdmin' | 'removeAdmin' | 'other';
@@ -59,9 +60,13 @@ export function isOwnAdminChange(
 /**
  * A decision's title: its kind in plain words, or, for an admin change its
  * subject proposed about themselves, "Become a Minter Admin" or "Step down
- * as Minter Admin" (the same words as the buttons that propose them).
+ * as Minter Admin" (the same words as the buttons that propose them). A
+ * kick that declines a join request is "Decline a join request".
  */
-export function decisionTitle(d: Pick<Decision, 'kind' | 'subject' | 'creatorAddress'>): string {
+export function decisionTitle(
+  d: Pick<Decision, 'kind' | 'subject' | 'creatorAddress' | 'decline'>
+): string {
+  if (d.kind === 'kick' && d.decline) return DECLINE_TITLE;
   if (isOwnAdminChange(d))
     return ADMIN_CHANGE_TITLE[adminChangeMode(d.kind as AdminChangeKind, true)];
   return KIND_LABEL[d.kind];
@@ -196,6 +201,11 @@ export interface Decision {
    * Decisions loader; absent or null otherwise.
    */
   double?: DecisionDouble | null;
+  /**
+   * A kick of someone who asked to join and isn't a member: it declines
+   * their join request (rules/decline.ts). Set by the loaders.
+   */
+  decline?: boolean;
   tx: TxRow;
 }
 
