@@ -18,6 +18,7 @@ const NominationPage = lazy(() => import('./pages/nominations/NominationPage'));
 const NominatePage = lazy(() => import('./pages/nominations/NominatePage'));
 const DecisionsPage = lazy(() => import('./pages/decisions/DecisionsPage'));
 const DecisionPage = lazy(() => import('./pages/decisions/DecisionPage'));
+const AdminPollPage = lazy(() => import('./pages/decisions/AdminPollPage'));
 const PersonPage = lazy(() => import('./pages/person/PersonPage'));
 const HistoryPage = lazy(() => import('./pages/history/HistoryPage'));
 const LegacyCardPage = lazy(() => import('./pages/history/LegacyCardPage'));
@@ -54,6 +55,9 @@ const router = createBrowserRouter(
         // Old /decisions?d=<signature> links open /decisions/<signature> (DecisionsPage).
         { path: 'decisions', element: <DecisionsPage /> },
         { path: 'decisions/:signature', element: <DecisionPage /> },
+        // One Minter Admin poll (Minter Admins only); without an id, all of Decisions.
+        { path: 'decisions/polls/:id', element: <AdminPollPage /> },
+        { path: 'decisions/polls', element: <Navigate to="/decisions" replace /> },
         { path: 'people/:address', element: <PersonPage /> },
         { path: 'history', element: <HistoryPage /> },
         { path: 'history/card/:card', element: <LegacyCardPage /> },

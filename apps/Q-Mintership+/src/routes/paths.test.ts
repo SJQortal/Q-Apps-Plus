@@ -66,4 +66,18 @@ describe('Hub learns the path on screen', () => {
       '*'
     );
   });
+
+  it('reports a Minter Admin poll’s path the same way', () => {
+    const postMessage = vi.fn();
+    Object.defineProperty(window, 'parent', { configurable: true, value: { postMessage } });
+    notifyHubDisplayedPath(`${adminPollPath('lvl5adm1')}?as=admin`);
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'QDN_RESOURCE_DISPLAYED',
+        name: 'Q-Mintership+',
+        path: '/decisions/polls/lvl5adm1',
+      }),
+      '*'
+    );
+  });
 });
