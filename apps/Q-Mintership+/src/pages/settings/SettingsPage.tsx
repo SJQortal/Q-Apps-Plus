@@ -23,6 +23,7 @@ import { ThemePicker } from '../../hub-theme';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody } from '../../components/layout/PageBody';
 import { ChangelogDialog } from '../../components/Settings/ChangelogDialog';
+import { NotificationSettings } from './NotificationSettings';
 import { AddressText } from '../../components/common/Person';
 import { NameAvatar } from '../../components/common/NameAvatar';
 import { Section, ToneChip } from '../../components/common/Section';
@@ -293,6 +294,8 @@ export default function SettingsPage() {
             These settings stay in this browser.
           </Typography>
         </Section>
+
+        <NotificationSettings />
 
         <Section title="About" id="settings-about">
           <Card>
