@@ -4,6 +4,8 @@ import react from '@vitejs/plugin-react';
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Off in every build and test run; only vite.testnet.config.ts turns it on, for its dev server.
+  define: { __QMP_TESTNET__: 'false' },
   // Relative asset URLs: the zip is served from /render/APP/Q-Mintership+/…
   base: '',
   build: {

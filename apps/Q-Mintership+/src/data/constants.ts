@@ -4,8 +4,22 @@
  * (docs/apps/Q-Mintership+.md → The new process).
  */
 
-/** The MINTER group: membership is what lets an account mint. */
-export const MINTER_GROUP_ID = 694;
+/**
+ * The MINTER group: membership is what lets an account mint.
+ *
+ * Dev-only testnet runs (vite.testnet.config.ts) point the app at a test
+ * group instead. `__QMP_TESTNET__` is false in every build, so the build
+ * keeps only 694 and none of the testnet code.
+ */
+export const MINTER_GROUP_ID: number = __QMP_TESTNET__ ? testnetGroupId() : 694;
+
+function testnetGroupId(): number {
+  const config = (globalThis as { __QMP_TESTNET_CONFIG__?: { groupId?: unknown } })
+    .__QMP_TESTNET_CONFIG__;
+  const id = Number(config?.groupId);
+  if (!Number.isInteger(id) || id <= 0) throw new Error('Testnet run without a test group');
+  return id;
+}
 
 /**
  * MINTER's owner is the null account. It counts as one of the group's admins

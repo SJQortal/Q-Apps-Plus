@@ -51,6 +51,8 @@ export async function qortal<T = unknown>(
  * to a local node on 12391; VITE_CORE_URL overrides that.
  */
 export function coreBaseUrl(): string {
+  // Dev-only testnet runs read the private testnet through the dev server.
+  if (__QMP_TESTNET__) return '/qmp-testnet-node';
   if (hasQortalRequest()) return '';
   const fromEnv = import.meta.env?.VITE_CORE_URL as string | undefined;
   return fromEnv ?? 'http://localhost:12391';
