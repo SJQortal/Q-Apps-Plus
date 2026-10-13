@@ -233,6 +233,20 @@ describe('Decisions: proposing an admin change', () => {
   }, 20_000);
 });
 
+describe('Decisions: how signing works', () => {
+  it('says admin changes move the target, and to plan the order', async () => {
+    const u = user();
+    await openPage();
+    await u.click(screen.getByRole('button', { name: 'How signing works' }));
+    expect(
+      screen.getByText(/^Adding or removing a Minter Admin moves the target for every waiting/)
+    ).toBeVisible();
+    expect(
+      screen.getByText(/^So before signing an admin change, look at what it would tip over/)
+    ).toBeVisible();
+  });
+});
+
 async function openPage() {
   await renderPage(<DecisionsPage />, {
     persona: 'admin',
