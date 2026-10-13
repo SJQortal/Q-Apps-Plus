@@ -246,6 +246,27 @@ describe('Nominate page: writing and publishing', () => {
     expect(screen.getAllByRole('button', { name: /Remove link/ })).toHaveLength(5);
   });
 
+  it('by keyboard: a new link field takes focus, and removing one never drops it on the page', async () => {
+    const user = userEvent.setup();
+    await open('nominator', ADDR.newcomerName);
+    await screen.findByText(/Can be nominated/, undefined, { timeout: 4000 });
+    screen.getByRole('button', { name: 'Add a link' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('textbox', { name: 'Link 1' })).toHaveFocus();
+    screen.getByRole('button', { name: 'Add a link' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('textbox', { name: 'Link 2' })).toHaveFocus();
+    // Removing the first: the field now first (the old second) takes focus.
+    screen.getByRole('button', { name: 'Remove link 1' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('textbox', { name: 'Link 1' })).toHaveFocus();
+    // Removing the last one: back to Add a link.
+    screen.getByRole('button', { name: 'Remove link 1' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.queryByRole('textbox', { name: /^Link / })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add a link' })).toHaveFocus();
+  });
+
   it('publishes the nomination record through Hub and offers the link for the nominee', async () => {
     const user = userEvent.setup();
     await open('nominator', ADDR.newcomerName);

@@ -192,6 +192,18 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
     if (next === 'picker') pickerRef.current?.focus();
     else if (next === 'summary' && summaryRef.current) focusElement(summaryRef.current);
   }, [picked, published]);
+  // Add a link: focus to its new field. Remove one: to the field now in its place
+  // (or the one before, or Add a link), not to the page with the button that went.
+  const addLinkRef = useRef<HTMLButtonElement | null>(null);
+  const linkFocus = useRef<number | null>(null);
+  useEffect(() => {
+    const at = linkFocus.current;
+    linkFocus.current = null;
+    if (at === null) return;
+    const field = linkRefs.current[Math.min(at, links.length - 1)];
+    if (field && links.length) field.focus();
+    else addLinkRef.current?.focus();
+  }, [links]);
   // The sticky submit bar's height is kept clear for focus (not in landscape, where it isn't sticky).
   const [submitBar, setSubmitBar] = useState<HTMLElement | null>(null);
 
@@ -368,7 +380,10 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
                   />
                   <IconButton
                     aria-label={`Remove link ${i + 1}`}
-                    onClick={() => setLinks((all) => all.filter((_, j) => j !== i))}
+                    onClick={() => {
+                      linkFocus.current = i;
+                      setLinks((all) => all.filter((_, j) => j !== i));
+                    }}
                     sx={{ width: 44, height: 44, mt: 0.5 }}
                   >
                     <DeleteOutlineOutlinedIcon />
@@ -379,7 +394,11 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
             <Box>
               <Button
                 startIcon={<AddOutlinedIcon />}
-                onClick={() => setLinks((all) => [...all, ''])}
+                ref={addLinkRef}
+                onClick={() => {
+                  linkFocus.current = links.length;
+                  setLinks((all) => [...all, '']);
+                }}
                 disabled={links.length >= LINKS_MAX}
                 sx={{ minHeight: 44 }}
               >
@@ -635,7 +654,12 @@ function CandidateSummary({
         ) : info ? (
           <Typography
             variant="body2"
-            sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, color: readable('success') }}
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 0.75,
+              color: readable('success'),
+            }}
           >
             <CheckCircleOutlineOutlinedIcon aria-hidden sx={{ fontSize: 18, mt: '1px' }} />
             <span>
