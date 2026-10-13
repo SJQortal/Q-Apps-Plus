@@ -470,6 +470,36 @@ describe('comments on a poll', () => {
   });
 });
 
+describe('comments the viewer can’t read', () => {
+  it('the thread says how many weren’t encrypted to them, so the count adds up', async () => {
+    const u = user();
+    await openDecisions('admin', (world) => {
+      withAdminPolls('admin')(world);
+      const signers = world.admins.filter((a: string) => a !== NULL_OWNER);
+      // Before the share, encrypted to everyone but Avery, and in no share.
+      world.adminPollRecords.push({
+        name: 'Admin K',
+        identifier: `qmp-admincomment-${ADMIN_POLL_IDS.shared}-zz9yy8`,
+        created: Date.now() - 2 * 86_400_000,
+        readers: signers.filter((a: string) => a !== world.admins[0]),
+        body: { v: 1, pollId: ADMIN_POLL_IDS.shared, text: 'Not in any copy.' },
+      });
+    });
+    const card = await pollCard(SHARED_Q);
+    await u.click(within(card).getByRole('button', { name: `Comments (2): ${SHARED_Q}` }));
+    const thread = await within(card).findByRole('region', { name: `Comments on ${SHARED_Q}` }, T);
+    expect(
+      await within(thread).findByText(
+        '1 comment here wasn’t encrypted to you, and no share carries it.',
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(within(thread).getByText(/Two days gives everyone time/)).toBeVisible();
+    expect(within(thread).queryByText('Not in any copy.')).toBeNull();
+  });
+});
+
 describe('Refresh', () => {
   it('reads the polls again with the rest of Decisions', async () => {
     const u = user();

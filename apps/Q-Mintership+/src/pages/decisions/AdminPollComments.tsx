@@ -4,8 +4,9 @@
  * replies one level deep, edit, delete and mute on this device), but every
  * comment is encrypted to the Minter Admins and decrypted here with the
  * viewer's key. Comments the viewer can't read come from a share when one
- * carried them, and are left out otherwise. No hiding: only Minter Admins
- * read these anyway. Refreshes every minute while open and visible.
+ * carried them, and are left out otherwise (saying how many). No hiding:
+ * only Minter Admins read these anyway. Refreshes every minute while open
+ * and visible.
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Box, Button, Typography } from '@mui/material';
@@ -41,6 +42,15 @@ import {
 import type { ShownPoll } from './adminPollUi';
 
 const REFRESH_MS = 60_000;
+
+/** Comments here the viewer can't read, which no share carries: why the count above is higher. */
+function unreadableText(count: number, none: boolean): string {
+  const which =
+    count === 1
+      ? '1 comment here wasn’t encrypted to you, and no share carries it.'
+      : `${formatCount(count)} comments here weren’t encrypted to you, and no share carries them.`;
+  return none ? `No comments you can read. ${which}` : which;
+}
 const PENDING_TEXT = 'Publishing… the Minter Admins see it once QDN has it.';
 
 type Dialog =
@@ -262,7 +272,7 @@ export default function AdminPollComments({
   } else if (!threads.length) {
     list = (
       <Typography variant="body2" color="text.secondary">
-        No comments yet.
+        {sources.unreadable ? unreadableText(sources.unreadable, true) : 'No comments yet.'}
       </Typography>
     );
   } else {
@@ -337,6 +347,11 @@ export default function AdminPollComments({
             );
           })}
         </Box>
+        {sources.unreadable ? (
+          <Typography variant="body2" color="text.secondary">
+            {unreadableText(sources.unreadable, false)}
+          </Typography>
+        ) : null}
         {unread > 0 ? (
           <Box>
             <Button
