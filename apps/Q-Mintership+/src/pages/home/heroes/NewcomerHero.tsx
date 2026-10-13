@@ -90,8 +90,9 @@ export function NewcomerHero({ status, needed }: { status: MyStatus; needed: num
             </HeroText>
             <HeroText>
               Nominators, minters at level {NOMINATOR_MIN_LEVEL} or above, look for people
-              who&rsquo;d make good minters, and often reach out first. When one nominates you and{' '}
-              {needed ? <Num>{needed}</Num> : 'enough'} Minter Admins sign, you&rsquo;re in.
+              who&rsquo;d make good minters, and often reach out first. When one nominates you, you
+              accept, and {needed ? <Num>{needed}</Num> : 'enough'} Minter Admins sign, you&rsquo;re
+              in.
             </HeroText>
             <HeroText>
               You can also show you&rsquo;re ready to mint, so nominators and Minter Admins see that

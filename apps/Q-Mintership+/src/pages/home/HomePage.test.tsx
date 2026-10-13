@@ -209,7 +209,9 @@ describe('Home: not in MINTER yet', () => {
       /Nominators, minters at level 5 or above, look for people who.d make good minters, and often reach out first\./
     );
     await waitFor(() =>
-      expect(hero).toHaveTextContent(/When one nominates you and 8 Minter Admins sign/)
+      expect(hero).toHaveTextContent(
+        /When one nominates you, you accept, and 8 Minter Admins sign, you.re in\./
+      )
     );
     expect(await within(hero).findByText('0 QORT', {}, T)).toBeInTheDocument();
     expect(hero).toHaveTextContent(/ask someone you know on Qortal to send you a little QORT/);
