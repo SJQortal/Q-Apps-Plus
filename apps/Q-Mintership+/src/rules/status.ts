@@ -12,6 +12,7 @@ import { BAN_MAX_SECONDS, NOMINATOR_MIN_LEVEL } from '../data/constants';
 import type { BanRow, InviteRow, TxRow } from '../data/types';
 import type { Nomination } from '../data/nominations';
 import { nominatorBlock } from './nomination';
+import { joinRequestStory } from './decline';
 
 export type StatusKind =
   | 'outsideHub'
@@ -88,6 +89,12 @@ export interface MyStatus {
   storedInvite: InviteRow | null;
   /** The newest way the account left MINTER, if it ever did. */
   removal: Removal | null;
+  /**
+   * When the Minter Admins last declined the account's join request (ms,
+   * estimated from the approval block), if they ever did. A decline is
+   * never a removal.
+   */
+  declinedAt: number | null;
   /** The account was in MINTER before (evidence: an approved invite before the removal). */
   wasMember: boolean;
   /** The open nomination for this account. */
@@ -125,18 +132,24 @@ function effectiveTime(tx: TxRow, tip: StatusInputs['tip'], msPerBlock: number):
 
 const DONE = new Set(['APPROVED', 'NOT_REQUIRED']);
 
-/** The account's newest removal from MINTER: an approved kick or ban about it, or its own LEAVE_GROUP. */
+/**
+ * The account's newest removal from MINTER: an approved kick or ban about
+ * it, or its own LEAVE_GROUP. A kick that declined its join request
+ * (rules/decline.ts) took nothing away: it isn't a removal.
+ */
 export function latestRemoval(
   address: string,
   history: TxRow[],
   tip: StatusInputs['tip'],
   msPerBlock: number
 ): Removal | null {
+  const { declined } = joinRequestStory(address, history);
   let best: Removal | null = null;
   for (const tx of history) {
     if (!DONE.has(String(tx.approvalStatus))) continue;
     let kind: Removal['kind'] | null = null;
-    if (tx.type === 'GROUP_KICK' && tx.member === address) kind = 'kick';
+    if (tx.type === 'GROUP_KICK' && tx.member === address && !declined.has(tx.signature))
+      kind = 'kick';
     else if (tx.type === 'GROUP_BAN' && tx.offender === address) kind = 'ban';
     else if (tx.type === 'LEAVE_GROUP' && tx.creatorAddress === address) kind = 'leave';
     if (!kind) continue;
@@ -173,6 +186,23 @@ function banTiming(
   const end = Math.max(at, tx.timestamp + banSeconds * 1000);
   // Only an end that has passed is a date to give.
   return end <= tip.timestamp ? { banSeconds, endedAt: end } : { banSeconds };
+}
+
+/** When the Minter Admins last declined the account's join request (ms), or null. */
+export function lastDeclinedAt(
+  address: string,
+  history: TxRow[],
+  tip: StatusInputs['tip'],
+  msPerBlock: number
+): number | null {
+  const { declined } = joinRequestStory(address, history);
+  let last: number | null = null;
+  for (const tx of history) {
+    if (!declined.has(tx.signature)) continue;
+    const at = effectiveTime(tx, tip, msPerBlock);
+    if (last === null || at > last) last = at;
+  }
+  return last;
 }
 
 /** When the Minter Admins lifted a ban that took effect at `after`: an approved CANCEL_GROUP_BAN about the account. */
@@ -239,10 +269,13 @@ export function formerMember(
 
 export function resolveStatus(input: StatusInputs): MyStatus {
   const progress = levelProgress(input.level, input.blocksMinted, NOMINATOR_MIN_LEVEL);
-  const removal =
-    input.hub === 'signedIn'
-      ? latestRemoval(input.address, input.history, input.tip, input.msPerBlock)
-      : null;
+  const signedIn = input.hub === 'signedIn';
+  const removal = signedIn
+    ? latestRemoval(input.address, input.history, input.tip, input.msPerBlock)
+    : null;
+  const declinedAt = signedIn
+    ? lastDeclinedAt(input.address, input.history, input.tip, input.msPerBlock)
+    : null;
   const wasMember = removal
     ? wasMemberBefore(input.address, input.history, removal.at) || removal.kind === 'leave'
     : false;
@@ -279,6 +312,7 @@ export function resolveStatus(input: StatusInputs): MyStatus {
     activeBan: input.activeBan,
     storedInvite: input.storedInvite,
     removal,
+    declinedAt,
     wasMember,
     nomination,
     canNominate: block === null,

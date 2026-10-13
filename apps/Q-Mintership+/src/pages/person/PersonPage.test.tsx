@@ -4,8 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
 import { fetchCallsFor, mockFetchRoute, qortalCalls, qortalCallsFor } from '../../test/setup';
-import { addTargetShift, fakeAddress } from '../../../e2e/world.mjs';
-import { ADDR, NOW, PEOPLE } from '../../test/world';
+import { DECLINED, addDecline, addTargetShift, fakeAddress } from '../../../e2e/world.mjs';
+import { ADDR, MS_PER_BLOCK, NOW, PEOPLE } from '../../test/world';
 import { CoreHttpError } from '../../qortal/client';
 import { formatDate } from '../../utils/format';
 import PersonPage from './PersonPage';
@@ -121,6 +121,27 @@ describe('Person page', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Not in MINTER')).toBeInTheDocument();
     expect(screen.queryByText('Former member')).toBeNull();
+  });
+
+  it('never calls a declined join request a removal from MINTER', async () => {
+    await renderPage(<PersonPage />, {
+      persona: 'admin',
+      path: `/people/${DECLINED.address}`,
+      route: ROUTE,
+      setup: (world) => void addDecline(world),
+    });
+    // Declined at block TIP - 19,000, dated from the tip.
+    const declinedOn = formatDate(NOW - 19_000 * MS_PER_BLOCK);
+    expect(
+      await screen.findByText(
+        `Not in MINTER yet. Minter Admins declined their join request on ${declinedOn}; they can send a new one.`
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Former member')).toBeNull();
+    expect(screen.queryByText(/Removed from MINTER/)).toBeNull();
+    const timeline = await section('MINTER timeline');
+    expect(await within(timeline).findByText('Join request declined')).toBeInTheDocument();
+    expect(within(timeline).getByText('Asked to join MINTER')).toBeInTheDocument();
   });
 
   it('tells a member below level 5 why they cannot nominate', async () => {
@@ -465,7 +486,8 @@ describe('person page words', () => {
     vi.stubGlobal('IntersectionObserver', FarAway);
     await visit(ADDR.kicked, 'nominator');
     await section('From the original app');
-    const cardReads = () => fetchCallsFor(/\/arbitrary\/(BLOG_POST|resources\/search\w*\?[^ ]*Minter-board-card)/);
+    const cardReads = () =>
+      fetchCallsFor(/\/arbitrary\/(BLOG_POST|resources\/search\w*\?[^ ]*Minter-board-card)/);
     expect(cardReads()).toEqual([]);
     await waitFor(() => expect(trigger).not.toBeNull());
     trigger!();

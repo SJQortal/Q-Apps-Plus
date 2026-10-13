@@ -1527,7 +1527,8 @@ export const DECLINED = { address: fakeAddress('declined-1'), name: 'Dee Decline
  * Add declines to the world:
  *
  * - a waiting one: Admin G proposes declining jr-2's join request (jr-2 is
- *   on Ready to mint), with a reason, 2 of 8 signatures;
+ *   on Ready to mint, and their JOIN_GROUP is on chain), with a reason,
+ *   2 of 8 signatures;
  * - a decided one: Dee Declined asked to join long ago (older than History's
  *   first 30 days), and an approved kick declined it 19,000 blocks ago.
  *
@@ -1552,6 +1553,20 @@ export function addDecline(world) {
     member: subject,
     reason: 'Asked to join, but no node online for months',
   };
+  // jr-2's join request, on chain.
+  world.decided.push({
+    type: 'JOIN_GROUP',
+    timestamp: blockTime(2_650_000) - 20_000,
+    reference: sig('r:decline:join'),
+    fee: '0.01000000',
+    signature: sig('decline:join'),
+    txGroupId: 0,
+    blockHeight: 2_650_000,
+    approvalStatus: 'NOT_REQUIRED',
+    creatorAddress: subject,
+    joinerPublicKey: pk(subject),
+    groupId: GROUP,
+  });
   world.pending.push(waiting);
   [extra(6), extra(7)].forEach((who, i) =>
     world.approvals.push({

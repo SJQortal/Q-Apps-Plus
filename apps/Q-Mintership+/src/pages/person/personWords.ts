@@ -16,6 +16,16 @@ export function statusSentence(
   const their = self ? 'your' : 'their';
   const since = memberSince ? ` since ${formatDate(memberSince)}` : '';
   const removedOn = person.removal ? ` on ${formatDate(person.removal.at)}` : '';
+  // A declined join request, unless a newer one is open or they left MINTER since.
+  const declinedAt =
+    person.declinedAt !== null &&
+    !person.hasJoinRequest &&
+    (!person.removal || person.declinedAt > person.removal.at)
+      ? person.declinedAt
+      : null;
+  const declined = declinedAt
+    ? ` Minter Admins declined ${their} join request on ${formatDate(declinedAt)}; ${they} can send a new one.`
+    : '';
   switch (person.kind) {
     case 'admin':
       return memberSince ? `Minter Admin, in MINTER${since}.` : 'Minter Admin and MINTER member.';
@@ -52,15 +62,15 @@ export function statusSentence(
         return `Was banned from MINTER${removedOn}; ${ended}, so ${they} can be nominated${again}.`;
       }
       return person.wasMember
-        ? `Removed from MINTER${removedOn}. ${They} keep ${their} level and can be nominated again.`
-        : `Removed from MINTER's join list${removedOn}. ${They} can be nominated.`;
+        ? `Removed from MINTER${removedOn}. ${They} keep ${their} level and can be nominated again.${declined}`
+        : `Removed from MINTER's join list${removedOn}. ${They} can be nominated.${declined}`;
     }
     case 'formerLeft':
-      return `Left MINTER${removedOn}. ${They} can be nominated again.`;
+      return `Left MINTER${removedOn}. ${They} can be nominated again.${declined}`;
     default:
       return person.hasJoinRequest
         ? `Not in MINTER yet. ${They}'ve asked to join, so an approved nomination adds ${them} at once.`
-        : 'Not in MINTER yet.';
+        : `Not in MINTER yet.${declined}`;
   }
 }
 

@@ -74,7 +74,12 @@ export default function DecisionPage() {
   const subject = data && data.kind !== 'unknown' ? decisionSubject(data.tx) : null;
   const titleFacts =
     data && data.kind !== 'unknown' && data.kind !== 'other'
-      ? { kind: decisionKind(data.tx), subject, creatorAddress: data.tx.creatorAddress ?? null }
+      ? {
+          kind: decisionKind(data.tx),
+          subject,
+          creatorAddress: data.tx.creatorAddress ?? null,
+          decline: data.kind !== 'unusual' && data.decline,
+        }
       : null;
   const who = useDisplayName(subject ?? '', subject ? undefined : null);
   const { refetch } = link;

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { fakeAddress, type World } from '../../../e2e/world.mjs';
+import { DECLINED, addDecline, fakeAddress, type World } from '../../../e2e/world.mjs';
 import { formatDate, shortAddress } from '../../utils/format';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
@@ -166,6 +166,53 @@ describe('Ready to mint', () => {
     const list = await readyList();
     // The others never were members.
     await waitFor(() => expect(within(list).getAllByText(/^Former member: /)).toHaveLength(3));
+  });
+
+  it('never marks a declined join request as a removal from MINTER', async () => {
+    await open('nominator', (world) => {
+      const { declined } = addDecline(world);
+      const kick = world.decided.find(
+        (tx: { signature: string }) => tx.signature === declined.kick
+      );
+      // Kit, removed on 26 Aug 2026, asked again and was declined too.
+      world.decided.push(
+        { ...kick, signature: `${kick.signature.slice(0, -4)}KitD`, member: ADDR.kicked },
+        ...[DECLINED.address, ADDR.kicked].map((who, i) => ({
+          type: 'JOIN_GROUP',
+          timestamp: kick.timestamp - 86_400_000 * (i + 2),
+          signature: `${kick.signature.slice(0, -4)}Jn${i}x`,
+          txGroupId: 0,
+          blockHeight: kick.blockHeight - 2_000 * (i + 1),
+          approvalStatus: 'NOT_REQUIRED',
+          creatorAddress: who,
+          groupId: 694,
+        })),
+        // Both asked again since.
+        ...[DECLINED.address, ADDR.kicked].map((who, i) => ({
+          type: 'JOIN_GROUP',
+          timestamp: kick.timestamp + 86_400_000 * (i + 2),
+          signature: `${kick.signature.slice(0, -4)}Ag${i}x`,
+          txGroupId: 0,
+          blockHeight: kick.approvalHeight + 1_000 * (i + 1),
+          approvalStatus: 'NOT_REQUIRED',
+          creatorAddress: who,
+          groupId: 694,
+        }))
+      );
+      world.joinRequests.push(joinRequest(DECLINED.address), joinRequest(ADDR.kicked));
+    });
+    const dee = await row(DECLINED.name);
+    expect(
+      await within(await row('Kit Kicked')).findByText(
+        'Former member: removed from MINTER on 26 Aug 2026',
+        {},
+        { timeout: 4000 }
+      )
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(fetchCallsFor(`/transactions/search?address=${DECLINED.address}`)).toHaveLength(1)
+    );
+    expect(within(dee).queryByText(/Former member/)).toBeNull();
   });
 
   it('says when a former member’s ban was lifted', async () => {

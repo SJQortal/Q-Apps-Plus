@@ -49,9 +49,10 @@ interface Step {
  * approved invite waiting is a join request, and with one it makes them a
  * member; an approved invite makes someone with a join request a member;
  * an approved kick takes away a join request if there is one (a decline),
- * otherwise their membership; a ban takes away either. Only what the
- * history in hand shows counts: a kick with no join request on record is
- * never taken for a decline.
+ * otherwise their membership (and the invite that let them in, even when
+ * the history in hand doesn't show it used); a ban takes away either. Only
+ * what the history in hand shows counts: a kick with no join request on
+ * record is never taken for a decline.
  */
 export function joinRequestStory(address: string, history: readonly TxRow[]): JoinRequestStory {
   const steps: Step[] = [];
@@ -89,7 +90,7 @@ export function joinRequestStory(address: string, history: readonly TxRow[]): Jo
         else if (!member) request = true;
         break;
       case 'LEAVE_GROUP':
-        member = false;
+        [member, invite] = [false, false];
         break;
       case 'GROUP_INVITE':
         if (request) [member, request] = [true, false];
@@ -102,12 +103,14 @@ export function joinRequestStory(address: string, history: readonly TxRow[]): Jo
         if (request && !member) {
           story.declined.add(tx.signature);
           request = false;
-        } else member = false;
+        } else {
+          // A member's kick: whatever let them in was used.
+          [member, invite] = [false, false];
+        }
         break;
       case 'GROUP_BAN':
-        if (member) member = false;
-        else if (request) request = false;
-        else invite = false;
+        if (request && !member) request = false;
+        else [member, invite] = [false, false];
         break;
     }
   }
