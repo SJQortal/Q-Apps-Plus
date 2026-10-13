@@ -1,5 +1,5 @@
 /** Page building blocks: titled sections, cards, stat tiles, chips. */
-import type { AnimationEvent, ReactNode } from 'react';
+import { useLayoutEffect, useRef, type AnimationEvent, type ReactNode } from 'react';
 import { Box, Chip, Typography, type ChipProps } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import type { NominationState } from '../../rules/nomination';
@@ -31,12 +31,26 @@ function markShown(event: AnimationEvent<HTMLElement>) {
   const list = el.parentElement;
   if (list === section) {
     el.dataset.qmpShown = '';
+    markLater(section);
   } else if (el.tagName === 'LI' && list?.tagName === 'UL' && list.parentElement === section) {
     el.dataset.qmpShown = '';
     // Once its first rows are in, the list has arrived: none of its rows fade in again.
     if (!list.querySelector(':scope > li:nth-child(-n + 6):not([data-qmp-shown])')) {
       list.dataset.qmpRowsShown = '';
     }
+  }
+}
+
+/**
+ * Only a section's first eight children fade in (index.css); the rest
+ * arrive with them. Marking those as shown keeps them still when one moves
+ * up into the first eight (a card above it leaving).
+ */
+function markLater(section: HTMLElement) {
+  for (const el of section.querySelectorAll<HTMLElement>(
+    ':scope > :nth-child(n + 9):not([data-qmp-shown])'
+  )) {
+    el.dataset.qmpShown = '';
   }
 }
 
@@ -58,8 +72,14 @@ export function Section({
   id?: string;
 }) {
   const headingId = id ? `${id}-title` : undefined;
+  const ref = useRef<HTMLElement>(null);
+  // Before the browser paints: cards past the eighth never start to fade in.
+  useLayoutEffect(() => {
+    if (ref.current) markLater(ref.current);
+  });
   return (
     <Box
+      ref={ref}
       component="section"
       aria-labelledby={headingId}
       className="qmp-reveal-fade"

@@ -187,12 +187,13 @@ html[data-motion='reduce'] {
 }
 
 /* A section's content and the page header's: a fade only, so nothing rises
-   twice. A list's first six rows follow one another; the rest come with
-   the list, so a long list costs no more than a short one. Each fades in
-   once: Section marks what has faded in (data-qmp-shown, and
-   data-qmp-rows-shown on a list once its first rows are in), so a row or
-   card that is re-sorted, filtered or moved up stays still. */
-:where(.qmp-reveal-fade > :not([data-qmp-shown])),
+   twice. Its first eight children fade in, and a list's first six rows
+   follow one another; the rest come with them, so a long list or a long
+   run of cards costs no more than a short one. Each fades in once: Section
+   marks what has faded in (data-qmp-shown, and data-qmp-rows-shown on a
+   list once its first rows are in), so a row or card that is re-sorted,
+   filtered or moved up stays still. */
+:where(.qmp-reveal-fade > :not([data-qmp-shown]):nth-child(-n + 8)),
 :where(
     .qmp-reveal-fade > ul:not([data-qmp-rows-shown]) > li:nth-child(-n + 6):not([data-qmp-shown])
   ) {

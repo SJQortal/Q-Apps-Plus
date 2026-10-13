@@ -256,6 +256,27 @@ describe('content arriving', () => {
     ]);
   });
 
+  it('fades a section’s first eight children in, and the rest come with them', () => {
+    const cards = (keys: number[]) => (
+      <Section title="Collecting signatures" id="collecting">
+        {keys.map((k) => (
+          <article key={k} aria-label={`Card ${k}`}>
+            Card {k}
+          </article>
+        ))}
+      </Section>
+    );
+    const view = render(cards([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]));
+    const names = () => screen.getAllByRole('article').map((c) => animation(c).name);
+    // The title row is the first child: seven cards fade in.
+    expect(names()).toEqual([...Array(7).fill('qmp-fade-in'), 'none', 'none', 'none', 'none']);
+    // A card turns up past the eighth, then two cards above leave while the
+    // rest are still fading in: those that were past the eighth move up, still.
+    view.rerender(cards([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]));
+    view.rerender(cards([1, 2, 3, 4, 5, 8, 9, 10, 11, 12]));
+    expect(names()).toEqual([...Array(5).fill('qmp-fade-in'), ...Array(5).fill('none')]);
+  });
+
   it('fades an empty state in where it appears', () => {
     render(<EmptyState title="Nothing here" />);
     expect(animation(screen.getByRole('status')).name).toBe('qmp-fade-in');
