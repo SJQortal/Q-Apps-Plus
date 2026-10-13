@@ -76,7 +76,7 @@ import {
 import type { Signer } from '../../writes/runner';
 import { BulkDialog } from './BulkDialog';
 import { DecisionCard, type NominationsState, type SubjectFacts } from './DecisionCard';
-import { answerView, canReject, canSign, isWaitingForMe } from './decisionUi';
+import { answerView, canReject, canSign, decisionCardId, isWaitingForMe } from './decisionUi';
 import { doubleLeftOutText, doublesAsideText } from './doubleUi';
 import { FirstSignatureDialog } from './FirstSignatureDialog';
 import { HowSigningWorks } from './HowSigningWorks';
@@ -152,6 +152,18 @@ function DecisionsQueue() {
   const [staleExpanded, setStaleExpanded] = useState(false);
   const proposeButton = useRef<HTMLButtonElement | null>(null);
   const hideAnsweredSwitch = useRef<HTMLInputElement | null>(null);
+  // The decision Sign, Reject or Withdraw was opened on, for where focus goes
+  // when the dialog closes (a ref: the dialog's target is already cleared then).
+  const answering = useRef<string | null>(null);
+  // Its card, or the section when the card is gone ("Hide what I answered").
+  const backToQueue = () =>
+    (answering.current ? document.getElementById(decisionCardId(answering.current)) : null) ??
+    sectionOf('collecting');
+  const answer = (decision: Decision, mode: RejectMode | 'sign') => {
+    answering.current = decision.signature;
+    if (mode === 'sign') setSignTarget(decision);
+    else setRejectTarget({ decision, mode });
+  };
   // Propose → Clean up stale invites: the section takes focus, after the menu
   // (or the phone's sheet) has put it back on Propose as it closed.
   const [staleFocus, setStaleFocus] = useState(0);
@@ -489,9 +501,9 @@ function DecisionsQueue() {
                     selecting={selecting}
                     selected={selected.has(d.signature)}
                     onToggleSelect={toggleSelect}
-                    onSign={setSignTarget}
-                    onReject={(decision) => setRejectTarget({ decision, mode: 'reject' })}
-                    onWithdraw={(decision) => setRejectTarget({ decision, mode: 'withdraw' })}
+                    onSign={(decision) => answer(decision, 'sign')}
+                    onReject={(decision) => answer(decision, 'reject')}
+                    onWithdraw={(decision) => answer(decision, 'withdraw')}
                     impact={impactOf(d)}
                     risk={riskOf(d)}
                     labelOf={labelOf}
@@ -654,6 +666,7 @@ function DecisionsQueue() {
         onClose={() => setSignTarget(null)}
         impact={signTarget ? impactOf(signTarget) : null}
         labelOf={labelOf}
+        returnFocus={backToQueue}
       />
       <ConsideringDialog
         request={considerRequest}
@@ -665,6 +678,7 @@ function DecisionsQueue() {
         mode={rejectTarget?.mode ?? 'reject'}
         signer={signer}
         onClose={() => setRejectTarget(null)}
+        returnFocus={backToQueue}
       />
       {data ? (
         <FirstSignatureDialog

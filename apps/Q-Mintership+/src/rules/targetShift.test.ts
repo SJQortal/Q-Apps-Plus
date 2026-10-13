@@ -18,6 +18,7 @@ import {
   targetSteps,
   toShiftDecision,
   type AdminChangeInput,
+  type AdminLeave,
   type ShiftDecision,
   type ShiftState,
 } from './targetShift';
@@ -568,7 +569,7 @@ describe('the decisions the projection reads', () => {
     expect(toShiftDecision(decisions[3])).toBeNull();
   });
 
-  it('leaves out doubles that change nothing, and counts a repeated change once', () => {
+  it('keeps doubles in, and counts a repeated change once', () => {
     const open = { ...base, phase: 'open' as const };
     const decisions: Decision[] = [
       {
@@ -599,14 +600,64 @@ describe('the decisions the projection reads', () => {
       { ...open, signature: 'k', kind: 'kick', tally: tally(8, 0) },
     ];
     const list = shiftDecisionsOf(decisions);
-    expect(list.map((d) => d.signature)).toEqual(['first', 'second', 'k']);
+    expect(list.map((d) => d.signature)).toEqual(['again', 'gone', 'first', 'second', 'k']);
     const s = state(20);
+    const scenarios = shiftScenarios(s, list);
     // An addition of a Minter Admin adds no seat, a removal of someone who isn't one removes none.
     expect(adminCountAfter(s, [add('Qadmin2', 'again'), remove('Qnobody', 'gone')])).toBe(20);
+    for (const signature of ['again', 'gone']) {
+      expect(scenarioFor(scenarios, signature)).toMatchObject({ countThen: 20, effects: [] });
+      expect(hasImpact(scenarioFor(scenarios, signature))).toBe(false);
+    }
     // Both copies of one addition add one seat, not two: 21 rows, 9 needed.
-    const adds = shiftScenarios(s, list).find((x) => x.scope === 'adds');
+    const adds = scenarios.find((x) => x.scope === 'adds');
     expect(adds).toMatchObject({ countThen: 21, neededThen: 9 });
-    expect(scenarioFor(shiftScenarios(s, list), 'second')).toMatchObject({ countThen: 21 });
+    expect(scenarioFor(scenarios, 'second')).toMatchObject({ countThen: 21 });
+  });
+
+  describe('an addition of a Minter Admin, while their removal is waiting', () => {
+    // 18 admin rows, PCT40: 8 needed; at 17 rows, 7.
+    const s = state(18);
+    const open = { ...base, phase: 'open' as const };
+    const decisions: Decision[] = [
+      {
+        ...open,
+        signature: 'again',
+        kind: 'addAdmin',
+        subject: 'Qadmin3',
+        tally: tally(7, 0),
+        double: { reason: 'alreadyInEffect' },
+      },
+      { ...open, signature: 'out', kind: 'removeAdmin', subject: 'Qadmin3', tally: tally(2, 0) },
+    ];
+    const list = shiftDecisionsOf(decisions);
+
+    it('applies at the lower target once the removal passes, and adds their seat back', () => {
+      for (const result of [
+        // Step down, before it is proposed…
+        projectShift(s, list, [remove('Qadmin3')]),
+        // …and the removal already waiting.
+        scenarioFor(shiftScenarios(s, list), 'out'),
+      ]) {
+        expect(result).toMatchObject({
+          followOn: ['again'],
+          countLow: 17,
+          neededLow: 7,
+          countThen: 18,
+          neededThen: 8,
+        });
+        expect(result?.effects.map((e) => [e.signature, e.effect])).toEqual([['again', 'applies']]);
+        expect(hasImpact(result)).toBe(true);
+      }
+    });
+
+    it('on its own it still changes nothing', () => {
+      expect(scenarioFor(shiftScenarios(s, list), 'again')).toMatchObject({
+        countThen: 18,
+        effects: [],
+        followOn: [],
+      });
+    });
   });
 });
 
@@ -715,6 +766,43 @@ describe('targetSteps: the target before and after each approved admin change', 
       neededBefore: 9,
       neededAfter: 10,
     });
+  });
+
+  it('gives no step to an approved addition of someone already a Minter Admin', () => {
+    // X was made an admin at 100, and a second addition of X was approved at 200.
+    const changes = [
+      { signature: 'first', address: 'QX', added: true, height: 100 },
+      { signature: 'again', address: 'QX', added: true, height: 200 },
+    ];
+    const steps = targetSteps(changes, 21, 'PCT40');
+    expect(
+      steps.map((s) => [s.signature, s.countBefore, s.countAfter, s.neededBefore, s.neededAfter])
+    ).toEqual([['first', 20, 21, 8, 9]]);
+    expect(adminCountAt(changes, [], 21, 150)).toBe(21);
+    expect(adminCountAt(changes, [], 21, 50)).toBe(20);
+  });
+
+  it('counts an addition again after a removal or a leave of the same person', () => {
+    const removed = [
+      { signature: 'add1', address: 'QX', added: true, height: 100 },
+      { signature: 'out', address: 'QX', added: false, height: 200 },
+      { signature: 'add2', address: 'QX', added: true, height: 300 },
+    ];
+    expect(targetSteps(removed, 21, 'PCT40').map((s) => [s.signature, s.countAfter])).toEqual([
+      ['add2', 21],
+      ['out', 20],
+      ['add1', 21],
+    ]);
+    const added = [
+      { signature: 'add1', address: 'QX', added: true, height: 100 },
+      { signature: 'add2', address: 'QX', added: true, height: 300 },
+    ];
+    const left: AdminLeave[] = [{ address: 'QX', height: 200, wasAdmin: true }];
+    expect(targetSteps(added, 21, 'PCT40', left).map((s) => [s.signature, s.countAfter])).toEqual([
+      ['add2', 21],
+      ['add1', 21],
+    ]);
+    expect(adminCountAt(added, left, 21, 250)).toBe(20);
   });
 
   it('has nothing to say without changes, and never counts below zero', () => {

@@ -25,6 +25,9 @@
  * an admin takes a row away;
  * removing someone who isn't an admin, or the group's owner (it can never be
  * removed), changes nothing. Several changes about one account count once.
+ * A change that only follows on (projectShift) is checked against the rows
+ * the changes before it leave, so a removal can make a waiting addition of
+ * the same account count again.
  */
 import { MINTER_GROUP_ID } from '../data/constants';
 import type { TxRow } from '../data/types';
@@ -147,8 +150,11 @@ function memberSet(state: ShiftState): ReadonlySet<string> | null {
     : new Set(state.members as readonly string[]);
 }
 
-/** The admin count once `changes` have passed, checked against today's admin (and member) rows. */
-export function adminCountAfter(state: ShiftState, changes: readonly AdminChangeInput[]): number {
+/** The admin rows `changes` add and take away, checked against today's admin (and member) rows. */
+function seatMoves(
+  state: ShiftState,
+  changes: readonly AdminChangeInput[]
+): { added: string[]; removed: string[] } {
   const admins = adminSet(state);
   const members = memberSet(state);
   const owner = state.owner ?? null;
@@ -160,14 +166,30 @@ export function adminCountAfter(state: ShiftState, changes: readonly AdminChange
     else t.remove = true;
     touched.set(change.subject, t);
   }
-  let delta = 0;
+  const added: string[] = [];
+  const removed: string[] = [];
   for (const [address, t] of touched) {
     if (address === owner) continue;
     if (admins.has(address)) {
-      if (t.remove) delta -= 1;
-    } else if (t.add && (!members || members.has(address))) delta += 1;
+      if (t.remove) removed.push(address);
+    } else if (t.add && (!members || members.has(address))) added.push(address);
   }
-  return Math.max(0, state.adminCount + delta);
+  return { added, removed };
+}
+
+/** The admin count once `changes` have passed, checked against today's admin (and member) rows. */
+export function adminCountAfter(state: ShiftState, changes: readonly AdminChangeInput[]): number {
+  const { added, removed } = seatMoves(state, changes);
+  return Math.max(0, state.adminCount + added.length - removed.length);
+}
+
+/** The admin rows and count once `changes` have passed, for what follows them. */
+function stateAfter(state: ShiftState, changes: readonly AdminChangeInput[]): ShiftState {
+  const { added, removed } = seatMoves(state, changes);
+  const admins = new Set(adminSet(state));
+  for (const address of removed) admins.delete(address);
+  for (const address of added) admins.add(address);
+  return { ...state, admins, adminCount: adminCountAfter(state, changes) };
 }
 
 /** How one admin change on its own moves the count: −1, 0 or +1. */
@@ -310,7 +332,9 @@ export function projectShift(
     }
     effects = merged();
   }
-  const countThen = adminCountAfter(state, assumed);
+  // What follows on applies once the changes have passed: checked against the
+  // rows they leave, so an addition of someone a removal took out counts again.
+  const countThen = adminCountAfter(stateAfter(state, changes), assumed.slice(changes.length));
   const countLow = Math.min(low(), countNow);
   const countHigh = Math.max(high, countNow);
 
@@ -432,14 +456,15 @@ export function toShiftDecision(d: Decision): ShiftDecision | null {
 
 /**
  * The decisions Core still evaluates: everything waiting but the expired
- * ones. A double that changes nothing (rules/double.ts: an addition of a
- * Minter Admin, or a removal of someone who isn't one) is left out: whether
- * it passes or not, no seat moves and nothing else changes. A repeat of a
- * change already waiting stays: it is the same change, counted once.
+ * ones. Doubles (rules/double.ts) stay in: one that changes nothing today
+ * can still apply once another change removes or adds its subject, and a
+ * repeat of a waiting change is the same change, counted once. The panel
+ * and chip of one that changes nothing are kept quiet in useShift
+ * (impactIn, riskIn).
  */
 export function shiftDecisionsOf(decisions: readonly Decision[]): ShiftDecision[] {
   return decisions
-    .filter((d) => d.phase !== 'expired' && d.double?.reason !== 'alreadyInEffect')
+    .filter((d) => d.phase !== 'expired')
     .map(toShiftDecision)
     .filter((d): d is ShiftDecision => d !== null);
 }
@@ -576,13 +601,41 @@ function newestFirstEvents(
 }
 
 /**
- * The admin count and target before and after each approved admin change,
- * newest first, worked back from today's count. Each approved change moved
- * the count by one, and so did each leave of an admin (`leaves`, with no
- * step of its own). `changes` and `leaves` must hold every approved admin
- * change and leave from the oldest one wanted up to now (one unbroken read),
- * or the counts drift. A leave with nothing on record about the leaver
- * (wasAdmin null) is taken as a member's.
+ * The approved changes that moved a seat, oldest first through `changes`
+ * and `leaves` (in one block, a leave before a change). An approved
+ * addition of someone already a Minter Admin (an earlier approved addition,
+ * with no removal or leave since) moves no seat, so it is left out. Before
+ * the oldest change read, who was an admin isn't known: a first addition
+ * counts.
+ */
+function seatChanges(
+  changes: readonly ApprovedAdminChange[],
+  leaves: readonly AdminLeave[]
+): ApprovedAdminChange[] {
+  const isAdmin = new Map<string, boolean>();
+  const kept = new Set<ApprovedAdminChange>();
+  for (const event of newestFirstEvents(changes, leaves).reverse()) {
+    if ('leave' in event) {
+      // Whoever leaves MINTER has no admin row afterwards.
+      isAdmin.set(event.leave.address, false);
+      continue;
+    }
+    const { change } = event;
+    if (change.added && isAdmin.get(change.address) === true) continue;
+    isAdmin.set(change.address, change.added);
+    kept.add(change);
+  }
+  return changes.filter((change) => kept.has(change));
+}
+
+/**
+ * The admin count and target before and after each approved admin change
+ * that moved a seat (seatChanges), newest first, worked back from today's
+ * count. Each one moved the count by one, and so did each leave of an
+ * admin (`leaves`, with no step of its own). `changes` and `leaves` must
+ * hold every approved admin change and leave from the oldest one wanted up
+ * to now (one unbroken read), or the counts drift. A leave with nothing on
+ * record about the leaver (wasAdmin null) is taken as a member's.
  */
 export function targetSteps(
   changes: readonly ApprovedAdminChange[],
@@ -592,7 +645,7 @@ export function targetSteps(
 ): TargetStep[] {
   let running = Math.max(0, currentCount);
   const steps: TargetStep[] = [];
-  for (const event of newestFirstEvents(changes, leaves)) {
+  for (const event of newestFirstEvents(seatChanges(changes, leaves), leaves)) {
     if ('leave' in event) {
       if (event.leave.wasAdmin === true) running += 1;
       continue;
@@ -624,7 +677,7 @@ export function adminCountAt(
   height: number
 ): number {
   let running = Math.max(0, currentCount);
-  for (const event of newestFirstEvents(changes, leaves)) {
+  for (const event of newestFirstEvents(seatChanges(changes, leaves), leaves)) {
     if (event.at <= height) break;
     if ('leave' in event) {
       if (event.leave.wasAdmin === true) running += 1;

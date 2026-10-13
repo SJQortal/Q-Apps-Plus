@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage } from '../../test/render';
+import { mockQortalRequest } from '../../test/setup';
 import { ADDR, type InstalledWorld } from '../../test/world';
 import { base58Encode } from '../../qortal/base58';
 import { STORAGE_PREFIX } from '../../constants/plus';
@@ -122,4 +123,37 @@ describe('Hide what I answered', () => {
     expect(await screen.findByRole('switch', { name: 'Hide what I answered' }, T)).toBeChecked();
     expect(screen.queryByRole('article', { name: KICK })).toBeNull();
   });
+
+  /** Rejects bob+builder from the keyboard, through Hub, and closes the dialog with Done. */
+  async function rejectWithKeyboard(u: ReturnType<typeof user>) {
+    mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'R1' }));
+    within(card(/bob\+builder/))
+      .getByRole('button', { name: /^Reject: / })
+      .focus();
+    await u.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog', { name: 'Reject this decision' });
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    await u.click(await within(dialog).findByRole('button', { name: 'Done' }, T));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), T);
+  }
+
+  it('after answering a card it hides, focus goes to the queue, not the page', async () => {
+    const u = user();
+    await openQueue();
+    await u.click(screen.getByRole('switch', { name: 'Hide what I answered' }));
+    await rejectWithKeyboard(u);
+    expect(screen.queryByRole('article', { name: /bob\+builder/ })).toBeNull();
+    await waitFor(
+      () => expect(screen.getByRole('region', { name: /^Collecting signatures/ })).toHaveFocus(),
+      T
+    );
+  }, 20_000);
+
+  it('with nothing hidden, focus goes back to the card that was answered', async () => {
+    const u = user();
+    await openQueue();
+    await rejectWithKeyboard(u);
+    expect(within(card(/bob\+builder/)).getByText('Rejected (confirming…)')).toBeInTheDocument();
+    await waitFor(() => expect(card(/bob\+builder/)).toHaveFocus(), T);
+  }, 20_000);
 });

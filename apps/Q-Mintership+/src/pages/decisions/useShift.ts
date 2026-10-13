@@ -39,18 +39,24 @@ export function useShift(data: DecisionsData | null | undefined, members?: Membe
 
 export type Shift = NonNullable<ReturnType<typeof useShift>>;
 
+/** A double that changes nothing (rules/double.ts: alreadyInEffect): no seat moves if it passes. */
+function changesNothing(d: Decision): boolean {
+  return d.double?.reason === 'alreadyInEffect';
+}
+
 /**
  * An admin change: what it does to the target if it passes. Nothing for a
- * double (rules/double.ts): there's no need to sign it, so no impact to
- * check before Hub.
+ * double that changes nothing (rules/double.ts), so no impact to check
+ * before Hub. A repeat of a waiting change shows the same as the earlier
+ * one: either can pass first, and the one that does moves the seat.
  */
 export function impactIn(shift: Shift | null, d: Decision) {
-  return shift && isAdminChangeKind(d.kind) && !d.double
+  return shift && isAdminChangeKind(d.kind) && !changesNothing(d)
     ? scenarioFor(shift.scenarios, d.signature)
     : null;
 }
 
-/** A waiting admin change would tip this decision over (the chip; never on a double). */
+/** A waiting admin change would tip this decision over (the chip; never on a double that changes nothing). */
 export function riskIn(shift: Shift | null, d: Decision) {
-  return shift && !d.double ? riskFor(d.signature, shift.scenarios) : null;
+  return shift && !changesNothing(d) ? riskFor(d.signature, shift.scenarios) : null;
 }

@@ -3,12 +3,14 @@
  * Minter Admin", a removal of someone who isn't a Minter Admin, and the same
  * addition waiting twice (e2e/world.mjs addDoubles). Each says so on its
  * card and its own page, keeps Sign and Reject as secondary buttons, offers
- * no Considering, shows no target impact, and counts nowhere as waiting.
+ * no Considering, and counts nowhere as waiting. One that changes nothing
+ * shows no target impact; a repeat shows the same as the earlier one.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage } from '../../test/render';
+import { qortalCallsFor } from '../../test/setup';
 import { addDoubles } from '../../../e2e/world.mjs';
 import { formatBlock } from '../../utils/format';
 import { getAddressHistory } from '../../data/txs';
@@ -60,7 +62,7 @@ describe('Doubles on the Decisions page', () => {
     );
     const note = doubleNote(already);
     expect(note).toHaveTextContent(
-      'Admin C is already a Minter Admin, from an earlier proposal. If this one passes, nothing changes, so there’s no need to sign it.'
+      'Admin C is already a Minter Admin, from an earlier proposal. As things stand, if this one passes, nothing changes, so there’s no need to sign it.'
     );
     expect(note).toHaveTextContent(
       new RegExp(`It runs out by itself at ${ADMIN_C_EXPIRES} \\(about .+\\)\\.$`)
@@ -87,9 +89,34 @@ describe('Doubles on the Decisions page', () => {
       /^The same change is already waiting in an earlier proposal: answer that one instead\. Once one of them passes, there’s no need to sign the other\. This one runs out by itself at block/
     );
     expect(
-      within(newer).getByRole('link', {
-        name: 'The earlier proposal: Make a Minter Admin, Member 9',
-      })
+      within(newer).getByRole('link', { name: 'The earlier proposal about Member 9' })
+    ).toHaveAttribute('href', `/decisions/${doubles.duplicate.older}`);
+  });
+
+  it('names the earlier proposal’s link after its subject, whoever proposed each', async () => {
+    let doubles = {} as Doubles;
+    await renderPage(<DecisionsPage />, {
+      persona: 'admin',
+      path: '/decisions',
+      route: '/decisions',
+      setup: (world: World) => {
+        doubles = addDoubles(world);
+        // Member 9 proposed the newer one themselves: "Become", where the older one is "Make".
+        const newer = world.pending.find(
+          (tx: { signature: string }) => tx.signature === doubles.duplicate.signature
+        );
+        newer.creatorAddress = doubles.duplicate.subject;
+        newer.ownerPublicKey = world.accounts.get(doubles.duplicate.subject)?.publicKey;
+      },
+    });
+    const newer = await screen.findByRole(
+      'article',
+      { name: 'Become a Minter Admin, Member 9' },
+      T
+    );
+    expect(card(MEMBER_9)).not.toBe(newer);
+    expect(
+      within(newer).getByRole('link', { name: 'The earlier proposal about Member 9' })
     ).toHaveAttribute('href', `/decisions/${doubles.duplicate.older}`);
   });
 
@@ -118,7 +145,7 @@ describe('Doubles on the Decisions page', () => {
   it('links the approved earlier proposal once that person’s history is read already', async () => {
     const u = user();
     const { doubles } = await openQueue();
-    const name = 'The earlier proposal: Become a Minter Admin, Admin C';
+    const name = 'The earlier proposal about Admin C';
     expect(within(card(ALREADY)).queryByRole('link', { name })).toBeNull();
     // Their own page (or their Home) read it; the queue never reads it for this.
     await getAddressHistory(doubles.alreadyAdmin.subject);
@@ -154,7 +181,7 @@ describe('Doubles on the Decisions page', () => {
     ).toBeVisible();
   });
 
-  it('shows no target impact or chip on a double, and Sign asks for no check', async () => {
+  it('shows no target impact or chip on a double that changes nothing, and Sign asks for no check', async () => {
     const u = user();
     await openQueue();
     for (const name of [ALREADY, NOT_ADMIN]) {
@@ -162,17 +189,38 @@ describe('Doubles on the Decisions page', () => {
       expect(within(double).queryByText(/^If this passes/)).toBeNull();
       expect(within(double).queryByRole('button', { name: /^Target may/ })).toBeNull();
     }
-    const [older, newer] = screen.getAllByRole('article', { name: MEMBER_9 });
-    // The older addition says what it does to the target; its double doesn't.
-    expect(within(older).getByText(/^If this passes/)).toBeInTheDocument();
-    expect(within(newer).queryByText(/^If this passes/)).toBeNull();
-    expect(within(newer).queryByRole('button', { name: /^Target may/ })).toBeNull();
 
     await u.click(within(card(ALREADY)).getByRole('button', { name: /^Sign: / }));
     const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
     expect(within(dialog).queryByText(/^If this passes/)).toBeNull();
     expect(within(dialog).queryByRole('checkbox', { name: 'I’ve checked these' })).toBeNull();
     // Hub opens (and declines in the mock) without a box to tick first.
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(
+      await within(dialog).findByText('Cancelled in Hub. Nothing was sent.', {}, T)
+    ).toBeVisible();
+  }, 20_000);
+
+  it('shows a repeated change’s target impact as on the earlier one, and Sign asks for the check', async () => {
+    const u = user();
+    await openQueue();
+    const [older, newer] = screen.getAllByRole('article', { name: MEMBER_9 });
+    // Either copy can pass first: both say what they do to the target.
+    const olderImpact = within(older).getByText(/^If this passes/);
+    const newerImpact = within(newer).getByText(/^If this passes/);
+    expect(newerImpact).toHaveTextContent(olderImpact.textContent ?? '');
+
+    await u.click(within(newer).getByRole('button', { name: /^Sign: / }));
+    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    expect(within(dialog).getByText(/^If this passes/)).toBeVisible();
+    const box = within(dialog).getByRole('checkbox', { name: 'I’ve checked these' });
+    expect(box).not.toBeChecked();
+    // Hub stays shut until the box is ticked.
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(dialog).findByText('Tick “I’ve checked these” to go on.')).toBeVisible();
+    expect(box).toHaveFocus();
+    expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
+    await u.click(box);
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(
       await within(dialog).findByText('Cancelled in Hub. Nothing was sent.', {}, T)
@@ -263,10 +311,10 @@ describe('A double’s own page', () => {
     });
     const page = await screen.findByRole('article', { name: 'Make a Minter Admin, Member 9' }, T);
     expect(
-      within(page).getByRole('link', {
-        name: 'The earlier proposal: Make a Minter Admin, Member 9',
-      })
+      within(page).getByRole('link', { name: 'The earlier proposal about Member 9' })
     ).toHaveAttribute('href', `/decisions/${older}`);
+    // Like the earlier one, it says what it does to the target.
+    expect(await within(page).findByText(/^If this passes/, {}, T)).toBeInTheDocument();
   });
 
   it('is shown to members too, read-only', async () => {
@@ -277,8 +325,24 @@ describe('A double’s own page', () => {
       T
     );
     expect(within(page).getByText('Double')).toBeInTheDocument();
-    expect(doubleNote(page)).toHaveTextContent(/isn’t a Minter Admin/);
+    // Why it is a double and when it runs out; what to do is for Minter Admins.
+    const note = doubleNote(page);
+    expect(note).toHaveTextContent(
+      /^Nora Nominator isn’t a Minter Admin, so there’s nothing to remove\. It runs out by itself at block/
+    );
+    expect(note).not.toHaveTextContent(/reject it|answer that one|need to sign/);
     expect(within(page).queryByRole('button', { name: /^Sign: / })).toBeNull();
+    expect(within(page).queryByRole('button', { name: /^Reject: / })).toBeNull();
+  });
+
+  it('tells members why a repeat is a double, with no advice', async () => {
+    await openDecision((d) => d.duplicate.signature, 'learner');
+    const page = await screen.findByRole('article', { name: 'Make a Minter Admin, Member 9' }, T);
+    const note = doubleNote(page);
+    expect(note).toHaveTextContent(
+      /^The same change is already waiting in an earlier proposal\. This one runs out by itself at block/
+    );
+    expect(note).not.toHaveTextContent(/reject it|answer that one|need to sign/);
   });
 });
 

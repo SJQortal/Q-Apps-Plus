@@ -1,8 +1,8 @@
 /**
  * A double on its card (rules/double.ts): the "Double" chip in the title
- * row (its full words for screen readers), and the note that says why
- * there's no need to sign it and when it runs out,
- * with a link to the other decision when there is one.
+ * row (its full words for screen readers), and the note that says why it
+ * is a double and when it runs out (to Minter Admins, also that there's no
+ * need to sign it), with a link to the other decision when there is one.
  */
 import { Link as RouterLink } from 'react-router-dom';
 import { Alert, Box, Button, Typography } from '@mui/material';
@@ -39,16 +39,19 @@ export function DoubleNote({
   decision: d,
   double,
   name,
-  label,
   now,
+  advice,
 }: {
   decision: Decision;
   double: DecisionDouble;
-  /** The subject as the card shows them. */
+  /**
+   * The subject as the card shows them, also for the link's name: the other
+   * proposal is about them too, though its title can differ (who proposed it).
+   */
   name: string;
-  /** The card's full title, for the link's name. */
-  label: string;
   now: ChainNow;
+  /** Minter Admins also read that there's no need to sign it, and what to do instead. */
+  advice: boolean;
 }) {
   const other = double.otherSignature;
   return (
@@ -58,14 +61,14 @@ export function DoubleNote({
       icon={<FileCopyOutlinedIcon aria-hidden />}
       sx={{ '& .MuiAlert-message': { minWidth: 0, width: '100%' }, overflowWrap: 'anywhere' }}
     >
-      <Typography variant="body2">{doubleNote({ ...d, double }, name, now)}</Typography>
+      <Typography variant="body2">{doubleNote({ ...d, double }, name, now, advice)}</Typography>
       {other ? (
         <Box sx={{ mt: 0.5, ml: -1 }}>
           <Button
             component={RouterLink}
             to={decisionPath(other)}
             color="inherit"
-            aria-label={`The earlier proposal: ${label}`}
+            aria-label={`The earlier proposal about ${name}`}
             sx={{ minHeight: 44, textDecoration: 'underline' }}
           >
             The earlier proposal
