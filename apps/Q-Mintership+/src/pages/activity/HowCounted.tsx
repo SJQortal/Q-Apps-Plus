@@ -77,6 +77,11 @@ export function HowCounted({ data }: { data: ActivityData | undefined }) {
           once they have answered.
         </Typography>
         <Typography component="li" variant="body2">
+          A double is never a miss: an admin change that would have changed nothing, or the same
+          change waiting twice, as marked on Decisions. Left alone, it doesn't count at all; an
+          answer on it counts like any other.
+        </Typography>
+        <Typography component="li" variant="body2">
           Time to sign is the median from a decision's block to their signature's block, at the live
           block time{data ? ` (one block every ${blockTimeWords(data.now)} now)` : ''}. Decisions
           they proposed themselves are left out.

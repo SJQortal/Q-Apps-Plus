@@ -23,11 +23,19 @@
  * - Missed: it expired, they were an admin until its last useful block,
  *   and they never answered it. Only doing nothing is a miss: a rejection
  *   (Reject, or a withdrawn signature) is an answer.
+ * - A double that expired (expiredDoubles) is neither eligible nor a miss
+ *   for an admin who left it alone; an answer on it counts as usual.
  * - Time to sign leaves out decisions the admin proposed themselves (the
  *   proposer signs in the next block, which says nothing about response).
  */
 import type { TxRow } from '../data/types';
-import { decisionKind, decisionSubject, toApprovalRow, type DecisionKind } from './decision';
+import {
+  decisionKind,
+  decisionSubject,
+  isUnusualApprovalRoute,
+  toApprovalRow,
+  type DecisionKind,
+} from './decision';
 import { isNewerDecision, type ApprovalRow } from './tally';
 
 export interface BlockRange {
@@ -43,6 +51,8 @@ export interface DecisionSpan {
   subject: string | null;
   creator: string | null;
   confirmedHeight: number;
+  /** The transaction's timestamp (orders copies confirmed in the same block). */
+  createdAt: number;
   /** The last block a signature can land in and still count. */
   lastSignatureHeight: number;
   outcome: DecisionOutcome;
@@ -90,6 +100,7 @@ export function decisionSpan(tx: TxRow, maxDelay: number, tipHeight: number): De
     subject: decisionSubject(tx),
     creator: tx.creatorAddress ?? null,
     confirmedHeight: h,
+    createdAt: tx.timestamp,
     lastSignatureHeight,
     outcome,
     decidedHeight,
@@ -167,6 +178,46 @@ export function median(values: number[]): number | null {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+// ---- doubles that expired ----------------------------------------------------
+
+/** `a` was confirmed before `b`: by block, then time, then signature (as rules/double.ts). */
+function confirmedBefore(a: DecisionSpan, b: DecisionSpan): boolean {
+  if (a.confirmedHeight !== b.confirmedHeight) return a.confirmedHeight < b.confirmedHeight;
+  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt;
+  return a.signature < b.signature;
+}
+
+/**
+ * The expired admin changes that were doubles (rules/double.ts), by
+ * signature: an addition of someone who was a Minter Admin at its last
+ * useful block, a removal of someone who wasn't, or a later copy of the same
+ * change confirmed while an earlier copy could still pass. `tenure` says
+ * when someone was a Minter Admin. Callers leave out the spans on the
+ * Unusual approval route, as Decisions does.
+ */
+export function expiredDoubles(
+  spans: readonly DecisionSpan[],
+  tenure: (address: string) => readonly Interval[]
+): Set<string> {
+  const doubles = new Set<string>();
+  for (const span of spans) {
+    if (span.outcome !== 'expired' || !span.subject) continue;
+    if (span.kind !== 'addAdmin' && span.kind !== 'removeAdmin') continue;
+    const wasAdmin = contains(tenure(span.subject), span.lastSignatureHeight);
+    const changesNothing = span.kind === 'addAdmin' ? wasAdmin : !wasAdmin;
+    const laterCopy = spans.some(
+      (other) =>
+        other.signature !== span.signature &&
+        other.kind === span.kind &&
+        other.subject === span.subject &&
+        confirmedBefore(other, span) &&
+        other.lastSignatureHeight >= span.confirmedHeight
+    );
+    if (changesNothing || laterCopy) doubles.add(span.signature);
+  }
+  return doubles;
 }
 
 // ---- per admin ---------------------------------------------------------------
@@ -283,6 +334,23 @@ export function computeActivity(input: ActivityInput): ActivityReport {
   for (const change of changes) candidates.add(change.address);
   for (const who of exclude) candidates.delete(who);
 
+  const tenures = new Map<string, Interval[]>();
+  const tenureFor = (address: string): Interval[] => {
+    let tenure = tenures.get(address);
+    if (!tenure) {
+      tenure = tenureOf(address, changes, currentSet.has(address), lastSeen.get(address) ?? null);
+      tenures.set(address, tenure);
+    }
+    return tenure;
+  };
+  const unusualRoute = new Set(
+    input.decisions.filter(isUnusualApprovalRoute).map((tx) => tx.signature)
+  );
+  const doubles = expiredDoubles(
+    spans.filter((s) => !unusualRoute.has(s.signature)),
+    tenureFor
+  );
+
   const inWindow = spans.filter(
     (s) => s.confirmedHeight <= E && Math.min(s.lastSignatureHeight, tip) >= S
   );
@@ -291,7 +359,7 @@ export function computeActivity(input: ActivityInput): ActivityReport {
   const former: AdminActivity[] = [];
   for (const address of candidates) {
     const isCurrent = currentSet.has(address);
-    const tenure = tenureOf(address, changes, isCurrent, lastSeen.get(address) ?? null);
+    const tenure = tenureFor(address);
     const servedInWindow = overlaps(tenure, S, E);
     if (!isCurrent && !servedInWindow) continue;
 
@@ -304,6 +372,8 @@ export function computeActivity(input: ActivityInput): ActivityReport {
       const from = Math.max(span.confirmedHeight, S);
       const to = Math.min(span.lastSignatureHeight, tip, E);
       const row = latest.get(span.signature)?.get(address);
+      // Left alone, a double that expired counts for no one.
+      if (!row && doubles.has(span.signature)) continue;
       const byTenure = overlaps(tenure, from, to);
       const rowInWindow = row
         ? (row.blockHeight as number) >= S && (row.blockHeight as number) <= E

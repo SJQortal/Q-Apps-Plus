@@ -59,6 +59,7 @@ describe('Activity', () => {
     const how = screen.getByText('How this is counted').closest('details') as HTMLElement;
     expect(how).toHaveTextContent(/Signing and rejecting are both answers/);
     expect(how).toHaveTextContent(/only doing nothing is a miss/);
+    expect(how).toHaveTextContent(/A double is never a miss/);
   });
 
   it('shows an admin removed in the window under Former admins', async () => {
