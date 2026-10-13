@@ -154,9 +154,42 @@ _Done on the branch; Simon reviews in the morning._
 - **Screenshot check** (`scripts/screens.mjs`, 26 screens × 5 sizes × 4 themes = 520 captures per mode, the page clock pinned to the mock world's time): dark and light both 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations (rerun after the review fixes; the mock world now also has transactions that aren't MINTER group changes, a named pending cancellation and a third stale invite). The `small-text` counts that remain are the 12 px section titles and bottom-bar labels, badge counts and the avatars' decorative letters.
 - **Tests:** 418 passed, 7 skipped (the node decode and live-node tests), in 46 files.
 
+- **Night 1 by the numbers:**
+  - 116 commits on the branch (one logical change each), built as a foundation (stack, kit, shell, data and write layers) and then five screens in parallel worktrees (Home, Nominations, Decisions, people and History, Activity), merged one at a time with build, lint and tests after each.
+  - Tests: 418 passing (from 94 in the scaffold, 8 of them failing). Every write is a mocked Hub call; the test harness fails any POST to Core.
+  - `npm run test:decode`: GROUP_APPROVAL bytes built by the app decode on a mainnet node (read-only endpoint) to the same fields.
+  - `npm run test:live` (GET only, mainnet, 2026-10-13): PCT40, 629 members, 20 admin rows so 8 signatures needed, 91 join requests, the one pending decision (an add-admin at 5 of 8, expiring at block 2,760,156, as the research measured), real accounts resolving to their statuses, and 30 days of Minter Admin Activity, in 48 GETs.
+  - Bundle: dist 1.5 MB (fonts included); biggest chunks `mui-core` 369 KB, `react-vendor` 322 KB, app entry 85 KB; every screen but Home loads on demand.
+  - First load in the screenshot check (390×844, GETs including lazily loaded avatars; Hub requests): a learner's Home 7 GETs; a newcomer's 21; an admin's 36; Decisions 62; Activity 38; Nominations 38. The original app downloads every GROUP_APPROVAL since block 1,990,000 (about 13,400 rows, 7.9 MB) every 15 s while its board is open, and makes about 21 unlimited searches.
+  - Review: 6 dimensions (Core rules, write safety, efficiency, phones and UX, accessibility, wording), 38 findings, each checked by a second reviewer trying to refute it: 37 confirmed and fixed, 1 refuted.
+
 ## Follow-ups
 
 ### Night 2 (must)
 
 1. **Private testnet end to end** for every write: from Core's `testnet/` folder, on its own data directory, ports and keys, never peering with mainnet (its `testchain.json` has `nullGroupMembershipHeight 0` and short delays, so expiry can be watched in minutes). A dev-only test signer drives the app's real write paths. Never commit test keys; never load mainnet keys. Prove at least: nominate → accept → first signature (invite + own approval, including signing the invite while it is still unconfirmed) → signatures → approval → member; the same without a join request (Join now); expiry; kick (and the "remove admin first" path); ban and lift; add/remove admin; cancel a stale invite; bulk sign; a Hub timeout followed by the lookup.
-2. **Hub check, read-only,** at the five sizes with real data, against the original app.
+2. **Hub check, read-only,** at the five sizes with real data, against the original app (docs/HUB-TESTING.md). Not done on night 1; `npm run test:live` covered the data layer against mainnet instead.
+3. Notifications (in-app, optional Hub alerts), and the optimistic states and animations checked against real confirmations on the testnet.
+
+### Questions for Simon
+
+1. **Wording on the bottom bar:** "Nominees" (Nominations doesn't fit 72 px at 360). OK?
+2. **Classic light colours:** the light accents are darker shades of the original (teal `#186d64`, gold `#8b6016`) so text and buttons pass 4.5:1. OK?
+3. **Stale invites:** invites approved in the last 30 days are listed but left out of "Propose cancelling all", since those people may still press Join. Is 30 days right, and should Home count only those older invites?
+4. **Proposals and their creator's signature:** proposing a kick, ban or admin change does not chain the proposer's own signature (the first signature of a nomination does); the dialog tells them to sign it in the queue. Chain it too?
+5. **Reasons:** a reason is required for kicks and bans (Core doesn't need one; capped at Core's 128 bytes). Keep it required?
+6. **Signing an unconfirmed decision:** Sign is offered only once a decision is in a block (the first signature signs its own invite while unconfirmed, which night 2 proves on the testnet). Offer Sign earlier too?
+7. **Cancel one invite directly:** Propose offers kick, ban, admin changes and lifting a ban; cancelling an approved invite is only in the stale-invite clean-up. Add it to Propose?
+8. **"Other transactions waiting for Minter Admins":** pending transactions with MINTER's approval that aren't MINTER group changes are listed apart, admins only, without Sign ("This isn't a MINTER group change, so it can't be signed here."). Wording OK?
+9. **Activity counting:** open decisions count for an admin only once they sign them; the median time to sign leaves out decisions the admin proposed; "missed" = expired while they were an admin, neither signed nor rejected; a signature landing after the last useful block is not counted; confirmed cancellations count as MINTER's without decoding each one (one GET each). Agree with each?
+10. **Activity's 180-day window** re-reads the whole range on each forced refresh; caching settled blocks and re-reading only the tail would save GETs. Worth it?
+11. **History:** proposals still collecting signatures are left out of the group History (they're in Nominations and Decisions); a person's own timeline shows them. Old cards whose poll isn't the publisher's are listed (the original app hid them) and noted on the card page. A person page reads the newest 40 old cards plus that person's own, with "Search older cards". OK?
+12. **Minting tips and where to find a nominator:** the copy is generic ("check in Hub that your minting key is active on your node"; "ask in Q-Chat or on open nominations"). Is there exact wording for Hub's and GO's minting screens, or an official MINTER chat group to point to?
+13. **The welcome to new minters** is remembered per device; someone who never opened Home while nominated won't see it. Fine?
+14. **History hygiene:** the old scaffold commit `afca556d` (2026-09-29) carries a Claude attribution trailer. Removing it needs a history rewrite of the pushed branch; `scripts/upstream-pr.sh` drops such lines for the upstream PR anyway. Your call.
+
+### Next-pass ideas
+
+- Settings sync to QDN (like Q-Share+'s `settingsQdn.ts`); the settings stay in the browser for now.
+- Hub's `SHOW_ACTIONS` feature detection, to switch to a GROUP_APPROVAL action if Hub adds one.
+- The level spread on Activity reads each member's account on request; a Core endpoint for levels of a group's members would make it one call.
