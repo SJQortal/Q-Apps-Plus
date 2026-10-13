@@ -79,7 +79,11 @@ function HubAlertsRow() {
   else if (!supported) hint = "Your Hub doesn't offer app alerts. Home still shows what changed.";
   else if (alerts.isError) hint = "Couldn't read your Hub alerts. Try again later.";
   else if (stale)
-    hint = 'These alerts were set up for your earlier role. Turn them off and on to update them.';
+    // With no role now, they can only be turned off: the switch stays off after that.
+    hint =
+      role === 'none'
+        ? 'These alerts were set up for your earlier role and no longer fit. Turn them off.'
+        : 'These alerts were set up for your earlier role. Turn them off and on to update them.';
   else hint = ROLE_HINT[role];
 
   const ready = inHub && supported && !alerts.isLoading && !alerts.isError;

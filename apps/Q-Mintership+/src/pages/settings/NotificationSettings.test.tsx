@@ -149,6 +149,24 @@ describe('Settings → Notifications', () => {
     expect(hubSwitch()).toBeEnabled();
   });
 
+  it('says to turn off alerts that no longer fit a role with nothing to alert about', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts(['qmp-nominated-you', 'qmp-supported-you']);
+    await renderPage(<NotificationSettings />, { persona: 'learner', path: '/settings' });
+    expect(
+      await within(section()).findByText(/no longer fit\. Turn them off\./, {}, T)
+    ).toBeVisible();
+    expect(within(section()).queryByText(/Turn them off and on/)).toBeNull();
+    expect(hubSwitch()).toBeChecked();
+    expect(hubSwitch()).toBeEnabled();
+    await u.click(hubSwitch());
+    expect(
+      await within(section()).findByText(/Nothing to alert you about now/, {}, T)
+    ).toBeVisible();
+    await waitFor(() => expect(hubSwitch()).toBeDisabled());
+    expect(hubSwitch()).not.toBeChecked();
+  });
+
   it('points to Hub or GO outside Hub', async () => {
     await renderPage(<NotificationSettings />, { persona: 'outside', path: '/settings' });
     expect(within(section()).getByText(/Open this app in Qortal Hub or GO/)).toBeVisible();
