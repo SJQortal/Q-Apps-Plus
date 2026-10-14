@@ -1,6 +1,6 @@
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
-import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutlineOutlined';
 import PlaylistPlayIcon from '@mui/icons-material/PlaylistPlay';
 import {
   Box,

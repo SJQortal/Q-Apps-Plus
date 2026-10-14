@@ -311,7 +311,9 @@ export const FileLoader: React.FC = () => {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                   setIsCheckSameCoverImage(e.target.checked);
                 }}
-                inputProps={{ 'aria-label': 'controlled' }}
+                slotProps={{
+                  input: { 'aria-label': 'controlled' }
+                }}
               />
             </Box>
           </Box>
@@ -323,7 +325,7 @@ export const FileLoader: React.FC = () => {
             onChange={(e) =>
               setTitlesPrefix(e.target.value.replace(/[^a-zA-Z0-9\s-]/g, ''))
             }
-            inputProps={{ maxLength: 180 }}
+            slotProps={{ htmlInput: { maxLength: 180 } }}
             sx={{ marginBottom: 2 }}
           />
         </>

@@ -3,6 +3,7 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import {
   IconButton,
   InputAdornment,
+  InputBaseProps,
   TextField,
   TextFieldProps,
 } from '@mui/material';
@@ -22,6 +23,8 @@ type BoundedNumericTextFieldProps = {
   afterChange?: (s: string) => void;
   initialValue?: string;
   maxSigDigits?: number;
+  /** Merged into the input slot (MUI 9 moved TextField's InputProps to slotProps.input). */
+  InputProps?: Partial<InputBaseProps>;
 } & TextFieldProps;
 
 export const BoundedNumericTextfield = ({
@@ -33,6 +36,7 @@ export const BoundedNumericTextfield = ({
   afterChange,
   initialValue,
   maxSigDigits = 6,
+  InputProps,
   ...props
 }: BoundedNumericTextFieldProps) => {
   const [textFieldValue, setTextFieldValue] = useState<string>(
@@ -163,33 +167,6 @@ export const BoundedNumericTextfield = ({
   return (
     <TextField
       {...noChangeProps}
-      InputProps={{
-        ...props?.InputProps,
-        endAdornment: addIconButtons ? (
-          <InputAdornment position="end">
-            <IconButton
-              onMouseDown={() => startContinuousChange(1)}
-              onMouseUp={stopContinuousChange}
-              onMouseLeave={stopContinuousChange}
-              onTouchStart={() => startContinuousChange(1)}
-              onTouchEnd={stopContinuousChange}
-            >
-              <AddIcon />{' '}
-            </IconButton>
-            <IconButton
-              onMouseDown={() => startContinuousChange(-1)}
-              onMouseUp={stopContinuousChange}
-              onMouseLeave={stopContinuousChange}
-              onTouchStart={() => startContinuousChange(-1)}
-              onTouchEnd={stopContinuousChange}
-            >
-              <RemoveIcon />{' '}
-            </IconButton>
-          </InputAdornment>
-        ) : (
-          <></>
-        ),
-      }}
       onChange={(e) => listeners(e as eventType)}
       onBlur={(e) => {
         formatValueOnBlur(e as eventType);
@@ -197,6 +174,35 @@ export const BoundedNumericTextfield = ({
       autoComplete="off"
       value={textFieldValue}
       inputRef={ref}
+      slotProps={{
+        input: {
+          ...InputProps,
+          endAdornment: addIconButtons ? (
+            <InputAdornment position="end">
+              <IconButton
+                onMouseDown={() => startContinuousChange(1)}
+                onMouseUp={stopContinuousChange}
+                onMouseLeave={stopContinuousChange}
+                onTouchStart={() => startContinuousChange(1)}
+                onTouchEnd={stopContinuousChange}
+              >
+                <AddIcon />{' '}
+              </IconButton>
+              <IconButton
+                onMouseDown={() => startContinuousChange(-1)}
+                onMouseUp={stopContinuousChange}
+                onMouseLeave={stopContinuousChange}
+                onTouchStart={() => startContinuousChange(-1)}
+                onTouchEnd={stopContinuousChange}
+              >
+                <RemoveIcon />{' '}
+              </IconButton>
+            </InputAdornment>
+          ) : (
+            <></>
+          ),
+        }
+      }}
     />
   );
 };
