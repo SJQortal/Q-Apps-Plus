@@ -4,7 +4,7 @@ Who joins the MINTER group (694), and therefore who mints QORT: propose a nomina
 
 **Published:** not yet.
 
-**Version on the branch:** `1.0.0` (not published), Q-Mintership+ 2.0, a rewrite on React 19.3 + MUI 9.4. Nights 1 and 2 are done on the branch: [SJQortal/Q-Apps-Plus#23](https://github.com/SJQortal/Q-Apps-Plus/pull/23). Night 2 added Simon's answers and proved every write on a private testnet. Night 3 marked "double" decisions, built Simon's answers to the night 2 questions and checked the app read-only in Hub with real data; Simon's guided real actions come next.
+**Version on the branch:** `1.0.0` (not published), Q-Mintership+ 2.0, a rewrite on React 19.3 + MUI 9.4. Nights 1 to 3 are done on the branch: [SJQortal/Q-Apps-Plus#23](https://github.com/SJQortal/Q-Apps-Plus/pull/23). Night 2 added Simon's answers and proved every write on a private testnet. Night 3 marked "double" decisions, built Simon's answers to the night 2 questions and checked the app read-only in Hub with real data; Simon's guided real actions come next.
 
 ## Baseline at import
 
@@ -447,11 +447,117 @@ _Done on the branch; Simon reviews in the morning._ Six branches built side by s
 - Tests: 960 passing (from 462). Screenshot check: 49 screens, 980 captures per mode, 0 findings.
 - Review: 37 findings, 34 confirmed and fixed, 3 refuted.
 
+### Night 3 (2026-10-13 to 14): doubles, Simon's answers, Decline a join request, Minter Admin polls, motion, Hub and a real phone
+
+_Done on the branch; Simon reviews in the morning._ Four branches were built side by side in their own worktrees (doubles with answers 5 and 6; Home and admin roles; links and look; Activity and alerts) and merged one at a time with build, lint and tests after each. Then came the review's fixes (four branches, Decline a join request among them; the last two merges were checked together), and the motion and Minter Admin polls branches, each with its own review and fixes before it was merged. Polls went into 1.0.0 only after passing everything, as Simon asked.
+
+**Doubles:** as described under The new process. The real case on mainnet (a member's second "Become a Minter Admin", 5 of 8, running out at block 2,760,156) reads as a double in Hub and in GO.
+
+**Simon's answers to the night 2 questions, built:**
+- 3: an admin's Home says when the target changed since Decisions last showed it, with "See what changed"; only Decisions writes the seen target.
+- 4: Activity counts any answer as taking part; Missed stays the decisions that expired with no answer, and an expired double is never a miss.
+- 5: rejected decisions stay out of every waiting list; "Hide what I answered".
+- 6: Reconsidering after a rejection, shown until the admin's next answer.
+- 7: the nominee's Home, own card and nomination page say rejections gently, with the same numbers.
+- 8: Become a Minter Admin is suggested from level 5, with a note below it (not a block).
+- 9: Step down only on the admin's own page; picking yourself in Remove a Minter Admin says where it is.
+- 10: the link a nominator copies opens `/nominations/<address>`.
+- 11: History's decided changes have "Open the decision".
+- 12: Settings → Muted names, with Unmute.
+- 17: the floating Propose nomination button is a round icon on phones, keeping its name.
+- 21: a former member whose ban ended or was lifted says so ("banned, ban ended on …", "ban lifted on …").
+- 25: nominators' Since your last visit items for the nominations they made, and an opt-in Hub alert rule for support on them.
+- 27: names inside sentences are always underlined.
+- 28: the ring's "of 8" is 14 px on 56 px rings (16 px on 64 px).
+
+**Decline a join request** (Simon, during the night): as described under Ready to mint. On the testnet (`decline`, blocks 557–571): a fresh account's join request, Ready to mint listing it, an admin's decline proposal with their own signature, the guard refusing a second decline, a non-requester and a member, Core approving it at 570, the join request gone from Core and from Ready to mint, the account never marked a former member, and a new join request accepted after it.
+
+**Minter Admin polls** (Simon, during the night): as described under The new process. On the testnet (`admin-polls`, blocks 705–722, 41 checks): one Hub step per poll and vote, encrypted; 1/1/1, then 2/1/1 after a share for an admin added since; a member locked out; comments; a vote refused after the end.
+
+**Motion** (Simon, during the night): refresh icons turn while they read and come to rest on a whole turn; pages, sections and a list's first rows fade in as they arrive (once, not on every refresh); the navigation highlight glides; buttons give a little when pressed; ticks and answer chips pop in when an answer is given; dialogs ease in; Show and Hide chevrons turn over; one 200 ms timing for entrances. CSS only (opacity, translate, scale), no new library. Settings → Motion → Reduce, or the system's reduced motion, turns it all off, delays included.
+
+**Every new write on the testnet** (60-second blocks; Core's own outcomes, read back):
+
+| Scenario | Blocks | Outcome |
+|---|---|---|
+| `doubles` | 468–490 | A2 (the same addition sent again, as another app would) marked the double of A1; A1 approved at 479; A2 then "already a Minter Admin", signed anyway and approved at 481 with the admin rows unchanged; a duplicate removal R2 marked, R1 approved at 488, R2 then "nothing to remove", the app refused to sign it, rejected at 490. 26 checks |
+| `rules`, `reject`, `shift-app`, `ui-sign` (touched tonight) | 491–517 | 4 of 4 passed, 87 checks |
+| `decline` | 557–571 | see above, 24 checks |
+| `admin-polls` | 705–722 | see above, 41 checks |
+| **Full run**, all 15 scenarios at once on the final code | 722–785 | **15 of 15 passed**, 313 checks, none failed (63 minutes, set by expiry's 62 blocks). It reproduced the admin-count trap the same way: the admin removal and the decision confirmed after it applied in block 761, the one confirmed before it in 762. |
+
+**Hub Dev Mode check (read-only, with real data).**
+
+**How it was driven.** A second Hub (Simon's GO 3.0 build, `--remote-debugging-port=9223`) signed in to Simon's own account, a Minter Admin, with Dev Mode → Server → 127.0.0.1:5174 (the Vite dev server, through the node's dev proxy at 127.0.0.1:12393) on the local Core 6.1.9, mainnet. It was driven with `scripts/hub-cdp.mjs` (`size`, `requests`, `calls`) and small scratchpad helpers: the app's own router for navigation (never a click or a tap in the app), the DOM and resource timings for measurements, JPEG captures of the Hub window. **Nothing was signed, published or sent, and no QORT was spent**: no write button and no write dialog was opened, and no Hub dialog appeared. The only requests the app sent were `GET_USER_ACCOUNT` (Hub already trusted the dev app, so it asked nothing), `QDN_RESOURCE_DISPLAYED`, and on Settings `SHOW_ACTIONS` and `NOTIFICATION_GET`.
+
+**Real data used:** the one MINTER decision waiting on mainnet (a member's second "Become a Minter Admin", 5 of 8, running out at block 2,760,156: a real double, and Simon has signed it), a nomination with past rounds, Simon's own page, a person with old cards from the original app, a banned former member, the 91 join requests on Ready to mint, History and Activity's 30-day window.
+
+**Screens and sizes:** Home (as a Minter Admin), Decisions, the double's own page, Nominations, Ready to mint, a nomination's page, three person pages, History, Activity and Settings, at 1440, 700, 390×844 touch, 360×740 touch and 844×390 touch (60 captures): **0 sideways overflow, 0 console errors, 0 unlabelled controls** at every size. What the sweep flagged and is as intended: names inside sentences are links about 21 px tall (inline text, which the target-size rule exempts), search fields are 40 px tall, the compact landscape filter chips are 40 px, and the avatars' decorative letters are 8 px.
+
+**Themes:** Hub's own Light/Dark switch: the app followed it without a reload (`THEME_CHANGED`), both ways. The four themes (Hub 3.0, Q-Mintership Classic, Black, White) on Decisions and Settings in Hub dark and light.
+
+**The double, live:** the card reads "Double" (screen readers: "Double: changes nothing"), "<Name> is already a Minter Admin, from an earlier proposal. As things stand, if this one passes, nothing changes, so there's no need to sign it. It runs out by itself at block 2,760,156 (about 15 Oct 2026, 03:00).", with "The earlier proposal" linking to the approved addition once that person's history was in the session's cache. The impact panel stays quiet.
+
+**Requests per screen** (390×844, signed in as a Minter Admin; Home cold, then each screen right after Home; Core GETs / Hub requests):
+
+| Screen | Before night 3's fixes | After |
+|---|---|---|
+| Home, first load | 24 GETs / `GET_USER_ACCOUNT`, `QDN_RESOURCE_DISPLAYED` ×2 | 24 / same |
+| Decisions | 10 / 1 | 10 / 1 |
+| A waiting decision's page | 14 / 1 | 13 / 1 |
+| Nominations | 0 / 1 (read with Home) | 0 / 1 |
+| Ready to mint (91 join requests, 20 rows shown) | **60** / 1 | **12** / 1 (rows read once they come near the screen) |
+| A nomination's page | 10 / 1 | 10 / 1 |
+| A person page with old cards | 55 / 1 (the newest 40 old cards are scanned once the section is near the screen) | 55 / 1 on a short page |
+| History | 38 / 1 | 38 / 1 |
+| Activity (30 days) | 7 / 1 | 7 / 1 |
+| Settings | 1 / `SHOW_ACTIONS`, `NOTIFICATION_GET` | same |
+
+No request used `limit=0`.
+
+**The original app side by side** (`qortal://APP/Q-Mintership`, v3.0.7 on QDN, in another Hub tab; read-only):
+- Its landing page: 3 GETs (one `limit=0`: `/groups/members/694?onlyAdmins=true&limit=0`), 3.3 MB, and on every load it sends `GET_USER_ACCOUNT`, `GET_ACCOUNT_NAMES`, `SHOW_ACTIONS`, `NOTIFICATION_PERMISSION`, `NOTIFICATION_REMOVE` and `NOTIFICATION_ADD`.
+- Its Minter Board: 20 GETs, 6 of them `limit=0` (among them the whole member list in one call), 4 `FETCH_QDN_RESOURCE`; it shows "0 displayed".
+- Its MAM board: **483 GETs in 40 s, 89 with `limit=0`, 11.8 MB**, 125 `FETCH_QDN_RESOURCE`, and 46 reads of the pending list.
+- The same data: it lists the same waiting proposal with "Existing ADD_GROUP_ADMIN Approvals: 5" by the same five Minter Admins, and offers "Approve Add-Admin Tx" without saying that it changes nothing.
+
+**Hub's own Copy link:** a Dev Mode server tab has no app identity, so Hub hides its Copy link there (checked: the button is hidden). What the app reports is right: `QDN_RESOURCE_DISPLAYED` with `/decisions/<signature>`, `/nominations/<address>` and `/people/<address>` as each page opens; Hub keeps only that path and adds the tab's own app name, so in the published app Hub's link is `qortal://APP/Q-Mintership+/decisions/<signature>`. To confirm on the published app.
+
+**Alerts (night 2 question 22), answered:** this Hub answers `SHOW_ACTIONS` with 104 actions, among them all six `NOTIFICATION_*` (`NOTIFICATION_ADD`, `_GET`, `_HAS_PERMISSION`, `_MARK_SEEN`, `_PERMISSION`, `_REMOVE`), and still no `GROUP_APPROVAL`. The desktop Hub people install has them too: they are in Qortal Hub's own releases since v2.0.1 (2026-06-14) through v3.0.3 (2026-08-23, `Qortal/Qortal-Hub` master) and develop, in `SHOW_ACTIONS`' list. Only `SHOW_ACTIONS` was sent tonight.
+
+**Hub & GO pitfalls** (docs/QORTAL.md): theme switch ✓ (above); sticky headers and frame height ✓ (header and bottom bar held at every size, a compact rail in 844×390); bottom sheets mount on open ✓; avatars load in view ✓; overlaps: the floating Propose nomination button is a round icon on phones and clear of the list's end ✓; deep links with `+` ✓ (the app writes `Q-Mintership+`); Back uses the app's own history ✓; unusual names: names with spaces and with Greek letters load their avatars and pages ✓; declines and timeouts: unchanged since night 2 (pinned by tests, proven on the testnet); public nodes: the app reads nothing list-based; resources not on the node: retried at 2, 4 and 8 minutes, then every 15 ✓.
+
+**Found and fixed:** Ready to mint read every row on its page at once (60 GETs for 20 rows): rows are now read once they come near the screen, and a person's old cards once their section does (12 GETs). The fixes were checked again in Hub: the double's new note, Ready to mint's Decline for a Minter Admin (not pressed), and the Minter Admin polls section (no polls on mainnet yet: an empty section and 4 searches more on Decisions, 15 GETs instead of 10, and no decrypting).
+
+**Still needs a phone (GO), after publishing:** landscape on a real phone; the keyboard over Become's statement, comments and Propose nomination's reason; safe areas on a phone with a notch; Hub alerts' OS notifications; the published app on GO's default public node (Dev Mode used the ThinkPad's node); Hub's own Copy link on the published app.
+
+**GO on a real phone** (night 3, after Simon set it up): Simon's phone (Android 16, System WebView 153) with GO on the ThinkPad's node through the USB cable (`adb reverse` of 12391 and 12393), GO's Dev Mode → Zip with `release/Q-Mintership+.zip` copied to the phone's Downloads (a preview on the node, not a publish), signed in to Simon's account. Driven over GO's WebView DevTools socket (read-only: the app's own navigation, measurements) and a few `adb` taps on GO's own buttons, the file picker and the search field. Nothing was signed, published or sent.
+- The app ran at `/render/hash/<hash>/…` (Core's preview path) with real data: Home as a Minter Admin, Decisions with the real double and its note, Nominations, Ready to mint.
+- **GO's own bars:** GO hides its top and bottom bars while the app scrolls: the app's frame grew from 717 to 832 px tall (top 93 → 38) and back. The app followed both ways: its header hid with GO's, its bottom bar stayed flush at the frame's new bottom, nothing jumped or left a gap.
+- **Found and fixed:** a new page kept the previous page's scroll (Decisions opened at 300 px down after Home): a new page now opens at its top, and Back keeps where you were (checked on the phone: Decisions at 0 after Home at 400; Back to Home at 400).
+- **Found and fixed:** with the keyboard up, GO shrank the frame to 505 px, just over the app's "under 500 px means the keyboard" rule, so the bottom bar and the round Propose nomination button stayed on screen above the keyboard. The keyboard is now detected as a text field with focus in a frame well under its tallest at that width; checked on the phone: frame 717 → 450 px, the bar and the button stepped aside.
+- **Found and fixed:** Home's activity tile read "0 of 0 Open decisions you've signed" when the only open decision was a double; it now says "None, Open decisions right now".
+
+**Review:** tonight's diff in six dimensions (Core rules, write safety, efficiency, phones and UX, accessibility, private wording): 28 findings, each checked by a second reviewer trying to refute it; 23 confirmed (16 distinct problems, all fixed, one commit each), 5 refuted.
+- Core rules: a repeated admin addition now shows its target impact and asks for "I've checked these" (either copy can pass first); an expired double is never a miss; History and Activity's pulse don't count an approved addition of an existing Minter Admin as a seat; the projection keeps doubles that change nothing in scenarios that remove their subject; a timed ban that ran out before its lift reads as ended.
+- Write safety and efficiency: a nominator's Hub alerts stay on when their open nominations close; Ready to mint retries a failed row once per refresh; the in-view look-ahead works inside Hub's frame.
+- Phones, UX and accessibility: Since your last visit never says a double is waiting for you; the nominee's own nomination page says rejections gently; "And N more" opens Nominations; a double's note gives advice only to Minter Admins; "The earlier proposal about <name>"; focus after Sign or Reject with "Hide what I answered" on; Hub alerts say when a nominator's nominations can't be read, with Try again.
+- Wording: no findings.
+- The motion branch's own review: 6 findings, all fixed (rows fading in again on re-sort, no cap on staggered children, header icons turning for background polls, Home's Refresh ignoring presses, chips popping on every mount, two timings). The polls branch's own review: 9 findings, all fixed (a share's copy could stand in for votes the reader could read themselves; a failed decrypt was cached as locked for the session; device time decided the end; voters beyond the 10th were hidden; and five smaller ones).
+
+**Tests and checks:**
+- Tests: 1359 passed, 8 skipped (the node decode and live-node tests), in 111 files (109 + 2 skipped), from 960 at the end of night 2. `npm run build`, `npm run lint` and `scripts/sync-theme.sh --check` pass.
+- Screenshot check: 61 screens × 5 sizes × 4 themes = 1220 captures per mode, dark and light both 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 small button targets, 0 axe violations. New screens: decisions-double, decision-double, home-target-changed, person-own-admin, person-own-member, decisions-remove-self, settings-muted, home-since-nominator, settings-alerts-nominator, nominations-ready-decline, decisions-polls and poll-page.
+- `npm run test:decode` (2) and `npm run test:live` (6, GET only on mainnet) pass.
+- Bundle: dist 1.9 MB (1.6 MB on night 2); `mui-core` 368 KB (112 KB gzip), `react-vendor` 316 KB (98 KB), app entry 124 KB (36 KB); Decisions 40 KB; polls, decline, the write dialogs and the comment threads load on demand. The production bundle and the zip contain none of the testnet names, and neither the testnet's encryption packages.
+
+**Night 3 by the numbers:** 108 commits on the branch since night 2 (one logical change each) and 10 merges: four feature branches, four review-fix branches, motion and polls. Five testnet scenarios run on their own plus one full run of all 15 (3 new: doubles, decline, admin-polls); no transaction on mainnet, 0 QORT spent. Tests 1359 (from 960). Screenshot check 61 screens, 1220 captures per mode, 0 findings. Review 28 findings (23 confirmed and fixed, 5 refuted), plus 6 and 9 in the motion and polls branches' own reviews, all fixed. The final zip, `release/Q-Mintership+.zip` (864 KB), was built from commit 96b0ee46.
+
 ## Follow-ups
 
 ### Readiness
 
-READINESS_VERDICT
+**Ready to publish as the testground, after the morning's guided actions.** Every write is proven on the private testnet (the full run, 15 of 15, on the final code); the app ran read-only in Hub with real data and in GO on a real phone with no errors; the tests, the screenshot check and the review are clean; the zip holds no testnet code. Nothing known blocks it. What only the morning can show: that Hub's dialogs for the real writes (a comment, a nomination, Considering, a first signature) say what the steps say. Publish once they match, then check Hub's own Copy link and the app in GO on its default node with the published app.
 
 ### The morning: Simon's guided real actions, before publishing
 
