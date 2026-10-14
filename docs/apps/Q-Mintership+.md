@@ -551,7 +551,7 @@ No request used `limit=0`.
 - `npm run test:decode` (2) and `npm run test:live` (6, GET only on mainnet) pass.
 - Bundle: dist 1.9 MB (1.6 MB on night 2); `mui-core` 368 KB (112 KB gzip), `react-vendor` 316 KB (98 KB), app entry 124 KB (36 KB); Decisions 40 KB; polls, decline, the write dialogs and the comment threads load on demand. The production bundle and the zip contain none of the testnet names, and neither the testnet's encryption packages.
 
-**Night 3 by the numbers:** 108 commits on the branch since night 2 (one logical change each) and 10 merges: four feature branches, four review-fix branches, motion and polls. Five testnet scenarios run on their own plus one full run of all 15 (3 new: doubles, decline, admin-polls); no transaction on mainnet, 0 QORT spent. Tests 1359 (from 960). Screenshot check 61 screens, 1220 captures per mode, 0 findings. Review 28 findings (23 confirmed and fixed, 5 refuted), plus 6 and 9 in the motion and polls branches' own reviews, all fixed. The final zip, `release/Q-Mintership+.zip` (864 KB), was built from commit 22fcd21e.
+**Night 3 by the numbers:** 108 commits on the branch since night 2 (one logical change each) and 10 merges: four feature branches, four review-fix branches, motion and polls. Five testnet scenarios run on their own plus one full run of all 15 (3 new: doubles, decline, admin-polls); no transaction on mainnet, 0 QORT spent. Tests 1359 (from 960). Screenshot check 61 screens, 1220 captures per mode, 0 findings. Review 28 findings (23 confirmed and fixed, 5 refuted), plus 6 and 9 in the motion and polls branches' own reviews, all fixed. The final zip, `release/Q-Mintership+.zip` (864 KB), was built from commit 15fda162.
 
 ## Follow-ups
 
