@@ -11,11 +11,12 @@ import PersonAddAltOutlinedIcon from '@mui/icons-material/PersonAddAltOutlined';
 import TipsAndUpdatesOutlinedIcon from '@mui/icons-material/TipsAndUpdatesOutlined';
 import { CUMULATIVE_BLOCKS_BY_LEVEL, NOMINATOR_MIN_LEVEL } from '../../../data/constants';
 import { ProgressBar } from '../../../components/common/ProgressRing';
-import { useNominations } from '../../../hooks/useData';
+import { useChainNow, useNominations } from '../../../hooks/useData';
+import { blocksToMs } from '../../../data/chain';
 import { PROPOSE_NOMINATION } from '../../../constants/words';
 import { nominatePath } from '../../../routes/paths';
 import type { MyStatus } from '../../../rules/status';
-import { formatCount } from '../../../utils/format';
+import { formatCount, formatRoughDuration } from '../../../utils/format';
 import { openQortalLink } from '../../../utils/links';
 import { NAMES_APP_LINK } from '../../../components/ready/readyChecks';
 import { MintingTipsDialog } from '../HelpDialogs';
@@ -24,9 +25,19 @@ import { countStates, myNominations } from '../homeData';
 
 const TARGET_AT = CUMULATIVE_BLOCKS_BY_LEVEL[NOMINATOR_MIN_LEVEL - 1];
 
-/** "Level 3 comes at 201,600 blocks minted: 111,100 more blocks to go." */
+/**
+ * "Level 3 comes at 201,600 blocks minted: 111,100 more blocks to go, about
+ * 3 months if your node stays online." A minter that stays online gains
+ * about one block minted per chain block (Core adds them 1,000 at a time),
+ * so the time is the blocks to go at the measured block time.
+ */
 function NextLevel({ status }: { status: MyStatus }) {
   const { nextLevelAt, blocksToNextLevel } = status.progress;
+  const now = useChainNow().data;
+  const eta =
+    now && blocksToNextLevel !== null && blocksToNextLevel > 0
+      ? formatRoughDuration(blocksToMs(now, blocksToNextLevel))
+      : null;
   return (
     <HeroText>
       You&rsquo;ve minted <Num>{formatCount(status.blocksMinted)}</Num> blocks.
@@ -34,7 +45,8 @@ function NextLevel({ status }: { status: MyStatus }) {
         <>
           {' '}
           Level {status.level + 1} comes at <Num>{formatCount(nextLevelAt)}</Num> blocks minted:{' '}
-          <Num>{formatCount(blocksToNextLevel)}</Num> more blocks to go.
+          <Num>{formatCount(blocksToNextLevel)}</Num> more blocks to go
+          {eta ? `, about ${eta} if your node stays online` : ''}.
         </>
       ) : (
         " You're at the top level."

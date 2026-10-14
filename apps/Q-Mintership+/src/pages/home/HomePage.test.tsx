@@ -219,7 +219,11 @@ describe('Home: members', () => {
         ![...el.children].some((c) => re.test(c.textContent ?? ''))
       );
     expect(
-      screen.getByText(sentence(/blocks minted: 111,100 more blocks to go\./))
+      screen.getByText(
+        sentence(
+          /blocks minted: 111,100 more blocks to go, about \d+ (days|months) if your node stays online\./
+        )
+      )
     ).toBeInTheDocument();
     expect(
       screen.getByText(sentence(/blocks for level 5 \([\d,]+ blocks to go\)/))

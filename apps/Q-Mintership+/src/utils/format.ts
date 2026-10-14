@@ -41,6 +41,21 @@ export function formatDuration(ms: number, options: { precise?: boolean } = {}):
   return 'under a minute';
 }
 
+/**
+ * A long wait in round words: days up to 8 weeks, then months, then years
+ * and months ("22 days", "5 months", "1 year 3 months").
+ */
+export function formatRoughDuration(ms: number): string {
+  const days = Math.max(0, ms) / 86_400_000;
+  if (days < 56) return formatDuration(ms);
+  const months = Math.round(days / 30.44);
+  if (months < 12) return `${months} months`;
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  const y = `${years} year${years === 1 ? '' : 's'}`;
+  return rest ? `${y} ${rest} month${rest === 1 ? '' : 's'}` : y;
+}
+
 /** "2d 4h", "3h 10m", "12m", "45s": the compact countdown form. */
 export function formatCountdown(ms: number): string {
   const total = Math.max(0, Math.round(ms / 1000));
