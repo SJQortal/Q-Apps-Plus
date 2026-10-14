@@ -24,7 +24,7 @@ import { countStates, myNominations } from '../homeData';
 
 const TARGET_AT = CUMULATIVE_BLOCKS_BY_LEVEL[NOMINATOR_MIN_LEVEL - 1];
 
-/** "Level 3 comes at 201,600 blocks: 111,100 to go." */
+/** "Level 3 comes at 201,600 blocks minted: 111,100 more blocks to go." */
 function NextLevel({ status }: { status: MyStatus }) {
   const { nextLevelAt, blocksToNextLevel } = status.progress;
   return (
@@ -33,8 +33,8 @@ function NextLevel({ status }: { status: MyStatus }) {
       {nextLevelAt !== null && blocksToNextLevel !== null ? (
         <>
           {' '}
-          Level {status.level + 1} comes at <Num>{formatCount(nextLevelAt)}</Num>:{' '}
-          <Num>{formatCount(blocksToNextLevel)}</Num> to go.
+          Level {status.level + 1} comes at <Num>{formatCount(nextLevelAt)}</Num> blocks minted:{' '}
+          <Num>{formatCount(blocksToNextLevel)}</Num> more blocks to go.
         </>
       ) : (
         " You're at the top level."
@@ -89,7 +89,7 @@ export function LearnerHero({ status, welcome }: { status: MyStatus; welcome?: b
           <Typography variant="body2" color="text.secondary">
             <Num>{formatCount(status.blocksMinted)}</Num> of <Num>{formatCount(TARGET_AT)}</Num>{' '}
             blocks for level {NOMINATOR_MIN_LEVEL} (
-            <Num>{formatCount(status.progress.blocksToTarget)}</Num> to go)
+            <Num>{formatCount(status.progress.blocksToTarget)}</Num> blocks to go)
           </Typography>
         </Box>
         <HeroText>

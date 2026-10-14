@@ -211,6 +211,19 @@ describe('Home: members', () => {
     await headline("You're minting, Leo Learner");
     expect(screen.getAllByText('90,500').length).toBeGreaterThan(0);
     expect(screen.getByText('111,100')).toBeInTheDocument();
+    // Every number says what it counts.
+    const sentence = (re: RegExp) => (_: string, el: Element | null) =>
+      Boolean(
+        el &&
+        re.test(el.textContent ?? '') &&
+        ![...el.children].some((c) => re.test(c.textContent ?? ''))
+      );
+    expect(
+      screen.getByText(sentence(/blocks minted: 111,100 more blocks to go\./))
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(sentence(/blocks for level 5 \([\d,]+ blocks to go\)/))
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('progressbar', { name: 'Progress to level 5: 15%' })
     ).toBeInTheDocument();
