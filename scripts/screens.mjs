@@ -180,7 +180,7 @@ try {
         page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().slice(0, 160)); });
         page.on('pageerror', (e) => errors.push('pageerror: ' + String(e).slice(0, 160)));
         await routeAssets(page);
-        await page.route(/\/(arbitrary|names|lists|addresses|transactions|blocks|crosschain|chat|groups|admin)\//, async (route) => {
+        await page.route(/\/(arbitrary|names|lists|addresses|transactions|blocks|crosschain|chat|groups|admin|polls)\//, async (route) => {
           const url = new URL(route.request().url());
           page.__fetches.push(url.pathname + url.search);
           const handled = config.route ? await config.route(route, url, ctx) : false;

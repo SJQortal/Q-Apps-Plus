@@ -1,0 +1,240 @@
+:root {
+  line-height: 1.2;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  font-family: 'Inter', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  --qp-safe-top: env(safe-area-inset-top, 0px);
+  --qp-safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* `clip`, not `hidden`: `hidden` makes body a scroll container and sticky
+   headers then scroll away (docs/QORTAL.md, Hub & GO pitfall 2). */
+html,
+body {
+  overflow-x: clip;
+}
+
+/* Keep a focused control clear of the sticky header and the bars at the
+   bottom (WCAG 2.4.11); the variables come from hooks/useOverlayPadding.ts. */
+html {
+  scroll-padding-top: calc(var(--qmp-header-height, 0px) + 8px);
+  scroll-padding-bottom: calc(var(--qmp-bottom-nav, 0px) + var(--qmp-bottom-bar, 0px) + 8px);
+}
+
+body {
+  margin: 0;
+  /* Hub's frame, not the screen (pitfall 3); set by useAppViewport. */
+  min-height: var(--qmp-app-height, 100dvh);
+}
+
+#root {
+  min-height: var(--qmp-app-height, 100dvh);
+}
+
+/* The system setting (unless Settings → Appearance → Motion is Full), or
+   Motion → Reduce. useApplyMotionSetting sets html[data-motion]. Delays go
+   too, so nothing staggered waits before it shows. Elements and their
+   pseudo-elements in separate rules: the same in a browser, and the
+   element rules stay readable to jsdom (motion.test.tsx). */
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='full']) * {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+  html:not([data-motion='full']) *::before,
+  html:not([data-motion='full']) *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+}
+html[data-motion='reduce'] * {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0s !important;
+}
+html[data-motion='reduce'] *::before,
+html[data-motion='reduce'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0s !important;
+}
+
+/* Press: buttons, icon buttons and clickable chips give a little under the
+   finger or the mouse (MUI's ripple stays). `scale` joins the transitions
+   MUI and the theme kit already give them, at their own pace; switches,
+   checkboxes and toggles keep MUI's. With reduced motion they stay still. */
+:root {
+  --qmp-press: 0.98;
+  --qmp-press-icon: 0.92;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='full']) {
+    --qmp-press: 1;
+    --qmp-press-icon: 1;
+  }
+}
+html[data-motion='reduce'] {
+  --qmp-press: 1;
+  --qmp-press-icon: 1;
+}
+.MuiButtonBase-root:is(.MuiButton-root, .MuiFab-root) {
+  transition-property: background, background-color, box-shadow, border-color, color, scale;
+}
+.MuiButtonBase-root.MuiIconButton-root {
+  transition-property: background-color, color, border-color, box-shadow, opacity, scale;
+}
+.MuiButtonBase-root.MuiChip-clickable {
+  transition-property: background-color, box-shadow, scale;
+}
+.MuiButtonBase-root:is(.MuiButton-root, .MuiFab-root, .MuiChip-clickable):active {
+  scale: var(--qmp-press);
+}
+.MuiButtonBase-root.MuiIconButton-root:active {
+  scale: var(--qmp-press-icon);
+}
+
+/* Motion's timing, set once (docs/DESIGN.md → Motion: 150–200 ms): what
+   appears, a chevron that turns, the navigation's highlight. Opacity alone
+   eases out; what moves, grows or turns starts quickly and settles. */
+:root {
+  --qmp-motion-enter: 200ms;
+  --qmp-ease-fade: ease-out;
+  --qmp-ease-enter: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Content arriving (docs/DESIGN.md → Motion). An animation runs when its
+   element is inserted, never when React re-renders it, so a refresh that
+   keeps what is on screen stays still and only what is new moves: a page as
+   it opens, data in place of its skeleton, a list's first rows. Opacity,
+   translate and scale only: nothing shifts the layout. :where() keeps every
+   one weaker than a component's own animation. The reduced-motion rules
+   above cut them. */
+@keyframes qmp-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes qmp-rise-in {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}
+@keyframes qmp-pop-in {
+  from {
+    opacity: 0;
+    scale: 0.8;
+  }
+}
+
+/* One element as it appears: an empty state, an error. */
+:where(.qmp-fade) {
+  animation-name: qmp-fade-in;
+  animation-duration: var(--qmp-motion-enter);
+  animation-timing-function: var(--qmp-ease-fade);
+  animation-fill-mode: backwards;
+}
+
+/* A loading placeholder that waits a moment, so a quick load never flashes it. */
+:where(.qmp-fade-late) {
+  animation-name: qmp-fade-in;
+  animation-duration: var(--qmp-motion-enter);
+  animation-timing-function: var(--qmp-ease-fade);
+  animation-delay: 150ms;
+  animation-fill-mode: backwards;
+}
+
+/* A small thing that just turned up: a tick, an answer's chip. */
+:where(.qmp-pop) {
+  animation-name: qmp-pop-in;
+  animation-duration: var(--qmp-motion-enter);
+  animation-timing-function: var(--qmp-ease-enter);
+  animation-fill-mode: backwards;
+}
+
+/* Dialogs ease in while MUI fades them in (its fade, timing and exit stay):
+   a slight rise and growth, or on phones, where they fill the screen, a
+   short rise. */
+@keyframes qmp-dialog-in {
+  from {
+    translate: 0 8px;
+    scale: 0.97;
+  }
+}
+@keyframes qmp-sheet-in {
+  from {
+    translate: 0 24px;
+  }
+}
+:where(.MuiDialog-paper) {
+  animation-name: qmp-dialog-in;
+  animation-duration: var(--qmp-motion-enter);
+  animation-timing-function: var(--qmp-ease-enter);
+  animation-fill-mode: backwards;
+}
+:where(.MuiDialog-paperFullScreen) {
+  animation-name: qmp-sheet-in;
+}
+
+/* A page's blocks (PageBody): a fade and a 4 px rise. */
+:where(.qmp-reveal) > * {
+  animation-name: qmp-rise-in;
+  animation-duration: var(--qmp-motion-enter);
+  animation-timing-function: var(--qmp-ease-enter);
+  animation-fill-mode: backwards;
+}
+
+/* A section's content and the page header's: a fade only, so nothing rises
+   twice. Its first eight children fade in, and a list's first six rows
+   follow one another; the rest come with them, so a long list or a long
+   run of cards costs no more than a short one. Each fades in once: Section
+   marks what has faded in (data-qmp-shown, and data-qmp-rows-shown on a
+   list once its first rows are in), so a row or card that is re-sorted,
+   filtered or moved up stays still. */
+:where(.qmp-reveal-fade > :not([data-qmp-shown]):nth-child(-n + 8)),
+:where(
+  .qmp-reveal-fade > ul:not([data-qmp-rows-shown]) > li:nth-child(-n + 6):not([data-qmp-shown])
+) {
+  animation-name: qmp-fade-in;
+  animation-duration: var(--qmp-motion-enter);
+  animation-timing-function: var(--qmp-ease-fade);
+  animation-fill-mode: backwards;
+}
+:where(.qmp-reveal-fade > ul > li:nth-child(2)) {
+  animation-delay: 30ms;
+}
+:where(.qmp-reveal-fade > ul > li:nth-child(3)) {
+  animation-delay: 60ms;
+}
+:where(.qmp-reveal-fade > ul > li:nth-child(4)) {
+  animation-delay: 90ms;
+}
+:where(.qmp-reveal-fade > ul > li:nth-child(5)) {
+  animation-delay: 120ms;
+}
+:where(.qmp-reveal-fade > ul > li:nth-child(6)) {
+  animation-delay: 150ms;
+}
+
+.qmp-visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
