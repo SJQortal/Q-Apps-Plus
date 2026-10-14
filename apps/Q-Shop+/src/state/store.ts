@@ -5,6 +5,7 @@ import globalReducer from './features/globalSlice'
 import storeReducer from './features/storeSlice'
 import cartReducer from './features/cartSlice'
 import orderReducer from './features/orderSlice'
+import { writeStoredSettings } from '../utils/settingsStorage'
 
 export const store = configureStore({
   reducer: {
@@ -20,6 +21,16 @@ export const store = configureStore({
       serializableCheck: false
     }),
   preloadedState: undefined // optional, can be any valid state object
+})
+
+// Remember the preferred coin between visits (Settings -> Shop).
+let lastPreferredCoin = store.getState().store.preferredCoin
+store.subscribe(() => {
+  const next = store.getState().store.preferredCoin
+  if (next !== lastPreferredCoin) {
+    lastPreferredCoin = next
+    writeStoredSettings({ preferredCoin: next })
+  }
 })
 
 // Define the RootState type, which is the type of the entire Redux state tree.

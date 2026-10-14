@@ -47,7 +47,6 @@ export const FiltersTitle = styled(Typography)(({ theme }) => ({
   alignItems: "center",
   gap: "5px",
   margin: "20px 0",
-  fontFamily: "Raleway",
   fontSize: "17px",
   color: theme.palette.text.primary,
   userSelect: "none",
@@ -61,7 +60,6 @@ export const FiltersCheckbox = styled(Checkbox)(({ theme }) => ({
 }));
 
 export const FiltersOption = styled("li")(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "17px",
   color: theme.palette.text.primary,
   userSelect: "none",
@@ -70,7 +68,6 @@ export const FiltersOption = styled("li")(({ theme }) => ({
 }));
 
 export const FiltersChip = styled(Chip)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "13px",
   color: theme.palette.text.primary,
   userSelect: "none",
@@ -84,7 +81,6 @@ export const FilterSelect = styled(Autocomplete)(({ theme }) => ({
     gap: "5px",
   },
   '& [class*="MuiFormLabel-root-MuiInputLabel-root"]': {
-    fontFamily: "Raleway",
     fontSize: "17px",
     color: theme.palette.text.primary,
     userSelect: "none",
@@ -94,7 +90,6 @@ export const FilterSelect = styled(Autocomplete)(({ theme }) => ({
 
 export const FilterSelectMenuItems = styled(TextField)(({ theme }) => ({
   '& [class*="MuiInputBase-input"]': {
-    fontFamily: "Raleway",
     fontSize: "17px",
     color: theme.palette.text.primary,
     userSelect: "none",
@@ -123,7 +118,6 @@ export const StoreTitleCard = styled(Box)(({ theme }) => ({
 }));
 
 export const StoreTitle = styled(Typography)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "20px",
   color: theme.palette.text.primary,
   transition: "all 0.3s ease-in-out",
@@ -148,7 +142,6 @@ export const FiltersSubContainer = styled(Box)(({ theme }) => ({
 }));
 
 export const FilterDropdownLabel = styled(InputLabel)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "16px",
   color: theme.palette.text.primary,
 }));
@@ -163,7 +156,6 @@ export const EditStoreButton = styled(Button)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   padding: "3px 12px",
-  fontFamily: "Raleway",
   fontSize: "15px",
   color: "#ffffff",
   backgroundColor: "#D4417E",
@@ -180,7 +172,6 @@ export const ProductManagerButton = styled(Button)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   padding: "3px 12px",
-  fontFamily: "Raleway",
   fontSize: "15px",
   color: "#ffffff",
   backgroundColor: theme.palette.secondary.main,
@@ -197,7 +188,6 @@ export const BackToStorefrontButton = styled(Button)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   padding: "3px 12px",
-  fontFamily: "Raleway",
   fontSize: "15px",
   color: "#ffffff",
   backgroundColor: theme.palette.mode === "dark" ? "#bdba02" : "#e1dd04",
@@ -223,7 +213,6 @@ export const NoProductsContainer = styled(Box)({
 });
 
 export const NoProductsText = styled(Typography)(({ theme }) => ({
-  fontFamily: "Merriweather Sans",
   fontSize: "24px",
   letterSpacing: "0.7px",
   color: theme.palette.text.primary,
@@ -261,7 +250,6 @@ export const NotificationBadge = styled(Box)<StoreProps>(
     borderRadius: "50%",
     backgroundColor: theme.palette.mode === "dark" ? "#bdba02" : "#e1dd04",
     color: "#000000",
-    fontFamily: "Karla",
     fontSize: "14px",
     fontWeight: "bold",
     userSelect: "none",
@@ -292,7 +280,6 @@ export const RatingContainer = styled(Box)(({ theme }) => ({
   alignItems: "center",
   padding: "1px 5px",
   borderRadius: "5px",
-  fontFamily: "Karla",
   letterSpacing: 0,
   fontWeight: 300,
   fontSize: "21px",
@@ -335,7 +322,6 @@ export const OfferedCoinsRow = styled(Box)(() => ({
   alignItems: "center",
   marginTop: "5px",
   gap: "7px",
-  fontFamily: "Karla",
   letterSpacing: 0,
   fontWeight: 300,
   userSelect: "none",

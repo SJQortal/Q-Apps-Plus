@@ -5,7 +5,6 @@ import { TimesSVG } from "../../../assets/svgs/TimesSVG";
 export const CreateProductButton = styled(Button)(({ theme }) => ({
   backgroundColor: theme.palette.secondary.main,
   textTransform: "none",
-  fontFamily: "Merriweather Sans",
   gap: "5px",
   fontSize: "15px",
   borderRadius: "5px",
@@ -44,7 +43,6 @@ export const InputFieldCustomLabel = styled(InputLabel)(({ theme }) => ({
   color: theme.palette.text.primary,
   fontSize: "18px",
   transformOrigin: "top center",
-  fontFamily: "Karla",
   letterSpacing: 0,
   "&.Mui-focused": {
     color: theme.palette.secondary.main
@@ -52,7 +50,6 @@ export const InputFieldCustomLabel = styled(InputLabel)(({ theme }) => ({
 }));
 
 export const CustomSelect = styled(Select)(({ theme }) => ({
-  fontFamily: "Karla",
   fontSize: "17.5px",
   letterSpacing: 0,
   "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
@@ -68,7 +65,6 @@ export const CategoryRow = styled(Box)(({ theme }) => ({
 }));
 
 export const CustomMenuItem = styled(MenuItem)(({ theme }) => ({
-  fontFamily: "Karla",
   letterSpacing: 0,
   fontSize: "18px"
 }));
@@ -76,7 +72,6 @@ export const CustomMenuItem = styled(MenuItem)(({ theme }) => ({
 export const AddButton = styled(Button)(({ theme }) => ({
   backgroundColor: theme.palette.secondary.main,
   color: "#fff",
-  fontFamily: "Raleway",
   fontSize: "16px",
   padding: "5px 10px",
   borderRadius: "8px",
@@ -101,7 +96,6 @@ export const MaximumImagesRow = styled(Box)(({ theme }) => ({
   alignItems: "center",
   justifyContent: "flex-start",
   padding: "0",
-  fontFamily: "Raleway",
   fontSize: "17px",
   color: theme.palette.text.primary,
   userSelect: "none"

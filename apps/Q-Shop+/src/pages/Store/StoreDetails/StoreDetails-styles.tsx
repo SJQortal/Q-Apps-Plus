@@ -5,7 +5,6 @@ export const EmailUser = styled("a")(({ theme }) => ({
   display: "flex",
   gap: "5px",
   alignItems: "center",
-  fontFamily: "Karla",
   letterSpacing: "0px",
   fontSize: "21px",
 }));
@@ -17,7 +16,6 @@ export const CloseButtonRow = styled(Box)(({ theme }) => ({
 }));
 
 export const CloseButton = styled(Button)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "15px",
 }));
 
@@ -28,7 +26,6 @@ export const StoreTitleCard = styled(Box)(({ theme }) => ({
   width: "fit-content",
   borderRadius: "8px",
   padding: "10px 15px",
-  fontFamily: "Merriweather Sans",
   fontWeight: 500,
   fontSize: "20px",
   color: theme.palette.text.primary,
@@ -56,7 +53,6 @@ export const CardRow = styled(Box)({
   alignItems: "center",
   justifyContent: "space-between",
   width: "100%",
-  fontFamily: "Karla",
   fontWeight: 300,
   fontSize: "20px",
   letterSpacing: "0px",
@@ -79,7 +75,6 @@ export const HeaderRow = styled(Box)(({ theme }) => ({
   justifyContent: "flex-start",
   width: "100%",
   padding: "10px 15px",
-  fontFamily: "Merriweather Sans, sans-serif",
   fontSize: "23px",
   color: theme.palette.text.primary,
 }));

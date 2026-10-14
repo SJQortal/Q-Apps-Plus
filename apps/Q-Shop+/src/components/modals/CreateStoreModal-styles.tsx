@@ -47,7 +47,6 @@ export const ModalBody = styled(Box)(({ theme }) => ({
 
 export const ModalTitle = styled(Typography)(({ theme }) => ({
   fontWeight: 400,
-  fontFamily: "Raleway",
   fontSize: "25px",
   userSelect: "none",
 }));
@@ -64,7 +63,6 @@ export const StoreLogoPreview = styled("img")(({ theme }) => ({
 export const AddLogoButton = styled(Button)(({ theme }) => ({
   backgroundColor: theme.palette.secondary.main,
   color: "#fff",
-  fontFamily: "Raleway",
   fontSize: "17px",
   padding: "5px 10px",
   borderRadius: "5px",
@@ -111,7 +109,6 @@ export const TimesIcon = styled(TimesSVG)(({ theme }) => ({
 
 const customInputStyle = (theme: Theme) => {
   return {
-    fontFamily: "Karla",
     fontSize: "18px",
     fontWeight: 300,
     color: theme.palette.text.primary,
@@ -119,7 +116,6 @@ const customInputStyle = (theme: Theme) => {
     borderColor: theme.palette.background.paper,
     "& label": {
       color: theme.palette.mode === "light" ? "#808183" : "#edeef0",
-      fontFamily: "Karla",
       fontSize: "18px",
       letterSpacing: "0px",
     },
@@ -141,7 +137,6 @@ const customInputStyle = (theme: Theme) => {
       },
     },
     "& .MuiInputBase-root": {
-      fontFamily: "Karla",
       fontSize: "18px",
       letterSpacing: "0px",
     },
@@ -166,12 +161,10 @@ export const ButtonRow = styled(Box)(({ theme }) => ({
 }));
 
 export const CancelButton = styled(Button)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "15px",
 }));
 
 export const CreateButton = styled(Button)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "15px",
   backgroundColor: "#32d43a",
   color: "black",
@@ -205,7 +198,6 @@ export const AdvancedSettingsBox = styled(Box)(({ theme }) => ({
   borderRadius: "5px",
   backgroundColor: theme.palette.background.paper,
   "& .MuiTypography-root": {
-    fontFamily: "Karla",
     fontSize: "20px",
     fontWeight: 300,
     letterSpacing: "0.2px",
@@ -226,7 +218,6 @@ export const CreateNewDataContainerRow = styled(Box)({
 export const CreateNewDataContainerButton = styled(Button)(({ theme }) => ({
   backgroundColor: "#d43232",
   textTransform: "none",
-  fontFamily: "Raleway",
   fontWeight: 300,
   gap: "5px",
   fontSize: "17px",

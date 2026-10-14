@@ -1,7 +1,5 @@
 import { AppBar, Button, Typography, Box, Popover } from "@mui/material";
 import { styled } from "@mui/system";
-import { LightModeSVG } from "../../../assets/svgs/LightModeSVG";
-import { DarkModeSVG } from "../../../assets/svgs/DarkModeSVG";
 import { StorefrontSVG } from "../../../assets/svgs/StorefrontSVG";
 import { CartSVG } from "../../../assets/svgs/CartSVG";
 
@@ -64,7 +62,6 @@ export const CreateBlogButton = styled(Button)(({ theme }) => ({
   gap: "4px",
   backgroundColor: theme.palette.secondary.main,
   color: "#fff",
-  fontFamily: "Raleway",
   transition: "all 0.3s ease-in-out",
   boxShadow: "none",
   "&:hover": {
@@ -84,7 +81,6 @@ export const AuthenticateButton = styled(Button)(({ theme }) => ({
   gap: "4px",
   backgroundColor: theme.palette.secondary.main,
   color: "#fff",
-  fontFamily: "Raleway",
   transition: "all 0.3s ease-in-out",
   boxShadow: "none",
   "&:hover": {
@@ -122,14 +118,12 @@ export const DropdownContainer = styled(Box)(({ theme }) => ({
 }));
 
 export const DropdownText = styled(Typography)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "16px",
   color: theme.palette.text.primary,
   userSelect: "none"
 }));
 
 export const NavbarName = styled(Typography)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "18px",
   color: theme.palette.text.primary,
   margin: "0 10px"
@@ -142,32 +136,9 @@ export const ThemeSelectRow = styled(Box)({
   flexBasis: 0
 });
 
-export const LightModeIcon = styled(LightModeSVG)(({ theme }) => ({
-  transition: "all 0.1s ease-in-out",
-  "&:hover": {
-    cursor: "pointer",
-    filter:
-      theme.palette.mode === "dark"
-        ? "drop-shadow(0px 4px 6px rgba(255, 255, 255, 0.6))"
-        : "drop-shadow(0px 4px 6px rgba(99, 88, 88, 0.1))"
-  }
-}));
-
-export const DarkModeIcon = styled(DarkModeSVG)(({ theme }) => ({
-  transition: "all 0.1s ease-in-out",
-  "&:hover": {
-    cursor: "pointer",
-    filter:
-      theme.palette.mode === "dark"
-        ? "drop-shadow(0px 4px 6px rgba(255, 255, 255, 0.6))"
-        : "drop-shadow(0px 4px 6px rgba(99, 88, 88, 0.1))"
-  }
-}));
-
 export const StoresButton = styled(Button)(({ theme }) => ({
   backgroundColor: theme.palette.secondary.main,
   textTransform: "none",
-  fontFamily: "Raleway",
   gap: "5px",
   fontSize: "17px",
   borderRadius: "5px",

@@ -32,7 +32,6 @@ export const ProductContainer = styled(Grid)(({ theme }) => ({
 }));
 
 export const ColumnTitle = styled(Typography)(({ theme }) => ({
-  fontFamily: "Karla",
   fontSize: "20px",
   fontWeight: 300,
   letterSpacing: 0,
@@ -63,7 +62,6 @@ export const ProductDetailsCol = styled(Grid)(({ theme }) => ({
 }));
 
 export const ProductTitle = styled(Typography)(({ theme }) => ({
-  fontFamily: "Merriweather Sans",
   fontSize: "22px",
   color: theme.palette.text.primary,
   userSelect: "none",
@@ -81,7 +79,6 @@ export const ProductDescription = styled(Box)(({ theme }) => ({
   fontWeight: 300,
   lineHeight: 1.5,
   letterSpacing: 0,
-  fontFamily: "Karla",
   fontSize: "18px",
   userSelect: "none",
   overflowY: "auto",
@@ -111,7 +108,6 @@ export const QuantityRow = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   gap: "10px",
-  fontFamily: "Karla",
   fontSize: "18px",
   fontWeight: 300,
   color: theme.palette.text.primary,
@@ -165,7 +161,6 @@ export const ProductPriceFont = styled(Typography)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   gap: "5px",
-  fontFamily: "Karla",
   fontSize: "18px",
   fontWeight: 300,
   color: theme.palette.text.primary,
@@ -195,7 +190,6 @@ export const TotalSumContainer = styled(Grid)(({ theme }) => ({
 export const TotalSumHeader = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "flex-start",
-  fontFamily: "Karla",
   fontWeight: "bold",
   fontSize: "18px",
   userSelect: "none",
@@ -223,7 +217,6 @@ export const TotalSumItem = styled(Box)(({ theme }) => ({
 export const TotalSumItemTitle = styled(Typography)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
-  fontFamily: "Karla",
   fontSize: "18px",
   fontWeight: 300,
   letterSpacing: 0,
@@ -238,7 +231,6 @@ export const OrderTotalRow = styled(Box)(({ theme }) => ({
   justifyContent: "center",
   color: theme.palette.text.primary,
   userSelect: "none",
-  fontFamily: "Karla",
   fontWeight: "bold",
   letterSpacing: 0,
   borderBottom: `1px solid ${theme.palette.background.paper}`,
@@ -263,7 +255,6 @@ export const ConfirmPurchaseRow = styled(Box)(({ theme }) => ({
   display: "flex",
   flexDirection: "row",
   alignItems: "center",
-  fontFamily: "Karla",
   fontSize: "21px",
   fontWeight: 300,
   letterSpacing: 0,
@@ -275,7 +266,6 @@ export const CoinToPayInRow = styled(Box)(({ theme }) => ({
   alignItems: "center",
   justifyContent: "flex-start",
   gap: "10px",
-  fontFamily: "Karla",
   fontSize: "21px",
   fontWeight: 300,
   letterSpacing: 0,

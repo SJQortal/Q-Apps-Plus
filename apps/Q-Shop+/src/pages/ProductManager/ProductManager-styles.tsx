@@ -31,7 +31,6 @@ export const StyledTabs = styled(Tabs)(({ theme }) => ({
 }));
 
 export const StyledTab = styled(Tab)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "15px",
   "& .MuiTabs-indicator": {
     backgroundColor: theme.palette.secondary.main
@@ -115,7 +114,6 @@ export const ProductToSaveImageRow = styled(Box)(({ theme }) => ({
 }));
 
 export const CardHeader = styled(Typography)(({ theme }) => ({
-  fontFamily: "Merriweather Sans",
   fontSize: "18px",
   userSelect: "none",
   color: "#000000",
@@ -123,7 +121,6 @@ export const CardHeader = styled(Typography)(({ theme }) => ({
 }));
 
 export const Bulletpoints = styled(Typography)(({ theme }) => ({
-  fontFamily: "Karla",
   fontSize: "17px",
   userSelect: "none",
   color: "#000000",
@@ -147,7 +144,6 @@ export const TimesIcon = styled(TimesSVG)(({ theme }) => ({
 }));
 
 export const AddMoreButton = styled(Button)(({ theme }) => ({
-  fontFamily: "Raleway",
   fontSize: "15px",
   backgroundColor: "#cfd432",
   color: "black",
@@ -192,7 +188,6 @@ export const DockedProductsToSaveCard = styled(Box)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
   padding: "8px 25px",
-  fontFamily: "Raleway",
   fontSize: "16px",
   color: theme.palette.text.primary,
   borderTopRightRadius: "8px",

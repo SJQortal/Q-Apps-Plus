@@ -5,7 +5,6 @@ export const ProductTitle = styled(Box)(({ theme }) => ({
   displayq: "flex",
   alignItems: "center",
   gap: "5px",
-  fontFamily: "Merriweather Sans",
   fontSize: "18px",
   wordBreak: "break-word",
   color: theme.palette.text.primary,
@@ -13,7 +12,6 @@ export const ProductTitle = styled(Box)(({ theme }) => ({
 }));
 
 export const ProductDescription = styled(Box)(({ theme }) => ({
-  fontFamily: "Karla",
   fontSize: "16px",
   color: theme.palette.text.primary,
   opacity: 0.95,
@@ -23,7 +21,6 @@ export const ProductDescription = styled(Box)(({ theme }) => ({
 }));
 
 export const AddToCartButton = styled(Button)(({ theme }) => ({
-  fontFamily: "Karla",
   fontWeight: 300,
   fontSize: "16.5px",
   borderRadius: "7px",

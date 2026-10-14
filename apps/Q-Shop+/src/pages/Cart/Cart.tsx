@@ -834,18 +834,18 @@ export const Cart = () => {
 
   return (
     <>
-     {isShow && (
-        <MultiplePublish
-          isOpen={isShow}
-          onError={(messageNotification)=> {
-            onCancel()
-          }}
-          onSubmit={() => {
-            onOk()
-          }}
-          publishes={publishes}
-        />
-      )}
+      {isShow && (
+         <MultiplePublish
+           isOpen={isShow}
+           onError={(messageNotification)=> {
+             onCancel()
+           }}
+           onSubmit={() => {
+             onOk()
+           }}
+           publishes={publishes}
+         />
+       )}
       <ReusableModal
         open={isOpen}
         customStyles={{
@@ -864,10 +864,15 @@ export const Cart = () => {
       >
         <CartContainer
           container
-          direction={isMobile ? "column" : "row"}
           spacing={1}
+          sx={{ flexDirection: isMobile ? "column" : "row" }}
         >
-          <Grid item xs={12} sm={9} sx={{ width: "100%" }}>
+          <Grid
+            sx={{ width: "100%" }}
+            size={{
+              xs: 12,
+              sm: 9
+            }}>
             {!localCart || cartOrders.length === 0 ? (
               <ProductTitle style={{ textAlign: "center" }}>
                 No items in cart
@@ -891,7 +896,7 @@ export const Cart = () => {
                     </BackToCheckoutButton>
                     <ColumnTitle>Delivery Information</ColumnTitle>
                     <Grid container spacing={2}>
-                      <ProductInfoCol item xs={12} sm={6}>
+                      <ProductInfoCol size={{ xs: 12, sm: 6 }}>
                         {/* Customer Name */}
                         <FormControl fullWidth>
                           <CustomInputField
@@ -960,7 +965,7 @@ export const Cart = () => {
                           </CustomSelect>
                         </FormControl>
                       </ProductInfoCol>
-                      <ProductInfoCol item xs={12} sm={6}>
+                      <ProductInfoCol size={{ xs: 12, sm: 6 }}>
                         {/* State or region */}
                         {country === "United States" ? (
                           <FormControl fullWidth>
@@ -1062,18 +1067,14 @@ export const Cart = () => {
                       return (
                         <ProductContainer container key={productId}>
                           <ProductInfoCol
-                            item
-                            xs={12}
-                            sm={4}
-                            style={{ textAlign: "center" }}
-                          >
+                            style={{ textAlign: "center" }} size={{ xs: 12, sm: 4 }}>
                             <ProductTitle>{product.title}</ProductTitle>
                             <ProductImage
                               src={product?.images?.[0] || ""}
                               alt={`product-img-${productId}}`}
                             />
                           </ProductInfoCol>
-                          <ProductDetailsCol item xs={12} sm={8}>
+                          <ProductDetailsCol size={{ xs: 12, sm: 8 }}>
                             <ProductDescription>
                               {product.description}
                             </ProductDescription>
@@ -1175,7 +1176,12 @@ export const Cart = () => {
             )}
           </Grid>
           {localCart && cartOrders.length > 0 && (
-            <Grid item xs={12} sm={3} sx={{ width: "100%" }}>
+            <Grid
+              sx={{ width: "100%" }}
+              size={{
+                xs: 12,
+                sm: 3
+              }}>
               <TotalSumContainer>
                 <TotalSumHeader>Order Summary</TotalSumHeader>
                 <TotalSumItems>
