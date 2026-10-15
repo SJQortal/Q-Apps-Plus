@@ -23,7 +23,7 @@ export const CHANGELOG: Release[] = [
         title: 'For everyone',
         notes: [
           'Home speaks to you: what your MINTER status is, with your real numbers, and the one thing to do next.',
-          'Nominations show who nominated, who supports, the approvals and rejections so far, how many Minter Admins are considering, and the time left.',
+          'Nominations show who nominated, who supports, which Minter Admins approved, rejected or are considering it (side by side, as on Decisions; on a phone the first three, then Show all), and the time left.',
           'Nominees accept with one step, so approval makes them a minter straight away.',
           "Not nominated yet? Show you're ready to mint: a short self-check, then a join request nominators can see.",
           'Nominations has a Ready to mint list of everyone who asked to join, so nominators can reach out.',
