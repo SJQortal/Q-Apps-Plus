@@ -149,6 +149,8 @@ export default function NominationsPage() {
         const next = new URLSearchParams(prev);
         if (key === 'all') next.delete('show');
         else next.set('show', key);
+        // Ready to mint's order belongs to that list.
+        if (key !== 'ready') next.delete('sort');
         return next;
       },
       { replace: true }

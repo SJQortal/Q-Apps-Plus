@@ -13,6 +13,11 @@ import {
   loadReadyToMint,
   matchReady,
   pickReadyToMint,
+  lastAskedAt,
+  parseReadySort,
+  readyOrderKey,
+  sortReady,
+  type ReadyFacts,
 } from './readyToMint';
 import { formerMember } from '../rules/status';
 import type { AccountInfo, BanRow, TxRow } from './types';
@@ -242,5 +247,71 @@ describe('loadReadyDetails', () => {
     await loadReadyDetails([broken, fine]);
     expect(peekQuery(`account:${broken}`)).toBeUndefined();
     expect(peekQuery<AccountInfo>(`account:${fine}`)).toMatchObject({ level: 0 });
+  });
+});
+
+describe('Ready to mint: the order', () => {
+  const A = fakeAddress('ord-a');
+  const B = fakeAddress('ord-b');
+  const C = fakeAddress('ord-c');
+  const D = fakeAddress('ord-d');
+
+  it('finds when someone last asked to join MINTER in their history', () => {
+    const join = (at: number, extra: Partial<TxRow> = {}): TxRow => ({
+      type: 'JOIN_GROUP',
+      signature: `s${at}`,
+      timestamp: at,
+      creatorAddress: A,
+      groupId: MINTER_GROUP_ID,
+      txGroupId: 0,
+      approvalStatus: 'NOT_REQUIRED',
+      ...extra,
+    });
+    expect(lastAskedAt(A, [join(100), join(300), join(200)])).toBe(300);
+    // Other groups, other people and invalid ones don't count.
+    expect(
+      lastAskedAt(A, [
+        join(100),
+        join(500, { groupId: 2 }),
+        join(600, { creatorAddress: B }),
+        join(700, { approvalStatus: 'INVALID' }),
+      ])
+    ).toBe(100);
+    expect(lastAskedAt(A, [])).toBeNull();
+  });
+
+  it('at the same level, puts more blocks minted first', () => {
+    const facts: Record<string, ReadyFacts> = {
+      [A]: { level: 7, blocks: 1_555_748 },
+      [B]: { level: 7, blocks: 1_938_372 },
+      [C]: { level: 8, blocks: 2_222_968 },
+    };
+    expect(sortReady([A, B, C], 'level', (x) => facts[x] ?? {})).toEqual([C, B, A]);
+  });
+
+  it('sorts each way, unknowns last, ties in the node’s order', () => {
+    const facts: Record<string, ReadyFacts> = {
+      [A]: { askedAt: 100, level: 3, blocks: 10, name: 'bravo' },
+      [B]: { askedAt: 300, level: 5, blocks: 5, name: 'Alpha' },
+      [C]: { askedAt: null, level: 3, blocks: null, name: null },
+      [D]: { askedAt: 200, level: null, blocks: 50, name: 'charlie 10' },
+    };
+    const of = (address: string) => facts[address] ?? {};
+    const people = [A, B, C, D];
+    expect(sortReady(people, 'newest', of)).toEqual([B, D, A, C]);
+    expect(sortReady(people, 'oldest', of)).toEqual([A, D, B, C]);
+    expect(sortReady(people, 'level', of)).toEqual([B, A, C, D]);
+    expect(sortReady(people, 'blocks', of)).toEqual([D, A, B, C]);
+    expect(sortReady(people, 'name', of)).toEqual([B, A, D, C]);
+    expect(sortReady(people, 'node', of)).toEqual(people);
+    expect(parseReadySort(null)).toBe('newest');
+    expect(parseReadySort('name')).toBe('name');
+    expect(parseReadySort('sideways')).toBe('newest');
+  });
+
+  it('keys an order by the whole list, so someone new anywhere in it orders it again', () => {
+    expect(readyOrderKey([A, B, C], 'newest')).toBe(readyOrderKey([A, B, C], 'newest'));
+    expect(readyOrderKey([A, B, C], 'newest')).not.toBe(readyOrderKey([A, D, C], 'newest'));
+    expect(readyOrderKey([A, B, C], 'newest')).not.toBe(readyOrderKey([A, B, C], 'oldest'));
   });
 });

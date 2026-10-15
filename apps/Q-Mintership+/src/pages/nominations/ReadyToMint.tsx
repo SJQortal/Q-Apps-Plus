@@ -4,17 +4,18 @@
  * and Minter Admins get Propose nomination on each row, or Add your support where an
  * open nomination already exists. Minter Admins can also Decline a join
  * request (readyDeclines.ts); a row whose decline waits says so. Twenty rows
- * at a time, in Core's order;
- * each row's level, blocks minted, name and whether they were a member
- * before ("Former member: left MINTER on …", "… ban lifted on …") are read
- * only once it is shown.
+ * at a time, sorted by the Sort picker (`?sort=`; the newest request first
+ * by default; data/readyToMint.ts → loadReadyOrder reads only what that
+ * order needs); each row's level, blocks minted, name, when they asked to
+ * join and whether they were a member before ("Former member: left MINTER
+ * on …", "… ban lifted on …") are read only once it is shown.
  * The page's search box filters it: a typed address directly, a typed name
  * through its owners (one small name search, cached), never by reading
  * every row's name.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { Box, Button, Link, Skeleton, Typography } from '@mui/material';
+import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
+import { Box, Button, Link, Skeleton, TextField, Typography } from '@mui/material';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import { PersonChip } from '../../components/common/Person';
 import { Section } from '../../components/common/Section';
@@ -23,21 +24,29 @@ import { effectiveBlocksMinted, isAddress } from '../../data/accounts';
 import type { Nomination } from '../../data/nominations';
 import { getQueryState, peekQuery } from '../../data/query';
 import {
+  DEFAULT_READY_SORT,
   READY_PAGE,
+  READY_SORTS,
+  askedKey,
   formerKey,
   loadReadyDetails,
+  loadReadyOrder,
   matchReady,
+  parseReadySort,
+  readyOrderKey,
+  type ReadySort,
   type ReadyToMint,
 } from '../../data/readyToMint';
 import type { AccountInfo } from '../../data/types';
 import { useInView } from '../../hooks/useInView';
 import { useMyStatus } from '../../hooks/useData';
-import type { UseQueryResult } from '../../hooks/useQuery';
+import { useQuery, type UseQueryResult } from '../../hooks/useQuery';
+import { appParam } from '../../routes/hubLocation';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { decisionPath, nominatePath } from '../../routes/paths';
 import type { FormerMember } from '../../rules/status';
 import { formerMemberLine } from '../person/personWords';
-import { displayName, formatCount } from '../../utils/format';
+import { displayName, formatCount, formatDate } from '../../utils/format';
 import { readable } from '../../utils/readable';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
 import type { Signer } from '../../writes/runner';
@@ -105,14 +114,37 @@ export function ReadyToMintSection({
   const find = useReadySearch(search);
   const query = find.query;
   const all = ready.data?.people;
-  const people = useMemo(
-    () => (all && query ? matchReady(all, query, find.owners, knownName) : all),
-    [all, query, find.owners]
+  // The order, from the URL: the reads it needs, then the search filters it.
+  const [params, setParams] = useSearchParams();
+  const sort = parseReadySort(appParam(params, 'sort'));
+  const setSort = (key: ReadySort) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (key === DEFAULT_READY_SORT) next.delete('sort');
+        else next.set('sort', key);
+        return next;
+      },
+      { replace: true }
+    );
+  const order = useQuery(all && sort !== 'node' ? readyOrderKey(all, sort) : null, () =>
+    loadReadyOrder(all as string[], sort)
   );
-  // A new search starts again at the first page.
-  const [shownFor, setShownFor] = useState(query);
-  if (shownFor !== query) {
-    setShownFor(query);
+  // Your node's order while a failed order can't be read (with a note saying so).
+  const sorted = !all
+    ? undefined
+    : sort === 'node'
+      ? all
+      : (order.data ?? (order.isError ? all : undefined));
+  const sorting = Boolean(all && !sorted);
+  const people = useMemo(
+    () => (sorted && query ? matchReady(sorted, query, find.owners, knownName) : sorted),
+    [sorted, query, find.owners]
+  );
+  // A new search or order starts again at the first page.
+  const [shownFor, setShownFor] = useState(`${query}|${sort}`);
+  if (shownFor !== `${query}|${sort}`) {
+    setShownFor(`${query}|${sort}`);
     setShown(READY_PAGE);
   }
   const visible = people ? people.slice(0, shown) : [];
@@ -171,6 +203,13 @@ export function ReadyToMintSection({
         title="Couldn’t load the people ready to mint."
         error={ready.error}
         onRetry={() => void ready.refetch()}
+      />
+    );
+  } else if (sorting) {
+    body = (
+      <ListSkeleton
+        count={3}
+        label={`Sorting: ${READY_SORTS.find((s) => s.key === sort)?.label ?? ''}`}
       />
     );
   } else if (!people) {
@@ -260,6 +299,16 @@ export function ReadyToMintSection({
             </Button>
           ) : null}
         </Box>
+        {sort !== 'node' && order.isError && !order.data ? (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, px: 0.5 }}>
+            <Typography variant="body2" color="text.secondary" role="note">
+              Couldn’t read everyone’s details to sort just now, so this is your node’s order.
+            </Typography>
+            <Button size="small" onClick={() => void order.refetch()} sx={{ minHeight: 44 }}>
+              Try again
+            </Button>
+          </Box>
+        ) : null}
         {ready.data?.truncated ? (
           <Typography variant="body2" color="text.secondary" role="note" sx={{ px: 0.5 }}>
             The member list was too long to read in full, so someone here may already be a member.
@@ -273,8 +322,29 @@ export function ReadyToMintSection({
     <Section title="Ready to mint" id="ready">
       <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
         People who asked to join MINTER. They need a nomination from a level 5+ minter or a Minter
-        Admin. Join requests carry no date, so this is the order your node lists them in.
+        Admin.
       </Typography>
+      {all?.length ? (
+        <TextField
+          select
+          label="Sort"
+          size="small"
+          value={sort}
+          onChange={(e) => setSort(e.target.value as ReadySort)}
+          slotProps={{ select: { native: true } }}
+          sx={{
+            alignSelf: 'flex-start',
+            width: { xs: '100%', sm: 260 },
+            '& .MuiInputBase-root': { minHeight: 44 },
+          }}
+        >
+          {READY_SORTS.map((s) => (
+            <option key={s.key} value={s.key}>
+              {s.label}
+            </option>
+          ))}
+        </TextField>
+      ) : null}
       {/* What the search found, read out as it changes; shown above the rows only
           (the skeleton or the empty state already says the rest on screen). */}
       <Typography
@@ -346,6 +416,7 @@ function ReadyRow({
   const account = useStoredValue<AccountInfo>(`account:${address}`);
   const name = useStoredValue<string | null>(`name:${address}`);
   const former = useStoredValue<FormerMember | null>(formerKey(address)).data ?? null;
+  const asked = useStoredValue<number | null>(askedKey(address)).data ?? null;
   const supportPending = usePendingWrite(nomination ? writeKeys.support(address) : null);
   const nominatePending = usePendingWrite(writeKeys.nominate(address));
   const declinePending = usePendingWrite(onDecline ? writeKeys.propose('kick', address) : null);
@@ -354,7 +425,7 @@ function ReadyRow({
   const label = displayName(shownName, address);
 
   const level = account.data ? (
-    `Level ${account.data.level} · ${blocksMintedText(effectiveBlocksMinted(account.data))}`
+    `Level ${account.data.level} · ${blocksMintedText(effectiveBlocksMinted(account.data))}${asked ? ` · asked ${formatDate(asked)}` : ''}`
   ) : account.status === 'error' ? (
     'Level not available right now'
   ) : (

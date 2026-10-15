@@ -12,10 +12,10 @@ import NominationsPage from './NominationsPage';
 
 afterEach(() => vi.useRealTimers());
 
-const open = (persona: string, setup?: (world: World) => void) =>
+const open = (persona: string, setup?: (world: World) => void, sort?: string) =>
   renderPage(<NominationsPage />, {
     persona,
-    path: '/nominations?show=ready',
+    path: `/nominations?show=ready${sort ? `&sort=${sort}` : ''}`,
     route: '/nominations',
     setup,
   });
@@ -42,17 +42,21 @@ function rowLabels(list: HTMLElement): string[] {
 
 describe('Ready to mint', () => {
   it('lists who asked to join, in the node’s order, to everyone, without members or banned', async () => {
-    await open('signedOut', (world) => {
-      world.joinRequests.push(
-        joinRequest(ADDR.kicked),
-        joinRequest(ADDR.learner),
-        joinRequest(ADDR.banned),
-        joinRequest(fakeAddress('old-ban'))
-      );
-    });
+    await open(
+      'signedOut',
+      (world) => {
+        world.joinRequests.push(
+          joinRequest(ADDR.kicked),
+          joinRequest(ADDR.learner),
+          joinRequest(ADDR.banned),
+          joinRequest(fakeAddress('old-ban'))
+        );
+      },
+      'node'
+    );
     const kit = await row('Kit Kicked');
     expect(
-      await within(kit).findByText('Level 3 · 210,000 blocks minted', {}, { timeout: 4000 })
+      await within(kit).findByText(/^Level 3 · 210,000 blocks minted/, {}, { timeout: 4000 })
     ).toBeInTheDocument();
     const list = await readyList();
     await waitFor(() => expect(rowLabels(list)).toContain('bob+builder'));
@@ -68,7 +72,7 @@ describe('Ready to mint', () => {
       shortAddress(fakeAddress('old-ban')),
     ]);
     expect(
-      await within(await row('bob+builder')).findByText('Level 0 · no blocks minted yet')
+      await within(await row('bob+builder')).findByText(/^Level 0 · no blocks minted yet/)
     ).toBeInTheDocument();
     // Kit was a member once: the row says so, from their MINTER history.
     expect(
@@ -80,7 +84,7 @@ describe('Ready to mint', () => {
     ).toBeInTheDocument();
     expect(within(await row('bob+builder')).queryByText(/Former member/)).toBeNull();
     expect(screen.getByText(/They need a nomination from a level 5\+ minter/)).toBeInTheDocument();
-    expect(screen.getByText(/this is the order your node lists them in/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Sort')).toHaveValue('node');
     expect(screen.getByText('8 of 8 shown')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Ready to mint\s*8/ })).toHaveAttribute(
       'aria-pressed',
@@ -101,9 +105,13 @@ describe('Ready to mint', () => {
   it('shows 20 at a time and reads accounts and names only for the rows shown', async () => {
     const user = userEvent.setup();
     const many = Array.from({ length: 45 }, (_, i) => fakeAddress(`many-jr-${i}`));
-    await open('nominator', (world) => {
-      world.joinRequests.push(...many.map(joinRequest));
-    });
+    await open(
+      'nominator',
+      (world) => {
+        world.joinRequests.push(...many.map(joinRequest));
+      },
+      'node'
+    );
     const list = await readyList();
     // 6 from the mock world, then 14 of these.
     await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(20));
@@ -133,6 +141,112 @@ describe('Ready to mint', () => {
     expect(within(list).getAllByRole('listitem')).toHaveLength(51);
     expect(screen.getByText('51 of 51 shown')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Show \d+ more$/ })).toBeNull();
+  });
+
+  /** Three people who asked to join on given days, at given levels, and one with no record. */
+  function sortWorld(world: World) {
+    const people = [
+      { key: 'sort-ann', name: 'Ann Early', level: 4, blocks: 90_000, days: 40 },
+      { key: 'sort-zed', name: 'Zed Recent', level: 1, blocks: 5_000, days: 2 },
+      { key: 'sort-meg', name: 'Meg Middle', level: 6, blocks: 400_000, days: 15 },
+      { key: 'sort-nil', name: 'Nil Unknown', level: 2, blocks: 20_000, days: null },
+    ];
+    for (const p of people) {
+      const address = fakeAddress(p.key);
+      world.accounts.set(address, {
+        address,
+        name: p.name,
+        level: p.level,
+        blocks: p.blocks,
+        publicKey: base58Encode(new Uint8Array(32).fill(p.level + 1)),
+        reference: 'x',
+        balance: 1,
+      });
+      world.names.set(p.name, address);
+      world.joinRequests.push(joinRequest(address));
+      if (p.days === null) continue;
+      world.decided.push({
+        type: 'JOIN_GROUP',
+        timestamp: NOW - p.days * 86_400_000,
+        reference: `r-join-${p.key}`,
+        fee: '0.01000000',
+        signature: `join-${p.key}`,
+        txGroupId: 0,
+        blockHeight: TIP - Math.round((p.days * 86_400_000) / MS_PER_BLOCK),
+        approvalStatus: 'NOT_REQUIRED',
+        creatorAddress: address,
+        groupId: 694,
+      });
+    }
+  }
+  const SORTED = ['Ann Early', 'Zed Recent', 'Meg Middle', 'Nil Unknown'];
+  const orderOf = async () => {
+    const list = await readyList();
+    await waitFor(() => expect(rowLabels(list)).toEqual(expect.arrayContaining(SORTED)));
+    return rowLabels(list).filter((label) => SORTED.includes(label));
+  };
+
+  it('sorts by when they asked, newest first by default, with the date on each row', async () => {
+    const user = userEvent.setup();
+    await open('nominator', sortWorld);
+    expect(await screen.findByLabelText('Sort')).toHaveValue('newest');
+    // Unknown dates go last.
+    await waitFor(async () =>
+      expect(await orderOf()).toEqual(['Zed Recent', 'Meg Middle', 'Ann Early', 'Nil Unknown'])
+    );
+    expect(
+      await within(await row('Zed Recent')).findByText(
+        `Level 1 · 5,000 blocks minted · asked ${formatDate(NOW - 2 * 86_400_000)}`,
+        {},
+        { timeout: 4000 }
+      )
+    ).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Sort'), 'Oldest request first');
+    await waitFor(async () =>
+      expect(await orderOf()).toEqual(['Ann Early', 'Meg Middle', 'Zed Recent', 'Nil Unknown'])
+    );
+    await user.selectOptions(screen.getByLabelText('Sort'), 'Highest level');
+    await waitFor(async () =>
+      expect(await orderOf()).toEqual(['Meg Middle', 'Ann Early', 'Nil Unknown', 'Zed Recent'])
+    );
+    await user.selectOptions(screen.getByLabelText('Sort'), 'Most blocks minted');
+    await waitFor(async () =>
+      expect(await orderOf()).toEqual(['Meg Middle', 'Ann Early', 'Nil Unknown', 'Zed Recent'])
+    );
+    await user.selectOptions(screen.getByLabelText('Sort'), 'Name (A–Z)');
+    await waitFor(async () =>
+      expect(await orderOf()).toEqual(['Ann Early', 'Meg Middle', 'Nil Unknown', 'Zed Recent'])
+    );
+  });
+
+  it('opens on the order a link names', async () => {
+    await open('nominator', sortWorld, 'oldest');
+    expect(await screen.findByLabelText('Sort')).toHaveValue('oldest');
+    await waitFor(async () =>
+      expect(await orderOf()).toEqual(['Ann Early', 'Meg Middle', 'Zed Recent', 'Nil Unknown'])
+    );
+  });
+
+  it('sorting by date reads each history once; accounts and names only for the rows shown', async () => {
+    const many = Array.from({ length: 45 }, (_, i) => fakeAddress(`sorted-jr-${i}`));
+    await open('nominator', (world) => {
+      world.joinRequests.push(...many.map(joinRequest));
+    });
+    const list = await readyList();
+    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(20));
+    const history = (address: string) =>
+      fetchCallsFor(`/transactions/search?address=${address}`).length;
+    const details = (address: string) =>
+      fetchCallsFor(`/addresses/${address}`).length +
+      fetchCallsFor(`/names/primary/${address}`).length;
+    // Every row's history, for the order: one read each.
+    await waitFor(() => expect(many.map(history)).toEqual(new Array(45).fill(1)));
+    // Accounts and names: none for the rows not shown.
+    const shownRows = new Set(rowLabels(list));
+    const hidden = many.filter((a) => !shownRows.has(shortAddress(a)));
+    expect(hidden.length).toBeGreaterThan(0);
+    expect(hidden.map(details)).toEqual(new Array(hidden.length).fill(0));
   });
 
   it('marks former members, kicked, banned or left, and nobody who was never a member', async () => {
