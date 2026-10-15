@@ -62,6 +62,9 @@ import {
   phaseLine,
   type AnswerIntent,
 } from './decisionUi';
+import { loadStaleInviteDetails, loadStaleInvites, staleDetailsKey } from '../../data/staleInvites';
+import { useInView } from '../../hooks/useInView';
+import { useQuery } from '../../hooks/useQuery';
 
 /** Phases in which a decision still collects answers (Considering shows then). */
 const COLLECTING_PHASES: ReadonlySet<Decision['phase']> = new Set([
@@ -520,6 +523,7 @@ function KindDetails({
         showAccepted={d.phase !== 'tooLate' && d.phase !== 'expired'}
       />
     );
+  if (d.kind === 'cancelInvite' && d.subject) return <CancelInviteDetails invitee={d.subject} />;
   if (d.kind === 'kick' || d.kind === 'ban') {
     const banEnd = banEndLine(d, now);
     return (
@@ -547,6 +551,50 @@ function KindDetails({
     );
   }
   return null;
+}
+
+/**
+ * Which invite a cancellation is about: who sent it, when the Minter Admins
+ * approved it, and that it was never used (they haven't joined). Read once
+ * the card nears the screen: the shared list of stored invites, then that
+ * invitee's history for the approval (cached, as in the stale-invite list).
+ */
+function CancelInviteDetails({ invitee }: { invitee: string }) {
+  const [node, setNode] = useState<HTMLElement | null>(null);
+  const near = useInView(node);
+  const list = useQuery(near ? 'staleinvites:list' : null, (force) => loadStaleInvites({ force }));
+  const row =
+    [...(list.data?.rows ?? []), ...(list.data?.memberRows ?? [])].find(
+      (r) => r.invitee === invitee
+    ) ?? null;
+  const details = useQuery(near && row ? staleDetailsKey([row]) : null, (force) =>
+    loadStaleInviteDetails(row ? [row] : [], { force })
+  );
+  const approved = details.data?.[0];
+  const member = Boolean(list.data?.memberRows.some((r) => r.invitee === invitee));
+  return (
+    <Typography ref={setNode} component="div" variant="body2" color="text.secondary">
+      {!list.data ? (
+        list.isError ? (
+          'Couldn’t read the invite it cancels on your node.'
+        ) : (
+          'Looking up the invite it cancels…'
+        )
+      ) : !row ? (
+        'There is no stored invite for them any more.'
+      ) : (
+        <>
+          Cancels the invite <PersonInline address={row.inviter} /> sent
+          {approved?.approvedAt
+            ? `, approved on ${formatDate(approved.approvedAt)}${
+                approved.approvedHeight ? ` (${formatBlock(approved.approvedHeight)})` : ''
+              }`
+            : ''}
+          {member ? '. They are in MINTER already.' : '. They never pressed Join.'}
+        </>
+      )}
+    </Typography>
+  );
 }
 
 function InviteDetails({

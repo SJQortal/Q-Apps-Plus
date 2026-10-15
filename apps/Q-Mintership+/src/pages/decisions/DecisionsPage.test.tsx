@@ -112,7 +112,24 @@ describe('Decisions: phases and actions', () => {
   });
 
   it('describes every kind in plain words: reason, ban length, whose invite is cancelled', async () => {
-    await openPage('admin');
+    await openPage('admin', '/decisions', (world) => {
+      // The approved invite behind the stored one the cancellation is about.
+      const stored = world.storedInvites.find(
+        (r: { invitee: string }) => r.invitee === fakeAddress('stale-1')
+      );
+      world.decided.push({
+        type: 'GROUP_INVITE',
+        signature: base58Encode(new Uint8Array(64).fill(41)),
+        timestamp: Date.now() - 400 * 86_400_000,
+        blockHeight: 2_105_623,
+        approvalHeight: 2_105_630,
+        approvalStatus: 'APPROVED',
+        creatorAddress: stored.inviter,
+        invitee: stored.invitee,
+        groupId: 694,
+        txGroupId: 694,
+      });
+    });
     const kick = await screen.findByRole('article', { name: /Remove from MINTER, Kai Target/ });
     expect(within(kick).getByText('Not minting for 6 months')).toBeInTheDocument();
     const ban = await screen.findByRole('article', { name: /Ban from MINTER, Ben Target/ });
@@ -121,6 +138,15 @@ describe('Decisions: phases and actions', () => {
     expect(
       within(cancel).getByRole('link', { name: /QgFT6i…1cnG: open their page/ })
     ).toBeVisible();
+    // Which invite it cancels: who sent it, when it was approved, and that it was never used.
+    const which = await within(cancel).findByText(/^Cancels the invite/, {}, T);
+    await waitFor(
+      () =>
+        expect(which).toHaveTextContent(
+          /^Cancels the invite A?Admin B sent, approved on .+ \(block [\d,]+\)\. They never pressed Join\.$/
+        ),
+      T
+    );
     // Ring, countdown and signers on an open invite.
     const signing = card(/bob\+builder/);
     expect(
