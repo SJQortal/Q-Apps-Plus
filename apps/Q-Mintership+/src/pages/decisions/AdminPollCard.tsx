@@ -47,6 +47,8 @@ import {
   voteClosing,
   type ShownPoll,
 } from './adminPollUi';
+import { useClamped } from '../../hooks/useClamped';
+import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 
 const AdminPollComments = lazy(() => import('./AdminPollComments'));
 
@@ -249,21 +251,29 @@ export function AdminPollCard({
   );
 }
 
+/**
+ * The poll's details in full on wider screens; on a phone a long text shows
+ * its first lines with "Show more" (only when it is really cut off).
+ */
 function Details({ text }: { text: string }) {
+  const phone = usePhoneLayout();
   const [open, setOpen] = useState(false);
+  const [node, setNode] = useState<HTMLElement | null>(null);
   const id = useId();
-  const long = text.length > 240 || text.split('\n').length > 4;
+  const lines = phone && !open ? PHONE_LINES : null;
+  const clamped = useClamped(lines ? node : null, `${text}:${lines}`);
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
       <Typography
+        ref={setNode}
         id={id}
         sx={{
           whiteSpace: 'pre-wrap',
           overflowWrap: 'anywhere',
-          ...(long && !open
+          ...(lines
             ? {
                 display: '-webkit-box',
-                WebkitLineClamp: 3,
+                WebkitLineClamp: lines,
                 WebkitBoxOrient: 'vertical',
                 overflow: 'hidden',
               }
@@ -272,7 +282,7 @@ function Details({ text }: { text: string }) {
       >
         {text}
       </Typography>
-      {long ? (
+      {phone && (clamped || open) ? (
         <Button
           size="small"
           onClick={() => setOpen((v) => !v)}
@@ -286,6 +296,9 @@ function Details({ text }: { text: string }) {
     </Box>
   );
 }
+
+/** Lines a poll's details show on a phone before "Show more". */
+const PHONE_LINES = 4;
 
 const VOTE_TONE: Record<PollVote, ColumnTone> = { yes: 'success', no: 'error', neutral: 'neutral' };
 const VOTE_ICON: Record<PollVote, ReactNode> = {
