@@ -30,8 +30,11 @@ export interface PersonChipProps {
    * always underlined.
    */
   inline?: boolean;
-  /** On phones the avatar sits above the name (narrow columns: AnswerColumns). */
-  stackOnPhone?: boolean;
+  /**
+   * On phones a smaller avatar (20 px) and name (14 px), the avatar centred
+   * beside a name that wraps onto two lines (narrow columns: AnswerColumns).
+   */
+  compactOnPhone?: boolean;
 }
 
 /**
@@ -47,7 +50,7 @@ export function PersonChip({
   link = true,
   strong = true,
   inline = false,
-  stackOnPhone = false,
+  compactOnPhone = false,
 }: PersonChipProps) {
   const shown = useDisplayName(address, name);
   const stretch = link && !inline;
@@ -59,6 +62,7 @@ export function PersonChip({
         overflowWrap: 'anywhere',
         display: 'block',
         lineHeight: 1.3,
+        ...(compactOnPhone ? { fontSize: { xs: 14 }, lineHeight: { xs: 1.25, sm: 1.3 } } : {}),
       }}
     >
       {shown.label}
@@ -68,17 +72,16 @@ export function PersonChip({
     <Box
       sx={{
         display: 'flex',
-        alignItems: stackOnPhone ? { xs: 'flex-start', sm: 'center' } : 'center',
-        flexDirection: stackOnPhone ? { xs: 'column', sm: 'row' } : 'row',
-        gap: stackOnPhone ? { xs: 0.5, sm: 1 } : 1.25,
-        py: stackOnPhone ? 0.5 : 0,
+        alignItems: 'center',
+        gap: compactOnPhone ? { xs: 0.75, sm: 1 } : 1.25,
+        py: compactOnPhone ? { xs: 0.25, sm: 0.5 } : 0,
         minWidth: 0,
         ...(stretch
           ? { position: 'relative', width: 'fit-content', maxWidth: '100%', minHeight: 44 }
           : {}),
       }}
     >
-      <NameAvatar name={shown.name} size={size} />
+      <NameAvatar name={shown.name} size={size} phoneSize={compactOnPhone ? 20 : undefined} />
       <Box sx={{ minWidth: 0 }}>
         {link ? (
           <Link

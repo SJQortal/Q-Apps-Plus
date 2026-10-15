@@ -14,9 +14,11 @@ import { avatarFailed, avatarLoaded, useAvatar } from '../../data/avatars';
 export interface NameAvatarProps {
   name: string | null;
   size?: number;
+  /** A smaller size under 600 px (a CSS breakpoint, so it costs no screen-size listener). */
+  phoneSize?: number;
 }
 
-export function NameAvatar({ name, size = 40 }: NameAvatarProps) {
+export function NameAvatar({ name, size = 40, phoneSize }: NameAvatarProps) {
   const [node, setNode] = useState<HTMLElement | null>(null);
   const avatar = useAvatar(name);
   const [visible, setVisible] = useState(avatar.loaded);
@@ -41,6 +43,8 @@ export function NameAvatar({ name, size = 40 }: NameAvatarProps) {
   }, [node, visible, name, avatar.src]);
 
   const letter = name ? ([...name.trim()][0]?.toUpperCase() ?? '?') : '';
+  const sized = (px: (s: number) => number) =>
+    phoneSize === undefined ? px(size) : { xs: px(phoneSize), sm: px(size) };
   const src = name && (visible || avatar.loaded) ? avatar.src : null;
 
   return (
@@ -48,8 +52,8 @@ export function NameAvatar({ name, size = 40 }: NameAvatarProps) {
       ref={setNode}
       aria-hidden
       sx={(theme) => ({
-        width: size,
-        height: size,
+        width: sized((s) => s),
+        height: sized((s) => s),
         flexShrink: 0,
         borderRadius: '50%',
         overflow: 'hidden',
@@ -60,7 +64,7 @@ export function NameAvatar({ name, size = 40 }: NameAvatarProps) {
         bgcolor: primarySoft(theme),
         color: theme.palette.primary.main,
         fontWeight: 700,
-        fontSize: Math.round(size * 0.42),
+        fontSize: sized((s) => Math.round(s * 0.42)),
         lineHeight: 1,
         userSelect: 'none',
       })}

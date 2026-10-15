@@ -1,8 +1,9 @@
 /**
  * Who answered, side by side: a column of Minter Admins per answer under
  * its count, so the answers read at a glance instead of one list under
- * another. On phones each person is their avatar over their name, so three
- * columns still fit. PeopleColumns draws any set of columns (a Minter Admin
+ * another. On phones each person is a small avatar centred beside their
+ * name (which wraps onto two lines), so three columns still fit and the
+ * people sit close one under another. PeopleColumns draws any set of columns (a Minter Admin
  * poll's Yes, No and Neutral); AnswerColumns is a decision's Approved,
  * Rejected and (while it collects answers) Considering.
  *
@@ -258,7 +259,7 @@ function Column({
                   address={p.address}
                   name={p.name}
                   size={28}
-                  stackOnPhone
+                  compactOnPhone
                   secondary={personNote(p)}
                 />
               </Box>
