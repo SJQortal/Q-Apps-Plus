@@ -31,6 +31,7 @@ export const CHANGELOG: Release[] = [
           'Every decision and nomination has its own page, with Copy link to share it. The link you send after proposing a nomination opens the nomination itself, where the nominee can accept.',
           'History links each decided change to its own decision page.',
           'Public comments on every decision and nomination: reply, edit or delete your own, and mute a name on your device. Settings lists the names you muted, to unmute them.',
+          'Home’s Your nominations has Details and Open in Decisions on each nomination.',
           'Home says what changed since your last visit, and nominators see how the nominations they made ended. Settings can turn on Hub alerts for new nominations, for being nominated, or for support on a nomination you made.',
           'Any MINTER member can propose themselves as a Minter Admin, with a short statement (level 5+ is suggested).',
           'A former member whose ban ended or was lifted says so, with the date. A declined join request never makes anyone a former member.',

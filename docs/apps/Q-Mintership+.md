@@ -590,6 +590,10 @@ On branch `q-mintership-plus/feedback-1`, merged into the rewrite branch. One co
 
 16. **Distinct frames** (Simon: less subtle). The reason frame has an accent border (primary at 45%) on an 8% tint; each comment a neutral border at 24% of the text colour. Axe is clean in every theme.
 
+17. **Poll details framed** (Simon). A poll's details sit in the same distinct frame as a nomination's reason: `ReasonFrame` became `FramedText` (components/common) for both, with "Show the whole reason" or "Show more" on phones.
+
+18. **Open your nominations from Home** (Simon: buttons on Home's nominations, "Open in Decisions"). Each card in Your nominations has Details (the nomination's page) and Open in Decisions (its decision, or Decisions while it waits for a first approval; none once it closed with no approval), as on the Nominations list.
+
 One test (TargetShift's "Approve several with an admin change") failed once under full-suite load and passed on its own and on a rerun: a long dialog flow close to its time limit.
 
 ## Follow-ups
