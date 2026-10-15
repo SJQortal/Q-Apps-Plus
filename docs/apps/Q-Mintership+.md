@@ -553,6 +553,12 @@ No request used `limit=0`.
 
 **Night 3 by the numbers:** 108 commits on the branch since night 2 (one logical change each) and 10 merges: four feature branches, four review-fix branches, motion and polls. Five testnet scenarios run on their own plus one full run of all 15 (3 new: doubles, decline, admin-polls); no transaction on mainnet, 0 QORT spent. Tests 1359 (from 960). Screenshot check 61 screens, 1220 captures per mode, 0 findings. Review 28 findings (23 confirmed and fixed, 5 refuted), plus 6 and 9 in the motion and polls branches' own reviews, all fixed. The final zip, `release/Q-Mintership+.zip` (864 KB), was built from commit 15fda162.
 
+### Feedback round 1 (from 2026-10-15): Simon's and the Minter Admins' fixes
+
+On branch `q-mintership-plus/feedback-1`, merged into the rewrite branch. One commit per fix; build, lint, tests and the theme check pass before each.
+
+1. **Links show at once, with the avatar of what they open** (Simon, on a real nomination in Hub). Decisions hid a nomination's links behind "Show the whole nomination". Now every `qortal://` link shows straight away, with the avatar of the app or website it opens (`qortal://APP/Torq/…` shows Torq's icon, loaded lazily like every avatar; a link that names no app or website, such as `use-group`, gets a link icon). The reason's own expander is now "Show the whole reason", and shows only when the reason really is cut off: measured, not guessed from its length, so a reason that fits on a wide screen no longer shows a button that expands nothing. Nominations, comments and History use the same component, and Home's compact nomination cards now show the links too.
+
 ## Follow-ups
 
 ### Readiness
