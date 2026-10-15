@@ -10,7 +10,8 @@
  *
  * Closed, it costs the shared count search (one GET for every card on the
  * page), or its own search once on screen when that can't tell. The thread
- * itself (and its code) loads only when opened.
+ * itself (and its code) loads only when opened, and opens and closes
+ * smoothly (SmoothReveal), so the page below glides instead of jumping.
  */
 import { lazy, Suspense, useId, useState } from 'react';
 import { Box, Button } from '@mui/material';
@@ -19,6 +20,7 @@ import type { CommentTarget } from '../../data/commentThread';
 import { formatCount } from '../../utils/format';
 import { ExpandChevron } from '../common/ExpandChevron';
 import { ListSkeleton } from '../common/states';
+import { SmoothReveal } from '../common/SmoothReveal';
 import { useCommentCount, useInView, useStableTarget } from './useComments';
 import type { AnswerBadges } from './answerBadges';
 
@@ -70,11 +72,11 @@ export function CommentsSection({
       >
         {text}
       </Button>
-      {open ? (
+      <SmoothReveal open={open}>
         <Suspense fallback={<ListSkeleton count={1} label="Loading comments" />}>
           <CommentsPanel id={panelId} target={target} label={label} answers={answers} />
         </Suspense>
-      ) : null}
+      </SmoothReveal>
     </Box>
   );
 }

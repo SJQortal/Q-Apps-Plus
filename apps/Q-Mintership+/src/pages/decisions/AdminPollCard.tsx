@@ -10,8 +10,6 @@
 import { lazy, Suspense, useId, useState, type ReactNode } from 'react';
 import { Box, Button, Chip, Typography } from '@mui/material';
 import ChatBubbleOutlineOutlinedIcon from '@mui/icons-material/ChatBubbleOutlineOutlined';
-import ExpandLessOutlinedIcon from '@mui/icons-material/ExpandLessOutlined';
-import ExpandMoreOutlinedIcon from '@mui/icons-material/ExpandMoreOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
@@ -23,6 +21,8 @@ import { PersonInline } from '../../components/common/Person';
 import { PeopleColumns, type ColumnTone } from '../../components/decision/AnswerColumns';
 import { Card, ToneChip } from '../../components/common/Section';
 import { ListSkeleton } from '../../components/common/states';
+import { ExpandChevron } from '../../components/common/ExpandChevron';
+import { SmoothReveal } from '../../components/common/SmoothReveal';
 import { DoneChip } from '../../components/decision/DecisionParts';
 import { POLL_VOTES, type PollVote } from '../../data/adminPollRecords';
 import { adminPollPath } from '../../routes/paths';
@@ -317,7 +317,7 @@ function VoteButtons({
   );
 }
 
-/** "Comments (n)": opens the encrypted thread (its code loads on demand). */
+/** "Comments (n)": opens the encrypted thread smoothly (its code loads on demand). */
 function PollComments({
   view,
   author,
@@ -348,12 +348,12 @@ function PollComments({
         aria-controls={open ? panelId : undefined}
         aria-label={`${text}: ${label}`}
         startIcon={<ChatBubbleOutlineOutlinedIcon />}
-        endIcon={open ? <ExpandLessOutlinedIcon /> : <ExpandMoreOutlinedIcon />}
+        endIcon={<ExpandChevron open={open} />}
         sx={{ minHeight: 44, ml: -1 }}
       >
         {text}
       </Button>
-      {open ? (
+      <SmoothReveal open={open}>
         <Suspense fallback={<ListSkeleton count={1} label="Loading comments" />}>
           <AdminPollComments
             id={panelId}
@@ -363,7 +363,7 @@ function PollComments({
             label={label}
           />
         </Suspense>
-      ) : null}
+      </SmoothReveal>
     </Box>
   );
 }
