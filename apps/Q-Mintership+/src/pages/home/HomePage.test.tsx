@@ -204,6 +204,20 @@ describe('Home: members', () => {
     expect(
       within(mine).getByRole('link', { name: 'See all 5 on Nominations' })
     ).toBeInTheDocument();
+    // Each opens: its own page (Details), and its decision (or Decisions, while it waits).
+    const card = (who: RegExp) => within(mine).getByRole('article', { name: who });
+    const bob = card(/^Nomination of bob\+builder$/);
+    expect(within(bob).getByRole('link', { name: 'Details about bob+builder' })).toHaveAttribute(
+      'href',
+      `/nominations/${ADDR.nominatedSigning}`
+    );
+    expect(
+      within(bob).getByRole('link', { name: 'Open in Decisions: bob+builder' })
+    ).toHaveAttribute('href', expect.stringMatching(/^\/decisions\/\w+$/));
+    const wren = card(/^Nomination of Wren Waiting$/);
+    expect(
+      within(wren).getByRole('link', { name: 'Open in Decisions: Wren Waiting' })
+    ).toHaveAttribute('href', '/decisions');
   });
 
   it('shows a member below level 5 their way to level 5, with minting tips', async () => {

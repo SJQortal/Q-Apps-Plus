@@ -19,7 +19,9 @@ import {
 import { NOMINATOR_MIN_LEVEL } from '../../data/constants';
 import { useChainNow, useNominations } from '../../hooks/useData';
 import { PROPOSE_NOMINATION } from '../../constants/words';
-import { PATHS, nominatePath, personPath } from '../../routes/paths';
+import { PATHS, decisionPath, nominatePath, nominationPath, personPath } from '../../routes/paths';
+import type { Nomination } from '../../data/nominations';
+import { useDisplayName } from '../../hooks/useDisplayName';
 import type { MyStatus } from '../../rules/status';
 import { formatCount } from '../../utils/format';
 import { Num } from './Hero';
@@ -108,7 +110,13 @@ export function MemberSection({ status }: { status: MyStatus }) {
           (mine.length && chainNow ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               {mine.slice(0, MINE_MAX).map((n) => (
-                <NominationCard key={n.nominee} nomination={n} now={chainNow} compact />
+                <NominationCard
+                  key={n.nominee}
+                  nomination={n}
+                  now={chainNow}
+                  compact
+                  actions={<YourNominationActions n={n} />}
+                />
               ))}
               {mine.length > MINE_MAX ? (
                 <Button
@@ -183,6 +191,45 @@ export function MemberSection({ status }: { status: MyStatus }) {
           ))}
         {data?.truncated ? <TruncatedNote what="the nominations" /> : null}
       </Section>
+    </>
+  );
+}
+
+/**
+ * On a nomination you made: Details (its own page) and Open in Decisions
+ * (its decision, or the Decisions page while it waits for a first
+ * approval). A nomination that closed with no approval has no decision to
+ * open. The buttons' names say whose card they are on.
+ */
+function YourNominationActions({ n }: { n: Nomination }) {
+  const who = useDisplayName(n.nominee, n.nomineeName ?? undefined).label;
+  const decisionLink = n.decision
+    ? decisionPath(n.decision.signature)
+    : n.state === 'waiting'
+      ? PATHS.decisions
+      : null;
+  return (
+    <>
+      <Button
+        component={RouterLink}
+        to={nominationPath(n.nominee)}
+        variant="text"
+        aria-label={`Details about ${who}`}
+        sx={{ minHeight: 44 }}
+      >
+        Details
+      </Button>
+      {decisionLink ? (
+        <Button
+          component={RouterLink}
+          to={decisionLink}
+          variant="outlined"
+          aria-label={`Open in Decisions: ${who}`}
+          sx={{ minHeight: 44 }}
+        >
+          Open in Decisions
+        </Button>
+      ) : null}
     </>
   );
 }
