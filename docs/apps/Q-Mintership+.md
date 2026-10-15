@@ -586,6 +586,10 @@ On branch `q-mintership-plus/feedback-1`, merged into the rewrite branch. One co
 
 14. **Each comment in a frame** (Simon). Every comment, with its replies' block, sits in a thin bordered frame with space between comments. The first try also tinted the frame; that took a red "Voted No" badge below 4.5:1 in Hub 3.0 dark and White (axe caught it), so the frame has a border only.
 
+15. **Full text on wide screens, Show more on phones** (Simon: no Show more / Show less on a poll's description, but keep a button on phones for long reasons and descriptions). On wider screens a nomination's reason and a poll's details show in full; under 600 px a long one shows four lines with "Show the whole reason" or "Show more", only when it is really cut off (`useClamped`, restored, measures it). Home's compact cards keep three lines.
+
+16. **Distinct frames** (Simon: less subtle). The reason frame has an accent border (primary at 45%) on an 8% tint; each comment a neutral border at 24% of the text colour. Axe is clean in every theme.
+
 One test (TargetShift's "Approve several with an admin change") failed once under full-suite load and passed on its own and on a rerun: a long dialog flow close to its time limit.
 
 ## Follow-ups
