@@ -446,30 +446,78 @@ export function computeActivity(input: ActivityInput): ActivityReport {
 
 // ---- sorting -----------------------------------------------------------------
 
-export type ActivitySort = 'participation' | 'signatures' | 'lastActive' | 'name';
+export type ActivitySort =
+  'participation' | 'signatures' | 'missed' | 'medianTime' | 'proposed' | 'lastActive' | 'name';
 
 /**
- * Sort a copy: participation and signatures highest first (no eligible
- * decisions last), last active newest first, names A–Z. Ties fall back to
- * the name, so the order never jumps between refreshes.
+ * Each column's first order: the most participation, approvals, misses and
+ * proposals first, the fastest median time to approve, the newest last
+ * activity, names A–Z. Pressing the column again reverses it.
+ */
+export const ACTIVITY_SORT_DESCENDING: Record<ActivitySort, boolean> = {
+  participation: true,
+  signatures: true,
+  missed: true,
+  medianTime: false,
+  proposed: true,
+  lastActive: true,
+  name: false,
+};
+
+/**
+ * Sort a copy by `sort`, in its first order or reversed. What isn't known
+ * (nothing eligible, no approval timed, no activity) stays last either way.
+ * Ties: participation by signatures, approvals by participation, then the
+ * name, so the order never jumps between refreshes.
  */
 export function sortActivity(
   rows: AdminActivity[],
   sort: ActivitySort,
-  nameOf: (address: string) => string
+  nameOf: (address: string) => string,
+  descending: boolean = ACTIVITY_SORT_DESCENDING[sort]
 ): AdminActivity[] {
   const byName = (a: AdminActivity, b: AdminActivity) =>
     nameOf(a.address).localeCompare(nameOf(b.address), undefined, { sensitivity: 'base' }) ||
     a.address.localeCompare(b.address);
   const desc = (x: number | null, y: number | null) => (y ?? -1) - (x ?? -1);
+  const key = (r: AdminActivity): number | string | null => {
+    switch (sort) {
+      case 'participation':
+        return r.participation;
+      case 'signatures':
+        return r.signed;
+      case 'missed':
+        return r.missed;
+      case 'medianTime':
+        return r.medianBlocksToSign;
+      case 'proposed':
+        return r.proposed;
+      case 'lastActive':
+        return r.lastActiveHeight;
+      default:
+        return nameOf(r.address);
+    }
+  };
+  const tie = (a: AdminActivity, b: AdminActivity) =>
+    sort === 'participation'
+      ? b.answered - a.answered
+      : sort === 'signatures'
+        ? desc(a.participation, b.participation)
+        : 0;
   return [...rows].sort((a, b) => {
-    let order = 0;
-    if (sort === 'participation')
-      order = desc(a.participation, b.participation) || b.answered - a.answered;
-    else if (sort === 'signatures')
-      order = b.signed - a.signed || desc(a.participation, b.participation);
-    else if (sort === 'lastActive') order = desc(a.lastActiveHeight, b.lastActiveHeight);
-    return order || byName(a, b);
+    const x = key(a);
+    const y = key(b);
+    if (x === null || y === null) {
+      if (x !== y) return x === null ? 1 : -1;
+    } else {
+      let order =
+        typeof x === 'string' && typeof y === 'string'
+          ? x.localeCompare(y, undefined, { sensitivity: 'base' })
+          : (x as number) - (y as number);
+      if (descending) order = -order;
+      if (order) return order;
+    }
+    return tie(a, b) || byName(a, b);
   });
 }
 

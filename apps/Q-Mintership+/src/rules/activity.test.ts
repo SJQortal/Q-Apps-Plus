@@ -695,6 +695,36 @@ describe('sortActivity', () => {
   it('sorts by name, ignoring case', () => {
     expect(order('name')).toEqual(['Q3', 'Q2', 'Q4', 'Q1']);
   });
+
+  const more = [
+    row('M1', { missed: 3, medianBlocksToSign: 400, proposed: 1 }),
+    row('M2', { missed: 0, medianBlocksToSign: 50, proposed: 4 }),
+    row('M3', { missed: 1, medianBlocksToSign: null, proposed: 0 }),
+  ];
+  const moreNames: Record<string, string> = { M1: 'a', M2: 'b', M3: 'c' };
+  const orderMore = (sort: Parameters<typeof sortActivity>[1], descending?: boolean) =>
+    sortActivity(more, sort, (a) => moreNames[a], descending).map((r) => r.address);
+
+  it('sorts by misses (most first), median time (fastest first, none last) and proposals', () => {
+    expect(orderMore('missed')).toEqual(['M1', 'M3', 'M2']);
+    expect(orderMore('medianTime')).toEqual(['M2', 'M1', 'M3']);
+    expect(orderMore('proposed')).toEqual(['M2', 'M1', 'M3']);
+  });
+
+  it('reverses any column, keeping what isn’t known last', () => {
+    expect(orderMore('missed', false)).toEqual(['M2', 'M3', 'M1']);
+    expect(orderMore('medianTime', true)).toEqual(['M1', 'M2', 'M3']);
+    expect(order('participation')).toEqual(['Q4', 'Q2', 'Q1', 'Q3']);
+    expect(
+      sortActivity(rows, 'participation', (a) => names[a], false).map((r) => r.address)
+    ).toEqual(['Q1', 'Q4', 'Q2', 'Q3']);
+    expect(sortActivity(rows, 'name', (a) => names[a], true).map((r) => r.address)).toEqual([
+      'Q1',
+      'Q4',
+      'Q2',
+      'Q3',
+    ]);
+  });
 });
 
 describe('computePulse', () => {

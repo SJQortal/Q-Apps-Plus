@@ -3,8 +3,10 @@
  * confirming as a lighter arc after it, the target as a tick. It fills
  * smoothly as signatures land (no animation with reduced motion).
  */
+import { useEffect, useState } from 'react';
 import { Box, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import { COUNT_UP_MS, motionReduced } from '../../hooks/useCountUp';
 
 export interface ProgressRingProps {
   /** Confirmed signatures. */
@@ -119,7 +121,14 @@ export function ProgressRing({
   );
 }
 
-/** A thin bar for progress that isn't signatures (level progress). */
+/**
+ * A bar for progress that isn't approvals (level progress, participation,
+ * the members' levels read): a rounded track tinted in the theme's primary
+ * colour, filled with a gradient of it. It fills from empty when it first
+ * shows and glides to a new value, in step with a number counting up beside
+ * it (hooks/useCountUp.ts: the same 900 ms, easing out). Reduced motion
+ * shows it full at once.
+ */
 export function ProgressBar({
   value,
   label,
@@ -131,6 +140,13 @@ export function ProgressBar({
   valueText?: string;
 }) {
   const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
+  // Empty on the first paint, then the value: the width's transition fills it.
+  const [filled, setFilled] = useState(motionReduced);
+  useEffect(() => {
+    if (filled) return;
+    const frame = requestAnimationFrame(() => setFilled(true));
+    return () => cancelAnimationFrame(frame);
+  }, [filled]);
   return (
     <Box
       role="progressbar"
@@ -141,15 +157,22 @@ export function ProgressBar({
       aria-valuemax={100}
       sx={{ width: '100%' }}
     >
-      <Box sx={{ height: 8, borderRadius: 4, bgcolor: 'action.hover', overflow: 'hidden' }}>
+      <Box
+        sx={(theme) => ({
+          height: 10,
+          borderRadius: 999,
+          bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.16 : 0.12),
+          overflow: 'hidden',
+        })}
+      >
         <Box
-          sx={{
-            width: `${pct}%`,
+          sx={(theme) => ({
+            width: `${filled ? pct : 0}%`,
             height: '100%',
-            bgcolor: 'primary.main',
-            borderRadius: 4,
-            transition: 'width 600ms ease',
-          }}
+            borderRadius: 999,
+            background: `linear-gradient(90deg, ${alpha(theme.palette.primary.main, 0.6)}, ${theme.palette.primary.main})`,
+            transition: `width ${COUNT_UP_MS}ms cubic-bezier(0.33, 1, 0.68, 1)`,
+          })}
         />
       </Box>
     </Box>

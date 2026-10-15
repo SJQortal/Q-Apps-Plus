@@ -65,28 +65,28 @@ export function HowCounted({ data }: { data: ActivityData | undefined }) {
           admins count until they stopped.
         </Typography>
         <Typography component="li" variant="body2">
-          Participation is the share of eligible decisions they answered. Approving and rejecting
-          are both answers, so both count as taking part; rejecting after approving is a
-          rejection. Approvals and rejections are shown apart.
+          Participation is the share of eligible decisions they signed. Approving and rejecting are
+          both signatures (each is a transaction they sign), so both count as taking part; rejecting
+          after approving is a rejection. Approvals and rejections are shown apart.
         </Typography>
         <Typography component="li" variant="body2">
-          Only an admin's latest answer on a decision counts, as on chain, and only if it landed in
-          time.
+          Only an admin's latest signature on a decision counts, as on chain, and only if it landed
+          in time.
         </Typography>
         <Typography component="li" variant="body2">
-          Missed means a decision expired while they were an admin and they never answered it:
-          only doing nothing is a miss. Decisions still collecting approvals count for an admin
-          once they have answered.
+          Missed means a decision expired while they were an admin and they never signed it: only
+          doing nothing is a miss. Decisions still collecting approvals count for an admin once they
+          have signed.
         </Typography>
         <Typography component="li" variant="body2">
           A double is never a miss: an admin change that would have changed nothing, or the same
-          change waiting twice, as marked on Decisions. Left alone, it doesn't count at all; an
-          answer on it counts like any other.
+          change waiting twice, as marked on Decisions. Left alone, it doesn't count at all; a
+          signature on it counts like any other.
         </Typography>
         <Typography component="li" variant="body2">
-          Time to approve is the median from a decision's block to their approval's block, at the live
-          block time{data ? ` (one block every ${blockTimeWords(data.now)} now)` : ''}. Decisions
-          they proposed themselves are left out.
+          Time to approve is the median from a decision's block to their approval's block, at the
+          live block time{data ? ` (one block every ${blockTimeWords(data.now)} now)` : ''}.
+          Decisions they proposed themselves are left out.
         </Typography>
         <Typography component="li" variant="body2">
           The window is measured in blocks, not assumed days

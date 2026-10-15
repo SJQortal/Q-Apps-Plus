@@ -1,13 +1,17 @@
 /**
- * Minter Admin Activity: every admin's answers (signatures and rejections,
- * shown apart) against the decisions they could have answered, misses, time
- * to sign, proposals and last activity.
- * Cards on phones and tablets (one or two columns), a sortable table from
- * 900 px. Former admins of the window are listed apart.
+ * Minter Admin Activity: every admin's signatures (approvals and rejections,
+ * shown apart) against the decisions they could have signed, misses, time
+ * to approve, proposals and last activity.
+ * Cards on phones and tablets (one or two columns), a table from 900 px
+ * whose every column header sorts it (again reverses it); Sort by and its
+ * order button do the same everywhere. Participation fills its bar and
+ * counts up to its value as it shows. Former admins of the window are
+ * listed apart.
  */
 import { useId, useState, type ReactNode } from 'react';
 import {
   Box,
+  Button,
   ButtonBase,
   Chip,
   TextField,
@@ -19,7 +23,13 @@ import ArrowDownwardOutlinedIcon from '@mui/icons-material/ArrowDownwardOutlined
 import ArrowUpwardOutlinedIcon from '@mui/icons-material/ArrowUpwardOutlined';
 import { primarySoft } from '../../hub-theme';
 import type { ActivityData } from '../../data/activity';
-import { sortActivity, type ActivitySort, type AdminActivity } from '../../rules/activity';
+import {
+  ACTIVITY_SORT_DESCENDING,
+  sortActivity,
+  type ActivitySort,
+  type AdminActivity,
+} from '../../rules/activity';
+import { useCountUp } from '../../hooks/useCountUp';
 import type { DecisionKind } from '../../rules/decision';
 import { PersonChip } from '../../components/common/Person';
 import { ProgressBar } from '../../components/common/ProgressRing';
@@ -30,18 +40,33 @@ import { blockDate, blocksAsTime, lastActive, NONE, ofTotal, percent, windowWord
 
 const SORTS: Array<{ value: ActivitySort; label: string }> = [
   { value: 'participation', label: 'Participation' },
-  { value: 'signatures', label: 'Approvals' },
+  { value: 'signatures', label: 'Approved' },
+  { value: 'missed', label: 'Missed' },
+  { value: 'medianTime', label: 'Median time to approve' },
+  { value: 'proposed', label: 'Proposed' },
   { value: 'lastActive', label: 'Last active' },
   { value: 'name', label: 'Name' },
 ];
 
-/** Participation, approvals and last active sort highest or newest first; names A–Z. */
-const DESCENDING: Record<ActivitySort, boolean> = {
-  participation: true,
-  signatures: true,
-  lastActive: true,
-  name: false,
-};
+export interface ActivityOrder {
+  sort: ActivitySort;
+  descending: boolean;
+}
+
+/** The order's words, for its button: "Highest first", "Fastest first", "A to Z", … */
+function orderWords({ sort, descending }: ActivityOrder): string {
+  if (sort === 'name') return descending ? 'Z to A' : 'A to Z';
+  if (sort === 'medianTime') return descending ? 'Slowest first' : 'Fastest first';
+  if (sort === 'lastActive') return descending ? 'Most recent first' : 'Least recent first';
+  return descending ? 'Highest first' : 'Lowest first';
+}
+
+/** A column pressed: its first order, or the other way round when it is the one in use. */
+function nextOrder(current: ActivityOrder, sort: ActivitySort): ActivityOrder {
+  return current.sort === sort
+    ? { sort, descending: !current.descending }
+    : { sort, descending: ACTIVITY_SORT_DESCENDING[sort] };
+}
 
 interface RowContext {
   data: ActivityData;
@@ -59,34 +84,58 @@ export function AdminActivityList({
 }) {
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
-  const [sort, setSort] = useState<ActivitySort>('participation');
+  const [order, setOrder] = useState<ActivityOrder>({
+    sort: 'participation',
+    descending: ACTIVITY_SORT_DESCENDING.participation,
+  });
+  const onSort = (sort: ActivitySort) => setOrder((current) => nextOrder(current, sort));
   const sortId = useId();
   const memberSet = new Set(data.members);
   // Members without a name have none; anyone else (a former admin who left) is looked up.
   const nameOf = (address: string) =>
     data.names[address] ?? (memberSet.has(address) ? null : undefined);
   const label = (address: string) => displayName(data.names[address], address);
-  const current = sortActivity(data.report.current, sort, label);
-  const former = sortActivity(data.report.former, sort, label);
+  const current = sortActivity(data.report.current, order.sort, label, order.descending);
+  const former = sortActivity(data.report.former, order.sort, label, order.descending);
   const ctx: RowContext = { data, nameOf, myAddress };
 
+  const words = orderWords(order);
   const sortControl = (
-    <TextField
-      select
-      size="small"
-      label="Sort by"
-      value={sort}
-      onChange={(e) => setSort(e.target.value as ActivitySort)}
-      id={sortId}
-      slotProps={{ select: { native: true } }}
-      sx={{ minWidth: 150, '& .MuiInputBase-root': { minHeight: 44 } }}
-    >
-      {SORTS.map((s) => (
-        <option key={s.value} value={s.value}>
-          {s.label}
-        </option>
-      ))}
-    </TextField>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <TextField
+        select
+        size="small"
+        label="Sort by"
+        value={order.sort}
+        onChange={(e) => {
+          const sort = e.target.value as ActivitySort;
+          setOrder({ sort, descending: ACTIVITY_SORT_DESCENDING[sort] });
+        }}
+        id={sortId}
+        slotProps={{ select: { native: true } }}
+        sx={{ minWidth: 150, '& .MuiInputBase-root': { minHeight: 44 } }}
+      >
+        {SORTS.map((s) => (
+          <option key={s.value} value={s.value}>
+            {s.label}
+          </option>
+        ))}
+      </TextField>
+      <Button
+        variant="outlined"
+        color="inherit"
+        onClick={() => onSort(order.sort)}
+        aria-label={`Order: ${words}. Press to reverse it`}
+        title="Reverse the order"
+        sx={{ minHeight: 44, minWidth: 44, px: 1 }}
+      >
+        {order.descending ? (
+          <ArrowDownwardOutlinedIcon aria-hidden sx={{ fontSize: 20 }} />
+        ) : (
+          <ArrowUpwardOutlinedIcon aria-hidden sx={{ fontSize: 20 }} />
+        )}
+      </Button>
+    </Box>
   );
 
   return (
@@ -104,8 +153,8 @@ export function AdminActivityList({
             rows={current}
             ctx={ctx}
             wide={wide}
-            sort={sort}
-            onSort={setSort}
+            order={order}
+            onSort={onSort}
           />
         ) : (
           <EmptyState
@@ -124,8 +173,8 @@ export function AdminActivityList({
             rows={former}
             ctx={ctx}
             wide={wide}
-            sort={sort}
-            onSort={setSort}
+            order={order}
+            onSort={onSort}
           />
         </Section>
       ) : null}
@@ -138,7 +187,7 @@ function AdminRows({
   rows,
   ctx,
   wide,
-  sort,
+  order,
   onSort,
 }: {
   /** The table's accessible name. */
@@ -146,10 +195,10 @@ function AdminRows({
   rows: AdminActivity[];
   ctx: RowContext;
   wide: boolean;
-  sort: ActivitySort;
+  order: ActivityOrder;
   onSort: (sort: ActivitySort) => void;
 }) {
-  if (wide) return <AdminTable label={label} rows={rows} ctx={ctx} sort={sort} onSort={onSort} />;
+  if (wide) return <AdminTable label={label} rows={rows} ctx={ctx} order={order} onSort={onSort} />;
   return (
     <Box
       component="ul"
@@ -242,12 +291,14 @@ function Who({
   );
 }
 
-/** "7 of 10 answered". */
-function answeredText(row: AdminActivity): string {
-  return `${ofTotal(row.answered, row.eligible)} answered`;
+/** "7 of 10 signed": approvals and rejections, each a signed transaction. */
+function signedText(row: AdminActivity): string {
+  return `${ofTotal(row.answered, row.eligible)} signed`;
 }
 
 function Participation({ row, caption }: { row: AdminActivity; caption?: boolean }) {
+  // Rises to its value as the bar fills (screen readers get the bar's value instead).
+  const counted = useCountUp((row.participation ?? 0) * 100);
   const bar = (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
       <Box sx={{ flex: 1, minWidth: 48 }}>
@@ -255,14 +306,22 @@ function Participation({ row, caption }: { row: AdminActivity; caption?: boolean
           value={row.participation ?? 0}
           label={
             row.participation === null
-              ? 'Participation: nothing to answer in this window'
+              ? 'Participation: nothing to sign in this window'
               : `Participation ${percent(row.participation)}`
           }
-          valueText={row.participation === null ? undefined : answeredText(row)}
+          valueText={row.participation === null ? undefined : signedText(row)}
         />
       </Box>
-      <Typography sx={{ fontWeight: 700, minWidth: 40, textAlign: 'right' }}>
-        {percent(row.participation)}
+      <Typography
+        aria-hidden
+        sx={{
+          fontWeight: 700,
+          minWidth: 44,
+          textAlign: 'right',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {row.participation === null ? percent(null) : `${Math.round(counted)}%`}
       </Typography>
     </Box>
   );
@@ -271,7 +330,7 @@ function Participation({ row, caption }: { row: AdminActivity; caption?: boolean
     <Box sx={{ minWidth: 0 }}>
       {bar}
       <Typography variant="body2" color="text.secondary" aria-hidden>
-        {answeredText(row)}
+        {signedText(row)}
       </Typography>
     </Box>
   );
@@ -313,7 +372,10 @@ function AdminCard({ row, ctx }: { row: AdminActivity; ctx: RowContext }) {
           rowGap: 1,
         }}
       >
-        <Stat label="Answered" value={row.eligible ? ofTotal(row.answered, row.eligible) : NONE} />
+        <Stat
+          label="Signatures"
+          value={row.eligible ? ofTotal(row.answered, row.eligible) : NONE}
+        />
         <Stat label="Approved" value={formatCount(row.signed)} />
         <Stat label="Rejected" value={formatCount(row.rejected)} />
         <Stat label="Missed" value={formatCount(row.missed)} />
@@ -330,26 +392,29 @@ function AdminCard({ row, ctx }: { row: AdminActivity; ctx: RowContext }) {
   );
 }
 
-/** A column header that sorts the list (aria-sort on the header cell). */
+/**
+ * A column header that sorts the list by it, or reverses the order when it
+ * is the one in use (aria-sort on the header cell).
+ */
 function SortHeader({
   label,
   value,
-  sort,
+  order,
   onSort,
   align = 'left',
 }: {
-  label: string;
+  label: ReactNode;
   value: ActivitySort;
-  sort: ActivitySort;
+  order: ActivityOrder;
   onSort: (sort: ActivitySort) => void;
   align?: 'left' | 'right';
 }) {
-  const active = sort === value;
+  const active = order.sort === value;
   return (
     <Box
       component="th"
       scope="col"
-      aria-sort={active ? (DESCENDING[value] ? 'descending' : 'ascending') : undefined}
+      aria-sort={active ? (order.descending ? 'descending' : 'ascending') : undefined}
       className={align === 'right' ? 'num' : undefined}
     >
       <ButtonBase
@@ -362,13 +427,15 @@ function SortHeader({
           borderRadius: 1,
           font: 'inherit',
           fontWeight: 700,
+          textAlign: align,
           color: active ? theme.palette.text.primary : 'inherit',
+          '&:hover': { color: theme.palette.text.primary },
           '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}` },
         })}
       >
-        {label}
+        <span>{label}</span>
         {active ? (
-          DESCENDING[value] ? (
+          order.descending ? (
             <ArrowDownwardOutlinedIcon sx={{ fontSize: 16 }} aria-hidden />
           ) : (
             <ArrowUpwardOutlinedIcon sx={{ fontSize: 16 }} aria-hidden />
@@ -384,17 +451,17 @@ function AdminTable({
   label,
   rows,
   ctx,
-  sort,
+  order,
   onSort,
 }: {
   label: string;
   rows: AdminActivity[];
   ctx: RowContext;
-  sort: ActivitySort;
+  order: ActivityOrder;
   onSort: (sort: ActivitySort) => void;
 }) {
   const now = ctx.data.now;
-  const headers = { sort, onSort };
+  const headers = { order, onSort };
   return (
     <Box
       sx={{
@@ -435,17 +502,20 @@ function AdminTable({
             <SortHeader label="Admin" value="name" {...headers} />
             <SortHeader label="Participation" value="participation" {...headers} />
             <SortHeader label="Approved" value="signatures" align="right" {...headers} />
-            <th scope="col" className="num">
-              Missed
-            </th>
-            <th scope="col" className="num">
-              Median time
-              <br />
-              to approve
-            </th>
-            <th scope="col" className="num">
-              Proposed
-            </th>
+            <SortHeader label="Missed" value="missed" align="right" {...headers} />
+            <SortHeader
+              label={
+                <>
+                  Median time
+                  <br />
+                  to approve
+                </>
+              }
+              value="medianTime"
+              align="right"
+              {...headers}
+            />
+            <SortHeader label="Proposed" value="proposed" align="right" {...headers} />
             <SortHeader label="Last active" value="lastActive" {...headers} />
           </tr>
         </thead>

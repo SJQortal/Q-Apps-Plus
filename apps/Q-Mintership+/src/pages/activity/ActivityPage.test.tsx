@@ -50,14 +50,14 @@ describe('Activity', () => {
     await renderPage(<ActivityPage />, { persona: 'admin', path: '/activity' });
     await admins();
     const avery = screen.getByRole('group', { name: /^Avery Admin:/ });
-    for (const label of ['Answered', 'Approved', 'Rejected', 'Missed'])
+    for (const label of ['Signatures', 'Approved', 'Rejected', 'Missed'])
       expect(within(avery).getByText(label)).toBeInTheDocument();
     expect(within(avery).getByRole('progressbar')).toHaveAttribute(
       'aria-valuetext',
-      expect.stringMatching(/^\d+ of \d+ answered$/)
+      expect.stringMatching(/^\d+ of \d+ signed$/)
     );
     const how = screen.getByText('How this is counted').closest('details') as HTMLElement;
-    expect(how).toHaveTextContent(/Approving and rejecting are both answers/);
+    expect(how).toHaveTextContent(/Approving and rejecting are both signatures/);
     expect(how).toHaveTextContent(/only doing nothing is a miss/);
     expect(how).toHaveTextContent(/A double is never a miss/);
   });
@@ -100,6 +100,13 @@ describe('Activity', () => {
 
     fireEvent.change(screen.getByLabelText('Sort by'), { target: { value: 'lastActive' } });
     expect(cardsIn('Minter Admin Activity').at(-1)).toMatch(/^Dex Demote:/);
+
+    // The order button reverses it, wherever the list is shown.
+    fireEvent.click(screen.getByRole('button', { name: /^Order: Most recent first\./ }));
+    expect(
+      screen.getByRole('button', { name: /^Order: Least recent first\./ })
+    ).toBeInTheDocument();
+    expect(cardsIn('Minter Admin Activity')[0]).not.toMatch(/^Dex Demote:/);
   });
 
   it('lists the target’s changes in the window: when, from what to what, and why', async () => {
@@ -243,7 +250,36 @@ describe('Activity', () => {
     );
     const firstRow = within(table).getAllByRole('row')[1];
     expect(within(firstRow).getByText('Admin A')).toBeInTheDocument();
-    expect(within(firstRow).getByText(/^\d+ of \d+ answered$/)).toBeInTheDocument();
+    expect(within(firstRow).getByText(/^\d+ of \d+ signed$/)).toBeInTheDocument();
+    // Again: Z to A.
+    fireEvent.click(within(table).getByRole('button', { name: 'Admin' }));
+    expect(within(table).getByRole('columnheader', { name: /Admin/ })).toHaveAttribute(
+      'aria-sort',
+      'descending'
+    );
+    expect(within(within(table).getAllByRole('row')[1]).queryByText('Admin A')).toBeNull();
+
+    // Every column sorts: Missed, most first; Median time to approve, fastest first.
+    const missedValues = () =>
+      within(table)
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => Number(within(row).getAllByRole('cell')[3].textContent));
+    fireEvent.click(within(table).getByRole('button', { name: 'Missed' }));
+    expect(within(table).getByRole('columnheader', { name: /Missed/ })).toHaveAttribute(
+      'aria-sort',
+      'descending'
+    );
+    expect(missedValues()).toEqual([...missedValues()].sort((a, b) => b - a));
+    fireEvent.click(within(table).getByRole('button', { name: /Median time/ }));
+    expect(within(table).getByRole('columnheader', { name: /Median time/ })).toHaveAttribute(
+      'aria-sort',
+      'ascending'
+    );
+    for (const name of ['Proposed', 'Approved', 'Last active'])
+      expect(within(table).getByRole('button', { name })).toBeInTheDocument();
+    // Sort by follows the table.
+    expect(screen.getByLabelText('Sort by')).toHaveValue('medianTime');
   });
 
   it('says what failed and offers Retry when the reads fail', async () => {
