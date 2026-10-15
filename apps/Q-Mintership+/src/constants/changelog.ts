@@ -74,6 +74,7 @@ export const CHANGELOG: Release[] = [
           'Every read is bounded, paged and cached; nothing loads everything at once.',
           'Hub 3.0 look with four themes, built for phones first.',
           'Every write was proven on a private test chain before release.',
+          'A refresh keeps Hub’s dark or light mode, and a tab left open across an update loads the new version instead of showing an error.',
           'Your answer shows at once and settles as soon as it is in a block.',
           'Every dialog works by keyboard and screen reader, with focus kept where you are.',
           'Subtle motion: refresh icons turn while they load, pages and lists fade in, the navigation highlight glides, buttons give a little when pressed, and ticks pop in. Reduced motion turns it all off.',

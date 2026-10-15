@@ -594,6 +594,10 @@ On branch `q-mintership-plus/feedback-1`, merged into the rewrite branch. One co
 
 18. **Open your nominations from Home** (Simon: buttons on Home's nominations, "Open in Decisions"). Each card in Your nominations has Details (the nomination's page) and Open in Decisions (its decision, or Decisions while it waits for a first approval; none once it closed with no approval), as on the Nominations list.
 
+19. **Dark stays dark after a refresh** (Simon: after switching to Settings and refreshing, the app turned light in a dark Hub). Hub opens an app with `?theme=dark`; in-app navigation drops the query, and on a reload Core's renderer injects its default `_qdnTheme = "light"` (`ArbitraryDataRenderer.java`: `theme = "light"` unless the URL says). Fixed in the theme kit (its own `Repo:` commits, synced into Q-Mail+, Q-Mintership+ and Q-Share+, each built and tested): Hub's mode is remembered (`qplus-hub-mode`) and, without a `theme` in the URL, wins over the injected default; Hub's switch (THEME_CHANGED) wins over both while the app is open. This app's `index.html` boot snippet reads the same order. Checked in Chromium: open at `?theme=dark`, navigate to `/settings`, reload with `_qdnTheme = "light"` injected: still dark. Q-Mail+ and Q-Share+ have the same bug in their published versions; their `index.html` snippets need the same change in their next pass.
+
+20. **A tab open across an update** (Simon: "This part of Q-Mintership+ could not be shown" on opening Settings, fixed by a reload). The app had been replaced (a new zip) while the tab was open, so the old build's Settings file was gone. A code-split file that fails to load now reloads once to the new build ("Q-Mintership+ was updated. Loading the new version…"), from the error boundary and Vite's `vite:preloadError`; a second failure within a minute shows the usual message (`utils/staleBuild.ts`).
+
 One test (TargetShift's "Approve several with an admin change") failed once under full-suite load and passed on its own and on a rerun: a long dialog flow close to its time limit.
 
 ## Follow-ups
