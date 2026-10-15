@@ -1,14 +1,15 @@
 /**
- * History → On chain: MINTER's decided changes and joins, newest first.
+ * History → On chain: MINTER's decided changes and joins, newest first, over
+ * a period: the last 30 days (the default), 60 or 120 days, a year, or from
+ * a date. The type and the period are in the URL (historyFilters.ts); a
+ * button at the end shows the next longer period.
  *
- * All types, and joins, join requests and leaves, are read 30 days at a time
- * (block windows found with /blocks/timestamp, then bounded searches): any
- * time starts with the last 30 days and "Load older" adds the 30 before,
- * back to MINTER's creation; a period reads the windows it covers. Windows
- * already read stay cached, so only new ones are fetched. A type of decision
- * (invites, removals, bans, …) is searched across all of MINTER's history,
- * or from the period's start, instead (TypedHistory.tsx). The type and the
- * period are in the URL (historyFilters.ts).
+ * All types, and joins, join requests and leaves, are read in 30-day windows
+ * (block windows found with /blocks/timestamp, then bounded searches), as
+ * many as the period covers and never before MINTER's creation. Windows
+ * already read stay cached, so a longer period fetches only the new ones. A
+ * type of decision (invites, removals, bans, …) is one search by type over
+ * the period instead (TypedHistory.tsx).
  *
  * An approved admin change says what it did to the target, worked back from
  * today's admin count (rules/targetShift.ts), where every later admin change
@@ -22,8 +23,6 @@ import { useSearchParams } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
 import { FALLBACK_MS_PER_BLOCK } from '../../data/constants';
 import {
-  HISTORY_MAX_WINDOWS,
-  HISTORY_WINDOW_DAYS,
   buildTimeline,
   loadHistoryWindows,
   withTargetSteps,
@@ -45,13 +44,17 @@ import {
 } from '../../components/common/states';
 import { Section } from '../../components/common/Section';
 import { appParam } from '../../routes/hubLocation';
-import { formatDate, plural } from '../../utils/format';
+import { plural } from '../../utils/format';
 import {
+  DEFAULT_PERIOD,
   historyFilterChoices,
   historyFilterLabel,
+  longerPeriod,
+  longerPeriodLabel,
   matchesHistoryFilter,
   parseHistoryFilter,
   parseHistoryPeriod,
+  periodKey,
   periodStartMs,
   periodWords,
   searchTypesFor,
@@ -98,27 +101,28 @@ export function ChainHistory() {
       { replace: true }
     );
   const setFilter = (key: HistoryFilter) => setQuery({ type: key === 'all' ? null : key });
+  // The last 30 days, the default, leaves the URL without a period.
   const setPeriod = (p: HistoryPeriod) =>
     setQuery({
-      period: p.kind === 'days' ? String(p.days) : null,
+      period:
+        p.kind === 'days' && periodKey(p) !== periodKey(DEFAULT_PERIOD) ? String(p.days) : null,
       from: p.kind === 'from' ? p.date : null,
     });
 
   const created = group.data?.created;
-  const startMs = anchor ? periodStartMs(period, anchor.timestamp) : null;
+  const startMs = periodStartMs(period, anchor?.timestamp ?? Date.now());
   const scope = periodWords(period, startMs);
   const search = searchTypesFor(filter);
+  const longer = longerPeriod(period);
+  const showLonger = () => {
+    if (longer) setPeriod(longer);
+  };
 
-  // Any time: the windows loaded so far. A period: the windows it covers, from MINTER's
-  // creation at the earliest. A search by type: the newest window (its target changes,
-  // and what is seen).
-  const [count, setCount] = useState(1);
+  // The windows the period covers, from MINTER's creation at the earliest; a search by
+  // type reads the newest one only (its target changes, and what is seen).
   const [limit, setLimit] = useState(FIRST_EVENTS);
-  const windowCount = search
-    ? 1
-    : startMs !== null && anchor
-      ? windowsFor(Math.max(startMs, created ?? 0), anchor.timestamp)
-      : count;
+  const windowCount =
+    search || !anchor ? 1 : windowsFor(Math.max(startMs, created ?? 0), anchor.timestamp);
   const query = useQuery<HistoryWindow[]>(
     anchor ? `timelines:${anchor.height}:${windowCount}` : null,
     (force) => loadHistoryWindows(anchor as HistoryAnchor, windowCount, { force })
@@ -166,37 +170,21 @@ export function ChainHistory() {
 
   const choices = useMemo(() => historyFilterChoices(events, filter), [events, filter]);
   const filtered = useMemo(
-    () =>
-      events.filter(
-        (e) => matchesHistoryFilter(e, filter) && (startMs === null || e.at >= startMs)
-      ),
+    () => events.filter((e) => matchesHistoryFilter(e, filter) && e.at >= startMs),
     [events, filter, startMs]
   );
 
   const loadingOlder = Boolean(windows && query.fetching && !query.data);
-  const oldest = windows?.[windows.length - 1];
-  const canLoadOlder =
-    startMs === null &&
-    count < HISTORY_MAX_WINDOWS &&
-    (oldest?.startHeight ?? 2) > 1 &&
-    (created === undefined || (oldest?.startMs ?? Infinity) > created);
   const shown = filtered.slice(0, limit);
   const hidden = filtered.length - shown.length;
   const label = historyFilterLabel(filter);
-  // Any time: as far as the windows read; a period: its own words.
-  const reach = startMs === null ? `since ${formatDate(oldest?.startMs ?? Date.now())}` : scope;
-  // The older days follow what is already shown.
-  const loadOlder = () => {
-    setLimit(filtered.length + MORE_EVENTS);
-    setCount((c) => c + 1);
-  };
   const nowMs = chain.data?.timestamp ?? Date.now();
 
   let body;
   if (search && anchor) {
     body = (
       <TypedHistory
-        key={`${filter}:${startMs ?? 'any'}`}
+        key={`${filter}:${startMs}`}
         anchor={anchor}
         filter={filter}
         types={search}
@@ -205,7 +193,8 @@ export function ChainHistory() {
         ctx={ctx}
         known={events}
         nowMs={nowMs}
-        onAnyTime={() => setPeriod({ kind: 'any' })}
+        longer={longer ? longerPeriodLabel(longer) : null}
+        onLonger={showLonger}
       />
     );
   } else if (!windows && (chain.isError || query.isError)) {
@@ -234,17 +223,13 @@ export function ChainHistory() {
           />
         ) : loadingOlder ? null : filter === 'all' ? (
           <EmptyState
-            title={`Nothing changed in MINTER ${reach}.`}
+            title={`Nothing changed in MINTER ${scope}.`}
             description="No one was added, removed, banned or made an admin, and no one joined or left."
           />
         ) : (
           <EmptyState
-            title={`Nothing under “${label}” ${reach}.`}
-            description={
-              canLoadOlder
-                ? `Load the ${HISTORY_WINDOW_DAYS} days before, or choose a longer period.`
-                : undefined
-            }
+            title={`Nothing under “${label}” ${scope}.`}
+            description={longer ? undefined : 'Pick an earlier date in When to look further back.'}
           />
         )}
         {loadingOlder ? <ListSkeleton count={2} label="Loading older MINTER events" /> : null}
@@ -259,7 +244,7 @@ export function ChainHistory() {
         ) : null}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
           <Typography variant="body2" color="text.secondary" sx={{ flex: '1 1 200px' }}>
-            {plural(filtered.length, 'event')} {reach}.
+            {plural(filtered.length, 'event')} {scope}.
           </Typography>
           {hidden > 0 ? (
             <Button
@@ -271,14 +256,18 @@ export function ChainHistory() {
             >
               {hidden <= MORE_EVENTS ? `Show all ${filtered.length}` : `Show ${MORE_EVENTS} more`}
             </Button>
-          ) : canLoadOlder && !query.isError ? (
+          ) : longer && !query.isError ? (
             <Button
               variant="outlined"
-              onClick={loadOlder}
+              onClick={() => {
+                // The longer period's older days follow what is already shown.
+                setLimit(filtered.length + MORE_EVENTS);
+                showLonger();
+              }}
               disabled={loadingOlder}
               sx={{ minHeight: 44 }}
             >
-              {loadingOlder ? 'Loading…' : `Load the ${HISTORY_WINDOW_DAYS} days before`}
+              {loadingOlder ? 'Loading…' : longerPeriodLabel(longer)}
             </Button>
           ) : null}
         </Box>

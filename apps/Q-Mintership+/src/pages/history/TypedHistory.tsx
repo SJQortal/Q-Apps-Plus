@@ -1,9 +1,9 @@
 /**
- * History → On chain, one type of decision: that type across all of
- * MINTER's history, or from the period's start (data/historySearch.ts),
- * newest first, 20 at a time. The search starts a signing window before the
- * period, so a proposal decided inside it is there too, and the events are
- * cut at the period's start by when they were decided. Removals and declined
+ * History → On chain, one type of decision: that type over the period, one
+ * search by type (data/historySearch.ts), newest first, 20 at a time. The
+ * search starts a signing window before the period, so a proposal decided
+ * inside it is there too, and the events are cut at the period's start by
+ * when they were decided. Removals and declined
  * join requests are both kicks: kicks are told apart from each person's own
  * history a batch at a time, as the list needs more. Events History's newest
  * window already has are taken from it, with their target changes.
@@ -49,34 +49,31 @@ export function TypedHistory({
   ctx,
   known,
   nowMs,
-  onAnyTime,
+  longer,
+  onLonger,
 }: {
   anchor: HistoryAnchor;
   filter: HistoryFilter;
   types: readonly GroupTxType[];
-  /** The period's start (ms), or null for all of MINTER's history. */
-  startMs: number | null;
-  /** "in all of MINTER's history", "in the last 60 days", … */
+  /** The period's start (ms). */
+  startMs: number;
+  /** "in the last 60 days", "since 3 Jan 2026", … */
   scope: string;
   ctx: TimelineContext;
   /** Events History's windows already hold (with their target changes). */
   known: readonly TimelineEvent[];
   nowMs: number;
-  /** Shown on an empty period: widen it to any time. */
-  onAnyTime?: () => void;
+  /** "Show the last 60 days": the next longer period, offered when this one is empty (none after a year). */
+  longer: string | null;
+  onLonger: () => void;
 }) {
   const label = historyFilterLabel(filter);
   const [shown, setShown] = useState(TYPED_PAGE);
 
-  const startBlock = useQuery(startMs === null ? null : blockAtTimeKey(startMs), () =>
-    getBlockAtTime(startMs as number)
-  );
-  const fromHeight =
-    startMs === null
-      ? 1
-      : startBlock.data
-        ? Math.max(1, startBlock.data.height + 1 - ctx.maximumBlockDelay)
-        : null;
+  const startBlock = useQuery(blockAtTimeKey(startMs), () => getBlockAtTime(startMs));
+  const fromHeight = startBlock.data
+    ? Math.max(1, startBlock.data.height + 1 - ctx.maximumBlockDelay)
+    : null;
   const rowsQ = useQuery(
     fromHeight === null ? null : typedHistoryKey(types, fromHeight, anchor.height),
     (force) => loadTypedHistory(types, fromHeight as number, anchor.height, { force })
@@ -114,7 +111,7 @@ export function TypedHistory({
       .filter((e) => e.outcome !== 'pending')
       .map((e) => fromWindows.get(e.signature) ?? e)
       .filter((e) => matchesHistoryFilter(e, filter))
-      .filter((e) => startMs === null || e.at >= startMs);
+      .filter((e) => e.at >= startMs);
   }, [rowsQ.data, isKick, marked, kicks, checked, known, ctx, filter, startMs]);
 
   // Mark more kicks while the list has fewer than it shows.
@@ -147,13 +144,9 @@ export function TypedHistory({
     return (
       <EmptyState
         title={`Nothing under “${label}” ${scope}.`}
-        description={
-          startMs === null
-            ? undefined
-            : 'Choose a longer period, or any time, to search further back.'
-        }
-        actionLabel={startMs === null || !onAnyTime ? undefined : 'Any time'}
-        onAction={startMs === null ? undefined : onAnyTime}
+        description={longer ? undefined : 'Pick an earlier date in When to search further back.'}
+        actionLabel={longer ?? undefined}
+        onAction={longer ? onLonger : undefined}
       />
     );
   }
@@ -191,6 +184,10 @@ export function TypedHistory({
             sx={{ minHeight: 44 }}
           >
             {marking && events.length <= shown ? 'Checking…' : 'Show more'}
+          </Button>
+        ) : longer ? (
+          <Button variant="outlined" onClick={onLonger} sx={{ minHeight: 44 }}>
+            {longer}
           </Button>
         ) : null}
       </Box>

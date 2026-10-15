@@ -5,7 +5,10 @@ import { fromDateInput } from '../activity/range';
 import {
   historyFilterChoices,
   historyType,
+  longerPeriod,
+  longerPeriodLabel,
   matchesHistoryFilter,
+  PERIOD_CHOICES,
   parseHistoryFilter,
   parseHistoryPeriod,
   periodStartMs,
@@ -145,26 +148,44 @@ describe('History: the period', () => {
   const NOW = Date.UTC(2026, 9, 15, 12);
   const DAY = 86_400_000;
 
-  it('reads ?period= and ?from=, anything else is any time', () => {
-    expect(parseHistoryPeriod(null, null)).toEqual({ kind: 'any' });
+  it('reads ?period= and ?from=, anything else is the last 30 days', () => {
+    expect(parseHistoryPeriod(null, null)).toEqual({ kind: 'days', days: 30 });
     expect(parseHistoryPeriod('60', null)).toEqual({ kind: 'days', days: 60 });
     expect(parseHistoryPeriod('365', null)).toEqual({ kind: 'days', days: 365 });
-    expect(parseHistoryPeriod('45', null)).toEqual({ kind: 'any' });
+    expect(parseHistoryPeriod('45', null)).toEqual({ kind: 'days', days: 30 });
+    expect(parseHistoryPeriod('any', null)).toEqual({ kind: 'days', days: 30 });
     expect(parseHistoryPeriod(null, '2026-01-03')).toEqual({ kind: 'from', date: '2026-01-03' });
     // A date wins over a number; a broken date doesn't count.
     expect(parseHistoryPeriod('60', '2026-01-03')).toEqual({ kind: 'from', date: '2026-01-03' });
     expect(parseHistoryPeriod('60', '3 Jan')).toEqual({ kind: 'days', days: 60 });
   });
 
-  it('says where it starts, in words', () => {
-    expect(periodStartMs({ kind: 'any' }, NOW)).toBeNull();
+  it('offers no "Any time": the last 30 days come first', () => {
+    expect(PERIOD_CHOICES.map((p) => p.label)).toEqual([
+      'Last 30 days',
+      'Last 60 days',
+      'Last 120 days',
+      'Last year',
+      'From a date…',
+    ]);
+  });
+
+  it('says where it starts, in words, and what the next longer period is', () => {
     expect(periodStartMs({ kind: 'days', days: 120 }, NOW)).toBe(NOW - 120 * DAY);
     const from = periodStartMs({ kind: 'from', date: '2026-01-03' }, NOW);
     expect(from).toBe(fromDateInput('2026-01-03'));
-    expect(periodWords({ kind: 'any' }, null)).toBe('in all of MINTER’s history');
     expect(periodWords({ kind: 'days', days: 60 }, NOW - 60 * DAY)).toBe('in the last 60 days');
     expect(periodWords({ kind: 'days', days: 365 }, NOW - 365 * DAY)).toBe('in the last year');
     expect(periodWords({ kind: 'from', date: '2026-01-03' }, from)).toBe('since 3 Jan 2026');
+    const steps: string[] = [];
+    for (let p = longerPeriod({ kind: 'days', days: 30 }); p; p = longerPeriod(p))
+      steps.push(longerPeriodLabel(p));
+    expect(steps).toEqual([
+      'Show the last 60 days',
+      'Show the last 120 days',
+      'Show the last year',
+    ]);
+    expect(longerPeriod({ kind: 'from', date: '2026-01-03' })).toBeNull();
   });
 
   it('reads the 30-day windows a period covers, at most three years', () => {

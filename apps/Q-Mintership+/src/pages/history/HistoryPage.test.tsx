@@ -34,17 +34,19 @@ describe('History page: on chain', () => {
     expect(within(expired).getByText('Expired')).toBeInTheDocument();
     expect(within(list).queryByText('Collecting approvals')).toBeNull();
     expect(within(list).queryByText(PEOPLE.urgent.name as string)).toBeNull();
-    expect(screen.getByText(/^\d+ events since \d+ \w+ \d{4}\.$/)).toBeInTheDocument();
+    expect(screen.getByText(/^\d+ events in the last 30 days\.$/)).toBeInTheDocument();
+    expect(screen.getByLabelText('When')).toHaveValue('30');
     expect(posts).toEqual([]);
     expect(qortalCalls.filter((c) => WRITES.test(String(c.action)))).toEqual([]);
   });
 
-  it('loads the 30 days before on request, in bounded block windows', async () => {
+  it('shows the last 60 days on request, in bounded block windows', async () => {
     await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
     const list = await eventsList();
     // Kit was removed about 47 days ago: not in the first 30-day window.
     expect(within(list).queryByText(PEOPLE.kicked.name as string)).toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: 'Load the 30 days before' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Show the last 60 days' }));
+    expect(screen.getByLabelText('When')).toHaveValue('60');
     const kicked = await screen.findByText(PEOPLE.kicked.name as string);
     const item = kicked.closest('li') as HTMLElement;
     expect(within(item).getByText('Removed from MINTER')).toBeInTheDocument();
@@ -92,7 +94,7 @@ describe('History page: filters', () => {
       'aria-pressed',
       'true'
     );
-    expect(screen.getByLabelText('When')).toHaveValue('any');
+    expect(screen.getByLabelText('When')).toHaveValue('30');
 
     await userEvent.click(within(filters).getByRole('button', { name: 'Left MINTER' }));
     const list = await screen.findByRole('group', {
@@ -101,8 +103,7 @@ describe('History page: filters', () => {
     expect(within(list).getAllByRole('listitem')).toHaveLength(2);
     for (const item of within(list).getAllByRole('listitem'))
       expect(within(item).getByText('Left MINTER')).toBeInTheDocument();
-    // Leaves are read 30 days at a time.
-    expect(screen.getByRole('button', { name: 'Load the 30 days before' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show the last 60 days' })).toBeInTheDocument();
 
     await userEvent.click(within(filters).getByRole('button', { name: 'All' }));
     expect(
@@ -110,11 +111,21 @@ describe('History page: filters', () => {
     ).toBeInTheDocument();
   });
 
-  it('finds bans from before History’s 30 days, in one search across MINTER’s history', async () => {
+  it('finds older bans with a longer period, in one search by type', async () => {
     await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
     const filters = await screen.findByRole('group', { name: 'Show one type of event' });
     await userEvent.click(within(filters).getByRole('button', { name: 'Bans' }));
-    const list = await screen.findByRole('group', { name: 'MINTER events: Bans, newest first' });
+    // No ban in the last 30 days; a 7-day ban 39 days ago; Bram, about 61 days ago.
+    expect(
+      await screen.findByText('Nothing under “Bans” in the last 30 days.')
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Show the last 60 days' }));
+    const sixty = await screen.findByRole('group', { name: 'MINTER events: Bans, newest first' });
+    expect(await within(sixty).findByText(/For 7 days/)).toBeInTheDocument();
+    expect(within(sixty).queryByText(PEOPLE.banned.name as string)).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Show the last 120 days' }));
+    expect(await screen.findByText(/^\d+ events? in the last 120 days\.$/)).toBeInTheDocument();
+    const list = screen.getByRole('group', { name: 'MINTER events: Bans, newest first' });
     // Bram was banned about 61 days ago.
     const bram = await within(list).findByText(PEOPLE.banned.name as string);
     const item = bram.closest('li') as HTMLElement;
@@ -124,26 +135,28 @@ describe('History page: filters', () => {
       expect(
         within(each).getByText(/^(Banned from MINTER|Proposed: Ban from MINTER)$/)
       ).toBeInTheDocument();
-    expect(screen.getByText(/^\d+ events? in all of MINTER’s history\.$/)).toBeInTheDocument();
+    expect(screen.getByText(/^\d+ events? in the last 120 days\.$/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show the last year' })).toBeInTheDocument();
     const searches = typeSearches('GROUP_BAN');
-    expect(searches.length).toBeGreaterThanOrEqual(1);
+    expect(searches.length).toBeGreaterThanOrEqual(3);
     for (const path of searches) {
       const params = new URL(path, 'http://x').searchParams;
-      expect(params.get('startBlock')).toBe('1');
+      expect(Number(params.get('startBlock'))).toBeGreaterThan(1);
+      expect(Number(params.get('blockLimit'))).toBeGreaterThan(0);
       expect(Number(params.get('limit'))).toBeGreaterThan(0);
     }
   });
 
-  it('tells removals from declined join requests, each across MINTER’s history', async () => {
+  it('tells removals from declined join requests, each in one search', async () => {
     await renderPage(<HistoryPage />, {
       persona: 'learner',
-      path: '/history?type=removal',
+      path: '/history?type=removal&period=60',
       setup: (world) => void addDecline(world),
     });
     const removals = await screen.findByRole('group', {
       name: 'MINTER events: Removals, newest first',
     });
-    // Kit was removed about 47 days ago: found without loading older days.
+    // Kit was removed about 47 days ago.
     expect(await within(removals).findByText(PEOPLE.kicked.name as string)).toBeInTheDocument();
     expect(within(removals).queryByText(DECLINED.name)).toBeNull();
     expect(within(removals).queryByText('Join request declined')).toBeNull();
@@ -185,19 +198,24 @@ describe('History page: filters', () => {
     // Kit, 47 days ago, is in; Bram's ban, 61 days ago, is not.
     expect(await screen.findByText(PEOPLE.kicked.name as string)).toBeInTheDocument();
     expect(screen.queryByText(PEOPLE.banned.name as string)).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Load the 30 days before' })).toBeNull();
     expect(screen.getByText(/^\d+ events in the last 60 days\.$/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show the last 120 days' })).toBeInTheDocument();
   });
 
-  it('a type with nothing in the period says so, and offers any time', async () => {
-    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history?type=ban&period=30' });
-    expect(
-      await screen.findByText('Nothing under “Bans” in the last 30 days.')
-    ).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Any time' }));
+  it('offers no Any time; after a year, the dates in When go further back', async () => {
+    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history?type=ban&period=365' });
+    const when = await screen.findByLabelText('When');
+    expect([...(when as HTMLSelectElement).options].map((o) => o.textContent)).toEqual([
+      'Last 30 days',
+      'Last 60 days',
+      'Last 120 days',
+      'Last year',
+      'From a date…',
+    ]);
     const list = await screen.findByRole('group', { name: 'MINTER events: Bans, newest first' });
     expect(await within(list).findByText(PEOPLE.banned.name as string)).toBeInTheDocument();
-    expect(screen.getByLabelText('When')).toHaveValue('any');
+    // After a year, the end offers no longer period: When has the dates.
+    expect(screen.queryByRole('button', { name: /^Show the last/ })).toBeNull();
   });
 
   it('shows what happened from a date', async () => {
@@ -246,15 +264,13 @@ describe('History page: filters on a phone', () => {
     const show = screen.getByLabelText('Show');
     expect(show).toHaveValue('all');
     await userEvent.selectOptions(show, 'Bans');
+    expect(
+      await screen.findByText('Nothing under “Bans” in the last 30 days.')
+    ).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('When'), 'Last 120 days');
     const list = await screen.findByRole('group', { name: 'MINTER events: Bans, newest first' });
     expect(await within(list).findByText(PEOPLE.banned.name as string)).toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText('When'), 'Last 120 days');
-    expect(await screen.findByText(/in the last 120 days\.$/)).toBeInTheDocument();
-    expect(
-      within(screen.getByRole('group', { name: 'MINTER events: Bans, newest first' })).getByText(
-        PEOPLE.banned.name as string
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByText(/in the last 120 days\.$/)).toBeInTheDocument();
   });
 });
 

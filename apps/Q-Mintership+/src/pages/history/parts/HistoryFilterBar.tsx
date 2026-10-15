@@ -1,8 +1,8 @@
 /**
  * History's filters: what to show (a chip per type; a native picker on
  * phones, where eleven chips would stack five rows deep) and when (a native
- * picker: any time, the last 30, 60 or 120 days, the last year, or from a
- * date, picked in a date field and applied with Show).
+ * picker: the last 30, 60 or 120 days, the last year, or from a date, picked
+ * in a date field and applied with Show).
  */
 import { useState, type FormEvent } from 'react';
 import { Box, Button, Chip, TextField, Typography } from '@mui/material';
@@ -56,7 +56,7 @@ export function HistoryFilterBar({
       return;
     }
     setEditing(false);
-    onPeriod(key === 'any' ? { kind: 'any' } : { kind: 'days', days: Number(key) as PeriodDays });
+    onPeriod({ kind: 'days', days: Number(key) as PeriodDays });
   };
 
   const apply = (event: FormEvent) => {

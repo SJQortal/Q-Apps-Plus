@@ -1,15 +1,17 @@
 /**
  * History's filters: a type of event and a period, both in the URL
- * (`?type=<key>`, `?period=30|60|120|365` or `?from=YYYY-MM-DD`), so Back
- * from a decision's page and Hub's Copy link keep them.
+ * (`?type=<key>`, `?period=60|120|365` or `?from=YYYY-MM-DD`; the last 30
+ * days without either), so Back from a decision's page and Hub's Copy link
+ * keep them.
  *
  * Each kind of event has a name of its own, in a fixed order (new minters
  * first). Invites include the nominations that expired or were rejected
  * (their rows say so); a kick that declined a join request is its own type,
  * as are removals and bans; making, removing, becoming a Minter Admin and
- * stepping down share one. Decision types are searched across MINTER's
- * history (data/historySearch.ts); joins, join requests and leaves are read
- * 30 days at a time. Pure, so the order and the names are pinned by tests.
+ * stepping down share one. Decision types are searched by type over the
+ * period (data/historySearch.ts); all types, joins, join requests and leaves
+ * are read in 30-day windows. Pure, so the order and the names are pinned by
+ * tests.
  */
 import { HISTORY_MAX_WINDOWS, HISTORY_WINDOW_DAYS, type TimelineEvent } from '../../data/timeline';
 import type { GroupTxType } from '../../data/types';
@@ -72,8 +74,8 @@ export function historyType(
 }
 
 /**
- * The transaction types a filter searches across MINTER's history, or null
- * for the ones read 30 days at a time (all, joins, join requests, leaves).
+ * The transaction types a filter searches by type over the period, or null
+ * for the ones read in 30-day windows (all, joins, join requests, leaves).
  */
 export function searchTypesFor(filter: HistoryFilter): readonly GroupTxType[] | null {
   switch (filter) {
@@ -133,24 +135,31 @@ export function historyFilterChoices(
 export const PERIOD_DAYS = [30, 60, 120, 365] as const;
 export type PeriodDays = (typeof PERIOD_DAYS)[number];
 
-export type HistoryPeriod =
-  { kind: 'any' } | { kind: 'days'; days: PeriodDays } | { kind: 'from'; date: string };
+export type HistoryPeriod = { kind: 'days'; days: PeriodDays } | { kind: 'from'; date: string };
 
-/** `?period=` and `?from=` as a period; anything unreadable is Any time. */
+export const DEFAULT_PERIOD: HistoryPeriod = { kind: 'days', days: 30 };
+
+/** `?period=` and `?from=` as a period; anything else is the last 30 days. */
 export function parseHistoryPeriod(period: string | null, from: string | null): HistoryPeriod {
   if (from && fromDateInput(from) !== null) return { kind: 'from', date: from };
   const days = Number(period);
   if (PERIOD_DAYS.includes(days as PeriodDays)) return { kind: 'days', days: days as PeriodDays };
-  return { kind: 'any' };
+  return DEFAULT_PERIOD;
 }
 
-/** The value a period select holds: 'any', '30', …, or 'from'. */
+/** The value a period select holds: '30', '60', '120', '365' or 'from'. */
 export function periodKey(period: HistoryPeriod): string {
   return period.kind === 'days' ? String(period.days) : period.kind;
 }
 
+/** The next longer period after the last 30, 60 or 120 days (none after a year or a date). */
+export function longerPeriod(period: HistoryPeriod): { kind: 'days'; days: PeriodDays } | null {
+  if (period.kind !== 'days') return null;
+  const next = PERIOD_DAYS[PERIOD_DAYS.indexOf(period.days) + 1];
+  return next ? { kind: 'days', days: next } : null;
+}
+
 export const PERIOD_CHOICES: ReadonlyArray<{ key: string; label: string }> = [
-  { key: 'any', label: 'Any time' },
   { key: '30', label: 'Last 30 days' },
   { key: '60', label: 'Last 60 days' },
   { key: '120', label: 'Last 120 days' },
@@ -158,19 +167,21 @@ export const PERIOD_CHOICES: ReadonlyArray<{ key: string; label: string }> = [
   { key: 'from', label: 'From a date…' },
 ];
 
-/** When the period starts (ms), or null for any time. */
-export function periodStartMs(period: HistoryPeriod, nowMs: number): number | null {
-  if (period.kind === 'days') return nowMs - period.days * DAY_MS;
-  if (period.kind === 'from') return fromDateInput(period.date);
-  return null;
+/** When the period starts (ms). */
+export function periodStartMs(period: HistoryPeriod, nowMs: number): number {
+  if (period.kind === 'from') return fromDateInput(period.date) ?? nowMs - 30 * DAY_MS;
+  return nowMs - period.days * DAY_MS;
 }
 
-/** "in all of MINTER's history", "in the last 60 days", "in the last year", "since 3 Jan 2026". */
-export function periodWords(period: HistoryPeriod, startMs: number | null): string {
-  if (period.kind === 'days')
-    return period.days === 365 ? 'in the last year' : `in the last ${period.days} days`;
-  if (period.kind === 'from' && startMs !== null) return `since ${formatDate(startMs)}`;
-  return 'in all of MINTER’s history';
+/** "in the last 60 days", "in the last year", "since 3 Jan 2026". */
+export function periodWords(period: HistoryPeriod, startMs: number): string {
+  if (period.kind === 'from') return `since ${formatDate(startMs)}`;
+  return period.days === 365 ? 'in the last year' : `in the last ${period.days} days`;
+}
+
+/** "Show the last 60 days", "Show the last year": the button for a longer period. */
+export function longerPeriodLabel(period: HistoryPeriod): string {
+  return `Show ${periodWords(period, 0).replace(/^in /, '')}`;
 }
 
 /** The 30-day windows that reach back to `startMs` from `anchorMs` (at least 1). */

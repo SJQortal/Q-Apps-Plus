@@ -406,8 +406,8 @@ export default {
     },
     { key: 'person', path: `/people/${ADDR.nominatedSigning}?as=admin`, after: settle },
     { key: 'history', path: '/history?as=learner', after: settle },
-    // On chain, one type searched across MINTER's history: Bans, with the ban from 61 days ago.
-    { key: 'history-filter', path: '/history?as=learner&type=ban', after: settle },
+    // On chain, one type searched by type over 120 days: Bans, with the ban from 61 days ago.
+    { key: 'history-filter', path: '/history?as=learner&type=ban&period=120', after: settle },
     // All types over a period: the last 120 days, read as four 30-day windows.
     { key: 'history-period', path: '/history?as=learner&period=120', after: settle },
     // An old card from the original app (e2e/world-legacy.mjs), with its poll and comments.
