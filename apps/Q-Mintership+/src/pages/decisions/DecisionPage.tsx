@@ -57,6 +57,7 @@ import { ConsideringDialog } from '../../components/decision/ConsideringDialog';
 import { peekQuery } from '../../data/query';
 import { signerOf } from '../../state/session';
 import { displayName } from '../../utils/format';
+import { DECISIONS_WIDTH } from './decisionUi';
 
 /** The card's section heading (Section id "decision-card"), waiting or decided. */
 const CARD_HEADING_ID = 'decision-card-title';
@@ -118,7 +119,7 @@ export default function DecisionPage() {
           signature ? <CopyLinkButton path={decisionPath(signature)} what="this decision" /> : null
         }
       />
-      <PageBody>
+      <PageBody $maxWidth={DECISIONS_WIDTH}>
         <Box role="status" className="qmp-visually-hidden">
           {said}
         </Box>

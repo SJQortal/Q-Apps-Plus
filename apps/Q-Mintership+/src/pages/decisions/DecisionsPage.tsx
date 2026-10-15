@@ -100,6 +100,7 @@ import { targetChangedTitle, type LabelOf } from './targetShiftUi';
 import { TargetImpact } from './TargetImpact';
 import { TargetShiftSection } from './TargetShiftSection';
 import { useAcknowledge } from './useAcknowledge';
+import { DECISIONS_WIDTH } from './decisionUi';
 
 // Minter Admins only: nobody else downloads the polls' code or reads them.
 const AdminPollsSection = lazy(() => import('./AdminPollsSection'));
@@ -440,7 +441,7 @@ function DecisionsQueue() {
           </>
         }
       />
-      <PageBody>
+      <PageBody $maxWidth={DECISIONS_WIDTH}>
         {/* There from the start: says once that the target changed (the note below isn't live). */}
         <span role="status" className="qmp-visually-hidden">
           {targetChange ? targetChangedTitle(targetChange.from.needed, targetChange.to.needed) : ''}

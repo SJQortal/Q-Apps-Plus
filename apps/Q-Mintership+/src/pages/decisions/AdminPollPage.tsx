@@ -25,6 +25,7 @@ import { AdminPollCard } from './AdminPollCard';
 import { PollWriteDialogs, type PollDialog } from './PollWriteDialogs';
 import { ADMINS_ONLY, HUB_DID_NOT_DECRYPT, myVoteView } from './adminPollUi';
 import { useAdminPolls } from './useAdminPolls';
+import { DECISIONS_WIDTH } from './decisionUi';
 
 export default function AdminPollPage() {
   const { id: param = '' } = useParams();
@@ -148,7 +149,7 @@ export default function AdminPollPage() {
           ) : null
         }
       />
-      <PageBody>{content}</PageBody>
+      <PageBody $maxWidth={DECISIONS_WIDTH}>{content}</PageBody>
       {author ? (
         <PollWriteDialogs
           dialog={dialog}
