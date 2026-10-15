@@ -305,7 +305,9 @@ export function DecisionCard(props: DecisionCardProps) {
         ) : null}
       </Box>
 
-      {d.creatorAddress ? (
+      {/* An invite from a nomination says "Nominated by" instead (its first approver is
+          in Approved); one proposed directly on chain says who proposed it. */}
+      {d.creatorAddress && !(d.kind === 'invite' && nomination?.nomination) ? (
         <Typography component="div" variant="body2" color="text.secondary">
           {isOwnAdminChange(d) ? (
             'Their own proposal, '

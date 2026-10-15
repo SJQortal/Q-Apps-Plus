@@ -219,8 +219,11 @@ describe('Decisions: phases and actions', () => {
     expect(within(signing).getByRole('heading', { name: /^Approved/ })).toHaveTextContent(
       'Approved5(+1 confirming)'
     );
-    // The nomination behind it.
+    // The nomination behind it: "Nominated by", and no "Proposed by" as well.
     expect(within(signing).getByText(/Nominated by/)).toBeInTheDocument();
+    expect(within(signing).queryByText(/^Proposed by/)).toBeNull();
+    // A removal still says who proposed it.
+    expect(within(kick).getByText(/^Proposed by/)).toBeVisible();
     expect(
       within(signing).getByText('Ready to mint: approval makes them a member at once.')
     ).toBeInTheDocument();
