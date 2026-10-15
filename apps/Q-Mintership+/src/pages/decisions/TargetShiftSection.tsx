@@ -6,6 +6,7 @@
  * removal, every new admin, or all of them).
  */
 import type { ChainNow } from '../../data/chain';
+import { useTheme } from '@mui/material/styles';
 import { Section } from '../../components/common/Section';
 import type { Decision } from '../../rules/decision';
 import type { ShiftScenario } from '../../rules/targetShift';
@@ -13,6 +14,7 @@ import { formatBlock } from '../../utils/format';
 import { whenApplied } from './decisionUi';
 import { TargetImpact } from './TargetImpact';
 import { scenarioLead, type LabelOf } from './targetShiftUi';
+import { SECTION_ICON, sectionAccent } from './sectionAccents';
 
 const flipsOf = (s: ShiftScenario) =>
   s.effects.filter((e) => e.effect !== 'needsMore').map((e) => e.signature);
@@ -31,6 +33,7 @@ export function TargetShiftSection({
   /** Minter Admins also get what they can do about it. */
   advice: boolean;
 }) {
+  const theme = useTheme();
   const byId = new Map(decisions.map((d) => [d.signature, d]));
   const singles = scenarios.filter((s) => s.scope === 'one');
   const seen = new Set(singles.flatMap(flipsOf));
@@ -43,7 +46,12 @@ export function TargetShiftSection({
   );
   if (!urgent.length && !together.length) return null;
   return (
-    <Section title="Admin changes and the target" id="target-shift">
+    <Section
+      title="Admin changes and the target"
+      accent={sectionAccent(theme, 'admins')}
+      icon={<SECTION_ICON.admins />}
+      id="target-shift"
+    >
       {urgent.map((s) => {
         const sig = s.changes[0]?.signature as string;
         const d = byId.get(sig) as Decision;

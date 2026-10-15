@@ -27,6 +27,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Navigate, useLocation } from 'react-router-dom';
 import { PATHS, legacyDecisionPath } from '../../routes/paths';
 import { Alert, Box, Button, Chip, FormControlLabel, Switch, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { visuallyHidden } from '@mui/utils';
 import { useAtom, useAtomValue } from 'jotai';
 import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
@@ -68,6 +69,7 @@ import {
   type DecisionsOrder,
 } from '../../state/settings';
 import { decisionGroupId, groupDecisions, type DecisionGroup } from './decisionGroups';
+import { SECTION_ICON, sectionAccent, type SectionAccent } from './sectionAccents';
 import { focusElement } from '../../utils/focus';
 import { displayName, formatCount, plural } from '../../utils/format';
 import type { ChainNow } from '../../data/chain';
@@ -139,6 +141,8 @@ function DecisionsQueue() {
   // Sticky bars sit above the phone's bottom bar while it is on screen.
   const bottomBar = useBottomNavShown();
   const reduced = useReducedMotion();
+  const theme = useTheme();
+  const accentOf = (key: SectionAccent) => sectionAccent(theme, key);
 
   const [signTarget, setSignTarget] = useState<Decision | null>(null);
   const [considerRequest, setConsiderRequest] = useState<ConsideringRequest | null>(null);
@@ -543,27 +547,43 @@ function DecisionsQueue() {
 
             {collecting.length && order === 'type' ? (
               <>
-                <Section title={`Collecting approvals · ${collecting.length}`} id="collecting">
+                <Section
+                  title="Collecting approvals"
+                  count={collecting.length}
+                  accent={accentOf('neutral')}
+                  id="collecting"
+                >
                   {groups.length ? <GroupJumps groups={groups} reduced={reduced} /> : null}
                   {hiddenNote}
                 </Section>
-                {groups.map((g) => (
-                  <Box
-                    key={g.key}
-                    id={decisionGroupId(g.key)}
-                    sx={{ scrollMarginTop: 'calc(var(--qmp-header-offset, 0px) + 16px)' }}
-                  >
-                    <Section
-                      title={`${g.label} · ${g.decisions.length}`}
-                      id={`${decisionGroupId(g.key)}-section`}
+                {groups.map((g) => {
+                  const Icon = SECTION_ICON[g.key];
+                  return (
+                    <Box
+                      key={g.key}
+                      id={decisionGroupId(g.key)}
+                      sx={{ scrollMarginTop: 'calc(var(--qmp-header-offset, 0px) + 16px)' }}
                     >
-                      {g.decisions.map(collectingCard(data.now))}
-                    </Section>
-                  </Box>
-                ))}
+                      <Section
+                        title={g.label}
+                        count={g.decisions.length}
+                        accent={accentOf(g.key)}
+                        icon={<Icon />}
+                        id={`${decisionGroupId(g.key)}-section`}
+                      >
+                        {g.decisions.map(collectingCard(data.now))}
+                      </Section>
+                    </Box>
+                  );
+                })}
               </>
             ) : collecting.length ? (
-              <Section title={`Collecting approvals · ${collecting.length}`} id="collecting">
+              <Section
+                title="Collecting approvals"
+                count={collecting.length}
+                accent={accentOf('neutral')}
+                id="collecting"
+              >
                 {shown.map(collectingCard(data.now))}
                 {hiddenNote}
               </Section>
@@ -587,7 +607,10 @@ function DecisionsQueue() {
 
             {waiting.length || nominationsQ.isLoading || nominationsQ.isError ? (
               <Section
-                title={`Waiting for a Minter Admin${waiting.length ? ` · ${waiting.length}` : ''}`}
+                title="Waiting for a Minter Admin"
+                count={waiting.length || undefined}
+                accent={accentOf('waiting')}
+                icon={<SECTION_ICON.waiting />}
                 id="waiting"
               >
                 {nominationsQ.isLoading && !nominationsQ.data ? <CardSkeleton lines={3} /> : null}
@@ -648,7 +671,12 @@ function DecisionsQueue() {
             ) : null}
 
             {closed.length ? (
-              <Section title={`Too late to approve · ${closed.length}`} id="closed">
+              <Section
+                title="Too late to approve"
+                count={closed.length}
+                accent={accentOf('neutral')}
+                id="closed"
+              >
                 {closed.map((d) => (
                   <DecisionCard
                     key={d.signature}
@@ -670,13 +698,17 @@ function DecisionsQueue() {
             ) : null}
 
             {isAdmin && data.unusual.length ? (
-              <Section title="Unusual approval route" id="unusual">
+              <Section title="Unusual approval route" accent={accentOf('neutral')} id="unusual">
                 <UnusualList decisions={data.unusual} now={data.now} />
               </Section>
             ) : null}
 
             {isAdmin && data.others.length ? (
-              <Section title="Other transactions waiting for Minter Admins" id="others">
+              <Section
+                title="Other transactions waiting for Minter Admins"
+                accent={accentOf('neutral')}
+                id="others"
+              >
                 <OtherPendingList items={data.others} now={data.now} />
               </Section>
             ) : null}
@@ -686,7 +718,12 @@ function DecisionsQueue() {
                 id={STALE_SECTION_ID}
                 sx={{ scrollMarginTop: 'calc(var(--qmp-header-offset, 0px) + 16px)' }}
               >
-                <Section title="Clean up stale invites" id="stale">
+                <Section
+                  title="Clean up stale invites"
+                  accent={accentOf('cancelInvite')}
+                  icon={<SECTION_ICON.cancelInvite />}
+                  id="stale"
+                >
                   <StaleInvites
                     signer={signer}
                     facts={{
@@ -987,9 +1024,9 @@ function OrderChoice({
 }
 
 /**
- * By type: a chip per type with its count, as an overview of what is waiting;
- * pressing one scrolls to that type's section and puts focus on its first
- * card.
+ * By type: a chip per type with its count and a dot in its section's colour,
+ * as an overview of what is waiting; pressing one scrolls to that type's
+ * section and puts focus on its first card.
  */
 function GroupJumps({
   groups,
@@ -998,6 +1035,7 @@ function GroupJumps({
   groups: ReadonlyArray<{ key: DecisionGroup; label: string; decisions: unknown[] }>;
   reduced: boolean;
 }) {
+  const theme = useTheme();
   const jump = (key: DecisionGroup) => {
     const section = document.getElementById(decisionGroupId(key));
     if (!section) return;
@@ -1016,6 +1054,20 @@ function GroupJumps({
           clickable
           variant="outlined"
           onClick={() => jump(g.key)}
+          // A dot in the section's colour, so the chip and its section match.
+          icon={
+            <Box
+              component="span"
+              aria-hidden
+              sx={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                bgcolor: sectionAccent(theme, g.key),
+                ml: '10px !important',
+              }}
+            />
+          }
           label={
             <>
               {g.label}{' '}

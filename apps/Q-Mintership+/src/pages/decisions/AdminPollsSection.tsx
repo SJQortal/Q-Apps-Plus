@@ -8,6 +8,7 @@
  */
 import { useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { Section } from '../../components/common/Section';
 import {
   CardSkeleton,
@@ -21,6 +22,7 @@ import { plural } from '../../utils/format';
 import type { PollAuthor } from '../../writes/adminPolls';
 import { AdminPollCard } from './AdminPollCard';
 import { PollWriteDialogs, type PollDialog } from './PollWriteDialogs';
+import { SECTION_ICON, sectionAccent } from './sectionAccents';
 import {
   ADVISORY,
   HUB_DID_NOT_DECRYPT,
@@ -49,6 +51,7 @@ export default function AdminPollsSection({
 }) {
   const { query, views, pending, signers, undecrypted, retry } = useAdminPolls(author.address);
   const now = useNow(60_000);
+  const theme = useTheme();
   const [dialog, setDialog] = useState<PollDialog | null>(null);
   const votedOn = (v: ShownPoll) => Boolean(myVoteView(v, pending.votes[v.id]).vote || v.myLate);
   const shown = (views ?? []).filter((v) => !(hideVoted && votedOn(v)));
@@ -79,7 +82,10 @@ export default function AdminPollsSection({
 
   return (
     <Section
-      title={`Minter Admin polls${views ? ` · ${views.length}` : ''}`}
+      title="Minter Admin polls"
+      count={views?.length}
+      accent={sectionAccent(theme, 'polls')}
+      icon={<SECTION_ICON.polls />}
       id={ADMIN_POLLS_SECTION_ID}
     >
       <Typography variant="body2" color="text.secondary">

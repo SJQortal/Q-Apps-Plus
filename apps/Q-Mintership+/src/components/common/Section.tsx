@@ -1,9 +1,11 @@
 /** Page building blocks: titled sections, cards, stat tiles, chips. */
 import { useLayoutEffect, useRef, type AnimationEvent, type ReactNode } from 'react';
 import { Box, Chip, Typography, type ChipProps } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import { alpha, styled } from '@mui/material/styles';
+import { visuallyHidden } from '@mui/utils';
 import type { NominationState } from '../../rules/nomination';
 import type { DecisionPhase } from '../../rules/decision';
+import { formatCount } from '../../utils/format';
 import { readable, type Tone } from '../../utils/readable';
 
 export const SectionTitle = styled(Typography)(({ theme }) => ({
@@ -59,17 +61,32 @@ function markLater(section: HTMLElement) {
  * What arrives in it fades in once (its data in place of a skeleton, a
  * list's first rows one after another; index.css → .qmp-reveal-fade), and
  * stays still when it is re-sorted or filtered (markShown).
+ *
+ * With an `accent` (a theme colour, e.g. Decisions' sectionAccents.ts) it is
+ * a panel of its own: lightly tinted in that colour, edged in it on the
+ * left, under a larger title with the icon in the colour and the count in a
+ * pill. Its text stays the theme's text colour. On phones the panel reaches
+ * a little into the page's margin, so the cards in it lose almost no width.
  */
 export function Section({
   title,
   action,
   children,
   id,
+  accent,
+  icon,
+  count,
 }: {
   title: string;
   action?: ReactNode;
   children: ReactNode;
   id?: string;
+  /** A colour from the theme: the section becomes a tinted panel with a larger title. */
+  accent?: string;
+  /** Shown before an accented title, in the accent. */
+  icon?: ReactNode;
+  /** Shown after an accented title, in a pill; screen readers hear "Title · 4". */
+  count?: number;
 }) {
   const headingId = id ? `${id}-title` : undefined;
   const ref = useRef<HTMLElement>(null);
@@ -84,12 +101,81 @@ export function Section({
       aria-labelledby={headingId}
       className="qmp-reveal-fade"
       onAnimationEnd={markShown}
-      sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}
+      sx={[
+        { display: 'flex', flexDirection: 'column', gap: 1 },
+        accent
+          ? (theme) => ({
+              gap: 1.25,
+              mx: { xs: -1, sm: 0 },
+              p: { xs: 1, sm: 1.5 },
+              borderRadius: `${theme.shape.borderRadius}px`,
+              bgcolor: alpha(accent, theme.palette.mode === 'dark' ? 0.09 : 0.07),
+              border: `1px solid ${alpha(accent, 0.32)}`,
+              borderLeft: `4px solid ${accent}`,
+            })
+          : null,
+      ]}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 32 }}>
-        <SectionTitle id={headingId} variant="h2">
-          {title}
-        </SectionTitle>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: accent ? 36 : 32 }}>
+        {accent ? (
+          <>
+            {icon ? (
+              <Box
+                aria-hidden
+                sx={{
+                  width: 32,
+                  height: 32,
+                  flexShrink: 0,
+                  borderRadius: '50%',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: alpha(accent, 0.2),
+                  color: accent,
+                  '& svg': { fontSize: 20 },
+                }}
+              >
+                {icon}
+              </Box>
+            ) : null}
+            <Typography
+              component="h2"
+              id={headingId}
+              sx={{ fontSize: { xs: 16, sm: 17 }, fontWeight: 700, lineHeight: 1.3, minWidth: 0 }}
+            >
+              {title}
+              {count !== undefined ? (
+                <>
+                  {' '}
+                  <Box component="span" sx={visuallyHidden}>
+                    ·
+                  </Box>{' '}
+                  <Box
+                    component="span"
+                    sx={{
+                      display: 'inline-block',
+                      px: 1,
+                      minWidth: 28,
+                      borderRadius: 999,
+                      textAlign: 'center',
+                      fontSize: 14,
+                      lineHeight: '24px',
+                      verticalAlign: 'text-bottom',
+                      bgcolor: alpha(accent, 0.22),
+                    }}
+                  >
+                    {formatCount(count)}
+                  </Box>
+                </>
+              ) : null}
+            </Typography>
+          </>
+        ) : (
+          <SectionTitle id={headingId} variant="h2">
+            {title}
+            {count !== undefined ? ` · ${formatCount(count)}` : null}
+          </SectionTitle>
+        )}
         {action ? <Box sx={{ ml: 'auto' }}>{action}</Box> : null}
       </Box>
       {children}
