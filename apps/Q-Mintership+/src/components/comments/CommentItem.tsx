@@ -338,13 +338,20 @@ export function CommentItem(props: CommentItemProps) {
       sx={(theme) => ({
         py: 1.25,
         outline: 'none',
-        borderRadius: 1,
+        borderRadius: `${theme.shape.borderRadius}px`,
         transition: theme.transitions.create('background-color'),
+        // A comment (with its replies) in a subtle frame of its own; replies sit in its block.
+        ...(isReply
+          ? {}
+          : {
+              px: { xs: 1.25, sm: 1.5 },
+              border: 1,
+              borderColor: 'divider',
+            }),
         // Focus comes here when a dialog or an editor about it closes.
         '&:focus-visible': { boxShadow: `0 0 0 2px ${theme.palette.primary.main}` },
         // A reply's quote went here.
         '&[data-flash="true"]': { bgcolor: accentWash(theme, 0.18) },
-        '& + &': isReply ? {} : { borderTop: 1, borderColor: 'divider' },
       })}
     >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>

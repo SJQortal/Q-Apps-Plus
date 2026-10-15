@@ -291,7 +291,7 @@ export default function AdminPollComments({
           component="ul"
           ref={listRef}
           aria-label={`Comments on ${label}, newest first`}
-          sx={{ listStyle: 'none', m: 0, p: 0 }}
+          sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 1 }}
         >
           {threads.map((t) => {
             const replying =
