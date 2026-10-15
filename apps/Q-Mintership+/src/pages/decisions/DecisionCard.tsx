@@ -1,18 +1,19 @@
 /**
- * One decision in full, for the Minter Admins and everyone following along:
- * what it does and to whom, who proposed it, the subject's profile (and the
- * nomination behind an invite), k of n with the time left to sign, who has
- * signed and who rejected (against the same target), and the admin's own
- * answer: Sign and Reject, Signed ✓ with Withdraw my signature, Rejected,
- * each "(confirming…)" until it is in a block. Next to the signers: which
- * Minter Admins are considering it, and the admin's own Considering. An
- * admin change says what it does to the target; a decision a waiting admin
- * change would tip over carries a "Target may drop to …" chip. Its public
- * comments sit behind a "Comments (n)" toggle.
+ * One decision in full, for the Minter Admins and everyone following along,
+ * top to bottom: what it is and to whom (with k of n), who proposed it and
+ * when, the subject's profile (and the nomination behind an invite), the
+ * time left to approve, who approved, who rejected and who is considering it
+ * in three columns (AnswerColumns) with the tie rule once anyone rejects,
+ * then the admin's own answer: Approve and Reject, "You approved ✓" with
+ * Reject, or "You rejected" with Approve, each "(confirming…)" until it is
+ * in a block, and their own Considering. An admin change says what it does
+ * to the target; a decision a waiting admin change would tip over carries a
+ * "Target may drop to …" chip. Its public comments sit behind a
+ * "Comments (n)" toggle.
  *
- * A double (rules/double.ts) says so with a chip and a note, keeps Sign and
- * Reject as plain secondary buttons, offers no Considering and stays out of
- * Sign several.
+ * A double (rules/double.ts) says so with a chip and a note, keeps Approve
+ * and Reject as plain secondary buttons, offers no Considering and stays out
+ * of Approve several.
  */
 import { useId, useState } from 'react';
 import { Box, Button, Checkbox, Skeleton, Typography } from '@mui/material';
@@ -25,12 +26,12 @@ import { decisionCommentTarget } from '../../data/commentThread';
 import { decisionTitle, isOwnAdminChange, type Decision } from '../../rules/decision';
 import { useAccount } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
-import { AvatarStack, PersonChip, PersonInline } from '../../components/common/Person';
+import { PersonChip, PersonInline } from '../../components/common/Person';
 import { CommentsSection } from '../../components/comments/CommentsSection';
 import { AnswerChip, SigningClock } from '../../components/decision/DecisionParts';
+import { AnswerColumns, type AnswerPerson } from '../../components/decision/AnswerColumns';
 import {
   ConsideringControls,
-  ConsideringLine,
   type ConsideringRequest,
 } from '../../components/decision/Considering';
 import { useConsideringFor } from '../../hooks/useConsidering';
@@ -41,7 +42,7 @@ import { decisionPath } from '../../routes/paths';
 import { ProgressRing } from '../../components/common/ProgressRing';
 import { Card, DecisionPhaseChip } from '../../components/common/Section';
 import { primarySoft } from '../../hub-theme';
-import { formatCount, formatDate, formatRelative, plural } from '../../utils/format';
+import { formatBlock, formatCount, formatDate, formatRelative } from '../../utils/format';
 import { usePendingAnswers } from '../../writes/optimistic';
 import type { DecisionRisk, ShiftScenario } from '../../rules/targetShift';
 import { DoubleChip, DoubleNote } from './DoubleParts';
@@ -57,7 +58,6 @@ import {
   canSign,
   canWithdraw,
   decisionCardId,
-  expiryLine,
   phaseLine,
   type AnswerIntent,
 } from './decisionUi';
@@ -171,7 +171,6 @@ export function DecisionCard(props: DecisionCardProps) {
   const tally = d.tally;
   const confirming = tally ? tally.inFlight.filter((x) => x.approval) : [];
   const rejecting = tally ? tally.inFlight.filter((x) => !x.approval) : [];
-  const withdrawn = tally ? tally.rejections.filter((x) => x.withdrew).length : 0;
   const title = decisionTitle(d);
   const subject = useDisplayName(
     d.subject ?? '',
@@ -189,6 +188,37 @@ export function DecisionCard(props: DecisionCardProps) {
     tally,
     { enabled: COLLECTING_PHASES.has(d.phase), myAddress: canAct ? myAddress : null }
   );
+  const collecting = COLLECTING_PHASES.has(d.phase);
+  const person = (x: { address?: string }) => ({
+    address: x.address as string,
+    name: x.address && adminNames.has(x.address) ? adminNames.get(x.address) : undefined,
+  });
+  const approvedPeople: AnswerPerson[] = tally
+    ? [
+        ...tally.approvals.filter((x) => x.address).map(person),
+        ...confirming.filter((x) => x.address).map((x) => ({ ...person(x), confirming: true })),
+      ]
+    : [];
+  const rejectedPeople: AnswerPerson[] = tally
+    ? [
+        ...tally.rejections
+          .filter((x) => x.address)
+          .map((x) => ({ ...person(x), hadApproved: x.withdrew })),
+        ...rejecting
+          .filter((x) => x.address)
+          .map((x) => ({
+            ...person(x),
+            confirming: true,
+            hadApproved: tally.approvals.some((a) => a.address === x.address),
+          })),
+      ]
+    : [];
+  const consideringPeople: AnswerPerson[] = considering.people.map((p) => ({
+    address: p.address,
+    name: p.name,
+    note: p.note,
+  }));
+  const answered = approvedPeople.length + rejectedPeople.length + consideringPeople.length > 0;
   const consider = (mode: ConsideringRequest['mode']) =>
     considering.publishTarget &&
     onConsider?.({
@@ -270,6 +300,26 @@ export function DecisionCard(props: DecisionCardProps) {
         ) : null}
       </Box>
 
+      {d.creatorAddress ? (
+        <Typography component="div" variant="body2" color="text.secondary">
+          {isOwnAdminChange(d) ? (
+            'Their own proposal, '
+          ) : (
+            <>
+              Proposed by{' '}
+              <PersonInline
+                address={d.creatorAddress}
+                name={adminNames.get(d.creatorAddress)}
+              />{' '}
+            </>
+          )}
+          <span title={d.blockHeight ? `Proposed in ${formatBlock(d.blockHeight)}` : undefined}>
+            {formatRelative(d.createdAt, now.timestamp)}
+          </span>
+          .
+        </Typography>
+      ) : null}
+
       {risk && labelOf && riskOpen ? (
         <TargetRiskNote
           id={riskId}
@@ -296,81 +346,27 @@ export function DecisionCard(props: DecisionCardProps) {
         <TargetImpact scenario={impact} labelOf={labelOf} lead="If this passes" advice={canAct} />
       ) : null}
 
-      {d.creatorAddress ? (
-        <Typography component="div" variant="body2" color="text.secondary">
-          {isOwnAdminChange(d) ? (
-            'Their own proposal, '
-          ) : (
-            <>
-              Proposed by{' '}
-              <PersonInline
-                address={d.creatorAddress}
-                name={adminNames.get(d.creatorAddress)}
-              />{' '}
-            </>
-          )}
-          {formatRelative(d.createdAt, now.timestamp)}
-          {d.blockHeight ? ` (block ${formatCount(d.blockHeight)})` : ''}.
+      {d.window && (d.phase === 'open' || d.phase === 'early') ? (
+        <SigningClock now={now} height={d.window.lastUsefulSignatureHeight} detailVisible />
+      ) : null}
+
+      {tally && answered ? (
+        <AnswerColumns
+          approved={approvedPeople}
+          rejected={rejectedPeople}
+          considering={collecting ? consideringPeople : null}
+        />
+      ) : tally && collecting ? (
+        <Typography variant="body2" color="text.secondary">
+          No Minter Admin has answered yet.
         </Typography>
       ) : null}
-
-      {d.window && (d.phase === 'open' || d.phase === 'early') ? (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-          <SigningClock now={now} height={d.window.lastUsefulSignatureHeight} detailVisible />
-          <Typography variant="body2" color="text.secondary">
-            {expiryLine(d, now)}
-          </Typography>
-        </Box>
+      {tally && rejectedPeople.length ? (
+        <Typography variant="body2" color="text.secondary">
+          Rejections: {tally.rejectionCount} of the {tally.needed} that would end it. If approvals
+          and rejections both reach {tally.needed}, it passes: Core counts approvals first.
+        </Typography>
       ) : null}
-
-      {tally &&
-      (tally.approvals.length ||
-        confirming.length ||
-        tally.rejections.length ||
-        rejecting.length) ? (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-          {tally.approvals.length ? (
-            <Signers
-              label={`Approved by ${plural(tally.approvals.length, 'Minter Admin')}`}
-              people={tally.approvals}
-              names={adminNames}
-            />
-          ) : null}
-          {confirming.length ? (
-            <Signers
-              label={`Confirming: ${plural(confirming.length, 'approval')} on the way`}
-              people={confirming}
-              names={adminNames}
-              faded
-            />
-          ) : null}
-          {tally.rejections.length ? (
-            <Signers
-              label={`Rejected by ${plural(tally.rejections.length, 'Minter Admin')}${
-                withdrawn ? ` (${withdrawn} had approved first)` : ''
-              }`}
-              people={tally.rejections}
-              names={adminNames}
-            />
-          ) : null}
-          {rejecting.length ? (
-            <Signers
-              label={`Confirming: ${plural(rejecting.length, 'rejection')} on the way`}
-              people={rejecting}
-              names={adminNames}
-              faded
-            />
-          ) : null}
-          {tally.rejections.length ? (
-            <Typography variant="body2" color="text.secondary">
-              Rejections: {tally.rejectionCount} of the {tally.needed} that would end it (approvals
-              are counted first).
-            </Typography>
-          ) : null}
-        </Box>
-      ) : null}
-
-      <ConsideringLine people={considering.people} />
 
       {line ? (
         <Typography variant="body2" color="text.secondary">
@@ -399,8 +395,7 @@ export function DecisionCard(props: DecisionCardProps) {
           ) : null}
           {signable && view.shown === 'rejected' ? (
             <Typography variant="body2" color="text.secondary" sx={{ flexBasis: '100%' }}>
-              You rejected this. Approving replaces your rejection: only your latest answer
-              counts.
+              You rejected this. Approving replaces your rejection: only your latest answer counts.
             </Typography>
           ) : null}
           {selecting && double && (signable || rejectable) && view.shown === 'none' ? (
@@ -663,37 +658,6 @@ function InviteDetails({
               : 'Hasn’t accepted yet: after approval they still need to press Join now.'}
           </span>
         </Typography>
-      ) : null}
-    </Box>
-  );
-}
-
-function Signers({
-  label,
-  people,
-  names,
-  faded,
-}: {
-  label: string;
-  people: Array<{ address?: string }>;
-  names: Map<string, string | null>;
-  faded?: boolean;
-}) {
-  const known = people
-    .filter((p): p is { address: string } => Boolean(p.address))
-    .map((p) => ({
-      address: p.address,
-      name: names.has(p.address) ? names.get(p.address) : undefined,
-    }));
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-      <Typography variant="body2" color="text.secondary">
-        {label}
-      </Typography>
-      {known.length ? (
-        <Box sx={{ opacity: faded ? 0.7 : 1 }}>
-          <AvatarStack people={known} label={label} max={10} showNames />
-        </Box>
       ) : null}
     </Box>
   );

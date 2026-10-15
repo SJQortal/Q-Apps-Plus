@@ -27,19 +27,20 @@ async function openDecisions(persona = 'admin', setup?: RenderPageOptions['setup
 }
 
 describe('Considering on the Decisions page', () => {
-  it('shows who is considering next to the signers, with notes, to everyone', async () => {
+  it('shows who is considering in its own column, with notes, to everyone', async () => {
     await openDecisions('learner', (world) => addConsidering(world));
     const card = screen.getByRole('article', { name: /Add to MINTER, bob\+builder/ });
-    const line = await within(card).findByText(/^Considering:/, {}, T);
+    const column = await within(card).findByRole('list', { name: /^Considering: / }, T);
+    expect(column).toHaveAccessibleName('Considering: 2 Minter Admins');
     // (Each name follows its avatar's letter.)
-    expect(line).toHaveTextContent(
-      /^Considering: A?Admin K \(“Waiting to hear back from them in Q-Chat about their node\.”\), A?Admin L$/
+    expect(column).toHaveTextContent(
+      /^A?Admin K“Waiting to hear back from them in Q-Chat about their node\.”A?Admin L$/
     );
-    expect(within(line).getByRole('link', { name: 'Admin K: open their page' })).toBeVisible();
-    // Not the admin who cleared theirs, nor the one who signed since, nor a member.
-    expect(line).not.toHaveTextContent('Admin N');
-    expect(line).not.toHaveTextContent('Admin B');
-    expect(line).not.toHaveTextContent('Nora');
+    expect(within(column).getByRole('link', { name: 'Admin K: open their page' })).toBeVisible();
+    // Not the admin who cleared theirs, nor the one who approved since, nor a member.
+    expect(column).not.toHaveTextContent('Admin N');
+    expect(column).not.toHaveTextContent('Admin B');
+    expect(column).not.toHaveTextContent('Nora');
     // The waiting nomination shows the count.
     expect(await screen.findByText('1 Minter Admin is considering', {}, T)).toBeVisible();
     // Members can't mark anything.
@@ -96,8 +97,10 @@ describe('Considering on the Decisions page', () => {
     });
     mockQortalRequest('PUBLISH_QDN_RESOURCE', () => ({ type: 'ARBITRARY', signature: 'C2' }));
     const card = screen.getByRole('article', { name: /Add to MINTER, bob\+builder/ });
-    expect(await within(card).findByText('Considering', {}, T)).toBeInTheDocument();
-    expect(within(card).getByText(/^Considering:/)).toHaveTextContent('Avery Admin');
+    expect(
+      await within(card).findByRole('list', { name: 'Considering: 1 Minter Admin' }, T)
+    ).toHaveTextContent('Avery Admin');
+    expect(within(card).getAllByText('Considering')).toHaveLength(2);
     await u.click(within(card).getByRole('button', { name: /^No longer considering: / }));
     const dialog = await screen.findByRole('dialog', { name: 'No longer considering' });
     expect(within(dialog).getByText(/QDN can’t delete a record/)).toBeVisible();
@@ -208,7 +211,9 @@ describe('Considering again after a rejection', () => {
     );
     const dialog = await screen.findByRole('dialog', { name: 'Mark as reconsidering' });
     expect(within(dialog).getByText(/looking at this again after rejecting it/)).toBeVisible();
-    expect(within(dialog).getByText(/Your rejection still counts until you approve\./)).toBeVisible();
+    expect(
+      within(dialog).getByText(/Your rejection still counts until you approve\./)
+    ).toBeVisible();
     expect(within(dialog).getByText(/Approving later replaces it/)).toBeVisible();
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(await within(dialog).findByText('Marked as reconsidering', {}, T)).toBeInTheDocument();
@@ -238,8 +243,11 @@ describe('Considering again after a rejection', () => {
       consideringKick(world, 180_000);
     });
     kick = screen.getByRole('article', { name: KICK });
-    expect(await within(kick).findByText(/^Considering:/, {}, T)).toHaveTextContent('Avery Admin');
-    expect(within(kick).getByText('Considering')).toBeInTheDocument();
+    expect(await within(kick).findByRole('list', { name: /^Considering: / }, T)).toHaveTextContent(
+      'Avery Admin'
+    );
+    // The column's heading, and the admin's own chip.
+    expect(within(kick).getAllByText('Considering')).toHaveLength(2);
     expect(within(kick).getByRole('button', { name: /^No longer considering: / })).toBeVisible();
     expect(within(kick).getByRole('button', { name: /^Approve: / })).toBeVisible();
   }, 20_000);

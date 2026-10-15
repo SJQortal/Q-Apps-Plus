@@ -96,12 +96,12 @@ describe('Decisions: phases and actions', () => {
   it('shows a nomination’s links at once, each with the avatar of the app or website it opens', async () => {
     await openPage('admin');
     const urgent = await screen.findByRole('article', { name: /Uma Urgent/ });
-    expect(within(urgent).getByRole('button', { name: 'APP/Q-Tube/channel/Example' })).toBeVisible();
+    expect(
+      within(urgent).getByRole('button', { name: 'APP/Q-Tube/channel/Example' })
+    ).toBeVisible();
     expect(within(urgent).getByRole('button', { name: 'WEBSITE/Example' })).toBeVisible();
     await waitFor(() =>
-      expect(
-        [...urgent.querySelectorAll('img')].map((img) => img.getAttribute('src'))
-      ).toEqual(
+      expect([...urgent.querySelectorAll('img')].map((img) => img.getAttribute('src'))).toEqual(
         expect.arrayContaining([
           '/arbitrary/THUMBNAIL/Q-Tube/qortal_avatar?async=true',
           '/arbitrary/THUMBNAIL/Example/qortal_avatar?async=true',
@@ -127,9 +127,15 @@ describe('Decisions: phases and actions', () => {
       within(signing).getByRole('img', { name: '5 of 8 approvals, 1 confirming' })
     ).toBeInTheDocument();
     expect(within(signing).getByText('left to approve')).toBeInTheDocument();
-    expect(within(signing).getByText(/^Expires at block/)).toBeInTheDocument();
-    expect(within(signing).getByRole('list', { name: 'Approved by 5 Minter Admins' })).toBeVisible();
-    expect(within(signing).getByText(/Confirming: 1 approval on the way/)).toBeInTheDocument();
+    expect(within(signing).getByText(/^Last block an approval counts in: /)).toBeVisible();
+    expect(within(signing).queryByText(/^Expires at block/)).toBeNull();
+    // Approved, Rejected and Considering side by side; the one on its way counts once it is in.
+    const approved = within(signing).getByRole('list', { name: 'Approved by 5 Minter Admins' });
+    expect(within(approved).getAllByRole('listitem')).toHaveLength(6);
+    expect(within(approved).getByText('confirming…')).toBeInTheDocument();
+    expect(within(signing).getByRole('heading', { name: /^Approved/ })).toHaveTextContent(
+      'Approved5(+1 confirming)'
+    );
     // The nomination behind it.
     expect(within(signing).getByText(/Nominated by/)).toBeInTheDocument();
     expect(
@@ -650,7 +656,9 @@ describe('Decisions: proposing', () => {
     expect(await within(hub).findByText('Step 1 done: proposed', {}, T)).toBeVisible();
     expect(within(hub).getByText(/You cancelled step 2 in Hub/)).toBeVisible();
     expect(
-      within(hub).getByText(/Your proposal is waiting for approvals. Once it is in a block, approve/)
+      within(hub).getByText(
+        /Your proposal is waiting for approvals. Once it is in a block, approve/
+      )
     ).toBeVisible();
     expect(qortalCallsFor('KICK_FROM_GROUP')).toHaveLength(1);
     expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(1);
@@ -917,7 +925,9 @@ describe('Decisions: admin changes from anywhere', () => {
       name: 'Become a Minter Admin, Pia Promote',
     });
     expect(within(pia).getByText(/^Their own proposal, /)).toBeVisible();
-    expect(within(pia).getByRole('button', { name: /^Approve: Become a Minter Admin/ })).toBeVisible();
+    expect(
+      within(pia).getByRole('button', { name: /^Approve: Become a Minter Admin/ })
+    ).toBeVisible();
   });
 
   it('shows a step-down proposed in another app, and a removal by another admin', async () => {

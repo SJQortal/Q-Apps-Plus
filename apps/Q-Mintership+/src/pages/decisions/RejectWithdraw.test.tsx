@@ -165,19 +165,20 @@ describe('Decisions: rejections on the cards', () => {
     await openPage('learner', (world) => addRejections(world));
     const kick = await screen.findByRole('article', { name: /Remove from MINTER, Kai Target/ });
     expect(within(kick).getByRole('img', { name: '1 of 8 approvals' })).toBeInTheDocument();
-    expect(
-      within(kick).getByRole('list', {
-        name: 'Rejected by 2 Minter Admins (1 had approved first)',
-      })
-    ).toBeVisible();
+    const rejected = within(kick).getByRole('list', { name: 'Rejected by 2 Minter Admins' });
+    expect(within(rejected).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(rejected).getByText('had approved first')).toBeInTheDocument();
     expect(
       within(kick).getByText(
-        'Rejections: 2 of the 8 that would end it (approvals are counted first).'
+        'Rejections: 2 of the 8 that would end it. If approvals and rejections both reach 8, it passes: Core counts approvals first.'
       )
     ).toBeVisible();
     // A rejection still on its way.
     const ban = card(/Ban from MINTER, Ben Target/);
-    expect(within(ban).getByText('Confirming: 1 rejection on the way')).toBeInTheDocument();
+    expect(within(ban).getByRole('heading', { name: /^Rejected/ })).toHaveTextContent(
+      '(+1 confirming)'
+    );
+    expect(within(ban).getByText('confirming…')).toBeInTheDocument();
     // Enough rejections: Core ends it.
     const lift = card(/^Lift a ban/);
     expect(within(lift).getByText('Enough rejections')).toBeInTheDocument();
@@ -206,7 +207,9 @@ describe('Decisions: rejections on the cards', () => {
     });
     const kick = await screen.findByRole('article', { name: /Remove from MINTER, Kai Target/ });
     expect(within(kick).getByText('You rejected')).toBeInTheDocument();
-    expect(within(kick).getByText(/You rejected this\. Approving replaces your rejection/)).toBeVisible();
+    expect(
+      within(kick).getByText(/You rejected this\. Approving replaces your rejection/)
+    ).toBeVisible();
     expect(within(kick).getByRole('button', { name: /^Approve: / })).toBeVisible();
     expect(within(kick).queryByRole('button', { name: /^Reject: / })).toBeNull();
     // It isn't waiting for this admin any more.

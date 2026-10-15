@@ -30,6 +30,8 @@ export interface PersonChipProps {
    * always underlined.
    */
   inline?: boolean;
+  /** On phones the avatar sits above the name (narrow columns: AnswerColumns). */
+  stackOnPhone?: boolean;
 }
 
 /**
@@ -45,6 +47,7 @@ export function PersonChip({
   link = true,
   strong = true,
   inline = false,
+  stackOnPhone = false,
 }: PersonChipProps) {
   const shown = useDisplayName(address, name);
   const stretch = link && !inline;
@@ -65,8 +68,10 @@ export function PersonChip({
     <Box
       sx={{
         display: 'flex',
-        alignItems: 'center',
-        gap: 1.25,
+        alignItems: stackOnPhone ? { xs: 'flex-start', sm: 'center' } : 'center',
+        flexDirection: stackOnPhone ? { xs: 'column', sm: 'row' } : 'row',
+        gap: stackOnPhone ? { xs: 0.5, sm: 1 } : 1.25,
+        py: stackOnPhone ? 0.5 : 0,
         minWidth: 0,
         ...(stretch
           ? { position: 'relative', width: 'fit-content', maxWidth: '100%', minHeight: 44 }

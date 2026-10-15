@@ -74,7 +74,7 @@ describe('Declines in Decisions', () => {
       await screen.findByText(`Decline a join request: ${DECLINED.name}`, {}, T)
     ).toBeInTheDocument();
     const card = await screen.findByRole('article', { name: /^Decline a join request/ }, T);
-    expect(within(card).getByText('Approved')).toBeVisible();
+    expect(within(card).getByText('Approved', { selector: '.MuiChip-label' })).toBeVisible();
     expect(screen.queryByText(/Remove from MINTER/)).toBeNull();
   });
 });

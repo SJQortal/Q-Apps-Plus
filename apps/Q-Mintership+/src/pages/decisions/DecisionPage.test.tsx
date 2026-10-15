@@ -45,7 +45,9 @@ describe('A decision’s own page: still waiting', () => {
     await open('admin', pendingOf('GROUP_KICK'));
     const card = await screen.findByRole('article', { name: 'Remove from MINTER, Kai Target' }, T);
     expect(within(card).getByText('Not minting for 6 months')).toBeVisible();
-    expect(within(card).getByRole('button', { name: /^Approve: Remove from MINTER/ })).toBeVisible();
+    expect(
+      within(card).getByRole('button', { name: /^Approve: Remove from MINTER/ })
+    ).toBeVisible();
     // The header copies the link; the card on its own page doesn't repeat it.
     expect(screen.getByRole('button', { name: 'Copy a link to this decision' })).toBeVisible();
     expect(within(card).queryByRole('button', { name: /^Copy link/ })).toBeNull();
@@ -175,13 +177,17 @@ describe('A decision’s own page: decided', () => {
   it('says how it ended, when, and who signed', async () => {
     await open('learner', (world) => addDecidedSignatures(world));
     const card = await screen.findByRole('article', { name: 'Add to MINTER, Nora Nominator' }, T);
-    expect(within(card).getByText('Approved')).toBeVisible();
+    expect(within(card).getByText('Approved', { selector: '.MuiChip-label' })).toBeVisible();
     expect(
       within(card).getByText('Enough Minter Admins approved, and Core applied it.')
     ).toBeVisible();
     expect(within(card).getByText(/^Decided in block 2,301,400, /)).toBeVisible();
-    expect(await within(card).findByText('Approved by 8 Minter Admins.', {}, T)).toBeVisible();
-    expect(within(card).getByRole('list', { name: 'Approved by 8 Minter Admins' })).toBeVisible();
+    expect(
+      await within(card).findByRole('list', { name: 'Approved by 8 Minter Admins' }, T)
+    ).toBeVisible();
+    // Nobody rejected it; a decided card has no Considering column.
+    expect(within(card).getByRole('heading', { name: /^Rejected/ })).toHaveTextContent('Rejected0');
+    expect(within(card).queryByRole('heading', { name: /^Considering/ })).toBeNull();
     expect(screen.getByRole('link', { name: 'The nomination' })).toHaveAttribute(
       'href',
       `/nominations/${ADDR.nominator}`
@@ -215,7 +221,7 @@ describe('A decision’s own page: decided', () => {
     );
     const card = await screen.findByRole('article', { name: /^Remove from MINTER, Kit Kicked/ }, T);
     expect(within(card).getByText('Kicked by Minter Admins')).toBeVisible();
-    expect(within(card).getByText('Approved')).toBeVisible();
+    expect(within(card).getByText('Approved', { selector: '.MuiChip-label' })).toBeVisible();
   });
 });
 

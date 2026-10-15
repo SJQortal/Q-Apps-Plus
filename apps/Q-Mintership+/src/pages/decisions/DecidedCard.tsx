@@ -2,12 +2,14 @@
  * A decision that is no longer waiting, on its own page: what it was and
  * about whom, who proposed it, how it ended and when (approved, rejected,
  * expired, not applied, or applied at once before MINTER needed
- * signatures), and which Minter Admins signed it.
+ * approvals), and which Minter Admins approved and rejected it, in two
+ * columns (AnswerColumns).
  */
 import { Box, Typography, type ChipProps } from '@mui/material';
 import type { ChainNow } from '../../data/chain';
 import type { DecisionLink } from '../../data/decisionLink';
-import { AvatarStack, PersonChip, PersonInline } from '../../components/common/Person';
+import { PersonChip, PersonInline } from '../../components/common/Person';
+import { AnswerColumns, type AnswerPerson } from '../../components/decision/AnswerColumns';
 import { Card, ToneChip } from '../../components/common/Section';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import {
@@ -17,7 +19,7 @@ import {
   isOwnAdminChange,
 } from '../../rules/decision';
 import { OUTCOME_LABEL, outcomeSentence, type DecisionOutcome } from '../../rules/outcome';
-import { formatBlock, formatCount, formatDate, plural } from '../../utils/format';
+import { formatBlock, formatDate } from '../../utils/format';
 import { banLengthText } from './decisionUi';
 
 type Decided = Extract<DecisionLink, { kind: 'decided' }>;
@@ -32,12 +34,6 @@ const OUTCOME_CHIP: Record<
   expired: { color: 'default', variant: 'outlined' },
   invalid: { color: 'warning', variant: 'outlined' },
 };
-
-/** "Approved by 8 Minter Admins.", "Approved by 3 Minter Admins; 1 rejected it." */
-function signersLine(signed: number, rejected: number): string {
-  const yes = signed ? `Approved by ${plural(signed, 'Minter Admin')}` : 'No Minter Admin approved it';
-  return rejected ? `${yes}; ${formatCount(rejected)} rejected it.` : `${yes}.`;
-}
 
 /** When a block was made (ms), estimated from the transaction's own block and the block pace. */
 function blockTime(link: Decided, height: number, now: ChainNow): number {
@@ -66,14 +62,14 @@ export function DecidedCard({
   const who = useDisplayName(subject ?? '', subject ? undefined : null);
   const chip = OUTCOME_CHIP[outcome];
   const reason = typeof tx.reason === 'string' && tx.reason.trim() ? tx.reason.trim() : null;
-  const signers = link.approvals
-    .filter((r) => r.creatorAddress)
-    .map((r) => ({
-      address: r.creatorAddress as string,
-      name: adminNames.has(r.creatorAddress as string)
-        ? adminNames.get(r.creatorAddress as string)
-        : undefined,
-    }));
+  const person = (r: { creatorAddress?: string }): AnswerPerson => ({
+    address: r.creatorAddress as string,
+    name: adminNames.has(r.creatorAddress as string)
+      ? adminNames.get(r.creatorAddress as string)
+      : undefined,
+  });
+  const approvers = link.approvals.filter((r) => r.creatorAddress).map(person);
+  const rejecters = link.rejections.filter((r) => r.creatorAddress).map(person);
 
   return (
     <Card
@@ -144,19 +140,12 @@ export function DecidedCard({
           Couldn’t read who approved it on your node.
         </Typography>
       ) : (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-          <Typography variant="body2" color="text.secondary">
-            {signersLine(signers.length, link.rejections.length)}
-          </Typography>
-          {signers.length ? (
-            <AvatarStack
-              people={signers}
-              label={`Approved by ${plural(signers.length, 'Minter Admin')}`}
-              max={10}
-              showNames
-            />
-          ) : null}
-        </Box>
+        <AnswerColumns
+          approved={approvers}
+          rejected={rejecters}
+          considering={null}
+          emptyText="None"
+        />
       )}
     </Card>
   );
