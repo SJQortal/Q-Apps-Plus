@@ -47,7 +47,7 @@ import { readable } from '../../utils/readable';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
-import { peekQuery } from '../../data/query';
+import { invalidate, peekQuery } from '../../data/query';
 import { useMyStatus, useNominations } from '../../hooks/useData';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { appParam } from '../../routes/hubLocation';
@@ -158,6 +158,8 @@ export default function NominationsPage() {
     setSupport({ nominee: n.nominee, name: n.nomineeName, open: true });
   const refresh = () => {
     void nominations.refetch();
+    // Comment counts and open threads.
+    invalidate('comments:');
     // The list follows the nominations' reads; after a failure it reads again itself.
     if (ready.isError) void ready.refetch();
   };

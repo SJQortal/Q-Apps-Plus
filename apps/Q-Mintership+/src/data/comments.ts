@@ -12,7 +12,9 @@
  *   the node yet shows as "fetching" and fills in when it arrives.
  *
  * Searches are cached for 3 minutes and shared; bodies for the session, per
- * version (data/qdn.ts). Nothing here writes.
+ * version (data/qdn.ts). The count list is read again every 3 minutes while
+ * a count shows and the tab is visible, and a target's own search adds what
+ * it finds to it. Nothing here writes.
  */
 import { getNameOwner } from './accounts';
 import {
@@ -44,7 +46,7 @@ import {
   searchQdn,
   setBodyWait,
 } from './qdn';
-import { fetchQuery, getQueryState, setQueryData } from './query';
+import { fetchQuery, getQueryState, peekQuery, setQueryData } from './query';
 import type { QdnRow } from './types';
 
 /** The shared count list covers comments published in this many days. */
@@ -100,6 +102,30 @@ export interface CommentRows {
   truncated: boolean;
 }
 
+const rowRef = (row: Pick<QdnRow, 'name' | 'identifier'>) => `${row.name}/${row.identifier}`;
+
+/**
+ * Comments a target's own search found that the shared list lacks (posted
+ * or edited since the list was read): added to it, so every count read from
+ * the list agrees with the thread at once, instead of after the next read.
+ */
+function mergeIntoIndex(found: readonly QdnRow[]): void {
+  const index = peekQuery<CommentIndex>('comments:index');
+  if (!index) return;
+  const known = new Map(index.rows.map((row) => [rowRef(row), row]));
+  const newer = found.filter((row) => {
+    if (row.created <= index.after) return false;
+    const listed = known.get(rowRef(row));
+    return !listed || rowTime(listed) < rowTime(row);
+  });
+  if (!newer.length) return;
+  setQueryData<CommentIndex>('comments:index', (previous) => {
+    const base = previous ?? index;
+    const replaced = new Set(newer.map(rowRef));
+    return { ...base, rows: [...newer, ...base.rows.filter((row) => !replaced.has(rowRef(row)))] };
+  });
+}
+
 /** A target's comment rows from its own keys' searches. Key `comments:rows:<target>`. */
 export function loadCommentRows(
   target: CommentTarget,
@@ -120,11 +146,10 @@ export function loadCommentRows(
           )
         )
       );
+      const found = results.flatMap((r) => r.rows);
+      mergeIntoIndex(found);
       return {
-        rows: commentRowsFor(
-          target,
-          results.flatMap((r) => r.rows)
-        ),
+        rows: commentRowsFor(target, found),
         truncated: results.some((r) => r.truncated),
       };
     },

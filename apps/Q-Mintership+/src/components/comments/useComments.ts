@@ -49,8 +49,13 @@ export function useStableTarget(target: CommentTarget): CommentTarget {
   return same ? stable : target;
 }
 
+/** The shared count list is read again this often while a count shows (paused while hidden). */
+const INDEX_REFRESH_MS = 3 * 60_000;
+
 export function useCommentIndex() {
-  return useQuery<CommentIndex>('comments:index', (force) => loadCommentIndex({ force }));
+  return useQuery<CommentIndex>('comments:index', (force) => loadCommentIndex({ force }), {
+    refreshMs: INDEX_REFRESH_MS,
+  });
 }
 
 /**

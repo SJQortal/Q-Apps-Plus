@@ -57,6 +57,69 @@ const region = () =>
 const commentLi = (identifier: string) =>
   document.querySelector<HTMLElement>(`[data-comment="${identifier}"]`)!;
 
+describe('CommentsSection: the count', () => {
+  /** A reply to Member 7's comment, published after the shared count list was read. */
+  const lateReply = (world: { records: unknown[] }, ids: Record<string, string>, i = 1) =>
+    world.records.push({
+      name: `Member ${20 + i}`,
+      identifier: `qmp-comment-${ADDR.nominatedWaiting}-late0${i}`,
+      created: NOW - 30_000 + i,
+      body: { v: 1, key: ADDR.nominatedWaiting, text: `A late reply ${i}`, replyTo: ids.helped },
+    });
+
+  it('a reply the thread has read counts on the closed toggle too', async () => {
+    const user = userEvent.setup();
+    const { world, ids } = await show('learner');
+    await toggle();
+    lateReply(world, ids);
+    // Opening reads the thread's own keys, which have the reply.
+    await user.click(await toggle());
+    const open = await screen.findByRole(
+      'button',
+      { name: /^Comments \(9\): / },
+      { timeout: 4000 }
+    );
+    await user.click(open);
+    const closed = screen.getByRole('button', { name: /^Comments \(9\): / });
+    expect(closed).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('reads the shared count list again after 3 minutes, so new comments count', async () => {
+    let world: { records: unknown[] } = { records: [] };
+    let ids: Record<string, string> = {};
+    await renderPage(
+      <CommentsSection
+        target={commentTarget('nomination', ADDR.nominatedWaiting, NOW - 40 * DAY)}
+        label={LABEL}
+      />,
+      {
+        persona: 'learner',
+        setup: (w) => {
+          world = w;
+          ids = addComments(w).ids;
+          // After installWorld's own clock, so the count's 3-minute timer is a fake one too.
+          vi.useFakeTimers({ shouldAdvanceTime: true });
+          vi.setSystemTime(NOW);
+        },
+      }
+    );
+    await toggle();
+    const searches = () =>
+      fetchCallsFor('/arbitrary/resources/searchsimple').filter((p) =>
+        p.includes('identifier=qmp-comment-&')
+      ).length;
+    expect(searches()).toBe(1);
+    lateReply(world, ids, 2);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3 * 60_000 + 1_000);
+    });
+    expect(searches()).toBe(2);
+    expect(
+      await screen.findByRole('button', { name: /^Comments \(9\): / }, { timeout: 4000 })
+    ).toBeInTheDocument();
+  });
+});
+
 describe('CommentsSection', () => {
   it('shows the count from one shared search, and reads no comment until opened', async () => {
     await show('learner');

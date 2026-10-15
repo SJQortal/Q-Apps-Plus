@@ -46,6 +46,7 @@ const REFRESH_PREFIXES = [
   'unconfirmed:',
   'approvals:',
   'qdnsearch:',
+  'comments:',
   'chain:now',
   'chain:tip',
   'group:info',

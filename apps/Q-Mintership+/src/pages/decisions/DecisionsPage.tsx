@@ -399,6 +399,8 @@ function DecisionsQueue() {
     void decisionsQ.refetch();
     void nominationsQ.refetch();
     invalidate('staleinvites:');
+    // Comment counts and open threads.
+    invalidate('comments:');
     // The Minter Admin polls too (read only for admins, so nothing for anyone else),
     // asking Hub again for any it didn't decrypt.
     retryPollDecrypts();
