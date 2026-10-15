@@ -40,6 +40,7 @@ export const CHANGELOG: Release[] = [
           'Avatars your node is still fetching come in by themselves, without a refresh; until then, the name’s first letter shows.',
           'Replies stand apart from the comment they answer, and each quotes it: press the quote to go there.',
           'A nomination’s reason shows in full, in a frame of its own with its links (on a phone a long one opens with Show the whole reason), and each comment sits in its own frame.',
+          'Not a Minter Admin? Vote Yes or No on an open nomination, so the admins can weigh the community’s view. Who voted shows beside Copy link on its card, and on their comments. Advisory: the Minter Admins decide on chain.',
         ],
       },
       {
