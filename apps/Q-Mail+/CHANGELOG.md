@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.3 (Q-Mail+) - October 15, 2026
+
+**Fixes**
+- In a dark Hub, refreshing Q-Mail+ on any page but the first showed it in its light colours. It now keeps Hub's light or dark mode.
+
 ## 1.0.2 (Q-Mail+) - October 12, 2026
 
 **Swipe back on phones**
