@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage } from '../../test/render';
 import { fetchCallsFor, mockQortalRequest, qortalCalls, qortalCallsFor } from '../../test/setup';
-import { ADDR, PEOPLE } from '../../test/world';
+import { ADDR, NOW, PEOPLE } from '../../test/world';
+import { DECLINED, addDecline } from '../../../e2e/world.mjs';
 import HistoryPage from './HistoryPage';
 
 const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH|VOTE|POLL/;
@@ -57,96 +58,203 @@ describe('History page: on chain', () => {
   });
 });
 
-describe('History page: type filters', () => {
+describe('History page: filters', () => {
   const INVITE_TITLES =
     /^(Approved for MINTER|Approved and added to MINTER|Invited to MINTER|Nominated for MINTER)$/;
+  const typeSearches = (type: string) =>
+    fetchCallsFor('/transactions/search').filter((path) => {
+      const params = new URL(path, 'http://x').searchParams;
+      return params.get('txGroupId') === '694' && params.getAll('txType').join() === type;
+    });
 
-  it('shows one type at a time, each with its count, and All again', async () => {
+  it('offers every type, and shows one at a time', async () => {
     await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
     await screen.findByRole('group', { name: 'MINTER events, newest first' });
     const filters = screen.getByRole('group', { name: 'Show one type of event' });
-    // The types in the first 30 days, in their fixed order, after All.
     expect(
       within(filters)
         .getAllByRole('button')
         .map((b) => b.textContent)
     ).toEqual([
-      'All 13',
-      'Invites 8',
-      'Removals and bans 1',
-      'Left MINTER 2',
-      'Minter Admin changes 2',
+      'All',
+      'Invites',
+      'Join requests',
+      'Joined MINTER',
+      'Declined requests',
+      'Removals',
+      'Bans',
+      'Left MINTER',
+      'Bans lifted',
+      'Cancelled invites',
+      'Minter Admin changes',
     ]);
-    expect(within(filters).getByRole('button', { name: 'All 13' })).toHaveAttribute(
+    expect(within(filters).getByRole('button', { name: 'All' })).toHaveAttribute(
       'aria-pressed',
       'true'
     );
+    expect(screen.getByLabelText('When')).toHaveValue('any');
 
-    await userEvent.click(within(filters).getByRole('button', { name: 'Invites 8' }));
-    expect(within(filters).getByRole('button', { name: 'Invites 8' })).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    );
-    const list = screen.getByRole('group', { name: 'MINTER events: Invites, newest first' });
-    const items = within(list).getAllByRole('listitem');
-    expect(items).toHaveLength(8);
-    for (const item of items) expect(within(item).getByText(INVITE_TITLES)).toBeInTheDocument();
-    expect(within(list).queryByText('Left MINTER')).toBeNull();
-    expect(screen.getByText(/^8 of 13 events since \d+ \w+ \d{4}\.$/)).toBeInTheDocument();
-
-    await userEvent.click(within(filters).getByRole('button', { name: 'All 13' }));
-    const everything = screen.getByRole('group', { name: 'MINTER events, newest first' });
-    expect(within(everything).getAllByText('Left MINTER')).toHaveLength(2);
-    expect(screen.getByText(/^13 events since/)).toBeInTheDocument();
-  });
-
-  it('opens on the type a link names, as Back from a decision does', async () => {
-    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history?type=admins' });
+    await userEvent.click(within(filters).getByRole('button', { name: 'Left MINTER' }));
     const list = await screen.findByRole('group', {
-      name: 'MINTER events: Minter Admin changes, newest first',
+      name: 'MINTER events: Left MINTER, newest first',
     });
-    expect(screen.getByRole('button', { name: 'Minter Admin changes 2' })).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    );
     expect(within(list).getAllByRole('listitem')).toHaveLength(2);
-    expect(within(list).getByText('No longer a Minter Admin')).toBeInTheDocument();
-    expect(within(list).getByText('Made a Minter Admin')).toBeInTheDocument();
-  });
+    for (const item of within(list).getAllByRole('listitem'))
+      expect(within(item).getByText('Left MINTER')).toBeInTheDocument();
+    // Leaves are read 30 days at a time.
+    expect(screen.getByRole('button', { name: 'Load the 30 days before' })).toBeInTheDocument();
 
-  it('says when the chosen type has nothing yet, and shows every type on request', async () => {
-    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history?type=liftBan' });
-    expect(
-      await screen.findByText('Nothing under “Bans lifted” in the last 30 days.')
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Bans lifted 0' })).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Show all types' }));
+    await userEvent.click(within(filters).getByRole('button', { name: 'All' }));
     expect(
       await screen.findByRole('group', { name: 'MINTER events, newest first' })
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Bans lifted/ })).toBeNull();
   });
 
-  it('keeps the type while older days load', async () => {
+  it('finds bans from before History’s 30 days, in one search across MINTER’s history', async () => {
     await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
     const filters = await screen.findByRole('group', { name: 'Show one type of event' });
-    await userEvent.click(within(filters).getByRole('button', { name: 'Removals and bans 1' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Load the 30 days before' }));
-    // Kit was removed about 47 days ago.
-    const kicked = await screen.findByText(PEOPLE.kicked.name as string);
-    const list = screen.getByRole('group', {
-      name: 'MINTER events: Removals and bans, newest first',
+    await userEvent.click(within(filters).getByRole('button', { name: 'Bans' }));
+    const list = await screen.findByRole('group', { name: 'MINTER events: Bans, newest first' });
+    // Bram was banned about 61 days ago.
+    const bram = await within(list).findByText(PEOPLE.banned.name as string);
+    const item = bram.closest('li') as HTMLElement;
+    expect(within(item).getByText('Banned from MINTER')).toBeInTheDocument();
+    expect(within(item).getByText(/Permanent/)).toBeInTheDocument();
+    for (const each of within(list).getAllByRole('listitem'))
+      expect(
+        within(each).getByText(/^(Banned from MINTER|Proposed: Ban from MINTER)$/)
+      ).toBeInTheDocument();
+    expect(screen.getByText(/^\d+ events? in all of MINTER’s history\.$/)).toBeInTheDocument();
+    const searches = typeSearches('GROUP_BAN');
+    expect(searches.length).toBeGreaterThanOrEqual(1);
+    for (const path of searches) {
+      const params = new URL(path, 'http://x').searchParams;
+      expect(params.get('startBlock')).toBe('1');
+      expect(Number(params.get('limit'))).toBeGreaterThan(0);
+    }
+  });
+
+  it('tells removals from declined join requests, each across MINTER’s history', async () => {
+    await renderPage(<HistoryPage />, {
+      persona: 'learner',
+      path: '/history?type=removal',
+      setup: (world) => void addDecline(world),
     });
-    expect(list).toContainElement(kicked);
-    // Removals and bans that happened, and proposals of them that expired or were rejected.
-    const titles =
-      /^(Removed from MINTER|Banned from MINTER|Proposed: Remove from MINTER|Proposed: Ban from MINTER)$/;
+    const removals = await screen.findByRole('group', {
+      name: 'MINTER events: Removals, newest first',
+    });
+    // Kit was removed about 47 days ago: found without loading older days.
+    expect(await within(removals).findByText(PEOPLE.kicked.name as string)).toBeInTheDocument();
+    expect(within(removals).queryByText(DECLINED.name)).toBeNull();
+    expect(within(removals).queryByText('Join request declined')).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Declined requests' }));
+    const declined = await screen.findByRole('group', {
+      name: 'MINTER events: Declined requests, newest first',
+    });
+    expect(await within(declined).findByText(DECLINED.name)).toBeInTheDocument();
+    expect(within(declined).getAllByText('Join request declined').length).toBeGreaterThanOrEqual(1);
+    expect(within(declined).queryByText(PEOPLE.kicked.name as string)).toBeNull();
+  });
+
+  it('opens on the type and period a link names, as Back from a decision does', async () => {
+    await renderPage(<HistoryPage />, {
+      persona: 'learner',
+      path: '/history?type=admins&period=30',
+    });
+    const list = await screen.findByRole('group', {
+      name: 'MINTER events: Minter Admin changes, newest first',
+    });
+    expect(screen.getByRole('button', { name: 'Minter Admin changes' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(screen.getByLabelText('When')).toHaveValue('30');
+    expect(await within(list).findByText('No longer a Minter Admin')).toBeInTheDocument();
+    expect(within(list).getByText('Made a Minter Admin')).toBeInTheDocument();
+    expect(screen.getByText(/in the last 30 days\.$/)).toBeInTheDocument();
+  });
+
+  it('a period reads the windows it covers, and none past it', async () => {
+    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
+    await screen.findByRole('group', { name: 'MINTER events, newest first' });
+    expect(screen.queryByText(PEOPLE.kicked.name as string)).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText('When'), 'Last 60 days');
+    await screen.findByText(/^\d+ events in the last 60 days\.$/);
+    await eventsList();
+    // Kit, 47 days ago, is in; Bram's ban, 61 days ago, is not.
+    expect(await screen.findByText(PEOPLE.kicked.name as string)).toBeInTheDocument();
+    expect(screen.queryByText(PEOPLE.banned.name as string)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Load the 30 days before' })).toBeNull();
+    expect(screen.getByText(/^\d+ events in the last 60 days\.$/)).toBeInTheDocument();
+  });
+
+  it('a type with nothing in the period says so, and offers any time', async () => {
+    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history?type=ban&period=30' });
+    expect(
+      await screen.findByText('Nothing under “Bans” in the last 30 days.')
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Any time' }));
+    const list = await screen.findByRole('group', { name: 'MINTER events: Bans, newest first' });
+    expect(await within(list).findByText(PEOPLE.banned.name as string)).toBeInTheDocument();
+    expect(screen.getByLabelText('When')).toHaveValue('any');
+  });
+
+  it('shows what happened from a date', async () => {
+    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history?type=invite' });
+    await screen.findByRole('group', { name: 'MINTER events: Invites, newest first' });
+    await userEvent.selectOptions(screen.getByLabelText('When'), 'From a date…');
+    const from = screen.getByLabelText('From');
+    // Before MINTER began: refused, with the date it began.
+    await userEvent.clear(from);
+    await userEvent.type(from, '2020-01-01');
+    await userEvent.click(screen.getByRole('button', { name: 'Show' }));
+    expect(screen.getByRole('alert')).toHaveTextContent(/^MINTER started on /);
+    const date = new Date(NOW - 20 * 86_400_000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const value = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    await userEvent.clear(from);
+    await userEvent.type(from, value);
+    await userEvent.click(screen.getByRole('button', { name: 'Show' }));
+    const list = await screen.findByRole('group', { name: 'MINTER events: Invites, newest first' });
+    expect(await screen.findByText(/^\d+ events? since \d+ \w+ \d{4}\.$/)).toBeInTheDocument();
     for (const item of within(list).getAllByRole('listitem'))
-      expect(within(item).getByText(titles)).toBeInTheDocument();
-    expect(within(list).queryByText('Left MINTER')).toBeNull();
+      expect(within(item).getByText(INVITE_TITLES)).toBeInTheDocument();
+  });
+});
+
+describe('History page: filters on a phone', () => {
+  const originalMatchMedia = window.matchMedia;
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it('picks the type and the period from two pickers instead of a wall of chips', async () => {
+    // 390 px: below MUI's sm breakpoint (600).
+    window.matchMedia = ((query: string) => {
+      const sizes = [...query.matchAll(/\((min|max)-width:\s*([\d.]+)px\)/g)];
+      const matches =
+        sizes.length > 0 &&
+        sizes.every(([, edge, value]) =>
+          edge === 'min' ? 390 >= Number(value) : 390 <= Number(value)
+        );
+      return { ...originalMatchMedia(query), matches };
+    }) as typeof window.matchMedia;
+    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
+    await screen.findByRole('group', { name: 'MINTER events, newest first' });
+    expect(screen.queryByRole('group', { name: 'Show one type of event' })).toBeNull();
+    const show = screen.getByLabelText('Show');
+    expect(show).toHaveValue('all');
+    await userEvent.selectOptions(show, 'Bans');
+    const list = await screen.findByRole('group', { name: 'MINTER events: Bans, newest first' });
+    expect(await within(list).findByText(PEOPLE.banned.name as string)).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('When'), 'Last 120 days');
+    expect(await screen.findByText(/in the last 120 days\.$/)).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('group', { name: 'MINTER events: Bans, newest first' })).getByText(
+        PEOPLE.banned.name as string
+      )
+    ).toBeInTheDocument();
   });
 });
 

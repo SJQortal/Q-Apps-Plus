@@ -349,8 +349,11 @@ export function memberSince(events: TimelineEvent[], address: string): number | 
 
 export const HISTORY_WINDOW_DAYS = 30;
 const WINDOW_MS = HISTORY_WINDOW_DAYS * 86_400_000;
-/** Windows History reads at most (about two years). */
-export const HISTORY_MAX_WINDOWS = 24;
+/**
+ * Windows History reads at most (about three years): MINTER began in
+ * September 2024, and History stops at its creation before this.
+ */
+export const HISTORY_MAX_WINDOWS = 36;
 
 export interface HistoryAnchor {
   height: number;
@@ -465,9 +468,10 @@ export async function withDeclines(rows: TxRow[]): Promise<TxRow[]> {
 }
 
 /**
- * The newest `count` windows together (key `timelines:<anchor height>:<count>`).
- * Each window is cached on its own, so "Load older" fetches only the new one,
- * and a refresh reloads only the newest.
+ * The newest `count` windows together (key `timelines:<anchor height>:<count>`),
+ * three at a time, so a year's worth doesn't ask the node for everything at
+ * once. Each window is cached on its own, so "Load older" or a longer period
+ * fetches only the new ones, and a refresh reloads only the newest.
  */
 export function loadHistoryWindows(
   anchor: HistoryAnchor,
@@ -477,10 +481,10 @@ export function loadHistoryWindows(
   return fetchQuery(
     `timelines:${anchor.height}:${count}`,
     () =>
-      Promise.all(
-        Array.from({ length: Math.max(1, count) }, (_, i) =>
-          loadHistoryWindow(anchor, i, { force: Boolean(options.force) && i === 0 })
-        )
+      mapLimit(
+        Array.from({ length: Math.max(1, count) }, (_, i) => i),
+        3,
+        (i) => loadHistoryWindow(anchor, i, { force: Boolean(options.force) && i === 0 })
       ),
     { ttlMs: 2 * 60_000, force: options.force }
   );

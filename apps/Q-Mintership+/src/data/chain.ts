@@ -62,12 +62,16 @@ export function getBlock(height: number): Promise<BlockSummary> {
   );
 }
 
+/** getBlockAtTime's key: the time rounded to the minute, so nearby callers share one read. */
+export function blockAtTimeKey(timestamp: number): string {
+  return `chain:at:${Math.floor(timestamp / 60_000) * 60_000}`;
+}
+
 /** `GET /blocks/timestamp/{ms}`: the block at or before a moment, for windows like "the last 30 days". */
 export function getBlockAtTime(timestamp: number): Promise<BlockSummary> {
-  // Rounded to the minute so nearby callers share one read.
   const minute = Math.floor(timestamp / 60_000) * 60_000;
   return fetchQuery(
-    `chain:at:${minute}`,
+    blockAtTimeKey(timestamp),
     async () =>
       toSummary(await getJson<Record<string, unknown>>(`/blocks/timestamp/${seg(minute)}`)),
     {

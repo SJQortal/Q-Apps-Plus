@@ -1,20 +1,25 @@
 /**
- * History → On chain: MINTER's decided changes and joins, 30 days at a time
- * (block windows found with /blocks/timestamp, then bounded searches), with
- * the newest first. "Load older" adds the 30 days before; windows already
- * read stay cached, so only the new one is fetched. An approved admin change
- * says what it did to the target, worked back from today's admin count
- * (rules/targetShift.ts), where every later admin change is in the windows
- * read. Each decided change links to its decision's own page
- * (parts/TimelineList.tsx), which reads its signatures only when opened.
+ * History → On chain: MINTER's decided changes and joins, newest first.
+ *
+ * All types, and joins, join requests and leaves, are read 30 days at a time
+ * (block windows found with /blocks/timestamp, then bounded searches): any
+ * time starts with the last 30 days and "Load older" adds the 30 before,
+ * back to MINTER's creation; a period reads the windows it covers. Windows
+ * already read stay cached, so only new ones are fetched. A type of decision
+ * (invites, removals, bans, …) is searched across all of MINTER's history,
+ * or from the period's start, instead (TypedHistory.tsx). The type and the
+ * period are in the URL (historyFilters.ts).
+ *
+ * An approved admin change says what it did to the target, worked back from
+ * today's admin count (rules/targetShift.ts), where every later admin change
+ * is in the windows read. Each decided change links to its decision's own
+ * page (parts/TimelineList.tsx), which reads its signatures only when opened.
  * Once the list is in, what it reaches is no longer new for this account
  * (data/historySeen.ts): a Minter Admin's History tab stops counting it.
- * Chips above the list show one type of event at a time (historyFilters.ts),
- * counted over the windows read; the choice is `?type=` in the URL.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Box, Button, Chip, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import { FALLBACK_MS_PER_BLOCK } from '../../data/constants';
 import {
   HISTORY_MAX_WINDOWS,
@@ -24,8 +29,10 @@ import {
   withTargetSteps,
   type HistoryAnchor,
   type HistoryWindow,
+  type TimelineContext,
 } from '../../data/timeline';
 import { useAdmins, useChainNow, useGroupInfo } from '../../hooks/useData';
+import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { markHistorySeen } from '../../data/historySeen';
 import { useSession } from '../../state/session';
 import { adminLeaves, approvedAdminChanges, targetSteps } from '../../rules/targetShift';
@@ -38,23 +45,33 @@ import {
 } from '../../components/common/states';
 import { Section } from '../../components/common/Section';
 import { appParam } from '../../routes/hubLocation';
-import { formatCount, formatDate, plural } from '../../utils/format';
+import { formatDate, plural } from '../../utils/format';
 import {
-  historyFilterChips,
-  historyTypeLabel,
+  historyFilterChoices,
+  historyFilterLabel,
   matchesHistoryFilter,
   parseHistoryFilter,
+  parseHistoryPeriod,
+  periodStartMs,
+  periodWords,
+  searchTypesFor,
+  windowsFor,
   type HistoryFilter,
+  type HistoryPeriod,
 } from './historyFilters';
+import { HistoryFilterBar } from './parts/HistoryFilterBar';
 import { TimelineList } from './parts/TimelineList';
+import { TypedHistory } from './TypedHistory';
 
-/** Events shown before "Show all". */
+/** Events shown before "Show all"; a longer list (a year is about 900) shows 50 more at a time. */
 const FIRST_EVENTS = 12;
+const MORE_EVENTS = 50;
 
 export function ChainHistory() {
   const chain = useChainNow();
   const group = useGroupInfo();
   const admins = useAdmins();
+  const phone = usePhoneLayout();
   // The windows hang off the tip seen on arrival, so refreshes don't shift them.
   const [pinned, setPinned] = useState<HistoryAnchor | null>(null);
   useEffect(() => {
@@ -64,11 +81,47 @@ export function ChainHistory() {
   const anchor =
     pinned ?? (chain.data ? { height: chain.data.height, timestamp: chain.data.timestamp } : null);
 
+  // The type and the period, from the URL.
+  const [params, setParams] = useSearchParams();
+  const filter = parseHistoryFilter(appParam(params, 'type'));
+  const period = parseHistoryPeriod(appParam(params, 'period'), appParam(params, 'from'));
+  const setQuery = (values: Record<string, string | null>) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [key, value] of Object.entries(values)) {
+          if (value === null) next.delete(key);
+          else next.set(key, value);
+        }
+        return next;
+      },
+      { replace: true }
+    );
+  const setFilter = (key: HistoryFilter) => setQuery({ type: key === 'all' ? null : key });
+  const setPeriod = (p: HistoryPeriod) =>
+    setQuery({
+      period: p.kind === 'days' ? String(p.days) : null,
+      from: p.kind === 'from' ? p.date : null,
+    });
+
+  const created = group.data?.created;
+  const startMs = anchor ? periodStartMs(period, anchor.timestamp) : null;
+  const scope = periodWords(period, startMs);
+  const search = searchTypesFor(filter);
+
+  // Any time: the windows loaded so far. A period: the windows it covers, from MINTER's
+  // creation at the earliest. A search by type: the newest window (its target changes,
+  // and what is seen).
   const [count, setCount] = useState(1);
-  const [expanded, setExpanded] = useState(false);
+  const [limit, setLimit] = useState(FIRST_EVENTS);
+  const windowCount = search
+    ? 1
+    : startMs !== null && anchor
+      ? windowsFor(Math.max(startMs, created ?? 0), anchor.timestamp)
+      : count;
   const query = useQuery<HistoryWindow[]>(
-    anchor ? `timelines:${anchor.height}:${count}` : null,
-    (force) => loadHistoryWindows(anchor as HistoryAnchor, count, { force })
+    anchor ? `timelines:${anchor.height}:${windowCount}` : null,
+    (force) => loadHistoryWindows(anchor as HistoryAnchor, windowCount, { force })
   );
   // What the list reaches isn't new any more: the History tab's count drops it.
   const session = useSession();
@@ -77,7 +130,7 @@ export function ChainHistory() {
   useEffect(() => {
     if (me && shownTo) markHistorySeen(me, shownTo);
   }, [me, shownTo]);
-  // Keep the windows already on screen while an older one loads.
+  // Keep the windows already on screen while older ones load.
   const [previous, setPrevious] = useState<HistoryWindow[] | undefined>(undefined);
   useEffect(() => {
     if (query.data) setPrevious(query.data);
@@ -89,13 +142,15 @@ export function ChainHistory() {
   const threshold = group.data?.approvalThreshold;
   const owner = group.data?.owner;
   const adminCount = admins.data?.adminCount;
+  const ctx = useMemo<TimelineContext>(
+    () => ({ msPerBlock, maximumBlockDelay }),
+    [msPerBlock, maximumBlockDelay]
+  );
   // Decided only: what is still collecting signatures lives in Nominations and Decisions.
   const events = useMemo(() => {
     if (!windows) return [];
     const rows = windows.flatMap((w) => w.rows);
-    const decided = buildTimeline(rows, { msPerBlock, maximumBlockDelay }).filter(
-      (e) => e.outcome !== 'pending'
-    );
+    const decided = buildTimeline(rows, ctx).filter((e) => e.outcome !== 'pending');
     if (adminCount === undefined || !threshold || windows.some((w) => w.truncated)) return decided;
     // A change approved this long after the oldest window's start was confirmed inside the
     // windows read, so every change after it is in hand and its count is exact.
@@ -107,38 +162,53 @@ export function ChainHistory() {
       (step) => step.height >= exactFrom
     );
     return withTargetSteps(decided, steps);
-  }, [windows, msPerBlock, maximumBlockDelay, adminCount, threshold, owner]);
+  }, [windows, ctx, maximumBlockDelay, adminCount, threshold, owner]);
 
-  const [params, setParams] = useSearchParams();
-  const filter = parseHistoryFilter(appParam(params, 'type'));
-  const setFilter = (key: HistoryFilter) =>
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (key === 'all') next.delete('type');
-        else next.set('type', key);
-        return next;
-      },
-      { replace: true }
-    );
-  const chips = useMemo(() => historyFilterChips(events, filter), [events, filter]);
+  const choices = useMemo(() => historyFilterChoices(events, filter), [events, filter]);
   const filtered = useMemo(
-    () => (filter === 'all' ? events : events.filter((e) => matchesHistoryFilter(e, filter))),
-    [events, filter]
+    () =>
+      events.filter(
+        (e) => matchesHistoryFilter(e, filter) && (startMs === null || e.at >= startMs)
+      ),
+    [events, filter, startMs]
   );
 
   const loadingOlder = Boolean(windows && query.fetching && !query.data);
   const oldest = windows?.[windows.length - 1];
-  const canLoadOlder = count < HISTORY_MAX_WINDOWS && (oldest?.startHeight ?? 2) > 1;
-  const shown = expanded ? filtered : filtered.slice(0, FIRST_EVENTS);
-  const days = count * HISTORY_WINDOW_DAYS;
+  const canLoadOlder =
+    startMs === null &&
+    count < HISTORY_MAX_WINDOWS &&
+    (oldest?.startHeight ?? 2) > 1 &&
+    (created === undefined || (oldest?.startMs ?? Infinity) > created);
+  const shown = filtered.slice(0, limit);
+  const hidden = filtered.length - shown.length;
+  const label = historyFilterLabel(filter);
+  // Any time: as far as the windows read; a period: its own words.
+  const reach = startMs === null ? `since ${formatDate(oldest?.startMs ?? Date.now())}` : scope;
+  // The older days follow what is already shown.
   const loadOlder = () => {
-    setExpanded(true);
+    setLimit(filtered.length + MORE_EVENTS);
     setCount((c) => c + 1);
   };
+  const nowMs = chain.data?.timestamp ?? Date.now();
 
   let body;
-  if (!windows && (chain.isError || query.isError)) {
+  if (search && anchor) {
+    body = (
+      <TypedHistory
+        key={`${filter}:${startMs ?? 'any'}`}
+        anchor={anchor}
+        filter={filter}
+        types={search}
+        startMs={startMs}
+        scope={scope}
+        ctx={ctx}
+        known={events}
+        nowMs={nowMs}
+        onAnyTime={() => setPeriod({ kind: 'any' })}
+      />
+    );
+  } else if (!windows && (chain.isError || query.isError)) {
     body = (
       <ErrorState
         title="Couldn't load MINTER's history."
@@ -151,37 +221,33 @@ export function ChainHistory() {
   } else {
     body = (
       <>
-        {events.length && (chips.length > 2 || filter !== 'all') ? (
-          <TypeFilter chips={chips} filter={filter} onChange={setFilter} />
-        ) : null}
         {filtered.length ? (
           <TimelineList
             events={shown}
             showSubject
-            nowMs={chain.data?.timestamp ?? Date.now()}
+            nowMs={nowMs}
             label={
               filter === 'all'
                 ? 'MINTER events, newest first'
-                : `MINTER events: ${historyTypeLabel(filter)}, newest first`
+                : `MINTER events: ${label}, newest first`
             }
           />
-        ) : events.length ? (
+        ) : loadingOlder ? null : filter === 'all' ? (
           <EmptyState
-            title={`Nothing under “${filter === 'all' ? 'All' : historyTypeLabel(filter)}” in the last ${days} days.`}
-            description={
-              canLoadOlder
-                ? `Load the ${HISTORY_WINDOW_DAYS} days before, or show every type.`
-                : 'Show every type instead.'
-            }
-            actionLabel="Show all types"
-            onAction={() => setFilter('all')}
+            title={`Nothing changed in MINTER ${reach}.`}
+            description="No one was added, removed, banned or made an admin, and no one joined or left."
           />
         ) : (
           <EmptyState
-            title={`Nothing changed in MINTER in the last ${days} days.`}
-            description="No one was added, removed, banned or made an admin, and no one joined or left."
+            title={`Nothing under “${label}” ${reach}.`}
+            description={
+              canLoadOlder
+                ? `Load the ${HISTORY_WINDOW_DAYS} days before, or choose a longer period.`
+                : undefined
+            }
           />
         )}
+        {loadingOlder ? <ListSkeleton count={2} label="Loading older MINTER events" /> : null}
         {windows.some((w) => w.truncated) ? <TruncatedNote what="these MINTER events" /> : null}
         {query.isError && windows ? (
           <ErrorState
@@ -193,12 +259,17 @@ export function ChainHistory() {
         ) : null}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
           <Typography variant="body2" color="text.secondary" sx={{ flex: '1 1 200px' }}>
-            {filter === 'all' ? '' : `${formatCount(filtered.length)} of `}
-            {plural(events.length, 'event')} since {formatDate(oldest?.startMs ?? Date.now())}.
+            {plural(filtered.length, 'event')} {reach}.
           </Typography>
-          {filtered.length > shown.length ? (
-            <Button variant="outlined" onClick={() => setExpanded(true)} sx={{ minHeight: 44 }}>
-              Show all {filtered.length}
+          {hidden > 0 ? (
+            <Button
+              variant="outlined"
+              onClick={() =>
+                setLimit((n) => (hidden <= MORE_EVENTS ? filtered.length : n + MORE_EVENTS))
+              }
+              sx={{ minHeight: 44 }}
+            >
+              {hidden <= MORE_EVENTS ? `Show all ${filtered.length}` : `Show ${MORE_EVENTS} more`}
             </Button>
           ) : canLoadOlder && !query.isError ? (
             <Button
@@ -222,49 +293,19 @@ export function ChainHistory() {
         happened; proposals that expired or were rejected are marked. Open ones are in Nominations
         and Decisions.
       </Typography>
+      {anchor ? (
+        <HistoryFilterBar
+          choices={choices}
+          filter={filter}
+          onFilter={setFilter}
+          period={period}
+          onPeriod={setPeriod}
+          phone={phone}
+          earliest={created}
+          nowMs={anchor.timestamp}
+        />
+      ) : null}
       {body}
     </Section>
-  );
-}
-
-/** All, or one type of event: a chip each with its count, as Nominations' filters. */
-function TypeFilter({
-  chips,
-  filter,
-  onChange,
-}: {
-  chips: ReadonlyArray<{ key: HistoryFilter; label: string; count: number }>;
-  filter: HistoryFilter;
-  onChange: (filter: HistoryFilter) => void;
-}) {
-  return (
-    <Box
-      role="group"
-      aria-label="Show one type of event"
-      sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}
-    >
-      {chips.map((c) => {
-        const active = filter === c.key;
-        return (
-          <Chip
-            key={c.key}
-            clickable
-            aria-pressed={active}
-            color={active ? 'primary' : 'default'}
-            variant={active ? 'filled' : 'outlined'}
-            onClick={() => onChange(c.key)}
-            label={
-              <>
-                {c.label}{' '}
-                <Box component="span" sx={{ ml: 0.5, fontWeight: 700 }}>
-                  {formatCount(c.count)}
-                </Box>
-              </>
-            }
-            sx={{ height: { xs: 44, sm: 40 }, borderRadius: 999, px: 0.5 }}
-          />
-        );
-      })}
-    </Box>
   );
 }

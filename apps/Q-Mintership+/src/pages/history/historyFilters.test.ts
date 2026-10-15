@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { buildTimeline } from '../../data/timeline';
 import type { TxRow } from '../../data/types';
+import { fromDateInput } from '../activity/range';
 import {
-  HISTORY_TYPES,
-  historyFilterChips,
+  historyFilterChoices,
   historyType,
   matchesHistoryFilter,
   parseHistoryFilter,
+  parseHistoryPeriod,
+  periodStartMs,
+  periodWords,
+  searchTypesFor,
+  windowsFor,
 } from './historyFilters';
 
 const CTX = { msPerBlock: 60_000, maximumBlockDelay: 10_080 };
@@ -65,7 +70,7 @@ describe('History: type filters', () => {
       ['Approved invite cancelled', 'cancelInvite'],
       ['Ban lifted', 'liftBan'],
       ['Left MINTER', 'left'],
-      ['Banned from MINTER', 'removal'],
+      ['Banned from MINTER', 'ban'],
       ['Join request declined', 'declined'],
       ['Asked to join MINTER', 'joinRequest'],
       ['Joined MINTER', 'joined'],
@@ -73,7 +78,7 @@ describe('History: type filters', () => {
     ]);
   });
 
-  it('removals and bans share a type; a kick of a member is a removal', () => {
+  it('a kick of a member is a removal, apart from bans', () => {
     const events = buildTimeline(
       [
         tx('GROUP_INVITE', 10, { invitee: who(1), approvalHeight: 20 }),
@@ -88,33 +93,38 @@ describe('History: type filters', () => {
     ]);
   });
 
-  it('offers All and the types with events, in a fixed order, with counts', () => {
-    const chips = historyFilterChips(everyType(), 'all');
-    expect(chips.map((c) => [c.label, c.count])).toEqual([
-      ['All', 11],
-      ['Invites', 2],
-      ['Join requests', 1],
-      ['Joined MINTER', 1],
-      ['Declined requests', 1],
-      ['Removals and bans', 1],
-      ['Left MINTER', 1],
-      ['Bans lifted', 1],
-      ['Cancelled invites', 1],
-      ['Minter Admin changes', 2],
+  it('offers All and every type, in a fixed order; Other changes only when there are some', () => {
+    const labels = historyFilterChoices([], 'all').map((c) => c.label);
+    expect(labels).toEqual([
+      'All',
+      'Invites',
+      'Join requests',
+      'Joined MINTER',
+      'Declined requests',
+      'Removals',
+      'Bans',
+      'Left MINTER',
+      'Bans lifted',
+      'Cancelled invites',
+      'Minter Admin changes',
     ]);
-    // Other changes has no events here, so no chip.
-    expect(HISTORY_TYPES.at(-1)?.key).toBe('other');
+    expect(historyFilterChoices([], 'other').at(-1)?.label).toBe('Other changes');
+    expect(
+      historyFilterChoices([{ kind: 'other', decline: false, joinRequest: false }], 'all').at(-1)
+        ?.label
+    ).toBe('Other changes');
   });
 
-  it('keeps the chosen type with none, so it can be seen and left', () => {
-    const events = everyType().filter((e) => historyType(e) !== 'liftBan');
-    expect(historyFilterChips(events, 'all').some((c) => c.key === 'liftBan')).toBe(false);
-    expect(historyFilterChips(events, 'liftBan').find((c) => c.key === 'liftBan')).toEqual({
-      key: 'liftBan',
-      label: 'Bans lifted',
-      count: 0,
-    });
-    expect(historyFilterChips([], 'all')).toEqual([{ key: 'all', label: 'All', count: 0 }]);
+  it('searches decision types across MINTER’s history; joins and leaves stay in windows', () => {
+    expect(searchTypesFor('ban')).toEqual(['GROUP_BAN']);
+    expect(searchTypesFor('removal')).toEqual(['GROUP_KICK']);
+    expect(searchTypesFor('declined')).toEqual(['GROUP_KICK']);
+    expect(searchTypesFor('invite')).toEqual(['GROUP_INVITE']);
+    expect(searchTypesFor('liftBan')).toEqual(['CANCEL_GROUP_BAN']);
+    expect(searchTypesFor('cancelInvite')).toEqual(['CANCEL_GROUP_INVITE']);
+    expect(searchTypesFor('admins')).toEqual(['ADD_GROUP_ADMIN', 'REMOVE_GROUP_ADMIN']);
+    for (const windowed of ['all', 'joinRequest', 'joined', 'left', 'other'] as const)
+      expect(searchTypesFor(windowed)).toBeNull();
   });
 
   it('filters, and reads ?type= safely', () => {
@@ -124,9 +134,45 @@ describe('History: type filters', () => {
       'Nominated for MINTER',
       'Approved for MINTER',
     ]);
-    expect(parseHistoryFilter('admins')).toBe('admins');
+    expect(parseHistoryFilter('ban')).toBe('ban');
     expect(parseHistoryFilter('all')).toBe('all');
     expect(parseHistoryFilter('nonsense')).toBe('all');
     expect(parseHistoryFilter(null)).toBe('all');
+  });
+});
+
+describe('History: the period', () => {
+  const NOW = Date.UTC(2026, 9, 15, 12);
+  const DAY = 86_400_000;
+
+  it('reads ?period= and ?from=, anything else is any time', () => {
+    expect(parseHistoryPeriod(null, null)).toEqual({ kind: 'any' });
+    expect(parseHistoryPeriod('60', null)).toEqual({ kind: 'days', days: 60 });
+    expect(parseHistoryPeriod('365', null)).toEqual({ kind: 'days', days: 365 });
+    expect(parseHistoryPeriod('45', null)).toEqual({ kind: 'any' });
+    expect(parseHistoryPeriod(null, '2026-01-03')).toEqual({ kind: 'from', date: '2026-01-03' });
+    // A date wins over a number; a broken date doesn't count.
+    expect(parseHistoryPeriod('60', '2026-01-03')).toEqual({ kind: 'from', date: '2026-01-03' });
+    expect(parseHistoryPeriod('60', '3 Jan')).toEqual({ kind: 'days', days: 60 });
+  });
+
+  it('says where it starts, in words', () => {
+    expect(periodStartMs({ kind: 'any' }, NOW)).toBeNull();
+    expect(periodStartMs({ kind: 'days', days: 120 }, NOW)).toBe(NOW - 120 * DAY);
+    const from = periodStartMs({ kind: 'from', date: '2026-01-03' }, NOW);
+    expect(from).toBe(fromDateInput('2026-01-03'));
+    expect(periodWords({ kind: 'any' }, null)).toBe('in all of MINTER’s history');
+    expect(periodWords({ kind: 'days', days: 60 }, NOW - 60 * DAY)).toBe('in the last 60 days');
+    expect(periodWords({ kind: 'days', days: 365 }, NOW - 365 * DAY)).toBe('in the last year');
+    expect(periodWords({ kind: 'from', date: '2026-01-03' }, from)).toBe('since 3 Jan 2026');
+  });
+
+  it('reads the 30-day windows a period covers, at most three years', () => {
+    expect(windowsFor(NOW - 10 * DAY, NOW)).toBe(1);
+    expect(windowsFor(NOW - 30 * DAY, NOW)).toBe(1);
+    expect(windowsFor(NOW - 60 * DAY, NOW)).toBe(2);
+    expect(windowsFor(NOW - 120 * DAY, NOW)).toBe(4);
+    expect(windowsFor(NOW - 365 * DAY, NOW)).toBe(13);
+    expect(windowsFor(NOW - 5000 * DAY, NOW)).toBe(36);
   });
 });
