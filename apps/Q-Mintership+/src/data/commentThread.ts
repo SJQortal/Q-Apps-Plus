@@ -263,8 +263,12 @@ export interface CommentView {
   deleted: boolean;
   edited: boolean;
   replyTo: string | null;
-  /** For a reply to a reply: whose comment it answers (threads are one level deep). */
+  /** For a reply: whose comment it answers (threads are one level deep, so it may be another reply). */
   replyToName: string | null;
+  /** For a reply: the `ref` of the comment it answers, to go to it. */
+  replyToRef: string | null;
+  /** For a reply: the start of the text it answers; null when that is deleted, hidden, muted or unread. */
+  replyToExcerpt: string | null;
   hidden: boolean;
   muted: boolean;
   /** Published from here, not on QDN yet (or this version isn't). */
@@ -299,6 +303,19 @@ export interface BuildThreadsInput {
 
 const MAX_DEPTH = 20;
 
+/** Characters of the answered comment a reply quotes (the quote shows two lines at most). */
+export const REPLY_EXCERPT_CHARS = 140;
+
+/** The start of a comment, on one line, for a reply's quote; nothing it wouldn't show itself. */
+function excerptOf(v: CommentView): string | null {
+  if (v.status !== 'shown' || v.deleted || v.hidden || v.muted) return null;
+  const text = v.text.replace(/\s+/g, ' ').trim();
+  if (!text) return null;
+  return text.length > REPLY_EXCERPT_CHARS
+    ? `${text.slice(0, REPLY_EXCERPT_CHARS).trimEnd()}…`
+    : text;
+}
+
 export function buildThreads(input: BuildThreadsInput): CommentThread[] {
   const pending = new Map((input.optimistic ?? []).map((o) => [o.ref, o]));
   const views: CommentView[] = [];
@@ -316,6 +333,8 @@ export function buildThreads(input: BuildThreadsInput): CommentThread[] {
     edited: Boolean(record?.edited) && !record?.deleted,
     replyTo: record?.replyTo ?? null,
     replyToName: null,
+    replyToRef: null,
+    replyToExcerpt: null,
     hidden: input.optimisticHides?.get(base.ref) ?? input.hides.get(base.ref) ?? false,
     muted: input.muted.has(base.name),
     pending: extra.pending,
@@ -384,7 +403,16 @@ export function buildThreads(input: BuildThreadsInput): CommentThread[] {
       continue;
     }
     const direct = reply.replyTo ? byIdentifier.get(reply.replyTo) : undefined;
-    list.push(direct && direct !== root ? { ...reply, replyToName: direct.name } : reply);
+    list.push(
+      direct
+        ? {
+            ...reply,
+            replyToName: direct.name,
+            replyToRef: direct.ref,
+            replyToExcerpt: excerptOf(direct),
+          }
+        : reply
+    );
   }
   return [...threads]
     .map(([comment, list]) => ({

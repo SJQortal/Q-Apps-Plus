@@ -43,7 +43,9 @@ describe('a Minter Admin poll’s own page', () => {
     expect(screen.getByRole('button', { name: 'Copy a link to this poll' })).toBeVisible();
     expect(within(card).queryByRole('button', { name: /^Copy link to/ })).toBeNull();
     const thread = await within(card).findByRole('region', { name: `Comments on ${OPEN_Q}` }, T);
-    expect(await within(thread).findByText(/they know how the network works/, {}, T)).toBeVisible();
+    expect(
+      await within(thread).findByText(/they know how the network works/, { selector: 'p' }, T)
+    ).toBeVisible();
     await expectNoAxeViolations(document.body);
   });
 

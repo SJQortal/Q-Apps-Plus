@@ -253,7 +253,7 @@ describe('buildThreads', () => {
   const none = new Map<string, boolean>();
   const muted = new Set<string>();
 
-  it('newest first, replies one level deep and oldest first, a reply to a reply says whom', () => {
+  it('newest first, replies one level deep and oldest first, each reply says whom it answers', () => {
     const a = row('Ada', 'aaaaaa', 100);
     const b = row('Bob', 'bbbbbb', 200);
     const r1 = row('Cy', 'rrrrr1', 300);
@@ -266,10 +266,50 @@ describe('buildThreads', () => {
     ]);
     const threads = buildThreads({ rows: [r2, r1, b, a], bodies, hides: none, muted });
     expect(threads.map((t) => t.comment.name)).toEqual(['Bob', 'Ada']);
-    expect(threads[1].replies.map((r) => [r.name, r.replyToName])).toEqual([
-      ['Cy', null],
-      ['Dee', 'Cy'],
+    expect(
+      threads[1].replies.map((r) => [r.name, r.replyToName, r.replyToRef, r.replyToExcerpt])
+    ).toEqual([
+      ['Cy', 'Ada', a.ref, 'First'],
+      ['Dee', 'Cy', r1.ref, 'Reply to Ada'],
     ]);
+    expect(threads[1].comment.replyToName).toBeNull();
+  });
+
+  it('a reply quotes the start of what it answers, on one line, and nothing it wouldn’t show', () => {
+    const long = row('Ada', 'aaaaaa', 100);
+    const hidden = row('Bob', 'bbbbbb', 200);
+    const gone = row('Eve', 'eeeeee', 250);
+    const loud = row('Loud', 'llllll', 260);
+    const replies = [
+      row('Cy', 'rrrrr1', 300),
+      row('Cy', 'rrrrr2', 400),
+      row('Cy', 'rrrrr3', 500),
+      row('Cy', 'rrrrr4', 600),
+    ];
+    const text = `Line one\n\n  line   two ${'x'.repeat(200)}`;
+    const bodies = new Map<string, CommentBody>([
+      [long.ref, ok(text)],
+      [hidden.ref, ok('Cheap QORT here')],
+      [gone.ref, ok('', { deleted: true })],
+      [loud.ref, ok('LOUD')],
+      [replies[0].ref, ok('a', { replyTo: long.identifier })],
+      [replies[1].ref, ok('b', { replyTo: hidden.identifier })],
+      [replies[2].ref, ok('c', { replyTo: gone.identifier })],
+      [replies[3].ref, ok('d', { replyTo: loud.identifier })],
+    ]);
+    const threads = buildThreads({
+      rows: [...replies, long, hidden, gone, loud],
+      bodies,
+      hides: new Map([[hidden.ref, true]]),
+      muted: new Set(['Loud']),
+    });
+    const quote = (name: string) =>
+      threads.find((t) => t.comment.name === name)?.replies[0]?.replyToExcerpt;
+    const first = quote('Ada');
+    expect(first).toBe(`Line one line two ${'x'.repeat(140 - 'Line one line two '.length)}…`);
+    expect(quote('Bob')).toBeNull();
+    expect(quote('Eve')).toBeNull();
+    expect(quote('Loud')).toBeNull();
   });
 
   it('a deleted comment keeps its place and its replies; an invalid one is left out', () => {

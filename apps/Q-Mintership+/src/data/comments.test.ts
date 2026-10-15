@@ -102,7 +102,7 @@ describe('loadCommentThread', () => {
     ]);
     expect(threads[0].comment.hidden).toBe(true);
     expect(threads[1].replies.map((r) => [r.name, r.replyToName])).toEqual([
-      ['Nora Nominator', null],
+      ['Nora Nominator', 'Member 7'],
       ['Zoë Newcomer', 'Nora Nominator'],
     ]);
     expect(threads[2].comment.edited).toBe(true);

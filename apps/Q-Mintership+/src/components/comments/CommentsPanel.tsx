@@ -35,6 +35,7 @@ import {
   PublishCommentDialog,
   type PublishMode,
 } from './CommentDialogs';
+import { CommentReplies, ReplyComposerBox } from './CommentReplies';
 import { CommentItem, type CommentViewer } from './CommentItem';
 
 const REFRESH_MS = 60_000;
@@ -288,19 +289,7 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
                 {...itemHandlers}
               >
                 {t.replies.length ? (
-                  <Box
-                    component="ul"
-                    aria-label={`Replies to ${t.comment.name}`}
-                    sx={{
-                      listStyle: 'none',
-                      m: 0,
-                      mt: 0.5,
-                      p: 0,
-                      pl: 1.5,
-                      borderLeft: 2,
-                      borderColor: 'divider',
-                    }}
-                  >
+                  <CommentReplies name={t.comment.name}>
                     {t.replies.map((r) => (
                       <CommentItem
                         key={r.ref}
@@ -324,10 +313,10 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
                         {...itemHandlers}
                       />
                     ))}
-                  </Box>
+                  </CommentReplies>
                 ) : null}
                 {replying ? (
-                  <Box sx={{ pl: 1.5, pt: 1 }}>
+                  <ReplyComposerBox>
                     <Composer
                       label={`Reply to ${replying.comment.name}`}
                       value={replying.text}
@@ -338,7 +327,7 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
                       submitLabel="Post reply"
                       autoFocus
                     />
-                  </Box>
+                  </ReplyComposerBox>
                 ) : null}
               </CommentItem>
             );

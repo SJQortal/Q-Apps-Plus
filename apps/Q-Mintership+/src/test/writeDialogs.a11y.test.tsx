@@ -405,7 +405,7 @@ describe('Write dialogs by keyboard: comments', () => {
       { persona, setup: (world) => (ids = addComments(world).ids) }
     );
     const panel = await screen.findByRole('region', { name: `Comments on ${LABEL}` }, T);
-    await within(panel).findByText(/Wren helped me set up my node/, {}, T);
+    await within(panel).findByText(/Wren helped me set up my node/, { selector: 'p' }, T);
     const li = (id: string) => document.querySelector<HTMLElement>(`[data-comment="${ids[id]}"]`)!;
     return { panel, ids, li };
   }

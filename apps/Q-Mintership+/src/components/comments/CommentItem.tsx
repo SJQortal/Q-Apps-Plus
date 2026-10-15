@@ -6,7 +6,8 @@
  * name you muted, is folded away with "Show anyway".
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Box, Button, Typography } from '@mui/material';
+import { Box, Button, ButtonBase, Typography } from '@mui/material';
+import { visuallyHidden } from '@mui/utils';
 import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
@@ -17,6 +18,8 @@ import VolumeUpOutlinedIcon from '@mui/icons-material/VolumeUpOutlined';
 import { getNameOwner } from '../../data/accounts';
 import type { CommentView } from '../../data/commentThread';
 import { useQuery } from '../../hooks/useQuery';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { accentWash } from '../../hub-theme';
 import { PersonByName } from '../../pages/history/parts/PersonByName';
 import { formatDateTime, formatRelative } from '../../utils/format';
 import { CommentMenu, type CommentAction } from './CommentMenu';
@@ -54,6 +57,82 @@ function Muted({ children }: { children: ReactNode }) {
     <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
       {children}
     </Typography>
+  );
+}
+
+/** How long the comment a reply answers stays highlighted after going to it. */
+const FLASH_MS = 1600;
+
+/**
+ * Above a reply's text: whose comment it answers and how that began. Pressing
+ * it goes to that comment (scrolled to the middle, focused and briefly
+ * highlighted), which may be another reply in the same thread.
+ */
+function ReplyQuote({ comment: c }: { comment: CommentView }) {
+  const reduced = useReducedMotion();
+  const goToParent = (from: HTMLElement) => {
+    const thread = from.closest<HTMLElement>('[data-thread-root]');
+    const target = [
+      ...(thread ? [thread] : []),
+      ...(thread?.querySelectorAll<HTMLElement>('[data-comment-ref]') ?? []),
+    ].find((el) => el.dataset.commentRef === c.replyToRef);
+    if (!target) return;
+    target.scrollIntoView?.({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
+    target.focus({ preventScroll: true });
+    target.dataset.flash = 'true';
+    window.setTimeout(() => delete target.dataset.flash, FLASH_MS);
+  };
+  return (
+    <ButtonBase
+      onClick={(e) => goToParent(e.currentTarget)}
+      sx={(theme) => ({
+        alignSelf: 'flex-start',
+        maxWidth: '100%',
+        minHeight: 44,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        textAlign: 'left',
+        px: 1.25,
+        py: 0.5,
+        borderLeft: 3,
+        borderColor: 'primary.main',
+        borderRadius: `0 ${theme.shape.borderRadius}px ${theme.shape.borderRadius}px 0`,
+        color: 'text.secondary',
+        '&:hover': { bgcolor: accentWash(theme, 0.08) },
+        '&.Mui-focusVisible': {
+          outline: `2px solid ${theme.palette.primary.main}`,
+          outlineOffset: 2,
+        },
+      })}
+    >
+      <Typography
+        variant="body2"
+        component="span"
+        sx={{ fontWeight: 600, color: 'text.primary', overflowWrap: 'anywhere' }}
+      >
+        Replying to {c.replyToName}
+      </Typography>
+      {c.replyToExcerpt ? (
+        <Typography
+          variant="body2"
+          component="span"
+          sx={{
+            overflowWrap: 'anywhere',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}
+        >
+          {c.replyToExcerpt}
+        </Typography>
+      ) : null}
+      <Box component="span" sx={visuallyHidden}>
+        (go to that comment)
+      </Box>
+    </ButtonBase>
   );
 }
 
@@ -167,7 +246,7 @@ export function CommentItem(props: CommentItemProps) {
     body = (
       <>
         <PersonByName name={c.name} size={isReply ? 24 : 28} secondary={when} />
-        {c.replyToName ? <Muted>Replying to {c.replyToName}</Muted> : null}
+        {isReply && c.replyToName ? <ReplyQuote comment={c} /> : null}
         <Box ref={bodyRef} tabIndex={-1} sx={{ outline: 'none', minWidth: 0 }}>
           {editor ? (
             editor
@@ -214,11 +293,17 @@ export function CommentItem(props: CommentItemProps) {
       component="li"
       tabIndex={-1}
       data-comment={c.identifier}
+      data-comment-ref={c.ref}
+      data-thread-root={isReply ? undefined : ''}
       sx={(theme) => ({
         py: 1.25,
         outline: 'none',
+        borderRadius: 1,
+        transition: theme.transitions.create('background-color'),
         // Focus comes here when a dialog or an editor about it closes.
         '&:focus-visible': { boxShadow: `0 0 0 2px ${theme.palette.primary.main}` },
+        // A reply's quote went here.
+        '&[data-flash="true"]': { bgcolor: accentWash(theme, 0.18) },
         '& + &': isReply ? {} : { borderTop: 1, borderColor: 'divider' },
       })}
     >

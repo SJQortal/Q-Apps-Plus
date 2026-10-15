@@ -453,7 +453,9 @@ describe('comments on a poll', () => {
     const card = await pollCard(OPEN_Q);
     await u.click(within(card).getByRole('button', { name: `Comments (3): ${OPEN_Q}` }));
     const thread = await within(card).findByRole('region', { name: `Comments on ${OPEN_Q}` }, T);
-    expect(await within(thread).findByText(/they know how the network works/, {}, T)).toBeVisible();
+    expect(
+      await within(thread).findByText(/they know how the network works/, { selector: 'p' }, T)
+    ).toBeVisible();
     const replies = within(thread).getByRole('list', { name: 'Replies to Admin C' });
     expect(within(replies).getByText(/Level isn't everything/)).toBeVisible();
     // A qortal:// link in a comment is a button, as in public comments.

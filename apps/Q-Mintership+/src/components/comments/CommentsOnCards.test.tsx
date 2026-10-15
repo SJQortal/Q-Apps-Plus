@@ -54,7 +54,7 @@ describe('comments on the cards', () => {
       T
     );
     expect(
-      await within(region).findByText(/Their node has been steady all month/, {}, T)
+      await within(region).findByText(/Their node has been steady all month/, { selector: 'p' }, T)
     ).toBeVisible();
     expect(within(region).getByText(/answers questions in the minting chat/)).toBeVisible();
     const replies = within(region).getByRole('list', { name: 'Replies to Admin C' });
@@ -97,7 +97,9 @@ describe('comments on the cards', () => {
       { timeout: 6000 }
     );
     await user.click(toggle);
-    expect(await screen.findByText(/Wren helped me set up my node/, {}, T)).toBeVisible();
+    expect(
+      await screen.findByText(/Wren helped me set up my node/, { selector: 'p' }, T)
+    ).toBeVisible();
     expect(document.querySelector(`[data-comment="${ids.spam}"]`)).toHaveTextContent(
       'Hidden by a Minter Admin.'
     );

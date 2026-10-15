@@ -692,7 +692,7 @@ export default {
         await settle(page);
         await page
           .getByRole('region', { name: /^Comments on / })
-          .getByText(/they know how the network works/)
+          .locator('p', { hasText: /they know how the network works/ })
           .waitFor({ timeout: 8000 });
         await page.waitForTimeout(300);
       }, `/decisions/polls/${ADMIN_POLL_IDS.open}`),

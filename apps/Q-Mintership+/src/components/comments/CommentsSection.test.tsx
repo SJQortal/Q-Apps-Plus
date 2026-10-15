@@ -76,14 +76,16 @@ describe('CommentsSection', () => {
     const { ids } = await show('learner');
     await user.click(await toggle());
     const panel = await region();
-    expect(await within(panel).findByText(/Wren helped me set up my node/)).toBeVisible();
+    expect(
+      await within(panel).findByText(/Wren helped me set up my node/, { selector: 'p' })
+    ).toBeVisible();
     const list = within(panel).getByRole('list', { name: `Comments on ${LABEL}, newest first` });
     // Top level: the hidden one (folded), Member 7, Lou Left, Member 3 (deleted).
     expect(within(commentLi(ids.spam)).getByText('Hidden by a Minter Admin.')).toBeVisible();
     expect(within(commentLi(ids.spam)).queryByText(/Cheap QORT/)).toBeNull();
     const replies = within(list).getByRole('list', { name: 'Replies to Member 7' });
     expect(within(replies).getByText('Replying to Nora Nominator')).toBeVisible();
-    expect(within(replies).getByRole('button', { name: /WrenNodeGuide/ })).toBeVisible();
+    expect(within(replies).getByRole('button', { name: 'WEBSITE/WrenNodeGuide' })).toBeVisible();
     expect(within(commentLi(ids.online)).getByText(/· edited/)).toBeVisible();
     expect(within(commentLi(ids.deleted)).getByText('Deleted')).toBeVisible();
     expect(within(commentLi(ids.civil)).getByText(/keep it about minting/)).toBeVisible();
@@ -91,6 +93,26 @@ describe('CommentsSection', () => {
     expect(within(commentLi(ids.helped)).queryByText('Hidden by a Minter Admin.')).toBeNull();
     // Anyone with a registered name can comment, at any level.
     expect(within(panel).getByRole('textbox', { name: 'Write a comment' })).toBeVisible();
+  });
+
+  it('each reply quotes the comment it answers, and the quote goes to that comment', async () => {
+    const user = userEvent.setup();
+    const { ids } = await show('learner');
+    await user.click(await toggle());
+    const panel = await region();
+    const replies = await within(panel).findByRole('list', { name: 'Replies to Member 7' });
+    const quotes = await within(replies).findAllByRole('button', { name: /^Replying to / });
+    expect(quotes.map((q) => q.textContent)).toEqual([
+      'Replying to Member 7Wren helped me set up my node last month. Patient, clear, and they checked back a week later to see it was still minting.(go to that comment)',
+      'Replying to Nora NominatorSame experience here. Their node guide is worth a read: qortal://WEBSITE/WrenNodeGuide(go to that comment)',
+    ]);
+    // Zoë answered Nora's reply: the quote goes there, in the same thread.
+    await user.click(quotes[1]);
+    const nora = commentLi(ids.sameHere);
+    expect(nora).toHaveFocus();
+    expect(nora).toHaveAttribute('data-flash', 'true');
+    await user.click(quotes[0]);
+    expect(commentLi(ids.helped)).toHaveFocus();
   });
 
   it('reads 20 at a time: Show more reads the next ones, keeping the first on screen', async () => {
@@ -108,7 +130,9 @@ describe('CommentsSection', () => {
     ).toHaveLength(20);
     await user.click(within(panel).getByRole('button', { name: 'Show more comments (11)' }));
     expect(await within(panel).findByText('Extra comment 22')).toBeVisible();
-    expect(within(panel).getByText(/Wren helped me set up my node/)).toBeVisible();
+    expect(
+      within(panel).getByText(/Wren helped me set up my node/, { selector: 'p' })
+    ).toBeVisible();
     expect(within(panel).getByText('Extra comment 0')).toBeVisible();
     expect(within(panel).queryByRole('button', { name: /Show more comments/ })).toBeNull();
     // The button went with the last page: focus is on the first comment it brought.
@@ -433,7 +457,9 @@ describe('CommentsSection', () => {
     await show('outside', { open: true });
     const panel = await region();
     expect(within(panel).getByText('Open Q-Mintership+ in Qortal Hub to comment.')).toBeVisible();
-    expect(await within(panel).findByText(/Wren helped me set up my node/)).toBeVisible();
+    expect(
+      await within(panel).findByText(/Wren helped me set up my node/, { selector: 'p' })
+    ).toBeVisible();
     expect(within(panel).queryByRole('button', { name: /more actions/ })).toBeNull();
   });
 });

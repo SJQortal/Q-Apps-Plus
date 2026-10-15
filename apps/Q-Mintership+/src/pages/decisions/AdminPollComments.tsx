@@ -10,6 +10,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Box, Button, Typography } from '@mui/material';
+import { CommentReplies, ReplyComposerBox } from '../../components/comments/CommentReplies';
 import { CommentItem, type CommentViewer } from '../../components/comments/CommentItem';
 import { Composer } from '../../components/comments/CommentsPanel';
 import { ErrorState, ListSkeleton } from '../../components/common/states';
@@ -301,19 +302,7 @@ export default function AdminPollComments({
                 {...handlers}
               >
                 {t.replies.length ? (
-                  <Box
-                    component="ul"
-                    aria-label={`Replies to ${t.comment.name}`}
-                    sx={{
-                      listStyle: 'none',
-                      m: 0,
-                      mt: 0.5,
-                      p: 0,
-                      pl: 1.5,
-                      borderLeft: 2,
-                      borderColor: 'divider',
-                    }}
-                  >
+                  <CommentReplies name={t.comment.name}>
                     {t.replies.map((r) => (
                       <CommentItem
                         key={r.ref}
@@ -327,10 +316,10 @@ export default function AdminPollComments({
                         {...handlers}
                       />
                     ))}
-                  </Box>
+                  </CommentReplies>
                 ) : null}
                 {replying ? (
-                  <Box sx={{ pl: 1.5, pt: 1 }}>
+                  <ReplyComposerBox>
                     <Composer
                       label={`Reply to ${replying.comment.name}`}
                       value={replying.text}
@@ -341,7 +330,7 @@ export default function AdminPollComments({
                       submitLabel="Post reply"
                       autoFocus
                     />
-                  </Box>
+                  </ReplyComposerBox>
                 ) : null}
               </CommentItem>
             );
