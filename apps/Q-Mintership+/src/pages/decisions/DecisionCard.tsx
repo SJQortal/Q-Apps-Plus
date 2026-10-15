@@ -36,9 +36,8 @@ import {
 } from '../../components/decision/Considering';
 import { answerBadges } from '../../components/comments/answerBadges';
 import { useConsideringFor } from '../../hooks/useConsidering';
-import { useClamped } from '../../hooks/useClamped';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
-import { QortalLinks } from '../../components/common/QortalLinks';
+import { ReasonFrame } from '../../components/nomination/ReasonFrame';
 import { decisionPath } from '../../routes/paths';
 import { ProgressRing } from '../../components/common/ProgressRing';
 import { Card, DecisionPhaseChip } from '../../components/common/Section';
@@ -612,11 +611,7 @@ function InviteDetails({
   now: ChainNow;
   showAccepted: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const reasonId = useId();
-  const [reasonNode, setReasonNode] = useState<HTMLElement | null>(null);
   const record = n?.nomination;
-  const clamped = useClamped(reasonNode, record?.record.reason ?? '');
   const supporters = n?.supporters.map((s) => s.publisher) ?? [];
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
@@ -639,36 +634,7 @@ function InviteDetails({
             ) : null}
             .
           </Typography>
-          <Typography
-            ref={setReasonNode}
-            id={reasonId}
-            sx={{
-              whiteSpace: 'pre-wrap',
-              overflowWrap: 'anywhere',
-              ...(expanded
-                ? {}
-                : {
-                    display: '-webkit-box',
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                  }),
-            }}
-          >
-            {record.record.reason}
-          </Typography>
-          {clamped || expanded ? (
-            <Button
-              size="small"
-              onClick={() => setExpanded((v) => !v)}
-              aria-expanded={expanded}
-              aria-controls={reasonId}
-              sx={{ alignSelf: 'flex-start', minHeight: 44 }}
-            >
-              {expanded ? 'Show less' : 'Show the whole reason'}
-            </Button>
-          ) : null}
-          <QortalLinks links={record.record.links} />
+          <ReasonFrame reason={record.record.reason} links={record.record.links} />
         </>
       ) : nominationsState === 'loading' ? (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

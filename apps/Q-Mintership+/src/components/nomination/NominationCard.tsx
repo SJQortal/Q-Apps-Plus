@@ -22,7 +22,7 @@ import { ConsideringCount } from '../decision/Considering';
 import { nominationPath } from '../../routes/paths';
 import { Countdown } from '../common/Countdown';
 import { CopyLinkButton } from '../common/CopyLinkButton';
-import { QortalLinks } from '../common/QortalLinks';
+import { ReasonFrame } from './ReasonFrame';
 import { PersonChip, PersonInline } from '../common/Person';
 import { ProgressRing } from '../common/ProgressRing';
 import { Card, NominationStateChip } from '../common/Section';
@@ -148,26 +148,13 @@ export function NominationCard({
         </Typography>
       ) : null}
 
-      {n.nomination?.record.reason ? (
-        <Typography
-          sx={{
-            whiteSpace: 'pre-wrap',
-            overflowWrap: 'anywhere',
-            ...(compact
-              ? {
-                  display: '-webkit-box',
-                  WebkitLineClamp: 3,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                }
-              : {}),
-          }}
-        >
-          {n.nomination.record.reason}
-        </Typography>
+      {n.nomination ? (
+        <ReasonFrame
+          reason={n.nomination.record.reason}
+          links={n.nomination.record.links}
+          compact={compact}
+        />
       ) : null}
-
-      {n.nomination ? <QortalLinks links={n.nomination.record.links} /> : null}
 
       {notes.length ? (
         <Box
