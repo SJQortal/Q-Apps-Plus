@@ -1,7 +1,7 @@
 /**
  * A nomination's reason, with its links, in a frame that sets the
- * nominator's own words apart from the card's other lines. Shown in full on
- * wider screens. On phones a long
+ * nominator's own words apart from the card's other lines: a tinted box
+ * with an accent border. Shown in full on wider screens. On phones a long
  * reason shows its first lines with "Show the whole reason" (only when it
  * is really cut off: measured); Home's compact cards keep three lines.
  */
@@ -42,9 +42,9 @@ export function ReasonFrame({
         px: { xs: 1.25, sm: 1.5 },
         py: 1,
         border: 1,
-        borderColor: 'divider',
+        borderColor: accentWash(theme, 0.45),
         borderRadius: `${theme.shape.borderRadius}px`,
-        bgcolor: accentWash(theme, 0.04),
+        bgcolor: accentWash(theme, 0.08),
       })}
     >
       <Typography

@@ -6,7 +6,7 @@
  * name you muted, is folded away with "Show anyway".
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Box, Button, ButtonBase, Typography, type ChipProps } from '@mui/material';
+import { alpha, Box, Button, ButtonBase, Typography, type ChipProps } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
 import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
@@ -346,7 +346,7 @@ export function CommentItem(props: CommentItemProps) {
           : {
               px: { xs: 1.25, sm: 1.5 },
               border: 1,
-              borderColor: 'divider',
+              borderColor: alpha(theme.palette.text.primary, 0.24),
             }),
         // Focus comes here when a dialog or an editor about it closes.
         '&:focus-visible': { boxShadow: `0 0 0 2px ${theme.palette.primary.main}` },
