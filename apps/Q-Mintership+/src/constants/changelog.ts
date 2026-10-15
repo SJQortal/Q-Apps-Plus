@@ -37,6 +37,7 @@ export const CHANGELOG: Release[] = [
           'Names inside sentences are always underlined, and the signature ring’s "of 8" is easier to read.',
           'A nomination’s links show straight away, each with the icon of the app or website it opens.',
           'Avatars your node is still fetching come in by themselves, without a refresh; until then, the name’s first letter shows.',
+          'Replies stand apart from the comment they answer, and each quotes it: press the quote to go there.',
         ],
       },
       {
