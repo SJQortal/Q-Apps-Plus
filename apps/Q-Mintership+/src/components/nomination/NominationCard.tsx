@@ -27,6 +27,7 @@ import { PersonChip, PersonInline } from '../common/Person';
 import { ProgressRing } from '../common/ProgressRing';
 import { Card, NominationStateChip } from '../common/Section';
 import { CommentsSection } from '../comments/CommentsSection';
+import { tallyBadges } from '../comments/answerBadges';
 import { readable } from '../../utils/readable';
 
 export interface NominationCardProps {
@@ -265,6 +266,7 @@ export function NominationCard({
         <CommentsSection
           target={nominationCommentTarget(n)}
           label={`the nomination of ${nominee.label}`}
+          answers={tallyBadges(tally, considering.people)}
           defaultOpen={comments === 'open'}
         />
       ) : null}

@@ -6,7 +6,7 @@
  * name you muted, is folded away with "Show anyway".
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Box, Button, ButtonBase, Typography } from '@mui/material';
+import { Box, Button, ButtonBase, Typography, type ChipProps } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
 import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
@@ -24,6 +24,13 @@ import { PersonByName } from '../../pages/history/parts/PersonByName';
 import { formatDateTime, formatRelative } from '../../utils/format';
 import { CommentMenu, type CommentAction } from './CommentMenu';
 import { CommentText } from './CommentText';
+import { ToneChip } from '../common/Section';
+import {
+  ANSWER_BADGE_LABEL,
+  type AnswerBadge,
+  type AnswerBadgeKind,
+  type AnswerBadges,
+} from './answerBadges';
 
 export interface CommentViewer {
   signedIn: boolean;
@@ -50,6 +57,8 @@ export interface CommentItemProps {
   children?: ReactNode;
   /** Under a comment that isn't on QDN yet (who sees it once it is). */
   pendingText?: string;
+  /** What each Minter Admin chose: a badge next to the name of one who did. */
+  answers?: AnswerBadges;
 }
 
 function Muted({ children }: { children: ReactNode }) {
@@ -57,6 +66,30 @@ function Muted({ children }: { children: ReactNode }) {
     <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
       {children}
     </Typography>
+  );
+}
+
+const BADGE_TONE: Record<AnswerBadgeKind, ChipProps['color']> = {
+  approved: 'success',
+  rejected: 'error',
+  considering: 'default',
+  yes: 'success',
+  no: 'error',
+  neutral: 'default',
+};
+
+/** Next to a Minter Admin's name: what they chose on what the thread is about. */
+function AnswerBadgeChip({ badge }: { badge: AnswerBadge }) {
+  const label = `${ANSWER_BADGE_LABEL[badge.kind]}${badge.confirming ? ' (confirming…)' : ''}`;
+  return (
+    <ToneChip
+      size="small"
+      variant="outlined"
+      color={BADGE_TONE[badge.kind]}
+      icon={badge.kind === 'considering' ? <VisibilityOutlinedIcon aria-hidden /> : undefined}
+      label={label}
+      sx={{ fontWeight: 600 }}
+    />
   );
 }
 
@@ -141,11 +174,15 @@ export function CommentItem(props: CommentItemProps) {
   const [revealed, setRevealed] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const revealedNow = useRef(false);
+  const ownName = viewer.signedIn && c.name === viewer.name;
+  const answers = props.answers;
   const owner = useQuery(
-    viewer.signedIn && c.name !== viewer.name ? `nameowner:${c.name}` : null,
+    !ownName && (viewer.signedIn || (answers && answers.size > 0)) ? `nameowner:${c.name}` : null,
     () => getNameOwner(c.name)
   );
-  const mine = viewer.signedIn && (c.name === viewer.name || owner.data === viewer.address);
+  const mine = viewer.signedIn && (ownName || owner.data === viewer.address);
+  const ownerAddress = ownName ? viewer.address : (owner.data ?? null);
+  const badge = ownerAddress ? (answers?.get(ownerAddress) ?? null) : null;
 
   // "Show anyway" leaves; focus goes to what it showed.
   useEffect(() => {
@@ -245,7 +282,10 @@ export function CommentItem(props: CommentItemProps) {
   } else {
     body = (
       <>
-        <PersonByName name={c.name} size={isReply ? 24 : 28} secondary={when} />
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 1 }}>
+          <PersonByName name={c.name} size={isReply ? 24 : 28} secondary={when} />
+          {badge ? <AnswerBadgeChip badge={badge} /> : null}
+        </Box>
         {isReply && c.replyToName ? <ReplyQuote comment={c} /> : null}
         <Box ref={bodyRef} tabIndex={-1} sx={{ outline: 'none', minWidth: 0 }}>
           {editor ? (

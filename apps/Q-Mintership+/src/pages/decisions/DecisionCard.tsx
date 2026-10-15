@@ -9,7 +9,7 @@
  * in a block, and their own Considering. An admin change says what it does
  * to the target; a decision a waiting admin change would tip over carries a
  * "Target may drop to …" chip. Its public comments sit behind a
- * "Comments (n)" toggle.
+ * "Comments (n)" toggle, each Minter Admin's marked with their answer.
  *
  * A double (rules/double.ts) says so with a chip and a note, keeps Approve
  * and Reject as plain secondary buttons, offers no Considering and stays out
@@ -34,6 +34,7 @@ import {
   ConsideringControls,
   type ConsideringRequest,
 } from '../../components/decision/Considering';
+import { answerBadges } from '../../components/comments/answerBadges';
 import { useConsideringFor } from '../../hooks/useConsidering';
 import { useClamped } from '../../hooks/useClamped';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
@@ -219,6 +220,7 @@ export function DecisionCard(props: DecisionCardProps) {
     note: p.note,
   }));
   const answered = approvedPeople.length + rejectedPeople.length + consideringPeople.length > 0;
+  const badges = answerBadges(approvedPeople, rejectedPeople, consideringPeople);
   const consider = (mode: ConsideringRequest['mode']) =>
     considering.publishTarget &&
     onConsider?.({
@@ -464,6 +466,7 @@ export function DecisionCard(props: DecisionCardProps) {
         target={decisionCommentTarget(d, nomination)}
         label={fullTitle}
         defaultOpen={commentsOpen}
+        answers={badges}
       />
     </Card>
   );

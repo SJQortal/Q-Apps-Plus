@@ -60,6 +60,10 @@ describe('comments on the cards', () => {
     const replies = within(region).getByRole('list', { name: 'Replies to Admin C' });
     expect(within(replies).getByText(/I see them online every day/)).toBeVisible();
     expect(document.querySelector(`[data-comment="${ids.signed}"]`)).not.toBeNull();
+    // A Minter Admin's comment says what they chose (Admin C approved it); a member's doesn't.
+    const adminC = document.querySelector(`[data-comment="${ids.signed}"]`) as HTMLElement;
+    expect(await within(adminC).findByText('Approved', {}, T)).toBeVisible();
+    expect(within(replies).queryByText(/^(Approved|Rejected|Considering)/)).toBeNull();
   });
 
   it('Nominations: the open cards show their comments', async () => {

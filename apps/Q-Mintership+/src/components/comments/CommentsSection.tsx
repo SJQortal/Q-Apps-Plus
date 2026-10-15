@@ -20,6 +20,7 @@ import { formatCount } from '../../utils/format';
 import { ExpandChevron } from '../common/ExpandChevron';
 import { ListSkeleton } from '../common/states';
 import { useCommentCount, useInView, useStableTarget } from './useComments';
+import type { AnswerBadges } from './answerBadges';
 
 const CommentsPanel = lazy(() => import('./CommentsPanel'));
 
@@ -32,6 +33,8 @@ export interface CommentsSectionProps {
   defaultOpen?: boolean;
   /** 'card' (default) draws a divider above it, inside a card; 'plain' doesn't. */
   variant?: 'card' | 'plain';
+  /** What each Minter Admin chose, for the badge next to their comments. */
+  answers?: AnswerBadges;
 }
 
 export function CommentsSection({
@@ -39,6 +42,7 @@ export function CommentsSection({
   label,
   defaultOpen = false,
   variant = 'card',
+  answers,
 }: CommentsSectionProps) {
   const target = useStableTarget(given);
   const [open, setOpen] = useState(defaultOpen);
@@ -68,7 +72,7 @@ export function CommentsSection({
       </Button>
       {open ? (
         <Suspense fallback={<ListSkeleton count={1} label="Loading comments" />}>
-          <CommentsPanel id={panelId} target={target} label={label} />
+          <CommentsPanel id={panelId} target={target} label={label} answers={answers} />
         </Suspense>
       ) : null}
     </Box>

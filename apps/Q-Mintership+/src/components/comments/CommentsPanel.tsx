@@ -37,6 +37,7 @@ import {
 } from './CommentDialogs';
 import { CommentReplies, ReplyComposerBox } from './CommentReplies';
 import { CommentItem, type CommentViewer } from './CommentItem';
+import type { AnswerBadges } from './answerBadges';
 
 const REFRESH_MS = 60_000;
 
@@ -58,9 +59,11 @@ export interface CommentsPanelProps {
   id: string;
   target: CommentTarget;
   label: string;
+  /** What each Minter Admin chose, for the badge next to their comments. */
+  answers?: AnswerBadges;
 }
 
-export default function CommentsPanel({ id, target, label }: CommentsPanelProps) {
+export default function CommentsPanel({ id, target, label, answers }: CommentsPanelProps) {
   const session = useSession();
   const signer = signerOf(session);
   const author = signer && session.name ? { ...signer, name: session.name } : null;
@@ -211,6 +214,7 @@ export default function CommentsPanel({ id, target, label }: CommentsPanelProps)
     about ? document.querySelector<HTMLElement>(`[data-comment="${about.identifier}"]`) : null;
 
   const itemHandlers = {
+    answers,
     onEdit: (c: CommentView) =>
       setInline({ mode: 'edit', comment: c, thread: '', text: c.text, error: null }),
     onDelete: (c: CommentView) => openDialog({ kind: 'delete', comment: c }),

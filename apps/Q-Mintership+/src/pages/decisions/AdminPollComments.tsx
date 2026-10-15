@@ -41,6 +41,7 @@ import {
   type PollCommentMode,
 } from './AdminPollDialogs';
 import type { ShownPoll } from './adminPollUi';
+import type { AnswerBadges } from '../../components/comments/answerBadges';
 
 const REFRESH_MS = 60_000;
 
@@ -234,7 +235,12 @@ export default function AdminPollComments({
 
   const reply = (thread: string) => (c: CommentView) =>
     setInline({ mode: 'reply', comment: c, thread, text: '', error: null });
+  // Each Minter Admin's vote, for the badge next to their comments.
+  const answers: AnswerBadges = new Map(
+    view.votes.map((v) => [v.address, { kind: v.vote }] as const)
+  );
   const handlers = {
+    answers,
     onEdit: (c: CommentView) =>
       setInline({ mode: 'edit', comment: c, thread: '', text: c.text, error: null }),
     onDelete: (c: CommentView) => openDialog({ kind: 'delete', comment: c }),
