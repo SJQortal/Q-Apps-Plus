@@ -32,6 +32,7 @@ export const CHANGELOG: Release[] = [
           'History links each decided change to its own decision page.',
           'History filters by type and by period: When picks the last 30 days (the default), 60 or 120 days, the last year, or a date, and a type such as Bans or Removals is searched over the whole period at once.',
           'Comment counts stay right: a reply counts on the closed card as well as in the open thread, and new comments count without a reload (Refresh reads them too).',
+          'On a phone, the Approved, Rejected and Considering columns list each Minter Admin in a compact row: a small avatar beside the name, so more fit on screen.',
           'Public comments on every decision and nomination: reply, edit or delete your own, and mute a name on your device. Settings lists the names you muted, to unmute them.',
           'Home’s Your nominations has Details and Open in Decisions on each nomination.',
           'Home says what changed since your last visit, and nominators see how the nominations they made ended. Settings can turn on Hub alerts for new nominations, for being nominated, or for support on a nomination you made.',
