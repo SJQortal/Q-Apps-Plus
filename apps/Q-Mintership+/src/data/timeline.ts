@@ -59,6 +59,10 @@ export interface TimelineEvent {
   detail: string | null;
   reason: string | null;
   tone: TimelineTone;
+  /** A kick that declined (or, not applied, proposed to decline) a join request. */
+  decline: boolean;
+  /** A JOIN_GROUP that only asked to join: no invite was waiting and they weren't a member. */
+  joinRequest: boolean;
   /** This event made the subject a MINTER member. */
   becameMember: boolean;
   /** This event ended the subject's membership. */
@@ -141,7 +145,9 @@ interface PersonState {
  */
 export function buildTimeline(rows: TxRow[], ctx: TimelineContext): TimelineEvent[] {
   const seen = new Set<string>();
-  const base: Array<Omit<TimelineEvent, 'title' | 'becameMember' | 'endedMembership'>> = [];
+  const base: Array<
+    Omit<TimelineEvent, 'title' | 'decline' | 'joinRequest' | 'becameMember' | 'endedMembership'>
+  > = [];
   for (const tx of rows) {
     if (!tx || seen.has(tx.signature) || !isMinterTx(tx)) continue;
     const kind = kindOf(tx);
@@ -210,6 +216,7 @@ export function buildTimeline(rows: TxRow[], ctx: TimelineContext): TimelineEven
   };
   const events: TimelineEvent[] = chronological.map((e) => {
     let title: string;
+    let joinRequest = false;
     let becameMember = false;
     let endedMembership = false;
     const s = e.subject ? stateOf(e.subject) : null;
@@ -248,6 +255,7 @@ export function buildTimeline(rows: TxRow[], ctx: TimelineContext): TimelineEven
         Object.assign(s, { member: true, invite: false, request: false });
       } else {
         title = 'Asked to join MINTER';
+        joinRequest = true;
         if (s) s.request = true;
       }
     } else {
@@ -265,7 +273,9 @@ export function buildTimeline(rows: TxRow[], ctx: TimelineContext): TimelineEven
     return {
       ...e,
       title,
-      tone: (e.kind === 'join' && title !== 'Joined MINTER') || decline ? 'neutral' : e.tone,
+      tone: joinRequest || decline ? 'neutral' : e.tone,
+      decline,
+      joinRequest,
       becameMember,
       endedMembership,
     };

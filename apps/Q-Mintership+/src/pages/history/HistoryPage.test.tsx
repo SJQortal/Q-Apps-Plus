@@ -57,6 +57,99 @@ describe('History page: on chain', () => {
   });
 });
 
+describe('History page: type filters', () => {
+  const INVITE_TITLES =
+    /^(Approved for MINTER|Approved and added to MINTER|Invited to MINTER|Nominated for MINTER)$/;
+
+  it('shows one type at a time, each with its count, and All again', async () => {
+    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
+    await screen.findByRole('group', { name: 'MINTER events, newest first' });
+    const filters = screen.getByRole('group', { name: 'Show one type of event' });
+    // The types in the first 30 days, in their fixed order, after All.
+    expect(
+      within(filters)
+        .getAllByRole('button')
+        .map((b) => b.textContent)
+    ).toEqual([
+      'All 13',
+      'Invites 8',
+      'Removals and bans 1',
+      'Left MINTER 2',
+      'Minter Admin changes 2',
+    ]);
+    expect(within(filters).getByRole('button', { name: 'All 13' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+
+    await userEvent.click(within(filters).getByRole('button', { name: 'Invites 8' }));
+    expect(within(filters).getByRole('button', { name: 'Invites 8' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    const list = screen.getByRole('group', { name: 'MINTER events: Invites, newest first' });
+    const items = within(list).getAllByRole('listitem');
+    expect(items).toHaveLength(8);
+    for (const item of items) expect(within(item).getByText(INVITE_TITLES)).toBeInTheDocument();
+    expect(within(list).queryByText('Left MINTER')).toBeNull();
+    expect(screen.getByText(/^8 of 13 events since \d+ \w+ \d{4}\.$/)).toBeInTheDocument();
+
+    await userEvent.click(within(filters).getByRole('button', { name: 'All 13' }));
+    const everything = screen.getByRole('group', { name: 'MINTER events, newest first' });
+    expect(within(everything).getAllByText('Left MINTER')).toHaveLength(2);
+    expect(screen.getByText(/^13 events since/)).toBeInTheDocument();
+  });
+
+  it('opens on the type a link names, as Back from a decision does', async () => {
+    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history?type=admins' });
+    const list = await screen.findByRole('group', {
+      name: 'MINTER events: Minter Admin changes, newest first',
+    });
+    expect(screen.getByRole('button', { name: 'Minter Admin changes 2' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(list).getByText('No longer a Minter Admin')).toBeInTheDocument();
+    expect(within(list).getByText('Made a Minter Admin')).toBeInTheDocument();
+  });
+
+  it('says when the chosen type has nothing yet, and shows every type on request', async () => {
+    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history?type=liftBan' });
+    expect(
+      await screen.findByText('Nothing under “Bans lifted” in the last 30 days.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bans lifted 0' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Show all types' }));
+    expect(
+      await screen.findByRole('group', { name: 'MINTER events, newest first' })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Bans lifted/ })).toBeNull();
+  });
+
+  it('keeps the type while older days load', async () => {
+    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
+    const filters = await screen.findByRole('group', { name: 'Show one type of event' });
+    await userEvent.click(within(filters).getByRole('button', { name: 'Removals and bans 1' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Load the 30 days before' }));
+    // Kit was removed about 47 days ago.
+    const kicked = await screen.findByText(PEOPLE.kicked.name as string);
+    const list = screen.getByRole('group', {
+      name: 'MINTER events: Removals and bans, newest first',
+    });
+    expect(list).toContainElement(kicked);
+    // Removals and bans that happened, and proposals of them that expired or were rejected.
+    const titles =
+      /^(Removed from MINTER|Banned from MINTER|Proposed: Remove from MINTER|Proposed: Ban from MINTER)$/;
+    for (const item of within(list).getAllByRole('listitem'))
+      expect(within(item).getByText(titles)).toBeInTheDocument();
+    expect(within(list).queryByText('Left MINTER')).toBeNull();
+  });
+});
+
 describe('History page: links to decisions', () => {
   /** The list item that names `name` and has `title`. */
   function itemOf(list: HTMLElement, title: string, name: string): HTMLElement {

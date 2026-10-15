@@ -54,6 +54,7 @@ describe('timeline wording', () => {
       ['Asked to join MINTER', A, false],
     ]);
     expect(events.map((e) => e.tone)).toEqual(['good', 'good', 'good', 'neutral']);
+    expect(events.map((e) => e.joinRequest)).toEqual([false, false, false, true]);
   });
 
   it('words admin changes people proposed about themselves', () => {
@@ -173,6 +174,16 @@ describe('timeline wording', () => {
       ['Approved for MINTER', 'good', false],
     ]);
     expect(events.find((e) => e.title === 'Join request declined')?.reason).toBe('No node');
+    // History's filters read these: the two declines (one only proposed), the two requests.
+    expect(events.map((e) => [e.decline, e.joinRequest])).toEqual([
+      [true, false],
+      [false, true],
+      [true, false],
+      [false, true],
+      [false, false],
+      [false, false],
+      [false, false],
+    ]);
   });
 
   it('a former member whose joining isn’t in the rows asks again, and is declined', () => {

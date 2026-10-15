@@ -9,9 +9,12 @@
  * (parts/TimelineList.tsx), which reads its signatures only when opened.
  * Once the list is in, what it reaches is no longer new for this account
  * (data/historySeen.ts): a Minter Admin's History tab stops counting it.
+ * Chips above the list show one type of event at a time (historyFilters.ts),
+ * counted over the windows read; the choice is `?type=` in the URL.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Button, Typography } from '@mui/material';
+import { useSearchParams } from 'react-router-dom';
+import { Box, Button, Chip, Typography } from '@mui/material';
 import { FALLBACK_MS_PER_BLOCK } from '../../data/constants';
 import {
   HISTORY_MAX_WINDOWS,
@@ -34,7 +37,15 @@ import {
   TruncatedNote,
 } from '../../components/common/states';
 import { Section } from '../../components/common/Section';
-import { formatDate, plural } from '../../utils/format';
+import { appParam } from '../../routes/hubLocation';
+import { formatCount, formatDate, plural } from '../../utils/format';
+import {
+  historyFilterChips,
+  historyTypeLabel,
+  matchesHistoryFilter,
+  parseHistoryFilter,
+  type HistoryFilter,
+} from './historyFilters';
 import { TimelineList } from './parts/TimelineList';
 
 /** Events shown before "Show all". */
@@ -98,10 +109,29 @@ export function ChainHistory() {
     return withTargetSteps(decided, steps);
   }, [windows, msPerBlock, maximumBlockDelay, adminCount, threshold, owner]);
 
+  const [params, setParams] = useSearchParams();
+  const filter = parseHistoryFilter(appParam(params, 'type'));
+  const setFilter = (key: HistoryFilter) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (key === 'all') next.delete('type');
+        else next.set('type', key);
+        return next;
+      },
+      { replace: true }
+    );
+  const chips = useMemo(() => historyFilterChips(events, filter), [events, filter]);
+  const filtered = useMemo(
+    () => (filter === 'all' ? events : events.filter((e) => matchesHistoryFilter(e, filter))),
+    [events, filter]
+  );
+
   const loadingOlder = Boolean(windows && query.fetching && !query.data);
   const oldest = windows?.[windows.length - 1];
   const canLoadOlder = count < HISTORY_MAX_WINDOWS && (oldest?.startHeight ?? 2) > 1;
-  const shown = expanded ? events : events.slice(0, FIRST_EVENTS);
+  const shown = expanded ? filtered : filtered.slice(0, FIRST_EVENTS);
+  const days = count * HISTORY_WINDOW_DAYS;
   const loadOlder = () => {
     setExpanded(true);
     setCount((c) => c + 1);
@@ -121,16 +151,34 @@ export function ChainHistory() {
   } else {
     body = (
       <>
-        {events.length ? (
+        {events.length && (chips.length > 2 || filter !== 'all') ? (
+          <TypeFilter chips={chips} filter={filter} onChange={setFilter} />
+        ) : null}
+        {filtered.length ? (
           <TimelineList
             events={shown}
             showSubject
             nowMs={chain.data?.timestamp ?? Date.now()}
-            label="MINTER events, newest first"
+            label={
+              filter === 'all'
+                ? 'MINTER events, newest first'
+                : `MINTER events: ${historyTypeLabel(filter)}, newest first`
+            }
+          />
+        ) : events.length ? (
+          <EmptyState
+            title={`Nothing under “${filter === 'all' ? 'All' : historyTypeLabel(filter)}” in the last ${days} days.`}
+            description={
+              canLoadOlder
+                ? `Load the ${HISTORY_WINDOW_DAYS} days before, or show every type.`
+                : 'Show every type instead.'
+            }
+            actionLabel="Show all types"
+            onAction={() => setFilter('all')}
           />
         ) : (
           <EmptyState
-            title={`Nothing changed in MINTER in the last ${count * HISTORY_WINDOW_DAYS} days.`}
+            title={`Nothing changed in MINTER in the last ${days} days.`}
             description="No one was added, removed, banned or made an admin, and no one joined or left."
           />
         )}
@@ -145,11 +193,12 @@ export function ChainHistory() {
         ) : null}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
           <Typography variant="body2" color="text.secondary" sx={{ flex: '1 1 200px' }}>
+            {filter === 'all' ? '' : `${formatCount(filtered.length)} of `}
             {plural(events.length, 'event')} since {formatDate(oldest?.startMs ?? Date.now())}.
           </Typography>
-          {events.length > shown.length ? (
+          {filtered.length > shown.length ? (
             <Button variant="outlined" onClick={() => setExpanded(true)} sx={{ minHeight: 44 }}>
-              Show all {events.length}
+              Show all {filtered.length}
             </Button>
           ) : canLoadOlder && !query.isError ? (
             <Button
@@ -175,5 +224,47 @@ export function ChainHistory() {
       </Typography>
       {body}
     </Section>
+  );
+}
+
+/** All, or one type of event: a chip each with its count, as Nominations' filters. */
+function TypeFilter({
+  chips,
+  filter,
+  onChange,
+}: {
+  chips: ReadonlyArray<{ key: HistoryFilter; label: string; count: number }>;
+  filter: HistoryFilter;
+  onChange: (filter: HistoryFilter) => void;
+}) {
+  return (
+    <Box
+      role="group"
+      aria-label="Show one type of event"
+      sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}
+    >
+      {chips.map((c) => {
+        const active = filter === c.key;
+        return (
+          <Chip
+            key={c.key}
+            clickable
+            aria-pressed={active}
+            color={active ? 'primary' : 'default'}
+            variant={active ? 'filled' : 'outlined'}
+            onClick={() => onChange(c.key)}
+            label={
+              <>
+                {c.label}{' '}
+                <Box component="span" sx={{ ml: 0.5, fontWeight: 700 }}>
+                  {formatCount(c.count)}
+                </Box>
+              </>
+            }
+            sx={{ height: { xs: 44, sm: 40 }, borderRadius: 999, px: 0.5 }}
+          />
+        );
+      })}
+    </Box>
   );
 }

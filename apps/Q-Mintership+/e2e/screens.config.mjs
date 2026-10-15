@@ -406,6 +406,8 @@ export default {
     },
     { key: 'person', path: `/people/${ADDR.nominatedSigning}?as=admin`, after: settle },
     { key: 'history', path: '/history?as=learner', after: settle },
+    // On chain filtered to one type: the chips with their counts, Invites chosen.
+    { key: 'history-filter', path: '/history?as=learner&type=invite', after: settle },
     // An old card from the original app (e2e/world-legacy.mjs), with its poll and comments.
     {
       key: 'legacy-card',
