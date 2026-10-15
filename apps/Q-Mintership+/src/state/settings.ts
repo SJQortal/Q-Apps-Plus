@@ -40,8 +40,8 @@ export const decisionsHideAnsweredAtom = atomWithStorage<boolean>(
   false
 );
 
-/** Decisions: most urgent first (one queue), or by type (a section per kind of change). */
+/** Decisions: by type (a section per kind of change, the default), or most urgent first. */
 export const decisionsOrderAtom = atomWithStorage<DecisionsOrder>(
   SETTINGS_KEYS.decisionsOrder,
-  'urgency'
+  'type'
 );

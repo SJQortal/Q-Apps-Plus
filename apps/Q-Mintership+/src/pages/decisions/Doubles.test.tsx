@@ -9,7 +9,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { getDefaultStore } from 'jotai';
 import { renderPage } from '../../test/render';
+import { decisionsOrderAtom } from '../../state/settings';
 import { qortalCallsFor } from '../../test/setup';
 import { addDoubles } from '../../../e2e/world.mjs';
 import { formatBlock } from '../../utils/format';
@@ -157,6 +159,8 @@ describe('Doubles on the Decisions page', () => {
   });
 
   it('sorts doubles after the real decisions, still in the queue', async () => {
+    // The one queue, most urgent first (By type is the default).
+    getDefaultStore().set(decisionsOrderAtom, 'urgency');
     await openQueue();
     const section = screen.getByRole('region', { name: /^Collecting approvals/ });
     const titles = within(section)

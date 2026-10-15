@@ -296,7 +296,7 @@ export default function SettingsPage() {
               <SettingText
                 id="decisions-order-label"
                 title="Decisions order"
-                hint="One queue, most urgent first, or a section for each type of change."
+                hint="A section for each type of change, or one queue, most urgent first."
               />
               <Select
                 size="small"
@@ -305,8 +305,8 @@ export default function SettingsPage() {
                 labelId="decisions-order-label"
                 sx={{ minHeight: 44 }}
               >
-                <MenuItem value="urgency">Most urgent first</MenuItem>
                 <MenuItem value="type">By type</MenuItem>
+                <MenuItem value="urgency">Most urgent first</MenuItem>
               </Select>
             </Row>
             {status?.isAdmin ? (

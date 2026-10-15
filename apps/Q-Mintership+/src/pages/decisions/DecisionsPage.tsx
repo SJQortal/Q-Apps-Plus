@@ -1,9 +1,9 @@
 /**
  * Decisions: every transaction waiting for MINTER's approval (invites,
- * kicks, bans, admin changes, cancelled invites and bans), most urgent
- * first, or by type (a section per kind of change, with chips that jump
- * to each; the choice stays on this device), plus the nominations no
- * Minter Admin has approved yet.
+ * kicks, bans, admin changes, cancelled invites and bans), by type (a
+ * section per kind of change, with chips that jump to each: the default)
+ * or most urgent first (the choice stays on this device), plus the
+ * nominations no Minter Admin has approved yet.
  *
  * Minter Admins sign here, one at a time or several in a row, reject, or
  * withdraw their signature (on chain both are a rejection), say they are
@@ -947,11 +947,11 @@ function FirstSignatureAction({
 }
 
 const ORDERS: ReadonlyArray<{ key: DecisionsOrder; label: string }> = [
-  { key: 'urgency', label: 'Most urgent first' },
   { key: 'type', label: 'By type' },
+  { key: 'urgency', label: 'Most urgent first' },
 ];
 
-/** Most urgent first (one queue) or by type (a section each): stays on this device. */
+/** By type (a section each, the default) or most urgent first (one queue): stays on this device. */
 function OrderChoice({
   order,
   onChange,

@@ -58,11 +58,17 @@ describe('Decisions: by type', () => {
   it('sorts the open decisions into a section per type, with chips that jump there', async () => {
     const u = user();
     await openPage('admin');
-    const urgent = screen.getByRole('button', { name: 'Most urgent first' });
-    expect(urgent).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('region', { name: /^Collecting approvals · \d+$/ })).toBeVisible();
-    await u.click(screen.getByRole('button', { name: 'By type' }));
+    // By type is the default, and the first choice.
+    const choices = within(screen.getByRole('group', { name: 'Order the decisions' }));
+    expect(choices.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'By type',
+      'Most urgent first',
+    ]);
     expect(screen.getByRole('button', { name: 'By type' })).toHaveAttribute('aria-pressed', 'true');
+    // The one queue, then back to By type.
+    await u.click(screen.getByRole('button', { name: 'Most urgent first' }));
+    expect(screen.queryByRole('navigation', { name: 'Decisions by type' })).toBeNull();
+    await u.click(screen.getByRole('button', { name: 'By type' }));
     // The choice stays on this device.
     expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEYS.decisionsOrder) ?? 'null')).toBe(
       'type'
