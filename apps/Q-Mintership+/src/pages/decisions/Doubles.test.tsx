@@ -299,7 +299,9 @@ describe('A double’s own page', () => {
     expect(doubleNote(page)).toHaveTextContent(
       /^Admin C is already a Minter Admin, from an earlier proposal\./
     );
-    expect(within(page).getByRole('button', { name: /^Approve: / })).toHaveClass('MuiButton-outlined');
+    expect(within(page).getByRole('button', { name: /^Approve: / })).toHaveClass(
+      'MuiButton-outlined'
+    );
     expect(within(page).queryByRole('button', { name: /^Considering: / })).toBeNull();
   });
 

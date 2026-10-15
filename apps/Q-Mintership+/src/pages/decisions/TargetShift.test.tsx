@@ -231,7 +231,9 @@ describe('Decisions: signing an admin change that would tip others over', () => 
   it('signing a decision that only carries a chip needs no tick', async () => {
     const u = user();
     await openShifted();
-    await u.click(within(card(/^Add to MINTER, Mia Met/)).getByRole('button', { name: /^Approve: / }));
+    await u.click(
+      within(card(/^Add to MINTER, Mia Met/)).getByRole('button', { name: /^Approve: / })
+    );
     const dialog = await screen.findByRole('dialog', { name: 'Approve this decision' });
     expect(within(dialog).queryByRole('checkbox')).toBeNull();
     expect(within(dialog).queryByRole('note')).toBeNull();

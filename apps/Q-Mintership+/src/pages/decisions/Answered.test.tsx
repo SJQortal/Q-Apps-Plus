@@ -153,7 +153,9 @@ describe('Hide what I answered', () => {
     const u = user();
     await openQueue();
     await rejectWithKeyboard(u);
-    expect(within(card(/bob\+builder/)).getByText('You rejected (confirming…)')).toBeInTheDocument();
+    expect(
+      within(card(/bob\+builder/)).getByText('You rejected (confirming…)')
+    ).toBeInTheDocument();
     await waitFor(() => expect(card(/bob\+builder/)).toHaveFocus(), T);
   }, 20_000);
 });
