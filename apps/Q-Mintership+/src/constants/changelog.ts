@@ -49,7 +49,7 @@ export const CHANGELOG: Release[] = [
           'Approve and Reject: the same two words on every decision, button and line. Approving says what Hub will show: a GROUP_APPROVAL, your yes to a change already proposed on chain.',
           'Each decision shows who approved, who rejected and who is considering side by side, with the rule for a tie (approvals are counted first), and its comments show what each Minter Admin chose.',
           'Cancelling an approved invite says which invite it cancels: who sent it and when it was approved.',
-          'Decisions most urgent first, or by type: a section for each kind of change (Add to MINTER, Remove or ban, Cancel an approved invite, Minter Admin changes, …), with a chip per type that jumps to it. The choice stays on this device.',
+          'Decisions by type: a section for each kind of change (Add to MINTER, Remove or ban, Cancel an approved invite, Minter Admin changes, …), with a chip per type that jumps to it; or most urgent first, as one queue. The choice stays on this device.',
           'Minter Admin polls show Yes, No and Neutral side by side, as a decision shows its answers, and their details in full (Show more on a phone); Decisions and Nominations use more of a wide screen.',
           'Doubles are marked: an admin change that adds someone who is already a Minter Admin, removes someone who isn’t one, or repeats one already waiting says so on its card, and doesn’t count as waiting for you. A repeat of a waiting change still shows what it would do to the target.',
           'Decline a join request: from Ready to mint or Propose, propose taking someone off the list, with a reason everyone sees. Once enough Minter Admins approve, their join request goes, and they can send a new one later.',

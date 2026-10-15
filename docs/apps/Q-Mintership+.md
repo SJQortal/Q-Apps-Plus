@@ -241,7 +241,7 @@ Every key starts with `qmintershipplus-`. Nothing here is published; a later Set
 | Key | What |
 |---|---|
 | `ui-theme` | the theme |
-| `motion`, `time-display`, `celebrate`, `activity-window`, `decisions-hide-signed` | Settings: animations, countdowns as time or blocks, the celebration, Activity's window, Hide what I answered (signed or rejected; the key kept its old name, so a device's choice carries over) |
+| `motion`, `time-display`, `celebrate`, `activity-window`, `decisions-hide-signed`, `decisions-order` | Settings: animations, countdowns as time or blocks, the celebration, Activity's window, Hide already voted on (approved, rejected or voted; the key kept its old name, so a device's choice carries over), Decisions by type (the default) or most urgent first |
 | `since-last-visit` | Home's "Since your last visit" on or off (default on) |
 | `last-visit-<address>-<groupId>` | the last visit's snapshot `{ v: 1, at, height, decisions?: [{ signature, kind, subject, height }] (Minter Admins, ≤ 100), nomination?: { decision, state, signed, needed, supporters, publishedAt } \| null (accounts not in MINTER), made?: [{ nominee, decision, state, publishedAt }] (nominators, ≤ 20, added on night 3; older snapshots without it still read) }`, saved whenever the app has new data; the one from before the session is the baseline |
 | `seen-target-<groupId>` | the target this device saw last, `{ adminCount, needed, height }`, for "The target changed" on Decisions |
@@ -602,6 +602,8 @@ On branch `q-mintership-plus/feedback-1`, merged into the rewrite branch. One co
 19. **Dark stays dark after a refresh** (Simon: after switching to Settings and refreshing, the app turned light in a dark Hub). Hub opens an app with `?theme=dark`; in-app navigation drops the query, and on a reload Core's renderer injects its default `_qdnTheme = "light"` (`ArbitraryDataRenderer.java`: `theme = "light"` unless the URL says). Fixed in the theme kit (its own `Repo:` commits, synced into Q-Mail+, Q-Mintership+ and Q-Share+, each built and tested): Hub's mode is remembered (`qplus-hub-mode`) and, without a `theme` in the URL, wins over the injected default; Hub's switch (THEME_CHANGED) wins over both while the app is open. This app's `index.html` boot snippet reads the same order. Checked in Chromium: open at `?theme=dark`, navigate to `/settings`, reload with `_qdnTheme = "light"` injected: still dark. Q-Mail+ and Q-Share+ have the same bug in their published versions; their `index.html` snippets need the same change in their next pass.
 
 20. **A tab open across an update** (Simon: "This part of Q-Mintership+ could not be shown" on opening Settings, fixed by a reload). The app had been replaced (a new zip) while the tab was open, so the old build's Settings file was gone. A code-split file that fails to load now reloads once to the new build ("Q-Mintership+ was updated. Loading the new version…"), from the error boundary and Vite's `vite:preloadError`; a second failure within a minute shows the usual message (`utils/staleBuild.ts`).
+
+21. **By type, by default** (Simon: By type can be the default and come first). A device with no choice yet opens Decisions by type, and the order chips and Settings list By type first; a device that chose Most urgent first keeps it (`qmintershipplus-decisions-order`).
 
 One test (TargetShift's "Approve several with an admin change") failed once under full-suite load and passed on its own and on a rerun: a long dialog flow close to its time limit.
 
