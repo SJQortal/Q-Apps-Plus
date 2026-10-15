@@ -85,8 +85,8 @@ export function FirstSignatureDialog({
           detail: (
             <Typography variant="body2">
               Hub will show Tx type GROUP_APPROVAL, &quot;approval&quot;: true and a box to tick:
-              that is your approval. The &quot;pendingSignature&quot; is the new nomination’s
-              own, made in step 1.
+              that is your approval. The &quot;pendingSignature&quot; is the new nomination’s own,
+              made in step 1.
             </Typography>
           ),
           check: SIGN_NEW_TX_CHECK,
@@ -118,7 +118,8 @@ export function FirstSignatureDialog({
           message: (
             <Typography variant="body2" sx={{ mt: 0.5 }}>
               Step 2 didn’t go through: {secondStepProblem(result.approval)} The nomination is on
-              chain and waiting. Once it shows in the queue, approve it there like any other decision.
+              chain and waiting. Once it shows in the queue, approve it there like any other
+              decision.
             </Typography>
           ),
         };
@@ -129,8 +130,8 @@ export function FirstSignatureDialog({
       successText={
         partial ? null : (
           <Typography variant="body2">
-            The nomination and your approval count once they are in a block, usually within a
-            couple of minutes. After yours it needs{' '}
+            The nomination and your approval count once they are in a block, usually within a couple
+            of minutes. After yours it needs{' '}
             {plural(Math.max(0, facts.needed - 1), 'more approval', 'more approvals')}.
           </Typography>
         )

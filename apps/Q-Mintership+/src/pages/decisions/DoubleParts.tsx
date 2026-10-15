@@ -15,7 +15,13 @@ import { decisionPath } from '../../routes/paths';
 import { doubleChipText, doubleNote } from './doubleUi';
 
 /** "Double", with what it means in full for screen readers; never colour alone. */
-export function DoubleChip({ decision: d, double }: { decision: Decision; double: DecisionDouble }) {
+export function DoubleChip({
+  decision: d,
+  double,
+}: {
+  decision: Decision;
+  double: DecisionDouble;
+}) {
   const full = doubleChipText({ kind: d.kind, double });
   return (
     <ToneChip

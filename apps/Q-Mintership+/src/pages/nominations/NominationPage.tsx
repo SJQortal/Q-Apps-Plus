@@ -22,7 +22,7 @@ import {
   ListSkeleton,
   TruncatedNote,
 } from '../../components/common/states';
-import { PageBody } from '../../components/layout/PageBody';
+import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { NominationCard } from '../../components/nomination/NominationCard';
 import { NomineeAction } from '../../components/nomination/NomineeAction';
@@ -74,7 +74,7 @@ function Shell({
           address ? <CopyLinkButton path={nominationPath(address)} what="this nomination" /> : null
         }
       />
-      <PageBody>{children}</PageBody>
+      <PageBody $maxWidth={WIDE_PAGE}>{children}</PageBody>
     </>
   );
 }

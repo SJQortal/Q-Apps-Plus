@@ -157,7 +157,8 @@ export function AdminRoleDialog({
           <>
             <Typography>
               Minter Admins approve or reject MINTER’s decisions: new minters, removals and bans,
-              and changes to the Minter Admins. It works best when you can look at Decisions every few days.
+              and changes to the Minter Admins. It works best when you can look at Decisions every
+              few days.
             </Typography>
             {levelNote ? (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>

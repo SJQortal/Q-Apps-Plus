@@ -74,15 +74,15 @@ export function RejectDialog({
             {mode === 'withdraw' ? (
               <Typography>
                 An approval can’t simply be taken back on chain: rejecting sends a rejection, and
-                only your latest answer counts. So your approval stops counting, and your
-                rejection counts towards ending it as rejected.
+                only your latest answer counts. So your approval stops counting, and your rejection
+                counts towards ending it as rejected.
               </Typography>
             ) : (
               <Typography>
                 Your rejection counts once it is in a block. Rejections are measured against the
                 same target as approvals: if {needed ?? 'enough'} Minter Admins reject it, it ends
-                as rejected. Approvals are counted first, so with {needed ?? 'enough'} of both it
-                is approved.
+                as rejected. Approvals are counted first, so with {needed ?? 'enough'} of both it is
+                approved.
               </Typography>
             )}
             <Typography>

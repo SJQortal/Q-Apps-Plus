@@ -14,13 +14,6 @@ import type { WriteOutcome } from '../../writes/runner';
 
 export type MyAnswer = ReturnType<typeof signerState>;
 
-/**
- * How wide the Decisions pages may grow (PageBody's cap; lists default to
- * 760 px): wide enough for a nomination's whole reason and the answer
- * columns on a desktop or in Hub, as Activity is.
- */
-export const DECISIONS_WIDTH = 960;
-
 /** "10,080 blocks (about 8 days 12 hours)": how long a decision collects signatures. */
 export function signingWindowText(maximumBlockDelay: number, msPerBlock: number): string {
   return `${formatCount(maximumBlockDelay)} blocks (about ${formatDuration(

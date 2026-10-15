@@ -13,7 +13,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { Section } from '../../components/common/Section';
 import { CardSkeleton, EmptyState, ErrorState } from '../../components/common/states';
-import { PageBody } from '../../components/layout/PageBody';
+import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { isPollId } from '../../data/adminPollRecords';
 import { useAdmins } from '../../hooks/useData';
@@ -25,7 +25,6 @@ import { AdminPollCard } from './AdminPollCard';
 import { PollWriteDialogs, type PollDialog } from './PollWriteDialogs';
 import { ADMINS_ONLY, HUB_DID_NOT_DECRYPT, myVoteView } from './adminPollUi';
 import { useAdminPolls } from './useAdminPolls';
-import { DECISIONS_WIDTH } from './decisionUi';
 
 export default function AdminPollPage() {
   const { id: param = '' } = useParams();
@@ -149,7 +148,7 @@ export default function AdminPollPage() {
           ) : null
         }
       />
-      <PageBody $maxWidth={DECISIONS_WIDTH}>{content}</PageBody>
+      <PageBody $maxWidth={WIDE_PAGE}>{content}</PageBody>
       {author ? (
         <PollWriteDialogs
           dialog={dialog}

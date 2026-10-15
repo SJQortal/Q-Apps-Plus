@@ -240,10 +240,10 @@ export function ProposeDialog({
         <Typography color="text.secondary">{info.description}</Typography>
         {kind === 'decline' ? (
           <Typography variant="body2" color="text.secondary">
-            Once {ctx.needed} Minter Admins approve it, like any decision, their join request goes and
-            they leave Ready to mint for everyone. They can send a new join request later. It costs{' '}
-            {formatQort((fee.data?.qort ?? 0.01) * 2)}: your proposal and your own approval of it,
-            two Hub steps.
+            Once {ctx.needed} Minter Admins approve it, like any decision, their join request goes
+            and they leave Ready to mint for everyone. They can send a new join request later. It
+            costs {formatQort((fee.data?.qort ?? 0.01) * 2)}: your proposal and your own approval of
+            it, two Hub steps.
           </Typography>
         ) : null}
         {kind === 'addAdmin' || kind === 'removeAdmin' ? (

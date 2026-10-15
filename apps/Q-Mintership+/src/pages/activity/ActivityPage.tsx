@@ -9,7 +9,7 @@ import { Button } from '@mui/material';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import { useAtom } from 'jotai';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { PageBody } from '../../components/layout/PageBody';
+import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
 import { ErrorState, ListSkeleton, TruncatedNote } from '../../components/common/states';
 import { RefreshButton } from '../../components/common/RefreshButton';
 import { Section } from '../../components/common/Section';
@@ -56,7 +56,7 @@ export default function ActivityPage() {
           </>
         }
       />
-      <PageBody $maxWidth={960}>
+      <PageBody $maxWidth={WIDE_PAGE}>
         <WindowPicker
           days={days}
           custom={custom}

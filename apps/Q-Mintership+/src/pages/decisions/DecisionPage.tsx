@@ -17,7 +17,7 @@ import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { PersonChip } from '../../components/common/Person';
 import { Card, Section, ToneChip } from '../../components/common/Section';
 import { CardSkeleton, EmptyState, ErrorState } from '../../components/common/states';
-import { PageBody } from '../../components/layout/PageBody';
+import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { loadDecisionLink, type DecisionLink } from '../../data/decisionLink';
 import { getMembership } from '../../data/group';
@@ -57,7 +57,6 @@ import { ConsideringDialog } from '../../components/decision/ConsideringDialog';
 import { peekQuery } from '../../data/query';
 import { signerOf } from '../../state/session';
 import { displayName } from '../../utils/format';
-import { DECISIONS_WIDTH } from './decisionUi';
 
 /** The card's section heading (Section id "decision-card"), waiting or decided. */
 const CARD_HEADING_ID = 'decision-card-title';
@@ -119,7 +118,7 @@ export default function DecisionPage() {
           signature ? <CopyLinkButton path={decisionPath(signature)} what="this decision" /> : null
         }
       />
-      <PageBody $maxWidth={DECISIONS_WIDTH}>
+      <PageBody $maxWidth={WIDE_PAGE}>
         <Box role="status" className="qmp-visually-hidden">
           {said}
         </Box>

@@ -37,7 +37,7 @@ import {
   TruncatedNote,
 } from '../../components/common/states';
 import { BOTTOM_NAV_HEIGHT } from '../../components/layout/BottomNav';
-import { PageBody } from '../../components/layout/PageBody';
+import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { NominationCard } from '../../components/nomination/NominationCard';
 import { NomineeAction } from '../../components/nomination/NomineeAction';
@@ -187,7 +187,7 @@ export default function NominationsPage() {
           </>
         }
       />
-      <PageBody>
+      <PageBody $maxWidth={WIDE_PAGE}>
         <NominateNote session={session} status={status} hidden={showOwn} />
 
         {showOwn && data ? (
@@ -226,8 +226,8 @@ export default function NominationsPage() {
             )}
             {step === 'accept' ? (
               <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
-                Accept now, so that once enough Minter Admins approve you become a member at once. It
-                sends a join request (<FeeNote txType="JOIN_GROUP" prefix="fee" />
+                Accept now, so that once enough Minter Admins approve you become a member at once.
+                It sends a join request (<FeeNote txType="JOIN_GROUP" prefix="fee" />
                 ).
               </Typography>
             ) : null}

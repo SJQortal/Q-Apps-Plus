@@ -18,8 +18,15 @@ const Column = styled('div', {
 }));
 
 /**
+ * How wide the pages whose cards carry long text and columns may grow on a
+ * desktop or in Hub: Decisions, Nominations (and a decision's, a
+ * nomination's or a poll's own page) and Activity.
+ */
+export const WIDE_PAGE = 960;
+
+/**
  * The centred content column under a PageHeader: 760 px for lists, wider
- * when asked. Its blocks fade in and rise 4 px as they arrive: the page as
+ * when asked (WIDE_PAGE). Its blocks fade in and rise 4 px as they arrive: the page as
  * it opens, and data as it replaces a skeleton (index.css → .qmp-reveal;
  * its padding holds the rise, so the page never grows a scrollbar for it).
  */
