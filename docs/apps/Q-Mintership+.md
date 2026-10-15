@@ -582,7 +582,7 @@ On branch `q-mintership-plus/feedback-1`, merged into the rewrite branch. One co
 
 12. **Hide already voted on** (Simon). The switch and its Settings row are renamed, and it now also leaves out the Minter Admin polls the admin voted on (counted, on its way, or after the end), with its own note and Show them.
 
-13. **Wider Decisions** (Simon). Decisions, a decision's page and a poll's page grow to 960 px (`DECISIONS_WIDTH`, as Activity), from 760.
+13. **Wider Decisions and Nominations** (Simon). Decisions, Nominations, a decision's, a nomination's and a poll's page grow to 960 px, from 760: one constant, `WIDE_PAGE` in `components/layout/PageBody.tsx`, which Activity uses too. The nominate form stays at 680.
 
 14. **Each comment in a frame** (Simon). Every comment, with its replies' block, sits in a thin bordered frame with space between comments. The first try also tinted the frame; that took a red "Voted No" badge below 4.5:1 in Hub 3.0 dark and White (axe caught it), so the frame has a border only.
 
