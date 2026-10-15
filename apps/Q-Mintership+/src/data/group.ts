@@ -10,6 +10,7 @@
  *   ones included.
  */
 import { isApprovalThreshold } from '../rules/threshold';
+import { primeNames } from './accounts';
 import { MINTER_GROUP_ID, NULL_OWNER } from './constants';
 import { getJson, getPaged, query, seg } from './core';
 import { fetchQuery } from './query';
@@ -81,6 +82,8 @@ export function getAdmins(options: { force?: boolean } = {}): Promise<AdminList>
         }
       );
       const admins = rows.map((row) => ({ ...row, isAdmin: true }));
+      // The rows carry the admins' names: every chip that shows one needs no lookup.
+      primeNames(admins.map((a) => ({ address: a.member, name: a.primaryName })));
       return {
         adminCount: adminCount || admins.length,
         memberCount,

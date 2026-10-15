@@ -1,12 +1,14 @@
 /**
  * One nomination, as everyone sees it: the nominee, who nominated and who
  * supports (with their notes), the reason and links, and where it stands
- * (waiting for a Minter Admin, k of n signatures with the countdown and any
- * rejections, how many Minter Admins are considering it, approved, or how
- * it ended). Screens add their own buttons through `actions`, and its
- * public comments with `comments`. While it is open, the community's Yes
- * and No sit beside Copy link, and anyone who isn't a Minter Admin (or the
- * nominee) can vote, where the admins' own buttons are on a decision.
+ * (waiting for a Minter Admin, k of n approvals with the countdown and any
+ * rejections, approved, or how it ended). While it is open, the Minter
+ * Admins' answers sit side by side as on Decisions (who approved, rejected
+ * or is considering it), for everyone: Decisions itself is only for the
+ * admins. Screens add their own buttons through `actions`, and its public
+ * comments with `comments`. The community's Yes and No sit beside Copy
+ * link, and anyone who isn't a Minter Admin (or the nominee) can vote,
+ * where the admins' own buttons are on a decision.
  */
 import { useState, type ReactNode } from 'react';
 import { Box, Typography } from '@mui/material';
@@ -23,7 +25,8 @@ import { useConsideringFor } from '../../hooks/useConsidering';
 import { useCommunityVoter, useCommunityVotes } from '../../hooks/useCommunityVotes';
 import { takesVotes } from '../../rules/communityVotes';
 import { useInView } from '../../hooks/useInView';
-import { ConsideringCount } from '../decision/Considering';
+import { AnswerColumns, type AnswerPerson } from '../decision/AnswerColumns';
+import { tallyPeople } from '../decision/answerPeople';
 import { nominationPath } from '../../routes/paths';
 import { Countdown } from '../common/Countdown';
 import { CopyLinkButton } from '../common/CopyLinkButton';
@@ -105,6 +108,17 @@ export function NominationCard({
     { nearScreen, myAddress: voter?.address }
   );
   const voted = votes.tally.yes.length + votes.tally.no.length > 0;
+  // The Minter Admins' answers so far: while it collects approvals, or while it waits for
+  // the first one with someone considering it.
+  const answers = tallyPeople(n.state === 'signing' ? tally : null);
+  const consideringPeople: AnswerPerson[] = considering.people.map((p) => ({
+    address: p.address,
+    name: p.name,
+    note: p.note,
+  }));
+  const showAnswers =
+    (n.state === 'signing' || n.state === 'waiting') &&
+    answers.approved.length + answers.rejected.length + consideringPeople.length > 0;
   return (
     <Card
       ref={setNode}
@@ -201,6 +215,17 @@ export function NominationCard({
         </Box>
       ) : null}
 
+      {showAnswers ? (
+        <AnswerColumns
+          approved={answers.approved}
+          rejected={answers.rejected}
+          considering={consideringPeople}
+          headingLevel="h3"
+          phoneLimit={3}
+          label={`the Minter Admins’ answers on ${nominee.label}`}
+        />
+      ) : null}
+
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
         {/* No "left to approve" once the count has decided it (as on the hero and decision cards). */}
         {n.state === 'signing' &&
@@ -230,7 +255,6 @@ export function NominationCard({
               : `${plural(tally.rejectionCount, 'rejection')} of the ${tally.needed} that would end it.`}
           </Typography>
         ) : null}
-        <ConsideringCount count={considering.people.length} />
         {n.state === 'signing' && !window ? (
           <Typography variant="body2" color="text.secondary">
             On its way into a block; the clock starts then.

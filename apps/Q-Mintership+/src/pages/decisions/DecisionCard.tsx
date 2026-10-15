@@ -32,6 +32,7 @@ import { PersonChip, PersonInline } from '../../components/common/Person';
 import { CommentsSection } from '../../components/comments/CommentsSection';
 import { AnswerChip, SigningClock } from '../../components/decision/DecisionParts';
 import { AnswerColumns, type AnswerPerson } from '../../components/decision/AnswerColumns';
+import { tallyPeople } from '../../components/decision/answerPeople';
 import {
   ConsideringControls,
   type ConsideringRequest,
@@ -178,7 +179,6 @@ export function DecisionCard(props: DecisionCardProps) {
   const reconsiderable = signable && view.shown === 'rejected' && view.settled;
   const tally = d.tally;
   const confirming = tally ? tally.inFlight.filter((x) => x.approval) : [];
-  const rejecting = tally ? tally.inFlight.filter((x) => !x.approval) : [];
   const title = decisionTitle(d);
   const subject = useDisplayName(
     d.subject ?? '',
@@ -210,30 +210,9 @@ export function DecisionCard(props: DecisionCardProps) {
     { nearScreen, myAddress: voter?.address }
   );
   const voted = votes.tally.yes.length + votes.tally.no.length > 0;
-  const person = (x: { address?: string }) => ({
-    address: x.address as string,
-    name: x.address && adminNames.has(x.address) ? adminNames.get(x.address) : undefined,
-  });
-  const approvedPeople: AnswerPerson[] = tally
-    ? [
-        ...tally.approvals.filter((x) => x.address).map(person),
-        ...confirming.filter((x) => x.address).map((x) => ({ ...person(x), confirming: true })),
-      ]
-    : [];
-  const rejectedPeople: AnswerPerson[] = tally
-    ? [
-        ...tally.rejections
-          .filter((x) => x.address)
-          .map((x) => ({ ...person(x), hadApproved: x.withdrew })),
-        ...rejecting
-          .filter((x) => x.address)
-          .map((x) => ({
-            ...person(x),
-            confirming: true,
-            hadApproved: tally.approvals.some((a) => a.address === x.address),
-          })),
-      ]
-    : [];
+  const { approved: approvedPeople, rejected: rejectedPeople } = tallyPeople(tally, (address) =>
+    adminNames.has(address) ? adminNames.get(address) : undefined
+  );
   const consideringPeople: AnswerPerson[] = considering.people.map((p) => ({
     address: p.address,
     name: p.name,

@@ -41,8 +41,11 @@ describe('Considering on the Decisions page', () => {
     expect(column).not.toHaveTextContent('Admin N');
     expect(column).not.toHaveTextContent('Admin B');
     expect(column).not.toHaveTextContent('Nora');
-    // The waiting nomination shows the count.
-    expect(await screen.findByText('1 Minter Admin is considering', {}, T)).toBeVisible();
+    // The waiting nomination shows who is considering it, in the same columns.
+    const wren = screen.getByRole('article', { name: 'Nomination of Wren Waiting' });
+    expect(
+      await within(wren).findByRole('list', { name: 'Considering: 1 Minter Admin' }, T)
+    ).toHaveTextContent(/Admin M.*Checking their minting history first\./);
     // Members can't mark anything.
     expect(screen.queryByRole('button', { name: /^Considering: / })).toBeNull();
     // One search for all the cards, paged at 100.
@@ -306,13 +309,15 @@ describe('Considering for the nominee and on person pages', () => {
     ).toBeVisible();
   });
 
-  it("a person's page shows the count on their nomination", async () => {
+  it("a person's page shows who is considering their nomination", async () => {
     await renderPage(<PersonPage />, {
       persona: 'learner',
       path: `/people/${ADDR.nominatedWaiting}`,
       route: '/people/:address',
       setup: (world) => addConsidering(world),
     });
-    expect(await screen.findByText('1 Minter Admin is considering', {}, T)).toBeVisible();
+    expect(
+      await screen.findByRole('list', { name: 'Considering: 1 Minter Admin' }, T)
+    ).toHaveTextContent('Admin M');
   });
 });

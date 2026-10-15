@@ -1,57 +1,15 @@
 /**
- * Considering ("I've looked at this, not sure yet") on the cards: who is
- * considering (with their notes) next to the signers, the count on
- * nomination cards and the admin's own button. It changes nothing on chain:
- * a small QDN record under the admin's name, 0.01 QORT per update, stated
- * before Hub opens. The dialog that publishes it is ConsideringDialog.tsx,
- * apart so these light parts don't bring the write code along.
+ * Considering ("I've looked at this, not sure yet") on the cards: the
+ * admin's own button (who is considering shows in AnswerColumns). It
+ * changes nothing on chain: a small QDN record under the admin's name, 0.01
+ * QORT per update, stated before Hub opens. The dialog that publishes it is
+ * ConsideringDialog.tsx, apart so these light parts don't bring the write
+ * code along.
  */
-import { Button, Chip, Typography } from '@mui/material';
+import { Button, Chip } from '@mui/material';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import type { ConsideringTarget } from '../../data/records';
-import {
-  consideringCountText,
-  type ConsideringPerson,
-  type MyConsideringState,
-} from '../../rules/considering';
-import { PersonInline } from '../common/Person';
-
-/** "Considering: Admin K (“note”), Admin L": who, with their notes, next to the signers. */
-export function ConsideringLine({ people }: { people: ConsideringPerson[] }) {
-  if (!people.length) return null;
-  return (
-    <Typography
-      component="div"
-      variant="body2"
-      color="text.secondary"
-      sx={{ overflowWrap: 'anywhere' }}
-    >
-      Considering:{' '}
-      {people.map((p, i) => (
-        <span key={p.address}>
-          {i > 0 ? ', ' : ''}
-          <PersonInline address={p.address} name={p.name} />
-          {p.note ? <> (“{p.note}”)</> : null}
-        </span>
-      ))}
-    </Typography>
-  );
-}
-
-/** "3 Minter Admins are considering", for nomination cards and the nominee's Home. */
-export function ConsideringCount({ count }: { count: number }) {
-  if (!count) return null;
-  return (
-    <Typography
-      variant="body2"
-      color="text.secondary"
-      sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
-    >
-      <VisibilityOutlinedIcon aria-hidden sx={{ fontSize: 18 }} />
-      {consideringCountText(count)}
-    </Typography>
-  );
-}
+import type { MyConsideringState } from '../../rules/considering';
 
 /**
  * The admin's own Considering: a button, or "Considering" with "No longer
