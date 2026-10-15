@@ -30,6 +30,7 @@ export const CHANGELOG: Release[] = [
           'Ready to mint says who was in MINTER before, and you can search it by name or address.',
           'Every decision and nomination has its own page, with Copy link to share it. The link you send after proposing a nomination opens the nomination itself, where the nominee can accept.',
           'History links each decided change to its own decision page.',
+          'History’s On chain list filters by type: invites, join requests, joins, declined requests, removals and bans, leaves, lifted bans, cancelled invites and Minter Admin changes, each with its count.',
           'Public comments on every decision and nomination: reply, edit or delete your own, and mute a name on your device. Settings lists the names you muted, to unmute them.',
           'Home’s Your nominations has Details and Open in Decisions on each nomination.',
           'Home says what changed since your last visit, and nominators see how the nominations they made ended. Settings can turn on Hub alerts for new nominations, for being nominated, or for support on a nomination you made.',
