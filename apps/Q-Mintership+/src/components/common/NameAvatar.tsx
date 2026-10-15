@@ -1,17 +1,15 @@
 /**
  * A Qortal name's avatar (its `qortal_avatar` thumbnail), loaded only once
  * it scrolls into view (MUI's Avatar would load on mount; docs/QORTAL.md
- * pitfall 5), and only tried once per name per session. Until then, and for
- * names without one, it shows the first letter. Accounts without a name get
- * a neutral circle. Hidden from screen readers: the name beside it says it.
+ * pitfall 5). The first letter shows until the image has loaded, and stays
+ * for names without one; an avatar Core is still fetching comes in when it
+ * can (data/avatars.ts). Accounts without a name get a neutral circle.
+ * Hidden from screen readers: the name beside it says it.
  */
 import { useEffect, useState } from 'react';
 import { Box } from '@mui/material';
 import { primarySoft } from '../../hub-theme';
-import { avatarUrl } from '../../data/accounts';
-
-const broken = new Set<string>();
-const loaded = new Set<string>();
+import { avatarFailed, avatarLoaded, useAvatar } from '../../data/avatars';
 
 export interface NameAvatarProps {
   name: string | null;
@@ -20,11 +18,11 @@ export interface NameAvatarProps {
 
 export function NameAvatar({ name, size = 40 }: NameAvatarProps) {
   const [node, setNode] = useState<HTMLElement | null>(null);
-  const [visible, setVisible] = useState(() => (name ? loaded.has(name) : false));
-  const [failed, setFailed] = useState(() => (name ? broken.has(name) : true));
+  const avatar = useAvatar(name);
+  const [visible, setVisible] = useState(avatar.loaded);
 
   useEffect(() => {
-    if (!node || visible || !name || failed) return;
+    if (!node || visible || !name || !avatar.src) return;
     if (typeof IntersectionObserver === 'undefined') {
       setVisible(true);
       return;
@@ -40,10 +38,10 @@ export function NameAvatar({ name, size = 40 }: NameAvatarProps) {
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [node, visible, name, failed]);
+  }, [node, visible, name, avatar.src]);
 
   const letter = name ? ([...name.trim()][0]?.toUpperCase() ?? '?') : '';
-  const showImage = Boolean(name && visible && !failed);
+  const src = name && (visible || avatar.loaded) ? avatar.src : null;
 
   return (
     <Box
@@ -55,6 +53,7 @@ export function NameAvatar({ name, size = 40 }: NameAvatarProps) {
         flexShrink: 0,
         borderRadius: '50%',
         overflow: 'hidden',
+        position: 'relative',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -66,22 +65,27 @@ export function NameAvatar({ name, size = 40 }: NameAvatarProps) {
         userSelect: 'none',
       })}
     >
-      {showImage ? (
+      {src && avatar.loaded ? null : letter}
+      {src ? (
         <Box
+          key={src}
           component="img"
-          src={avatarUrl(name as string)}
+          src={src}
           alt=""
           decoding="async"
-          onLoad={() => loaded.add(name as string)}
-          onError={() => {
-            broken.add(name as string);
-            setFailed(true);
+          onLoad={() => avatarLoaded(name as string, src)}
+          onError={() => avatarFailed(name as string, src)}
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block',
+            opacity: avatar.loaded ? 1 : 0,
           }}
-          sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
         />
-      ) : (
-        letter
-      )}
+      ) : null}
     </Box>
   );
 }

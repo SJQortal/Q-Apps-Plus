@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
@@ -485,15 +485,17 @@ describe('person page words', () => {
   });
 
   it('reads the original app’s cards only once that section comes near the screen', async () => {
-    let trigger: (() => void) | null = null;
+    // Nothing is near the screen until the test scrolls everything into view.
+    const triggers: Array<() => void> = [];
     class FarAway {
       constructor(private callback: IntersectionObserverCallback) {}
       observe() {
-        trigger = () =>
+        triggers.push(() =>
           this.callback(
             [{ isIntersecting: true } as IntersectionObserverEntry],
             this as unknown as IntersectionObserver
-          );
+          )
+        );
       }
       disconnect() {}
       unobserve() {}
@@ -507,8 +509,8 @@ describe('person page words', () => {
     const cardReads = () =>
       fetchCallsFor(/\/arbitrary\/(BLOG_POST|resources\/search\w*\?[^ ]*Minter-board-card)/);
     expect(cardReads()).toEqual([]);
-    await waitFor(() => expect(trigger).not.toBeNull());
-    trigger!();
+    await waitFor(() => expect(triggers.length).toBeGreaterThan(0));
+    act(() => triggers.forEach((trigger) => trigger()));
     await waitFor(() => expect(cardReads().length).toBeGreaterThan(0));
   });
 });
