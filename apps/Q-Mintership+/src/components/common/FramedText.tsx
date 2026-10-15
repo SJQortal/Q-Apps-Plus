@@ -1,27 +1,31 @@
 /**
- * A nomination's reason, with its links, in a frame that sets the
- * nominator's own words apart from the card's other lines: a tinted box
- * with an accent border. Shown in full on wider screens. On phones a long
- * reason shows its first lines with "Show the whole reason" (only when it
- * is really cut off: measured); Home's compact cards keep three lines.
+ * Someone's own words set apart from a card's other lines, in a framed
+ * box (an accent border on a light tint): a nomination's reason with its
+ * links, a Minter Admin poll's details. Shown in full on wider screens. On
+ * phones a long text shows its first lines with a button (only when it is
+ * really cut off: measured); compact cards keep three lines, no button.
  */
 import { useId, useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { accentWash } from '../../hub-theme';
 import { useClamped } from '../../hooks/useClamped';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
-import { QortalLinks } from '../common/QortalLinks';
+import { QortalLinks } from './QortalLinks';
 
-/** Lines a reason shows on a phone before "Show the whole reason". */
+/** Lines a text shows on a phone before its button. */
 const PHONE_LINES = 4;
 
-export function ReasonFrame({
-  reason,
-  links,
+export function FramedText({
+  text,
+  links = [],
+  moreLabel = 'Show more',
   compact = false,
 }: {
-  reason: string;
-  links: string[];
+  text: string;
+  /** qortal:// links shown under the text, inside the frame. */
+  links?: string[];
+  /** The phone button's words: "Show the whole reason", "Show more". */
+  moreLabel?: string;
   /** Three lines at most, no button (compact cards). */
   compact?: boolean;
 }) {
@@ -30,7 +34,7 @@ export function ReasonFrame({
   const [node, setNode] = useState<HTMLElement | null>(null);
   const id = useId();
   const lines = compact ? 3 : phone && !open ? PHONE_LINES : null;
-  const clamped = useClamped(lines ? node : null, `${reason}:${lines}`);
+  const clamped = useClamped(lines ? node : null, `${text}:${lines}`);
   const canToggle = !compact && phone && (clamped || open);
   return (
     <Box
@@ -63,7 +67,7 @@ export function ReasonFrame({
             : {}),
         }}
       >
-        {reason}
+        {text}
       </Typography>
       {canToggle ? (
         <Button
@@ -73,10 +77,10 @@ export function ReasonFrame({
           aria-controls={id}
           sx={{ alignSelf: 'flex-start', minHeight: 44, mt: -0.5, ml: -0.75 }}
         >
-          {open ? 'Show less' : 'Show the whole reason'}
+          {open ? 'Show less' : moreLabel}
         </Button>
       ) : null}
-      <QortalLinks links={links} />
+      {links.length ? <QortalLinks links={links} /> : null}
     </Box>
   );
 }

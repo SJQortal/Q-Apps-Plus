@@ -22,7 +22,7 @@ import { ConsideringCount } from '../decision/Considering';
 import { nominationPath } from '../../routes/paths';
 import { Countdown } from '../common/Countdown';
 import { CopyLinkButton } from '../common/CopyLinkButton';
-import { ReasonFrame } from './ReasonFrame';
+import { FramedText } from '../common/FramedText';
 import { PersonChip, PersonInline } from '../common/Person';
 import { ProgressRing } from '../common/ProgressRing';
 import { Card, NominationStateChip } from '../common/Section';
@@ -149,9 +149,10 @@ export function NominationCard({
       ) : null}
 
       {n.nomination ? (
-        <ReasonFrame
-          reason={n.nomination.record.reason}
+        <FramedText
+          text={n.nomination.record.reason}
           links={n.nomination.record.links}
+          moreLabel="Show the whole reason"
           compact={compact}
         />
       ) : null}

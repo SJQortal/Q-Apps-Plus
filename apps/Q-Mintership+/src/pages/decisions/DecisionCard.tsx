@@ -37,7 +37,7 @@ import {
 import { answerBadges } from '../../components/comments/answerBadges';
 import { useConsideringFor } from '../../hooks/useConsidering';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
-import { ReasonFrame } from '../../components/nomination/ReasonFrame';
+import { FramedText } from '../../components/common/FramedText';
 import { decisionPath } from '../../routes/paths';
 import { ProgressRing } from '../../components/common/ProgressRing';
 import { Card, DecisionPhaseChip } from '../../components/common/Section';
@@ -634,7 +634,11 @@ function InviteDetails({
             ) : null}
             .
           </Typography>
-          <ReasonFrame reason={record.record.reason} links={record.record.links} />
+          <FramedText
+            text={record.record.reason}
+            links={record.record.links}
+            moreLabel="Show the whole reason"
+          />
         </>
       ) : nominationsState === 'loading' ? (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HubThemeProvider } from '../../hub-theme';
 import { themeConfig, THEME_STORAGE_KEY } from '../../theme/qplus-theme';
-import { ReasonFrame } from './ReasonFrame';
+import { FramedText } from './FramedText';
 
 const REASON = 'Runs a public node, helps newcomers in Q-Chat every day, and wrote the guide.';
 const originalMatchMedia = window.matchMedia;
@@ -31,10 +31,10 @@ function frame(width: number, textHeight: number) {
   });
 }
 
-function show(props: Partial<Parameters<typeof ReasonFrame>[0]> = {}) {
+function show(props: Partial<Parameters<typeof FramedText>[0]> = {}) {
   return render(
     <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
-      <ReasonFrame reason={REASON} links={[]} {...props} />
+      <FramedText text={REASON} moreLabel="Show the whole reason" {...props} />
     </HubThemeProvider>
   );
 }
@@ -47,7 +47,7 @@ afterEach(() => {
   }
 });
 
-describe('ReasonFrame', () => {
+describe('FramedText', () => {
   it('shows the whole reason on a wider screen, with no button', () => {
     frame(1280, 300);
     show();
@@ -74,5 +74,15 @@ describe('ReasonFrame', () => {
     frame(390, 300);
     show({ compact: true });
     expect(screen.queryByRole('button', { name: /whole reason/ })).toBeNull();
+  });
+
+  it('says Show more unless told otherwise (a poll’s details)', async () => {
+    frame(390, 300);
+    render(
+      <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+        <FramedText text={REASON} />
+      </HubThemeProvider>
+    );
+    expect(await screen.findByRole('button', { name: 'Show more' })).toBeVisible();
   });
 });

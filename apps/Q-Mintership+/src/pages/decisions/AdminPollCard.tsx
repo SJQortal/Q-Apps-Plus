@@ -47,8 +47,7 @@ import {
   voteClosing,
   type ShownPoll,
 } from './adminPollUi';
-import { useClamped } from '../../hooks/useClamped';
-import { usePhoneLayout } from '../../hooks/usePhoneLayout';
+import { FramedText } from '../../components/common/FramedText';
 
 const AdminPollComments = lazy(() => import('./AdminPollComments'));
 
@@ -138,7 +137,7 @@ export function AdminPollCard({
           </>
         ) : null}
       </Typography>
-      {poll.details ? <Details text={poll.details} /> : null}
+      {poll.details ? <FramedText text={poll.details} /> : null}
 
       <Typography
         variant="body2"
@@ -250,55 +249,6 @@ export function AdminPollCard({
     </Card>
   );
 }
-
-/**
- * The poll's details in full on wider screens; on a phone a long text shows
- * its first lines with "Show more" (only when it is really cut off).
- */
-function Details({ text }: { text: string }) {
-  const phone = usePhoneLayout();
-  const [open, setOpen] = useState(false);
-  const [node, setNode] = useState<HTMLElement | null>(null);
-  const id = useId();
-  const lines = phone && !open ? PHONE_LINES : null;
-  const clamped = useClamped(lines ? node : null, `${text}:${lines}`);
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-      <Typography
-        ref={setNode}
-        id={id}
-        sx={{
-          whiteSpace: 'pre-wrap',
-          overflowWrap: 'anywhere',
-          ...(lines
-            ? {
-                display: '-webkit-box',
-                WebkitLineClamp: lines,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-              }
-            : {}),
-        }}
-      >
-        {text}
-      </Typography>
-      {phone && (clamped || open) ? (
-        <Button
-          size="small"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-controls={id}
-          sx={{ alignSelf: 'flex-start', minHeight: 44 }}
-        >
-          {open ? 'Show less' : 'Show more'}
-        </Button>
-      ) : null}
-    </Box>
-  );
-}
-
-/** Lines a poll's details show on a phone before "Show more". */
-const PHONE_LINES = 4;
 
 const VOTE_TONE: Record<PollVote, ColumnTone> = { yes: 'success', no: 'error', neutral: 'neutral' };
 const VOTE_ICON: Record<PollVote, ReactNode> = {
