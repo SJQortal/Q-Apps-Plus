@@ -5,10 +5,25 @@ import { getDefaultStore } from 'jotai';
 import { renderPage } from '../../test/render';
 import { MUTED_NAMES_KEY, mutedNamesAtom } from '../../state/comments';
 import SettingsPage from './SettingsPage';
+import { SETTINGS_KEYS, decisionsOrderAtom } from '../../state/settings';
 
 afterEach(() => vi.useRealTimers());
 
 describe('Settings', () => {
+  it('chooses the Decisions order for everyone: most urgent first, or by type', async () => {
+    const u = userEvent.setup();
+    getDefaultStore().set(decisionsOrderAtom, 'urgency');
+    await renderPage(<SettingsPage />, { persona: 'learner', path: '/settings' });
+    const order = await screen.findByRole('combobox', { name: 'Decisions order' });
+    expect(order).toHaveTextContent('Most urgent first');
+    await u.click(order);
+    await u.click(await screen.findByRole('option', { name: 'By type' }));
+    expect(order).toHaveTextContent('By type');
+    expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEYS.decisionsOrder) ?? 'null')).toBe(
+      'type'
+    );
+  });
+
   it('shows the signed-in account with its MINTER roles', async () => {
     await renderPage(<SettingsPage />, { persona: 'admin', path: '/settings' });
     expect(await screen.findByText('Avery Admin')).toBeInTheDocument();

@@ -7,6 +7,7 @@ import { createWorld, fakeAddress } from '../../../e2e/world.mjs';
 import { mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { base58Decode, base58Encode } from '../../qortal/base58';
 import DecisionsPage from './DecisionsPage';
+import { SETTINGS_KEYS } from '../../state/settings';
 
 afterEach(() => vi.useRealTimers());
 
@@ -52,6 +53,62 @@ function newProposal(
   world.pending.push(tx);
   return tx;
 }
+
+describe('Decisions: by type', () => {
+  it('sorts the open decisions into a section per type, with chips that jump there', async () => {
+    const u = user();
+    await openPage('admin');
+    const urgent = screen.getByRole('button', { name: 'Most urgent first' });
+    expect(urgent).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('region', { name: /^Collecting approvals · \d+$/ })).toBeVisible();
+    await u.click(screen.getByRole('button', { name: 'By type' }));
+    expect(screen.getByRole('button', { name: 'By type' })).toHaveAttribute('aria-pressed', 'true');
+    // The choice stays on this device.
+    expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEYS.decisionsOrder) ?? 'null')).toBe(
+      'type'
+    );
+    // Each type its own section, named as its cards are, new minters first.
+    const titles: Record<string, RegExp> = {
+      'Add to MINTER': /^Add to MINTER, /,
+      'Remove or ban': /^(Remove from MINTER|Ban from MINTER), /,
+      'Lift a ban': /^Lift a ban, /,
+      'Cancel an approved invite': /^Cancel an approved invite, /,
+      'Minter Admin changes':
+        /^(Make a Minter Admin|Become a Minter Admin|Remove a Minter Admin|Step down as Minter Admin)/,
+    };
+    for (const [label, cardTitle] of Object.entries(titles)) {
+      const section = screen.queryByRole('region', { name: new RegExp(`^${label} · \\d+$`) });
+      if (!section) continue;
+      const cards = within(section).getAllByRole('article');
+      expect(section).toHaveAccessibleName(`${label} · ${cards.length}`);
+      for (const card of cards) expect(card.getAttribute('aria-label')).toMatch(cardTitle);
+    }
+    // In order, after the overview, before the other sections.
+    const named = screen
+      .getAllByRole('region')
+      .map((r) => document.getElementById(r.getAttribute('aria-labelledby') ?? '')?.textContent);
+    expect(named.slice(0, 7)).toEqual([
+      'Collecting approvals · 10',
+      'Add to MINTER · 4',
+      'Remove or ban · 2',
+      'Lift a ban · 1',
+      'Cancel an approved invite · 1',
+      'Minter Admin changes · 2',
+      'Waiting for a Minter Admin · 1',
+    ]);
+    expect(screen.getByRole('region', { name: /^Add to MINTER · \d+$/ })).toBeVisible();
+    // The overview: a chip per type; a press puts focus on that section's first card.
+    const nav = screen.getByRole('navigation', { name: 'Decisions by type' });
+    await u.click(
+      within(nav).getByRole('button', { name: 'Cancel an approved invite 1 decision' })
+    );
+    expect(screen.getByRole('article', { name: /^Cancel an approved invite, / })).toHaveFocus();
+    // Back to one queue.
+    await u.click(screen.getByRole('button', { name: 'Most urgent first' }));
+    expect(screen.queryByRole('navigation', { name: 'Decisions by type' })).toBeNull();
+    expect(screen.queryByRole('region', { name: /^Add to MINTER · \d+$/ })).toBeNull();
+  });
+});
 
 describe('Decisions: phases and actions', () => {
   it('offers Sign only on open and early decisions the admin has not signed', async () => {

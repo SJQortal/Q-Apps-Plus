@@ -285,6 +285,20 @@ export default {
     },
     { key: 'decisions', path: '/decisions?as=admin', after: settle },
     { key: 'decisions-member', path: '/decisions?as=learner', after: settle },
+    // By type: a section per kind of change, with the chips that jump to each.
+    {
+      key: 'decisions-by-type',
+      path: '/decisions?as=admin',
+      after: async (page) => {
+        await page.addInitScript(
+          ([key, value]) => window.localStorage.setItem(key, value),
+          ['qmintershipplus-decisions-order', JSON.stringify('type')]
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+        await page.getByRole('navigation', { name: 'Decisions by type' }).waitFor({ timeout: 8000 });
+      },
+    },
     // Propose's choices, then cancelling an approved invite up to its two Hub steps.
     {
       key: 'decisions-propose',

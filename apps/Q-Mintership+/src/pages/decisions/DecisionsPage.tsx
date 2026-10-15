@@ -1,7 +1,9 @@
 /**
  * Decisions: every transaction waiting for MINTER's approval (invites,
  * kicks, bans, admin changes, cancelled invites and bans), most urgent
- * first, plus the nominations no Minter Admin has signed yet.
+ * first, or by type (a section per kind of change, with chips that jump
+ * to each; the choice stays on this device), plus the nominations no
+ * Minter Admin has approved yet.
  *
  * Minter Admins sign here, one at a time or several in a row, reject, or
  * withdraw their signature (on chain both are a rejection), say they are
@@ -24,7 +26,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { PATHS, legacyDecisionPath } from '../../routes/paths';
-import { Alert, Box, Button, FormControlLabel, Switch, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, FormControlLabel, Switch, Typography } from '@mui/material';
+import { visuallyHidden } from '@mui/utils';
 import { useAtom, useAtomValue } from 'jotai';
 import { PageBody } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
@@ -59,9 +62,15 @@ import { decisionTitle, type Decision } from '../../rules/decision';
 import { hasImpact, isAdminChangeKind, projectShift } from '../../rules/targetShift';
 import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
 import { signerOf, useSession } from '../../state/session';
-import { decisionsHideAnsweredAtom } from '../../state/settings';
+import {
+  decisionsHideAnsweredAtom,
+  decisionsOrderAtom,
+  type DecisionsOrder,
+} from '../../state/settings';
+import { decisionGroupId, groupDecisions, type DecisionGroup } from './decisionGroups';
 import { focusElement } from '../../utils/focus';
-import { displayName, plural } from '../../utils/format';
+import { displayName, formatCount, plural } from '../../utils/format';
+import type { ChainNow } from '../../data/chain';
 import { bulkSign } from '../../writes/flows';
 import {
   pendingAnswersIn,
@@ -125,6 +134,7 @@ function DecisionsQueue() {
   const nominationsQ = useNominations();
   const membersQ = useMembers();
   const [hideAnswered, setHideAnswered] = useAtom(decisionsHideAnsweredAtom);
+  const [order, setOrder] = useAtom(decisionsOrderAtom);
   const writes = useAtomValue(pendingWritesAtom);
   // Sticky bars sit above the phone's bottom bar while it is on screen.
   const bottomBar = useBottomNavShown();
@@ -270,6 +280,50 @@ function DecisionsQueue() {
       })
     : [];
   const waiting = (nominationsQ.data?.open ?? []).filter((n) => n.state === 'waiting');
+  const hiddenNote = hiddenCount ? (
+    <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+      <Typography variant="body2" color="text.secondary">
+        {plural(hiddenCount, 'decision')} you answered {hiddenCount === 1 ? 'is' : 'are'} hidden.
+      </Typography>
+      <Button
+        onClick={() => {
+          // This button goes with the note: focus to the switch it turned off.
+          hideAnsweredSwitch.current?.focus();
+          setHideAnswered(false);
+        }}
+        sx={{ minHeight: 44 }}
+      >
+        Show the ones I answered
+      </Button>
+    </Box>
+  ) : null;
+  // By type: the shown decisions (Hide what I answered applies), each type in queue order.
+  const groups = groupDecisions(shown);
+  const collectingCard = (now: ChainNow) => (d: Decision) => (
+    <DecisionCard
+      key={d.signature}
+      decision={d}
+      now={now}
+      myPublicKey={myKey}
+      myAddress={signer?.address ?? null}
+      canAct={isAdmin}
+      nomination={nominationFor(d)}
+      nominationsState={nominationsState}
+      onRetryNominations={retryNominations}
+      adminNames={adminNames}
+      subjectFacts={factsFor(d.subject)}
+      onConsider={setConsiderRequest}
+      selecting={selecting}
+      selected={selected.has(d.signature)}
+      onToggleSelect={toggleSelect}
+      onSign={(decision) => answer(decision, 'sign')}
+      onReject={(decision) => answer(decision, 'reject')}
+      onWithdraw={(decision) => answer(decision, 'withdraw')}
+      impact={impactOf(d)}
+      risk={riskOf(d)}
+      labelOf={labelOf}
+    />
+  );
 
   const toggleSelect = (signature: string) =>
     setSelected((current) => {
@@ -422,8 +476,8 @@ function DecisionsQueue() {
                 <Typography variant="body2" color="text.secondary">
                   Each needs {plural(needed, 'approval')}:{' '}
                   {describeThreshold(data.group.approvalThreshold)}, counting all {totalAdmins}{' '}
-                  admin seats. Approve the ones you agree with. Reject the ones you don’t, or let them
-                  expire: {plural(needed, 'rejection')} end one as rejected.
+                  admin seats. Approve the ones you agree with. Reject the ones you don’t, or let
+                  them expire: {plural(needed, 'rejection')} end one as rejected.
                 </Typography>
                 {doubles.length ? (
                   <Typography variant="body2" color="text.secondary">
@@ -481,51 +535,33 @@ function DecisionsQueue() {
               />
             ) : null}
 
-            {collecting.length ? (
-              <Section title={`Collecting approvals · ${collecting.length}`} id="collecting">
-                {shown.map((d) => (
-                  <DecisionCard
-                    key={d.signature}
-                    decision={d}
-                    now={data.now}
-                    myPublicKey={myKey}
-                    myAddress={signer?.address ?? null}
-                    canAct={isAdmin}
-                    nomination={nominationFor(d)}
-                    nominationsState={nominationsState}
-                    onRetryNominations={retryNominations}
-                    adminNames={adminNames}
-                    subjectFacts={factsFor(d.subject)}
-                    onConsider={setConsiderRequest}
-                    selecting={selecting}
-                    selected={selected.has(d.signature)}
-                    onToggleSelect={toggleSelect}
-                    onSign={(decision) => answer(decision, 'sign')}
-                    onReject={(decision) => answer(decision, 'reject')}
-                    onWithdraw={(decision) => answer(decision, 'withdraw')}
-                    impact={impactOf(d)}
-                    risk={riskOf(d)}
-                    labelOf={labelOf}
-                  />
-                ))}
-                {hiddenCount ? (
-                  <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {plural(hiddenCount, 'decision')} you answered{' '}
-                      {hiddenCount === 1 ? 'is' : 'are'} hidden.
-                    </Typography>
-                    <Button
-                      onClick={() => {
-                        // This button goes with the note: focus to the switch it turned off.
-                        hideAnsweredSwitch.current?.focus();
-                        setHideAnswered(false);
-                      }}
-                      sx={{ minHeight: 44 }}
+            {collecting.length > 1 ? <OrderChoice order={order} onChange={setOrder} /> : null}
+
+            {collecting.length && order === 'type' ? (
+              <>
+                <Section title={`Collecting approvals · ${collecting.length}`} id="collecting">
+                  {groups.length ? <GroupJumps groups={groups} reduced={reduced} /> : null}
+                  {hiddenNote}
+                </Section>
+                {groups.map((g) => (
+                  <Box
+                    key={g.key}
+                    id={decisionGroupId(g.key)}
+                    sx={{ scrollMarginTop: 'calc(var(--qmp-header-offset, 0px) + 16px)' }}
+                  >
+                    <Section
+                      title={`${g.label} · ${g.decisions.length}`}
+                      id={`${decisionGroupId(g.key)}-section`}
                     >
-                      Show the ones I answered
-                    </Button>
+                      {g.decisions.map(collectingCard(data.now))}
+                    </Section>
                   </Box>
-                ) : null}
+                ))}
+              </>
+            ) : collecting.length ? (
+              <Section title={`Collecting approvals · ${collecting.length}`} id="collecting">
+                {shown.map(collectingCard(data.now))}
+                {hiddenNote}
               </Section>
             ) : null}
 
@@ -899,5 +935,91 @@ function FirstSignatureAction({
     >
       First approval
     </Button>
+  );
+}
+
+const ORDERS: ReadonlyArray<{ key: DecisionsOrder; label: string }> = [
+  { key: 'urgency', label: 'Most urgent first' },
+  { key: 'type', label: 'By type' },
+];
+
+/** Most urgent first (one queue) or by type (a section each): stays on this device. */
+function OrderChoice({
+  order,
+  onChange,
+}: {
+  order: DecisionsOrder;
+  onChange: (order: DecisionsOrder) => void;
+}) {
+  return (
+    <Box
+      role="group"
+      aria-label="Order the decisions"
+      sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}
+    >
+      {ORDERS.map((o) => {
+        const active = order === o.key;
+        return (
+          <Chip
+            key={o.key}
+            clickable
+            aria-pressed={active}
+            color={active ? 'primary' : 'default'}
+            variant={active ? 'filled' : 'outlined'}
+            onClick={() => onChange(o.key)}
+            label={o.label}
+            sx={{ height: { xs: 44, sm: 40 }, borderRadius: 999, px: 0.5 }}
+          />
+        );
+      })}
+    </Box>
+  );
+}
+
+/**
+ * By type: a chip per type with its count, as an overview of what is waiting;
+ * pressing one scrolls to that type's section and puts focus on its first
+ * card.
+ */
+function GroupJumps({
+  groups,
+  reduced,
+}: {
+  groups: ReadonlyArray<{ key: DecisionGroup; label: string; decisions: unknown[] }>;
+  reduced: boolean;
+}) {
+  const jump = (key: DecisionGroup) => {
+    const section = document.getElementById(decisionGroupId(key));
+    if (!section) return;
+    section.scrollIntoView?.({ block: 'start', behavior: reduced ? 'auto' : 'smooth' });
+    section.querySelector<HTMLElement>('article')?.focus({ preventScroll: true });
+  };
+  return (
+    <Box
+      component="nav"
+      aria-label="Decisions by type"
+      sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}
+    >
+      {groups.map((g) => (
+        <Chip
+          key={g.key}
+          clickable
+          variant="outlined"
+          onClick={() => jump(g.key)}
+          label={
+            <>
+              {g.label}{' '}
+              <Box component="span" sx={{ ml: 0.25, fontWeight: 700 }}>
+                {formatCount(g.decisions.length)}
+              </Box>{' '}
+              <Box component="span" sx={visuallyHidden}>
+                {g.decisions.length === 1 ? 'decision' : 'decisions'}
+              </Box>
+            </>
+          }
+          sx={{ height: { xs: 44, sm: 40 }, borderRadius: 999, px: 0.5 }}
+        />
+      ))}
+    </Box>
   );
 }

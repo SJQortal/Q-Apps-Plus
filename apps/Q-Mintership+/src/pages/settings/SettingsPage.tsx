@@ -36,6 +36,8 @@ import {
   decisionsHideAnsweredAtom,
   motionAtom,
   timeDisplayAtom,
+  decisionsOrderAtom,
+  type DecisionsOrder,
   type MotionSetting,
   type TimeDisplay,
 } from '../../state/settings';
@@ -159,6 +161,7 @@ export default function SettingsPage() {
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [motion, setMotion] = useAtom(motionAtom);
   const [timeDisplay, setTimeDisplay] = useAtom(timeDisplayAtom);
+  const [decisionsOrder, setDecisionsOrder] = useAtom(decisionsOrderAtom);
   const [celebrate, setCelebrate] = useAtom(celebrateAtom);
   const [hideAnswered, setHideAnswered] = useAtom(decisionsHideAnsweredAtom);
 
@@ -287,6 +290,23 @@ export default function SettingsPage() {
                 <MenuItem value="time">Time left</MenuItem>
                 <MenuItem value="blocks">Blocks left</MenuItem>
                 <MenuItem value="both">Both</MenuItem>
+              </Select>
+            </Row>
+            <Row>
+              <SettingText
+                id="decisions-order-label"
+                title="Decisions order"
+                hint="One queue, most urgent first, or a section for each type of change."
+              />
+              <Select
+                size="small"
+                value={decisionsOrder}
+                onChange={(e) => setDecisionsOrder(e.target.value as DecisionsOrder)}
+                labelId="decisions-order-label"
+                sx={{ minHeight: 44 }}
+              >
+                <MenuItem value="urgency">Most urgent first</MenuItem>
+                <MenuItem value="type">By type</MenuItem>
               </Select>
             </Row>
             {status?.isAdmin ? (

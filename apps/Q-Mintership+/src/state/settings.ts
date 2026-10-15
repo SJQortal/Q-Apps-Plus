@@ -8,6 +8,8 @@ import { STORAGE_PREFIX } from '../constants/plus';
 export type MotionSetting = 'system' | 'reduce' | 'full';
 export type TimeDisplay = 'time' | 'blocks' | 'both';
 export type ActivityWindow = 30 | 60 | 90 | 180;
+/** Decisions: one queue, most urgent first, or a section per type. */
+export type DecisionsOrder = 'urgency' | 'type';
 
 export const SETTINGS_KEYS = {
   motion: `${STORAGE_PREFIX}motion`,
@@ -17,6 +19,7 @@ export const SETTINGS_KEYS = {
   // Still "hide-signed", from when it hid signatures only: the same key, so a
   // device's choice carries over now that it hides rejections too.
   decisionsHideAnswered: `${STORAGE_PREFIX}decisions-hide-signed`,
+  decisionsOrder: `${STORAGE_PREFIX}decisions-order`,
 } as const;
 
 /** Animations: follow the system, always reduce, or always play. */
@@ -35,4 +38,10 @@ export const activityWindowAtom = atomWithStorage<ActivityWindow>(SETTINGS_KEYS.
 export const decisionsHideAnsweredAtom = atomWithStorage<boolean>(
   SETTINGS_KEYS.decisionsHideAnswered,
   false
+);
+
+/** Decisions: most urgent first (one queue), or by type (a section per kind of change). */
+export const decisionsOrderAtom = atomWithStorage<DecisionsOrder>(
+  SETTINGS_KEYS.decisionsOrder,
+  'urgency'
 );
