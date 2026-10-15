@@ -574,6 +574,18 @@ On branch `q-mintership-plus/feedback-1`, merged into the rewrite branch. One co
 
 8. **Decisions by type** (Simon: sort the cards by type into their own sections, to make the queue easier to take in). Above the list: "Most urgent first" (one queue, as before, the default) or "By type", which shows the open decisions in a section per kind, named as their cards are, new minters first: Add to MINTER, Decline a join request, Remove or ban, Lift a ban, Cancel an approved invite, Minter Admin changes, Other group changes, each in the queue's order (`pages/decisions/decisionGroups.ts`). An overview section ("Collecting approvals · n") keeps a chip per type with its count; a press scrolls to that section and focuses its first card, and it stays where focus goes when an answered card is hidden. Hide what I answered and Approve several work in both orders. The choice is a per-device setting (`qmintershipplus-decisions-order`), also in Settings → Mintership. New screen in the screenshot check: decisions-by-type. Found along the way: `npx tsc -p .` checks nothing here (the root tsconfig only references the others); `tsc -b` in the build always did, and `npx tsc --noEmit -p tsconfig.app.json` is the quick check.
 
+9. **Polls in the decisions' style** (Simon). A Minter Admin poll's votes are three columns, Yes, No and Neutral, with counts and voters, built on the same component as a decision's answers (`PeopleColumns`, which `AnswerColumns` now uses); "Asked by" sits under the question; the own vote reads "You voted Yes ✓".
+
+10. **Nominated by, not Proposed by as well** (Simon). An invite from a nomination shows only "Nominated by" (its first approver is in Approved); an invite proposed directly on chain, and every other kind, keeps "Proposed by".
+
+11. **The whole reason, in a frame** (Simon). A nomination's reason shows in full, with its links, in a lightly tinted bordered frame (`ReasonFrame`) on decision and nomination cards; Home's compact cards keep three lines. The measured clamp (`useClamped`) is gone.
+
+12. **Hide already voted on** (Simon). The switch and its Settings row are renamed, and it now also leaves out the Minter Admin polls the admin voted on (counted, on its way, or after the end), with its own note and Show them.
+
+13. **Wider Decisions** (Simon). Decisions, a decision's page and a poll's page grow to 960 px (`DECISIONS_WIDTH`, as Activity), from 760.
+
+14. **Each comment in a frame** (Simon). Every comment, with its replies' block, sits in a thin bordered frame with space between comments. The first try also tinted the frame; that took a red "Voted No" badge below 4.5:1 in Hub 3.0 dark and White (axe caught it), so the frame has a border only.
+
 One test (TargetShift's "Approve several with an admin change") failed once under full-suite load and passed on its own and on a rerun: a long dialog flow close to its time limit.
 
 ## Follow-ups
