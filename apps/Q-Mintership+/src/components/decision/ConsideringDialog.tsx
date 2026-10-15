@@ -42,8 +42,8 @@ export function ConsideringDialog({
   const trimmed = note.trim();
   const clear = request?.mode === 'clear';
   const again = !clear && Boolean(request?.again);
-  // After a rejection, only a signature is left to answer with.
-  const replacedBy = again ? 'Signing' : 'Signing, rejecting or withdrawing';
+  // After a rejection, only an approval is left to answer with.
+  const replacedBy = again ? 'Approving' : 'Approving or rejecting';
   return (
     <HubStepDialog
       open={Boolean(request && signer)}
@@ -69,7 +69,7 @@ export function ConsideringDialog({
                   <Typography>
                     Tell the other Minter Admins{request.nominee ? ', and the nominee,' : ''} that
                     you’re looking at this again after rejecting it, and haven’t decided yet. Your
-                    rejection still counts until you sign. This changes nothing on chain.
+                    rejection still counts until you approve. This changes nothing on chain.
                   </Typography>
                 ) : (
                   <Typography>

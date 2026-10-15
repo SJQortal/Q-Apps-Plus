@@ -250,7 +250,7 @@ function HubAlertsRow() {
           ) : null}
           {ready && role !== 'none' ? (
             <Typography variant="body2" color="text.secondary" {...LINE}>
-              Signatures, approvals and expiry show on Home: Hub can only alert about published
+              Approvals, rejections and expiry show on Home: Hub can only alert about published
               records.
             </Typography>
           ) : null}

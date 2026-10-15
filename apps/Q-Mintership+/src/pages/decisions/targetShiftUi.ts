@@ -25,10 +25,10 @@ export function joinAnd(items: readonly string[]): string {
 /** "drops from 9 to 8 signatures", "rises from 8 to 9 signatures", "stays at 8 signatures". */
 export function targetMove(neededNow: number, neededThen: number): string {
   if (neededThen < neededNow)
-    return `drops from ${neededNow} to ${plural(neededThen, 'signature')}`;
+    return `drops from ${neededNow} to ${plural(neededThen, 'approval')}`;
   if (neededThen > neededNow)
-    return `rises from ${neededNow} to ${plural(neededThen, 'signature')}`;
-  return `stays at ${plural(neededThen, 'signature')}`;
+    return `rises from ${neededNow} to ${plural(neededThen, 'approval')}`;
+  return `stays at ${plural(neededThen, 'approval')}`;
 }
 
 /**
@@ -117,7 +117,7 @@ export function riskExplanation(risk: DecisionRisk, labelOf: LabelOf): string[] 
     case 'applies':
       return [
         why,
-        `This decision has ${plural(e.approvals, 'signature')}, so Core would apply it at once, in the same block or the next, with no new signature.`,
+        `This decision has ${plural(e.approvals, 'approval')}, so Core would apply it at once, in the same block or the next, with no new approval.`,
       ];
     case 'rejected':
       return [
@@ -127,7 +127,7 @@ export function riskExplanation(risk: DecisionRisk, labelOf: LabelOf): string[] 
     case 'needsMore':
       return [
         why,
-        `It has ${plural(e.approvals, 'signature')}: enough today, but if the admin change comes first it needs ${formatCount(e.more)} more.`,
+        `It has ${plural(e.approvals, 'approval')}: enough today, but if the admin change comes first it needs ${formatCount(e.more)} more.`,
       ];
   }
 }
@@ -141,14 +141,14 @@ export const ORDER_ADVICE =
  * before `deadline` ("the admin change passes", "block 1,233").
  */
 export function withdrawAdvice(fee: string, deadline = 'the admin change passes'): string {
-  return `Signed one of these and don’t want it to go through this way? You can withdraw your signature before ${deadline}. A withdrawal counts as a rejection, only each admin’s latest answer counts, and it costs ${fee}.`;
+  return `Approved one of these and don’t want it to go through this way? You can still reject it before ${deadline}: only each admin’s latest answer counts, and it costs ${fee}.`;
 }
 
 /** The banner's title: "The target changed from 9 to 7 signatures". */
 export function targetChangedTitle(fromNeeded: number, toNeeded: number): string {
   return fromNeeded === toNeeded
     ? 'MINTER’s admin seats changed'
-    : `The target changed from ${fromNeeded} to ${plural(toNeeded, 'signature')}`;
+    : `The target changed from ${fromNeeded} to ${plural(toNeeded, 'approval')}`;
 }
 
 export interface TargetChangeReason {

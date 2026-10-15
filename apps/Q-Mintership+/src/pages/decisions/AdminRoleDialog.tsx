@@ -156,8 +156,8 @@ export function AdminRoleDialog({
         become ? (
           <>
             <Typography>
-              Minter Admins sign MINTER’s decisions: new minters, removals and bans, and changes to
-              the Minter Admins. It works best when you can look at Decisions every few days.
+              Minter Admins approve or reject MINTER’s decisions: new minters, removals and bans,
+              and changes to the Minter Admins. It works best when you can look at Decisions every few days.
             </Typography>
             {levelNote ? (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -186,7 +186,7 @@ export function AdminRoleDialog({
         ) : (
           <Typography>
             You stay a MINTER member, and your level and minting don’t change. Until it is approved
-            you are still a Minter Admin and can sign as usual.
+            you are still a Minter Admin and can approve and reject as usual.
           </Typography>
         )
       }

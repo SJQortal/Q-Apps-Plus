@@ -177,7 +177,7 @@ describe('parseComment', () => {
     expect(parseComment({ ...ok, deleted: true }, ident)?.text).toBe('');
   });
 
-  it('a reply may answer a comment under another key (a nomination before its first signature)', () => {
+  it('a reply may answer a comment under another key (a nomination before its first approval)', () => {
     const replyTo = id(NOMINEE, 'parent');
     expect(parseComment({ ...ok, replyTo }, ident)?.replyTo).toBe(replyTo);
   });

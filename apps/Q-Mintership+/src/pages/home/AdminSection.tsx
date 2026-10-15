@@ -67,7 +67,7 @@ export function AdminSection({ publicKey }: { publicKey: string }) {
   return (
     <>
       <Section
-        title="Waiting for your signature"
+        title="Waiting for your answer"
         id="home-waiting"
         action={
           summary && summary.waiting.length > TOP ? (
@@ -96,7 +96,7 @@ export function AdminSection({ publicKey }: { publicKey: string }) {
           </Box>
         ) : (
           <EmptyState
-            title="Nothing is waiting for your signature"
+            title="Nothing is waiting for your answer"
             description="New nominations and proposals show up here as they arrive."
           />
         )}
@@ -106,10 +106,10 @@ export function AdminSection({ publicKey }: { publicKey: string }) {
       <PollsWaitingLine />
 
       {firstSignature.length ? (
-        <Section title="Waiting for a first signature" id="home-first">
+        <Section title="Waiting for a first approval" id="home-first">
           <Card sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
             <Typography variant="body2" color="text.secondary">
-              The first Minter Admin who signs creates the invite and starts the clock.
+              The first Minter Admin who approves creates the invite and starts the clock.
             </Typography>
             {firstSignature.slice(0, TOP).map((n) => {
               const by = n.nomination?.publisher;
@@ -169,7 +169,7 @@ export function AdminSection({ publicKey }: { publicKey: string }) {
             label={
               summary && !summary.open.length
                 ? 'Open decisions right now'
-                : "Open decisions you've signed"
+                : "Open decisions you've approved"
             }
           />
           <StatTile

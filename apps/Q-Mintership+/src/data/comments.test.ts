@@ -125,7 +125,7 @@ describe('loadCommentThread', () => {
     expect(bodyReads.filter((p) => p.includes('qmp-comment-'))).toHaveLength(4);
   });
 
-  it('a decision’s thread includes the nomination’s comments from before the first signature', async () => {
+  it('a decision’s thread includes the nomination’s comments from before the first approval', async () => {
     const { bob, decisionKey, ids } = await setup();
     const decision = bob.decision!;
     const target = decisionCommentTarget(decision, bob);

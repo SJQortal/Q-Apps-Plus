@@ -88,7 +88,7 @@ describe('stale invites', () => {
     expect([...waitingCancelInvitees(data.decisions)]).toEqual([fakeAddress('stale-1')]);
     const admin = { address, publicKey };
     expect(await guardCancelInvite(admin, fakeAddress('stale-1'))).toBe(
-      'Cancelling this invite is already waiting for signatures.'
+      'Cancelling this invite is already waiting for approvals.'
     );
     expect(await guardCancelInvite(admin, fakeAddress('stale-2'))).toBeNull();
   });
@@ -110,7 +110,7 @@ describe('stale invites', () => {
     expect(outcomes[0]).toMatchObject({
       status: 'sent',
       partial:
-        'Proposed ✓. Your signature didn’t go through: Your node doesn’t show it yet. Sign it in the queue once it’s in a block.',
+        'Proposed ✓. Your approval didn’t go through: Your node doesn’t show it yet. Approve it in the queue once it’s in a block.',
     });
     expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
     // The second row's cancellation is already waiting: stopped before Hub.
@@ -171,7 +171,7 @@ describe('stale invites', () => {
       status: 'sent',
       signature: sent[1],
       stopped: true,
-      partial: expect.stringMatching(/You cancelled your signature in Hub/),
+      partial: expect.stringMatching(/You cancelled your approval in Hub/),
     });
     // Each signature is on exactly the cancellation just proposed.
     const signedSigs = qortalCallsFor('SIGN_TRANSACTION').map((c) =>
@@ -194,7 +194,7 @@ describe('stale invites', () => {
       {
         status: 'blocked',
         reason:
-          'All 2 with your signatures need 0.04 QORT in fees, and your confirmed balance is 0.03 QORT. Propose them one at a time instead.',
+          'All 2 with your approvals need 0.04 QORT in fees, and your confirmed balance is 0.03 QORT. Propose them one at a time instead.',
         stopped: true,
       },
     ]);
@@ -227,16 +227,16 @@ describe('stale invites', () => {
     ).toEqual({
       ...sent,
       partial:
-        'Proposed ✓. Your signature didn’t go through: Your node doesn’t show it yet. Sign it in the queue once it’s in a block.',
+        'Proposed ✓. Your approval didn’t go through: Your node doesn’t show it yet. Approve it in the queue once it’s in a block.',
     });
     expect(cancelAllSummary({ total: 3, sent: 3, partial: 0, stopped: false })).toBe(
-      '3 of 3 proposed and signed. Each counts once it is in a block.'
+      '3 of 3 proposed and approved. Each counts once it is in a block.'
     );
     expect(cancelAllSummary({ total: 4, sent: 1, partial: 1, stopped: true })).toBe(
-      '1 of 4 proposed and signed. 1 more was proposed without your signature: sign it in the queue once it’s in a block. You cancelled one in Hub, so the rest were not sent. Each counts once it is in a block.'
+      '1 of 4 proposed and approved. 1 more was proposed without your approval: approve it in the queue once it’s in a block. You cancelled one in Hub, so the rest were not sent. Each counts once it is in a block.'
     );
     expect(cancelAllSummary({ total: 2, sent: 0, partial: 2, stopped: false })).toBe(
-      '0 of 2 proposed and signed. 2 more were proposed without your signature: sign them in the queue once they’re in a block.'
+      '0 of 2 proposed and approved. 2 more were proposed without your approval: approve them in the queue once they’re in a block.'
     );
   });
 

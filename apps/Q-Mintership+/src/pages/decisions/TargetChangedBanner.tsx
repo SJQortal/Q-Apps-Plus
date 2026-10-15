@@ -122,15 +122,15 @@ export function TargetChangedBanner({
       <Typography component="div" variant="body2" sx={{ mt: 0.5 }}>
         {moved ? 'It changed ' : 'They changed '}
         {because}. The target is {describeThreshold(threshold)}, recounted every block
-        {moved ? '' : `: it stays at ${plural(to.needed, 'signature')}`}.
+        {moved ? '' : `: it stays at ${plural(to.needed, 'approval')}`}.
       </Typography>
 
       {applies.length ? (
         <Box sx={{ mt: 1 }}>
           <Typography variant="body2">
             {applies.length === 1
-              ? 'This decision now has enough signatures because of it, so Core applies it without a new signature:'
-              : 'These decisions now have enough signatures because of it, so Core applies them without a new signature:'}
+              ? 'This decision now has enough approvals because of it, so Core applies it without a new approval:'
+              : 'These decisions now have enough approvals because of it, so Core applies them without a new approval:'}
           </Typography>
           <DecisionLinks
             items={applies.map((e) => ({
@@ -160,8 +160,8 @@ export function TargetChangedBanner({
       {!flipped ? (
         <Typography variant="body2" sx={{ mt: 0.5 }}>
           {to.needed > from.needed
-            ? 'Each decision still collecting needs more signatures than before.'
-            : 'No waiting decision has enough signatures because of it.'}
+            ? 'Each decision still collecting needs more approvals than before.'
+            : 'No waiting decision has enough approvals because of it.'}
         </Typography>
       ) : null}
       {stoppable.length && isAdmin ? (

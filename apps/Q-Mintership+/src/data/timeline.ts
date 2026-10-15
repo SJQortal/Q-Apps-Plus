@@ -87,7 +87,7 @@ const DONE_TITLE: Record<Exclude<TimelineKind, 'invite' | 'join'>, string> = {
 };
 
 export const OUTCOME_LABEL: Record<Exclude<TimelineOutcome, 'done'>, string> = {
-  pending: 'Collecting signatures',
+  pending: 'Collecting approvals',
   expired: 'Expired',
   rejected: 'Rejected',
 };
@@ -164,7 +164,7 @@ export function buildTimeline(rows: TxRow[], ctx: TimelineContext): TimelineEven
     let detail: string | null = null;
     if (kind === 'ban' && outcome === 'done') detail = banLength(Number(tx.timeToLive ?? 0));
     if (kind === 'invite' && outcome === 'expired')
-      detail = 'Not enough signatures in time. They can be nominated again.';
+      detail = 'Not enough approvals in time. They can be nominated again.';
     if (outcome === 'rejected')
       detail =
         kind === 'invite'
@@ -279,8 +279,8 @@ export function buildTimeline(rows: TxRow[], ctx: TimelineContext): TimelineEven
 /** "Target 9 → 8 signatures (21 → 20 admin seats)": what an approved admin change did to the target. */
 export function targetStepDetail(step: TargetStep): string {
   return step.neededBefore !== step.neededAfter
-    ? `Target ${step.neededBefore} → ${plural(step.neededAfter, 'signature')} (${step.countBefore} → ${step.countAfter} admin seats)`
-    : `Admin seats ${step.countBefore} → ${step.countAfter}; the target stayed at ${plural(step.neededAfter, 'signature')}`;
+    ? `Target ${step.neededBefore} → ${plural(step.neededAfter, 'approval')} (${step.countBefore} → ${step.countAfter} admin seats)`
+    : `Admin seats ${step.countBefore} → ${step.countAfter}; the target stayed at ${plural(step.neededAfter, 'approval')}`;
 }
 
 /**

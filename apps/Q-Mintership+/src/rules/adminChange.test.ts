@@ -123,10 +123,10 @@ describe('adminChangeBlockText', () => {
       'You’re already a Minter Admin.'
     );
     expect(adminChangeBlockText('waiting', 'addAdmin', true)).toBe(
-      'Your proposal to become a Minter Admin is already waiting for signatures.'
+      'Your proposal to become a Minter Admin is already waiting for approvals.'
     );
     expect(adminChangeBlockText('waiting', 'removeAdmin', true)).toBe(
-      'Your step-down is already waiting for signatures.'
+      'Your step-down is already waiting for approvals.'
     );
     expect(adminChangeBlockText('adminsOnly', 'removeAdmin', true)).toBe(
       'You’re not a Minter Admin right now.'

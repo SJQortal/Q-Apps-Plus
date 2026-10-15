@@ -81,7 +81,7 @@ describe('Home: outside Hub and signed out', () => {
     await renderPage(<HomePage />, { persona: 'signedOut' });
     await headline('Who mints QORT is decided here');
     const hero = screen.getByRole('region', { name: 'Who mints QORT is decided here' });
-    await waitFor(() => expect(hero).toHaveTextContent(/8 signatures are needed today/));
+    await waitFor(() => expect(hero).toHaveTextContent(/8 approvals are needed today/));
     const before = qortalCallsFor('GET_USER_ACCOUNT').length;
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     await waitFor(() => expect(qortalCallsFor('GET_USER_ACCOUNT').length).toBeGreaterThan(before));
@@ -91,28 +91,28 @@ describe('Home: outside Hub and signed out', () => {
 describe('Home: Minter Admins', () => {
   it('leads with the decisions waiting for their signature', async () => {
     const { posts } = await renderPage(<HomePage />, { persona: 'admin' });
-    await headline('Avery Admin, 6 decisions are waiting for your signature');
+    await headline('Avery Admin, 6 decisions are waiting for your answer');
     expect(screen.getByText(/2 days 5 hours/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Review decisions/ })).toHaveAttribute(
       'href',
       '/decisions'
     );
     // The three most urgent rows, most urgent first.
-    const waiting = screen.getByRole('region', { name: 'Waiting for your signature' });
-    const rows = within(waiting).getAllByRole('link', { name: /signatures\./ });
+    const waiting = screen.getByRole('region', { name: 'Waiting for your answer' });
+    const rows = within(waiting).getAllByRole('link', { name: /approvals\./ });
     expect(rows).toHaveLength(3);
-    expect(rows[0]).toHaveAccessibleName(/Become a Minter Admin: Pia Promote\. 5 of 8 signatures/);
+    expect(rows[0]).toHaveAccessibleName(/Become a Minter Admin: Pia Promote\. 5 of 8 approvals/);
     // Activity: signed 2 of the 8 open ones; 4 approved invites nobody used.
     const activity = screen.getByRole('region', { name: 'Your activity' });
     expect(within(activity).getByText('2 of 8')).toBeInTheDocument();
     expect(await within(activity).findByText('4', {}, T)).toBeInTheDocument();
     expect(within(activity).getByText('Unusual approval route')).toBeInTheDocument();
     // A nomination still waiting for its first signature.
-    const hero = screen.getByRole('region', { name: /waiting for your signature$/ });
+    const hero = screen.getByRole('region', { name: /waiting for your answer$/ });
     await waitFor(() =>
-      expect(hero).toHaveTextContent(/1 nomination is waiting for a first signature/)
+      expect(hero).toHaveTextContent(/1 nomination is waiting for a first approval/)
     );
-    expect(screen.getByRole('region', { name: 'Waiting for a first signature' })).toHaveTextContent(
+    expect(screen.getByRole('region', { name: 'Waiting for a first approval' })).toHaveTextContent(
       /Wren Waiting/
     );
     // The member view below: their own minting numbers.
@@ -122,7 +122,7 @@ describe('Home: Minter Admins', () => {
 
   it('reloads every section on Refresh, even while the status is being read', async () => {
     await renderPage(<HomePage />, { persona: 'admin' });
-    await headline('Avery Admin, 6 decisions are waiting for your signature');
+    await headline('Avery Admin, 6 decisions are waiting for your answer');
     const decisionReads = () => queryLoadCounts().decisions ?? 0;
     await waitFor(() => expect(decisionReads()).toBeGreaterThan(0));
     const before = decisionReads();
@@ -148,10 +148,10 @@ describe('Home: Minter Admins', () => {
     const seen = JSON.stringify({ adminCount: 21, needed: 9, height: TIP - 100 });
     window.localStorage.setItem(seenTargetKey(), seen);
     await renderPage(<HomePage />, { persona: 'admin' });
-    const hero = await screen.findByRole('region', { name: /waiting for your signature$/ }, T);
+    const hero = await screen.findByRole('region', { name: /waiting for your answer$/ }, T);
     await waitFor(() =>
       expect(hero).toHaveTextContent(
-        /The target changed from 9 to 8 signatures since you last looked at Decisions\. See what changed/
+        /The target changed from 9 to 8 approvals since you last looked at Decisions\. See what changed/
       )
     );
     expect(within(hero).getByRole('link', { name: 'See what changed' })).toHaveAttribute(
@@ -166,8 +166,8 @@ describe('Home: Minter Admins', () => {
     const seen = JSON.stringify({ adminCount: 20, needed: 8, height: TIP - 100 });
     window.localStorage.setItem(seenTargetKey(), seen);
     const first = await renderPage(<HomePage />, { persona: 'admin' });
-    const hero = await screen.findByRole('region', { name: /waiting for your signature$/ }, T);
-    await waitFor(() => expect(hero).toHaveTextContent(/Each decision needs 8 signatures/));
+    const hero = await screen.findByRole('region', { name: /waiting for your answer$/ }, T);
+    await waitFor(() => expect(hero).toHaveTextContent(/Each decision needs 8 approvals/));
     expect(hero).not.toHaveTextContent(/target changed/);
     expect(within(hero).queryByRole('link', { name: 'See what changed' })).toBeNull();
     expect(window.localStorage.getItem(seenTargetKey())).toBe(seen);
@@ -175,8 +175,8 @@ describe('Home: Minter Admins', () => {
 
     window.localStorage.removeItem(seenTargetKey());
     await renderPage(<HomePage />, { persona: 'admin' });
-    const again = await screen.findByRole('region', { name: /waiting for your signature$/ }, T);
-    await waitFor(() => expect(again).toHaveTextContent(/Each decision needs 8 signatures/));
+    const again = await screen.findByRole('region', { name: /waiting for your answer$/ }, T);
+    await waitFor(() => expect(again).toHaveTextContent(/Each decision needs 8 approvals/));
     expect(again).not.toHaveTextContent(/target changed/);
     expect(window.localStorage.getItem(seenTargetKey())).toBeNull();
   });
@@ -194,7 +194,7 @@ describe('Home: members', () => {
     );
     expect(
       await screen.findByText(
-        /open nominations: 1 waiting for a Minter Admin and 2 collecting signatures/,
+        /open nominations: 1 waiting for a Minter Admin and 2 collecting approvals/,
         {},
         T
       )
@@ -325,7 +325,7 @@ describe('Home: the Minter Admin role', () => {
     const role = await screen.findByRole('region', { name: 'Minter Admins' }, T);
     expect(
       within(role).getByText(
-        /Any member can propose themselves; the Minter Admins decide, with 8 signatures\./
+        /Any member can propose themselves; the Minter Admins decide, with 8 approvals\./
       )
     ).toBeVisible();
     mockQortalRequest('ADD_GROUP_ADMIN', (req: Record<string, unknown>) => {
@@ -357,7 +357,7 @@ describe('Home: the Minter Admin role', () => {
     // One step, one fee: a member can't sign.
     expect(within(dialog).getByText('Fee: 0.01 QORT')).toBeInTheDocument();
     expect(within(dialog).getByText('Propose it')).toBeInTheDocument();
-    expect(within(dialog).queryByText(/Sign it/)).toBeNull();
+    expect(within(dialog).queryByText(/Approve it/)).toBeNull();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(await within(dialog).findByText('Proposed', {}, T)).toBeVisible();
     expect(within(dialog).getByText(/The Minter Admins will now decide/)).toBeVisible();
@@ -444,7 +444,7 @@ describe('Home: not in MINTER yet', () => {
     );
     await waitFor(() =>
       expect(hero).toHaveTextContent(
-        /When one nominates you, you accept, and 8 Minter Admins sign, you.re in\./
+        /When one nominates you, you accept, and 8 Minter Admins approve, you.re in\./
       )
     );
     expect(await within(hero).findByText('0 QORT', {}, T)).toBeInTheDocument();
@@ -550,7 +550,7 @@ describe('Home: not in MINTER yet', () => {
     );
     expect(hero).toHaveTextContent(/It can.t be withdrawn/);
     expect(hero).toHaveTextContent(
-      /may nominate you\. Then Minter Admins sign: once 8 have signed, you.re in at once/
+      /may nominate you\. Then Minter Admins decide: once 8 have approved, you.re in at once/
     );
     expect(within(hero).queryByRole('button', { name: "Show you're ready to mint" })).toBeNull();
     expect(within(hero).getByRole('button', { name: 'Copy your name' })).toBeInTheDocument();
@@ -609,17 +609,17 @@ describe('Home: nominated', () => {
     getDefaultStore().set(pendingWritesAtom, {});
   });
 
-  it('shows k of n with the time left to sign once Minter Admins are signing', async () => {
+  it('shows k of n with the time left to approve once Minter Admins are signing', async () => {
     await renderPage(<HomePage />, { persona: 'nominatedSigning' });
-    await headline('bob+builder, Minter Admins are signing your nomination');
+    await headline('bob+builder, your nomination is collecting approvals');
     // An earlier Accept whose lookup found nothing in time: the join request is in now.
     act(() => markWrite(writeKeys.join(ADDR.nominatedSigning), 'failed', { message: NOT_YET }));
-    const hero = screen.getByRole('region', { name: /signing your nomination/ });
+    const hero = screen.getByRole('region', { name: /your nomination is collecting approvals/ });
     expect(hero).not.toHaveTextContent(NOT_YET);
-    expect(within(hero).getByRole('img', { name: '5 of 8 signatures, 1 confirming' }));
-    expect(hero).toHaveTextContent(/5 of 8 signatures so far, 1 more confirming\. 2 more needed/);
-    expect(within(hero).getByText('left to sign')).toBeInTheDocument();
-    expect(within(hero).getByText(/^Last block a signature counts in: /)).toBeVisible();
+    expect(within(hero).getByRole('img', { name: '5 of 8 approvals, 1 confirming' }));
+    expect(hero).toHaveTextContent(/5 of 8 approvals so far, 1 more confirming\. 2 more needed/);
+    expect(within(hero).getByText('left to approve')).toBeInTheDocument();
+    expect(within(hero).getByText(/^Last block an approval counts in: /)).toBeVisible();
     // The join request is in: one wording, however it was sent.
     expect(
       within(hero).getByText("You're ready ✓: when the admins approve, you're in at once.")
@@ -708,7 +708,7 @@ describe('Home: former members', () => {
     expect(hero).toHaveTextContent(/61 days ago/);
     expect(hero).toHaveTextContent(/It's permanent\./);
     expect(hero).toHaveTextContent(/Minter Admins must lift the ban/);
-    expect(hero).toHaveTextContent(/needs 8 signatures/);
+    expect(hero).toHaveTextContent(/needs 8 approvals/);
     expect(within(hero).queryByRole('button')).toBeNull();
   });
 
@@ -812,7 +812,7 @@ describe('Home: former members', () => {
       'You’ve shown you’re ready to mint ✓'
     );
     expect(hero).toHaveTextContent(/see that you.d like to mint again/);
-    expect(hero).toHaveTextContent(/once 8 have signed, you.re in at once/);
+    expect(hero).toHaveTextContent(/once 8 have approved, you.re in at once/);
     expect(within(hero).queryByRole('button', { name: "Show you're ready to mint" })).toBeNull();
     getDefaultStore().set(pendingWritesAtom, {});
   });

@@ -138,7 +138,7 @@ describe('when Sign, Reject and Withdraw are offered', () => {
     }
   });
 
-  it('Withdraw also with enough signatures, while a withdrawal can still stop it', async () => {
+  it('Withdraw also with enough approvals, while a withdrawal can still stop it', async () => {
     const { data, by, publicKey } = await decisionsAs('admin');
     const early = by(ADDR.early); // signed by this admin; Core can't decide it yet
     const others = Array.from({ length: 8 }, (_, i) => ({
@@ -174,12 +174,12 @@ describe('when Sign, Reject and Withdraw are offered', () => {
     expect(canWithdraw(met, view, later)).toBe(false);
   });
 
-  it('a confirmed rejection can be replaced by a signature, but not rejected again', async () => {
+  it('a confirmed rejection can be replaced by an approval, but not rejected again', async () => {
     const { data, by, publicKey } = await decisionsAs('admin');
     const fresh = by(ADDR.nominatedSigning);
     const d = withAnswers(fresh, publicKey, [{ approval: false, confirmed: true, t: 5 }]);
     const view = answerView(d, publicKey);
-    expect(view).toMatchObject({ shown: 'rejected', settled: true, label: 'Rejected' });
+    expect(view).toMatchObject({ shown: 'rejected', settled: true, label: 'You rejected' });
     expect(canSign(d, view)).toBe(true);
     expect(canReject(d, view)).toBe(false);
     expect(canWithdraw(d, view, data.now)).toBe(false);
@@ -197,39 +197,39 @@ describe('when Sign, Reject and Withdraw are offered', () => {
     expect(view).toMatchObject({
       shown: 'rejected',
       settled: false,
-      label: 'Rejected (confirming…)',
+      label: 'You rejected (confirming…)',
     });
     expect(canSign(d, view) || canReject(d, view) || canWithdraw(d, view, data.now)).toBe(false);
   });
 });
 
 describe("the admin's answer as the card shows it", () => {
-  it('Signed ✓, or Signed ✓ (confirming…) while on its way', async () => {
+  it('You approved ✓, or You approved ✓ (confirming…) while on its way', async () => {
     const { by, publicKey } = await decisionsAs('admin');
-    expect(answerView(by(ADDR.urgent), publicKey).label).toBe('Signed ✓');
+    expect(answerView(by(ADDR.urgent), publicKey).label).toBe('You approved ✓');
     const open = by(ADDR.nominatedSigning);
     expect(answerView(open, publicKey).label).toBeNull();
     expect(answerView(open, publicKey, only('sign', pendingWrite('confirming'))).label).toBe(
-      'Signed ✓ (confirming…)'
+      'You approved ✓ (confirming…)'
     );
-    // Sending isn't an answer yet: the card shows "Signing…" instead.
+    // Sending isn't an answer yet: the card shows "Approving…" instead.
     const sending = answerView(open, publicKey, only('sign', pendingWrite('sending')));
     expect(sending).toMatchObject({ label: null, sending: 'sign', busy: true });
   });
 
-  it('Rejected (confirming…) settles to Rejected once the chain has it', async () => {
+  it('You rejected (confirming…) settles to You rejected once the chain has it', async () => {
     const { by, publicKey } = await decisionsAs('admin');
     const open = by(ADDR.nominatedSigning);
     const pending = only('reject', pendingWrite('confirming'));
     expect(answerView(open, publicKey, pending)).toMatchObject({
       shown: 'rejected',
       settled: false,
-      label: 'Rejected (confirming…)',
+      label: 'You rejected (confirming…)',
       busy: true,
     });
     const inBlock = withAnswers(open, publicKey, [{ approval: false, confirmed: true, t: 5 }]);
     expect(answerView(inBlock, publicKey, pending)).toMatchObject({
-      label: 'Rejected',
+      label: 'You rejected',
       settled: true,
       busy: false,
     });
@@ -237,28 +237,28 @@ describe("the admin's answer as the card shows it", () => {
     expect(canSign(inBlock, answerView(inBlock, publicKey, pending))).toBe(true);
   });
 
-  it('Withdrawn (confirming…) settles to Signature withdrawn', async () => {
+  it('a rejection after approving: You rejected (confirming…), then You rejected', async () => {
     const { by, publicKey } = await decisionsAs('admin');
     const signed = by(ADDR.urgent);
     const pending = only('withdraw', pendingWrite('confirming'));
-    // The chain still shows the signature: the withdrawal is on its way.
+    // The chain still shows the approval: the rejection is on its way.
     expect(answerView(signed, publicKey, pending)).toMatchObject({
       shown: 'rejected',
       withdrew: true,
-      label: 'Withdrawn (confirming…)',
+      label: 'You rejected (confirming…)',
     });
     const after = withAnswers(signed, publicKey, [
       { approval: true, confirmed: true, t: 1 },
       { approval: false, confirmed: true, t: 9 },
     ]);
-    expect(answerView(after, publicKey, pending).label).toBe('Signature withdrawn');
-    // After a reload (no entry), the chain alone says it was withdrawn.
-    expect(answerView(after, publicKey).label).toBe('Signature withdrawn');
+    expect(answerView(after, publicKey, pending).label).toBe('You rejected');
+    // After a reload (no entry), the chain alone says so.
+    expect(answerView(after, publicKey).label).toBe('You rejected');
     const flying = withAnswers(signed, publicKey, [
       { approval: true, confirmed: true, t: 1 },
       { approval: false, confirmed: false, t: 9 },
     ]);
-    expect(answerView(flying, publicKey).label).toBe('Withdrawn (confirming…)');
+    expect(answerView(flying, publicKey).label).toBe('You rejected (confirming…)');
   });
 
   it('the newest answer from this device wins', () => {
@@ -274,7 +274,7 @@ describe('phase lines', () => {
   it('says where each phase stands in plain words', async () => {
     const { data, by } = await decisionsAs('admin');
     expect(phaseLine(by(ADDR.met), data.now)).toMatch(/Core applies it in the next block/);
-    expect(phaseLine(by(ADDR.late), data.now)).toMatch(/Too late to sign/);
+    expect(phaseLine(by(ADDR.late), data.now)).toMatch(/Too late to approve/);
     expect(phaseLine(by(ADDR.demote), data.now)).toMatch(/On its way into a block/);
     expect(phaseLine(by(ADDR.early), data.now)).toMatch(/can be applied from block 2,757,504/);
     expect(phaseLine(by(ADDR.nominatedSigning), data.now)).toBeNull();
@@ -337,7 +337,7 @@ describe('when a timed ban ends', () => {
   });
 });
 
-describe('when a decision with enough signatures is applied', () => {
+describe('when a decision with enough approvals is applied', () => {
   it('says the next block once it can be, and its first decision block while just proposed', async () => {
     const { data, by } = await decisionsAs('admin');
     const early = by(ADDR.early); // confirmed 2 blocks ago: Core can't decide it yet
@@ -362,7 +362,7 @@ describe('when a decision with enough signatures is applied', () => {
     expect(met.applyAtHeight).toBe(early.window!.earliestDecisionHeight);
     expect(met.applyAtHeight).toBeGreaterThan(data.now.height + 1);
     expect(phaseLine(met, data.now)).toMatch(
-      /^Enough signatures: Core applies it at block [\d,]+ \(in about \d+ minutes?\)\./
+      /^Enough approvals: Core applies it at block [\d,]+ \(in about \d+ minutes?\)\./
     );
     // An open decision with enough signatures: the next block.
     expect(whenApplied(by(ADDR.met), data.now)).toBe('in the next block');
@@ -422,7 +422,7 @@ describe('when a decision has enough rejections', () => {
     expect(decision.windowPhase).toBe('early');
     expect(decision.applyAtHeight).toBe(early.window!.earliestDecisionHeight);
     expect(phaseLine(decision, data.now)).toMatch(
-      /^Enough rejections: Core ends it as rejected at block [\d,]+ \(in about .+\), unless it has 8 signatures by then \(signatures are counted first\)\./
+      /^Enough rejections: Core ends it as rejected at block [\d,]+ \(in about .+\), unless it has 8 approvals by then \(approvals are counted first\)\./
     );
     // So Sign is offered: to an admin who hasn't answered, and to one whose
     // rejection is in a block (a signature replaces it). Another rejection

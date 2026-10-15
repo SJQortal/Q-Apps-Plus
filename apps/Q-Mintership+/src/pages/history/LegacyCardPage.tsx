@@ -189,8 +189,8 @@ function CardView({ row, section }: { row: LegacyCardRow; section: string }) {
         }}
       >
         {card.board === 'minter'
-          ? 'This board is read-only now, and Q-Mintership+ has no votes. New nominations happen in Nominations, and Minter Admins decide by signing.'
-          : 'This board is read-only now. Admin changes are proposed and signed by Minter Admins in Decisions.'}
+          ? 'This board is read-only now, and Q-Mintership+ has no votes. New nominations happen in Nominations, and Minter Admins decide by approving or rejecting.'
+          : 'This board is read-only now. Admin changes are proposed and approved by Minter Admins in Decisions.'}
       </Alert>
       <Comments card={card} scrollTo={section === 'comments'} />
     </>

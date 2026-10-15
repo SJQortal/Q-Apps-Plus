@@ -66,7 +66,7 @@ export function NewcomerHero({ status, needed }: { status: MyStatus; needed: num
           isReady ? (
             <ReadyNext needed={needed} />
           ) : (
-            'When someone nominates you, this page shows who did, and how the signing goes.'
+            'When someone nominates you, this page shows who did, and how the Minter Admins answer.'
           )
         }
       >
@@ -91,7 +91,7 @@ export function NewcomerHero({ status, needed }: { status: MyStatus; needed: num
             <HeroText>
               Nominators, minters at level {NOMINATOR_MIN_LEVEL} or above, look for people
               who&rsquo;d make good minters, and often reach out first. When one nominates you, you
-              accept, and {needed ? <Num>{needed}</Num> : 'enough'} Minter Admins sign, you&rsquo;re
+              accept, and {needed ? <Num>{needed}</Num> : 'enough'} Minter Admins approve, you&rsquo;re
               in.
             </HeroText>
             <HeroText>

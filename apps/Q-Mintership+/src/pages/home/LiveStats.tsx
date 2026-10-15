@@ -46,11 +46,11 @@ export function LiveStats({ needed }: { needed: NeededSignatures }) {
         <StatTile
           value={<Value value={needed.signers} />}
           label="Minter Admins"
-          hint="Who can sign"
+          hint="Who can approve"
         />
         <StatTile
           value={<Value value={needed.needed} />}
-          label="Signatures needed"
+          label="Approvals needed"
           hint={
             needed.percent !== null && needed.adminSeats !== null
               ? `${needed.percent}% of ${needed.adminSeats} admin seats`
@@ -74,7 +74,7 @@ export function LiveStats({ needed }: { needed: NeededSignatures }) {
       needed.adminSeats > needed.signers ? (
         <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
           MINTER has {needed.adminSeats} admin seats: one is the group&rsquo;s null owner, which
-          counts towards the threshold but can&rsquo;t sign.
+          counts towards the threshold but can&rsquo;t approve.
         </Typography>
       ) : null}
       {nominations.data?.truncated ? <TruncatedNote what="the nominations" /> : null}

@@ -99,14 +99,14 @@ describe('guardConsidering', () => {
       await guardConsidering(signer, { pendingSignature: of(ADDR.nominatedSigning) }, false)
     ).toBeNull();
     expect(await guardConsidering(signer, { pendingSignature: of(ADDR.late) }, false)).toBe(
-      'Too late: signatures and rejections can no longer count on this one.'
+      'Too late: approvals and rejections can no longer count on this one.'
     );
     expect(
       await guardConsidering(signer, { nomineeAddress: ADDR.nominatedWaiting }, false)
     ).toBeNull();
     // bob+builder's nomination already has its invite: it isn't waiting any more.
     expect(await guardConsidering(signer, { nomineeAddress: ADDR.nominatedSigning }, false)).toBe(
-      'This nomination isn’t waiting for a first signature any more.'
+      'This nomination isn’t waiting for a first approval any more.'
     );
     // Clearing is always possible.
     expect(await guardConsidering(signer, { pendingSignature: of(ADDR.late) }, true)).toBeNull();

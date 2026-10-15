@@ -314,7 +314,7 @@ export default {
         await page.waitForTimeout(400);
       },
     },
-    // Reject, Withdraw my signature and Considering: each explained, with its fee, before Hub.
+    // Reject, Reject after approving and Considering: each explained, with its fee, before Hub.
     {
       key: 'decisions-reject',
       path: '/decisions?as=admin',
@@ -326,8 +326,8 @@ export default {
       path: '/decisions?as=admin',
       overlay: true,
       after: open(
-        'Withdraw my signature (counts as a rejection): Add to MINTER, Uma Urgent',
-        'Withdraw your signature'
+        'Reject: Add to MINTER, Uma Urgent',
+        'Reject after approving'
       ),
     },
     {
@@ -382,11 +382,11 @@ export default {
         await page.reload({ waitUntil: 'load' });
         await settle(page);
         await page
-          .getByRole('heading', { name: 'The target changed from 10 to 9 signatures' })
+          .getByRole('heading', { name: 'The target changed from 10 to 9 approvals' })
           .waitFor({ timeout: 8000 });
       },
     },
-    // Signing that admin change: the impact, and the box to tick before Hub opens.
+    // Approving that admin change: the impact, and the box to tick before Hub opens.
     {
       key: 'decisions-admin-impact',
       path: '/decisions?world=shift&as=admin',
@@ -394,16 +394,16 @@ export default {
       after: async (page) => {
         await settle(page);
         await page
-          .getByRole('button', { name: /^Sign: Remove a Minter Admin, Dex Demote/ })
+          .getByRole('button', { name: /^Approve: Remove a Minter Admin, Dex Demote/ })
           .click({ timeout: 4000 });
-        const dialog = page.getByRole('dialog', { name: 'Sign this decision' });
+        const dialog = page.getByRole('dialog', { name: 'Approve this decision' });
         await dialog.waitFor({ timeout: 8000 });
         await dialog.getByRole('button', { name: 'Continue to Hub' }).click({ timeout: 4000 });
         await dialog.getByText('Tick “I’ve checked these” to go on.').waitFor({ timeout: 4000 });
         await page.waitForTimeout(300);
       },
     },
-    // Shareable links: one decision waiting (Sign), one decided, and one nomination with its rounds.
+    // Shareable links: one decision waiting (Approve), one decided, and one nomination with its rounds.
     {
       key: 'decision-pending',
       path: `/decisions/${PENDING_SIG}?as=admin`,
@@ -412,7 +412,7 @@ export default {
     {
       key: 'decision-decided',
       path: `/decisions/${DECIDED_SIG}?as=learner`,
-      after: wait('main [aria-label^="Signed by"]'),
+      after: wait('main [aria-label^="Approved by"]'),
     },
     {
       key: 'nomination',

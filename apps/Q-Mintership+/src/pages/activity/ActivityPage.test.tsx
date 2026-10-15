@@ -34,9 +34,9 @@ describe('Activity', () => {
     expect(cards).toHaveLength(19);
     const avery = screen.getByRole('group', { name: /^Avery Admin:/ });
     expect(within(avery).getByText('You')).toBeInTheDocument();
-    expect(within(avery).getByText('Signed')).toBeInTheDocument();
+    expect(within(avery).getByText('Approved')).toBeInTheDocument();
     expect(within(avery).getByRole('progressbar')).toHaveAccessibleName(/Participation \d+%/);
-    expect(screen.getByText(/MINTER decisions were waiting for signatures in the last 30 days/));
+    expect(screen.getByText(/MINTER decisions were waiting for approvals in the last 30 days/));
     // The group pulse.
     expect(screen.getByText('MINTER members')).toBeInTheDocument();
     expect(screen.getByText(/10 joined, 2 left in the last 30 days/)).toBeInTheDocument();
@@ -50,14 +50,14 @@ describe('Activity', () => {
     await renderPage(<ActivityPage />, { persona: 'admin', path: '/activity' });
     await admins();
     const avery = screen.getByRole('group', { name: /^Avery Admin:/ });
-    for (const label of ['Answered', 'Signed', 'Rejected', 'Missed'])
+    for (const label of ['Answered', 'Approved', 'Rejected', 'Missed'])
       expect(within(avery).getByText(label)).toBeInTheDocument();
     expect(within(avery).getByRole('progressbar')).toHaveAttribute(
       'aria-valuetext',
       expect.stringMatching(/^\d+ of \d+ answered$/)
     );
     const how = screen.getByText('How this is counted').closest('details') as HTMLElement;
-    expect(how).toHaveTextContent(/Signing and rejecting are both answers/);
+    expect(how).toHaveTextContent(/Approving and rejecting are both answers/);
     expect(how).toHaveTextContent(/only doing nothing is a miss/);
     expect(how).toHaveTextContent(/A double is never a miss/);
   });
@@ -111,10 +111,10 @@ describe('Activity', () => {
     // Newest first: Fern removed 12 days ago (21 → 20 seats), an admin added 20 days ago.
     expect(items).toHaveLength(2);
     expect(items[0]).toHaveTextContent(
-      /^9 → 8 signatures on \d+ \w+ 2026: .*Fern Former was removed as a Minter Admin \(21 → 20 admin seats\)\.$/
+      /^9 → 8 approvals on \d+ \w+ 2026: .*Fern Former was removed as a Minter Admin \(21 → 20 admin seats\)\.$/
     );
     expect(items[1]).toHaveTextContent(
-      /^8 → 9 signatures on .+ was made a Minter Admin \(20 → 21 admin seats\)\.$/
+      /^8 → 9 approvals on .+ was made a Minter Admin \(20 → 21 admin seats\)\.$/
     );
   });
 
@@ -149,7 +149,7 @@ describe('Activity', () => {
     expect(items[0]).toHaveTextContent(
       /Fern Former was removed as a Minter Admin \(21 → 20 admin seats\)\.$/
     );
-    expect(items[1]).toHaveTextContent(/^8 → 9 signatures on .+ \(20 → 21 admin seats\)\.$/);
+    expect(items[1]).toHaveTextContent(/^8 → 9 approvals on .+ \(20 → 21 admin seats\)\.$/);
   });
 
   it('switches the window and remembers the choice', async () => {
@@ -184,7 +184,7 @@ describe('Activity', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show' }));
     expect(screen.queryByRole('alert')).toBeNull();
     expect(
-      await screen.findByText(/were waiting for signatures in this range/, {}, { timeout: 3000 })
+      await screen.findByText(/were waiting for approvals in this range/, {}, { timeout: 3000 })
     ).toBeInTheDocument();
   });
 

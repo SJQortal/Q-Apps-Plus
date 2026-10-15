@@ -73,12 +73,12 @@ export function TargetImpact({
       <Typography sx={{ fontWeight: 700 }}>{shiftSentence(s, lead)}</Typography>
       {s.followOn.length ? (
         <Typography variant="body2" sx={{ mt: 0.5 }}>
-          That includes {joinAnd(s.followOn.map(labelOf))}: it has enough signatures at the new
+          That includes {joinAnd(s.followOn.map(labelOf))}: it has enough approvals at the new
           target, so it would apply at once too and move the target again.
         </Typography>
       ) : null}
       <EffectList
-        title="These would apply at once, in the same block or the next, with no new signature:"
+        title="These would apply at once, in the same block or the next, with no new approval:"
         effects={applies}
         labelOf={labelOf}
       />
@@ -88,7 +88,7 @@ export function TargetImpact({
         labelOf={labelOf}
       />
       <EffectList
-        title="These have enough signatures now and would fall short if the admin change comes first:"
+        title="These have enough approvals now and would fall short if the admin change comes first:"
         effects={metShort}
         labelOf={labelOf}
       />
@@ -96,7 +96,7 @@ export function TargetImpact({
         <Typography variant="body2" sx={{ mt: 0.5 }}>
           {metShort.length ? 'The other ' : ''}
           {plural(othersShort.length, 'decision')} still collecting would each need{' '}
-          {plural(rise, 'more signature', 'more signatures')} than now.
+          {plural(rise, 'more approval', 'more approvals')} than now.
         </Typography>
       ) : null}
       {flips && advice ? (

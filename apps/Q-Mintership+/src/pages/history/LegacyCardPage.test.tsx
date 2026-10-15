@@ -123,7 +123,7 @@ describe('Original card page', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Admin proposal' })).toBeInTheDocument();
     expect(await screen.findByText('6 yes')).toBeInTheDocument();
     expect(
-      screen.getByText(/Admin changes are proposed and signed by Minter Admins/)
+      screen.getByText(/Admin changes are proposed and approved by Minter Admins/)
     ).toBeInTheDocument();
   });
 

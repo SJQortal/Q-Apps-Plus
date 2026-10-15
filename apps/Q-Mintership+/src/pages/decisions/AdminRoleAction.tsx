@@ -72,15 +72,15 @@ function usePendingAdminChange(address: string, mode: OwnAdminRole | null) {
 function waitingText(mode: OwnAdminRole, own: boolean): string {
   if (mode === 'become')
     return own
-      ? 'Your proposal to become a Minter Admin is waiting for the Minter Admins’ signatures.'
-      : 'A proposal to make you a Minter Admin is waiting for the Minter Admins’ signatures.';
+      ? 'Your proposal to become a Minter Admin is waiting for the Minter Admins’ approvals.'
+      : 'A proposal to make you a Minter Admin is waiting for the Minter Admins’ approvals.';
   return own
-    ? 'Your step-down is waiting for the Minter Admins’ signatures.'
-    : 'A proposal to remove your Minter Admin role is waiting for the Minter Admins’ signatures.';
+    ? 'Your step-down is waiting for the Minter Admins’ approvals.'
+    : 'A proposal to remove your Minter Admin role is waiting for the Minter Admins’ approvals.';
 }
 
 function aboutText(needed: number | null): string {
-  return `Minter Admins sign MINTER’s decisions. Any member can propose themselves; the Minter Admins decide${needed !== null ? `, with ${plural(needed, 'signature')}` : ''}.`;
+  return `Minter Admins approve or reject MINTER’s decisions. Any member can propose themselves; the Minter Admins decide${needed !== null ? `, with ${plural(needed, 'approval')}` : ''}.`;
 }
 
 export interface AdminRoleActionProps {

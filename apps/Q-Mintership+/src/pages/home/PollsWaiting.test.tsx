@@ -19,7 +19,7 @@ const privateReads = () =>
 describe('Home: Minter Admin polls waiting for your vote', () => {
   it('says nothing, and reads nothing, until Decisions has read the polls', async () => {
     await renderPage(<HomePage />, { persona: 'admin', setup: withAdminPolls('admin') });
-    expect(await screen.findByText('Waiting for your signature', {}, T)).toBeVisible();
+    expect(await screen.findByText('Waiting for your answer', {}, T)).toBeVisible();
     expect(screen.queryByText(/waiting for your vote/)).toBeNull();
     expect(privateReads()).toHaveLength(0);
     expect(qortalCallsFor('DECRYPT_DATA')).toHaveLength(0);
@@ -30,7 +30,7 @@ describe('Home: Minter Admin polls waiting for your vote', () => {
       persona: 'admin',
       setup: withAdminPolls('admin'),
     });
-    expect(await screen.findByText('Waiting for your signature', {}, T)).toBeVisible();
+    expect(await screen.findByText('Waiting for your answer', {}, T)).toBeVisible();
     // What Decisions read this session (Avery voted on one of the three open polls).
     await act(async () => {
       await loadAdminPolls(address);

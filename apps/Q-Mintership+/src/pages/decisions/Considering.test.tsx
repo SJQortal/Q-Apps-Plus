@@ -151,7 +151,7 @@ describe('Considering on the Decisions page', () => {
     expect(dialog).not.toHaveTextContent(/nominee/);
   }, 20_000);
 
-  it('offers Considering on a nomination waiting for its first signature', async () => {
+  it('offers Considering on a nomination waiting for its first approval', async () => {
     await openDecisions('admin');
     expect(
       await screen.findByRole('button', { name: 'Considering: Nomination of Wren Waiting' }, T)
@@ -198,7 +198,7 @@ describe('Considering again after a rejection', () => {
     });
     mockQortalRequest('PUBLISH_QDN_RESOURCE', () => ({ type: 'ARBITRARY', signature: 'C3' }));
     const kick = screen.getByRole('article', { name: KICK });
-    expect(within(kick).getByText('Rejected')).toBeInTheDocument();
+    expect(within(kick).getByText('You rejected')).toBeInTheDocument();
     await u.click(
       await within(kick).findByRole(
         'button',
@@ -208,8 +208,8 @@ describe('Considering again after a rejection', () => {
     );
     const dialog = await screen.findByRole('dialog', { name: 'Mark as reconsidering' });
     expect(within(dialog).getByText(/looking at this again after rejecting it/)).toBeVisible();
-    expect(within(dialog).getByText(/Your rejection still counts until you sign\./)).toBeVisible();
-    expect(within(dialog).getByText(/Signing later replaces it/)).toBeVisible();
+    expect(within(dialog).getByText(/Your rejection still counts until you approve\./)).toBeVisible();
+    expect(within(dialog).getByText(/Approving later replaces it/)).toBeVisible();
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(await within(dialog).findByText('Marked as reconsidering', {}, T)).toBeInTheDocument();
     expect(JSON.parse(atob(String(qortalCallsFor('PUBLISH_QDN_RESOURCE')[0].data64)))).toEqual({
@@ -241,7 +241,7 @@ describe('Considering again after a rejection', () => {
     expect(await within(kick).findByText(/^Considering:/, {}, T)).toHaveTextContent('Avery Admin');
     expect(within(kick).getByText('Considering')).toBeInTheDocument();
     expect(within(kick).getByRole('button', { name: /^No longer considering: / })).toBeVisible();
-    expect(within(kick).getByRole('button', { name: /^Sign: / })).toBeVisible();
+    expect(within(kick).getByRole('button', { name: /^Approve: / })).toBeVisible();
   }, 20_000);
 
   it('a signature after the record hides it again', async () => {
@@ -251,7 +251,7 @@ describe('Considering again after a rejection', () => {
       answerKick(world, true, 240_000);
     });
     const kick = screen.getByRole('article', { name: KICK });
-    expect(await within(kick).findByText('Signed ✓', {}, T)).toBeInTheDocument();
+    expect(await within(kick).findByText('You approved ✓', {}, T)).toBeInTheDocument();
     expect(within(kick).queryByText(/^Considering:/)).toBeNull();
     expect(within(kick).queryByRole('button', { name: /^(Re)?[Cc]onsidering: / })).toBeNull();
   });
@@ -277,9 +277,9 @@ describe('Considering again after a rejection', () => {
       });
     });
     const kick = screen.getByRole('article', { name: KICK });
-    expect(within(kick).getByText('Rejected (confirming…)')).toBeInTheDocument();
+    expect(within(kick).getByText('You rejected (confirming…)')).toBeInTheDocument();
     const double = screen.getByRole('article', { name: 'Become a Minter Admin, Admin C' });
-    expect(within(double).getByText('Rejected')).toBeInTheDocument();
+    expect(within(double).getByText('You rejected')).toBeInTheDocument();
     // Considering is offered elsewhere, so the shared read is in.
     await screen.findAllByRole('button', { name: /^Considering: / }, T);
     expect(within(kick).queryByRole('button', { name: /^(Re)?[Cc]onsidering: / })).toBeNull();

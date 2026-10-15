@@ -43,7 +43,7 @@ describe('windowPhase and blocks left', () => {
     expect(windowPhase(w, 1005)).toBe('open');
   });
 
-  it('stays open while a new signature can land at or before h+10079', () => {
+  it('stays open while a new approval can land at or before h+10079', () => {
     // Tip 11078: a signature lands in 11079 = h+10079, the last useful block.
     expect(windowPhase(w, 11078)).toBe('open');
     expect(signatureBlocksLeft(w, 11078)).toBe(1);

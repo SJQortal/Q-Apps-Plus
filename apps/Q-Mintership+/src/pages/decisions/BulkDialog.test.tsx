@@ -16,7 +16,7 @@ describe('BulkDialog: what a screen reader hears', () => {
         <BulkDialog
           open
           onClose={() => {}}
-          title="Sign several"
+          title="Approve several"
           action="SIGN_TRANSACTION"
           feeTxType="GROUP_APPROVAL"
           items={[
@@ -31,11 +31,11 @@ describe('BulkDialog: what a screen reader hears', () => {
         />
       </HubThemeProvider>
     );
-    const dialog = screen.getByRole('dialog', { name: 'Sign several' });
+    const dialog = screen.getByRole('dialog', { name: 'Approve several' });
     const live = within(dialog).getByRole('status');
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     // Its buttons go while it runs: focus waits on the title, not on the page.
-    expect(within(dialog).getByRole('heading', { name: 'Sign several' })).toHaveFocus();
+    expect(within(dialog).getByRole('heading', { name: 'Approve several' })).toHaveFocus();
 
     act(() => report(0, null, 'waitingForHub'));
     expect(live).toHaveTextContent('1. Add to MINTER: Ada: Waiting for you in Hub…');
@@ -73,12 +73,12 @@ describe('BulkDialog: what a screen reader hears', () => {
           title="Cancel stale invites"
           steps={[
             { action: 'CANCEL_GROUP_INVITE', title: 'Propose it' },
-            { action: 'SIGN_TRANSACTION', title: 'Sign it', check: ['Tick the box.'] },
+            { action: 'SIGN_TRANSACTION', title: 'Approve it', check: ['Tick the box.'] },
           ]}
           feeTxType="CANCEL_GROUP_INVITE"
           items={[{ key: 'a', label: 'Invite for Ada' }]}
           confirmLabel="Continue to Hub"
-          sentLabel="Proposed and signed ✓"
+          sentLabel="Proposed and approved ✓"
           summarize={({ sent, partial }) => `${sent} signed, ${partial} without a signature.`}
           run={(r) => {
             report = r;
@@ -97,7 +97,7 @@ describe('BulkDialog: what a screen reader hears', () => {
     act(() => report(0, null, { step: 0, stage: 'waitingForHub' }));
     expect(live).toHaveTextContent('1. Invite for Ada: Step 1 of 2, propose it: Waiting for you');
     act(() => report(0, null, { step: 1, stage: 'waitingForHub', signature: 'Sig12345XYZ' }));
-    expect(live).toHaveTextContent('Step 2 of 2, sign it: Waiting for you in Hub…');
+    expect(live).toHaveTextContent('Step 2 of 2, approve it: Waiting for you in Hub…');
     expect(live).toHaveTextContent('"pendingSignature" starts with Sig12345.');
     expect(within(dialog).getByText('Sig12345')).toBeVisible();
 

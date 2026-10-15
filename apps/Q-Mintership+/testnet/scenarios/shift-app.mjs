@@ -64,7 +64,7 @@ export default {
     const signer = await ctx.open('admin24', { group: key, route: '/decisions' });
     const rCard24 = signer.page.locator(`[id="decision-${r}"]`);
     await rCard24.waitFor({ timeout: 120_000 });
-    await rCard24.getByRole('button', { name: /^Sign/ }).first().click();
+    await rCard24.getByRole('button', { name: /^Approve/ }).first().click();
     const dialog = signer.page.getByRole('dialog');
     await dialog.getByRole('button', { name: 'Continue to Hub' }).click();
     const held = await dialog.getByText(/I’ve checked these/).first().isVisible().catch(() => false);

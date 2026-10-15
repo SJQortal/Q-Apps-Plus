@@ -55,8 +55,8 @@ describe('Write dialogs by keyboard: a decision', () => {
     await decisions();
     await checkDialogByKeyboard(
       u,
-      within(bob()).getByRole('button', { name: /^Sign: / }),
-      'Sign this decision',
+      within(bob()).getByRole('button', { name: /^Approve: / }),
+      'Approve this decision',
       { reach: ['Not now', 'Continue to Hub'] }
     );
   });
@@ -72,13 +72,13 @@ describe('Write dialogs by keyboard: a decision', () => {
     );
   });
 
-  it('Withdraw my signature', async () => {
+  it('Reject after approving', async () => {
     const u = user();
     await decisions();
     await checkDialogByKeyboard(
       u,
-      within(card(/Uma Urgent/)).getByRole('button', { name: /^Withdraw my signature/ }),
-      'Withdraw your signature'
+      within(card(/Uma Urgent/)).getByRole('button', { name: /^Reject: / }),
+      'Reject after approving'
     );
   });
 
@@ -113,22 +113,22 @@ describe('Write dialogs by keyboard: a decision', () => {
     await checkDialogByKeyboard(u, opener, 'No longer considering');
   });
 
-  it('First signature', async () => {
+  it('First approval', async () => {
     const u = user();
     await decisions();
     await checkDialogByKeyboard(
       u,
-      await screen.findByRole('button', { name: /^First signature: / }, T),
-      /^First signature: /
+      await screen.findByRole('button', { name: /^First approval: / }, T),
+      /^First approval: /
     );
   });
 
-  it('Sign several', async () => {
+  it('Approve several', async () => {
     const u = user();
     await decisions();
-    await u.click(screen.getByRole('button', { name: 'Sign several' }));
+    await u.click(screen.getByRole('button', { name: 'Approve several' }));
     await u.click(screen.getByRole('checkbox', { name: /bob\+builder/ }));
-    await checkDialogByKeyboard(u, screen.getByRole('button', { name: 'Sign 1' }), 'Sign several');
+    await checkDialogByKeyboard(u, screen.getByRole('button', { name: 'Approve 1' }), 'Approve several');
   });
 
   it('Propose cancelling one stale invite, and all of them', async () => {

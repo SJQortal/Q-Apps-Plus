@@ -62,7 +62,7 @@ describe('Doubles on the Decisions page', () => {
     );
     const note = doubleNote(already);
     expect(note).toHaveTextContent(
-      'Admin C is already a Minter Admin, from an earlier proposal. As things stand, if this one passes, nothing changes, so there’s no need to sign it.'
+      'Admin C is already a Minter Admin, from an earlier proposal. As things stand, if this one passes, nothing changes, so there’s no need to approve it.'
     );
     expect(note).toHaveTextContent(
       new RegExp(`It runs out by itself at ${ADMIN_C_EXPIRES} \\(about .+\\)\\.$`)
@@ -74,7 +74,7 @@ describe('Doubles on the Decisions page', () => {
       'Double: nothing to remove'
     );
     expect(doubleNote(notAdmin)).toHaveTextContent(
-      /^Nora Nominator isn’t a Minter Admin, so there’s nothing to remove\. There’s no need to sign it: reject it, or let it run out\. It runs out by itself at block/
+      /^Nora Nominator isn’t a Minter Admin, so there’s nothing to remove\. There’s no need to approve it: reject it, or let it run out\. It runs out by itself at block/
     );
   });
 
@@ -86,7 +86,7 @@ describe('Doubles on the Decisions page', () => {
       'Double: the same change is already waiting'
     );
     expect(doubleNote(newer)).toHaveTextContent(
-      /^The same change is already waiting in an earlier proposal: answer that one instead\. Once one of them passes, there’s no need to sign the other\. This one runs out by itself at block/
+      /^The same change is already waiting in an earlier proposal: answer that one instead\. Once one of them passes, there’s no need to approve the other\. This one runs out by itself at block/
     );
     expect(
       within(newer).getByRole('link', { name: 'The earlier proposal about Member 9' })
@@ -123,18 +123,18 @@ describe('Doubles on the Decisions page', () => {
   it('keeps Sign and Reject secondary on a double (Reject only on a removal), with no Considering', async () => {
     await openQueue();
     const already = card(ALREADY);
-    expect(within(already).getByRole('button', { name: /^Sign: / })).toHaveClass(
+    expect(within(already).getByRole('button', { name: /^Approve: / })).toHaveClass(
       'MuiButton-outlined'
     );
     expect(within(already).getByRole('button', { name: /^Reject: / })).toBeVisible();
     expect(within(already).queryByRole('button', { name: /^Considering: / })).toBeNull();
     // A removal that is a double offers Reject only.
     const notAdmin = card(NOT_ADMIN);
-    expect(within(notAdmin).queryByRole('button', { name: /^Sign: / })).toBeNull();
+    expect(within(notAdmin).queryByRole('button', { name: /^Approve: / })).toBeNull();
     expect(within(notAdmin).getByRole('button', { name: /^Reject: / })).toBeVisible();
     // A real decision keeps its main Sign, and Considering.
     const real = card(/Add to MINTER, bob\+builder/);
-    expect(within(real).getByRole('button', { name: /^Sign: / })).toHaveClass(
+    expect(within(real).getByRole('button', { name: /^Approve: / })).toHaveClass(
       'MuiButton-contained'
     );
     expect(
@@ -158,7 +158,7 @@ describe('Doubles on the Decisions page', () => {
 
   it('sorts doubles after the real decisions, still in the queue', async () => {
     await openQueue();
-    const section = screen.getByRole('region', { name: /^Collecting signatures/ });
+    const section = screen.getByRole('region', { name: /^Collecting approvals/ });
     const titles = within(section)
       .getAllByRole('article')
       .map((a) => a.getAttribute('aria-label'));
@@ -175,9 +175,9 @@ describe('Doubles on the Decisions page', () => {
   it('doesn’t count them as waiting, and says so quietly', async () => {
     await openQueue();
     // Six as before, plus the older Member 9 addition; the three doubles don't count.
-    expect(screen.getByText('7 decisions waiting for your signature')).toBeInTheDocument();
+    expect(screen.getByText('7 decisions waiting for your answer')).toBeInTheDocument();
     expect(
-      screen.getByText('Plus 3 doubles, marked on their cards: no need to sign them.')
+      screen.getByText('Plus 3 doubles, marked on their cards: no need to approve them.')
     ).toBeVisible();
   });
 
@@ -190,8 +190,8 @@ describe('Doubles on the Decisions page', () => {
       expect(within(double).queryByRole('button', { name: /^Target may/ })).toBeNull();
     }
 
-    await u.click(within(card(ALREADY)).getByRole('button', { name: /^Sign: / }));
-    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    await u.click(within(card(ALREADY)).getByRole('button', { name: /^Approve: / }));
+    const dialog = await screen.findByRole('dialog', { name: 'Approve this decision' });
     expect(within(dialog).queryByText(/^If this passes/)).toBeNull();
     expect(within(dialog).queryByRole('checkbox', { name: 'I’ve checked these' })).toBeNull();
     // Hub opens (and declines in the mock) without a box to tick first.
@@ -210,8 +210,8 @@ describe('Doubles on the Decisions page', () => {
     const newerImpact = within(newer).getByText(/^If this passes/);
     expect(newerImpact).toHaveTextContent(olderImpact.textContent ?? '');
 
-    await u.click(within(newer).getByRole('button', { name: /^Sign: / }));
-    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    await u.click(within(newer).getByRole('button', { name: /^Approve: / }));
+    const dialog = await screen.findByRole('dialog', { name: 'Approve this decision' });
     expect(within(dialog).getByText(/^If this passes/)).toBeVisible();
     const box = within(dialog).getByRole('checkbox', { name: 'I’ve checked these' });
     expect(box).not.toBeChecked();
@@ -228,11 +228,11 @@ describe('Doubles on the Decisions page', () => {
   }, 20_000);
 });
 
-describe('Doubles and Sign several', () => {
+describe('Doubles and Approve several', () => {
   it('leaves doubles out, with the reason, on their cards and in the run', async () => {
     const u = user();
     await openQueue();
-    await u.click(screen.getByRole('button', { name: 'Sign several' }));
+    await u.click(screen.getByRole('button', { name: 'Approve several' }));
     // No box to tick on a double: it says why.
     const already = card(ALREADY);
     expect(within(already).queryByRole('checkbox')).toBeNull();
@@ -249,8 +249,8 @@ describe('Doubles and Sign several', () => {
 
     await u.click(screen.getByRole('button', { name: 'Select all' }));
     expect(screen.getByText('7 of 7 selected')).toBeInTheDocument();
-    await u.click(screen.getByRole('button', { name: 'Sign 7' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Sign several' });
+    await u.click(screen.getByRole('button', { name: 'Approve 7' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Approve several' });
     expect(within(dialog).getByText(/7 Hub confirmations, one for each/)).toBeVisible();
     expect(within(dialog).getByText('Not in this run:')).toBeVisible();
     expect(
@@ -299,7 +299,7 @@ describe('A double’s own page', () => {
     expect(doubleNote(page)).toHaveTextContent(
       /^Admin C is already a Minter Admin, from an earlier proposal\./
     );
-    expect(within(page).getByRole('button', { name: /^Sign: / })).toHaveClass('MuiButton-outlined');
+    expect(within(page).getByRole('button', { name: /^Approve: / })).toHaveClass('MuiButton-outlined');
     expect(within(page).queryByRole('button', { name: /^Considering: / })).toBeNull();
   });
 
@@ -331,7 +331,7 @@ describe('A double’s own page', () => {
       /^Nora Nominator isn’t a Minter Admin, so there’s nothing to remove\. It runs out by itself at block/
     );
     expect(note).not.toHaveTextContent(/reject it|answer that one|need to sign/);
-    expect(within(page).queryByRole('button', { name: /^Sign: / })).toBeNull();
+    expect(within(page).queryByRole('button', { name: /^Approve: / })).toBeNull();
     expect(within(page).queryByRole('button', { name: /^Reject: / })).toBeNull();
   });
 
@@ -355,10 +355,10 @@ describe('Doubles don’t count on Home or in the navigation', () => {
     // Six as without doubles, plus the older Member 9 addition.
     await screen.findByRole(
       'heading',
-      { level: 2, name: 'Avery Admin, 7 decisions are waiting for your signature' },
+      { level: 2, name: 'Avery Admin, 7 decisions are waiting for your answer' },
       T
     );
-    const waiting = screen.getByRole('region', { name: 'Waiting for your signature' });
+    const waiting = screen.getByRole('region', { name: 'Waiting for your answer' });
     expect(within(waiting).getByRole('link', { name: 'See all 7' })).toBeVisible();
     const activity = screen.getByRole('region', { name: 'Your activity' });
     expect(within(activity).getByText('2 of 9')).toBeInTheDocument();

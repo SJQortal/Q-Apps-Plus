@@ -160,7 +160,7 @@ describe('rejections and withdrawn signatures', () => {
     expect(tally.rejectionCount).toBe(1);
   });
 
-  it('ends at 8 rejections of 20, unless 8 signatures are in too (approvals first)', () => {
+  it('ends at 8 rejections of 20, unless 8 approvals are in too (approvals first)', () => {
     const rejections = Array.from({ length: 8 }, (_, i) => row(`r${i}`, false, i + 1, 100));
     expect(tallyApprovals({ ...base, rows: rejections.slice(0, 7) }).rejectedMet).toBe(false);
     expect(tallyApprovals({ ...base, rows: rejections }).rejectedMet).toBe(true);

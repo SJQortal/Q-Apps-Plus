@@ -25,7 +25,7 @@ const OPEN_Q = 'Should only level 5+ minters become Minter Admins?';
 const VOTED_Q =
   'Should we remove members who were active before joining MINTER and went inactive after?';
 const CLOSED_Q = 'Should Minter Admins review the stale invites together once a month?';
-const SHARED_Q = 'Should a nomination wait 48 hours before its first signature?';
+const SHARED_Q = 'Should a nomination wait 48 hours before its first approval?';
 const extra = (i: number) => fakeAddress(`admin-${i}`);
 
 async function openDecisions(persona = 'admin', setup?: RenderPageOptions['setup']) {

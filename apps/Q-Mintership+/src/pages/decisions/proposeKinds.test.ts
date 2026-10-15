@@ -105,7 +105,7 @@ describe('proposals: person and check', () => {
     // Its cancellation is waiting already (the invitee is read from its raw bytes).
     await expect(checkSubject('cancelInvite', signer, fakeAddress('stale-1'))).resolves.toEqual({
       status: 'blocked',
-      reason: 'Cancelling this invite is already waiting for signatures.',
+      reason: 'Cancelling this invite is already waiting for approvals.',
     });
   });
 });

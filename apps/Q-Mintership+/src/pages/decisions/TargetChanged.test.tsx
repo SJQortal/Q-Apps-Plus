@@ -36,10 +36,10 @@ async function openShifted(options: { seen?: 'before' | 'unknown height' | null 
 }
 
 describe('Decisions: the target changed since the last visit', () => {
-  it('says from what to what, who was removed, and what now has enough signatures', async () => {
+  it('says from what to what, who was removed, and what now has enough approvals', async () => {
     await openShifted({ seen: 'before' });
     const banner = await screen.findByRole('heading', {
-      name: 'The target changed from 10 to 9 signatures',
+      name: 'The target changed from 10 to 9 approvals',
     });
     const alert = banner.closest('[role="region"]') as HTMLElement;
     expect(
@@ -48,7 +48,7 @@ describe('Decisions: the target changed since the last visit', () => {
     expect(within(alert).getAllByText(/Otto Outgoing|Orla Outgoing/)).toHaveLength(2);
     expect(alert).toHaveTextContent('The target is 40% of admins, recounted every block.');
     expect(alert).toHaveTextContent(
-      'This decision now has enough signatures because of it, so Core applies it without a new signature:'
+      'This decision now has enough approvals because of it, so Core applies it without a new approval:'
     );
     const link = within(alert).getByRole('link', {
       name: 'Remove from MINTER: Kai Target, 9 of 9',
@@ -69,22 +69,22 @@ describe('Decisions: the target changed since the last visit', () => {
   it('goes away with Got it, and focus stays on the page', async () => {
     const u = user();
     await openShifted({ seen: 'before' });
-    await screen.findByRole('heading', { name: 'The target changed from 10 to 9 signatures' });
+    await screen.findByRole('heading', { name: 'The target changed from 10 to 9 approvals' });
     screen.getByRole('button', { name: 'Got it' }).focus();
     await u.keyboard('{Enter}');
-    expect(screen.queryByText('The target changed from 10 to 9 signatures')).toBeNull();
+    expect(screen.queryByText('The target changed from 10 to 9 approvals')).toBeNull();
     expect(screen.getByRole('heading', { level: 1, name: 'Decisions' })).toHaveFocus();
   });
 
   it('is a region with its own heading, read out once by the page, not a live region', async () => {
     await openShifted({ seen: 'before' });
     const note = await screen.findByRole('region', {
-      name: 'The target changed from 10 to 9 signatures',
+      name: 'The target changed from 10 to 9 approvals',
     });
     expect(
       within(note).getByRole('heading', {
         level: 2,
-        name: 'The target changed from 10 to 9 signatures',
+        name: 'The target changed from 10 to 9 approvals',
       })
     ).toBeVisible();
     // It fills in as its reasons load: a live region would be read again each time.
@@ -94,7 +94,7 @@ describe('Decisions: the target changed since the last visit', () => {
     // The page's own status line, there from the start, says the title once.
     const said = screen
       .getAllByRole('status')
-      .filter((s) => s.textContent === 'The target changed from 10 to 9 signatures');
+      .filter((s) => s.textContent === 'The target changed from 10 to 9 approvals');
     expect(said).toHaveLength(1);
   });
 
@@ -115,7 +115,7 @@ describe('Decisions: the target changed since the last visit', () => {
     await u.click(screen.getByRole('button', { name: 'Refresh' }));
     const banner = await screen.findByRole(
       'heading',
-      { name: 'The target changed from 9 to 8 signatures' },
+      { name: 'The target changed from 9 to 8 approvals' },
       T
     );
     const alert = banner.closest('[role="region"]') as HTMLElement;
@@ -128,7 +128,7 @@ describe('Decisions: the target changed since the last visit', () => {
   it('keeps to the count when the change is too long ago to read', async () => {
     await openShifted({ seen: 'unknown height' });
     const banner = await screen.findByRole('heading', {
-      name: 'The target changed from 10 to 9 signatures',
+      name: 'The target changed from 10 to 9 approvals',
     });
     expect(banner.closest('[role="region"]')).toHaveTextContent(
       'It changed because MINTER has 2 fewer admin seats (21; it had 23).'

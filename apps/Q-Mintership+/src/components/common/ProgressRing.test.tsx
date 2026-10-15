@@ -38,7 +38,7 @@ describe('ProgressRing: the target', () => {
 
   it('keeps its full label for screen readers, the numbers inside hidden', () => {
     show(<ProgressRing value={100} target={99} pending={2} />);
-    const ring = screen.getByRole('img', { name: '100 of 99 signatures, 2 confirming' });
+    const ring = screen.getByRole('img', { name: '100 of 99 approvals, 2 confirming' });
     expect(screen.getByText('of 99').closest('[aria-hidden="true"]')).not.toBeNull();
     expect(ring).toContainElement(screen.getByText('of 99'));
   });

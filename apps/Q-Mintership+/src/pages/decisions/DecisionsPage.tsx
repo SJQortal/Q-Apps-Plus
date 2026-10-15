@@ -373,7 +373,7 @@ function DecisionsQueue() {
       <PageHeader
         title="Decisions"
         subtitle={
-          data ? `Each needs ${needed} signatures` : 'Everything waiting for the Minter Admins'
+          data ? `Each needs ${needed} approvals` : 'Everything waiting for the Minter Admins'
         }
         // Only Minter Admins have Decisions in their navigation; others arrive from a link.
         back={inNav ? undefined : PATHS.nominations}
@@ -416,13 +416,13 @@ function DecisionsQueue() {
               <Card sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                 <Typography component="h2" sx={{ fontWeight: 700, fontSize: 18 }}>
                   {signable.length
-                    ? `${plural(signable.length, 'decision')} waiting for your signature`
-                    : 'Nothing waiting for your signature'}
+                    ? `${plural(signable.length, 'decision')} waiting for your answer`
+                    : 'Nothing waiting for your answer'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Each needs {plural(needed, 'signature')}:{' '}
+                  Each needs {plural(needed, 'approval')}:{' '}
                   {describeThreshold(data.group.approvalThreshold)}, counting all {totalAdmins}{' '}
-                  admin seats. Sign the ones you agree with. Reject the ones you don’t, or let them
+                  admin seats. Approve the ones you agree with. Reject the ones you don’t, or let them
                   expire: {plural(needed, 'rejection')} end one as rejected.
                 </Typography>
                 {doubles.length ? (
@@ -433,9 +433,9 @@ function DecisionsQueue() {
               </Card>
             ) : (
               <Alert severity="info" role="note">
-                Only Minter Admins sign decisions. Here you can follow each one: who proposed it,
-                who has signed or rejected it, and how long is left. Each needs {needed} Minter
-                Admin signatures.
+                Only Minter Admins approve or reject decisions. Here you can follow each one: who
+                proposed it, who has approved or rejected it, and how long is left. Each needs{' '}
+                {needed} Minter Admin approvals.
               </Alert>
             )}
 
@@ -458,7 +458,7 @@ function DecisionsQueue() {
                     onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
                     sx={{ minHeight: 44 }}
                   >
-                    {selecting ? 'Cancel selection' : 'Sign several'}
+                    {selecting ? 'Cancel selection' : 'Approve several'}
                   </Button>
                 ) : null}
               </Box>
@@ -466,7 +466,7 @@ function DecisionsQueue() {
 
             {collecting.length || waiting.length || closed.length ? null : (
               <EmptyState
-                title="Nothing waiting for signatures"
+                title="Nothing collecting approvals"
                 description="New nominations and proposals show up here as soon as they are on chain."
               />
             )}
@@ -482,7 +482,7 @@ function DecisionsQueue() {
             ) : null}
 
             {collecting.length ? (
-              <Section title={`Collecting signatures · ${collecting.length}`} id="collecting">
+              <Section title={`Collecting approvals · ${collecting.length}`} id="collecting">
                 {shown.map((d) => (
                   <DecisionCard
                     key={d.signature}
@@ -561,7 +561,7 @@ function DecisionsQueue() {
                 ) : null}
                 {waiting.length ? (
                   <Typography variant="body2" color="text.secondary">
-                    Nominated, but no Minter Admin has signed yet. The first signature puts the
+                    Nominated, but no Minter Admin has approved yet. The first approval puts the
                     nomination on chain and starts the clock.
                   </Typography>
                 ) : null}
@@ -602,7 +602,7 @@ function DecisionsQueue() {
             ) : null}
 
             {closed.length ? (
-              <Section title={`Too late to sign · ${closed.length}`} id="closed">
+              <Section title={`Too late to approve · ${closed.length}`} id="closed">
                 {closed.map((d) => (
                   <DecisionCard
                     key={d.signature}
@@ -746,11 +746,11 @@ function DecisionsQueue() {
       <BulkDialog
         open={bulkList !== null}
         onClose={() => setBulkList(null)}
-        title="Sign several"
+        title="Approve several"
         intro={
           <>
             <Typography>
-              Signs {plural(bulkList?.length ?? 0, 'decision')}, one after another. Each signature
+              Approves {plural(bulkList?.length ?? 0, 'decision')}, one after another. Each approval
               counts once it is in a block.
             </Typography>
             {bulkImpact ? (
@@ -818,7 +818,7 @@ function SelectionBar({
     <Box
       ref={setBar}
       role="region"
-      aria-label="Sign several"
+      aria-label="Approve several"
       sx={(theme) => ({
         position: 'sticky',
         bottom: aboveNav ? `calc(${BOTTOM_NAV_HEIGHT}px + var(--qp-safe-bottom) + 8px)` : 16,
@@ -842,7 +842,7 @@ function SelectionBar({
         {selected === total ? 'Clear' : 'Select all'}
       </Button>
       <Button variant="contained" disabled={!selected} onClick={onSign} sx={{ minHeight: 44 }}>
-        Sign {selected || ''}
+        Approve {selected || ''}
       </Button>
     </Box>
   );
@@ -894,10 +894,10 @@ function FirstSignatureAction({
       variant="contained"
       onClick={onStart}
       disabled={pending?.status === 'sending'}
-      aria-label={`First signature: ${displayName(n.nomineeName, n.nominee)}`}
+      aria-label={`First approval: ${displayName(n.nomineeName, n.nominee)}`}
       sx={{ minHeight: 44 }}
     >
-      First signature
+      First approval
     </Button>
   );
 }

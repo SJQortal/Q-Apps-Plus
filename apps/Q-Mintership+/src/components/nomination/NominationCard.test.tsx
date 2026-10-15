@@ -64,7 +64,7 @@ describe('AvatarStack', () => {
   it('puts list semantics on the items and keeps the avatars as named links', async () => {
     await renderPage(
       <AvatarStack
-        label="Signed by"
+        label="Approved by"
         max={2}
         people={[
           { address: ADDR.admin, name: 'Ada Admin' },
@@ -74,7 +74,7 @@ describe('AvatarStack', () => {
       />,
       { persona: 'admin', path: '/' }
     );
-    const list = screen.getByRole('list', { name: 'Signed by' });
+    const list = screen.getByRole('list', { name: 'Approved by' });
     const items = within(list).getAllByRole('listitem');
     expect(items).toHaveLength(3);
     expect(within(items[0]).getByRole('link', { name: 'Ada Admin' })).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe('AvatarStack', () => {
   it('shows the names under the avatars for phones, and gives each a 44 px target', async () => {
     await renderPage(
       <AvatarStack
-        label="Signed by"
+        label="Approved by"
         max={2}
         showNames
         people={[

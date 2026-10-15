@@ -16,7 +16,7 @@ vi.setConfig({ testTimeout: 30_000 });
 
 const T = { timeout: 6000 };
 const OPEN_Q = 'Should only level 5+ minters become Minter Admins?';
-const SHARED_Q = 'Should a nomination wait 48 hours before its first signature?';
+const SHARED_Q = 'Should a nomination wait 48 hours before its first approval?';
 
 function openPoll(id: string, persona = 'admin') {
   return renderPage(<AdminPollPage />, {

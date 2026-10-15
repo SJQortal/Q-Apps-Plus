@@ -156,7 +156,7 @@ function roleRules(role: AlertRole, address: string): HubAlertRule[] {
         ALERT_IDS.newNomination,
         NOMINATION_PREFIX,
         '/nominations',
-        'A new nomination was published. Open it to check it and sign first.'
+        'A new nomination was published. Open it to check it and approve first.'
       ),
     ];
   }

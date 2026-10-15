@@ -53,9 +53,9 @@ describe('Nominate page: who may nominate', () => {
     const next = screen.getByRole('region', { name: 'What happens next' });
     // 10,080 blocks at 72.9 s, and PCT40 of 20 admins.
     expect(
-      await within(next).findByText(/about 8\.5 days to collect signatures/)
+      await within(next).findByText(/about 8\.5 days to collect approvals/)
     ).toBeInTheDocument();
-    expect(await within(next).findByText(/It needs 8 signatures right now/)).toBeInTheDocument();
+    expect(await within(next).findByText(/It needs 8 approvals right now/)).toBeInTheDocument();
     expect(within(next).getByText(/Nothing else is sent or spent/)).toBeInTheDocument();
   });
 });
@@ -153,7 +153,7 @@ describe('Nominate page: guards before anything is written', () => {
     ['nominator', 'nominator', /^That's your own account: you can't nominate yourself\.$/],
     ['nominator', 'learner', /Already in MINTER/],
     ['nominator', 'banned', /Banned from MINTER: Minter Admins must lift the ban/],
-    ['nominator', 'nominatedSigning', /Minter Admins are already signing a nomination/],
+    ['nominator', 'nominatedSigning', /A nomination for this person is already collecting approvals/],
     ['nominator', 'approved', /Already approved: they only need to press Join/],
     ['nominator', 'nominatedWaiting', /Already nominated\. You can add your support/],
   ];

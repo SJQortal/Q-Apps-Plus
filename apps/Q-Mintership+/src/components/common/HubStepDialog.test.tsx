@@ -19,14 +19,14 @@ function open(run: (report: (step: number, stage: WriteStage) => void) => Promis
       <HubStepDialog
         open
         onClose={() => {}}
-        title="Sign this decision"
-        steps={[{ action: 'SIGN_TRANSACTION', title: 'Sign it', feeTxType: 'GROUP_APPROVAL' }]}
+        title="Approve this decision"
+        steps={[{ action: 'SIGN_TRANSACTION', title: 'Approve it', feeTxType: 'GROUP_APPROVAL' }]}
         run={async (report) => ({ outcome: await run(report) })}
         successTitle="Signed"
       />
     </HubThemeProvider>
   );
-  return screen.getByRole('dialog', { name: 'Sign this decision' });
+  return screen.getByRole('dialog', { name: 'Approve this decision' });
 }
 
 describe('HubStepDialog: what a screen reader hears', () => {
@@ -59,7 +59,7 @@ describe('HubStepDialog: what a screen reader hears', () => {
     within(dialog).getByRole('button', { name: 'Continue to Hub' }).focus();
     await u.keyboard('{Enter}');
     expect(within(dialog).queryByRole('button', { name: 'Continue to Hub' })).toBeNull();
-    const title = within(dialog).getByRole('heading', { name: 'Sign this decision' });
+    const title = within(dialog).getByRole('heading', { name: 'Approve this decision' });
     expect(title).toHaveFocus();
     // Still there a moment later: nothing pulls it back to the dialog's frame.
     await act(() => new Promise((r) => setTimeout(r, 120)));
@@ -122,9 +122,9 @@ describe('HubStepDialog: something to do before Hub opens', () => {
         <HubStepDialog
           open
           onClose={() => {}}
-          title="Sign this decision"
+          title="Approve this decision"
           intro="Tick the box first."
-          steps={[{ action: 'SIGN_TRANSACTION', title: 'Sign it', feeTxType: 'GROUP_APPROVAL' }]}
+          steps={[{ action: 'SIGN_TRANSACTION', title: 'Approve it', feeTxType: 'GROUP_APPROVAL' }]}
           beforeStart={() => ready}
           run={async () => {
             runs++;
@@ -133,7 +133,7 @@ describe('HubStepDialog: something to do before Hub opens', () => {
         />
       </HubThemeProvider>
     );
-    const dialog = screen.getByRole('dialog', { name: 'Sign this decision' });
+    const dialog = screen.getByRole('dialog', { name: 'Approve this decision' });
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(runs).toBe(0);
     expect(within(dialog).getByText('Tick the box first.')).toBeVisible();
@@ -159,8 +159,8 @@ function DisabledOpener() {
       <HubStepDialog
         open={open}
         onClose={() => setOpen(false)}
-        title="Sign this decision"
-        steps={[{ action: 'SIGN_TRANSACTION', title: 'Sign it', feeTxType: 'GROUP_APPROVAL' }]}
+        title="Approve this decision"
+        steps={[{ action: 'SIGN_TRANSACTION', title: 'Approve it', feeTxType: 'GROUP_APPROVAL' }]}
         run={async () => {
           setSending(true);
           return { outcome: { status: 'sent', tx: null, signature: 'S', recovered: false } };
@@ -175,7 +175,7 @@ describe('HubStepDialog: closing when its button can no longer take focus', () =
     const u = userEvent.setup();
     render(<DisabledOpener />);
     await u.click(screen.getByRole('button', { name: 'Sign' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    const dialog = await screen.findByRole('dialog', { name: 'Approve this decision' });
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     await u.click(await within(dialog).findByRole('button', { name: 'Done' }));
     expect(await screen.findByRole('article', { name: 'The card' })).toHaveFocus();

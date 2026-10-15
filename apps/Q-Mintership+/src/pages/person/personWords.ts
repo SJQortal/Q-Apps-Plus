@@ -96,7 +96,7 @@ export function proposalsSummary(proposals: TimelineEvent[]): string {
     proposals.filter((p) => p.outcome === outcome).length;
   const parts = [
     count('done') ? `${count('done')} approved` : '',
-    count('pending') ? `${count('pending')} collecting signatures` : '',
+    count('pending') ? `${count('pending')} collecting approvals` : '',
     count('expired') ? `${count('expired')} expired` : '',
     count('rejected') ? `${count('rejected')} rejected` : '',
   ].filter(Boolean);

@@ -52,7 +52,7 @@ describe('A nomination’s own page', () => {
   it('shows a nomination being signed, its round and links to its decision', async () => {
     const { world } = await open(ADDR.nominatedSigning, 'admin');
     const current = await screen.findByRole('region', { name: 'Nomination' }, T);
-    expect(within(current).getByText('Collecting signatures')).toBeInTheDocument();
+    expect(within(current).getByText('Collecting approvals')).toBeInTheDocument();
     expect(within(current).getByText(/Nominated by/)).toBeInTheDocument();
     const invite = world.pending.find(
       (t: { type: string; invitee?: string }) =>
@@ -70,12 +70,12 @@ describe('A nomination’s own page', () => {
     const list = await within(rounds).findByRole('list', { name: 'Rounds, newest first' }, T);
     // The three ways a round ends, as the list below can show them.
     expect(rounds).toHaveTextContent(
-      'ends when enough of them sign, as many reject it, or the time runs out.'
+      'ends when enough of them approve, as many reject it, or the time runs out.'
     );
     const items = within(list).getAllByRole('listitem');
     expect(items).toHaveLength(1);
     expect(within(items[0]).getByText('Round 1')).toBeInTheDocument();
-    expect(within(items[0]).getByText('Collecting signatures')).toBeInTheDocument();
+    expect(within(items[0]).getByText('Collecting approvals')).toBeInTheDocument();
     expect(
       within(items[0]).getByRole('link', { name: 'Open the decision of round 1' })
     ).toHaveAttribute('href', `/decisions/${invite.signature}`);
@@ -94,14 +94,14 @@ describe('A nomination’s own page', () => {
     const rounds = await screen.findByRole('region', { name: 'Rounds' }, T);
     expect(
       await within(rounds).findByText(
-        /^Not enough signatures in time\. They can be nominated again\. Expired /,
+        /^Not enough approvals in time\. They can be nominated again\. Expired /,
         {},
         T
       )
     ).toBeInTheDocument();
   });
 
-  it('offers an eligible viewer their support while it waits for a first signature', async () => {
+  it('offers an eligible viewer their support while it waits for a first approval', async () => {
     await open(ADDR.nominatedWaiting, 'admin');
     const current = await screen.findByRole('region', { name: 'Nomination' }, T);
     expect(within(current).getByRole('link', { name: 'Add your support' })).toHaveAttribute(
@@ -109,7 +109,7 @@ describe('A nomination’s own page', () => {
       `/nominate?who=${ADDR.nominatedWaiting}`
     );
     expect(
-      within(current).getByRole('link', { name: 'First signature in Decisions' })
+      within(current).getByRole('link', { name: 'First approval in Decisions' })
     ).toHaveAttribute('href', '/decisions');
     const rounds = await screen.findByRole('region', { name: 'Rounds' }, T);
     expect(

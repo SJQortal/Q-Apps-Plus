@@ -616,11 +616,11 @@ describe('Ready to mint: declining a join request', () => {
     const link = await within(jr2).findByRole(
       'link',
       {
-        name: `A decline is waiting for Minter Admins’ signatures: open the decision about ${shortAddress(fakeAddress('jr-2'))}`,
+        name: `A decline is waiting for Minter Admins’ approvals: open the decision about ${shortAddress(fakeAddress('jr-2'))}`,
       },
       { timeout: 4000 }
     );
-    expect(link).toHaveTextContent('A decline is waiting for Minter Admins’ signatures');
+    expect(link).toHaveTextContent('A decline is waiting for Minter Admins’ approvals');
     expect(link).toHaveAttribute('href', `/decisions/${signature}`);
   });
 
@@ -668,7 +668,7 @@ describe('Ready to mint: declining a join request', () => {
     );
     expect(
       within(form).getByText(
-        'Once 8 Minter Admins sign it, like any decision, their join request goes and they leave Ready to mint for everyone. They can send a new join request later. It costs 0.02 QORT: your proposal and your own signature on it, two Hub steps.'
+        'Once 8 Minter Admins approve it, like any decision, their join request goes and they leave Ready to mint for everyone. They can send a new join request later. It costs 0.02 QORT: your proposal and your own approval of it, two Hub steps.'
       )
     ).toBeVisible();
     // The person is picked already, and checked.
@@ -687,14 +687,14 @@ describe('Ready to mint: declining a join request', () => {
       { timeout: 4000 }
     );
     expect(within(hub).getByText('Step 1 of 2: Propose it')).toBeVisible();
-    expect(within(hub).getByText('Step 2 of 2: Sign it')).toBeVisible();
+    expect(within(hub).getByText('Step 2 of 2: Approve it')).toBeVisible();
     expect(within(hub).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
     expect(within(hub).getByText(/^Reason:/).parentElement).toHaveTextContent(
       'Reason: No node, asked twice'
     );
     await user.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
     expect(
-      await within(hub).findByText('Proposed and signed', {}, { timeout: 4000 })
+      await within(hub).findByText('Proposed and approved', {}, { timeout: 4000 })
     ).toBeVisible();
     expect(qortalCallsFor('KICK_FROM_GROUP')).toEqual([
       {

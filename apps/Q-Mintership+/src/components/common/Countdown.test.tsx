@@ -11,12 +11,12 @@ describe('Countdown', () => {
   it('counts time down to the block, with the blocks in its label', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(T + 60_000);
-    const { container } = render(<Countdown now={now(100)} height={160} suffix="left to sign" />);
+    const { container } = render(<Countdown now={now(100)} height={160} suffix="left to approve" />);
     expect(screen.getByText('59m')).toBeInTheDocument();
     // Read as text (no aria-label on a plain span): the blocks and the date included.
     const clock = container.firstElementChild as HTMLElement;
     expect(clock).not.toHaveAttribute('aria-label');
-    expect(clock).toHaveTextContent(/^59m left to sign, 60 blocks\. Block 160, about /);
+    expect(clock).toHaveTextContent(/^59m left to approve, 60 blocks\. Block 160, about /);
   });
 
   it('can show the block and date as a line, for touch and keyboard users', () => {
@@ -26,12 +26,12 @@ describe('Countdown', () => {
       <Countdown
         now={now(100)}
         height={160}
-        suffix="left to sign"
-        blockLabel="Last block a signature counts in:"
+        suffix="left to approve"
+        blockLabel="Last block an approval counts in:"
         detailVisible
       />
     );
-    expect(screen.getByText(/^Last block a signature counts in: 160, about /)).toBeVisible();
+    expect(screen.getByText(/^Last block an approval counts in: 160, about /)).toBeVisible();
   });
 
   it('shows the blocks still to go when the time estimate runs out before the chain does', () => {
@@ -41,16 +41,16 @@ describe('Countdown', () => {
       <Countdown
         now={now(100)}
         height={102}
-        suffix="left to sign"
-        doneText="Signing time is over"
+        suffix="left to approve"
+        doneText="Time to approve is over"
       />
     );
     expect(screen.getByText('2 blocks')).toBeInTheDocument();
-    expect(screen.queryByText('Signing time is over')).toBeNull();
+    expect(screen.queryByText('Time to approve is over')).toBeNull();
   });
 
   it('says it is over once the chain reaches the block', () => {
-    render(<Countdown now={now(102)} height={102} doneText="Signing time is over" />);
-    expect(screen.getByText('Signing time is over')).toBeInTheDocument();
+    render(<Countdown now={now(102)} height={102} doneText="Time to approve is over" />);
+    expect(screen.getByText('Time to approve is over')).toBeInTheDocument();
   });
 });

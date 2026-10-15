@@ -60,14 +60,14 @@ export function HowCounted({ data }: { data: ActivityData | undefined }) {
           a ban, cancelling an invite, and making or removing a Minter Admin.
         </Typography>
         <Typography component="li" variant="body2">
-          A decision is eligible for an admin when it was waiting for signatures while they were a
+          A decision is eligible for an admin when it was waiting for approvals while they were a
           Minter Admin. Admins added during the window count from the day they were added; former
           admins count until they stopped.
         </Typography>
         <Typography component="li" variant="body2">
-          Participation is the share of eligible decisions they answered. Signing and rejecting are
-          both answers, so both count as taking part; a withdrawn signature is a rejection.
-          Signatures and rejections are shown apart.
+          Participation is the share of eligible decisions they answered. Approving and rejecting
+          are both answers, so both count as taking part; rejecting after approving is a
+          rejection. Approvals and rejections are shown apart.
         </Typography>
         <Typography component="li" variant="body2">
           Only an admin's latest answer on a decision counts, as on chain, and only if it landed in
@@ -75,7 +75,7 @@ export function HowCounted({ data }: { data: ActivityData | undefined }) {
         </Typography>
         <Typography component="li" variant="body2">
           Missed means a decision expired while they were an admin and they never answered it:
-          only doing nothing is a miss. Decisions still collecting signatures count for an admin
+          only doing nothing is a miss. Decisions still collecting approvals count for an admin
           once they have answered.
         </Typography>
         <Typography component="li" variant="body2">
@@ -84,7 +84,7 @@ export function HowCounted({ data }: { data: ActivityData | undefined }) {
           answer on it counts like any other.
         </Typography>
         <Typography component="li" variant="body2">
-          Time to sign is the median from a decision's block to their signature's block, at the live
+          Time to approve is the median from a decision's block to their approval's block, at the live
           block time{data ? ` (one block every ${blockTimeWords(data.now)} now)` : ''}. Decisions
           they proposed themselves are left out.
         </Typography>
@@ -96,7 +96,7 @@ export function HowCounted({ data }: { data: ActivityData | undefined }) {
         </Typography>
         <Typography component="li" variant="body2">
           Votes and comments from the original Q-Mintership aren't counted: there are no polls any
-          more, only signatures.
+          more, only approvals and rejections.
         </Typography>
       </Box>
     </Box>

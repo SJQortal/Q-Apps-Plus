@@ -64,7 +64,7 @@ describe('nominationRounds', () => {
     expect(nominationRounds([old, confirmed], ME, MAX, waiting)[0].startedHeight).toBe(30_000);
   });
 
-  it('has no rounds before a first signature', () => {
+  it('has no rounds before a first approval', () => {
     expect(nominationRounds([], ME, MAX)).toEqual([]);
   });
 });

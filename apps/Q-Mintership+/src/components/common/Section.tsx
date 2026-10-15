@@ -163,12 +163,12 @@ export function LevelBadge({ level }: { level: number }) {
 
 const NOMINATION_CHIP: Record<NominationState, { label: string; color: ChipProps['color'] }> = {
   waiting: { label: 'Waiting for a Minter Admin', color: 'default' },
-  signing: { label: 'Collecting signatures', color: 'primary' },
+  signing: { label: 'Collecting approvals', color: 'primary' },
   approved: { label: 'Approved: join to finish', color: 'success' },
   joined: { label: 'In MINTER', color: 'success' },
   expired: { label: 'Expired', color: 'default' },
   rejected: { label: 'Rejected', color: 'error' },
-  lapsed: { label: 'No admin signed in time', color: 'default' },
+  lapsed: { label: 'No admin approved in time', color: 'default' },
   blocked: { label: 'Banned: ban must be lifted', color: 'warning' },
 };
 
@@ -186,11 +186,11 @@ export function NominationStateChip({ state }: { state: NominationState }) {
 
 const PHASE_CHIP: Record<DecisionPhase, { label: string; color: ChipProps['color'] }> = {
   unconfirmed: { label: 'Waiting for a block', color: 'default' },
-  early: { label: 'Collecting signatures', color: 'primary' },
-  open: { label: 'Collecting signatures', color: 'primary' },
-  thresholdMet: { label: 'Enough signatures', color: 'success' },
+  early: { label: 'Collecting approvals', color: 'primary' },
+  open: { label: 'Collecting approvals', color: 'primary' },
+  thresholdMet: { label: 'Enough approvals', color: 'success' },
   rejectedMet: { label: 'Enough rejections', color: 'error' },
-  tooLate: { label: 'Too late to sign', color: 'default' },
+  tooLate: { label: 'Too late to approve', color: 'default' },
   expired: { label: 'Expired', color: 'default' },
 };
 

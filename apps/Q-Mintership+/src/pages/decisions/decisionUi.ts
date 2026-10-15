@@ -76,7 +76,7 @@ export interface AnswerView {
   busy: boolean;
   /** Being sent right now (the checks, or Hub's dialog). */
   sending: AnswerIntent | null;
-  /** "Signed ✓", "Rejected (confirming…)", "Signature withdrawn", … or null. */
+  /** "You approved ✓", "You rejected (confirming…)", … or null. */
   label: string | null;
   /** The chain's word for the admin's answer. */
   chain: MyAnswer;
@@ -125,21 +125,16 @@ export function answerView(
     withdrew,
     busy,
     sending: newest?.write.status === 'sending' ? newest.intent : null,
-    label: answerLabel(shown, settled, withdrew),
+    label: answerLabel(shown, settled),
     chain,
     failed: INTENTS.some((i) => pending[i]?.status === 'failed') && !newest,
   };
 }
 
-function answerLabel(
-  shown: AnswerView['shown'],
-  settled: boolean,
-  withdrew: boolean
-): string | null {
-  if (shown === 'signed') return settled ? 'Signed ✓' : 'Signed ✓ (confirming…)';
+function answerLabel(shown: AnswerView['shown'], settled: boolean): string | null {
+  if (shown === 'signed') return settled ? 'You approved ✓' : 'You approved ✓ (confirming…)';
   if (shown === 'rejected') {
-    if (withdrew) return settled ? 'Signature withdrawn' : 'Withdrawn (confirming…)';
-    return settled ? 'Rejected' : 'Rejected (confirming…)';
+    return settled ? 'You rejected' : 'You rejected (confirming…)';
   }
   return null;
 }
@@ -227,27 +222,27 @@ export function phaseLine(d: Decision, now: ChainNow): string | null {
   const w = d.window;
   switch (d.phase) {
     case 'unconfirmed':
-      return 'On its way into a block. The clock starts once it is in one, and signing opens then.';
+      return 'On its way into a block. The clock starts once it is in one, and approving opens then.';
     case 'early':
       return w
-        ? `Just proposed. Signatures count already; it can be applied from ${formatBlock(w.earliestDecisionHeight)} (in about ${formatDuration(Math.max(0, heightToTime(now, w.earliestDecisionHeight) - now.timestamp))}).`
+        ? `Just proposed. Approvals count already; it can be applied from ${formatBlock(w.earliestDecisionHeight)} (in about ${formatDuration(Math.max(0, heightToTime(now, w.earliestDecisionHeight) - now.timestamp))}).`
         : null;
     case 'open':
       return null;
     case 'thresholdMet':
-      return `Enough signatures: Core applies it ${whenApplied(d, now)}. Nobody has to do anything else.`;
+      return `Enough approvals: Core applies it ${whenApplied(d, now)}. Nobody has to do anything else.`;
     case 'rejectedMet': {
       const when = whenApplied(d, now);
       return when === 'in the next block'
         ? `Enough rejections: Core ends it as rejected in the next block. It can be proposed again.`
-        : `Enough rejections: Core ends it as rejected ${when}, unless it has ${d.tally?.needed ?? 'enough'} signatures by then (signatures are counted first). It can be proposed again.`;
+        : `Enough rejections: Core ends it as rejected ${when}, unless it has ${d.tally?.needed ?? 'enough'} approvals by then (approvals are counted first). It can be proposed again.`;
     }
     case 'tooLate':
       return w
-        ? `Too late to sign: the last block a signature could count in has passed. It expires at ${formatBlock(w.expiresAtHeight)}.`
-        : 'Too late to sign: the last block a signature could count in has passed.';
+        ? `Too late to approve: the last block an approval could count in has passed. It expires at ${formatBlock(w.expiresAtHeight)}.`
+        : 'Too late to approve: the last block an approval could count in has passed.';
     case 'expired':
-      return 'Expired without enough signatures. It can be proposed again.';
+      return 'Expired without enough approvals. It can be proposed again.';
   }
 }
 

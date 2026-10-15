@@ -57,7 +57,7 @@ export const PROPOSE_KINDS: Record<ProposeKind, ProposeKindInfo> = {
   },
   addAdmin: {
     label: 'Make a Minter Admin',
-    description: 'A MINTER member who then signs decisions too.',
+    description: 'A MINTER member who then approves or rejects decisions too.',
     action: 'ADD_GROUP_ADMIN',
     txType: 'ADD_GROUP_ADMIN',
   },
@@ -75,7 +75,7 @@ export const PROPOSE_KINDS: Record<ProposeKind, ProposeKindInfo> = {
   },
   cancelInvite: {
     label: 'Cancel an approved invite',
-    description: 'One approved invite you pick, with your signature added.',
+    description: 'One approved invite you pick, with your approval added.',
     action: 'CANCEL_GROUP_INVITE',
     txType: 'CANCEL_GROUP_INVITE',
   },

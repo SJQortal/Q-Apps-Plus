@@ -52,16 +52,16 @@ export function FirstSignatureDialog({
         onClose();
         setPartial(null);
       }}
-      title={`First signature: ${nominee.label}`}
+      title={`First approval: ${nominee.label}`}
       intro={
         <>
           <Typography>
-            No Minter Admin has signed this nomination yet. As the first, you put it on chain and
-            sign it: two Hub confirmations, one after the other.
+            No Minter Admin has approved this nomination yet. As the first, you put it on chain and
+            approve it: two Hub confirmations, one after the other.
           </Typography>
           <Typography sx={{ mt: 1 }}>
             The clock starts once it is in a block. The other Minter Admins then have {windowText}{' '}
-            to reach {facts.needed} signatures.
+            to reach {facts.needed} approvals.
           </Typography>
           <Typography sx={{ mt: 1 }}>
             <FeeNote txType="GROUP_INVITE" times={2} prefix="Fees in total" />
@@ -81,11 +81,12 @@ export function FirstSignatureDialog({
         },
         {
           action: 'SIGN_TRANSACTION',
-          title: 'Sign it',
+          title: 'Approve it',
           detail: (
             <Typography variant="body2">
-              Hub will show Tx type GROUP_APPROVAL, &quot;approval&quot;: true and a box to tick.
-              The &quot;pendingSignature&quot; is the new nomination’s own, made in step 1.
+              Hub will show Tx type GROUP_APPROVAL, &quot;approval&quot;: true and a box to tick:
+              that is your approval. The &quot;pendingSignature&quot; is the new nomination’s
+              own, made in step 1.
             </Typography>
           ),
           check: SIGN_NEW_TX_CHECK,
@@ -117,20 +118,20 @@ export function FirstSignatureDialog({
           message: (
             <Typography variant="body2" sx={{ mt: 0.5 }}>
               Step 2 didn’t go through: {secondStepProblem(result.approval)} The nomination is on
-              chain and waiting. Once it shows in the queue, sign it there like any other decision.
+              chain and waiting. Once it shows in the queue, approve it there like any other decision.
             </Typography>
           ),
         };
       }}
       successTitle={
-        partial ? 'Step 1 done: the nomination is on chain' : 'Signed: the clock has started'
+        partial ? 'Step 1 done: the nomination is on chain' : 'Approved: the clock has started'
       }
       successText={
         partial ? null : (
           <Typography variant="body2">
-            The nomination and your signature count once they are in a block, usually within a
+            The nomination and your approval count once they are in a block, usually within a
             couple of minutes. After yours it needs{' '}
-            {plural(Math.max(0, facts.needed - 1), 'more signature', 'more signatures')}.
+            {plural(Math.max(0, facts.needed - 1), 'more approval', 'more approvals')}.
           </Typography>
         )
       }

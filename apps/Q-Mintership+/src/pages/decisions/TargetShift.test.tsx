@@ -41,18 +41,18 @@ describe('Decisions: an admin change says what it does to the target', () => {
     const removal = card(/^Remove a Minter Admin, Dex Demote/);
     const note = within(removal).getByRole('note');
     expect(note).toHaveTextContent(
-      'If this passes, MINTER has 20 admin seats and the target drops from 9 to 8 signatures.'
+      'If this passes, MINTER has 20 admin seats and the target drops from 9 to 8 approvals.'
     );
     expect(
       within(note).getByText(
-        'These would apply at once, in the same block or the next, with no new signature:'
+        'These would apply at once, in the same block or the next, with no new approval:'
       )
     ).toBeVisible();
     expect(within(note).getByText('Add to MINTER: Mia Met (8 of 9)')).toBeVisible();
     // What admins can do about it: the order, and withdrawing a signature.
     expect(within(note).getByText(/agree the order with the other Minter Admins/)).toBeVisible();
     expect(
-      within(note).getByText(/A withdrawal counts as a rejection.+costs 0\.01 QORT\./)
+      within(note).getByText(/You can still reject it before.+costs 0\.01 QORT\./)
     ).toBeVisible();
   });
 
@@ -60,22 +60,22 @@ describe('Decisions: an admin change says what it does to the target', () => {
     await openPage();
     const removal = card(/^Remove a Minter Admin, Dex Demote/);
     expect(within(removal).getByRole('note')).toHaveTextContent(
-      'If this passes, MINTER has 19 admin seats; the target stays at 8 signatures. No waiting decision would change because of it.'
+      'If this passes, MINTER has 19 admin seats; the target stays at 8 approvals. No waiting decision would change because of it.'
     );
   });
 
-  it('a new admin raises the target: what has enough signatures now would fall short', async () => {
+  it('a new admin raises the target: what has enough approvals now would fall short', async () => {
     await openPage();
     const add = card(/^(Make|Become) a Minter Admin, Pia Promote/);
     const note = within(add).getByRole('note');
     expect(note).toHaveTextContent(
-      'If this passes, MINTER has 21 admin seats and the target rises from 8 to 9 signatures.'
+      'If this passes, MINTER has 21 admin seats and the target rises from 8 to 9 approvals.'
     );
     expect(
       within(note).getByText('Add to MINTER: Mia Met (8 of 8: enough now, 1 short then)')
     ).toBeVisible();
     expect(note).toHaveTextContent(
-      /The other \d+ decisions still collecting would each need 1 more signature than now\./
+      /The other \d+ decisions still collecting would each need 1 more approval than now\./
     );
     // Mia Met's card: the chip says the target may rise.
     const met = card(/^Add to MINTER, Mia Met/);
@@ -102,7 +102,7 @@ describe('Decisions: an admin change about to apply', () => {
     const section = screen.getByRole('region', { name: 'Admin changes and the target' });
     const note = within(section).getByRole('note');
     expect(note).toHaveTextContent(
-      'Remove a Minter Admin: Dex Demote has enough signatures: Core applies it in the next block. When it does, MINTER has 20 admin seats and the target drops from 9 to 8 signatures.'
+      'Remove a Minter Admin: Dex Demote has enough approvals: Core applies it in the next block. When it does, MINTER has 20 admin seats and the target drops from 9 to 8 approvals.'
     );
     expect(within(note).getByText('Add to MINTER: Mia Met (8 of 9)')).toBeVisible();
     // It applies in the next block: a withdrawal sent now would land too late to count.
@@ -130,7 +130,7 @@ describe('Decisions: the chip on a decision an admin change would tip over', () 
       },
     });
     const met = card(/^Add to MINTER, Mia Met/);
-    expect(within(met).getByRole('button', { name: /^Withdraw my signature/ })).toBeVisible();
+    expect(within(met).getByRole('button', { name: /^Reject: / })).toBeVisible();
     const chip = within(met).getByRole('button', { name: 'Target may drop to 8' });
     expect(chip).toHaveAttribute('aria-expanded', 'false');
     expect(within(met).queryByText(/Core would apply it at once/)).toBeNull();
@@ -140,12 +140,12 @@ describe('Decisions: the chip on a decision an admin change would tip over', () 
     const id = chip.getAttribute('aria-controls') as string;
     const note = document.getElementById(id) as HTMLElement;
     expect(note).toHaveTextContent(
-      'If Remove a Minter Admin: Dex Demote passes, MINTER has 20 admin seats and the target drops from 9 to 8 signatures.'
+      'If Remove a Minter Admin: Dex Demote passes, MINTER has 20 admin seats and the target drops from 9 to 8 approvals.'
     );
     expect(note).toHaveTextContent(
-      'This decision has 8 signatures, so Core would apply it at once, in the same block or the next, with no new signature.'
+      'This decision has 8 approvals, so Core would apply it at once, in the same block or the next, with no new approval.'
     );
-    expect(note).toHaveTextContent(/withdraw your signature before the admin change passes/);
+    expect(note).toHaveTextContent(/You can still reject it before the admin change passes/);
 
     await u.click(chip);
     expect(chip).toHaveAttribute('aria-expanded', 'false');
@@ -184,11 +184,11 @@ describe('Decisions: signing an admin change that would tip others over', () => 
     const { shift } = await openShifted();
     mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'A1' }));
     await u.click(
-      within(card(/^Remove a Minter Admin, Dex Demote/)).getByRole('button', { name: /^Sign: / })
+      within(card(/^Remove a Minter Admin, Dex Demote/)).getByRole('button', { name: /^Approve: / })
     );
-    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    const dialog = await screen.findByRole('dialog', { name: 'Approve this decision' });
     expect(within(dialog).getByRole('note')).toHaveTextContent(
-      /target drops from 9 to 8 signatures.+Add to MINTER: Mia Met \(8 of 9\)/
+      /target drops from 9 to 8 approvals.+Add to MINTER: Mia Met \(8 of 9\)/
     );
     const box = within(dialog).getByRole('checkbox', { name: 'I’ve checked these' });
     expect(box).not.toBeChecked();
@@ -205,7 +205,7 @@ describe('Decisions: signing an admin change that would tip others over', () => 
     await u.click(box);
     expect(within(dialog).queryByRole('alert')).toBeNull();
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
-    expect(await within(dialog).findByText('Signed', {}, T)).toBeInTheDocument();
+    expect(await within(dialog).findByText('Approved', {}, T)).toBeInTheDocument();
     const bytes = base58Decode(String(qortalCallsFor('SIGN_TRANSACTION')[0].unsignedBytes));
     expect(base58Encode(bytes.slice(112, 176))).toBe(shift.demote);
   });
@@ -217,37 +217,37 @@ describe('Decisions: signing an admin change that would tip others over', () => 
       u.click(
         within(
           await screen.findByRole('article', { name: /^Remove a Minter Admin, Dex Demote/ })
-        ).getByRole('button', { name: /^Sign: / })
+        ).getByRole('button', { name: /^Approve: / })
       );
     await sign();
-    let dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    let dialog = await screen.findByRole('dialog', { name: 'Approve this decision' });
     await u.click(within(dialog).getByRole('checkbox', { name: 'I’ve checked these' }));
     await u.click(within(dialog).getByRole('button', { name: 'Not now' }));
     await sign();
-    dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    dialog = await screen.findByRole('dialog', { name: 'Approve this decision' });
     expect(within(dialog).getByRole('checkbox', { name: 'I’ve checked these' })).not.toBeChecked();
   });
 
   it('signing a decision that only carries a chip needs no tick', async () => {
     const u = user();
     await openShifted();
-    await u.click(within(card(/^Add to MINTER, Mia Met/)).getByRole('button', { name: /^Sign: / }));
-    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    await u.click(within(card(/^Add to MINTER, Mia Met/)).getByRole('button', { name: /^Approve: / }));
+    const dialog = await screen.findByRole('dialog', { name: 'Approve this decision' });
     expect(within(dialog).queryByRole('checkbox')).toBeNull();
     expect(within(dialog).queryByRole('note')).toBeNull();
   });
 
-  it('Sign several with an admin change in it needs the same tick', async () => {
+  it('Approve several with an admin change in it needs the same tick', async () => {
     const u = user();
     await openShifted();
     mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'B1' }));
-    await u.click(screen.getByRole('button', { name: 'Sign several' }));
+    await u.click(screen.getByRole('button', { name: 'Approve several' }));
     await u.click(screen.getByRole('checkbox', { name: /Dex Demote/ }));
     await u.click(screen.getByRole('checkbox', { name: /Ben Target/ }));
-    await u.click(screen.getByRole('button', { name: 'Sign 2' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Sign several' });
+    await u.click(screen.getByRole('button', { name: 'Approve 2' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Approve several' });
     expect(within(dialog).getByRole('note')).toHaveTextContent(
-      /^If Remove a Minter Admin: Dex Demote passes, MINTER has 20 admin seats and the target drops from 9 to 8 signatures\./
+      /^If Remove a Minter Admin: Dex Demote passes, MINTER has 20 admin seats and the target drops from 9 to 8 approvals\./
     );
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
@@ -276,7 +276,7 @@ describe('Decisions: proposing an admin change', () => {
     const hub = await screen.findByRole('dialog', { name: /Remove a Minter Admin: Admin B/ });
     const note = within(hub).getByRole('note');
     expect(note).toHaveTextContent(
-      'If this passes, MINTER has 20 admin seats and the target drops from 9 to 8 signatures.'
+      'If this passes, MINTER has 20 admin seats and the target drops from 9 to 8 approvals.'
     );
     expect(within(note).getByText('Add to MINTER: Mia Met (8 of 9)')).toBeVisible();
     await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
@@ -293,12 +293,12 @@ describe('Decisions: how signing works', () => {
   it('says admin changes move the target, and to plan the order', async () => {
     const u = user();
     await openPage();
-    await u.click(screen.getByRole('button', { name: 'How signing works' }));
+    await u.click(screen.getByRole('button', { name: 'How approving works' }));
     expect(
       screen.getByText(/^Adding or removing a Minter Admin moves the target for every waiting/)
     ).toBeVisible();
     expect(
-      screen.getByText(/^So before signing an admin change, look at what it would tip over/)
+      screen.getByText(/^So before approving an admin change, look at what it would tip over/)
     ).toBeVisible();
   });
 });

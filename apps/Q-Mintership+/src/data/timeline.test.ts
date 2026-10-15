@@ -95,7 +95,7 @@ describe('timeline wording', () => {
       [
         'Nominated for MINTER',
         'expired',
-        'Not enough signatures in time. They can be nominated again.',
+        'Not enough approvals in time. They can be nominated again.',
       ],
       ['Proposed: Ban from MINTER', 'rejected', 'Enough Minter Admins rejected it.'],
       ['Proposed: Remove from MINTER', 'pending', null],
@@ -340,8 +340,8 @@ describe('withTargetSteps: what an approved admin change did to the target', () 
     const detail = (kind: string, outcome = 'done') =>
       events.find((e) => e.kind === kind && e.outcome === outcome)?.detail;
     // 20 now; before the removal 21 (9 needed); before the addition 20.
-    expect(detail('removeAdmin')).toBe('Target 9 → 8 signatures (21 → 20 admin seats)');
-    expect(detail('addAdmin')).toBe('Target 8 → 9 signatures (20 → 21 admin seats)');
+    expect(detail('removeAdmin')).toBe('Target 9 → 8 approvals (21 → 20 admin seats)');
+    expect(detail('addAdmin')).toBe('Target 8 → 9 approvals (20 → 21 admin seats)');
     expect(detail('removeAdmin', 'expired')).toBeNull();
     expect(detail('kick')).toBeNull();
   });
@@ -357,7 +357,7 @@ describe('withTargetSteps: what an approved admin change did to the target', () 
         neededBefore: 8,
         neededAfter: 8,
       })
-    ).toBe('Admin seats 20 → 19; the target stayed at 8 signatures');
+    ).toBe('Admin seats 20 → 19; the target stayed at 8 approvals');
   });
 
   it('leaves the events alone without steps', () => {

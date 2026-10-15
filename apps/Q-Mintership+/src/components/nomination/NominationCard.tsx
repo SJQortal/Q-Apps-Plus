@@ -51,7 +51,7 @@ const ENDED_TEXT: Partial<Record<NominationState, string>> = {
   joined: 'Joined MINTER',
   expired: 'Expired',
   rejected: 'Rejected',
-  lapsed: 'Closed with no Minter Admin signature',
+  lapsed: 'Closed with no Minter Admin approval',
 };
 
 export function NominationCard({
@@ -195,7 +195,7 @@ export function NominationCard({
       ) : null}
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
-        {/* No "left to sign" once the count has decided it (as on the hero and decision cards). */}
+        {/* No "left to approve" once the count has decided it (as on the hero and decision cards). */}
         {n.state === 'signing' &&
         window &&
         n.decision?.phase !== 'rejectedMet' &&
@@ -203,9 +203,9 @@ export function NominationCard({
           <Countdown
             now={now}
             height={window.lastUsefulSignatureHeight}
-            suffix="left to sign"
-            doneText="Signing time is over"
-            blockLabel="Last block a signature counts in:"
+            suffix="left to approve"
+            doneText="Time to approve is over"
+            blockLabel="Last block an approval counts in:"
             detailVisible
           />
         ) : null}
@@ -231,7 +231,7 @@ export function NominationCard({
         ) : null}
         {n.state === 'waiting' && n.waitingEndsAt ? (
           <Typography variant="body2" color="text.secondary">
-            Waiting for a Minter Admin’s first signature:{' '}
+            Waiting for a Minter Admin’s first approval:{' '}
             {formatDuration(n.waitingEndsAt - now.timestamp)} left.
           </Typography>
         ) : null}

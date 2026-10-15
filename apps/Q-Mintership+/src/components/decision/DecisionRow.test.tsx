@@ -26,18 +26,18 @@ function Rows() {
 }
 
 describe('DecisionRow', () => {
-  it('links to the decision with k of n, the time left to sign and your signature', async () => {
+  it('links to the decision with k of n, the time left to approve and your signature', async () => {
     await renderPage(<Rows />, { persona: 'admin', path: '/' });
     // The link is named by its visible text, plus the ring's k of n in hidden words.
     const urgent = await screen.findByRole('link', {
-      name: /^Add to MINTER: Uma Urgent\. 7 of 8 signatures\. \d+h \d+m left to sign Signed ✓$/,
+      name: /^Add to MINTER: Uma Urgent\. 7 of 8 approvals\. \d+h \d+m left to approve You approved ✓$/,
     });
     expect(urgent.getAttribute('href')).toMatch(/^\/decisions\/\w+$/);
-    expect(within(urgent).getByText('Signed ✓')).toBeInTheDocument();
+    expect(within(urgent).getByText('You approved ✓')).toBeInTheDocument();
     const open = await screen.findByRole('link', {
-      name: /^Add to MINTER: bob\+builder\. 5 of 8 signatures\. \d+d \d+h left to sign$/,
+      name: /^Add to MINTER: bob\+builder\. 5 of 8 approvals\. \d+d \d+h left to approve$/,
     });
-    expect(within(open).getByText('left to sign')).toBeInTheDocument();
+    expect(within(open).getByText('left to approve')).toBeInTheDocument();
     expect(within(open).queryByRole('img')).toBeNull();
     // A cancelled invite names its invitee (read from the raw bytes).
     expect(

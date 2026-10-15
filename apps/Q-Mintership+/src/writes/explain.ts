@@ -39,32 +39,32 @@ export const HUB_DIALOGS: Record<string, HubDialogText> = {
   KICK_FROM_GROUP: {
     hubAsks: 'Hub asks you to allow removing this member from MINTER.',
     check: ['The member.', 'The group is MINTER.', 'The fee.'],
-    notes: ['This only proposes the removal. It happens if enough Minter Admins sign.'],
+    notes: ['This only proposes the removal. It happens if enough Minter Admins approve.'],
   },
   BAN_FROM_GROUP: {
     hubAsks: 'Hub asks you to allow banning this account from MINTER.',
     check: ['The account.', 'The group is MINTER.', 'The fee.'],
-    notes: ['This only proposes the ban. It happens if enough Minter Admins sign.'],
+    notes: ['This only proposes the ban. It happens if enough Minter Admins approve.'],
   },
   CANCEL_GROUP_BAN: {
     hubAsks: 'Hub asks you to allow cancelling the ban on this account.',
     check: ['The account.', 'The group is MINTER.', 'The fee.'],
-    notes: ['This only proposes lifting the ban. It happens if enough Minter Admins sign.'],
+    notes: ['This only proposes lifting the ban. It happens if enough Minter Admins approve.'],
   },
   CANCEL_GROUP_INVITE: {
     hubAsks: 'Hub asks you to allow cancelling the group invite for this account.',
     check: ['The account.', 'The group is MINTER.', 'The fee.'],
-    notes: ['This only proposes the cancellation. It happens if enough Minter Admins sign.'],
+    notes: ['This only proposes the cancellation. It happens if enough Minter Admins approve.'],
   },
   ADD_GROUP_ADMIN: {
     hubAsks: 'Hub asks you to allow adding this member as an admin.',
     check: ['The member.', 'The group is MINTER.', 'The fee.'],
-    notes: ['This only proposes it. It happens if enough Minter Admins sign.'],
+    notes: ['This only proposes it. It happens if enough Minter Admins approve.'],
   },
   REMOVE_GROUP_ADMIN: {
     hubAsks: 'Hub asks you to allow removing this admin.',
     check: ['The admin.', 'The group is MINTER.', 'The fee.'],
-    notes: ['This only proposes it. It happens if enough Minter Admins sign.'],
+    notes: ['This only proposes it. It happens if enough Minter Admins approve.'],
   },
   PUBLISH_QDN_RESOURCE: {
     hubAsks: 'Hub asks you to publish a small record to QDN under your name.',

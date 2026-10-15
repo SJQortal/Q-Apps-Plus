@@ -41,17 +41,17 @@ export function unmatchedCancels(decisions: Decision[]): number {
 /** Each item of "Propose cancelling all": the cancellation, then the proposer's signature on it. */
 export const CANCEL_AND_SIGN_STEPS: BulkStep[] = [
   { action: 'CANCEL_GROUP_INVITE', title: 'Propose it' },
-  { action: 'SIGN_TRANSACTION', title: 'Sign it', check: SIGN_NEW_TX_CHECK },
+  { action: 'SIGN_TRANSACTION', title: 'Approve it', check: SIGN_NEW_TX_CHECK },
 ];
 
 /** "2 of 3 proposed and signed. 1 more was proposed without your signature: …" */
 export function cancelAllSummary({ total, sent, partial, stopped }: BulkCounts): string {
-  const parts = [`${sent} of ${total} proposed and signed.`];
+  const parts = [`${sent} of ${total} proposed and approved.`];
   if (partial)
     parts.push(
       partial === 1
-        ? '1 more was proposed without your signature: sign it in the queue once it’s in a block.'
-        : `${partial} more were proposed without your signature: sign them in the queue once they’re in a block.`
+        ? '1 more was proposed without your approval: approve it in the queue once it’s in a block.'
+        : `${partial} more were proposed without your approval: approve them in the queue once they’re in a block.`
     );
   if (stopped) parts.push('You cancelled one in Hub, so the rest were not sent.');
   if (sent) parts.push('Each counts once it is in a block.');
@@ -73,12 +73,12 @@ export function ownSignatureItem(result: OwnSignatureOutcome): BulkOutcome {
     return {
       ...proposal,
       partial:
-        'Proposed ✓. You cancelled your signature in Hub, so the rest were not sent. Sign this one in the queue once it’s in a block.',
+        'Proposed ✓. You cancelled your approval in Hub, so the rest were not sent. Approve this one in the queue once it’s in a block.',
       stopped: true,
     };
   return {
     ...proposal,
-    partial: `Proposed ✓. Your signature didn’t go through: ${secondStepProblem(approval)} Sign it in the queue once it’s in a block.`,
+    partial: `Proposed ✓. Your approval didn’t go through: ${secondStepProblem(approval)} Approve it in the queue once it’s in a block.`,
   };
 }
 
@@ -102,7 +102,7 @@ export async function cancelAll(
   if (short) {
     const blocked: BulkOutcome = {
       status: 'blocked',
-      reason: `All ${rows.length} with your signatures need ${short.total} in fees, and your confirmed balance is ${short.balance}. Propose them one at a time instead.`,
+      reason: `All ${rows.length} with your approvals need ${short.total} in fees, and your confirmed balance is ${short.balance}. Propose them one at a time instead.`,
       stopped: true,
     };
     report(0, blocked);

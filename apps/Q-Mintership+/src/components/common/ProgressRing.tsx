@@ -41,7 +41,7 @@ export function ProgressRing({
   const met = value >= target && target > 0;
   const colour = theme.palette[tone ?? (met ? 'success' : 'primary')].main;
   const text =
-    label ?? `${value} of ${target} signatures${pending ? `, ${pending} confirming` : ''}`;
+    label ?? `${value} of ${target} approvals${pending ? `, ${pending} confirming` : ''}`;
   // From 56 px (cards, pages, Home) "of 8" is a quarter of the ring, 14 px or more, on one
   // line height; "100 of 99" still sits inside the ring in every theme's font (Inter, and
   // the system fonts' widest). Smaller rings keep their size.

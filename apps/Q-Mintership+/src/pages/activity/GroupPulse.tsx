@@ -80,7 +80,7 @@ export function GroupPulse({
           <StatTile
             value={formatCount(data.signerCount)}
             label="Minter Admins"
-            hint={`${plural(data.needed, 'signature')} needed per decision`}
+            hint={`${plural(data.needed, 'approval')} needed per decision`}
           />
           <StatTile
             value={data.joinRequests === null ? NONE : formatCount(data.joinRequests)}
@@ -157,7 +157,7 @@ function TargetChangesCard({ data }: { data: ActivityData }) {
               key={step.signature ?? `${step.address}:${step.height}`}
             >
               <Box component="span" sx={{ fontWeight: 700 }}>
-                {step.neededBefore} → {plural(step.neededAfter, 'signature')}
+                {step.neededBefore} → {plural(step.neededAfter, 'approval')}
               </Box>{' '}
               on {blockDate(step.height, data.now)}:{' '}
               <PersonInline address={step.address} name={data.names[step.address]} />{' '}
@@ -168,7 +168,7 @@ function TargetChangesCard({ data }: { data: ActivityData }) {
         </Box>
       ) : (
         <Typography variant="body2" color="text.secondary">
-          The target stayed at {plural(data.neededAtEnd, 'signature')}{' '}
+          The target stayed at {plural(data.neededAtEnd, 'approval')}{' '}
           {windowWords(data.range.days)}.
         </Typography>
       )}
@@ -181,7 +181,7 @@ function TargetChangesCard({ data }: { data: ActivityData }) {
       ) : null}
       <Typography variant="body2" color="text.secondary">
         Each waiting decision is measured against the admin seats in every block, so a change here
-        moves the target for all of them, including ones that already have signatures.
+        moves the target for all of them, including ones that already have approvals.
       </Typography>
     </Card>
   );

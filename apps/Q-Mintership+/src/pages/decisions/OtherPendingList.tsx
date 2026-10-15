@@ -42,7 +42,7 @@ export function OtherPendingList({ items, now }: { items: OtherPending[]; now: C
             <PersonChip address={item.creatorAddress} size={32} secondary="Sender" />
           ) : null}
           <Typography variant="body2">
-            Not a MINTER group change, so it can’t be signed here.
+            Not a MINTER group change, so it can’t be approved here.
           </Typography>
         </Card>
       ))}

@@ -226,7 +226,7 @@ export default function NominationsPage() {
             )}
             {step === 'accept' ? (
               <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
-                Accept now, so that once enough Minter Admins sign you become a member at once. It
+                Accept now, so that once enough Minter Admins approve you become a member at once. It
                 sends a join request (<FeeNote txType="JOIN_GROUP" prefix="fee" />
                 ).
               </Typography>

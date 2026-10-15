@@ -130,13 +130,13 @@ export function adminChangeBlockText(
     case 'waiting':
       switch (mode) {
         case 'become':
-          return 'Your proposal to become a Minter Admin is already waiting for signatures.';
+          return 'Your proposal to become a Minter Admin is already waiting for approvals.';
         case 'promote':
-          return 'Making this member an admin is already waiting for signatures.';
+          return 'Making this member an admin is already waiting for approvals.';
         case 'stepDown':
-          return 'Your step-down is already waiting for signatures.';
+          return 'Your step-down is already waiting for approvals.';
         case 'remove':
-          return 'Removing this admin is already waiting for signatures.';
+          return 'Removing this admin is already waiting for approvals.';
       }
   }
 }

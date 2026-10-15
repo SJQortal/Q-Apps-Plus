@@ -1,9 +1,12 @@
 /**
- * Sign one decision: what it approves, what Hub's raw-data dialog will show
- * (GROUP_APPROVAL, approval true, the pending signature, a tick box) and the
- * fee, then signDecision. The card turns "Signed ✓ (confirming…)" at once.
- * An admin change first says what it does to the target; when that changes
- * any waiting decision, "I've checked these" must be ticked before Hub opens.
+ * Approve one decision: what approving does (the change is already on chain
+ * as the proposal; an approval says yes to it, and Core applies it once
+ * enough Minter Admins have approved), what Hub's raw-data dialog will show
+ * (GROUP_APPROVAL pointing at the proposal, approval true, a tick box) and
+ * the fee, then signDecision. The card turns "You approved ✓ (confirming…)"
+ * at once. An admin change first says what it does to the target; when that
+ * changes any waiting decision, "I've checked these" must be ticked before
+ * Hub opens.
  */
 import { Box, Typography } from '@mui/material';
 import type { Decision } from '../../rules/decision';
@@ -36,6 +39,7 @@ export function SignDialog({
   returnFocus?: () => HTMLElement | null;
 }) {
   const subject = useDisplayName(d?.subject ?? '', d?.subject ? undefined : null);
+  const proposer = useDisplayName(d?.creatorAddress ?? '', d?.creatorAddress ? undefined : null);
   const shift = impact && labelOf ? impact : null;
   const ack = useAcknowledge(d && shift ? d.signature : null);
   const mustCheck = hasImpact(shift);
@@ -46,7 +50,7 @@ export function SignDialog({
       open={Boolean(d && signer)}
       onClose={onClose}
       returnFocus={returnFocus}
-      title="Sign this decision"
+      title="Approve this decision"
       intro={
         d ? (
           <>
@@ -54,9 +58,14 @@ export function SignDialog({
               {decisionTitle(d)}: {who}
             </Typography>
             <Typography sx={{ mt: 0.5 }}>
-              Your signature approves it. It counts once it is in a block
-              {tally ? `; ${tally.approvalCount} of ${tally.needed} signatures so far` : ''}. Core
-              applies it by itself when enough Minter Admins have signed.
+              Approving says yes to this proposal
+              {d.creatorAddress ? `, which ${proposer.label} made` : ''}. The change itself is
+              already on chain, waiting for the Minter Admins: you don’t make it yourself. Once
+              enough Minter Admins have approved, Core applies it by itself.
+            </Typography>
+            <Typography sx={{ mt: 0.5 }}>
+              Your approval counts once it is in a block
+              {tally ? `; ${tally.approvalCount} of ${tally.needed} approvals so far` : ''}.
             </Typography>
             {shift && labelOf ? (
               <Box sx={{ mt: 1.5 }}>
@@ -75,10 +84,11 @@ export function SignDialog({
       steps={[
         {
           action: 'SIGN_TRANSACTION',
-          title: 'Sign it',
+          title: 'Approve it',
           detail: d ? (
             <Typography variant="body2" component="div">
-              For this decision, &quot;pendingSignature&quot; starts with{' '}
+              A GROUP_APPROVAL is how an approval is sent: it points at the waiting proposal (a{' '}
+              {d.type}) through &quot;pendingSignature&quot;, which for this decision starts with{' '}
               <SignaturePrefix signature={d.signature} />.
             </Typography>
           ) : null,
@@ -92,11 +102,11 @@ export function SignDialog({
         return { outcome };
       }}
       confirmLabel="Continue to Hub"
-      successTitle="Signed"
+      successTitle="Approved"
       successText={
         <Typography variant="body2">
           It counts once it is in a block, usually within a couple of minutes. Until then the card
-          says Signed ✓ (confirming…).
+          says You approved ✓ (confirming…).
         </Typography>
       }
     />

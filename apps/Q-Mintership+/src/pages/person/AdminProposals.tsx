@@ -43,7 +43,7 @@ export function AdminProposals({
           </Button>
         ) : null}
         <Button component={RouterLink} to={PATHS.activity} sx={{ minHeight: 44 }}>
-          Signatures and activity
+          Approvals and activity
         </Button>
       </Box>
     </Section>

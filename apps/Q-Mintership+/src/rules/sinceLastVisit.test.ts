@@ -354,7 +354,7 @@ describe('adminChanges', () => {
     expect(changes.decided).toEqual([]);
   });
 
-  it('finds nominations published since, still waiting for a first signature', () => {
+  it('finds nominations published since, still waiting for a first approval', () => {
     const byMe = { publisher: { address: ME } } as Nomination['nomination'];
     const byOther = { publisher: { address: OTHER } } as Nomination['nomination'];
     const list = [
@@ -405,14 +405,14 @@ describe('nomineeEvents', () => {
     expect(nomineeEvents(prev, nomination({ publishedAt: AT, state: 'lapsed' }))).toEqual([]);
   });
 
-  it('reports the first signature, with the count', () => {
+  it('reports the first approval, with the count', () => {
     const prev = snapNomination(nomination()) as SnapNomination;
     const now = signing(1);
     now.publishedAt = prev.publishedAt;
     expect(nomineeEvents(prev, now)).toEqual([{ kind: 'firstSignature', signed: 1, needed: 8 }]);
   });
 
-  it('reports new signatures, and stays quiet when there are none (or fewer)', () => {
+  it('reports new approvals, and stays quiet when there are none (or fewer)', () => {
     expect(nomineeEvents(prevSigning(3), signing(5))).toEqual([
       { kind: 'signatures', added: 2, signed: 5, needed: 8 },
     ]);
@@ -432,7 +432,7 @@ describe('nomineeEvents', () => {
     expect(nomineeEvents(already, at('expired'))).toEqual([]);
   });
 
-  it('reports a nomination that closed without a first signature', () => {
+  it('reports a nomination that closed without a first approval', () => {
     const prev = snapNomination(nomination()) as SnapNomination;
     expect(nomineeEvents(prev, nomination({ state: 'lapsed' }))).toEqual([{ kind: 'lapsed' }]);
     expect(nomineeEvents({ ...prev, state: 'lapsed' }, nomination({ state: 'lapsed' }))).toEqual(
@@ -525,7 +525,7 @@ describe('summary', () => {
           { kind: 'support', added: 2 },
         ],
       })
-    ).toBe('Since your last visit: 1 new signature on your nomination, 2 new supporters.');
+    ).toBe('Since your last visit: 1 new approval on your nomination, 2 new supporters.');
     expect(sinceSummary({ joined: true, admin: null, nominee: [] })).toBe(
       "Since your last visit: you're in."
     );
@@ -542,7 +542,7 @@ describe('summary', () => {
       { kind: 'lapsed' },
     ];
     expect(sinceSummary({ joined: false, admin: null, nominee: kinds })).toBe(
-      "Since your last visit: you've been nominated, a Minter Admin signed your nomination first, your nomination was approved, your nomination expired, your nomination didn't go through this time, your nomination closed without a first signature."
+      "Since your last visit: you've been nominated, a Minter Admin approved your nomination first, your nomination was approved, your nomination expired, your nomination didn't go through this time, your nomination closed without a first approval."
     );
   });
 });

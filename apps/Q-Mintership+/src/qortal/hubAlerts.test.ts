@@ -42,7 +42,7 @@ describe('alert rules', () => {
         notificationId: 'qmp-new-nomination',
         link: 'qortal://APP/Q-Mintership+/nominations',
         image: '/arbitrary/THUMBNAIL/Q-Mintership%2B/qortal_avatar?async=true',
-        message: { en: 'A new nomination was published. Open it to check it and sign first.' },
+        message: { en: 'A new nomination was published. Open it to check it and approve first.' },
         filters: {
           service: 'JSON',
           identifier: 'qmp-nomination-',

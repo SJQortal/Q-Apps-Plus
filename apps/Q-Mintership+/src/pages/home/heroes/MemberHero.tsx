@@ -123,7 +123,7 @@ function OpenNominationsLine({ address }: { address: string }) {
   const counts = countStates(open);
   const parts = [
     counts.waiting ? `${counts.waiting} waiting for a Minter Admin` : null,
-    counts.signing ? `${counts.signing} collecting signatures` : null,
+    counts.signing ? `${counts.signing} collecting approvals` : null,
     counts.approved ? `${counts.approved} approved and waiting for the nominee to join` : null,
     counts.blocked ? `${counts.blocked} blocked by a ban` : null,
   ].filter(Boolean) as string[];
@@ -181,13 +181,13 @@ export function NominatorHero({
       }
       next={
         <>
-          A Minter Admin signs a nomination first, then the others:{' '}
+          A Minter Admin approves a nomination first, then the others:{' '}
           {needed ? (
             <>
-              at <Num>{needed}</Num> signatures
+              at <Num>{needed}</Num> approvals
             </>
           ) : (
-            'with enough signatures'
+            'with enough approvals'
           )}{' '}
           your nominee is in.
         </>

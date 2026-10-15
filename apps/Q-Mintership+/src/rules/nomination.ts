@@ -71,7 +71,7 @@ export const NOMINEE_BLOCK_TEXT: Record<NomineeBlock, string> = {
   self: "That's your own account: you can't nominate yourself.",
   member: 'Already in MINTER.',
   banned: 'Banned from MINTER: Minter Admins must lift the ban before a nomination can go ahead.',
-  pending: 'Minter Admins are already signing a nomination for this person.',
+  pending: 'A nomination for this person is already collecting approvals.',
   stored: 'Already approved: they only need to press Join now.',
   open: 'Already nominated. You can add your support to that nomination instead.',
 };

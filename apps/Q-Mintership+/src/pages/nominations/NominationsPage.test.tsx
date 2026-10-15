@@ -61,7 +61,7 @@ describe('Nominations page', () => {
     await user.click(screen.getByRole('button', { name: /Waiting for a Minter Admin\s*1/ }));
     expect(cardNames(list())).toEqual(['Wren Waiting']);
 
-    await user.click(screen.getByRole('button', { name: /Collecting signatures\s*5/ }));
+    await user.click(screen.getByRole('button', { name: /Collecting approvals\s*5/ }));
     expect(cardNames(list())).toHaveLength(5);
     expect(cardNames(list())).toContain('bob+builder');
     expect(cardNames(list())).not.toContain('Wren Waiting');
@@ -192,7 +192,7 @@ describe('Nominations page', () => {
     await user.click(within(mine).getByRole('button', { name: 'Accept nomination' }));
     const dialog = await screen.findByRole('dialog', { name: 'Accept your nomination' });
     // Home and Nominations share this dialog: the signatures needed, then the fee.
-    expect(within(dialog).getByText(/once 8 Minter Admins have signed/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/once 8 Minter Admins have approved/)).toBeInTheDocument();
     expect(within(dialog).getByText(/Fee: 0.01 QORT/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(

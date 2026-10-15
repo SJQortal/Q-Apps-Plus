@@ -192,14 +192,14 @@ function NominationView({ address }: { address: string }) {
         ) : rounds.length ? (
           <>
             <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
-              A round starts with a Minter Admin’s first signature, and ends when enough of them
-              sign, as many reject it, or the time runs out.
+              A round starts with a Minter Admin’s first approval, and ends when enough of them
+              approve, as many reject it, or the time runs out.
             </Typography>
             <RoundsList rounds={rounds} msPerBlock={chain.data.msPerBlock} />
           </>
         ) : (
           <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
-            No round yet: a round starts when a Minter Admin makes the first signature.
+            No round yet: a round starts when a Minter Admin gives the first approval.
           </Typography>
         )}
         {history.data?.truncated ? <TruncatedNote what="their history" /> : null}
@@ -265,7 +265,7 @@ function CurrentActions({
           variant="outlined"
           sx={{ minHeight: 44 }}
         >
-          First signature in Decisions
+          First approval in Decisions
         </Button>
       ) : null}
       {viewer?.canNominate && n.state === 'waiting' && !mine ? (
@@ -340,12 +340,12 @@ function RoundItem({ round, msPerBlock }: { round: NominationRound; msPerBlock: 
         {round.startedHeight !== null ? ` (${formatBlock(round.startedHeight)})` : ''}
         {round.firstSigner ? (
           <>
-            , first signature by <PersonInline address={round.firstSigner} />
+            , first approval by <PersonInline address={round.firstSigner} />
           </>
         ) : null}
         .
       </Typography>
-      {/* A round still collecting signatures has its chip; its decision page has the clock. */}
+      {/* A round still collecting approvals has its chip; its decision page has the clock. */}
       {round.outcome === 'pending' ? null : (
         <Typography variant="body2">
           {outcomeSentence(round.outcome, 'invite')}

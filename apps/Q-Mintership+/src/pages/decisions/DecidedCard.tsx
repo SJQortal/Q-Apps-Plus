@@ -33,9 +33,9 @@ const OUTCOME_CHIP: Record<
   invalid: { color: 'warning', variant: 'outlined' },
 };
 
-/** "Signed by 8 Minter Admins.", "Signed by 3 Minter Admins; 1 rejected it." */
+/** "Approved by 8 Minter Admins.", "Approved by 3 Minter Admins; 1 rejected it." */
 function signersLine(signed: number, rejected: number): string {
-  const yes = signed ? `Signed by ${plural(signed, 'Minter Admin')}` : 'No Minter Admin signed it';
+  const yes = signed ? `Approved by ${plural(signed, 'Minter Admin')}` : 'No Minter Admin approved it';
   return rejected ? `${yes}; ${formatCount(rejected)} rejected it.` : `${yes}.`;
 }
 
@@ -141,7 +141,7 @@ export function DecidedCard({
 
       {outcome === 'applied' ? null : link.signaturesUnread ? (
         <Typography variant="body2" color="text.secondary">
-          Couldn’t read who signed it on your node.
+          Couldn’t read who approved it on your node.
         </Typography>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
@@ -151,7 +151,7 @@ export function DecidedCard({
           {signers.length ? (
             <AvatarStack
               people={signers}
-              label={`Signed by ${plural(signers.length, 'Minter Admin')}`}
+              label={`Approved by ${plural(signers.length, 'Minter Admin')}`}
               max={10}
               showNames
             />

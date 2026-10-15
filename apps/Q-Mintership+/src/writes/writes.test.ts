@@ -144,7 +144,7 @@ describe('guards re-read the chain before a write', () => {
     const admin = signerFor('admin');
     const data = await loadDecisions();
     const of = (a: string) => data.decisions.find((d) => d.subject === a)!.signature;
-    expect(await guardSign(admin, of(ADDR.urgent))).toBe("You've already signed this.");
+    expect(await guardSign(admin, of(ADDR.urgent))).toBe("You've already approved this.");
     expect(await guardSign(admin, of(ADDR.late))).toMatch(/Too late/);
     expect(await guardSign(admin, of(ADDR.nominatedSigning))).toBeNull();
     const learner = signerFor('learner');
@@ -157,7 +157,7 @@ describe('guards re-read the chain before a write', () => {
     const admin = { address, publicKey };
     for (const signature of [invite, name, cancel])
       expect(await guardSign(admin, signature)).toBe(
-        "This isn't a MINTER group change, so it can't be signed here."
+        "This isn't a MINTER group change, so it can't be approved here."
       );
     const data = await loadDecisions();
     const mintersCancel = data.decisions.find((d) => d.kind === 'cancelInvite')!;
@@ -241,7 +241,7 @@ describe('guards re-read the chain before a write', () => {
     const jr2 = fakeAddress('jr-2');
     sentProposal(world, { address, publicKey }, 'GROUP_KICK', { groupId: 694, member: jr2 }, 21);
     expect(await guardDecline({ address, publicKey }, jr2)).toBe(
-      'Declining this join request is already waiting for signatures.'
+      'Declining this join request is already waiting for approvals.'
     );
   });
 
@@ -261,10 +261,10 @@ describe('guards re-read the chain before a write', () => {
     expect(await guardAddAdmin(admin, ADDR.adminL4)).toBe('Already a Minter Admin.');
     // Pia Promote proposed herself, from another app: it is waiting for signatures.
     expect(await guardAddAdmin(admin, ADDR.promote)).toBe(
-      'Making this member an admin is already waiting for signatures.'
+      'Making this member an admin is already waiting for approvals.'
     );
     expect(await guardAddAdmin(signerFor('promote'), ADDR.promote)).toBe(
-      'Your proposal to become a Minter Admin is already waiting for signatures.'
+      'Your proposal to become a Minter Admin is already waiting for approvals.'
     );
     // Not in MINTER: not even for themselves.
     expect(await guardAddAdmin(signerFor('newcomerName'), ADDR.newcomerName)).toMatch(
@@ -280,7 +280,7 @@ describe('guards re-read the chain before a write', () => {
     expect(await guardRemoveAdmin(admin, ADDR.nominator)).toBe('Not a Minter Admin.');
     // Dex Demote's removal is already on its way.
     expect(await guardRemoveAdmin(admin, ADDR.demote)).toBe(
-      'Removing this admin is already waiting for signatures.'
+      'Removing this admin is already waiting for approvals.'
     );
     expect(await guardRemoveAdmin(admin, NULL_OWNER)).toBe(
       "MINTER's owner account can't be removed."
@@ -298,7 +298,7 @@ describe('guards re-read the chain before a write', () => {
     );
     // Its waiting cancellation names the invitee only in its raw bytes.
     expect(await guardCancelInvite(admin, fakeAddress('stale-1'))).toBe(
-      'Cancelling this invite is already waiting for signatures.'
+      'Cancelling this invite is already waiting for approvals.'
     );
     expect(await guardCancelInvite(admin, fakeAddress('stale-2'))).toBeNull();
     expect(await guardCancelInvite(signerFor('nominator'), fakeAddress('stale-2'))).toMatch(
@@ -795,7 +795,7 @@ describe('proposeAndSign: a proposal and the proposer’s own signature', () => 
     );
     expect(result.proposal).toEqual({
       status: 'blocked',
-      reason: 'Cancelling this invite is already waiting for signatures.',
+      reason: 'Cancelling this invite is already waiting for approvals.',
     });
     expect(result.approval).toBeNull();
     expect(qortalCallsFor('CANCEL_GROUP_INVITE')).toHaveLength(0);

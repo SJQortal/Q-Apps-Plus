@@ -34,7 +34,7 @@ function openDecision(pick: (made: ReturnType<typeof addDecline>) => string) {
 }
 
 describe('Declines in Decisions', () => {
-  it('titles a waiting decline on its card and in Sign several; a member’s removal keeps its title', async () => {
+  it('titles a waiting decline on its card and in Approve several; a member’s removal keeps its title', async () => {
     const user = userEvent.setup();
     await renderPage(<DecisionsPage />, {
       persona: 'admin',
@@ -45,18 +45,18 @@ describe('Declines in Decisions', () => {
     const card = await screen.findByRole('article', { name: `Decline a join request, ${jr2}` }, T);
     expect(within(card).getByText('Asked to join, but no node online for months')).toBeVisible();
     expect(
-      within(card).getByRole('button', { name: /^Sign: Decline a join request/ })
+      within(card).getByRole('button', { name: /^Approve: Decline a join request/ })
     ).toBeVisible();
     expect(
       screen.getByRole('article', { name: 'Remove from MINTER, Kai Target' })
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Sign several' }));
+    await user.click(screen.getByRole('button', { name: 'Approve several' }));
     await user.click(
-      screen.getByRole('checkbox', { name: `Select to sign: Decline a join request, ${jr2}` })
+      screen.getByRole('checkbox', { name: `Select to approve: Decline a join request, ${jr2}` })
     );
-    await user.click(screen.getByRole('button', { name: 'Sign 1' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Sign several' });
+    await user.click(screen.getByRole('button', { name: 'Approve 1' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Approve several' });
     expect(dialog).toHaveTextContent(`Decline a join request: ${jr2}`);
   }, 20_000);
 
@@ -114,7 +114,7 @@ describe('Decisions → Propose → Decline a join request', () => {
     const form = await screen.findByRole('dialog', { name: 'Decline a join request' });
     expect(
       within(form).getByText(
-        /^Once 8 Minter Admins sign it, like any decision, their join request goes and they leave Ready to mint for everyone\. They can send a new join request later\. It costs 0\.02 QORT: your proposal and your own signature on it, two Hub steps\.$/
+        /^Once 8 Minter Admins approve it, like any decision, their join request goes and they leave Ready to mint for everyone\. They can send a new join request later\. It costs 0\.02 QORT: your proposal and your own approval of it, two Hub steps\.$/
       )
     ).toBeVisible();
 
@@ -124,7 +124,7 @@ describe('Decisions → Propose → Decline a join request', () => {
     await user.click(within(form).getByRole('button', { name: 'Find' }));
     expect(
       await within(form).findByText(
-        'Declining this join request is already waiting for signatures.',
+        'Declining this join request is already waiting for approvals.',
         {},
         T
       )
@@ -146,15 +146,15 @@ describe('Decisions → Propose → Decline a join request', () => {
       T
     );
     expect(within(hub).getByText('Step 1 of 2: Propose it')).toBeVisible();
-    expect(within(hub).getByText('Step 2 of 2: Sign it')).toBeVisible();
+    expect(within(hub).getByText('Step 2 of 2: Approve it')).toBeVisible();
     expect(within(hub).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
     expect(
       within(hub).getByText(
-        /^This proposes declining their join request: once it passes, they leave Ready to mint for everyone, and they can send a new one later\. It happens only if 8 Minter Admins sign within/
+        /^This proposes declining their join request: once it passes, they leave Ready to mint for everyone, and they can send a new one later\. It happens only if 8 Minter Admins approve within/
       )
     ).toBeVisible();
     await user.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
-    expect(await within(hub).findByText('Proposed and signed', {}, T)).toBeVisible();
+    expect(await within(hub).findByText('Proposed and approved', {}, T)).toBeVisible();
     expect(qortalCallsFor('KICK_FROM_GROUP')).toEqual([
       {
         action: 'KICK_FROM_GROUP',

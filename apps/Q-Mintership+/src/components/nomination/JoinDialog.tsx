@@ -62,7 +62,7 @@ export function JoinDialog({
             <>
               <Typography>
                 Accepting sends your request to join MINTER. It doesn&rsquo;t make you a member yet:
-                once {needed ? needed : 'enough'} Minter Admins have signed your nomination,
+                once {needed ? needed : 'enough'} Minter Admins have approved your nomination,
                 you&rsquo;re added at once, with nothing more to press.
               </Typography>
               <Typography variant="body2" color="text.secondary">
@@ -111,7 +111,7 @@ export function JoinDialog({
       successText={
         <Typography variant="body2">
           {accept
-            ? 'Your join request is on its way into a block. You join MINTER the moment enough Minter Admins have signed.'
+            ? 'Your join request is on its way into a block. You join MINTER the moment enough Minter Admins have approved.'
             : 'Your join is on its way into a block, usually within a minute or two. Then you are a member of MINTER.'}
         </Typography>
       }

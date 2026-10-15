@@ -246,7 +246,7 @@ describe('doubleOf: what is never a double', () => {
 });
 
 describe('doubleOf: a double while it waits, whatever its phase', () => {
-  it('with enough signatures or rejections, too late to sign, early or on its way', () => {
+  it('with enough approvals or rejections, too late to sign, early or on its way', () => {
     const phases: DecisionPhase[] = [
       'thresholdMet',
       'rejectedMet',

@@ -1,7 +1,7 @@
 /**
  * The screens against real confirmations (60-second blocks): Sign through
  * the Decisions card and its dialog on a phone-sized page, then time
- * "Signed ✓ (confirming…)" until it settles to "Signed ✓", read the ring
+ * "You approved ✓ (confirming…)" until it settles to "You approved ✓", read the ring
  * as signatures land, and check the welcome celebration when the nominee
  * becomes a member, with and without reduced motion.
  */
@@ -34,15 +34,15 @@ export default {
     await card.waitFor({ timeout: 120_000 });
     const ringBefore = await ringLabel(card);
     const t0 = Date.now();
-    await card.getByRole('button', { name: /^Sign/ }).first().click();
+    await card.getByRole('button', { name: /^Approve/ }).first().click();
     await p.getByRole('button', { name: 'Continue to Hub' }).click();
     await p.getByRole('button', { name: 'Done' }).waitFor({ timeout: 120_000 });
     const tSent = Date.now();
     await p.getByRole('button', { name: 'Done' }).click();
-    await card.getByText('Signed ✓ (confirming…)').waitFor({ timeout: 30_000 });
+    await card.getByText('You approved ✓ (confirming…)').waitFor({ timeout: 30_000 });
     const tConfirming = Date.now();
     const sentHeight = await ctx.height();
-    await card.getByText(/^Signed ✓$/).waitFor({ timeout: 6 * 60_000 });
+    await card.getByText(/^You approved ✓$/).waitFor({ timeout: 6 * 60_000 });
     const tSettled = Date.now();
     const settledHeight = await ctx.height();
     const ringAfter = await ringLabel(card);

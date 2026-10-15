@@ -36,17 +36,17 @@ export function AnonymousHero({ outside, needed }: { outside: boolean; needed: n
     >
       <HeroText>
         Minting QORT takes membership of the MINTER group. Members at level 5 or above nominate new
-        minters, and Minter Admins sign to let them in
+        minters, and Minter Admins approve them
         {needed ? (
           <>
-            : <Num>{needed}</Num> signatures are needed today
+            : <Num>{needed}</Num> approvals are needed today
           </>
         ) : null}
         .
       </HeroText>
       <HeroText>
-        There are no votes or polls. A nomination goes through when enough Minter Admins sign it, or
-        it runs out and can be tried again.
+        There are no votes or polls. A nomination goes through when enough Minter Admins approve it,
+        or it runs out and can be tried again.
       </HeroText>
       {outside ? (
         <HeroText muted>Open this in Qortal Hub or GO to sign in.</HeroText>

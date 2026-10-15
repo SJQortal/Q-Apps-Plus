@@ -570,9 +570,9 @@ function nomineeWords(e: NomineeEvent): string {
     case 'nominated':
       return "you've been nominated";
     case 'firstSignature':
-      return 'a Minter Admin signed your nomination first';
+      return 'a Minter Admin approved your nomination first';
     case 'signatures':
-      return `${count(e.added, 'new signature', 'new signatures')} on your nomination`;
+      return `${count(e.added, 'new approval', 'new approvals')} on your nomination`;
     case 'support':
       return count(e.added, 'new supporter', 'new supporters');
     case 'approved':
@@ -582,7 +582,7 @@ function nomineeWords(e: NomineeEvent): string {
     case 'rejected':
       return "your nomination didn't go through this time";
     case 'lapsed':
-      return 'your nomination closed without a first signature';
+      return 'your nomination closed without a first approval';
   }
 }
 

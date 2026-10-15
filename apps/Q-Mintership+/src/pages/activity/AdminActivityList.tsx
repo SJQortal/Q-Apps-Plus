@@ -30,12 +30,12 @@ import { blockDate, blocksAsTime, lastActive, NONE, ofTotal, percent, windowWord
 
 const SORTS: Array<{ value: ActivitySort; label: string }> = [
   { value: 'participation', label: 'Participation' },
-  { value: 'signatures', label: 'Signatures' },
+  { value: 'signatures', label: 'Approvals' },
   { value: 'lastActive', label: 'Last active' },
   { value: 'name', label: 'Name' },
 ];
 
-/** Participation, signatures and last active sort highest or newest first; names A–Z. */
+/** Participation, approvals and last active sort highest or newest first; names A–Z. */
 const DESCENDING: Record<ActivitySort, boolean> = {
   participation: true,
   signatures: true,
@@ -94,9 +94,9 @@ export function AdminActivityList({
       <Section title="Minter Admin Activity" id="activity-admins" action={sortControl}>
         <Typography variant="body2" color="text.secondary">
           {plural(data.report.decisionCount, 'MINTER decision')}{' '}
-          {data.report.decisionCount === 1 ? 'was' : 'were'} waiting for signatures{' '}
-          {windowWords(data.range.days)}; each needs {plural(data.needed, 'signature')}, from{' '}
-          {formatCount(data.signerCount)} Minter Admins who can sign.
+          {data.report.decisionCount === 1 ? 'was' : 'were'} waiting for approvals{' '}
+          {windowWords(data.range.days)}; each needs {plural(data.needed, 'approval')}, from{' '}
+          {formatCount(data.signerCount)} Minter Admins who can approve.
         </Typography>
         {current.length ? (
           <AdminRows
@@ -314,11 +314,11 @@ function AdminCard({ row, ctx }: { row: AdminActivity; ctx: RowContext }) {
         }}
       >
         <Stat label="Answered" value={row.eligible ? ofTotal(row.answered, row.eligible) : NONE} />
-        <Stat label="Signed" value={formatCount(row.signed)} />
+        <Stat label="Approved" value={formatCount(row.signed)} />
         <Stat label="Rejected" value={formatCount(row.rejected)} />
         <Stat label="Missed" value={formatCount(row.missed)} />
         <Stat label="Proposed" value={formatCount(row.proposed)} />
-        <Stat label="Median time to sign" value={blocksAsTime(row.medianBlocksToSign, now)} />
+        <Stat label="Median time to approve" value={blocksAsTime(row.medianBlocksToSign, now)} />
         <Stat label="Last active" value={lastActive(row.lastActiveHeight, now)} />
       </Box>
       {row.proposed ? (
@@ -434,14 +434,14 @@ function AdminTable({
           <tr>
             <SortHeader label="Admin" value="name" {...headers} />
             <SortHeader label="Participation" value="participation" {...headers} />
-            <SortHeader label="Signed" value="signatures" align="right" {...headers} />
+            <SortHeader label="Approved" value="signatures" align="right" {...headers} />
             <th scope="col" className="num">
               Missed
             </th>
             <th scope="col" className="num">
               Median time
               <br />
-              to sign
+              to approve
             </th>
             <th scope="col" className="num">
               Proposed

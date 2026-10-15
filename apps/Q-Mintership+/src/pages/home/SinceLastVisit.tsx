@@ -160,7 +160,7 @@ function NewDecisionsItem({ decisions, publicKey }: { decisions: Decision[]; pub
       }
     >
       <DecisionNames decisions={decisions} />.
-      {waiting ? ` ${plural(waiting, 'is', 'are')} waiting for your signature.` : ''}
+      {waiting ? ` ${plural(waiting, 'is', 'are')} waiting for your answer.` : ''}
     </Item>
   );
 }
@@ -181,9 +181,9 @@ function NewDecisionItem({ decision: d, publicKey }: { decision: Decision; publi
     >
       New
       {d.tally
-        ? ` · ${d.tally.approvalCount} of ${d.tally.needed} signatures`
+        ? ` · ${d.tally.approvalCount} of ${d.tally.needed} approvals`
         : ' · waiting for a block'}
-      {waitsForMe ? ' · waiting for your signature' : ''}
+      {waitsForMe ? ' · waiting for your answer' : ''}
     </Item>
   );
 }
@@ -207,7 +207,7 @@ function NewNominationItem({ nomination: n }: { nomination: Nomination }) {
       }
     >
       {by ? `Nominated by ${by.name} ${formatRelative(n.publishedAt)}` : 'Nominated'} · waiting for
-      a first signature
+      a first approval
     </Item>
   );
 }
@@ -238,7 +238,7 @@ function NewNominationsItem({ nominations }: { nominations: Nomination[] }) {
         </span>
       ))}
       {nominations.length > shown.length ? `, and ${nominations.length - shown.length} more` : ''} ·
-      waiting for a first signature
+      waiting for a first approval
     </Item>
   );
 }
@@ -252,7 +252,7 @@ const OUTCOME: Record<
   expired: {
     Icon: ScheduleOutlinedIcon,
     tone: 'neutral',
-    words: 'Expired without enough signatures',
+    words: 'Expired without enough approvals',
   },
 };
 
@@ -329,13 +329,13 @@ const MADE: Record<
     Icon: ScheduleOutlinedIcon,
     tone: 'neutral',
     title: (who) => `Your nomination of ${who} expired`,
-    text: 'It ran out of time without enough signatures. They can be nominated again.',
+    text: 'It ran out of time without enough approvals. They can be nominated again.',
   },
   lapsed: {
     Icon: HourglassEmptyOutlinedIcon,
     tone: 'neutral',
     title: (who) => `Your nomination of ${who} closed`,
-    text: 'No Minter Admin signed it in time. They can be nominated again.',
+    text: 'No Minter Admin approved it in time. They can be nominated again.',
   },
 };
 
@@ -364,7 +364,7 @@ function MadeItem({ event: e }: { event: MadeEvent }) {
 }
 
 function signaturesLine(signed: number, needed: number | null): string {
-  return needed ? `${signed} of ${needed} signatures` : plural(signed, 'signature');
+  return needed ? `${signed} of ${needed} approvals` : plural(signed, 'approval');
 }
 
 function NomineeItem({ event: e }: { event: NomineeEvent }) {
@@ -393,13 +393,13 @@ function NomineeItem({ event: e }: { event: NomineeEvent }) {
     }
     case 'firstSignature':
       return (
-        <Item Icon={DrawOutlinedIcon} tone="primary" title="A Minter Admin signed first">
+        <Item Icon={DrawOutlinedIcon} tone="primary" title="A Minter Admin approved first">
           The clock has started: {signaturesLine(e.signed, e.needed)} so far.
         </Item>
       );
     case 'signatures':
       return (
-        <Item Icon={DrawOutlinedIcon} tone="primary" title={plural(e.added, 'new signature')}>
+        <Item Icon={DrawOutlinedIcon} tone="primary" title={plural(e.added, 'new approval')}>
           Your nomination has {signaturesLine(e.signed, e.needed)} now.
         </Item>
       );
@@ -445,9 +445,9 @@ function NomineeItem({ event: e }: { event: NomineeEvent }) {
         <Item
           Icon={HourglassEmptyOutlinedIcon}
           tone="neutral"
-          title="No Minter Admin signed in time"
+          title="No Minter Admin approved in time"
         >
-          Your nomination waited its full window without a first signature and closed. You can be
+          Your nomination waited its full window without a first approval and closed. You can be
           nominated again.
         </Item>
       );

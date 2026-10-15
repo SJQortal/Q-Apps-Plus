@@ -38,7 +38,7 @@ function MostUrgent({ decision: d, now }: { decision: Decision; now: ChainNow })
       {d.subject ? `: ${subject.label}` : ''}&rdquo;,{' '}
       {left !== null ? (
         <>
-          has <Num>{formatDuration(left, { precise: true })}</Num> left to sign.
+          has <Num>{formatDuration(left, { precise: true })}</Num> left to approve.
         </>
       ) : (
         'is next in the queue.'
@@ -51,7 +51,7 @@ export function NeededLine({ needed }: { needed: NeededSignatures }) {
   if (needed.needed === null) return null;
   return (
     <HeroText>
-      Each decision needs <Num>{needed.needed}</Num> signatures right now
+      Each decision needs <Num>{needed.needed}</Num> approvals right now
       {needed.percent !== null && needed.adminSeats !== null ? (
         <>
           {' '}
@@ -76,7 +76,7 @@ export function TargetChangedLine({ needed }: { needed: number | null }) {
   return (
     <HeroText>
       The target changed from <Num>{seen.needed}</Num> to <Num>{needed}</Num>{' '}
-      {needed === 1 ? 'signature' : 'signatures'} since you last looked at Decisions.{' '}
+      {needed === 1 ? 'approval' : 'approvals'} since you last looked at Decisions.{' '}
       <Link
         component={RouterLink}
         to={decisionPath()}
@@ -127,7 +127,7 @@ export function AdminHero({
   const firstSignature = nominations.data?.open.filter((n) => n.state === 'waiting').length ?? 0;
   const name = status.name;
   const title = count
-    ? `${name ? `${name}, ` : ''}${plural(count, 'decision')} ${count === 1 ? 'is' : 'are'} waiting for your signature`
+    ? `${name ? `${name}, ` : ''}${plural(count, 'decision')} ${count === 1 ? 'is' : 'are'} waiting for your answer`
     : name
       ? `You're up to date, ${name}`
       : "You're up to date";
@@ -146,17 +146,17 @@ export function AdminHero({
           Review decisions
         </Button>
       }
-      next="Sign what you support. If you don't, reject it or let it run out. You can withdraw a signature later, but on chain that counts as a rejection."
+      next="Approve what you support. If you don't, reject it or let it run out. Changed your mind after approving? Reject it: only your latest answer counts."
     >
       {count ? (
         <MostUrgent decision={summary.waiting[0]} now={decisions.data.now} />
       ) : (
-        <HeroText>Nothing is waiting for your signature right now.</HeroText>
+        <HeroText>Nothing is waiting for your answer right now.</HeroText>
       )}
       {firstSignature ? (
         <HeroText>
           <Num>{firstSignature}</Num> nomination{firstSignature === 1 ? ' is' : 's are'} waiting for
-          a first signature.
+          a first approval.
         </HeroText>
       ) : null}
       <NeededLine needed={needed} />

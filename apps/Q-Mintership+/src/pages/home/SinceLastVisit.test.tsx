@@ -65,7 +65,7 @@ describe('Since your last visit: Minter Admins', () => {
     // list under the hero already shows the urgent ones.
     const row = (await within(region).findByText('7 new decisions', {}, T)).closest('li');
     expect(row).toHaveTextContent(
-      'Ban from MINTER: Ben Target; Add to MINTER: bob+builder, and 5 more. 5 are waiting for your signature.'
+      'Ban from MINTER: Ben Target; Add to MINTER: bob+builder, and 5 more. 5 are waiting for your answer.'
     );
     expect(within(region).getByRole('link', { name: 'Review the new decisions' })).toHaveAttribute(
       'href',
@@ -81,12 +81,12 @@ describe('Since your last visit: Minter Admins', () => {
 
     // Decided since (one approved, two expired): read once each.
     expect(
-      await within(region).findByText('Expired without enough signatures in block 2,752,581', {}, T)
+      await within(region).findByText('Expired without enough approvals in block 2,752,581', {}, T)
     ).toBeVisible();
     expect(within(region).getByText('Approved in block 2,752,300')).toBeVisible();
     expect(within(region).getByRole('link', { name: 'Remy Recent' })).toBeInTheDocument();
     expect(
-      within(region).getByText('Expired without enough signatures in block 2,752,048')
+      within(region).getByText('Expired without enough approvals in block 2,752,048')
     ).toBeVisible();
     expect(fetchCallsFor(ONE_TX)).toHaveLength(3);
 
@@ -119,8 +119,8 @@ describe('Since your last visit: Minter Admins', () => {
 
   it('shows nothing, and reads nothing extra, on a first visit', async () => {
     await renderPage(<HomePage />, { persona: 'admin' });
-    await screen.findByRole('region', { name: 'Waiting for your signature' }, T);
-    await screen.findAllByRole('link', { name: /signatures/ }, T);
+    await screen.findByRole('region', { name: 'Waiting for your answer' }, T);
+    await screen.findAllByRole('link', { name: /approvals/ }, T);
     expect(screen.queryByRole('region', { name: 'Since your last visit' })).toBeNull();
     expect(fetchCallsFor(ONE_TX)).toHaveLength(0);
   });
@@ -128,8 +128,8 @@ describe('Since your last visit: Minter Admins', () => {
   it('can be switched off in Settings', async () => {
     getDefaultStore().set(sinceLastVisitAtom, false);
     await renderPage(<HomePage />, { persona: 'admin', setup: seed('admin') });
-    await screen.findByRole('region', { name: 'Waiting for your signature' }, T);
-    await screen.findAllByRole('link', { name: /signatures/ }, T);
+    await screen.findByRole('region', { name: 'Waiting for your answer' }, T);
+    await screen.findAllByRole('link', { name: /approvals/ }, T);
     expect(screen.queryByRole('region', { name: 'Since your last visit' })).toBeNull();
     expect(fetchCallsFor(ONE_TX)).toHaveLength(0);
   });
@@ -172,11 +172,11 @@ describe('Since your last visit: Minter Admins', () => {
       T
     );
     expect(open.closest('li')).toHaveTextContent(
-      'New · 2 of 8 signatures · waiting for your signature'
+      'New · 2 of 8 approvals · waiting for your answer'
     );
     const nominations = (await within(region).findByText('2 new nominations', {}, T)).closest('li');
     expect(nominations).toHaveTextContent(
-      'Zoë Newcomer, Wren Waiting · waiting for a first signature'
+      'Zoë Newcomer, Wren Waiting · waiting for a first approval'
     );
     expect(
       within(region).getByRole('link', { name: 'Review the new nominations' })
@@ -185,7 +185,7 @@ describe('Since your last visit: Minter Admins', () => {
 });
 
 describe('Since your last visit: doubles', () => {
-  it('never says a new double is waiting for your signature', async () => {
+  it('never says a new double is waiting for your answer', async () => {
     let doubles = {} as ReturnType<typeof addDoubles>;
     await renderPage(<HomePage />, {
       persona: 'admin',
@@ -213,11 +213,11 @@ describe('Since your last visit: doubles', () => {
       T
     );
     const row = open.closest('li') as HTMLElement;
-    expect(row).toHaveTextContent(/New · 2 of \d+ signatures/);
-    expect(row).not.toHaveTextContent('waiting for your signature');
+    expect(row).toHaveTextContent(/New · 2 of \d+ approvals/);
+    expect(row).not.toHaveTextContent('waiting for your answer');
   });
 
-  it('leaves doubles out of the new decisions waiting for your signature', async () => {
+  it('leaves doubles out of the new decisions waiting for your answer', async () => {
     await renderPage(<HomePage />, {
       persona: 'admin',
       setup: (world) => {
@@ -229,7 +229,7 @@ describe('Since your last visit: doubles', () => {
     const region = await panel();
     // Five as before, and the older of Member 9's two additions; not the two doubles.
     const row = (await within(region).findByText('10 new decisions', {}, T)).closest('li');
-    expect(row).toHaveTextContent('and 8 more. 6 are waiting for your signature.');
+    expect(row).toHaveTextContent('and 8 more. 6 are waiting for your answer.');
   });
 });
 
@@ -290,14 +290,14 @@ describe('Since your last visit: titles', () => {
 });
 
 describe('Since your last visit: nominees', () => {
-  it('counts the new signatures on your nomination', async () => {
+  it('counts the new approvals on your nomination', async () => {
     await renderPage(<HomePage />, {
       persona: 'nominatedSigning',
       setup: seed('nominatedSigning'),
     });
     const region = await panel();
-    expect(within(region).getByText('2 new signatures')).toBeVisible();
-    expect(within(region).getByText('Your nomination has 5 of 8 signatures now.')).toBeVisible();
+    expect(within(region).getByText('2 new approvals')).toBeVisible();
+    expect(within(region).getByText('Your nomination has 5 of 8 approvals now.')).toBeVisible();
     expect(within(region).getAllByRole('listitem')).toHaveLength(1);
   });
 
@@ -313,7 +313,7 @@ describe('Since your last visit: nominees', () => {
     expect(within(region).getAllByRole('listitem')).toHaveLength(1);
   });
 
-  it('reports the first signature', async () => {
+  it('reports the first approval', async () => {
     await renderPage(<HomePage />, {
       persona: 'nominatedSigning',
       setup: (world) => {
@@ -331,9 +331,9 @@ describe('Since your last visit: nominees', () => {
       },
     });
     const region = await panel();
-    expect(within(region).getByText('A Minter Admin signed first')).toBeVisible();
+    expect(within(region).getByText('A Minter Admin approved first')).toBeVisible();
     expect(
-      within(region).getByText('The clock has started: 5 of 8 signatures so far.')
+      within(region).getByText('The clock has started: 5 of 8 approvals so far.')
     ).toBeVisible();
   });
 
@@ -359,7 +359,7 @@ describe('Since your last visit: nominees', () => {
     expect(within(region).getByText('Your nomination expired')).toBeVisible();
     expect(
       within(region).getByText(
-        'It had 5 of 8 signatures at your last visit. You can be nominated again.'
+        'It had 5 of 8 approvals at your last visit. You can be nominated again.'
       )
     ).toBeVisible();
   });

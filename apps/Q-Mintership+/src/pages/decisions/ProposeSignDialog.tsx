@@ -114,7 +114,7 @@ export function ProposeSignDialog({
   };
   const signStep: HubStep = {
     action: 'SIGN_TRANSACTION',
-    title: 'Sign it',
+    title: 'Approve it',
     detail: (
       <Typography variant="body2">
         Hub will show Tx type GROUP_APPROVAL, &quot;approval&quot;: true and a box to tick. The
@@ -144,7 +144,7 @@ export function ProposeSignDialog({
         <>
           {details}
           <Typography sx={details ? { mt: 1 } : undefined}>
-            {lead} It happens only if {facts.needed} Minter Admins sign within {window}.
+            {lead} It happens only if {facts.needed} Minter Admins approve within {window}.
           </Typography>
           {shift && labelOf ? (
             <Box sx={{ mt: 1.5 }}>
@@ -158,12 +158,12 @@ export function ProposeSignDialog({
           ) : null}
           {withSignature ? (
             <Typography sx={{ mt: 1 }}>
-              Your proposal doesn’t count as your signature, so you sign it straight after: two Hub
-              confirmations, one after the other.
+              Your proposal doesn’t count as your approval, so you approve it straight after: two
+              Hub confirmations, one after the other.
             </Typography>
           ) : (
             <Typography sx={{ mt: 1 }}>
-              Only Minter Admins sign, so this is one Hub confirmation: once it is proposed, the
+              Only Minter Admins approve, so this is one Hub confirmation: once it is proposed, the
               Minter Admins decide.
             </Typography>
           )}
@@ -221,7 +221,7 @@ export function ProposeSignDialog({
           message: (
             <Typography variant="body2" sx={{ mt: 0.5 }}>
               Step 2 didn’t go through: {secondStepProblem(result.approval)} Your proposal is
-              waiting for signatures. Once it is in a block, sign it in the queue like any other
+              waiting for approvals. Once it is in a block, approve it in the queue like any other
               decision.
             </Typography>
           ),
@@ -232,20 +232,20 @@ export function ProposeSignDialog({
           ? 'Step 1 done: proposed'
           : ending === 'proposalOnly'
             ? 'Proposed'
-            : 'Proposed and signed'
+            : 'Proposed and approved'
       }
       successText={
         ending === 'partial' ? null : ending === 'proposalOnly' ? (
           <Typography variant="body2">
             Your proposal counts once it is in a block, usually within a couple of minutes. The
-            Minter Admins will now decide: it needs {plural(facts.needed, 'signature')} within{' '}
+            Minter Admins will now decide: it needs {plural(facts.needed, 'approval')} within{' '}
             {window}, or it expires.
           </Typography>
         ) : (
           <Typography variant="body2">
-            Your proposal and your signature count once they are in a block, usually within a couple
+            Your proposal and your approval count once they are in a block, usually within a couple
             of minutes. After yours it needs{' '}
-            {after ? plural(after, 'more signature', 'more signatures') : 'no more signatures'}.
+            {after ? plural(after, 'more approval', 'more approvals') : 'no more approvals'}.
           </Typography>
         )
       }

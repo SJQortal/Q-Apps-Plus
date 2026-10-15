@@ -1838,7 +1838,7 @@ export function addAdminPolls(world) {
     extra(10),
     t4,
     10,
-    'Should a nomination wait 48 hours before its first signature?',
+    'Should a nomination wait 48 hours before its first approval?',
     withoutAvery
   );
   vote(P4, extra(10), 'yes', t4 + 3_600_000, withoutAvery);

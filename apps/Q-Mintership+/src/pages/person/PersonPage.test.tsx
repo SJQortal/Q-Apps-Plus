@@ -45,10 +45,10 @@ describe('Person page', () => {
       /^\/decisions\/\w+$/
     );
     expect(
-      screen.getByText('Minter Admins are already signing a nomination for this person.')
+      screen.getByText('A nomination for this person is already collecting approvals.')
     ).toBeInTheDocument();
     const nomination = await section('Nomination');
-    expect(within(nomination).getByText('Collecting signatures')).toBeInTheDocument();
+    expect(within(nomination).getByText('Collecting approvals')).toBeInTheDocument();
     const timeline = await section('MINTER timeline');
     expect(await within(timeline).findByText('Nominated for MINTER')).toBeInTheDocument();
     const original = await section('From the original app');
@@ -268,12 +268,12 @@ describe('Person page', () => {
     const proposals = await section('As a Minter Admin');
     expect(
       within(proposals).getByText(
-        /^Proposed \d+ changes for others: \d+ approved, 1 collecting signatures/
+        /^Proposed \d+ changes for others: \d+ approved, 1 collecting approvals/
       )
     ).toBeInTheDocument();
     expect(within(proposals).getByText(PEOPLE.early.name as string)).toBeInTheDocument();
     expect(
-      within(proposals).getByRole('link', { name: 'Signatures and activity' })
+      within(proposals).getByRole('link', { name: 'Approvals and activity' })
     ).toHaveAttribute('href', '/activity');
   });
 
@@ -414,7 +414,7 @@ describe('Person page: one’s own admin role', () => {
       )
     ).toBeVisible();
     expect(within(dialog).getByText(/You stay a MINTER member/)).toBeVisible();
-    expect(within(dialog).getByText('Step 2 of 2: Sign it')).toBeInTheDocument();
+    expect(within(dialog).getByText('Step 2 of 2: Approve it')).toBeInTheDocument();
     expect(within(dialog).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
     // Declined in Hub: nothing is signed.
     await userEvent.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
@@ -445,7 +445,7 @@ describe('Person page: one’s own admin role', () => {
     );
     const note = within(dialog).getByRole('note');
     expect(note).toHaveTextContent(
-      /^If this passes, MINTER has 20 admin seats and the target drops from 9 to 8 signatures\./
+      /^If this passes, MINTER has 20 admin seats and the target drops from 9 to 8 approvals\./
     );
     expect(within(note).getByText('Add to MINTER: Mia Met (8 of 9)')).toBeVisible();
     // Not without the tick: Hub isn't asked, and the box takes focus.
@@ -464,7 +464,7 @@ describe('Person page: one’s own admin role', () => {
     await visit(ADDR.demote, 'demote');
     expect(
       await screen.findByText(
-        'A proposal to remove your Minter Admin role is waiting for the Minter Admins’ signatures.',
+        'A proposal to remove your Minter Admin role is waiting for the Minter Admins’ approvals.',
         {},
         { timeout: 3000 }
       )

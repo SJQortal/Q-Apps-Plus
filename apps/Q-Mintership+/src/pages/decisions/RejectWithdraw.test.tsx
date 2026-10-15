@@ -26,21 +26,17 @@ async function openPage(persona = 'admin', setup?: RenderPageOptions['setup']) {
 
 const card = (name: RegExp) => screen.getByRole('article', { name });
 
-describe('Decisions: Reject and Withdraw my signature', () => {
-  it('offers Reject next to Sign, and Withdraw where the admin has signed', async () => {
+describe('Decisions: Approve and Reject', () => {
+  it('offers Reject next to Approve, and Reject alone where the admin has approved', async () => {
     await openPage('admin');
     const open = card(/bob\+builder/);
     expect(within(open).getByRole('button', { name: /^Reject: / })).toBeVisible();
-    expect(within(open).getByRole('button', { name: /^Sign: / })).toBeVisible();
-    expect(within(open).queryByRole('button', { name: /^Withdraw my signature/ })).toBeNull();
-    const signed = await screen.findByRole('article', { name: /Uma Urgent/ });
-    expect(within(signed).getByText('Signed ✓')).toBeInTheDocument();
-    expect(
-      within(signed).getByRole('button', {
-        name: /^Withdraw my signature \(counts as a rejection\): /,
-      })
-    ).toBeVisible();
-    expect(within(signed).queryByRole('button', { name: /^Reject: / })).toBeNull();
+    expect(within(open).getByRole('button', { name: /^Approve: / })).toBeVisible();
+    expect(within(open).queryByText(/^You approved/)).toBeNull();
+    const approved = await screen.findByRole('article', { name: /Uma Urgent/ });
+    expect(within(approved).getByText('You approved ✓')).toBeInTheDocument();
+    expect(within(approved).getByRole('button', { name: /^Reject: / })).toBeVisible();
+    expect(within(approved).queryByRole('button', { name: /^Approve: / })).toBeNull();
     // Too late: neither.
     const late = await screen.findByRole('article', { name: /Lars Late/ });
     expect(within(late).queryByRole('button', { name: /^Reject: / })).toBeNull();
@@ -94,11 +90,11 @@ describe('Decisions: Reject and Withdraw my signature', () => {
     expect(
       within(dialog).getByText(/if 8 Minter Admins reject it, it ends as rejected/)
     ).toBeVisible();
-    expect(within(dialog).getByText(/Signatures are counted first/)).toBeVisible();
-    expect(within(dialog).getByText(/doesn’t cancel anyone else’s signature/)).toBeVisible();
+    expect(within(dialog).getByText(/Approvals are counted first/)).toBeVisible();
+    expect(within(dialog).getByText(/doesn’t cancel anyone else’s approval/)).toBeVisible();
     expect(
       within(dialog).getByText(
-        'With yours: 1 rejection of the 8 that would end it (5 of 8 signatures).'
+        'With yours: 1 rejection of the 8 that would end it (5 of 8 approvals).'
       )
     ).toBeVisible();
     expect(within(dialog).getByText('"approval": false.')).toBeInTheDocument();
@@ -114,35 +110,35 @@ describe('Decisions: Reject and Withdraw my signature', () => {
 
     await u.click(within(dialog).getByRole('button', { name: 'Done' }));
     const after = await screen.findByRole('article', { name: /bob\+builder/ });
-    expect(await within(after).findByText('Rejected (confirming…)')).toBeInTheDocument();
-    expect(within(after).queryByRole('button', { name: /^Sign: / })).toBeNull();
+    expect(await within(after).findByText('You rejected (confirming…)')).toBeInTheDocument();
+    expect(within(after).queryByRole('button', { name: /^Approve: / })).toBeNull();
     expect(within(after).queryByRole('button', { name: /^Reject: / })).toBeNull();
   }, 20_000);
 
-  it('withdraws a signature: says what it does and the count after it', async () => {
+  it('rejects after approving: says what it does and the count after it', async () => {
     const u = user();
     await openPage('admin');
     mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'W1' }));
-    const signed = await screen.findByRole('article', { name: /Uma Urgent/ });
-    await u.click(within(signed).getByRole('button', { name: /^Withdraw my signature/ }));
-    const dialog = await screen.findByRole('dialog', { name: 'Withdraw your signature' });
-    expect(within(dialog).getByText(/withdrawing it sends a rejection/)).toBeVisible();
+    const approved = await screen.findByRole('article', { name: /Uma Urgent/ });
+    await u.click(within(approved).getByRole('button', { name: /^Reject: / }));
+    const dialog = await screen.findByRole('dialog', { name: 'Reject after approving' });
+    expect(within(dialog).getByText(/rejecting sends a rejection/)).toBeVisible();
     expect(
       within(dialog).getByText(
-        'Once it is in a block: 6 of 8 signatures, and 1 rejection of the 8 that would end it.'
+        'Once it is in a block: 6 of 8 approvals, and 1 rejection of the 8 that would end it.'
       )
     ).toBeVisible();
     expect(within(dialog).getByText('"approval": false.')).toBeInTheDocument();
     expect(within(dialog).getByText(/Fee: 0.01 QORT/)).toBeInTheDocument();
 
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
-    expect(await within(dialog).findByText('Signature withdrawn', {}, T)).toBeInTheDocument();
+    expect(await within(dialog).findByText('Rejected', {}, T)).toBeInTheDocument();
     const bytes = base58Decode(String(qortalCallsFor('SIGN_TRANSACTION')[0].unsignedBytes));
     expect(bytes[176]).toBe(0);
     await u.click(within(dialog).getByRole('button', { name: 'Done' }));
     const after = await screen.findByRole('article', { name: /Uma Urgent/ });
-    expect(await within(after).findByText('Withdrawn (confirming…)')).toBeInTheDocument();
-    expect(within(after).queryByRole('button', { name: /^Withdraw my signature/ })).toBeNull();
+    expect(await within(after).findByText('You rejected (confirming…)')).toBeInTheDocument();
+    expect(within(after).queryByRole('button', { name: /^Reject: / })).toBeNull();
   }, 20_000);
 
   it('a cancel in Hub sends nothing and keeps the buttons', async () => {
@@ -165,18 +161,18 @@ describe('Decisions: Reject and Withdraw my signature', () => {
 });
 
 describe('Decisions: rejections on the cards', () => {
-  it('shows who rejected, a withdrawn signature, and rejections against the target', async () => {
+  it('shows who rejected, who had approved first, and rejections against the target', async () => {
     await openPage('learner', (world) => addRejections(world));
     const kick = await screen.findByRole('article', { name: /Remove from MINTER, Kai Target/ });
-    expect(within(kick).getByRole('img', { name: '1 of 8 signatures' })).toBeInTheDocument();
+    expect(within(kick).getByRole('img', { name: '1 of 8 approvals' })).toBeInTheDocument();
     expect(
       within(kick).getByRole('list', {
-        name: 'Rejected by 2 Minter Admins (1 withdrew a signature)',
+        name: 'Rejected by 2 Minter Admins (1 had approved first)',
       })
     ).toBeVisible();
     expect(
       within(kick).getByText(
-        'Rejections: 2 of the 8 that would end it (signatures are counted first).'
+        'Rejections: 2 of the 8 that would end it (approvals are counted first).'
       )
     ).toBeVisible();
     // A rejection still on its way.
@@ -192,7 +188,7 @@ describe('Decisions: rejections on the cards', () => {
     ).toBeVisible();
   });
 
-  it("shows an admin's own rejection, and Sign still replaces it", async () => {
+  it("shows an admin's own rejection, and Approve still replaces it", async () => {
     await openPage('admin', (world) => {
       const kick = world.pending.find((t: { type: string }) => t.type === 'GROUP_KICK');
       world.approvals.push({
@@ -209,23 +205,23 @@ describe('Decisions: rejections on the cards', () => {
       });
     });
     const kick = await screen.findByRole('article', { name: /Remove from MINTER, Kai Target/ });
-    expect(within(kick).getByText('Rejected')).toBeInTheDocument();
-    expect(within(kick).getByText(/Your latest answer on chain is a rejection/)).toBeVisible();
-    expect(within(kick).getByRole('button', { name: /^Sign: / })).toBeVisible();
+    expect(within(kick).getByText('You rejected')).toBeInTheDocument();
+    expect(within(kick).getByText(/You rejected this\. Approving replaces your rejection/)).toBeVisible();
+    expect(within(kick).getByRole('button', { name: /^Approve: / })).toBeVisible();
     expect(within(kick).queryByRole('button', { name: /^Reject: / })).toBeNull();
     // It isn't waiting for this admin any more.
-    expect(screen.getByText('5 decisions waiting for your signature')).toBeInTheDocument();
+    expect(screen.getByText('5 decisions waiting for your answer')).toBeInTheDocument();
   });
 });
 
-describe('Decisions: the help says what Reject and Withdraw do', () => {
-  it('How signing works explains both, with the target', async () => {
+describe('Decisions: the help says what Reject does', () => {
+  it('How approving works explains it, also after approving, with the target', async () => {
     const u = user();
     await openPage('admin');
-    await u.click(screen.getByRole('button', { name: 'How signing works' }));
+    await u.click(screen.getByRole('button', { name: 'How approving works' }));
     expect(screen.getByText(/If you don’t agree, press Reject, or do nothing/)).toBeVisible();
     expect(screen.getByText(/8 of them end it as rejected/)).toBeVisible();
-    expect(screen.getByText(/Withdraw my signature takes yours back/)).toBeVisible();
+    expect(screen.getByText(/Changed your mind after approving\? Press Reject/)).toBeVisible();
     expect(screen.queryByText(/There is no reject or withdraw button/)).toBeNull();
   });
 });

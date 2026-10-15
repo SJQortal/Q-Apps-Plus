@@ -31,11 +31,11 @@ const TEXT: Record<
     confirming: 'Rejected (confirming…)',
   },
   withdraw: {
-    title: 'Withdraw your signature',
-    step: 'Send the rejection that withdraws it',
+    title: 'Reject after approving',
+    step: 'Send your rejection',
     confirm: 'Continue to Hub',
-    successTitle: 'Signature withdrawn',
-    confirming: 'Withdrawn (confirming…)',
+    successTitle: 'Rejected',
+    confirming: 'Rejected (confirming…)',
   },
 };
 
@@ -73,28 +73,28 @@ export function RejectDialog({
             </Typography>
             {mode === 'withdraw' ? (
               <Typography>
-                A signature can’t simply be taken back on chain: withdrawing it sends a rejection,
-                and only your latest answer counts. So your signature stops counting, and your
+                An approval can’t simply be taken back on chain: rejecting sends a rejection, and
+                only your latest answer counts. So your approval stops counting, and your
                 rejection counts towards ending it as rejected.
               </Typography>
             ) : (
               <Typography>
                 Your rejection counts once it is in a block. Rejections are measured against the
-                same target as signatures: if {needed ?? 'enough'} Minter Admins reject it, it ends
-                as rejected. Signatures are counted first, so with {needed ?? 'enough'} of both it
+                same target as approvals: if {needed ?? 'enough'} Minter Admins reject it, it ends
+                as rejected. Approvals are counted first, so with {needed ?? 'enough'} of both it
                 is approved.
               </Typography>
             )}
             <Typography>
               {mode === 'withdraw'
-                ? 'It doesn’t cancel anyone else’s signature, and you can sign again later while there is time.'
-                : 'It doesn’t cancel anyone else’s signature, and you can still sign later while there is time: only your latest answer counts.'}
+                ? 'It doesn’t cancel anyone else’s approval, and you can approve again later while there is time.'
+                : 'It doesn’t cancel anyone else’s approval, and you can still approve later while there is time: only your latest answer counts.'}
             </Typography>
             {after && needed !== null ? (
               <Typography sx={{ fontWeight: 600 }}>
                 {mode === 'withdraw'
-                  ? `Once it is in a block: ${after.approvals} of ${needed} signatures, and ${plural(after.rejections, 'rejection')} of the ${needed} that would end it.`
-                  : `With yours: ${plural(after.rejections, 'rejection')} of the ${needed} that would end it (${after.approvals} of ${needed} signatures).`}
+                  ? `Once it is in a block: ${after.approvals} of ${needed} approvals, and ${plural(after.rejections, 'rejection')} of the ${needed} that would end it.`
+                  : `With yours: ${plural(after.rejections, 'rejection')} of the ${needed} that would end it (${after.approvals} of ${needed} approvals).`}
               </Typography>
             ) : null}
           </Box>

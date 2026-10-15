@@ -1,8 +1,7 @@
 /**
  * Small parts of a decision, shared by the full card (Decisions) and the
- * compact DecisionRow: the signing clock (the shared Countdown with the
- * signing words), the "Signed ✓" chip and the admin's own answer. The
- * signers' avatars are the shared AvatarStack (components/common/Person).
+ * compact DecisionRow: the approval clock (the shared Countdown with the
+ * approval words), the "You approved ✓" chip and the admin's own answer.
  */
 import { Chip } from '@mui/material';
 import type { ChainNow } from '../../data/chain';
@@ -10,7 +9,7 @@ import type { AnswerView } from '../../pages/decisions/decisionUi';
 import { useChangedSinceMount } from '../../hooks/useChangedSinceMount';
 import { Countdown } from '../common/Countdown';
 
-/** Time left to sign: until the last block in which a signature still counts. */
+/** Time left to approve: until the last block in which an approval still counts. */
 export function SigningClock({
   now,
   height,
@@ -28,9 +27,9 @@ export function SigningClock({
     <Countdown
       now={now}
       height={height}
-      suffix="left to sign"
-      doneText="Signing time is over"
-      blockLabel="Last block a signature counts in:"
+      suffix="left to approve"
+      doneText="Time to approve is over"
+      blockLabel="Last block an approval counts in:"
       plain={plain}
       detailVisible={detailVisible}
     />
@@ -38,7 +37,7 @@ export function SigningClock({
 }
 
 /**
- * "Signed ✓" once it is in a block (filled green), or "… (confirming…)"
+ * "You approved ✓" once it is in a block (filled green), or "… (confirming…)"
  * while it is on its way: a green outline with the words in the text
  * colour, which stays readable on every theme. With `pop` it pops in
  * (index.css → .qmp-pop): when it takes the place of the button just
@@ -78,8 +77,8 @@ export function DoneChip({
 }
 
 /**
- * The admin's own answer: a signature as DoneChip; a rejection (or a
- * withdrawn signature) in neutral grey, filled once it is in a block and
+ * The admin's own answer: an approval as DoneChip; a rejection (also one
+ * after approving) in neutral grey, filled once it is in a block and
  * outlined while it is on its way. Nothing when there is no answer. It pops
  * in when the answer changes on screen, never for the answers a page opens
  * with, and not again as it settles.

@@ -80,13 +80,13 @@ export function NominatedHero({
   const name = status.name;
 
   const title = met
-    ? 'Enough Minter Admins have signed'
+    ? 'Enough Minter Admins have approved'
     : rejectedEnd
       ? "Your nomination won't go through this time"
       : signing
         ? name
-          ? `${name}, Minter Admins are signing your nomination`
-          : 'Minter Admins are signing your nomination'
+          ? `${name}, your nomination is collecting approvals`
+          : 'Your nomination is collecting approvals'
         : name
           ? `${name}, you've been nominated for MINTER`
           : "You've been nominated for MINTER";
@@ -94,12 +94,12 @@ export function NominatedHero({
   const next = rejectedEnd
     ? `It closes ${when}. Your account and your level stay as they are, and you can be nominated again later.`
     : !accepted
-      ? `Accept, then wait for the Minter Admins: ${needNow ? `at ${needNow} signatures` : 'once enough have signed'} you're in, with no further step.`
+      ? `Accept, then wait for the Minter Admins: ${needNow ? `at ${needNow} approvals` : 'once enough have approved'} you're in, with no further step.`
       : met
         ? `You're added to MINTER ${when}. Nothing more to do.`
         : signing
-          ? `At ${needNow ? `${needNow} signatures` : 'enough signatures'} you're added to MINTER automatically: nothing more to do. If time runs out, you can be nominated again.`
-          : `When a Minter Admin signs first, the clock starts; at ${needNow ? `${needNow} signatures` : 'enough signatures'} you're added automatically.`;
+          ? `At ${needNow ? `${needNow} approvals` : 'enough approvals'} you're added to MINTER automatically: nothing more to do. If time runs out, you can be nominated again.`
+          : `When a Minter Admin approves first, the clock starts; at ${needNow ? `${needNow} approvals` : 'enough approvals'} you're added automatically.`;
 
   return (
     <>
@@ -155,7 +155,7 @@ export function NominatedHero({
 
         {signing && tally ? (
           <HeroText>
-            <Num>{tally.approvalCount}</Num> of <Num>{tally.needed}</Num> signatures so far
+            <Num>{tally.approvalCount}</Num> of <Num>{tally.needed}</Num> approvals so far
             {inFlight ? (
               <>
                 , <Num>{inFlight}</Num> more confirming
@@ -187,7 +187,7 @@ export function NominatedHero({
             ) : (
               <>
                 <Num>{plural(rejections, 'Minter Admin')}</Num> {rejections === 1 ? 'has' : 'have'}{' '}
-                said no so far; it needs <Num>{tally.needed}</Num> to end it, and signatures are
+                said no so far; it needs <Num>{tally.needed}</Num> to end it, and approvals are
                 counted first.
               </>
             )}
@@ -204,28 +204,28 @@ export function NominatedHero({
             <Countdown
               now={now.data}
               height={window.lastUsefulSignatureHeight}
-              suffix="left to sign"
-              doneText="Signing time is over"
-              blockLabel="Last block a signature counts in:"
+              suffix="left to approve"
+              doneText="Time to approve is over"
+              blockLabel="Last block an approval counts in:"
               detailVisible
             />
           </Box>
         ) : null}
         {signing && !window ? (
           <HeroText muted>
-            The first Minter Admin&rsquo;s signature is on its way into a block; the clock starts
+            The first Minter Admin&rsquo;s approval is on its way into a block; the clock starts
             then.
           </HeroText>
         ) : null}
         {n.state === 'waiting' ? (
           <HeroText>
-            It&rsquo;s waiting for a Minter Admin to sign first.
+            It&rsquo;s waiting for a Minter Admin to approve first.
             {n.waitingEndsAt ? (
               <>
                 {' '}
                 It stays open for{' '}
                 <Num>{formatDuration(n.waitingEndsAt - nowMs, { precise: true })}</Num> more; if no
-                admin signs by then, it moves to History and you can be nominated again.
+                admin approves by then, it moves to History and you can be nominated again.
               </>
             ) : null}
           </HeroText>

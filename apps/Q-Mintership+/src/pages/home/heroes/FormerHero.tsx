@@ -81,7 +81,7 @@ function comeBackActions(ready: ReadyToMint, status: MyStatus, historyLink: Reac
 }
 
 const NOMINATED_NEXT =
-  'When someone nominates you, this page shows who did, and how the signing goes.';
+  'When someone nominates you, this page shows who did, and how the Minter Admins answer.';
 
 export function FormerHero({ status, needed }: { status: MyStatus; needed: number | null }) {
   const ready = useReadyToMint(status);
@@ -136,7 +136,7 @@ export function FormerHero({ status, needed }: { status: MyStatus; needed: numbe
         <Reason reason={ban?.reason ?? removal?.reason} />
         <HeroText>
           Before you can {status.wasMember ? 'rejoin' : 'join'}, Minter Admins must lift the ban:
-          one of them proposes it, and it needs {needed ? <Num>{needed}</Num> : 'enough'} signatures
+          one of them proposes it, and it needs {needed ? <Num>{needed}</Num> : 'enough'} approvals
           like any decision. After that, a new nomination is possible.
         </HeroText>
         <LevelKept status={status} />

@@ -104,10 +104,10 @@ export function guardWithdraw(signer: Signer, pendingSignature: string): Promise
 }
 
 const TOO_LATE: Record<DecisionIntent, string> = {
-  sign: 'Too late to count: the last block in which a signature can count has passed.',
+  sign: 'Too late to count: the last block in which an approval can count has passed.',
   reject: 'Too late to count: the last block in which a rejection can count has passed.',
   withdraw:
-    'Too late to count: the last block in which withdrawing a signature can count has passed.',
+    'Too late to count: the last block in which a rejection can count has passed.',
 };
 
 /**
@@ -125,12 +125,12 @@ export async function guardDecision(
   const tx = await getTransaction(pendingSignature, { force: true });
   if (!tx) return "This transaction isn't on your node yet. Wait a moment and refresh.";
   if (isUnusualApprovalRoute(tx))
-    return "This one can't be signed here. Check it with the other Minter Admins.";
+    return "This one can't be approved here. Check it with the other Minter Admins.";
   if (tx.txGroupId !== MINTER_GROUP_ID)
     return "This transaction isn't waiting for MINTER's approval.";
   const [target] = await withCancelInviteTargets([tx]);
   if (!isMinterGroupChange(target))
-    return "This isn't a MINTER group change, so it can't be signed here.";
+    return "This isn't a MINTER group change, so it can't be approved here.";
   if (tx.approvalStatus && tx.approvalStatus !== 'PENDING') {
     return `This has already been decided (${tx.approvalStatus.toLowerCase().replace('_', ' ')}).`;
   }
@@ -176,11 +176,11 @@ async function removalDoubleProblem(tx: TxRow): Promise<string | null> {
 function inFlightProblem(intent: DecisionIntent, approval: boolean): string {
   if (approval) {
     return intent === 'sign'
-      ? 'Your signature is already on its way. It counts once it is in a block.'
-      : 'Your signature is still on its way into a block. You can withdraw it once it is in.';
+      ? 'Your approval is already on its way. It counts once it is in a block.'
+      : 'Your approval is still on its way into a block. You can reject once it is in.';
   }
   return intent === 'sign'
-    ? 'Your rejection is still on its way into a block. You can sign once it is in.'
+    ? 'Your rejection is still on its way into a block. You can approve once it is in.'
     : 'Your rejection is already on its way. It counts once it is in a block.';
 }
 
@@ -188,15 +188,15 @@ function inFlightProblem(intent: DecisionIntent, approval: boolean): string {
 function confirmedProblem(intent: DecisionIntent, approval: boolean | null): string | null {
   switch (intent) {
     case 'sign':
-      return approval === true ? "You've already signed this." : null;
+      return approval === true ? "You've already approved this." : null;
     case 'reject':
       if (approval === true)
-        return "You've signed this. To take your signature back, use Withdraw my signature.";
+        return "You've approved this. To take it back, press Reject on its card.";
       return approval === false ? "You've already rejected this." : null;
     case 'withdraw':
       if (approval === false) return 'Your latest answer on chain is already a rejection.';
       return approval === null
-        ? "You haven't signed this, so there's no signature to withdraw."
+        ? "You haven't approved this, so there's no approval to take back."
         : null;
   }
 }
@@ -236,7 +236,7 @@ export async function guardInvite(signer: Signer, nominee: string): Promise<stri
   if (activeBanFor(bans, nominee))
     return 'This account is banned from MINTER. The ban has to be lifted first.';
   if (waiting)
-    return 'A nomination for this person is already waiting for signatures. Sign that one instead.';
+    return 'A nomination for this person is already waiting for approvals. Approve that one instead.';
   if (stored) return 'This person was already approved: they only need to press Join now.';
   return null;
 }
@@ -253,7 +253,7 @@ export async function guardKick(signer: Signer, member: string): Promise<string 
   if (membership.isAdmin)
     return 'Minter Admins can’t be removed directly. Propose removing their admin role first.';
   if (!membership.isMember && !joinRequest) return 'Not in MINTER, and no join request to decline.';
-  if (waiting) return 'A removal for this member is already waiting for signatures.';
+  if (waiting) return 'A removal for this member is already waiting for approvals.';
   return null;
 }
 
@@ -277,9 +277,9 @@ export async function guardDecline(signer: Signer, address: string): Promise<str
     return 'Already in MINTER, so there’s no join request to decline. To remove them, use Remove a member.';
   if (!joinRequest)
     return 'This account hasn’t asked to join MINTER, so there’s no join request to decline.';
-  if (kick) return 'Declining this join request is already waiting for signatures.';
+  if (kick) return 'Declining this join request is already waiting for approvals.';
   if (invite)
-    return 'A nomination for them is collecting signatures. Reject that one instead, or let it run out.';
+    return 'A nomination for them is collecting approvals. Reject that one instead, or let it run out.';
   return null;
 }
 
@@ -303,7 +303,7 @@ export async function guardBan(
   if (membership.isAdmin)
     return 'Minter Admins can’t be banned directly. Propose removing their admin role first.';
   if (activeBanFor(bans, offender)) return 'Already banned.';
-  if (waiting) return 'A ban for this account is already waiting for signatures.';
+  if (waiting) return 'A ban for this account is already waiting for approvals.';
   return null;
 }
 
@@ -316,7 +316,7 @@ export async function guardCancelBan(signer: Signer, member: string): Promise<st
     findWaiting('CANCEL_GROUP_BAN', member),
   ]);
   if (!activeBanFor(bans, member)) return 'This account has no ban in force.';
-  if (waiting) return 'Lifting this ban is already waiting for signatures.';
+  if (waiting) return 'Lifting this ban is already waiting for approvals.';
   return null;
 }
 
@@ -329,7 +329,7 @@ export async function guardCancelInvite(signer: Signer, invitee: string): Promis
     findWaiting('CANCEL_GROUP_INVITE', invitee),
   ]);
   if (!stored) return 'There is no approved invite stored for this account.';
-  if (waiting) return 'Cancelling this invite is already waiting for signatures.';
+  if (waiting) return 'Cancelling this invite is already waiting for approvals.';
   return null;
 }
 
@@ -466,17 +466,17 @@ export async function guardConsidering(
   if ('pendingSignature' in target) {
     const tx = await getTransaction(target.pendingSignature, { force: true });
     if (!tx || (tx.approvalStatus && tx.approvalStatus !== 'PENDING'))
-      return 'This decision isn’t waiting for signatures any more.';
+      return 'This decision isn’t waiting for approvals any more.';
     if (typeof tx.blockHeight === 'number') {
       const [group, now] = await Promise.all([getGroupInfo(), getChainNow({ force: true })]);
       const phase = windowPhase(decisionWindow(tx.blockHeight, group), now.height);
       if (phase === 'tooLate' || phase === 'expired')
-        return 'Too late: signatures and rejections can no longer count on this one.';
+        return 'Too late: approvals and rejections can no longer count on this one.';
     }
     return null;
   }
   const nominations = await loadNominationsFor(target.nomineeAddress, { force: true });
   return nominations.some((n) => n.state === 'waiting')
     ? null
-    : 'This nomination isn’t waiting for a first signature any more.';
+    : 'This nomination isn’t waiting for a first approval any more.';
 }

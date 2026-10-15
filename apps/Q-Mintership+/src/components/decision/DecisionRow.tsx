@@ -59,7 +59,7 @@ export function DecisionRow({
           {decisionTitle(d)}: {who}
           {d.tally ? (
             <span className="qmp-visually-hidden">
-              . {d.tally.approvalCount} of {d.tally.needed} signatures.
+              . {d.tally.approvalCount} of {d.tally.needed} approvals.
             </span>
           ) : null}
         </Typography>

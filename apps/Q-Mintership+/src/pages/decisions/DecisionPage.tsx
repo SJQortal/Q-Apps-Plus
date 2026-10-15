@@ -342,7 +342,7 @@ function UnusualView({ tx }: { tx: TxRow }) {
       </Typography>
       {subject ? <PersonChip address={subject} size={32} /> : null}
       <Alert severity="warning" role="note">
-        <strong>Unusual approval route.</strong> This one can’t be signed here. Check it with the
+        <strong>Unusual approval route.</strong> This one can’t be approved here. Check it with the
         other Minter Admins.
       </Alert>
     </Card>
@@ -523,7 +523,7 @@ function NotInQueue({ tx }: { tx: TxRow }) {
       </Box>
       {subject ? <PersonChip address={subject} size={40} /> : null}
       <Typography variant="body2" color="text.secondary">
-        Your node’s queue doesn’t list it yet, so its signatures and clock aren’t shown. It usually
+        Your node’s queue doesn’t list it yet, so its approvals and clock aren’t shown. It usually
         appears within a minute or two.
       </Typography>
     </Card>

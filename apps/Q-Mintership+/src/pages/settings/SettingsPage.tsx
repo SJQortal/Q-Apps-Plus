@@ -219,7 +219,7 @@ export default function SettingsPage() {
                   }
                   hint={
                     session.status === 'outside'
-                      ? 'Your account, nominations and signing work inside Qortal Hub or GO.'
+                      ? 'Your account, nominations and approvals work inside Qortal Hub or GO.'
                       : 'Sign in to see your own status and act on nominations.'
                   }
                 />
@@ -294,7 +294,7 @@ export default function SettingsPage() {
                 <SettingText
                   id="hide-answered-label"
                   title="Hide decisions I answered"
-                  hint="Signed or rejected: keep the Decisions queue to what still needs you."
+                  hint="Approved or rejected: keep the Decisions queue to what still needs you."
                 />
                 <Switch
                   checked={hideAnswered}

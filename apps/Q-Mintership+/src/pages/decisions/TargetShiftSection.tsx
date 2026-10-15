@@ -58,7 +58,7 @@ export function TargetShiftSection({
             key={sig}
             scenario={s}
             labelOf={labelOf}
-            lead={`${labelOf(sig)} has enough signatures: Core applies it ${whenApplied(d, now)}. When it does`}
+            lead={`${labelOf(sig)} has enough approvals: Core applies it ${whenApplied(d, now)}. When it does`}
             advice={advice}
             deadline={deadline}
           />

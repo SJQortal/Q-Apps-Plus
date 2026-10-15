@@ -31,7 +31,7 @@ describe('History page: on chain', () => {
       .closest('li') as HTMLElement;
     expect(within(expired).getByText('Nominated for MINTER')).toBeInTheDocument();
     expect(within(expired).getByText('Expired')).toBeInTheDocument();
-    expect(within(list).queryByText('Collecting signatures')).toBeNull();
+    expect(within(list).queryByText('Collecting approvals')).toBeNull();
     expect(within(list).queryByText(PEOPLE.urgent.name as string)).toBeNull();
     expect(screen.getByText(/^\d+ events since \d+ \w+ \d{4}\.$/)).toBeInTheDocument();
     expect(posts).toEqual([]);
@@ -116,10 +116,10 @@ describe('History page: the target', () => {
       .find((item) => within(item).queryByText('Fern Former')) as HTMLElement;
     expect(within(fern).getByText('No longer a Minter Admin')).toBeInTheDocument();
     expect(
-      await within(fern).findByText('Target 9 → 8 signatures (21 → 20 admin seats)')
+      await within(fern).findByText('Target 9 → 8 approvals (21 → 20 admin seats)')
     ).toBeInTheDocument();
     expect(
-      within(list).getByText('Target 8 → 9 signatures (20 → 21 admin seats)')
+      within(list).getByText('Target 8 → 9 approvals (20 → 21 admin seats)')
     ).toBeInTheDocument();
   });
 });

@@ -59,19 +59,19 @@ describe('the target in words', () => {
   });
 
   it('says which way the target moves', () => {
-    expect(targetMove(9, 8)).toBe('drops from 9 to 8 signatures');
-    expect(targetMove(8, 9)).toBe('rises from 8 to 9 signatures');
-    expect(targetMove(8, 8)).toBe('stays at 8 signatures');
-    expect(targetMove(2, 1)).toBe('drops from 2 to 1 signature');
+    expect(targetMove(9, 8)).toBe('drops from 9 to 8 approvals');
+    expect(targetMove(8, 9)).toBe('rises from 8 to 9 approvals');
+    expect(targetMove(8, 8)).toBe('stays at 8 approvals');
+    expect(targetMove(2, 1)).toBe('drops from 2 to 1 approval');
   });
 
   it('says what an admin change does to the seats and the target', () => {
     expect(shiftSentence(scenario(), 'If this passes')).toBe(
-      'If this passes, MINTER has 20 admin seats and the target drops from 9 to 8 signatures.'
+      'If this passes, MINTER has 20 admin seats and the target drops from 9 to 8 approvals.'
     );
     expect(
       shiftSentence(scenario({ countThen: 19, neededThen: 8, neededNow: 8 }), 'If it passes')
-    ).toBe('If it passes, MINTER has 19 admin seats; the target stays at 8 signatures.');
+    ).toBe('If it passes, MINTER has 19 admin seats; the target stays at 8 approvals.');
   });
 
   it('says when the count can dip lower on the way than where it ends up', () => {
@@ -87,7 +87,7 @@ describe('the target in words', () => {
       neededHigh: 4,
     });
     expect(shiftSentence(dip, 'If this passes')).toBe(
-      'If this passes, MINTER has 8 admin seats; the target stays at 4 signatures, but on the way MINTER can drop to 7 admin seats (target 3).'
+      'If this passes, MINTER has 8 admin seats; the target stays at 4 approvals, but on the way MINTER can drop to 7 admin seats (target 3).'
     );
     // No dip below both ends: nothing more to say.
     expect(shiftSentence(scenario({ countLow: 20, neededLow: 8 }), 'If this passes')).not.toMatch(
@@ -187,14 +187,14 @@ describe('the chip on an affected decision', () => {
     });
     expect(riskChipLabel(r)).toBe('Target may drop to 3');
     expect(riskExplanation(r, labelOf)[0]).toBe(
-      'If Remove a Minter Admin: Dex Demote passes (with Remove a Minter Admin: Admin B, which would then apply at once too), MINTER can drop to 7 admin seats on the way, and then the target drops from 4 to 3 signatures.'
+      'If Remove a Minter Admin: Dex Demote passes (with Remove a Minter Admin: Admin B, which would then apply at once too), MINTER can drop to 7 admin seats on the way, and then the target drops from 4 to 3 approvals.'
     );
   });
 
   it('explains it: which change, the new target, and what Core would do', () => {
     expect(riskExplanation(risk(), labelOf)).toEqual([
-      'If Remove a Minter Admin: Dex Demote passes, MINTER has 20 admin seats and the target drops from 9 to 8 signatures.',
-      'This decision has 8 signatures, so Core would apply it at once, in the same block or the next, with no new signature.',
+      'If Remove a Minter Admin: Dex Demote passes, MINTER has 20 admin seats and the target drops from 9 to 8 approvals.',
+      'This decision has 8 approvals, so Core would apply it at once, in the same block or the next, with no new approval.',
     ]);
     expect(
       riskExplanation(
@@ -205,7 +205,7 @@ describe('the chip on an affected decision', () => {
         labelOf
       )
     ).toEqual([
-      'If Remove a Minter Admin: Dex Demote passes (with Remove a Minter Admin: Admin B, which would then apply at once too), MINTER has 19 admin seats and the target drops from 9 to 8 signatures.',
+      'If Remove a Minter Admin: Dex Demote passes (with Remove a Minter Admin: Admin B, which would then apply at once too), MINTER has 19 admin seats and the target drops from 9 to 8 approvals.',
       'It has 8 rejections, so it would end as rejected at once, in the same block or the next.',
     ]);
     const two = scenario({
@@ -234,16 +234,16 @@ describe('the chip on an affected decision', () => {
         labelOf
       )[1]
     ).toBe(
-      'It has 8 signatures: enough today, but if the admin change comes first it needs 1 more.'
+      'It has 8 approvals: enough today, but if the admin change comes first it needs 1 more.'
     );
   });
 
   it('says what a withdrawal does and costs', () => {
     expect(withdrawAdvice('0.01 QORT')).toMatch(
-      /withdraw your signature before the admin change passes\. A withdrawal counts as a rejection, only each admin’s latest answer counts, and it costs 0\.01 QORT\.$/
+      /You can still reject it before the admin change passes: only each admin’s latest answer counts, and it costs 0\.01 QORT\.$/
     );
     expect(withdrawAdvice('0.01 QORT', 'block 1,233')).toMatch(
-      /withdraw your signature before block 1,233\./
+      /reject it before block 1,233:/
     );
   });
 });
@@ -278,7 +278,7 @@ describe('why the target changed since the last visit', () => {
     expect(seatChange(23, 21)).toBe('MINTER has 2 fewer admin seats (21; it had 23)');
     expect(seatChange(20, 21)).toBe('MINTER has 1 more admin seat (21; it had 20)');
     expect(seatChange(20, 20)).toBe('MINTER still has 20 admin seats');
-    expect(targetChangedTitle(9, 7)).toBe('The target changed from 9 to 7 signatures');
+    expect(targetChangedTitle(9, 7)).toBe('The target changed from 9 to 7 approvals');
     expect(targetChangedTitle(8, 8)).toBe('MINTER’s admin seats changed');
   });
 });

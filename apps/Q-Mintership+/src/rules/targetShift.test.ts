@@ -519,7 +519,7 @@ describe('riskFor: the chip on a decision', () => {
     expect(riskFor('nine', more)?.scenario).toMatchObject({ scope: 'removals', neededThen: 9 });
   });
 
-  it('flags a rising target only for a decision that has enough signatures now', () => {
+  it('flags a rising target only for a decision that has enough approvals now', () => {
     const at = state(20); // 8 needed
     const decisions = [changeDecision('a1', a1, 0), decision('met', 8), decision('low', 3)];
     const scenarios = shiftScenarios(at, decisions);

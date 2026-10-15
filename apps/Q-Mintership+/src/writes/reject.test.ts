@@ -55,7 +55,7 @@ describe('guards for Reject and Withdraw', () => {
     const { admin, of } = await setUp();
     expect(await guardReject(admin, of(ADDR.nominatedSigning))).toBeNull();
     expect(await guardReject(admin, of(ADDR.urgent))).toBe(
-      "You've signed this. To take your signature back, use Withdraw my signature."
+      "You've approved this. To take it back, press Reject on its card."
     );
     expect(await guardReject(admin, of(ADDR.late))).toBe(
       'Too late to count: the last block in which a rejection can count has passed.'
@@ -80,16 +80,16 @@ describe('guards for Reject and Withdraw', () => {
     const { world, admin, of } = await setUp();
     expect(await guardWithdraw(admin, of(ADDR.urgent))).toBeNull();
     expect(await guardWithdraw(admin, of(ADDR.nominatedSigning))).toBe(
-      "You haven't signed this, so there's no signature to withdraw."
+      "You haven't approved this, so there's no approval to take back."
     );
     expect(await guardWithdraw(admin, of(ADDR.late))).toMatch(/^Too late to count/);
     // A signature still on its way can't be withdrawn yet.
     answer(world, admin, of(ADDR.kickTarget), true, null, 42);
     expect(await guardWithdraw(admin, of(ADDR.kickTarget))).toBe(
-      'Your signature is still on its way into a block. You can withdraw it once it is in.'
+      'Your approval is still on its way into a block. You can reject once it is in.'
     );
     expect(await guardReject(admin, of(ADDR.kickTarget))).toBe(
-      'Your signature is still on its way into a block. You can withdraw it once it is in.'
+      'Your approval is still on its way into a block. You can reject once it is in.'
     );
   });
 
@@ -101,7 +101,7 @@ describe('guards for Reject and Withdraw', () => {
       'Your rejection is already on its way. It counts once it is in a block.'
     );
     expect(await guardSign(admin, pending)).toBe(
-      'Your rejection is still on its way into a block. You can sign once it is in.'
+      'Your rejection is still on its way into a block. You can approve once it is in.'
     );
   });
 
@@ -153,7 +153,7 @@ describe('rejectDecision and withdrawSignature', () => {
     const outcome = await withdrawSignature(admin, of(ADDR.nominatedSigning));
     expect(outcome).toEqual({
       status: 'blocked',
-      reason: "You haven't signed this, so there's no signature to withdraw.",
+      reason: "You haven't approved this, so there's no approval to take back.",
     });
     expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
     expect(getPendingWrite(writeKeys.withdraw(of(ADDR.nominatedSigning)))).toBeNull();

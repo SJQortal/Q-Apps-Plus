@@ -55,7 +55,7 @@ export function decidedHeight(
 
 /** A short label for each outcome (chips and titles). */
 export const OUTCOME_LABEL: Record<DecisionOutcome, string> = {
-  pending: 'Collecting signatures',
+  pending: 'Collecting approvals',
   approved: 'Approved',
   applied: 'Applied',
   rejected: 'Rejected',
@@ -67,19 +67,19 @@ export const OUTCOME_LABEL: Record<DecisionOutcome, string> = {
 export function outcomeSentence(outcome: DecisionOutcome, kind: DecisionKind): string {
   switch (outcome) {
     case 'pending':
-      return 'Still collecting signatures.';
+      return 'Still collecting approvals.';
     case 'approved':
-      return 'Enough Minter Admins signed, and Core applied it.';
+      return 'Enough Minter Admins approved, and Core applied it.';
     case 'applied':
-      return 'Applied at once: it is from before MINTER needed Minter Admins’ signatures.';
+      return 'Applied at once: it is from before MINTER needed Minter Admins’ approvals.';
     case 'rejected':
       return 'Rejected by Minter Admins.';
     case 'expired':
       return kind === 'invite'
-        ? 'Not enough signatures in time. They can be nominated again.'
-        : 'Not enough signatures in time, so it didn’t happen.';
+        ? 'Not enough approvals in time. They can be nominated again.'
+        : 'Not enough approvals in time, so it didn’t happen.';
     case 'invalid':
-      return 'Enough Minter Admins signed, but Core didn’t apply it: by then it was no longer valid.';
+      return 'Enough Minter Admins approved, but Core didn’t apply it: by then it was no longer valid.';
   }
 }
 

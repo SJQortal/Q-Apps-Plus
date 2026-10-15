@@ -35,7 +35,7 @@ describe('Settings', () => {
       ['Celebrate joining MINTER', 'A small burst on Home when you become a minter.'],
       [
         'Hide decisions I answered',
-        'Signed or rejected: keep the Decisions queue to what still needs you.',
+        'Approved or rejected: keep the Decisions queue to what still needs you.',
       ],
       ['Since your last visit', /^Home lists what changed since you last opened the app/],
     ] as const) {

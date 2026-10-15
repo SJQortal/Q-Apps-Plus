@@ -83,8 +83,8 @@ describe('rejections on a nomination', () => {
     expect(
       within(card).getByText(/Enough Minter Admins have rejected it: it ends as rejected/)
     ).toBeVisible();
-    // No countdown "left to sign" beside it.
-    expect(within(card).queryByText('left to sign')).toBeNull();
+    // No countdown "left to approve" beside it.
+    expect(within(card).queryByText('left to approve')).toBeNull();
   });
 
   it('the card counts down while it can still be signed', async () => {
@@ -98,7 +98,7 @@ describe('rejections on a nomination', () => {
       { name: /Nomination of bob\+builder/ },
       { timeout: 4000 }
     );
-    expect(within(card).getByText('left to sign')).toBeInTheDocument();
+    expect(within(card).getByText('left to approve')).toBeInTheDocument();
   });
 
   it("the nominee's Home keeps the numbers so far, said gently", async () => {
@@ -108,13 +108,13 @@ describe('rejections on a nomination', () => {
     });
     const hero = await screen.findByRole(
       'region',
-      { name: /signing your nomination/ },
+      { name: /your nomination is collecting approvals/ },
       { timeout: 4000 }
     );
     await waitFor(
       () =>
         expect(hero).toHaveTextContent(
-          /2 Minter Admins have said no so far; it needs 8 to end it, and signatures are counted first\./
+          /2 Minter Admins have said no so far; it needs 8 to end it, and approvals are counted first\./
         ),
       { timeout: 4000 }
     );
@@ -134,7 +134,7 @@ describe('rejections on a nomination', () => {
     });
     const hero = await screen.findByRole(
       'region',
-      { name: /signing your nomination/ },
+      { name: /your nomination is collecting approvals/ },
       { timeout: 4000 }
     );
     await waitFor(

@@ -768,18 +768,18 @@ function WhatHappensNext({ name, named }: { name: string; named: boolean }) {
           </li>
           <li>
             <Typography variant="body2">
-              <strong>A Minter Admin signs first.</strong> That puts the nomination on chain and
-              starts the clock: {span} to collect signatures. Until then it waits on the Nominations
+              <strong>A Minter Admin approves first.</strong> That puts the nomination on chain and
+              starts the clock: {span} to collect approvals. Until then it waits on the Nominations
               page for up to {span}.
             </Typography>
           </li>
           <li>
             <Typography variant="body2">
-              <strong>The other Minter Admins sign, reject, or let it run out.</strong>{' '}
+              <strong>The other Minter Admins approve, reject, or let it run out.</strong>{' '}
               {needed && group
-                ? `It needs ${plural(needed, 'signature')} right now (${describeThreshold(group.approvalThreshold)}). `
+                ? `It needs ${plural(needed, 'approval')} right now (${describeThreshold(group.approvalThreshold)}). `
                 : ''}
-              Once enough have signed it is approved automatically. If as many reject it, or time
+              Once enough have approved it goes through automatically. If as many reject it, or time
               runs out, it ends and they can be nominated again.
             </Typography>
           </li>

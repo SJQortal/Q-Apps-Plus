@@ -1,6 +1,6 @@
 /**
  * A decision this Minter Admin answered (signed or rejected, in a block or
- * on its way) waits for them nowhere: not in "Waiting for your signature"
+ * on its way) waits for them nowhere: not in "Waiting for your answer"
  * (Decisions and Home), not in the Decisions badge, not in Sign several.
  * "Hide what I answered" hides both kinds of answer, and keeps the device's
  * choice from when it was "Hide what I signed".
@@ -63,14 +63,14 @@ const KICK = /^Remove from MINTER, Kai Target/;
 const BAN = /^Ban from MINTER, Ben Target/;
 
 describe('Rejected decisions stay out of the waiting lists', () => {
-  it('Decisions: the summary and Sign several leave them out', async () => {
+  it('Decisions: the summary and Approve several leave them out', async () => {
     const u = user();
     await openQueue();
-    expect(within(card(KICK)).getByText('Rejected')).toBeInTheDocument();
-    expect(within(card(BAN)).getByText('Rejected (confirming…)')).toBeInTheDocument();
+    expect(within(card(KICK)).getByText('You rejected')).toBeInTheDocument();
+    expect(within(card(BAN)).getByText('You rejected (confirming…)')).toBeInTheDocument();
     // Six without the rejections; one in a block and one on its way leave four.
-    expect(screen.getByText('4 decisions waiting for your signature')).toBeInTheDocument();
-    await u.click(screen.getByRole('button', { name: 'Sign several' }));
+    expect(screen.getByText('4 decisions waiting for your answer')).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: 'Approve several' }));
     expect(within(card(KICK)).queryByRole('checkbox')).toBeNull();
     expect(within(card(BAN)).queryByRole('checkbox')).toBeNull();
     await u.click(screen.getByRole('button', { name: 'Select all' }));
@@ -81,10 +81,10 @@ describe('Rejected decisions stay out of the waiting lists', () => {
     await renderPage(<HomePage />, { persona: 'admin', setup: averyRejects });
     await screen.findByRole(
       'heading',
-      { level: 2, name: 'Avery Admin, 4 decisions are waiting for your signature' },
+      { level: 2, name: 'Avery Admin, 4 decisions are waiting for your answer' },
       T
     );
-    const waiting = screen.getByRole('region', { name: 'Waiting for your signature' });
+    const waiting = screen.getByRole('region', { name: 'Waiting for your answer' });
     expect(within(waiting).queryByRole('link', { name: /Kai Target/ })).toBeNull();
     expect(within(waiting).queryByRole('link', { name: /Ben Target/ })).toBeNull();
   });
@@ -144,7 +144,7 @@ describe('Hide what I answered', () => {
     await rejectWithKeyboard(u);
     expect(screen.queryByRole('article', { name: /bob\+builder/ })).toBeNull();
     await waitFor(
-      () => expect(screen.getByRole('region', { name: /^Collecting signatures/ })).toHaveFocus(),
+      () => expect(screen.getByRole('region', { name: /^Collecting approvals/ })).toHaveFocus(),
       T
     );
   }, 20_000);
@@ -153,7 +153,7 @@ describe('Hide what I answered', () => {
     const u = user();
     await openQueue();
     await rejectWithKeyboard(u);
-    expect(within(card(/bob\+builder/)).getByText('Rejected (confirming…)')).toBeInTheDocument();
+    expect(within(card(/bob\+builder/)).getByText('You rejected (confirming…)')).toBeInTheDocument();
     await waitFor(() => expect(card(/bob\+builder/)).toHaveFocus(), T);
   }, 20_000);
 });

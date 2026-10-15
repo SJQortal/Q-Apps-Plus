@@ -107,7 +107,7 @@ export function StaleInvites({
       </Typography>
       <Typography variant="body2" color="text.secondary">
         {rows.length
-          ? 'These people were approved but never pressed Join, so their invites stay listed until Minter Admins cancel them. A cancellation goes through the same signatures as any decision.'
+          ? 'These people were approved but never pressed Join, so their invites stay listed until Minter Admins cancel them. A cancellation needs the same approvals as any decision.'
           : 'Every approved invite has been used.'}
         {list.data?.alreadyMembers
           ? ` Left out: ${plural(list.data.alreadyMembers, 'invite')} for people already in MINTER.`
@@ -116,8 +116,8 @@ export function StaleInvites({
       {waitingFor.size ? (
         <Typography variant="body2" color="text.secondary">
           {waitingFor.size === 1
-            ? '1 of them already has a cancellation waiting for signatures.'
-            : `${waitingFor.size} of them already have a cancellation waiting for signatures.`}
+            ? '1 of them already has a cancellation waiting for approvals.'
+            : `${waitingFor.size} of them already have a cancellation waiting for approvals.`}
         </Typography>
       ) : null}
       {unmatched ? (
@@ -191,11 +191,11 @@ export function StaleInvites({
             <Typography>
               Proposes cancelling {plural(bulkRows?.length ?? 0, 'approved invite')} not approved in
               the last 30 days, one after another. Each happens only if {facts.needed} Minter Admins
-              sign it within {signingWindowText(facts.maximumBlockDelay, facts.msPerBlock)}.
+              approve it within {signingWindowText(facts.maximumBlockDelay, facts.msPerBlock)}.
             </Typography>
             <Typography sx={{ mt: 1 }}>
-              A proposal doesn’t count as your signature, so you sign each one straight after it, as
-              for a single proposal.
+              A proposal doesn’t count as your approval, so you approve each one straight after it,
+              as for a single proposal.
             </Typography>
           </>
         }
@@ -203,7 +203,7 @@ export function StaleInvites({
         feeTxType="CANCEL_GROUP_INVITE"
         items={(bulkRows ?? []).map((row) => ({ key: row.invitee, label: inviteeLabel(row) }))}
         confirmLabel="Continue to Hub"
-        sentLabel="Proposed and signed ✓"
+        sentLabel="Proposed and approved ✓"
         summarize={cancelAllSummary}
         run={(report) => cancelAll(signer, bulkRows ?? [], report)}
       />
@@ -274,7 +274,7 @@ function StaleRow({
         ) : null}
       </Box>
       {cancelWaiting ? (
-        <DoneChip label="Cancellation waiting for signatures" settled={false} pop={pop} />
+        <DoneChip label="Cancellation waiting for approvals" settled={false} pop={pop} />
       ) : pending?.status === 'confirming' ? (
         <DoneChip label="Proposed (confirming…)" settled={false} pop={pop} />
       ) : (

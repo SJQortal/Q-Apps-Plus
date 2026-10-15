@@ -72,9 +72,9 @@ const COLLECTING_PHASES: ReadonlySet<Decision['phase']> = new Set([
 ]);
 
 const SENDING_TEXT: Record<AnswerIntent, string> = {
-  sign: 'Signing…',
+  sign: 'Approving…',
   reject: 'Rejecting…',
-  withdraw: 'Withdrawing…',
+  withdraw: 'Rejecting…',
 };
 
 export interface SubjectFacts {
@@ -227,7 +227,7 @@ export function DecisionCard(props: DecisionCardProps) {
           <Checkbox
             checked={Boolean(selected)}
             onChange={() => onToggleSelect?.(d.signature)}
-            slotProps={{ input: { 'aria-label': `Select to sign: ${fullTitle}` } }}
+            slotProps={{ input: { 'aria-label': `Select to approve: ${fullTitle}` } }}
             sx={{ width: 44, height: 44, ml: -1, mt: -0.5, flexShrink: 0 }}
           />
         ) : null}
@@ -331,14 +331,14 @@ export function DecisionCard(props: DecisionCardProps) {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
           {tally.approvals.length ? (
             <Signers
-              label={`Signed by ${plural(tally.approvals.length, 'Minter Admin')}`}
+              label={`Approved by ${plural(tally.approvals.length, 'Minter Admin')}`}
               people={tally.approvals}
               names={adminNames}
             />
           ) : null}
           {confirming.length ? (
             <Signers
-              label={`Confirming: ${plural(confirming.length, 'signature')} on the way`}
+              label={`Confirming: ${plural(confirming.length, 'approval')} on the way`}
               people={confirming}
               names={adminNames}
               faded
@@ -347,7 +347,7 @@ export function DecisionCard(props: DecisionCardProps) {
           {tally.rejections.length ? (
             <Signers
               label={`Rejected by ${plural(tally.rejections.length, 'Minter Admin')}${
-                withdrawn ? ` (${withdrawn} withdrew a signature)` : ''
+                withdrawn ? ` (${withdrawn} had approved first)` : ''
               }`}
               people={tally.rejections}
               names={adminNames}
@@ -363,7 +363,7 @@ export function DecisionCard(props: DecisionCardProps) {
           ) : null}
           {tally.rejections.length ? (
             <Typography variant="body2" color="text.secondary">
-              Rejections: {tally.rejectionCount} of the {tally.needed} that would end it (signatures
+              Rejections: {tally.rejectionCount} of the {tally.needed} that would end it (approvals
               are counted first).
             </Typography>
           ) : null}
@@ -399,8 +399,8 @@ export function DecisionCard(props: DecisionCardProps) {
           ) : null}
           {signable && view.shown === 'rejected' ? (
             <Typography variant="body2" color="text.secondary" sx={{ flexBasis: '100%' }}>
-              Your latest answer on chain is a rejection. Signing replaces it: only your latest
-              answer counts.
+              You rejected this. Approving replaces your rejection: only your latest answer
+              counts.
             </Typography>
           ) : null}
           {selecting && double && (signable || rejectable) && view.shown === 'none' ? (
@@ -418,10 +418,10 @@ export function DecisionCard(props: DecisionCardProps) {
               variant="outlined"
               color="inherit"
               onClick={() => onWithdraw?.(d)}
-              aria-label={`Withdraw my signature (counts as a rejection): ${fullTitle}`}
+              aria-label={`Reject: ${fullTitle}`}
               sx={{ minHeight: 44, ml: 'auto', textAlign: 'left' }}
             >
-              Withdraw my signature (counts as a rejection)
+              Reject
             </Button>
           ) : null}
           {rejectable || signable ? (
@@ -444,10 +444,10 @@ export function DecisionCard(props: DecisionCardProps) {
                   // (never on a removal that is a double: canSign).
                   variant={double ? 'outlined' : 'contained'}
                   onClick={() => onSign?.(d)}
-                  aria-label={`Sign: ${fullTitle}`}
+                  aria-label={`Approve: ${fullTitle}`}
                   sx={{ minHeight: 44, minWidth: 96 }}
                 >
-                  Sign
+                  Approve
                 </Button>
               ) : null}
             </Box>

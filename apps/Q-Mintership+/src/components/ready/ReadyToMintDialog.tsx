@@ -141,7 +141,7 @@ export function ReadyToMintDialog({
           Nominators, minters at level {NOMINATOR_MIN_LEVEL} or above, look for people who&rsquo;d
           make good minters. Showing you&rsquo;re ready sends MINTER a join request from your
           account: nominators and Minter Admins can see it, and when a nomination of you is approved
-          {needed ? ` (${needed} signatures today)` : ''}, you&rsquo;re a member at once.
+          {needed ? ` (${needed} approvals today)` : ''}, you&rsquo;re a member at once.
         </Typography>
 
         <Box component="fieldset" sx={{ border: 0, m: 0, p: 0, minWidth: 0 }}>

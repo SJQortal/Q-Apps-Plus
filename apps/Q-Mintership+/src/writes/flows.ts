@@ -272,7 +272,7 @@ async function withOwnSignature(
       proposal,
       approval: {
         status: 'blocked',
-        reason: 'Hub didn’t say which transaction it sent, so it can’t be signed from here.',
+        reason: 'Hub didn’t say which transaction it sent, so it can’t be approved from here.',
       },
       proposalSignature: null,
     };

@@ -11,7 +11,7 @@ import type { ProposeContext } from '../decisions/ProposeDialog';
 import { useStoredValue } from './useReadyToMint';
 
 /** The words a row says while a decline of its join request waits. */
-export const DECLINE_WAITING = 'A decline is waiting for Minter Admins’ signatures';
+export const DECLINE_WAITING = 'A decline is waiting for Minter Admins’ approvals';
 
 export interface ReadyDeclines {
   /** Waiting kicks by subject: the decision's signature. */

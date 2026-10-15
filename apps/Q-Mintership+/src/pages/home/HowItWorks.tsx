@@ -36,29 +36,29 @@ export function HowItWorks({ needed }: { needed: number | null }) {
             so you join the moment you&rsquo;re approved. If you&rsquo;ve already shown you&rsquo;re
             ready to mint, that request is in, and there&rsquo;s nothing to accept.
           </Step>
-          <Step n={3} title="A Minter Admin signs first">
+          <Step n={3} title="A Minter Admin approves first">
             That starts the clock: Minter Admins then have{' '}
-            {windowText ? <Num>about {windowText}</Num> : 'about eight and a half days'} to sign.
+            {windowText ? <Num>about {windowText}</Num> : 'about eight and a half days'} to approve.
           </Step>
-          <Step n={4} title="Other Minter Admins sign">
+          <Step n={4} title="Other Minter Admins approve">
             {needed ? (
               <>
-                <Num>{needed}</Num> signatures are needed today.
+                <Num>{needed}</Num> approvals are needed today.
               </>
             ) : (
-              'Enough Minter Admins sign.'
+              'Enough Minter Admins approve.'
             )}{' '}
-            There are no votes or polls: admins sign, reject, or let it run out.
+            There are no votes or polls: admins approve, reject, or let it run out.
           </Step>
           <Step n={5} title="You're in">
-            With enough signatures you&rsquo;re in at once if you&rsquo;re ready (you accepted, or
+            With enough approvals you&rsquo;re in at once if you&rsquo;re ready (you accepted, or
             showed you&rsquo;re ready to mint), or you press Join now if not. If time runs out, you
             can simply be nominated again.
           </Step>
         </StepList>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          Before a Minter Admin signs, a nomination stays open for one signing window, then moves to
-          History.
+          Before a Minter Admin approves, a nomination stays open for one approval window, then moves
+          to History.
         </Typography>
       </Card>
     </Section>

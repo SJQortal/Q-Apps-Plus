@@ -237,7 +237,7 @@ describe('content arriving', () => {
         </article>
       ));
     const view = render(
-      <Section title="Collecting signatures" id="collecting">
+      <Section title="Collecting approvals" id="collecting">
         <p>Loading</p>
       </Section>
     );
@@ -245,7 +245,7 @@ describe('content arriving', () => {
     expect(animation(screen.getByText('Loading')).name).toBe('none');
     const show = (keys: string[]) =>
       view.rerender(
-        <Section title="Collecting signatures" id="collecting">
+        <Section title="Collecting approvals" id="collecting">
           {cards(keys)}
         </Section>
       );
@@ -266,7 +266,7 @@ describe('content arriving', () => {
 
   it('fades a section’s first eight children in, and the rest come with them', () => {
     const cards = (keys: number[]) => (
-      <Section title="Collecting signatures" id="collecting">
+      <Section title="Collecting approvals" id="collecting">
         {keys.map((k) => (
           <article key={k} aria-label={`Card ${k}`}>
             Card {k}
@@ -397,13 +397,13 @@ describe('small things that turn up', () => {
   it('pops an answer’s chip in as it is given, and settles it in place', () => {
     const view = render(<AnswerChip view={{ shown: 'none', settled: false, label: '' }} />);
     view.rerender(
-      <AnswerChip view={{ shown: 'signed', settled: false, label: 'Signed ✓ (confirming…)' }} />
+      <AnswerChip view={{ shown: 'signed', settled: false, label: 'You approved ✓ (confirming…)' }} />
     );
-    const chip = screen.getByText('Signed ✓ (confirming…)').closest('.MuiChip-root') as Element;
+    const chip = screen.getByText('You approved ✓ (confirming…)').closest('.MuiChip-root') as Element;
     expect(animation(chip).name).toBe('qmp-pop-in');
-    view.rerender(<AnswerChip view={{ shown: 'signed', settled: true, label: 'Signed ✓' }} />);
+    view.rerender(<AnswerChip view={{ shown: 'signed', settled: true, label: 'You approved ✓' }} />);
     // The same chip, recoloured: it doesn't pop again.
-    expect(screen.getByText('Signed ✓').closest('.MuiChip-root')).toBe(chip);
+    expect(screen.getByText('You approved ✓').closest('.MuiChip-root')).toBe(chip);
     // A changed answer pops in too.
     view.rerender(
       <AnswerChip view={{ shown: 'rejected', settled: false, label: 'Rejected (confirming…)' }} />
@@ -415,15 +415,15 @@ describe('small things that turn up', () => {
   it('leaves the chips a page opens with still', () => {
     render(
       <>
-        <AnswerChip view={{ shown: 'signed', settled: true, label: 'Signed ✓' }} />
+        <AnswerChip view={{ shown: 'signed', settled: true, label: 'You approved ✓' }} />
         <AnswerChip view={{ shown: 'rejected', settled: false, label: 'Rejected (confirming…)' }} />
-        <DoneChip label="Cancellation waiting for signatures" settled={false} />
+        <DoneChip label="Cancellation waiting for approvals" settled={false} />
       </>
     );
     for (const text of [
-      'Signed ✓',
+      'You approved ✓',
       'Rejected (confirming…)',
-      'Cancellation waiting for signatures',
+      'Cancellation waiting for approvals',
     ])
       expect(animation(screen.getByText(text).closest('.MuiChip-root') as Element).name).toBe(
         'none'

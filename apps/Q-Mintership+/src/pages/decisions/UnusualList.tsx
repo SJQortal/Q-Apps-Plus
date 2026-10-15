@@ -31,7 +31,7 @@ export function UnusualList({ decisions, now }: { decisions: Decision[]; now: Ch
           </Typography>
           {d.subject ? <PersonChip address={d.subject} size={32} /> : null}
           <Typography variant="body2">
-            This one can’t be signed here. Check it with the other Minter Admins.
+            This one can’t be approved here. Check it with the other Minter Admins.
           </Typography>
         </Card>
       ))}

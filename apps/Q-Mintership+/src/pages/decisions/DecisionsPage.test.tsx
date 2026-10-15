@@ -58,39 +58,39 @@ describe('Decisions: phases and actions', () => {
     await openPage('admin');
     // Open, not signed: Sign.
     expect(
-      within(card(/bob\+builder/)).getByRole('button', { name: /^Sign: / })
+      within(card(/bob\+builder/)).getByRole('button', { name: /^Approve: / })
     ).toBeInTheDocument();
     // Signed already (7 of 8, close to the end): Signed ✓, no Sign.
     const urgent = await screen.findByRole('article', { name: /Uma Urgent/ });
-    expect(within(urgent).getByText('Signed ✓')).toBeInTheDocument();
-    expect(within(urgent).queryByRole('button', { name: /^Sign/ })).toBeNull();
+    expect(within(urgent).getByText('You approved ✓')).toBeInTheDocument();
+    expect(within(urgent).queryByRole('button', { name: /^Approve/ })).toBeNull();
     // Enough signatures: applies next block, no Sign.
     const met = await screen.findByRole('article', { name: /Mia Met/ });
     expect(within(met).getByText(/Core applies it in the next block/)).toBeInTheDocument();
-    expect(within(met).queryByRole('button', { name: /^Sign/ })).toBeNull();
+    expect(within(met).queryByRole('button', { name: /^Approve/ })).toBeNull();
     // Too late: listed apart, no Sign.
     const late = await screen.findByRole('article', { name: /Lars Late/ });
     expect(
-      within(late).getByText(/last block a signature could count in has passed/)
+      within(late).getByText(/last block an approval could count in has passed/)
     ).toBeVisible();
-    expect(within(late).queryByRole('button', { name: /^Sign/ })).toBeNull();
+    expect(within(late).queryByRole('button', { name: /^Approve/ })).toBeNull();
     // Still unconfirmed: no clock, no Sign.
     const unconfirmed = card(/Remove a Minter Admin/);
     expect(within(unconfirmed).getByText(/On its way into a block/)).toBeInTheDocument();
-    expect(within(unconfirmed).queryByRole('button', { name: /^Sign/ })).toBeNull();
+    expect(within(unconfirmed).queryByRole('button', { name: /^Approve/ })).toBeNull();
     // Early, created and signed by this admin.
     const early = await screen.findByRole('article', { name: /Eli Early/ });
-    expect(within(early).getByText('Signed ✓')).toBeInTheDocument();
+    expect(within(early).getByText('You approved ✓')).toBeInTheDocument();
     // Six decisions are open and unsigned by this admin.
-    expect(screen.getAllByRole('button', { name: /^Sign: / })).toHaveLength(6);
-    expect(screen.getByText('6 decisions waiting for your signature')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Approve: / })).toHaveLength(6);
+    expect(screen.getByText('6 decisions waiting for your answer')).toBeInTheDocument();
   });
 
   it('shows Sign on an early decision to an admin who has not signed it', async () => {
     await openPage('adminL4');
     const early = await screen.findByRole('article', { name: /Eli Early/ });
-    expect(within(early).getByRole('button', { name: /^Sign: / })).toBeInTheDocument();
-    expect(within(early).getByText(/Just proposed. Signatures count already/)).toBeInTheDocument();
+    expect(within(early).getByRole('button', { name: /^Approve: / })).toBeInTheDocument();
+    expect(within(early).getByText(/Just proposed. Approvals count already/)).toBeInTheDocument();
   });
 
   it('shows a nomination’s links at once, each with the avatar of the app or website it opens', async () => {
@@ -124,12 +124,12 @@ describe('Decisions: phases and actions', () => {
     // Ring, countdown and signers on an open invite.
     const signing = card(/bob\+builder/);
     expect(
-      within(signing).getByRole('img', { name: '5 of 8 signatures, 1 confirming' })
+      within(signing).getByRole('img', { name: '5 of 8 approvals, 1 confirming' })
     ).toBeInTheDocument();
-    expect(within(signing).getByText('left to sign')).toBeInTheDocument();
+    expect(within(signing).getByText('left to approve')).toBeInTheDocument();
     expect(within(signing).getByText(/^Expires at block/)).toBeInTheDocument();
-    expect(within(signing).getByRole('list', { name: 'Signed by 5 Minter Admins' })).toBeVisible();
-    expect(within(signing).getByText(/Confirming: 1 signature on the way/)).toBeInTheDocument();
+    expect(within(signing).getByRole('list', { name: 'Approved by 5 Minter Admins' })).toBeVisible();
+    expect(within(signing).getByText(/Confirming: 1 approval on the way/)).toBeInTheDocument();
     // The nomination behind it.
     expect(within(signing).getByText(/Nominated by/)).toBeInTheDocument();
     expect(
@@ -139,10 +139,10 @@ describe('Decisions: phases and actions', () => {
 
   it('is read-only for people who are not Minter Admins', async () => {
     await openPage('nominator');
-    expect(screen.getByText(/Only Minter Admins sign decisions/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Sign/ })).toBeNull();
+    expect(screen.getByText(/Only Minter Admins approve or reject decisions/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Approve/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Propose' })).toBeNull();
-    expect(screen.queryByRole('button', { name: /First signature/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /First approval/ })).toBeNull();
     expect(screen.queryByText('Unusual approval route')).toBeNull();
     expect(screen.queryByText('Clean up stale invites')).toBeNull();
     expect(screen.queryByText('Hide what I answered')).toBeNull();
@@ -164,7 +164,7 @@ describe('Decisions: unusual approval route', () => {
     const list = await screen.findByRole('list', { name: 'Unusual approval route' });
     expect(
       within(list).getByText(
-        'This one can’t be signed here. Check it with the other Minter Admins.'
+        'This one can’t be approved here. Check it with the other Minter Admins.'
       )
     ).toBeInTheDocument();
     expect(within(list).queryByRole('button')).toBeNull();
@@ -208,7 +208,7 @@ describe('Decisions: other transactions waiting for Minter Admins', () => {
     expect(within(list).getByText(/Register name/)).toBeInTheDocument();
     expect(within(list).queryByRole('button')).toBeNull();
     // Nothing in the queue is about them: still six to sign.
-    expect(screen.getAllByRole('button', { name: /^Sign: / })).toHaveLength(6);
+    expect(screen.getAllByRole('button', { name: /^Approve: / })).toHaveLength(6);
   });
 
   it('is not shown to members', async () => {
@@ -224,8 +224,8 @@ describe('Decisions: focus after a dialog', () => {
     const u = user();
     await openPage('admin');
     const signing = card(/bob\+builder/);
-    await u.click(within(signing).getByRole('button', { name: /^Sign: / }));
-    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    await u.click(within(signing).getByRole('button', { name: /^Approve: / }));
+    const dialog = await screen.findByRole('dialog', { name: 'Approve this decision' });
     // The mock world declines it in Hub; meanwhile the card's Sign button was swapped.
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(
@@ -238,9 +238,9 @@ describe('Decisions: focus after a dialog', () => {
   it('returns to the button that opened it when it is still there', async () => {
     const u = user();
     await openPage('admin');
-    const button = within(card(/bob\+builder/)).getByRole('button', { name: /^Sign: / });
+    const button = within(card(/bob\+builder/)).getByRole('button', { name: /^Approve: / });
     await u.click(button);
-    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    const dialog = await screen.findByRole('dialog', { name: 'Approve this decision' });
     await u.click(within(dialog).getByRole('button', { name: 'Not now' }));
     await waitFor(() => expect(button).toHaveFocus(), T);
   });
@@ -255,15 +255,15 @@ describe('Decisions: signing', () => {
     ).signature as string;
     mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'A1' }));
 
-    await u.click(within(card(/bob\+builder/)).getByRole('button', { name: /^Sign: / }));
-    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    await u.click(within(card(/bob\+builder/)).getByRole('button', { name: /^Approve: / }));
+    const dialog = await screen.findByRole('dialog', { name: 'Approve this decision' });
     expect(within(dialog).getByText(pending.slice(0, 8))).toBeInTheDocument();
     expect(within(dialog).getAllByText(/GROUP_APPROVAL/).length).toBeGreaterThan(0);
     expect(within(dialog).getByText(/Fee: 0.01 QORT/)).toBeInTheDocument();
     expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(0);
 
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
-    expect(await within(dialog).findByText('Signed')).toBeInTheDocument();
+    expect(await within(dialog).findByText('Approved')).toBeInTheDocument();
     const call = qortalCallsFor('SIGN_TRANSACTION')[0];
     expect(call.process).toBe(true);
     const bytes = base58Decode(String(call.unsignedBytes));
@@ -273,22 +273,22 @@ describe('Decisions: signing', () => {
     await u.click(within(dialog).getByRole('button', { name: 'Done' }));
     // The page is aria-hidden until the dialog has closed.
     const signed = await screen.findByRole('article', { name: /bob\+builder/ });
-    expect(await within(signed).findByText('Signed ✓ (confirming…)')).toBeInTheDocument();
-    expect(within(signed).queryByRole('button', { name: /^Sign: / })).toBeNull();
+    expect(await within(signed).findByText('You approved ✓ (confirming…)')).toBeInTheDocument();
+    expect(within(signed).queryByRole('button', { name: /^Approve: / })).toBeNull();
   });
 
   it('says so when Hub was cancelled, and nothing was sent', async () => {
     const u = user();
     await openPage('admin');
-    await u.click(within(card(/bob\+builder/)).getByRole('button', { name: /^Sign: / }));
-    const dialog = await screen.findByRole('dialog', { name: 'Sign this decision' });
+    await u.click(within(card(/bob\+builder/)).getByRole('button', { name: /^Approve: / }));
+    const dialog = await screen.findByRole('dialog', { name: 'Approve this decision' });
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(await within(dialog).findByText(/Cancelled in Hub. Nothing was sent./)).toBeVisible();
   });
 });
 
-describe('Decisions: first signature', () => {
-  it('makes the first signature in one guided step of two Hub confirmations', async () => {
+describe('Decisions: first approval', () => {
+  it('makes the first approval in one guided step of two Hub confirmations', async () => {
     const u = user();
     const { world, address, publicKey } = await openPage('admin');
     const inviteSig = base58Encode(new Uint8Array(64).fill(7));
@@ -311,15 +311,15 @@ describe('Decisions: first signature', () => {
     // What the step shows while Hub's raw-data dialog is open.
     let shownInStep2 = '';
     mockQortalRequest('SIGN_TRANSACTION', () => {
-      const step2 = screen.getByText('Step 2 of 2: Sign it').closest('li') as HTMLElement;
+      const step2 = screen.getByText('Step 2 of 2: Approve it').closest('li') as HTMLElement;
       shownInStep2 = step2.textContent ?? '';
       return { type: 'GROUP_APPROVAL', signature: 'A2' };
     });
 
-    await u.click(await screen.findByRole('button', { name: 'First signature: Wren Waiting' }));
-    const dialog = await screen.findByRole('dialog', { name: 'First signature: Wren Waiting' });
+    await u.click(await screen.findByRole('button', { name: 'First approval: Wren Waiting' }));
+    const dialog = await screen.findByRole('dialog', { name: 'First approval: Wren Waiting' });
     expect(within(dialog).getByText('Step 1 of 2: Create the nomination on chain')).toBeVisible();
-    expect(within(dialog).getByText('Step 2 of 2: Sign it')).toBeVisible();
+    expect(within(dialog).getByText('Step 2 of 2: Approve it')).toBeVisible();
     expect(within(dialog).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
     // Its signature doesn't exist yet: the check says when the characters show.
     expect(
@@ -331,7 +331,7 @@ describe('Decisions: first signature', () => {
     expect(qortalCallsFor('INVITE_TO_GROUP')).toHaveLength(0);
 
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
-    expect(await within(dialog).findByText('Signed: the clock has started')).toBeVisible();
+    expect(await within(dialog).findByText('Approved: the clock has started')).toBeVisible();
     expect(shownInStep2).toContain(
       `For this nomination, "pendingSignature" starts with ${inviteSig.slice(0, 8)}.`
     );
@@ -344,7 +344,7 @@ describe('Decisions: first signature', () => {
     expect(base58Encode(bytes.slice(112, 176))).toBe(inviteSig);
   });
 
-  it('explains a first signature whose second step was cancelled', async () => {
+  it('explains a first approval whose second step was cancelled', async () => {
     const u = user();
     const { world } = await openPage('admin');
     const inviteSig = base58Encode(new Uint8Array(64).fill(8));
@@ -362,14 +362,14 @@ describe('Decisions: first signature', () => {
       return tx;
     });
     // SIGN_TRANSACTION keeps the world's answer: declined.
-    await u.click(await screen.findByRole('button', { name: 'First signature: Wren Waiting' }));
-    const dialog = await screen.findByRole('dialog', { name: 'First signature: Wren Waiting' });
+    await u.click(await screen.findByRole('button', { name: 'First approval: Wren Waiting' }));
+    const dialog = await screen.findByRole('dialog', { name: 'First approval: Wren Waiting' });
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(
       await within(dialog).findByText('Step 1 done: the nomination is on chain')
     ).toBeVisible();
     expect(within(dialog).getByText(/You cancelled step 2 in Hub/)).toBeVisible();
-    expect(within(dialog).getByText(/sign it there like any other decision/)).toBeVisible();
+    expect(within(dialog).getByText(/approve it there like any other decision/)).toBeVisible();
   });
 });
 
@@ -384,14 +384,14 @@ describe('Decisions: bulk sign', () => {
       return { type: 'GROUP_APPROVAL', signature: `S${calls}` };
     });
 
-    await u.click(screen.getByRole('button', { name: 'Sign several' }));
+    await u.click(screen.getByRole('button', { name: 'Approve several' }));
     await u.click(screen.getByRole('checkbox', { name: /bob\+builder/ }));
     await u.click(screen.getByRole('checkbox', { name: /Kai Target/ }));
     await u.click(screen.getByRole('checkbox', { name: /Ben Target/ }));
     expect(screen.getByText('3 of 6 selected')).toBeInTheDocument();
-    await u.click(screen.getByRole('button', { name: 'Sign 3' }));
+    await u.click(screen.getByRole('button', { name: 'Approve 3' }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Sign several' });
+    const dialog = await screen.findByRole('dialog', { name: 'Approve several' });
     expect(within(dialog).getByText(/3 Hub confirmations, one for each/)).toBeVisible();
     expect(within(dialog).getByText(/Fees in total: 0.03 QORT/)).toBeInTheDocument();
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
@@ -418,7 +418,7 @@ describe('Decisions: stale invites', () => {
     expect(await screen.findByText('4 approved invites never used')).toBeVisible();
     expect(screen.getByText(/Left out: 1 invite for people already in MINTER/)).toBeVisible();
     expect(
-      screen.getByText('1 of them already has a cancellation waiting for signatures.')
+      screen.getByText('1 of them already has a cancellation waiting for approvals.')
     ).toBeVisible();
 
     await u.click(screen.getByRole('button', { name: 'Show them' }));
@@ -433,7 +433,7 @@ describe('Decisions: stale invites', () => {
       )
     ).toBeVisible();
     // The one whose cancellation is already waiting can't be proposed again.
-    const waitingChip = within(list).getByText('Cancellation waiting for signatures');
+    const waitingChip = within(list).getByText('Cancellation waiting for approvals');
     const waiting = waitingChip.closest('li')!;
     expect(within(waiting as HTMLElement).queryByRole('button')).toBeNull();
     // It was there when the list opened: it doesn't pop in (index.css → .qmp-pop).
@@ -474,10 +474,10 @@ describe('Decisions: stale invites', () => {
         `Hub shows ${invitee.slice(0, 6)}…${invitee.slice(-4)} and the group MINTER.`
       )
     ).toBeVisible();
-    expect(within(hub).getByText('Step 2 of 2: Sign it')).toBeVisible();
+    expect(within(hub).getByText('Step 2 of 2: Approve it')).toBeVisible();
     expect(within(hub).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
     await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
-    expect(await within(hub).findByText('Proposed and signed', {}, T)).toBeVisible();
+    expect(await within(hub).findByText('Proposed and approved', {}, T)).toBeVisible();
     expect(qortalCallsFor('CANCEL_GROUP_INVITE')[0]).toMatchObject({ qortalAddress: invitee });
     const bytes = base58Decode(String(qortalCallsFor('SIGN_TRANSACTION')[0].unsignedBytes));
     expect(base58Encode(bytes.slice(112, 176))).toBe(cancel);
@@ -504,12 +504,12 @@ describe('Decisions: stale invites', () => {
       await screen.findByRole('button', { name: 'Propose cancelling all 2 older ones' }, T)
     );
     const dialog = await screen.findByRole('dialog', { name: 'Cancel stale invites' });
-    expect(within(dialog).getByText(/so you sign each one straight after it/)).toBeVisible();
+    expect(within(dialog).getByText(/so you approve each one straight after it/)).toBeVisible();
     expect(
       within(dialog).getByText('4 Hub confirmations, two for each, one after another:')
     ).toBeVisible();
     expect(within(dialog).getByText('1. Propose it.')).toBeVisible();
-    expect(within(dialog).getByText('2. Sign it.')).toBeVisible();
+    expect(within(dialog).getByText('2. Approve it.')).toBeVisible();
     expect(within(dialog).getByText(/Fees in total: 0.04 QORT \(4 × 0.01 QORT\)/)).toBeVisible();
     // Nothing about the balance unless it can't pay.
     expect(within(dialog).queryByText(/balance/)).toBeNull();
@@ -518,13 +518,13 @@ describe('Decisions: stale invites', () => {
     await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(
       await within(dialog).findByText(
-        '2 of 2 proposed and signed. Each counts once it is in a block.',
+        '2 of 2 proposed and approved. Each counts once it is in a block.',
         {},
         T
       )
     ).toBeVisible();
     const progress = within(dialog).getByRole('list', { name: 'Progress' });
-    expect(within(progress).getAllByText('Proposed and signed ✓')).toHaveLength(2);
+    expect(within(progress).getAllByText('Proposed and approved ✓')).toHaveLength(2);
     expect(qortalCallsFor('CANCEL_GROUP_INVITE').map((c) => c.qortalAddress)).toEqual([
       fakeAddress('stale-2'),
       fakeAddress('stale-3'),
@@ -578,7 +578,7 @@ describe('Decisions: proposing', () => {
     );
     let shownInStep2 = '';
     mockQortalRequest('SIGN_TRANSACTION', () => {
-      const step2 = screen.getByText('Step 2 of 2: Sign it').closest('li') as HTMLElement;
+      const step2 = screen.getByText('Step 2 of 2: Approve it').closest('li') as HTMLElement;
       shownInStep2 = step2.textContent ?? '';
       return { type: 'GROUP_APPROVAL', signature: 'OWN' };
     });
@@ -599,18 +599,18 @@ describe('Decisions: proposing', () => {
     const hub = await screen.findByRole('dialog', { name: /Remove a Minter Admin: Admin B/ });
     // Two Hub confirmations, both fees up front.
     expect(within(hub).getByText('Step 1 of 2: Propose it')).toBeVisible();
-    expect(within(hub).getByText('Step 2 of 2: Sign it')).toBeVisible();
+    expect(within(hub).getByText('Step 2 of 2: Approve it')).toBeVisible();
     expect(within(hub).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
     expect(
       within(hub).getByText(/^Hub shows Admin B \(Q\w{5}…\) and the group MINTER\.$/)
     ).toBeVisible();
     expect(
-      within(hub).getByText(/Your proposal doesn’t count as your signature, so you sign it/)
+      within(hub).getByText(/Your proposal doesn’t count as your approval, so you approve it/)
     ).toBeVisible();
     expect(within(hub).queryByText(/sign it in the queue too/)).toBeNull();
     await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
-    expect(await within(hub).findByText('Proposed and signed', {}, T)).toBeVisible();
-    expect(within(hub).getByText(/After yours it needs 7 more signatures/)).toBeVisible();
+    expect(await within(hub).findByText('Proposed and approved', {}, T)).toBeVisible();
+    expect(within(hub).getByText(/After yours it needs 7 more approvals/)).toBeVisible();
     // While Hub asked for step 2, the step showed the proposal's first characters.
     expect(shownInStep2).toContain(
       `For this proposal, "pendingSignature" starts with ${removal.slice(0, 8)}.`
@@ -650,7 +650,7 @@ describe('Decisions: proposing', () => {
     expect(await within(hub).findByText('Step 1 done: proposed', {}, T)).toBeVisible();
     expect(within(hub).getByText(/You cancelled step 2 in Hub/)).toBeVisible();
     expect(
-      within(hub).getByText(/Your proposal is waiting for signatures. Once it is in a block, sign/)
+      within(hub).getByText(/Your proposal is waiting for approvals. Once it is in a block, approve/)
     ).toBeVisible();
     expect(qortalCallsFor('KICK_FROM_GROUP')).toHaveLength(1);
     expect(qortalCallsFor('SIGN_TRANSACTION')).toHaveLength(1);
@@ -751,7 +751,7 @@ describe('Decisions: proposing', () => {
     // The two invite choices say how they differ.
     expect(
       await screen.findByRole('menuitem', {
-        name: /Cancel an approved invite.*One approved invite you pick, with your signature added\./,
+        name: /Cancel an approved invite.*One approved invite you pick, with your approval added\./,
       })
     ).toBeVisible();
     expect(
@@ -801,7 +801,7 @@ describe('Decisions: proposing', () => {
     expect(within(form).queryByText(/they may still press Join now/)).toBeNull();
     expect(
       await within(form).findByText(
-        'Cancelling this invite is already waiting for signatures.',
+        'Cancelling this invite is already waiting for approvals.',
         {},
         T
       )
@@ -814,11 +814,11 @@ describe('Decisions: proposing', () => {
 
     const hub = await screen.findByRole('dialog', { name: /^Cancel an approved invite: / }, T);
     expect(within(hub).getByText('Step 1 of 2: Propose it')).toBeVisible();
-    expect(within(hub).getByText('Step 2 of 2: Sign it')).toBeVisible();
+    expect(within(hub).getByText('Step 2 of 2: Approve it')).toBeVisible();
     expect(within(hub).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
     expect(qortalCallsFor('CANCEL_GROUP_INVITE')).toHaveLength(0);
     await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
-    expect(await within(hub).findByText('Proposed and signed', {}, T)).toBeVisible();
+    expect(await within(hub).findByText('Proposed and approved', {}, T)).toBeVisible();
     expect(qortalCallsFor('CANCEL_GROUP_INVITE')).toEqual([
       expect.objectContaining({ groupId: 694, qortalAddress: invitee, txGroupId: 694 }),
     ]);
@@ -917,7 +917,7 @@ describe('Decisions: admin changes from anywhere', () => {
       name: 'Become a Minter Admin, Pia Promote',
     });
     expect(within(pia).getByText(/^Their own proposal, /)).toBeVisible();
-    expect(within(pia).getByRole('button', { name: /^Sign: Become a Minter Admin/ })).toBeVisible();
+    expect(within(pia).getByRole('button', { name: /^Approve: Become a Minter Admin/ })).toBeVisible();
   });
 
   it('shows a step-down proposed in another app, and a removal by another admin', async () => {
@@ -942,7 +942,7 @@ describe('Decisions: admin changes from anywhere', () => {
     const pia = await screen.findByRole('article', {
       name: 'Become a Minter Admin, Pia Promote',
     });
-    expect(within(pia).queryByRole('button', { name: /^Sign/ })).toBeNull();
+    expect(within(pia).queryByRole('button', { name: /^Approve/ })).toBeNull();
   });
 });
 
@@ -991,14 +991,14 @@ describe('Decisions: navigation and filters', () => {
     world.pending.length = 0;
     world.records.length = 0;
     await u.click(screen.getByRole('button', { name: 'Refresh' }));
-    expect(await screen.findByText('Nothing waiting for signatures')).toBeVisible();
+    expect(await screen.findByText('Nothing collecting approvals')).toBeVisible();
   });
 });
 
 describe('Decisions: headings', () => {
   it('one h1, then h2 for each part of the page, h3 for each card: no level skipped', async () => {
     await openPage('admin');
-    await screen.findByRole('heading', { level: 2, name: 'How signing works' });
+    await screen.findByRole('heading', { level: 2, name: 'How approving works' });
     const levels = screen.getAllByRole('heading').map((h) => Number(h.tagName.slice(1)));
     expect(levels[0]).toBe(1);
     expect(levels.filter((l) => l === 1)).toHaveLength(1);
@@ -1007,7 +1007,7 @@ describe('Decisions: headings', () => {
       if (i > 0) expect(level).toBeLessThanOrEqual(levels[i - 1] + 1);
     });
     expect(
-      screen.getByRole('heading', { level: 2, name: /decisions? waiting for your signature$/ })
+      screen.getByRole('heading', { level: 2, name: /decisions? waiting for your answer$/ })
     ).toBeVisible();
     // How signing works is a part of its own, not under the stale invites before it.
     expect(levels.at(-1)).toBe(2);

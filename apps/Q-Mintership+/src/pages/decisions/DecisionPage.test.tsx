@@ -45,7 +45,7 @@ describe('A decision’s own page: still waiting', () => {
     await open('admin', pendingOf('GROUP_KICK'));
     const card = await screen.findByRole('article', { name: 'Remove from MINTER, Kai Target' }, T);
     expect(within(card).getByText('Not minting for 6 months')).toBeVisible();
-    expect(within(card).getByRole('button', { name: /^Sign: Remove from MINTER/ })).toBeVisible();
+    expect(within(card).getByRole('button', { name: /^Approve: Remove from MINTER/ })).toBeVisible();
     // The header copies the link; the card on its own page doesn't repeat it.
     expect(screen.getByRole('button', { name: 'Copy a link to this decision' })).toBeVisible();
     expect(within(card).queryByRole('button', { name: /^Copy link/ })).toBeNull();
@@ -152,7 +152,7 @@ describe('A decision’s own page: still waiting', () => {
         ).signature
     );
     const card = await screen.findByRole('article', { name: /^Add to MINTER, bob\+builder/ }, T);
-    expect(within(card).queryByRole('button', { name: /^Sign/ })).toBeNull();
+    expect(within(card).queryByRole('button', { name: /^Approve/ })).toBeNull();
     expect(await within(card).findByText(/Nominated by/, {}, T)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'The nomination' })).toHaveAttribute(
       'href',
@@ -167,7 +167,7 @@ describe('A decision’s own page: still waiting', () => {
       { name: 'Become a Minter Admin, Pia Promote' },
       T
     );
-    expect(within(card).getByRole('button', { name: /^Sign: / })).toBeVisible();
+    expect(within(card).getByRole('button', { name: /^Approve: / })).toBeVisible();
   });
 });
 
@@ -177,11 +177,11 @@ describe('A decision’s own page: decided', () => {
     const card = await screen.findByRole('article', { name: 'Add to MINTER, Nora Nominator' }, T);
     expect(within(card).getByText('Approved')).toBeVisible();
     expect(
-      within(card).getByText('Enough Minter Admins signed, and Core applied it.')
+      within(card).getByText('Enough Minter Admins approved, and Core applied it.')
     ).toBeVisible();
     expect(within(card).getByText(/^Decided in block 2,301,400, /)).toBeVisible();
-    expect(await within(card).findByText('Signed by 8 Minter Admins.', {}, T)).toBeVisible();
-    expect(within(card).getByRole('list', { name: 'Signed by 8 Minter Admins' })).toBeVisible();
+    expect(await within(card).findByText('Approved by 8 Minter Admins.', {}, T)).toBeVisible();
+    expect(within(card).getByRole('list', { name: 'Approved by 8 Minter Admins' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'The nomination' })).toHaveAttribute(
       'href',
       `/nominations/${ADDR.nominator}`
@@ -203,7 +203,7 @@ describe('A decision’s own page: decided', () => {
     const card = await screen.findByRole('article', { name: /^Add to MINTER, / }, T);
     expect(within(card).getByText('Expired')).toBeVisible();
     expect(
-      within(card).getByText('Not enough signatures in time. They can be nominated again.')
+      within(card).getByText('Not enough approvals in time. They can be nominated again.')
     ).toBeVisible();
     expect(within(card).getByText(/^Expired in block /)).toBeVisible();
   });
@@ -235,7 +235,7 @@ describe('A decision’s own page: links that aren’t a MINTER decision', () =>
     const pick = (world: World) => world.unusual.signature as string;
     const first = await open('admin', pick);
     expect(await screen.findByText('Unusual approval route.', {}, T)).toBeVisible();
-    expect(screen.queryByRole('button', { name: /^Sign/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Approve/ })).toBeNull();
     first.unmount();
     await open('learner', pick);
     expect(

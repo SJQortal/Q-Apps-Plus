@@ -68,8 +68,8 @@ export function ReadyNext({ needed }: { needed: number | null }) {
   return (
     <>
       A nominator, a minter at level {NOMINATOR_MIN_LEVEL} or above, may nominate you. Then Minter
-      Admins sign: once {needed ? <Num>{needed}</Num> : 'enough'} have signed, you&rsquo;re in at
-      once, with nothing more to press.
+      Admins decide: once {needed ? <Num>{needed}</Num> : 'enough'} have approved, you&rsquo;re in
+      at once, with nothing more to press.
     </>
   );
 }

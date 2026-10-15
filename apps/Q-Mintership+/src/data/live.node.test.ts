@@ -98,7 +98,7 @@ describe.skipIf(!NODE)('the data layer on a real node (GET only)', () => {
     expect(members.members.length).toBe(members.memberCount);
     console.info(
       `MINTER: ${info.approvalThreshold}, delays ${info.minimumBlockDelay}/${info.maximumBlockDelay}, ` +
-        `${members.memberCount} members, ${admins.adminCount} admin rows → ${approvalsNeeded(info.approvalThreshold, admins.adminCount)} signatures needed, ` +
+        `${members.memberCount} members, ${admins.adminCount} admin rows → ${approvalsNeeded(info.approvalThreshold, admins.adminCount)} approvals needed, ` +
         `${joins.length} join requests`
     );
   });
