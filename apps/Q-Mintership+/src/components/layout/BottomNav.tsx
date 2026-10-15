@@ -2,7 +2,7 @@ import { Badge } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { headerFill, primarySoft } from '../../hub-theme';
-import { isNavActive, phoneItems } from './navItems';
+import { badgeWords, isNavActive, phoneItems } from './navItems';
 
 export const BOTTOM_NAV_HEIGHT = 60;
 
@@ -85,9 +85,12 @@ const Label = styled('span')({
 export function BottomNav({
   isAdmin,
   decisionsBadge = 0,
+  historyBadge = 0,
 }: {
   isAdmin: boolean;
   decisionsBadge?: number;
+  /** Changes decided since this Minter Admin last had History open. */
+  historyBadge?: number;
 }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -95,7 +98,7 @@ export function BottomNav({
     <Bar aria-label="Main">
       {phoneItems(isAdmin).map(({ key, label, short, path, Icon }) => {
         const active = isNavActive(pathname, path);
-        const badge = key === 'decisions' ? decisionsBadge : 0;
+        const badge = key === 'decisions' ? decisionsBadge : key === 'history' ? historyBadge : 0;
         return (
           <Item
             key={key}
@@ -116,7 +119,7 @@ export function BottomNav({
               </Pill>
             </Badge>
             <Label>{short ?? label}</Label>
-            {badge ? <span className="qmp-visually-hidden">, {badge} waiting for you</span> : null}
+            {badge ? <span className="qmp-visually-hidden">, {badgeWords(key, badge)}</span> : null}
           </Item>
         );
       })}

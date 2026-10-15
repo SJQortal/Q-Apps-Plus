@@ -62,3 +62,8 @@ export function isNavActive(pathname: string, path: string): boolean {
   if (path === '/') return pathname === '/' || pathname === '';
   return pathname === path || pathname.startsWith(`${path}/`);
 }
+
+/** What a nav item's count says to screen readers: "3 waiting for you", "2 new". */
+export function badgeWords(key: NavKey, count: number): string {
+  return key === 'history' ? `${count} new` : `${count} waiting for you`;
+}

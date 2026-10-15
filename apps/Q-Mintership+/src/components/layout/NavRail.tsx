@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { headerFill, primarySoft } from '../../hub-theme';
 import { useCompactRail } from '../../hooks/usePhoneLayout';
 import { APP_NAME } from '../../constants/plus';
-import { isNavActive, railItems } from './navItems';
+import { badgeWords, isNavActive, railItems } from './navItems';
 
 export const RAIL_WIDTH = 220;
 export const RAIL_WIDTH_COMPACT = 72;
@@ -113,9 +113,12 @@ const NavLabel = styled('span')({
 export function NavRail({
   isAdmin,
   decisionsBadge = 0,
+  historyBadge = 0,
 }: {
   isAdmin: boolean;
   decisionsBadge?: number;
+  /** Changes decided since this Minter Admin last had History open. */
+  historyBadge?: number;
 }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -133,7 +136,7 @@ export function NavRail({
       </Brand>
       {railItems(isAdmin).map(({ key, label, path, Icon }) => {
         const active = isNavActive(pathname, path);
-        const badge = key === 'decisions' ? decisionsBadge : 0;
+        const badge = key === 'decisions' ? decisionsBadge : key === 'history' ? historyBadge : 0;
         return (
           <NavButton
             key={key}
@@ -153,7 +156,7 @@ export function NavRail({
               <Icon aria-hidden />
             </Badge>
             <NavLabel className={compact ? 'qmp-visually-hidden' : undefined}>{label}</NavLabel>
-            {badge ? <span className="qmp-visually-hidden">, {badge} waiting for you</span> : null}
+            {badge ? <span className="qmp-visually-hidden">, {badgeWords(key, badge)}</span> : null}
           </NavButton>
         );
       })}

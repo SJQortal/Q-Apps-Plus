@@ -29,6 +29,7 @@ import {
   ADDR,
   NOW,
   PEOPLE,
+  TIP,
 } from './world.mjs';
 import { addTargetShift } from './world.mjs';
 import { nominatorLastVisit } from './world.mjs';
@@ -418,6 +419,34 @@ export default {
       after: wait('main h2'),
     },
     { key: 'activity', path: '/activity?as=admin', after: settle },
+    // A Minter Admin who last had History open at TIP − 6,000: three changes decided since
+    // count on the rail's History, and on Activity's History button where the phone bar has none.
+    {
+      key: 'activity-history-news',
+      path: '/activity?as=admin',
+      after: async (page) => {
+        await page.addInitScript(
+          ([key, value]) => {
+            try {
+              localStorage.setItem(key, value);
+            } catch {
+              // No storage: no count, and the wait below says so.
+            }
+          },
+          [
+            `qmintershipplus-history-seen-${ADDR.admin}`,
+            JSON.stringify({ v: 1, height: TIP - 6_000 }),
+          ]
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+        await page
+          .getByRole('link', { name: 'History', exact: false })
+          .first()
+          .waitFor({ timeout: 8000 });
+        await page.waitForTimeout(1500);
+      },
+    },
     { key: 'activity-member', path: '/activity?as=learner', after: settle },
     { key: 'settings', path: '/settings?as=admin', after: settle },
     // A moving target (e2e/world.mjs addTargetShift): the "target changed" note

@@ -8,6 +8,7 @@ import { useTrackInAppHistory } from '../../hooks/useSafeBack';
 import { useApplyMotionSetting } from '../../hooks/useReducedMotion';
 import { BOTTOM_NAV_VAR, usePublishOffset } from '../../hooks/useOverlayPadding';
 import { useDecisions, useMyStatus } from '../../hooks/useData';
+import { useHistoryNews } from '../../hooks/useHistoryNews';
 import { useRecordVisit } from '../../hooks/useLastVisit';
 import { useScrollTopOnNewPage } from '../../hooks/useScrollTopOnNewPage';
 import { useSettleConfirmingWrites } from '../../hooks/useSettleConfirmingWrites';
@@ -67,6 +68,7 @@ export function AppShell() {
   const { status } = useMyStatus();
   const isAdmin = Boolean(status?.isAdmin);
   const badge = useDecisionsBadge(isAdmin, session.publicKey);
+  const historyBadge = useHistoryNews(isAdmin, session.status === 'ready' ? session.address : null);
 
   useStartSession();
   useHubMessages();
@@ -91,7 +93,9 @@ export function AppShell() {
   );
   return (
     <Frame>
-      {bottomBar ? null : <NavRail isAdmin={isAdmin} decisionsBadge={badge} />}
+      {bottomBar ? null : (
+        <NavRail isAdmin={isAdmin} decisionsBadge={badge} historyBadge={historyBadge} />
+      )}
       <Main $phone={navShown}>
         <ErrorBoundary resetKey={pathname}>
           <Suspense fallback={<PageFallback />}>
@@ -99,7 +103,9 @@ export function AppShell() {
           </Suspense>
         </ErrorBoundary>
       </Main>
-      {navShown ? <BottomNav isAdmin={isAdmin} decisionsBadge={badge} /> : null}
+      {navShown ? (
+        <BottomNav isAdmin={isAdmin} decisionsBadge={badge} historyBadge={historyBadge} />
+      ) : null}
     </Frame>
   );
 }

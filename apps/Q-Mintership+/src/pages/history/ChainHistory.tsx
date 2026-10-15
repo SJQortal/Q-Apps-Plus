@@ -7,6 +7,8 @@
  * (rules/targetShift.ts), where every later admin change is in the windows
  * read. Each decided change links to its decision's own page
  * (parts/TimelineList.tsx), which reads its signatures only when opened.
+ * Once the list is in, what it reaches is no longer new for this account
+ * (data/historySeen.ts): a Minter Admin's History tab stops counting it.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
@@ -21,6 +23,8 @@ import {
   type HistoryWindow,
 } from '../../data/timeline';
 import { useAdmins, useChainNow, useGroupInfo } from '../../hooks/useData';
+import { markHistorySeen } from '../../data/historySeen';
+import { useSession } from '../../state/session';
 import { adminLeaves, approvedAdminChanges, targetSteps } from '../../rules/targetShift';
 import { useQuery } from '../../hooks/useQuery';
 import {
@@ -55,6 +59,13 @@ export function ChainHistory() {
     anchor ? `timelines:${anchor.height}:${count}` : null,
     (force) => loadHistoryWindows(anchor as HistoryAnchor, count, { force })
   );
+  // What the list reaches isn't new any more: the History tab's count drops it.
+  const session = useSession();
+  const me = session.status === 'ready' ? session.address : null;
+  const shownTo = query.data && anchor ? anchor.height : null;
+  useEffect(() => {
+    if (me && shownTo) markHistorySeen(me, shownTo);
+  }, [me, shownTo]);
   // Keep the windows already on screen while an older one loads.
   const [previous, setPrevious] = useState<HistoryWindow[] | undefined>(undefined);
   useEffect(() => {

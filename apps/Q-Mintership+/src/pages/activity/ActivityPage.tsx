@@ -5,15 +5,18 @@
  */
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Button } from '@mui/material';
+import { Badge, Button } from '@mui/material';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import { useAtom } from 'jotai';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
+import { badgeWords } from '../../components/layout/navItems';
+import { useNavHas } from '../../components/layout/useNavHas';
 import { ErrorState, ListSkeleton, TruncatedNote } from '../../components/common/states';
 import { RefreshButton } from '../../components/common/RefreshButton';
 import { Section } from '../../components/common/Section';
-import { useGroupInfo, useNominations } from '../../hooks/useData';
+import { useGroupInfo, useMyStatus, useNominations } from '../../hooks/useData';
+import { useHistoryNews } from '../../hooks/useHistoryNews';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { PATHS } from '../../routes/paths';
 import { useSession } from '../../state/session';
@@ -35,6 +38,13 @@ export default function ActivityPage() {
   const session = useSession();
   const phone = usePhoneLayout();
   const data = activity.data;
+  const { status } = useMyStatus();
+  const historyInNav = useNavHas('history');
+  const news = useHistoryNews(
+    Boolean(status?.isAdmin),
+    session.status === 'ready' ? session.address : null
+  );
+  const historyNews = historyInNav ? 0 : news;
 
   return (
     <>
@@ -47,10 +57,23 @@ export default function ActivityPage() {
               component={RouterLink}
               to={PATHS.history}
               color="inherit"
-              startIcon={<HistoryOutlinedIcon />}
+              startIcon={
+                // Where History isn't in the nav (a Minter Admin's phone bar), its count is here.
+                <Badge
+                  badgeContent={historyNews}
+                  color="error"
+                  max={99}
+                  slotProps={{ badge: { 'aria-hidden': true } }}
+                >
+                  <HistoryOutlinedIcon />
+                </Badge>
+              }
               sx={{ minHeight: 44 }}
             >
               History
+              {historyNews ? (
+                <span className="qmp-visually-hidden">, {badgeWords('history', historyNews)}</span>
+              ) : null}
             </Button>
             <RefreshButton onClick={() => void activity.refetch()} fetching={activity.fetching} />
           </>
