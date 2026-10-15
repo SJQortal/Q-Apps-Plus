@@ -50,11 +50,16 @@ const sent = () =>
   }));
 const publishes = () => qortalCallsFor('PUBLISH_QDN_RESOURCE');
 const signerCount = 19;
-/** The Yes / No / Neutral counts of a card's "Votes" list, in order. */
-const counts = (votes: HTMLElement) =>
-  within(votes)
-    .getAllByText(/^(Yes|No|Neutral): \d+$/)
-    .map((e) => e.textContent);
+/** The Yes / No / Neutral counts of a card's vote columns, in order: "Yes: 3". */
+const counts = (card: HTMLElement) =>
+  within(card)
+    .getAllByRole('heading', { level: 4, name: /^(Yes|No|Neutral)\s*\d+$/ })
+    .map((h) => (h.textContent ?? '').replace(/^(\D+?)\s*(\d+)$/, '$1: $2'));
+/** Who is in a vote's column, by the names of their links. */
+const voters = (card: HTMLElement, vote: string) =>
+  within(within(card).getByRole('list', { name: new RegExp(`^Voted ${vote}: `) }))
+    .getAllByRole('link')
+    .map((a) => a.getAttribute('aria-label')?.replace(/: open their page$/, ''));
 
 describe('Decisions → Minter Admin polls', () => {
   it('lists the polls an admin can read: open first (soonest end), then closed', async () => {
@@ -88,16 +93,10 @@ describe('Decisions → Minter Admin polls', () => {
     expect(within(card).getByText('Minter Admins only')).toBeVisible();
     expect(within(card).getByText(/^Asked by/)).toHaveTextContent(/Admin B\s*1 day 23 hours ago/);
     expect(within(card).getByText(/^Ends in 5 days · .*\(about block 2,763,427\)$/)).toBeVisible();
-    const votes = within(card).getByRole('list', { name: 'Votes' });
-    expect(counts(votes)).toEqual(['Yes: 3', 'No: 2', 'Neutral: 1']);
-    // Each count with who voted that, in words too.
-    expect(votes).toHaveTextContent(/No: 2.*Juniper L4 and Admin F.*Neutral: 1/);
-    const yes = within(card).getByRole('list', { name: 'Voted Yes' });
-    expect(
-      within(yes)
-        .getAllByRole('link')
-        .map((a) => a.getAttribute('aria-label'))
-    ).toEqual(['Admin B', 'Admin C', 'Dex Demote']);
+    // Yes, No and Neutral side by side, each with its count and who voted it, by name.
+    expect(counts(card)).toEqual(['Yes: 3', 'No: 2', 'Neutral: 1']);
+    expect(voters(card, 'Yes')).toEqual(['Admin B', 'Admin C', 'Dex Demote']);
+    expect(voters(card, 'No')).toEqual(['Juniper L4', 'Admin F']);
     expect(
       within(card).getByText(`13 of ${signerCount} Minter Admins haven't voted`)
     ).toBeVisible();
@@ -116,11 +115,7 @@ describe('Decisions → Minter Admin polls', () => {
     expect(within(shared).getByText(/Shared by/)).toHaveTextContent(
       /Shared by\s*A?Admin D ΑΩ: you read their copy\./
     );
-    expect(counts(within(shared).getByRole('list', { name: 'Votes' }))).toEqual([
-      'Yes: 1',
-      'No: 1',
-      'Neutral: 1',
-    ]);
+    expect(counts(shared)).toEqual(['Yes: 1', 'No: 1', 'Neutral: 1']);
     const closed = await pollCard(CLOSED_Q);
     expect(within(closed).getByText('Closed')).toBeVisible();
     expect(within(closed).getByText(/^Ended 4 days ago · /)).toBeVisible();
@@ -147,11 +142,7 @@ describe('Decisions → Minter Admin polls', () => {
       })
     );
     const shared = await pollCard(SHARED_Q);
-    expect(counts(within(shared).getByRole('list', { name: 'Votes' }))).toEqual([
-      'Yes: 1',
-      'No: 1',
-      'Neutral: 1',
-    ]);
+    expect(counts(shared)).toEqual(['Yes: 1', 'No: 1', 'Neutral: 1']);
     expect(
       within(shared).getByText('1 vote you can’t read yet isn’t in these counts.')
     ).toBeVisible();
@@ -306,7 +297,7 @@ describe('voting', () => {
     });
     await u.click(within(dialog).getByRole('button', { name: 'Done' }));
     const after = await pollCard(OPEN_Q);
-    expect(await within(after).findByText('Voted Yes ✓ (confirming…)', {}, T)).toBeVisible();
+    expect(await within(after).findByText('You voted Yes ✓ (confirming…)', {}, T)).toBeVisible();
     expect(within(after).getByText('Change your vote:')).toBeVisible();
     expect(
       within(after).getByRole('button', { name: `Change your vote to No: ${OPEN_Q}` })
@@ -321,7 +312,7 @@ describe('voting', () => {
     await openDecisions();
     sent();
     const card = await pollCard(VOTED_Q);
-    expect(within(card).getByText('Your vote: No ✓')).toBeVisible();
+    expect(within(card).getByText('You voted No ✓')).toBeVisible();
     await u.click(
       within(card).getByRole('button', { name: `Change your vote to Yes: ${VOTED_Q}` })
     );

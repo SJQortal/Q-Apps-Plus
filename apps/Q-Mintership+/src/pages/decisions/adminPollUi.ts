@@ -157,7 +157,7 @@ export function myVoteView(
     if (pending.status === 'sending')
       return {
         vote: counted?.vote ?? null,
-        label: counted ? `Your vote: ${VOTE_LABEL[counted.vote]} ✓` : null,
+        label: counted ? `You voted ${VOTE_LABEL[counted.vote]} ✓` : null,
         settled: true,
         sending: true,
         failed: false,
@@ -165,14 +165,14 @@ export function myVoteView(
     if (pending.status === 'confirming')
       return {
         vote: pending.vote,
-        label: `Voted ${VOTE_LABEL[pending.vote]} ✓ (confirming…)`,
+        label: `You voted ${VOTE_LABEL[pending.vote]} ✓ (confirming…)`,
         settled: false,
         sending: false,
         failed: false,
       };
     return {
       vote: counted?.vote ?? null,
-      label: counted ? `Your vote: ${VOTE_LABEL[counted.vote]} ✓` : null,
+      label: counted ? `You voted ${VOTE_LABEL[counted.vote]} ✓` : null,
       settled: true,
       sending: false,
       failed: true,
@@ -182,7 +182,7 @@ export function myVoteView(
   return {
     vote: counted.vote,
     label: view.open
-      ? `Your vote: ${VOTE_LABEL[counted.vote]} ✓`
+      ? `You voted ${VOTE_LABEL[counted.vote]} ✓`
       : `You voted ${VOTE_LABEL[counted.vote]}`,
     settled: true,
     sending: false,

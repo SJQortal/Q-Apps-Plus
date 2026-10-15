@@ -1,9 +1,10 @@
 /**
- * Who answered a decision, side by side: Approved, Rejected and (while it
- * collects answers) Considering, each a column of Minter Admins under its
- * count, so the answers read at a glance instead of one list under another.
- * On phones each person is their avatar over their name, so three columns
- * still fit.
+ * Who answered, side by side: a column of Minter Admins per answer under
+ * its count, so the answers read at a glance instead of one list under
+ * another. On phones each person is their avatar over their name, so three
+ * columns still fit. PeopleColumns draws any set of columns (a Minter Admin
+ * poll's Yes, No and Neutral); AnswerColumns is a decision's Approved,
+ * Rejected and (while it collects answers) Considering.
  *
  * An answer still on its way shows in its column, faded, with "confirming…"
  * (until then the one it replaces, if any, still counts in the other); a
@@ -30,9 +31,9 @@ export interface AnswerPerson {
   note?: string | null;
 }
 
-type Tone = 'success' | 'error' | 'neutral';
+export type ColumnTone = 'success' | 'error' | 'neutral';
 
-const TONE_COLOR: Record<Tone, string> = {
+const TONE_COLOR: Record<ColumnTone, string> = {
   success: 'success.main',
   error: 'error.main',
   neutral: 'text.secondary',
@@ -53,42 +54,73 @@ export function AnswerColumns({
   considering,
   emptyText = 'None yet',
 }: AnswerColumnsProps) {
-  const columns = considering ? 3 : 2;
+  return (
+    <PeopleColumns
+      columns={[
+        {
+          key: 'approved',
+          title: 'Approved',
+          listLabel: (n) => `Approved by ${plural(n, 'Minter Admin')}`,
+          icon: <CheckCircleOutlineOutlinedIcon aria-hidden />,
+          tone: 'success',
+          people: approved,
+          emptyText,
+        },
+        {
+          key: 'rejected',
+          title: 'Rejected',
+          listLabel: (n) => `Rejected by ${plural(n, 'Minter Admin')}`,
+          icon: <CancelOutlinedIcon aria-hidden />,
+          tone: 'error',
+          people: rejected,
+          emptyText,
+        },
+        ...(considering
+          ? [
+              {
+                key: 'considering',
+                title: 'Considering',
+                listLabel: (n: number) => `Considering: ${plural(n, 'Minter Admin')}`,
+                icon: <VisibilityOutlinedIcon aria-hidden />,
+                tone: 'neutral' as const,
+                people: considering,
+                emptyText: 'Nobody',
+              },
+            ]
+          : []),
+      ]}
+    />
+  );
+}
+
+export interface PeopleColumn {
+  key: string;
+  title: string;
+  /** The list's name for screen readers, from the count that counts. */
+  listLabel: (count: number) => string;
+  icon: ReactNode;
+  tone: ColumnTone;
+  people: AnswerPerson[];
+  /** Said when the column has nobody. */
+  emptyText: string;
+  /** The count in the heading, when it isn't the people who count here. */
+  count?: number;
+}
+
+/** Columns of people side by side, each under its title and count. */
+export function PeopleColumns({ columns }: { columns: PeopleColumn[] }) {
   return (
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+        gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`,
         columnGap: { xs: 1, sm: 2 },
         rowGap: 1,
       }}
     >
-      <Column
-        title="Approved"
-        listLabel={(n) => `Approved by ${plural(n, 'Minter Admin')}`}
-        icon={<CheckCircleOutlineOutlinedIcon aria-hidden />}
-        tone="success"
-        people={approved}
-        emptyText={emptyText}
-      />
-      <Column
-        title="Rejected"
-        listLabel={(n) => `Rejected by ${plural(n, 'Minter Admin')}`}
-        icon={<CancelOutlinedIcon aria-hidden />}
-        tone="error"
-        people={rejected}
-        emptyText={emptyText}
-      />
-      {considering ? (
-        <Column
-          title="Considering"
-          listLabel={(n) => `Considering: ${plural(n, 'Minter Admin')}`}
-          icon={<VisibilityOutlinedIcon aria-hidden />}
-          tone="neutral"
-          people={considering}
-          emptyText="Nobody"
-        />
-      ) : null}
+      {columns.map(({ key, ...column }) => (
+        <Column key={key} {...column} />
+      ))}
     </Box>
   );
 }
@@ -100,18 +132,11 @@ function Column({
   tone,
   people,
   emptyText,
-}: {
-  title: string;
-  /** The list's name for screen readers, from the count that counts. */
-  listLabel: (count: number) => string;
-  icon: ReactNode;
-  tone: Tone;
-  people: AnswerPerson[];
-  emptyText: string;
-}) {
+  count,
+}: Omit<PeopleColumn, 'key'>) {
   const headingId = useId();
-  const counted = people.filter((p) => !p.confirming).length;
-  const coming = people.length - counted;
+  const counted = count ?? people.filter((p) => !p.confirming).length;
+  const coming = people.filter((p) => p.confirming).length;
   return (
     <Box
       role="group"

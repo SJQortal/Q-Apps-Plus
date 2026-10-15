@@ -1,12 +1,13 @@
 /**
  * One Minter Admin poll: the question and its details, who asked (and who
- * shared it, when the viewer reads a share's copy), when it ends, the Yes /
- * No / Neutral counts and who voted what, the viewer's own vote with the
+ * shared it, when the viewer reads a share's copy), when it ends, who voted
+ * Yes, No and Neutral in three columns (as a decision's answers), the
+ * viewer's own vote with the
  * buttons to vote or change it (each one Hub step), "Share with N Minter
  * Admins added since", Copy link and the encrypted comments. Advisory only:
  * there is no pass or fail.
  */
-import { lazy, Suspense, useId, useState } from 'react';
+import { lazy, Suspense, useId, useState, type ReactNode } from 'react';
 import { Box, Button, Chip, Typography } from '@mui/material';
 import ChatBubbleOutlineOutlinedIcon from '@mui/icons-material/ChatBubbleOutlineOutlined';
 import ExpandLessOutlinedIcon from '@mui/icons-material/ExpandLessOutlined';
@@ -14,8 +15,12 @@ import ExpandMoreOutlinedIcon from '@mui/icons-material/ExpandMoreOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
+import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
+import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
+import RemoveCircleOutlineOutlinedIcon from '@mui/icons-material/RemoveCircleOutlineOutlined';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
-import { AvatarStack, PersonInline } from '../../components/common/Person';
+import { PersonInline } from '../../components/common/Person';
+import { PeopleColumns, type ColumnTone } from '../../components/decision/AnswerColumns';
 import { Card, ToneChip } from '../../components/common/Section';
 import { ListSkeleton } from '../../components/common/states';
 import { DoneChip } from '../../components/decision/DecisionParts';
@@ -23,7 +28,7 @@ import { POLL_VOTES, type PollVote } from '../../data/adminPollRecords';
 import { adminPollPath } from '../../routes/paths';
 import type { PendingShare, PendingVote } from '../../state/adminPolls';
 import { usePendingPollWrites } from '../../state/adminPolls';
-import { formatCount, formatRelative } from '../../utils/format';
+import { formatCount, formatRelative, plural } from '../../utils/format';
 import type { PollAuthor } from '../../writes/adminPolls';
 import { NeedsName } from './NeedsName';
 import {
@@ -120,8 +125,6 @@ export function AdminPollCard({
       <Typography component="h3" sx={{ fontWeight: 700, fontSize: 16, overflowWrap: 'anywhere' }}>
         {poll.question}
       </Typography>
-      {poll.details ? <Details text={poll.details} /> : null}
-
       <Typography component="div" variant="body2" color="text.secondary">
         Asked by <PersonInline address={view.publisher.address} name={view.publisher.name} />{' '}
         {formatRelative(view.postedAt, now)}
@@ -133,6 +136,8 @@ export function AdminPollCard({
           </>
         ) : null}
       </Typography>
+      {poll.details ? <Details text={poll.details} /> : null}
+
       <Typography
         variant="body2"
         sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, overflowWrap: 'anywhere' }}
@@ -143,7 +148,7 @@ export function AdminPollCard({
         </span>
       </Typography>
 
-      <Votes view={view} />
+      <VoteColumns view={view} />
       {view.unread.length ? (
         <Typography variant="body2" color="text.secondary">
           {unreadText(view.unread.length)}
@@ -282,45 +287,30 @@ function Details({ text }: { text: string }) {
   );
 }
 
-/** The counts, and beside each who voted that (in words as well as avatars). */
-function Votes({ view }: { view: ShownPoll }) {
+const VOTE_TONE: Record<PollVote, ColumnTone> = { yes: 'success', no: 'error', neutral: 'neutral' };
+const VOTE_ICON: Record<PollVote, ReactNode> = {
+  yes: <CheckCircleOutlineOutlinedIcon aria-hidden />,
+  no: <CancelOutlinedIcon aria-hidden />,
+  neutral: <RemoveCircleOutlineOutlinedIcon aria-hidden />,
+};
+
+/** Yes, No and Neutral side by side, each with its count and who voted it (as on decisions). */
+function VoteColumns({ view }: { view: ShownPoll }) {
   return (
-    <Box
-      component="ul"
-      aria-label="Votes"
-      sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 0.5 }}
-    >
-      {POLL_VOTES.map((v) => {
-        const people = view.votes.filter((x) => x.vote === v);
-        return (
-          <Box
-            component="li"
-            key={v}
-            sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, minWidth: 0 }}
-          >
-            <Chip
-              variant="outlined"
-              label={`${VOTE_LABEL[v]}: ${formatCount(view.counts[v])}`}
-              sx={{ fontWeight: 700, minWidth: 96, mt: '6px', flexShrink: 0 }}
-            />
-            {people.length ? (
-              <AvatarStack
-                people={people.map((p) => ({ address: p.address, name: p.name }))}
-                label={`Voted ${VOTE_LABEL[v]}`}
-                // Every voter, by name: one vote per admin, so at most the admin list.
-                max={people.length}
-                size={24}
-                showNames
-              />
-            ) : (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: '11px' }}>
-                {view.open ? 'No one yet' : 'No one'}
-              </Typography>
-            )}
-          </Box>
-        );
-      })}
-    </Box>
+    <PeopleColumns
+      columns={POLL_VOTES.map((v) => ({
+        key: v,
+        title: VOTE_LABEL[v],
+        listLabel: (n: number) => `Voted ${VOTE_LABEL[v]}: ${plural(n, 'Minter Admin')}`,
+        icon: VOTE_ICON[v],
+        tone: VOTE_TONE[v],
+        people: view.votes
+          .filter((x) => x.vote === v)
+          .map((x) => ({ address: x.address, name: x.name })),
+        count: view.counts[v],
+        emptyText: view.open ? 'No one yet' : 'No one',
+      }))}
+    />
   );
 }
 

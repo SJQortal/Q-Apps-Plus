@@ -113,10 +113,10 @@ describe('the viewer’s vote', () => {
     });
   });
 
-  it('counted: "Your vote: Yes ✓" while open, "You voted Yes" once closed', () => {
+  it('counted: "You voted Yes ✓" while open, "You voted Yes" once closed', () => {
     expect(myVoteView(view({ myVote: vote('yes') }), null)).toMatchObject({
       vote: 'yes',
-      label: 'Your vote: Yes ✓',
+      label: 'You voted Yes ✓',
       settled: true,
     });
     expect(myVoteView(view({ myVote: vote('yes'), open: false }), null).label).toBe(
@@ -130,7 +130,7 @@ describe('the viewer’s vote', () => {
       status: 'sending',
       at: T0 + 5000,
     });
-    expect(sending).toMatchObject({ vote: 'no', label: 'Your vote: No ✓', sending: true });
+    expect(sending).toMatchObject({ vote: 'no', label: 'You voted No ✓', sending: true });
     const confirming = myVoteView(view({ myVote: vote('no') }), {
       vote: 'yes',
       status: 'confirming',
@@ -138,7 +138,7 @@ describe('the viewer’s vote', () => {
     });
     expect(confirming).toEqual({
       vote: 'yes',
-      label: 'Voted Yes ✓ (confirming…)',
+      label: 'You voted Yes ✓ (confirming…)',
       settled: false,
       sending: false,
       failed: false,
@@ -171,7 +171,7 @@ describe('the viewer’s vote', () => {
         status: 'confirming',
         at: T0,
       }).label
-    ).toBe('Your vote: Yes ✓');
+    ).toBe('You voted Yes ✓');
   });
 
   it('a share settles once QDN lists the viewer’s, newer than before', () => {

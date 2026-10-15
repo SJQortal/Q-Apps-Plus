@@ -213,7 +213,7 @@ describe('who voted what', () => {
       { name: /^Minter Admin poll: Should we remove/ },
       T
     );
-    const yes = within(card).getByRole('list', { name: 'Voted Yes' });
+    const yes = within(card).getByRole('list', { name: /^Voted Yes: / });
     expect(within(yes).getAllByRole('link')).toHaveLength(11);
     expect(within(card).queryByText(/and \d+ more/)).toBeNull();
     expect(within(card).queryByText(/^\+\d+$/)).toBeNull();
