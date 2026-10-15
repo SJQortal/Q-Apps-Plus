@@ -37,6 +37,22 @@ export async function openQortalLink(link: string): Promise<boolean> {
   }
 }
 
+/** The link without its scheme, decoded for reading (`bob%2Bbuilder` → `bob+builder`). */
+export function linkLabel(link: string): string {
+  return decodeSafe(link.replace(/^qortal:\/\//i, ''));
+}
+
+/**
+ * The name a `qortal://SERVICE/<name>/…` link opens (an app's or website's
+ * icon is that name's avatar), or null for links without one
+ * (`qortal://use-group/…`).
+ */
+export function linkName(link: string): string | null {
+  const [service, name] = link.replace(/^qortal:\/\//i, '').split(/[/?#]/);
+  if (!service || !/^[A-Z][A-Z0-9_]*$/.test(service) || !name) return null;
+  return decodeSafe(name).trim() || null;
+}
+
 export { ORIGINAL_APP_LINK };
 
 /** Copy text; true when it worked. */

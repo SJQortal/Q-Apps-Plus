@@ -41,7 +41,8 @@ import { formatCount, formatDate, formatDateTime, plural } from '../../utils/for
 import { ORIGINAL_APP_LINK, openQortalLink } from '../../utils/links';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { legacyKindLabel, legacyProblem } from './parts/legacyWords';
-import { LegacyTextView, QortalLinks } from './parts/LegacyText';
+import { LegacyTextView } from './parts/LegacyText';
+import { QortalLinks } from '../../components/common/QortalLinks';
 import { PersonByName } from './parts/PersonByName';
 import { ListCard } from './parts/TimelineList';
 

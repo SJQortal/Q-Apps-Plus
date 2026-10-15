@@ -16,7 +16,6 @@
  */
 import { useId, useState } from 'react';
 import { Box, Button, Checkbox, Skeleton, Typography } from '@mui/material';
-import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import { READY_LABEL } from '../../constants/words';
 import type { ChainNow } from '../../data/chain';
@@ -35,13 +34,14 @@ import {
   type ConsideringRequest,
 } from '../../components/decision/Considering';
 import { useConsideringFor } from '../../hooks/useConsidering';
+import { useClamped } from '../../hooks/useClamped';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
+import { QortalLinks } from '../../components/common/QortalLinks';
 import { decisionPath } from '../../routes/paths';
 import { ProgressRing } from '../../components/common/ProgressRing';
 import { Card, DecisionPhaseChip } from '../../components/common/Section';
 import { primarySoft } from '../../hub-theme';
 import { formatCount, formatDate, formatRelative, plural } from '../../utils/format';
-import { openQortalLink } from '../../utils/links';
 import { usePendingAnswers } from '../../writes/optimistic';
 import type { DecisionRisk, ShiftScenario } from '../../rules/targetShift';
 import { DoubleChip, DoubleNote } from './DoubleParts';
@@ -565,7 +565,10 @@ function InviteDetails({
   showAccepted: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const reasonId = useId();
+  const [reasonNode, setReasonNode] = useState<HTMLElement | null>(null);
   const record = n?.nomination;
+  const clamped = useClamped(reasonNode, record?.record.reason ?? '');
   const supporters = n?.supporters.map((s) => s.publisher) ?? [];
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
@@ -589,6 +592,8 @@ function InviteDetails({
             .
           </Typography>
           <Typography
+            ref={setReasonNode}
+            id={reasonId}
             sx={{
               whiteSpace: 'pre-wrap',
               overflowWrap: 'anywhere',
@@ -604,34 +609,18 @@ function InviteDetails({
           >
             {record.record.reason}
           </Typography>
-          {record.record.reason.length > 160 || record.record.links.length ? (
+          {clamped || expanded ? (
             <Button
               size="small"
               onClick={() => setExpanded((v) => !v)}
               aria-expanded={expanded}
+              aria-controls={reasonId}
               sx={{ alignSelf: 'flex-start', minHeight: 44 }}
             >
-              {expanded ? 'Show less' : 'Show the whole nomination'}
+              {expanded ? 'Show less' : 'Show the whole reason'}
             </Button>
           ) : null}
-          {expanded && record.record.links.length ? (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {record.record.links.map((link) => (
-                <Button
-                  key={link}
-                  size="small"
-                  variant="outlined"
-                  endIcon={<OpenInNewOutlinedIcon />}
-                  onClick={() => void openQortalLink(link)}
-                  sx={{ minHeight: 44, textTransform: 'none', maxWidth: '100%' }}
-                >
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {link.replace(/^qortal:\/\//i, '')}
-                  </span>
-                </Button>
-              ))}
-            </Box>
-          ) : null}
+          <QortalLinks links={record.record.links} />
         </>
       ) : nominationsState === 'loading' ? (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

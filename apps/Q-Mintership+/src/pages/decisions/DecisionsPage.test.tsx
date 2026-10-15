@@ -93,6 +93,24 @@ describe('Decisions: phases and actions', () => {
     expect(within(early).getByText(/Just proposed. Signatures count already/)).toBeInTheDocument();
   });
 
+  it('shows a nomination’s links at once, each with the avatar of the app or website it opens', async () => {
+    await openPage('admin');
+    const urgent = await screen.findByRole('article', { name: /Uma Urgent/ });
+    expect(within(urgent).getByRole('button', { name: 'APP/Q-Tube/channel/Example' })).toBeVisible();
+    expect(within(urgent).getByRole('button', { name: 'WEBSITE/Example' })).toBeVisible();
+    await waitFor(() =>
+      expect(
+        [...urgent.querySelectorAll('img')].map((img) => img.getAttribute('src'))
+      ).toEqual(
+        expect.arrayContaining([
+          '/arbitrary/THUMBNAIL/Q-Tube/qortal_avatar?async=true',
+          '/arbitrary/THUMBNAIL/Example/qortal_avatar?async=true',
+        ])
+      )
+    );
+    expect(within(urgent).queryByRole('button', { name: /Show the whole/ })).toBeNull();
+  });
+
   it('describes every kind in plain words: reason, ban length, whose invite is cancelled', async () => {
     await openPage('admin');
     const kick = await screen.findByRole('article', { name: /Remove from MINTER, Kai Target/ });

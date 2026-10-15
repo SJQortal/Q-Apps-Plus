@@ -6,7 +6,7 @@
 import { useId, useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { commentLinks } from '../../data/commentRecords';
-import { QortalLinks } from '../../pages/history/parts/LegacyText';
+import { QortalLinks } from '../common/QortalLinks';
 
 const FOLD_CHARS = 420;
 const FOLD_LINES = 7;

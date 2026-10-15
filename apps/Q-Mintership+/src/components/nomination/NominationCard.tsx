@@ -7,8 +7,7 @@
  * public comments with `comments`.
  */
 import type { ReactNode } from 'react';
-import { Box, Button, Typography } from '@mui/material';
-import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
+import { Box, Typography } from '@mui/material';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import { READY_LABEL } from '../../constants/words';
 import type { ChainNow } from '../../data/chain';
@@ -20,10 +19,10 @@ import { formatDuration, formatRelative, plural } from '../../utils/format';
 import { whenApplied } from '../../pages/decisions/decisionUi';
 import { useConsideringFor } from '../../hooks/useConsidering';
 import { ConsideringCount } from '../decision/Considering';
-import { openQortalLink } from '../../utils/links';
 import { nominationPath } from '../../routes/paths';
 import { Countdown } from '../common/Countdown';
 import { CopyLinkButton } from '../common/CopyLinkButton';
+import { QortalLinks } from '../common/QortalLinks';
 import { PersonChip, PersonInline } from '../common/Person';
 import { ProgressRing } from '../common/ProgressRing';
 import { Card, NominationStateChip } from '../common/Section';
@@ -34,7 +33,7 @@ export interface NominationCardProps {
   nomination: Nomination;
   now: ChainNow;
   actions?: ReactNode;
-  /** Shorter: the reason is clamped, links and supporters' notes are hidden. */
+  /** Shorter: the reason is clamped and supporters' notes are hidden. */
   compact?: boolean;
   /** Leave out the nominee line (on the nominee's own page). */
   hideNominee?: boolean;
@@ -167,31 +166,7 @@ export function NominationCard({
         </Typography>
       ) : null}
 
-      {!compact && n.nomination?.record.links.length ? (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-          {n.nomination.record.links.map((link) => (
-            <Button
-              key={link}
-              size="small"
-              variant="outlined"
-              endIcon={<OpenInNewOutlinedIcon />}
-              onClick={() => void openQortalLink(link)}
-              sx={{
-                minHeight: 44,
-                textTransform: 'none',
-                maxWidth: '100%',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                justifyContent: 'flex-start',
-              }}
-            >
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {link.replace(/^qortal:\/\//i, '')}
-              </span>
-            </Button>
-          ))}
-        </Box>
-      ) : null}
+      {n.nomination ? <QortalLinks links={n.nomination.record.links} /> : null}
 
       {notes.length ? (
         <Box
