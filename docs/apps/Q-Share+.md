@@ -4,7 +4,7 @@ Share files and documents on QDN, with categories, comments and lists.
 
 **Published:** `1.0.0` on 2026-09-30, as the QDN `APP` resource `Q-Share+`, built from commit `2bc12cc`. Checked on 2026-10-01: the live bundle's 17 JavaScript chunks have the same content-hashed names as a build of that commit.
 
-**Version on the branch:** `1.0.1`, not published yet: Play audio / Play video, more file types, and the description placeholder fix (CHANGELOG.md). The work below was drafted in six rounds numbered `1.0.0-plus.1` … `plus.6`; under the plain-version rule (qplus-app skill) they are all part of `1.0.0`.
+**Version on the branch:** `1.0.1`, not published yet: Play audio / Play video, more file types, and the description placeholder fix, and (2026-10-15, branch `repo/hub-mode-after-reload`) a dark Hub's mode kept across a refresh on a deep page (CHANGELOG.md). Kept here with Simon's OK until more fixes gather; no upstream PR for it yet. The work below was drafted in six rounds numbered `1.0.0-plus.1` … `plus.6`; under the plain-version rule (qplus-app skill) they are all part of `1.0.0`.
 
 ## Baseline at import
 

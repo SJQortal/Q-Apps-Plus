@@ -21,6 +21,7 @@ export const CHANGELOG: Release[] = [
       "Audio and video files say Play audio and Play video, and Close player once the player is open.",
       "Subtitles and checksum files preview as text, audiobooks (.m4b) and WebM audio play, and comic books are listed as documents.",
       "On phones, the description's placeholder no longer covers the first word while the keyboard is still composing it.",
+      "In a dark Hub, refreshing Q-Share+ on any page but the first no longer shows it in its light colours.",
     ],
   },
   {

@@ -9,6 +9,7 @@ Changes since the published 1.0.0:
 - Share pages: audio and video files say **Play audio** / **Play video** (with a play icon) and **Close player** once open, instead of "Preview"; the player's error message and fallback name say so too. Images and text keep "Preview".
 - File types found in real shares: subtitles (.srt, .vtt) and checksum files (.md5, .sha*) preview as text, audiobooks (.m4b) and WebM audio (.weba) play, and comic books (.cbz, .cbr) are listed as documents.
 - Editor: the description placeholder no longer sits on top of the first word while a phone keyboard (or a desktop IME) is still composing it.
+- Theme: in a dark Hub, a refresh on any page but the first showed the light colours (in-app navigation drops `?theme=`, and Core then injects `_qdnTheme = "light"`). The theme kit now remembers Hub's mode, and `index.html`'s boot snippet reads it in the same order.
 - 490 tests; lint clean.
 
 ## 1.0.0 (2026-09-30)
