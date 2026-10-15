@@ -44,6 +44,9 @@ export const CHANGELOG: Release[] = [
         title: 'For Minter Admins',
         notes: [
           'One Decisions queue for nominations, removals, bans and admin changes, most urgent first, with k of n and a live countdown.',
+          'Approve and Reject: the same two words on every decision, button and line. Approving says what Hub will show: a GROUP_APPROVAL, your yes to a change already proposed on chain.',
+          'Each decision shows who approved, who rejected and who is considering side by side, with the rule for a tie (approvals are counted first), and its comments show what each Minter Admin chose.',
+          'Cancelling an approved invite says which invite it cancels: who sent it and when it was approved.',
           'Doubles are marked: an admin change that adds someone who is already a Minter Admin, removes someone who isn’t one, or repeats one already waiting says so on its card, and doesn’t count as waiting for you. A repeat of a waiting change still shows what it would do to the target.',
           'Decline a join request: from Ready to mint or Propose, propose taking someone off the list, with a reason everyone sees. Once enough Minter Admins approve, their join request goes, and they can send a new one later.',
           'Minter Admin polls: ask the Minter Admins an advisory question from Propose. They vote Yes, No or Neutral until it ends (1 to 30 days, 7 by default), with comments. Polls, votes and comments are encrypted to the Minter Admins, and a poll can be shared with admins added since. Nothing changes on chain from the result.',
