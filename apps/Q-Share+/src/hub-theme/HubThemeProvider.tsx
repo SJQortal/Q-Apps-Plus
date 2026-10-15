@@ -12,7 +12,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { CssBaseline, GlobalStyles } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
-import { applyDocumentChrome, hostModeFromMessage, readHostMode, readStoredUiTheme, writeStoredUiTheme } from './boot';
+import {
+  applyDocumentChrome,
+  hostModeFromMessage,
+  noteHostMode,
+  readHostMode,
+  readStoredUiTheme,
+  writeStoredUiTheme,
+} from './boot';
 import { createAppTheme, tokensFromTheme, type AppThemeConfig } from './mui-theme';
 import { cssVariables, resolveMode, type ColorMode, type UiThemeId } from './tokens';
 
@@ -68,7 +75,9 @@ export function HubThemeProvider({ storageKey, config, children }: HubThemeProvi
     const onMessage = (event: MessageEvent) => {
       const next = hostModeFromMessage(event.data);
       if (!next) return;
-      // A remount (e.g. after an error boundary) reads the injected value again.
+      // Newer than the URL's mode: a remount (e.g. after an error boundary) and the
+      // next reload read it (boot.ts readHostMode). The injected value follows too.
+      noteHostMode(next);
       (window as Window & { _qdnTheme?: string })._qdnTheme = next;
       setHostMode(next);
     };
