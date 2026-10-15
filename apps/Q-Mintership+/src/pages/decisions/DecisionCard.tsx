@@ -8,8 +8,10 @@
  * Reject, or "You rejected" with Approve, each "(confirming…)" until it is
  * in a block, and their own Considering. An admin change says what it does
  * to the target; a decision a waiting admin change would tip over carries a
- * "Target may drop to …" chip. Its public comments sit behind a
- * "Comments (n)" toggle, each Minter Admin's marked with their answer.
+ * "Target may drop to …" chip. An invite shows the community's Yes and No
+ * beside Copy link, and offers them to anyone who isn't a Minter Admin
+ * where the admins' buttons are. Its public comments sit behind a
+ * "Comments (n)" toggle, each marked with its writer's answer or vote.
  *
  * A double (rules/double.ts) says so with a chip and a note, keeps Approve
  * and Reject as plain secondary buttons, offers no Considering and stays out
@@ -34,7 +36,10 @@ import {
   ConsideringControls,
   type ConsideringRequest,
 } from '../../components/decision/Considering';
-import { answerBadges } from '../../components/comments/answerBadges';
+import { answerBadges, withCommunityBadges } from '../../components/comments/answerBadges';
+import { CommunitySummary, CommunityVoteControls } from '../../components/community/CommunityVotes';
+import { useCommunityVoter, useCommunityVotes } from '../../hooks/useCommunityVotes';
+import { VOTING_PHASES } from '../../rules/communityVotes';
 import { useConsideringFor } from '../../hooks/useConsidering';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { FramedText } from '../../components/common/FramedText';
@@ -192,6 +197,19 @@ export function DecisionCard(props: DecisionCardProps) {
     { enabled: COLLECTING_PHASES.has(d.phase), myAddress: canAct ? myAddress : null }
   );
   const collecting = COLLECTING_PHASES.has(d.phase);
+  // The community's votes on an invite's nominee: read while it collects answers, cast
+  // (by anyone who isn't a Minter Admin) while approvals can still count.
+  const [node, setNode] = useState<HTMLElement | null>(null);
+  const nearScreen = useInView(node);
+  const voteNominee = d.kind === 'invite' && d.subject && collecting ? d.subject : null;
+  const voter = useCommunityVoter(
+    voteNominee && !canAct && VOTING_PHASES.has(d.phase) ? voteNominee : null
+  );
+  const votes = useCommunityVotes(
+    voteNominee ? { nominee: voteNominee, since: nomination?.publishedAt ?? d.createdAt } : null,
+    { nearScreen, myAddress: voter?.address }
+  );
+  const voted = votes.tally.yes.length + votes.tally.no.length > 0;
   const person = (x: { address?: string }) => ({
     address: x.address as string,
     name: x.address && adminNames.has(x.address) ? adminNames.get(x.address) : undefined,
@@ -236,6 +254,7 @@ export function DecisionCard(props: DecisionCardProps) {
 
   return (
     <Card
+      ref={setNode}
       as="article"
       id={decisionCardId(d.signature)}
       tabIndex={-1}
@@ -456,13 +475,38 @@ export function DecisionCard(props: DecisionCardProps) {
         </Box>
       ) : null}
 
-      {copyLink ? (
-        <Box sx={{ display: 'flex', mt: -0.5, ml: -1 }}>
-          <CopyLinkButton
-            variant="text"
-            path={decisionPath(d.signature)}
-            what={`the decision ${fullTitle}`}
+      {voter && votes.mine ? (
+        // Where a Minter Admin's Reject and Approve are.
+        <Box
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 1,
+          }}
+        >
+          <CommunityVoteControls
+            nominee={voteNominee as string}
+            label={subject.label}
+            mine={votes.mine}
+            signer={voter}
           />
+        </Box>
+      ) : null}
+
+      {copyLink || voted ? (
+        <Box
+          sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mt: -0.5, ml: -1 }}
+        >
+          {copyLink ? (
+            <CopyLinkButton
+              variant="text"
+              path={decisionPath(d.signature)}
+              what={`the decision ${fullTitle}`}
+            />
+          ) : null}
+          <CommunitySummary tally={votes.tally} label={subject.label} />
         </Box>
       ) : null}
 
@@ -470,7 +514,7 @@ export function DecisionCard(props: DecisionCardProps) {
         target={decisionCommentTarget(d, nomination)}
         label={fullTitle}
         defaultOpen={commentsOpen}
-        answers={badges}
+        answers={withCommunityBadges(badges, votes.tally)}
       />
     </Card>
   );

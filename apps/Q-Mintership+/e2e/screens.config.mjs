@@ -11,6 +11,7 @@
  * nothing can be sent.
  */
 import {
+  addCommunityVotes,
   addConsidering,
   addDecidedSignatures,
   addComments,
@@ -41,6 +42,8 @@ addReady(world);
 // rejected invite in History) and Minter Admins considering (with notes) on the cards.
 addRejections(world);
 addConsidering(world);
+// The community's Yes and No (people who aren't Minter Admins) on Wren's and bob's nominations.
+addCommunityVotes(world);
 // A moving target: screens whose path starts with `?world=shift` read this world.
 const shiftWorld = createWorld();
 addOtherPending(shiftWorld);
@@ -275,6 +278,42 @@ export default {
     },
     // The nominee's own card comes first, with Accept nomination.
     { key: 'nominations-nominee', path: '/nominations?as=nominatedWaiting', after: settle },
+    // Someone who isn't a Minter Admin: No and Yes on the cards, their own vote on Wren's.
+    {
+      key: 'nominations-community',
+      path: '/nominations?as=learner',
+      after: async (page) => {
+        await settle(page);
+        await page
+          .getByRole('group', { name: 'Your vote on bob+builder' })
+          .waitFor({ timeout: 8000 });
+      },
+    },
+    {
+      key: 'nominations-community-voters',
+      path: '/nominations?as=learner',
+      overlay: true,
+      after: async (page) => {
+        await settle(page);
+        await page
+          .getByRole('article', { name: 'Nomination of bob+builder' })
+          .getByRole('button', { name: /^Community votes: / })
+          .click({ timeout: 8000 });
+        await page.getByRole('dialog', { name: 'Community votes' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
+    {
+      key: 'nominations-community-vote',
+      path: '/nominations?as=learner',
+      overlay: true,
+      after: async (page) => {
+        await settle(page);
+        await page.getByRole('button', { name: 'Vote Yes: bob+builder' }).click({ timeout: 8000 });
+        await page.getByRole('dialog', { name: 'Vote Yes' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
     { key: 'nominate', path: '/nominate?as=nominator', after: settle },
     // A candidate picked from a link. `who` comes first: the check appends
     // `?theme=` to the last value (the app ignores it, see appParam).
@@ -296,7 +335,9 @@ export default {
         );
         await page.reload({ waitUntil: 'load' });
         await settle(page);
-        await page.getByRole('navigation', { name: 'Decisions by type' }).waitFor({ timeout: 8000 });
+        await page
+          .getByRole('navigation', { name: 'Decisions by type' })
+          .waitFor({ timeout: 8000 });
       },
     },
     // Propose's choices, then cancelling an approved invite up to its two Hub steps.
@@ -339,10 +380,7 @@ export default {
       key: 'decisions-withdraw',
       path: '/decisions?as=admin',
       overlay: true,
-      after: open(
-        'Reject: Add to MINTER, Uma Urgent',
-        'Reject after approving'
-      ),
+      after: open('Reject: Add to MINTER, Uma Urgent', 'Reject after approving'),
     },
     {
       key: 'decisions-considering',

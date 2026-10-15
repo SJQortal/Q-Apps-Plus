@@ -4,9 +4,11 @@
  * (waiting for a Minter Admin, k of n signatures with the countdown and any
  * rejections, how many Minter Admins are considering it, approved, or how
  * it ended). Screens add their own buttons through `actions`, and its
- * public comments with `comments`.
+ * public comments with `comments`. While it is open, the community's Yes
+ * and No sit beside Copy link, and anyone who isn't a Minter Admin (or the
+ * nominee) can vote, where the admins' own buttons are on a decision.
  */
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Box, Typography } from '@mui/material';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import { READY_LABEL } from '../../constants/words';
@@ -18,6 +20,9 @@ import { useDisplayName } from '../../hooks/useDisplayName';
 import { formatDuration, formatRelative, plural } from '../../utils/format';
 import { whenApplied } from '../../pages/decisions/decisionUi';
 import { useConsideringFor } from '../../hooks/useConsidering';
+import { useCommunityVoter, useCommunityVotes } from '../../hooks/useCommunityVotes';
+import { takesVotes } from '../../rules/communityVotes';
+import { useInView } from '../../hooks/useInView';
 import { ConsideringCount } from '../decision/Considering';
 import { nominationPath } from '../../routes/paths';
 import { Countdown } from '../common/Countdown';
@@ -27,7 +32,8 @@ import { PersonChip, PersonInline } from '../common/Person';
 import { ProgressRing } from '../common/ProgressRing';
 import { Card, NominationStateChip } from '../common/Section';
 import { CommentsSection } from '../comments/CommentsSection';
-import { tallyBadges } from '../comments/answerBadges';
+import { tallyBadges, withCommunityBadges } from '../comments/answerBadges';
+import { CommunitySummary, CommunityVoteControls } from '../community/CommunityVotes';
 import { readable } from '../../utils/readable';
 
 export interface NominationCardProps {
@@ -88,8 +94,20 @@ export function NominationCard({
     tally,
     { enabled: n.state === 'waiting' || n.state === 'signing' }
   );
+  // The community's votes: read while it is open, cast while it still collects approvals.
+  const [node, setNode] = useState<HTMLElement | null>(null);
+  const nearScreen = useInView(node);
+  const voter = useCommunityVoter(takesVotes(n.state, n.decision?.phase) ? n.nominee : null);
+  const votes = useCommunityVotes(
+    n.state === 'waiting' || n.state === 'signing' || n.state === 'approved'
+      ? { nominee: n.nominee, since: n.publishedAt }
+      : null,
+    { nearScreen, myAddress: voter?.address }
+  );
+  const voted = votes.tally.yes.length + votes.tally.no.length > 0;
   return (
     <Card
+      ref={setNode}
       as="article"
       aria-label={`Nomination of ${nominee.label}`}
       sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}
@@ -235,9 +253,17 @@ export function NominationCard({
             {endedAt ? ` ${formatRelative(endedAt, now.timestamp)}` : ''}.
           </Typography>
         ) : null}
-        {copyLink || actions ? (
+        {copyLink || actions || voted || (voter && votes.mine) ? (
           <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
             {actions}
+            {voter && votes.mine ? (
+              <CommunityVoteControls
+                nominee={n.nominee}
+                label={nominee.label}
+                mine={votes.mine}
+                signer={voter}
+              />
+            ) : null}
             {/* After the screen's own actions: the link is the quieter one. */}
             {copyLink ? (
               <CopyLinkButton
@@ -246,6 +272,7 @@ export function NominationCard({
                 what={`the nomination of ${nominee.label}`}
               />
             ) : null}
+            <CommunitySummary tally={votes.tally} label={nominee.label} />
           </Box>
         ) : null}
       </Box>
@@ -254,7 +281,7 @@ export function NominationCard({
         <CommentsSection
           target={nominationCommentTarget(n)}
           label={`the nomination of ${nominee.label}`}
-          answers={tallyBadges(tally, considering.people)}
+          answers={withCommunityBadges(tallyBadges(tally, considering.people), votes.tally)}
           defaultOpen={comments === 'open'}
         />
       ) : null}

@@ -3,8 +3,9 @@
  * the small badge next to their name in its comments: approved, rejected or
  * considering on a decision (a Considering newer than their answer wins, as
  * on the card; an answer on its way wins over the one it replaces), or their
- * vote on a Minter Admin poll. Keyed by address: a comment's name is looked
- * up to the account that owns it.
+ * vote on a Minter Admin poll; and on a nomination, the community's Yes and
+ * No from everyone else. Keyed by address: a comment's name is looked up to
+ * the account that owns it.
  */
 import type { Tally } from '../../rules/tally';
 
@@ -80,4 +81,16 @@ export function tallyBadges(
       : [],
     considering
   );
+}
+
+/** A nomination's community votes added as "Voted Yes" and "Voted No" (a Minter Admin's badge stays). */
+export function withCommunityBadges(
+  badges: AnswerBadges,
+  community: { yes: readonly Answerer[]; no: readonly Answerer[] }
+): AnswerBadges {
+  if (!community.yes.length && !community.no.length) return badges;
+  const all = new Map(badges);
+  for (const p of community.yes) if (!all.has(p.address)) all.set(p.address, { kind: 'yes' });
+  for (const p of community.no) if (!all.has(p.address)) all.set(p.address, { kind: 'no' });
+  return all;
 }

@@ -108,7 +108,14 @@ export interface PeopleColumn {
 }
 
 /** Columns of people side by side, each under its title and count. */
-export function PeopleColumns({ columns }: { columns: PeopleColumn[] }) {
+export function PeopleColumns({
+  columns,
+  headingLevel = 'h4',
+}: {
+  columns: PeopleColumn[];
+  /** The columns' headings: h4 inside a card (under its h3), h3 in a dialog (under its h2). */
+  headingLevel?: 'h3' | 'h4';
+}) {
   return (
     <Box
       sx={{
@@ -119,7 +126,7 @@ export function PeopleColumns({ columns }: { columns: PeopleColumn[] }) {
       }}
     >
       {columns.map(({ key, ...column }) => (
-        <Column key={key} {...column} />
+        <Column key={key} {...column} headingLevel={headingLevel} />
       ))}
     </Box>
   );
@@ -133,7 +140,8 @@ function Column({
   people,
   emptyText,
   count,
-}: Omit<PeopleColumn, 'key'>) {
+  headingLevel,
+}: Omit<PeopleColumn, 'key'> & { headingLevel: 'h3' | 'h4' }) {
   const headingId = useId();
   const counted = count ?? people.filter((p) => !p.confirming).length;
   const coming = people.filter((p) => p.confirming).length;
@@ -144,7 +152,7 @@ function Column({
       sx={{ minWidth: 0, borderTop: 3, borderColor: TONE_COLOR[tone], pt: 0.75 }}
     >
       <Typography
-        component="h4"
+        component={headingLevel}
         id={headingId}
         sx={{
           display: 'flex',

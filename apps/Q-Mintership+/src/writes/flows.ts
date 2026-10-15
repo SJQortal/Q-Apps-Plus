@@ -21,6 +21,7 @@ import {
   type NominationInput,
 } from '../data/records';
 import type { GroupTxType, TxRow } from '../data/types';
+import { buildVote, newVoteIdentifier, type CommunityVoteValue } from '../data/voteRecords';
 import { chainsOwnSignature } from '../rules/adminChange';
 import { decisionSubject } from '../rules/decision';
 import { groupApprovalUnsignedBase58, groupRejectionUnsignedBase58 } from '../qortal/approvalBytes';
@@ -29,6 +30,7 @@ import {
   guardBan,
   guardCancelBan,
   guardCancelInvite,
+  guardCommunityVote,
   guardConsidering,
   guardDecline,
   guardInvite,
@@ -61,6 +63,8 @@ import { runWrite, type Signer, type WriteOutcome, type WriteStage } from './run
 
 /** A Considering record changes only who is considering (and the balance it costs). */
 const CONSIDERING_PREFIXES: readonly string[] = ['considering:', 'balance:'];
+/** A community vote changes only the votes (and the balance). */
+const COMMUNITY_VOTE_PREFIXES: readonly string[] = ['communityvotes:', 'balance:'];
 
 /**
  * Marks the write while it is sent and confirmed, and once Hub answers
@@ -669,6 +673,44 @@ export async function publishConsidering(
       });
     },
     CONSIDERING_PREFIXES
+  );
+}
+
+/**
+ * A community vote, Yes or No, on an open nomination from someone who isn't
+ * a Minter Admin: a new small QDN record under their name each time (the
+ * newest counts). Advisory: nothing on chain follows from it.
+ */
+export async function publishCommunityVote(
+  signer: Signer & { name: string | null },
+  nominee: string,
+  vote: CommunityVoteValue,
+  onStage?: (s: WriteStage) => void
+): Promise<WriteOutcome> {
+  // Only the votes change: the chain views keep their own pace.
+  return tracked(
+    writeKeys.communityVote(nominee, vote),
+    async () => {
+      let record;
+      let identifier: string;
+      try {
+        record = buildVote(nominee, vote);
+        identifier = newVoteIdentifier(nominee, vote);
+      } catch (error) {
+        return {
+          status: 'blocked',
+          reason: error instanceof Error ? error.message : String(error),
+        };
+      }
+      return runWrite({
+        request: publishRecordRequest(signer.name ?? '', identifier, record),
+        signer,
+        precheck: () => guardCommunityVote(signer, nominee),
+        match: (tx) => tx.type === 'ARBITRARY' && tx.identifier === identifier,
+        onStage,
+      });
+    },
+    COMMUNITY_VOTE_PREFIXES
   );
 }
 

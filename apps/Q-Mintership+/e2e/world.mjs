@@ -1048,6 +1048,50 @@ export function addConsidering(world) {
   add(nameOf(extra(15)), ADDR.urgent, { nomineeAddress: ADDR.nominatedWaiting }, 3_600_000);
   return { decisionKey, inviteSignature: invite.signature, waitingKey: ADDR.nominatedWaiting };
 }
+// ---- Community votes (Yes or No from people who aren't Minter Admins) ----------
+/**
+ * Add community votes: on Wren Waiting's nomination (published 48 h ago)
+ * Member 7, Zoë Newcomer and Member 1 say Yes, Lou Left says No, and Leo
+ * Learner changed a Yes to No; on bob+builder's, five say Yes (Kit Kicked,
+ * Members 5, 6, 11 and 12) and Member 4 No. Ignored: a Minter Admin's
+ * vote, the nominee's own, one from before the round, and an identifier
+ * that isn't a vote. Returns the nominees.
+ */
+export function addCommunityVotes(world) {
+  const HOUR = 3_600_000;
+  const vote = (name, nomineeKey, value, hoursAgo, id) =>
+    world.records.push({
+      name,
+      identifier: `qmp-vote-${ADDR[nomineeKey]}-${value}-${id}`,
+      created: NOW - hoursAgo * HOUR,
+      body: { v: 1, nomineeAddress: ADDR[nomineeKey], vote: value },
+    });
+  vote('Member 7', 'nominatedWaiting', 'yes', 25, 'wren01');
+  vote('Zoë Newcomer', 'nominatedWaiting', 'yes', 17, 'wren02');
+  vote('Member 1', 'nominatedWaiting', 'yes', 12, 'wren03');
+  vote('Lou Left', 'nominatedWaiting', 'no', 29, 'wren04');
+  vote('Leo Learner', 'nominatedWaiting', 'yes', 8, 'wren05');
+  vote('Leo Learner', 'nominatedWaiting', 'no', 3, 'wren06');
+  // Ignored: a Minter Admin (their answer is on chain), the nominee, before the round.
+  vote('Admin K', 'nominatedWaiting', 'yes', 1, 'wren07');
+  vote('Wren Waiting', 'nominatedWaiting', 'yes', 26, 'wren08');
+  vote('Member 2', 'nominatedWaiting', 'yes', 60, 'wren09');
+
+  vote('Kit Kicked', 'nominatedSigning', 'yes', 30, 'bob001');
+  vote('Member 5', 'nominatedSigning', 'yes', 24, 'bob002');
+  vote('Member 6', 'nominatedSigning', 'yes', 6, 'bob003');
+  vote('Member 11', 'nominatedSigning', 'yes', 4, 'bob004');
+  vote('Member 12', 'nominatedSigning', 'yes', 2, 'bob005');
+  vote('Member 4', 'nominatedSigning', 'no', 40, 'bob006');
+  world.records.push({
+    name: 'Member 1',
+    identifier: 'qmp-vote-not-an-address-yes-abc123',
+    created: NOW - HOUR,
+    body: { v: 1, vote: 'yes' },
+  });
+  return { waiting: ADDR.nominatedWaiting, signing: ADDR.nominatedSigning };
+}
+
 // ---- shareable links (decision and nomination pages) ------------------------
 /**
  * Signatures on a decided decision, for its own page (/decisions/<sig>):

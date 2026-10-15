@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { addComments } from '../../e2e/world.mjs';
+import { addComments, addCommunityVotes } from '../../e2e/world.mjs';
 import { CommentsSection } from '../components/comments/CommentsSection';
 import { commentTarget } from '../data/commentThread';
 import DecisionsPage from '../pages/decisions/DecisionsPage';
@@ -128,7 +128,11 @@ describe('Write dialogs by keyboard: a decision', () => {
     await decisions();
     await u.click(screen.getByRole('button', { name: 'Approve several' }));
     await u.click(screen.getByRole('checkbox', { name: /bob\+builder/ }));
-    await checkDialogByKeyboard(u, screen.getByRole('button', { name: 'Approve 1' }), 'Approve several');
+    await checkDialogByKeyboard(
+      u,
+      screen.getByRole('button', { name: 'Approve 1' }),
+      'Approve several'
+    );
   });
 
   it('Propose cancelling one stale invite, and all of them', async () => {
@@ -368,6 +372,29 @@ describe('Write dialogs by keyboard: nominations', () => {
       u,
       within(eli).getByRole('button', { name: 'Add your support for Eli Early' }),
       'Add your support'
+    );
+  });
+
+  it('A community vote, and the voters beside Copy link', async () => {
+    const u = user();
+    await renderPage(<NominationsPage />, {
+      persona: 'learner',
+      path: '/nominations',
+      route: '/nominations',
+      setup: (world) => addCommunityVotes(world),
+    });
+    const bob = await screen.findByRole('article', { name: /Nomination of bob\+builder/ }, T);
+    await checkDialogByKeyboard(
+      u,
+      await within(bob).findByRole('button', { name: 'Vote Yes: bob+builder' }, T),
+      'Vote Yes',
+      { reach: ['Not now', 'Continue to Hub'] }
+    );
+    await checkDialogByKeyboard(
+      u,
+      within(bob).getByRole('button', { name: /^Community votes: 5 Yes, 1 No/ }),
+      'Community votes',
+      { reach: ['Close'] }
     );
   });
 

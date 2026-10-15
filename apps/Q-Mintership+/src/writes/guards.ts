@@ -35,6 +35,7 @@ import {
   toApprovalRow,
 } from '../rules/decision';
 import { adminChangeBlock, adminChangeBlockText, type AdminChangeKind } from '../rules/adminChange';
+import { takesVotes } from '../rules/communityVotes';
 import { isRemovalDouble } from '../rules/double';
 import { NOMINEE_BLOCK_TEXT, isOpenState, nomineeBlock, nominatorBlock } from '../rules/nomination';
 import { latestPerSigner, type ApprovalRow } from '../rules/tally';
@@ -106,8 +107,7 @@ export function guardWithdraw(signer: Signer, pendingSignature: string): Promise
 const TOO_LATE: Record<DecisionIntent, string> = {
   sign: 'Too late to count: the last block in which an approval can count has passed.',
   reject: 'Too late to count: the last block in which a rejection can count has passed.',
-  withdraw:
-    'Too late to count: the last block in which a rejection can count has passed.',
+  withdraw: 'Too late to count: the last block in which a rejection can count has passed.',
 };
 
 /**
@@ -444,6 +444,26 @@ export async function guardSupport(signer: Signer, nominee: string): Promise<str
     return 'There is no open nomination for this person to support. You can propose a nomination for them instead.';
   if (open.nomination?.publisher.address === signer.address)
     return 'You nominated this person already.';
+  return null;
+}
+
+/**
+ * Before a community vote: a registered name to publish under, not a Minter
+ * Admin (their answer is on chain), not the nominee, and the nomination still
+ * waiting for its first approval or collecting approvals that can count.
+ */
+export async function guardCommunityVote(
+  signer: Signer & { name?: string | null },
+  nominee: string
+): Promise<string | null> {
+  if (!signer.name)
+    return 'Your vote is published under your registered name, and your account has none yet.';
+  if (nominee === signer.address) return 'You can’t vote on your own nomination.';
+  if (await isMinterAdmin(signer.address))
+    return 'Minter Admins answer on chain: Approve or Reject.';
+  const nominations = await loadNominationsFor(nominee, { force: true });
+  if (!nominations.some((n) => takesVotes(n.state, n.decision?.phase)))
+    return 'This nomination isn’t open for votes any more.';
   return null;
 }
 

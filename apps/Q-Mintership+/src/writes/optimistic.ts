@@ -94,8 +94,8 @@ export const CONFIRMING_WINDOW_MS = 5 * 60_000;
 
 /**
  * A write that keeps the live views fast: sent from this device in the last
- * few minutes, and not yet seen in a block. A Considering record doesn't
- * count: it changes none of those views.
+ * few minutes, and not yet seen in a block. A Considering record or a
+ * community vote doesn't count: it changes none of those views.
  */
 export function waitsForBlock(entry: PendingWrite, now = Date.now()): boolean {
   return (
@@ -165,7 +165,13 @@ export const writeKeys = {
   considering: (key: string) => `considering:${key}`,
   /** No longer considering. */
   notConsidering: (key: string) => `notconsidering:${key}`,
+  /** A community vote (Yes or No) on a nominee, from someone who isn't a Minter Admin. */
+  communityVote: (nominee: string, vote: 'yes' | 'no') => `communityvote:${vote}:${nominee}`,
 };
 
 /** Writes that only publish a QDN note, which the chain views never show. */
-const QDN_NOTE_PREFIXES = [writeKeys.considering(''), writeKeys.notConsidering('')];
+const QDN_NOTE_PREFIXES = [
+  writeKeys.considering(''),
+  writeKeys.notConsidering(''),
+  'communityvote:',
+];

@@ -25,6 +25,7 @@ export function addConsidering(world: World): {
   inviteSignature: string;
   waitingKey: string;
 };
+export function addCommunityVotes(world: World): { waiting: string; signing: string };
 export function answerCore(
   world: World,
   pathname: string,
