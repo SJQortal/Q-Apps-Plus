@@ -56,6 +56,7 @@ export const CHANGELOG: Release[] = [
           'Decline a join request: from Ready to mint or Propose, propose taking someone off the list, with a reason everyone sees. Once enough Minter Admins approve, their join request goes, and they can send a new one later.',
           'Minter Admin polls: ask the Minter Admins an advisory question from Propose. They vote Yes, No or Neutral until it ends (1 to 30 days, 7 by default), with comments. Polls, votes and comments are encrypted to the Minter Admins, and a poll can be shared with admins added since. Nothing changes on chain from the result.',
           '"Hide already voted on" keeps Decisions to what still needs you: decisions you approved or rejected, and Minter Admin polls you voted on.',
+          'The History tab counts the changes decided since you last looked (on a phone, Activity’s History button does).',
           'Approve in one step, or several in a row. Every Hub confirmation is explained before it opens, with its fee.',
           'Propose a removal, a ban, an admin change, lifting a ban or cancelling an approved invite, and add your own approval in the same step.',
           'Reject a decision, also one you approved: on chain that is a rejection, counted against the same target as approvals, and the app says so before Hub opens.',
