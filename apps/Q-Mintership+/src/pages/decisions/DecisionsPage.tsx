@@ -163,7 +163,7 @@ function DecisionsQueue() {
   // The decision Sign, Reject or Withdraw was opened on, for where focus goes
   // when the dialog closes (a ref: the dialog's target is already cleared then).
   const answering = useRef<string | null>(null);
-  // Its card, or the section when the card is gone ("Hide what I answered").
+  // Its card, or the section when the card is gone ("Hide already voted on").
   const backToQueue = () =>
     (answering.current ? document.getElementById(decisionCardId(answering.current)) : null) ??
     sectionOf('collecting');
@@ -283,7 +283,8 @@ function DecisionsQueue() {
   const hiddenNote = hiddenCount ? (
     <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
       <Typography variant="body2" color="text.secondary">
-        {plural(hiddenCount, 'decision')} you answered {hiddenCount === 1 ? 'is' : 'are'} hidden.
+        {plural(hiddenCount, 'decision')} you already voted on {hiddenCount === 1 ? 'is' : 'are'}{' '}
+        hidden.
       </Typography>
       <Button
         onClick={() => {
@@ -291,13 +292,14 @@ function DecisionsQueue() {
           hideAnsweredSwitch.current?.focus();
           setHideAnswered(false);
         }}
+        aria-label="Show them: the decisions you already voted on"
         sx={{ minHeight: 44 }}
       >
-        Show the ones I answered
+        Show them
       </Button>
     </Box>
   ) : null;
-  // By type: the shown decisions (Hide what I answered applies), each type in queue order.
+  // By type: the shown decisions (Hide already voted on applies), each type in queue order.
   const groups = groupDecisions(shown);
   const collectingCard = (now: ChainNow) => (d: Decision) => (
     <DecisionCard
@@ -503,7 +505,7 @@ function DecisionsQueue() {
                       slotProps={{ input: { ref: hideAnsweredSwitch } }}
                     />
                   }
-                  label="Hide what I answered"
+                  label="Hide already voted on"
                   sx={{ minHeight: 44, mr: 'auto' }}
                 />
                 {selecting || signable.length > 1 ? (
@@ -632,6 +634,12 @@ function DecisionsQueue() {
                   onAsk={(from) => {
                     askFrom.current = from;
                     setAsking(true);
+                  }}
+                  hideVoted={hideAnswered}
+                  onShowVoted={() => {
+                    // The note's button goes: focus to the switch it turned off, when shown.
+                    hideAnsweredSwitch.current?.focus();
+                    setHideAnswered(false);
                   }}
                 />
               </Suspense>

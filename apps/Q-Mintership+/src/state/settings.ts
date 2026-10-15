@@ -34,7 +34,7 @@ export const celebrateAtom = atomWithStorage<boolean>(SETTINGS_KEYS.celebrate, t
 /** Minter Admin Activity's default window, in days. */
 export const activityWindowAtom = atomWithStorage<ActivityWindow>(SETTINGS_KEYS.activityWindow, 30);
 
-/** Decisions: hide the ones you have already answered (signed or rejected). */
+/** Decisions: hide what you already voted on (approved or rejected; polls you voted on). */
 export const decisionsHideAnsweredAtom = atomWithStorage<boolean>(
   SETTINGS_KEYS.decisionsHideAnswered,
   false

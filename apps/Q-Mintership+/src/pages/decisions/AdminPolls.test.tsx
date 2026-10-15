@@ -62,6 +62,36 @@ const voters = (card: HTMLElement, vote: string) =>
     .map((a) => a.getAttribute('aria-label')?.replace(/: open their page$/, ''));
 
 describe('Decisions → Minter Admin polls', () => {
+  it('Hide already voted on leaves out the polls the admin voted on, with a note to show them', async () => {
+    const u = userEvent.setup();
+    await openDecisions();
+    await pollCard(CLOSED_Q);
+    const hide = screen.getByRole('switch', { name: 'Hide already voted on' });
+    await u.click(hide);
+    const section = await polls();
+    // Avery voted on the closed one and on one open one; the other open ones wait for a vote.
+    await waitFor(() =>
+      expect(
+        within(section).queryByRole('article', { name: `Minter Admin poll: ${CLOSED_Q}` })
+      ).toBeNull()
+    );
+    expect(
+      within(section).queryByRole('article', { name: `Minter Admin poll: ${VOTED_Q}` })
+    ).toBeNull();
+    expect(
+      within(section).getByRole('article', { name: `Minter Admin poll: ${OPEN_Q}` })
+    ).toBeVisible();
+    expect(within(section).getByText('2 polls you already voted on are hidden.')).toBeVisible();
+    await u.click(
+      within(section).getByRole('button', { name: 'Show them: the polls you already voted on' })
+    );
+    expect(
+      await within(section).findByRole('article', { name: `Minter Admin poll: ${CLOSED_Q}` })
+    ).toBeVisible();
+    expect(hide).not.toBeChecked();
+    expect(hide).toHaveFocus();
+  });
+
   it('lists the polls an admin can read: open first (soonest end), then closed', async () => {
     await openDecisions();
     const section = await polls();

@@ -3,6 +3,8 @@
  * so nobody else downloads or reads any of it): open polls first, the
  * soonest end first, then those that ended in the last 31 days. Each card
  * votes, shares and comments through its own Hub step. Advisory only.
+ * "Hide already voted on" (the Decisions switch) leaves out the polls the
+ * viewer voted on, with a note to show them.
  */
 import { useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
@@ -33,17 +35,26 @@ export const ADMIN_POLLS_SECTION_ID = 'admin-polls';
 export default function AdminPollsSection({
   author,
   onAsk,
+  hideVoted = false,
+  onShowVoted,
 }: {
   /** The signed-in Minter Admin. */
   author: PollAuthor;
   /** Opens Ask the Minter Admins (as Propose does), from this button: focus comes back to it. */
   onAsk: (from: HTMLElement) => void;
+  /** Hide already voted on: leave out the polls the viewer voted on (in time or late). */
+  hideVoted?: boolean;
+  /** Turn hiding off (the note's Show them). */
+  onShowVoted?: () => void;
 }) {
   const { query, views, pending, signers, undecrypted, retry } = useAdminPolls(author.address);
   const now = useNow(60_000);
   const [dialog, setDialog] = useState<PollDialog | null>(null);
-  const open = views?.filter((v) => v.open) ?? [];
-  const closed = views?.filter((v) => !v.open) ?? [];
+  const votedOn = (v: ShownPoll) => Boolean(myVoteView(v, pending.votes[v.id]).vote || v.myLate);
+  const shown = (views ?? []).filter((v) => !(hideVoted && votedOn(v)));
+  const hidden = (views?.length ?? 0) - shown.length;
+  const open = shown.filter((v) => v.open);
+  const closed = shown.filter((v) => !v.open);
 
   const card = (view: ShownPoll) => (
     <AdminPollCard
@@ -110,6 +121,20 @@ export default function AdminPollsSection({
             </Box>
           ) : null}
           {closed.map(card)}
+          {hidden ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                {plural(hidden, 'poll')} you already voted on {hidden === 1 ? 'is' : 'are'} hidden.
+              </Typography>
+              <Button
+                onClick={onShowVoted}
+                aria-label="Show them: the polls you already voted on"
+                sx={{ minHeight: 44 }}
+              >
+                Show them
+              </Button>
+            </Box>
+          ) : null}
           {undecrypted ? (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 1 }}>
               <Typography variant="body2" color="text.secondary" role="note">

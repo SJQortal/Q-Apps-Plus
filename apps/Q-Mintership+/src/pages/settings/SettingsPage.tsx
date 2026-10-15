@@ -313,8 +313,8 @@ export default function SettingsPage() {
               <SwitchRow>
                 <SettingText
                   id="hide-answered-label"
-                  title="Hide decisions I answered"
-                  hint="Approved or rejected: keep the Decisions queue to what still needs you."
+                  title="Hide already voted on"
+                  hint="Decisions you approved or rejected, and Minter Admin polls you voted on: keep Decisions to what still needs you."
                 />
                 <Switch
                   checked={hideAnswered}

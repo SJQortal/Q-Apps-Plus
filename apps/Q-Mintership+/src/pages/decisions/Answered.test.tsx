@@ -2,7 +2,7 @@
  * A decision this Minter Admin answered (signed or rejected, in a block or
  * on its way) waits for them nowhere: not in "Waiting for your answer"
  * (Decisions and Home), not in the Decisions badge, not in Sign several.
- * "Hide what I answered" hides both kinds of answer, and keeps the device's
+ * "Hide already voted on" hides both kinds of answer, and keeps the device's
  * choice from when it was "Hide what I signed".
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -101,26 +101,28 @@ describe('Rejected decisions stay out of the waiting lists', () => {
   });
 });
 
-describe('Hide what I answered', () => {
+describe('Hide already voted on', () => {
   it('hides signed and rejected ones, in a block or on their way', async () => {
     const u = user();
     await openQueue();
-    await u.click(screen.getByRole('switch', { name: 'Hide what I answered' }));
+    await u.click(screen.getByRole('switch', { name: 'Hide already voted on' }));
     expect(screen.queryByRole('article', { name: KICK })).toBeNull();
     expect(screen.queryByRole('article', { name: BAN })).toBeNull();
     expect(screen.queryByRole('article', { name: /Uma Urgent/ })).toBeNull();
     // Uma Urgent and Eli Early (signed), the kick and the ban (rejected).
-    expect(screen.getByText(/4 decisions you answered are hidden/)).toBeVisible();
+    expect(screen.getByText(/4 decisions you already voted on are hidden/)).toBeVisible();
     expect(card(/bob\+builder/)).toBeInTheDocument();
     expect(window.localStorage.getItem(`${STORAGE_PREFIX}decisions-hide-signed`)).toBe('true');
-    await u.click(screen.getByRole('button', { name: 'Show the ones I answered' }));
+    await u.click(
+      screen.getByRole('button', { name: 'Show them: the decisions you already voted on' })
+    );
     expect(await screen.findByRole('article', { name: KICK })).toBeInTheDocument();
   });
 
   it('keeps the choice this device made as "Hide what I signed"', async () => {
     window.localStorage.setItem(`${STORAGE_PREFIX}decisions-hide-signed`, 'true');
     await openQueue();
-    expect(await screen.findByRole('switch', { name: 'Hide what I answered' }, T)).toBeChecked();
+    expect(await screen.findByRole('switch', { name: 'Hide already voted on' }, T)).toBeChecked();
     expect(screen.queryByRole('article', { name: KICK })).toBeNull();
   });
 
@@ -140,7 +142,7 @@ describe('Hide what I answered', () => {
   it('after answering a card it hides, focus goes to the queue, not the page', async () => {
     const u = user();
     await openQueue();
-    await u.click(screen.getByRole('switch', { name: 'Hide what I answered' }));
+    await u.click(screen.getByRole('switch', { name: 'Hide already voted on' }));
     await rejectWithKeyboard(u);
     expect(screen.queryByRole('article', { name: /bob\+builder/ })).toBeNull();
     await waitFor(
