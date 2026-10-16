@@ -92,7 +92,11 @@ describe('side by side', () => {
     expect(text('penalty')).toEqual(['None', '−5,000,000 blocks']);
     expect(text('balance')).toEqual(['12.5 QORT', '6,480.54 QORT']);
     expect(text('status')).toEqual(['Former member', 'MINTER member']);
-    expect(text('sponsor')).toEqual(['None found', 'Qsssss…ssss']);
+    // The second's links were capped: its sponsor is the first of those read.
+    expect(text('sponsor')).toEqual([
+      'None found',
+      'Qsssss…ssss (the first in its newest 500 read)',
+    ]);
     expect(text('sponsored')).toEqual(['None', '48 accounts+']);
     expect(text('mintingNow')).toEqual(['No', 'Yes']);
     expect(text('lastSent')).toEqual(['Never', '15 May 2023 · block 2,740,000']);
@@ -170,6 +174,21 @@ describe('side by side', () => {
     }
     // Still reading (nothing failed): undefined, as before.
     expect(row(sideRows([facts({ balance: undefined })]), 'balance').cells[0]).toBeUndefined();
+  });
+
+  it('a sponsor from capped links says only the newest 500 were read', () => {
+    const rows = sideRows([
+      facts({ sponsor: S, sponseesCapped: true }),
+      facts({ sponsor: null, sponseesCapped: true }),
+    ]);
+    const sponsor = row(rows, 'sponsor').cells.map((c) => (c ? cellText(c) : '…'));
+    expect(sponsor).toEqual([
+      'Qsssss…ssss (the first in its newest 500 read)',
+      'None found in its newest 500 reward shares, level moves and name sales',
+    ]);
+    // Never the same for all with one that was read in full.
+    const mixed = sideRows([facts({ sponsor: S, sponseesCapped: true }), facts({ sponsor: S })]);
+    expect(sameForAll(row(mixed, 'sponsor').cells)).toBeNull();
   });
 
   it('a primary name that couldn’t be read is never “No primary name”', () => {

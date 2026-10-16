@@ -78,6 +78,22 @@ describe('In common', () => {
   });
 });
 
+describe('In common with capped links', () => {
+  it('“none found: a shared sponsor” says only the newest 500 were read', () => {
+    const state = inCommonState(
+      compareData({
+        links: [
+          read({ rows: [], truncated: true, privs: {} }),
+          read({ rows: [], truncated: false, privs: {} }),
+        ],
+      })
+    );
+    expect(state.empty[0]).toBe(
+      'a shared sponsor (only the newest 500 reward shares, level moves and name sales read for A)'
+    );
+  });
+});
+
 describe('Copy findings: what was read', () => {
   it('every read in: how far each one goes', () => {
     expect(coverageLines(compareData(), { paymentsBetween: true })).toEqual([

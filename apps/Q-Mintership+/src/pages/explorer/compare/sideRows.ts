@@ -65,6 +65,7 @@ export interface SideFacts {
   sponsor: string | null | undefined;
   /** How many accounts it sponsored (undefined: reading). */
   sponsees?: number;
+  /** Its links were capped (only the newest 500 read): the sponsor and sponsee count may be partial. */
   sponseesCapped?: boolean;
   mintingNow?: boolean;
   /** Its newest own transaction (null: none). */
@@ -181,12 +182,23 @@ export function sideRows(facts: readonly SideFacts[]): SideRow[] {
     row('status', 'MINTER status', (f) =>
       f.status ? plain(minterStatusWord(f.status)) : unread(f, 'status')
     ),
+    // Its first reward share in: only its newest 500 were read when capped, so it says so.
     row('sponsor', 'Sponsor', (f) =>
       f.sponsor === undefined
         ? unread(f, 'links')
         : f.sponsor
-          ? { key: f.sponsor, account: f.sponsor }
-          : plain('None found')
+          ? f.sponseesCapped
+            ? {
+                key: `${f.sponsor}|newest 500`,
+                account: f.sponsor,
+                after: ' (the first in its newest 500 read)',
+              }
+            : { key: f.sponsor, account: f.sponsor }
+          : plain(
+              f.sponseesCapped
+                ? 'None found in its newest 500 reward shares, level moves and name sales'
+                : 'None found'
+            )
     ),
     row('sponsored', 'Sponsored', (f) =>
       f.sponsees === undefined

@@ -515,6 +515,26 @@ describe('in common', () => {
     ).toBe('First seen in the same block');
     expect(timingText('First seen', [{ letter: 'A', value: 10 }], 'blocks', 2)).toBeNull();
   });
+
+  it('an account whose links were capped is left out of the self-share timing, and said so', () => {
+    const capped = { ...links([share(C, C, 1_371_500)]), truncated: true };
+    const sides = [
+      side(A, 'A', { links: links([share(A, A, 1_371_000)]) }),
+      side(B, 'B', { links: links([share(B, B, 1_371_014)]) }),
+      // Its first self-share may be older than the newest 500 read.
+      side(C, 'C', { links: capped }),
+    ];
+    expect(timingRows(sides)).toEqual([
+      {
+        key: 'selfShare',
+        text: 'Self-shares created 14 blocks apart, first to last: A, B (C left out: only its newest 500 reward shares, level moves and name sales were read)',
+      },
+    ]);
+    // Only capped ones: no row at all.
+    expect(timingRows([side(A, 'A', { links: capped }), side(C, 'C', { links: capped })])).toEqual(
+      []
+    );
+  });
 });
 
 describe('the timeline together', () => {
@@ -594,6 +614,19 @@ describe('the timeline together', () => {
       },
     ]);
     expect(events.map((e) => plain(e.parts))).toEqual(['got its minting level from C']);
+  });
+
+  it('a self-share from capped links says it is only the earliest of those read', () => {
+    const events = timelineEvents([
+      {
+        address: A,
+        letter: 'A',
+        links: { ...links([share(A, A, 1_371_000)]), truncated: true },
+      },
+    ]);
+    expect(events.map((e) => plain(e.parts))).toEqual([
+      'created a self-share (minting with its own key; the earliest in its newest 500 reward shares, level moves and name sales read)',
+    ]);
   });
 });
 

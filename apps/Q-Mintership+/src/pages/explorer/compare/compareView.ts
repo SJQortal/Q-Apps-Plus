@@ -262,8 +262,16 @@ export function pairPending(
 /** What In common has, is reading, found nothing of, and couldn't check. */
 export function inCommonState(data: CompareData): InCommonState {
   const live = data.live.map((a, i) => (a ? i : -1)).filter((i) => i >= 0);
+  // Accounts whose links were capped: their first reward share may not have been read.
+  const capped = live.filter((i) => data.links[i].data?.truncated).map(letterOf);
   const checks: Array<{ words: string; found: boolean; reads: (i: number) => CompareRead[] }> = [
-    { words: 'a shared sponsor', found: data.sponsors.length > 0, reads: (i) => [data.links[i]] },
+    {
+      words: capped.length
+        ? `a shared sponsor (only the newest 500 reward shares, level moves and name sales read for ${listWords(capped)})`
+        : 'a shared sponsor',
+      found: data.sponsors.length > 0,
+      reads: (i) => [data.links[i]],
+    },
     {
       words: 'a shared first payer',
       found: data.firstPayers.length > 0,

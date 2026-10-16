@@ -981,11 +981,22 @@ export function timingRows(
     .filter((v): v is TimingValue => typeof v.value === 'number');
   const seen = timingText('First seen', firstSeen, 'blocks', total);
   if (seen) rows.push({ key: 'firstSeen', text: seen });
+  // An account whose links were capped may have an older self-share than the ones read.
+  const capped = sides.filter((s) => s.links?.truncated).map((s) => s.letter);
   const shares = sides
+    .filter((s) => !s.links?.truncated)
     .map((s) => ({ letter: s.letter, value: firstSelfShare(s)?.blockHeight }))
     .filter((v): v is TimingValue => typeof v.value === 'number');
   const share = timingText('Self-shares created', shares, 'blocks', total);
-  if (share) rows.push({ key: 'selfShare', text: share });
+  if (share)
+    rows.push({
+      key: 'selfShare',
+      text: capped.length
+        ? `${share} (${listWords(capped)} left out: only ${
+            capped.length === 1 ? 'its' : 'their'
+          } newest 500 reward shares, level moves and name sales were read)`
+        : share,
+    });
   const joins = sides
     .map((s) => ({ letter: s.letter, value: joined[s.address] }))
     .filter((v): v is TimingValue => typeof v.value === 'number' && v.value > 0);
@@ -1127,7 +1138,13 @@ export function timelineEvents(sides: readonly TimelineSide[]): TimelineEvent[] 
         kind: 'selfShare',
         height: self.blockHeight ?? null,
         timestamp: self.timestamp,
-        parts: [text('created a self-share (minting with its own key)')],
+        parts: [
+          text(
+            side.links?.truncated
+              ? 'created a self-share (minting with its own key; the earliest in its newest 500 reward shares, level moves and name sales read)'
+              : 'created a self-share (minting with its own key)'
+          ),
+        ],
         signature: self.signature,
       });
     }
