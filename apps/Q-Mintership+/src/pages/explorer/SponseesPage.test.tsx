@@ -48,13 +48,13 @@ describe('the accounts a sponsor sponsored', () => {
     expect((await list()).children).toHaveLength(5);
     await waitFor(
       () =>
-        expect(
-          screen.getByText(/^5 accounts sponsored, /, { selector: '[role="status"]' })
-        ).toHaveTextContent(
+        expect(screen.getByText(/^5 accounts sponsored, /)).toHaveTextContent(
           /^5 accounts sponsored, \w{3} \d{4} – \w{3} \d{4}: 1 in MINTER now, 1 minting now, 0 with a minting penalty\.$/
         ),
       T
     );
+    // Its counts change as rows are read: not a live region.
+    expect(screen.getByText(/^5 accounts sponsored, /)).not.toHaveAttribute('role');
     const leo = await screen.findByRole('list', { name: 'About Leo Learner' }, T);
     expect(leo).toHaveTextContent(/In MINTER since/);
     await waitFor(() => expect(leo).toHaveTextContent('Level 2'), T);
@@ -126,6 +126,9 @@ describe('the accounts a sponsor sponsored', () => {
     await list();
     const card = screen.getByRole('region', { name: 'Who made their first QORT payment' });
     await user.click(within(card).getByRole('button', { name: 'Check 5 accounts' }));
+    // Said once as it starts; the running count is on screen, not announced.
+    expect(within(card).getByRole('status')).toHaveTextContent(/^Checking 5 accounts…$/);
+    expect(within(card).getByText(/^Checked \d of 5 accounts…$/)).not.toHaveAttribute('role');
     await user.click(await within(card).findByRole('button', { name: 'Stop' }, T));
     expect(
       await within(card).findByText(/^Stopped after [0-4] of 5 accounts\.$/, {}, T)

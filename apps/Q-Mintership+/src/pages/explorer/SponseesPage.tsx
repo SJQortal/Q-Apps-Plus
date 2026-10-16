@@ -133,9 +133,8 @@ export default function SponseesPage() {
   else
     body = (
       <>
-        <Typography role="status" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
-          {summary}
-        </Typography>
+        {/* Not a live region: its counts change as each row's account is read. */}
+        <Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{summary}</Typography>
         {links.data?.truncated ? (
           <Typography variant="body2" color="text.secondary">
             From its newest 500 reward shares, level moves and name sales: there may be older ones.

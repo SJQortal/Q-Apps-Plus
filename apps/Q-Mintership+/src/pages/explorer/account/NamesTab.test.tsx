@@ -338,11 +338,16 @@ describe('Names: published on QDN', () => {
     await user.click(await within(qdn).findByRole('button', { name: 'Search 20 more names' }, T));
     // The same button turns into Stop, and keeps the focus.
     expect(within(qdn).getByRole('button', { name: 'Stop' })).toHaveFocus();
-    expect(within(qdn).getByRole('status')).toHaveTextContent(/^Searching: \d+ of 20 names$/);
+    // Said once as it starts; the running count is on screen and in the bar.
+    expect(within(qdn).getByRole('status')).toHaveTextContent(/^Searching 20 names on QDN…$/);
+    expect(within(qdn).getByText(/^Searching: \d+ of 20 names$/)).not.toHaveAttribute('role');
     expect(
       within(qdn).getByRole('progressbar', { name: 'Searching its names on QDN' })
     ).toBeVisible();
-    expect(await within(qdn).findByText('Searched all 30 names.', {}, T)).toBeInTheDocument();
+    expect(
+      await within(qdn).findByText('Searched all 30 names.', { selector: 'p' }, T)
+    ).toBeInTheDocument();
+    expect(within(qdn).getByRole('status')).toHaveTextContent(/^Searched all 30 names\.$/);
     expect(byName()).toHaveLength(30);
     expect(most).toBe(4);
     // Nothing left to search: the button goes, and the line of what was searched takes the focus.
@@ -368,7 +373,9 @@ describe('Names: published on QDN', () => {
     slow = true;
     await user.click(more);
     await user.click(within(qdn).getByRole('button', { name: 'Stop' }));
-    expect(await within(qdn).findByText('Searched 14 of 30 names.', {}, T)).toBeInTheDocument();
+    expect(
+      await within(qdn).findByText('Searched 14 of 30 names.', { selector: 'p' }, T)
+    ).toBeInTheDocument();
     expect(byName()).toHaveLength(14);
     expect(within(qdn).getByRole('button', { name: 'Search 16 more names' })).toBeInTheDocument();
   });
@@ -387,7 +394,9 @@ describe('Names: published on QDN', () => {
     expect(within(qdn).getByText(/^Searched 9 of 30 names\./)).toBeInTheDocument();
     fail = false;
     await user.click(within(qdn).getByRole('button', { name: 'Retry' }));
-    expect(await within(qdn).findByText(/^Searched 10 of 30 names\./, {}, T)).toBeInTheDocument();
+    expect(
+      await within(qdn).findByText(/^Searched 10 of 30 names\./, { selector: 'p' }, T)
+    ).toBeInTheDocument();
     expect(within(qdn).queryByText(/^Couldn't search/)).toBeNull();
   });
 

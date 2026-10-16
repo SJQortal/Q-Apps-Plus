@@ -99,6 +99,10 @@ function CheckCard({
       <Typography variant="body2" color="text.secondary">
         {about}
       </Typography>
+      {/* Said once when a check starts; the count runs on screen and in the bar. */}
+      <span role="status" className="qmp-visually-hidden">
+        {running ? `Checking ${plural(total, 'account')}…` : ''}
+      </span>
       {running && progress ? (
         <LinearProgress
           variant="determinate"
@@ -108,7 +112,7 @@ function CheckCard({
       ) : null}
       <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
         {running && progress ? (
-          <Typography role="status" variant="body2" sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }}>
             Checked {formatCount(progress.done)} of {plural(progress.total, 'account')}…
           </Typography>
         ) : null}
