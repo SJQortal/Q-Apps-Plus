@@ -146,7 +146,7 @@ export function InCommonSection({ data }: { data: CompareData }) {
         ) : null}
 
         {state.reading ? (
-          <Waiting>
+          <Waiting announce="Reading what they share…">
             Reading sponsors, first payments, payments each way and groups to see what they share…
           </Waiting>
         ) : null}
@@ -156,6 +156,7 @@ export function InCommonSection({ data }: { data: CompareData }) {
           error={state.failedReads[0]?.error}
           onRetry={() => state.failedReads.forEach((q) => void q.refetch())}
           retryLabel="Retry In common"
+          announce="In common: some reads failed."
         />
         {state.empty.length ? <Note>Checked, none found: {state.empty.join(', ')}.</Note> : null}
       </Section>

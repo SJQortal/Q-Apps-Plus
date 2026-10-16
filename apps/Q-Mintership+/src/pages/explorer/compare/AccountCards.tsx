@@ -100,8 +100,10 @@ function AccountCard({
     );
   } else {
     body = (
-      <Box role="status" aria-label={`Loading account ${letter}`}>
-        <Skeleton variant="text" width="60%" />
+      // Words a screen reader can find (a skeleton alone says nothing), not a live region.
+      <Box>
+        <Skeleton variant="text" width="60%" aria-hidden />
+        <span className="qmp-visually-hidden">Loading account {letter}…</span>
       </Box>
     );
   }

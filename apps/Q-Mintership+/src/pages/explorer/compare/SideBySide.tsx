@@ -196,7 +196,12 @@ export function SideBySide({
     <Section title="Side by side" id="compare-side">
       {table ? <Table columns={columns} rows={rows} /> : <Stacked columns={columns} rows={rows} />}
       {onRetry ? (
-        <FailedReads what={failed} onRetry={onRetry} retryLabel="Retry Side by side" />
+        <FailedReads
+          what={failed}
+          onRetry={onRetry}
+          retryLabel="Retry Side by side"
+          announce="Side by side: some reads failed."
+        />
       ) : null}
     </Section>
   );

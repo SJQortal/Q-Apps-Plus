@@ -152,7 +152,7 @@ export function RecordedSection({
           <PairBlock key={pair.pair.id} data={data} pair={pair} accents={accents} />
         ))}
         {waiting.length ? (
-          <Waiting>
+          <Waiting announce="Reading what was recorded between them…">
             Reading what was recorded between {waiting.map((p) => p.pair.label).join(', ')}:{' '}
             {pendingWords([...new Set(waiting.flatMap((p) => p.result.pending))])}…
           </Waiting>
@@ -161,6 +161,7 @@ export function RecordedSection({
           what={errors.map((e) => e.what)}
           onRetry={() => errors.forEach((e) => e.retry())}
           retryLabel="Retry Recorded between them"
+          announce="Recorded between them: some reads failed."
         />
         {emptyLine ? (
           <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
