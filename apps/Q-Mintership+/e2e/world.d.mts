@@ -145,3 +145,7 @@ export interface ExplorerWorld {
     publishes: string[];
   };
 }
+/** The Overview and Names tabs' name collector: 30 names, QDN under five, a minting penalty. */
+export const COLLECTOR: ExplorerPerson & { name: string };
+/** Its names in Core's order (when each was registered); the primary is the third. */
+export const COLLECTOR_NAMES: string[];
