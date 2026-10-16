@@ -46,6 +46,7 @@ import { useLandscapeFrame } from '../../utils/hubFrame';
 import { AccountHeader } from './account/AccountHeader';
 import { AccountTabs } from './account/AccountTabs';
 import { CompareToggle } from './account/CompareToggle';
+import { CompareWith } from './account/CompareWith';
 import { ExplorerTrail } from './account/ExplorerTrail';
 import OverviewTab from './account/OverviewTab';
 import { refreshAccount } from './account/refreshAccount';
@@ -251,6 +252,7 @@ export default function AccountPage() {
       <>
         <CopyLinkButton path={explorerAccountPath(account.address)} what="this account" />
         <CompareToggle address={account.address} label={label} />
+        <CompareWith address={account.address} label={label} />
         <RefreshButton
           onClick={() => refreshAccount(account.address, account.publicKey)}
           fetching={explored.fetching}
