@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { Alert, Box, Button, Typography } from '@mui/material';
+import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { PersonChip } from '../../components/common/Person';
 import { Card, Section, ToneChip } from '../../components/common/Section';
@@ -30,7 +31,13 @@ import {
 } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { useQuery } from '../../hooks/useQuery';
-import { PATHS, decisionPath, nominationPath } from '../../routes/paths';
+import {
+  PATHS,
+  decisionPath,
+  explorerAccountPath,
+  explorerComparePath,
+  nominationPath,
+} from '../../routes/paths';
 import {
   decisionKind,
   decisionSubject,
@@ -349,14 +356,40 @@ function UnusualView({ tx }: { tx: TxRow }) {
   );
 }
 
-/** Where to go from here: the nomination behind an invite, and the whole queue. */
-function MoreLinks({ tx }: { tx: TxRow }) {
+/**
+ * Where to go from here: the nomination behind an invite, the person in the
+ * Explorer (and, for an invite whose nominator is known, both side by
+ * side), and the whole queue.
+ */
+function MoreLinks({ tx, nominator = null }: { tx: TxRow; nominator?: string | null }) {
   const subject = decisionSubject(tx);
+  const who = useDisplayName(subject ?? '', subject ? undefined : null);
+  const invite = tx.type === 'GROUP_INVITE';
   return (
     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-      {tx.type === 'GROUP_INVITE' && subject ? (
+      {invite && subject ? (
         <Button component={RouterLink} to={nominationPath(subject)} sx={{ minHeight: 44 }}>
           The nomination
+        </Button>
+      ) : null}
+      {subject ? (
+        <Button
+          component={RouterLink}
+          to={explorerAccountPath(subject)}
+          aria-label={`Explore ${who.label}`}
+          startIcon={<TravelExploreOutlinedIcon />}
+          sx={{ minHeight: 44 }}
+        >
+          Explore
+        </Button>
+      ) : null}
+      {invite && subject && nominator && nominator !== subject ? (
+        <Button
+          component={RouterLink}
+          to={explorerComparePath([subject, nominator])}
+          sx={{ minHeight: 44 }}
+        >
+          Compare nominee and nominator
         </Button>
       ) : null}
       <Button component={RouterLink} to={PATHS.decisions} sx={{ minHeight: 44 }}>
@@ -501,7 +534,14 @@ function PendingView({
           commentsOpen
         />
       </Section>
-      <MoreLinks tx={tx} />
+      <MoreLinks
+        tx={tx}
+        nominator={
+          nomination?.decision?.signature === signature
+            ? (nomination.nomination?.publisher.address ?? null)
+            : null
+        }
+      />
     </>
   );
 }
