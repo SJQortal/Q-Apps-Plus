@@ -63,6 +63,9 @@ function Probe() {
       <button type="button" onClick={() => hop(ADDR.kicked, false)}>
         open Kit from elsewhere
       </button>
+      <button type="button" onClick={() => navigate(-1)}>
+        go back
+      </button>
     </>
   );
 }
@@ -78,7 +81,7 @@ function answerExplorerReads() {
   ]);
 }
 
-async function open(path: string, setup?: () => void, persona = 'learner') {
+async function open(path: string, setup?: () => void, persona = 'learner', strict = false) {
   const result = await renderPage(
     <>
       <AccountPage />
@@ -88,6 +91,7 @@ async function open(path: string, setup?: () => void, persona = 'learner') {
       persona,
       path,
       route: ROUTE,
+      strict,
       // Newer than the world's own routes: these answer first.
       setup: () => {
         answerExplorerReads();
@@ -188,6 +192,36 @@ describe('an account in the Explorer', () => {
     await user.click(within(tabs).getByRole('tab', { name: 'Overview' }));
     await waitFor(() => expect(at()).toBe(`/explorer/account/${ADDR.nominator}|null|REPLACE`), T);
     expect(within(tabs).getByRole('tab', { name: 'Overview' })).toHaveFocus();
+  });
+
+  it('starts a tab afresh for each account: Back to one keeps nothing asked on another', async () => {
+    const { user, posts } = await open(
+      explorerAccountPath(ADDR.nominator, 'connections'),
+      undefined,
+      'learner',
+      true
+    );
+    const sponsorship = (address: string) => fetchCallsFor(`/addresses/sponsorship/${address}`);
+    await screen.findByRole('button', { name: 'Load Core’s report' }, T);
+    // To Leo by an Explorer link, then his Connections, where his report is asked for.
+    await user.click(screen.getByRole('button', { name: 'hop to Leo' }));
+    await screen.findByRole('heading', { level: 1, name: 'Leo Learner' }, T);
+    const tabs = await screen.findByRole('tablist', { name: 'Account sections' }, T);
+    await user.click(within(tabs).getByRole('tab', { name: 'Connections' }));
+    await user.click(await screen.findByRole('button', { name: 'Load Core’s report' }, T));
+    await waitFor(() => expect(sponsorship(ADDR.learner)).toHaveLength(1), T);
+    // Back to Nora's Connections (already read, so the page stays): nothing asked on hers.
+    await user.click(screen.getByRole('button', { name: 'go back' }));
+    await waitFor(
+      () => expect(at()).toBe(`/explorer/account/${ADDR.nominator}/connections|null|POP`),
+      T
+    );
+    await screen.findByRole('heading', { level: 1, name: 'Nora Nominator' }, T);
+    expect(
+      await screen.findByRole('button', { name: 'Load Core’s report' }, T)
+    ).toBeInTheDocument();
+    expect(sponsorship(ADDR.nominator)).toEqual([]);
+    noWrites(posts);
   });
 
   it('opens an unknown tab segment on Overview', async () => {

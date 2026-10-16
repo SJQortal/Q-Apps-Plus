@@ -288,7 +288,8 @@ export default function AccountPage() {
         {showTabs && opened ? (
           <>
             {tabsInHeader ? null : tabBar}
-            <TabPanel tab={tab} address={opened} />
+            {/* One per account: a tab's own state (what was asked, what was found) starts fresh. */}
+            <TabPanel key={opened} tab={tab} address={opened} />
           </>
         ) : null}
       </PageBody>
