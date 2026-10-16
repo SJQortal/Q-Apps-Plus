@@ -302,6 +302,36 @@ describe('Connections: payments and first QORT', () => {
     expect(within(recorded).queryByRole('button', { name: /^Show more AT/ })).toBeNull();
   });
 
+  it('Compare with no room for both says so and picks neither', async () => {
+    const { user, posts } = await open(ADDR.left);
+    const store = getDefaultStore();
+    const three = [ADDR.admin, ADDR.nominator, ADDR.learner];
+    store.set(comparePicksAtom, three);
+    const recorded = await region('Recorded between them');
+    await user.click(
+      await within(recorded).findByRole('button', { name: 'Compare Lou Left with Kit Kicked' }, T)
+    );
+    expect(
+      await screen.findByText('Compare holds 4 accounts. Remove one first.', {}, T)
+    ).toBeInTheDocument();
+    expect(store.get(comparePicksAtom)).toEqual(three);
+    expect(screen.queryByTestId('navigated-away')).toBeNull();
+    noWrites(posts);
+  });
+
+  it('Compare with one of the two picked already adds the other', async () => {
+    const { user, posts } = await open(ADDR.left);
+    const store = getDefaultStore();
+    store.set(comparePicksAtom, [ADDR.admin, ADDR.left, ADDR.learner]);
+    const recorded = await region('Recorded between them');
+    await user.click(
+      await within(recorded).findByRole('button', { name: 'Compare Lou Left with Kit Kicked' }, T)
+    );
+    expect(await screen.findByTestId('navigated-away', {}, T)).toBeInTheDocument();
+    expect(store.get(comparePicksAtom)).toEqual([ADDR.admin, ADDR.left, ADDR.learner, ADDR.kicked]);
+    noWrites(posts);
+  });
+
   it('MINTER members only: none of Lou’s payments were with members', async () => {
     const { user } = await open(ADDR.left);
     const recorded = await region('Recorded between them');
