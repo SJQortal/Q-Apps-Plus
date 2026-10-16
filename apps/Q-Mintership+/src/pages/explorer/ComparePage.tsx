@@ -78,6 +78,7 @@ import { cellText, sameForAll, sideRows, type SideFacts } from './compare/sideRo
 import { TimelineSection } from './compare/TimelineSection';
 import { COMPARE_SCOPE, useCompareData, type CompareData } from './compare/useCompareData';
 import { EXPLORER_NEUTRAL_LINE } from './explorerWords';
+import { ExplorerHeaderSearch } from '../../components/explorer/ExplorerHeaderSearch';
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
@@ -340,9 +341,12 @@ export default function ComparePage() {
         title="Compare accounts"
         back={PATHS.explorer}
         actions={
-          addresses.length ? (
-            <CopyLinkButton path={explorerComparePath([...addresses])} what="this comparison" />
-          ) : null
+          <>
+            <ExplorerHeaderSearch />
+            {addresses.length ? (
+              <CopyLinkButton path={explorerComparePath([...addresses])} what="this comparison" />
+            ) : null}
+          </>
         }
       />
       <PageBody $maxWidth={WIDE_PAGE}>

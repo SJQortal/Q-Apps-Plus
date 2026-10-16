@@ -38,6 +38,7 @@ import {
   typesOfChoice,
   type GlobalType,
 } from './tx/globalFilters';
+import { ExplorerHeaderSearch } from '../../components/explorer/ExplorerHeaderSearch';
 
 export default function TransactionsPage() {
   const [params, setParams] = useSearchParams();
@@ -123,7 +124,12 @@ export default function TransactionsPage() {
       <PageHeader
         title="Transactions on Qortal"
         back={PATHS.explorer}
-        actions={<RefreshButton onClick={() => void refresh()} fetching={refreshing} />}
+        actions={
+          <>
+            <ExplorerHeaderSearch />
+            {<RefreshButton onClick={() => void refresh()} fetching={refreshing} />}
+          </>
+        }
       />
       <PageBody>
         <Typography color="text.secondary">

@@ -40,6 +40,7 @@ import { INVALID_ADDRESS } from './explorerWords';
 import { SetChecks } from './sets/SetChecks';
 import { SET_LIST_SX, SponseeRowItem } from './sets/SponseeRows';
 import { withMarkedName } from '../../components/common/markedText';
+import { ExplorerHeaderSearch } from '../../components/explorer/ExplorerHeaderSearch';
 
 /** Rows shown before "Show more" (each looks up a name and, near the screen, its account). */
 const ROWS = 20;
@@ -204,9 +205,12 @@ export default function SponseesPage() {
         heading={withMarkedName(title, name, label)}
         back={PATHS.explorer}
         actions={
-          valid ? (
-            <CopyLinkButton path={explorerSponseesPath(address)} what="this list" />
-          ) : undefined
+          <>
+            <ExplorerHeaderSearch />
+            {valid ? (
+              <CopyLinkButton path={explorerSponseesPath(address)} what="this list" />
+            ) : undefined}
+          </>
         }
       />
       <PageBody $maxWidth={WIDE_PAGE}>{body}</PageBody>

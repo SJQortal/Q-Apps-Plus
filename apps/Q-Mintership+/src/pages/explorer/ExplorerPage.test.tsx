@@ -53,10 +53,8 @@ describe('the Explorer’s landing page', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Explorer' })).toBeInTheDocument();
     expect(screen.getByText('Look up any Qortal account or transaction')).toBeInTheDocument();
     const field = screen.getByRole('combobox', { name: 'Find an account or transaction' });
-    expect(field).toHaveAttribute('placeholder', 'Name, Q… address or signature');
-    expect(
-      screen.getByText('Pick a suggestion, or press Enter to look up the name')
-    ).toBeInTheDocument();
+    expect(field).toHaveAttribute('placeholder', 'Name, Q… address, signature or QDN identifier');
+    expect(screen.getByText('Pick a suggestion, or press Enter to look it up')).toBeInTheDocument();
     // A wide screen without touch: ready to type.
     expect(field).toHaveFocus();
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();

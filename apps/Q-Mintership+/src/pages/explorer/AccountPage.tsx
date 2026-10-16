@@ -54,6 +54,7 @@ import { refreshAccount } from './account/refreshAccount';
 import { ACCOUNT_TABS, AT_TABS, panelIdOf, tabIdOf } from './account/tabIds';
 import { AT_ACCOUNT, INVALID_ADDRESS, UNUSED_ADDRESS } from './explorerWords';
 import { MarkedName } from '../../components/common/MarkedName';
+import { ExplorerHeaderSearch } from '../../components/explorer/ExplorerHeaderSearch';
 
 // Each tab's code loads when it is first opened.
 const TAB_PANELS: Record<ExplorerTab, ComponentType<{ address: string }>> = {
@@ -299,7 +300,12 @@ export default function AccountPage() {
         heading={titleName ? <MarkedName name={titleName}>{title}</MarkedName> : undefined}
         subtitle={subtitle}
         back={PATHS.explorer}
-        actions={actions}
+        actions={
+          <>
+            <ExplorerHeaderSearch />
+            {actions}
+          </>
+        }
       >
         {showTabs && tabsInHeader ? tabBar : null}
       </PageHeader>

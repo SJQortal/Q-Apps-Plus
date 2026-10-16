@@ -29,6 +29,7 @@ import { explorerTxPath, PATHS } from '../../routes/paths';
 import { txTypeLabel } from '../../rules/explorer/txFamilies';
 import { cameFromExplorer } from '../../state/explorer';
 import { TxView } from './tx/TxView';
+import { ExplorerHeaderSearch } from '../../components/explorer/ExplorerHeaderSearch';
 
 export const NO_SUCH_TX = 'No transaction has this signature on your node.';
 export const NOT_A_SIGNATURE = "This isn't a transaction signature. A letter may be wrong.";
@@ -89,7 +90,16 @@ export default function TxPage() {
 
   return (
     <PersonLinkContext value={links}>
-      <PageHeader title={title} back={PATHS.explorer} actions={actions} />
+      <PageHeader
+        title={title}
+        back={PATHS.explorer}
+        actions={
+          <>
+            <ExplorerHeaderSearch />
+            {actions}
+          </>
+        }
+      />
       <PageBody>{body}</PageBody>
     </PersonLinkContext>
   );

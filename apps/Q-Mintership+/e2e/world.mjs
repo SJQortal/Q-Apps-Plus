@@ -788,8 +788,9 @@ export function answerCore(world, pathname, sp) {
   if (p === '/arbitrary/resources/searchsimple') {
     const service = sp.get('service');
     const ident = sp.get('identifier') || '';
+    // Every record is JSON; no service means every service (an identifier pasted in the Explorer).
     let rows = world.records
-      .filter(() => service === 'JSON')
+      .filter(() => !service || service === 'JSON')
       .filter((r) =>
         sp.get('prefix') === 'true' ? r.identifier.startsWith(ident) : r.identifier === ident
       )

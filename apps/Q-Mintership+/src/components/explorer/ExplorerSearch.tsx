@@ -1,15 +1,20 @@
 /**
- * The Explorer's one field: a name, a Q… address, an AT address or a
- * transaction signature.
+ * The Explorer's one field: a name, a Q… address, an AT address, a
+ * transaction signature or a QDN identifier. On the Explorer's own page it
+ * is the big field; every other Explorer page has it compact in its header
+ * (ExplorerHeaderSearch).
  *
  * - Suggestions come in groups: Exact (what Enter does with the text),
  *   Names (registered names that start with it: the cached searchNames
  *   page Nominate shares, 250 ms after typing stops, one row per owner),
+ *   QDN (resources published under exactly that identifier, newest first:
+ *   data/explorer/qdnIdentifier.ts, each opening its latest transaction),
  *   and Recent (accounts explored on this device, while the field is empty).
  * - Enter never picks a suggestion by itself (no auto-highlight): it opens
  *   an address, an AT address or a transaction, or looks the text up as a
- *   name. A name Core doesn't know opens nothing; the names that contain the
- *   text are listed instead. Another account is never opened silently: an
+ *   name. A name Core doesn't know opens the one QDN resource with that
+ *   identifier when there is exactly one; otherwise nothing opens, and the
+ *   names that contain the text are listed instead. Another account is never opened silently: an
  *   account opened by a name carries that name to its page, which says so.
  * - A polite status line says what the suggestions found.
  */
@@ -24,15 +29,25 @@ import {
   type AutocompleteRenderGroupParams,
 } from '@mui/material';
 import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
+import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
+import { visuallyHidden } from '@mui/utils';
 import { primarySoft } from '../../hub-theme';
 import { NameAvatar } from '../common/NameAvatar';
 import { NameWithAvatar } from './NameWithAvatar';
 import { isAddress } from '../../data/accounts';
 import { getNameData, isAtAddress, isSignature } from '../../data/explorer/account';
 import { nameContainsKey, searchNamesContaining } from '../../data/explorer/names';
+import {
+  couldBeIdentifier,
+  identifierKey,
+  isPrivateService,
+  searchIdentifier,
+} from '../../data/explorer/qdnIdentifier';
+import { rowTime } from '../../data/qdn';
+import type { QdnRow } from '../../data/types';
 import {
   NAME_SEARCH_LIMIT,
   NAME_SEARCH_MIN,
@@ -44,7 +59,7 @@ import { useQuery } from '../../hooks/useQuery';
 import { explorerAccountPath, explorerTxPath } from '../../routes/paths';
 import { visibleName } from '../../rules/explorer/nameNotes';
 import { useRecent, type NameMatch } from '../../state/explorer';
-import { plural, shortAddress } from '../../utils/format';
+import { formatDate, plural, shortAddress } from '../../utils/format';
 import { MarkedName } from '../common/MarkedName';
 
 /** How long typing must pause before names are suggested. */
@@ -57,6 +72,7 @@ type Option =
   | { group: 'Exact'; kind: 'account' | 'at'; address: string }
   | { group: 'Exact'; kind: 'tx'; signature: string }
   | { group: 'Names'; kind: 'name'; hit: NameHit }
+  | { group: 'QDN'; kind: 'resource'; row: QdnRow }
   | { group: 'Recent'; kind: 'recent'; address: string };
 
 function optionText(option: Option | string): string {
@@ -72,10 +88,14 @@ function optionText(option: Option | string): string {
       return option.signature;
     case 'name':
       return option.hit.name;
+    case 'resource':
+      return option.row.identifier;
   }
 }
 
 function optionKey(option: Option): string {
+  if (option.kind === 'resource')
+    return `resource:${option.row.name}:${option.row.service}:${option.row.identifier}`;
   return `${option.kind}:${option.kind === 'name' ? option.hit.owner : optionText(option)}`;
 }
 
@@ -97,6 +117,11 @@ function shortSignature(signature: string): string {
 function foundWords(names: number, owners: number): string {
   const found = `${plural(names, 'name')} found`;
   return owners < names ? `${found} · ${plural(owners, 'account')}` : found;
+}
+
+/** "1 QDN resource with this identifier", "10+ QDN resources with this identifier". */
+function resourcesWords(count: number, more: boolean): string {
+  return `${more ? `${count}+ QDN resources` : plural(count, 'QDN resource')} with this identifier`;
 }
 
 /** A name, isolated from the text around it, its invisible characters shown. */
@@ -187,6 +212,33 @@ function NameOption({ hit, paused }: { hit: NameHit; paused: boolean }) {
         </Typography>
         <Typography variant="body2" color="text.secondary">
           {shortAddress(hit.owner)}
+        </Typography>
+      </Box>
+    </>
+  );
+}
+
+/**
+ * A QDN resource with the identifier typed: its service and identifier
+ * (an encrypted one says only that), who published it and when.
+ */
+function ResourceOption({ row }: { row: QdnRow }) {
+  const encrypted = isPrivateService(row.service);
+  return (
+    <>
+      <OptionIcon>
+        <CloudOutlinedIcon />
+      </OptionIcon>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
+          {encrypted
+            ? `An encrypted ${row.service} resource`
+            : `${row.service} · ${row.identifier}`}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+          {'Published by '}
+          <NameText name={row.name} />
+          {` · ${formatDate(rowTime(row))}`}
         </Typography>
       </Box>
     </>
@@ -313,6 +365,15 @@ export interface ExplorerSearchProps {
    * scrolling.
    */
   listMaxHeight?: string;
+  /**
+   * The header's small field: no floating label or hint under it (an error
+   * still shows), the status for screen readers only, suggestions at least
+   * 360 px wide. A name Core doesn't know opens its page, which lists the
+   * names that contain it.
+   */
+  compact?: boolean;
+  /** Called once it has opened something (the phone's search dialog closes). */
+  onDone?: () => void;
 }
 
 export function ExplorerSearch({
@@ -320,8 +381,10 @@ export function ExplorerSearch({
   onAccount,
   label = 'Find an account or transaction',
   listMaxHeight,
+  compact = false,
+  onDone,
 }: ExplorerSearchProps) {
-  const navigate = useNavigate();
+  const routerNavigate = useNavigate();
   const recent = useRecent();
   const inputRef = useRef<HTMLInputElement>(null);
   const [input, setInput] = useState('');
@@ -330,7 +393,17 @@ export function ExplorerSearch({
   const [error, setError] = useState('');
   /** A name Core doesn't know (Enter was pressed on it). */
   const [missing, setMissing] = useState<string | null>(null);
+  /** Enter on text that names no one but several QDN resources have as identifier. */
+  const [pickResource, setPickResource] = useState<number | null>(null);
+  /** The suggestions are open (opened again for "pick one"). */
+  const [listOpen, setListOpen] = useState(false);
   const groupId = useId();
+  // Opening anything empties a compact field and tells the caller.
+  const navigate = (to: string, options?: { state?: unknown }) => {
+    void routerNavigate(to, options);
+    if (compact) setInput('');
+    onDone?.();
+  };
 
   useEffect(() => {
     const value = input.trim();
@@ -352,6 +425,12 @@ export function ExplorerSearch({
   const key = `namesearch:${NAME_SEARCH_LIMIT}:${debounced.toLowerCase()}`;
   const search = useQuery(searchable ? key : null, () => searchNames(debounced, NAME_SEARCH_LIMIT));
   const hits = searchable && !search.isError ? (search.data ?? []) : [];
+  // Exactly that identifier on QDN: one small search, once typing pauses.
+  const idSearchable = couldBeIdentifier(debounced) && !special;
+  const resources = useQuery(idSearchable ? identifierKey(debounced) : null, () =>
+    searchIdentifier(debounced)
+  );
+  const resourceRows = idSearchable && !resources.isError ? (resources.data?.rows ?? []) : [];
   // One row per owner: the first of their names Core listed.
   const owners = new Map<string, NameHit>();
   for (const hit of hits) if (!owners.has(hit.owner)) owners.set(hit.owner, hit);
@@ -362,6 +441,7 @@ export function ExplorerSearch({
     ...(q.length >= NAME_SEARCH_MIN
       ? [...owners.values()].map((hit): Option => ({ group: 'Names', kind: 'name', hit }))
       : []),
+    ...(paused ? resourceRows.map((row): Option => ({ group: 'QDN', kind: 'resource', row })) : []),
     ...(q ? [] : recent.map((address): Option => ({ group: 'Recent', kind: 'recent', address }))),
   ];
 
@@ -375,11 +455,27 @@ export function ExplorerSearch({
     navigate(explorerAccountPath(address), from ? { state: from } : undefined);
   };
 
+  /** A QDN resource: its latest transaction, or (picking an account) its publisher. */
+  const openResource = async (row: QdnRow) => {
+    if (!onAccount && row.latestSignature) return navigate(explorerTxPath(row.latestSignature));
+    setResolving(true);
+    try {
+      const data = await getNameData(row.name);
+      if (data) open(data.owner, { viaName: row.name, matched: data.name });
+      else setError('Couldn’t find who published it on your node.');
+    } catch {
+      setError('Couldn’t look that up on your node. Try again.');
+    } finally {
+      setResolving(false);
+    }
+  };
+
   const resolve = async (text: string) => {
     const value = text.trim();
     if (!value) return;
     setError('');
     setMissing(null);
+    setPickResource(null);
     if (isAddress(value) || isAtAddress(value)) return open(value);
     if (isSignature(value)) {
       if (onAccount) {
@@ -392,8 +488,18 @@ export function ExplorerSearch({
     setResolving(true);
     try {
       const data = await getNameData(value);
-      if (data) open(data.owner, { viaName: value, matched: data.name });
-      else setMissing(value);
+      if (data) return open(data.owner, { viaName: value, matched: data.name });
+      // No such name: a QDN identifier, when exactly one resource has it.
+      const found = couldBeIdentifier(value) ? (await searchIdentifier(value)).rows : [];
+      if (found.length === 1) return void openResource(found[0]);
+      if (found.length > 1) {
+        setPickResource(found.length);
+        setListOpen(true);
+        return;
+      }
+      // The header's field: the name's own page lists the names that contain it.
+      if (compact && !onAccount) return navigate(explorerAccountPath(value));
+      setMissing(value);
     } catch {
       setError('Couldn’t look that up on your node. Try again.');
     } finally {
@@ -413,6 +519,8 @@ export function ExplorerSearch({
         return navigate(explorerTxPath(option.signature));
       case 'name':
         return open(option.hit.owner, { viaName: option.hit.name, matched: option.hit.name });
+      case 'resource':
+        return void openResource(option.row);
     }
   };
 
@@ -422,6 +530,8 @@ export function ExplorerSearch({
   else if (isAddress(q)) status = 'Press Enter to open this account.';
   else if (isAtAddress(q)) status = 'Press Enter to open this AT address.';
   else if (isSignature(q)) status = onAccount ? '' : 'Press Enter to open this transaction.';
+  else if (pickResource)
+    status = `No one has that name, and ${plural(pickResource, 'QDN resource')} have it as identifier: pick one.`;
   else if (searchable && paused) {
     if (search.isError)
       status = 'Couldn’t suggest names right now. Press Enter to look up the name.';
@@ -430,7 +540,10 @@ export function ExplorerSearch({
         ? foundWords(hits.length, owners.size)
         : `No names start with “${visibleName(debounced)}”`;
     else status = 'Looking up names…';
-  }
+    if (resourceRows.length && search.data)
+      status += ` · ${resourcesWords(resourceRows.length, resources.data?.more ?? false)}`;
+  } else if (idSearchable && paused && resourceRows.length)
+    status = resourcesWords(resourceRows.length, resources.data?.more ?? false);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>
@@ -439,11 +552,18 @@ export function ExplorerSearch({
         fullWidth
         autoHighlight={false}
         autoSelect={false}
+        open={listOpen}
+        onOpen={() => setListOpen(true)}
+        onClose={() => setListOpen(false)}
         // The suggestions stay inside the page's main landmark (screen readers
         // and axe expect every part of the page in one), and the clear button
         // is a full tap target.
         slotProps={{
-          popper: { disablePortal: true },
+          popper: {
+            disablePortal: true,
+            // In the header the field is narrow: the suggestions keep room to read.
+            ...(compact ? { placement: 'bottom-end', sx: { minWidth: 'min(360px, 92vw)' } } : {}),
+          },
           ...(listMaxHeight ? { listbox: { style: { maxHeight: listMaxHeight } } } : {}),
           clearIndicator: { sx: { width: 44, height: 44 } },
         }}
@@ -480,6 +600,8 @@ export function ExplorerSearch({
                 <NameOption hit={option.hit} paused={paused} />
               ) : option.kind === 'recent' ? (
                 <RecentOption address={option.address} />
+              ) : option.kind === 'resource' ? (
+                <ResourceOption row={option.row} />
               ) : (
                 <ExactOption option={option} />
               )}
@@ -490,14 +612,20 @@ export function ExplorerSearch({
           <TextField
             {...params}
             inputRef={inputRef}
-            label={label}
-            placeholder="Name, Q… address or signature"
+            label={compact ? undefined : label}
+            size={compact ? 'small' : 'medium'}
+            placeholder={
+              compact ? 'Search the Explorer' : 'Name, Q… address, signature or QDN identifier'
+            }
             error={Boolean(error)}
-            helperText={error || 'Pick a suggestion, or press Enter to look up the name'}
+            helperText={
+              error || (compact ? undefined : 'Pick a suggestion, or press Enter to look it up')
+            }
             slotProps={{
               ...params.slotProps,
               htmlInput: {
                 ...params.slotProps.htmlInput,
+                ...(compact ? { 'aria-label': label } : {}),
                 autoCapitalize: 'none',
                 autoCorrect: 'off',
                 spellCheck: false,
@@ -511,7 +639,7 @@ export function ExplorerSearch({
         role="status"
         variant="body2"
         color="text.secondary"
-        sx={{ px: 0.5, minHeight: '1.43em' }}
+        sx={compact ? visuallyHidden : { px: 0.5, minHeight: '1.43em' }}
       >
         {status}
       </Typography>

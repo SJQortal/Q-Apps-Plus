@@ -12,7 +12,8 @@ import { fetchQuery } from './query';
 import type { QdnRow } from './types';
 
 export interface QdnSearch {
-  service: string;
+  /** One service, or every service when left out (an identifier pasted into the Explorer). */
+  service?: string;
   identifier: string;
   /** Match identifiers starting with `identifier` (default true). */
   prefix?: boolean;

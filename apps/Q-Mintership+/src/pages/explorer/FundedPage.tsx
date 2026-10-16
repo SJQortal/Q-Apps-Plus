@@ -30,6 +30,7 @@ import { INVALID_ADDRESS } from './explorerWords';
 import { SET_LIST_SX } from './sets/SponseeRows';
 import { fundedSummary } from './sets/words';
 import { withMarkedName } from '../../components/common/markedText';
+import { ExplorerHeaderSearch } from '../../components/explorer/ExplorerHeaderSearch';
 
 /** Rows shown before "Show more". */
 const ROWS = 20;
@@ -197,7 +198,12 @@ export default function FundedPage() {
         }
         back={PATHS.explorer}
         actions={
-          valid ? <CopyLinkButton path={explorerFundedPath(address)} what="this list" /> : undefined
+          <>
+            <ExplorerHeaderSearch />
+            {valid ? (
+              <CopyLinkButton path={explorerFundedPath(address)} what="this list" />
+            ) : undefined}
+          </>
         }
       />
       <PageBody $maxWidth={WIDE_PAGE}>{body}</PageBody>

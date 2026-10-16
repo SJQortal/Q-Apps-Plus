@@ -8,9 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useLocation, useNavigationType } from 'react-router-dom';
-import { renderPage } from '../../test/render';
+import { renderPage, type RenderPageOptions } from '../../test/render';
 import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../test/setup';
-import { ADDR } from '../../test/world';
+import { ADDR, NOW } from '../../test/world';
 import { recordRecent, resetExplorerState } from '../../state/explorer';
 import { ExplorerSearch } from './ExplorerSearch';
 
@@ -52,13 +52,13 @@ function Probe() {
   );
 }
 
-async function show(persona = 'learner') {
+async function show(persona = 'learner', setup?: RenderPageOptions['setup']) {
   const result = await renderPage(
     <>
       <ExplorerSearch />
       <Probe />
     </>,
-    { persona, path: '/explorer', route: '/explorer/*', strict: true }
+    { persona, path: '/explorer', route: '/explorer/*', strict: true, setup }
   );
   // After the world's catch-all: the newest route answers first.
   answerNameSearch();
@@ -192,5 +192,65 @@ describe('ExplorerSearch: Enter', () => {
     expect(at()).toBe(`/explorer/tx/${SIG}|null|PUSH`);
     // None of these is a name: no name was looked up or searched.
     expect(fetchCallsFor(/^\/names\/(?!search|primary)/)).toEqual([]);
+  });
+});
+
+describe('ExplorerSearch: QDN identifiers', () => {
+  /** QDN resources under `identifier`, one per name. */
+  const publish =
+    (identifier: string, ...names: string[]): RenderPageOptions['setup'] =>
+    (world) => {
+      names.forEach((name, i) =>
+        world.records.push({ name, identifier, created: NOW - (i + 1) * 3_600_000, body: {} })
+      );
+    };
+
+  it('suggests the resources published under an identifier pasted in, and opens the one picked', async () => {
+    const { field, user, posts } = await show('learner', publish('my-doc-abc', 'Nora Nominator'));
+    await user.click(field);
+    await user.paste('my-doc-abc');
+    const qdn = await screen.findByRole('group', { name: 'QDN' }, T);
+    const option = within(qdn).getByRole('option', { name: /^JSON · my-doc-abc/ });
+    expect(option).toHaveTextContent('Published by Nora Nominator');
+    await waitFor(() => expect(status()).toHaveTextContent('1 QDN resource with this identifier'));
+    // One exact search, no bodies.
+    const searches = fetchCallsFor('/arbitrary/resources/searchsimple').filter((p) =>
+      p.includes('identifier=my-doc-abc')
+    );
+    expect(searches).toHaveLength(1);
+    expect(searches[0]).toMatch(/prefix=false/);
+    expect(searches[0]).toMatch(/limit=11/);
+    expect(fetchCallsFor('/arbitrary/JSON/')).toEqual([]);
+    await user.click(option);
+    expect(at()).toMatch(/^\/explorer\/tx\/[1-9A-HJ-NP-Za-km-z]+\|null\|PUSH$/);
+    expect(posts).toEqual([]);
+  });
+
+  it('Enter on an identifier nobody has as a name opens the one resource that has it', async () => {
+    const { field, user } = await show('learner', publish('my-doc-abc', 'Nora Nominator'));
+    await user.click(field);
+    await user.paste('my-doc-abc');
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(at()).toMatch(/^\/explorer\/tx\//), T);
+  });
+
+  it('when several resources share it, Enter asks to pick one and opens nothing', async () => {
+    const { field, user } = await show(
+      'learner',
+      publish('qortal_shared', 'Nora Nominator', 'Leo Learner')
+    );
+    await user.click(field);
+    await user.paste('qortal_shared');
+    await screen.findByRole('group', { name: 'QDN' }, T);
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(status()).toHaveTextContent(
+        'No one has that name, and 2 QDN resources have it as identifier: pick one.'
+      )
+    );
+    expect(at()).toBe('/explorer|null|POP');
+    expect(within(screen.getByRole('group', { name: 'QDN' })).getAllByRole('option')).toHaveLength(
+      2
+    );
   });
 });
