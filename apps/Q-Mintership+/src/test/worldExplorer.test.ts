@@ -1,6 +1,7 @@
 /**
  * The Explorer's part of the mock world (e2e/world-explorer.mjs), read
- * through the Explorer's own loaders the way the pages will read it.
+ * through the Explorer's own loaders the way the pages will read it, in
+ * strict mode: a read the world can't answer fails the test.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -55,7 +56,7 @@ async function get<T = unknown>(path: string): Promise<{ status: number; body: T
 
 describe('Explorer world: names', () => {
   it('gives the admin three names and the nominator two, the primary still first in Core', async () => {
-    installWorld();
+    installWorld('admin', { strict: true });
     expect((await getNamesOf(ADDR.admin)).names).toEqual(['Avery Admin', 'Avery Two', 'AA Maps']);
     // Nora bought "Spare Room", registered before her own name.
     expect((await getNamesOf(ADDR.nominator)).names).toEqual(['Spare Room', 'Nora Nominator']);
@@ -66,7 +67,7 @@ describe('Explorer world: names', () => {
   });
 
   it("answers a name's full record, matching any case like Core's reduced names", async () => {
-    installWorld();
+    installWorld('admin', { strict: true });
     const maps = await getNameData('AA Maps');
     expect(maps).toMatchObject({
       name: 'AA Maps',
@@ -81,7 +82,7 @@ describe('Explorer world: names', () => {
   });
 
   it('finds secondary names in the name search', async () => {
-    installWorld();
+    installWorld('admin', { strict: true });
     const { body } = await get<Array<{ name: string; owner: string }>>(
       '/names/search?query=av&prefix=true&limit=10'
     );
@@ -94,7 +95,7 @@ describe('Explorer world: names', () => {
 
 describe('Explorer world: accounts, groups and minting', () => {
   it('tells a never-used address apart', async () => {
-    installWorld();
+    installWorld('admin', { strict: true });
     await expect(exploreAccount(UNUSED_ADDRESS)).resolves.toEqual({
       kind: 'unused',
       address: UNUSED_ADDRESS,
@@ -103,7 +104,7 @@ describe('Explorer world: accounts, groups and minting', () => {
   });
 
   it('lists other groups without changing MINTER membership', async () => {
-    installWorld();
+    installWorld('admin', { strict: true });
     const groups = await getGroupsOf(ADDR.admin);
     expect(groups.map((g) => [g.groupName, g.isAdmin ?? false])).toEqual([
       ['MINTER', true],
@@ -131,7 +132,7 @@ describe('Explorer world: accounts, groups and minting', () => {
   });
 
   it('says who is minting now and when they last signed', async () => {
-    installWorld();
+    installWorld('admin', { strict: true });
     const online = await getOnline();
     expect(onlineSharesOf(online, ADDR.admin)).toEqual([
       expect.objectContaining({ minterAddress: ADDR.admin, recipientAddress: ADDR.admin }),
@@ -144,7 +145,7 @@ describe('Explorer world: accounts, groups and minting', () => {
   });
 
   it("reports the sponsor's sponsees the way Core does", async () => {
-    installWorld();
+    installWorld('admin', { strict: true });
     const report = await get<Record<string, unknown>>(`/addresses/sponsorship/${SPONSOR.address}`);
     expect(report.body).toMatchObject({
       address: SPONSOR.address,
@@ -160,7 +161,7 @@ describe('Explorer world: accounts, groups and minting', () => {
 
 describe('Explorer world: where the first QORT came from', () => {
   it('Kit and Lou both got theirs from Hal, five blocks apart', async () => {
-    installWorld();
+    installWorld('admin', { strict: true });
     const kit = await getFirstSeen(ADDR.kicked);
     expect(kit.funding).toMatchObject({
       kind: 'payment',
@@ -175,7 +176,7 @@ describe('Explorer world: where the first QORT came from', () => {
   });
 
   it('reads accounts that never sent anything from their reference', async () => {
-    installWorld();
+    installWorld('admin', { strict: true });
     const [sam, tia, unnamed, ugo] = SPONSEES;
     expect((await getFirstSeen(tia.address)).funding).toMatchObject({
       kind: 'payment',
@@ -197,7 +198,7 @@ describe('Explorer world: where the first QORT came from', () => {
   });
 
   it('makes Hal a busy payer (500+) and Kit a quiet one', async () => {
-    installWorld();
+    installWorld('admin', { strict: true });
     await expect(getPayerBand(FUNDER.address)).resolves.toBe(500);
     await expect(getPayerBand(ADDR.kicked)).resolves.toBe(0);
   });
@@ -205,7 +206,7 @@ describe('Explorer world: where the first QORT came from', () => {
 
 describe('Explorer world: transactions', () => {
   it('moves a minting level, with the recipient only in the raw bytes', async () => {
-    const { world } = installWorld();
+    const { world } = installWorld('admin', { strict: true });
     const { privs } = explorerOf(world).sigs;
     const row = await getTx(privs);
     expect(row).toMatchObject({ type: 'TRANSFER_PRIVS', creatorAddress: OLD_MINTER.address });
@@ -218,7 +219,7 @@ describe('Explorer world: transactions', () => {
   });
 
   it('finds an account by every part it played', async () => {
-    const { world } = installWorld();
+    const { world } = installWorld('admin', { strict: true });
     const x = explorerOf(world);
     const { body } = await get<TxRow[]>(
       `/transactions/search?address=${ADDR.kicked}&limit=100&reverse=true`
@@ -249,7 +250,7 @@ describe('Explorer world: transactions', () => {
   });
 
   it('answers the AT, its deployment and the trade between Lou and Kit', async () => {
-    const { world } = installWorld();
+    const { world } = installWorld('admin', { strict: true });
     const x = explorerOf(world);
     const atRows = await get<TxRow[]>(`/transactions/search?address=${AT_ADDRESS}&limit=100`);
     expect(atRows.body.map((t) => t.signature)).toEqual([x.sigs.deploy, x.sigs.payout]);
@@ -266,7 +267,7 @@ describe('Explorer world: transactions', () => {
   });
 
   it('sells a name from Leo to Nora', async () => {
-    const { world } = installWorld();
+    const { world } = installWorld('admin', { strict: true });
     const x = explorerOf(world);
     const { body } = await get<TxRow[]>(
       `/transactions/search?address=${ADDR.learner}&txType=SELL_NAME&txType=BUY_NAME&limit=100`
@@ -291,7 +292,7 @@ describe('Explorer world: transactions', () => {
 
 describe('Explorer world: QDN', () => {
   it('answers other services and searches by name alone', async () => {
-    installWorld();
+    installWorld('admin', { strict: true });
     const app = await get<Array<{ service: string; name: string }>>(
       `/arbitrary/resources/searchsimple?service=APP&name=${encodeURIComponent('AA Maps')}&limit=100`
     );
