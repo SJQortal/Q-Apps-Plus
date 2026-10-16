@@ -1243,11 +1243,17 @@ export function timelineEvents(sides: readonly TimelineSide[]): TimelineEvent[] 
   );
 }
 
-/** "5 blocks later", "Same block", "2 days later", between two lines. */
+/**
+ * "5 blocks later", "Same block", "2 days later", between two lines. The
+ * list is in the order the transactions were signed, and one signed later
+ * can land in an earlier block: then the gap is in time, never a negative
+ * count of blocks.
+ */
 export function gapWords(previous: TimelineEvent, next: TimelineEvent): string {
   if (previous.height !== null && next.height !== null) {
     const blocks = next.height - previous.height;
-    return blocks === 0 ? 'Same block' : `${plural(blocks, 'block')} later`;
+    if (blocks === 0) return 'Same block';
+    if (blocks > 0) return `${plural(blocks, 'block')} later`;
   }
   const ms = next.timestamp - previous.timestamp;
   return ms < 60_000 ? 'Moments later' : `${formatRoughDuration(ms)} later`;

@@ -616,6 +616,23 @@ describe('the timeline together', () => {
     expect(events.map((e) => plain(e.parts))).toEqual(['got its minting level from C']);
   });
 
+  it('a transaction signed later but in an earlier block is never “-1 blocks later”', () => {
+    const event = (letter: Letter, height: number, timestamp: number) => ({
+      key: letter,
+      kind: 'funding' as const,
+      address: letter === 'A' ? A : B,
+      letter,
+      height,
+      timestamp,
+      parts: [],
+    });
+    // Signed 20 s apart, the later one confirmed a block before the other.
+    const [first, second] = [event('A', 2_760_531, T0), event('B', 2_760_530, T0 + 20_000)];
+    expect(gapWords(first, second)).toBe('Moments later');
+    expect(gapWords(first, event('B', 2_760_529, T0 + 2 * DAY))).toBe('2 days later');
+    expect(gapWords(second, event('A', 2_760_535, T0 + 30_000))).toBe('5 blocks later');
+  });
+
   it('a first own transaction that is its self-share or a level move reads as that, once', () => {
     const ownFirst = (row: TxRow): FirstSeen => ({
       firstOwn: {
