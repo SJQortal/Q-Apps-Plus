@@ -8,7 +8,7 @@
  * account with nothing at all. Read-only throughout.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage, type RenderPageOptions } from '../../../test/render';
 import { expectNoAxeViolations } from '../../../test/axe';
@@ -19,6 +19,7 @@ import { explorerAccountPath } from '../../../routes/paths';
 import { resetExplorerState } from '../../../state/explorer';
 import type { ActivityData } from '../../../data/activity';
 import type { AdminActivity } from '../../../rules/activity';
+import { answerCore } from '../../../../e2e/world.mjs';
 import AccountPage from '../AccountPage';
 import { addPollVotes, addRecord } from './mintership/testWorld';
 
@@ -53,6 +54,42 @@ function noWrites(posts: string[]) {
 }
 
 describe('the Mintership tab', () => {
+  it('MINTER’s settings that can’t be read: said with Retry, and the timeline still shows', async () => {
+    let fail = true;
+    const { user, posts } = await open(ADDR.nominator, (world) =>
+      mockFetchRoute('/groups/694', (url: URL) =>
+        fail && url.pathname === '/groups/694'
+          ? new Response('{"error":5,"message":"repository issue"}', { status: 500 })
+          : answerCore(world, url.pathname, url.searchParams)?.body
+      )
+    );
+    const status = await region('MINTER status');
+    expect(
+      await within(status).findByText(
+        /^Couldn't read MINTER's settings: the timeline below uses the usual approval window\./,
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    // Never a skeleton forever: where they stand, and their timeline.
+    expect(
+      await within(status).findByText(
+        'In MINTER. At level 6, they can nominate new minters.',
+        {},
+        T
+      )
+    ).toBeVisible();
+    const timeline = await region('MINTER timeline');
+    expect(await within(timeline).findByText('Approved for MINTER', {}, T)).toBeVisible();
+    fail = false;
+    await user.click(within(status).getByRole('button', { name: 'Retry' }));
+    await waitFor(
+      () => expect(within(status).queryByText(/^Couldn't read MINTER's settings/)).toBeNull(),
+      T
+    );
+    noWrites(posts);
+  });
+
   it('shows a member nominator: where they stand, their round, timeline and records', async () => {
     const { container, posts, panel } = await open(ADDR.nominator);
     expect(within(panel).getByRole('link', { name: 'MINTER profile' })).toHaveAttribute(
@@ -189,7 +226,15 @@ describe('the Mintership tab', () => {
     expect(
       within(admin).getByRole('group', { name: 'Their proposals, newest first' })
     ).toBeVisible();
-    expect(within(admin).getByRole('button', { name: 'Show all 13' })).toBeVisible();
+    // One button that stays, so the focus stays on it.
+    const all = within(admin).getByRole('button', { name: 'Show all 13' });
+    expect(all).toHaveAttribute('aria-expanded', 'false');
+    await user.click(all);
+    expect(all).toHaveAccessibleName('Show fewer');
+    expect(all).toHaveAttribute('aria-expanded', 'true');
+    expect(all).toHaveFocus();
+    await user.click(all);
+    expect(all).toHaveAccessibleName('Show all 13');
     expect(
       within(admin).getByText(
         "From Activity's last 30 days. Participation 80%: 12 of 15 decisions answered (11 approved, 1 rejected), 3 missed."
@@ -210,6 +255,13 @@ describe('the Mintership tab', () => {
         T
       )
     ).toBeVisible();
+    // The button went: the answers panel holds the focus.
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toContainElement(
+      within(admin).getByText(
+        'All 53 answers they gave. 52 of them on MINTER decisions: 52 approved, 0 rejected.'
+      )
+    );
     expect(
       within(admin).getByText("Left out: 1 answer on transactions that aren't MINTER decisions.")
     ).toBeVisible();
@@ -231,6 +283,8 @@ describe('the Mintership tab', () => {
     expect(within(admin).queryByRole('button', { name: /^Load/ })).toBeNull();
     await user.click(within(admin).getByRole('button', { name: 'Show 20 more of 32' }));
     expect(within(answers).getAllByRole('listitem')).toHaveLength(40);
+    // The first answer it added takes the focus.
+    expect(within(answers).getAllByRole('listitem')[20]).toHaveFocus();
 
     await expectNoAxeViolations(container);
     expect(queryLoadCounts().activity).toBeUndefined();

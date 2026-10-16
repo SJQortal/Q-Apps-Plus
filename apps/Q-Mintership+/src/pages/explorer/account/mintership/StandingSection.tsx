@@ -83,9 +83,18 @@ export function StandingSection({ story }: { story: MinterStory }) {
       </>
     );
   }
+  const settings = story.settingsFailed;
   return (
     <Section title="MINTER status" id="explorer-mintership-status">
       {body}
+      {settings ? (
+        <ErrorState
+          compact
+          title={settings.title}
+          error={settings.error}
+          onRetry={settings.retry}
+        />
+      ) : null}
     </Section>
   );
 }

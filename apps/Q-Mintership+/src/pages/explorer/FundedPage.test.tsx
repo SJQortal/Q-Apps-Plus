@@ -56,6 +56,10 @@ describe('first QORT payments from an account', () => {
     expect(list.children[0]).toHaveTextContent(/5\.4321 QORT, .* · block 1,364,165/);
     expect(screen.getByRole('button', { name: 'Show more (30 more)' })).toBeInTheDocument();
     await expectNoAxeViolations(container);
+    // Show more: the first row it adds takes the focus.
+    await user.click(screen.getByRole('button', { name: 'Show more (30 more)' }));
+    expect(list.children).toHaveLength(40);
+    expect(list.children[20]).toHaveFocus();
 
     await user.click(screen.getByRole('button', { name: 'Check 50 more' }));
     expect(

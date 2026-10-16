@@ -35,6 +35,7 @@ import { visibleName } from '../../rules/explorer/nameNotes';
 import { COMPARE_MAX } from '../../state/explorer';
 import { formatCount, plural, shortAddress } from '../../utils/format';
 import { useStoreValues } from './account/connections/hooks';
+import { useFocusNewRows } from './account/names/useShowMore';
 import { INVALID_ADDRESS } from './explorerWords';
 import { SetChecks } from './sets/SetChecks';
 import { SET_LIST_SX, SponseeRowItem } from './sets/SponseeRows';
@@ -73,6 +74,7 @@ export default function SponseesPage() {
   const accounts = useStoreValues<AccountInfo>(rows.map((row) => `account:${row.address}`));
 
   const [limit, setLimit] = useState(ROWS);
+  const { listRef, focusFrom } = useFocusNewRows();
   const [picks, setPicks] = useState<string[]>([]);
   const pick = (who: string, on: boolean) =>
     setPicks((list) =>
@@ -131,9 +133,8 @@ export default function SponseesPage() {
   else
     body = (
       <>
-        <Typography role="status" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
-          {summary}
-        </Typography>
+        {/* Not a live region: its counts change as each row's account is read. */}
+        <Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{summary}</Typography>
         {links.data?.truncated ? (
           <Typography variant="body2" color="text.secondary">
             From its newest 500 reward shares, level moves and name sales: there may be older ones.
@@ -161,7 +162,12 @@ export default function SponseesPage() {
           <Typography variant="body2" color="text.secondary">
             Pick 2 to {COMPARE_MAX} accounts to compare them side by side.
           </Typography>
-          <Box component="ul" aria-label={`Accounts ${label} sponsored`} sx={SET_LIST_SX}>
+          <Box
+            component="ul"
+            ref={listRef}
+            aria-label={`Accounts ${label} sponsored`}
+            sx={SET_LIST_SX}
+          >
             {rows.slice(0, limit).map((row) => (
               <SponseeRowItem
                 key={row.address}
@@ -176,7 +182,10 @@ export default function SponseesPage() {
           </Box>
           {rows.length > limit ? (
             <Button
-              onClick={() => setLimit((n) => n + ROWS)}
+              onClick={() => {
+                focusFrom(limit);
+                setLimit((n) => n + ROWS);
+              }}
               sx={{ alignSelf: 'flex-start', minHeight: 44 }}
             >
               Show more ({formatCount(rows.length - limit)} more)

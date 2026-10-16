@@ -3,7 +3,8 @@
  * grouped by the other account, "Sent to" or "Received from", sorted by
  * how many or how much. Each account that has sent 100+ or 500+ payments
  * says so; those with 1,000+ are folded into one line that opens them. AT
- * addresses come last, as contracts. "MINTER members only" filters by the
+ * addresses come last, as contracts, 20 at a time like the people
+ * ("Show more"). "MINTER members only" filters by the
  * app's cached member list (read once this part is near the screen). The
  * line under the list says how far back it read; "Check older" reads the
  * next 100 that way.
@@ -35,6 +36,7 @@ import {
   type FlowSort,
 } from '../../../../rules/explorer/money';
 import { formatCount, plural } from '../../../../utils/format';
+import { useFocusNewRows } from '../names/useShowMore';
 import { ConnectionRow, ROW_LIST_SX } from './ConnectionRow';
 import { blocksLine } from './words';
 import { usePayerBands, type MinterMarks } from './hooks';
@@ -95,6 +97,9 @@ export function PaymentsPanel({
   const [sort, setSort] = useState<FlowSort>('count');
   const [membersOnly, setMembersOnly] = useState(false);
   const [limit, setLimit] = useState(PAGE_ROWS);
+  const peopleFocus = useFocusNewRows();
+  const [atLimit, setAtLimit] = useState(PAGE_ROWS);
+  const atFocus = useFocusNewRows();
   const [busyOpen, setBusyOpen] = useState(false);
   const [older, setOlder] = useState<'idle' | 'loading' | 'failed'>('idle');
   const [said, setSaid] = useState('');
@@ -160,6 +165,7 @@ export function PaymentsPanel({
             if (!value) return;
             setDirection(value);
             setLimit(PAGE_ROWS);
+            setAtLimit(PAGE_ROWS);
             setBusyOpen(false);
             setSaid('');
           }}
@@ -226,6 +232,7 @@ export function PaymentsPanel({
         <>
           <Box
             component="ul"
+            ref={peopleFocus.listRef}
             aria-label={direction === 'sent' ? 'Sent to' : 'Received from'}
             sx={ROW_LIST_SX}
           >
@@ -275,15 +282,23 @@ export function PaymentsPanel({
           ) : null}
           {people.length > visible.length ? (
             <Button
-              onClick={() => setLimit((value) => value + PAGE_ROWS)}
+              onClick={() => {
+                peopleFocus.focusFrom(shown.length);
+                setLimit((value) => value + PAGE_ROWS);
+              }}
               sx={{ alignSelf: 'flex-start', minHeight: 44 }}
             >
               Show more ({formatCount(people.length - visible.length)} more)
             </Button>
           ) : null}
           {ats.length ? (
-            <Box component="ul" aria-label="AT addresses (automated contracts)" sx={ROW_LIST_SX}>
-              {ats.slice(0, PAGE_ROWS).map((flow) => (
+            <Box
+              component="ul"
+              ref={atFocus.listRef}
+              aria-label="AT addresses (automated contracts)"
+              sx={ROW_LIST_SX}
+            >
+              {ats.slice(0, atLimit).map((flow) => (
                 <FlowRow
                   key={flow.address}
                   flow={flow}
@@ -294,6 +309,17 @@ export function PaymentsPanel({
                 />
               ))}
             </Box>
+          ) : null}
+          {ats.length > atLimit ? (
+            <Button
+              onClick={() => {
+                atFocus.focusFrom(atLimit);
+                setAtLimit((value) => value + PAGE_ROWS);
+              }}
+              sx={{ alignSelf: 'flex-start', minHeight: 44 }}
+            >
+              Show more AT addresses ({formatCount(ats.length - atLimit)} more)
+            </Button>
           ) : null}
         </>
       )}
@@ -318,6 +344,14 @@ export function PaymentsPanel({
             </Button>
           ) : null}
         </Box>
+      ) : null}
+      {data.assets.isError && data.assets.data === undefined ? (
+        <ErrorState
+          compact
+          title="Couldn’t read its asset transfers and multi-payments."
+          error={data.assets.error}
+          onRetry={() => void data.assets.refetch()}
+        />
       ) : null}
       {older === 'failed' ? (
         <ErrorState

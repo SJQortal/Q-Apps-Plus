@@ -2,7 +2,9 @@
  * Overview's "Direct links": the first three things recorded between this
  * account and others (the same findings, in the same order, as Connections →
  * Recorded between them), one line each, and "All connections (n)" to that
- * tab. When the data checked has none, one line says so.
+ * tab. When the data checked has none, one line says so; a part that
+ * couldn't be read is named, with Retry, and never counted as none found.
+ * When the links read stopped at its ceiling, a line says so.
  *
  * It reads the same keys as the Connections tab (links, payments each way,
  * asset transfers; the links and asset reads are heavy), once it nears the
@@ -19,7 +21,8 @@ import { useInView } from '../../../hooks/useInView';
 import { explorerAccountPath } from '../../../routes/paths';
 import { formatCount } from '../../../utils/format';
 import { useConnections, useRecorded } from './connections/useConnections';
-import { whenLine } from './connections/words';
+import { tabIdOf } from './tabIds';
+import { LINKS_CAPPED_NOTE, unreadWords, whenLine } from './connections/words';
 
 export interface DirectLinksPreviewProps {
   address: string;
@@ -34,23 +37,65 @@ export function DirectLinksPreview({ address }: DirectLinksPreviewProps) {
   const data = useConnections(address, near);
   const recorded = useRecorded(data);
   const location = useLocation();
-  const failed = data.links.isError && !data.links.data;
+  const { failed } = data;
+  const firstError = failed.length ? data[failed[0]].error : undefined;
+  const capped = data.links.data?.truncated === true;
+  // Partial: a part couldn't be read, isn't in yet, or was read only in part.
+  const partial = failed.length > 0 || !data.settled || capped;
+  const cappedNote = capped ? (
+    <Typography variant="body2" color="text.secondary">
+      {LINKS_CAPPED_NOTE}
+    </Typography>
+  ) : null;
+  const unread = failed.length ? (
+    <ErrorState
+      compact
+      title={`Couldn’t read ${unreadWords(failed)}.`}
+      error={firstError}
+      onRetry={data.retryFailed}
+    />
+  ) : null;
+  const allLink = (
+    <Link
+      component={RouterLink}
+      to={explorerAccountPath(address, 'connections')}
+      replace
+      // Keeps what the page was opened with, as the tabs do.
+      state={location.state}
+      onClick={() =>
+        // The Overview goes; the tab it opened takes the focus.
+        requestAnimationFrame(() => document.getElementById(tabIdOf('connections'))?.focus())
+      }
+      sx={{
+        alignSelf: 'flex-start',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 0.5,
+        minHeight: 44,
+        fontWeight: 600,
+      }}
+    >
+      {recorded.length
+        ? `All connections (${formatCount(recorded.length)}${partial ? '+' : ''})`
+        : 'All connections'}
+      <ChevronRightOutlinedIcon fontSize="small" aria-hidden />
+    </Link>
+  );
 
   let body: React.ReactNode;
-  if (failed)
-    body = (
-      <ErrorState
-        compact
-        title="Couldn’t read its links."
-        error={data.links.error}
-        onRetry={() => void data.links.refetch()}
-      />
-    );
-  else if (!data.settled && recorded.length < PREVIEW)
+  if (!data.settled && recorded.length < PREVIEW)
     body = <ListSkeleton count={1} label="Loading its direct links" />;
   else if (!recorded.length)
-    body = (
-      <Typography color="text.secondary">No direct links found in the data checked.</Typography>
+    body = unread ? (
+      <>
+        {unread}
+        {allLink}
+      </>
+    ) : (
+      <>
+        <Typography color="text.secondary">No direct links found in the data checked.</Typography>
+        {cappedNote}
+      </>
     );
   else
     body = (
@@ -72,25 +117,9 @@ export function DirectLinksPreview({ address }: DirectLinksPreviewProps) {
             </Box>
           ))}
         </Box>
-        <Link
-          component={RouterLink}
-          to={explorerAccountPath(address, 'connections')}
-          replace
-          // Keeps what the page was opened with, as the tabs do.
-          state={location.state}
-          sx={{
-            alignSelf: 'flex-start',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 0.5,
-            minHeight: 44,
-            fontWeight: 600,
-          }}
-        >
-          All connections ({formatCount(recorded.length)}
-          {data.settled ? '' : '+'})
-          <ChevronRightOutlinedIcon fontSize="small" aria-hidden />
-        </Link>
+        {cappedNote}
+        {unread}
+        {allLink}
       </>
     );
 

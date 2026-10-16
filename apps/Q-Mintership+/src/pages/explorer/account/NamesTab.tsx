@@ -28,11 +28,21 @@ export interface NamesTabProps {
 export default function NamesTab({ address }: NamesTabProps) {
   const names = useQuery(`xnames:${address}`, (force) => getNamesOf(address, { force }));
   const primaryQuery = usePrimaryName(address);
-  // A primary name that can't be read counts as none: the list still shows.
-  const primary = primaryQuery.isError ? null : primaryQuery.data;
+  // A primary name that can't be read: the list still shows (in Core's order) and says so.
+  const primaryFailed = primaryQuery.isError && primaryQuery.data === undefined;
+  const primary = primaryFailed ? null : primaryQuery.data;
   return (
     <>
-      <NamesList address={address} names={names} primary={primary} />
+      <NamesList
+        address={address}
+        names={names}
+        primary={primary}
+        primaryError={
+          primaryFailed
+            ? { error: primaryQuery.error, retry: () => void primaryQuery.refetch() }
+            : undefined
+        }
+      />
       <NameHistory address={address} />
       {!names.data || primary === undefined ? (
         names.isError ? null : (

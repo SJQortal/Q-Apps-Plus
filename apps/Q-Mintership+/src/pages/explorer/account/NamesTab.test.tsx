@@ -6,6 +6,7 @@
  * themselves, the rest on request with Stop; counts per service, encrypted
  * ones never listed). Reads counted; axe; no writes.
  */
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -19,6 +20,7 @@ import { explorerAccountPath } from '../../../routes/paths';
 import { resetExplorerState } from '../../../state/explorer';
 import { formatDate } from '../../../utils/format';
 import AccountPage from '../AccountPage';
+import { QdnPublished } from './names/QdnPublished';
 
 const T = { timeout: 4000 };
 const ROUTE = '/explorer/account/:who/:tab?';
@@ -124,6 +126,36 @@ describe('Names: every name', () => {
     const list = within(names).getByRole('list', { name: 'Its names' });
     expect(rowNames(list).slice(0, 3)).toEqual(COLLECTOR_NAMES.slice(0, 3));
     expect(within(list).queryByText('Primary')).toBeNull();
+  });
+
+  it('a primary name that couldn’t be read is said with Retry, never as no primary name', async () => {
+    let fail = true;
+    const { user } = await open(COLLECTOR.address, (world) =>
+      mockFetchRoute(`/names/primary/${COLLECTOR.address}`, (url: URL) =>
+        fail
+          ? new Response('{"error":5,"message":"repository issue"}', { status: 500 })
+          : worldAnswer(world, url)
+      )
+    );
+    const names = await region('Names (30)');
+    expect(
+      await within(names).findByText(/^Couldn't read its primary name\./, {}, T)
+    ).toBeInTheDocument();
+    expect(within(names).queryByText(/^No primary name/)).toBeNull();
+    // The names still show, in Core's order.
+    const list = within(names).getByRole('list', { name: 'Its names' });
+    expect(rowNames(list).slice(0, 3)).toEqual(COLLECTOR_NAMES.slice(0, 3));
+    fail = false;
+    await user.click(within(names).getByRole('button', { name: 'Retry' }));
+    // (The list is drawn again once the primary name is in.)
+    await waitFor(
+      () =>
+        expect(
+          within(within(names).getByRole('list', { name: 'Its names' })).getByText('Primary')
+        ).toBeInTheDocument(),
+      T
+    );
+    expect(within(names).queryByText(/^Couldn't read its primary name/)).toBeNull();
   });
 
   it('says when Core’s list was cut at 500', async () => {
@@ -304,13 +336,22 @@ describe('Names: published on QDN', () => {
     );
     const qdn = await region('Published on QDN');
     await user.click(await within(qdn).findByRole('button', { name: 'Search 20 more names' }, T));
-    expect(within(qdn).getByRole('status')).toHaveTextContent(/^Searching: \d+ of 20 names$/);
+    // The same button turns into Stop, and keeps the focus.
+    expect(within(qdn).getByRole('button', { name: 'Stop' })).toHaveFocus();
+    // Said once as it starts; the running count is on screen and in the bar.
+    expect(within(qdn).getByRole('status')).toHaveTextContent(/^Searching 20 names on QDN…$/);
+    expect(within(qdn).getByText(/^Searching: \d+ of 20 names$/)).not.toHaveAttribute('role');
     expect(
       within(qdn).getByRole('progressbar', { name: 'Searching its names on QDN' })
     ).toBeVisible();
-    expect(await within(qdn).findByText('Searched all 30 names.', {}, T)).toBeInTheDocument();
+    expect(
+      await within(qdn).findByText('Searched all 30 names.', { selector: 'p' }, T)
+    ).toBeInTheDocument();
+    expect(within(qdn).getByRole('status')).toHaveTextContent(/^Searched all 30 names\.$/);
     expect(byName()).toHaveLength(30);
     expect(most).toBe(4);
+    // Nothing left to search: the button goes, and the line of what was searched takes the focus.
+    expect(within(qdn).getByText('Searched all 30 names.', { selector: 'p' })).toHaveFocus();
     // The old name's image is found now.
     const counts = within(qdn).getByRole('list', { name: 'Resources per service' });
     expect(within(counts).getByText('IMAGE 1')).toBeInTheDocument();
@@ -343,7 +384,9 @@ describe('Names: published on QDN', () => {
     await waitFor(() => expect(held).toBe(4), T);
     await user.click(within(qdn).getByRole('button', { name: 'Stop' }));
     release();
-    expect(await within(qdn).findByText('Searched 14 of 30 names.', {}, T)).toBeInTheDocument();
+    expect(
+      await within(qdn).findByText('Searched 14 of 30 names.', { selector: 'p' }, T)
+    ).toBeInTheDocument();
     expect(held).toBe(4);
     expect(byName()).toHaveLength(14);
     expect(within(qdn).getByRole('button', { name: 'Search 16 more names' })).toBeInTheDocument();
@@ -363,7 +406,36 @@ describe('Names: published on QDN', () => {
     expect(within(qdn).getByText(/^Searched 9 of 30 names\./)).toBeInTheDocument();
     fail = false;
     await user.click(within(qdn).getByRole('button', { name: 'Retry' }));
-    expect(await within(qdn).findByText(/^Searched 10 of 30 names\./, {}, T)).toBeInTheDocument();
+    expect(
+      await within(qdn).findByText(/^Searched 10 of 30 names\./, { selector: 'p' }, T)
+    ).toBeInTheDocument();
     expect(within(qdn).queryByText(/^Couldn't search/)).toBeNull();
+  });
+
+  it('counts only the names it is given when the section stays on screen for another account', async () => {
+    // Back from one account's Names tab to another's keeps this section mounted.
+    function Reused() {
+      const [other, setOther] = useState(false);
+      const name = other ? 'Nobody Here' : 'Cora Collector';
+      return (
+        <>
+          <button type="button" onClick={() => setOther(true)}>
+            Other account
+          </button>
+          <QdnPublished names={[name]} primary={name} truncated={false} />
+        </>
+      );
+    }
+    const { posts } = await renderPage(<Reused />, { persona: 'learner', strict: true });
+    const user = userEvent.setup();
+    const qdn = await region('Published on QDN');
+    expect(await within(qdn).findByText(/^\d+ resources$/, {}, T)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Other account' }));
+    expect(
+      await within(qdn).findByText('Nothing published under the name searched.', {}, T)
+    ).toBeInTheDocument();
+    expect(within(qdn).queryByText(/resources?$/)).toBeNull();
+    expect(within(qdn).queryByText(/Cora Collector/)).toBeNull();
+    noWrites(posts);
   });
 });

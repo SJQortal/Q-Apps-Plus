@@ -25,6 +25,7 @@ import { formatAmount } from '../../rules/explorer/txWords';
 import { visibleName } from '../../rules/explorer/nameNotes';
 import { formatCount, formatDate, plural, shortAddress } from '../../utils/format';
 import { useMinterMarks } from './account/connections/hooks';
+import { FOCUSABLE_ROW_SX, useFocusNewRows } from './account/names/useShowMore';
 import { INVALID_ADDRESS } from './explorerWords';
 import { SET_LIST_SX } from './sets/SponseeRows';
 import { fundedSummary } from './sets/words';
@@ -42,6 +43,7 @@ export default function FundedPage() {
   );
   const marks = useMinterMarks(valid);
   const [limit, setLimit] = useState(ROWS);
+  const { listRef, focusFrom } = useFocusNewRows();
   const [more, setMore] = useState<'idle' | 'loading' | 'failed'>('idle');
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
@@ -141,11 +143,12 @@ export default function FundedPage() {
           <Section title="First QORT payment from it" id="funded-list" count={first.length}>
             <Box
               component="ul"
+              ref={listRef}
               aria-label={`Accounts whose first QORT payment came from ${label}`}
               sx={SET_LIST_SX}
             >
               {first.slice(0, limit).map((paid) => (
-                <li key={paid.address}>
+                <Box component="li" key={paid.address} tabIndex={-1} sx={FOCUSABLE_ROW_SX}>
                   <PersonChip
                     address={paid.address}
                     size={32}
@@ -156,12 +159,15 @@ export default function FundedPage() {
                       .filter(Boolean)
                       .join(' · ')}
                   />
-                </li>
+                </Box>
               ))}
             </Box>
             {first.length > limit ? (
               <Button
-                onClick={() => setLimit((n) => n + ROWS)}
+                onClick={() => {
+                  focusFrom(limit);
+                  setLimit((n) => n + ROWS);
+                }}
                 sx={{ alignSelf: 'flex-start', minHeight: 44 }}
               >
                 Show more ({formatCount(first.length - limit)} more)

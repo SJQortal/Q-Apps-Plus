@@ -4,14 +4,15 @@
  * sentence, and when. Beside it, two separate 44 px controls: the evidence
  * toggle ("4 payments") that opens the transactions behind it, each a
  * sentence with its date and block linking to the transaction, and Compare,
- * which picks both accounts and opens them side by side.
+ * which picks both accounts and opens them side by side (when Compare has
+ * no room for both, it says so and picks neither).
  *
  * The sentence is plain text (the name above is the link), and the
  * expanding part sits outside the toggle, so no control holds another.
  */
 import { useId, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { Box, Button, IconButton, Link, Tooltip, Typography } from '@mui/material';
+import { Box, Button, IconButton, Link, Snackbar, Tooltip, Typography } from '@mui/material';
 import CompareArrowsOutlinedIcon from '@mui/icons-material/CompareArrowsOutlined';
 import { ExpandChevron } from '../../../../components/common/ExpandChevron';
 import { PersonChip } from '../../../../components/common/Person';
@@ -24,8 +25,9 @@ import { useDisplayName } from '../../../../hooks/useDisplayName';
 import { useQuery } from '../../../../hooks/useQuery';
 import { explorerAccountPath, explorerComparePath, explorerTxPath } from '../../../../routes/paths';
 import { describeTx, type TxPart } from '../../../../rules/explorer/txWords';
-import { addPick } from '../../../../state/explorer';
+import { addPick, COMPARE_FULL, COMPARE_MAX, useComparePicks } from '../../../../state/explorer';
 import { formatCount, formatDate, shortAddress } from '../../../../utils/format';
+import { FOCUSABLE_ROW_SX, useFocusNewRows } from '../names/useShowMore';
 
 /** Evidence lines shown before "Show all". */
 const EVIDENCE_ROWS = 20;
@@ -55,7 +57,7 @@ function EvidenceLine({
   const words = describeTx(tx, { viewpoint, privsRecipient: recipient });
   const height = tx.blockHeight;
   return (
-    <Box component="li" sx={{ minWidth: 0 }}>
+    <Box component="li" tabIndex={-1} sx={{ minWidth: 0, ...FOCUSABLE_ROW_SX }}>
       {/* A div: the people in the sentence are chips. */}
       <Typography component="div" variant="body2" sx={{ overflowWrap: 'anywhere' }}>
         <TxSentence parts={words.parts} />
@@ -93,6 +95,7 @@ export function EvidenceList({
   privs?: Readonly<Record<string, string | null>>;
 }) {
   const [all, setAll] = useState(false);
+  const { listRef, focusFrom } = useFocusNewRows();
   const shown = all ? txs : txs.slice(0, EVIDENCE_ROWS);
   return (
     <Box
@@ -106,7 +109,7 @@ export function EvidenceList({
         borderColor: 'divider',
       }}
     >
-      <Box component="ul" sx={{ ...ROW_LIST_SX, gap: 0.5 }}>
+      <Box component="ul" ref={listRef} sx={{ ...ROW_LIST_SX, gap: 0.5 }}>
         {shown.map((tx) => (
           <EvidenceLine
             key={tx.signature}
@@ -117,7 +120,13 @@ export function EvidenceList({
         ))}
       </Box>
       {txs.length > shown.length ? (
-        <Button onClick={() => setAll(true)} sx={{ alignSelf: 'flex-start', minHeight: 44 }}>
+        <Button
+          onClick={() => {
+            focusFrom(EVIDENCE_ROWS);
+            setAll(true);
+          }}
+          sx={{ alignSelf: 'flex-start', minHeight: 44 }}
+        >
           Show all {formatCount(txs.length)}
         </Button>
       ) : null}
@@ -141,7 +150,10 @@ function EvidenceBySignature({ signature, viewpoint }: { signature: string; view
   return <EvidenceList txs={tx.data ? [tx.data] : []} viewpoint={viewpoint} />;
 }
 
-/** "Compare" for a pair: both picked, then both side by side. */
+/**
+ * "Compare" for a pair: both picked, then both side by side. Both or
+ * neither: when Compare has no room for both, a message says so.
+ */
 export function CompareButton({
   address,
   accountLabel,
@@ -154,21 +166,40 @@ export function CompareButton({
   otherLabel: string;
 }) {
   const navigate = useNavigate();
+  const picks = useComparePicks();
+  const [full, setFull] = useState(false);
   const label = `Compare ${accountLabel} with ${otherLabel}`;
+  const compare = () => {
+    const missing = [address, other].filter((who) => !picks.includes(who));
+    if (picks.length + missing.length > COMPARE_MAX) {
+      setFull(true);
+      return;
+    }
+    for (const who of missing) addPick(who);
+    navigate(explorerComparePath([address, other]));
+  };
   return (
-    <Tooltip title={label}>
-      <IconButton
-        aria-label={label}
-        onClick={() => {
-          addPick(address);
-          addPick(other);
-          navigate(explorerComparePath([address, other]));
+    <>
+      <Tooltip title={label}>
+        <IconButton
+          aria-label={label}
+          onClick={compare}
+          sx={{ width: 44, height: 44, flexShrink: 0 }}
+        >
+          <CompareArrowsOutlinedIcon />
+        </IconButton>
+      </Tooltip>
+      <Snackbar
+        open={full}
+        autoHideDuration={6000}
+        onClose={(_, reason) => {
+          if (reason !== 'clickaway') setFull(false);
         }}
-        sx={{ width: 44, height: 44, flexShrink: 0 }}
-      >
-        <CompareArrowsOutlinedIcon />
-      </IconButton>
-    </Tooltip>
+        message={COMPARE_FULL}
+        // Above the phone's bottom bar.
+        sx={{ bottom: { xs: 'calc(var(--qmp-bottom-nav, 0px) + 8px)', sm: 24 } }}
+      />
+    </>
   );
 }
 
@@ -224,7 +255,7 @@ export function ConnectionRow({
   const shownTags = (tags ?? []).filter((tag): tag is string => Boolean(tag));
   const secondary = shownTags.length ? shownTags.join(' · ') : undefined;
   return (
-    <Box component="li" sx={{ minWidth: 0 }}>
+    <Box component="li" tabIndex={-1} sx={{ minWidth: 0, ...FOCUSABLE_ROW_SX }}>
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 0 }}>
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
           {isAt ? (

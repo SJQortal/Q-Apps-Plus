@@ -12,6 +12,7 @@ import { expectNoAxeViolations } from '../../test/axe';
 import { mockFetchRoute, qortalCalls } from '../../test/setup';
 import { ADDR } from '../../test/world';
 import { SPONSEES, SPONSOR, answerCore } from '../../../e2e/world.mjs';
+import { queryLoadCounts } from '../../data/query';
 import { explorerSponseesPath } from '../../routes/paths';
 import { resetExplorerState } from '../../state/explorer';
 import SponseesPage from './SponseesPage';
@@ -48,13 +49,13 @@ describe('the accounts a sponsor sponsored', () => {
     expect((await list()).children).toHaveLength(5);
     await waitFor(
       () =>
-        expect(
-          screen.getByText(/^5 accounts sponsored, /, { selector: '[role="status"]' })
-        ).toHaveTextContent(
+        expect(screen.getByText(/^5 accounts sponsored, /)).toHaveTextContent(
           /^5 accounts sponsored, \w{3} \d{4} – \w{3} \d{4}: 1 in MINTER now, 1 minting now, 0 with a minting penalty\.$/
         ),
       T
     );
+    // Its counts change as rows are read: not a live region.
+    expect(screen.getByText(/^5 accounts sponsored, /)).not.toHaveAttribute('role');
     const leo = await screen.findByRole('list', { name: 'About Leo Learner' }, T);
     expect(leo).toHaveTextContent(/In MINTER since/);
     await waitFor(() => expect(leo).toHaveTextContent('Level 2'), T);
@@ -98,6 +99,8 @@ describe('the accounts a sponsor sponsored', () => {
     const card = screen.getByRole('region', { name: 'Who made their first QORT payment' });
     await user.click(within(card).getByRole('button', { name: 'Check 5 accounts' }));
     expect(await within(card).findByText('Checked all 5 accounts.', {}, T)).toBeInTheDocument();
+    // One button through the run (Check, Stop, Check again): it keeps the focus.
+    expect(within(card).getByRole('button', { name: 'Check again' })).toHaveFocus();
     const payers = within(card).getByRole('list', { name: 'First QORT payments by payer' });
     await waitFor(
       () =>
@@ -113,7 +116,7 @@ describe('the accounts a sponsor sponsored', () => {
     const { user } = await open(SPONSOR.address, (world) =>
       // Slow transaction reads, so the check is still running when Stop is pressed.
       mockFetchRoute('/transactions/', async (url: URL) => {
-        await new Promise((r) => setTimeout(r, 60));
+        await new Promise((r) => setTimeout(r, 250));
         const answer = answerCore(world, url.pathname, url.searchParams);
         if (!answer) throw new Error(`no mock for ${url.pathname}`);
         return new Response(answer.text !== undefined ? answer.text : JSON.stringify(answer.body), {
@@ -124,10 +127,36 @@ describe('the accounts a sponsor sponsored', () => {
     await list();
     const card = screen.getByRole('region', { name: 'Who made their first QORT payment' });
     await user.click(within(card).getByRole('button', { name: 'Check 5 accounts' }));
+    // Said once as it starts; the running count is on screen, not announced.
+    expect(within(card).getByRole('status')).toHaveTextContent(/^Checking 5 accounts…$/);
+    expect(within(card).getByText(/^Checked \d of 5 accounts…$/)).not.toHaveAttribute('role');
     await user.click(await within(card).findByRole('button', { name: 'Stop' }, T));
     expect(
       await within(card).findByText(/^Stopped after [0-4] of 5 accounts\.$/, {}, T)
     ).toBeInTheDocument();
+  });
+
+  it('leaving the page stops a check: no new account starts', async () => {
+    const { user, unmount, posts } = await open(SPONSOR.address, (world) =>
+      // Slow transaction reads, so the check is still running when the page closes.
+      mockFetchRoute('/transactions/', async (url: URL) => {
+        await new Promise((r) => setTimeout(r, 250));
+        const answer = answerCore(world, url.pathname, url.searchParams);
+        if (!answer) throw new Error(`no mock for ${url.pathname}`);
+        return new Response(answer.text !== undefined ? answer.text : JSON.stringify(answer.body), {
+          status: answer.status,
+        });
+      })
+    );
+    await list();
+    const card = screen.getByRole('region', { name: 'Who made their first QORT payment' });
+    await user.click(within(card).getByRole('button', { name: 'Check 5 accounts' }));
+    await waitFor(() => expect(queryLoadCounts().xfirst ?? 0).toBeGreaterThan(0), T);
+    unmount();
+    // Long enough for all 5 to start if nothing stopped them.
+    await new Promise((r) => setTimeout(r, 2_000));
+    expect(queryLoadCounts().xfirst).toBeLessThanOrEqual(3);
+    expect(posts).toEqual([]);
   });
 
   it('checks where their QORT went, on request', async () => {

@@ -12,6 +12,8 @@
  * - In Q-Mintership: nominations, supports and votes between it and others
  *   (MintershipLinks);
  * - "Also checked, nothing found: …", and Core's own report on request.
+ * When the links read stopped at its ceiling (its newest 500 rows), the
+ * tab says so, and what those rows didn't show isn't claimed as none.
  * A section shows only when it has something. "Copy findings" copies the
  * lot as text, with the block it was checked at.
  *
@@ -57,8 +59,17 @@ import { useLevels, useMinterMarks, type MinterMarks } from './connections/hooks
 import { InCommonSection } from './connections/InCommon';
 import { PaymentsPanel } from './connections/PaymentsPanel';
 import { useConnections, useRecorded } from './connections/useConnections';
+import { FOCUSABLE_ROW_SX, useFocusNewRows } from './names/useShowMore';
 import { useInCommon } from './connections/useInCommon';
-import { blocksLine, textOf, whenLine } from './connections/words';
+import {
+  blocksLine,
+  cappedNothingLine,
+  fundingTag,
+  LINKS_CAPPED_NOTE,
+  textOf,
+  unreadWords,
+  whenLine,
+} from './connections/words';
 import { MintershipLinks } from './MintershipLinks';
 
 export interface ConnectionsTabProps {
@@ -85,16 +96,23 @@ function Part({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** A list of rows, the first 20 and then "Show all". */
+/** A list of rows, the first 20 and then "Show all" (the focus goes to the first row added). */
 function Rows({ label, rows }: { label: string; rows: ReactNode[] }) {
   const [all, setAll] = useState(false);
+  const { listRef, focusFrom } = useFocusNewRows();
   return (
     <>
-      <Box component="ul" aria-label={label} sx={ROW_LIST_SX}>
+      <Box component="ul" ref={listRef} aria-label={label} sx={ROW_LIST_SX}>
         {all ? rows : rows.slice(0, ROWS)}
       </Box>
       {rows.length > ROWS && !all ? (
-        <Button onClick={() => setAll(true)} sx={{ alignSelf: 'flex-start', minHeight: 44 }}>
+        <Button
+          onClick={() => {
+            focusFrom(ROWS);
+            setAll(true);
+          }}
+          sx={{ alignSelf: 'flex-start', minHeight: 44 }}
+        >
           Show all {formatCount(rows.length)}
         </Button>
       ) : null}
@@ -117,7 +135,7 @@ function FindingRow({
 }) {
   if (!finding.other)
     return (
-      <Box component="li">
+      <Box component="li" tabIndex={-1} sx={FOCUSABLE_ROW_SX}>
         <Typography sx={{ overflowWrap: 'anywhere' }}>{textOf(finding.parts)}</Typography>
         <Typography variant="body2" color="text.secondary">
           {whenLine(finding)}
@@ -188,7 +206,9 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const [paymentsNode, setPaymentsNode] = useState<HTMLElement | null>(null);
   const marks = useMinterMarks(useInView(paymentsNode));
   const [commonNode, setCommonNode] = useState<HTMLElement | null>(null);
-  const common = useInCommon(address, parsed, useInView(commonNode));
+  // In common and In Q-Mintership read once they near the screen.
+  const commonNear = useInView(commonNode);
+  const common = useInCommon(address, parsed, commonNear);
 
   const of = (kind: Finding['kind']) => recorded.filter((f) => f.kind === kind);
   const levelMoves = of('levelMove');
@@ -202,24 +222,40 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const paymentsPending =
     data.sent.isLoading || data.recv.isLoading || data.sent.isError || data.recv.isError;
   const paymentsAny = Boolean(data.flowsSent?.length || data.flowsReceived?.length);
+  const assetsFailed = data.failed.includes('assets');
+  const showPayments = paymentsPending || paymentsAny || assetsFailed;
   const showRecorded =
     data.links.isLoading ||
     (data.links.isError && !data.links.data) ||
     linkFindings > 0 ||
     sponsees !== null ||
-    paymentsPending ||
-    paymentsAny;
+    showPayments;
 
   const funding = common.first.data?.funding ?? null;
   const sponsor = common.sponsor;
   const relationOf = (other: string) =>
     [
       other === sponsor ? 'its sponsor' : null,
-      funding?.from === other ? 'its first QORT came from them' : null,
+      funding && funding.from === other ? fundingTag(funding) : null,
     ].filter((tag): tag is string => tag !== null);
 
+  // Its newest 500 links rows only: level moves are read in full, the rest may be older.
+  const capped = data.links.data?.truncated === true;
+  const pairedOnline = data.online.data?.some(
+    (share) =>
+      share.minterAddress !== share.recipientAddress &&
+      (share.minterAddress === address || share.recipientAddress === address)
+  );
   const empty: EmptyCheck[] = [];
-  if (parsed) empty.push(...emptyLinkChecks(parsed, data.online.data ? data.mintingWith : null));
+  const cappedEmpty: EmptyCheck[] = [];
+  if (parsed)
+    for (const check of emptyLinkChecks(parsed, data.online.data ? data.mintingWith : null)) {
+      if (!capped || check === 'levelMoves') empty.push(check);
+      // Who mints with it now is in the online list itself.
+      else if (check === 'mintingWith') {
+        if (!pairedOnline) empty.push(check);
+      } else cappedEmpty.push(check);
+    }
   if (
     data.flowsSent &&
     data.flowsReceived &&
@@ -230,6 +266,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
     empty.push('payments');
   if (common.first.data && !funding) empty.push('firstQort');
   const noneLine = nothingFoundLine(empty);
+  const cappedLine = cappedNothingLine(nothingFoundLine(cappedEmpty));
 
   const build = async () => {
     const tip = await getTip().catch(() => null);
@@ -245,6 +282,8 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
             : undefined
         )
       );
+    // What isn't above was not read: never "none found".
+    if (data.failed.length) coverage.push(`Couldn’t read ${unreadWords(data.failed)}.`);
     const commonLines: FindingLine[] = [];
     if (funding)
       commonLines.push({
@@ -262,7 +301,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
       coverage,
       recorded,
       common: commonLines,
-      noneFound: noneLine,
+      noneFound: [noneLine, cappedLine].filter(Boolean).join('\n\n') || null,
       link: appLink(explorerAccountPath(address, 'connections')),
       nameOf: (other) => peekQuery<string | null>(`name:${other}`),
     });
@@ -299,6 +338,10 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
             />
           ) : !data.links.data ? (
             <ListSkeleton count={2} label="Loading its links" />
+          ) : capped ? (
+            <Typography variant="body2" color="text.secondary">
+              {LINKS_CAPPED_NOTE} Every level move was read.
+            </Typography>
           ) : null}
           {levelMoves.length ? (
             <Part title="Minting level">
@@ -333,7 +376,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
               <Rows label="Names bought or sold" rows={names.map(row)} />
             </Part>
           ) : null}
-          {paymentsPending || paymentsAny ? (
+          {showPayments ? (
             <Box ref={setPaymentsNode}>
               <Part title="Payments">
                 <PaymentsPanel
@@ -357,13 +400,17 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
           marks={marks}
           sentAny={(data.sent.data?.rows.length ?? 0) > 0}
         />
+        <MintershipLinks address={address} enabled={commonNear} />
       </Box>
-
-      <MintershipLinks address={address} />
 
       {noneLine ? (
         <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
           {noneLine}
+        </Typography>
+      ) : null}
+      {cappedLine ? (
+        <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+          {cappedLine}
         </Typography>
       ) : null}
 

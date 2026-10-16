@@ -25,6 +25,9 @@ import {
 import { flowsOf, type Flow } from '../../../../rules/explorer/money';
 import { recordedFindings, type Finding } from '../../../../rules/explorer/findings';
 
+/** The reads "Recorded between them" is built from. */
+export type ConnectionsPart = 'links' | 'sent' | 'recv' | 'assets';
+
 export interface ConnectionsData {
   links: UseQueryResult<AccountLinks>;
   sent: UseQueryResult<PaymentPage>;
@@ -41,6 +44,10 @@ export interface ConnectionsData {
   flowsReceived: Flow[] | null;
   /** Every part has loaded or failed. */
   settled: boolean;
+  /** The parts that failed with nothing loaded: what they would show isn't claimed as checked. */
+  failed: ConnectionsPart[];
+  /** Reads the failed parts again. */
+  retryFailed: () => void;
 }
 
 export function useConnections(address: string, enabled = true): ConnectionsData {
@@ -78,6 +85,13 @@ export function useConnections(address: string, enabled = true): ConnectionsData
     [recv.data, assets.data, address]
   );
   const settled = [links, sent, recv, assets].every((q) => q.data !== undefined || q.isError);
+  const parts = { links, sent, recv, assets };
+  const failed = (Object.keys(parts) as ConnectionsPart[]).filter(
+    (part) => parts[part].isError && parts[part].data === undefined
+  );
+  const retryFailed = () => {
+    for (const part of failed) void parts[part].refetch();
+  };
   return {
     links,
     sent,
@@ -89,6 +103,8 @@ export function useConnections(address: string, enabled = true): ConnectionsData
     flowsSent,
     flowsReceived,
     settled,
+    failed,
+    retryFailed,
   };
 }
 

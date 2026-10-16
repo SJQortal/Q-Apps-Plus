@@ -1,7 +1,8 @@
 /**
  * Checks across a set of accounts, each run only when asked, two accounts
  * at a time, with progress and Stop (a read already running finishes; its
- * answer is kept for next time):
+ * answer is kept for next time). Leaving the page stops a check the same
+ * way:
  *
  * - "Who made their first QORT payment": where each one's first QORT came
  *   from, grouped by the payer ("H made the first QORT payment to 7 of
@@ -12,7 +13,7 @@
  *
  * Facts with their denominators; what wasn't read says so.
  */
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Box, Button, LinearProgress, Typography } from '@mui/material';
 import { Card, Section } from '../../../components/common/Section';
 import { TxSentence } from '../../../components/explorer/TxSentence';
@@ -29,6 +30,7 @@ import { bandWords, groupFirstPayers } from '../../../rules/explorer/connections
 import { wentTo, wentToParts } from '../../../rules/explorer/money';
 import { formatCount, plural } from '../../../utils/format';
 import { usePayerBands } from '../account/connections/hooks';
+import { FOCUSABLE_ROW_SX, useFocusNewRows } from '../account/names/useShowMore';
 import { SET_LIST_SX } from './SponseeRows';
 
 /** Result rows shown before "Show more". */
@@ -48,7 +50,10 @@ function useRun<T>(
 ) {
   const [run, setRun] = useState<Run<T>>({ state: 'idle' });
   const stopper = useRef<AbortController | null>(null);
+  // Leaving the page: no new account starts (one being read finishes, and is kept).
+  useEffect(() => () => stopper.current?.abort(), []);
   const start = async () => {
+    stopper.current?.abort();
     const stop = new AbortController();
     stopper.current = stop;
     setRun({ state: 'running', progress: { done: 0, total: accounts.length } });
@@ -85,6 +90,7 @@ function CheckCard({
   children: ReactNode;
 }) {
   const progress = run.state === 'idle' ? null : run.progress;
+  const running = run.state === 'running';
   return (
     <Card
       as="section"
@@ -97,32 +103,37 @@ function CheckCard({
       <Typography variant="body2" color="text.secondary">
         {about}
       </Typography>
-      {run.state === 'running' && progress ? (
-        <>
-          <LinearProgress
-            variant="determinate"
-            value={progress.total ? (progress.done / progress.total) * 100 : 0}
-            aria-label={`${title}: progress`}
-          />
-          <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-            <Typography role="status" variant="body2" sx={{ flex: 1, minWidth: 0 }}>
-              Checked {formatCount(progress.done)} of {plural(progress.total, 'account')}…
-            </Typography>
-            <Button onClick={onStop} sx={{ minHeight: 44 }}>
-              Stop
-            </Button>
-          </Box>
-        </>
-      ) : (
+      {/* Said once when a check starts; the count runs on screen and in the bar. */}
+      <span role="status" className="qmp-visually-hidden">
+        {running ? `Checking ${plural(total, 'account')}…` : ''}
+      </span>
+      {running && progress ? (
+        <LinearProgress
+          variant="determinate"
+          value={progress.total ? (progress.done / progress.total) * 100 : 0}
+          aria-label={`${title}: progress`}
+        />
+      ) : null}
+      <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+        {running && progress ? (
+          <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }}>
+            Checked {formatCount(progress.done)} of {plural(progress.total, 'account')}…
+          </Typography>
+        ) : null}
+        {/* One button that stays (start, Stop, Check again): the focus stays on it. */}
         <Button
-          variant="outlined"
-          onClick={onStart}
-          disabled={total === 0}
-          sx={{ alignSelf: 'flex-start', minHeight: 44 }}
+          variant={running ? 'text' : 'outlined'}
+          onClick={running ? onStop : onStart}
+          disabled={!running && total === 0}
+          sx={{ minHeight: 44 }}
         >
-          {run.state === 'done' ? 'Check again' : `Check ${plural(total, 'account')}`}
+          {running
+            ? 'Stop'
+            : run.state === 'done'
+              ? 'Check again'
+              : `Check ${plural(total, 'account')}`}
         </Button>
-      )}
+      </Box>
       {run.state === 'done' ? (
         <Typography role="status" variant="body2" color="text.secondary">
           {run.stopped
@@ -143,6 +154,7 @@ function FirstPayers({
   total: number;
 }) {
   const [limit, setLimit] = useState(ROWS);
+  const { listRef, focusFrom } = useFocusNewRows();
   const funding = new Map<string, Funding | null>();
   let failed = 0;
   for (const [address, checked] of results) {
@@ -155,11 +167,21 @@ function FirstPayers({
   return (
     <>
       {shown.length ? (
-        <Box component="ul" aria-label="First QORT payments by payer" sx={SET_LIST_SX}>
+        <Box
+          component="ul"
+          ref={listRef}
+          aria-label="First QORT payments by payer"
+          sx={SET_LIST_SX}
+        >
           {shown.map((payer) => {
             const words = bandWords(bands[payer.from]);
             return (
-              <Typography component="li" key={payer.from} sx={{ overflowWrap: 'anywhere' }}>
+              <Typography
+                component="li"
+                key={payer.from}
+                tabIndex={-1}
+                sx={{ overflowWrap: 'anywhere', ...FOCUSABLE_ROW_SX }}
+              >
                 <TxSentence
                   parts={[
                     { kind: 'account', address: payer.from },
@@ -185,7 +207,10 @@ function FirstPayers({
       )}
       {grouped.payers.length > shown.length ? (
         <Button
-          onClick={() => setLimit((n) => n + ROWS)}
+          onClick={() => {
+            focusFrom(shown.length);
+            setLimit((n) => n + ROWS);
+          }}
           sx={{ alignSelf: 'flex-start', minHeight: 44 }}
         >
           Show more ({formatCount(grouped.payers.length - shown.length)} more)
@@ -211,6 +236,7 @@ function FirstPayers({
 
 function WentTo({ results, total }: { results: Map<string, Checked<PaymentPage>>; total: number }) {
   const [limit, setLimit] = useState(ROWS);
+  const { listRef, focusFrom } = useFocusNewRows();
   const sent = new Map<string, TxRow[]>();
   let failed = 0;
   for (const [address, checked] of results) {
@@ -222,9 +248,14 @@ function WentTo({ results, total }: { results: Map<string, Checked<PaymentPage>>
   return (
     <>
       {shown.length ? (
-        <Box component="ul" aria-label="Where their QORT went" sx={SET_LIST_SX}>
+        <Box component="ul" ref={listRef} aria-label="Where their QORT went" sx={SET_LIST_SX}>
           {shown.map((entry) => (
-            <Typography component="li" key={entry.address} sx={{ overflowWrap: 'anywhere' }}>
+            <Typography
+              component="li"
+              key={entry.address}
+              tabIndex={-1}
+              sx={{ overflowWrap: 'anywhere', ...FOCUSABLE_ROW_SX }}
+            >
               <TxSentence
                 parts={[
                   ...wentToParts(entry, total),
@@ -239,7 +270,10 @@ function WentTo({ results, total }: { results: Map<string, Checked<PaymentPage>>
       )}
       {recipients.length > shown.length ? (
         <Button
-          onClick={() => setLimit((n) => n + ROWS)}
+          onClick={() => {
+            focusFrom(shown.length);
+            setLimit((n) => n + ROWS);
+          }}
           sx={{ alignSelf: 'flex-start', minHeight: 44 }}
         >
           Show more ({formatCount(recipients.length - shown.length)} more)

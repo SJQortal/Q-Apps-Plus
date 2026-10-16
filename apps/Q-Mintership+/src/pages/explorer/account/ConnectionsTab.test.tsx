@@ -24,6 +24,7 @@ import {
 } from '../../../../e2e/world.mjs';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../../components/common/personLinks';
 import { explorerAccountPath } from '../../../routes/paths';
+import { queryLoadCounts } from '../../../data/query';
 import { comparePicksAtom, resetExplorerState } from '../../../state/explorer';
 import ConnectionsTab from './ConnectionsTab';
 
@@ -72,6 +73,29 @@ function noWrites(posts: string[]) {
 }
 
 const region = (name: string) => screen.findByRole('region', { name }, T);
+
+/**
+ * The links search for `who` fills all 5 pages (its own rows first, then
+ * account-flag rows that link nothing), so the read stops at its ceiling.
+ */
+function cappedLinks(world: World, who: string) {
+  mockFetchRoute('/transactions/search', (url: URL) => {
+    const sp = url.searchParams;
+    const own = answerCore(world, url.pathname, sp)?.body;
+    if (sp.get('address') !== who || !sp.getAll('txType').includes('REWARD_SHARE')) return own;
+    const offset = Number(sp.get('offset') ?? 0);
+    const real = offset === 0 && Array.isArray(own) ? own : [];
+    const filler = Array.from({ length: 100 - real.length }, (_, i) => ({
+      type: 'ACCOUNT_FLAGS',
+      timestamp: 1_600_000_000_000 + offset + i,
+      signature: `filler${offset + i}`,
+      blockHeight: 1_000 + offset + i,
+      creatorAddress: ADDR.admin,
+      target: who,
+    }));
+    return [...real, ...filler];
+  });
+}
 
 beforeEach(() => resetExplorerState());
 afterEach(() => vi.useRealTimers());
@@ -170,6 +194,160 @@ describe('Connections: payments and first QORT', () => {
     // The compare page isn't mounted here: the router left this route.
     expect(await screen.findByTestId('navigated-away', {}, T)).toBeInTheDocument();
     expect(getDefaultStore().get(comparePicksAtom)).toEqual([ADDR.left, ADDR.kicked]);
+  });
+
+  it('tags the first-incoming account by what it sent: a reward share is not its first QORT', async () => {
+    const ugo = SPONSEES[3].address;
+    await open(ugo, (world) => {
+      // Sid, whose reward share was Ugo's first incoming transaction, pays it later.
+      const x = world.explorer as {
+        rows: Array<Record<string, unknown>>;
+        bySig: Map<string, unknown>;
+        parties: Map<string, string[]>;
+      };
+      const row = {
+        type: 'PAYMENT',
+        timestamp: 1_700_000_000_000,
+        fee: '0.01000000',
+        signature:
+          'sidPaysUgo1111111111111111111111111111111111111111111111111111111111111111111111111',
+        txGroupId: 0,
+        blockHeight: 2_710_000,
+        approvalStatus: 'NOT_REQUIRED',
+        creatorAddress: SPONSOR.address,
+        senderPublicKey: world.accounts.get(SPONSOR.address)?.publicKey,
+        recipient: ugo,
+        amount: '3.00000000',
+      };
+      x.rows.push(row);
+      x.bySig.set(row.signature, row);
+      x.parties.set(row.signature, [SPONSOR.address, ugo]);
+    });
+    const recorded = await region('Recorded between them');
+    const got = await within(recorded).findByRole('list', { name: 'Received from' }, T);
+    await waitFor(() => expect(got).toHaveTextContent('Received 3 QORT from Sid Sponsor'), T);
+    await waitFor(
+      () => expect(got).toHaveTextContent('its first incoming transaction came from them'),
+      T
+    );
+    expect(got).not.toHaveTextContent('its first QORT came from them');
+    const common = await region('In common');
+    await waitFor(
+      () =>
+        expect(common).toHaveTextContent(
+          'Its first incoming transaction: a 0 % reward share from Sid Sponsor'
+        ),
+      T
+    );
+  });
+
+  it('Show more and Show all hand the focus to the first row they add', async () => {
+    const { user } = await open(FUNDER.address, (world) =>
+      mockFetchRoute('/transactions/payments/between', (url: URL) =>
+        // 25 payments from Kit, for the evidence list's Show all.
+        url.searchParams.get('recipientAddress') === FUNDER.address &&
+        !url.searchParams.get('senderAddress') &&
+        url.searchParams.get('limit') === '100' &&
+        !Number(url.searchParams.get('offset'))
+          ? Array.from({ length: 25 }, (_, i) => ({
+              type: 'PAYMENT',
+              timestamp: 1_700_000_000_000 + i,
+              signature: `kitPays${'z'.repeat(70)}${'123456789ABCDEFGHJKLMNPQR'[i]}`,
+              blockHeight: 2_700_000 + i,
+              creatorAddress: ADDR.kicked,
+              recipient: FUNDER.address,
+              amount: '1.00000000',
+            }))
+          : answerCore(world, url.pathname, url.searchParams)?.body
+      )
+    );
+    const recorded = await region('Recorded between them');
+    const sent = await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+    await waitFor(() => expect(within(sent).getAllByRole('listitem')).toHaveLength(20), T);
+    await user.click(within(recorded).getByRole('button', { name: 'Show more (80 more)' }));
+    await waitFor(() => expect(within(sent).getAllByRole('listitem')).toHaveLength(40), T);
+    expect(within(sent).getAllByRole('listitem')[20]).toHaveFocus();
+
+    // Kit's 25 payments to Hal: the evidence shows 20, then all.
+    await user.click(within(recorded).getByRole('button', { name: /^Received from/ }));
+    const toggle = await within(recorded).findByRole(
+      'button',
+      { name: 'Show the 25 payments with Kit Kicked' },
+      T
+    );
+    await user.click(toggle);
+    const panel = document.getElementById(
+      toggle.getAttribute('aria-controls') ?? ''
+    ) as HTMLElement;
+    const evidence = within(panel).getByRole('list');
+    expect(within(evidence).getAllByRole('listitem')).toHaveLength(20);
+    await user.click(within(panel).getByRole('button', { name: 'Show all 25' }));
+    expect(within(evidence).getAllByRole('listitem')).toHaveLength(25);
+    expect(within(evidence).getAllByRole('listitem')[20]).toHaveFocus();
+  });
+
+  it('AT addresses come 20 at a time too, with Show more, never cut silently', async () => {
+    const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    const ats = Array.from({ length: 25 }, (_, i) => `A${'x'.repeat(32)}${B58[i]}`);
+    const { user } = await open(ADDR.newcomer, (world) =>
+      mockFetchRoute('/transactions/payments/between', (url: URL) =>
+        url.searchParams.get('senderAddress') === ADDR.newcomer
+          ? ats.map((at, i) => ({
+              type: 'PAYMENT',
+              timestamp: 1_700_000_000_000 + i,
+              signature: `toAt${B58[i]}${'z'.repeat(80)}`,
+              blockHeight: 2_700_000 + i,
+              creatorAddress: ADDR.newcomer,
+              recipient: at,
+              amount: '1.00000000',
+            }))
+          : answerCore(world, url.pathname, url.searchParams)?.body
+      )
+    );
+    const recorded = await region('Recorded between them');
+    const list = await within(recorded).findByRole(
+      'list',
+      { name: 'AT addresses (automated contracts)' },
+      T
+    );
+    expect(within(list).getAllByRole('listitem')).toHaveLength(20);
+    expect(within(recorded).getByRole('button', { name: /^Sent to · 25$/ })).toBeInTheDocument();
+    await user.click(
+      within(recorded).getByRole('button', { name: 'Show more AT addresses (5 more)' })
+    );
+    expect(within(list).getAllByRole('listitem')).toHaveLength(25);
+    expect(within(list).getAllByRole('listitem')[20]).toHaveFocus();
+    expect(within(recorded).queryByRole('button', { name: /^Show more AT/ })).toBeNull();
+  });
+
+  it('Compare with no room for both says so and picks neither', async () => {
+    const { user, posts } = await open(ADDR.left);
+    const store = getDefaultStore();
+    const three = [ADDR.admin, ADDR.nominator, ADDR.learner];
+    store.set(comparePicksAtom, three);
+    const recorded = await region('Recorded between them');
+    await user.click(
+      await within(recorded).findByRole('button', { name: 'Compare Lou Left with Kit Kicked' }, T)
+    );
+    expect(
+      await screen.findByText('Compare holds 4 accounts. Remove one first.', {}, T)
+    ).toBeInTheDocument();
+    expect(store.get(comparePicksAtom)).toEqual(three);
+    expect(screen.queryByTestId('navigated-away')).toBeNull();
+    noWrites(posts);
+  });
+
+  it('Compare with one of the two picked already adds the other', async () => {
+    const { user, posts } = await open(ADDR.left);
+    const store = getDefaultStore();
+    store.set(comparePicksAtom, [ADDR.admin, ADDR.left, ADDR.learner]);
+    const recorded = await region('Recorded between them');
+    await user.click(
+      await within(recorded).findByRole('button', { name: 'Compare Lou Left with Kit Kicked' }, T)
+    );
+    expect(await screen.findByTestId('navigated-away', {}, T)).toBeInTheDocument();
+    expect(store.get(comparePicksAtom)).toEqual([ADDR.admin, ADDR.left, ADDR.learner, ADDR.kicked]);
+    noWrites(posts);
   });
 
   it('MINTER members only: none of Lou’s payments were with members', async () => {
@@ -362,12 +540,125 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
     ).toBeInTheDocument();
   });
 
+  it('a part that couldn’t be read is named with Retry, and left out of what was checked', async () => {
+    const { user } = await open(ADDR.newcomer, (world) =>
+      mockFetchRoute('/transactions/search', (url: URL) =>
+        url.searchParams.getAll('txType').includes('TRANSFER_ASSET')
+          ? new Response('{"error":5,"message":"repository issue"}', { status: 500 })
+          : answerCore(world, url.pathname, url.searchParams)?.body
+      )
+    );
+    const writeText = vi.fn(async (text: string) => void text);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const recorded = await region('Recorded between them');
+    expect(
+      await within(recorded).findByText(
+        /^Couldn’t read its asset transfers and multi-payments\./,
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(within(recorded).getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    // Payments: not claimed as none found.
+    expect(
+      await screen.findByText(
+        'Also checked, nothing found: level moves, a sponsor, accounts it sponsored, minting with another account now, name sales, where its first QORT came from.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Copy findings' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled(), T);
+    expect(writeText.mock.calls[0][0]).toContain(
+      '- Couldn’t read its asset transfers and multi-payments.'
+    );
+  });
+
+  it('links read to their ceiling: said on the tab, and only level moves claimed as none', async () => {
+    const { user } = await open(ADDR.newcomer, (world) => cappedLinks(world, ADDR.newcomer));
+    const writeText = vi.fn(async (text: string) => void text);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    expect(
+      await screen.findByText(
+        'Also checked, nothing found: level moves, minting with another account now, payments, where its first QORT came from.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'In its newest 500 reward shares, level moves and name sales, nothing found: a sponsor, accounts it sponsored, name sales.'
+      )
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Copy findings' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled(), T);
+    const text = writeText.mock.calls[0][0] as string;
+    expect(text).toContain('Reward shares, level moves and name sales: its newest 500');
+    expect(text).toContain(
+      'In its newest 500 reward shares, level moves and name sales, nothing found: a sponsor, accounts it sponsored, name sales.'
+    );
+  });
+
+  it('Sid Sponsor, links read to their ceiling: what was found, and a line that there may be older ones', async () => {
+    await open(SPONSOR.address, (world) => cappedLinks(world, SPONSOR.address));
+    const recorded = await region('Recorded between them');
+    expect(
+      await within(recorded).findByText(
+        'From its newest 500 reward shares, level moves and name sales: there may be older ones. Every level move was read.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(
+      await within(recorded).findByRole('link', { name: /^Sponsored 5 accounts/ }, T)
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'In its newest 500 reward shares, level moves and name sales, nothing found: a sponsor, name sales.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Also checked, nothing found:.*a sponsor/)).toBeNull();
+  });
+
+  it('In common and In Q-Mintership read nothing until they near the screen', async () => {
+    // Nothing ever comes into view here.
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+        takeRecords() {
+          return [];
+        }
+      }
+    );
+    try {
+      const { posts } = await open(ADDR.nominator);
+      const recorded = await region('Recorded between them');
+      await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+      await screen.findByText(/^Also checked, nothing found/, {}, T);
+      const loads = queryLoadCounts();
+      expect(loads.xmade).toBeUndefined();
+      expect(loads.nominations).toBeUndefined();
+      expect(loads.communityvotes).toBeUndefined();
+      expect(loads.xfirst).toBeUndefined();
+      noWrites(posts);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('Core’s own report only on request, with what its numbers count', async () => {
     const { user } = await open(SPONSOR.address);
     const report = await region('Core’s own report');
     expect(fetchCallsFor('/addresses/sponsorship/')).toEqual([]);
     await user.click(within(report).getByRole('button', { name: 'Load Core’s report' }));
     const lines = await within(report).findByRole('list', { name: 'Core’s report' }, T);
+    // The button went: what it loaded holds the focus.
+    expect(lines.parentElement).toHaveFocus();
     expect(lines).toHaveTextContent('Accounts it ever made a reward share to: 5');
     expect(lines).toHaveTextContent('Core counts names, not accounts');
     expect(fetchCallsFor('/addresses/sponsorship/')).toHaveLength(1);

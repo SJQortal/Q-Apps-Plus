@@ -6,11 +6,12 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
-import { addCommunityVotes } from '../../../../e2e/world.mjs';
+import userEvent from '@testing-library/user-event';
+import { addCommunityVotes, answerCore } from '../../../../e2e/world.mjs';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../../components/common/personLinks';
 import { renderPage, type RenderPageOptions } from '../../../test/render';
 import { expectNoAxeViolations } from '../../../test/axe';
-import { qortalCalls } from '../../../test/setup';
+import { mockFetchRoute, qortalCalls } from '../../../test/setup';
 import { ADDR } from '../../../test/world';
 import { explorerAccountPath, explorerComparePath } from '../../../routes/paths';
 import { MintershipLinks } from './MintershipLinks';
@@ -89,6 +90,29 @@ describe('In Q-Mintership (Connections)', () => {
     expect(
       within(nominated[0]).getByRole('link', { name: 'Compare with Wren Waiting' })
     ).toHaveAttribute('href', explorerComparePath([ADDR.nominator, ADDR.nominatedWaiting]));
+  });
+
+  it('says when a read failed, with Retry, instead of showing nothing', async () => {
+    let fail = true;
+    const { posts } = await open(ADDR.liftBan, (world) =>
+      mockFetchRoute('/groups/694', (url: URL) =>
+        fail && url.pathname === '/groups/694'
+          ? new Response('{"error":5,"message":"repository issue"}', { status: 500 })
+          : answerCore(world, url.pathname, url.searchParams)?.body
+      )
+    );
+    const user = userEvent.setup();
+    const section = await screen.findByRole('region', { name: 'In Q-Mintership' }, T);
+    expect(
+      within(section).getByText(/^Couldn’t read all of its Q-Mintership records\./)
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('probe')).toHaveTextContent('0 links, failed');
+    fail = false;
+    await user.click(within(section).getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent(/^0 links$/), T);
+    expect(screen.queryByRole('region', { name: 'In Q-Mintership' })).toBeNull();
+    expect(posts).toEqual([]);
+    expect(qortalCalls.filter((c) => WRITES.test(String(c.action)))).toEqual([]);
   });
 
   it('shows nothing when there are none, and tells the Connections tab so', async () => {
