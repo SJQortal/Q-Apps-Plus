@@ -219,6 +219,14 @@ describe('Compare: two accounts', () => {
   it('opens what stands behind a finding: payments link to their transactions, a trade to its AT', async () => {
     const { user, world } = await open(explorerComparePath([ADDR.kicked, ADDR.left]));
     const recorded = await region('Recorded between them');
+    // The pair's heading says its letters once (the badges are decoration).
+    expect(
+      await within(recorded).findByRole(
+        'heading',
+        { level: 3, name: /^A–B: ?Kit Kicked and Lou Left$/ },
+        T
+      )
+    ).toBeInTheDocument();
     const toggle = await within(recorded).findByRole(
       'button',
       { name: 'Show the 4 payments from Kit Kicked to Lou Left' },

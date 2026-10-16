@@ -91,8 +91,10 @@ function PairBlock({
       sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0, ...PAIR_ANCHOR_SX }}
     >
       <SubHeading>
+        {/* The letters are said once, by the hidden "A–B:" after them. */}
         <Box
           component="span"
+          aria-hidden
           sx={{ display: 'inline-flex', gap: 0.5, verticalAlign: 'middle', mr: 1 }}
         >
           <LetterBadge letter={data.sides[i].letter} accent={accents[i]} size={24} />
