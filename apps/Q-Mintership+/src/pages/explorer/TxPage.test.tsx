@@ -1,6 +1,6 @@
 /**
  * One transaction's page on the strict mock world: its type as the title,
- * the sentence, the facts, the people, the fields, raw data on request
+ * the sentence, the facts, the people, the fields, raw API response on request
  * (never a message's content or an encrypted resource's identifier), a
  * minting-level move's recipient, a group approval's transaction and
  * MINTER decision, a waiting one, and a signature the node doesn't know
@@ -72,7 +72,7 @@ const h1 = (name: string) => screen.findByRole('heading', { level: 1, name }, T)
 afterEach(() => vi.useRealTimers());
 
 describe('one transaction', () => {
-  it('a payment: its type, sentence, facts, people, fields, raw data on request', async () => {
+  it('a payment: its type, sentence, facts, people, fields, raw API response on request', async () => {
     const { user, container, posts } = await open(sigs.kitLou[0]);
     expect(await h1('Payment')).toBeVisible();
     // In the sentence, among the people, and as the payer's field.
@@ -88,12 +88,12 @@ describe('one transaction', () => {
     expect(within(details).getByText('Amount', { selector: 'dt' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy a link to this transaction' })).toBeVisible();
 
-    const raw = screen.getByRole('button', { name: 'Show raw data' });
+    const raw = screen.getByRole('button', { name: 'Raw API response' });
     expect(raw).toHaveAttribute('aria-expanded', 'false');
     expect(container.querySelector('pre')).toBeNull();
     await user.click(raw);
     expect(raw).toHaveAttribute('aria-expanded', 'true');
-    expect(container.querySelector('pre')?.textContent).toContain(
+    expect(screen.getByRole('region', { name: 'Raw API response' })).toHaveTextContent(
       `"signature": "${sigs.kitLou[0]}"`
     );
     await expectNoAxeViolations(container);
@@ -103,7 +103,7 @@ describe('one transaction', () => {
   it('a message: never its content, not even in the raw data', async () => {
     const { user, container } = await open(sigs.message);
     expect(await h1('Message')).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Show raw data' }));
+    await user.click(screen.getByRole('button', { name: 'Raw API response' }));
     expect(container.querySelector('pre')?.textContent).toContain('"data": "(not shown)"');
     expect(document.body.textContent).not.toContain(MESSAGE_CONTENT);
   });
@@ -112,7 +112,7 @@ describe('one transaction', () => {
     const { user } = await open(sigs.publishes[3]);
     expect(await h1('QDN publish')).toBeVisible();
     expect(await screen.findByText('MAIL_PRIVATE', {}, T)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Show raw data' }));
+    await user.click(screen.getByRole('button', { name: 'Raw API response' }));
     expect(document.body.textContent).not.toContain('qortal_qmail_explorer_test');
   });
 

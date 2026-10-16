@@ -3,18 +3,16 @@
  * the facts (block and time, or that it waits for a block; the fee; where
  * group approval stands, only when it needs one), the accounts involved,
  * for a group approval the transaction it answers, the type's fields in
- * plain words, and its raw data, collapsed (the only place raw JSON shows,
- * less what never shows: txPageWords.ts).
+ * plain words, and its raw API response, collapsed (components/explorer/
+ * RawJson.tsx; less what never shows: rules/explorer/rawTx.ts).
  */
-import { useId, useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
 import { Card, Section } from '../../../components/common/Section';
-import { ExpandChevron } from '../../../components/common/ExpandChevron';
-import { SmoothReveal } from '../../../components/common/SmoothReveal';
 import { usePersonLinks } from '../../../components/common/personLinks';
 import { ErrorState, ListSkeleton } from '../../../components/common/states';
+import { RawResponse } from '../../../components/explorer/RawJson';
 import { TxFields, TxPeople } from '../../../components/explorer/TxFields';
 import { TxSentence } from '../../../components/explorer/TxSentence';
 import { useTxWords } from '../../../components/explorer/useTxWords';
@@ -25,7 +23,7 @@ import { useQuery } from '../../../hooks/useQuery';
 import { decisionPath, explorerTxPath } from '../../../routes/paths';
 import { formatAmount } from '../../../rules/explorer/txWords';
 import { formatCount, formatDateTime, formatRelative } from '../../../utils/format';
-import { approvalWords, makerOf, rawForDisplay } from './txPageWords';
+import { approvalWords, makerOf } from './txPageWords';
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -133,44 +131,6 @@ function AnsweredTx({ signature }: { signature: string }) {
   );
 }
 
-function RawData({ tx }: { tx: TxRow }) {
-  const [open, setOpen] = useState(false);
-  const id = useId();
-  const text = useMemo(() => JSON.stringify(rawForDisplay(tx), null, 2), [tx]);
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
-      <Button
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-controls={open ? id : undefined}
-        endIcon={<ExpandChevron open={open} />}
-        sx={{ alignSelf: 'flex-start', minHeight: 44 }}
-      >
-        {open ? 'Hide raw data' : 'Show raw data'}
-      </Button>
-      <SmoothReveal open={open}>
-        <Box
-          component="pre"
-          id={id}
-          sx={{
-            m: 0,
-            p: 1.5,
-            borderRadius: 1,
-            bgcolor: 'action.hover',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-            fontSize: 14,
-            lineHeight: 1.5,
-            whiteSpace: 'pre-wrap',
-            overflowWrap: 'anywhere',
-          }}
-        >
-          {text}
-        </Box>
-      </SmoothReveal>
-    </Box>
-  );
-}
-
 export function TxView({ tx }: { tx: TxRow }) {
   const words = useTxWords(tx, null);
   // The approval status is one of the facts above; the fields don't repeat it.
@@ -191,7 +151,7 @@ export function TxView({ tx }: { tx: TxRow }) {
           </Card>
         </Section>
       ) : null}
-      <RawData tx={tx} />
+      <RawResponse tx={tx} />
     </>
   );
 }

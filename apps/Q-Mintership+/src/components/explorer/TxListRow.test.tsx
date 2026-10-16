@@ -2,7 +2,8 @@
  * One transaction in a list: one button that opens to the details, people
  * linking into the Explorer and "Open transaction"; what is never shown (a
  * message's content, an encrypted resource's identifier, fields only the
- * raw data has); a minting-level move's recipient. Strict mock world.
+ * raw data has); the raw API response, opened in the row, coloured by kind
+ * and copied as JSON; a minting-level move's recipient. Strict mock world.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
@@ -104,6 +105,46 @@ describe('TxListRow', () => {
       await screen.findByRole('button', { name: /Got its minting level from Olga Old/ }, T)
     ).toBeInTheDocument();
     expect(fetchCallsFor('/transactions/signature/')).toEqual([]);
+  });
+
+  it('opens the raw API response right in the row, coloured by kind, and copies it', async () => {
+    const { user, container } = await show([row(sigs.kitLou[0])], ADDR.kicked);
+    await user.click(await screen.findByRole('button', { name: /Sent 10 QORT to Lou Left/ }, T));
+    const raw = screen.getByRole('button', { name: 'Raw API response' });
+    expect(raw).toHaveAttribute('aria-expanded', 'false');
+    // Nothing is laid out until it opens.
+    expect(container.querySelector('pre')).toBeNull();
+    await user.click(raw);
+    expect(raw).toHaveAttribute('aria-expanded', 'true');
+    const box = screen.getByRole('region', { name: 'Raw API response' });
+    expect(box).toHaveAttribute('tabindex', '0');
+    const line = [...box.children].find((el) => el.textContent?.includes('"signature"'));
+    expect(line?.textContent).toBe(`"signature": "${sigs.kitLou[0]}",`);
+    expect(line?.querySelector('[data-k="key"]')?.textContent).toBe('"signature"');
+    expect(line?.querySelector('[data-k="string"]')?.textContent).toBe(`"${sigs.kitLou[0]}"`);
+    const height = [...box.children].find((el) => el.textContent?.includes('"blockHeight"'));
+    expect(height?.querySelector('[data-k="number"]')?.textContent).toBe('1364500');
+
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({
+      writeText,
+    } as unknown as Clipboard);
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(JSON.parse(writeText.mock.calls[0][0] as string)).toEqual(row(sigs.kitLou[0]));
+    expect(await screen.findByText('Copied')).toBeInTheDocument();
+    await expectNoAxeViolations(container);
+    await user.click(raw);
+    expect(raw).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('never shows a message’s content, not even in the raw API response', async () => {
+    const { user } = await show([row(sigs.message)]);
+    await user.click(await screen.findByRole('button', { name: /message/i }, T));
+    await user.click(screen.getByRole('button', { name: 'Raw API response' }));
+    expect(screen.getByRole('region', { name: 'Raw API response' })).toHaveTextContent(
+      '"data": "(not shown)"'
+    );
+    expect(document.body.textContent).not.toContain(MESSAGE_CONTENT);
   });
 
   it('shows a group change in words, without the fields only its raw data has', async () => {

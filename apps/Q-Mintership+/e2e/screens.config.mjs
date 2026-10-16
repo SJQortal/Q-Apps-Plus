@@ -829,6 +829,37 @@ export default {
       after: explorerSettle,
     },
     {
+      // A row opened, with its raw API response open under it.
+      key: 'explorer-transactions-raw',
+      path: `/explorer/account/${ADDR.admin}/transactions?as=admin`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.locator('[data-tx-row]').first().click({ timeout: 8000 });
+        await page.getByRole('button', { name: 'Raw API response' }).first().click();
+        const raw = page.getByRole('region', { name: 'Raw API response' }).first();
+        await raw.waitFor({ timeout: 4000 });
+        await raw.evaluate((r) => r.scrollIntoView({ block: 'center' }));
+        await page.waitForTimeout(400);
+      },
+    },
+    {
+      // Compare with…: the names suggested show under the field, the dialog not scrolled.
+      key: 'explorer-compare-with',
+      path: `/explorer/account/${ADDR.admin}?as=admin`,
+      overlay: true,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByRole('button', { name: /with another account$/ }).click({ timeout: 8000 });
+        await page
+          .getByRole('dialog', { name: 'Compare with…' })
+          .getByRole('combobox', { name: 'Find an account' })
+          .fill('A', { timeout: 4000 });
+        await page.keyboard.type('v');
+        await page.getByRole('option').first().waitFor({ timeout: 8000 });
+        await page.waitForTimeout(500);
+      },
+    },
+    {
       key: 'explorer-mintership',
       path: `/explorer/account/${ADDR.nominatedSigning}/mintership?as=admin`,
       after: explorerSettle,
@@ -857,6 +888,18 @@ export default {
       key: 'explorer-tx',
       path: `/explorer/tx/${world.explorer.sigs.privs}?as=learner`,
       after: explorerSettle,
+    },
+    {
+      key: 'explorer-tx-raw',
+      path: `/explorer/tx/${world.explorer.sigs.privs}?as=learner`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByRole('button', { name: 'Raw API response' }).click({ timeout: 8000 });
+        const raw = page.getByRole('region', { name: 'Raw API response' });
+        await raw.waitFor({ timeout: 4000 });
+        await raw.evaluate((r) => r.scrollIntoView({ block: 'center' }));
+        await page.waitForTimeout(400);
+      },
     },
     { key: 'explorer-txs', path: '/explorer/transactions?as=learner', after: explorerSettle },
     {

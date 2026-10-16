@@ -10,9 +10,13 @@
  * long list doesn't read every counterparty's name at once; until then the
  * sentence names accounts by their short address.
  *
+ * The details end with "Raw API response", which opens to the
+ * transaction's JSON as Core sent it (components/explorer/RawJson.tsx),
+ * right there in the list.
+ *
  * A message never shows its content, an encrypted QDN resource never its
- * identifier (rules/explorer/txWords.ts leaves both out), and the fields
- * only a transaction's raw data carries never show here.
+ * identifier (rules/explorer/txWords.ts and rawTx.ts leave both out), and
+ * the fields only a transaction's raw response carries show only there.
  */
 import { useId, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -28,6 +32,7 @@ import type { TxRow } from '../../data/types';
 import { useInView } from '../../hooks/useInView';
 import { explorerTxPath } from '../../routes/paths';
 import { formatCount, formatDateTime, formatRelative } from '../../utils/format';
+import { RawResponse } from './RawJson';
 import { TxFields, TxPeople } from './TxFields';
 import { TxIcon } from './TxIcon';
 import { TxSentence } from './TxSentence';
@@ -163,16 +168,21 @@ export function TxListRow({ tx, viewpoint = null }: TxListRowProps) {
           </Typography>
           <TxFields fields={words.fields} label={`${words.title} details`} />
           <TxPeople addresses={words.participants} maker={maker} />
-          <Button
-            component={RouterLink}
-            to={explorerTxPath(tx.signature)}
-            state={links.state}
-            variant="outlined"
-            endIcon={<OpenInNewOutlinedIcon />}
-            sx={{ alignSelf: 'flex-start', minHeight: 44 }}
-          >
-            Open transaction
-          </Button>
+          <RawResponse
+            tx={tx}
+            before={
+              <Button
+                component={RouterLink}
+                to={explorerTxPath(tx.signature)}
+                state={links.state}
+                variant="outlined"
+                endIcon={<OpenInNewOutlinedIcon />}
+                sx={{ minHeight: 44 }}
+              >
+                Open transaction
+              </Button>
+            }
+          />
         </Box>
       </SmoothReveal>
     </Row>
