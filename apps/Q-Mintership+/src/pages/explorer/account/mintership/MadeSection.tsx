@@ -111,25 +111,25 @@ function PersonRows({
 
 /** "Bob’s nomination", the name isolated. */
 function NominationTitle({ nominee }: { nominee: string }) {
-  const { label } = useDisplayName(nominee);
+  const { name, label } = useDisplayName(nominee);
   return (
     <>
-      <IsolatedName name={label} />
-      {'’s nomination'}
+      <IsolatedName name={name} label={label} suffix="’s" />
+      {' nomination'}
     </>
   );
 }
 
 function DecisionTitleText({ decision }: { decision: DecisionRef }) {
   const subject = useDecisionSubject(decision);
-  const { label } = useDisplayName(subject ?? '', subject ? undefined : null);
+  const { name, label } = useDisplayName(subject ?? '', subject ? undefined : null);
   return (
     <>
       {decisionTitle(decision)}
       {subject ? (
         <>
           {': '}
-          <IsolatedName name={label} />
+          <IsolatedName name={name} label={label} />
         </>
       ) : null}
     </>

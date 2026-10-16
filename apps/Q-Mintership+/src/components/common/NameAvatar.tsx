@@ -49,6 +49,8 @@ export function NameAvatar({ name, size = 40, phoneSize }: NameAvatarProps) {
 
   return (
     <Box
+      // A span, so it can sit inside a line of text (a <p>) as well as a list.
+      component="span"
       ref={setNode}
       aria-hidden
       sx={(theme) => ({

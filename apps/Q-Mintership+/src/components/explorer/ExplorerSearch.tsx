@@ -29,6 +29,7 @@ import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { primarySoft } from '../../hub-theme';
 import { NameAvatar } from '../common/NameAvatar';
+import { NameWithAvatar } from './NameWithAvatar';
 import { isAddress } from '../../data/accounts';
 import { getNameData, isAtAddress, isSignature } from '../../data/explorer/account';
 import { nameContainsKey, searchNamesContaining } from '../../data/explorer/names';
@@ -174,7 +175,7 @@ function NameOption({ hit, paused }: { hit: NameHit; paused: boolean }) {
               {' '}
               <Box component="span" sx={{ fontWeight: 400, color: 'text.secondary' }}>
                 {'· a name of '}
-                <NameText name={ownerName} />
+                <NameWithAvatar name={ownerName} strong={false} />
               </Box>
             </>
           ) : null}

@@ -24,6 +24,7 @@ import {
 } from '../../state/explorer';
 import { motionAtom, SETTINGS_KEYS } from '../../state/settings';
 import AccountPage from './AccountPage';
+import { readText } from '../../test/readText';
 
 const T = { timeout: 4000 };
 const ROUTE = '/explorer/account/:who/:tab?';
@@ -261,7 +262,7 @@ describe('a name in the URL', () => {
     ).toBeVisible();
     await waitFor(
       () =>
-        expect(note()).toHaveTextContent(
+        expect(readText(note())).toBe(
           "Opened from the name “Q-Maps”, one of this account's 3 names."
         ),
       T
@@ -278,7 +279,7 @@ describe('a name in the URL', () => {
     );
     await waitFor(
       () =>
-        expect(note()).toHaveTextContent(
+        expect(readText(note())).toBe(
           "Opened from the name “q-maps”, one of this account's 3 names. Core matched “Q-Maps” (same letters, ignoring case and look-alikes)."
         ),
       T

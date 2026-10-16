@@ -15,6 +15,7 @@ import { getNameData, type NamesOf } from '../../../../data/explorer/account';
 import { useInView } from '../../../../hooks/useInView';
 import { useQuery, type UseQueryResult } from '../../../../hooks/useQuery';
 import { nameNotes } from '../../../../rules/explorer/nameNotes';
+import { NameAvatar } from '../../../../components/common/NameAvatar';
 import { NameText } from './NameText';
 import {
   NO_NAMES,
@@ -79,11 +80,12 @@ function NameRow({ name, address, primary }: { name: string; address: string; pr
       }}
     >
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
+        <NameAvatar name={name} size={32} />
         <Typography
           component="span"
           sx={{ fontWeight: 700, fontSize: 17, overflowWrap: 'anywhere', minWidth: 0 }}
         >
-          <NameText name={name} quoted={false} />
+          <NameText name={name} quoted={false} avatar={false} />
         </Typography>
         {primary ? (
           <ToneChip size="small" variant="outlined" label="Primary" sx={{ fontSize: 14 }} />

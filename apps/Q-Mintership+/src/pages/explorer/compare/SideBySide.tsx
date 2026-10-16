@@ -12,10 +12,10 @@ import { Section } from '../../../components/common/Section';
 import { PersonInline } from '../../../components/common/Person';
 import { useDisplayName } from '../../../hooks/useDisplayName';
 import type { Letter } from '../../../rules/explorer/compare';
-import { visibleName } from '../../../rules/explorer/nameNotes';
 import { LetterBadge } from './letters';
 import { FailedReads } from './parts';
 import { sameForAll, type SideCell, type SideRow } from './sideRows';
+import { NameWithAvatar } from '../../../components/explorer/NameWithAvatar';
 
 export interface SideColumn {
   address: string;
@@ -43,9 +43,7 @@ function Cell({ cell }: { cell: SideCell | undefined }) {
       {cell.account ? (
         <PersonInline address={cell.account} />
       ) : cell.name !== undefined ? (
-        <bdi dir="auto" style={{ fontWeight: 600 }}>
-          {visibleName(cell.name)}
-        </bdi>
+        <NameWithAvatar name={cell.name} />
       ) : (
         cell.text
       )}

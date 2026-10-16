@@ -22,6 +22,7 @@ import type { AdminActivity } from '../../../rules/activity';
 import { answerCore } from '../../../../e2e/world.mjs';
 import AccountPage from '../AccountPage';
 import { addPollVotes, addRecord } from './mintership/testWorld';
+import { readText } from '../../../test/readText';
 
 const T = { timeout: 6000 };
 const ROUTE = '/explorer/account/:who/:tab?';
@@ -129,7 +130,7 @@ describe('the Mintership tab', () => {
 
     const made = await region('In Q-Mintership+, under any of their names');
     expect(await within(made).findByText('Nominations made · 5', {}, T)).toBeVisible();
-    expect(within(made).getByText(/^Found under 1 of their 2 names:/)).toHaveTextContent(
+    expect(readText(within(made).getByText(/^Found under 1 of their 2 names:/))).toBe(
       'Found under 1 of their 2 names: Nora Nominator.'
     );
     const nominees = within(made).getByRole('list', { name: 'People they nominated' });
@@ -177,11 +178,11 @@ describe('the Mintership tab', () => {
       });
     });
     const made = await region('In Q-Mintership+, under any of their names');
-    expect(
-      await within(made).findByText(/^Found under 2 of their 2 names:/, {}, T)
-    ).toHaveTextContent('Found under 2 of their 2 names: Spare Room, Nora Nominator.');
+    expect(readText(await within(made).findByText(/^Found under 2 of their 2 names:/, {}, T))).toBe(
+      'Found under 2 of their 2 names: Spare Room, Nora Nominator.'
+    );
     const votes = within(made).getByRole('list', { name: 'Nominations they voted on' });
-    expect(within(votes).getByText(/^Voted No \(newest of 2 votes\)/)).toHaveTextContent(
+    expect(readText(within(votes).getByText(/^Voted No \(newest of 2 votes\)/))).toMatch(
       /under Spare Room$/
     );
     const comments = within(made).getByRole('list', { name: 'What they commented on' });

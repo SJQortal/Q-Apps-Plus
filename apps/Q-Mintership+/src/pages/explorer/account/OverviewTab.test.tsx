@@ -18,6 +18,7 @@ import { resetExplorerState } from '../../../state/explorer';
 import { formatDate } from '../../../utils/format';
 import AccountPage from '../AccountPage';
 import { monthYear } from './overview/overviewWords';
+import { readText } from '../../../test/readText';
 
 const T = { timeout: 4000 };
 const ROUTE = '/explorer/account/:who/:tab?';
@@ -215,8 +216,7 @@ describe('Overview: penalty, notes and a busy name list', () => {
       await within(notes).findByText(
         (_, el) =>
           el?.tagName === 'P' &&
-          el.textContent ===
-            `About its primary name “${odd}”: This name is written like an address.`,
+          readText(el) === `About its primary name “${odd}”: This name is written like an address.`,
         {},
         T
       )

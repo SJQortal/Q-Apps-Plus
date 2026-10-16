@@ -9,10 +9,10 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Link, Typography } from '@mui/material';
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
 import { ListCard } from '../../../history/parts/TimelineList';
-import { visibleName } from '../../../../rules/explorer/nameNotes';
 import { formatCount } from '../../../../utils/format';
 import { FOCUSABLE_ROW_SX, useShowMore } from '../names/useShowMore';
 import { alsoChecked, namesLead, NO_NAME_RECORDS } from './mintershipWords';
+import { NameWithAvatar } from '../../../../components/explorer/NameWithAvatar';
 
 /** Rows a list shows before "Show more". */
 export const SHOWN_STEP = 20;
@@ -49,12 +49,28 @@ export function AlsoChecked({ items }: { items: readonly string[] }) {
   return text ? <Note>{text}</Note> : null;
 }
 
-/** A name, isolated from the words around it. */
-export function IsolatedName({ name }: { name: string }) {
+/**
+ * A name, isolated from the words around it, with its own avatar. `label`
+ * instead shows a stand-in (a short address for someone with no name),
+ * isolated the same way but with no avatar: it isn't a name.
+ */
+export function IsolatedName({
+  name,
+  label,
+  suffix,
+}: {
+  name: string | null;
+  label?: string;
+  suffix?: string;
+}) {
+  if (name) return <NameWithAvatar name={name} suffix={suffix} />;
   return (
-    <bdi dir="auto" style={{ fontWeight: 600 }}>
-      {visibleName(name)}
-    </bdi>
+    <>
+      <bdi dir="auto" style={{ fontWeight: 600 }}>
+        {label ?? ''}
+      </bdi>
+      {suffix}
+    </>
   );
 }
 

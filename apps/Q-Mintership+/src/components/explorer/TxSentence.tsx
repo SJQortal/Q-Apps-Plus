@@ -13,12 +13,12 @@
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Link } from '@mui/material';
 import { PersonInline } from '../common/Person';
+import { NameWithAvatar } from './NameWithAvatar';
 import { getGroupName } from '../../data/explorer/account';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { useQuery } from '../../hooks/useQuery';
 import { explorerTxPath } from '../../routes/paths';
 import { groupWords, type TxPart } from '../../rules/explorer/txWords';
-import { visibleName } from '../../rules/explorer/nameNotes';
 
 export function GroupName({ groupId }: { groupId: number }) {
   const known = groupWords(groupId);
@@ -67,15 +67,7 @@ function Part({ part, plain }: { part: TxPart; plain: boolean }) {
         </Box>
       );
     case 'name':
-      return (
-        <>
-          “
-          <bdi dir="auto" style={{ fontWeight: 600 }}>
-            {visibleName(part.name)}
-          </bdi>
-          ”
-        </>
-      );
+      return <NameWithAvatar name={part.name} quoted />;
     case 'group':
       return <GroupName groupId={part.groupId} />;
     case 'tx':

@@ -27,6 +27,7 @@ import { explorerAccountPath } from '../../../routes/paths';
 import { queryLoadCounts } from '../../../data/query';
 import { comparePicksAtom, resetExplorerState } from '../../../state/explorer';
 import ConnectionsTab from './ConnectionsTab';
+import { readText } from '../../../test/readText';
 
 const T = { timeout: 5000 };
 
@@ -462,7 +463,9 @@ describe('Connections: minting and names', () => {
     const names = within(recorded).getByRole('list', { name: 'Names bought or sold' });
     await waitFor(
       () =>
-        expect(names).toHaveTextContent('Sold the name “Spare Room” to Nora Nominator for 5 QORT'),
+        expect(readText(names)).toContain(
+          'Sold the name “Spare Room” to Nora Nominator for 5 QORT'
+        ),
       T
     );
     const common = await region('In common');

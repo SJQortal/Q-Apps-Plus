@@ -21,6 +21,7 @@ import { resetExplorerState } from '../../../state/explorer';
 import { formatDate } from '../../../utils/format';
 import AccountPage from '../AccountPage';
 import { QdnPublished } from './names/QdnPublished';
+import { readText } from '../../../test/readText';
 
 const T = { timeout: 4000 };
 const ROUTE = '/explorer/account/:who/:tab?';
@@ -55,7 +56,7 @@ const region = (name: string | RegExp) => screen.findByRole('region', { name }, 
 const rowNames = (list: HTMLElement) =>
   within(list)
     .getAllByRole('listitem')
-    .map((row) => row.firstElementChild?.firstElementChild?.textContent ?? '');
+    .map((row) => row.querySelector('bdi')?.textContent ?? '');
 
 function noWrites(posts: string[]) {
   expect(posts).toEqual([]);
@@ -72,6 +73,11 @@ describe('Names: every name', () => {
     const list = await within(names).findByRole('list', { name: 'Its names' }, T);
     const first = rowNames(list);
     expect(first).toHaveLength(20);
+    // Each name with its own avatar beside it (its first letter until the image loads).
+    const avatars = within(list)
+      .getAllByRole('listitem')
+      .map((row) => row.querySelector('[aria-hidden="true"]')?.textContent);
+    expect(avatars.slice(0, 5)).toEqual(['C', 'C', 'C', 'C', 'Q']);
     expect(first.slice(0, 5)).toEqual([
       'Cora Collector',
       'Cora Shelf 01',
@@ -205,9 +211,7 @@ describe('Names: name history', () => {
     const rows = within(list).getAllByRole('listitem');
     expect(rows).toHaveLength(3);
     await waitFor(() =>
-      expect(rows[0]).toHaveTextContent(
-        /^Sold the name “Spare Room” to N?Nora Nominator for 5 QORT/
-      )
+      expect(readText(rows[0])).toMatch(/^Sold the name “Spare Room” to Nora Nominator for 5 QORT/)
     );
     expect(
       within(rows[0]).getByRole('link', { name: 'Nora Nominator: explore this account' })
@@ -215,8 +219,8 @@ describe('Names: name history', () => {
     expect(rows[0]).toHaveTextContent(
       `${formatDate(blockTime(2_351_000) - 20_000)} · block 2,351,000`
     );
-    expect(rows[1]).toHaveTextContent(/^Listed the name “Spare Room” for sale at 5 QORT/);
-    expect(rows[2]).toHaveTextContent(/^Registered the name “Spare Room”/);
+    expect(readText(rows[1])).toMatch(/^Listed the name “Spare Room” for sale at 5 QORT/);
+    expect(readText(rows[2])).toMatch(/^Registered the name “Spare Room”/);
     expect(within(history).getByText('3 name transactions.')).toBeInTheDocument();
     // One heavy read, of the five name types.
     expect(
@@ -230,8 +234,8 @@ describe('Names: name history', () => {
     const history = await region('Name history');
     const list = await within(history).findByRole('list', { name: 'Its name transactions' }, T);
     await waitFor(() =>
-      expect(within(list).getAllByRole('listitem')[0]).toHaveTextContent(
-        /^Bought the name “Spare Room” from L?Leo Learner for 5 QORT/
+      expect(readText(within(list).getAllByRole('listitem')[0])).toMatch(
+        /^Bought the name “Spare Room” from Leo Learner for 5 QORT/
       )
     );
   });
@@ -295,7 +299,7 @@ describe('Names: published on QDN', () => {
       within(qdn).getByText(
         (_, el) =>
           el?.tagName === 'P' &&
-          el.textContent ===
+          readText(el) ===
             '“Cora Shelf 23” has more than 100 resources: its newest 100 are counted.'
       )
     ).toBeInTheDocument();
@@ -303,11 +307,13 @@ describe('Names: published on QDN', () => {
     const newest = within(qdn).getByRole('list', { name: 'Newest resources' });
     const rows = within(newest).getAllByRole('listitem');
     expect(rows).toHaveLength(20);
-    expect(rows[0]).toHaveTextContent('A video (VIDEO)shelf-tour-2Under “Cora Shelf 25” · 45.8 MB');
-    expect(rows[2]).toHaveTextContent(
+    expect(readText(rows[0])).toContain(
+      'A video (VIDEO)shelf-tour-2Under “Cora Shelf 25” · 45.8 MB'
+    );
+    expect(readText(rows[2])).toMatch(
       /^JSON data \(JSON\)cora-prefsUnder “Cora Collector” · 310 bytes/
     );
-    expect(rows[4]).toHaveTextContent(/^An app \(APP\)defaultUnder “Cora Collector” · 2.3 MB/);
+    expect(readText(rows[4])).toMatch(/^An app \(APP\)defaultUnder “Cora Collector” · 2.3 MB/);
     expect(
       within(qdn).getByText('2 encrypted resources are counted above and not listed.')
     ).toBeInTheDocument();
