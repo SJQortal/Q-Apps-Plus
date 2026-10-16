@@ -286,6 +286,13 @@ describe('Person page', () => {
     expect(screen.queryByText('In MINTER since')).toBeNull();
   });
 
+  it('links to the account in the Explorer, for its links and transactions', async () => {
+    await visit(ADDR.nominator, 'learner');
+    expect(
+      await screen.findByRole('link', { name: 'Explore links and transactions' })
+    ).toHaveAttribute('href', `/explorer/account/${ADDR.nominator}`);
+  });
+
   it('says so for an address that never made a transaction', async () => {
     await visit(fakeAddress('never-used'), 'learner');
     expect(await screen.findByText('No activity on Qortal yet.')).toBeInTheDocument();
