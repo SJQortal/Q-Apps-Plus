@@ -78,8 +78,14 @@ describe('one transaction', () => {
     // In the sentence, among the people, and as the payer's field.
     const kit = await screen.findAllByRole('link', { name: 'Kit Kicked: explore this account' }, T);
     expect(kit[0]).toHaveAttribute('href', `/explorer/account/${ADDR.kicked}`);
-    expect(fact('Block')).toBe('1,364,500');
+    expect(fact('Block')).toBe('1,364,500Every transaction in this block');
+    expect(screen.getByRole('link', { name: 'Every transaction in this block' })).toHaveAttribute(
+      'href',
+      '/explorer/transactions?type=all&blocks=from-1364500&span=1&order=oldest'
+    );
     expect(fact('Fee')).toBe('0.01 QORT');
+    expect(fact('Signature')).toBe(`${sigs.kitLou[0]}Copy`);
+    expect(screen.getByRole('button', { name: 'Copy the signature' })).toBeVisible();
     expect(screen.queryByText('Group approval', { selector: 'dt' })).toBeNull();
     const people = screen.getByRole('list', { name: 'Accounts involved' });
     expect(within(people).getAllByRole('listitem')).toHaveLength(2);

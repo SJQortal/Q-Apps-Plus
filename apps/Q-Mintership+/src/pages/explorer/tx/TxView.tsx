@@ -1,17 +1,19 @@
 /**
  * One transaction on its own page: the sentence first (with links), then
- * the facts (block and time, or that it waits for a block; the fee; where
- * group approval stands, only when it needs one), the accounts involved,
+ * the facts (block and time, or that it waits for a block, with a link to
+ * every transaction in that block; the fee; where group approval stands,
+ * only when it needs one; its signature, with Copy), the accounts involved,
  * for a group approval the transaction it answers, the type's fields in
  * plain words, and its raw API response, collapsed (components/explorer/
  * RawJson.tsx; less what never shows: rules/explorer/rawTx.ts).
  */
 import { Link as RouterLink } from 'react-router-dom';
-import { Box, Button, Typography } from '@mui/material';
+import { Box, Button, Link, Typography } from '@mui/material';
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
 import { Card, Section } from '../../../components/common/Section';
 import { usePersonLinks } from '../../../components/common/personLinks';
 import { ErrorState, ListSkeleton } from '../../../components/common/states';
+import { CopyTextButton } from '../../../components/common/CopyTextButton';
 import { RawResponse } from '../../../components/explorer/RawJson';
 import { TxFields, TxPeople } from '../../../components/explorer/TxFields';
 import { TxSentence } from '../../../components/explorer/TxSentence';
@@ -20,15 +22,24 @@ import { MINTER_GROUP_ID } from '../../../data/constants';
 import { getTx } from '../../../data/explorer/account';
 import type { TxRow } from '../../../data/types';
 import { useQuery } from '../../../hooks/useQuery';
-import { decisionPath, explorerTxPath } from '../../../routes/paths';
+import { decisionPath, explorerBlockPath, explorerTxPath } from '../../../routes/paths';
 import { formatAmount } from '../../../rules/explorer/txWords';
 import { formatCount, formatDateTime, formatRelative } from '../../../utils/format';
 import { approvalWords, makerOf } from './txPageWords';
 import { FIELD_BLOCK_SX } from '../../../components/explorer/fieldBlock';
 
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+function Fact({
+  label,
+  children,
+  wide = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  /** Across the whole row (the signature). */
+  wide?: boolean;
+}) {
   return (
-    <Box sx={FIELD_BLOCK_SX}>
+    <Box sx={{ ...FIELD_BLOCK_SX, ...(wide ? { gridColumn: '1 / -1' } : {}) }}>
       <Typography component="dt" variant="body2" color="text.secondary">
         {label}
       </Typography>
@@ -55,7 +66,18 @@ function Facts({ tx }: { tx: TxRow }) {
         }}
       >
         <Fact label="Block">
-          {confirmed ? formatCount(tx.blockHeight as number) : 'Waiting to be confirmed'}
+          {confirmed ? (
+            <>
+              {formatCount(tx.blockHeight as number)}
+              <Box component="span" sx={{ display: 'block', fontWeight: 400 }}>
+                <Link component={RouterLink} to={explorerBlockPath(tx.blockHeight as number)}>
+                  Every transaction in this block
+                </Link>
+              </Box>
+            </>
+          ) : (
+            'Waiting to be confirmed'
+          )}
         </Fact>
         <Fact label={confirmed ? 'Time' : 'Sent'}>
           {formatDateTime(tx.timestamp)}{' '}
@@ -65,6 +87,24 @@ function Facts({ tx }: { tx: TxRow }) {
         </Fact>
         {tx.fee !== undefined ? <Fact label="Fee">{formatAmount(tx.fee)} QORT</Fact> : null}
         {approval ? <Fact label="Group approval">{approval}</Fact> : null}
+        <Fact label="Signature" wide>
+          <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box
+              component="span"
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                fontSize: 14,
+                fontWeight: 500,
+                wordBreak: 'break-all',
+              }}
+            >
+              {tx.signature}
+            </Box>
+            <CopyTextButton text={tx.signature} what="the signature" />
+          </Box>
+        </Fact>
       </Box>
     </Card>
   );

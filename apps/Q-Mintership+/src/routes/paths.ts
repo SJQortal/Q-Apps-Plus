@@ -100,6 +100,11 @@ export function explorerTransactionsPath(): string {
   return `${PATHS.explorer}/transactions`;
 }
 
+/** Transactions on Qortal at one block: every type, just that block, in the block's order. */
+export function explorerBlockPath(height: number): string {
+  return `${explorerTransactionsPath()}?type=all&blocks=from-${height}&span=1&order=oldest`;
+}
+
 /** `/explorer/sponsees/<address>`: the accounts a sponsor sponsored. */
 export function explorerSponseesPath(address: string): string {
   return `${PATHS.explorer}/sponsees/${encodeURIComponent(address)}`;
