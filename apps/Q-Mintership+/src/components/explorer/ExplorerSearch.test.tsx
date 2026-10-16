@@ -93,6 +93,15 @@ describe('ExplorerSearch: suggestions', () => {
     expect(posts).toEqual([]);
   });
 
+  it('clears the text with a full 44 px button', async () => {
+    const { field, user } = await show();
+    await user.type(field, 'nor');
+    const clear = screen.getByRole('button', { name: 'Clear' });
+    expect(clear).toHaveStyle({ width: '44px', height: '44px' });
+    await user.click(clear);
+    expect(field).toHaveValue('');
+  });
+
   it('asks for one more letter, and says when no names start with the text', async () => {
     const { field, user } = await show();
     await user.type(field, 'n');
