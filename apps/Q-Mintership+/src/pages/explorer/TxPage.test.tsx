@@ -83,7 +83,7 @@ describe('one transaction', () => {
     expect(screen.queryByText('Group approval', { selector: 'dt' })).toBeNull();
     const people = screen.getByRole('list', { name: 'Accounts involved' });
     expect(within(people).getAllByRole('listitem')).toHaveLength(2);
-    expect(within(people).getByText('Signed')).toBeInTheDocument();
+    expect(within(people).getByText('Creator')).toBeInTheDocument();
     const details = screen.getByRole('region', { name: 'Details' });
     expect(within(details).getByText('Amount', { selector: 'dt' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy a link to this transaction' })).toBeVisible();
