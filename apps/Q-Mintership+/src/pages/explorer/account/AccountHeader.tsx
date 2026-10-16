@@ -1,6 +1,6 @@
 /**
  * The top of an account page, on every tab (its name is the page title):
- * the avatar, its level, the short address with copy, at most three chips
+ * the avatar, its level, the whole address with copy, at most three chips
  * (where it stands in MINTER, minting now, a minting penalty), and a note
  * when it was opened by a name that isn't its primary one. On phones the
  * title is cut short beside the header's buttons, so the whole name is
@@ -80,9 +80,10 @@ export function AccountHeader({
               </li>
             ))}
           </Box>
-          <AddressText address={address} />
         </Box>
       </Box>
+      {/* The whole address on a line of its own, so a phone has room for it. */}
+      <AddressText address={address} full />
       {primary ? (
         <Typography
           sx={{ display: { xs: 'block', sm: 'none' }, fontWeight: 700, overflowWrap: 'anywhere' }}

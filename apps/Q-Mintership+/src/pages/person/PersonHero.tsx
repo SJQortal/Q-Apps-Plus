@@ -156,9 +156,10 @@ export function PersonHero({
           >
             {shownName ?? 'No registered name'}
           </Typography>
-          <AddressText address={address} full={!phone} />
         </Box>
       </Box>
+      {/* The whole address on a line of its own, so a phone has room for it. */}
+      <AddressText address={address} full />
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
         <LevelBadge level={person.level} />

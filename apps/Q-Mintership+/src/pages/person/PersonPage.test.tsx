@@ -61,6 +61,33 @@ describe('Person page', () => {
     expect(qortalCalls.filter((c) => WRITES.test(String(c.action)))).toEqual([]);
   });
 
+  it('shows the whole address, on a phone too', async () => {
+    const original = window.matchMedia;
+    // A phone: MUI's down('sm') query matches.
+    window.matchMedia = ((query: string) => ({
+      matches: /max-width:\s*599/.test(query),
+      media: query,
+      onchange: null,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+    try {
+      await visit(ADDR.nominatedSigning, 'admin');
+      expect(
+        await screen.findByRole('heading', {
+          level: 2,
+          name: PEOPLE.nominatedSigning.name as string,
+        })
+      ).toBeInTheDocument();
+      expect(screen.getByText(ADDR.nominatedSigning)).toBeInTheDocument();
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
   it('gives a nominee their next step on their own page (the link a nominator sends)', async () => {
     await visit(ADDR.nominatedWaiting, 'nominatedWaiting');
     const nomination = await section('Nomination');
@@ -272,9 +299,10 @@ describe('Person page', () => {
       )
     ).toBeInTheDocument();
     expect(within(proposals).getByText(PEOPLE.early.name as string)).toBeInTheDocument();
-    expect(
-      within(proposals).getByRole('link', { name: 'Approvals and activity' })
-    ).toHaveAttribute('href', '/activity');
+    expect(within(proposals).getByRole('link', { name: 'Approvals and activity' })).toHaveAttribute(
+      'href',
+      '/activity'
+    );
   });
 
   it('shows a level 5+ member (no join on record, so no start date)', async () => {

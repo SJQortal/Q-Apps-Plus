@@ -146,6 +146,8 @@ describe('an account in the Explorer', () => {
     expect(await within(about).findByText('MINTER member', {}, T)).toBeInTheDocument();
     expect(await within(about).findByText('Minting now', {}, T)).toBeInTheDocument();
     expect(within(about).queryByText('Minting penalty')).toBeNull();
+    // The whole address, not a shortened one.
+    expect(screen.getByText(ADDR.nominator)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy address' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy a link to this account' })).toBeInTheDocument();
