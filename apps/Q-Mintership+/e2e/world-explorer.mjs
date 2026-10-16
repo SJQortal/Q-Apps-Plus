@@ -734,9 +734,20 @@ export function answerExplorer(world, p, sp) {
     const key = m[1];
     const creator = [...world.accounts.values()].find((a) => a.publicKey === key)?.address;
     if (!creator) return json([]);
-    const rows = [...groupTxs(world), ...x.rows]
+    const all = [...groupTxs(world), ...x.rows];
+    // On a node every reference is a real transaction; the mock's made-up ones
+    // aren't, so a row whose reference nothing here has comes without one
+    // (the app then asks for the first payment received, as it would anyway).
+    const known = new Set(all.map((t) => t.signature));
+    const rows = all
       .filter((t) => t.creatorAddress === creator && typeof t.blockHeight === 'number')
-      .sort((a, b) => a.blockHeight - b.blockHeight);
+      .sort((a, b) => a.blockHeight - b.blockHeight)
+      .map((t) => {
+        if (!t.reference || known.has(t.reference)) return t;
+        const { reference: _unknown, ...rest } = t;
+        void _unknown;
+        return rest;
+      });
     return json(page(rows, sp));
   }
   if (p === '/transactions/search') {
