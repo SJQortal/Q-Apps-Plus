@@ -1,7 +1,7 @@
 /**
  * A transaction's raw API response, easy to read: Core's JSON in its own
  * layout, keys, strings, numbers and true/false/null each in a colour of
- * the theme (shaded to read at 4.5:1, utils/readable.ts), every other line
+ * the theme (shaded to read at 4.5:1 on the box and on its stripes), every other line
  * faintly striped, and a long value wrapping under itself rather than back
  * to the edge, one line per box (so a selection copies as lines). "Copy"
  * copies the text exactly as JSON.stringify lays it out. A response taller
@@ -15,7 +15,15 @@
  */
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Box, Button, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import {
+  alpha,
+  darken,
+  decomposeColor,
+  getContrastRatio,
+  lighten,
+  recomposeColor,
+  type Theme,
+} from '@mui/material/styles';
 import CheckOutlinedIcon from '@mui/icons-material/CheckOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import type { TxRow } from '../../data/types';
@@ -27,6 +35,31 @@ import { copyText } from '../../utils/links';
 import { readableTone } from '../../utils/readable';
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
+/** Every other line's tint (of the text colour over the box). */
+const STRIPE = 0.04;
+
+/** The box's striped lines: the text colour at STRIPE over the box's own background. */
+function stripeOf(theme: Theme): string {
+  const bg = decomposeColor(theme.palette.background.default).values;
+  const fg = decomposeColor(theme.palette.text.primary).values;
+  const mix = [0, 1, 2].map((i) => Math.round(bg[i] * (1 - STRIPE) + fg[i] * STRIPE));
+  return recomposeColor({ type: 'rgb', values: [mix[0], mix[1], mix[2]] });
+}
+
+/**
+ * A tone readable on the theme's surfaces (utils/readable.ts) and on the
+ * striped lines too, shaded a little further when a stripe needs it.
+ */
+function lineTone(theme: Theme, tone: 'primary' | 'success' | 'warning' | 'error'): string {
+  const base = readableTone(theme, tone);
+  const stripe = stripeOf(theme);
+  const shift = theme.palette.mode === 'dark' ? lighten : darken;
+  for (let step = 0; step <= 10; step++) {
+    const colour = step === 0 ? base : shift(base, step / 20);
+    if (getContrastRatio(colour, stripe) >= 4.6) return colour;
+  }
+  return theme.palette.text.primary;
+}
 
 export function RawJson({ value, label }: { value: unknown; label: string }) {
   const lines = useMemo(() => jsonLines(value), [value]);
@@ -87,13 +120,13 @@ export function RawJson({ value, label }: { value: unknown; label: string }) {
             outlineOffset: 2,
           },
           '& > span': { display: 'flex', px: 1.5, minWidth: 0 },
-          '& > span:nth-of-type(even)': { bgcolor: alpha(theme.palette.text.primary, 0.04) },
+          '& > span:nth-of-type(even)': { bgcolor: alpha(theme.palette.text.primary, STRIPE) },
           '& [data-i]': { flexShrink: 0 },
           '& [data-v]': { minWidth: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' },
-          '& [data-k="key"]': { color: readableTone(theme, 'primary') },
-          '& [data-k="string"]': { color: readableTone(theme, 'success') },
-          '& [data-k="number"]': { color: readableTone(theme, 'warning') },
-          '& [data-k="boolean"], & [data-k="null"]': { color: readableTone(theme, 'error') },
+          '& [data-k="key"]': { color: lineTone(theme, 'primary') },
+          '& [data-k="string"]': { color: lineTone(theme, 'success') },
+          '& [data-k="number"]': { color: lineTone(theme, 'warning') },
+          '& [data-k="boolean"], & [data-k="null"]': { color: lineTone(theme, 'error') },
         })}
       >
         {lines.map((line, i) => (
