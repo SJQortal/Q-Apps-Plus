@@ -148,10 +148,28 @@ describe('Transactions on Qortal', () => {
         T
       )
     ).toBeVisible();
-    // Every type at once: no txType, still 20 rows in a block range.
+    // Every type at once: every type offered (never messages), still 20 rows in a block range.
     await user.selectOptions(screen.getByRole('combobox', { name: 'Type' }), 'all');
-    await waitFor(() => expect(searches().some((p) => !p.has('txType'))).toBe(true));
+    await waitFor(() =>
+      expect(searches().some((p) => p.getAll('txType').includes('PAYMENT'))).toBe(true)
+    );
+    const all = searches().find((p) => p.getAll('txType').length > 30)!;
+    expect(all.getAll('txType')).not.toContain('MESSAGE');
+    expect(all.getAll('txType')).not.toContain('CHAT');
     everySearchBounded();
+  });
+
+  it('offers no chain-wide list of messages', async () => {
+    await open('?type=messages');
+    await results();
+    const type = screen.getByRole('combobox', { name: 'Type' });
+    // A link asking for messages opens the default (Payments).
+    expect(type).toHaveValue('payments');
+    const offered = [...type.querySelectorAll('option')].map((o) => o.getAttribute('value'));
+    expect(offered).not.toContain('messages');
+    expect(offered).not.toContain('MESSAGE');
+    expect(offered).not.toContain('CHAT');
+    expect(searches().every((p) => !p.getAll('txType').includes('MESSAGE'))).toBe(true);
   });
 
   it('searches 10,000 blocks from a block typed in, and checks what is typed', async () => {

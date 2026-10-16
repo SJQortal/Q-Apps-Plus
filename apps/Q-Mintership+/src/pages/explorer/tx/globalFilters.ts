@@ -24,11 +24,18 @@ export type GlobalType = string;
 export const DEFAULT_TYPE: GlobalType = 'payments';
 export const DEFAULT_BLOCKS: BlocksChoice = { kind: 'latest', blocks: 1000 };
 
-const EXACT: ReadonlySet<string> = new Set(ALL_TX_TYPES);
+/**
+ * Messages aren't offered here: an account's own Transactions tab lists the
+ * ones it took part in (never their content), but a chain-wide feed of who
+ * messages whom is more than an explorer of accounts needs.
+ */
+const NOT_OFFERED: ReadonlySet<string> = new Set(['messages', ...typesFor('messages')]);
+
+const EXACT: ReadonlySet<string> = new Set(ALL_TX_TYPES.filter((type) => !NOT_OFFERED.has(type)));
 
 /** `?type=`: a family key or an exact type, else Payments. */
 export function parseTypeParam(value: string | null): GlobalType {
-  if (value && (isTxFamilyKey(value) || EXACT.has(value))) return value;
+  if (value && !NOT_OFFERED.has(value) && (isTxFamilyKey(value) || EXACT.has(value))) return value;
   return DEFAULT_TYPE;
 }
 
@@ -37,8 +44,9 @@ export function typeParam(type: GlobalType): string | null {
   return type === DEFAULT_TYPE ? null : type;
 }
 
-/** The types to ask Core for: none for All. */
+/** The types to ask Core for; All is every type that is offered (not messages). */
 export function typesOfChoice(type: GlobalType): readonly string[] {
+  if (type === 'all') return [...EXACT];
   return isTxFamilyKey(type) ? typesFor(type) : [type];
 }
 
@@ -74,15 +82,15 @@ export interface TypeGroup {
   options: Array<{ value: GlobalType; label: string }>;
 }
 
-export const TYPE_GROUPS: readonly TypeGroup[] = TX_FAMILIES.filter((f) => f.key !== 'all').map(
-  (family) => ({
-    label: family.label,
-    options: [
-      { value: family.key, label: `${family.label} (every type)` },
-      ...family.types.map((type) => ({ value: type, label: txTypeLabel(type) })),
-    ],
-  })
-);
+export const TYPE_GROUPS: readonly TypeGroup[] = TX_FAMILIES.filter(
+  (f) => f.key !== 'all' && !NOT_OFFERED.has(f.key)
+).map((family) => ({
+  label: family.label,
+  options: [
+    { value: family.key, label: `${family.label} (every type)` },
+    ...family.types.map((type) => ({ value: type, label: txTypeLabel(type) })),
+  ],
+}));
 
 /** "blocks 2,756,501–2,757,500", or "block 2,757,500". */
 export function rangeWords(range: BlockRange): string {
