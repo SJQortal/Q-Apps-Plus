@@ -3,7 +3,9 @@
  * the accounts explored on this device, the accounts picked to compare,
  * quick starts from reads the app shares with its other pages (your
  * account, open nominations, Minter Admins, members who joined lately),
- * Transactions on Qortal, and how to read the Explorer.
+ * Transactions on Qortal, how to read the Explorer, and the Explorer Quiz
+ * (a question about the chain at the bottom of the screen, answered by
+ * exploring: components/explorer/quiz/).
  *
  * Read-only, like every Explorer page: nothing here sends anything. Lists
  * that cost a read load only once they near the screen, and nothing polls.
@@ -22,6 +24,7 @@ import {
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import QuizOutlinedIcon from '@mui/icons-material/QuizOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody } from '../../components/layout/PageBody';
@@ -526,7 +529,7 @@ export default function ExplorerPage() {
         <Section title="The whole chain" id="explorer-chain">
           <TransactionsCard />
         </Section>
-        <Box>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
           <Button
             variant="outlined"
             startIcon={<InfoOutlinedIcon />}
@@ -534,6 +537,18 @@ export default function ExplorerPage() {
             sx={{ minHeight: 44 }}
           >
             How to read the Explorer
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<QuizOutlinedIcon />}
+            onClick={() =>
+              void import('../../components/explorer/quiz/quizActions').then((quiz) =>
+                quiz.startQuiz()
+              )
+            }
+            sx={{ minHeight: 44 }}
+          >
+            Explorer Quiz
           </Button>
         </Box>
       </PageBody>

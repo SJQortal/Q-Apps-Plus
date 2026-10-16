@@ -111,6 +111,54 @@ const wait = (selector) => async (page) =>
   page.waitForSelector(selector, { timeout: 8000 }).catch(() => {});
 const settle = wait('main h1');
 /** An Explorer page: its title, then its reads (skeletons gone, network quiet). */
+/** The Explorer Quiz with one question open (and, `status` right, answered), kept on the device. */
+const quizState = (status) => ({
+  v: 1,
+  on: true,
+  folded: false,
+  question: {
+    v: 1,
+    key: 'screens:sponsor',
+    template: 'sponsor',
+    level: 'medium',
+    tip: TIP,
+    parts: [
+      { kind: 'text', text: 'Who sponsored ' },
+      { kind: 'account', address: ADDR.learner, name: 'Leo Learner' },
+      { kind: 'text', text: '? If more than one account did, the one Core counts.' },
+    ],
+    answer: { kind: 'account', address: SPONSOR.address, name: SPONSOR.name },
+    placeholder: 'A name or an address',
+    hint: 'Sponsors are in Connections, under Reward shares.',
+    how: 'Connections → Reward shares: “Sponsored by …”. When several accounts sponsored it, the one Core counts is marked “the sponsor Core counts”.',
+    link: `/explorer/account/${ADDR.learner}/connections`,
+    linkLabel: 'Open its Connections',
+  },
+  status,
+  misses: 1,
+  hinted: status === 'asking',
+  level: null,
+  score: {
+    asked: 4,
+    right: status === 'right' ? 3 : 2,
+    streak: status === 'right' ? 2 : 0,
+    best: 3,
+  },
+  asked: ['screens:sponsor'],
+});
+const withQuiz = (status) => async (page) => {
+  await page.addInitScript(
+    ([key, value]) => window.localStorage.setItem(key, value),
+    ['qmintershipplus-explorer-quiz', JSON.stringify(quizState(status))]
+  );
+  await page.reload({ waitUntil: 'load' });
+  await explorerSettle(page);
+  await page
+    .getByRole('region', { name: 'Explorer Quiz' })
+    .waitFor({ timeout: 8000 })
+    .catch(() => {});
+};
+
 const explorerSettle = async (page) => {
   await settle(page);
   await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
@@ -842,6 +890,13 @@ export default {
           // In the page (its avatars sit absolutely, so the list itself has no size).
           .waitFor({ state: 'attached', timeout: 8000 });
       },
+    },
+    // The Explorer Quiz: a question open at the bottom, its hint shown; then answered.
+    { key: 'explorer-quiz', path: '/explorer?as=admin', after: withQuiz('asking') },
+    {
+      key: 'explorer-quiz-answered',
+      path: `/explorer/account/${ADDR.learner}/connections?as=admin`,
+      after: withQuiz('right'),
     },
     {
       key: 'explorer-transactions',

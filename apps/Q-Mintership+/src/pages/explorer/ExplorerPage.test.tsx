@@ -12,7 +12,26 @@ import { expectNoAxeViolations } from '../../test/axe';
 import { mockFetchRoute, qortalCalls } from '../../test/setup';
 import { ADDR } from '../../test/world';
 import { addPick, RECENT_KEY, recordRecent, resetExplorerState } from '../../state/explorer';
+import { getQuiz, resetQuiz } from '../../state/explorerQuiz';
 import ExplorerPage from './ExplorerPage';
+
+// The quiz's question, made without reading the chain (its templates have tests of their own).
+vi.mock('../../data/explorer/quiz/generators', () => ({
+  makeQuestion: vi.fn(async () => ({
+    v: 1,
+    key: 'test:level',
+    template: 'level',
+    level: 'easy',
+    tip: 1,
+    parts: [{ kind: 'text', text: 'What level is Leo Learner at?' }],
+    answer: { kind: 'number', value: '2' },
+    placeholder: 'A number',
+    hint: '',
+    how: '',
+    link: '/explorer',
+    linkLabel: '',
+  })),
+}));
 
 const T = { timeout: 4000 };
 const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH|VOTE|POLL/;
@@ -44,7 +63,10 @@ async function show(persona = 'learner') {
 
 const at = () => screen.getByTestId('at').textContent ?? '';
 
-beforeEach(() => resetExplorerState());
+beforeEach(() => {
+  resetExplorerState();
+  resetQuiz();
+});
 afterEach(() => vi.useRealTimers());
 
 describe('the Explorer’s landing page', () => {
@@ -191,5 +213,20 @@ describe('the Explorer’s landing page', () => {
     for (const tab of ['Overview', 'Connections', 'Transactions', 'Mintership', 'Names'])
       expect(within(dialog).getByText(tab)).toBeInTheDocument();
     await expectNoAxeViolations(dialog);
+  });
+
+  it('starts the Explorer Quiz beside How to read the Explorer', async () => {
+    const { user } = await show();
+    const quiz = screen.getByRole('button', { name: 'Explorer Quiz' });
+    expect(quiz.previousElementSibling).toHaveTextContent('How to read the Explorer');
+    expect(getQuiz().on).toBe(false);
+    await user.click(quiz);
+    await waitFor(() => expect(getQuiz().question?.key).toBe('test:level'), T);
+    expect(getQuiz()).toMatchObject({ on: true, status: 'asking', score: { asked: 1 } });
+    // Pressed again with a question open: the same question, no new one.
+    await user.click(quiz);
+    expect(getQuiz().score.asked).toBe(1);
+    // Nothing sent: the quiz only reads.
+    expect(qortalCalls.filter((c) => c.action !== 'GET_USER_ACCOUNT')).toEqual([]);
   });
 });

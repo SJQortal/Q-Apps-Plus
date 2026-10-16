@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { styled } from '@mui/material/styles';
@@ -15,6 +15,8 @@ import { useSettleConfirmingWrites } from '../../hooks/useSettleConfirmingWrites
 import { notifyHubDisplayedPath } from '../../routes/hubLocation';
 import { useLegacyRouteRedirect } from '../../routes/useLegacyRouteRedirect';
 import { useSession, useStartSession } from '../../state/session';
+import { useQuiz } from '../../state/explorerQuiz';
+import { PATHS } from '../../routes/paths';
 import { signerState } from '../../rules/tally';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 import { ListSkeleton } from '../common/states';
@@ -22,6 +24,9 @@ import { BottomNav, BOTTOM_NAV_HEIGHT } from './BottomNav';
 import { NavRail } from './NavRail';
 import { useDecisionsInNav } from './useDecisionsInNav';
 import { isBottomBarLayout, isBottomNavShown, useFrameFacts } from './useBottomNav';
+
+/** The Explorer Quiz's bar, loaded only while the quiz is on. */
+const QuizDock = lazy(() => import('../explorer/quiz/QuizDock'));
 
 const Frame = styled('div')(({ theme }) => ({
   display: 'flex',
@@ -72,6 +77,8 @@ export function AppShell() {
   // Admins always; everyone else while a proposal they may vote on is open.
   const withDecisions = useDecisionsInNav() ?? isAdmin;
   const historyBadge = useHistoryNews(isAdmin, session.status === 'ready' ? session.address : null);
+  const quizOn = useQuiz().on;
+  const onExplorer = pathname === PATHS.explorer || pathname.startsWith(`${PATHS.explorer}/`);
 
   useStartSession();
   useHubMessages();
@@ -105,6 +112,14 @@ export function AppShell() {
             <Outlet />
           </Suspense>
         </ErrorBoundary>
+        {/* On every Explorer page while the quiz is on, at the bottom of the screen. */}
+        {quizOn && onExplorer ? (
+          <ErrorBoundary resetKey="explorer-quiz">
+            <Suspense fallback={null}>
+              <QuizDock />
+            </Suspense>
+          </ErrorBoundary>
+        ) : null}
       </Main>
       {navShown ? (
         <BottomNav
