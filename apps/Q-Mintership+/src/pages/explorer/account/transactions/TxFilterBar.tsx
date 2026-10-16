@@ -154,7 +154,8 @@ export function TxFilterBar({
             size="small"
             value={filters.type ?? ''}
             onChange={(e) => onChange({ ...filters, type: e.target.value || null })}
-            slotProps={{ select: { native: true } }}
+            // Its first choice is the empty value: the label stays up.
+            slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
             sx={FIELD_SX}
           >
             <option value="">Every type</option>
@@ -172,7 +173,7 @@ export function TxFilterBar({
             size="small"
             value={filters.name ?? ''}
             onChange={(e) => onChange({ ...filters, name: e.target.value || null })}
-            slotProps={{ select: { native: true } }}
+            slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
             sx={FIELD_SX}
           >
             <option value="">Any name</option>

@@ -491,5 +491,8 @@ describe('an account’s transactions, filtered', () => {
     ).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Clear filters' }));
     expect(where().toString()).toBe('');
+    // "Any name" is the empty value: the label stays above it, not on it.
+    expect(select('Name')).toHaveValue('');
+    expect(document.querySelector('label[data-shrink="false"]')).toBeNull();
   });
 });
