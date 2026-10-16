@@ -4,13 +4,14 @@
  * an account's records were found under (each isolated), a row that opens
  * an item, and the "Also checked, nothing found" line.
  */
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Link, Typography } from '@mui/material';
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
 import { ListCard } from '../../../history/parts/TimelineList';
 import { visibleName } from '../../../../rules/explorer/nameNotes';
 import { formatCount } from '../../../../utils/format';
+import { FOCUSABLE_ROW_SX, useShowMore } from '../names/useShowMore';
 import { alsoChecked, namesLead, NO_NAME_RECORDS } from './mintershipWords';
 
 /** Rows a list shows before "Show more". */
@@ -84,8 +85,9 @@ export function NamesFound({
 }
 
 /**
- * A list shown 20 rows at a time, with "Show more" (and how many are left).
- * `render` draws one row (an `li`'s content).
+ * A list shown 20 rows at a time, with "Show more" (and how many are left);
+ * the focus goes to the first row it adds. `render` draws one row (an
+ * `li`'s content).
  */
 export function SteppedList<T>({
   items,
@@ -101,12 +103,13 @@ export function SteppedList<T>({
   /** Rows in one bordered card (default), or as separate cards. */
   card?: boolean;
 }) {
-  const [shown, setShown] = useState(SHOWN_STEP);
+  const { shown, showMore, listRef } = useShowMore(SHOWN_STEP);
   const visible = items.slice(0, shown);
   const left = items.length - visible.length;
   const list = (
     <Box
       component="ul"
+      ref={listRef}
       aria-label={label}
       sx={{
         listStyle: 'none',
@@ -122,7 +125,11 @@ export function SteppedList<T>({
         <Box
           component="li"
           key={keyOf(item)}
-          sx={card ? { px: { xs: 1.5, sm: 2 }, py: 0.75, minWidth: 0 } : { minWidth: 0 }}
+          tabIndex={-1}
+          sx={[
+            card ? { px: { xs: 1.5, sm: 2 }, py: 0.75, minWidth: 0 } : { minWidth: 0 },
+            FOCUSABLE_ROW_SX,
+          ]}
         >
           {render(item)}
         </Box>
@@ -134,11 +141,7 @@ export function SteppedList<T>({
       {card ? <ListCard>{list}</ListCard> : list}
       {left > 0 ? (
         <Box>
-          <Button
-            variant="outlined"
-            onClick={() => setShown((n) => n + SHOWN_STEP)}
-            sx={{ minHeight: 44 }}
-          >
+          <Button variant="outlined" onClick={showMore} sx={{ minHeight: 44 }}>
             Show {formatCount(Math.min(left, SHOWN_STEP))} more of {formatCount(left)}
           </Button>
         </Box>

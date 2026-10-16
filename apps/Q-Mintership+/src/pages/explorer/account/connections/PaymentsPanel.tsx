@@ -35,6 +35,7 @@ import {
   type FlowSort,
 } from '../../../../rules/explorer/money';
 import { formatCount, plural } from '../../../../utils/format';
+import { useFocusNewRows } from '../names/useShowMore';
 import { ConnectionRow, ROW_LIST_SX } from './ConnectionRow';
 import { blocksLine } from './words';
 import { usePayerBands, type MinterMarks } from './hooks';
@@ -95,6 +96,7 @@ export function PaymentsPanel({
   const [sort, setSort] = useState<FlowSort>('count');
   const [membersOnly, setMembersOnly] = useState(false);
   const [limit, setLimit] = useState(PAGE_ROWS);
+  const peopleFocus = useFocusNewRows();
   const [busyOpen, setBusyOpen] = useState(false);
   const [older, setOlder] = useState<'idle' | 'loading' | 'failed'>('idle');
   const [said, setSaid] = useState('');
@@ -226,6 +228,7 @@ export function PaymentsPanel({
         <>
           <Box
             component="ul"
+            ref={peopleFocus.listRef}
             aria-label={direction === 'sent' ? 'Sent to' : 'Received from'}
             sx={ROW_LIST_SX}
           >
@@ -275,7 +278,10 @@ export function PaymentsPanel({
           ) : null}
           {people.length > visible.length ? (
             <Button
-              onClick={() => setLimit((value) => value + PAGE_ROWS)}
+              onClick={() => {
+                peopleFocus.focusFrom(shown.length);
+                setLimit((value) => value + PAGE_ROWS);
+              }}
               sx={{ alignSelf: 'flex-start', minHeight: 44 }}
             >
               Show more ({formatCount(people.length - visible.length)} more)

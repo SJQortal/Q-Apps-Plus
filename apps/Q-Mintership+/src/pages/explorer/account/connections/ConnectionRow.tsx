@@ -26,6 +26,7 @@ import { explorerAccountPath, explorerComparePath, explorerTxPath } from '../../
 import { describeTx, type TxPart } from '../../../../rules/explorer/txWords';
 import { addPick } from '../../../../state/explorer';
 import { formatCount, formatDate, shortAddress } from '../../../../utils/format';
+import { FOCUSABLE_ROW_SX, useFocusNewRows } from '../names/useShowMore';
 
 /** Evidence lines shown before "Show all". */
 const EVIDENCE_ROWS = 20;
@@ -51,7 +52,7 @@ function EvidenceLine({
   const words = describeTx(tx, { viewpoint, privsRecipient });
   const height = tx.blockHeight;
   return (
-    <Box component="li" sx={{ minWidth: 0 }}>
+    <Box component="li" tabIndex={-1} sx={{ minWidth: 0, ...FOCUSABLE_ROW_SX }}>
       {/* A div: the people in the sentence are chips. */}
       <Typography component="div" variant="body2" sx={{ overflowWrap: 'anywhere' }}>
         <TxSentence parts={words.parts} />
@@ -89,6 +90,7 @@ export function EvidenceList({
   privs?: Readonly<Record<string, string | null>>;
 }) {
   const [all, setAll] = useState(false);
+  const { listRef, focusFrom } = useFocusNewRows();
   const shown = all ? txs : txs.slice(0, EVIDENCE_ROWS);
   return (
     <Box
@@ -102,7 +104,7 @@ export function EvidenceList({
         borderColor: 'divider',
       }}
     >
-      <Box component="ul" sx={{ ...ROW_LIST_SX, gap: 0.5 }}>
+      <Box component="ul" ref={listRef} sx={{ ...ROW_LIST_SX, gap: 0.5 }}>
         {shown.map((tx) => (
           <EvidenceLine
             key={tx.signature}
@@ -113,7 +115,13 @@ export function EvidenceList({
         ))}
       </Box>
       {txs.length > shown.length ? (
-        <Button onClick={() => setAll(true)} sx={{ alignSelf: 'flex-start', minHeight: 44 }}>
+        <Button
+          onClick={() => {
+            focusFrom(EVIDENCE_ROWS);
+            setAll(true);
+          }}
+          sx={{ alignSelf: 'flex-start', minHeight: 44 }}
+        >
           Show all {formatCount(txs.length)}
         </Button>
       ) : null}
@@ -220,7 +228,7 @@ export function ConnectionRow({
   const shownTags = (tags ?? []).filter((tag): tag is string => Boolean(tag));
   const secondary = shownTags.length ? shownTags.join(' · ') : undefined;
   return (
-    <Box component="li" sx={{ minWidth: 0 }}>
+    <Box component="li" tabIndex={-1} sx={{ minWidth: 0, ...FOCUSABLE_ROW_SX }}>
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 0 }}>
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
           {isAt ? (

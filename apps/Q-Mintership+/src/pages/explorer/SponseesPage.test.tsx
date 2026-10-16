@@ -113,7 +113,7 @@ describe('the accounts a sponsor sponsored', () => {
     const { user } = await open(SPONSOR.address, (world) =>
       // Slow transaction reads, so the check is still running when Stop is pressed.
       mockFetchRoute('/transactions/', async (url: URL) => {
-        await new Promise((r) => setTimeout(r, 60));
+        await new Promise((r) => setTimeout(r, 250));
         const answer = answerCore(world, url.pathname, url.searchParams);
         if (!answer) throw new Error(`no mock for ${url.pathname}`);
         return new Response(answer.text !== undefined ? answer.text : JSON.stringify(answer.body), {

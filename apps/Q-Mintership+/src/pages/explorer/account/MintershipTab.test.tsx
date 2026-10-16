@@ -189,7 +189,15 @@ describe('the Mintership tab', () => {
     expect(
       within(admin).getByRole('group', { name: 'Their proposals, newest first' })
     ).toBeVisible();
-    expect(within(admin).getByRole('button', { name: 'Show all 13' })).toBeVisible();
+    // One button that stays, so the focus stays on it.
+    const all = within(admin).getByRole('button', { name: 'Show all 13' });
+    expect(all).toHaveAttribute('aria-expanded', 'false');
+    await user.click(all);
+    expect(all).toHaveAccessibleName('Show fewer');
+    expect(all).toHaveAttribute('aria-expanded', 'true');
+    expect(all).toHaveFocus();
+    await user.click(all);
+    expect(all).toHaveAccessibleName('Show all 13');
     expect(
       within(admin).getByText(
         "From Activity's last 30 days. Participation 80%: 12 of 15 decisions answered (11 approved, 1 rejected), 3 missed."
@@ -231,6 +239,8 @@ describe('the Mintership tab', () => {
     expect(within(admin).queryByRole('button', { name: /^Load/ })).toBeNull();
     await user.click(within(admin).getByRole('button', { name: 'Show 20 more of 32' }));
     expect(within(answers).getAllByRole('listitem')).toHaveLength(40);
+    // The first answer it added takes the focus.
+    expect(within(answers).getAllByRole('listitem')[20]).toHaveFocus();
 
     await expectNoAxeViolations(container);
     expect(queryLoadCounts().activity).toBeUndefined();

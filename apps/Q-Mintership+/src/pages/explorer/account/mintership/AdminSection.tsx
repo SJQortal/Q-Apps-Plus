@@ -96,10 +96,16 @@ export function AdminSection({
             nowMs={nowMs}
             label="Their proposals, newest first"
           />
-          {proposals.length > shown.length ? (
+          {proposals.length > FIRST ? (
             <Box>
-              <Button variant="outlined" onClick={() => setAll(true)} sx={{ minHeight: 44 }}>
-                Show all {proposals.length}
+              {/* One button that stays: the focus stays on it. */}
+              <Button
+                variant="outlined"
+                onClick={() => setAll((open) => !open)}
+                aria-expanded={all}
+                sx={{ minHeight: 44 }}
+              >
+                {all ? 'Show fewer' : `Show all ${proposals.length}`}
               </Button>
             </Box>
           ) : null}

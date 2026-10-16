@@ -17,6 +17,7 @@ import { useDisplayName } from '../../../hooks/useDisplayName';
 import { useInView } from '../../../hooks/useInView';
 import { useQuery } from '../../../hooks/useQuery';
 import { formatCount, formatDate, plural } from '../../../utils/format';
+import { FOCUSABLE_ROW_SX } from '../account/names/useShowMore';
 
 export const SET_LIST_SX = {
   listStyle: 'none',
@@ -69,7 +70,8 @@ export function SponseeRowItem({ row, membersKnown, picked, full, onPick }: Spon
     <Box
       component="li"
       ref={setNode}
-      sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, minWidth: 0 }}
+      tabIndex={-1}
+      sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, minWidth: 0, ...FOCUSABLE_ROW_SX }}
     >
       <Checkbox
         checked={picked}

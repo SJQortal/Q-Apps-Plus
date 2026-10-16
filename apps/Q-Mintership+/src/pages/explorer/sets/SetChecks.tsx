@@ -29,6 +29,7 @@ import { bandWords, groupFirstPayers } from '../../../rules/explorer/connections
 import { wentTo, wentToParts } from '../../../rules/explorer/money';
 import { formatCount, plural } from '../../../utils/format';
 import { usePayerBands } from '../account/connections/hooks';
+import { FOCUSABLE_ROW_SX, useFocusNewRows } from '../account/names/useShowMore';
 import { SET_LIST_SX } from './SponseeRows';
 
 /** Result rows shown before "Show more". */
@@ -143,6 +144,7 @@ function FirstPayers({
   total: number;
 }) {
   const [limit, setLimit] = useState(ROWS);
+  const { listRef, focusFrom } = useFocusNewRows();
   const funding = new Map<string, Funding | null>();
   let failed = 0;
   for (const [address, checked] of results) {
@@ -155,11 +157,21 @@ function FirstPayers({
   return (
     <>
       {shown.length ? (
-        <Box component="ul" aria-label="First QORT payments by payer" sx={SET_LIST_SX}>
+        <Box
+          component="ul"
+          ref={listRef}
+          aria-label="First QORT payments by payer"
+          sx={SET_LIST_SX}
+        >
           {shown.map((payer) => {
             const words = bandWords(bands[payer.from]);
             return (
-              <Typography component="li" key={payer.from} sx={{ overflowWrap: 'anywhere' }}>
+              <Typography
+                component="li"
+                key={payer.from}
+                tabIndex={-1}
+                sx={{ overflowWrap: 'anywhere', ...FOCUSABLE_ROW_SX }}
+              >
                 <TxSentence
                   parts={[
                     { kind: 'account', address: payer.from },
@@ -185,7 +197,10 @@ function FirstPayers({
       )}
       {grouped.payers.length > shown.length ? (
         <Button
-          onClick={() => setLimit((n) => n + ROWS)}
+          onClick={() => {
+            focusFrom(shown.length);
+            setLimit((n) => n + ROWS);
+          }}
           sx={{ alignSelf: 'flex-start', minHeight: 44 }}
         >
           Show more ({formatCount(grouped.payers.length - shown.length)} more)
@@ -211,6 +226,7 @@ function FirstPayers({
 
 function WentTo({ results, total }: { results: Map<string, Checked<PaymentPage>>; total: number }) {
   const [limit, setLimit] = useState(ROWS);
+  const { listRef, focusFrom } = useFocusNewRows();
   const sent = new Map<string, TxRow[]>();
   let failed = 0;
   for (const [address, checked] of results) {
@@ -222,9 +238,14 @@ function WentTo({ results, total }: { results: Map<string, Checked<PaymentPage>>
   return (
     <>
       {shown.length ? (
-        <Box component="ul" aria-label="Where their QORT went" sx={SET_LIST_SX}>
+        <Box component="ul" ref={listRef} aria-label="Where their QORT went" sx={SET_LIST_SX}>
           {shown.map((entry) => (
-            <Typography component="li" key={entry.address} sx={{ overflowWrap: 'anywhere' }}>
+            <Typography
+              component="li"
+              key={entry.address}
+              tabIndex={-1}
+              sx={{ overflowWrap: 'anywhere', ...FOCUSABLE_ROW_SX }}
+            >
               <TxSentence
                 parts={[
                   ...wentToParts(entry, total),
@@ -239,7 +260,10 @@ function WentTo({ results, total }: { results: Map<string, Checked<PaymentPage>>
       )}
       {recipients.length > shown.length ? (
         <Button
-          onClick={() => setLimit((n) => n + ROWS)}
+          onClick={() => {
+            focusFrom(shown.length);
+            setLimit((n) => n + ROWS);
+          }}
           sx={{ alignSelf: 'flex-start', minHeight: 44 }}
         >
           Show more ({formatCount(recipients.length - shown.length)} more)

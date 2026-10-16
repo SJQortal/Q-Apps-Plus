@@ -222,6 +222,51 @@ describe('Connections: payments and first QORT', () => {
     );
   });
 
+  it('Show more and Show all hand the focus to the first row they add', async () => {
+    const { user } = await open(FUNDER.address, (world) =>
+      mockFetchRoute('/transactions/payments/between', (url: URL) =>
+        // 25 payments from Kit, for the evidence list's Show all.
+        url.searchParams.get('recipientAddress') === FUNDER.address &&
+        !url.searchParams.get('senderAddress') &&
+        url.searchParams.get('limit') === '100' &&
+        !Number(url.searchParams.get('offset'))
+          ? Array.from({ length: 25 }, (_, i) => ({
+              type: 'PAYMENT',
+              timestamp: 1_700_000_000_000 + i,
+              signature: `kitPays${'z'.repeat(70)}${'123456789ABCDEFGHJKLMNPQR'[i]}`,
+              blockHeight: 2_700_000 + i,
+              creatorAddress: ADDR.kicked,
+              recipient: FUNDER.address,
+              amount: '1.00000000',
+            }))
+          : answerCore(world, url.pathname, url.searchParams)?.body
+      )
+    );
+    const recorded = await region('Recorded between them');
+    const sent = await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+    await waitFor(() => expect(within(sent).getAllByRole('listitem')).toHaveLength(20), T);
+    await user.click(within(recorded).getByRole('button', { name: 'Show more (80 more)' }));
+    await waitFor(() => expect(within(sent).getAllByRole('listitem')).toHaveLength(40), T);
+    expect(within(sent).getAllByRole('listitem')[20]).toHaveFocus();
+
+    // Kit's 25 payments to Hal: the evidence shows 20, then all.
+    await user.click(within(recorded).getByRole('button', { name: /^Received from/ }));
+    const toggle = await within(recorded).findByRole(
+      'button',
+      { name: 'Show the 25 payments with Kit Kicked' },
+      T
+    );
+    await user.click(toggle);
+    const panel = document.getElementById(
+      toggle.getAttribute('aria-controls') ?? ''
+    ) as HTMLElement;
+    const evidence = within(panel).getByRole('list');
+    expect(within(evidence).getAllByRole('listitem')).toHaveLength(20);
+    await user.click(within(panel).getByRole('button', { name: 'Show all 25' }));
+    expect(within(evidence).getAllByRole('listitem')).toHaveLength(25);
+    expect(within(evidence).getAllByRole('listitem')[20]).toHaveFocus();
+  });
+
   it('MINTER members only: none of Lou’s payments were with members', async () => {
     const { user } = await open(ADDR.left);
     const recorded = await region('Recorded between them');

@@ -59,6 +59,7 @@ import { useLevels, useMinterMarks, type MinterMarks } from './connections/hooks
 import { InCommonSection } from './connections/InCommon';
 import { PaymentsPanel } from './connections/PaymentsPanel';
 import { useConnections, useRecorded } from './connections/useConnections';
+import { FOCUSABLE_ROW_SX, useFocusNewRows } from './names/useShowMore';
 import { useInCommon } from './connections/useInCommon';
 import {
   blocksLine,
@@ -95,16 +96,23 @@ function Part({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** A list of rows, the first 20 and then "Show all". */
+/** A list of rows, the first 20 and then "Show all" (the focus goes to the first row added). */
 function Rows({ label, rows }: { label: string; rows: ReactNode[] }) {
   const [all, setAll] = useState(false);
+  const { listRef, focusFrom } = useFocusNewRows();
   return (
     <>
-      <Box component="ul" aria-label={label} sx={ROW_LIST_SX}>
+      <Box component="ul" ref={listRef} aria-label={label} sx={ROW_LIST_SX}>
         {all ? rows : rows.slice(0, ROWS)}
       </Box>
       {rows.length > ROWS && !all ? (
-        <Button onClick={() => setAll(true)} sx={{ alignSelf: 'flex-start', minHeight: 44 }}>
+        <Button
+          onClick={() => {
+            focusFrom(ROWS);
+            setAll(true);
+          }}
+          sx={{ alignSelf: 'flex-start', minHeight: 44 }}
+        >
           Show all {formatCount(rows.length)}
         </Button>
       ) : null}
@@ -127,7 +135,7 @@ function FindingRow({
 }) {
   if (!finding.other)
     return (
-      <Box component="li">
+      <Box component="li" tabIndex={-1} sx={FOCUSABLE_ROW_SX}>
         <Typography sx={{ overflowWrap: 'anywhere' }}>{textOf(finding.parts)}</Typography>
         <Typography variant="body2" color="text.secondary">
           {whenLine(finding)}
