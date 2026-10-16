@@ -177,6 +177,51 @@ describe('Connections: payments and first QORT', () => {
     expect(getDefaultStore().get(comparePicksAtom)).toEqual([ADDR.left, ADDR.kicked]);
   });
 
+  it('tags the first-incoming account by what it sent: a reward share is not its first QORT', async () => {
+    const ugo = SPONSEES[3].address;
+    await open(ugo, (world) => {
+      // Sid, whose reward share was Ugo's first incoming transaction, pays it later.
+      const x = world.explorer as {
+        rows: Array<Record<string, unknown>>;
+        bySig: Map<string, unknown>;
+        parties: Map<string, string[]>;
+      };
+      const row = {
+        type: 'PAYMENT',
+        timestamp: 1_700_000_000_000,
+        fee: '0.01000000',
+        signature:
+          'sidPaysUgo1111111111111111111111111111111111111111111111111111111111111111111111111',
+        txGroupId: 0,
+        blockHeight: 2_710_000,
+        approvalStatus: 'NOT_REQUIRED',
+        creatorAddress: SPONSOR.address,
+        senderPublicKey: world.accounts.get(SPONSOR.address)?.publicKey,
+        recipient: ugo,
+        amount: '3.00000000',
+      };
+      x.rows.push(row);
+      x.bySig.set(row.signature, row);
+      x.parties.set(row.signature, [SPONSOR.address, ugo]);
+    });
+    const recorded = await region('Recorded between them');
+    const got = await within(recorded).findByRole('list', { name: 'Received from' }, T);
+    await waitFor(() => expect(got).toHaveTextContent('Received 3 QORT from Sid Sponsor'), T);
+    await waitFor(
+      () => expect(got).toHaveTextContent('its first incoming transaction came from them'),
+      T
+    );
+    expect(got).not.toHaveTextContent('its first QORT came from them');
+    const common = await region('In common');
+    await waitFor(
+      () =>
+        expect(common).toHaveTextContent(
+          'Its first incoming transaction: a 0 % reward share from Sid Sponsor'
+        ),
+      T
+    );
+  });
+
   it('MINTER members only: none of Lou’s payments were with members', async () => {
     const { user } = await open(ADDR.left);
     const recorded = await region('Recorded between them');

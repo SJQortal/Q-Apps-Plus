@@ -1,6 +1,7 @@
 /** Small words the Connections rows share. */
 import { monthRange } from '../../../../rules/explorer/connections';
 import { formatCount, formatDate } from '../../../../utils/format';
+import type { Funding } from '../../../../data/explorer/account';
 import { LINK_PAGE, LINK_PAGES } from '../../../../data/explorer/links';
 import type { ConnectionsPart } from './useConnections';
 
@@ -76,4 +77,24 @@ export function cappedNothingLine(line: string | null): string | null {
         `In its newest ${LINKS_READ} reward shares, level moves and name sales, nothing found: `
       )
     : null;
+}
+
+/**
+ * The tag on the row of the account its first incoming transaction came
+ * from, worded by what that transaction was: only a payment is its first
+ * QORT; a reward share or an asset transfer moved no QORT to it.
+ */
+export function fundingTag(funding: Pick<Funding, 'kind'>): string | null {
+  switch (funding.kind) {
+    case 'payment':
+    case 'multiPayment':
+      return 'its first QORT came from them';
+    case 'transferPrivs':
+      return 'its minting level came from them';
+    case 'rewardShare':
+    case 'transferAsset':
+      return 'its first incoming transaction came from them';
+    default:
+      return null;
+  }
 }

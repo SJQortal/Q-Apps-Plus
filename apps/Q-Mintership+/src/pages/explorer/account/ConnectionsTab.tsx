@@ -63,6 +63,7 @@ import { useInCommon } from './connections/useInCommon';
 import {
   blocksLine,
   cappedNothingLine,
+  fundingTag,
   LINKS_CAPPED_NOTE,
   textOf,
   unreadWords,
@@ -225,7 +226,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const relationOf = (other: string) =>
     [
       other === sponsor ? 'its sponsor' : null,
-      funding?.from === other ? 'its first QORT came from them' : null,
+      funding && funding.from === other ? fundingTag(funding) : null,
     ].filter((tag): tag is string => tag !== null);
 
   // Its newest 500 links rows only: level moves are read in full, the rest may be older.
