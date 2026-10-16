@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createTheme, decomposeColor, getContrastRatio } from '@mui/material/styles';
 import { createAppTheme } from '../hub-theme';
 import { themeConfig } from '../theme/qplus-theme';
-import { readableColor, readableTone, type Tone } from './readable';
+import { readableColor, readableOn, readableTone, type Tone } from './readable';
 
 const TONES: Tone[] = ['primary', 'secondary', 'success', 'warning', 'error', 'info'];
 
@@ -56,6 +56,31 @@ describe('readable text colours', () => {
               getContrastRatio(shown, bg),
               `${tone} on ${bg} in ${id}/${mode}`
             ).toBeGreaterThanOrEqual(4.5);
+          }
+        }
+      }
+    }
+  });
+});
+
+describe('readable text on a wash of its own colour (a tinted chip)', () => {
+  /** `colour` over `background` at `amount`, as the chip shows it. */
+  const over = (background: string, colour: string, amount: number) => {
+    const bg = decomposeColor(background).values;
+    const fg = decomposeColor(colour).values;
+    return `rgb(${[0, 1, 2].map((i) => Math.round(bg[i] * (1 - amount) + fg[i] * amount)).join(', ')})`;
+  };
+
+  it('reads at 4.5:1 on the wash over every surface, in every theme', () => {
+    for (const id of ['hub30', 'hub20', 'black', 'white'] as const) {
+      for (const mode of ['light', 'dark'] as const) {
+        const theme = createAppTheme(id, mode, themeConfig);
+        for (const tone of TONES) {
+          const colour = theme.palette[tone].main;
+          for (const wash of [0.12, 0.16, 0.32]) {
+            const shown = readableOn(theme, colour, wash);
+            for (const bg of surfacesOf(theme))
+              expect(getContrastRatio(shown, over(bg, colour, wash))).toBeGreaterThanOrEqual(4.5);
           }
         }
       }

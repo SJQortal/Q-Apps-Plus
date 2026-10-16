@@ -11,7 +11,13 @@
  *
  * Icons and fills keep the plain palette colour (`success.main`).
  */
-import { darken, getContrastRatio, lighten, type Theme } from '@mui/material/styles';
+import {
+  darken,
+  decomposeColor,
+  getContrastRatio,
+  lighten,
+  type Theme,
+} from '@mui/material/styles';
 
 export type Tone = 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info';
 
@@ -36,16 +42,39 @@ function worstContrast(colour: string, backgrounds: string[]): number {
   return worst === Infinity ? 0 : worst;
 }
 
+/** `colour` laid over `background` at `amount` (0–1), as an opaque rgb(). */
+function over(background: string, colour: string, amount: number): string {
+  try {
+    const bg = decomposeColor(background).values;
+    const fg = decomposeColor(colour).values;
+    const mix = [0, 1, 2].map((i) => Math.round(bg[i] * (1 - amount) + fg[i] * amount));
+    return `rgb(${mix.join(', ')})`;
+  } catch {
+    return background;
+  }
+}
+
 /** `colour`, or the nearest shade of it that reads at 4.5:1 on every surface. */
 export function readableColor(theme: Theme, colour: string): string {
+  return readableOn(theme, colour, 0);
+}
+
+/**
+ * `colour` as text on a wash of itself (`wash`, 0–1: a tinted chip), or the
+ * nearest shade that reads at 4.5:1 on that wash over every surface.
+ */
+export function readableOn(theme: Theme, colour: string, wash: number): string {
   let known = cache.get(theme);
   if (!known) {
     known = new Map();
     cache.set(theme, known);
   }
-  const hit = known.get(colour);
+  const key = wash ? `${colour}@${wash}` : colour;
+  const hit = known.get(key);
   if (hit) return hit;
-  const backgrounds = surfaces(theme);
+  const backgrounds = wash
+    ? surfaces(theme).map((surface) => over(surface, colour, wash))
+    : surfaces(theme);
   const shift = theme.palette.mode === 'dark' ? lighten : darken;
   let result = theme.palette.text.primary;
   for (let step = 0; step <= STEPS; step++) {
@@ -60,7 +89,7 @@ export function readableColor(theme: Theme, colour: string): string {
       break;
     }
   }
-  known.set(colour, result);
+  known.set(key, result);
   return result;
 }
 

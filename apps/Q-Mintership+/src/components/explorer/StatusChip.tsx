@@ -21,7 +21,7 @@ import StarOutlineOutlinedIcon from '@mui/icons-material/StarOutlineOutlined';
 import VerifiedOutlinedIcon from '@mui/icons-material/VerifiedOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import WorkspacePremiumOutlinedIcon from '@mui/icons-material/WorkspacePremiumOutlined';
-import { readableColor } from '../../utils/readable';
+import { readableOn } from '../../utils/readable';
 import { statusAccent, statusKindOf, type StatusKind } from './statusKinds';
 
 const ICON: Partial<Record<StatusKind, ReactElement>> = {
@@ -84,7 +84,8 @@ export function StatusChip({
     );
   const level = kind === 'level' ? Number(label.replace(/\D/g, '')) : 0;
   const wash = kind === 'level' ? levelWash(level, dark) : dark ? 0.16 : 0.12;
-  const text = readableColor(theme, accent);
+  // Read against the chip's own wash over every surface, not the bare page.
+  const text = readableOn(theme, accent, wash);
   return (
     <Chip
       size="small"
