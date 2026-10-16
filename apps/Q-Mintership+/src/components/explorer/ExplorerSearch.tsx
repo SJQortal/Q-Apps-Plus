@@ -302,12 +302,19 @@ export interface ExplorerSearchProps {
   onAccount?: (address: string, from?: NameMatch) => void;
   /** The field's label. */
   label?: string;
+  /**
+   * The suggestions' tallest height (CSS), when the field sits where they
+   * have more room than MUI's 40vh (a tall dialog), so they show without
+   * scrolling.
+   */
+  listMaxHeight?: string;
 }
 
 export function ExplorerSearch({
   autoFocus = false,
   onAccount,
   label = 'Find an account or transaction',
+  listMaxHeight,
 }: ExplorerSearchProps) {
   const navigate = useNavigate();
   const recent = useRecent();
@@ -432,6 +439,7 @@ export function ExplorerSearch({
         // is a full tap target.
         slotProps={{
           popper: { disablePortal: true },
+          ...(listMaxHeight ? { listbox: { style: { maxHeight: listMaxHeight } } } : {}),
           clearIndicator: { sx: { width: 44, height: 44 } },
         }}
         options={options}

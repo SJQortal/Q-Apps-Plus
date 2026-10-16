@@ -63,6 +63,25 @@ describe('Compare with…', () => {
     expect(qortalCalls.filter((c) => WRITES.test(String(c.action)))).toEqual([]);
   });
 
+  it('is tall, so the names suggested under the field show without scrolling it', async () => {
+    await renderPage(<CompareWith address={ADDR.nominator} label="Nora Nominator" />, {
+      persona: 'learner',
+      path: explorerAccountPath(ADDR.nominator),
+      route: '/*',
+      strict: true,
+    });
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole('button', { name: 'Compare Nora Nominator with another account' })
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Compare with…' }, T);
+    await user.type(within(dialog).getByRole('combobox', { name: 'Find an account' }), 'No');
+    const list = await within(dialog).findByRole('listbox', {}, T);
+    // The room under the field, not MUI's 40vh.
+    expect(list.style.maxHeight).toContain('800px');
+    expect(list.style.maxHeight).toContain('200px');
+  });
+
   it('sits in the account header, beside the Compare toggle', async () => {
     await renderPage(<AccountPage />, {
       persona: 'learner',

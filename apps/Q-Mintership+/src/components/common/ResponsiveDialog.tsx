@@ -32,10 +32,18 @@ export interface ResponsiveDialogProps {
   maxWidth?: DialogProps['maxWidth'];
   /** Full screen on every layout. */
   fullScreen?: boolean;
+  /**
+   * As tall as the frame allows (up to 800 px) on wider layouts, not just
+   * as tall as its content: room for a list that opens under a field.
+   */
+  tall?: boolean;
   describedBy?: string;
   /** Where focus goes on close when the opener and its card are gone. */
   returnFocus?: () => HTMLElement | null;
 }
+
+/** A tall dialog's height on wider layouts. */
+export const TALL_HEIGHT = 'min(800px, calc(var(--qmp-app-height, 100dvh) - 32px))';
 
 /** The containers a dialog's opener sits in that usually outlive it. */
 const ANCHOR = 'article, [role="article"], li, section, [role="region"], main';
@@ -54,6 +62,7 @@ export function ResponsiveDialog({
   actions,
   maxWidth = 'sm',
   fullScreen = false,
+  tall = false,
   describedBy,
   returnFocus,
 }: ResponsiveDialogProps) {
@@ -145,7 +154,10 @@ export function ResponsiveDialog({
                   paddingTop: 'env(safe-area-inset-top, 0px)',
                   paddingBottom: 'env(safe-area-inset-bottom, 0px)',
                 }
-              : { maxHeight: 'calc(var(--qmp-app-height, 100dvh) - 32px)' }),
+              : {
+                  maxHeight: 'calc(var(--qmp-app-height, 100dvh) - 32px)',
+                  ...(tall ? { height: TALL_HEIGHT } : {}),
+                }),
           },
         },
       }}

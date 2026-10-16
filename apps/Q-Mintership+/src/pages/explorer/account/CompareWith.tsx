@@ -4,15 +4,25 @@
  * by side with this one (`/explorer/compare/<this>/<picked>`). Picking this
  * same account says so instead. The Compare toggle beside it is unchanged
  * (it adds to the accounts picked to compare).
+ *
+ * The dialog is tall, so the names suggested while typing show under the
+ * field without scrolling the dialog: the list takes the room left below
+ * the field (the title, the line above it and the field take about 200 px;
+ * on a phone the frame's top bar and the keyboard's room take more).
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconButton, Tooltip, Typography } from '@mui/material';
 import CompareArrowsOutlinedIcon from '@mui/icons-material/CompareArrowsOutlined';
-import { ResponsiveDialog } from '../../../components/common/ResponsiveDialog';
+import { ResponsiveDialog, TALL_HEIGHT } from '../../../components/common/ResponsiveDialog';
 import { ExplorerSearch } from '../../../components/explorer/ExplorerSearch';
 import { usePhoneLayout } from '../../../hooks/usePhoneLayout';
 import { explorerComparePath } from '../../../routes/paths';
+
+/** The suggestions' room: the dialog's height less what sits above them. */
+const LIST_ROOM = `calc(${TALL_HEIGHT} - 200px)`;
+/** On a phone the dialog is the whole frame. */
+const LIST_ROOM_PHONE = 'calc(var(--qmp-app-height, 100dvh) - 260px)';
 
 export function CompareWith({ address, label }: { address: string; label: string }) {
   const [open, setOpen] = useState(false);
@@ -35,7 +45,7 @@ export function CompareWith({ address, label }: { address: string; label: string
           <CompareArrowsOutlinedIcon />
         </IconButton>
       </Tooltip>
-      <ResponsiveDialog open={open} onClose={close} title="Compare with…">
+      <ResponsiveDialog open={open} onClose={close} title="Compare with…" tall>
         <Typography sx={{ mb: 1.5, overflowWrap: 'anywhere' }}>
           Find the account to compare <bdi dir="auto">{label}</bdi> with.
         </Typography>
@@ -43,6 +53,7 @@ export function CompareWith({ address, label }: { address: string; label: string
           label="Find an account"
           // The keyboard would cover the dialog on a phone.
           autoFocus={!phone}
+          listMaxHeight={phone ? LIST_ROOM_PHONE : LIST_ROOM}
           onAccount={(picked) => {
             if (picked === address) {
               setMessage('That’s this account. Pick another one.');
