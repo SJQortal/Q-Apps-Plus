@@ -25,12 +25,20 @@ export const ACCOUNT_KEY_PREFIXES = [
   'xanswers:',
   'xsponsor:',
   'xfunded:',
+  'xlastsent:',
+  'xlegacyby:',
+  'xpollvotes:',
   // The app's reads it shares.
   'account:',
   'name:',
   'status:',
   'balance:',
   'membership:',
+  'history:',
+  'nominations:for:',
+  'declinemarks:',
+  'legacy:for:',
+  'communityvotes:nominee:',
 ] as const;
 
 export function refreshAccount(address: string, publicKey?: string): void {
