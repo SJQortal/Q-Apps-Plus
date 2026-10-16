@@ -17,6 +17,7 @@ import { FailedReads } from './parts';
 import { sameForAll, type SideCell, type SideRow } from './sideRows';
 import { NameWithAvatar } from '../../../components/explorer/NameWithAvatar';
 import { MarkedName } from '../../../components/common/MarkedName';
+import { FIELD_BLOCK_SX, fieldBlockFill } from '../../../components/explorer/fieldBlock';
 
 export interface SideColumn {
   address: string;
@@ -100,7 +101,12 @@ function Table({ columns, rows }: { columns: readonly SideColumn[]; rows: readon
         {rows.map((row) => {
           const same = sameForAll(row.cells);
           return (
-            <tr key={row.key}>
+            // Every other fact on a panel, so a row reads across without a ruler.
+            <Box
+              component="tr"
+              key={row.key}
+              sx={{ '&:nth-of-type(odd)': { bgcolor: fieldBlockFill } }}
+            >
               <Box
                 component="th"
                 scope="row"
@@ -119,7 +125,7 @@ function Table({ columns, rows }: { columns: readonly SideColumn[]; rows: readon
                   </Box>
                 ))
               )}
-            </tr>
+            </Box>
           );
         })}
       </tbody>
@@ -129,11 +135,11 @@ function Table({ columns, rows }: { columns: readonly SideColumn[]; rows: readon
 
 function Stacked({ columns, rows }: { columns: readonly SideColumn[]; rows: readonly SideRow[] }) {
   return (
-    <Box component="dl" sx={{ m: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+    <Box component="dl" sx={{ m: 0, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
       {rows.map((row) => {
         const same = sameForAll(row.cells);
         return (
-          <Box key={row.key} sx={{ minWidth: 0, pb: 1.5, borderBottom: 1, borderColor: 'divider' }}>
+          <Box key={row.key} sx={FIELD_BLOCK_SX}>
             <Typography
               component="dt"
               variant="body2"

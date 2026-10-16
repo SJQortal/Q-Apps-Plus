@@ -23,6 +23,7 @@ import { formatCount } from '../../../utils/format';
 import { useConnections, useRecorded } from './connections/useConnections';
 import { tabIdOf } from './tabIds';
 import { LINKS_CAPPED_NOTE, unreadWords, whenLine } from './connections/words';
+import { FIELD_BLOCK_SX } from '../../../components/explorer/fieldBlock';
 
 export interface DirectLinksPreviewProps {
   address: string;
@@ -106,7 +107,7 @@ export function DirectLinksPreview({ address }: DirectLinksPreviewProps) {
           sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 1 }}
         >
           {recorded.slice(0, PREVIEW).map((finding) => (
-            <Box component="li" key={finding.key} sx={{ minWidth: 0 }}>
+            <Box component="li" key={finding.key} sx={FIELD_BLOCK_SX}>
               {/* A div: the people in the sentence are chips. */}
               <Typography component="div" sx={{ overflowWrap: 'anywhere' }}>
                 <TxSentence parts={finding.parts} />

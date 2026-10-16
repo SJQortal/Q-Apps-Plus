@@ -47,6 +47,7 @@ import {
   truncatedLine,
 } from './namesWords';
 import { FOCUSABLE_ROW_SX, useShowMore } from './useShowMore';
+import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 
 /** Names shown at first, and added by each "Show more". */
 export const NAMES_PAGE = 20;
@@ -169,14 +170,8 @@ function NameItem({
       }}
     >
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>{about}</Box>
-      <Box
-        sx={{
-          minWidth: 0,
-          ...(grid ? { pt: 1.5, borderTop: 1, borderColor: 'divider' } : {}),
-        }}
-      >
-        {history}
-      </Box>
+      {/* Its history on a panel of its own (fieldBlock.ts). */}
+      <Box sx={FIELD_BLOCK_SX}>{history}</Box>
     </Box>
   );
 }

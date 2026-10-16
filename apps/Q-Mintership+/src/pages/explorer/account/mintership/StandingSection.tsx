@@ -15,10 +15,11 @@ import { statusSentence } from '../../../person/personWords';
 import type { MinterStory } from './useMinterStory';
 import { nominationLine, roundsLine } from './mintershipWords';
 import { Note } from './parts';
+import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <Box sx={{ minWidth: 0 }}>
+    <Box sx={FIELD_BLOCK_SX}>
       <Typography component="dt" variant="body2" color="text.secondary">
         {label}
       </Typography>
@@ -57,9 +58,8 @@ export function StandingSection({ story }: { story: MinterStory }) {
           aria-label="MINTER facts"
           sx={{
             m: 0,
-            px: 0.5,
             display: 'grid',
-            gap: 1.5,
+            gap: 1,
             gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
           }}
         >

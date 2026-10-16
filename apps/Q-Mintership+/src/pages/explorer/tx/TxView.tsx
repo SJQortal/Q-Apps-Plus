@@ -24,10 +24,11 @@ import { decisionPath, explorerTxPath } from '../../../routes/paths';
 import { formatAmount } from '../../../rules/explorer/txWords';
 import { formatCount, formatDateTime, formatRelative } from '../../../utils/format';
 import { approvalWords, makerOf } from './txPageWords';
+import { FIELD_BLOCK_SX } from '../../../components/explorer/fieldBlock';
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <Box sx={{ minWidth: 0 }}>
+    <Box sx={FIELD_BLOCK_SX}>
       <Typography component="dt" variant="body2" color="text.secondary">
         {label}
       </Typography>
@@ -49,7 +50,7 @@ function Facts({ tx }: { tx: TxRow }) {
         sx={{
           m: 0,
           display: 'grid',
-          gap: 2,
+          gap: 1,
           gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' },
         }}
       >

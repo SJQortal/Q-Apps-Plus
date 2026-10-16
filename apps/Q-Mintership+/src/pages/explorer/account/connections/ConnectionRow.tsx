@@ -29,6 +29,7 @@ import { describeTx, type TxPart } from '../../../../rules/explorer/txWords';
 import { addPick, COMPARE_FULL, COMPARE_MAX, useComparePicks } from '../../../../state/explorer';
 import { formatCount, formatDate, shortAddress } from '../../../../utils/format';
 import { FOCUSABLE_ROW_SX, useFocusNewRows } from '../names/useShowMore';
+import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 
 /** Evidence lines shown before "Show all". */
 const EVIDENCE_ROWS = 20;
@@ -251,7 +252,8 @@ export function ConnectionRow({
   const shownTags = (tags ?? []).filter((tag): tag is string => Boolean(tag));
   const secondary = shownTags.length ? shownTags.join(' · ') : undefined;
   return (
-    <Box component="li" tabIndex={-1} sx={{ minWidth: 0, ...FOCUSABLE_ROW_SX }}>
+    // Each connection on a panel of its own (fieldBlock.ts).
+    <Box component="li" tabIndex={-1} sx={{ ...FIELD_BLOCK_SX, ...FOCUSABLE_ROW_SX }}>
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 0 }}>
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
           {isAt ? (

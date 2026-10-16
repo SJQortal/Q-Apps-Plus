@@ -1,5 +1,6 @@
 /**
- * The Overview's facts, two to a row (three on wide screens): its level and
+ * The Overview's facts, each on a panel of its own (fieldBlock.ts), two to
+ * a row (three on wide screens): its level and
  * how far it is to the next, blocks minted (with Core's adjustment and
  * penalty when it recorded any), its balance, when it was first seen, and
  * its groups (MINTER first, five shown, the rest on request). Each fact
@@ -28,6 +29,7 @@ import {
   membersWords,
 } from './overviewWords';
 import { GroupAvatar } from '../../../../components/common/GroupAvatar';
+import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 
 /** Groups shown before "Show all". */
 const GROUPS_SHOWN = 5;
@@ -55,7 +57,7 @@ function Fact({
   return (
     <Box
       sx={{
-        minWidth: 0,
+        ...FIELD_BLOCK_SX,
         display: 'flex',
         flexDirection: 'column',
         gap: 0.5,
@@ -309,8 +311,7 @@ export function FactsSection({
           sx={{
             m: 0,
             display: 'grid',
-            columnGap: 2,
-            rowGap: 2,
+            gap: 1,
             gridTemplateColumns: {
               xs: 'repeat(2, minmax(0, 1fr))',
               md: 'repeat(3, minmax(0, 1fr))',

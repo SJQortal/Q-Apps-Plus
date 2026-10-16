@@ -19,6 +19,7 @@ import { formatCount, formatDate } from '../../../../utils/format';
 import { ConnectionRow, ROW_LIST_SX } from './ConnectionRow';
 import type { MinterMarks } from './hooks';
 import type { InCommonData } from './useInCommon';
+import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 
 const LINK_SX = {
   display: 'inline-flex',
@@ -46,7 +47,7 @@ function FirstQort({
   const when = `${formatDate(funding.timestamp)} · block ${formatCount(funding.height)}`;
   if (!funding.from)
     return (
-      <Box component="li">
+      <Box component="li" sx={FIELD_BLOCK_SX}>
         <Typography>
           <TxSentence parts={parts} plain />
         </Typography>
