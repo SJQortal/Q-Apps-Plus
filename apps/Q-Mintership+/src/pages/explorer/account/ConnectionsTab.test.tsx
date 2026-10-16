@@ -24,6 +24,7 @@ import {
 } from '../../../../e2e/world.mjs';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../../components/common/personLinks';
 import { explorerAccountPath } from '../../../routes/paths';
+import { queryLoadCounts } from '../../../data/query';
 import { comparePicksAtom, resetExplorerState } from '../../../state/explorer';
 import ConnectionsTab from './ConnectionsTab';
 
@@ -563,6 +564,35 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
       )
     ).toBeInTheDocument();
     expect(screen.queryByText(/^Also checked, nothing found:.*a sponsor/)).toBeNull();
+  });
+
+  it('In common and In Q-Mintership read nothing until they near the screen', async () => {
+    // Nothing ever comes into view here.
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+        takeRecords() {
+          return [];
+        }
+      }
+    );
+    try {
+      const { posts } = await open(ADDR.nominator);
+      const recorded = await region('Recorded between them');
+      await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+      await screen.findByText(/^Also checked, nothing found/, {}, T);
+      const loads = queryLoadCounts();
+      expect(loads.xmade).toBeUndefined();
+      expect(loads.nominations).toBeUndefined();
+      expect(loads.communityvotes).toBeUndefined();
+      expect(loads.xfirst).toBeUndefined();
+      noWrites(posts);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('Core’s own report only on request, with what its numbers count', async () => {

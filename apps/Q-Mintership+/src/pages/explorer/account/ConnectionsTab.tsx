@@ -206,7 +206,9 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const [paymentsNode, setPaymentsNode] = useState<HTMLElement | null>(null);
   const marks = useMinterMarks(useInView(paymentsNode));
   const [commonNode, setCommonNode] = useState<HTMLElement | null>(null);
-  const common = useInCommon(address, parsed, useInView(commonNode));
+  // In common and In Q-Mintership read once they near the screen.
+  const commonNear = useInView(commonNode);
+  const common = useInCommon(address, parsed, commonNear);
 
   const of = (kind: Finding['kind']) => recorded.filter((f) => f.kind === kind);
   const levelMoves = of('levelMove');
@@ -398,9 +400,8 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
           marks={marks}
           sentAny={(data.sent.data?.rows.length ?? 0) > 0}
         />
+        <MintershipLinks address={address} enabled={commonNear} />
       </Box>
-
-      <MintershipLinks address={address} />
 
       {noneLine ? (
         <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
