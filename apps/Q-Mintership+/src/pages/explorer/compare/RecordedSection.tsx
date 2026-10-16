@@ -140,31 +140,34 @@ export function RecordedSection({
     : null;
   if (!pairs.length) return null;
   return (
-    <Section title="Recorded between them" id="compare-recorded">
-      <Note>
-        Payments between each pair are read both ways (up to the newest 100 each way). Asset
-        transfers, reward shares, level moves, name sales, Q-Mintership records and trade portal
-        sales come from each account’s own newest ones.
-      </Note>
-      {found.map((pair) => (
-        <PairBlock key={pair.pair.id} data={data} pair={pair} accents={accents} />
-      ))}
-      {waiting.length ? (
-        <Waiting>
-          Reading what was recorded between {waiting.map((p) => p.pair.label).join(', ')}:{' '}
-          {pendingWords([...new Set(waiting.flatMap((p) => p.result.pending))])}…
-        </Waiting>
-      ) : null}
-      <FailedReads
-        what={errors.map((e) => e.what)}
-        onRetry={() => errors.forEach((e) => e.retry())}
-        retryLabel="Retry Recorded between them"
-      />
-      {emptyLine ? (
-        <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-          {emptyLine}
-        </Typography>
-      ) : null}
-    </Section>
+    // The pair grid jumps here for a pair whose reads failed (the Retry is here).
+    <Box id="compare-recorded" tabIndex={-1} sx={PAIR_ANCHOR_SX}>
+      <Section title="Recorded between them" id="compare-recorded-section">
+        <Note>
+          Payments between each pair are read both ways (up to the newest 100 each way). Asset
+          transfers, reward shares, level moves, name sales, Q-Mintership records and trade portal
+          sales come from each account’s own newest ones.
+        </Note>
+        {found.map((pair) => (
+          <PairBlock key={pair.pair.id} data={data} pair={pair} accents={accents} />
+        ))}
+        {waiting.length ? (
+          <Waiting>
+            Reading what was recorded between {waiting.map((p) => p.pair.label).join(', ')}:{' '}
+            {pendingWords([...new Set(waiting.flatMap((p) => p.result.pending))])}…
+          </Waiting>
+        ) : null}
+        <FailedReads
+          what={errors.map((e) => e.what)}
+          onRetry={() => errors.forEach((e) => e.retry())}
+          retryLabel="Retry Recorded between them"
+        />
+        {emptyLine ? (
+          <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+            {emptyLine}
+          </Typography>
+        ) : null}
+      </Section>
+    </Box>
   );
 }

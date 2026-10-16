@@ -73,11 +73,12 @@ const nameOf = (address: string) => {
   return name ? visibleName(name) : name;
 };
 
-/** Each pair's counts for the grid: recorded, in common, and whether its reads are in. */
+/**
+ * Each pair's counts for the grid: recorded, in common, and whether its
+ * reads are all in, still out, or some failed (with nothing left out).
+ */
 function pairGridRows(data: CompareData): PairGridRow[] {
-  // A failed read is not a read: the pair can't say "none found" on it.
-  const done = (q: { data?: unknown }) => q.data !== undefined;
-  return data.pairData.map(({ pair, result }) => {
+  return data.pairData.map(({ pair, result, xy, yx }) => {
     const a = letterOf(pair.i);
     const b = letterOf(pair.j);
     const both = (letters: readonly Letter[]) => letters.includes(a) && letters.includes(b);
@@ -86,16 +87,26 @@ function pairGridRows(data: CompareData): PairGridRow[] {
       data.firstPayers.filter((p) => both(p.accounts.map((x) => x.letter))).length +
       data.counterparties.rows.filter((r) => both(r.counts.map((c) => c.letter))).length +
       data.groupsShared.filter((g) => both(g.letters)).length;
-    const commonIn = [pair.i, pair.j].every((k) =>
-      [
-        data.first[k],
-        data.groups[k],
-        data.sent[k],
-        data.recv[k],
-        data.assets[k],
-        data.links[k],
-      ].every(done)
-    );
+    const sides = [pair.i, pair.j];
+    const recordedReads = [
+      xy,
+      yx,
+      ...sides.flatMap((k) => [data.links[k], data.assets[k], data.made[k], data.trades[k]]),
+    ];
+    const commonReads = sides.flatMap((k) => [
+      data.first[k],
+      data.groups[k],
+      data.sent[k],
+      data.recv[k],
+      data.assets[k],
+      data.links[k],
+    ]);
+    // A failed read is not a read: the pair can't say "none found" on it.
+    const commonIn = commonReads.every((q) => q.data !== undefined);
+    const settled = !result.pending.length && commonIn;
+    const out = [...recordedReads, ...commonReads].some((q) => q.isLoading);
+    const recordedFailed = recordedReads.some((q) => q.isError);
+    const commonFailed = commonReads.some((q) => q.isError);
     return {
       label: pair.label,
       id: pair.id,
@@ -103,7 +114,8 @@ function pairGridRows(data: CompareData): PairGridRow[] {
       j: pair.j,
       recorded: result.findings.length,
       inCommon,
-      settled: !result.pending.length && commonIn,
+      state: settled ? 'done' : !out && (recordedFailed || commonFailed) ? 'failed' : 'checking',
+      retryAt: recordedFailed ? 'compare-recorded' : commonFailed ? 'compare-common' : undefined,
     };
   });
 }

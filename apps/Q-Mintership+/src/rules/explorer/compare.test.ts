@@ -317,10 +317,15 @@ describe('recorded between two accounts', () => {
   });
 
   it('sums up a pair for the grid', () => {
-    expect(pairSummary(2, 1, true)).toBe('2 recorded, 1 in common');
-    expect(pairSummary(0, 0, true)).toBe('none found');
-    expect(pairSummary(0, 0, false)).toBe('checking…');
-    expect(pairSummary(1, 0, false)).toBe('1 recorded so far');
+    expect(pairSummary(2, 1, 'done')).toBe('2 recorded, 1 in common');
+    expect(pairSummary(0, 0, 'done')).toBe('none found');
+    expect(pairSummary(0, 0, 'checking')).toBe('checking…');
+    expect(pairSummary(1, 0, 'checking')).toBe('1 recorded so far');
+  });
+
+  it('a pair whose reads failed never reads as checking or none found', () => {
+    expect(pairSummary(0, 0, 'failed')).toBe('couldn’t read everything');
+    expect(pairSummary(1, 2, 'failed')).toBe('1 recorded, 2 in common; some reads failed');
   });
 });
 

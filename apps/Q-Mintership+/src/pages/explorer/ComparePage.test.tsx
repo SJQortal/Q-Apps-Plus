@@ -503,4 +503,34 @@ describe('Compare: reads that fail', () => {
     expect(within(common).getByRole('list', { name: 'Shared groups' })).toBeInTheDocument();
     expect(within(common).queryByText(/^Couldn’t finish/)).toBeNull();
   });
+
+  it('the pair grid says a pair couldn’t be read, not “checking…” for good', async () => {
+    let broken = { on: false };
+    const { user } = await open(
+      explorerComparePath([ADDR.kicked, ADDR.left, SPONSOR.address]),
+      (world) => {
+        broken = breakReads(
+          world,
+          (url) =>
+            url.pathname === '/transactions/payments/between' &&
+            url.searchParams.get('senderAddress') === ADDR.kicked &&
+            url.searchParams.get('recipientAddress') === SPONSOR.address
+        );
+      }
+    );
+    const grid = await screen.findByRole('navigation', { name: 'Pairs' }, T);
+    await waitFor(() => expect(grid).toHaveTextContent(/A–C: [^A-Z]*some reads failed/), T);
+    expect(grid).not.toHaveTextContent(/A–C: [^A-Z]*(checking|so far|none found)/);
+    // It jumps to where the Retry is.
+    await user.click(within(grid).getByRole('button', { name: /A–C/ }));
+    const recordedBox = document.getElementById('compare-recorded');
+    expect(document.activeElement).toBe(recordedBox);
+    const recorded = await region('Recorded between them');
+    expect(recorded).toHaveTextContent('Couldn’t read the payments between A and C.');
+
+    broken.on = false;
+    await user.click(within(recorded).getByRole('button', { name: 'Retry Recorded between them' }));
+    await waitFor(() => expect(grid).not.toHaveTextContent(/A–C: [^A-Z]*failed/), T);
+    expect(grid).not.toHaveTextContent(/A–C: [^A-Z]*(checking|so far)/);
+  });
 });

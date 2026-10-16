@@ -557,14 +557,25 @@ export function checkedNoneLine(empty: readonly PairCheck[]): string | null {
   return `Checked, none found: ${empty.map((check) => PAIR_CHECK_WORDS[check]).join(', ')}.`;
 }
 
-/** The pair grid's words: "2 recorded, 1 in common", "none found", or "checking…". */
-export function pairSummary(recorded: number, inCommon: number, settled: boolean): string {
+/** Where a pair's reads are: still out, all in, or some failed (and none still out). */
+export type PairState = 'checking' | 'done' | 'failed';
+
+/**
+ * The pair grid's words: "2 recorded, 1 in common", "none found",
+ * "checking…", or after a failed read "couldn’t read everything".
+ */
+export function pairSummary(recorded: number, inCommon: number, state: PairState): string {
   const parts = [
     recorded ? `${formatCount(recorded)} recorded` : null,
     inCommon ? `${formatCount(inCommon)} in common` : null,
   ].filter((part): part is string => part !== null);
-  if (parts.length) return settled ? parts.join(', ') : `${parts.join(', ')} so far`;
-  return settled ? 'none found' : 'checking…';
+  if (parts.length) {
+    const found = parts.join(', ');
+    if (state === 'done') return found;
+    return state === 'failed' ? `${found}; some reads failed` : `${found} so far`;
+  }
+  if (state === 'done') return 'none found';
+  return state === 'failed' ? 'couldn’t read everything' : 'checking…';
 }
 
 // ---- in common -------------------------------------------------------------------------
