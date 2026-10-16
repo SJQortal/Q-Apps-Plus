@@ -19,6 +19,10 @@
  * --mode light`. Runs with different themes or modes can go side by side
  * without overwriting each other's report.
  *
+ * A screen may list console errors it expects (`expectErrors: /…/`), for a
+ * page that shows what happens when Core answers with an error on purpose
+ * (the browser logs the failed request); anything else still counts.
+ *
  * Needs Playwright: a global `playwright`, or `playwright-core` plus a
  * Chromium-based browser in QPLUS_CHROMIUM (e.g. /snap/bin/brave).
  * QPLUS_PLAYWRIGHT can point at a playwright or playwright-core folder.
@@ -241,7 +245,7 @@ try {
           }
         }
         const ignore = config.ignoreErrors ?? /qortalRequest|favicon/;
-        report.push({ screen: screen.key, viewport: vp.name, theme, ok, errors: errors.filter((e) => !ignore.test(e)), ...metrics, searches, fetches: page.__fetches.length, axe });
+        report.push({ screen: screen.key, viewport: vp.name, theme, ok, errors: errors.filter((e) => !ignore.test(e) && !(screen.expectErrors && screen.expectErrors.test(e))), ...metrics, searches, fetches: page.__fetches.length, axe });
         await page.close();
       }
       await context.close();
