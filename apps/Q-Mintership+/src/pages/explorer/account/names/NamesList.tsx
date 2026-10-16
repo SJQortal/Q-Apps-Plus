@@ -103,11 +103,14 @@ export function NamesList({
   address,
   names,
   primary,
+  primaryError,
 }: {
   address: string;
   names: UseQueryResult<NamesOf>;
   /** undefined while loading; null for none (or when it couldn't be read). */
   primary: string | null | undefined;
+  /** The primary name couldn't be read: said, with Retry, never as "No primary name". */
+  primaryError?: { error: unknown; retry: () => void };
 }) {
   const { shown, showMore, listRef } = useShowMore(NAMES_PAGE);
 
@@ -131,7 +134,14 @@ export function NamesList({
     const left = ordered.length - visible.length;
     body = (
       <Card sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {!hasPrimary ? (
+        {primaryError ? (
+          <ErrorState
+            compact
+            title="Couldn't read its primary name."
+            error={primaryError.error}
+            onRetry={primaryError.retry}
+          />
+        ) : !hasPrimary ? (
           <Typography variant="body2" color="text.secondary">
             {NO_PRIMARY}
           </Typography>

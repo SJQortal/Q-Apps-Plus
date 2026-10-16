@@ -128,6 +128,36 @@ describe('Names: every name', () => {
     expect(within(list).queryByText('Primary')).toBeNull();
   });
 
+  it('a primary name that couldn’t be read is said with Retry, never as no primary name', async () => {
+    let fail = true;
+    const { user } = await open(COLLECTOR.address, (world) =>
+      mockFetchRoute(`/names/primary/${COLLECTOR.address}`, (url: URL) =>
+        fail
+          ? new Response('{"error":5,"message":"repository issue"}', { status: 500 })
+          : worldAnswer(world, url)
+      )
+    );
+    const names = await region('Names (30)');
+    expect(
+      await within(names).findByText(/^Couldn't read its primary name\./, {}, T)
+    ).toBeInTheDocument();
+    expect(within(names).queryByText(/^No primary name/)).toBeNull();
+    // The names still show, in Core's order.
+    const list = within(names).getByRole('list', { name: 'Its names' });
+    expect(rowNames(list).slice(0, 3)).toEqual(COLLECTOR_NAMES.slice(0, 3));
+    fail = false;
+    await user.click(within(names).getByRole('button', { name: 'Retry' }));
+    // (The list is drawn again once the primary name is in.)
+    await waitFor(
+      () =>
+        expect(
+          within(within(names).getByRole('list', { name: 'Its names' })).getByText('Primary')
+        ).toBeInTheDocument(),
+      T
+    );
+    expect(within(names).queryByText(/^Couldn't read its primary name/)).toBeNull();
+  });
+
   it('says when Core’s list was cut at 500', async () => {
     const bulk = Array.from({ length: 500 }, (_, i) => `Bulk ${String(i).padStart(3, '0')}`);
     await open(ADDR.learner, () => {
