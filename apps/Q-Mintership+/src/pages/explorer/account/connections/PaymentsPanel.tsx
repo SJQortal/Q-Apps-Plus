@@ -87,7 +87,11 @@ export function PaymentsPanel({
   marks,
   relationOf,
 }: PaymentsPanelProps) {
-  const [direction, setDirection] = useState<Direction>('sent');
+  const [chosen, setDirection] = useState<Direction | null>(null);
+  // Until one is picked: Sent to, unless it sent nothing and received something.
+  const direction: Direction =
+    chosen ??
+    (data.flowsSent?.length === 0 && (data.flowsReceived?.length ?? 0) > 0 ? 'received' : 'sent');
   const [sort, setSort] = useState<FlowSort>('count');
   const [membersOnly, setMembersOnly] = useState(false);
   const [limit, setLimit] = useState(PAGE_ROWS);

@@ -222,6 +222,16 @@ describe('Connections: minting and names', () => {
       T
     );
     expect(level).toHaveTextContent('block 2,000,000');
+    // It sent nothing: the payments open on what it received.
+    const got = await within(recorded).findByRole('list', { name: 'Received from' }, T);
+    await waitFor(
+      () => expect(got).toHaveTextContent('Received 2 QORT from Avery Admin in 1 payment'),
+      T
+    );
+    expect(within(recorded).getByRole('button', { name: /^Received from/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
     await expectNoAxeViolations(container);
   });
 
