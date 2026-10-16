@@ -7,6 +7,10 @@ import { mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { base58Decode, base58Encode } from '../../qortal/base58';
 import DecisionsPage from './DecisionsPage';
 
+// The heaviest page tests: each flow renders the whole Decisions page several times
+// over. Alone they take 2–7 s; with the full suite on every core some pass 15 s.
+vi.setConfig({ testTimeout: 30_000 });
+
 afterEach(() => vi.useRealTimers());
 
 const user = () => userEvent.setup();
