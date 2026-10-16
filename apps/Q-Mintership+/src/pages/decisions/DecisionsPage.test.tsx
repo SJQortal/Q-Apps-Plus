@@ -8,6 +8,7 @@ import { mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/se
 import { base58Decode, base58Encode } from '../../qortal/base58';
 import DecisionsPage from './DecisionsPage';
 import { SETTINGS_KEYS } from '../../state/settings';
+import { peekQuery } from '../../data/query';
 
 // The heaviest page tests: each flow renders the whole Decisions page several times
 // over. Alone they take 2–7 s; with the full suite on every core some pass 15 s.
@@ -250,6 +251,17 @@ describe('Decisions: phases and actions', () => {
     expect(screen.queryByText('Hide already voted on')).toBeNull();
     // The waiting nomination is still listed.
     expect(await screen.findByText('Wren Waiting')).toBeInTheDocument();
+    // A removal, a ban and a new Minter Admin are open: Decisions is in their navigation.
+    await waitFor(() => expect(peekQuery<number>('decisions:public')).toBe(3));
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+  });
+
+  it('offers Back to people who are not Minter Admins when nothing they may vote on is open', async () => {
+    await openPage('nominator', '/decisions', (world) => {
+      world.pending = world.pending.filter(
+        (t: { type: string }) => !['GROUP_KICK', 'GROUP_BAN', 'ADD_GROUP_ADMIN'].includes(t.type)
+      );
+    });
     // Decisions isn't in their navigation, so the page offers Back.
     expect(await screen.findByRole('button', { name: 'Back' })).toBeInTheDocument();
   });

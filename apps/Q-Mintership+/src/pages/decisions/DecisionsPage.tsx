@@ -11,7 +11,9 @@
  * signature on a nomination, propose kicks, bans, admin changes and
  * cancelled invites (each with their own signature), and clean up stale
  * invites. Doing nothing lets a decision expire. Everyone else follows
- * along read-only.
+ * along, comments, and votes Yes or No (advisory, a QDN record) on
+ * nominations, removals, bans and new Minter Admins, as on Nominations;
+ * while one of those is open, Decisions is in everyone's navigation.
  *
  * The target moves with the admin count (rules/targetShift.ts): an admin
  * change says what it would do to every waiting decision, a decision it
@@ -502,7 +504,9 @@ function DecisionsQueue() {
               <Alert severity="info" role="note">
                 Only Minter Admins approve or reject decisions. Here you can follow each one: who
                 proposed it, who has approved or rejected it, and how long is left. Each needs{' '}
-                {needed} Minter Admin approvals.
+                {needed} Minter Admin approvals. On a nomination, a removal, a ban or a new Minter
+                Admin you can vote Yes or No and comment, so the Minter Admins see how the community
+                feels.
               </Alert>
             )}
 

@@ -111,11 +111,12 @@ const NavLabel = styled('span')({
 });
 
 export function NavRail({
-  isAdmin,
+  withDecisions,
   decisionsBadge = 0,
   historyBadge = 0,
 }: {
-  isAdmin: boolean;
+  /** Decisions is in the navigation (useDecisionsInNav). */
+  withDecisions: boolean;
   decisionsBadge?: number;
   /** Changes decided since this Minter Admin last had History open. */
   historyBadge?: number;
@@ -134,7 +135,7 @@ export function NavRail({
           </Typography>
         )}
       </Brand>
-      {railItems(isAdmin).map(({ key, label, path, Icon }) => {
+      {railItems(withDecisions).map(({ key, label, path, Icon }) => {
         const active = isNavActive(pathname, path);
         const badge = key === 'decisions' ? decisionsBadge : key === 'history' ? historyBadge : 0;
         return (

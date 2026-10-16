@@ -56,7 +56,7 @@ describe('the nav items', () => {
     expect(explorer?.short).toBeUndefined();
   });
 
-  it('the rail: Home, Decisions (admins), Nominations, History, Activity, Explorer, Settings', () => {
+  it('the rail: Home, Decisions (when shown), Nominations, History, Activity, Explorer, Settings', () => {
     expect(keys(railItems(true))).toEqual([
       'home',
       'decisions',
@@ -102,7 +102,7 @@ describe('the nav items', () => {
 
 describe('the bars on screen', () => {
   it('the phone bar shows Explorer and no Settings', () => {
-    show(<BottomNav isAdmin />, '/explorer/account/QA');
+    show(<BottomNav withDecisions />, '/explorer/account/QA');
     const bar = screen.getByRole('navigation');
     const buttons = within(bar).getAllByRole('button');
     expect(buttons.map((b) => b.textContent)).toEqual([
@@ -119,7 +119,7 @@ describe('the bars on screen', () => {
   });
 
   it('the rail shows Explorer before Settings', () => {
-    show(<NavRail isAdmin={false} />, '/');
+    show(<NavRail withDecisions={false} />, '/');
     const names = within(screen.getByRole('navigation', { name: 'Main' }))
       .getAllByRole('button')
       .map((b) => b.getAttribute('aria-label') ?? b.textContent ?? '');

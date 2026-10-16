@@ -20,6 +20,7 @@ import { ErrorBoundary } from '../common/ErrorBoundary';
 import { ListSkeleton } from '../common/states';
 import { BottomNav, BOTTOM_NAV_HEIGHT } from './BottomNav';
 import { NavRail } from './NavRail';
+import { useDecisionsInNav } from './useDecisionsInNav';
 import { isBottomBarLayout, isBottomNavShown, useFrameFacts } from './useBottomNav';
 
 const Frame = styled('div')(({ theme }) => ({
@@ -68,6 +69,8 @@ export function AppShell() {
   const { status } = useMyStatus();
   const isAdmin = Boolean(status?.isAdmin);
   const badge = useDecisionsBadge(isAdmin, session.publicKey);
+  // Admins always; everyone else while a proposal they may vote on is open.
+  const withDecisions = useDecisionsInNav() ?? isAdmin;
   const historyBadge = useHistoryNews(isAdmin, session.status === 'ready' ? session.address : null);
 
   useStartSession();
@@ -94,7 +97,7 @@ export function AppShell() {
   return (
     <Frame>
       {bottomBar ? null : (
-        <NavRail isAdmin={isAdmin} decisionsBadge={badge} historyBadge={historyBadge} />
+        <NavRail withDecisions={withDecisions} decisionsBadge={badge} historyBadge={historyBadge} />
       )}
       <Main $phone={navShown}>
         <ErrorBoundary resetKey={pathname}>
@@ -104,7 +107,11 @@ export function AppShell() {
         </ErrorBoundary>
       </Main>
       {navShown ? (
-        <BottomNav isAdmin={isAdmin} decisionsBadge={badge} historyBadge={historyBadge} />
+        <BottomNav
+          withDecisions={withDecisions}
+          decisionsBadge={badge}
+          historyBadge={historyBadge}
+        />
       ) : null}
     </Frame>
   );

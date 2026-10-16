@@ -18,8 +18,6 @@ export interface NavItem {
   short?: string;
   path: string;
   Icon: SvgIconComponent;
-  /** Only Minter Admins see it. */
-  adminOnly?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -29,7 +27,6 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Decisions',
     path: PATHS.decisions,
     Icon: FactCheckOutlinedIcon,
-    adminOnly: true,
   },
   {
     key: 'nominations',
@@ -44,19 +41,23 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'settings', label: 'Settings', path: PATHS.settings, Icon: SettingsOutlinedIcon },
 ];
 
-/** Every item the rail shows. */
-export function railItems(isAdmin: boolean): NavItem[] {
-  return NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+/**
+ * Every item the rail shows. Decisions is there for Minter Admins, and for
+ * everyone else while a proposal they may vote on is open (a removal, a ban,
+ * a new Minter Admin: useDecisionsInNav).
+ */
+export function railItems(withDecisions: boolean): NavItem[] {
+  return NAV_ITEMS.filter((item) => item.key !== 'decisions' || withDecisions);
 }
 
 /**
- * The phone bar: five items at most (docs/DESIGN.md → Mobile). Admins get
- * Decisions in place of History; History stays reachable from Home,
- * Activity and every person page. Explorer takes the last slot; Settings
- * is then a gear in Home's header (HomePage), and shows Back.
+ * The phone bar: five items at most (docs/DESIGN.md → Mobile). Decisions,
+ * when it is there, takes History's place; History stays reachable from
+ * Home, Activity and every person page. Explorer takes the last slot;
+ * Settings is then a gear in Home's header (HomePage), and shows Back.
  */
-export function phoneItems(isAdmin: boolean): NavItem[] {
-  const keys: NavKey[] = isAdmin
+export function phoneItems(withDecisions: boolean): NavItem[] {
+  const keys: NavKey[] = withDecisions
     ? ['home', 'decisions', 'nominations', 'activity', 'explorer']
     : ['home', 'nominations', 'history', 'activity', 'explorer'];
   return keys.map((key) => NAV_ITEMS.find((item) => item.key === key) as NavItem);
