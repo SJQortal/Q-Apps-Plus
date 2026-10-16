@@ -12,7 +12,8 @@
  */
 import { useId, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { Box, Button, IconButton, Link, Snackbar, Tooltip, Typography } from '@mui/material';
+import { Box, Button, IconButton, Link, Tooltip, Typography } from '@mui/material';
+import { AnchoredNote } from '../../../../components/common/AnchoredNote';
 import CompareArrowsOutlinedIcon from '@mui/icons-material/CompareArrowsOutlined';
 import { ExpandChevron } from '../../../../components/common/ExpandChevron';
 import { PersonChip } from '../../../../components/common/Person';
@@ -168,6 +169,7 @@ export function CompareButton({
   const navigate = useNavigate();
   const picks = useComparePicks();
   const [full, setFull] = useState(false);
+  const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const label = `Compare ${accountLabel} with ${otherLabel}`;
   const compare = () => {
     const missing = [address, other].filter((who) => !picks.includes(who));
@@ -182,6 +184,7 @@ export function CompareButton({
     <>
       <Tooltip title={label}>
         <IconButton
+          ref={setAnchor}
           aria-label={label}
           onClick={compare}
           sx={{ width: 44, height: 44, flexShrink: 0 }}
@@ -189,16 +192,9 @@ export function CompareButton({
           <CompareArrowsOutlinedIcon />
         </IconButton>
       </Tooltip>
-      <Snackbar
-        open={full}
-        autoHideDuration={6000}
-        onClose={(_, reason) => {
-          if (reason !== 'clickaway') setFull(false);
-        }}
-        message={COMPARE_FULL}
-        // Above the phone's bottom bar.
-        sx={{ bottom: { xs: 'calc(var(--qmp-bottom-nav, 0px) + 8px)', sm: 24 } }}
-      />
+      <AnchoredNote anchor={anchor} open={full} onClose={() => setFull(false)}>
+        {COMPARE_FULL}
+      </AnchoredNote>
     </>
   );
 }
