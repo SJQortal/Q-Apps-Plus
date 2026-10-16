@@ -139,7 +139,12 @@ export function inCommonState(data: CompareData): InCommonState {
     },
     {
       words: 'the same accounts in their payments',
-      found: data.counterparties.rows.length > 0,
+      // Shared accounts that were left out (ATs, busy payers) were found, and are said so.
+      found: Boolean(
+        data.counterparties.rows.length ||
+        data.counterparties.atLeftOut ||
+        data.counterparties.busyLeftOut
+      ),
       reads: (i) => [data.sent[i], data.recv[i], data.assets[i]],
     },
     {
@@ -171,6 +176,8 @@ export function inCommonState(data: CompareData): InCommonState {
       data.sponsors.length ||
       data.firstPayers.length ||
       data.counterparties.rows.length ||
+      data.counterparties.atLeftOut ||
+      data.counterparties.busyLeftOut ||
       data.groupsShared.length ||
       data.timing.length
     ),
