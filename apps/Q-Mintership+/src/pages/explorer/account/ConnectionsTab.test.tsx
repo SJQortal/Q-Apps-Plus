@@ -267,6 +267,40 @@ describe('Connections: payments and first QORT', () => {
     expect(within(evidence).getAllByRole('listitem')[20]).toHaveFocus();
   });
 
+  it('AT addresses come 20 at a time too, with Show more, never cut silently', async () => {
+    const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    const ats = Array.from({ length: 25 }, (_, i) => `A${'x'.repeat(32)}${B58[i]}`);
+    const { user } = await open(ADDR.newcomer, (world) =>
+      mockFetchRoute('/transactions/payments/between', (url: URL) =>
+        url.searchParams.get('senderAddress') === ADDR.newcomer
+          ? ats.map((at, i) => ({
+              type: 'PAYMENT',
+              timestamp: 1_700_000_000_000 + i,
+              signature: `toAt${B58[i]}${'z'.repeat(80)}`,
+              blockHeight: 2_700_000 + i,
+              creatorAddress: ADDR.newcomer,
+              recipient: at,
+              amount: '1.00000000',
+            }))
+          : answerCore(world, url.pathname, url.searchParams)?.body
+      )
+    );
+    const recorded = await region('Recorded between them');
+    const list = await within(recorded).findByRole(
+      'list',
+      { name: 'AT addresses (automated contracts)' },
+      T
+    );
+    expect(within(list).getAllByRole('listitem')).toHaveLength(20);
+    expect(within(recorded).getByRole('button', { name: /^Sent to · 25$/ })).toBeInTheDocument();
+    await user.click(
+      within(recorded).getByRole('button', { name: 'Show more AT addresses (5 more)' })
+    );
+    expect(within(list).getAllByRole('listitem')).toHaveLength(25);
+    expect(within(list).getAllByRole('listitem')[20]).toHaveFocus();
+    expect(within(recorded).queryByRole('button', { name: /^Show more AT/ })).toBeNull();
+  });
+
   it('MINTER members only: none of Lou’s payments were with members', async () => {
     const { user } = await open(ADDR.left);
     const recorded = await region('Recorded between them');
