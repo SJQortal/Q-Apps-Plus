@@ -669,4 +669,60 @@ describe('copy findings', () => {
       whereWords({ parts: [], height: 5, firstHeight: 1, count: 3, signature: 'abcdefghij' })
     ).toBe(' (blocks 1–5, 3 transactions, newest abcdefgh…)');
   });
+
+  it('partial data says how far it got: still reading, couldn’t read, checked and none found', () => {
+    const text = compareText({
+      accounts: [
+        { letter: 'A', address: A, name: null },
+        { letter: 'B', address: B, name: null },
+        { letter: 'C', address: C, name: null },
+      ],
+      checkedAt: null,
+      neutralLine: 'Nothing here shows who runs an account.',
+      coverage: [],
+      pairs: [
+        {
+          label: 'A–B',
+          lines: [{ parts: [{ kind: 'text', text: 'A paid B 1 QORT in 1 payment' }] }],
+          noneFound: null,
+          status: ['Still reading: reward shares.'],
+        },
+        {
+          label: 'A–C',
+          lines: [],
+          noneFound: 'Checked, none found: Q-Mintership records.',
+          status: ['Couldn’t read: payments both ways.'],
+        },
+      ],
+      emptyPairs: null,
+      common: [],
+      commonNotes: [],
+      commonStatus: [
+        'Checked, none found: a shared first payer.',
+        'Still checking for a shared sponsor.',
+      ],
+      timeline: [],
+      timelineStatus: 'Still reading for the timeline.',
+      link: 'qortal://APP/Q-Mintership+/explorer/compare/a/b/c',
+    });
+    expect(text).toContain(
+      [
+        'Recorded between them:',
+        'A–B:',
+        '- A paid B 1 QORT in 1 payment',
+        '  Still reading: reward shares.',
+        'A–C:',
+        '  Checked, none found: Q-Mintership records.',
+        '  Couldn’t read: payments both ways.',
+        '',
+        'In common:',
+        'Checked, none found: a shared first payer.',
+        'Still checking for a shared sponsor.',
+        '',
+        'Timeline together:',
+        'Still reading for the timeline.',
+        '',
+      ].join('\n')
+    );
+  });
 });

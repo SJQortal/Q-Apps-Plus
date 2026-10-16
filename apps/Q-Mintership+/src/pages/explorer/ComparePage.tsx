@@ -45,6 +45,8 @@ import {
   leftOutLine,
   letterOf,
   LETTERS,
+  listWords,
+  PAIR_CHECK_WORDS,
   parseComparePath,
   sameFirstPayerParts,
   sameSponsorParts,
@@ -58,7 +60,13 @@ import { visibleName } from '../../rules/explorer/nameNotes';
 import { COMPARE_FULL, comparePicksAtom } from '../../state/explorer';
 import { appLink } from '../../utils/links';
 import { AccountCards } from './compare/AccountCards';
-import { inCommonState, sideFailed, sideFailures, useLetterAccents } from './compare/compareView';
+import {
+  inCommonState,
+  pairPending,
+  sideFailed,
+  sideFailures,
+  useLetterAccents,
+} from './compare/compareView';
 import { InCommonSection } from './compare/InCommonSection';
 import { PairGrid, type PairGridRow } from './compare/PairGrid';
 import { CopyFindingsButton } from './compare/parts';
@@ -123,8 +131,20 @@ function pairGridRows(data: CompareData): PairGridRow[] {
   });
 }
 
-/** Everything on the page as plain text, with the block it was checked at. */
-async function buildText(data: CompareData, sideFacts: SideFacts[]): Promise<string> {
+/** "payments both ways, reward shares". */
+const checkWords = (checks: readonly PairCheck[]) =>
+  checks.map((check) => PAIR_CHECK_WORDS[check]).join(', ');
+
+/**
+ * Everything on the page as plain text, with the block it was checked at,
+ * as far as the reads got: what is still being read and what couldn't be
+ * read is said, as on the page, never left out as if nothing were there.
+ */
+async function buildText(
+  data: CompareData,
+  sideFacts: SideFacts[],
+  timelineReading: boolean
+): Promise<string> {
   const tip = await getTip().catch(() => null);
   const total = data.liveSides.length;
   const linksCapped = data.links.some((q) => q.data?.truncated);
@@ -138,13 +158,20 @@ async function buildText(data: CompareData, sideFacts: SideFacts[]): Promise<str
     'The same accounts in their payments: in each account’s newest 100 QORT payments each way.',
   ];
   const pairs = data.pairData
-    .filter((p) => p.result.findings.length)
-    .map((p) => ({
-      label: p.pair.label,
-      // A trade's sentence has its dates already.
-      lines: p.result.findings.map((f) => (f.kind === 'trade' ? { parts: f.parts } : f)),
-      noneFound: checkedNoneLine(p.result.empty),
-    }));
+    .filter((p) => p.result.findings.length || p.result.pending.length)
+    .map((p) => {
+      const { reading, failed } = pairPending(data, p);
+      return {
+        label: p.pair.label,
+        // A trade's sentence has its dates already.
+        lines: p.result.findings.map((f) => (f.kind === 'trade' ? { parts: f.parts } : f)),
+        noneFound: checkedNoneLine(p.result.empty),
+        status: [
+          ...(reading.length ? [`Still reading: ${checkWords(reading)}.`] : []),
+          ...(failed.length ? [`Couldn’t read: ${checkWords(failed)}.`] : []),
+        ],
+      };
+    });
   const nothing = data.pairData.filter(
     (p) => !p.result.findings.length && !p.result.pending.length
   );
@@ -184,6 +211,15 @@ async function buildText(data: CompareData, sideFacts: SideFacts[]): Promise<str
       : []),
     ...data.timing.map((t) => t.text),
   ];
+  const state = inCommonState(data);
+  const commonStatus = [
+    ...(state.empty.length ? [`Checked, none found: ${state.empty.join(', ')}.`] : []),
+    ...(state.checking.length ? [`Still checking for ${listWords(state.checking)}.`] : []),
+    ...(state.failed.length ? [`Couldn’t finish checking for ${listWords(state.failed)}.`] : []),
+  ];
+  const timelineStatus = timelineReading
+    ? 'Still reading first transactions, self-shares, names and MINTER history for the timeline: it may be missing lines.'
+    : null;
   const timeline = data.timeline.map((event, i) =>
     i === 0
       ? timelineLine(event, nameOf)
@@ -214,7 +250,9 @@ async function buildText(data: CompareData, sideFacts: SideFacts[]): Promise<str
     emptyPairs,
     common,
     commonNotes,
+    commonStatus,
     timeline,
+    timelineStatus,
     side,
     link: appLink(explorerComparePath([...data.addresses])),
     nameOf,
@@ -358,7 +396,7 @@ export default function ComparePage() {
               />
             </Box>
             <Box>
-              <CopyFindingsButton build={() => buildText(data, sideFacts)} />
+              <CopyFindingsButton build={() => buildText(data, sideFacts, timelineReading)} />
             </Box>
           </>
         ) : null}

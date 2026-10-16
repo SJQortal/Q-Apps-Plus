@@ -545,6 +545,46 @@ describe('Compare: reads that fail', () => {
     expect(grid).not.toHaveTextContent(/A–C: [^A-Z]*(checking|so far)/);
   });
 
+  it('Copy findings says what couldn’t be read, pair by pair and in common', async () => {
+    const { user } = await open(
+      explorerComparePath([ADDR.kicked, ADDR.left, SPONSOR.address]),
+      (world) => {
+        breakReads(
+          world,
+          (url) =>
+            (url.pathname === '/transactions/payments/between' &&
+              url.searchParams.get('senderAddress') === ADDR.kicked &&
+              url.searchParams.get('recipientAddress') === SPONSOR.address) ||
+            (url.pathname === '/transactions/search' &&
+              url.searchParams.get('address') === ADDR.kicked &&
+              url.searchParams.getAll('txType').includes('REWARD_SHARE'))
+        );
+      }
+    );
+    const writeText = vi.fn(async (text: string) => void text);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const grid = await screen.findByRole('navigation', { name: 'Pairs' }, T);
+    await waitFor(() => expect(grid).toHaveTextContent(/A–C: [^A-Z]*failed/), T);
+    const common = await region('In common');
+    await waitFor(
+      () => expect(common).toHaveTextContent('Couldn’t finish checking for a shared sponsor.'),
+      T
+    );
+    await user.click(screen.getByRole('button', { name: 'Copy findings' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled(), T);
+    const text = writeText.mock.calls[0][0] as string;
+    // A pair with nothing found yet is not left out: it says what it couldn't read.
+    expect(text).toMatch(
+      /\nA–C:\n( {2}Checked, none found: [^\n]*\n)? {2}Couldn’t read: payments both ways, reward shares, level moves, name sales\.\n/
+    );
+    // A pair with findings says it too, under them.
+    expect(text).toMatch(
+      /\nA–B:\n(- [^\n]*\n)+( {2}[^\n]*\n)* {2}Couldn’t read: reward shares, level moves, name sales\.\n/
+    );
+    expect(text).toContain('Couldn’t finish checking for a shared sponsor.');
+    expect(text).not.toMatch(/Checked, none found: [^\n]*a shared sponsor/);
+  });
+
   it('Side by side: a failed read says “Couldn’t read”, not “Loading” for good, with Retry', async () => {
     let broken = { on: false };
     const { user } = await open(explorerComparePath([ADDR.kicked, ADDR.left]), (world) => {

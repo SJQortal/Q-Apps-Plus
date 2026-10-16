@@ -1229,14 +1229,27 @@ export interface CompareTextInput {
   neutralLine: string;
   /** How much was read. */
   coverage: readonly string[];
-  /** Pairs with findings, each with its own checked-and-empty line. */
-  pairs: ReadonlyArray<{ label: string; lines: readonly CompareLine[]; noneFound: string | null }>;
+  /**
+   * Pairs with findings or with checks not read yet, each with its own
+   * checked-and-empty line and what it is still reading or couldn't read.
+   */
+  pairs: ReadonlyArray<{
+    label: string;
+    lines: readonly CompareLine[];
+    noneFound: string | null;
+    /** "Still reading: …", "Couldn’t read: …". */
+    status?: readonly string[];
+  }>;
   /** "A–C, B–C: checked, none found: …", or null. */
   emptyPairs: string | null;
   common: readonly CompareLine[];
   /** Plain lines (shared counterparties' counts, timing rows, left out). */
   commonNotes: readonly string[];
+  /** In common's "Checked, none found: …", still checking and couldn't check, as on the page. */
+  commonStatus?: readonly string[];
   timeline: readonly string[];
+  /** What the timeline is still reading, when it is. */
+  timelineStatus?: string | null;
   /** Side by side, one line per fact. */
   side?: readonly string[];
   link: string;
@@ -1288,17 +1301,21 @@ export function compareText(input: CompareTextInput): string {
       out.push(`${pair.label}:`);
       for (const line of pair.lines) out.push(bullet(line, nameOf));
       if (pair.noneFound) out.push(`  ${pair.noneFound}`);
+      for (const status of pair.status ?? []) out.push(`  ${status}`);
     }
     if (input.emptyPairs) out.push(input.emptyPairs);
   }
-  if (input.common.length || input.commonNotes.length) {
+  const commonStatus = input.commonStatus ?? [];
+  if (input.common.length || input.commonNotes.length || commonStatus.length) {
     out.push('', 'In common:');
     for (const line of input.common) out.push(bullet(line, nameOf));
     for (const note of input.commonNotes) out.push(`- ${note}`);
+    for (const status of commonStatus) out.push(status);
   }
-  if (input.timeline.length) {
+  if (input.timeline.length || input.timelineStatus) {
     out.push('', 'Timeline together:');
     for (const line of input.timeline) out.push(`- ${line}`);
+    if (input.timelineStatus) out.push(input.timelineStatus);
   }
   if (input.side?.length) {
     out.push('', 'Side by side:');

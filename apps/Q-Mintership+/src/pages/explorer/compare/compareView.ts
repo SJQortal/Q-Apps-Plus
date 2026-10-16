@@ -4,13 +4,13 @@
  * In common has, is still reading, found nothing of and couldn't check.
  */
 import { useTheme, type Theme } from '@mui/material/styles';
-import { letterOf, type PairFinding } from '../../../rules/explorer/compare';
+import { letterOf, type PairCheck, type PairFinding } from '../../../rules/explorer/compare';
 import { monthRange } from '../../../rules/explorer/connections';
 import { formatDate } from '../../../utils/format';
 import { withHue } from '../../decisions/sectionAccents';
 import { whenLine } from '../account/connections/words';
 import type { SideRead } from './sideRows';
-import type { CompareData } from './useCompareData';
+import type { CompareData, PairData } from './useCompareData';
 
 /** A blue, a violet, a teal and an amber. */
 const HUES = [215, 285, 170, 35] as const;
@@ -57,6 +57,8 @@ export interface InCommonState {
   empty: string[];
   /** Checks a read failed for, in words: neither found nor said to be empty. */
   failed: string[];
+  /** Checks still waiting for a read (none failed), in words. */
+  checking: string[];
   /** The reads that failed, to retry. */
   failedReads: CompareRead[];
 }
@@ -127,6 +129,33 @@ export function sideFailures(data: CompareData): { what: string[]; reads: Compar
   return { what, reads: [...reads] };
 }
 
+/** The reads behind each of a pair's checks in Recorded between them. */
+function pairCheckReads(data: CompareData, pair: PairData): Record<PairCheck, CompareRead[]> {
+  const { i, j } = pair.pair;
+  const links = [data.links[i], data.links[j]];
+  return {
+    payments: [pair.xy, pair.yx, data.assets[i], data.assets[j]],
+    rewardShares: links,
+    levelMoves: links,
+    nameSales: links,
+    records: [data.made[i], data.made[j]],
+    trades: [data.trades[i], data.trades[j]],
+  };
+}
+
+/** A pair's checks not read yet: those still reading, and those a failed read stopped. */
+export function pairPending(
+  data: CompareData,
+  pair: PairData
+): { reading: PairCheck[]; failed: PairCheck[] } {
+  const reads = pairCheckReads(data, pair);
+  const reading: PairCheck[] = [];
+  const failed: PairCheck[] = [];
+  for (const check of pair.result.pending)
+    (reads[check].some((q) => q.isError) ? failed : reading).push(check);
+  return { reading, failed };
+}
+
 /** What In common has, is reading, found nothing of, and couldn't check. */
 export function inCommonState(data: CompareData): InCommonState {
   const live = data.live.map((a, i) => (a ? i : -1)).filter((i) => i >= 0);
@@ -155,8 +184,8 @@ export function inCommonState(data: CompareData): InCommonState {
   ];
   const empty: string[] = [];
   const failed: string[] = [];
+  const checking: string[] = [];
   const failedReads = new Set<CompareRead>();
-  let reading = false;
   for (const check of checks) {
     const reads = live.flatMap(check.reads);
     // A failed read is not a read: its check is neither empty nor complete.
@@ -164,14 +193,16 @@ export function inCommonState(data: CompareData): InCommonState {
       if (!check.found) empty.push(check.words);
     } else if (reads.some((q) => q.isError)) {
       failed.push(check.words);
+    } else {
+      checking.push(check.words);
     }
-    for (const q of reads) {
-      if (q.isError) failedReads.add(q);
-      else if (q.data === undefined) reading = true;
-    }
+    for (const q of reads) if (q.isError) failedReads.add(q);
   }
   return {
-    reading,
+    reading: live.some((i) =>
+      checks.some((check) => check.reads(i).some((q) => q.data === undefined && !q.isError))
+    ),
+    checking,
     any: Boolean(
       data.sponsors.length ||
       data.firstPayers.length ||
