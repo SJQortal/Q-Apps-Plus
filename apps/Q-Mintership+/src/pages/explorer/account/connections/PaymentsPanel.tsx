@@ -118,6 +118,7 @@ export function PaymentsPanel({
 
   const tagsOf = (other: string) => [
     marks.markOf(other),
+    marks.devOf(other),
     ...relationOf(other),
     bandWords(bands[other]),
   ];

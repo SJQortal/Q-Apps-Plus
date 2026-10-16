@@ -826,6 +826,22 @@ export default {
       path: `/explorer/account/${ADDR.kicked}/connections?as=admin`,
       after: explorerSettle,
     },
+    // The same connections as a circle (List / Circle, kept on this device).
+    {
+      key: 'explorer-connections-circle',
+      path: `/explorer/account/${ADDR.left}/connections?as=admin`,
+      after: async (page) => {
+        await page.addInitScript(
+          ([key, value]) => window.localStorage.setItem(key, value),
+          ['qmintershipplus-connections-view', 'circle']
+        );
+        await page.reload({ waitUntil: 'load' });
+        await explorerSettle(page);
+        await page
+          .getByRole('list', { name: 'Linked accounts, the most transactions first' })
+          .waitFor({ timeout: 8000 });
+      },
+    },
     {
       key: 'explorer-transactions',
       path: `/explorer/account/${ADDR.admin}/transactions?as=admin`,

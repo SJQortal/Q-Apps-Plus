@@ -19,6 +19,7 @@ import type { NameMatch } from '../../../state/explorer';
 import { minterStatusWord, openedFrom } from './accountWords';
 import { MarkedName } from '../../../components/common/MarkedName';
 import { StatusChip } from '../../../components/explorer/StatusChip';
+import { DEV_ADMIN, useDevAdmins } from '../../../components/explorer/useDevAdmins';
 
 export interface AccountHeaderProps {
   address: string;
@@ -48,8 +49,10 @@ export function AccountHeader({
   mintingNow,
   openedBy,
 }: AccountHeaderProps) {
+  const devAdmins = useDevAdmins();
   const chips = [
     status ? minterStatusWord(status) : null,
+    devAdmins?.has(address) ? DEV_ADMIN : null,
     mintingNow ? 'Minting now' : null,
     account.blocksMintedPenalty !== 0 ? 'Minting penalty' : null,
   ].filter((chip): chip is string => chip !== null);

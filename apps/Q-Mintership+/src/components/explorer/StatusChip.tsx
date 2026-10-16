@@ -2,7 +2,8 @@
  * The Explorer's status chips in colour: where an account stands in MINTER,
  * whether it mints now, its level, and its part in a group or a name. The
  * colour says what kind of fact it is, never good or bad: MINTER blue,
- * Minter Admins violet, minting green with a live dot, a ban red, a penalty
+ * Minter Admins violet, Dev Admins (the dev group's admins) teal, minting
+ * green with a live dot, a ban red, a penalty
  * amber, a group's owner gold; an account outside MINTER, or one that was
  * in it, stays quiet grey. A level's tint deepens with the level.
  *
@@ -16,6 +17,7 @@ import { Box, Chip } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
+import CodeOutlinedIcon from '@mui/icons-material/CodeOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import StarOutlineOutlinedIcon from '@mui/icons-material/StarOutlineOutlined';
 import VerifiedOutlinedIcon from '@mui/icons-material/VerifiedOutlined';
@@ -26,6 +28,7 @@ import { statusAccent, statusKindOf, type StatusKind } from './statusKinds';
 
 const ICON: Partial<Record<StatusKind, ReactElement>> = {
   admin: <AdminPanelSettingsOutlinedIcon />,
+  devAdmin: <CodeOutlinedIcon />,
   groupAdmin: <AdminPanelSettingsOutlinedIcon />,
   member: <VerifiedOutlinedIcon />,
   banned: <BlockOutlinedIcon />,

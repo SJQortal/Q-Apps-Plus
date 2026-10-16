@@ -532,6 +532,8 @@ function buildWorld() {
     accounts,
     names,
     admins,
+    // The dev group's admins (group 1): Avery Admin, and the group's null owner (no one's).
+    devAdmins: [ADDR.admin, NULL_OWNER],
     members,
     memberJoined,
     pending,
@@ -664,6 +666,11 @@ export function answerCore(world, pathname, sp) {
   if (p === '/transactions/unitfee') return text(1_000_000);
 
   if (p === `/groups/${GROUP}`) return json(world.group);
+  // The dev group (group 1): its admins only (the Explorer's Dev Admin mark).
+  if (p === '/groups/members/1') {
+    const rows = world.devAdmins.map((member) => ({ member, isAdmin: true, joined: NOW }));
+    return json({ memberCount: rows.length, adminCount: rows.length, members: page(rows, sp) });
+  }
   if (p === `/groups/members/${GROUP}`) {
     if (sp.get('onlyAdmins') === 'true') {
       const rows = world.admins.map((a, i) => ({ ...memberRow(world, a, i), isAdmin: true }));

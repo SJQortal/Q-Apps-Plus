@@ -22,6 +22,7 @@ import { INVALID_ADDRESS, UNUSED_ADDRESS } from '../explorerWords';
 import { LetterBadge } from './letters';
 import type { CompareData } from './useCompareData';
 import { StatusChip } from '../../../components/explorer/StatusChip';
+import { DEV_ADMIN, useDevAdmins } from '../../../components/explorer/useDevAdmins';
 
 const CHIP_LIST_SX = {
   listStyle: 'none',
@@ -53,9 +54,11 @@ function AccountCard({
   const addressLabel = `${label}’s address (${letter})`;
   const status = data.status[index].data;
   const minting = data.mintingNow[index];
+  const devAdmins = useDevAdmins();
   const chips = account
     ? [
         status ? minterStatusWord(status) : null,
+        devAdmins?.has(address) ? DEV_ADMIN : null,
         minting ? 'Minting now' : null,
         account.blocksMintedPenalty !== 0 ? 'Minting penalty' : null,
       ].filter((chip): chip is string => chip !== null)

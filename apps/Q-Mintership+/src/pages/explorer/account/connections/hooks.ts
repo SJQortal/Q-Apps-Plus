@@ -19,6 +19,7 @@ import { getPayerBand, type PayerBand } from '../../../../data/explorer/account'
 import { runPool } from '../../../../data/explorer/sets';
 import { peekQuery, subscribeQuery } from '../../../../data/query';
 import type { AccountInfo } from '../../../../data/types';
+import { DEV_ADMIN, useDevAdmins } from '../../../../components/explorer/useDevAdmins';
 
 /** The values of `keys` in the store now (undefined where nothing is loaded), re-read on change. */
 export function useStoreValues<T>(keys: readonly string[]): Array<T | undefined> {
@@ -38,6 +39,8 @@ export type MinterMark = 'Minter Admin' | 'MINTER member';
 export interface MinterMarks {
   /** The mark for an account, or null (not in the lists, or the lists aren't loaded). */
   markOf: (address: string) => MinterMark | null;
+  /** "Dev Admin" for an admin of the dev group (data/explorer/devAdmins.ts), else null. */
+  devOf: (address: string) => typeof DEV_ADMIN | null;
   /** The member list is loaded, so "MINTER members only" can filter. */
   ready: boolean;
 }
@@ -50,6 +53,7 @@ export function useMinterMarks(load: boolean): MinterMarks {
     getMembers().catch(quiet);
     getAdmins().catch(quiet);
   }, [load]);
+  const devAdmins = useDevAdmins(load);
   const [members, admins] = useStoreValues<MemberList | AdminList>([
     'group:members',
     'group:admins',
@@ -59,6 +63,7 @@ export function useMinterMarks(load: boolean): MinterMarks {
   return {
     markOf: (address) =>
       adminSet.has(address) ? 'Minter Admin' : memberSet.has(address) ? 'MINTER member' : null,
+    devOf: (address) => (devAdmins?.has(address) ? DEV_ADMIN : null),
     ready: members !== undefined,
   };
 }

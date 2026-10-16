@@ -13,7 +13,8 @@ import { getDefaultStore } from 'jotai';
 import { renderPage } from '../../test/render';
 import { expectNoAxeViolations } from '../../test/axe';
 import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../test/setup';
-import { ADDR } from '../../test/world';
+import { ADDR, installWorld } from '../../test/world';
+import { getDevAdmins } from '../../data/explorer/devAdmins';
 import { explorerAccountPath } from '../../routes/paths';
 import {
   addPick,
@@ -146,6 +147,9 @@ describe('an account in the Explorer', () => {
     expect(await within(about).findByText('MINTER member', {}, T)).toBeInTheDocument();
     expect(await within(about).findByText('Minting now', {}, T)).toBeInTheDocument();
     expect(within(about).queryByText('Minting penalty')).toBeNull();
+    // Not one of the dev group's admins.
+    await waitFor(() => expect(fetchCallsFor('/groups/members/1').length).toBeGreaterThan(0), T);
+    expect(within(about).queryByText('Dev Admin')).toBeNull();
     // The whole address, not a shortened one.
     expect(screen.getByText(ADDR.nominator)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy address' })).toBeInTheDocument();
@@ -579,5 +583,23 @@ describe('Compare from the account header', () => {
     await user.click(screen.getByRole('button', { name: 'Remove Nora Nominator from compare' }));
     expect(await screen.findByText('Removed from compare', {}, T)).toBeVisible();
     expect(store.get(comparePicksAtom)).toEqual([]);
+  });
+});
+
+describe('Dev Admins', () => {
+  it('marks an admin of the dev group, from one read of its admins', async () => {
+    await open(explorerAccountPath(ADDR.admin));
+    const about = await screen.findByRole('list', { name: 'About this account' }, T);
+    expect(await within(about).findByText('Dev Admin', {}, T)).toBeInTheDocument();
+    expect(within(about).getByText('Minter Admin')).toBeInTheDocument();
+    const reads = fetchCallsFor('/groups/members/1');
+    expect(reads).toHaveLength(1);
+    expect(reads[0]).toMatch(/onlyAdmins=true/);
+    expect(reads[0]).toMatch(/limit=100/);
+  });
+
+  it('leaves out the group’s null owner, which is no one’s account', async () => {
+    installWorld('learner');
+    expect(await getDevAdmins()).toEqual([ADDR.admin]);
   });
 });

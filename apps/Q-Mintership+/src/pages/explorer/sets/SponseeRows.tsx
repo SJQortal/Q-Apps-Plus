@@ -18,6 +18,7 @@ import { useQuery } from '../../../hooks/useQuery';
 import { formatCount, formatDate, plural } from '../../../utils/format';
 import { FOCUSABLE_ROW_SX } from '../account/names/useShowMore';
 import { StatusChip } from '../../../components/explorer/StatusChip';
+import { DEV_ADMIN, useDevAdmins } from '../../../components/explorer/useDevAdmins';
 
 export const SET_LIST_SX = {
   listStyle: 'none',
@@ -53,6 +54,7 @@ export function SponseeRowItem({ row, membersKnown, picked, full, onPick }: Spon
     getAccount(row.address, { force })
   );
   const label = useDisplayName(row.address).label;
+  const devAdmins = useDevAdmins(near);
   const facts = [
     row.member
       ? row.member.joined
@@ -61,6 +63,7 @@ export function SponseeRowItem({ row, membersKnown, picked, full, onPick }: Spon
       : membersKnown
         ? 'Not in MINTER'
         : null,
+    devAdmins?.has(row.address) ? DEV_ADMIN : null,
     row.banned ? 'Banned from MINTER' : null,
     row.mintingNow ? 'Minting now' : null,
     account.data ? `Level ${account.data.level}` : null,

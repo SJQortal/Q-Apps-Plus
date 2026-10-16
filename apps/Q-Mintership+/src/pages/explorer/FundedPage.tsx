@@ -165,6 +165,7 @@ export default function FundedPage() {
                     secondary={[
                       `${formatAmount(paid.amount)} QORT, ${formatDate(paid.timestamp)} · block ${formatCount(paid.height)}`,
                       marks.markOf(paid.address),
+                      marks.devOf(paid.address),
                     ]
                       .filter(Boolean)
                       .join(' · ')}

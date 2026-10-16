@@ -4,6 +4,7 @@ import { statusKindOf } from './statusKinds';
 describe('statusKindOf', () => {
   it('reads each chip’s kind from the words the Explorer uses', () => {
     expect(statusKindOf('Minter Admin')).toBe('admin');
+    expect(statusKindOf('Dev Admin')).toBe('devAdmin');
     expect(statusKindOf('MINTER member')).toBe('member');
     expect(statusKindOf('In MINTER')).toBe('member');
     expect(statusKindOf('In MINTER since 4 Aug 2026')).toBe('member');

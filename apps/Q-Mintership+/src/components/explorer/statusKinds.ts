@@ -7,6 +7,7 @@ import { withHue } from '../../pages/decisions/sectionAccents';
 
 export type StatusKind =
   | 'admin'
+  | 'devAdmin'
   | 'member'
   | 'minting'
   | 'banned'
@@ -22,6 +23,7 @@ export type StatusKind =
 /** The kind of a status chip, from its words (the words the Explorer already uses). */
 export function statusKindOf(label: string): StatusKind {
   if (label === 'Minter Admin') return 'admin';
+  if (label === 'Dev Admin') return 'devAdmin';
   if (label === 'MINTER member' || /^In MINTER( since |$)/.test(label)) return 'member';
   if (label === 'Minting now') return 'minting';
   if (label === 'Banned from MINTER') return 'banned';
@@ -51,6 +53,8 @@ export function statusAccent(theme: Theme, kind: StatusKind): string | null {
       return p.warning.main;
     case 'owner':
       return withHue(p.info.main, 45); // gold
+    case 'devAdmin':
+      return withHue(p.info.main, 172); // teal
     default:
       return null;
   }

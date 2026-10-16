@@ -63,7 +63,7 @@ function FirstQort({
       other={funding.from}
       parts={parts}
       when={when}
-      tags={[marks.markOf(funding.from)]}
+      tags={[marks.markOf(funding.from), marks.devOf(funding.from)]}
       evidence={{ words: '1 transaction', signature: funding.signature }}
     />
   );
@@ -110,7 +110,7 @@ export function InCommonSection({
             when={`Its reward shares to others: ${data.siblingsSpan}${
               siblingsCapped ? ' (its newest 500 transactions read)' : ''
             }`}
-            tags={[marks.markOf(sponsor), 'its sponsor']}
+            tags={[marks.markOf(sponsor), marks.devOf(sponsor), 'its sponsor']}
             extra={
               <Link component={RouterLink} to={explorerSponseesPath(sponsor)} sx={LINK_SX}>
                 The {formatCount(siblings + 1)}

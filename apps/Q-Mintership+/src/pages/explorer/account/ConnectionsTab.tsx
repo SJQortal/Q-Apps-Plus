@@ -152,7 +152,7 @@ function FindingRow({
       other={finding.other}
       parts={finding.parts}
       when={whenLine(finding)}
-      tags={[marks.markOf(finding.other)]}
+      tags={[marks.markOf(finding.other), marks.devOf(finding.other)]}
       evidence={{ words: finding.evidenceWords, txs: finding.evidence }}
       privs={privs}
       flow={finding.kind === 'paidBy' ? 'in' : finding.kind === 'paidTo' ? 'out' : undefined}
