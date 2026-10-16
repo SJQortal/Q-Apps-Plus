@@ -12,6 +12,7 @@
 import type { ReactNode } from 'react';
 import { Link as RouterLink, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Box, Button, Typography, type ChipProps } from '@mui/material';
+import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { PersonChip, PersonInline } from '../../components/common/Person';
 import { Section, ToneChip } from '../../components/common/Section';
@@ -39,7 +40,15 @@ import {
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { useQuery } from '../../hooks/useQuery';
 import { PROPOSE_NOMINATION } from '../../constants/words';
-import { PATHS, decisionPath, nominatePath, nominationPath, personPath } from '../../routes/paths';
+import {
+  PATHS,
+  decisionPath,
+  explorerAccountPath,
+  explorerComparePath,
+  nominatePath,
+  nominationPath,
+  personPath,
+} from '../../routes/paths';
 import { isOpenState } from '../../rules/nomination';
 import { OUTCOME_LABEL, outcomeSentence, type DecisionOutcome } from '../../rules/outcome';
 import { nominationRounds, type NominationRound } from '../../rules/rounds';
@@ -149,6 +158,7 @@ function NominationView({ address }: { address: string }) {
   }
 
   const nothing = !current && rounds !== null && rounds.length === 0;
+  const nominator = current?.nomination?.publisher.address ?? null;
   return (
     <Shell subtitle={who.label} address={address}>
       <PersonChip address={address} size={40} secondary="Nominee" />
@@ -205,10 +215,28 @@ function NominationView({ address }: { address: string }) {
         {history.data?.truncated ? <TruncatedNote what="their history" /> : null}
       </Section>
 
-      <Box>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
         <Button component={RouterLink} to={personPath(address)} sx={{ minHeight: 44 }}>
           Their MINTER profile and history
         </Button>
+        <Button
+          component={RouterLink}
+          to={explorerAccountPath(address)}
+          aria-label={`Explore ${who.label}`}
+          startIcon={<TravelExploreOutlinedIcon />}
+          sx={{ minHeight: 44 }}
+        >
+          Explore
+        </Button>
+        {nominator && nominator !== address ? (
+          <Button
+            component={RouterLink}
+            to={explorerComparePath([address, nominator])}
+            sx={{ minHeight: 44 }}
+          >
+            Compare nominee and nominator
+          </Button>
+        ) : null}
       </Box>
     </Shell>
   );
