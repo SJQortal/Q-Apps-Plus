@@ -181,6 +181,29 @@ describe('fundingFrom', () => {
     ).toMatchObject({ kind: 'multiPayment', amount: '2' });
   });
 
+  it('counts a multi-payment as a QORT payment only when it paid the account QORT', () => {
+    const multi = (payments: Array<Record<string, unknown>>) =>
+      fundingFrom({ ...base, type: 'MULTI_PAYMENT', creatorAddress: B, payments }, A);
+    expect(multi([{ recipient: A, amount: '3', assetId: 90 }])).toMatchObject({
+      kind: 'transferAsset',
+      from: B,
+      amount: '3',
+      assetId: 90,
+    });
+    expect(
+      multi([
+        { recipient: A, amount: '3', assetId: 90 },
+        { recipient: A, amount: '2', assetId: 0 },
+      ])
+    ).toMatchObject({ kind: 'multiPayment', amount: '2', assetId: 0 });
+  });
+
+  it('keeps the asset the genesis block gave out', () => {
+    expect(
+      fundingFrom({ ...base, type: 'GENESIS', recipient: A, amount: '100000', assetId: 1 }, A)
+    ).toMatchObject({ kind: 'genesis', from: null, amount: '100000', assetId: 1 });
+  });
+
   it('ignores transactions that send nothing to the account', () => {
     expect(fundingFrom({ ...base, type: 'PAYMENT', recipient: B, creatorAddress: A }, A)).toBeNull();
     expect(fundingFrom({ ...base, type: 'REGISTER_NAME', creatorAddress: A }, A)).toBeNull();

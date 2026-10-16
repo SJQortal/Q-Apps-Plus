@@ -327,10 +327,18 @@ export type FundingKind =
   'payment' | 'multiPayment' | 'transferAsset' | 'at' | 'rewardShare' | 'transferPrivs' | 'genesis';
 
 export interface Funding {
+  /**
+   * The kind of transaction. A multi-payment counts as 'multiPayment' only
+   * when it paid the account QORT; one that paid it another asset is an
+   * asset transfer.
+   */
   kind: FundingKind;
   /** Who it came from (an AT's own address for an AT payout); null for the genesis block. */
   from: string | null;
   amount?: string;
+  /** The asset of `amount` (0 is QORT), for asset transfers, multi-payments and the genesis block. */
+  assetId?: number;
+  assetName?: string;
   sharePercent?: string;
   height: number;
   timestamp: number;
@@ -346,6 +354,19 @@ export interface FirstSeen {
   firstSeen: { height: number; timestamp: number } | null;
 }
 
+/** Core's asset id (absent means QORT); NaN when it isn't a number. */
+function assetIdOf(value: unknown): number {
+  return value === undefined || value === null ? 0 : Number(value);
+}
+
+/** The asset of a row or payment, as Funding carries it. */
+function assetOf(row: Readonly<Record<string, unknown>>): Pick<Funding, 'assetId' | 'assetName'> {
+  return {
+    assetId: assetIdOf(row.assetId),
+    ...(typeof row.assetName === 'string' && row.assetName ? { assetName: row.assetName } : {}),
+  };
+}
+
 /** What `tx` gave `address`, if `tx` is a transaction that sends something to it. */
 export function fundingFrom(tx: TxRow, address: string): Funding | null {
   if (typeof tx.blockHeight !== 'number') return null;
@@ -358,15 +379,31 @@ export function fundingFrom(tx: TxRow, address: string): Funding | null {
         : null;
     case 'TRANSFER_ASSET':
       return tx.recipient === address
-        ? { ...base, kind: 'transferAsset', from: creator, amount: String(tx.amount ?? '') }
+        ? {
+            ...base,
+            kind: 'transferAsset',
+            from: creator,
+            amount: String(tx.amount ?? ''),
+            ...assetOf(tx),
+          }
         : null;
     case 'MULTI_PAYMENT': {
+      // Core takes a multi-payment of any asset as a new account's first
+      // transaction: it is a QORT payment only when it paid QORT.
       const payments = Array.isArray(tx.payments)
-        ? (tx.payments as Array<{ recipient?: string; amount?: string }>)
+        ? (tx.payments as Array<{ recipient?: string; amount?: string; assetId?: unknown }>)
         : [];
-      const mine = payments.find((payment) => payment?.recipient === address);
-      return mine
-        ? { ...base, kind: 'multiPayment', from: creator, amount: String(mine.amount ?? '') }
+      const mine = payments.filter((payment) => payment?.recipient === address);
+      const qort = mine.find((payment) => assetIdOf(payment.assetId) === 0);
+      const paid = qort ?? mine[0];
+      return paid
+        ? {
+            ...base,
+            kind: qort ? 'multiPayment' : 'transferAsset',
+            from: creator,
+            amount: String(paid.amount ?? ''),
+            ...assetOf(paid),
+          }
         : null;
     }
     case 'AT':
@@ -393,8 +430,9 @@ export function fundingFrom(tx: TxRow, address: string): Funding | null {
         ? { ...base, kind: 'transferPrivs', from: creator }
         : null;
     case 'GENESIS':
+      // The genesis block gave out other assets than QORT: keep which one.
       return tx.recipient === address
-        ? { ...base, kind: 'genesis', from: null, amount: String(tx.amount ?? '') }
+        ? { ...base, kind: 'genesis', from: null, amount: String(tx.amount ?? ''), ...assetOf(tx) }
         : null;
     default:
       return null;
