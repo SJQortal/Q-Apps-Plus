@@ -341,3 +341,57 @@ describe('Overview: its groups', () => {
     expect(names()).toEqual(['MINTER', 'Q-Mintership Helpers', 'Qortal General']);
   });
 });
+
+describe('Overview: its activity over time', () => {
+  it('draws its transactions by family, marks its milestones, lists a period, and goes full screen', async () => {
+    const { user, container } = await open(ADDR.admin);
+    const activity = await region('Activity');
+    const chart = await within(activity).findByRole(
+      'group',
+      { name: /activity over time\. Use the arrow keys/ },
+      T
+    );
+    // What was read, and each family with its count (a toggle to hide it).
+    await waitFor(
+      () => expect(within(activity).getByText(/^All \d+ transactions? since /)).toBeInTheDocument(),
+      T
+    );
+    const legend = within(activity).getByRole('list', {
+      name: 'Kinds of transactions: press one to hide or show it',
+    });
+    const first = within(legend).getAllByRole('button')[0];
+    expect(first).toHaveAttribute('aria-pressed', 'true');
+    await user.click(first);
+    expect(first).toHaveAttribute('aria-pressed', 'false');
+    await user.click(first);
+    // Its milestones, each a link to what it marks.
+    const milestones = await within(activity).findByRole('list', { name: 'Milestones' }, T);
+    const links = within(milestones).getAllByRole('link');
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links)
+      expect(link.getAttribute('href')).toMatch(/^\/(explorer|nominations)\//);
+    // Keys: to the last period with transactions, then Enter lists them.
+    chart.focus();
+    await user.keyboard('{End}');
+    expect(
+      within(activity).getByText(/: (\d+ transactions?|not read yet)/, {
+        selector: '[role="status"]',
+      })
+    ).toBeInTheDocument();
+    for (let i = 0; i < 40; i++) {
+      await user.keyboard('{Enter}');
+      if (within(activity).queryByRole('button', { name: 'Close the list' })) break;
+      await user.keyboard('{ArrowLeft}');
+    }
+    const close = await within(activity).findByRole('button', { name: 'Close the list' }, T);
+    expect(within(activity).getByRole('list', { name: /^Transactions, / })).toBeInTheDocument();
+    await expectNoAxeViolations(container);
+    await user.click(close);
+    // Full screen: the same, in a dialog.
+    await user.click(
+      within(activity).getByRole('button', { name: 'Show the activity full screen' })
+    );
+    const dialog = await screen.findByRole('dialog', { name: /^Activity: / }, T);
+    expect(within(dialog).getByRole('group', { name: /activity over time/ })).toBeInTheDocument();
+  });
+});

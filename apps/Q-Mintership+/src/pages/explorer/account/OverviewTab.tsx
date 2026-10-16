@@ -23,6 +23,7 @@ import { DirectLinksPreview } from './DirectLinksPreview';
 import { LatestTransactions } from './LatestTransactions';
 import { FactsSection } from './overview/FactsSection';
 import { GroupsSection } from './overview/GroupsSection';
+import { ActivitySection } from './activity/ActivitySection';
 import { MinterSection } from './overview/MinterSection';
 import { MintingSection } from './overview/MintingSection';
 import { NotesSection } from './overview/NotesSection';
@@ -75,6 +76,7 @@ export default function OverviewTab({ address }: OverviewTabProps) {
       />
       <DirectLinksPreview address={address} />
       <FactsSection address={address} account={a} firstSeen={firstSeen} />
+      <ActivitySection address={address} firstSeen={firstSeen} />
       <GroupsSection address={address} />
       <MinterSection address={address} status={status} memberSince={memberSince} />
       <MintingSection address={address} hasPublicKey={Boolean(publicKey)} />
