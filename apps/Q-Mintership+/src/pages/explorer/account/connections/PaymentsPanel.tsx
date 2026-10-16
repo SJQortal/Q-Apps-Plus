@@ -1,7 +1,7 @@
 /**
  * Connections → Payments: QORT payments, asset transfers and multi-payments
  * grouped by the other account, "Sent to" or "Received from", sorted by
- * how many or how much. Each account that has sent 100+ or 500+ payments
+ * how many or how much, or by the latest or the earliest payment. Each account that has sent 100+ or 500+ payments
  * says so; those with 1,000+ are folded into one line that opens them. AT
  * addresses come last, as contracts, 20 at a time like the people
  * ("Show more"). "MINTER members only" filters by the
@@ -15,6 +15,7 @@ import {
   Button,
   FormControlLabel,
   Switch,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -29,6 +30,8 @@ import {
   collapseBusy,
   flowCountWords,
   flowParts,
+  FLOW_SORTS,
+  isFlowSort,
   paymentsCoverage,
   sortFlows,
   splitAt,
@@ -183,20 +186,23 @@ export function PaymentsPanel({
             Received from{receivedCount !== undefined ? ` · ${formatCount(receivedCount)}` : ''}
           </ToggleButton>
         </ToggleButtonGroup>
-        <ToggleButtonGroup
-          exclusive
+        <TextField
+          select
+          label="Sort"
           size="small"
           value={sort}
-          onChange={(_, value: FlowSort | null) => value && setSort(value)}
-          aria-label="Sort by"
+          onChange={(e) => {
+            if (isFlowSort(e.target.value)) setSort(e.target.value);
+          }}
+          slotProps={{ select: { native: true } }}
+          sx={{ flex: '0 1 220px', minWidth: 180, '& .MuiInputBase-root': { minHeight: 44 } }}
         >
-          <ToggleButton value="count" sx={{ minHeight: 44, textTransform: 'none', fontSize: 14 }}>
-            Most payments
-          </ToggleButton>
-          <ToggleButton value="total" sx={{ minHeight: 44, textTransform: 'none', fontSize: 14 }}>
-            Most QORT
-          </ToggleButton>
-        </ToggleButtonGroup>
+          {FLOW_SORTS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </TextField>
         <FormControlLabel
           control={
             <Switch

@@ -153,6 +153,11 @@ describe('sorting, ATs and busy accounts', () => {
     expect(sortFlows(flows, 'total').map((f) => f.address)).toEqual([B, C, AT, A]);
   });
 
+  it('sorts by the latest payment, or by the earliest', () => {
+    expect(sortFlows(flows, 'latest').map((f) => f.address)).toEqual([AT, C, B, A]);
+    expect(sortFlows(flows, 'first').map((f) => f.address)).toEqual([A, B, C, AT]);
+  });
+
   it('splits out AT addresses', () => {
     const { people, ats } = splitAt(flows);
     expect(ats.map((f) => f.address)).toEqual([AT]);

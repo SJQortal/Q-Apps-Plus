@@ -136,16 +136,39 @@ export function flowsOf(rows: readonly TxRow[], address: string, direction: Flow
   return [...flows.values()];
 }
 
-export type FlowSort = 'count' | 'total';
+export type FlowSort = 'count' | 'total' | 'latest' | 'first';
 
-/** Most transactions first, or most QORT first; ties by the other, then the newest. */
+export const FLOW_SORTS: ReadonlyArray<{ value: FlowSort; label: string }> = [
+  { value: 'count', label: 'Most payments' },
+  { value: 'total', label: 'Most QORT' },
+  { value: 'latest', label: 'Latest payment first' },
+  { value: 'first', label: 'Earliest payment first' },
+];
+
+export function isFlowSort(value: unknown): value is FlowSort {
+  return FLOW_SORTS.some((sort) => sort.value === value);
+}
+
+/**
+ * Most transactions first, most QORT first, the latest payment first or
+ * the earliest first; ties by the newest, then the other's address.
+ */
 export function sortFlows(flows: readonly Flow[], sort: FlowSort): Flow[] {
   const byQort = (a: Flow, b: Flow) => (a.qort === b.qort ? 0 : a.qort > b.qort ? -1 : 1);
+  const primary = (a: Flow, b: Flow): number => {
+    switch (sort) {
+      case 'count':
+        return b.count - a.count || byQort(a, b);
+      case 'total':
+        return byQort(a, b) || b.count - a.count;
+      case 'latest':
+        return b.last.height - a.last.height || b.last.timestamp - a.last.timestamp;
+      case 'first':
+        return a.first.height - b.first.height || a.first.timestamp - b.first.timestamp;
+    }
+  };
   return [...flows].sort(
-    (a, b) =>
-      (sort === 'count' ? b.count - a.count || byQort(a, b) : byQort(a, b) || b.count - a.count) ||
-      b.last.height - a.last.height ||
-      a.address.localeCompare(b.address)
+    (a, b) => primary(a, b) || b.last.height - a.last.height || a.address.localeCompare(b.address)
   );
 }
 
