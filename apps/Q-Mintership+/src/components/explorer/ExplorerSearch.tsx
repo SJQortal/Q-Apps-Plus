@@ -426,6 +426,13 @@ export function ExplorerSearch({
         fullWidth
         autoHighlight={false}
         autoSelect={false}
+        // The suggestions stay inside the page's main landmark (screen readers
+        // and axe expect every part of the page in one), and the clear button
+        // is a full tap target.
+        slotProps={{
+          popper: { disablePortal: true },
+          clearIndicator: { sx: { width: 40, height: 40 } },
+        }}
         options={options}
         value={null}
         filterOptions={(x) => x}
