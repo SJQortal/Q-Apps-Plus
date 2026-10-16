@@ -23,6 +23,7 @@ import { useAtom } from 'jotai';
 import { ThemePicker } from '../../hub-theme';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody } from '../../components/layout/PageBody';
+import { useNavHas } from '../../components/layout/useNavHas';
 import { ChangelogDialog } from '../../components/Settings/ChangelogDialog';
 import { NotificationSettings } from './NotificationSettings';
 import { MutedNames } from './MutedNames';
@@ -49,6 +50,7 @@ import {
   SOURCE_REPO,
   UPSTREAM_REPO,
 } from '../../constants/plus';
+import { PATHS } from '../../routes/paths';
 import { copyText, openQortalLink } from '../../utils/links';
 import { readable } from '../../utils/readable';
 
@@ -164,6 +166,8 @@ export default function SettingsPage() {
   const [decisionsOrder, setDecisionsOrder] = useAtom(decisionsOrderAtom);
   const [celebrate, setCelebrate] = useAtom(celebrateAtom);
   const [hideAnswered, setHideAnswered] = useAtom(decisionsHideAnsweredAtom);
+  // On phones Settings is a gear on Home, not in the bar: Back.
+  const inNav = useNavHas('settings');
 
   const roles = status
     ? [
@@ -175,7 +179,7 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" />
+      <PageHeader title="Settings" back={inNav ? undefined : PATHS.home} />
       <PageBody $maxWidth={720}>
         <Section title="Account" id="settings-account">
           <Card>

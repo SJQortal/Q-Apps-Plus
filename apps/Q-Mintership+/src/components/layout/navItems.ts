@@ -5,9 +5,11 @@ import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined';
 import { PATHS } from '../../routes/paths';
 
-export type NavKey = 'home' | 'decisions' | 'nominations' | 'history' | 'activity' | 'settings';
+export type NavKey =
+  'home' | 'decisions' | 'nominations' | 'history' | 'activity' | 'explorer' | 'settings';
 
 export interface NavItem {
   key: NavKey;
@@ -38,6 +40,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   { key: 'history', label: 'History', path: PATHS.history, Icon: HistoryOutlinedIcon },
   { key: 'activity', label: 'Activity', path: PATHS.activity, Icon: InsightsOutlinedIcon },
+  { key: 'explorer', label: 'Explorer', path: PATHS.explorer, Icon: TravelExploreOutlinedIcon },
   { key: 'settings', label: 'Settings', path: PATHS.settings, Icon: SettingsOutlinedIcon },
 ];
 
@@ -49,12 +52,13 @@ export function railItems(isAdmin: boolean): NavItem[] {
 /**
  * The phone bar: five items at most (docs/DESIGN.md → Mobile). Admins get
  * Decisions in place of History; History stays reachable from Home,
- * Activity and every person page.
+ * Activity and every person page. Explorer takes the last slot; Settings
+ * is then a gear in Home's header (HomePage), and shows Back.
  */
 export function phoneItems(isAdmin: boolean): NavItem[] {
   const keys: NavKey[] = isAdmin
-    ? ['home', 'decisions', 'nominations', 'activity', 'settings']
-    : ['home', 'nominations', 'history', 'activity', 'settings'];
+    ? ['home', 'decisions', 'nominations', 'activity', 'explorer']
+    : ['home', 'nominations', 'history', 'activity', 'explorer'];
   return keys.map((key) => NAV_ITEMS.find((item) => item.key === key) as NavItem);
 }
 
