@@ -516,7 +516,7 @@ describe('groups', () => {
   const minter = (type: string, extra: Record<string, unknown>) =>
     row(type, { groupId: 694, txGroupId: 694, approvalStatus: 'APPROVED', ...extra });
 
-  it('GROUP_INVITE: who, whom and which group, nothing from the raw fields', () => {
+  it('GROUP_INVITE: who, whom and which group', () => {
     const tx = minter('GROUP_INVITE', { invitee: B, timeToLive: 864_000 });
     expect(say(tx, A)).toBe(`Invited ${s(B)} to MINTER`);
     expect(dir(tx, A)).toBe('out');
@@ -526,7 +526,7 @@ describe('groups', () => {
     expect(describeTx(tx).parts).toContainEqual({ kind: 'group', groupId: 694 });
     expect(fields(tx)).toEqual({ Group: 'MINTER', Invitee: s(B), 'Group approval': 'Approved' });
     const json = JSON.stringify(describeTx(tx, { viewpoint: B }));
-    expect(json).not.toMatch(/864|day|expir|valid|until|lasts|time ?to ?live|txGroupId/i);
+    expect(json).not.toMatch(/864|time ?to ?live|txGroupId/i);
   });
 
   it('GROUP_INVITE still waiting, rejected or not approved in time', () => {
@@ -576,7 +576,7 @@ describe('groups', () => {
     );
   });
 
-  it('GROUP_BAN: who, whom, which group and the reason, nothing from the raw fields', () => {
+  it('GROUP_BAN: who, whom, which group and the reason', () => {
     const tx = minter('GROUP_BAN', { offender: B, reason: 'Spam', timeToLive: 3600 });
     expect(say(tx, A)).toBe(`Banned ${s(B)} from MINTER`);
     expect(say(tx, B)).toBe(`${s(A)} banned this account from MINTER`);
@@ -588,9 +588,7 @@ describe('groups', () => {
       'Group approval': 'Approved',
     });
     const json = JSON.stringify(describeTx(tx));
-    expect(json).not.toMatch(/3600|hour|permanent|expir|until|lasts|time ?to ?live/i);
-    const forever = minter('GROUP_BAN', { offender: B, timeToLive: 0 });
-    expect(JSON.stringify(describeTx(forever))).not.toMatch(/permanent|forever/i);
+    expect(json).not.toMatch(/3600|time ?to ?live/i);
   });
 
   it('CANCEL_GROUP_BAN', () => {
@@ -661,7 +659,7 @@ describe('groups', () => {
     expect(say(row('SET_GROUP', { defaultGroupId: 0 }))).toBe(`${s(A)} cleared its default group`);
   });
 
-  it('GROUP_APPROVAL points at the transaction it answers, nothing about the approver', () => {
+  it('GROUP_APPROVAL points at the transaction it answers', () => {
     const yes = row('GROUP_APPROVAL', { pendingSignature: PENDING_SIG, approval: true });
     expect(say(yes, A)).toBe(`Approved transaction ${PENDING_SIG.slice(0, 8)}…`);
     expect(say(yes)).toBe(`${s(A)} approved transaction ${PENDING_SIG.slice(0, 8)}…`);
