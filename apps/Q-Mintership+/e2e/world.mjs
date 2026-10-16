@@ -9,11 +9,23 @@
  * are always declined: nothing can be sent from a mock.
  *
  * Extensions: e2e/world-legacy.mjs (old Q-Mintership cards, polls and
- * comments) and e2e/world-activity.mjs (history for Minter Admin Activity)
- * add their own data and endpoints.
+ * comments), e2e/world-activity.mjs (history for Minter Admin Activity) and
+ * e2e/world-explorer.mjs (payments, names, reward shares and more for the
+ * Explorer) add their own data and endpoints.
  */
 import { extendLegacy, answerLegacy } from './world-legacy.mjs';
 import { extendActivity, answerActivity } from './world-activity.mjs';
+import { extendExplorer, answerExplorer } from './world-explorer.mjs';
+
+export {
+  SPONSOR,
+  FUNDER,
+  OLD_MINTER,
+  UNUSED_ADDRESS,
+  AT_ADDRESS,
+  SPONSEES,
+  MESSAGE_CONTENT,
+} from './world-explorer.mjs';
 
 export const NOW = 1_791_830_000_000; // 2026-10-12 ~14:33 UTC
 export const TIP = 2_757_500;
@@ -546,6 +558,7 @@ function buildWorld() {
   };
   extendLegacy(world);
   extendActivity(world);
+  extendExplorer(world);
   return world;
 }
 
@@ -633,7 +646,8 @@ export function answerCore(world, pathname, sp) {
   const p = pathname;
   let m;
 
-  const ext = answerLegacy(world, p, sp) ?? answerActivity(world, p, sp);
+  const ext =
+    answerLegacy(world, p, sp) ?? answerActivity(world, p, sp) ?? answerExplorer(world, p, sp);
   if (ext) return ext;
 
   if (p === '/blocks/height') return text(TIP);
