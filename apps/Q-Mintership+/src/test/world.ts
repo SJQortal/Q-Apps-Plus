@@ -3,7 +3,7 @@
  * GET it knows is answered, any POST to Core fails the test, and every
  * qortalRequest write is declined unless a test answers it itself.
  */
-import { vi } from 'vitest';
+import { onTestFinished, vi } from 'vitest';
 import {
   answerCore,
   answerQortal,
@@ -34,6 +34,8 @@ export interface InstalledWorld {
   publicKey: string;
   /** Core paths that were POSTed (must stay empty: the app never POSTs). */
   posts: string[];
+  /** In strict mode: GETs the world couldn't answer (the test fails unless it empties this). */
+  unanswered: string[];
 }
 
 const WRITE_ACTIONS = [
@@ -51,7 +53,15 @@ const WRITE_ACTIONS = [
 
 export function installWorld(
   persona = 'admin',
-  options: { fakeNow?: boolean } = {}
+  options: {
+    fakeNow?: boolean;
+    /**
+     * A GET the world can't answer fails the test instead of answering 404
+     * "no mock": the fetch rejects, the path is listed in `unanswered`, and
+     * the test fails when it ends unless it emptied that list itself.
+     */
+    strict?: boolean;
+  } = {}
 ): InstalledWorld {
   resetQueries();
   resetQdnMisses();
@@ -65,12 +75,22 @@ export function installWorld(
   }
   const world = createWorld();
   const posts: string[] = [];
+  const unanswered: string[] = [];
+  if (options.strict)
+    onTestFinished(() => {
+      if (unanswered.length)
+        throw new Error(`The mock world has no answer for: ${unanswered.join(', ')}`);
+    });
   mockFetchRoute(/^\//, (url: URL, init?: RequestInit) => {
     if (init?.method && init.method !== 'GET') {
       posts.push(url.pathname);
       return new Response('POST not allowed in this app', { status: 405 });
     }
     const answer = answerCore(world, url.pathname, url.searchParams);
+    if (!answer && options.strict) {
+      unanswered.push(url.pathname + url.search);
+      throw new Error(`no mock for GET ${url.pathname}${url.search}`);
+    }
     if (!answer)
       return new Response(JSON.stringify({ error: 404, message: `no mock for ${url.pathname}` }), {
         status: 404,
@@ -87,5 +107,11 @@ export function installWorld(
     );
   }
   const address = personaAddress(persona);
-  return { world, address, publicKey: world.accounts.get(address)?.publicKey ?? '', posts };
+  return {
+    world,
+    address,
+    publicKey: world.accounts.get(address)?.publicKey ?? '',
+    posts,
+    unanswered,
+  };
 }

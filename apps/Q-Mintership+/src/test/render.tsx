@@ -27,6 +27,8 @@ export interface RenderPageOptions {
   route?: string;
   /** Change the mock world before the page first reads it. */
   setup?: (world: InstalledWorld['world']) => void;
+  /** Fail the test on any GET the mock world can't answer (installWorld's strict mode). */
+  strict?: boolean;
 }
 
 export async function renderPage(
@@ -34,7 +36,9 @@ export async function renderPage(
   options: RenderPageOptions = {}
 ): Promise<InstalledWorld & ReturnType<typeof render>> {
   const persona = options.persona ?? 'admin';
-  const installed = installWorld(persona === 'outside' ? 'admin' : persona);
+  const installed = installWorld(persona === 'outside' ? 'admin' : persona, {
+    strict: options.strict,
+  });
   options.setup?.(installed.world);
   resetSessionStarter();
   resetPageFocus();
