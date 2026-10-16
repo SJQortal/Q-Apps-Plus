@@ -33,6 +33,7 @@ import {
 } from './world.mjs';
 import { addTargetShift } from './world.mjs';
 import { nominatorLastVisit } from './world.mjs';
+import { AT_ADDRESS, FUNDER, SPONSOR, UNUSED_ADDRESS } from './world-explorer.mjs';
 
 const world = createWorld();
 // Admins' Decisions also shows the transactions that aren't MINTER group changes.
@@ -106,6 +107,20 @@ const json = (route, status, body) =>
 const wait = (selector) => async (page) =>
   page.waitForSelector(selector, { timeout: 8000 }).catch(() => {});
 const settle = wait('main h1');
+/** An Explorer page: its title, then its reads (skeletons gone, network quiet). */
+const explorerSettle = async (page) => {
+  await settle(page);
+  await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+  await page
+    .waitForFunction(
+      () =>
+        !document.querySelector('main [role="status"][aria-busy="true"], main .MuiSkeleton-root'),
+      null,
+      { timeout: 8000 }
+    )
+    .catch(() => {});
+  await page.waitForTimeout(400);
+};
 
 /** Settle, then press a button and wait for the dialog it opens. */
 const open = (button, dialog) => async (page) => {
@@ -781,6 +796,80 @@ export default {
           .waitFor({ timeout: 8000 });
         await page.waitForTimeout(300);
       }, `/decisions/polls/${ADMIN_POLL_IDS.open}`),
+    },
+    // ---- The Explorer: accounts, their tabs, compare, transactions ----------------
+    { key: 'explorer', path: '/explorer?as=admin', after: explorerSettle },
+    { key: 'explorer-outside', path: '/explorer?as=outside', after: explorerSettle },
+    {
+      key: 'explorer-search',
+      path: '/explorer?as=admin',
+      overlay: true,
+      after: async (page) => {
+        await settle(page);
+        await page
+          .getByRole('combobox', { name: 'Find an account or transaction' })
+          .fill('Av', { timeout: 4000 });
+        await page.getByRole('option').first().waitFor({ timeout: 8000 });
+        await page.waitForTimeout(500);
+      },
+    },
+    {
+      key: 'explorer-account',
+      path: `/explorer/account/${ADDR.admin}?as=admin`,
+      after: explorerSettle,
+    },
+    {
+      key: 'explorer-connections',
+      path: `/explorer/account/${ADDR.kicked}/connections?as=admin`,
+      after: explorerSettle,
+    },
+    {
+      key: 'explorer-transactions',
+      path: `/explorer/account/${ADDR.admin}/transactions?as=admin`,
+      after: explorerSettle,
+    },
+    {
+      key: 'explorer-mintership',
+      path: `/explorer/account/${ADDR.nominatedSigning}/mintership?as=admin`,
+      after: explorerSettle,
+    },
+    {
+      key: 'explorer-names',
+      path: `/explorer/account/${ADDR.admin}/names?as=learner`,
+      after: explorerSettle,
+    },
+    {
+      key: 'explorer-sponsees',
+      path: `/explorer/sponsees/${SPONSOR.address}?as=admin`,
+      after: explorerSettle,
+    },
+    {
+      key: 'explorer-funded',
+      path: `/explorer/funded/${FUNDER.address}?as=admin`,
+      after: explorerSettle,
+    },
+    {
+      key: 'explorer-compare',
+      path: `/explorer/compare/${ADDR.kicked}/${ADDR.left}?as=admin`,
+      after: explorerSettle,
+    },
+    {
+      key: 'explorer-tx',
+      path: `/explorer/tx/${world.explorer.sigs.privs}?as=learner`,
+      after: explorerSettle,
+    },
+    { key: 'explorer-txs', path: '/explorer/transactions?as=learner', after: explorerSettle },
+    {
+      key: 'explorer-unused',
+      path: `/explorer/account/${UNUSED_ADDRESS}?as=learner`,
+      after: explorerSettle,
+      // Core answers 404 for an address it has never seen; the page says so.
+      expectErrors: /status of 404/,
+    },
+    {
+      key: 'explorer-at',
+      path: `/explorer/account/${AT_ADDRESS}?as=learner`,
+      after: explorerSettle,
     },
   ],
 };
