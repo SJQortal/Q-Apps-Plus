@@ -17,6 +17,7 @@ import { useMemo, type ReactNode } from 'react';
 import { Link as RouterLink, Navigate, useParams } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
+import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined';
 import { getNameOwner, isAddress } from '../../data/accounts';
 import {
   buildTimeline,
@@ -52,7 +53,7 @@ import {
   ListSkeleton,
   TruncatedNote,
 } from '../../components/common/states';
-import { PATHS, personPath } from '../../routes/paths';
+import { PATHS, explorerAccountPath, personPath } from '../../routes/paths';
 import { shortAddress } from '../../utils/format';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { PersonSearch } from '../history/parts/PersonSearch';
@@ -285,7 +286,7 @@ function PersonView({ address }: { address: string }) {
         </>
       )}
 
-      <Box>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
         <Button
           component={RouterLink}
           to={PATHS.history}
@@ -293,6 +294,14 @@ function PersonView({ address }: { address: string }) {
           sx={{ minHeight: 44 }}
         >
           All of MINTER's history
+        </Button>
+        <Button
+          component={RouterLink}
+          to={explorerAccountPath(address)}
+          startIcon={<TravelExploreOutlinedIcon />}
+          sx={{ minHeight: 44 }}
+        >
+          Explore links and transactions
         </Button>
       </Box>
     </Shell>

@@ -83,6 +83,15 @@ describe('A nomination’s own page', () => {
       'href',
       `/people/${ADDR.nominatedSigning}`
     );
+    // In the Explorer: the nominee, and the nominee beside the nominator.
+    expect(screen.getByRole('link', { name: 'Explore bob+builder' })).toHaveAttribute(
+      'href',
+      `/explorer/account/${ADDR.nominatedSigning}`
+    );
+    expect(screen.getByRole('link', { name: 'Compare nominee and nominator' })).toHaveAttribute(
+      'href',
+      `/explorer/compare/${ADDR.nominatedSigning}/${ADDR.nominator}`
+    );
     expect(qortalCalls.filter((c) => WRITES.test(String(c.action)))).toEqual([]);
     expect(fetchCalls.some((p) => /limit=0(&|$)/.test(p))).toBe(false);
   });
@@ -159,6 +168,12 @@ describe('A nomination’s own page', () => {
     await open(ADDR.newcomerName, 'nominator');
     expect(await screen.findByText('No nomination for this person', {}, T)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Propose nomination' })).toBeVisible();
+    // Still explorable; no nominator to compare with.
+    expect(screen.getByRole('link', { name: 'Explore Zoë Newcomer' })).toHaveAttribute(
+      'href',
+      `/explorer/account/${ADDR.newcomerName}`
+    );
+    expect(screen.queryByRole('link', { name: 'Compare nominee and nominator' })).toBeNull();
   });
 
   it('opens a name’s owner when the link holds a name', async () => {
