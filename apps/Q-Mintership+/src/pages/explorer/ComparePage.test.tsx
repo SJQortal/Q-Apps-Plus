@@ -467,4 +467,40 @@ describe('Compare: reads that fail', () => {
     );
     await waitFor(() => expect(within(recorded).queryByText(/^Couldn’t read /)).toBeNull(), T);
   });
+
+  it('In common: a check whose read failed is never “none found”, and says so with Retry', async () => {
+    let broken = { on: false };
+    const { user } = await open(explorerComparePath([ADDR.kicked, ADDR.left]), (world) => {
+      broken = breakReads(
+        world,
+        (url) =>
+          (url.pathname === '/transactions/search' &&
+            url.searchParams.get('address') === ADDR.kicked &&
+            url.searchParams.getAll('txType').includes('REWARD_SHARE')) ||
+          url.pathname === `/groups/member/${ADDR.kicked}`
+      );
+    });
+    const common = await region('In common');
+    const line = await within(common).findByText(/^Couldn’t finish checking for /, {}, T);
+    expect(line).toHaveTextContent(
+      'Couldn’t finish checking for a shared sponsor and shared groups (MINTER aside).'
+    );
+    await waitFor(
+      () => expect(spoken(common)).toContain('Both got their first QORT payment from Hal Helper'),
+      T
+    );
+    expect(common).toHaveTextContent('Hal Helper paid both');
+    expect(common).not.toHaveTextContent(/Checked, none found/);
+    expect(within(common).queryByRole('list', { name: 'Shared groups' })).toBeNull();
+    expect(within(common).queryAllByRole('alert')).toEqual([]);
+
+    broken.on = false;
+    await user.click(within(common).getByRole('button', { name: 'Retry In common' }));
+    await waitFor(
+      () => expect(common).toHaveTextContent('Checked, none found: a shared sponsor.'),
+      T
+    );
+    expect(within(common).getByRole('list', { name: 'Shared groups' })).toBeInTheDocument();
+    expect(within(common).queryByText(/^Couldn’t finish/)).toBeNull();
+  });
 });

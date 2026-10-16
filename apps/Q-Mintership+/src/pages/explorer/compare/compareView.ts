@@ -1,7 +1,7 @@
 /**
  * Compare's small view helpers that aren't components: the letters'
  * colours, when a finding happened in words, the pair anchors, and what
- * In common has, is still reading and found nothing of.
+ * In common has, is still reading, found nothing of and couldn't check.
  */
 import { useTheme, type Theme } from '@mui/material/styles';
 import type { PairFinding } from '../../../rules/explorer/compare';
@@ -52,25 +52,63 @@ export interface InCommonState {
   reading: boolean;
   /** What two or more share, found so far. */
   any: boolean;
-  /** Checked and nothing found, in words. */
+  /** Checked (every read it needs came in) and nothing found, in words. */
   empty: string[];
+  /** Checks a read failed for, in words: neither found nor said to be empty. */
+  failed: string[];
+  /** The reads that failed, to retry. */
+  failedReads: CompareRead[];
 }
 
-/** What In common has, is reading, and found nothing of. */
+/** One of Compare's reads, as far as these checks need it. */
+export interface CompareRead {
+  data?: unknown;
+  error: unknown;
+  isError: boolean;
+  isLoading: boolean;
+  refetch: () => Promise<void>;
+}
+
+/** What In common has, is reading, found nothing of, and couldn't check. */
 export function inCommonState(data: CompareData): InCommonState {
   const live = data.live.map((a, i) => (a ? i : -1)).filter((i) => i >= 0);
-  const done = (q: { data?: unknown; isError: boolean }) => q.data !== undefined || q.isError;
-  const linksIn = live.every((i) => done(data.links[i]));
-  const firstIn = live.every((i) => done(data.first[i]));
-  const payIn = live.every((i) => done(data.sent[i]) && done(data.recv[i]) && done(data.assets[i]));
-  const groupsIn = live.every((i) => done(data.groups[i]));
+  const checks: Array<{ words: string; found: boolean; reads: (i: number) => CompareRead[] }> = [
+    { words: 'a shared sponsor', found: data.sponsors.length > 0, reads: (i) => [data.links[i]] },
+    {
+      words: 'a shared first payer',
+      found: data.firstPayers.length > 0,
+      reads: (i) => [data.first[i]],
+    },
+    {
+      words: 'the same accounts in their payments',
+      found: data.counterparties.rows.length > 0,
+      reads: (i) => [data.sent[i], data.recv[i], data.assets[i]],
+    },
+    {
+      words: 'shared groups (MINTER aside)',
+      found: data.groupsShared.length > 0,
+      reads: (i) => [data.groups[i]],
+    },
+  ];
   const empty: string[] = [];
-  if (linksIn && !data.sponsors.length) empty.push('a shared sponsor');
-  if (firstIn && !data.firstPayers.length) empty.push('a shared first payer');
-  if (payIn && !data.counterparties.rows.length) empty.push('the same accounts in their payments');
-  if (groupsIn && !data.groupsShared.length) empty.push('shared groups (MINTER aside)');
+  const failed: string[] = [];
+  const failedReads = new Set<CompareRead>();
+  let reading = false;
+  for (const check of checks) {
+    const reads = live.flatMap(check.reads);
+    // A failed read is not a read: its check is neither empty nor complete.
+    if (reads.every((q) => q.data !== undefined)) {
+      if (!check.found) empty.push(check.words);
+    } else if (reads.some((q) => q.isError)) {
+      failed.push(check.words);
+    }
+    for (const q of reads) {
+      if (q.isError) failedReads.add(q);
+      else if (q.data === undefined) reading = true;
+    }
+  }
   return {
-    reading: !(linksIn && firstIn && payIn && groupsIn),
+    reading,
     any: Boolean(
       data.sponsors.length ||
       data.firstPayers.length ||
@@ -79,5 +117,7 @@ export function inCommonState(data: CompareData): InCommonState {
       data.timing.length
     ),
     empty,
+    failed,
+    failedReads: [...failedReads],
   };
 }

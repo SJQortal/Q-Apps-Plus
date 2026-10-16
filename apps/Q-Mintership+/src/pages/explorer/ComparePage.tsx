@@ -75,7 +75,8 @@ const nameOf = (address: string) => {
 
 /** Each pair's counts for the grid: recorded, in common, and whether its reads are in. */
 function pairGridRows(data: CompareData): PairGridRow[] {
-  const done = (q: { data?: unknown; isError: boolean }) => q.data !== undefined || q.isError;
+  // A failed read is not a read: the pair can't say "none found" on it.
+  const done = (q: { data?: unknown }) => q.data !== undefined;
   return data.pairData.map(({ pair, result }) => {
     const a = letterOf(pair.i);
     const b = letterOf(pair.j);
@@ -315,7 +316,7 @@ export default function ComparePage() {
             <RecordedSection data={data} accents={accents} />
             <Box ref={setBelowNode} sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
               <TimelineSection data={data} accents={accents} reading={timelineReading} />
-              {common.any || common.reading || common.empty.length ? (
+              {common.any || common.reading || common.empty.length || common.failed.length ? (
                 <InCommonSection data={data} />
               ) : null}
             </Box>

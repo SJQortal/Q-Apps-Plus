@@ -6,13 +6,13 @@
  * direction and the counts; busy payers and AT addresses left out and
  * counted), groups smallest first, and how far apart some firsts were.
  * Raw facts: no threshold decides what is shown, and nothing says what it
- * means. Then what was checked and found nothing.
+ * means. Then what was checked and found nothing, and what a failed read
+ * left unchecked (never counted as nothing found).
  */
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Link, Typography } from '@mui/material';
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
 import { Section } from '../../../components/common/Section';
-import { ErrorState } from '../../../components/common/states';
 import { TxSentence } from '../../../components/explorer/TxSentence';
 import { explorerSponseesPath } from '../../../routes/paths';
 import {
@@ -26,7 +26,7 @@ import {
 } from '../../../rules/explorer/compare';
 import { formatCount, plural } from '../../../utils/format';
 import { inCommonState, PAIR_ANCHOR_SX } from './compareView';
-import { LIST_SX, Note, SteppedList, SubHeading, Waiting } from './parts';
+import { FailedReads, LIST_SX, Note, SteppedList, SubHeading, Waiting } from './parts';
 import type { CompareData } from './useCompareData';
 
 const LINK_SX = {
@@ -48,12 +48,6 @@ export function InCommonSection({ data }: { data: CompareData }) {
   const state = inCommonState(data);
   const { counterparties } = data;
   const leftOut = leftOutLine(counterparties);
-  const failed = data.live
-    .map((address, i) => ({ address, i }))
-    .filter(({ address }) => address)
-    .flatMap(({ i }) =>
-      [data.first[i], data.groups[i], data.sent[i], data.recv[i]].filter((q) => q.isError)
-    );
   return (
     // The pair grid jumps here for a pair with only something in common.
     <Box id="compare-common" tabIndex={-1} sx={PAIR_ANCHOR_SX}>
@@ -159,14 +153,13 @@ export function InCommonSection({ data }: { data: CompareData }) {
             Reading sponsors, first payments, payments each way and groups to see what they share…
           </Waiting>
         ) : null}
-        {failed.length ? (
-          <ErrorState
-            compact
-            title="Couldn’t read everything this part needs."
-            error={failed[0].error}
-            onRetry={() => failed.forEach((q) => void q.refetch())}
-          />
-        ) : null}
+        <FailedReads
+          lead="Couldn’t finish checking for"
+          what={state.failed}
+          error={state.failedReads[0]?.error}
+          onRetry={() => state.failedReads.forEach((q) => void q.refetch())}
+          retryLabel="Retry In common"
+        />
         {state.empty.length ? <Note>Checked, none found: {state.empty.join(', ')}.</Note> : null}
       </Section>
     </Box>
