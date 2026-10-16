@@ -4,6 +4,7 @@
  * when and at what percent, whether the share was removed, where it stands
  * in MINTER now, whether it mints now, and its level and any minting
  * penalty. A summary line counts them, every count with its denominator.
+ * Sorted the first sponsored first, or another way (sets/sortSponsees.ts).
  * Pick up to 4 to compare; two checks across the set run on request.
  *
  * Reads: the sponsor's links (xlinks:<a>, heavy, dropped when the page
@@ -13,7 +14,7 @@
  */
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Box, Button, Typography } from '@mui/material';
+import { Box, Button, TextField, Typography } from '@mui/material';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
@@ -38,6 +39,7 @@ import { useStoreValues } from './account/connections/hooks';
 import { useFocusNewRows } from './account/names/useShowMore';
 import { INVALID_ADDRESS } from './explorerWords';
 import { SetChecks } from './sets/SetChecks';
+import { isSponseeSort, sortSponsees, SPONSEE_SORTS, type SponseeSort } from './sets/sortSponsees';
 import { SET_LIST_SX, SponseeRowItem } from './sets/SponseeRows';
 import { withMarkedName } from '../../components/common/markedText';
 import { ExplorerHeaderSearch } from '../../components/explorer/ExplorerHeaderSearch';
@@ -75,6 +77,8 @@ export default function SponseesPage() {
     [sponsees, members.data, online.data, bans.data]
   );
   const accounts = useStoreValues<AccountInfo>(rows.map((row) => `account:${row.address}`));
+  const [sort, setSort] = useState<SponseeSort>('first');
+  const sorted = useMemo(() => sortSponsees(rows, sort), [rows, sort]);
 
   const [limit, setLimit] = useState(ROWS);
   const { listRef, focusFrom } = useFocusNewRows();
@@ -159,16 +163,41 @@ export default function SponseesPage() {
             </Button>
           }
         >
-          <Typography variant="body2" color="text.secondary">
-            Pick 2 to {COMPARE_MAX} accounts to compare them side by side.
-          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
+            {rows.length > 1 ? (
+              <TextField
+                select
+                label="Sort"
+                size="small"
+                value={sort}
+                onChange={(e) => {
+                  if (isSponseeSort(e.target.value)) setSort(e.target.value);
+                }}
+                slotProps={{ select: { native: true } }}
+                sx={{
+                  flex: '0 1 260px',
+                  minWidth: 200,
+                  '& .MuiInputBase-root': { minHeight: 44 },
+                }}
+              >
+                {SPONSEE_SORTS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </TextField>
+            ) : null}
+            <Typography variant="body2" color="text.secondary" sx={{ flex: '1 1 220px' }}>
+              Pick 2 to {COMPARE_MAX} accounts to compare them side by side.
+            </Typography>
+          </Box>
           <Box
             component="ul"
             ref={listRef}
             aria-label={`Accounts ${label} sponsored`}
             sx={SET_LIST_SX}
           >
-            {rows.slice(0, limit).map((row) => (
+            {sorted.slice(0, limit).map((row) => (
               <SponseeRowItem
                 key={row.address}
                 row={row}
