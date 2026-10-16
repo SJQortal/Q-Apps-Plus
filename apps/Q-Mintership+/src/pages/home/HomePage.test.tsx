@@ -886,3 +886,35 @@ describe('Home: an admin with no open decisions', () => {
     expect(within(activity).queryByText(/0 of 0/)).toBeNull();
   }, 15_000);
 });
+
+describe('Home: Q-Minter for everyone outside MINTER', () => {
+  it('offers the Q-Minter website first to someone not in MINTER, in a new Hub tab', async () => {
+    await renderPage(<HomePage />, { persona: 'newcomer' });
+    const guide = await screen.findByRole(
+      'region',
+      { name: 'How minting works' },
+      { timeout: 4000 }
+    );
+    mockQortalRequest('OPEN_NEW_TAB', () => true);
+    await userEvent.click(within(guide).getByRole('button', { name: 'Open Q-Minter' }));
+    expect(qortalCallsFor('OPEN_NEW_TAB').map((c) => c.qortalLink)).toEqual([
+      'qortal://WEBSITE/Q-Minter/#/',
+    ]);
+  });
+
+  it('writes the link out when the app is open outside Hub', async () => {
+    await renderPage(<HomePage />, { persona: 'outside' });
+    const guide = await screen.findByRole(
+      'region',
+      { name: 'How minting works' },
+      { timeout: 4000 }
+    );
+    expect(guide).toHaveTextContent('In Qortal Hub or GO: qortal://WEBSITE/Q-Minter/#/');
+  });
+
+  it('isn’t there for MINTER members', async () => {
+    await renderPage(<HomePage />, { persona: 'learner' });
+    await headline("You're minting, Leo Learner");
+    expect(screen.queryByRole('region', { name: 'How minting works' })).toBeNull();
+  });
+});

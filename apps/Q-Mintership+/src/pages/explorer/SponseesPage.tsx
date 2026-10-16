@@ -41,6 +41,7 @@ import { SetChecks } from './sets/SetChecks';
 import { SET_LIST_SX, SponseeRowItem } from './sets/SponseeRows';
 import { withMarkedName } from '../../components/common/markedText';
 import { ExplorerHeaderSearch } from '../../components/explorer/ExplorerHeaderSearch';
+import { RewardShareNote } from '../../components/explorer/RewardShareNote';
 
 /** Rows shown before "Show more" (each looks up a name and, near the screen, its account). */
 const ROWS = 20;
@@ -142,10 +143,7 @@ export default function SponseesPage() {
             From its newest 500 reward shares, level moves and name sales: there may be older ones.
           </Typography>
         ) : null}
-        <Typography variant="body2" color="text.secondary">
-          Before Oct 2024 most new accounts started minting through another account’s reward share
-          (a sponsor). Since then MINTER membership is what counts.
-        </Typography>
+        <RewardShareNote />
         <Section
           title="Sponsored"
           id="sponsees-list"

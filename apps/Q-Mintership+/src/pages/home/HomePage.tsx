@@ -24,6 +24,7 @@ import { displayName } from '../../utils/format';
 import { AdminRoleAction } from '../decisions/AdminRoleAction';
 import { AdminSection } from './AdminSection';
 import { HowItWorks } from './HowItWorks';
+import { MintingGuide } from './MintingGuide';
 import { LiveStats } from './LiveStats';
 import { MemberSection } from './MemberSection';
 import { AdminHero } from './heroes/AdminHero';
@@ -89,6 +90,7 @@ function StatusView({
       return (
         <>
           <AnonymousHero outside={status.kind === 'outsideHub'} needed={needed.needed} />
+          <MintingGuide outside={status.kind === 'outsideHub'} />
           <LiveStats needed={needed} />
           <HowItWorks needed={needed.needed} />
         </>
@@ -121,6 +123,7 @@ function StatusView({
       return (
         <>
           <NominatedHero status={status} nomination={status.nomination} needed={needed.needed} />
+          <MintingGuide />
           {now.data ? (
             <Section title="Your nomination" id="home-nomination">
               <NominationCard
@@ -135,13 +138,19 @@ function StatusView({
         </>
       );
     case 'approvedInvite':
-      return <ApprovedHero status={status} />;
+      return (
+        <>
+          <ApprovedHero status={status} />
+          <MintingGuide />
+        </>
+      );
     case 'formerKicked':
     case 'formerBanned':
     case 'formerLeft':
       return (
         <>
           <FormerHero status={status} needed={needed.needed} />
+          <MintingGuide />
           <HowItWorks needed={needed.needed} />
         </>
       );
@@ -151,6 +160,7 @@ function StatusView({
   return (
     <>
       <NewcomerHero status={status} needed={needed.needed} />
+      <MintingGuide />
       <HowItWorks needed={needed.needed} />
     </>
   );

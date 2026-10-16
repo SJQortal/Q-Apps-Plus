@@ -71,14 +71,11 @@ import {
   whenLine,
 } from './connections/words';
 import { MintershipLinks } from './MintershipLinks';
+import { RewardShareNote } from '../../../components/explorer/RewardShareNote';
 
 export interface ConnectionsTabProps {
   address: string;
 }
-
-/** How minting worked before Oct 2024, under any reward-share link. */
-export const SPONSOR_ERA_NOTE =
-  'Before Oct 2024 most new accounts started minting through another account’s reward share (a sponsor). Since then MINTER membership is what counts.';
 
 /** Rows of one kind shown before "Show all". */
 const ROWS = 20;
@@ -366,9 +363,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
                   </Typography>
                 </Box>
               ) : null}
-              <Typography variant="body2" color="text.secondary">
-                {SPONSOR_ERA_NOTE}
-              </Typography>
+              <RewardShareNote />
             </Part>
           ) : null}
           {names.length ? (

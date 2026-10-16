@@ -24,6 +24,7 @@ import { useConnections, useRecorded } from './connections/useConnections';
 import { tabIdOf } from './tabIds';
 import { LINKS_CAPPED_NOTE, unreadWords, whenLine } from './connections/words';
 import { FIELD_BLOCK_SX } from '../../../components/explorer/fieldBlock';
+import { RewardShareNote } from '../../../components/explorer/RewardShareNote';
 
 export interface DirectLinksPreviewProps {
   address: string;
@@ -118,6 +119,14 @@ export function DirectLinksPreview({ address }: DirectLinksPreviewProps) {
             </Box>
           ))}
         </Box>
+        {/* A sponsor or another account minting with it: what reward shares were. */}
+        {recorded
+          .slice(0, PREVIEW)
+          .some(
+            (f) => f.kind === 'sponsor' || f.kind === 'mintingWith' || f.kind === 'sponsees'
+          ) ? (
+          <RewardShareNote />
+        ) : null}
         {cappedNote}
         {unread}
         {allLink}

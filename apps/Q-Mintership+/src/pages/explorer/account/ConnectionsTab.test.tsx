@@ -11,7 +11,13 @@ import userEvent from '@testing-library/user-event';
 import { getDefaultStore } from 'jotai';
 import { renderPage, type RenderPageOptions } from '../../../test/render';
 import { expectNoAxeViolations } from '../../../test/axe';
-import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../../test/setup';
+import {
+  fetchCallsFor,
+  mockFetchRoute,
+  mockQortalRequest,
+  qortalCalls,
+  qortalCallsFor,
+} from '../../../test/setup';
 import { ADDR } from '../../../test/world';
 import {
   FUNDER,
@@ -460,6 +466,14 @@ describe('Connections: minting and names', () => {
       T
     );
     expect(recorded).toHaveTextContent('Before Oct 2024 most new accounts started minting');
+    // Q-Minter's history page explains reward shares, in a new Hub tab.
+    mockQortalRequest('OPEN_NEW_TAB', () => true);
+    await userEvent.click(
+      within(recorded).getByRole('button', { name: 'How reward shares worked: Q-Minter' })
+    );
+    expect(qortalCallsFor('OPEN_NEW_TAB').map((c) => c.qortalLink)).toEqual([
+      'qortal://WEBSITE/Q-Minter/#/history',
+    ]);
     const names = within(recorded).getByRole('list', { name: 'Names bought or sold' });
     await waitFor(
       () =>
