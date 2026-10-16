@@ -21,6 +21,7 @@ import { useInView } from '../../../hooks/useInView';
 import { explorerAccountPath } from '../../../routes/paths';
 import { formatCount } from '../../../utils/format';
 import { useConnections, useRecorded } from './connections/useConnections';
+import { tabIdOf } from './tabIds';
 import { LINKS_CAPPED_NOTE, unreadWords, whenLine } from './connections/words';
 
 export interface DirectLinksPreviewProps {
@@ -61,6 +62,10 @@ export function DirectLinksPreview({ address }: DirectLinksPreviewProps) {
       replace
       // Keeps what the page was opened with, as the tabs do.
       state={location.state}
+      onClick={() =>
+        // The Overview goes; the tab it opened takes the focus.
+        requestAnimationFrame(() => document.getElementById(tabIdOf('connections'))?.focus())
+      }
       sx={{
         alignSelf: 'flex-start',
         display: 'inline-flex',

@@ -8,6 +8,7 @@ import { ADDR } from '../../../test/world';
 import { answerCore, SPONSOR, type World } from '../../../../e2e/world.mjs';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../../components/common/personLinks';
 import { explorerAccountPath } from '../../../routes/paths';
+import AccountPage from '../AccountPage';
 import { DirectLinksPreview } from './DirectLinksPreview';
 
 const T = { timeout: 5000 };
@@ -60,6 +61,29 @@ describe('Overview: Direct links', () => {
     expect(
       qortalCalls.filter((c) => /INVITE|KICK|BAN|JOIN|SIGN|PUBLISH/.test(String(c.action)))
     ).toEqual([]);
+  });
+
+  it('All connections opens the tab and hands it the focus', async () => {
+    const { posts } = await renderPage(<AccountPage />, {
+      persona: 'learner',
+      path: explorerAccountPath(ADDR.left),
+      route: '/explorer/account/:who/:tab?',
+      strict: true,
+    });
+    const user = userEvent.setup();
+    const section = await screen.findByRole('region', { name: 'Direct links' }, T);
+    await user.click(await within(section).findByRole('link', { name: 'All connections (3)' }, T));
+    // (The tab's panel loads on its own, so the switch can come a moment later.)
+    await waitFor(
+      () =>
+        expect(screen.getByRole('tab', { name: 'Connections' })).toHaveAttribute(
+          'aria-selected',
+          'true'
+        ),
+      T
+    );
+    expect(screen.getByRole('tab', { name: 'Connections' })).toHaveFocus();
+    expect(posts).toEqual([]);
   });
 
   it('a level move comes first', async () => {
