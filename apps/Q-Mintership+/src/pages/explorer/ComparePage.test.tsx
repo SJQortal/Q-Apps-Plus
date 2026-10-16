@@ -13,9 +13,10 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import { getDefaultStore } from 'jotai';
 import { renderPage } from '../../test/render';
 import { expectNoAxeViolations } from '../../test/axe';
-import { fetchCallsFor, qortalCalls } from '../../test/setup';
-import { ADDR } from '../../test/world';
+import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../test/setup';
+import { ADDR, type InstalledWorld } from '../../test/world';
 import {
+  answerCore,
   AT_ADDRESS,
   MESSAGE_CONTENT,
   SPONSEES,
@@ -42,7 +43,7 @@ function Probe() {
   return <output data-testid="at">{location.pathname}</output>;
 }
 
-async function open(path: string) {
+async function open(path: string, setup?: (world: InstalledWorld['world']) => void) {
   const result = await renderPage(
     <>
       <Routes>
@@ -51,9 +52,27 @@ async function open(path: string) {
       </Routes>
       <Probe />
     </>,
-    { persona: 'learner', path, route: '/*', strict: true }
+    { persona: 'learner', path, route: '/*', strict: true, setup }
   );
   return { ...result, user: userEvent.setup() };
+}
+
+/** Core answers 500 to the GETs `broken` matches while `on` is set; the world answers the rest. */
+function breakReads(world: InstalledWorld['world'], broken: (url: URL) => boolean) {
+  const state = { on: true };
+  mockFetchRoute(/^\//, (url: URL) => {
+    if (state.on && broken(url))
+      return new Response(JSON.stringify({ error: 500, message: 'Core is down' }), {
+        status: 500,
+      });
+    const answer = answerCore(world, url.pathname, url.searchParams);
+    if (!answer) throw new Error(`no mock for GET ${url.pathname}${url.search}`);
+    return new Response(answer.text !== undefined ? answer.text : JSON.stringify(answer.body), {
+      status: answer.status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+  return state;
 }
 
 const at = () => screen.getByTestId('at').textContent ?? '';
@@ -414,5 +433,38 @@ describe('Compare: Remove and Add', () => {
       T
     );
     expect(store.get(comparePicksAtom)).toEqual([ADDR.kicked, ADDR.left, SPONSOR.address]);
+  });
+});
+
+describe('Compare: reads that fail', () => {
+  it('Recorded between them: every failed read in one line, with one Retry for all', async () => {
+    let broken = { on: false };
+    const { user } = await open(explorerComparePath([ADDR.kicked, ADDR.left]), (world) => {
+      broken = breakReads(
+        world,
+        (url) =>
+          url.pathname.startsWith('/crosschain/trades') ||
+          url.searchParams.getAll('txType').includes('TRANSFER_ASSET')
+      );
+    });
+    const recorded = await region('Recorded between them');
+    const line = await within(recorded).findByText(/^Couldn’t read /, {}, T);
+    expect(line).toHaveTextContent(
+      'Couldn’t read A’s asset transfers, A’s trade portal sales, B’s asset transfers and B’s trade portal sales.'
+    );
+    expect(line).toHaveAttribute('role', 'status');
+    expect(within(recorded).queryAllByRole('alert')).toEqual([]);
+    expect(within(recorded).getAllByRole('button', { name: /^Retry/ })).toHaveLength(1);
+
+    broken.on = false;
+    await user.click(within(recorded).getByRole('button', { name: 'Retry Recorded between them' }));
+    await waitFor(
+      () =>
+        expect(spoken(recorded)).toContain(
+          'Lou Left sold 12 QORT to Kit Kicked on the trade portal in 1 trade'
+        ),
+      T
+    );
+    await waitFor(() => expect(within(recorded).queryByText(/^Couldn’t read /)).toBeNull(), T);
   });
 });

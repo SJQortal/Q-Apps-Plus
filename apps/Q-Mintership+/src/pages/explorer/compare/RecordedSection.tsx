@@ -3,17 +3,17 @@
  * something was found get a block (an anchor the pair grid jumps to), each
  * finding a sentence with its blocks or dates and what stands behind it;
  * then what was checked and found nothing for that pair, and one line for
- * the pairs with nothing at all. While reads are out, it says which.
+ * the pairs with nothing at all. While reads are out, it says which; the
+ * reads that failed are one line with one Retry.
  */
 import { Box, Typography } from '@mui/material';
 import { Section } from '../../../components/common/Section';
-import { ErrorState } from '../../../components/common/states';
 import { useDisplayName } from '../../../hooks/useDisplayName';
 import { checkedNoneLine, PAIR_CHECK_WORDS, type PairCheck } from '../../../rules/explorer/compare';
 import { PAIR_ANCHOR_SX, pairAnchorId } from './compareView';
 import { FindingRow } from './FindingRow';
 import { LetterBadge } from './letters';
-import { LIST_SX, Note, SubHeading, Waiting } from './parts';
+import { FailedReads, LIST_SX, Note, SubHeading, Waiting } from './parts';
 import type { CompareData, PairData } from './useCompareData';
 
 /** What a pair's reads are still out for, in words. */
@@ -129,7 +129,7 @@ export function RecordedSection({
   const reading = pairs.filter((p) => p.result.pending.length && inFlight(data, p));
   const waiting = reading.filter((p) => !p.result.findings.length);
   const failures = pairs.flatMap((p) => failedReads(data, p));
-  // One error line per failed read, even when two pairs share it.
+  // Each failed read once, even when two pairs share it; all of them in one line.
   const seen = new Set<string>();
   const errors = failures.filter((f) => (seen.has(f.what) ? false : (seen.add(f.what), true)));
   const allChecks = new Set(nothing.flatMap((p) => p.result.empty));
@@ -155,14 +155,11 @@ export function RecordedSection({
           {pendingWords([...new Set(waiting.flatMap((p) => p.result.pending))])}…
         </Waiting>
       ) : null}
-      {errors.map((error) => (
-        <ErrorState
-          key={error.what}
-          compact
-          title={`Couldn’t read ${error.what}.`}
-          onRetry={error.retry}
-        />
-      ))}
+      <FailedReads
+        what={errors.map((e) => e.what)}
+        onRetry={() => errors.forEach((e) => e.retry())}
+        retryLabel="Retry Recorded between them"
+      />
       {emptyLine ? (
         <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
           {emptyLine}
