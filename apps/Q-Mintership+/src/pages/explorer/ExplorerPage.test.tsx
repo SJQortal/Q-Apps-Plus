@@ -178,7 +178,11 @@ describe('the Explorer’s landing page', () => {
     const { user } = await show();
     await user.click(screen.getByRole('button', { name: 'How to read the Explorer' }));
     const dialog = await screen.findByRole('dialog', { name: 'How to read the Explorer' }, T);
-    expect(within(dialog).getByText(/Nothing here shows who runs an account\./)).toBeVisible();
+    expect(
+      within(dialog).getByText(
+        /Nothing here shows who runs an account, as there is no KYC on Qortal\./
+      )
+    ).toBeVisible();
     expect(within(dialog).getByText(/read from your own node/)).toBeVisible();
     expect(within(dialog).getByText(/each list says how far it got/)).toBeVisible();
     expect(

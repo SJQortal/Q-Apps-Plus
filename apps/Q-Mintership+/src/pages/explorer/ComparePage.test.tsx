@@ -119,7 +119,9 @@ describe('Compare: two accounts', () => {
       const { container, posts } = await open(explorerComparePath([ADDR.kicked, ADDR.left]));
       expect(screen.getByRole('heading', { level: 1, name: 'Compare accounts' })).toBeVisible();
       expect(
-        screen.getByText(/Nothing here shows who runs an account\./, { selector: '[role="note"]' })
+        screen.getByText(/Nothing here shows who runs an account, as there is no KYC on Qortal\./, {
+          selector: '[role="note"]',
+        })
       ).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /link to this comparison/i })).toBeVisible();
 

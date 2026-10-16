@@ -3,7 +3,7 @@
  * sentence with numbers, a date and a block, opening to the transactions
  * behind it; never a verdict.
  *
- * The fixed neutral line, then:
+ * The facts first, then the fixed neutral line and Copy findings:
  * - Recorded between them: minting level moved, reward shares (its
  *   sponsor, minting with another account now, the accounts it sponsored),
  *   names bought or sold, and payments by the other account;
@@ -318,13 +318,6 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
 
   return (
     <>
-      <Typography role="note" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-        {EXPLORER_NEUTRAL_LINE}
-      </Typography>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-        <CopyFindingsButton build={build} />
-      </Box>
-
       {showRecorded ? (
         <Section title="Recorded between them" id="connections-recorded">
           {data.links.isError && !data.links.data ? (
@@ -411,6 +404,14 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
       ) : null}
 
       <CoreReport address={address} />
+
+      {/* What these facts are and aren't, and Copy findings, after the facts (Simon, 2026-10-16). */}
+      <Typography role="note" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+        {EXPLORER_NEUTRAL_LINE}
+      </Typography>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+        <CopyFindingsButton build={build} />
+      </Box>
     </>
   );
 }

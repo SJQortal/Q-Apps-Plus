@@ -110,10 +110,17 @@ afterEach(() => vi.useRealTimers());
 describe('Connections: payments and first QORT', () => {
   it('Lou Left: payments with Kit each way, first QORT from a busy funder, and what was checked', async () => {
     const { container, posts, user } = await open(ADDR.left);
-    expect(
-      screen.getByText(/Nothing here shows who runs an account\./, { selector: '[role="note"]' })
-    ).toBeInTheDocument();
+    const note = screen.getByText(
+      /Nothing here shows who runs an account, as there is no KYC on Qortal\./,
+      { selector: '[role="note"]' }
+    );
     const recorded = await region('Recorded between them');
+    // The facts first; the note and Copy findings after them, at the bottom.
+    expect(recorded.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      note.compareDocumentPosition(screen.getByRole('button', { name: 'Copy findings' })) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
     const sent = await within(recorded).findByRole('list', { name: 'Sent to' }, T);
     await waitFor(
       () => expect(sent).toHaveTextContent('Paid Kit Kicked 6.3 QORT in 2 payments'),

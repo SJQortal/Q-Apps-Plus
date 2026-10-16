@@ -9,7 +9,7 @@ export const EXPLORER_PURPOSE =
 
 /** The fixed line at the top of Connections and Compare, and in the guide. */
 export const EXPLORER_NEUTRAL_LINE =
-  'Public chain and QDN facts. Accounts are linked for many ordinary reasons (trades, gifts, help for newcomers, shared groups). Nothing here shows who runs an account.';
+  'Public chain and QDN facts. Accounts are linked for many ordinary reasons (trades, gifts, help for newcomers, shared groups). Nothing here shows who runs an account, as there is no KYC on Qortal.';
 
 /** An account page's state pages. */
 export const INVALID_ADDRESS = "This isn't a valid Qortal address. A letter may be wrong.";
