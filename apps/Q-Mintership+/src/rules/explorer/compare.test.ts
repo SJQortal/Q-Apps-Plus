@@ -238,6 +238,33 @@ describe('recorded between two accounts', () => {
     );
   });
 
+  it('a reward share removed and made again says so, with the newest share’s percent', () => {
+    const result = pairFindings({
+      x: side(A, 'A', {
+        links: links([
+          share(A, B, 1_000_100),
+          share(A, B, 1_007_334, '-1.00'),
+          share(A, B, 1_010_000, '5.00'),
+        ]),
+      }),
+      y: side(B, 'B', { links: links([]) }),
+      online: [{ minterAddress: A, recipientAddress: B }],
+    });
+    expect(plain(result.findings[0].parts)).toBe(
+      'A made a reward share to B at 0 %, removed after 7,234 blocks, shared again at 5 % (block 1,010,000); they are minting with it now'
+    );
+    // Removed and not made again: no "again", and not minting with it.
+    const removed = pairFindings({
+      x: side(A, 'A', {
+        links: links([share(A, B, 1_000_100), share(A, B, 1_007_334, '-1.00')]),
+      }),
+      y: side(B, 'B', { links: links([]) }),
+    });
+    expect(plain(removed.findings[0].parts)).toBe(
+      'A made a reward share to B at 0 %, removed after 7,234 blocks'
+    );
+  });
+
   it('finds Q-Mintership records either way, under the names they were published under', () => {
     const result = pairFindings({
       x: side(A, 'A', {

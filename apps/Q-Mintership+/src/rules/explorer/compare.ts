@@ -35,7 +35,7 @@ import {
   plural,
   shortAddress,
 } from '../../utils/format';
-import { isRemoval, linksOf, monthRange, sponseesOf, whenWords } from './connections';
+import { isRemoval, linksOf, monthRange, percentOf, sponseesOf, whenWords } from './connections';
 import { partsText } from './findings';
 import { flowAmounts, flowsOf, formatAtomic, parseAtomic, type Flow } from './money';
 import { txTypeLabel } from './txFamilies';
@@ -319,9 +319,20 @@ function linkFindings(input: PairInput): {
     const share = sponseesOf(rows, sponsor).find((s) => s.address === other);
     if (!share) continue;
     const now = share.active && onlinePair(input.online, sponsor, other);
+    // Removed, then made again (and active now): say so, with the newest share's percent.
+    const again =
+      share.active && share.blocks !== null ? share.txs.find((row) => !isRemoval(row)) : undefined;
     const tail =
       share.blocks !== null
-        ? `, removed after ${plural(share.blocks, 'block')}`
+        ? `, removed after ${plural(share.blocks, 'block')}${
+            again
+              ? `, shared again at ${percentOf(again)} %${
+                  typeof again.blockHeight === 'number'
+                    ? ` (block ${formatCount(again.blockHeight)})`
+                    : ''
+                }`
+              : ''
+          }`
         : share.active
           ? ', not removed'
           : '';
