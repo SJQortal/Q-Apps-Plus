@@ -80,7 +80,8 @@ describe('the Explorer Quiz bar', () => {
       'href',
       QUESTION.link
     );
-    expect(within(bar).getByText('1 of 1 right')).toBeVisible();
+    // In the title row from 600 px, under the buttons on phones (one shows at a time).
+    expect(within(bar).getAllByText('1 of 1 right')).toHaveLength(2);
     await waitFor(() =>
       expect(within(bar).getByRole('button', { name: 'Next question' })).toHaveFocus()
     );

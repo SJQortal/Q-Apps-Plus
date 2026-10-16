@@ -53,18 +53,6 @@ const LEVEL_HUE: Record<QuizLevel, number> = { easy: 150, medium: 210, tricky: 2
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
-/** Read out everywhere, shown from 600 px (phones show the short score). */
-const visuallyHiddenOnPhones = {
-  '@media (max-width: 599.95px)': {
-    position: 'absolute',
-    width: 1,
-    height: 1,
-    overflow: 'hidden',
-    clip: 'rect(0 0 0 0)',
-    whiteSpace: 'nowrap',
-  },
-} as const;
-
 /** The question's parts as text: names in bold, an address whole, blocks with their number. */
 export function QuestionText({ parts }: { parts: readonly QuizPart[] }) {
   return (
@@ -267,20 +255,11 @@ export default function QuizDock() {
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            display: { xs: folded ? 'none' : 'block', sm: 'block' },
+            // Phones have no room beside the title: the score is under the buttons there.
+            display: { xs: 'none', sm: 'block' },
           }}
         >
-          {quiz.score.asked ? (
-            <>
-              {/* Phones: "3/5 right", the whole line for screen readers. */}
-              <Box component="span" aria-hidden sx={{ display: { xs: 'inline', sm: 'none' } }}>
-                {`${formatCount(quiz.score.right)}/${formatCount(quiz.score.asked)} right`}
-              </Box>
-              <Box component="span" sx={visuallyHiddenOnPhones}>
-                {scoreWords(quiz.score)}
-              </Box>
-            </>
-          ) : null}
+          {quiz.score.asked ? scoreWords(quiz.score) : null}
         </Typography>
         <Tooltip title={folded ? 'Show the question' : 'Fold'}>
           <IconButton
@@ -500,6 +479,16 @@ export default function QuizDock() {
                   ))}
                 </TextField>
               </Box>
+              {quiz.score.asked ? (
+                // Phones: the score here, under the buttons (the title row has no room).
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ display: { xs: 'block', sm: 'none' } }}
+                >
+                  {scoreWords(quiz.score)}
+                </Typography>
+              ) : null}
             </>
           )}
         </Box>
