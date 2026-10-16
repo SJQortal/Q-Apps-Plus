@@ -140,8 +140,12 @@ describe('one transaction', () => {
     expect(
       await within(answers).findByRole('link', { name: 'Open the MINTER decision' }, T)
     ).toHaveAttribute('href', `/decisions/${pending}`);
-    // No note about the approver: it is an answer, nothing more.
-    expect(answers.textContent).not.toMatch(/is an admin|was an admin|not an admin/i);
+    // The region holds the sentence and its two links, nothing more.
+    const sentence = answers.querySelector('p')?.textContent ?? '';
+    expect(sentence).toMatch(/invite .+ to MINTER/);
+    expect(answers.textContent).toBe(
+      `The transaction it answers${sentence}Open that transactionOpen the MINTER decision`
+    );
     await expectNoAxeViolations(container);
     noWrites(posts);
   });
