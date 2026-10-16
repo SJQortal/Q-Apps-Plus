@@ -7,7 +7,7 @@
  * checking", and Overview's latest transactions sharing the first read.
  * Read-only: no POST, no write request to Hub.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useLocation, useNavigationType } from 'react-router-dom';
@@ -35,6 +35,24 @@ const items = (list: HTMLElement) => list.querySelectorAll(':scope > li');
 const rowButtons = (list: HTMLElement) => list.querySelectorAll<HTMLElement>('[data-tx-row]');
 
 const T = { timeout: 5000 };
+
+/**
+ * The world's own answer to a read this test's route passes on, served the
+ * way the harness serves it (its status too). A read the world can't answer
+ * fails the test, as strict mode does, instead of coming back as 200 null.
+ */
+function worldAnswer(world: World, url: URL): Response {
+  const answer = answerCore(world, url.pathname, url.searchParams);
+  if (!answer) {
+    const path = `${url.pathname}${url.search}`;
+    onTestFinished(() => {
+      throw new Error(`The mock world has no answer for: ${path}`);
+    });
+    throw new Error(`no mock for GET ${path}`);
+  }
+  if (answer.text !== undefined) return new Response(answer.text, { status: answer.status });
+  return new Response(JSON.stringify(answer.body), { status: answer.status });
+}
 /** 150 rows, or nine reads in a row: more than the default 15 s on a busy machine. */
 const HEAVY = 30_000;
 const ROUTE = '/explorer/account/:who/:tab?';
@@ -138,8 +156,7 @@ describe('an account’s transactions', () => {
       // Hal's newest 70 only: one read holds them all.
       mockFetchRoute('/transactions/search', (url: URL) => {
         const p = url.searchParams;
-        if (p.get('address') !== FUNDER.address || p.has('txType'))
-          return answerCore(world, url.pathname, p)?.body;
+        if (p.get('address') !== FUNDER.address || p.has('txType')) return worldAnswer(world, url);
         const rows = (world.explorer.rows as Array<{ creatorAddress?: string }>)
           .filter((r) => r.creatorAddress === FUNDER.address)
           .reverse()

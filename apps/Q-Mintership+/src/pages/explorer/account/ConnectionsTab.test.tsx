@@ -5,7 +5,7 @@
  * checked and found nothing, evidence toggles, Compare, payer bands, Copy
  * findings and Core's own report. Read-only: no POST, no write request.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { getDefaultStore } from 'jotai';
@@ -20,6 +20,7 @@ import {
   SPONSEES,
   SPONSOR,
   answerCore,
+  type World,
 } from '../../../../e2e/world.mjs';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../../components/common/personLinks';
 import { explorerAccountPath } from '../../../routes/paths';
@@ -27,6 +28,24 @@ import { comparePicksAtom, resetExplorerState } from '../../../state/explorer';
 import ConnectionsTab from './ConnectionsTab';
 
 const T = { timeout: 5000 };
+
+/**
+ * The world's own answer to a read this test's route passes on, served the
+ * way the harness serves it (its status too). A read the world can't answer
+ * fails the test, as strict mode does, instead of coming back as 200 null.
+ */
+function worldAnswer(world: World, url: URL): Response {
+  const answer = answerCore(world, url.pathname, url.searchParams);
+  if (!answer) {
+    const path = `${url.pathname}${url.search}`;
+    onTestFinished(() => {
+      throw new Error(`The mock world has no answer for: ${path}`);
+    });
+    throw new Error(`no mock for GET ${path}`);
+  }
+  if (answer.text !== undefined) return new Response(answer.text, { status: answer.status });
+  return new Response(JSON.stringify(answer.body), { status: answer.status });
+}
 const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH|VOTE|POLL/;
 const VERDICTS =
   /\b(alts?|suspicious|same person|fraud|strong(est)?|weak|consolidation|linked accounts|likel(y|ihood)|score)\b/i;
@@ -170,7 +189,7 @@ describe('Connections: payments and first QORT', () => {
         // Kit has sent 1,000+ payments here.
         if (url.searchParams.get('senderAddress') === ADDR.kicked && url.searchParams.get('offset'))
           return [{ type: 'PAYMENT' }];
-        return answerCore(world, url.pathname, url.searchParams)?.body;
+        return worldAnswer(world, url);
       })
     );
     const recorded = await region('Recorded between them');

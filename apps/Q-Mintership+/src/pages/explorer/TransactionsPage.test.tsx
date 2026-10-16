@@ -5,7 +5,7 @@
  * the URL (read with appParam, written in place), "from a block", and
  * "Show older" with its live-region words and focus. Read-only.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useLocation, useNavigationType } from 'react-router-dom';
@@ -20,6 +20,24 @@ const items = (list: HTMLElement) => list.querySelectorAll(':scope > li');
 const rowButtons = (list: HTMLElement) => list.querySelectorAll<HTMLElement>('[data-tx-row]');
 
 const T = { timeout: 4000 };
+
+/**
+ * The world's own answer to a read this test's route passes on, served the
+ * way the harness serves it (its status too). A read the world can't answer
+ * fails the test, as strict mode does, instead of coming back as 200 null.
+ */
+function worldAnswer(world: World, url: URL): Response {
+  const answer = answerCore(world, url.pathname, url.searchParams);
+  if (!answer) {
+    const path = `${url.pathname}${url.search}`;
+    onTestFinished(() => {
+      throw new Error(`The mock world has no answer for: ${path}`);
+    });
+    throw new Error(`no mock for GET ${path}`);
+  }
+  if (answer.text !== undefined) return new Response(answer.text, { status: answer.status });
+  return new Response(JSON.stringify(answer.body), { status: answer.status });
+}
 const ROUTE = '/explorer/transactions';
 const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH|VOTE|POLL/;
 
@@ -205,7 +223,7 @@ describe('Transactions on Qortal', () => {
       // 45 of Hal's payments in the range: pages of 20, 20 and 5.
       mockFetchRoute('/transactions/search', (url: URL) => {
         const p = url.searchParams;
-        if (p.has('address')) return answerCore(world, url.pathname, p)?.body;
+        if (p.has('address')) return worldAnswer(world, url);
         const rows = (world.explorer.rows as Array<{ creatorAddress?: string }>)
           .filter((r) => r.creatorAddress === FUNDER.address)
           .slice(0, 45)
