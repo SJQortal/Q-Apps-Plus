@@ -1,16 +1,373 @@
 /**
- * How this account is linked to other accounts. A placeholder until this tab is built.
+ * How this account is linked to other accounts, as evidence: each link a
+ * sentence with numbers, a date and a block, opening to the transactions
+ * behind it; never a verdict.
+ *
+ * The fixed neutral line, then:
+ * - Recorded between them: minting level moved, reward shares (its
+ *   sponsor, minting with another account now, the accounts it sponsored),
+ *   names bought or sold, and payments by the other account;
+ * - In common: where its first QORT came from, the sponsor it shares with
+ *   others, and who got their first QORT payment from it;
+ * - In Q-Mintership: nominations, supports and votes between it and others
+ *   (MintershipLinks);
+ * - "Also checked, nothing found: …", and Core's own report on request.
+ * A section shows only when it has something. "Copy findings" copies the
+ * lot as text, with the block it was checked at.
+ *
+ * Reads (all cached per account, none polled; Refresh marks them stale):
+ * xlinks, xpay sent and received, xassets, xonline, xfirst, the sponsor's
+ * xlinks (heavy, dropped with this page), payer bands for the accounts on
+ * screen, and MINTER's member and admin lists once Payments nears the
+ * screen.
  */
-import { Typography } from '@mui/material';
+import { useState, type ReactNode } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
+import { Box, Button, Link, Typography } from '@mui/material';
+import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
+import CheckOutlinedIcon from '@mui/icons-material/CheckOutlined';
+import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
+import { Section } from '../../../components/common/Section';
+import { ErrorState, ListSkeleton } from '../../../components/common/states';
+import { getTip } from '../../../data/chain';
+import { peekQuery } from '../../../data/query';
+import { useDisplayName } from '../../../hooks/useDisplayName';
+import { useInView } from '../../../hooks/useInView';
+import { explorerAccountPath, explorerSponseesPath } from '../../../routes/paths';
+import {
+  emptyLinkChecks,
+  fundingParts,
+  nothingFoundLine,
+  siblingsParts,
+  type EmptyCheck,
+} from '../../../rules/explorer/connections';
+import {
+  findingsText,
+  linksCoverage,
+  type Finding,
+  type FindingLine,
+} from '../../../rules/explorer/findings';
+import { paymentsCoverage } from '../../../rules/explorer/money';
+import { appLink, copyText } from '../../../utils/links';
+import { formatCount } from '../../../utils/format';
+import { EXPLORER_NEUTRAL_LINE } from '../explorerWords';
+import { ConnectionRow, ROW_LIST_SX } from './connections/ConnectionRow';
+import { CoreReport } from './connections/CoreReport';
+import { useLevels, useMinterMarks, type MinterMarks } from './connections/hooks';
+import { InCommonSection } from './connections/InCommon';
+import { PaymentsPanel } from './connections/PaymentsPanel';
+import { useConnections, useRecorded } from './connections/useConnections';
+import { useInCommon } from './connections/useInCommon';
+import { blocksLine, textOf, whenLine } from './connections/words';
+import { MintershipLinks } from './MintershipLinks';
 
 export interface ConnectionsTabProps {
   address: string;
 }
 
-export default function ConnectionsTab({ address }: ConnectionsTabProps) {
+/** How minting worked before Oct 2024, under any reward-share link. */
+export const SPONSOR_ERA_NOTE =
+  'Before Oct 2024 most new accounts started minting through another account’s reward share (a sponsor). Since then MINTER membership is what counts.';
+
+/** Rows of one kind shown before "Show all". */
+const ROWS = 20;
+
+const SUBHEAD_SX = { fontSize: 16, fontWeight: 700, lineHeight: 1.3, mt: 1 } as const;
+
+function Part({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <Typography color="text.secondary" role="status" data-address={address}>
-      Coming in this update
-    </Typography>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+      <Typography component="h3" sx={SUBHEAD_SX}>
+        {title}
+      </Typography>
+      {children}
+    </Box>
+  );
+}
+
+/** A list of rows, the first 20 and then "Show all". */
+function Rows({ label, rows }: { label: string; rows: ReactNode[] }) {
+  const [all, setAll] = useState(false);
+  return (
+    <>
+      <Box component="ul" aria-label={label} sx={ROW_LIST_SX}>
+        {all ? rows : rows.slice(0, ROWS)}
+      </Box>
+      {rows.length > ROWS && !all ? (
+        <Button onClick={() => setAll(true)} sx={{ alignSelf: 'flex-start', minHeight: 44 }}>
+          Show all {formatCount(rows.length)}
+        </Button>
+      ) : null}
+    </>
+  );
+}
+
+function FindingRow({
+  address,
+  accountLabel,
+  finding,
+  marks,
+  privs,
+}: {
+  address: string;
+  accountLabel: string;
+  finding: Finding;
+  marks: MinterMarks;
+  privs?: Record<string, string | null>;
+}) {
+  if (!finding.other)
+    return (
+      <Box component="li">
+        <Typography sx={{ overflowWrap: 'anywhere' }}>{textOf(finding.parts)}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          {whenLine(finding)}
+        </Typography>
+      </Box>
+    );
+  return (
+    <ConnectionRow
+      address={address}
+      accountLabel={accountLabel}
+      other={finding.other}
+      parts={finding.parts}
+      when={whenLine(finding)}
+      tags={[marks.markOf(finding.other)]}
+      evidence={{ words: finding.evidenceWords, txs: finding.evidence }}
+      privs={privs}
+    />
+  );
+}
+
+/** Copies the findings as text; says once whether it worked. */
+function CopyFindingsButton({ build }: { build: () => Promise<string> }) {
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  return (
+    <>
+      <Button
+        variant="outlined"
+        startIcon={state === 'copied' ? <CheckOutlinedIcon /> : <ContentCopyOutlinedIcon />}
+        onClick={async () => {
+          setState('idle');
+          const ok = await copyText(await build());
+          setState(ok ? 'copied' : 'failed');
+        }}
+        sx={{ minHeight: 44 }}
+      >
+        {state === 'copied' ? 'Findings copied' : 'Copy findings'}
+      </Button>
+      <span role="status" className="qmp-visually-hidden">
+        {state === 'copied'
+          ? 'Findings copied'
+          : state === 'failed'
+            ? 'Couldn’t copy the findings'
+            : ''}
+      </span>
+    </>
+  );
+}
+
+const LINK_SX = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 0.5,
+  minHeight: 44,
+  fontWeight: 600,
+  overflowWrap: 'anywhere',
+} as const;
+
+export default function ConnectionsTab({ address }: ConnectionsTabProps) {
+  const accountLabel = useDisplayName(address).label;
+  const data = useConnections(address);
+  const { parsed } = data;
+  const fromOthers = (parsed?.levelMoves ?? [])
+    .filter((move) => move.direction === 'from' && move.other)
+    .map((move) => move.other as string);
+  const levels = useLevels(fromOthers);
+  const recorded = useRecorded(data, levels);
+
+  const [paymentsNode, setPaymentsNode] = useState<HTMLElement | null>(null);
+  const marks = useMinterMarks(useInView(paymentsNode));
+  const [commonNode, setCommonNode] = useState<HTMLElement | null>(null);
+  const common = useInCommon(address, parsed, useInView(commonNode));
+
+  const of = (kind: Finding['kind']) => recorded.filter((f) => f.kind === kind);
+  const levelMoves = of('levelMove');
+  const sponsors = of('sponsor');
+  const mintingWith = of('mintingWith');
+  const sponsees = of('sponsees')[0] ?? null;
+  const names = of('nameDeal');
+  const linkFindings = levelMoves.length + sponsors.length + mintingWith.length + names.length;
+  const sharesShown = sponsors.length + mintingWith.length > 0 || sponsees !== null;
+
+  const paymentsPending =
+    data.sent.isLoading || data.recv.isLoading || data.sent.isError || data.recv.isError;
+  const paymentsAny = Boolean(data.flowsSent?.length || data.flowsReceived?.length);
+  const showRecorded =
+    data.links.isLoading ||
+    (data.links.isError && !data.links.data) ||
+    linkFindings > 0 ||
+    sponsees !== null ||
+    paymentsPending ||
+    paymentsAny;
+
+  const funding = common.first.data?.funding ?? null;
+  const sponsor = common.sponsor;
+  const relationOf = (other: string) =>
+    [
+      other === sponsor ? 'its sponsor' : null,
+      funding?.from === other ? 'its first QORT came from them' : null,
+    ].filter((tag): tag is string => tag !== null);
+
+  const empty: EmptyCheck[] = [];
+  if (parsed) empty.push(...emptyLinkChecks(parsed, data.online.data ? data.mintingWith : null));
+  if (
+    data.flowsSent &&
+    data.flowsReceived &&
+    data.assets.data !== undefined &&
+    !data.flowsSent.length &&
+    !data.flowsReceived.length
+  )
+    empty.push('payments');
+  if (common.first.data && !funding) empty.push('firstQort');
+  const noneLine = nothingFoundLine(empty);
+
+  const build = async () => {
+    const tip = await getTip().catch(() => null);
+    const coverage: string[] = [];
+    if (data.links.data) coverage.push(linksCoverage(data.links.data));
+    if (data.sent.data && data.recv.data)
+      coverage.push(
+        paymentsCoverage(
+          { count: data.sent.data.rows.length, done: data.sent.data.done },
+          { count: data.recv.data.rows.length, done: data.recv.data.done },
+          data.assets.data
+            ? { count: data.assets.data.rows.length, truncated: data.assets.data.truncated }
+            : undefined
+        )
+      );
+    const commonLines: FindingLine[] = [];
+    if (funding)
+      commonLines.push({
+        parts: fundingParts(funding, common.band),
+        height: funding.height,
+        signature: funding.signature,
+      });
+    if (sponsor && common.siblings)
+      commonLines.push({ parts: siblingsParts(sponsor, common.siblings) });
+    return findingsText({
+      address,
+      name: peekQuery<string | null>(`name:${address}`) ?? null,
+      checkedAt: tip?.height ?? null,
+      neutralLine: EXPLORER_NEUTRAL_LINE,
+      coverage,
+      recorded,
+      common: commonLines,
+      noneFound: noneLine,
+      link: appLink(explorerAccountPath(address, 'connections')),
+      nameOf: (other) => peekQuery<string | null>(`name:${other}`),
+    });
+  };
+
+  const row = (finding: Finding) => (
+    <FindingRow
+      key={finding.key}
+      address={address}
+      accountLabel={accountLabel}
+      finding={finding}
+      marks={marks}
+      privs={data.links.data?.privs}
+    />
+  );
+
+  return (
+    <>
+      <Typography role="note" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+        {EXPLORER_NEUTRAL_LINE}
+      </Typography>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+        <CopyFindingsButton build={build} />
+      </Box>
+
+      {showRecorded ? (
+        <Section title="Recorded between them" id="connections-recorded">
+          {data.links.isError && !data.links.data ? (
+            <ErrorState
+              compact
+              title="Couldn’t read its reward shares, level moves and name sales."
+              error={data.links.error}
+              onRetry={() => void data.links.refetch()}
+            />
+          ) : !data.links.data ? (
+            <ListSkeleton count={2} label="Loading its links" />
+          ) : null}
+          {levelMoves.length ? (
+            <Part title="Minting level">
+              <Rows label="Minting level moved" rows={levelMoves.map(row)} />
+            </Part>
+          ) : null}
+          {sharesShown ? (
+            <Part title="Reward shares">
+              {sponsors.length + mintingWith.length ? (
+                <Rows label="Reward shares" rows={[...sponsors, ...mintingWith].map(row)} />
+              ) : null}
+              {sponsees ? (
+                <Box>
+                  <Link component={RouterLink} to={explorerSponseesPath(address)} sx={LINK_SX}>
+                    {textOf(sponsees.parts)}
+                    <ChevronRightOutlinedIcon fontSize="small" aria-hidden />
+                  </Link>
+                  <Typography variant="body2" color="text.secondary">
+                    {/* The months are in the link already. */}
+                    First shares in{' '}
+                    {blocksLine(sponsees.firstHeight ?? sponsees.height, sponsees.height)}
+                  </Typography>
+                </Box>
+              ) : null}
+              <Typography variant="body2" color="text.secondary">
+                {SPONSOR_ERA_NOTE}
+              </Typography>
+            </Part>
+          ) : null}
+          {names.length ? (
+            <Part title="Names">
+              <Rows label="Names bought or sold" rows={names.map(row)} />
+            </Part>
+          ) : null}
+          {paymentsPending || paymentsAny ? (
+            <Box ref={setPaymentsNode}>
+              <Part title="Payments">
+                <PaymentsPanel
+                  address={address}
+                  accountLabel={accountLabel}
+                  data={data}
+                  marks={marks}
+                  relationOf={relationOf}
+                />
+              </Part>
+            </Box>
+          ) : null}
+        </Section>
+      ) : null}
+
+      <Box ref={setCommonNode} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <InCommonSection
+          address={address}
+          accountLabel={accountLabel}
+          data={common}
+          marks={marks}
+          sentAny={(data.sent.data?.rows.length ?? 0) > 0}
+        />
+      </Box>
+
+      <MintershipLinks address={address} />
+
+      {noneLine ? (
+        <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+          {noneLine}
+        </Typography>
+      ) : null}
+
+      <CoreReport address={address} />
+    </>
   );
 }
