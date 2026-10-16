@@ -82,8 +82,6 @@ export function AccountHeader({
           </Box>
         </Box>
       </Box>
-      {/* The whole address on a line of its own, so a phone has room for it. */}
-      <AddressText address={address} full />
       {primary ? (
         <Typography
           sx={{ display: { xs: 'block', sm: 'none' }, fontWeight: 700, overflowWrap: 'anywhere' }}
@@ -91,6 +89,8 @@ export function AccountHeader({
           <bdi dir="auto">{visibleName(primary)}</bdi>
         </Typography>
       ) : null}
+      {/* The whole address on a line of its own, so a phone has room for it. */}
+      <AddressText address={address} full />
       {note ? (
         <Typography
           variant="body2"
