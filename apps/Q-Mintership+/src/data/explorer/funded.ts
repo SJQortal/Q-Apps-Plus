@@ -4,9 +4,11 @@
  * One read of its first 100 QORT payments (`payments/between`, oldest
  * first); then, for each account it paid, that account's earliest QORT
  * payment received (`payments/between?recipientAddress=…&limit=1`): when
- * that one came from this account, it made their first QORT payment. 50
- * accounts are checked at first and 50 more per tap, 4 at a time. These are
- * light reads (a few ms each), not heavy address searches.
+ * that one came from this account, it made their first QORT payment.
+ * getFunded reads the payments only; checkMoreFunded checks the next 50
+ * accounts (the page runs it once at first, then once per tap), 4 at a
+ * time, reporting progress. These are light reads, not heavy address
+ * searches, but a busy node can take a moment for each.
  */
 import type { TxRow } from '../types';
 import { getJson, query } from '../core';
@@ -74,11 +76,19 @@ function firstReceived(address: string): Promise<FirstReceived | null> {
 }
 
 /** Check the next `count` accounts not checked yet; returns the new value. */
-async function checkNext(funded: Funded, count: number): Promise<Funded> {
+async function checkNext(
+  funded: Funded,
+  count: number,
+  onProgress?: (done: number, total: number) => void
+): Promise<Funded> {
   const batch = funded.paid.slice(funded.checked, funded.checked + count);
   const checks: Record<string, FirstReceived | null> = {};
+  let done = 0;
+  onProgress?.(done, batch.length);
   await runPool(batch, 4, async (paid) => {
     checks[paid.address] = await firstReceived(paid.address);
+    done += 1;
+    onProgress?.(done, batch.length);
   });
   return {
     ...funded,
@@ -115,20 +125,17 @@ async function readFunded(address: string): Promise<Funded> {
       signature: row.signature,
     });
   }
-  return checkNext(
-    {
-      payments: list.length,
-      truncated: list.length >= PAYMENTS,
-      paid: [...paid.values()],
-      atLeftOut,
-      checks: {},
-      checked: 0,
-    },
-    FUNDED_BATCH
-  );
+  return {
+    payments: list.length,
+    truncated: list.length >= PAYMENTS,
+    paid: [...paid.values()],
+    atLeftOut,
+    checks: {},
+    checked: 0,
+  };
 }
 
-/** Its first 100 payments, and the first 50 accounts it paid checked. */
+/** Its first 100 payments and the accounts it paid (none checked yet). */
 export function getFunded(address: string, options: { force?: boolean } = {}): Promise<Funded> {
   return fetchQuery(fundedKey(address), () => readFunded(address), {
     ttlMs: 30 * 60_000,
@@ -136,11 +143,14 @@ export function getFunded(address: string, options: { force?: boolean } = {}): P
   });
 }
 
-/** "Check 50 more": the next accounts it paid. */
-export async function checkMoreFunded(address: string): Promise<Funded | undefined> {
+/** Check the next 50 accounts it paid (what is checked is kept with the payments). */
+export async function checkMoreFunded(
+  address: string,
+  options: { onProgress?: (done: number, total: number) => void } = {}
+): Promise<Funded | undefined> {
   const current = peekQuery<Funded>(fundedKey(address));
   if (!current || current.checked >= current.paid.length) return current;
-  const next = await checkNext(current, FUNDED_BATCH);
+  const next = await checkNext(current, FUNDED_BATCH, options.onProgress);
   setQueryData(fundedKey(address), next);
   return next;
 }

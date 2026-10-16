@@ -43,15 +43,22 @@ describe('whose first QORT payment came from an account', () => {
       const i = Number(r.slice(1, 5).replace(/z/g, '0'));
       return [i % 2 === 0 ? pay(H, r, 1_000 + i) : pay(OTHER, r, 500)];
     });
-    const funded = await getFunded(H);
-    expect(funded).toMatchObject({ payments: 63, truncated: false, atLeftOut: 1, checked: 50 });
-    expect(funded.paid).toHaveLength(60);
-    expect(funded.paid[0]).toMatchObject({ address: to(0), height: 1_000, amount: '1.50000000' });
+    const read = await getFunded(H);
+    expect(read).toMatchObject({ payments: 63, truncated: false, atLeftOut: 1, checked: 0 });
+    expect(read.paid).toHaveLength(60);
+    expect(read.paid[0]).toMatchObject({ address: to(0), height: 1_000, amount: '1.50000000' });
+    expect(fetchCallsFor('/transactions/payments/between')).toHaveLength(1);
     const first = params(fetchCallsFor('/transactions/payments/between')[0]);
     expect(first.get('senderAddress')).toBe(H);
     expect(first.get('limit')).toBe('100');
     expect(first.get('reverse')).toBeNull();
     expect(first.get('confirmationStatus')).toBe('CONFIRMED');
+
+    const progress: number[] = [];
+    const funded = (await checkMoreFunded(H, { onProgress: (done) => progress.push(done) }))!;
+    expect(funded.checked).toBe(50);
+    expect(progress[0]).toBe(0);
+    expect(progress[progress.length - 1]).toBe(50);
     const checks = fetchCallsFor('/transactions/payments/between').slice(1).map(params);
     expect(checks).toHaveLength(50);
     expect(checks.every((c) => c.get('limit') === '1' && c.get('recipientAddress'))).toBe(true);
@@ -79,7 +86,8 @@ describe('whose first QORT payment came from an account', () => {
       running -= 1;
       return [];
     });
-    const funded = await getFunded(H);
+    await getFunded(H);
+    const funded = (await checkMoreFunded(H))!;
     expect(most).toBe(4);
     expect(funded.checked).toBe(12);
     expect(firstPaidBy(funded, H)).toEqual([]);
@@ -87,7 +95,8 @@ describe('whose first QORT payment came from an account', () => {
 
   it('in the mock world: Hal made the first QORT payment to every account he paid first', async () => {
     installWorld('admin', { strict: true });
-    const funded = await getFunded(FUNDER.address);
+    await getFunded(FUNDER.address);
+    const funded = (await checkMoreFunded(FUNDER.address))!;
     expect(funded).toMatchObject({ payments: 100, truncated: true, checked: 50 });
     expect(funded.paid.slice(0, 4).map((p) => p.address)).toEqual([
       ADDR.kicked,
