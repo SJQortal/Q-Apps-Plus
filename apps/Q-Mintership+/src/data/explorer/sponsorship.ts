@@ -4,7 +4,13 @@
  * kept for the session (`xsponsor:<a>`). What its numbers really count is
  * said in rules/explorer/connections.ts sponsorReportLines: Core counts
  * names, not accounts, and its transfer counts include what was received.
+ *
+ * Core's report on an account's sponsor (`/addresses/sponsorship/{a}/sponsor`,
+ * about a second) names which account Core counts as its sponsor; read only
+ * when more than one account sponsored it (`xcoresponsor:<a>`).
  */
+import { CoreHttpError } from '../../qortal/client';
+import { isAddress } from '../accounts';
 import { getJson, seg } from '../core';
 import { heavyQuery } from './heavy';
 
@@ -75,6 +81,32 @@ export function getSponsorshipReport(
         await getJson<unknown>(`/addresses/sponsorship/${seg(address)}`),
         address
       ),
+    { ttlMs: 30 * 60_000, force: options.force }
+  );
+}
+
+export const coreSponsorKey = (address: string) => `xcoresponsor:${address}`;
+
+/** The account Core counts as `address`'s sponsor, or null when it counts none (heavy). */
+export function getCoreSponsor(
+  address: string,
+  options: { force?: boolean } = {}
+): Promise<string | null> {
+  return heavyQuery(
+    address,
+    coreSponsorKey(address),
+    async () => {
+      try {
+        const body = await getJson<{ address?: unknown }>(
+          `/addresses/sponsorship/${seg(address)}/sponsor`
+        );
+        return isAddress(body?.address) ? body.address : null;
+      } catch (error) {
+        // Core's "account address unknown": no account sponsored it.
+        if (error instanceof CoreHttpError && error.status === 404) return null;
+        throw error;
+      }
+    },
     { ttlMs: 30 * 60_000, force: options.force }
   );
 }

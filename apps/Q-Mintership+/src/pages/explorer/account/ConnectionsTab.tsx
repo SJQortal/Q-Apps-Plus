@@ -36,6 +36,8 @@ import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import { Section } from '../../../components/common/Section';
 import { ErrorState, ListSkeleton } from '../../../components/common/states';
 import { getTip } from '../../../data/chain';
+import { coreSponsorKey, getCoreSponsor } from '../../../data/explorer/sponsorship';
+import { useQuery } from '../../../hooks/useQuery';
 import { peekQuery } from '../../../data/query';
 import { useDisplayName } from '../../../hooks/useDisplayName';
 import { useInView } from '../../../hooks/useInView';
@@ -129,12 +131,15 @@ function FindingRow({
   finding,
   marks,
   privs,
+  tags = [],
 }: {
   address: string;
   accountLabel: string;
   finding: Finding;
   marks: MinterMarks;
   privs?: Record<string, string | null>;
+  /** More plain tags under the name ("Core counts it as the sponsor"). */
+  tags?: readonly string[];
 }) {
   if (!finding.other)
     return (
@@ -152,7 +157,7 @@ function FindingRow({
       other={finding.other}
       parts={finding.parts}
       when={whenLine(finding)}
-      tags={[marks.markOf(finding.other), marks.devOf(finding.other)]}
+      tags={[marks.markOf(finding.other), marks.devOf(finding.other), ...tags]}
       evidence={{ words: finding.evidenceWords, txs: finding.evidence }}
       privs={privs}
       flow={finding.kind === 'paidBy' ? 'in' : finding.kind === 'paidTo' ? 'out' : undefined}
@@ -197,6 +202,9 @@ const LINK_SX = {
   overflowWrap: 'anywhere',
 } as const;
 
+/** On the sponsor Core counts, when more than one account sponsored it. */
+export const CORE_SPONSOR_TAG = 'the sponsor Core counts';
+
 export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const accountLabel = useDisplayName(address).label;
   const data = useConnections(address);
@@ -220,6 +228,10 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const sponsors = of('sponsor');
   const mintingWith = of('mintingWith');
   const sponsees = of('sponsees')[0] ?? null;
+  // More than one account sponsored it: which one Core counts (about a second, read once).
+  const coreSponsor = useQuery(sponsors.length > 1 ? coreSponsorKey(address) : null, (force) =>
+    getCoreSponsor(address, { force })
+  );
   const names = of('nameDeal');
   const linkFindings = levelMoves.length + sponsors.length + mintingWith.length + names.length;
   const sharesShown = sponsors.length + mintingWith.length > 0 || sponsees !== null;
@@ -320,6 +332,11 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
       finding={finding}
       marks={marks}
       privs={data.links.data?.privs}
+      tags={
+        finding.kind === 'sponsor' && coreSponsor.data && finding.other === coreSponsor.data
+          ? [CORE_SPONSOR_TAG]
+          : []
+      }
     />
   );
 
