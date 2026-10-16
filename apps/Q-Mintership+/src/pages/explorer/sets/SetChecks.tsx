@@ -1,7 +1,8 @@
 /**
  * Checks across a set of accounts, each run only when asked, two accounts
  * at a time, with progress and Stop (a read already running finishes; its
- * answer is kept for next time):
+ * answer is kept for next time). Leaving the page stops a check the same
+ * way:
  *
  * - "Who made their first QORT payment": where each one's first QORT came
  *   from, grouped by the payer ("H made the first QORT payment to 7 of
@@ -12,7 +13,7 @@
  *
  * Facts with their denominators; what wasn't read says so.
  */
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Box, Button, LinearProgress, Typography } from '@mui/material';
 import { Card, Section } from '../../../components/common/Section';
 import { TxSentence } from '../../../components/explorer/TxSentence';
@@ -49,7 +50,10 @@ function useRun<T>(
 ) {
   const [run, setRun] = useState<Run<T>>({ state: 'idle' });
   const stopper = useRef<AbortController | null>(null);
+  // Leaving the page: no new account starts (one being read finishes, and is kept).
+  useEffect(() => () => stopper.current?.abort(), []);
   const start = async () => {
+    stopper.current?.abort();
     const stop = new AbortController();
     stopper.current = stop;
     setRun({ state: 'running', progress: { done: 0, total: accounts.length } });

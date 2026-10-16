@@ -12,6 +12,7 @@ import { expectNoAxeViolations } from '../../test/axe';
 import { mockFetchRoute, qortalCalls } from '../../test/setup';
 import { ADDR } from '../../test/world';
 import { SPONSEES, SPONSOR, answerCore } from '../../../e2e/world.mjs';
+import { queryLoadCounts } from '../../data/query';
 import { explorerSponseesPath } from '../../routes/paths';
 import { resetExplorerState } from '../../state/explorer';
 import SponseesPage from './SponseesPage';
@@ -133,6 +134,29 @@ describe('the accounts a sponsor sponsored', () => {
     expect(
       await within(card).findByText(/^Stopped after [0-4] of 5 accounts\.$/, {}, T)
     ).toBeInTheDocument();
+  });
+
+  it('leaving the page stops a check: no new account starts', async () => {
+    const { user, unmount, posts } = await open(SPONSOR.address, (world) =>
+      // Slow transaction reads, so the check is still running when the page closes.
+      mockFetchRoute('/transactions/', async (url: URL) => {
+        await new Promise((r) => setTimeout(r, 250));
+        const answer = answerCore(world, url.pathname, url.searchParams);
+        if (!answer) throw new Error(`no mock for ${url.pathname}`);
+        return new Response(answer.text !== undefined ? answer.text : JSON.stringify(answer.body), {
+          status: answer.status,
+        });
+      })
+    );
+    await list();
+    const card = screen.getByRole('region', { name: 'Who made their first QORT payment' });
+    await user.click(within(card).getByRole('button', { name: 'Check 5 accounts' }));
+    await waitFor(() => expect(queryLoadCounts().xfirst ?? 0).toBeGreaterThan(0), T);
+    unmount();
+    // Long enough for all 5 to start if nothing stopped them.
+    await new Promise((r) => setTimeout(r, 2_000));
+    expect(queryLoadCounts().xfirst).toBeLessThanOrEqual(3);
+    expect(posts).toEqual([]);
   });
 
   it('checks where their QORT went, on request', async () => {
