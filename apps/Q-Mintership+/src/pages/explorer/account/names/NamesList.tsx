@@ -10,17 +10,7 @@
  * stops at 500 here, and says so.
  */
 import { useState, type ReactNode } from 'react';
-import {
-  Box,
-  Button,
-  Skeleton,
-  TextField,
-  ToggleButton,
-  ToggleButtonGroup,
-  Typography,
-} from '@mui/material';
-import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
-import ViewListOutlinedIcon from '@mui/icons-material/ViewListOutlined';
+import { Box, Button, Skeleton, TextField, Typography } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
 import { Card, Section, ToneChip } from '../../../../components/common/Section';
 import { EmptyState, ErrorState, ListSkeleton } from '../../../../components/common/states';
@@ -48,6 +38,7 @@ import {
 } from './namesWords';
 import { FOCUSABLE_ROW_SX, useShowMore } from './useShowMore';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
+import { ViewToggle } from '../ViewToggle';
 
 /** Names shown at first, and added by each "Show more". */
 export const NAMES_PAGE = 20;
@@ -226,23 +217,7 @@ function NamesControls({
           </option>
         ))}
       </TextField>
-      <ToggleButtonGroup
-        exclusive
-        size="small"
-        value={view}
-        onChange={(_, value: NamesView | null) => {
-          if (value) onView(value);
-        }}
-        aria-label="Show the names as"
-        sx={{ ml: 'auto' }}
-      >
-        <ToggleButton value="grid" aria-label="Grid" sx={{ width: 44, height: 44 }}>
-          <GridViewOutlinedIcon />
-        </ToggleButton>
-        <ToggleButton value="list" aria-label="List" sx={{ width: 44, height: 44 }}>
-          <ViewListOutlinedIcon />
-        </ToggleButton>
-      </ToggleButtonGroup>
+      <ViewToggle view={view} onView={onView} label="Show the names as" />
     </Box>
   );
 }

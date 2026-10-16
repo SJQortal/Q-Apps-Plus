@@ -3,36 +3,24 @@
  * a row (three on wide screens): its level and
  * how far it is to the next, blocks minted (with Core's adjustment and
  * penalty when it recorded any), its balance, when it was first seen, and
- * its groups (MINTER first, five shown, the rest on request). Each fact
+ * how many groups it is in (GroupsSection lists them). Each fact
  * loads, fails and retries on its own; none polls.
  */
-import { useId, useState, type ReactNode } from 'react';
-import { Box, Button, Skeleton, Typography } from '@mui/material';
+import type { ReactNode } from 'react';
+import { Box, Skeleton, Typography } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
 import { ProgressBar } from '../../../../components/common/ProgressRing';
-import { Card, Section, ToneChip } from '../../../../components/common/Section';
-import { SmoothReveal } from '../../../../components/common/SmoothReveal';
+import { Card, Section } from '../../../../components/common/Section';
 import { ErrorState } from '../../../../components/common/states';
 import { getBalance } from '../../../../data/accounts';
-import { MINTER_GROUP_ID } from '../../../../data/constants';
-import { getGroupsOf, type FirstSeen, type GroupOf } from '../../../../data/explorer/account';
+import { getGroupsOf, type FirstSeen } from '../../../../data/explorer/account';
 import type { AccountInfo } from '../../../../data/types';
 import { useQuery, type UseQueryResult } from '../../../../hooks/useQuery';
 import { effectiveBlocksMinted, levelProgress } from '../../../../rules/levels';
 import { formatBlock, formatCount, formatDate } from '../../../../utils/format';
 import { levelFraction } from '../../../home/homeData';
-import {
-  balanceWords,
-  blocksDetail,
-  groupsWords,
-  levelNextWords,
-  membersWords,
-} from './overviewWords';
-import { GroupAvatar } from '../../../../components/common/GroupAvatar';
+import { balanceWords, blocksDetail, groupsWords, levelNextWords } from './overviewWords';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
-
-/** Groups shown before "Show all". */
-const GROUPS_SHOWN = 5;
 
 const VALUE_SX = {
   m: 0,
@@ -198,100 +186,13 @@ function FirstSeenFact({ query }: { query: UseQueryResult<FirstSeen> }) {
   );
 }
 
-function GroupRow({ group, address }: { group: GroupOf; address: string }) {
-  const owner = group.owner === address;
-  return (
-    <Box
-      component="li"
-      sx={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        columnGap: 1,
-        rowGap: 0.5,
-        py: 1,
-        borderTop: 1,
-        borderColor: 'divider',
-        minWidth: 0,
-      }}
-    >
-      <GroupAvatar
-        groupId={group.groupId}
-        groupName={group.groupName}
-        ownerName={group.ownerPrimaryName}
-        size={32}
-      />
-      <Typography component="span" sx={{ fontWeight: 600, overflowWrap: 'anywhere', minWidth: 0 }}>
-        <bdi dir="auto">{group.groupName || `Group #${group.groupId}`}</bdi>
-      </Typography>
-      {typeof group.memberCount === 'number' ? (
-        <Typography component="span" variant="body2" color="text.secondary">
-          {membersWords(group.memberCount)}
-        </Typography>
-      ) : null}
-      {owner ? (
-        <ToneChip size="small" variant="outlined" label="Owner" sx={{ fontSize: 14 }} />
-      ) : null}
-      {group.isAdmin ? (
-        <ToneChip size="small" variant="outlined" label="Admin" sx={{ fontSize: 14 }} />
-      ) : null}
-    </Box>
-  );
-}
-
-const LIST_SX = { listStyle: 'none', m: 0, p: 0 } as const;
-
+/** How many groups it is in; Overview's Groups section lists them. */
 function GroupsFact({ address }: { address: string }) {
   const groups = useQuery(`xgroups:${address}`, (force) => getGroupsOf(address, { force }));
-  const [all, setAll] = useState(false);
-  const moreId = useId();
   if (groups.isError && !groups.data)
     return <FactError label="Groups" what="its groups" query={groups} />;
-  if (!groups.data) return <Fact wide label="Groups" value={<Loading />} />;
-  // MINTER first, then Core's order.
-  const list = [
-    ...groups.data.filter((g) => g.groupId === MINTER_GROUP_ID),
-    ...groups.data.filter((g) => g.groupId !== MINTER_GROUP_ID),
-  ];
-  const first = list.slice(0, GROUPS_SHOWN);
-  const rest = list.slice(GROUPS_SHOWN);
-  return (
-    <Fact
-      wide
-      label="Groups"
-      value={groupsWords(list.length)}
-      detail={
-        list.length ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', color: 'text.primary' }}>
-            <Box component="ul" aria-label="Its groups" sx={LIST_SX}>
-              {first.map((group) => (
-                <GroupRow key={group.groupId} group={group} address={address} />
-              ))}
-            </Box>
-            {rest.length ? (
-              <>
-                <SmoothReveal open={all}>
-                  <Box component="ul" id={moreId} aria-label="More of its groups" sx={LIST_SX}>
-                    {rest.map((group) => (
-                      <GroupRow key={group.groupId} group={group} address={address} />
-                    ))}
-                  </Box>
-                </SmoothReveal>
-                <Button
-                  onClick={() => setAll((open) => !open)}
-                  aria-expanded={all}
-                  aria-controls={all ? moreId : undefined}
-                  sx={{ alignSelf: 'flex-start', minHeight: 44 }}
-                >
-                  {all ? 'Show fewer' : `Show all ${formatCount(list.length)}`}
-                </Button>
-              </>
-            ) : null}
-          </Box>
-        ) : null
-      }
-    />
-  );
+  if (!groups.data) return <Fact label="Groups" value={<Loading />} />;
+  return <Fact label="Groups" value={groupsWords(groups.data.length)} />;
 }
 
 export function FactsSection({

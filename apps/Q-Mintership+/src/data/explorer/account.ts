@@ -159,6 +159,8 @@ export interface GroupOf {
   memberCount?: number;
   isAdmin?: boolean;
   created?: number;
+  /** The group's own description, as its owner wrote it (trimmed; absent when empty). */
+  description?: string;
 }
 
 /**
@@ -187,6 +189,9 @@ export function getGroupsOf(
           ...(typeof row.memberCount === 'number' ? { memberCount: row.memberCount } : {}),
           ...(row.isAdmin === true ? { isAdmin: true } : {}),
           ...(typeof row.created === 'number' ? { created: row.created } : {}),
+          ...(typeof row.description === 'string' && row.description.trim()
+            ? { description: row.description.trim() }
+            : {}),
         }))
         .filter((group) => Number.isFinite(group.groupId));
       const minter = groups.find((group) => group.groupId === MINTER_GROUP_ID);

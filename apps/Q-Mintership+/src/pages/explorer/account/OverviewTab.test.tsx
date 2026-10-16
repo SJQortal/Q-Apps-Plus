@@ -98,7 +98,10 @@ describe('Overview: a Minter Admin minting now', () => {
     await waitFor(() => expect(fact('First seen').value).not.toBe('Loading'), T);
     expect(fact('First seen').detail).toMatch(/^At block [\d,]+$/);
     await waitFor(() => expect(fact('Groups').value).toBe('In 3 groups'), T);
-    const groups = within(facts).getByRole('list', { name: 'Its groups' });
+    // At a glance counts them; the Groups section lists them.
+    expect(within(facts).queryByRole('list', { name: 'Its groups' })).toBeNull();
+    const groupsSection = await region('Groups (3)');
+    const groups = within(groupsSection).getByRole('list', { name: 'Its groups' });
     const rows = within(groups).getAllByRole('listitem');
     // MINTER first; the admin owns and runs the helpers' group.
     // Each group with its avatar (its owner's group THUMBNAIL; the letter until it loads).
@@ -108,11 +111,12 @@ describe('Overview: a Minter Admin minting now', () => {
       'Q',
     ]);
     expect(rows.map((row) => readText(row))).toEqual([
-      expect.stringMatching(/^MINTER[\d,]+ membersAdmin$/),
-      'Qortal General5,200 members',
-      'Q-Mintership Helpers40 membersOwnerAdmin',
+      // The grid card ends with the group's own description.
+      expect.stringMatching(/^MINTER[\d,]+ membersAdminThe MINTER Group of Qortal$/),
+      'Qortal General5,200 membersQortal General (made-up group)',
+      'Q-Mintership Helpers40 membersOwnerAdminQ-Mintership Helpers (made-up group)',
     ]);
-    expect(within(facts).queryByRole('button', { name: /^Show all/ })).toBeNull();
+    expect(within(groupsSection).queryByRole('button', { name: /^Show all/ })).toBeNull();
 
     // 4. MINTER: the person page's sentence and the two ways on.
     const minterSection = await region('MINTER');
@@ -303,5 +307,37 @@ describe('Overview: one section failing', () => {
       within(alert.closest('[role="alert"]') as HTMLElement).getByRole('button', { name: 'Retry' })
     );
     await waitFor(() => expect(fact('Balance').value).toBe('12.5 QORT'), T);
+  });
+});
+
+describe('Overview: its groups', () => {
+  it('a grid by default, sorted as picked, or a list kept on this device', async () => {
+    const { user } = await open(ADDR.admin);
+    const section = await region('Groups (3)');
+    const names = () =>
+      within(within(section).getByRole('list', { name: 'Its groups' }))
+        .getAllByRole('listitem')
+        .map((row) => readText(row).replace(/\d.*$/, ''));
+    await waitFor(() =>
+      expect(names()).toEqual(['MINTER', 'Qortal General', 'Q-Mintership Helpers'])
+    );
+    const grid = within(section).getByRole('button', { name: 'Grid' });
+    expect(grid).toHaveAttribute('aria-pressed', 'true');
+
+    const sort = within(section).getByRole('combobox', { name: 'Sort' });
+    await user.selectOptions(sort, 'Most members');
+    expect(names()).toEqual(['Qortal General', 'MINTER', 'Q-Mintership Helpers']);
+    await user.selectOptions(sort, 'Owner and admin first');
+    expect(names()).toEqual(['Q-Mintership Helpers', 'MINTER', 'Qortal General']);
+    await user.selectOptions(sort, 'Name A–Z');
+    expect(names()).toEqual(['MINTER', 'Q-Mintership Helpers', 'Qortal General']);
+
+    await user.click(within(section).getByRole('button', { name: 'List' }));
+    expect(within(section).getByRole('button', { name: 'List' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(window.localStorage.getItem('qmintershipplus-groups-view')).toBe('list');
+    expect(names()).toEqual(['MINTER', 'Q-Mintership Helpers', 'Qortal General']);
   });
 });
