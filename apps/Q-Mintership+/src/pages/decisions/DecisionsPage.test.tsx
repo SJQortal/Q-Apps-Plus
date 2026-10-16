@@ -118,6 +118,10 @@ describe('Decisions: by type', () => {
     await u.click(screen.getByRole('button', { name: 'Most urgent first' }));
     expect(screen.queryByRole('navigation', { name: 'Decisions by type' })).toBeNull();
     expect(screen.queryByRole('region', { name: /^Add to MINTER · \d+$/ })).toBeNull();
+    // In one queue each card keeps its kind's colour: a soft edge on the left.
+    expect(screen.getAllByRole('article', { name: /^Add to MINTER, / })[0]).toHaveStyle({
+      borderLeftWidth: '3px',
+    });
   });
 });
 

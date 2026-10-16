@@ -70,7 +70,12 @@ import {
   decisionsOrderAtom,
   type DecisionsOrder,
 } from '../../state/settings';
-import { decisionGroupId, groupDecisions, type DecisionGroup } from './decisionGroups';
+import {
+  decisionGroup,
+  decisionGroupId,
+  groupDecisions,
+  type DecisionGroup,
+} from './decisionGroups';
 import { SECTION_ICON, sectionAccent, type SectionAccent } from './sectionAccents';
 import { focusElement } from '../../utils/focus';
 import { displayName, formatCount, plural } from '../../utils/format';
@@ -307,31 +312,35 @@ function DecisionsQueue() {
   ) : null;
   // By type: the shown decisions (Hide already voted on applies), each type in queue order.
   const groups = groupDecisions(shown);
-  const collectingCard = (now: ChainNow) => (d: Decision) => (
-    <DecisionCard
-      key={d.signature}
-      decision={d}
-      now={now}
-      myPublicKey={myKey}
-      myAddress={signer?.address ?? null}
-      canAct={isAdmin}
-      nomination={nominationFor(d)}
-      nominationsState={nominationsState}
-      onRetryNominations={retryNominations}
-      adminNames={adminNames}
-      subjectFacts={factsFor(d.subject)}
-      onConsider={setConsiderRequest}
-      selecting={selecting}
-      selected={selected.has(d.signature)}
-      onToggleSelect={toggleSelect}
-      onSign={(decision) => answer(decision, 'sign')}
-      onReject={(decision) => answer(decision, 'reject')}
-      onWithdraw={(decision) => answer(decision, 'withdraw')}
-      impact={impactOf(d)}
-      risk={riskOf(d)}
-      labelOf={labelOf}
-    />
-  );
+  // In one queue (Most urgent first) each card keeps its kind's colour; By type's sections give it.
+  const collectingCard =
+    (now: ChainNow, coloured = false) =>
+    (d: Decision) => (
+      <DecisionCard
+        key={d.signature}
+        accent={coloured ? accentOf(decisionGroup(d)) : undefined}
+        decision={d}
+        now={now}
+        myPublicKey={myKey}
+        myAddress={signer?.address ?? null}
+        canAct={isAdmin}
+        nomination={nominationFor(d)}
+        nominationsState={nominationsState}
+        onRetryNominations={retryNominations}
+        adminNames={adminNames}
+        subjectFacts={factsFor(d.subject)}
+        onConsider={setConsiderRequest}
+        selecting={selecting}
+        selected={selected.has(d.signature)}
+        onToggleSelect={toggleSelect}
+        onSign={(decision) => answer(decision, 'sign')}
+        onReject={(decision) => answer(decision, 'reject')}
+        onWithdraw={(decision) => answer(decision, 'withdraw')}
+        impact={impactOf(d)}
+        risk={riskOf(d)}
+        labelOf={labelOf}
+      />
+    );
 
   const toggleSelect = (signature: string) =>
     setSelected((current) => {
@@ -593,7 +602,7 @@ function DecisionsQueue() {
                 accent={accentOf('neutral')}
                 id="collecting"
               >
-                {shown.map(collectingCard(data.now))}
+                {shown.map(collectingCard(data.now, true))}
                 {hiddenNote}
               </Section>
             ) : null}
@@ -689,6 +698,7 @@ function DecisionsQueue() {
                 {closed.map((d) => (
                   <DecisionCard
                     key={d.signature}
+                    accent={accentOf(decisionGroup(d))}
                     decision={d}
                     now={data.now}
                     myPublicKey={myKey}

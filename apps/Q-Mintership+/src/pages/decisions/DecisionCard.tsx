@@ -20,6 +20,7 @@
  */
 import { useId, useState } from 'react';
 import { Box, Button, Checkbox, Skeleton, Typography } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import { READY_LABEL } from '../../constants/words';
 import type { ChainNow } from '../../data/chain';
@@ -140,6 +141,12 @@ export interface DecisionCardProps {
   copyLink?: boolean;
   /** Its comments start open (on the decision's own page). */
   commentsOpen?: boolean;
+  /**
+   * Its kind's colour (sectionAccents.ts), where it isn't in a section of its
+   * kind (Most urgent first, Too late to approve): an outline and a soft left
+   * edge in it, as By type's sections give their cards.
+   */
+  accent?: string;
 }
 
 export function DecisionCard(props: DecisionCardProps) {
@@ -167,6 +174,7 @@ export function DecisionCard(props: DecisionCardProps) {
     labelOf,
     copyLink = true,
     commentsOpen = false,
+    accent,
   } = props;
   const [riskOpen, setRiskOpen] = useState(false);
   const riskId = useId();
@@ -259,6 +267,13 @@ export function DecisionCard(props: DecisionCardProps) {
         outline: 'none',
         scrollMarginTop: 'calc(var(--qmp-header-offset, 0px) + 16px)',
         transition: 'box-shadow 300ms ease, background-color 300ms ease',
+        ...(accent
+          ? {
+              borderColor: alpha(accent, theme.palette.mode === 'dark' ? 0.5 : 0.45),
+              borderLeft: `3px solid ${alpha(accent, 0.6)}`,
+              backgroundColor: alpha(accent, theme.palette.mode === 'dark' ? 0.05 : 0.035),
+            }
+          : {}),
         ...(highlighted
           ? {
               boxShadow: `0 0 0 2px ${theme.palette.primary.main}`,
