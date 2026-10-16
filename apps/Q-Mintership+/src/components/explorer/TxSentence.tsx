@@ -3,7 +3,8 @@
  * accounts as people (their name, linking where the page links people:
  * into the Explorer inside it), names as isolated text, so a name with
  * right-to-left marks or label-like words can't change how the line reads,
- * amounts in bold, groups by name, and a transaction it points at as a link.
+ * amounts in bold (an asset's name isolated too, and free to wrap), groups
+ * by name, and a transaction it points at as a link.
  *
  * `plain` renders accounts and transactions as text without links, for a
  * sentence inside a button (an expandable row): a link inside a button is
@@ -52,9 +53,17 @@ function Part({ part, plain }: { part: TxPart; plain: boolean }) {
         <PersonInline address={part.address} />
       );
     case 'amount':
-      return (
+      // The number never breaks. An asset's name is its issuer's choice (up to
+      // 40 characters): it is isolated and may wrap, so it can't push the line
+      // past a phone's edge. QORT stays with its number.
+      return part.asset === 'QORT' ? (
         <Box component="strong" sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-          {part.amount} {part.asset}
+          {part.amount} QORT
+        </Box>
+      ) : (
+        <Box component="strong" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ whiteSpace: 'nowrap' }}>{part.amount}</span>{' '}
+          <bdi dir="auto">{part.asset}</bdi>
         </Box>
       );
     case 'name':
