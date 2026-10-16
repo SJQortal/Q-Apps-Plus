@@ -1,10 +1,14 @@
 /**
- * The Transactions tab's words: what each family's transactions are called,
+ * The Transactions tab's words: what each family's (or type's)
+ * transactions are called, what narrows the list (a name, a time, blocks),
  * how much of the account's list is on screen (always with what it is out
  * of, when that is known), and what "Load older" brought.
  */
-import type { TxFamilyKey } from '../../../../rules/explorer/txFamilies';
-import { formatCount } from '../../../../utils/format';
+import { ACCOUNT_TX_PAGE } from '../../../../data/explorer/accountTx';
+import { dayStart, WHENS, type TxFilters } from '../../../../rules/explorer/accountTxFilters';
+import { visibleName } from '../../../../rules/explorer/nameNotes';
+import { txTypeLabel, type TxFamilyKey } from '../../../../rules/explorer/txFamilies';
+import { formatCount, formatDate } from '../../../../utils/format';
 
 interface Noun {
   one: string;
@@ -29,39 +33,123 @@ export function familyTitle(family: TxFamilyKey, label: string): string {
   return family === 'all' ? 'All transactions' : label;
 }
 
-/** "No name transactions in this account's history." */
-export function emptyLine(family: TxFamilyKey): string {
-  return `No ${FAMILY_NOUN[family].many} in this account's history.`;
+/** What the list holds, as a noun: the exact type picked, or its family. */
+export function listNoun(filters: TxFilters): Noun {
+  // With a name, All reads only the types that carry one.
+  if (filters.name && filters.kind === 'all' && !filters.type)
+    return { one: 'name or QDN transaction', many: 'name and QDN transactions' };
+  if (filters.type) {
+    const label = txTypeLabel(filters.type);
+    return { one: `“${label}” transaction`, many: `“${label}” transactions` };
+  }
+  return FAMILY_NOUN[filters.kind];
+}
+
+/** When, as the end of a sentence: " in the last 7 days", " between 1 Sept 2026 and …". */
+function timePhrase(filters: TxFilters): string {
+  const { when, from, to } = filters;
+  const span = WHENS.find((w) => w.value === when)?.label.toLowerCase();
+  if (when === '24h' || when === '7d' || when === '30d' || when === '1y') return ` in the ${span}`;
+  if (when === 'dates') {
+    const day = (value: string) => formatDate(dayStart(value));
+    if (from && to)
+      return from === to ? ` on ${day(from)}` : ` between ${day(from)} and ${day(to)}`;
+    if (from) return ` since ${day(from)}`;
+    if (to) return ` up to ${day(to)}`;
+  }
+  if (when === 'blocks') {
+    const block = (value: string) => formatCount(Number(value));
+    if (from && to)
+      return from === to ? ` in block ${block(from)}` : ` in blocks ${block(from)}–${block(to)}`;
+    if (from) return ` from block ${block(from)} on`;
+    if (to) return ` up to block ${block(to)}`;
+  }
+  return '';
+}
+
+/** What narrows the list, as the end of a sentence: " about “Q-Maps” in the last 7 days". */
+export function scopePhrase(filters: TxFilters): string {
+  const name = filters.name ? ` about “${visibleName(filters.name)}”` : '';
+  return `${name}${timePhrase(filters)}`;
+}
+
+/** "No name transactions in this account's history.", or with what narrows it. */
+export function emptyLine(filters: TxFilters): string {
+  const noun = listNoun(filters);
+  const scope = scopePhrase(filters);
+  return scope
+    ? `This account has no ${noun.many}${scope}.`
+    : `No ${noun.many} in this account's history.`;
+}
+
+/** Why nothing can match: a name picked with a kind that never carries one. */
+export function noNameLine(filters: TxFilters): string {
+  return `${listNoun(filters).many.replace(/^./, (c) => c.toUpperCase())} are never about a name. Pick All, Names or QDN data to see transactions about “${visibleName(filters.name ?? '')}”.`;
 }
 
 /**
- * How much of the list is on screen: "The newest 150 of this account's
- * transactions." while Core may have more, "The newest 50 of this
- * account's 87 payments." once every row is read, "All 37 of …" when all
- * are on screen.
+ * How much of the list is on screen, always with what it is out of when
+ * known: "The newest 150 of this account's transactions.", "All 37 of …",
+ * "The oldest 50 of …". With a name picked (matched on the rows read):
+ * "12 about “Q-Maps” among its newest 300 name transactions read; Load
+ * older looks further back." Sorted by amount: "Biggest amounts first,
+ * among the 100 read so far."
  */
 export function coverageLine(
-  family: TxFamilyKey,
+  filters: TxFilters,
   shown: number,
   held: number,
+  read: number,
   done: boolean
 ): string {
-  const noun = FAMILY_NOUN[family];
+  const noun = listNoun(filters);
+  const scope = scopePhrase(filters);
+  const end = filters.order === 'oldest' ? 'oldest' : 'newest';
+  const lead =
+    filters.order === 'amount'
+      ? done
+        ? 'Biggest amounts first. '
+        : `Biggest amounts first, among the ${formatCount(read)} read so far. `
+      : '';
+  if (filters.name && !done) {
+    const time = timePhrase(filters);
+    const found = held ? formatCount(held) : 'None yet';
+    return `${lead}${found} about “${visibleName(filters.name)}” in its ${end} ${formatCount(read)} ${read === 1 ? noun.one : noun.many}${time}. ${loadMoreLabel(filters)} looks further.`;
+  }
   if (done && shown >= held)
-    return held === 1
-      ? `This account's only ${noun.one}.`
-      : `All ${formatCount(held)} of this account's ${noun.many}.`;
-  return done
-    ? `The newest ${formatCount(shown)} of this account's ${formatCount(held)} ${noun.many}.`
-    : `The newest ${formatCount(shown)} of this account's ${noun.many}.`;
+    return (
+      lead +
+      (held === 1
+        ? `This account's only ${noun.one}${scope}.`
+        : `All ${formatCount(held)} of this account's ${noun.many}${scope}.`)
+    );
+  return (
+    lead +
+    (done
+      ? `The ${end} ${formatCount(shown)} of this account's ${formatCount(held)} ${noun.many}${scope}.`
+      : `The ${end} ${formatCount(shown)} of this account's ${noun.many}${scope}.`)
+  );
+}
+
+/** The button that reads on: older ones, or newer ones when the oldest come first. */
+export function loadMoreLabel(filters: TxFilters): string {
+  return filters.order === 'oldest' ? 'Load newer' : 'Load older';
+}
+
+/** Said while a name's matches are few and more is read by itself. */
+export function readingOnLine(name: string): string {
+  return `Reading on for more about “${visibleName(name)}”…`;
 }
 
 /** "50 older transactions loaded" (said once in a polite live region). */
-export function olderLoadedLine(family: TxFamilyKey, count: number): string {
-  const noun = FAMILY_NOUN[family];
-  return count <= 0
-    ? `No older ${noun.many}`
-    : `${formatCount(count)} older ${count === 1 ? noun.one : noun.many} loaded`;
+export function olderLoadedLine(filters: TxFilters, count: number, done: boolean): string {
+  const noun = listNoun(filters);
+  const more = filters.order === 'oldest' ? 'newer' : 'older';
+  if (count > 0)
+    return `${formatCount(count)} ${more} ${count === 1 ? noun.one : noun.many} loaded`;
+  if (!done && filters.name)
+    return `None about “${visibleName(filters.name)}” in the next ${formatCount(ACCOUNT_TX_PAGE)} read`;
+  return `No ${more} ${noun.many}`;
 }
 
 /** Shown while a busy account's search runs longer than a few seconds. */

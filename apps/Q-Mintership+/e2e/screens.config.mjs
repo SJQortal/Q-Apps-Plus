@@ -829,6 +829,21 @@ export default {
       after: explorerSettle,
     },
     {
+      // Filtered: a kind, between two dates, oldest first (the date fields open).
+      key: 'explorer-transactions-filtered',
+      path: `/explorer/account/${ADDR.admin}/transactions?as=admin&kind=payments&when=dates&from=2023-01-01&to=2026-12-31&order=oldest`,
+      after: explorerSettle,
+    },
+    {
+      key: 'explorer-names-list',
+      path: `/explorer/account/${ADDR.admin}/names?as=learner`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByRole('button', { name: 'List' }).click({ timeout: 8000 });
+        await page.waitForTimeout(300);
+      },
+    },
+    {
       // A row opened, with its raw API response open under it.
       key: 'explorer-transactions-raw',
       path: `/explorer/account/${ADDR.admin}/transactions?as=admin`,

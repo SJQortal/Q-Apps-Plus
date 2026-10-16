@@ -8,13 +8,14 @@
  * Read-only: no POST, no write request to Hub.
  */
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useLocation, useNavigationType } from 'react-router-dom';
 import {
   FUNDER,
   MESSAGE_CONTENT,
   answerCore,
+  createWorld,
   fakeAddress,
   type World,
 } from '../../../../e2e/world.mjs';
@@ -25,6 +26,7 @@ import { ADDR } from '../../../test/world';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../../components/common/personLinks';
 import { explorerAccountPath } from '../../../routes/paths';
 import { TX_FAMILIES, typesFor } from '../../../rules/explorer/txFamilies';
+import { dateValue, dayStart } from '../../../rules/explorer/accountTxFilters';
 import { resetExplorerState } from '../../../state/explorer';
 import AccountPage from '../AccountPage';
 import { LatestTransactions } from './LatestTransactions';
@@ -331,5 +333,163 @@ describe('Overview’s latest transactions', () => {
       strict: true,
     });
     expect(await screen.findByText('No transactions yet.', {}, T)).toBeInTheDocument();
+  });
+});
+
+describe('an account’s transactions, filtered', () => {
+  function Where() {
+    const location = useLocation();
+    return <output data-testid="where">{location.search}</output>;
+  }
+  const where = () => new URLSearchParams(screen.getByTestId('where').textContent ?? '');
+  async function openFiltered(address: string, query = '') {
+    const result = await renderPage(
+      <>
+        <AccountPage />
+        <Where />
+      </>,
+      {
+        persona: 'learner',
+        path: `${explorerAccountPath(address, 'transactions')}${query}`,
+        route: ROUTE,
+        strict: true,
+      }
+    );
+    return { ...result, user: userEvent.setup() };
+  }
+  const select = (name: string) => screen.getByRole('combobox', { name });
+  /** Every search the tab made for `address`, whatever its types. */
+  const allSearches = (address: string) =>
+    fetchCallsFor('/transactions/search')
+      .map((call) => new URL(call, 'http://x').searchParams)
+      .filter((p) => p.get('address') === address && p.get('limit') === '100');
+
+  it(
+    'orders oldest first (Core’s order) or by the biggest amount (the rows read), kept in the URL',
+    async () => {
+      const { user, posts } = await openFiltered(FUNDER.address);
+      const all = await region('All transactions');
+      const list = await within(all).findByRole('list', { name: 'All transactions' }, T);
+      const newest = rowButtons(list)[0].textContent;
+
+      await user.selectOptions(select('Order'), 'oldest');
+      expect(where().get('order')).toBe('oldest');
+      await waitFor(
+        () => expect(allSearches(FUNDER.address).at(-1)?.get('reverse')).toBe('false'),
+        T
+      );
+      // The list is drawn anew for each choice: read the section again.
+      const section = () => screen.getByRole('region', { name: 'All transactions' });
+      await waitFor(
+        () =>
+          expect(
+            within(section()).getByText(/^The oldest 50 of this account's transactions\./)
+          ).toBeVisible(),
+        T
+      );
+      expect(
+        rowButtons(within(section()).getByRole('list', { name: 'All transactions' }))[0].textContent
+      ).not.toBe(newest);
+      expect(within(section()).getByText('Load newer', { selector: 'button' })).toBeInTheDocument();
+      expect(screen.getByText(/^Showing: All transactions · oldest first$/)).toBeInTheDocument();
+
+      await user.selectOptions(select('Order'), 'amount');
+      expect(where().get('order')).toBe('amount');
+      await waitFor(
+        () =>
+          expect(
+            within(section()).getByText(/^Biggest amounts first, among the 100 read so far\./)
+          ).toBeVisible(),
+        T
+      );
+      // Never a block range: with an address Core would read every transaction in those blocks.
+      expect(allSearches(FUNDER.address).some((p) => p.has('startBlock'))).toBe(false);
+
+      await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+      expect(where().toString()).toBe('');
+      expect(select('Order')).toHaveValue('newest');
+      noWrites(posts);
+    },
+    HEAVY
+  );
+
+  it(
+    'shows the transactions between two dates, by each one’s own time, from the URL or typed',
+    async () => {
+      const world = createWorld();
+      const funderRows = (world.explorer.rows as Array<{ timestamp: number; signature: string }>)
+        .filter((r) => world.explorer.parties.get(r.signature)?.includes(FUNDER.address))
+        .sort((a, b) => b.timestamp - a.timestamp);
+      // A day in the middle of Hal's rows: from it on.
+      const day = dateValue(funderRows[Math.floor(funderRows.length / 2)].timestamp);
+      const { user, posts } = await openFiltered(FUNDER.address);
+      await region('All transactions');
+      await user.selectOptions(select('When'), 'dates');
+      const form = screen.getByRole('form', { name: 'Between dates' });
+      await user.click(within(form).getByRole('button', { name: 'Show' }));
+      expect(within(form).getByRole('alert')).toHaveTextContent(
+        'Pick a first day, a last day, or both.'
+      );
+      fireEvent.change(within(form).getByLabelText('First day'), { target: { value: day } });
+      await user.click(within(form).getByRole('button', { name: 'Show' }));
+      expect(where().get('when')).toBe('dates');
+      expect(where().get('from')).toBe(day);
+      const all = await region('All transactions');
+      const expected = funderRows.filter((r) => r.timestamp >= dayStart(day)).length;
+      await waitFor(() => {
+        expect(
+          within(all).getByText(
+            new RegExp(
+              `(All ${expected}|The newest ${Math.min(50, expected)}) of this account's transactions since `
+            )
+          )
+        ).toBeVisible();
+      }, T);
+      expect(allSearches(FUNDER.address).some((p) => p.has('startBlock'))).toBe(false);
+      noWrites(posts);
+    },
+    HEAVY
+  );
+
+  it('picks one of its names, the primary first, and says when a kind is never about a name', async () => {
+    const { user } = await openFiltered(ADDR.learner, '?name=Spare%20Room');
+    const section = await region('All transactions');
+    await waitFor(
+      () =>
+        expect(
+          within(section).getByText(
+            "All 3 of this account's name and QDN transactions about “Spare Room”."
+          )
+        ).toBeVisible(),
+      T
+    );
+    // A name from a link stays picked even when the account no longer has it.
+    expect(select('Name')).toHaveValue('Spare Room');
+    const options = within(select('Name'))
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+    expect(options[0]).toBe('Any name');
+    // Only the types that carry a name were asked for.
+    const asked = allSearches(ADDR.learner).at(-1)?.getAll('txType') ?? [];
+    expect([...asked].sort()).toEqual([
+      'ARBITRARY',
+      'BUY_NAME',
+      'CANCEL_SELL_NAME',
+      'REGISTER_NAME',
+      'SELL_NAME',
+      'UPDATE_NAME',
+    ]);
+
+    const chips = screen.getByRole('group', { name: 'Show one kind of transaction' });
+    await user.click(within(chips).getByRole('button', { name: 'Payments' }));
+    expect(
+      await screen.findByText(
+        'Payments are never about a name. Pick All, Names or QDN data to see transactions about “Spare Room”.',
+        {},
+        T
+      )
+    ).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(where().toString()).toBe('');
   });
 });

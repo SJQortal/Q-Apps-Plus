@@ -82,7 +82,8 @@ export function formatAmount(value: unknown): string {
 
 const ATOMIC = 100_000_000n;
 
-function toAtomic(value: unknown): bigint | null {
+/** "1.5" → 150000000n (8 decimals); null for anything that isn't an amount. */
+export function toAtomic(value: unknown): bigint | null {
   const match = String(value ?? '')
     .trim()
     .match(/^(\d+)(?:\.(\d{1,8}))?$/);

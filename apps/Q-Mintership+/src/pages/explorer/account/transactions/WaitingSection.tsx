@@ -1,7 +1,8 @@
 /**
  * "Sent by this account, waiting to be confirmed": what the account sent
  * that isn't in a block yet, read from the node's mempool by its public key
- * (data/explorer/accountTx.ts, 20 s, never polled), in the family picked.
+ * (data/explorer/accountTx.ts, 20 s, never polled), of the kind, type and
+ * name picked (the tab leaves it out when the time picked ends before now).
  * Nothing shows when there is none. What others sent to it can't be found
  * until it is in a block (Core records who a transaction involves only at
  * confirmation), and the section says so.
@@ -11,24 +12,33 @@ import { Section } from '../../../../components/common/Section';
 import { TxList } from '../../../../components/explorer/TxListRow';
 import { getUnconfirmedOf, unconfirmedKey } from '../../../../data/explorer/accountTx';
 import { useQuery } from '../../../../hooks/useQuery';
-import { typesFor, type TxFamilyKey } from '../../../../rules/explorer/txFamilies';
+import {
+  isAboutName,
+  typesToAsk,
+  type TxFilters,
+} from '../../../../rules/explorer/accountTxFilters';
 
 export const WAITING_TITLE = 'Sent by this account, waiting to be confirmed';
 
 export function WaitingSection({
   address,
   publicKey,
-  family,
+  filters,
 }: {
   address: string;
   publicKey: string;
-  family: TxFamilyKey;
+  filters: TxFilters;
 }) {
   const waiting = useQuery(unconfirmedKey(publicKey), (force) =>
     getUnconfirmedOf(publicKey, { force })
   );
-  const types: readonly string[] = typesFor(family);
-  const rows = (waiting.data ?? []).filter((tx) => !types.length || types.includes(tx.type));
+  const types = typesToAsk(filters);
+  const rows = (waiting.data ?? []).filter(
+    (tx) =>
+      types !== null &&
+      (!types.length || types.includes(tx.type)) &&
+      (!filters.name || isAboutName(tx, filters.name))
+  );
   if (!rows.length) return null;
   return (
     <Section title={WAITING_TITLE} id="explorer-account-waiting" count={rows.length}>

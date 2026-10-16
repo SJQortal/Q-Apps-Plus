@@ -165,3 +165,69 @@ describe('getUnconfirmedOf', () => {
     expect(fetchCallsFor('/transactions/unconfirmed')).toHaveLength(1);
   });
 });
+
+describe('getAccountTx in a window (Transactions filters)', () => {
+  /** 5,000 rows, s1 (oldest, t=1 s, block 1) to s5000 (newest); served in either order. */
+  const all = txs(5000, 1).map((tx, i) => ({ ...tx, blockHeight: 5000 - i }));
+  function serveBoth() {
+    mockFetchRoute('/transactions/search', (url: URL) => {
+      const offset = Number(url.searchParams.get('offset'));
+      const limit = Number(url.searchParams.get('limit'));
+      const list = url.searchParams.get('reverse') === 'false' ? [...all].reverse() : all;
+      return list.slice(offset, offset + limit);
+    });
+  }
+  const searches = () => fetchCallsFor('/transactions/search');
+  const sigs = (list: AccountTxList) => list.rows.map((tx) => tx.signature);
+
+  it('newest first: finds where the window starts in a few reads, then reads to its end', async () => {
+    serveBoth();
+    // s1200 to s1999 (t in [1,200,000, 2,000,000)).
+    const view = { window: { fromMs: 1_200_000, toMs: 2_000_000 } };
+    const first = await getAccountTx(A, [], { view });
+    expect(sigs(first)[0]).toBe('s1999');
+    expect(first.rows).toHaveLength(100);
+    expect(first.done).toBe(false);
+    // Never a block range: Core would read every transaction in those blocks.
+    for (const call of searches()) {
+      expect(call).not.toContain('startBlock');
+      expect(call).not.toContain('blockLimit');
+    }
+    expect(searches().length).toBeLessThanOrEqual(14);
+    let list = first;
+    while (!list.done) list = await getAccountTx(A, [], { older: true, view });
+    expect(list.rows).toHaveLength(800);
+    expect(sigs(list).at(-1)).toBe('s1200');
+    expect(peekQuery(accountTxKey(A, [], view))).toBe(list);
+    expect(accountTxKey(A, [], view)).toBe(`xtx:${A}:all:t1200000-2000000`);
+  });
+
+  it('oldest first: from the window’s first row, reading towards the newest', async () => {
+    serveBoth();
+    const view = { order: 'oldest' as const, window: { fromMs: 4_321_000 } };
+    const first = await getAccountTx(A, [], { view });
+    expect(sigs(first).slice(0, 2)).toEqual(['s4321', 's4322']);
+    expect(searches().every((call) => call.includes('reverse=false'))).toBe(true);
+    let list = first;
+    while (!list.done) list = await getAccountTx(A, [], { older: true, view });
+    expect(sigs(list).at(-1)).toBe('s5000');
+    expect(list.rows).toHaveLength(680);
+    expect(accountTxKey(A, [], view)).toBe(`xtx:${A}:all:oldest:t4321000-`);
+  });
+
+  it('a window past the newest row, or before the oldest, is empty and done', async () => {
+    serveBoth();
+    const after = await getAccountTx(A, [], { view: { window: { fromMs: 9_000_000 } } });
+    expect(after).toMatchObject({ rows: [], done: true });
+    const before = await getAccountTx(A, [], { view: { window: { toMs: 500 } } });
+    expect(before).toMatchObject({ rows: [], done: true });
+  });
+
+  it('blocks are matched exactly on each row, found by the blocks’ times', async () => {
+    serveBoth();
+    const view = { window: { fromBlock: 2500, toBlock: 2509, fromMs: 2_400_000, toMs: 2_600_000 } };
+    let list = await getAccountTx(A, [], { view });
+    while (!list.done) list = await getAccountTx(A, [], { older: true, view });
+    expect(sigs(list)).toEqual(Array.from({ length: 10 }, (_, i) => `s${2509 - i}`));
+  });
+});
