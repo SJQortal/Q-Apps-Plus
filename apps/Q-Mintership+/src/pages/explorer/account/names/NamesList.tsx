@@ -1,14 +1,26 @@
 /**
- * Every name the account owns: the primary one first (marked "Primary"),
- * then Core's order (when each was registered), 20 at a time. Each row
- * shows the name's avatar, reads its own record once it nears the screen
- * (registered, updated, for sale), shows notes on how the name is written,
- * and opens to its own history ("History · 3"). Below, the names it had
- * (sold, or renamed), each with who has it now and the same history. Core's
- * list stops at 500 here, and says so.
+ * Every name the account owns, 20 at a time, in the order picked (primary
+ * first by default: names/sortNames.ts), as a grid of cards (the default)
+ * or a list (useNamesView.ts: kept on this device). Each name shows its
+ * avatar, reads its own record once it nears the screen (registered,
+ * updated, for sale), notes on how the name is written, and its own
+ * history beside it: under the name in a card, to its right in the list
+ * (under it on phones). Below, the names it had (sold, or renamed), each
+ * with who has it now and its history, laid out the same way. Core's list
+ * stops at 500 here, and says so.
  */
-import { useState } from 'react';
-import { Box, Button, Skeleton, Typography } from '@mui/material';
+import { useState, type ReactNode } from 'react';
+import {
+  Box,
+  Button,
+  Skeleton,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from '@mui/material';
+import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
+import ViewListOutlinedIcon from '@mui/icons-material/ViewListOutlined';
 import { visuallyHidden } from '@mui/utils';
 import { Card, Section, ToneChip } from '../../../../components/common/Section';
 import { EmptyState, ErrorState, ListSkeleton } from '../../../../components/common/states';
@@ -19,7 +31,9 @@ import { PersonInline } from '../../../../components/common/Person';
 import type { NameHistory } from '../../../../data/explorer/nameHistory';
 import type { TxRow } from '../../../../data/types';
 import { historyByName, pastNames } from './byName';
-import { NameHistoryToggle } from './NameHistoryToggle';
+import { NameHistoryList } from './NameHistoryList';
+import { isNameSort, NAME_SORTS, sortNames, type NameSort } from './sortNames';
+import { useNamesView, type NamesView } from './useNamesView';
 import { nameNotes } from '../../../../rules/explorer/nameNotes';
 import { NameAvatar } from '../../../../components/common/NameAvatar';
 import { NameText } from './NameText';
@@ -105,46 +119,188 @@ function NowOwnedBy({ name, near, address }: { name: string; near: boolean; addr
   );
 }
 
-/** A name it had: its avatar, who has it now, and its history. */
-function PastNameRow({
-  name,
-  address,
-  txs,
+/**
+ * One name's box: what it is on one side, its history on the other. A card
+ * in the grid (history under the name); a row in the list (history to the
+ * right from 600 px, under it on phones).
+ */
+function NameItem({
+  view,
+  setNode,
+  about,
+  history,
 }: {
-  name: string;
-  address: string;
-  txs: readonly TxRow[];
+  view: NamesView;
+  setNode: (node: HTMLLIElement | null) => void;
+  about: ReactNode;
+  history: ReactNode;
 }) {
-  const [node, setNode] = useState<HTMLLIElement | null>(null);
-  const near = useInView(node);
+  const grid = view === 'grid';
   return (
     <Box
       component="li"
       ref={setNode}
       tabIndex={-1}
       sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 0.5,
-        py: 1.25,
-        borderTop: 1,
-        borderColor: 'divider',
+        display: 'grid',
+        gap: grid ? 1.5 : { xs: 1, sm: 3 },
+        alignContent: 'start',
         minWidth: 0,
-        '&:first-of-type': { borderTop: 0, pt: 0 },
+        ...(grid
+          ? {
+              gridTemplateColumns: 'minmax(0, 1fr)',
+              p: 2,
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 2,
+              bgcolor: 'background.paper',
+            }
+          : {
+              gridTemplateColumns: {
+                xs: 'minmax(0, 1fr)',
+                sm: 'minmax(0, 2fr) minmax(0, 3fr)',
+              },
+              py: 1.5,
+              borderTop: 1,
+              borderColor: 'divider',
+              '&:first-of-type': { borderTop: 0, pt: 0 },
+            }),
         ...FOCUSABLE_ROW_SX,
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-        <NameAvatar name={name} size={32} />
-        <Typography
-          component="span"
-          sx={{ fontWeight: 700, fontSize: 17, overflowWrap: 'anywhere', minWidth: 0 }}
-        >
-          <NameText name={name} quoted={false} avatar={false} />
-        </Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>{about}</Box>
+      <Box
+        sx={{
+          minWidth: 0,
+          ...(grid ? { pt: 1.5, borderTop: 1, borderColor: 'divider' } : {}),
+        }}
+      >
+        {history}
       </Box>
-      <NowOwnedBy name={name} near={near} address={address} />
-      <NameHistoryToggle name={name} txs={txs} address={address} />
+    </Box>
+  );
+}
+
+/** The list sits in a card; the grid's cards stand on their own. */
+function NamesFrame({ view, children }: { view: NamesView; children: ReactNode }) {
+  return view === 'list' ? <Card>{children}</Card> : <>{children}</>;
+}
+
+/** The list of names in the view picked. */
+function itemsSx(view: NamesView) {
+  return view === 'grid'
+    ? {
+        listStyle: 'none',
+        m: 0,
+        p: 0,
+        display: 'grid',
+        gap: 1.5,
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
+      }
+    : { listStyle: 'none', m: 0, p: 0 };
+}
+
+/** Sort and Grid/List, above the names. */
+function NamesControls({
+  sort,
+  onSort,
+  view,
+  onView,
+}: {
+  sort: NameSort;
+  onSort: (sort: NameSort) => void;
+  view: NamesView;
+  onView: (view: NamesView) => void;
+}) {
+  return (
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
+      <TextField
+        select
+        label="Sort"
+        size="small"
+        value={sort}
+        onChange={(e) => {
+          if (isNameSort(e.target.value)) onSort(e.target.value);
+        }}
+        slotProps={{ select: { native: true } }}
+        sx={{ flex: '1 1 200px', maxWidth: { sm: 260 }, '& .MuiInputBase-root': { minHeight: 44 } }}
+      >
+        {NAME_SORTS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </TextField>
+      <ToggleButtonGroup
+        exclusive
+        size="small"
+        value={view}
+        onChange={(_, value: NamesView | null) => {
+          if (value) onView(value);
+        }}
+        aria-label="Show the names as"
+        sx={{ ml: 'auto' }}
+      >
+        <ToggleButton value="grid" aria-label="Grid" sx={{ width: 44, height: 44 }}>
+          <GridViewOutlinedIcon />
+        </ToggleButton>
+        <ToggleButton value="list" aria-label="List" sx={{ width: 44, height: 44 }}>
+          <ViewListOutlinedIcon />
+        </ToggleButton>
+      </ToggleButtonGroup>
+    </Box>
+  );
+}
+
+/** A name it had: its avatar, who has it now, and its history. */
+function PastNameRow({
+  name,
+  address,
+  txs,
+  view,
+}: {
+  name: string;
+  address: string;
+  txs: readonly TxRow[];
+  view: NamesView;
+}) {
+  const [node, setNode] = useState<HTMLLIElement | null>(null);
+  const near = useInView(node);
+  return (
+    <NameItem
+      view={view}
+      setNode={setNode}
+      about={
+        <>
+          <NameHead name={name} />
+          <NowOwnedBy name={name} near={near} address={address} />
+        </>
+      }
+      history={<NameHistoryList name={name} txs={txs} address={address} />}
+    />
+  );
+}
+
+/** A name's avatar and the name, and "Primary" on the primary one. */
+function NameHead({ name, primary = false }: { name: string; primary?: boolean }) {
+  return (
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
+      <NameAvatar name={name} size={40} />
+      <Typography
+        component="span"
+        sx={{
+          fontWeight: 700,
+          fontSize: 17,
+          overflowWrap: 'anywhere',
+          minWidth: 0,
+          flex: '0 1 auto',
+        }}
+      >
+        <NameText name={name} quoted={false} avatar={false} />
+      </Typography>
+      {primary ? (
+        <ToneChip size="small" variant="outlined" label="Primary" sx={{ fontSize: 14 }} />
+      ) : null}
     </Box>
   );
 }
@@ -154,53 +310,35 @@ function NameRow({
   address,
   primary,
   txs,
+  view,
 }: {
   name: string;
   address: string;
   primary: boolean;
   /** Its transactions about this name; undefined while they load or when they couldn't be read. */
   txs: readonly TxRow[] | undefined;
+  view: NamesView;
 }) {
   const [node, setNode] = useState<HTMLLIElement | null>(null);
   const near = useInView(node);
   const notes = nameNotes(name, address);
   return (
-    <Box
-      component="li"
-      ref={setNode}
-      tabIndex={-1}
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 0.5,
-        py: 1.25,
-        borderTop: 1,
-        borderColor: 'divider',
-        minWidth: 0,
-        '&:first-of-type': { borderTop: 0, pt: 0 },
-        ...FOCUSABLE_ROW_SX,
-      }}
-    >
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
-        <NameAvatar name={name} size={32} />
-        <Typography
-          component="span"
-          sx={{ fontWeight: 700, fontSize: 17, overflowWrap: 'anywhere', minWidth: 0 }}
-        >
-          <NameText name={name} quoted={false} avatar={false} />
-        </Typography>
-        {primary ? (
-          <ToneChip size="small" variant="outlined" label="Primary" sx={{ fontSize: 14 }} />
-        ) : null}
-      </Box>
-      <NameDetails name={name} near={near} />
-      {notes.map((note) => (
-        <Typography key={note.kind} variant="body2" sx={{ overflowWrap: 'anywhere' }}>
-          {note.text}
-        </Typography>
-      ))}
-      {txs && txs.length ? <NameHistoryToggle name={name} txs={txs} address={address} /> : null}
-    </Box>
+    <NameItem
+      view={view}
+      setNode={setNode}
+      about={
+        <>
+          <NameHead name={name} primary={primary} />
+          <NameDetails name={name} near={near} />
+          {notes.map((note) => (
+            <Typography key={note.kind} variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+              {note.text}
+            </Typography>
+          ))}
+        </>
+      }
+      history={<NameHistoryList name={name} txs={txs} address={address} />}
+    />
   );
 }
 
@@ -221,6 +359,8 @@ export function NamesList({
   primaryError?: { error: unknown; retry: () => void };
 }) {
   const { shown, showMore, listRef } = useShowMore(NAMES_PAGE);
+  const [sort, setSort] = useState<NameSort>('primary');
+  const [view, setView] = useNamesView();
   const byName = history.data ? historyByName(history.data.rows) : null;
 
   let body: React.ReactNode;
@@ -238,11 +378,14 @@ export function NamesList({
   else {
     const all = names.data.names;
     const hasPrimary = primary !== null && all.includes(primary);
-    const ordered = hasPrimary ? [primary, ...all.filter((n) => n !== primary)] : all;
+    const ordered = sortNames(all, sort, primary, byName);
     const visible = ordered.slice(0, shown);
     const left = ordered.length - visible.length;
     body = (
-      <Card sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0 }}>
+        {all.length > 1 ? (
+          <NamesControls sort={sort} onSort={setSort} view={view} onView={setView} />
+        ) : null}
         {primaryError ? (
           <ErrorState
             compact
@@ -255,22 +398,20 @@ export function NamesList({
             {NO_PRIMARY}
           </Typography>
         ) : null}
-        <Box
-          component="ul"
-          ref={listRef}
-          aria-label="Its names"
-          sx={{ listStyle: 'none', m: 0, p: 0 }}
-        >
-          {visible.map((name, i) => (
-            <NameRow
-              key={name}
-              name={name}
-              address={address}
-              primary={hasPrimary && i === 0}
-              txs={byName ? (byName.get(name) ?? []) : undefined}
-            />
-          ))}
-        </Box>
+        <NamesFrame view={view}>
+          <Box component="ul" ref={listRef} aria-label="Its names" sx={itemsSx(view)}>
+            {visible.map((name) => (
+              <NameRow
+                key={name}
+                name={name}
+                address={address}
+                primary={hasPrimary && name === primary}
+                txs={byName ? (byName.get(name) ?? []) : undefined}
+                view={view}
+              />
+            ))}
+          </Box>
+        </NamesFrame>
         {left > 0 ? (
           <Button onClick={showMore} sx={{ alignSelf: 'flex-start', minHeight: 44 }}>
             {showMoreWords(left, NAMES_PAGE)}
@@ -282,7 +423,7 @@ export function NamesList({
           </Typography>
         ) : null}
         <HistoryState history={history} />
-      </Card>
+      </Box>
     );
   }
   // The names it had: only once its history is read (a name it never owned now can't be listed otherwise).
@@ -295,21 +436,24 @@ export function NamesList({
       </Section>
       {had.length && byName ? (
         <Section title={`Names it had (${had.length})`} id="names-had">
-          <Card sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0 }}>
             <Typography variant="body2" color="text.secondary">
               Names it sold, or renamed to something else.
             </Typography>
-            <Box component="ul" aria-label="Names it had" sx={{ listStyle: 'none', m: 0, p: 0 }}>
-              {had.map((name) => (
-                <PastNameRow
-                  key={name}
-                  name={name}
-                  address={address}
-                  txs={byName.get(name) ?? []}
-                />
-              ))}
-            </Box>
-          </Card>
+            <NamesFrame view={view}>
+              <Box component="ul" aria-label="Names it had" sx={itemsSx(view)}>
+                {had.map((name) => (
+                  <PastNameRow
+                    key={name}
+                    name={name}
+                    address={address}
+                    txs={byName.get(name) ?? []}
+                    view={view}
+                  />
+                ))}
+              </Box>
+            </NamesFrame>
+          </Box>
         </Section>
       ) : null}
     </>

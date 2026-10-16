@@ -1,24 +1,19 @@
 /**
- * Every name the account owns, each opening to its own history (registered,
- * renamed, listed for sale, bought, sold), the names it had, and what it
- * published on QDN under its names.
+ * Every name the account owns, each with its own history beside it
+ * (registered, renamed, listed for sale, bought, sold), and the names it
+ * had. What it published on QDN is in the Transactions tab (QDN data, and
+ * by name).
  *
  * Reads: its names (`xnames:`, shared with the page header) and primary
  * name (`name:`), then per visible name `/names/{name}` (`xnamedata:`); one
  * heavy search of its name transactions (`xnamehist:`), which every name's
- * history comes from; once that section nears the screen, the QDN search
- * of its first 10 names (`xqdnname:` per name; the rest on request).
- * Nothing polls.
+ * history comes from. Nothing polls.
  */
-import { Typography } from '@mui/material';
-import { Card, Section } from '../../../components/common/Section';
-import { ListSkeleton } from '../../../components/common/states';
 import { getNamesOf } from '../../../data/explorer/account';
 import { usePrimaryName } from '../../../hooks/useData';
 import { useQuery } from '../../../hooks/useQuery';
 import { getNameHistory, nameHistoryKey } from '../../../data/explorer/nameHistory';
 import { NamesList } from './names/NamesList';
-import { QdnPublished } from './names/QdnPublished';
 
 export interface NamesTabProps {
   address: string;
@@ -44,23 +39,6 @@ export default function NamesTab({ address }: NamesTabProps) {
         }
         history={history}
       />
-      {!names.data || primary === undefined ? (
-        names.isError ? null : (
-          <Section title="Published on QDN" id="names-qdn">
-            <ListSkeleton count={1} label="Loading its names" />
-          </Section>
-        )
-      ) : names.data.names.length ? (
-        <QdnPublished names={names.data.names} primary={primary} truncated={names.data.truncated} />
-      ) : (
-        <Section title="Published on QDN" id="names-qdn">
-          <Card>
-            <Typography color="text.secondary">
-              QDN resources are published under names, and it has none.
-            </Typography>
-          </Card>
-        </Section>
-      )}
     </>
   );
 }

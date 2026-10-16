@@ -1,12 +1,10 @@
 /**
  * The Names tab's words: the list's title and limits, the primary-name
- * rule, a name's own record, how much of the name history was read, and
- * what the QDN search covered. Counts always come with what they are out
+ * rule, a name's own record, and how much of the name history was read. Counts always come with what they are out
  * of; partial reads say how far they got.
  */
 import type { NameData, NamesOf } from '../../../../data/explorer/account';
 import { NAME_HISTORY_LIMIT } from '../../../../data/explorer/nameHistory';
-import { QDN_NAME_LIMIT, type QdnServiceCount } from '../../../../data/explorer/qdnBy';
 import { formatAmount } from '../../../../rules/explorer/txWords';
 import { formatCount, formatDate } from '../../../../utils/format';
 
@@ -58,46 +56,3 @@ export function historyCoverage(count: number, capped: boolean): string {
 
 export const NO_NAME_HISTORY =
   'No name transactions found: it registered, bought, sold or changed no names.';
-
-/** "Searched 10 of 88 names", "Searched all 3 names", "Searched its only name". */
-export function searchedLine(searched: number, total: number, truncated: boolean): string {
-  if (searched >= total && !truncated)
-    return total === 1 ? 'Searched its only name.' : `Searched all ${formatCount(total)} names.`;
-  return `Searched ${formatCount(searched)} of ${formatCount(total)}${truncated ? '+' : ''} names.`;
-}
-
-/** Which names are searched without asking. */
-export function autoNamesWords(hasPrimary: boolean, newest: number): string {
-  const recent = `the ${formatCount(newest)} registered most recently`;
-  return hasPrimary ? `First the primary name and ${recent}.` : `First ${recent}.`;
-}
-
-/** "Search 78 more names", "Search 1 more name". */
-export function searchMoreWords(left: number): string {
-  return `Search ${formatCount(left)} more ${left === 1 ? 'name' : 'names'}`;
-}
-
-/** "APP 2", "MAIL_PRIVATE 53+" (more when a name hit the cap). */
-export function serviceCountWords(count: QdnServiceCount): string {
-  return `${count.service} ${formatCount(count.count)}${count.partial ? '+' : ''}`;
-}
-
-/** A name past the cap: only its newest resources were counted. */
-export function cappedWords(names: readonly string[]): string | null {
-  if (!names.length) return null;
-  if (names.length === 1)
-    return `has more than ${QDN_NAME_LIMIT} resources: its newest ${QDN_NAME_LIMIT} are counted.`;
-  return `${formatCount(names.length)} names have more than ${QDN_NAME_LIMIT} resources each: their newest ${QDN_NAME_LIMIT} are counted.`;
-}
-
-/** Encrypted resources are counted, never listed. */
-export function encryptedWords(count: number): string {
-  return count === 1
-    ? '1 encrypted resource is counted above and not listed.'
-    : `${formatCount(count)} encrypted resources are counted above and not listed.`;
-}
-
-/** "74 resources", "100+ resources". */
-export function resourcesWords(total: number, partial: boolean): string {
-  return `${formatCount(total)}${partial ? '+' : ''} ${total === 1 && !partial ? 'resource' : 'resources'}`;
-}
