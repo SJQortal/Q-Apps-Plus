@@ -2,8 +2,10 @@
  * Compare → Side by side. From 900 px a real table: a header row with each
  * account's letter and name, a row header per fact. Narrower, each fact is
  * a block: its label, then one line per account (letter and value). A fact
- * the same for every account reads "Same for all: …" once. The page decides
- * the layout once and passes it down (no screen-size listener per row).
+ * the same for every account reads "Same for all: …" once. A read that
+ * failed says "Couldn’t read" in its cell, and the section lists them in one
+ * line with one Retry. The page decides the layout once and passes it down
+ * (no screen-size listener per row).
  */
 import { Box, Skeleton, Typography } from '@mui/material';
 import { Section } from '../../../components/common/Section';
@@ -12,6 +14,7 @@ import { useDisplayName } from '../../../hooks/useDisplayName';
 import type { Letter } from '../../../rules/explorer/compare';
 import { visibleName } from '../../../rules/explorer/nameNotes';
 import { LetterBadge } from './letters';
+import { FailedReads } from './parts';
 import { sameForAll, type SideCell, type SideRow } from './sideRows';
 
 export interface SideColumn {
@@ -27,6 +30,12 @@ function Cell({ cell }: { cell: SideCell | undefined }) {
         <Skeleton variant="text" width={80} aria-hidden />
         <span className="qmp-visually-hidden">Loading</span>
       </>
+    );
+  if (cell.failed)
+    return (
+      <Box component="span" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+        {cell.text}
+      </Box>
     );
   return (
     <Box component="span" sx={{ overflowWrap: 'anywhere' }}>
@@ -170,16 +179,25 @@ export function SideBySide({
   columns,
   rows,
   table,
+  failed = [],
+  onRetry,
 }: {
   columns: readonly SideColumn[];
   rows: readonly SideRow[];
   /** A table (900 px and wider), else stacked blocks. */
   table: boolean;
+  /** The reads that failed, in words ("B’s balance"). */
+  failed?: readonly string[];
+  /** Asks again for every read that failed. */
+  onRetry?: () => void;
 }) {
   if (columns.length < 2) return null;
   return (
     <Section title="Side by side" id="compare-side">
       {table ? <Table columns={columns} rows={rows} /> : <Stacked columns={columns} rows={rows} />}
+      {onRetry ? (
+        <FailedReads what={failed} onRetry={onRetry} retryLabel="Retry Side by side" />
+      ) : null}
     </Section>
   );
 }

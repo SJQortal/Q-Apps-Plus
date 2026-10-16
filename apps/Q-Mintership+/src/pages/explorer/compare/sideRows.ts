@@ -3,8 +3,9 @@
  * Overview's words (names, first seen, first QORT from, level, blocks
  * minted, minting penalty, balance, MINTER status, sponsor, sponsored,
  * minting now, last sent a transaction, groups, QDN publishes). A cell is
- * undefined while its read is out. A row whose cells are all the same reads
- * "Same for all: …".
+ * undefined while its read is out, and says "Couldn’t read" when the read
+ * failed (never a value it doesn't have). A row whose cells are all the
+ * same reads "Same for all: …".
  */
 import type { FirstSeen, GroupOf, NamesOf } from '../../../data/explorer/account';
 import type { LastSent } from '../../../data/explorer/lastSent';
@@ -29,6 +30,8 @@ export interface SideCell {
   before?: string;
   /** Words after it. */
   after?: string;
+  /** Its read failed: the text says so, and the row never reads "Same for all". */
+  failed?: boolean;
 }
 
 export interface SideRow {
@@ -36,6 +39,10 @@ export interface SideRow {
   label: string;
   cells: Array<SideCell | undefined>;
 }
+
+/** The reads Side by side needs, beyond the account itself. */
+export type SideRead =
+  'names' | 'first' | 'balance' | 'status' | 'links' | 'online' | 'lastSent' | 'groups' | 'qdn';
 
 export interface SideFacts {
   account: AccountInfo;
@@ -56,12 +63,26 @@ export interface SideFacts {
   groups?: GroupOf[];
   /** What its primary name published on QDN. */
   qdn?: QdnOfName;
+  /** The reads that failed (their cells say so instead of loading for good). */
+  failed?: Partial<Record<SideRead, boolean>>;
 }
 
 const plain = (text: string, key = text): SideCell => ({ key, text });
 
+/** "Couldn’t read", keyed to its account so a row of them never collapses. */
+const failedCell = (f: SideFacts): SideCell => ({
+  key: `failed:${f.account.address}`,
+  text: 'Couldn’t read',
+  failed: true,
+});
+
+/** The cell for a value still out: undefined while reading, "Couldn’t read" once failed. */
+const unread = (f: SideFacts, read: SideRead): SideCell | undefined =>
+  f.failed?.[read] ? failedCell(f) : undefined;
+
 function namesCell(f: SideFacts): SideCell | undefined {
-  if (f.primary === undefined || !f.names) return undefined;
+  if (!f.names) return unread(f, 'names');
+  if (f.primary === undefined) return undefined;
   const count = f.names.names.length;
   const more = f.names.truncated ? '+' : '';
   if (f.primary) {
@@ -79,8 +100,9 @@ function namesCell(f: SideFacts): SideCell | undefined {
     : plain('No registered name');
 }
 
-function firstQortCell(first: FirstSeen | undefined): SideCell | undefined {
-  if (!first) return undefined;
+function firstQortCell(f: SideFacts): SideCell | undefined {
+  const first = f.first;
+  if (!first) return unread(f, 'first');
   const funding = first.funding;
   if (!funding) return plain('Not found');
   const from = funding.from;
@@ -121,7 +143,7 @@ export function sideRows(facts: readonly SideFacts[]): SideRow[] {
   return [
     row('names', 'Names', namesCell),
     row('firstSeen', 'First seen', (f) => {
-      if (!f.first) return undefined;
+      if (!f.first) return unread(f, 'first');
       const seen = f.first.firstSeen;
       return seen
         ? plain(
@@ -130,7 +152,7 @@ export function sideRows(facts: readonly SideFacts[]): SideRow[] {
           )
         : plain('Not found');
     }),
-    row('firstQort', 'First QORT from', (f) => firstQortCell(f.first)),
+    row('firstQort', 'First QORT from', firstQortCell),
     row('level', 'Level', (f) => plain(`Level ${f.account.level}`)),
     row('blocks', 'Blocks minted', (f) => plain(formatCount(f.account.blocksMinted))),
     row('penalty', 'Minting penalty', (f) =>
@@ -141,33 +163,33 @@ export function sideRows(facts: readonly SideFacts[]): SideRow[] {
       )
     ),
     row('balance', 'Balance', (f) => {
-      if (f.balance === undefined) return undefined;
+      if (f.balance === undefined) return unread(f, 'balance');
       const words = balanceWords(f.balance);
       return plain(`${words.short} QORT`, words.full);
     }),
     row('status', 'MINTER status', (f) =>
-      f.status ? plain(minterStatusWord(f.status)) : undefined
+      f.status ? plain(minterStatusWord(f.status)) : unread(f, 'status')
     ),
     row('sponsor', 'Sponsor', (f) =>
       f.sponsor === undefined
-        ? undefined
+        ? unread(f, 'links')
         : f.sponsor
           ? { key: f.sponsor, account: f.sponsor }
           : plain('None found')
     ),
     row('sponsored', 'Sponsored', (f) =>
       f.sponsees === undefined
-        ? undefined
+        ? unread(f, 'links')
         : f.sponsees
           ? plain(`${plural(f.sponsees, 'account')}${f.sponseesCapped ? '+' : ''}`)
           : plain('None')
     ),
     row('mintingNow', 'Minting now', (f) =>
-      f.mintingNow === undefined ? undefined : plain(f.mintingNow ? 'Yes' : 'No')
+      f.mintingNow === undefined ? unread(f, 'online') : plain(f.mintingNow ? 'Yes' : 'No')
     ),
     row('lastSent', 'Last sent a transaction', (f) => {
       if (!f.account.publicKey) return plain('Never');
-      if (f.lastSent === undefined) return undefined;
+      if (f.lastSent === undefined) return unread(f, 'lastSent');
       return f.lastSent
         ? plain(
             `${formatDate(f.lastSent.timestamp)} · block ${formatCount(f.lastSent.height)}`,
@@ -175,20 +197,22 @@ export function sideRows(facts: readonly SideFacts[]): SideRow[] {
           )
         : plain('Never');
     }),
-    row('groups', 'Groups', (f) => (f.groups ? plain(formatCount(f.groups.length)) : undefined)),
+    row('groups', 'Groups', (f) =>
+      f.groups ? plain(formatCount(f.groups.length)) : unread(f, 'groups')
+    ),
     row('qdn', 'QDN publishes', (f) => {
       if (f.primary === undefined) return undefined;
       if (f.primary === null) return plain('No primary name');
-      if (!f.qdn) return undefined;
+      if (!f.qdn) return unread(f, 'qdn');
       const count = `${formatCount(f.qdn.resources.length)}${f.qdn.capped ? '+' : ''}`;
       return { key: `${f.primary}|${count}`, before: `${count} as `, name: f.primary };
     }),
   ];
 }
 
-/** The one cell a row's cells all equal, or null (or while any is out). */
+/** The one cell a row's cells all equal, or null (or while any is out or failed). */
 export function sameForAll(cells: ReadonlyArray<SideCell | undefined>): SideCell | null {
-  if (cells.length < 2 || cells.some((cell) => cell === undefined)) return null;
+  if (cells.length < 2 || cells.some((cell) => cell === undefined || cell.failed)) return null;
   const [first] = cells as SideCell[];
   return cells.every((cell) => cell?.key === first.key) ? first : null;
 }

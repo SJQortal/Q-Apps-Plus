@@ -4,11 +4,12 @@
  * In common has, is still reading, found nothing of and couldn't check.
  */
 import { useTheme, type Theme } from '@mui/material/styles';
-import type { PairFinding } from '../../../rules/explorer/compare';
+import { letterOf, type PairFinding } from '../../../rules/explorer/compare';
 import { monthRange } from '../../../rules/explorer/connections';
 import { formatDate } from '../../../utils/format';
 import { withHue } from '../../decisions/sectionAccents';
 import { whenLine } from '../account/connections/words';
+import type { SideRead } from './sideRows';
 import type { CompareData } from './useCompareData';
 
 /** A blue, a violet, a teal and an amber. */
@@ -67,6 +68,61 @@ export interface CompareRead {
   isError: boolean;
   isLoading: boolean;
   refetch: () => Promise<void>;
+}
+
+/** What each of Side by side's reads is, in words after the account's letter. */
+const SIDE_READ_WORDS: ReadonlyArray<[SideRead, string]> = [
+  ['names', 'names'],
+  ['first', 'first transactions'],
+  ['balance', 'balance'],
+  ['status', 'MINTER status'],
+  ['links', 'reward shares'],
+  ['lastSent', 'last sent transaction'],
+  ['groups', 'groups'],
+  ['qdn', 'QDN publishes'],
+];
+
+/** Side by side's reads for the account at `i`. */
+function sideReads(data: CompareData, i: number): Record<SideRead, CompareRead> {
+  return {
+    names: data.names[i],
+    first: data.first[i],
+    balance: data.balance[i],
+    status: data.status[i],
+    links: data.links[i],
+    online: data.online,
+    lastSent: data.lastSent[i],
+    groups: data.groups[i],
+    qdn: data.qdn[i],
+  };
+}
+
+/** Which of Side by side's reads failed for the account at `i`. */
+export function sideFailed(data: CompareData, i: number): Partial<Record<SideRead, boolean>> {
+  const reads = sideReads(data, i);
+  const failed: Partial<Record<SideRead, boolean>> = {};
+  for (const read of Object.keys(reads) as SideRead[]) if (reads[read].isError) failed[read] = true;
+  return failed;
+}
+
+/** Side by side's failed reads: "B’s balance", "who is minting now", and the reads to retry. */
+export function sideFailures(data: CompareData): { what: string[]; reads: CompareRead[] } {
+  const what: string[] = [];
+  const reads = new Set<CompareRead>();
+  data.live.forEach((address, i) => {
+    if (!address) return;
+    const mine = sideReads(data, i);
+    for (const [read, words] of SIDE_READ_WORDS) {
+      if (!mine[read].isError) continue;
+      what.push(`${letterOf(i)}’s ${words}`);
+      reads.add(mine[read]);
+    }
+  });
+  if (data.live.some(Boolean) && data.online.isError) {
+    what.push('who is minting now');
+    reads.add(data.online);
+  }
+  return { what, reads: [...reads] };
 }
 
 /** What In common has, is reading, found nothing of, and couldn't check. */

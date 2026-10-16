@@ -119,4 +119,56 @@ describe('side by side', () => {
     // Names in a cell stay names (shown isolated), with their names known.
     expect(cellText({ key: 'x', account: H }, () => 'Hal')).toBe('Hal');
   });
+
+  it('a read that failed says so in its cell, and never reads “Same for all”', () => {
+    const broken = (address: string) =>
+      facts({
+        account: account({ address }),
+        balance: undefined,
+        names: undefined,
+        lastSent: undefined,
+        groups: undefined,
+        first: undefined,
+        status: undefined,
+        sponsor: undefined,
+        sponsees: undefined,
+        mintingNow: undefined,
+        qdn: undefined,
+        failed: {
+          balance: true,
+          names: true,
+          lastSent: true,
+          groups: true,
+          first: true,
+          status: true,
+          links: true,
+          online: true,
+          qdn: true,
+        },
+      });
+    const rows = sideRows([broken(addr('a')), broken(addr('b'))]);
+    for (const key of [
+      'names',
+      'firstSeen',
+      'firstQort',
+      'balance',
+      'status',
+      'sponsor',
+      'sponsored',
+      'mintingNow',
+      'lastSent',
+      'groups',
+      'qdn',
+    ]) {
+      const cells = row(rows, key).cells;
+      expect(
+        cells.map((c) => c?.text),
+        key
+      ).toEqual(['Couldn’t read', 'Couldn’t read']);
+      expect(cells.every((c) => c?.failed)).toBe(true);
+      expect(sameForAll(cells), key).toBeNull();
+    }
+    // Still reading (nothing failed): undefined, as before.
+    expect(row(sideRows([facts({ balance: undefined })]), 'balance').cells[0]).toBeUndefined();
+  });
 });

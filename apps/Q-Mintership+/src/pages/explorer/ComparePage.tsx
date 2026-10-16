@@ -57,7 +57,7 @@ import { visibleName } from '../../rules/explorer/nameNotes';
 import { COMPARE_FULL, comparePicksAtom } from '../../state/explorer';
 import { appLink } from '../../utils/links';
 import { AccountCards } from './compare/AccountCards';
-import { inCommonState, useLetterAccents } from './compare/compareView';
+import { inCommonState, sideFailed, sideFailures, useLetterAccents } from './compare/compareView';
 import { InCommonSection } from './compare/InCommonSection';
 import { PairGrid, type PairGridRow } from './compare/PairGrid';
 import { CopyFindingsButton } from './compare/parts';
@@ -185,7 +185,10 @@ async function buildText(data: CompareData, sideFacts: SideFacts[]): Promise<str
     const same = sameForAll(row.cells);
     if (same) return `${row.label}: same for all, ${cellText(same, nameOf)}`;
     return `${row.label}: ${row.cells
-      .map((cell, i) => `${columns[i]} ${cell ? cellText(cell, nameOf) : 'not read'}`)
+      .map(
+        (cell, i) =>
+          `${columns[i]} ${cell ? (cell.failed ? 'couldn’t read' : cellText(cell, nameOf)) : 'not read'}`
+      )
       .join('; ')}`;
   });
   return compareText({
@@ -268,9 +271,11 @@ export default function ComparePage() {
         lastSent: data.lastSent[i].data,
         groups: data.groups[i].data,
         qdn: data.qdn[i].data,
+        failed: sideFailed(data, i),
       },
     ];
   });
+  const sideFailedReads = sideFailures(data);
   const columns = data.addresses
     .map((address, i) => ({ address, letter: letterOf(i), accent: accents[i] }))
     .filter((_, i) => data.accounts[i]);
@@ -333,7 +338,13 @@ export default function ComparePage() {
               ) : null}
             </Box>
             <Box ref={setSideNode}>
-              <SideBySide columns={columns} rows={sideRows(sideFacts)} table={table} />
+              <SideBySide
+                columns={columns}
+                rows={sideRows(sideFacts)}
+                table={table}
+                failed={sideFailedReads.what}
+                onRetry={() => sideFailedReads.reads.forEach((q) => void q.refetch())}
+              />
             </Box>
             <Box>
               <CopyFindingsButton build={() => buildText(data, sideFacts)} />

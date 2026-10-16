@@ -4,7 +4,8 @@
  * its avatar and name (to its account in the Explorer), short address with
  * copy, level, where it stands in MINTER (the app's own status words),
  * "Minting now", "Minting penalty", and Remove. An address Core doesn't
- * know says so on its card. Under the cards, "Add an account" (the
+ * know says so on its card, and so does a status it couldn't read (a chip
+ * left out is never a silent "no"). Under the cards, "Add an account" (the
  * Explorer's search field), up to 4.
  */
 import { Box, IconButton, Skeleton, Tooltip, Typography } from '@mui/material';
@@ -57,6 +58,13 @@ function AccountCard({
         account.blocksMintedPenalty !== 0 ? 'Minting penalty' : null,
       ].filter((chip): chip is string => chip !== null)
     : [];
+  // A chip left out because its read failed is said, not taken for "no".
+  const unread = account
+    ? [
+        data.status[index].isError ? 'its MINTER status' : null,
+        data.online.isError ? 'whether it is minting now' : null,
+      ].filter((what): what is string => what !== null)
+    : [];
 
   let body: React.ReactNode;
   if (account) {
@@ -70,6 +78,11 @@ function AccountCard({
             <ToneChip size="small" variant="outlined" label={chip} sx={{ fontSize: 14 }} />
           </li>
         ))}
+        {unread.length ? (
+          <Typography component="li" variant="body2" color="text.secondary">
+            Couldn’t read {unread.join(' or ')}
+          </Typography>
+        ) : null}
       </Box>
     );
   } else if (explored.data?.kind === 'unused') {

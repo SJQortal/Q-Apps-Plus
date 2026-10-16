@@ -533,4 +533,22 @@ describe('Compare: reads that fail', () => {
     await waitFor(() => expect(grid).not.toHaveTextContent(/A–C: [^A-Z]*failed/), T);
     expect(grid).not.toHaveTextContent(/A–C: [^A-Z]*(checking|so far)/);
   });
+
+  it('Side by side: a failed read says “Couldn’t read”, not “Loading” for good, with Retry', async () => {
+    let broken = { on: false };
+    const { user } = await open(explorerComparePath([ADDR.kicked, ADDR.left]), (world) => {
+      broken = breakReads(world, (url) => url.pathname === `/addresses/balance/${ADDR.left}`);
+    });
+    const side = await region('Side by side');
+    await waitFor(() => expect(side).toHaveTextContent('BalanceA12.5 QORTBCouldn’t read'), T);
+    const line = await within(side).findByText(/^Couldn’t read B’s balance\./, {}, T);
+    expect(line).toHaveAttribute('role', 'status');
+    await waitFor(() => expect(side).toHaveTextContent('MINTER statusSame for all'), T);
+    expect(within(side).queryByText('Loading')).toBeNull();
+
+    broken.on = false;
+    await user.click(within(side).getByRole('button', { name: 'Retry Side by side' }));
+    await waitFor(() => expect(side).toHaveTextContent('BalanceSame for all: 12.5 QORT'), T);
+    expect(within(side).queryByText(/^Couldn’t read/)).toBeNull();
+  });
 });
