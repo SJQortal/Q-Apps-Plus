@@ -431,7 +431,7 @@ export function ExplorerSearch({
         // is a full tap target.
         slotProps={{
           popper: { disablePortal: true },
-          clearIndicator: { sx: { width: 40, height: 40 } },
+          clearIndicator: { sx: { width: 44, height: 44 } },
         }}
         options={options}
         value={null}

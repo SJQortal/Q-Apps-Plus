@@ -100,14 +100,23 @@ export function rangeWords(range: BlockRange): string {
     : `block ${formatCount(range.start)}`;
 }
 
-/** "The newest 40 payments in blocks …", "All 7 …", "The only payment in …". */
+/** All, in the lines that say what was searched: it never holds messages, and says so. */
+const ALL_EXCEPT_MESSAGES: Noun = {
+  one: 'transaction of any type except messages',
+  many: 'transactions of every type except messages',
+};
+
+/**
+ * "The newest 40 payments in blocks …", "All 7 …", "The only payment in …";
+ * for All, "All 37 transactions of every type except messages in …".
+ */
 export function globalCoverage(
   type: GlobalType,
   count: number,
   done: boolean,
   range: BlockRange
 ): string {
-  const noun = typeNoun(type);
+  const noun = type === 'all' ? ALL_EXCEPT_MESSAGES : typeNoun(type);
   const where = rangeWords(range);
   if (!done) return `The newest ${formatCount(count)} ${noun.many} in ${where}.`;
   return count === 1
@@ -115,9 +124,10 @@ export function globalCoverage(
     : `All ${formatCount(count)} ${noun.many} in ${where}.`;
 }
 
-/** "No payments in blocks …." */
+/** "No payments in blocks …."; for All, "No transactions of any type except messages in …". */
 export function globalEmpty(type: GlobalType, range: BlockRange): string {
-  return `No ${typeNoun(type).many} in ${rangeWords(range)}.`;
+  const what = type === 'all' ? 'transactions of any type except messages' : typeNoun(type).many;
+  return `No ${what} in ${rangeWords(range)}.`;
 }
 
 /** "20 older payments loaded". */

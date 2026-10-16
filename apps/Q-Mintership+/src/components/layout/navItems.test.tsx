@@ -10,6 +10,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { HubThemeProvider } from '../../hub-theme';
 import { themeConfig, THEME_STORAGE_KEY } from '../../theme/qplus-theme';
 import { renderPage } from '../../test/render';
+import { mockFetchRoute } from '../../test/setup';
 import HomePage from '../../pages/home/HomePage';
 import SettingsPage from '../../pages/settings/SettingsPage';
 import { BottomNav } from './BottomNav';
@@ -137,6 +138,27 @@ describe('Settings on phones', () => {
     expect(gear).toHaveStyle({ width: '44px', height: '44px' });
     await userEvent.setup().click(gear);
     expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
+  });
+
+  it('is there while the status is unknown: loading, or failed to load', async () => {
+    screenWidth(390);
+    const failStatus = () =>
+      mockFetchRoute(
+        /^\/addresses\/Q/,
+        () => new Response(JSON.stringify({ error: 1, message: 'node busy' }), { status: 500 })
+      );
+    const home = await renderPage(<HomePage />, { persona: 'learner', setup: failStatus });
+    // Before the status is known, and after it failed: Settings is still one tap away.
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+    expect(await screen.findByText("Couldn't load your MINTER status.", {}, T)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+    home.unmount();
+    await renderPage(<SettingsPage />, {
+      persona: 'learner',
+      path: '/settings',
+      setup: failStatus,
+    });
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
   });
 
   it('is not on Home where the rail has Settings', async () => {

@@ -60,6 +60,34 @@ describe('TxSentence', () => {
     expect(screen.getByText('15 QORT').tagName).toBe('STRONG');
   });
 
+  it('keeps a number whole but lets a long asset name wrap, isolated', () => {
+    const asset = 'https://kick.com/a-very-long-asset-name-x';
+    const { container } = render(
+      <p>
+        <TxSentence
+          parts={[
+            { kind: 'text', text: 'Sent ' },
+            { kind: 'amount', amount: '1,234.56789012', asset },
+            { kind: 'text', text: ' and ' },
+            { kind: 'amount', amount: '5', asset: 'QORT' },
+          ]}
+          plain
+        />
+      </p>
+    );
+    const sentence = container.querySelector('p > span') as HTMLElement;
+    const name = screen.getByText(asset);
+    expect(name.tagName).toBe('BDI');
+    expect(name).toHaveAttribute('dir', 'auto');
+    // Nothing between the name and the sentence keeps it on one line.
+    for (let el: HTMLElement | null = name; el && el !== sentence; el = el.parentElement)
+      expect(getComputedStyle(el).whiteSpace).not.toBe('nowrap');
+    expect(screen.getByText('1,234.56789012')).toHaveStyle({ whiteSpace: 'nowrap' });
+    expect(name.closest('strong')).toHaveTextContent('1,234.56789012 https://kick.com/');
+    // QORT stays with its number.
+    expect(screen.getByText('5 QORT')).toHaveStyle({ whiteSpace: 'nowrap' });
+  });
+
   it('has no links in plain mode (inside a button)', async () => {
     renderSentence(true);
     expect(await screen.findByText('Bob')).toBeInTheDocument();

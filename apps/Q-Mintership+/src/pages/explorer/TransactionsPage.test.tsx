@@ -177,6 +177,23 @@ describe('Transactions on Qortal', () => {
     everySearchBounded();
   });
 
+  it('says All leaves out messages, and that messages aren’t listed here', async () => {
+    const { posts } = await open('?type=all');
+    const found = await results();
+    expect(
+      await within(found).findByText(
+        /^(All \d+ transactions of every type except messages|No transactions of any type except messages) in blocks 2,756,501–2,757,500\.$/,
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(screen.getByText(/Messages aren't listed here/)).toHaveTextContent(
+      "Messages aren't listed here: an account's Transactions tab shows its own."
+    );
+    everySearchBounded();
+    noWrites(posts);
+  });
+
   it('offers no chain-wide list of messages', async () => {
     await open('?type=messages');
     await results();

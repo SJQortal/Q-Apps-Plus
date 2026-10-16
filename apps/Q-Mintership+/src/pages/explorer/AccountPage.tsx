@@ -38,6 +38,7 @@ import { useHeavyScope } from '../../hooks/useHeavyScope';
 import { usePrimaryName } from '../../hooks/useData';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useQuery } from '../../hooks/useQuery';
+import { useTopInViewOnSwitch } from '../../hooks/useScrollTopOnNewPage';
 import { explorerAccountPath, explorerTabOf, PATHS, type ExplorerTab } from '../../routes/paths';
 import { visibleName } from '../../rules/explorer/nameNotes';
 import { cameFromExplorer, nameMatchOf, openInTrail, recordRecent } from '../../state/explorer';
@@ -159,6 +160,7 @@ export default function AccountPage() {
   const tab: ExplorerTab = kind === 'at' ? 'transactions' : explorerTabOf(params.tab);
   const tabs = kind === 'at' ? AT_TABS : ACCOUNT_TABS;
   const tabBar = opened ? <AccountTabs address={opened} tab={tab} tabs={tabs} /> : null;
+  useTopInViewOnSwitch(opened, tab, panelIdOf(tab));
 
   // ---- What the page says, by state. ----
   let title = 'Account';
@@ -290,7 +292,8 @@ export default function AccountPage() {
         {showTabs && opened ? (
           <>
             {tabsInHeader ? null : tabBar}
-            <TabPanel tab={tab} address={opened} />
+            {/* One per account: a tab's own state (what was asked, what was found) starts fresh. */}
+            <TabPanel key={opened} tab={tab} address={opened} />
           </>
         ) : null}
       </PageBody>

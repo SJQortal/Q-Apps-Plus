@@ -4,7 +4,8 @@
  * (`replace`), so Back leaves the account rather than stepping through its
  * tabs, and a copied link opens the same tab. They scroll sideways on
  * narrow screens (with arrows on phones too). The page keeps focus on the
- * tab after a switch (routes/paths.ts pageKeyOf).
+ * tab after a switch (routes/paths.ts pageKeyOf) and brings the new tab's
+ * top into view when it is above the screen (useTopInViewOnSwitch).
  */
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { Tab, Tabs } from '@mui/material';

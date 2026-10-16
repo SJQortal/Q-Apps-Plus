@@ -2,8 +2,10 @@
  * The top of an account page, on every tab (its name is the page title):
  * the avatar, its level, the short address with copy, at most three chips
  * (where it stands in MINTER, minting now, a minting penalty), and a note
- * when it was opened by a name that isn't its primary one. Plain facts in
- * neutral chips: no colour says good or bad.
+ * when it was opened by a name that isn't its primary one. On phones the
+ * title is cut short beside the header's buttons, so the whole name is
+ * under the avatar too, wrapping. Plain facts in neutral chips: no colour
+ * says good or bad.
  */
 import { Box, Typography } from '@mui/material';
 import { AddressText } from '../../../components/common/Person';
@@ -83,6 +85,13 @@ export function AccountHeader({
           <AddressText address={address} />
         </Box>
       </Box>
+      {primary ? (
+        <Typography
+          sx={{ display: { xs: 'block', sm: 'none' }, fontWeight: 700, overflowWrap: 'anywhere' }}
+        >
+          <bdi dir="auto">{visibleName(primary)}</bdi>
+        </Typography>
+      ) : null}
       {note ? (
         <Typography
           variant="body2"

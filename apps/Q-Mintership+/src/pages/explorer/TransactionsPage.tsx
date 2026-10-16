@@ -3,7 +3,8 @@
  * transaction of one type (Payments unless another is picked) in a range
  * of blocks (the latest 1,000 unless another is picked), newest first, 20
  * a page, shown as soon as the page opens; what waits for a block is
- * listed apart. The type and blocks are in the URL (`?type=`, `?blocks=`,
+ * listed apart. Messages are never listed here (tx/globalFilters.ts), and
+ * the page says so. The type and blocks are in the URL (`?type=`, `?blocks=`,
  * read with appParam, so a query Hub appends doesn't spoil them).
  *
  * The latest blocks hang off the tip read when the page opened, so the
@@ -126,7 +127,8 @@ export default function TransactionsPage() {
       />
       <PageBody>
         <Typography color="text.secondary">
-          Every confirmed transaction of one type in a range of blocks, newest first.
+          Every confirmed transaction of one type in a range of blocks, newest first. Messages
+          aren't listed here: an account's Transactions tab shows its own.
         </Typography>
         <GlobalFilterBar
           type={type}

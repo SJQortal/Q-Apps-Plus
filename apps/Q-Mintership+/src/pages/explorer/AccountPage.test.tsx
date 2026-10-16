@@ -22,7 +22,7 @@ import {
   resetExplorerState,
   trailAtom,
 } from '../../state/explorer';
-import { SETTINGS_KEYS } from '../../state/settings';
+import { motionAtom, SETTINGS_KEYS } from '../../state/settings';
 import AccountPage from './AccountPage';
 
 const T = { timeout: 4000 };
@@ -63,6 +63,9 @@ function Probe() {
       <button type="button" onClick={() => hop(ADDR.kicked, false)}>
         open Kit from elsewhere
       </button>
+      <button type="button" onClick={() => navigate(-1)}>
+        go back
+      </button>
     </>
   );
 }
@@ -78,7 +81,7 @@ function answerExplorerReads() {
   ]);
 }
 
-async function open(path: string, setup?: () => void, persona = 'learner') {
+async function open(path: string, setup?: () => void, persona = 'learner', strict = true) {
   const result = await renderPage(
     <>
       <AccountPage />
@@ -88,7 +91,7 @@ async function open(path: string, setup?: () => void, persona = 'learner') {
       persona,
       path,
       route: ROUTE,
-      strict: true,
+      strict,
       // Newer than the world's own routes: these answer first.
       setup: () => {
         answerExplorerReads();
@@ -189,6 +192,36 @@ describe('an account in the Explorer', () => {
     await user.click(within(tabs).getByRole('tab', { name: 'Overview' }));
     await waitFor(() => expect(at()).toBe(`/explorer/account/${ADDR.nominator}|null|REPLACE`), T);
     expect(within(tabs).getByRole('tab', { name: 'Overview' })).toHaveFocus();
+  });
+
+  it('starts a tab afresh for each account: Back to one keeps nothing asked on another', async () => {
+    const { user, posts } = await open(
+      explorerAccountPath(ADDR.nominator, 'connections'),
+      undefined,
+      'learner',
+      true
+    );
+    const sponsorship = (address: string) => fetchCallsFor(`/addresses/sponsorship/${address}`);
+    await screen.findByRole('button', { name: 'Load Core’s report' }, T);
+    // To Leo by an Explorer link, then his Connections, where his report is asked for.
+    await user.click(screen.getByRole('button', { name: 'hop to Leo' }));
+    await screen.findByRole('heading', { level: 1, name: 'Leo Learner' }, T);
+    const tabs = await screen.findByRole('tablist', { name: 'Account sections' }, T);
+    await user.click(within(tabs).getByRole('tab', { name: 'Connections' }));
+    await user.click(await screen.findByRole('button', { name: 'Load Core’s report' }, T));
+    await waitFor(() => expect(sponsorship(ADDR.learner)).toHaveLength(1), T);
+    // Back to Nora's Connections (already read, so the page stays): nothing asked on hers.
+    await user.click(screen.getByRole('button', { name: 'go back' }));
+    await waitFor(
+      () => expect(at()).toBe(`/explorer/account/${ADDR.nominator}/connections|null|POP`),
+      T
+    );
+    await screen.findByRole('heading', { level: 1, name: 'Nora Nominator' }, T);
+    expect(
+      await screen.findByRole('button', { name: 'Load Core’s report' }, T)
+    ).toBeInTheDocument();
+    expect(sponsorship(ADDR.nominator)).toEqual([]);
+    noWrites(posts);
   });
 
   it('opens an unknown tab segment on Overview', async () => {
@@ -394,6 +427,21 @@ describe('the trail', () => {
 });
 
 describe('on a phone', () => {
+  it('shows the whole name under the avatar, the title being cut short', async () => {
+    screenWidth(360);
+    const { posts } = await open(explorerAccountPath(ADDR.nominator), undefined, 'learner', true);
+    await screen.findByRole('heading', { level: 1, name: 'Nora Nominator' }, T);
+    await screen.findByRole('list', { name: 'About this account' }, T);
+    // Once in the title (one h1), once as plain text under the avatar.
+    const [title, line] = screen.getAllByText('Nora Nominator');
+    expect(title.closest('h1')).not.toBeNull();
+    expect(line.tagName).toBe('BDI');
+    expect(line).toHaveAttribute('dir', 'auto');
+    expect(line.closest('h1, h2, h3')).toBeNull();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    noWrites(posts);
+  });
+
   it('carries the tabs in the sticky header and folds the middle of a long trail', async () => {
     screenWidth(390);
     // Four accounts opened one from another, Leo's last: opening his page keeps them.
@@ -409,7 +457,86 @@ describe('on a phone', () => {
     expect(more).toHaveTextContent('2 more');
     await user.click(more);
     expect(within(trail).queryByRole('button', { name: /more accounts in the trail/ })).toBeNull();
-    expect(within(trail).getAllByRole('listitem')).toHaveLength(4);
+    const crumbs = within(trail).getAllByRole('listitem');
+    expect(crumbs).toHaveLength(4);
+    // The button went: focus is on the first crumb it revealed, not lost.
+    await waitFor(() => expect(within(crumbs[1]).getByRole('link')).toHaveFocus());
+  });
+});
+
+describe('a tab switch deep in a long tab', () => {
+  /** Where each tab panel's top is, as if the page were scrolled; the rest at 0. */
+  let panelTop = 0;
+  const scrolled: Array<{ id: string; options: unknown }> = [];
+
+  beforeEach(() => {
+    panelTop = 0;
+    scrolled.length = 0;
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element
+    ) {
+      const top = this.getAttribute('role') === 'tabpanel' ? panelTop : 0;
+      return { top, bottom: top, left: 0, right: 0, width: 0, height: 0, x: 0, y: top } as DOMRect;
+    });
+    Element.prototype.scrollIntoView = function (this: Element, options?: unknown) {
+      scrolled.push({ id: this.id, options });
+    };
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
+  it('brings the new tab’s top into view on a phone, and stays put when it is on screen', async () => {
+    screenWidth(390);
+    const { user, posts } = await open(
+      explorerAccountPath(ADDR.nominator),
+      undefined,
+      'learner',
+      true
+    );
+    await screen.findByRole('heading', { level: 1, name: 'Nora Nominator' }, T);
+    const tabs = within(screen.getByRole('banner')).getByRole('tablist', {
+      name: 'Account sections',
+    });
+    // Far down Overview, the header back: the next tab's top is above the screen.
+    panelTop = -2400;
+    await user.click(within(tabs).getByRole('tab', { name: 'Names' }));
+    await screen.findByRole('tabpanel', { name: 'Names' }, T);
+    await waitFor(
+      () =>
+        expect(scrolled).toEqual([
+          { id: 'account-panel-names', options: { block: 'start', behavior: 'smooth' } },
+        ]),
+      T
+    );
+    expect(within(tabs).getByRole('tab', { name: 'Names' })).toHaveFocus();
+    // Near the top already: no jump.
+    panelTop = 300;
+    await user.click(within(tabs).getByRole('tab', { name: 'Overview' }));
+    await screen.findByRole('tabpanel', { name: 'Overview' }, T);
+    expect(scrolled).toHaveLength(1);
+    noWrites(posts);
+  });
+
+  it('jumps without the smooth scroll when motion is reduced', async () => {
+    store.set(motionAtom, 'reduce');
+    try {
+      const { user } = await open(explorerAccountPath(ADDR.nominator), undefined, 'learner', true);
+      const tabs = await screen.findByRole('tablist', { name: 'Account sections' }, T);
+      panelTop = -800;
+      await user.click(within(tabs).getByRole('tab', { name: 'Mintership' }));
+      await screen.findByRole('tabpanel', { name: 'Mintership' }, T);
+      await waitFor(
+        () =>
+          expect(scrolled).toEqual([
+            { id: 'account-panel-mintership', options: { block: 'start', behavior: 'auto' } },
+          ]),
+        T
+      );
+    } finally {
+      store.set(motionAtom, 'system');
+    }
   });
 });
 
