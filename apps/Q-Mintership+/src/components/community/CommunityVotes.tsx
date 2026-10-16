@@ -24,6 +24,7 @@ import { NameAvatar } from '../common/NameAvatar';
 import { ResponsiveDialog } from '../common/ResponsiveDialog';
 import { PeopleColumns } from '../decision/AnswerColumns';
 import { LazyCommunityVoteDialog } from './LazyCommunityVoteDialog';
+import { MarkedName } from '../common/MarkedName';
 
 /** Avatars shown per side beside Copy link; the rest are "+n". */
 export const AVATARS_SHOWN = 3;
@@ -116,7 +117,7 @@ export function CommunitySummary({
       >
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
-            Nomination of {label}
+            Nomination of <MarkedName name={label} />
           </Typography>
           <PeopleColumns
             headingLevel="h3"

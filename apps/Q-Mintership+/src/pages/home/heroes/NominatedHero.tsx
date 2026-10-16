@@ -29,6 +29,7 @@ import { useConsideringFor } from '../../../hooks/useConsidering';
 import { consideringCountText } from '../../../rules/considering';
 import { READY_DONE, READY_DONE_NEXT } from '../../../constants/words';
 import { whenApplied } from '../../decisions/decisionUi';
+import { MarkedName } from '../../../components/common/MarkedName';
 
 export function NominatedHero({
   status,
@@ -246,8 +247,8 @@ export function NominatedHero({
         {short ? (
           <Alert severity="warning">
             Your confirmed balance is <Num>{formatQort(balance.data ?? 0)}</Num>. Ask{' '}
-            {by ? by.name : 'someone you know on Qortal'} or a friend to send you a little QORT (
-            {formatQort(feeQort)} covers the fee), then accept.
+            {by ? <MarkedName name={by.name} /> : 'someone you know on Qortal'} or a friend to send
+            you a little QORT ({formatQort(feeQort)} covers the fee), then accept.
           </Alert>
         ) : null}
         {!accepted && pending?.status === 'failed' ? (

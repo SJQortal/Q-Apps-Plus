@@ -11,7 +11,7 @@ import ErrorOutlineOutlinedIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import { friendlyError } from '../../utils/friendlyError';
 
 interface EmptyStateProps {
-  title: string;
+  title: ReactNode;
   description?: ReactNode;
   actionLabel?: string;
   /** Gets the click, so a dialog it opens can give focus back to this button. */

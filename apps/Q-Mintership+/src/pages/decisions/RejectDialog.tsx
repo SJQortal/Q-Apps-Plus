@@ -16,6 +16,7 @@ import { plural } from '../../utils/format';
 import { SIGN_REJECTION_CHECK } from '../../writes/explain';
 import { rejectDecision, withdrawSignature } from '../../writes/flows';
 import type { Signer } from '../../writes/runner';
+import { MarkedName } from '../../components/common/MarkedName';
 
 export type RejectMode = 'reject' | 'withdraw';
 
@@ -69,7 +70,7 @@ export function RejectDialog({
         d ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
-              {decisionTitle(d)}: {who}
+              {decisionTitle(d)}: <MarkedName name={who} />
             </Typography>
             {mode === 'withdraw' ? (
               <Typography>

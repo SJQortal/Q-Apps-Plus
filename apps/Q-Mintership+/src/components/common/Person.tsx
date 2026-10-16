@@ -12,6 +12,7 @@ import CheckOutlinedIcon from '@mui/icons-material/CheckOutlined';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { shortAddress } from '../../utils/format';
 import { copyText } from '../../utils/links';
+import { MarkedName } from './MarkedName';
 import { NameAvatar } from './NameAvatar';
 import { usePersonLinks } from './personLinks';
 
@@ -67,7 +68,7 @@ export function PersonChip({
         ...(compactOnPhone ? { fontSize: { xs: 14 }, lineHeight: { xs: 1.25, sm: 1.3 } } : {}),
       }}
     >
-      {shown.label}
+      <MarkedName name={shown.name}>{shown.label}</MarkedName>
     </Typography>
   );
   return (
@@ -215,7 +216,7 @@ export function AvatarStack({
         {shown.map((p, i) => (
           <span key={p.address}>
             {i > 0 ? (i === shown.length - 1 && !rest ? ' and ' : ', ') : ''}
-            <ShownName address={p.address} name={p.name} />
+            <PersonName address={p.address} name={p.name} />
           </span>
         ))}
         {rest > 0 ? ` and ${rest} more` : ''}
@@ -224,8 +225,13 @@ export function AvatarStack({
   );
 }
 
-function ShownName({ address, name }: { address: string; name?: string | null }) {
-  return <>{useDisplayName(address, name).label}</>;
+/**
+ * A person's name as plain text (or their short address), crossed out when
+ * MarkedName says so: for a name inside a line the caller styles.
+ */
+export function PersonName({ address, name }: { address: string; name?: string | null }) {
+  const shown = useDisplayName(address, name);
+  return <MarkedName name={shown.name}>{shown.label}</MarkedName>;
 }
 
 function StackedAvatar({
@@ -240,7 +246,7 @@ function StackedAvatar({
   const shown = useDisplayName(address, name);
   const links = usePersonLinks();
   return (
-    <Tooltip title={shown.label}>
+    <Tooltip title={<MarkedName name={shown.name}>{shown.label}</MarkedName>}>
       <Link
         component={RouterLink}
         to={links.to(address)}

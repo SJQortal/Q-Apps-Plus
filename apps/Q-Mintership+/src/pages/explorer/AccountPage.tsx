@@ -53,6 +53,7 @@ import OverviewTab from './account/OverviewTab';
 import { refreshAccount } from './account/refreshAccount';
 import { ACCOUNT_TABS, AT_TABS, panelIdOf, tabIdOf } from './account/tabIds';
 import { AT_ACCOUNT, INVALID_ADDRESS, UNUSED_ADDRESS } from './explorerWords';
+import { MarkedName } from '../../components/common/MarkedName';
 
 // Each tab's code loads when it is first opened.
 const TAB_PANELS: Record<ExplorerTab, ComponentType<{ address: string }>> = {
@@ -78,7 +79,11 @@ function whoKind(who: string): Who {
 function Quoted({ name }: { name: string }) {
   return (
     <>
-      “<bdi dir="auto">{visibleName(name)}</bdi>”
+      “
+      <bdi dir="auto">
+        <MarkedName name={name}>{visibleName(name)}</MarkedName>
+      </bdi>
+      ”
     </>
   );
 }
@@ -164,6 +169,8 @@ export default function AccountPage() {
 
   // ---- What the page says, by state. ----
   let title = 'Account';
+  /** The name the title is, as published (crossed out when MarkedName says so). */
+  let titleName: string | null = null;
   let subtitle: string | undefined;
   let body: React.ReactNode;
   let showTabs = false;
@@ -186,6 +193,7 @@ export default function AccountPage() {
   } else if (kind === 'name') {
     if (nameQuery.isError) {
       title = visibleName(who);
+      titleName = who;
       body = (
         <ErrorState
           title="Couldn't look up this name."
@@ -212,6 +220,7 @@ export default function AccountPage() {
     } else {
       // Looking it up, or about to switch to its owner.
       title = visibleName(who);
+      titleName = who;
       body = <HeroSkeleton />;
     }
   } else if (kind === 'at') {
@@ -247,6 +256,7 @@ export default function AccountPage() {
     const name = primary.data ?? null;
     const label = name ? visibleName(name) : shortAddress(account.address);
     title = label;
+    titleName = name;
     if (primary.data === null && names.data)
       subtitle = names.data.names.length ? 'No primary name' : 'No registered name';
     showTabs = true;
@@ -284,7 +294,13 @@ export default function AccountPage() {
 
   return (
     <PersonLinkContext value={EXPLORER_PERSON_LINKS}>
-      <PageHeader title={title} subtitle={subtitle} back={PATHS.explorer} actions={actions}>
+      <PageHeader
+        title={title}
+        heading={titleName ? <MarkedName name={titleName}>{title}</MarkedName> : undefined}
+        subtitle={subtitle}
+        back={PATHS.explorer}
+        actions={actions}
+      >
         {showTabs && tabsInHeader ? tabBar : null}
       </PageHeader>
       <PageBody $maxWidth={WIDE_PAGE}>

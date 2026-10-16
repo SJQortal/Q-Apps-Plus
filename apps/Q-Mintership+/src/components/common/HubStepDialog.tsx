@@ -48,7 +48,7 @@ export interface StepRunResult {
 export interface HubStepDialogProps {
   open: boolean;
   onClose: () => void;
-  title: string;
+  title: ReactNode;
   /** What will happen, in plain words. */
   intro?: ReactNode;
   steps: HubStep[];

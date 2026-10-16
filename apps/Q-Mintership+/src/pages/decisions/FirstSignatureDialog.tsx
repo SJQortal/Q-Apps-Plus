@@ -17,6 +17,8 @@ import { firstSignature, type FirstSignatureOutcome } from '../../writes/flows';
 import type { Signer } from '../../writes/runner';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { secondStepProblem, signingWindowText } from './decisionUi';
+import { MarkedName } from '../../components/common/MarkedName';
+import { withMarkedName } from '../../components/common/markedText';
 
 export interface FirstSignatureFacts {
   needed: number;
@@ -52,7 +54,7 @@ export function FirstSignatureDialog({
         onClose();
         setPartial(null);
       }}
-      title={`First approval: ${nominee.label}`}
+      title={withMarkedName(`First approval: ${nominee.label}`, nominee.label)}
       intro={
         <>
           <Typography>
@@ -74,7 +76,7 @@ export function FirstSignatureDialog({
           title: 'Create the nomination on chain',
           detail: (
             <Typography variant="body2">
-              Hub shows the invitee ({nominee.label}) and the group MINTER.
+              Hub shows the invitee (<MarkedName name={nominee.label} />) and the group MINTER.
             </Typography>
           ),
           feeTxType: 'GROUP_INVITE',

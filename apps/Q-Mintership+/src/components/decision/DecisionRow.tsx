@@ -19,6 +19,7 @@ import { NameAvatar } from '../common/NameAvatar';
 import { ProgressRing } from '../common/ProgressRing';
 import { DecisionPhaseChip } from '../common/Section';
 import { AnswerChip, SigningClock } from './DecisionParts';
+import { MarkedName } from '../common/MarkedName';
 
 export function DecisionRow({
   decision: d,
@@ -56,7 +57,7 @@ export function DecisionRow({
       <NameAvatar name={d.subject ? subject.name : null} size={36} />
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
-          {decisionTitle(d)}: {who}
+          {decisionTitle(d)}: <MarkedName name={who} />
           {d.tally ? (
             <span className="qmp-visually-hidden">
               . {d.tally.approvalCount} of {d.tally.needed} approvals.

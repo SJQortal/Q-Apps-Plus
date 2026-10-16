@@ -13,6 +13,7 @@ import { formatCount } from '../../../../utils/format';
 import { FOCUSABLE_ROW_SX, useShowMore } from '../names/useShowMore';
 import { alsoChecked, namesLead, NO_NAME_RECORDS } from './mintershipWords';
 import { NameWithAvatar } from '../../../../components/explorer/NameWithAvatar';
+import { MarkedName } from '../../../../components/common/MarkedName';
 
 /** Rows a list shows before "Show more". */
 export const SHOWN_STEP = 20;
@@ -67,7 +68,7 @@ export function IsolatedName({
   return (
     <>
       <bdi dir="auto" style={{ fontWeight: 600 }}>
-        {label ?? ''}
+        <MarkedName name={name}>{label ?? ''}</MarkedName>
       </bdi>
       {suffix}
     </>

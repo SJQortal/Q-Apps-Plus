@@ -20,6 +20,7 @@ import { useDisplayName } from '../../hooks/useDisplayName';
 import { useQuery } from '../../hooks/useQuery';
 import { explorerTxPath } from '../../routes/paths';
 import { groupWords, type TxPart } from '../../rules/explorer/txWords';
+import { MarkedName } from '../common/MarkedName';
 
 export function GroupName({ groupId }: { groupId: number }) {
   const known = groupWords(groupId);
@@ -47,10 +48,10 @@ export function GroupName({ groupId }: { groupId: number }) {
 }
 
 function PlainPerson({ address }: { address: string }) {
-  const { label } = useDisplayName(address);
+  const { name, label } = useDisplayName(address);
   return (
     <bdi dir="auto" style={{ fontWeight: 600 }}>
-      {label}
+      <MarkedName name={name}>{label}</MarkedName>
     </bdi>
   );
 }

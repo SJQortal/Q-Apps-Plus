@@ -43,6 +43,7 @@ import { displayName, formatCount, formatDate, formatRelative, plural } from '..
 import type { Proposal } from '../../writes/flows';
 import { pendingWritesAtom, usePendingWrite, writeKeys } from '../../writes/optimistic';
 import type { Signer } from '../../writes/runner';
+import { withMarkedName } from '../../components/common/markedText';
 
 export function StaleInvites({
   signer,
@@ -265,7 +266,10 @@ function StaleRow({
         <PersonChip
           address={row.invitee}
           size={36}
-          secondary={`Invited by ${inviter.label}${when ? `, ${when}` : ''}`}
+          secondary={withMarkedName(
+            `Invited by ${inviter.label}${when ? `, ${when}` : ''}`,
+            inviter.label
+          )}
         />
         {recent ? (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>

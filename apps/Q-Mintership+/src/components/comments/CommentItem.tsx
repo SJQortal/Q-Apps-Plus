@@ -31,6 +31,8 @@ import {
   type AnswerBadgeKind,
   type AnswerBadges,
 } from './answerBadges';
+import { MarkedName } from '../common/MarkedName';
+import { withMarkedName } from '../common/markedText';
 
 export interface CommentViewer {
   signedIn: boolean;
@@ -145,7 +147,7 @@ function ReplyQuote({ comment: c }: { comment: CommentView }) {
         component="span"
         sx={{ fontWeight: 600, color: 'text.primary', overflowWrap: 'anywhere' }}
       >
-        Replying to {c.replyToName}
+        Replying to <MarkedName name={c.replyToName} />
       </Typography>
       {c.replyToExcerpt ? (
         <Typography
@@ -267,7 +269,9 @@ export function CommentItem(props: CommentItemProps) {
     body = (
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 1 }}>
         <Muted>
-          {c.hidden ? 'Hidden by a Minter Admin.' : `You muted ${c.name} on this device.`}
+          {c.hidden
+            ? 'Hidden by a Minter Admin.'
+            : withMarkedName(`You muted ${c.name} on this device.`, c.name)}
         </Muted>
         <Button
           size="small"

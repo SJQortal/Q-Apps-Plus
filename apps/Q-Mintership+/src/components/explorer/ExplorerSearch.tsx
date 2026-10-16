@@ -45,6 +45,7 @@ import { explorerAccountPath, explorerTxPath } from '../../routes/paths';
 import { visibleName } from '../../rules/explorer/nameNotes';
 import { useRecent, type NameMatch } from '../../state/explorer';
 import { plural, shortAddress } from '../../utils/format';
+import { MarkedName } from '../common/MarkedName';
 
 /** How long typing must pause before names are suggested. */
 export const SEARCH_DEBOUNCE_MS = 250;
@@ -100,7 +101,11 @@ function foundWords(names: number, owners: number): string {
 
 /** A name, isolated from the text around it, its invisible characters shown. */
 function NameText({ name }: { name: string }) {
-  return <bdi dir="auto">{visibleName(name)}</bdi>;
+  return (
+    <bdi dir="auto">
+      <MarkedName name={name}>{visibleName(name)}</MarkedName>
+    </bdi>
+  );
 }
 
 /** The name's first letter in the avatar's circle, without loading its image (while typing). */

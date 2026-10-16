@@ -64,6 +64,7 @@ import { ConsideringDialog } from '../../components/decision/ConsideringDialog';
 import { peekQuery } from '../../data/query';
 import { signerOf } from '../../state/session';
 import { displayName } from '../../utils/format';
+import { withMarkedName } from '../../components/common/markedText';
 
 /** The card's section heading (Section id "decision-card"), waiting or decided. */
 const CARD_HEADING_ID = 'decision-card-title';
@@ -117,7 +118,10 @@ export default function DecisionPage() {
         title="Decision"
         subtitle={
           titleFacts
-            ? `${decisionTitle(titleFacts)}${subject ? `: ${who.label}` : ''}`
+            ? withMarkedName(
+                `${decisionTitle(titleFacts)}${subject ? `: ${who.label}` : ''}`,
+                subject ? who.label : null
+              )
             : 'One MINTER decision'
         }
         back={PATHS.decisions}

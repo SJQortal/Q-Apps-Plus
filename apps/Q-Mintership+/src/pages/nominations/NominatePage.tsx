@@ -71,6 +71,8 @@ import { publishNomination } from '../../writes/flows';
 import { CandidatePicker, type PickedCandidate } from './CandidatePicker';
 import { CANDIDATE_KEY, candidateBlock, loadCandidate, type Candidate } from './candidate';
 import { isStillOpenForSupport } from './filters';
+import { MarkedName } from '../../components/common/MarkedName';
+import { withMarkedName } from '../../components/common/markedText';
 
 export default function NominatePage() {
   const session = useSession();
@@ -482,7 +484,11 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
         intro={
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Typography>
-              You’re nominating <strong>{shownName}</strong> for MINTER.
+              You’re nominating{' '}
+              <strong>
+                <MarkedName name={shownName} />
+              </strong>{' '}
+              for MINTER.
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Your reason
@@ -760,8 +766,8 @@ function WhatHappensNext({ name, named }: { name: string; named: boolean }) {
         >
           <li>
             <Typography variant="body2">
-              <strong>{named ? `${name} accepts.` : 'They accept.'}</strong> In Q-Mintership+ they
-              press Accept, which sends their join request (
+              <strong>{named ? withMarkedName(`${name} accepts.`, name) : 'They accept.'}</strong>{' '}
+              In Q-Mintership+ they press Accept, which sends their join request (
               <FeeNote txType="JOIN_GROUP" prefix="fee" />
               ), so an approval later makes them a member at once. You get a link to send them.
             </Typography>
@@ -875,7 +881,7 @@ function Done({
       {now ? <NominationCard nomination={published.preview} now={now} /> : null}
       <Card sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         <Typography component="h2" sx={{ fontSize: 18, fontWeight: 700 }}>
-          Let {name} know
+          Let <MarkedName name={name} /> know
         </Typography>
         {published.preview.hasJoinRequest ? (
           <Typography variant="body2" color="text.secondary">

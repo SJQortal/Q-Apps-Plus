@@ -45,6 +45,7 @@ import { LegacyTextView } from './parts/LegacyText';
 import { QortalLinks } from '../../components/common/QortalLinks';
 import { PersonByName } from './parts/PersonByName';
 import { ListCard } from './parts/TimelineList';
+import { MarkedName } from '../../components/common/MarkedName';
 
 const COMMENTS_PAGE = 20;
 
@@ -440,7 +441,8 @@ function CommentItem({ row }: { row: LegacyCommentRow }) {
           }}
         >
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            Replying to {comment.replyTo.author ?? 'a comment'}
+            Replying to{' '}
+            {comment.replyTo.author ? <MarkedName name={comment.replyTo.author} /> : 'a comment'}
           </Typography>
           {comment.replyTo.excerpt ? (
             <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>

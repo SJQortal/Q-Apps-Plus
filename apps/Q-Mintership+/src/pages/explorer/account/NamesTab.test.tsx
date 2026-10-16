@@ -101,8 +101,9 @@ describe('Names: every name', () => {
       "This name starts with the same characters as its owner's address (QjyA6…)."
     );
     expect(rows[5]).toHaveTextContent('This name is written like an address.');
-    // The blank character shows as "·".
-    expect(rowNames(list)[6]).toBe('Cora·Blank');
+    // The blank character shows as "·", and the name is crossed out (a screen reader hears why).
+    expect(rowNames(list)[6]).toBe('Cora·Blank (written with a blank Braille character)');
+    expect(rows[6].querySelector('bdi s')).not.toBeNull();
     expect(rows[6]).toHaveTextContent('This name contains an invisible or blank character.');
 
     await expectNoAxeViolations(container);

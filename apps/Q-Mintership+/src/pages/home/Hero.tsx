@@ -15,6 +15,7 @@ import { useDisplayName } from '../../hooks/useDisplayName';
 import { personPath } from '../../routes/paths';
 import { copyText } from '../../utils/links';
 import { readable } from '../../utils/readable';
+import { MarkedName } from '../../components/common/MarkedName';
 
 const rise = keyframes`
   from { opacity: 0; transform: translate3d(0, 6px, 0); }
@@ -161,7 +162,7 @@ export function PersonLink({ address, name }: { address: string; name?: string |
       underline="always"
       sx={{ fontWeight: 600, overflowWrap: 'anywhere', color: readable('primary') }}
     >
-      {shown.label}
+      <MarkedName name={shown.name}>{shown.label}</MarkedName>
     </Link>
   );
 }

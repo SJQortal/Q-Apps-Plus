@@ -6,6 +6,7 @@
  * bigger one).
  */
 import { NameWithAvatar } from '../../../../components/explorer/NameWithAvatar';
+import { MarkedName } from '../../../../components/common/MarkedName';
 import { visibleName } from '../../../../rules/explorer/nameNotes';
 
 export function NameText({
@@ -18,6 +19,10 @@ export function NameText({
   avatar?: boolean;
 }) {
   if (avatar) return <NameWithAvatar name={name} quoted={quoted} strong={false} />;
-  const shown = <bdi dir="auto">{visibleName(name)}</bdi>;
+  const shown = (
+    <bdi dir="auto">
+      <MarkedName name={name}>{visibleName(name)}</MarkedName>
+    </bdi>
+  );
   return quoted ? <>“{shown}”</> : shown;
 }

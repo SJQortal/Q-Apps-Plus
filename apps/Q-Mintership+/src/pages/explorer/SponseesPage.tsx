@@ -39,6 +39,7 @@ import { useFocusNewRows } from './account/names/useShowMore';
 import { INVALID_ADDRESS } from './explorerWords';
 import { SetChecks } from './sets/SetChecks';
 import { SET_LIST_SX, SponseeRowItem } from './sets/SponseeRows';
+import { withMarkedName } from '../../components/common/markedText';
 
 /** Rows shown before "Show more" (each looks up a name and, near the screen, its account). */
 const ROWS = 20;
@@ -122,7 +123,7 @@ export default function SponseesPage() {
   else if (!sponsees.length)
     body = (
       <EmptyState
-        title={`${label} made no reward shares to other accounts.`}
+        title={withMarkedName(`${label} made no reward shares to other accounts.`, name, label)}
         description={
           links.data?.truncated
             ? 'Its newest 500 reward shares, level moves and name sales were read.'
@@ -200,6 +201,7 @@ export default function SponseesPage() {
     <PersonLinkContext value={EXPLORER_PERSON_LINKS}>
       <PageHeader
         title={title}
+        heading={withMarkedName(title, name, label)}
         back={PATHS.explorer}
         actions={
           valid ? (

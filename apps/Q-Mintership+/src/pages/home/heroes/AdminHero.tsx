@@ -25,6 +25,7 @@ import {
   useSendingSignature,
   type NeededSignatures,
 } from '../homeData';
+import { MarkedName } from '../../../components/common/MarkedName';
 
 function MostUrgent({ decision: d, now }: { decision: Decision; now: ChainNow }) {
   const subject = useDisplayName(d.subject ?? '', d.subject ? undefined : null);
@@ -35,7 +36,14 @@ function MostUrgent({ decision: d, now }: { decision: Decision; now: ChainNow })
   return (
     <HeroText>
       The most urgent, &ldquo;{decisionTitle(d)}
-      {d.subject ? `: ${subject.label}` : ''}&rdquo;,{' '}
+      {d.subject ? (
+        <>
+          : <MarkedName name={subject.name}>{subject.label}</MarkedName>
+        </>
+      ) : (
+        ''
+      )}
+      &rdquo;,{' '}
       {left !== null ? (
         <>
           has <Num>{formatDuration(left, { precise: true })}</Num> left to approve.

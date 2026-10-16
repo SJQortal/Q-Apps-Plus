@@ -11,6 +11,7 @@ import { publishConsidering } from '../../writes/flows';
 import type { Signer } from '../../writes/runner';
 import { HubStepDialog } from '../common/HubStepDialog';
 import type { ConsideringRequest } from './Considering';
+import { withMarkedName } from '../common/markedText';
 
 /** Publish Considering (with an optional note), or "No longer considering". */
 export function ConsideringDialog({
@@ -56,7 +57,7 @@ export function ConsideringDialog({
         request ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
             <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
-              {request.label}
+              {withMarkedName(request.label, request.name)}
             </Typography>
             {clear ? (
               <Typography>

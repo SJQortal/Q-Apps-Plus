@@ -15,6 +15,7 @@ import { explorerAccountPath, explorerComparePath } from '../../../routes/paths'
 import { visibleName } from '../../../rules/explorer/nameNotes';
 import { useComparePicks, useTrail } from '../../../state/explorer';
 import { shortAddress } from '../../../utils/format';
+import { MarkedName } from '../../../components/common/MarkedName';
 
 /** Crumbs past this many have their middle collapsed on phones. */
 const COLLAPSE_FROM = 4;
@@ -46,7 +47,7 @@ function Crumb({ address, current }: { address: string; current: boolean }) {
     <>
       <NameAvatar name={name} size={20} />
       <Box component="bdi" dir="auto" sx={LABEL_SX}>
-        {label}
+        <MarkedName name={name}>{label}</MarkedName>
       </Box>
     </>
   );

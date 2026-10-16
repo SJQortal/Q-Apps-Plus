@@ -11,6 +11,7 @@ import { publishCommunityVote } from '../../writes/flows';
 import type { Signer } from '../../writes/runner';
 import { HubStepDialog } from '../common/HubStepDialog';
 import { ResponsiveDialog } from '../common/ResponsiveDialog';
+import { MarkedName } from '../common/MarkedName';
 
 export interface CommunityVoteDialogProps {
   open: boolean;
@@ -62,7 +63,7 @@ export function CommunityVoteDialog({
       intro={
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
-            Nomination of {label}
+            Nomination of <MarkedName name={label} />
           </Typography>
           <Typography>
             Your vote tells the Minter Admins how the community feels about this nomination. It’s

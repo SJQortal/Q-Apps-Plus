@@ -344,15 +344,20 @@ function DecisionsQueue() {
   };
   const selectedList = signable.filter((d) => selected.has(d.signature));
 
-  const labelFor = (d: Decision) => {
-    if (!d.subject) return `${decisionTitle(d)} (Core doesn’t say for whom)`;
+  const nameFor = (d: Decision) => {
+    if (!d.subject) return null;
     const name =
       nominationFor(d)?.nomineeName ??
       members.get(d.subject)?.primaryName ??
       adminNames.get(d.subject) ??
       peekQuery<string | null>(`name:${d.subject}`) ??
       null;
-    return `${decisionTitle(d)}: ${displayName(name, d.subject)}`;
+    return displayName(name, d.subject);
+  };
+  const labelFor = (d: Decision) => {
+    const name = nameFor(d);
+    if (!name) return `${decisionTitle(d)} (Core doesn’t say for whom)`;
+    return `${decisionTitle(d)}: ${name}`;
   };
 
   const bySignature = useMemo(
@@ -855,10 +860,15 @@ function DecisionsQueue() {
         beforeStart={bulkMustCheck ? bulkAck.confirm : undefined}
         action="SIGN_TRANSACTION"
         feeTxType="GROUP_APPROVAL"
-        items={(bulkList ?? []).map((d) => ({ key: d.signature, label: labelFor(d) }))}
+        items={(bulkList ?? []).map((d) => ({
+          key: d.signature,
+          label: labelFor(d),
+          name: nameFor(d),
+        }))}
         leftOut={doubles.map((d) => ({
           key: d.signature,
           label: labelFor(d),
+          name: nameFor(d),
           reason: d.double ? doubleLeftOutText({ kind: d.kind, double: d.double }) : '',
         }))}
         confirmLabel="Continue to Hub"
@@ -947,14 +957,17 @@ function WaitingConsidering({
     { myAddress }
   );
   if (!mine || !publishTarget) return null;
-  const label = `Nomination of ${displayName(n.nomineeName, n.nominee)}`;
+  const name = displayName(n.nomineeName, n.nominee);
+  const label = `Nomination of ${name}`;
   return (
     <ConsideringControls
       mine={mine}
       label={label}
       canStart
-      onSet={() => onConsider({ target: publishTarget, mode: 'set', label, nominee: true })}
-      onClear={() => onConsider({ target: publishTarget, mode: 'clear', label, nominee: true })}
+      onSet={() => onConsider({ target: publishTarget, mode: 'set', label, name, nominee: true })}
+      onClear={() =>
+        onConsider({ target: publishTarget, mode: 'clear', label, name, nominee: true })
+      }
     />
   );
 }

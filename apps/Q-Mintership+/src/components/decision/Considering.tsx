@@ -87,6 +87,8 @@ export interface ConsideringRequest {
   mode: 'set' | 'clear';
   /** What it is about, e.g. "Add to MINTER: bob+builder". */
   label: string;
+  /** The name in `label`, as it shows there (crossed out when MarkedName says so). */
+  name?: string | null;
   /** It is about a nominee: a waiting nomination or an invite. */
   nominee?: boolean;
   /** The admin's latest answer is a rejection: they are reconsidering it. */

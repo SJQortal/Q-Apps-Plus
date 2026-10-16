@@ -20,6 +20,7 @@ import { hasImpact, type ShiftScenario } from '../../rules/targetShift';
 import { TargetImpact } from './TargetImpact';
 import type { LabelOf } from './targetShiftUi';
 import { useAcknowledge } from './useAcknowledge';
+import { MarkedName } from '../../components/common/MarkedName';
 
 export function SignDialog({
   decision: d,
@@ -43,7 +44,11 @@ export function SignDialog({
   const shift = impact && labelOf ? impact : null;
   const ack = useAcknowledge(d && shift ? d.signature : null);
   const mustCheck = hasImpact(shift);
-  const who = d?.subject ? subject.label : 'an approved invite (Core doesn’t say for whom)';
+  const who = d?.subject ? (
+    <MarkedName name={subject.name}>{subject.label}</MarkedName>
+  ) : (
+    'an approved invite (Core doesn’t say for whom)'
+  );
   const tally = d?.tally;
   return (
     <HubStepDialog
@@ -59,9 +64,15 @@ export function SignDialog({
             </Typography>
             <Typography sx={{ mt: 0.5 }}>
               Approving says yes to this proposal
-              {d.creatorAddress ? `, which ${proposer.label} made` : ''}. The change itself is
-              already on chain, waiting for the Minter Admins: you don’t make it yourself. Once
-              enough Minter Admins have approved, Core applies it by itself.
+              {d.creatorAddress ? (
+                <>
+                  , which <MarkedName name={proposer.name}>{proposer.label}</MarkedName> made
+                </>
+              ) : (
+                ''
+              )}
+              . The change itself is already on chain, waiting for the Minter Admins: you don’t make
+              it yourself. Once enough Minter Admins have approved, Core applies it by itself.
             </Typography>
             <Typography sx={{ mt: 0.5 }}>
               Your approval counts once it is in a block

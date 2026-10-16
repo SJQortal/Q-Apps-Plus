@@ -6,6 +6,7 @@
  * can't change how the line reads, with invisible characters shown as "·".
  */
 import { Box } from '@mui/material';
+import { MarkedName } from '../common/MarkedName';
 import { NameAvatar } from '../common/NameAvatar';
 import { visibleName } from '../../rules/explorer/nameNotes';
 
@@ -40,7 +41,7 @@ export function NameWithAvatar({
       </Box>
       {quoted ? '“' : null}
       <bdi dir="auto" style={strong ? { fontWeight: 600 } : undefined}>
-        {visibleName(name)}
+        <MarkedName name={name}>{visibleName(name)}</MarkedName>
       </bdi>
       {quoted ? '”' : null}
       {suffix}

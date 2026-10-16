@@ -11,6 +11,7 @@ import { useDisplayName } from '../../hooks/useDisplayName';
 import { publishSupport } from '../../writes/flows';
 import type { Signer } from '../../writes/runner';
 import { HubStepDialog } from '../common/HubStepDialog';
+import { MarkedName } from '../common/MarkedName';
 
 export interface SupportDialogProps {
   open: boolean;
@@ -43,9 +44,12 @@ export function SupportDialog({
       intro={
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           <Typography>
-            Your support shows on the nomination of <strong>{who}</strong> as “also supported by{' '}
-            {signer?.name ?? 'you'}”. It tells the Minter Admins that more than one experienced
-            minter backs them.
+            Your support shows on the nomination of{' '}
+            <strong>
+              <MarkedName name={who} />
+            </strong>{' '}
+            as “also supported by {signer?.name ?? 'you'}”. It tells the Minter Admins that more
+            than one experienced minter backs them.
           </Typography>
           <TextField
             label="A note (optional)"

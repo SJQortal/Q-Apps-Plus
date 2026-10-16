@@ -27,6 +27,7 @@ import { hasImpact, type ShiftScenario } from '../../rules/targetShift';
 import { TargetImpact } from './TargetImpact';
 import type { LabelOf } from './targetShiftUi';
 import { useAcknowledge } from './useAcknowledge';
+import { withMarkedName } from '../../components/common/markedText';
 
 /** The numbers a proposal's words need. */
 export interface ProposalFacts {
@@ -109,7 +110,11 @@ export function ProposeSignDialog({
   const proposeStep: HubStep = {
     action: info.action,
     title: 'Propose it',
-    detail: <Typography variant="body2">Hub shows {shown} and the group MINTER.</Typography>,
+    detail: (
+      <Typography variant="body2">
+        Hub shows {withMarkedName(shown, who)} and the group MINTER.
+      </Typography>
+    ),
     feeTxType: txType,
   };
   const signStep: HubStep = {
@@ -139,7 +144,7 @@ export function ProposeSignDialog({
       }}
       onBack={onBack}
       returnFocus={returnFocus}
-      title={title}
+      title={withMarkedName(title, who)}
       intro={
         <>
           {details}

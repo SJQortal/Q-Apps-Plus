@@ -56,6 +56,7 @@ import type { MyStatus } from '../../rules/status';
 import { signerOf, useSession } from '../../state/session';
 import { formatBlock, formatDate } from '../../utils/format';
 import { ListCard } from '../history/parts/TimelineList';
+import { MarkedName } from '../../components/common/MarkedName';
 
 export default function NominationPage() {
   const { address: param = '' } = useParams();
@@ -69,7 +70,7 @@ function Shell({
   address,
   children,
 }: {
-  subtitle: string;
+  subtitle: ReactNode;
   address?: string;
   children: ReactNode;
 }) {
@@ -139,7 +140,7 @@ function NominationView({ address }: { address: string }) {
 
   if (nominations.isError && !nominations.data) {
     return (
-      <Shell subtitle={who.label} address={address}>
+      <Shell subtitle={<MarkedName name={who.name}>{who.label}</MarkedName>} address={address}>
         <ErrorState
           title="Couldn’t load this nomination."
           error={nominations.error}
@@ -150,7 +151,7 @@ function NominationView({ address }: { address: string }) {
   }
   if (!nominations.data || !chain.data) {
     return (
-      <Shell subtitle={who.label} address={address}>
+      <Shell subtitle={<MarkedName name={who.name}>{who.label}</MarkedName>} address={address}>
         <CardSkeleton lines={4} ring />
         <ListSkeleton count={2} label="Loading the rounds" />
       </Shell>
@@ -160,7 +161,7 @@ function NominationView({ address }: { address: string }) {
   const nothing = !current && rounds !== null && rounds.length === 0;
   const nominator = current?.nomination?.publisher.address ?? null;
   return (
-    <Shell subtitle={who.label} address={address}>
+    <Shell subtitle={<MarkedName name={who.name}>{who.label}</MarkedName>} address={address}>
       <PersonChip address={address} size={40} secondary="Nominee" />
 
       {nothing ? (

@@ -63,6 +63,7 @@ import { isRecentInvite } from './staleRules';
 import type { ShiftScenario } from '../../rules/targetShift';
 import type { LabelOf } from './targetShiftUi';
 import { focusDialogTitle } from '../../utils/focus';
+import { markedNameNote } from '../../rules/markedName';
 
 export interface ProposeContext extends ProposalFacts {
   totalAdmins: number;
@@ -513,6 +514,7 @@ function AdminPicker({
       {signers.map((s) => (
         <option key={s.member} value={s.member}>
           {displayName(s.primaryName, s.member)}
+          {markedNameNote(s.primaryName)}
           {s.member === self ? ' (you)' : ''}
         </option>
       ))}
@@ -559,7 +561,8 @@ function BanOption({
   const name = useDisplayName(address);
   return (
     <option value={address}>
-      {name.label}, banned {formatRelative(banned)}
+      {name.label}
+      {markedNameNote(name.name)}, banned {formatRelative(banned)}
       {reason ? `: ${reason}` : ''}
     </option>
   );
@@ -660,7 +663,8 @@ function InviteOption({
   const name = useDisplayName(address);
   return (
     <option value={address}>
-      {name.label}, invited by {inviter}
+      {name.label}
+      {markedNameNote(name.name)}, invited by {inviter}
       {approvedAt ? `, approved ${formatRelative(approvedAt)}` : ''}
       {member ? ', already a member' : ''}
     </option>

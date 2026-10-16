@@ -29,6 +29,7 @@ import { FOCUSABLE_ROW_SX, useFocusNewRows } from './account/names/useShowMore';
 import { INVALID_ADDRESS } from './explorerWords';
 import { SET_LIST_SX } from './sets/SponseeRows';
 import { fundedSummary } from './sets/words';
+import { withMarkedName } from '../../components/common/markedText';
 
 /** Rows shown before "Show more". */
 const ROWS = 20;
@@ -86,7 +87,11 @@ export default function FundedPage() {
     );
   else if (!funded.data) body = <ListSkeleton count={3} label="Checking its first payments" />;
   else if (!funded.data.paid.length)
-    body = <EmptyState title={`${label} has sent no QORT payments to other accounts.`} />;
+    body = (
+      <EmptyState
+        title={withMarkedName(`${label} has sent no QORT payments to other accounts.`, name, label)}
+      />
+    );
   else {
     const data = funded.data;
     const first = firstPaidBy(data, address);
@@ -94,11 +99,15 @@ export default function FundedPage() {
     body = (
       <>
         <Typography role="status" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
-          {data.checked === 0
-            ? `${label} paid ${plural(data.paid.length, 'account')} in its ${
-                data.truncated ? 'first ' : ''
-              }${plural(data.payments, 'payment')}. Checking whose first QORT payment it was…`
-            : fundedSummary(data, label, first.length)}
+          {withMarkedName(
+            data.checked === 0
+              ? `${label} paid ${plural(data.paid.length, 'account')} in its ${
+                  data.truncated ? 'first ' : ''
+                }${plural(data.payments, 'payment')}. Checking whose first QORT payment it was…`
+              : fundedSummary(data, label, first.length),
+            name,
+            label
+          )}
         </Typography>
         {progress ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
@@ -183,6 +192,9 @@ export default function FundedPage() {
     <PersonLinkContext value={EXPLORER_PERSON_LINKS}>
       <PageHeader
         title={valid ? `First QORT payments from ${label}` : 'First QORT payments'}
+        heading={
+          valid ? withMarkedName(`First QORT payments from ${label}`, name, label) : undefined
+        }
         back={PATHS.explorer}
         actions={
           valid ? <CopyLinkButton path={explorerFundedPath(address)} what="this list" /> : undefined

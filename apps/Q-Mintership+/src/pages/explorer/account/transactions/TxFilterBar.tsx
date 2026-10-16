@@ -30,6 +30,7 @@ import {
 import { visibleName } from '../../../../rules/explorer/nameNotes';
 import { TX_FAMILIES, txTypeLabel, typesFor } from '../../../../rules/explorer/txFamilies';
 import { formatCount } from '../../../../utils/format';
+import { markedNameNote } from '../../../../rules/markedName';
 
 const FIELD_SX = {
   flex: '1 1 170px',
@@ -180,6 +181,7 @@ export function TxFilterBar({
             {nameOptions.map((name) => (
               <option key={name} value={name}>
                 {visibleName(name)}
+                {markedNameNote(name)}
                 {name === primary ? ' (primary)' : ''}
               </option>
             ))}

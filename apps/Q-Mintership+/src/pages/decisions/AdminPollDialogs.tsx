@@ -13,6 +13,7 @@ import { formatDateTime, formatRelative, plural } from '../../utils/format';
 import type { PollAuthor, PollWrite } from '../../writes/adminPolls';
 import type { WriteStage } from '../../writes/runner';
 import { ADVISORY, CHANGE_WARN_MS, VOTE_LABEL, encryptedCheck, encryptedTo } from './adminPollUi';
+import { MarkedName } from '../../components/common/MarkedName';
 
 type Publish = (onStage: (stage: WriteStage) => void) => Promise<PollWrite>;
 type ReturnFocus = () => HTMLElement | null;
@@ -213,7 +214,7 @@ export function PollCommentDialog({
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           {replyingTo ? (
             <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-              Replying to {replyingTo}
+              Replying to <MarkedName name={replyingTo} />
             </Typography>
           ) : null}
           <Box

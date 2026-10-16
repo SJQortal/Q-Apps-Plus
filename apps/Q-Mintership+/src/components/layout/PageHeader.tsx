@@ -52,6 +52,8 @@ const Header = styled('header', {
 
 export interface PageHeaderProps {
   title: string;
+  /** What the heading shows, when not `title` itself (a crossed-out name: MarkedName). */
+  heading?: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
   /** Show Back; the value is where Back goes when the app was opened on this page. */
@@ -60,7 +62,7 @@ export interface PageHeaderProps {
   children?: ReactNode;
 }
 
-export function PageHeader({ title, subtitle, actions, back, children }: PageHeaderProps) {
+export function PageHeader({ title, heading, subtitle, actions, back, children }: PageHeaderProps) {
   const page = pageKeyOf(useLocation().pathname);
   const titleRef = useRef<HTMLHeadingElement>(null);
 
@@ -106,7 +108,7 @@ export function PageHeader({ title, subtitle, actions, back, children }: PageHea
           }}
           noWrap
         >
-          {title}
+          {heading ?? title}
         </Typography>
         {subtitle && !compact ? (
           <Typography variant="body2" color="text.secondary" noWrap>

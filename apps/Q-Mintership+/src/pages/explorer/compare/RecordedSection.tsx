@@ -8,13 +8,13 @@
  */
 import { Box, Typography } from '@mui/material';
 import { Section } from '../../../components/common/Section';
-import { useDisplayName } from '../../../hooks/useDisplayName';
 import { checkedNoneLine, PAIR_CHECK_WORDS, type PairCheck } from '../../../rules/explorer/compare';
 import { PAIR_ANCHOR_SX, pairAnchorId } from './compareView';
 import { FindingRow } from './FindingRow';
 import { LetterBadge } from './letters';
 import { FailedReads, LIST_SX, Note, SubHeading, Waiting } from './parts';
 import type { CompareData, PairData } from './useCompareData';
+import { PersonName } from '../../../components/common/Person';
 
 /** What a pair's reads are still out for, in words. */
 function pendingWords(pending: readonly PairCheck[]): string {
@@ -76,8 +76,6 @@ function PairBlock({
   accents: readonly string[];
 }) {
   const { i, j } = pair.pair;
-  const x = useDisplayName(pair.x).label;
-  const y = useDisplayName(pair.y).label;
   const { findings, empty, pending } = pair.result;
   const none = checkedNoneLine(empty);
   const privs = {
@@ -103,7 +101,13 @@ function PairBlock({
         <Box component="span" className="qmp-visually-hidden">
           {pair.pair.label}:{' '}
         </Box>
-        <bdi dir="auto">{x}</bdi> and <bdi dir="auto">{y}</bdi>
+        <bdi dir="auto">
+          <PersonName address={pair.x} />
+        </bdi>{' '}
+        and{' '}
+        <bdi dir="auto">
+          <PersonName address={pair.y} />
+        </bdi>
       </SubHeading>
       <Box component="ul" aria-label={`Recorded between ${pair.pair.label}`} sx={LIST_SX}>
         {findings.map((finding) => (

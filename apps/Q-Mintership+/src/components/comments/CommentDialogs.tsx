@@ -7,6 +7,8 @@ import { Box, Typography } from '@mui/material';
 import type { CommentWrite } from '../../writes/comments';
 import type { WriteStage } from '../../writes/runner';
 import { HubStepDialog } from '../common/HubStepDialog';
+import { MarkedName } from '../common/MarkedName';
+import { withMarkedName } from '../common/markedText';
 
 type Publish = (onStage: (stage: WriteStage) => void) => Promise<CommentWrite>;
 /** Where focus goes on close when the button that opened the dialog is gone. */
@@ -77,7 +79,7 @@ export function PublishCommentDialog({
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           {replyingTo ? (
             <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-              Replying to {replyingTo}
+              Replying to <MarkedName name={replyingTo} />
             </Typography>
           ) : null}
           <Box
@@ -188,9 +190,12 @@ export function HideCommentDialog({
       intro={
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           <Typography sx={{ overflowWrap: 'anywhere' }}>
-            {hide
-              ? `The comment by ${author} stays on QDN, but everyone sees it folded away as “Hidden by a Minter Admin”, with Show anyway.`
-              : `The comment by ${author} shows normally again for everyone.`}
+            {withMarkedName(
+              hide
+                ? `The comment by ${author} stays on QDN, but everyone sees it folded away as “Hidden by a Minter Admin”, with Show anyway.`
+                : `The comment by ${author} shows normally again for everyone.`,
+              author
+            )}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             This publishes a small record under your name that the app reads.{' '}

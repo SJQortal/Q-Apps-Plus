@@ -12,6 +12,7 @@ import { styled } from '@mui/material/styles';
 import { NameAvatar } from '../../components/common/NameAvatar';
 import { Section } from '../../components/common/Section';
 import { useMutedNames } from '../../state/comments';
+import { MarkedName } from '../../components/common/MarkedName';
 
 const PAGE = 20;
 /** Focus the empty note (no name left). */
@@ -75,7 +76,7 @@ export function MutedNames() {
                 <Typography
                   sx={{ flex: 1, minWidth: 0, fontWeight: 600, overflowWrap: 'anywhere' }}
                 >
-                  {name}
+                  <MarkedName name={name} />
                 </Typography>
                 <Button
                   variant="outlined"

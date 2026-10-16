@@ -42,6 +42,8 @@ import { sinceLastVisitAtom } from '../../state/notifications';
 import { formatBlock, formatRelative, plural } from '../../utils/format';
 import { PersonLink } from './Hero';
 import { focusPageTitle } from '../../components/layout/pageFocus';
+import { MarkedName } from '../../components/common/MarkedName';
+import { withMarkedName } from '../../components/common/markedText';
 
 /** Decided rows before "And N more". */
 const TOP = 3;
@@ -107,9 +109,13 @@ function Item({
 }
 
 /** "Remove from MINTER: Kai Target". */
-function useDecisionTitle(facts: Pick<Decision, 'kind' | 'subject' | 'creatorAddress'>): string {
+function useDecisionTitle(facts: Pick<Decision, 'kind' | 'subject' | 'creatorAddress'>): {
+  text: string;
+  shown: ReactNode;
+} {
   const who = useDisplayName(facts.subject ?? '', facts.subject ? undefined : null);
-  return `${decisionTitle(facts)}: ${facts.subject ? who.label : 'an approved invite'}`;
+  const text = `${decisionTitle(facts)}: ${facts.subject ? who.label : 'an approved invite'}`;
+  return { text, shown: withMarkedName(text, who.name, who.label) };
 }
 
 /** Open, not a double (rules/double.ts), and not signed (or rejected) by this admin yet. */
@@ -120,7 +126,7 @@ function waitsFor(d: Decision, publicKey: string): boolean {
 
 /** A decision's title inside a sentence. */
 function DecisionTitle({ decision: d }: { decision: Decision }) {
-  return <>{useDecisionTitle(d)}</>;
+  return <>{useDecisionTitle(d).shown}</>;
 }
 
 /** "Ban from MINTER: Ben Target; Add to MINTER: bob+builder, and 5 more". */
@@ -172,9 +178,13 @@ function NewDecisionItem({ decision: d, publicKey }: { decision: Decision; publi
     <Item
       Icon={FiberNewOutlinedIcon}
       tone="primary"
-      title={title}
+      title={title.shown}
       action={
-        <Button component={RouterLink} to={decisionPath(d.signature)} aria-label={`Open: ${title}`}>
+        <Button
+          component={RouterLink}
+          to={decisionPath(d.signature)}
+          aria-label={`Open: ${title.text}`}
+        >
           Open
         </Button>
       }
@@ -195,7 +205,7 @@ function NewNominationItem({ nomination: n }: { nomination: Nomination }) {
     <Item
       Icon={HowToRegOutlinedIcon}
       tone="primary"
-      title={`New nomination: ${shown.label}`}
+      title={withMarkedName(`New nomination: ${shown.label}`, shown.name, shown.label)}
       action={
         <Button
           component={RouterLink}
@@ -206,14 +216,17 @@ function NewNominationItem({ nomination: n }: { nomination: Nomination }) {
         </Button>
       }
     >
-      {by ? `Nominated by ${by.name} ${formatRelative(n.publishedAt)}` : 'Nominated'} · waiting for
-      a first approval
+      {by
+        ? withMarkedName(`Nominated by ${by.name} ${formatRelative(n.publishedAt)}`, by.name)
+        : 'Nominated'}{' '}
+      · waiting for a first approval
     </Item>
   );
 }
 
 function NomineeName({ nomination: n }: { nomination: Nomination }) {
-  return <>{useDisplayName(n.nominee, n.nomineeName ?? undefined).label}</>;
+  const shown = useDisplayName(n.nominee, n.nomineeName ?? undefined);
+  return <MarkedName name={shown.name}>{shown.label}</MarkedName>;
 }
 
 /** New nominations: the one, or a count and the first names. */
@@ -341,13 +354,14 @@ const MADE: Record<
 
 /** How a nomination the account made ended, with a link to it. */
 function MadeItem({ event: e }: { event: MadeEvent }) {
-  const who = useDisplayName(e.nominee, e.nomineeName ?? undefined).label;
+  const shown = useDisplayName(e.nominee, e.nomineeName ?? undefined);
+  const who = shown.label;
   const words = MADE[e.kind];
   return (
     <Item
       Icon={words.Icon}
       tone={words.tone}
-      title={words.title(who)}
+      title={withMarkedName(words.title(who), shown.name, who)}
       action={
         <Button
           component={RouterLink}

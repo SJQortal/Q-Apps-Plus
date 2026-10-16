@@ -13,6 +13,7 @@ import type { DecisionDouble } from '../../rules/double';
 import { ToneChip } from '../../components/common/Section';
 import { decisionPath } from '../../routes/paths';
 import { doubleChipText, doubleNote } from './doubleUi';
+import { withMarkedName } from '../../components/common/markedText';
 
 /** "Double", with what it means in full for screen readers; never colour alone. */
 export function DoubleChip({
@@ -67,7 +68,9 @@ export function DoubleNote({
       icon={<FileCopyOutlinedIcon aria-hidden />}
       sx={{ '& .MuiAlert-message': { minWidth: 0, width: '100%' }, overflowWrap: 'anywhere' }}
     >
-      <Typography variant="body2">{doubleNote({ ...d, double }, name, now, advice)}</Typography>
+      <Typography variant="body2">
+        {withMarkedName(doubleNote({ ...d, double }, name, now, advice), name)}
+      </Typography>
       {other ? (
         <Box sx={{ mt: 0.5, ml: -1 }}>
           <Button

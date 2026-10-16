@@ -26,6 +26,7 @@ import type { MyStatus } from '../../rules/status';
 import { formatCount } from '../../utils/format';
 import { Num } from './Hero';
 import { levelFraction, myNominations, supportable } from './homeData';
+import { withMarkedName } from '../../components/common/markedText';
 
 const MINE_MAX = 3;
 const SUPPORT_MAX = 3;
@@ -155,7 +156,11 @@ export function MemberSection({ status }: { status: MyStatus }) {
                       <PersonChip
                         address={n.nominee}
                         name={n.nomineeName ?? undefined}
-                        secondary={by ? `Nominated by ${by.name}` : 'Proposed on chain'}
+                        secondary={
+                          by
+                            ? withMarkedName(`Nominated by ${by.name}`, by.name)
+                            : 'Proposed on chain'
+                        }
                       />
                     </Box>
                     <NominationStateChip state={n.state} />

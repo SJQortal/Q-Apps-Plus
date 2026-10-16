@@ -28,10 +28,13 @@ import { ResponsiveDialog } from '../../components/common/ResponsiveDialog';
 import type { GroupTxType } from '../../data/types';
 import { HUB_DIALOGS, HUB_DIALOG_SECONDS } from '../../writes/explain';
 import type { WriteOutcome, WriteStage } from '../../writes/runner';
+import { withMarkedName } from '../../components/common/markedText';
 
 export interface BulkItem {
   key: string;
   label: string;
+  /** The name in `label`, as it shows there (crossed out when MarkedName says so). */
+  name?: string | null;
 }
 
 /** Something the run leaves out, and why ("Left out: a double, it changes nothing"). */
@@ -329,7 +332,7 @@ export function BulkDialog(props: BulkDialogProps) {
               >
                 {leftOut.map((item) => (
                   <li key={item.key}>
-                    {item.label}. {item.reason}.
+                    {withMarkedName(item.label, item.name)}. {item.reason}.
                   </li>
                 ))}
               </Box>
@@ -401,7 +404,7 @@ export function BulkDialog(props: BulkDialogProps) {
               </Box>
               <Box sx={{ minWidth: 0, flex: 1 }}>
                 <Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
-                  {i + 1}. {item.label}
+                  {i + 1}. {withMarkedName(item.label, item.name)}
                 </Typography>
                 {line ? (
                   <Typography

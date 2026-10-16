@@ -16,6 +16,7 @@ import {
 } from '../../data/nameSearch';
 import { useQuery } from '../../hooks/useQuery';
 import { shortAddress } from '../../utils/format';
+import { MarkedName } from '../../components/common/MarkedName';
 
 export interface PickedCandidate {
   address: string;
@@ -111,7 +112,7 @@ export function CandidatePicker({
               <NameAvatar name={option.name} size={32} />
               <Box sx={{ minWidth: 0 }}>
                 <Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
-                  {option.name}
+                  <MarkedName name={option.name} />
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {shortAddress(option.owner)}

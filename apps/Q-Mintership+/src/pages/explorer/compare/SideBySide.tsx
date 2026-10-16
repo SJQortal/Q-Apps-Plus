@@ -16,6 +16,7 @@ import { LetterBadge } from './letters';
 import { FailedReads } from './parts';
 import { sameForAll, type SideCell, type SideRow } from './sideRows';
 import { NameWithAvatar } from '../../../components/explorer/NameWithAvatar';
+import { MarkedName } from '../../../components/common/MarkedName';
 
 export interface SideColumn {
   address: string;
@@ -53,7 +54,7 @@ function Cell({ cell }: { cell: SideCell | undefined }) {
 }
 
 function ColumnName({ column }: { column: SideColumn }) {
-  const { label } = useDisplayName(column.address);
+  const { name, label } = useDisplayName(column.address);
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
       <LetterBadge letter={column.letter} accent={column.accent} />
@@ -62,7 +63,7 @@ function ColumnName({ column }: { column: SideColumn }) {
         dir="auto"
         sx={{ fontWeight: 700, overflowWrap: 'anywhere', minWidth: 0 }}
       >
-        {label}
+        <MarkedName name={name}>{label}</MarkedName>
       </Box>
     </Box>
   );

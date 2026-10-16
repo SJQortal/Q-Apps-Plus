@@ -18,6 +18,7 @@ import { visibleName } from '../../../rules/explorer/nameNotes';
 import type { MyStatus } from '../../../rules/status';
 import type { NameMatch } from '../../../state/explorer';
 import { minterStatusWord, openedFrom } from './accountWords';
+import { MarkedName } from '../../../components/common/MarkedName';
 
 export interface AccountHeaderProps {
   address: string;
@@ -86,7 +87,9 @@ export function AccountHeader({
         <Typography
           sx={{ display: { xs: 'block', sm: 'none' }, fontWeight: 700, overflowWrap: 'anywhere' }}
         >
-          <bdi dir="auto">{visibleName(primary)}</bdi>
+          <bdi dir="auto">
+            <MarkedName name={primary}>{visibleName(primary)}</MarkedName>
+          </bdi>
         </Typography>
       ) : null}
       {/* The whole address on a line of its own, so a phone has room for it. */}

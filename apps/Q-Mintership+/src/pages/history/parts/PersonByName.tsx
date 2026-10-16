@@ -10,6 +10,7 @@ import { getNameOwner } from '../../../data/accounts';
 import { useQuery } from '../../../hooks/useQuery';
 import { NameAvatar } from '../../../components/common/NameAvatar';
 import { PersonChip } from '../../../components/common/Person';
+import { MarkedName } from '../../../components/common/MarkedName';
 
 export function PersonByName({
   name,
@@ -32,7 +33,7 @@ export function PersonByName({
           component="span"
           sx={{ fontWeight: 600, overflowWrap: 'anywhere', display: 'block', lineHeight: 1.3 }}
         >
-          {name}
+          <MarkedName name={name} />
         </Typography>
         {secondary ? (
           <Typography

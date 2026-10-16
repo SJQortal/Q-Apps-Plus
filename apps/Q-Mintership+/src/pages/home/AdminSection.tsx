@@ -28,6 +28,7 @@ import {
   useSendingSignature,
   useUnusedInvites,
 } from './homeData';
+import { withMarkedName } from '../../components/common/markedText';
 
 const TOP = 3;
 
@@ -124,7 +125,10 @@ export function AdminSection({ publicKey }: { publicKey: string }) {
                       name={n.nomineeName ?? undefined}
                       secondary={
                         by
-                          ? `Nominated by ${by.name} ${formatRelative(n.publishedAt)}`
+                          ? withMarkedName(
+                              `Nominated by ${by.name} ${formatRelative(n.publishedAt)}`,
+                              by.name
+                            )
                           : `Nominated ${formatRelative(n.publishedAt)}`
                       }
                     />
