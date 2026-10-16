@@ -688,3 +688,33 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
     expect(fetchCallsFor('/addresses/sponsorship/')).toHaveLength(1);
   });
 });
+
+describe('Connections: as a circle', () => {
+  it('draws the linked accounts around it, sized by transactions, each opening its account', async () => {
+    const { container, user } = await open(ADDR.left);
+    await region('Recorded between them');
+    await user.click(screen.getByRole('button', { name: 'Circle' }));
+    expect(screen.getByRole('button', { name: 'Circle' })).toHaveAttribute('aria-pressed', 'true');
+    expect(window.localStorage.getItem('qmintershipplus-connections-view')).toBe('circle');
+    const circle = await region('Connections circle');
+    expect(screen.queryByRole('region', { name: 'Recorded between them' })).toBeNull();
+    const linked = await within(circle).findByRole(
+      'list',
+      { name: 'Linked accounts, the most transactions first' },
+      T
+    );
+    // Kit: paid each way, so one link with both counts, opening Kit's account in the Explorer.
+    const kit = within(linked).getByRole('link', {
+      name: /^Kit Kicked, \d+ transactions: \d+ received, \d+ sent: explore this account$/,
+    });
+    expect(kit).toHaveAttribute('href', explorerAccountPath(ADDR.kicked));
+    // What the lines mean, in words.
+    const legend = within(circle).getByRole('list', { name: 'What the lines mean' });
+    expect(readText(legend)).toBe('Received from itSent to itReward shares, minting level, names');
+    await expectNoAxeViolations(container);
+
+    await user.click(screen.getByRole('button', { name: 'List' }));
+    expect(await region('Recorded between them')).toBeInTheDocument();
+    expect(window.localStorage.getItem('qmintershipplus-connections-view')).toBe('list');
+  });
+});

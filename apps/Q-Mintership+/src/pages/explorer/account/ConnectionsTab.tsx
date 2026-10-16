@@ -3,7 +3,9 @@
  * sentence with numbers, a date and a block, opening to the transactions
  * behind it; never a verdict.
  *
- * The facts first, then the fixed neutral line and Copy findings:
+ * What was recorded between them as a list or as a circle (List and Circle,
+ * kept on this device: ConnectionsCircle), the facts first, then the fixed
+ * neutral line and Copy findings:
  * - Recorded between them: minting level moved, reward shares (its
  *   sponsor, minting with another account now, the accounts it sponsored),
  *   names bought or sold, and payments by the other account;
@@ -25,7 +27,9 @@
  */
 import { useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Box, Button, Link, Typography } from '@mui/material';
+import { Box, Button, Link, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import BubbleChartOutlinedIcon from '@mui/icons-material/BubbleChartOutlined';
+import ViewListOutlinedIcon from '@mui/icons-material/ViewListOutlined';
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
 import CheckOutlinedIcon from '@mui/icons-material/CheckOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
@@ -72,6 +76,8 @@ import {
 } from './connections/words';
 import { MintershipLinks } from './MintershipLinks';
 import { RewardShareNote } from '../../../components/explorer/RewardShareNote';
+import { ConnectionsCircle } from './connections/ConnectionsCircle';
+import { useConnectionsView, type ConnectionsView } from './connections/useConnectionsView';
 
 export interface ConnectionsTabProps {
   address: string;
@@ -201,6 +207,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const levels = useLevels(fromOthers);
   const recorded = useRecorded(data, levels);
 
+  const [view, setView] = useConnectionsView();
   const [paymentsNode, setPaymentsNode] = useState<HTMLElement | null>(null);
   const marks = useMinterMarks(useInView(paymentsNode));
   const [commonNode, setCommonNode] = useState<HTMLElement | null>(null);
@@ -318,7 +325,41 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
 
   return (
     <>
-      {showRecorded ? (
+      <ToggleButtonGroup
+        exclusive
+        size="small"
+        value={view}
+        onChange={(_, value: ConnectionsView | null) => {
+          if (value) setView(value);
+        }}
+        aria-label="Show what was recorded between them as"
+        sx={{ alignSelf: 'flex-start' }}
+      >
+        <ToggleButton value="list" sx={{ minHeight: 44, px: 1.5, gap: 0.75 }}>
+          <ViewListOutlinedIcon fontSize="small" />
+          List
+        </ToggleButton>
+        <ToggleButton value="circle" sx={{ minHeight: 44, px: 1.5, gap: 0.75 }}>
+          <BubbleChartOutlinedIcon fontSize="small" />
+          Circle
+        </ToggleButton>
+      </ToggleButtonGroup>
+
+      {view === 'circle' && showRecorded ? (
+        <Section title="Connections circle" id="connections-circle">
+          {data.settled ? (
+            <ConnectionsCircle
+              address={address}
+              recorded={recorded}
+              onShowList={() => setView('list')}
+            />
+          ) : (
+            <ListSkeleton count={2} label="Reading its links" />
+          )}
+        </Section>
+      ) : null}
+
+      {view === 'list' && showRecorded ? (
         <Section title="Recorded between them" id="connections-recorded">
           {data.links.isError && !data.links.data ? (
             <ErrorState
