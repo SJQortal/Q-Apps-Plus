@@ -442,7 +442,9 @@ export function getFirstSeen(address: string): Promise<FirstSeen> {
       }
       let funding: Funding | null = null;
       if (reference) {
-        const tx = await getTx(reference).catch(() => null);
+        // getTx answers null only when Core doesn't know the transaction; any
+        // other failure rejects this load, so it is never kept as "none found".
+        const tx = await getTx(reference);
         funding = tx ? fundingFrom(tx, address) : null;
       }
       if (!funding) {

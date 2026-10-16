@@ -250,6 +250,39 @@ describe('getFirstSeen', () => {
   });
 });
 
+describe('getFirstSeen when a read fails', () => {
+  it('rejects (and keeps nothing) when the reference read fails', async () => {
+    mockFetchRoute('/addresses/', account({ reference: 'ref1' }));
+    mockFetchRoute('/transactions/signature/', () => new Response('busy', { status: 502 }));
+    mockFetchRoute('/transactions/payments/between', []);
+    await expect(getFirstSeen(A)).rejects.toThrow();
+    expect(fetchCallsFor('/transactions/payments/between')).toHaveLength(0);
+    expect(peekQuery(`xfirst:${A}`)).toBeUndefined();
+  });
+
+  it('falls back to the first payment received when Core does not know the reference', async () => {
+    mockFetchRoute('/addresses/', account({ reference: 'ref1' }));
+    mockFetchRoute(
+      '/transactions/signature/',
+      () => new Response(JSON.stringify({ error: 311 }), { status: 404 })
+    );
+    mockFetchRoute('/transactions/payments/between', [
+      {
+        type: 'PAYMENT',
+        timestamp: 2000,
+        signature: 'pay1',
+        txGroupId: 0,
+        blockHeight: 900,
+        recipient: A,
+        creatorAddress: B,
+        amount: '1',
+      },
+    ]);
+    const seen = await getFirstSeen(A);
+    expect(seen.funding).toMatchObject({ kind: 'payment', from: B, height: 900 });
+  });
+});
+
 describe('getPayerBand', () => {
   it('reads bands of sent payments, stopping at the first empty one', async () => {
     mockFetchRoute('/transactions/payments/between', (url: URL) => {
