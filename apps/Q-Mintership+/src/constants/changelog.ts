@@ -51,6 +51,7 @@ export const CHANGELOG: Release[] = [
           'Explorer’s Mintership tab tells an account’s MINTER story: its status and rounds, what it published in Q-Mintership+ under any of its names, a Minter Admin’s proposals and answers, and its posts in the original app.',
           'Compare 2 to 4 accounts: what passed between them, a timeline together, what they have in common, and the facts side by side. Copy findings gives them as text to share.',
           'Transactions on Qortal: the latest transactions of any type over the last 1,000 or 10,000 blocks, or from a block.',
+          'In the Explorer every name, primary or secondary, and every group shows its own avatar, and an account’s page shows its whole address (the person page too). Each of an account’s names opens to its own history, and the names it sold or renamed follow, with who has them now. Adding an account to Compare says so in a small note just under the button.',
           'On a phone, Explorer is in the bottom bar, and Settings is the gear at the top of Home.',
         ],
       },
