@@ -21,6 +21,7 @@ Who joins the MINTER group (694), and therefore who mints QORT: propose a nomina
 - **A clean break from the old cards and polls.** What happens on chain (invite, approvals, join) works in every app; the old cards, polls, comments and AR cards stay readable in History.
 - **Added by Simon (2026-10-13), built on night 2:** Reject, Withdraw my signature and Considering; safeguards for the admin-count trap; who may propose admin changes; comments; a shareable link for every decision and nomination; "Propose nomination"; notifications. Every write is proven on a private testnet (see Testnet).
 - **Added by Simon (2026-10-13), built on night 3:** doubles; his answers to the night 2 questions; Decline a join request; Minter Admin polls; subtle motion across the app. Each new write is proven on the testnet too.
+- **Added by Simon (2026-10-15), built overnight to 2026-10-16:** the Explorer, a tab to look up any account, name or transaction and follow how accounts are linked (see The Explorer below). It only reads.
 
 ## The new process
 
@@ -102,6 +103,48 @@ Who joins the MINTER group (694), and therefore who mints QORT: propose a nomina
 - **Ordering:** before an admin change passes, settle the decisions it would flip (or let them expire), or agree the order with the other Minter Admins. An admin who signed a decision at risk can withdraw their signature while it can still count; the advice names the block it must be in, and appears only where a withdrawal can still land in time.
 - **After the fact:** when the target has changed since this device last looked, Decisions says from what to what and why (who was added or removed), and lists the decisions that now have enough signatures, the soonest to apply first, and those that now end as rejected.
 - **History** gives each approved admin change the target before and after ("Target 9 → 8 signatures (21 → 20 admin seats)"), counting admins' own leaves from MINTER too. **Activity's pulse** lists the target's changes in the window.
+
+## The Explorer (Simon, 2026-10-15)
+
+A tab to look up any Qortal account, name or transaction and follow how accounts are linked: for Minter Admins weighing a nomination, and for anyone. It merges the two pages of the old Dodgers app (`qortal://APP/Dodgers`, an account explorer and a transaction search; its published bundle carried source maps, so its whole source was read) and goes further: every name an account owns (not only `names[0]`), the nomination process, name suggestions while typing, connections with the transactions behind them, rabbit holes from account to account, and Compare.
+
+**What it is for, in its own words:** "See what an account did on Qortal and how it is linked to other accounts." Connections and Compare open with: "Public chain and QDN facts. Accounts are linked for many ordinary reasons (trades, gifts, help for newcomers, shared groups). Nothing here shows who runs an account."
+
+**Rules it follows** (pinned by tests):
+- **Evidence, never verdicts.** Each link is a sentence with numbers, a date and a block ("Paid Bob 120 QORT in 4 payments (Mar–May 2025)"), and opens to its transactions. No scores, likelihoods or verdict words; a count comes with its denominator ("Hal Helper has sent 500+ payments"); partial data says how far it got ("in its latest 100 payments each way"); what was checked and found nothing says so ("Also checked, nothing found: level moves, name sales"); a read that failed is never shown as "nothing found".
+- **Read-only.** No Hub dialogs, no fees: an ESLint rule keeps every write module out of the Explorer's folders, and its page tests assert no POST and no write request.
+- **Private by design.** No `/chat/` reads; a message's content never shows (not even an unencrypted one); encrypted QDN resources (any `*_PRIVATE` service and MAIL) are counted, never listed; admin approvals and invites are MINTER process facts on the Mintership tab, never "connections"; recent explorations stay on the device, addresses only, behind a Settings switch.
+- **Cheap.** Each tab and each section below the fold reads only when opened or near the screen; every list is paged (100 a read) with a ceiling it states; searches by address (Core groups every row of the account for each one, about 0.5 s on a busy account whatever the page size) go through one limiter, two at a time, the open view first, and a closed view's queued ones are dropped; nothing polls; Refresh re-reads only the open account.
+
+**Where:** Explorer is in the rail after Activity and in the phone bar, where it takes Settings' place (the last slot); on phones Settings is the gear at the top of Home, and shows Back (open question 1).
+
+| Path | Page |
+|---|---|
+| `/explorer` | the search field, recent explorations, Compare picks, quick starts (your account, nominated now, Minter Admins, recently joined MINTER), Transactions on Qortal, "How to read the Explorer" |
+| `/explorer/account/<address>` (`/connections`, `/transactions`, `/mintership`, `/names`) | one account; a name in the path is looked up and replaced by its owner's address (names change hands, so links carry addresses) |
+| `/explorer/sponsees/<address>`, `/explorer/funded/<address>` | the accounts a sponsor sponsored; the accounts whose first QORT payment came from this one |
+| `/explorer/compare/<a>/<b>[/<c>/<d>]` | 2 to 4 accounts |
+| `/explorer/tx/<signature>` | one transaction |
+| `/explorer/transactions` (`?type=`, `?blocks=`) | Transactions on Qortal |
+
+"transactions", "account" and "explorer" are registered names, so accounts live under `account/`. Fixed on the way: the original app's nav hrefs (MINTERS, TOOLS, STATS…) redirected from the last segment of any path, so `/people/Tools` opened Decisions; only a one-segment path counts now.
+
+**The search field:** a name, a Q-address, an AT address or a transaction signature. From 2 letters, names starting with the text (one cached `/names/search` per pause, shared with Propose nomination's picker), one row per account; a name that isn't its owner's primary name reads "Q-Maps · a name of Simon James". Enter never picks a suggestion: it looks up exactly what was typed (Core matches the reduced name, so "T00LS" finds "Tools", and the page says "Core matched “Tools” (same letters, ignoring case and look-alikes)"); a name nobody has says so and lists names containing it. Never another account silently (Dodgers opened the first search result).
+
+**An account:** a compact header on every tab (avatar, primary name, level, MINTER status in the app's own words, minting now, a minting penalty; Copy link, add to Compare, Compare with…, Refresh), the trail of accounts opened one from another (Back and a crumb cut it; a search starts a new one), then five tabs:
+- **Overview:** a summary sentence (level, in MINTER since, names, first seen, last sent a transaction), Direct links, facts (level and progress, blocks minted, balance, first seen, groups), MINTER (the status sentence and the MINTER profile link, where nominating, supporting and deciding stay), minting now and the last block signed, the latest transactions, notes (a minting penalty: "Core recorded a minting penalty of −5,000,000 blocks on this account. The chain doesn't record why."; a name written like an address, starting or ending like its owner's address, or holding invisible characters).
+- **Connections:** Recorded between them (a minting level moved, with the recipient read from the raw bytes since Core's JSON leaves it out; sponsored by and sponsored, with %, how long and removals; minting with another account now; names bought or sold; payments sent and received grouped by account, with MINTER marks, a MINTER-only filter, busy payers marked and collapsed, AT addresses apart); In common (where the first QORT came from, worded by what it was; also sponsored by; whose first QORT payment came from this account); In Q-Mintership (nominated, supported, voted on, from records, one account counted once across its names); Core's own sponsorship report on request; Copy findings.
+- **Transactions:** the account's transactions as sentences ("Sent 15 QORT to Bob", "Got its minting level from Olga Old"), filtered by family (Payments, Names, Minting, Groups, QDN data, Trading, Messages, Other), 100 a read, the waiting ones it sent on top; each row opens to its fields and people.
+- **Mintership:** the MINTER profile link, status, rounds, the MINTER timeline, what it published in Q-Mintership+ under any of its names (nominations, supports, community votes, comments, Considering), as a Minter Admin (proposals, Activity's figures when already read, every answer on request, joined to MINTER's decisions), and the original app (cards about them, cards and comments they posted, poll votes on request).
+- **Names:** every name (primary first), each with its registration, sale and notes, the name history, and what was published on QDN under each name (the primary and 9 newest names at once, the rest on request; encrypted ones counted only).
+
+**Compare:** each account lettered A–D; Recorded between them (payments both ways per pair, transfers, reward shares, level moves, name sales, trade-portal sales, Q-Mintership records), a timeline together ("Block 1,364,165 · A: first QORT payment from Hal Helper … 5 blocks later · B: …"), In common (same sponsor, same first payer, shared counterparties with direction: "A → K → B", "both paid K", "K paid both"; shared groups smallest first; raw time differences), side by side (a table from 900 px, rows on phones; "Same for all" when equal), Copy findings.
+
+**Transactions on Qortal:** any type over the latest 1,000 or 10,000 blocks, or 10,000 from a block (Core needs a range for a chain-wide type search), 20 a page. Messages aren't offered there: an account's own tab lists the ones it took part in, but a feed of who messages whom is more than an explorer of accounts needs.
+
+**One transaction:** the type as its title, the sentence, block and time (or waiting), the people, the fields in words, a minting-level move's recipient, an approval's transaction (and its decision page for MINTER), the raw data (a message's content and an encrypted resource's identifier stay out of it too), Copy link.
+
+**Entry points:** the person page ("Explore links and transactions"), a decision's and a nomination's page ("Explore" the person, "Compare nominee and nominator").
 
 ## Statuses (the status-tailored Home)
 
@@ -237,6 +280,31 @@ The rules registered with Hub (all `service: 'JSON'`, `prefix: true`, `excludeBl
 
 The Decisions queue costs about 8 GETs, however many decisions there are (plus one raw read the first time a cancellation is seen, and the shared Considering and comment-count searches). Doubles need no read of their own (they use the admin rows the queue already has). It lists MINTER group changes (groupId 694) as decisions; other pending transactions that wait for MINTER's admins are shown apart, to Minter Admins only, as "Other transactions waiting for Minter Admins", without Sign.
 
+### Explorer reads (all GET, read-only)
+
+Keys start with `x` and are cached for the session; heavy reads (searches by address) go through the limiter (`data/explorer/heavy.ts`: two at a time, the open view first).
+
+| Need | Endpoint |
+|---|---|
+| The account, never used or not | `/addresses/{a}` (Core's 404 code 124 means never used) |
+| Every name it owns | `/names/address/{a}?limit=100&offset=…`, at most 5 pages; `/names/primary/{a}`; `/names/{name}` per name on screen (Core matches the reduced name) |
+| Groups | `/groups/member/{a}` (also gives MINTER membership); `/groups/{id}` for a group's name, once each |
+| Minting now, last block signed | `/addresses/online` (once, kept 5 minutes, never polled); `/blocks/signer/{a}?limit=1&reverse=true` (only with a public key) |
+| First seen, where its first QORT came from | `/transactions/creator/{pk}?confirmationStatus=CONFIRMED&limit=1`, then `/transactions/signature/{its reference}` (skipped when that first transaction was a PUBLICIZE or ARBITRARY); fallback `/transactions/payments/between?recipientAddress={a}&limit=1` |
+| Last sent a transaction | `/transactions/creator/{pk}?confirmationStatus=CONFIRMED&limit=1&reverse=true` |
+| Links (heavy) | `/transactions/search?address={a}&txType=REWARD_SHARE&txType=TRANSFER_PRIVS&txType=BUY_NAME&txType=ACCOUNT_FLAGS&txType=ACCOUNT_LEVEL&confirmationStatus=CONFIRMED&limit=100&reverse=true`, pages until short, at most 5, then one TRANSFER_PRIVS-only search when capped; a level move's recipient from `/transactions/signature/{sig}/raw` (bytes 112–136) |
+| Payments | `/transactions/payments/between?senderAddress=` and `?recipientAddress={a}` (PAYMENT only, fast, 100 a read, newest first); TRANSFER_ASSET and MULTI_PAYMENT by one heavy search, 100 newest |
+| How busy a payer is | `/transactions/payments/between?senderAddress={x}&limit=1&offset=99` (then 499, 999): "has sent 100+ / 500+ / 1,000+ payments" |
+| Transactions tab (heavy) | `/transactions/search?address={a}[&txType=…]&confirmationStatus=CONFIRMED&limit=100&offset=…&reverse=true`; waiting ones it sent: `/transactions/unconfirmed?creator={pk}` |
+| Mintership tab | the app's own status, MINTER history, nominations and original-app reads (shared keys); records under every name: `searchsimple?service=JSON&identifier=qmp-…&prefix=true&name=…` (names in chunks of 40, rows kept only for exact names); answers on request: GROUP_APPROVAL by address joined to `/transactions/search?txGroupId=694&txType=<decision types>` pages; poll votes on request |
+| Names tab | name history (one heavy search of the name types); QDN per name: `searchsimple?name={n}&limit=100&reverse=true` (one name per read, 4 at a time; the primary and 9 newest at once, the rest on request) |
+| Sets | a sponsor's sponsees from its links, with the member list, `/addresses/online` and each visible row's account; checks across the set on request, 2 at a time, with Stop |
+| Compare | each account's reads above, `/transactions/payments/between?senderAddress={a}&recipientAddress={b}` both ways per pair, `/crosschain/trades?sellerPublicKey={pk}&limit=100` |
+| Transactions on Qortal | `/transactions/search?txType=…&startBlock=…&blockLimit=1000\|10000&confirmationStatus=CONFIRMED&limit=20&offset=…&reverse=true` (always a block range); waiting ones from `/transactions/unconfirmed?txType=…` |
+| Core's sponsorship report | `/addresses/sponsorship/{a}`, on request only (1–5 s) |
+
+Never read: `/chat/*`, `/transactions/address/{a}` (no limit by default), `/blocks/signers` (13 s), a type search without a block range.
+
 ### Device storage (localStorage, per browser)
 
 Every key starts with `qmintershipplus-`. Nothing here is published; a later Settings sync could carry it across devices.
@@ -251,6 +319,8 @@ Every key starts with `qmintershipplus-`. Nothing here is published; a later Set
 | `history-seen-<address>` | how far this account's History list reached when last open, `{ v: 1, height }`, for a Minter Admin's count on the History tab; set to the tip the first time, so counting starts then |
 | `muted-names` | names muted in comments, listed in Settings → Muted names with Unmute |
 | `last-status:<address>` | the last status Home showed, so the welcome plays once |
+| `explorer-recent` | the Explorer's recent explorations: addresses only, newest first, at most 8; written only while Settings → Explorer → "Remember accounts I explore on this device" is on |
+| `explorer-remember` | that switch (on by default; turning it off also forgets the list) |
 
 Hub alerts are not on the device: Hub keeps the rules for the account.
 
@@ -319,7 +389,7 @@ Agreed with Simon (2026-10-12):
 | The notification broadcast modal after every action | Friction after every vote, comment and approval; in-app state and "Since your last visit" replace it, with opt-in Hub alerts. |
 | Stats snapshot publishing | The Activity page computes everything live from the chain. |
 | The encrypted Admin Board discussion | Admin discussion moves to admins' own channels; old admin cards are linked to in the original app. |
-| The account explorer modal | Becomes the person page. |
+| The account explorer modal | Becomes the person page (MINTER profile and actions) and the Explorer tab (everything an account did on Qortal, read-only). |
 
 ## Done
 
@@ -635,11 +705,25 @@ On branch `q-mintership-plus/feedback-1`, merged into the rewrite branch. One co
 
 One test (TargetShift's "Approve several with an admin change") failed once under full-suite load and passed on its own and on a rerun: a long dialog flow close to its time limit.
 
+34. **The Explorer** (Simon: a new tab to explore what users do on QDN and the chain, based on qortal://APP/Dodgers, Explorer and Transactions in one, for Minter Admins and anyone, especially to find the secondary accounts of people with several minting accounts; secondary names and nominations understood, name suggestions while typing, compare accounts, rabbit holes, and Core investigated for what is missing). Built overnight 2026-10-15/16 as described under The Explorer above. How:
+    - **Research first** (five readers in parallel): Dodgers dissected from its published source maps (40 files, 6,522 lines: every card, call and computation, its bugs, such as opening the first search result when a name has no exact match, and its `limit=0` reads); the app's infrastructure; Core's API (source 6.1.4, every endpoint checked live on mainnet 6.1.9 with GETs, timed); how secondary accounts show in public data (sponsorship and reward shares, level moves, name sales, payments, first funding, Core's own 2022–24 self-sponsorship checks); and what Mintership data the app already loads.
+    - **A plan, reviewed before building** by four critics (phone UX, Core cost, a Minter Admin's investigations, safety and wording). Their changes: the trail in a session store, tabs that switch in place, "Transactions" (not a second "Activity"), set views of a sponsor's sponsees and of the accounts a funder paid first, a payer test on `payments/between` (3–30 ms instead of 0.4 s), first funding that skips a PUBLICIZE or ARBITRARY first transaction, one QDN search per name (several names in one search without a service is a slow scan), keys that can't collide with the app's, admin approvals as process facts only, no chat reads.
+    - **Built in waves** in parallel worktrees, merged one at a time with build, lint and tests: the data core and the redirect fix; transaction words for every type and the mock world; the route, nav, landing page and account shell; then Overview and Names, Connections and the set views, Transactions with the transaction page and Transactions on Qortal, and Mintership with the entry points; then Compare.
+    - **Reviewed:** the Explorer in six dimensions (Core and data, wording and privacy, phones and accessibility, the rules, efficiency, tests): 50 findings, each checked by a second reviewer trying to refute it; 35 confirmed, 34 fixed (one commit each) and 1 deferred (see Follow-ups), 15 refuted. Compare in three dimensions: 36 findings, 30 confirmed (21 distinct problems, 19 fixed; the 2 left are in Follow-ups), 6 refuted. The main catches: a failed read shown as "nothing found" (everywhere now a compact error with Retry, and kept out of "Also checked, nothing found"); a QDN summary carrying the previous account's results after Back; the limiter bypassed by Refresh; Compare stuck on "Reading…" under React's StrictMode; a bought name dated by its first registration; a genesis allocation of QORA called QORT.
+    - **Checked with real data** (the dev server outside Hub reads the local mainnet node, signed out, read-only): Simon's account (88 names, 45 groups, a sponsor and 9 sponsees, 80 connections) on every tab, Compare with another account, a busy Minter Admin's answers (1,000+), an account with a penalty, a sponsee with no public key, an account with 205 names.
+    - **Reads per screen with real data** (a fresh load each, the mainnet node on a busy machine, sections that wait for the screen not all started): a light account 21–28 Core reads per tab, every answer in 1.2–1.8 s (Mintership 78, with the original-app card scan the person page already makes); Simon's account (88 names, thousands of transactions) answered in 2.7–10 s, the slowest being one 100-row transaction search on its Transactions tab (4.7 s under load); the landing page 2; Compare of the two 70 reads, all answered in 4.6 s. Every list read in the Explorer's code passes a limit of 1 to 100 (checked in the code, read by read), and the mock world fails any `limit=0`.
+    - Data and words are pinned by tests (transaction sentences for all 41 types from every side; connections, money sums in exact 8-decimal arithmetic, first funding, payer bands, Compare's pairs, timeline and overlaps). Every Explorer page test runs on a strict mock world (a read it can't answer fails the test) and asserts no POST and no write request, with axe.
+    - **Tests:** 2,021 passed, 1 expected fail, 8 skipped, in 188 files (from 1,462 in 128 before the Explorer); `npm run build`, `npm run lint` and `scripts/sync-theme.sh --check` pass. Under full-suite load a few of the heaviest Decisions page tests can pass their 15–30 s limit; each passes alone (the two heaviest files now have 30 s).
+    - **Screenshot check:** 16 new screens (explorer, -outside, -search, -account, -connections, -transactions, -mintership, -names, -sponsees, -funded, -compare, -tx, -txs, -unused, -at) with Home and Settings for the gear: 640 captures in dark and light, 0 console errors (the never-used address's own 404 listed as expected), 0 sideways overflow, 0 unlabelled buttons, 0 small targets, 0 axe violations.
+    - **Bundle:** dist 2.3 MB (1.9 MB before); every Explorer page loads on demand (Compare 52 KB, the account page 29 KB, Mintership 27 KB, Connections 21 KB); first load gains 5 KB in the app entry and 31 KB in the shared MUI chunk (Tabs, Snackbar).
+
 ## Follow-ups
 
 ### Readiness
 
 **Ready to publish as the testground, after the morning's guided actions.** Every write is proven on the private testnet (the full run, 15 of 15, on the final code); the app ran read-only in Hub with real data and in GO on a real phone with no errors; the tests, the screenshot check and the review are clean; the zip holds no testnet code. Nothing known blocks it. What only the morning can show: that Hub's dialogs for the real writes (a comment, a nomination, Considering, a first signature) say what the steps say. Publish once they match, then check Hub's own Copy link and the app in GO on its default node with the published app.
+
+**The Explorer (2026-10-16)** only reads, so it adds nothing to check in Hub's dialogs. It was checked with real data in a browser (the dev server reading the local node, signed out) and in the screenshot check, but not yet in a test Hub or in GO: worth one look in Hub Dev Mode before publishing (Next-pass ideas).
 
 ### The morning: Simon's guided real actions, before publishing
 
@@ -802,6 +886,36 @@ Answered in the evening of 2026-10-13. To build in night 3, before the Hub check
 27. **Build:** people named inside sentences are always underlined.
 28. **Build:** the ring's "of 8" is larger on 56 px rings.
 
+### Open questions for Simon (the Explorer, 2026-10-16)
+
+The Explorer works either way; each is a choice.
+
+1. **Settings on phones.** Explorer took Settings' place in the phone bar (the last slot, so the other items keep theirs), and Settings is now the gear at the top of Home, with Back on its page. DESIGN.md says Settings is reached from the nav. Keep, or put Explorer in the header as a search button instead, or in History's place?
+2. **The account header on a phone** has four icon buttons (Copy link, add to Compare, Compare with…, Refresh), so the title is cut short; the full name shows under the avatar. Move Compare with… under the trail as a text button?
+3. **Payments in Connections** read the newest 100 payments each way (plus "Check older"). Enough, or read more at once for Minter Admins?
+4. **Several sponsors:** an account sponsored by more than one account lists each "Sponsored by …", oldest first, and the oldest is treated as its sponsor for "Also sponsored by". Right?
+5. **Tags** under a payment counterparty: "its sponsor", and what its first funding was ("its first QORT payment came from them"). Wording OK?
+6. **Original-app cards** about a person are still found by their primary name only (the person page's existing scan); the Explorer adds the cards they posted under any name. Match cards about them by every name too? It changes what the person page's shared read means.
+7. **Community votes** in "In Q-Mintership" include Minter Admins' votes, which the nomination's tally leaves out. Keep them there as plain facts?
+8. **Compare nominee and nominator** shows on a waiting invite's decision page and on the nomination page; for a decided invite the nominator would need one more read. Add it?
+9. **Transactions on Qortal** leaves messages out (an account's own tab lists the ones it took part in, never their content). OK?
+10. **"Applied"** is the app's word for a MINTER change that needed no approvals when it was made (before MINTER required them); the Explorer's round line repeats it ("One round … Applied."). Keep, or say "Applied at once (no approvals needed then)"?
+11. **A graph view** of an account's connections (the old payment tree, redone): the lists cover it on phones; worth a lazily loaded map on wide screens?
+
+### Core: what an explorer needs that Core doesn't give (proposals)
+
+Found while building the Explorer; none blocks it. Each would be a read-only endpoint the app can feature-detect (a 404 means it falls back to what it does today).
+
+1. **TRANSFER_PRIVS JSON has no `recipient`.** `TransferPrivsTransactionData` isn't in `TransactionData`'s `@XmlSeeAlso`, so its own fields aren't written; the app reads the recipient from `/transactions/signature/{sig}/raw` (bytes 112–136).
+2. **No name history.** `getTransactionsInvolvingName` exists inside Core; a `GET /names/{name}/history` would show every owner of a name, not only one account's side.
+3. **No counterparty summary.** `GET /addresses/{a}/counterparties?txType=…` (sent and received counts and amounts per account, first and last block) would replace paging through payments, make overlaps exact, and mark busy accounts for free.
+4. **No counts.** A count for `/transactions/search` (as `/chat/messages/count` has) would turn the 100+/500+/1,000+ payer test into one read.
+5. **Sponsor and sponsees.** `/addresses/sponsorship/{a}/sponsor` takes an arbitrary row (no ORDER BY) and the report lists sponsees' names, not addresses; its `nonRegisteredCount` is sponsees minus names, which goes negative with several names. A sponsees list with addresses, dates and removals would serve explorers directly.
+6. **First funding.** Following an account's first reference works for most accounts but not after a fee-less first transaction; `GET /addresses/{a}/origin`, and the reverse ("accounts first funded by X"), would make the funder views exact.
+7. **No minting history per account.** Core keeps no record of which reward batches an account was online for, and `/blocks/onlineaccounts/{h}` answers an empty list on mainnet today; a per-account history would allow "minted in the same periods" comparisons.
+8. **Primary names in bulk:** `getPrimaryNamesByOwners` exists inside Core; one endpoint for many addresses would save a read per row.
+9. **Searches that cost more than they should:** `searchsimple` with several `name=` and no service scans everything (0.5 s for 2 names; one name is 1–10 ms); `/transactions/address/{a}` has no limit by default; `/addresses/rewardshares?involving=` takes 0.4–1.2 s where `recipients=` takes 40 ms.
+
 ### Next-pass ideas
 
 - Settings sync to QDN (like Q-Share+'s `settingsQdn.ts`); the settings, the last-visit snapshot, the seen target and muted names stay in the browser for now.
@@ -812,3 +926,9 @@ Answered in the evening of 2026-10-13. To build in night 3, before the Hub check
 - Theme kit, for every app: the light themes' off-state switch track is about 2.7:1 (a control's boundary needs 3:1); captions and field helper text are 12 px where docs/DESIGN.md asks 14 px on phones; Hub 3.0 light's success, warning and info colours are 2.4–3.5:1 on paper (this app only uses them beside words); a kit-level focus ring, as docs/DESIGN.md describes.
 - The page tests are sensitive to a heavily loaded machine: a vitest `maxWorkers` limit, or longer timeouts on the heaviest page files, for overnight runs.
 - Cleanup: DecisionCard's `highlighted` prop and `decisionCardId` anchor are unused now that `?d=` links redirect.
+- Explorer: a Hub Dev Mode check (round 4) with real data at the five sizes, counting reads per screen in Hub; and in GO on a phone.
+- Explorer: the same `/groups/member/{a}` is read twice when an account opens (the MINTER membership and the Explorer's groups use separate keys); one shared loader would save a read.
+- Explorer: "Published on QDN" keeps what it found while the tab is open, so Refresh doesn't re-read it until the tab is opened again.
+- Explorer: a few list buttons (the landing page's short lists, a transaction's fields) still drop keyboard focus when pressed; the funded page's checks aren't stopped when the page closes (at most 50 small reads).
+- Explorer: History's "Find a person" could use the Explorer's field (suggestions, exact lookup), still opening the person page.
+- Explorer: the screenshot check flags buttons under 40 px; DESIGN.md asks 44.
