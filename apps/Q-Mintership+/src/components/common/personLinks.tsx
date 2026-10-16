@@ -33,6 +33,15 @@ export const EXPLORER_PERSON_LINKS: PersonLinks = {
   verb: 'explore this account',
 };
 
+/**
+ * The Explorer's landing page: accounts open in the Explorer, but each one
+ * starts a new trail (it isn't a step from another account).
+ */
+export const EXPLORER_START_LINKS: PersonLinks = {
+  to: (address) => explorerAccountPath(address),
+  verb: 'explore this account',
+};
+
 export const PersonLinkContext = createContext<PersonLinks>(DEFAULT_PERSON_LINKS);
 
 export function usePersonLinks(): PersonLinks {
