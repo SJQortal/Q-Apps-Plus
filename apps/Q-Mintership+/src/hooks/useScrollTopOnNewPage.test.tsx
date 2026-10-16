@@ -17,6 +17,7 @@ function setup() {
         children: [
           { index: true, element: <p>home</p> },
           { path: 'decisions', element: <p>decisions</p> },
+          { path: 'explorer/account/:who/:tab?', element: <p>account</p> },
         ],
       },
     ],
@@ -40,5 +41,18 @@ describe('useScrollTopOnNewPage', () => {
     await act(() => router.navigate(-1));
     await act(() => router.navigate(-1));
     expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('keeps an Explorer account’s place when only its tab changes', async () => {
+    const { router, scrollTo } = setup();
+    await act(() => router.navigate('/explorer/account/QA'));
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    scrollTo.mockClear();
+    await act(() => router.navigate('/explorer/account/QA/names', { replace: true }));
+    await act(() => router.navigate('/explorer/account/QA', { replace: true }));
+    expect(scrollTo).not.toHaveBeenCalled();
+    // Another account is another page.
+    await act(() => router.navigate('/explorer/account/QB/names'));
+    expect(scrollTo).toHaveBeenCalledWith(0, 0);
   });
 });
