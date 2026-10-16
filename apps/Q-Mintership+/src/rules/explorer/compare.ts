@@ -667,8 +667,8 @@ export function sameFirstPayers(sides: readonly CompareSide[]): SameFirstPayer[]
     .map(([from, accounts]) => ({ from, accounts }));
 }
 
-/** "has sent 1,000+ payments", or null under 100. */
-function bandWords(band: PayerBand | undefined): string | null {
+/** "has sent 1,000+ payments", or null under 100 (or not read). */
+export function bandWords(band: PayerBand | undefined): string | null {
   return band ? `has sent ${formatCount(band)}+ payments` : null;
 }
 

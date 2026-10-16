@@ -16,6 +16,7 @@ import { Section } from '../../../components/common/Section';
 import { TxSentence } from '../../../components/explorer/TxSentence';
 import { explorerSponseesPath } from '../../../routes/paths';
 import {
+  bandWords,
   counterpartyCounts,
   counterpartyParts,
   groupsLead,
@@ -37,11 +38,6 @@ const LINK_SX = {
   fontWeight: 600,
   overflowWrap: 'anywhere',
 } as const;
-
-/** Busy marks for accounts that have sent 100+ or 500+ payments (1,000+ are left out). */
-function bandMark(band: number | undefined): string | null {
-  return band ? `has sent ${formatCount(band)}+ payments` : null;
-}
 
 export function InCommonSection({ data }: { data: CompareData }) {
   const total = data.liveSides.length;
@@ -90,7 +86,8 @@ export function InCommonSection({ data }: { data: CompareData }) {
               label="Same accounts in their payments"
               keyOf={(row) => row.address}
               render={(row) => {
-                const mark = bandMark(data.bands[row.address]);
+                // Busy marks for 100+ and 500+ (1,000+ are left out).
+                const mark = bandWords(data.bands[row.address]);
                 return (
                   <>
                     <Typography component="div" sx={{ overflowWrap: 'anywhere' }}>

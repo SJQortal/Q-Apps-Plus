@@ -33,6 +33,7 @@ import { useHeavyScope } from '../../hooks/useHeavyScope';
 import { useInView } from '../../hooks/useInView';
 import { explorerAccountPath, explorerComparePath, PATHS } from '../../routes/paths';
 import {
+  bandWords,
   checkedNoneLine,
   compareText,
   COMPARE_LIMIT,
@@ -154,12 +155,19 @@ async function buildText(data: CompareData, sideFacts: SideFacts[]): Promise<str
   const common: CompareLine[] = [
     ...data.sponsors.map((s) => ({ parts: sameSponsorParts(s, total) })),
     ...data.firstPayers.map((p) => ({ parts: sameFirstPayerParts(p, total, data.bands[p.from]) })),
-    ...data.counterparties.rows.map((r) => ({
-      parts: [
-        ...counterpartyParts(r, total),
-        { kind: 'text' as const, text: ` (${counterpartyCounts(r)})` },
-      ],
-    })),
+    ...data.counterparties.rows.map((r) => {
+      // The busy mark the page shows next to it, too.
+      const busy = bandWords(data.bands[r.address]);
+      return {
+        parts: [
+          ...counterpartyParts(r, total),
+          {
+            kind: 'text' as const,
+            text: ` (${counterpartyCounts(r)}${busy ? ` · it ${busy}` : ''})`,
+          },
+        ],
+      };
+    }),
   ];
   const left = leftOutLine(data.counterparties);
   const commonNotes = [

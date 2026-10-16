@@ -282,6 +282,13 @@ describe('Compare: two accounts', () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     const common = await region('In common');
     await waitFor(() => expect(common).toHaveTextContent('Self-shares created 14 blocks apart'), T);
+    await waitFor(
+      () =>
+        expect(common).toHaveTextContent(
+          'A received 1 payment · B received 1 payment · it has sent 500+ payments'
+        ),
+      T
+    );
     const recorded = await region('Recorded between them');
     await waitFor(() => expect(recorded).toHaveTextContent('on the trade portal'), T);
     await user.click(screen.getByRole('button', { name: 'Copy findings' }));
@@ -296,6 +303,10 @@ describe('Compare: two accounts', () => {
     );
     expect(text).toMatch(/sold 12 QORT to .* on the trade portal in 1 trade \(\d+ \w+ \d{4}\)\n/);
     expect(text).toContain('Checked, none found: reward shares, level moves');
+    // A busy counterparty keeps its mark in the copy, as on the page.
+    expect(text).toMatch(
+      /- Hal Helper \(Q\w{5}…\w{4}\) paid both \(A received 1 payment · B received 1 payment · it has sent 500\+ payments\)/
+    );
     expect(text).toContain('First seen 5 blocks apart');
     expect(text).toMatch(/- Block 1,364,165 · A: first QORT payment from Hal Helper/);
     expect(text).toMatch(/- 5 blocks later · Block 1,364,170 · B: first QORT payment/);
