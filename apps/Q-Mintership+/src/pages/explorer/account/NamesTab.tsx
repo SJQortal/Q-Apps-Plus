@@ -1,15 +1,14 @@
 /**
- * Every name the account owns, and what it did with names: the list (its
- * primary name first, each name's own record as it scrolls into view,
- * notes on how a name is written), its name transactions (registered,
- * renamed, listed for sale, bought, sold), and what it published on QDN
- * under its names.
+ * Every name the account owns, each opening to its own history (registered,
+ * renamed, listed for sale, bought, sold), the names it had, and what it
+ * published on QDN under its names.
  *
  * Reads: its names (`xnames:`, shared with the page header) and primary
- * name (`name:`), then per visible name `/names/{name}` (`xnamedata:`);
- * once each section nears the screen, one heavy search of its name
- * transactions (`xnamehist:`) and the QDN search of its first 10 names
- * (`xqdnname:` per name; the rest on request). Nothing polls.
+ * name (`name:`), then per visible name `/names/{name}` (`xnamedata:`); one
+ * heavy search of its name transactions (`xnamehist:`), which every name's
+ * history comes from; once that section nears the screen, the QDN search
+ * of its first 10 names (`xqdnname:` per name; the rest on request).
+ * Nothing polls.
  */
 import { Typography } from '@mui/material';
 import { Card, Section } from '../../../components/common/Section';
@@ -17,7 +16,7 @@ import { ListSkeleton } from '../../../components/common/states';
 import { getNamesOf } from '../../../data/explorer/account';
 import { usePrimaryName } from '../../../hooks/useData';
 import { useQuery } from '../../../hooks/useQuery';
-import { NameHistory } from './names/NameHistory';
+import { getNameHistory, nameHistoryKey } from '../../../data/explorer/nameHistory';
 import { NamesList } from './names/NamesList';
 import { QdnPublished } from './names/QdnPublished';
 
@@ -31,6 +30,7 @@ export default function NamesTab({ address }: NamesTabProps) {
   // A primary name that can't be read: the list still shows (in Core's order) and says so.
   const primaryFailed = primaryQuery.isError && primaryQuery.data === undefined;
   const primary = primaryFailed ? null : primaryQuery.data;
+  const history = useQuery(nameHistoryKey(address), (force) => getNameHistory(address, { force }));
   return (
     <>
       <NamesList
@@ -42,8 +42,8 @@ export default function NamesTab({ address }: NamesTabProps) {
             ? { error: primaryQuery.error, retry: () => void primaryQuery.refetch() }
             : undefined
         }
+        history={history}
       />
-      <NameHistory address={address} />
       {!names.data || primary === undefined ? (
         names.isError ? null : (
           <Section title="Published on QDN" id="names-qdn">

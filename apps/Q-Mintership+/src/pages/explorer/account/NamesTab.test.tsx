@@ -203,44 +203,70 @@ describe('Names: every name', () => {
   });
 });
 
-describe('Names: name history', () => {
-  it('tells the seller’s side of a sale as a sale, newest first, with date and block', async () => {
-    const { container } = await open(ADDR.learner);
-    const history = await region('Name history');
-    const list = await within(history).findByRole('list', { name: 'Its name transactions' }, T);
-    const rows = within(list).getAllByRole('listitem');
-    expect(rows).toHaveLength(3);
-    await waitFor(() =>
-      expect(readText(rows[0])).toMatch(/^Sold the name “Spare Room” to Nora Nominator for 5 QORT/)
-    );
+describe('Names: each name opens to its history', () => {
+  it('a name it had: who has it now, and its history newest first, with date and block', async () => {
+    const { container, user, posts } = await open(ADDR.learner);
+    const had = await region('Names it had (1)');
+    const list = within(had).getByRole('list', { name: 'Names it had' });
+    const row = within(list).getAllByRole('listitem')[0];
+    expect(row.querySelector('bdi')?.textContent).toBe('Spare Room');
+    // Its own avatar, and who has it now (a step into that account).
+    expect(row.querySelector('[aria-hidden="true"]')?.textContent).toBe('S');
     expect(
-      within(rows[0]).getByRole('link', { name: 'Nora Nominator: explore this account' })
+      await within(row).findByRole('link', { name: 'Nora Nominator: explore this account' }, T)
     ).toHaveAttribute('href', explorerAccountPath(ADDR.nominator));
+    expect(readText(row)).toContain('Now owned by Nora Nominator');
+    // Closed at first; one press opens its three transactions.
+    const toggle = within(row).getByRole('button', {
+      name: 'Show the history of “Spare Room” (3 transactions)',
+    });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveTextContent('History · 3');
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle).toHaveAccessibleName('Hide the history of “Spare Room” (3 transactions)');
+    const history = within(row).getByRole('list', { name: 'The history of “Spare Room”' });
+    const rows = within(history).getAllByRole('listitem');
+    expect(rows).toHaveLength(3);
+    expect(readText(rows[0])).toMatch(/^Sold the name “Spare Room” to Nora Nominator for 5 QORT/);
     expect(rows[0]).toHaveTextContent(
       `${formatDate(blockTime(2_351_000) - 20_000)} · block 2,351,000`
     );
     expect(readText(rows[1])).toMatch(/^Listed the name “Spare Room” for sale at 5 QORT/);
     expect(readText(rows[2])).toMatch(/^Registered the name “Spare Room”/);
-    expect(within(history).getByText('3 name transactions.')).toBeInTheDocument();
-    // One heavy read, of the five name types.
+    // One heavy read of the five name types serves every name's history.
     expect(
       fetchCallsFor(`/transactions/search?address=${ADDR.learner}&txType=REGISTER_NAME`)
     ).toHaveLength(1);
+    // No separate history section any more.
+    expect(screen.queryByRole('region', { name: 'Name history' })).toBeNull();
     await expectNoAxeViolations(container);
+    noWrites(posts);
   });
 
-  it('and the buyer’s side as a purchase', async () => {
-    await open(ADDR.nominator);
-    const history = await region('Name history');
-    const list = await within(history).findByRole('list', { name: 'Its name transactions' }, T);
-    await waitFor(() =>
-      expect(readText(within(list).getAllByRole('listitem')[0])).toMatch(
-        /^Bought the name “Spare Room” from Leo Learner for 5 QORT/
+  it('a name it owns opens to its own history: the buyer’s side as a purchase', async () => {
+    const { user } = await open(ADDR.nominator);
+    const names = await region(/^Names \(\d+\)$/);
+    const list = await within(names).findByRole('list', { name: 'Its names' }, T);
+    const row = within(list)
+      .getAllByRole('listitem')
+      .find((li) => li.querySelector('bdi')?.textContent === 'Spare Room') as HTMLElement;
+    await user.click(
+      await within(row).findByRole(
+        'button',
+        { name: 'Show the history of “Spare Room” (1 transaction)' },
+        T
       )
     );
+    const history = within(row).getByRole('list', { name: 'The history of “Spare Room”' });
+    expect(readText(within(history).getAllByRole('listitem')[0])).toMatch(
+      /^Bought the name “Spare Room” from Leo Learner for 5 QORT/
+    );
+    // It doesn't count among the names it had.
+    expect(screen.queryByRole('region', { name: /^Names it had/ })).toBeNull();
   });
 
-  it('says when it read only the newest 100', async () => {
+  it('says when each name’s history comes from only the newest 100', async () => {
     const hundred = Array.from({ length: 100 }, (_, i) => ({
       type: 'REGISTER_NAME',
       signature: `sig${i}`,
@@ -250,7 +276,7 @@ describe('Names: name history', () => {
       creatorAddress: COLLECTOR.address,
       name: `Name ${i}`,
     }));
-    const { user } = await open(COLLECTOR.address, (world) =>
+    await open(COLLECTOR.address, (world) =>
       mockFetchRoute('/transactions/search', (url: URL) =>
         url.searchParams.get('address') === COLLECTOR.address &&
         url.searchParams.getAll('txType').includes('BUY_NAME')
@@ -258,15 +284,32 @@ describe('Names: name history', () => {
           : worldAnswer(world, url)
       )
     );
-    const history = await region('Name history');
+    const names = await region('Names (30)');
     expect(
-      await within(history).findByText('The newest 100 name transactions.', {}, T)
+      await within(names).findByText(
+        "Each name's history comes from its newest 100 name transactions; older ones aren't read.",
+        {},
+        T
+      )
     ).toBeInTheDocument();
-    const list = within(history).getByRole('list', { name: 'Its name transactions' });
-    expect(within(list).getAllByRole('listitem')).toHaveLength(20);
-    await user.click(within(history).getByRole('button', { name: 'Show 20 more' }));
-    expect(within(list).getAllByRole('listitem')).toHaveLength(40);
-    expect(within(list).getAllByRole('listitem')[20]).toHaveFocus();
+  });
+
+  it('a history that couldn’t be read is said with Retry, and the names still show', async () => {
+    let fail = true;
+    const { user } = await open(ADDR.learner, (world) =>
+      mockFetchRoute('/transactions/search', (url: URL) =>
+        fail && url.searchParams.getAll('txType').includes('BUY_NAME')
+          ? new Response('boom', { status: 500 })
+          : worldAnswer(world, url)
+      )
+    );
+    const names = await region(/^Names \(\d+\)$/);
+    const alert = await within(names).findByRole('alert', {}, T);
+    expect(alert).toHaveTextContent(/^Couldn't load its name history\./);
+    expect(within(names).queryByRole('button', { name: /^Show the history/ })).toBeNull();
+    fail = false;
+    await user.click(within(alert).getByRole('button', { name: 'Retry' }));
+    expect(await region('Names it had (1)')).toBeInTheDocument();
   });
 });
 

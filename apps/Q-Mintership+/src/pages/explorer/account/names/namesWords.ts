@@ -49,9 +49,10 @@ export function nameDataParts(data: NameData): string[] {
   ].filter((part): part is string => part !== null);
 }
 
-/** Under the name history: how much of it this is. */
+/** Under the names: how much of their history was read. */
 export function historyCoverage(count: number, capped: boolean): string {
-  if (capped) return `The newest ${formatCount(NAME_HISTORY_LIMIT)} name transactions.`;
+  if (capped)
+    return `Each name's history comes from its newest ${formatCount(NAME_HISTORY_LIMIT)} name transactions; older ones aren't read.`;
   return count === 1 ? '1 name transaction.' : `${formatCount(count)} name transactions.`;
 }
 
