@@ -1,13 +1,15 @@
 /**
  * The account header's Compare button: adds the account to the accounts
- * picked to compare (up to 4), or takes it out. A short message says what
+ * picked to compare (up to 4), or takes it out. Its icon is a list to add
+ * to (ticked once picked), apart from Compare with…'s arrows. A short message says what
  * happened, with "Compare now" once two or more are picked; a 5th is
  * refused in words.
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, IconButton, Snackbar, Tooltip } from '@mui/material';
-import CompareArrowsOutlinedIcon from '@mui/icons-material/CompareArrowsOutlined';
+import PlaylistAddCheckOutlinedIcon from '@mui/icons-material/PlaylistAddCheckOutlined';
+import PlaylistAddOutlinedIcon from '@mui/icons-material/PlaylistAddOutlined';
 import { explorerComparePath } from '../../../routes/paths';
 import { COMPARE_FULL, COMPARE_MAX, togglePick, useComparePicks } from '../../../state/explorer';
 
@@ -42,7 +44,7 @@ export function CompareToggle({ address, label }: { address: string; label: stri
           color={picked ? 'primary' : 'default'}
           sx={{ width: 44, height: 44 }}
         >
-          <CompareArrowsOutlinedIcon />
+          {picked ? <PlaylistAddCheckOutlinedIcon /> : <PlaylistAddOutlinedIcon />}
         </IconButton>
       </Tooltip>
       <Snackbar
