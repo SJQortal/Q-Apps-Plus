@@ -583,6 +583,10 @@ describe('Compare: reads that fail', () => {
     );
     expect(text).toContain('Couldn’t finish checking for a shared sponsor.');
     expect(text).not.toMatch(/Checked, none found: [^\n]*a shared sponsor/);
+    // What was read says so too, instead of "all of each account’s".
+    expect(text).toContain(
+      '- Reward shares, level moves and name sales: all of B’s and C’s; couldn’t be read for A.'
+    );
   });
 
   it('Side by side: a failed read says “Couldn’t read”, not “Loading” for good, with Retry', async () => {

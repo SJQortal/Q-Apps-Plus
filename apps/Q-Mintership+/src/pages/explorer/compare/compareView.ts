@@ -4,7 +4,12 @@
  * In common has, is still reading, found nothing of and couldn't check.
  */
 import { useTheme, type Theme } from '@mui/material/styles';
-import { letterOf, type PairCheck, type PairFinding } from '../../../rules/explorer/compare';
+import {
+  letterOf,
+  listWords,
+  type PairCheck,
+  type PairFinding,
+} from '../../../rules/explorer/compare';
 import { monthRange } from '../../../rules/explorer/connections';
 import { formatDate } from '../../../utils/format';
 import { withHue } from '../../decisions/sectionAccents';
@@ -127,6 +132,104 @@ export function sideFailures(data: CompareData): { what: string[]; reads: Compar
     reads.add(data.online);
   }
   return { what, reads: [...reads] };
+}
+
+type ReadStatus = 'read' | 'reading' | 'failed';
+
+const statusOf = (q: CompareRead): ReadStatus =>
+  q.data !== undefined ? 'read' : q.isError ? 'failed' : 'reading';
+
+/** The worst of several reads: failed, then still reading, then read. */
+const worst = (statuses: readonly ReadStatus[]): ReadStatus =>
+  statuses.includes('failed') ? 'failed' : statuses.includes('reading') ? 'reading' : 'read';
+
+/** "A’s and C’s". */
+const possessives = (letters: readonly string[]) => listWords(letters.map((l) => `${l}’s`));
+
+/** ["not read yet for B", "couldn’t be read for C"] for the accounts whose reads aren't in. */
+function unreadParts(statuses: ReadonlyArray<[string, ReadStatus]>): string[] {
+  const reading = statuses.filter(([, s]) => s === 'reading').map(([l]) => l);
+  const failed = statuses.filter(([, s]) => s === 'failed').map(([l]) => l);
+  return [
+    ...(reading.length ? [`not read yet for ${listWords(reading)}`] : []),
+    ...(failed.length ? [`couldn’t be read for ${listWords(failed)}`] : []),
+  ];
+}
+
+/**
+ * Copy findings' "What was read", from what was read: each line says how
+ * far it goes (the newest 100, the newest 500, the first 500 names), and
+ * for which accounts a read is still out or failed.
+ */
+export function coverageLines(data: CompareData, caps?: { paymentsBetween: boolean }): string[] {
+  const live = data.live.flatMap((a, i) => (a ? [i] : []));
+  const each = (status: (i: number) => ReadStatus) =>
+    live.map((i): [string, ReadStatus] => [letterOf(i), status(i)]);
+  const line = (label: string, parts: readonly string[]) => `${label}: ${parts.join('; ')}.`;
+  const readIn = (status: (i: number) => ReadStatus) => live.filter((i) => status(i) === 'read');
+  const whose = (letters: readonly string[]) =>
+    letters.length === live.length ? 'each account’s' : possessives(letters);
+
+  const assets = (i: number) => statusOf(data.assets[i]);
+  // No public key: it never sold a trade, nothing to read.
+  const trades = (i: number) =>
+    data.sides[i].trades !== undefined ? 'read' : statusOf(data.trades[i]);
+  const links = (i: number) => statusOf(data.links[i]);
+  const made = (i: number) => statusOf(data.made[i]);
+  const payments = (i: number) =>
+    worst([statusOf(data.sent[i]), statusOf(data.recv[i]), statusOf(data.assets[i])]);
+
+  const newest100 = (status: (i: number) => ReadStatus) => {
+    const read = readIn(status).map(letterOf);
+    return [...(read.length ? [`${whose(read)} newest 100`] : []), ...unreadParts(each(status))];
+  };
+
+  const linksIn = readIn(links);
+  const full = linksIn.filter((i) => !data.links[i].data?.truncated).map(letterOf);
+  const capped = linksIn.filter((i) => data.links[i].data?.truncated).map(letterOf);
+
+  const madeIn = readIn(made).map(letterOf);
+  const fewerNames = readIn(made)
+    .filter((i) => data.made[i].data?.namesTruncated)
+    .map(letterOf);
+  const ceiling = readIn(made)
+    .filter((i) => data.made[i].data?.truncated.length)
+    .map(letterOf);
+  const owners =
+    madeIn.length === live.length
+      ? 'each account owns'
+      : `${listWords(madeIn)} ${madeIn.length === 1 ? 'owns' : 'own'}`;
+
+  return [
+    caps?.paymentsBetween === false
+      ? 'Payments between each pair: from the sender’s newest 100 QORT payments (this node can’t search the payments between two accounts).'
+      : 'Payments between each pair: every QORT payment each way, up to the newest 100.',
+    line('Asset transfers and multi-payments', newest100(assets)),
+    line('Trade portal sales', newest100(trades)),
+    line('Reward shares, level moves and name sales', [
+      ...(full.length ? [`all of ${whose(full)}`] : []),
+      ...(capped.length ? [`${whose(capped)} newest 500 (every level move read)`] : []),
+      ...unreadParts(each(links)),
+    ]),
+    line('Q-Mintership records', [
+      ...(madeIn.length ? [`under every name ${owners}`] : []),
+      ...(fewerNames.length ? [`only the first 500 names of ${listWords(fewerNames)}`] : []),
+      ...(ceiling.length
+        ? [
+            `some kinds stopped at their ceiling for ${listWords(ceiling)} (the newest 300 records of a kind per 40 names)`,
+          ]
+        : []),
+      ...unreadParts(each(made)),
+    ]),
+    line('The same accounts in their payments', [
+      ...(readIn(payments).length
+        ? [
+            `in ${whose(readIn(payments).map(letterOf))} newest 100 QORT payments each way and newest 100 asset transfers and multi-payments`,
+          ]
+        : []),
+      ...unreadParts(each(payments)),
+    ]),
+  ];
 }
 
 /** The reads behind each of a pair's checks in Recorded between them. */

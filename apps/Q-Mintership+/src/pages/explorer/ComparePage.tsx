@@ -28,6 +28,7 @@ import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../components/common/personLinks';
 import { EmptyState } from '../../components/common/states';
 import { getTip } from '../../data/chain';
+import type { PaymentCaps } from '../../data/explorer/money';
 import { peekQuery } from '../../data/query';
 import { useHeavyScope } from '../../hooks/useHeavyScope';
 import { useInView } from '../../hooks/useInView';
@@ -61,6 +62,7 @@ import { COMPARE_FULL, comparePicksAtom } from '../../state/explorer';
 import { appLink } from '../../utils/links';
 import { AccountCards } from './compare/AccountCards';
 import {
+  coverageLines,
   inCommonState,
   pairPending,
   sideFailed,
@@ -147,16 +149,8 @@ async function buildText(
 ): Promise<string> {
   const tip = await getTip().catch(() => null);
   const total = data.liveSides.length;
-  const linksCapped = data.links.some((q) => q.data?.truncated);
-  const coverage = [
-    'Payments between each pair: every QORT payment each way, up to the newest 100.',
-    'Asset transfers and multi-payments, trade portal sales: each account’s newest 100.',
-    linksCapped
-      ? 'Reward shares, level moves and name sales: each account’s newest 500 (every level move read).'
-      : 'Reward shares, level moves and name sales: all of each account’s.',
-    'Q-Mintership records: under every name each account owns.',
-    'The same accounts in their payments: in each account’s newest 100 QORT payments each way.',
-  ];
+  // How far each read went, from the reads themselves (and whether this node has payments/between).
+  const coverage = coverageLines(data, peekQuery<PaymentCaps>('xcaps'));
   const pairs = data.pairData
     .filter((p) => p.result.findings.length || p.result.pending.length)
     .map((p) => {
