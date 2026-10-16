@@ -72,6 +72,8 @@ export function NameAvatar({
       component="span"
       ref={setNode}
       aria-hidden
+      // Marked, so a line of text that makes its spans inline (PersonInline) leaves it a circle.
+      data-avatar=""
       sx={(theme) => ({
         width: sized((s) => s),
         height: sized((s) => s),
@@ -85,7 +87,8 @@ export function NameAvatar({
         bgcolor: primarySoft(theme),
         color: theme.palette.primary.main,
         fontWeight: 700,
-        fontSize: sized((s) => Math.round(s * 0.42)),
+        // Readable even on the smallest (20 px, in a line of text).
+        fontSize: sized((s) => Math.max(10, Math.round(s * 0.42))),
         lineHeight: 1,
         userSelect: 'none',
       })}

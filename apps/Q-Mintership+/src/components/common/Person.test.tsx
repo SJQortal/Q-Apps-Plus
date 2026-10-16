@@ -70,3 +70,13 @@ describe('PersonInline: a link you can see without hovering', () => {
     expect(rulesFor(link)).toMatch(/text-decoration:none/);
   });
 });
+
+describe('PersonInline: the avatar in a line of text', () => {
+  it('stays a circle with the name’s letter when there is no picture', () => {
+    show(<PersonInline address={ADA} name="toroid" />);
+    const avatar = document.querySelector('[data-avatar]') as HTMLElement;
+    expect(avatar).toHaveTextContent('T');
+    // Not made inline by the sentence's rule for its words.
+    expect(avatar).toHaveStyle({ display: 'inline-flex', width: '20px', height: '20px' });
+  });
+});

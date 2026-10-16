@@ -140,7 +140,8 @@ export function PersonInline({ address, name }: { address: string; name?: string
         display: 'inline-flex',
         verticalAlign: 'middle',
         maxWidth: '100%',
-        '& p, & span': { display: 'inline' },
+        // Its words inline with the sentence; the avatar stays a circle with its letter.
+        '& p, & span:not([data-avatar])': { display: 'inline' },
         // The name reads as part of the sentence around it.
         '& .MuiTypography-root': { fontSize: 'inherit' },
       }}
