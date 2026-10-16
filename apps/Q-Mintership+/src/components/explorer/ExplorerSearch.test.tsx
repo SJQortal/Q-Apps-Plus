@@ -84,11 +84,18 @@ describe('ExplorerSearch: suggestions', () => {
     expect(
       await within(names).findByRole('option', { name: /^Norbert · a name of Leo Learner Q/ }, T)
     ).toBeInTheDocument();
-    expect(within(names).getByRole('option', { name: /^Nora Nominator Q/ })).toBeInTheDocument();
+    // Nora's row is her shorter name (ranked first), saying whose it is.
+    expect(
+      await within(names).findByRole(
+        'option',
+        { name: /^Nora’s Shop · a name of Nora Nominator Q/ },
+        T
+      )
+    ).toBeInTheDocument();
     expect(within(names).getAllByRole('option')).toHaveLength(2);
     expect(status()).toHaveTextContent('3 names found · 2 accounts');
-    // One search for the whole word typed, under the key Nominate shares.
-    expect(fetchCallsFor('/names/search?query=nor&prefix=true&limit=10')).toHaveLength(1);
+    // One search for the whole word typed: a page of 20.
+    expect(fetchCallsFor('/names/search?query=nor&prefix=true&limit=20')).toHaveLength(1);
     expect(fetchCallsFor('/names/search').every((p) => !/limit=0\b/.test(p))).toBe(true);
     expect(posts).toEqual([]);
   });
@@ -136,7 +143,7 @@ describe('ExplorerSearch: Enter', () => {
   it('never picks a suggestion: it looks the text up as a name, and opens nothing when no one has it', async () => {
     const { field, user, posts } = await show();
     await user.type(field, 'Nor');
-    await screen.findByRole('option', { name: /^Nora Nominator/ }, T);
+    await screen.findByRole('option', { name: /^Nora’s Shop/ }, T);
     await user.keyboard('{Enter}');
     expect(
       await screen.findByText(
@@ -252,5 +259,37 @@ describe('ExplorerSearch: QDN identifiers', () => {
     expect(within(screen.getByRole('group', { name: 'QDN' })).getAllByRole('option')).toHaveLength(
       2
     );
+  });
+});
+
+describe('ExplorerSearch: the name typed first', () => {
+  it('lists the name typed first, before longer names and look-alikes in capitals', async () => {
+    const { field, user } = await show();
+    // Core's own order: capitals first.
+    mockFetchRoute('/names/search', () => [
+      { name: 'Nora Consulting', owner: ADDR.admin },
+      { name: 'Nora stupid', owner: ADDR.left },
+      { name: 'nora', owner: ADDR.nominator },
+      { name: 'nora-dev', owner: ADDR.learner },
+    ]);
+    await user.type(field, 'nora');
+    const names = await screen.findByRole('group', { name: 'Names' }, T);
+    await waitFor(() =>
+      expect(within(names).getAllByRole('option')[0]).toHaveAccessibleName(/^nora /)
+    );
+  });
+
+  it('looks the name typed up on its own when a full page doesn’t have it', async () => {
+    const { field, user } = await show();
+    mockFetchRoute('/names/search', () =>
+      Array.from({ length: 20 }, (_, i) => ({ name: `Nora ${i + 10}`, owner: ADDR.admin }))
+    );
+    mockFetchRoute(/^\/names\/nora$/, { name: 'nora', owner: ADDR.nominator });
+    await user.type(field, 'nora');
+    const names = await screen.findByRole('group', { name: 'Names' }, T);
+    await waitFor(() =>
+      expect(within(names).getAllByRole('option')[0]).toHaveAccessibleName(/^nora /)
+    );
+    expect(fetchCallsFor(/^\/names\/nora$/)).toHaveLength(1);
   });
 });

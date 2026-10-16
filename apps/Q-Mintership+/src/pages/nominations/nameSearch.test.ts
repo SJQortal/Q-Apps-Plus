@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { findNameOwners, nameMatchKey, searchNames } from '../../data/nameSearch';
+import { findNameOwners, nameMatchKey, rankNameHits, searchNames } from '../../data/nameSearch';
 import { resetQueries } from '../../data/query';
 import { fetchCallsFor, mockFetchRoute } from '../../test/setup';
 import { ADDR } from '../../test/world';
@@ -21,9 +21,10 @@ describe('name search (src/data/nameSearch.ts)', () => {
       ];
     });
     const hits = await searchNames('  nor ');
+    // Ranked: the shorter name first (rankNameHits).
     expect(hits).toEqual([
-      { name: 'Nora Nominator', owner: ADDR.nominator },
       { name: 'Norbert', owner: ADDR.learner },
+      { name: 'Nora Nominator', owner: ADDR.nominator },
     ]);
     expect(seen!.get('query')).toBe('nor');
     expect(seen!.get('prefix')).toBe('true');
@@ -67,7 +68,8 @@ describe('findNameOwners (Ready to mint’s search)', () => {
       { name: 'Lou Two', owner: ADDR.left },
       { name: 'Louise', owner: ADDR.learner },
     ]);
-    expect(await findNameOwners(' lou ')).toEqual([ADDR.left, ADDR.learner]);
+    // Ranked: Louise (the shortest) first.
+    expect(await findNameOwners(' lou ')).toEqual([ADDR.learner, ADDR.left]);
     await findNameOwners('LOU');
     expect(fetchCallsFor('/names/search')).toHaveLength(1);
     // The page had room, so an exact name would have been on it: no exact lookup.
@@ -99,5 +101,28 @@ describe('findNameOwners (Ready to mint’s search)', () => {
     expect(nameMatchKey('a')).toBeNull();
     expect(nameMatchKey(' Lou ')).toBe('namematch:lou');
     expect(fetchCallsFor('/names/')).toHaveLength(0);
+  });
+});
+
+describe('rankNameHits', () => {
+  it('puts the name typed first in any capitals, then the shorter names, then A–Z', () => {
+    // Core's order: capitals first, so the look-alikes came before the name itself.
+    const core = [
+      'Crowetic Consulting',
+      'Crowetic stupid',
+      "Crowetic's Cards",
+      'crowetic',
+      'crowetic-dev',
+      'crowetic2',
+    ].map((name, i) => ({ name, owner: `Q${i}` }));
+    expect(rankNameHits(core, 'crowetic').map((h) => h.name)).toEqual([
+      'crowetic',
+      'crowetic2',
+      'crowetic-dev',
+      'Crowetic stupid',
+      "Crowetic's Cards",
+      'Crowetic Consulting',
+    ]);
+    expect(rankNameHits(core, 'CROWETIC')[0].name).toBe('crowetic');
   });
 });

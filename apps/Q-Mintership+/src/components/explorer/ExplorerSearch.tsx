@@ -5,8 +5,10 @@
  * (ExplorerHeaderSearch).
  *
  * - Suggestions come in groups: Exact (what Enter does with the text),
- *   Names (registered names that start with it: the cached searchNames
- *   page Nominate shares, 250 ms after typing stops, one row per owner),
+ *   Names (registered names that start with it, 250 ms after typing stops:
+ *   searchNames' page of 20, ranked with the name typed first, then the
+ *   shorter names; the name typed looked up on its own when the page is
+ *   full without it; one row per owner),
  *   QDN (resources published under exactly that identifier, newest first:
  *   data/explorer/qdnIdentifier.ts, each opening its latest transaction),
  *   and Recent (accounts explored on this device, while the field is empty).
@@ -49,7 +51,6 @@ import {
 import { rowTime } from '../../data/qdn';
 import type { QdnRow } from '../../data/types';
 import {
-  NAME_SEARCH_LIMIT,
   NAME_SEARCH_MIN,
   searchNames,
   type NameHit,
@@ -61,6 +62,9 @@ import { visibleName } from '../../rules/explorer/nameNotes';
 import { useRecent, type NameMatch } from '../../state/explorer';
 import { formatDate, plural, shortAddress } from '../../utils/format';
 import { MarkedName } from '../common/MarkedName';
+
+/** Names read per query (Core's page, ranked: data/nameSearch.ts → rankNameHits). */
+const EXPLORER_NAME_PAGE = 20;
 
 /** How long typing must pause before names are suggested. */
 export const SEARCH_DEBOUNCE_MS = 250;
@@ -421,17 +425,32 @@ export function ExplorerSearch({
   const special = isAddress(debounced) || isAtAddress(debounced) || isSignature(debounced);
   const searchable =
     debounced.length >= NAME_SEARCH_MIN && debounced.length <= NAME_MAX && !special;
-  // The same key searchNames caches under (Nominate's picker shares it).
-  const key = `namesearch:${NAME_SEARCH_LIMIT}:${debounced.toLowerCase()}`;
-  const search = useQuery(searchable ? key : null, () => searchNames(debounced, NAME_SEARCH_LIMIT));
-  const hits = searchable && !search.isError ? (search.data ?? []) : [];
+  // The same key searchNames caches under; a page of 20, ranked (the name typed first).
+  const key = `namesearch:${EXPLORER_NAME_PAGE}:${debounced.toLowerCase()}`;
+  const search = useQuery(searchable ? key : null, () =>
+    searchNames(debounced, EXPLORER_NAME_PAGE)
+  );
+  const listed = searchable && !search.isError ? (search.data ?? []) : [];
+  // The name typed, when Core's page is full without it: looked up on its own, put first.
+  const lower = debounced.toLowerCase();
+  const needExact =
+    searchable &&
+    listed.length >= EXPLORER_NAME_PAGE &&
+    !listed.some((hit) => hit.name.toLowerCase() === lower);
+  const exactName = useQuery(needExact ? `xnamedata:${debounced}` : null, () =>
+    getNameData(debounced)
+  );
+  const hits: NameHit[] =
+    needExact && exactName.data
+      ? [{ name: exactName.data.name, owner: exactName.data.owner }, ...listed]
+      : listed;
   // Exactly that identifier on QDN: one small search, once typing pauses.
   const idSearchable = couldBeIdentifier(debounced) && !special;
   const resources = useQuery(idSearchable ? identifierKey(debounced) : null, () =>
     searchIdentifier(debounced)
   );
   const resourceRows = idSearchable && !resources.isError ? (resources.data?.rows ?? []) : [];
-  // One row per owner: the first of their names Core listed.
+  // One row per owner: the first of their names in that order.
   const owners = new Map<string, NameHit>();
   for (const hit of hits) if (!owners.has(hit.owner)) owners.set(hit.owner, hit);
 

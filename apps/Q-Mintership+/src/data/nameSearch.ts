@@ -5,6 +5,11 @@
  * ignores case). One small page per query, never more, cached for the
  * session and shared while in flight. Screens debounce the typing. Ready to
  * mint's search resolves a typed name to its owners with findNameOwners.
+ *
+ * Core lists the matches in plain character order, capitals first, so
+ * "Crowetic Consulting" and look-alikes came before "crowetic" itself. The
+ * page is ranked here (rankNameHits): the exact name first, then shorter
+ * names, then A–Z ignoring case.
  */
 import { getNameOwner, isAddress } from './accounts';
 import { getJson, query } from './core';
@@ -76,8 +81,24 @@ export function searchNames(text: string, limit = NAME_SEARCH_LIMIT): Promise<Na
         seen.add(name);
         hits.push({ name, owner });
       }
-      return hits.slice(0, size);
+      return rankNameHits(hits, q).slice(0, size);
     },
     { ttlMs: 5 * 60_000 }
+  );
+}
+
+/**
+ * The names in the order a person looks for them: the name typed (in any
+ * capitals: Core has one name per spelling, ignoring case), then the shorter
+ * names (the closer matches), then A–Z ignoring case.
+ */
+export function rankNameHits(hits: readonly NameHit[], text: string): NameHit[] {
+  const lower = text.trim().toLowerCase();
+  const rank = (name: string) => (name.toLowerCase() === lower ? 0 : 1);
+  return [...hits].sort(
+    (a, b) =>
+      rank(a.name) - rank(b.name) ||
+      a.name.length - b.name.length ||
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
   );
 }
