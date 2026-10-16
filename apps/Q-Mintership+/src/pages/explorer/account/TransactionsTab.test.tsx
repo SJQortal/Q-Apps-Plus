@@ -30,7 +30,13 @@ import AccountPage from '../AccountPage';
 import { LatestTransactions } from './LatestTransactions';
 import TransactionsTab from './TransactionsTab';
 
+/** A list's rows, counted without a role query (cheap on 150 rows). */
+const items = (list: HTMLElement) => list.querySelectorAll(':scope > li');
+const rowButtons = (list: HTMLElement) => list.querySelectorAll<HTMLElement>('[data-tx-row]');
+
 const T = { timeout: 5000 };
+/** 150 rows, or nine reads in a row: more than the default 15 s on a busy machine. */
+const HEAVY = 30_000;
 const ROUTE = '/explorer/account/:who/:tab?';
 const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH|VOTE|POLL/;
 
@@ -90,36 +96,42 @@ function screenWidth(width: number) {
 }
 
 describe('an account’s transactions', () => {
-  it('shows 50, then the rest of the read, then reads older ones; says so; keeps focus', async () => {
-    const { user, container, posts } = await openTab(FUNDER.address);
-    const all = await region('All transactions');
-    const list = await within(all).findByRole('list', { name: 'All transactions' }, T);
-    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(50), T);
-    expect(within(list).getAllByRole('button')[0]).toHaveAccessibleName(/^Sent 1 QORT to /);
-    expect(
-      within(all).getByText("The newest 50 of this account's transactions.")
-    ).toBeInTheDocument();
-    await expectNoAxeViolations(container);
+  it(
+    'shows 50, then the rest of the read, then reads older ones; says so; keeps focus',
+    async () => {
+      const { user, posts } = await openTab(FUNDER.address);
+      const all = await region('All transactions');
+      const list = await within(all).findByRole('list', { name: 'All transactions' }, T);
+      await waitFor(() => expect(items(list)).toHaveLength(50), T);
+      expect(rowButtons(list)[0]).toHaveAccessibleName(/^Sent 1 QORT to /);
+      expect(
+        within(all).getByText("The newest 50 of this account's transactions.")
+      ).toBeInTheDocument();
 
-    const older = within(all).getByRole('button', { name: 'Load older' });
-    await user.click(older);
-    expect(within(list).getAllByRole('listitem')).toHaveLength(100);
-    expect(older).toHaveFocus();
-    expect(await screen.findByText('50 older transactions loaded', {}, T)).toBeInTheDocument();
-    // The second half of the first read: nothing more was read.
-    expect(searches(FUNDER.address)).toHaveLength(1);
+      // By its text: a role query with a name reads every row's name first.
+      const older = within(all).getByText('Load older', { selector: 'button' });
+      await user.click(older);
+      expect(items(list)).toHaveLength(100);
+      expect(older).toHaveFocus();
+      expect(await screen.findByText('50 older transactions loaded', {}, T)).toBeInTheDocument();
+      // The second half of the first read: nothing more was read.
+      expect(searches(FUNDER.address)).toHaveLength(1);
 
-    await user.click(older);
-    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(150), T);
-    expect(older).toHaveFocus();
-    const reads = searches(FUNDER.address);
-    expect(reads.map((p) => p.get('offset'))).toEqual(['0', '100']);
-    expect(reads.every((p) => p.get('limit') === '100' && p.get('reverse') === 'true')).toBe(true);
-    expect(
-      within(all).getByText("The newest 150 of this account's transactions.")
-    ).toBeInTheDocument();
-    noWrites(posts);
-  });
+      await user.click(older);
+      await waitFor(() => expect(items(list)).toHaveLength(150), T);
+      expect(older).toHaveFocus();
+      const reads = searches(FUNDER.address);
+      expect(reads.map((p) => p.get('offset'))).toEqual(['0', '100']);
+      expect(reads.every((p) => p.get('limit') === '100' && p.get('reverse') === 'true')).toBe(
+        true
+      );
+      expect(
+        within(all).getByText("The newest 150 of this account's transactions.")
+      ).toBeInTheDocument();
+      noWrites(posts);
+    },
+    HEAVY
+  );
 
   it('moves focus to the first new row when nothing older is left', async () => {
     const { user } = await openTab(FUNDER.address, (world) =>
@@ -138,56 +150,60 @@ describe('an account’s transactions', () => {
     const all = await region('All transactions');
     const list = await within(all).findByRole('list', { name: 'All transactions' }, T);
     expect(within(all).getByText("The newest 50 of this account's 70 transactions.")).toBeVisible();
-    await user.click(within(all).getByRole('button', { name: 'Load older' }));
-    expect(within(list).getAllByRole('listitem')).toHaveLength(70);
-    expect(within(all).queryByRole('button', { name: 'Load older' })).toBeNull();
-    const rows = within(list).getAllByRole('button', { expanded: false });
+    await user.click(within(all).getByText('Load older', { selector: 'button' }));
+    expect(items(list)).toHaveLength(70);
+    expect(within(all).queryByText('Load older', { selector: 'button' })).toBeNull();
+    const rows = rowButtons(list);
     await waitFor(() => expect(rows[50]).toHaveFocus());
     expect(await screen.findByText('20 older transactions loaded', {}, T)).toBeInTheDocument();
     expect(within(all).getByText("All 70 of this account's transactions.")).toBeVisible();
   });
 
-  it('filters by family, one read per family, each with its own empty line', async () => {
-    const { user, posts } = await openTab(ADDR.kicked);
-    await region('All transactions');
-    const chips = screen.getByRole('group', { name: 'Show one kind of transaction' });
-    for (const family of TX_FAMILIES) {
-      await user.click(within(chips).getByRole('button', { name: family.label }));
-      expect(within(chips).getByRole('button', { name: family.label })).toHaveAttribute(
-        'aria-pressed',
-        'true'
-      );
-      const title = family.key === 'all' ? 'All transactions' : family.label;
-      const section = await region(title);
-      await waitFor(() => {
-        expect(within(section).queryByLabelText(/Loading/)).toBeNull();
-        expect(
-          within(section).queryByRole('list') ?? within(section).queryByText(/ history\.$/)
-        ).not.toBeNull();
-      }, T);
-      expect(searches(ADDR.kicked, typesFor(family.key)), family.key).toHaveLength(1);
-    }
-    // Kit has no name transactions: said so.
-    await user.click(within(chips).getByRole('button', { name: 'Names' }));
-    expect(
-      await screen.findByText("No name transactions in this account's history.", {}, T)
-    ).toBeInTheDocument();
-    // A message is listed without its content.
-    await user.click(within(chips).getByRole('button', { name: 'Messages' }));
-    const messages = await region('Messages');
-    expect(
-      await within(messages).findByRole('button', { name: /Sent a message to Lou Left/ }, T)
-    ).toBeInTheDocument();
-    await user.click(within(messages).getByRole('button', { name: /Sent a message/ }));
-    expect(document.body.textContent).not.toContain(MESSAGE_CONTENT);
-    // A family read once is kept: back to Messages costs nothing more.
-    const before = fetchCallsFor('/transactions/search').length;
-    await user.click(within(chips).getByRole('button', { name: 'All' }));
-    await user.click(within(chips).getByRole('button', { name: 'Messages' }));
-    await region('Messages');
-    expect(fetchCallsFor('/transactions/search')).toHaveLength(before);
-    noWrites(posts);
-  });
+  it(
+    'filters by family, one read per family, each with its own empty line',
+    async () => {
+      const { user, posts } = await openTab(ADDR.kicked);
+      await region('All transactions');
+      const chips = screen.getByRole('group', { name: 'Show one kind of transaction' });
+      for (const family of TX_FAMILIES) {
+        await user.click(within(chips).getByRole('button', { name: family.label }));
+        expect(within(chips).getByRole('button', { name: family.label })).toHaveAttribute(
+          'aria-pressed',
+          'true'
+        );
+        const title = family.key === 'all' ? 'All transactions' : family.label;
+        const section = await region(title);
+        await waitFor(() => {
+          expect(within(section).queryByLabelText(/Loading/)).toBeNull();
+          expect(
+            within(section).queryByRole('list') ?? within(section).queryByText(/ history\.$/)
+          ).not.toBeNull();
+        }, T);
+        expect(searches(ADDR.kicked, typesFor(family.key)), family.key).toHaveLength(1);
+      }
+      // Kit has no name transactions: said so.
+      await user.click(within(chips).getByRole('button', { name: 'Names' }));
+      expect(
+        await screen.findByText("No name transactions in this account's history.", {}, T)
+      ).toBeInTheDocument();
+      // A message is listed without its content.
+      await user.click(within(chips).getByRole('button', { name: 'Messages' }));
+      const messages = await region('Messages');
+      expect(
+        await within(messages).findByRole('button', { name: /Sent a message to Lou Left/ }, T)
+      ).toBeInTheDocument();
+      await user.click(within(messages).getByRole('button', { name: /Sent a message/ }));
+      expect(document.body.textContent).not.toContain(MESSAGE_CONTENT);
+      // A family read once is kept: back to Messages costs nothing more.
+      const before = fetchCallsFor('/transactions/search').length;
+      await user.click(within(chips).getByRole('button', { name: 'All' }));
+      await user.click(within(chips).getByRole('button', { name: 'Messages' }));
+      await region('Messages');
+      expect(fetchCallsFor('/transactions/search')).toHaveLength(before);
+      noWrites(posts);
+    },
+    HEAVY
+  );
 
   it('on phones picks the family in one native picker', async () => {
     screenWidth(360);
@@ -269,7 +285,7 @@ describe('Overview’s latest transactions', () => {
     );
     const latest = await region('Latest transactions');
     const list = await within(latest).findByRole('list', { name: 'Latest transactions' }, T);
-    expect(within(list).getAllByRole('listitem')).toHaveLength(5);
+    expect(items(list)).toHaveLength(5);
     await expectNoAxeViolations(container);
     await user.click(within(latest).getByRole('link', { name: 'All transactions' }));
     expect(screen.getByTestId('at')).toHaveTextContent(

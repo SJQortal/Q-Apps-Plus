@@ -16,10 +16,12 @@
  */
 import { useId, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Box, Button, ButtonBase, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
+import { styled } from '@mui/material/styles';
+import ExpandMoreOutlinedIcon from '@mui/icons-material/ExpandMoreOutlined';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import { Card } from '../common/Section';
-import { ExpandChevron } from '../common/ExpandChevron';
+import { CHEVRON_TURN } from '../common/ExpandChevron';
 import { SmoothReveal } from '../common/SmoothReveal';
 import { usePersonLinks } from '../common/personLinks';
 import type { TxRow } from '../../data/types';
@@ -32,6 +34,53 @@ import { TxSentence } from './TxSentence';
 import { useTxWords } from './useTxWords';
 
 const NOWRAP = { whiteSpace: 'nowrap' } as const;
+
+// The closed row's parts, styled once: a list shows 50 rows, so each row is
+// a plain button and spans (no per-row sx, ripple or focus tracking).
+const RowButton = styled('button')(({ theme }) => ({
+  width: '100%',
+  minHeight: 56,
+  margin: 0,
+  border: 0,
+  padding: theme.spacing(1, 1.25),
+  [theme.breakpoints.up('sm')]: { padding: theme.spacing(1, 1.5) },
+  display: 'flex',
+  alignItems: 'flex-start',
+  justifyContent: 'flex-start',
+  gap: theme.spacing(1.5),
+  textAlign: 'left',
+  borderRadius: theme.shape.borderRadius,
+  background: 'none',
+  cursor: 'pointer',
+  font: 'inherit',
+  color: theme.palette.text.primary,
+  WebkitTapHighlightColor: 'transparent',
+  '&:hover': { backgroundColor: theme.palette.action.hover },
+  '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
+  // The chevron turns over as the row opens (ExpandChevron's turn).
+  '& [data-chevron]': { transition: CHEVRON_TURN },
+  '&[aria-expanded="true"] [data-chevron]': { transform: 'rotate(180deg)' },
+}));
+const Slot = styled('span')(({ theme }) => ({
+  paddingTop: 2,
+  display: 'flex',
+  color: theme.palette.text.secondary,
+  '& > svg': { fontSize: 22 },
+}));
+const Lines = styled('span')({ flex: 1, minWidth: 0, display: 'block' });
+const SentenceLine = styled('span')({
+  display: 'block',
+  fontSize: 15,
+  lineHeight: 1.4,
+  overflowWrap: 'anywhere',
+});
+const WhenLine = styled('span')(({ theme }) => ({
+  ...theme.typography.body2,
+  display: 'block',
+  marginTop: 2,
+  color: theme.palette.text.secondary,
+}));
+const Row = styled('div')({ minWidth: 0 });
 
 /**
  * When it happened: "12 Oct 2026, 14:33 · block 2,757,497", or that it
@@ -72,52 +121,29 @@ export function TxListRow({ tx, viewpoint = null }: TxListRowProps) {
   const maker = words.participants[0] ?? null;
 
   return (
-    <Box ref={setNode} sx={{ minWidth: 0 }}>
-      <ButtonBase
+    <Row ref={setNode}>
+      <RowButton
+        type="button"
         data-tx-row=""
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
-        sx={{
-          width: '100%',
-          minHeight: 56,
-          px: { xs: 1.25, sm: 1.5 },
-          py: 1,
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'flex-start',
-          gap: 1.5,
-          textAlign: 'left',
-          borderRadius: 1,
-          font: 'inherit',
-          color: 'text.primary',
-          '&:hover': { bgcolor: 'action.hover' },
-          '&.Mui-focusVisible': { outline: 2, outlineColor: 'primary.main', outlineOffset: -2 },
-        }}
       >
-        <Box component="span" sx={{ pt: 0.25, display: 'flex' }}>
+        <Slot>
           <TxIcon type={tx.type} />
-        </Box>
-        <Box component="span" sx={{ flex: 1, minWidth: 0, display: 'block' }}>
-          <Typography
-            component="span"
-            sx={{ display: 'block', fontSize: 15, lineHeight: 1.4, overflowWrap: 'anywhere' }}
-          >
+        </Slot>
+        <Lines>
+          <SentenceLine>
             {near ? <TxSentence parts={words.parts} plain /> : words.plain}
-          </Typography>
-          <Typography
-            component="span"
-            variant="body2"
-            color="text.secondary"
-            sx={{ display: 'block', mt: 0.25 }}
-          >
+          </SentenceLine>
+          <WhenLine>
             <When tx={tx} />
-          </Typography>
-        </Box>
-        <Box component="span" sx={{ pt: 0.25, display: 'flex', color: 'text.secondary' }}>
-          <ExpandChevron open={open} />
-        </Box>
-      </ButtonBase>
+          </WhenLine>
+        </Lines>
+        <Slot>
+          <ExpandMoreOutlinedIcon aria-hidden data-chevron="" />
+        </Slot>
+      </RowButton>
       <SmoothReveal open={open}>
         <Box
           id={panelId}
@@ -149,7 +175,7 @@ export function TxListRow({ tx, viewpoint = null }: TxListRowProps) {
           </Button>
         </Box>
       </SmoothReveal>
-    </Box>
+    </Row>
   );
 }
 

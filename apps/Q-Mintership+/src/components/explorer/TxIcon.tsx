@@ -1,7 +1,8 @@
 /**
  * A transaction's icon: one per family (rules/explorer/txFamilies.ts), so
  * a list reads at a glance as payments, names, minting, groups and so on.
- * Decorative: the sentence beside it says what the transaction did.
+ * Decorative: the sentence beside it says what the transaction did. Its
+ * colour and size come from where it sits (a row's icon slot).
  */
 import type { SvgIconComponent } from '@mui/icons-material';
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
@@ -26,12 +27,7 @@ const FAMILY_ICON: Record<Exclude<TxFamilyKey, 'all'>, SvgIconComponent> = {
 };
 
 export function TxIcon({ type }: { type: string }) {
-  const Icon = FAMILY_ICON[familyOf(type)];
-  return (
-    <Icon
-      aria-hidden
-      data-family={familyOf(type)}
-      sx={{ color: 'text.secondary', fontSize: 22, flexShrink: 0 }}
-    />
-  );
+  const family = familyOf(type);
+  const Icon = FAMILY_ICON[family];
+  return <Icon aria-hidden data-family={family} />;
 }

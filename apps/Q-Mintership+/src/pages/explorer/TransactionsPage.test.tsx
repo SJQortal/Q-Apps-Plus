@@ -15,6 +15,10 @@ import { expectNoAxeViolations } from '../../test/axe';
 import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../test/setup';
 import TransactionsPage from './TransactionsPage';
 
+/** A list's rows, counted without a role query (cheap on 150 rows). */
+const items = (list: HTMLElement) => list.querySelectorAll(':scope > li');
+const rowButtons = (list: HTMLElement) => list.querySelectorAll<HTMLElement>('[data-tx-row]');
+
 const T = { timeout: 4000 };
 const ROUTE = '/explorer/transactions';
 const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH|VOTE|POLL/;
@@ -102,7 +106,7 @@ describe('Transactions on Qortal', () => {
     const { container } = await open('?type=groups');
     const found = await results();
     const confirmed = await within(found).findByRole('list', { name: 'Confirmed transactions' }, T);
-    expect(within(confirmed).getAllByRole('listitem').length).toBeGreaterThan(0);
+    expect(items(confirmed).length).toBeGreaterThan(0);
     const waiting = await screen.findByRole('region', { name: /Waiting to be confirmed/ }, T);
     expect(
       within(waiting).getAllByRole('button', { name: /Waiting to be confirmed/ })
@@ -194,17 +198,18 @@ describe('Transactions on Qortal', () => {
     );
     const found = await results();
     const list = await within(found).findByRole('list', { name: 'Confirmed transactions' }, T);
-    expect(within(list).getAllByRole('listitem')).toHaveLength(20);
+    expect(items(list)).toHaveLength(20);
     expect(within(found).getByText(/^The newest 20 payments in blocks/)).toBeVisible();
-    const older = within(found).getByRole('button', { name: 'Show older' });
+    // By its text: a role query with a name reads every row's name first.
+    const older = within(found).getByText('Show older', { selector: 'button' });
     await user.click(older);
-    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(40), T);
+    await waitFor(() => expect(items(list)).toHaveLength(40), T);
     expect(older).toHaveFocus();
     expect(await screen.findByText('20 older payments loaded', {}, T)).toBeInTheDocument();
     await user.click(older);
-    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(45), T);
-    expect(within(found).queryByRole('button', { name: 'Show older' })).toBeNull();
-    const rows = within(list).getAllByRole('button', { expanded: false });
+    await waitFor(() => expect(items(list)).toHaveLength(45), T);
+    expect(within(found).queryByText('Show older', { selector: 'button' })).toBeNull();
+    const rows = rowButtons(list);
     await waitFor(() => expect(rows[40]).toHaveFocus());
     expect(await screen.findByText('5 older payments loaded', {}, T)).toBeInTheDocument();
     expect(within(found).getByText(/^All 45 payments in blocks/)).toBeVisible();
