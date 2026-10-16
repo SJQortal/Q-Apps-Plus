@@ -183,9 +183,8 @@ describe('an account in the Explorer', () => {
     const names = within(tabs).getByRole('tab', { name: 'Names' });
     expect(names).toHaveAttribute('aria-selected', 'true');
     expect(names).toHaveFocus();
-    expect(await screen.findByRole('tabpanel', { name: 'Names' }, T)).toHaveTextContent(
-      'Coming in this update'
-    );
+    const panel = await screen.findByRole('tabpanel', { name: 'Names' }, T);
+    expect(await within(panel).findByRole('region', { name: 'Names (3)' }, T)).toBeInTheDocument();
     await user.click(within(tabs).getByRole('tab', { name: 'Overview' }));
     await waitFor(() => expect(at()).toBe(`/explorer/account/${ADDR.nominator}|null|REPLACE`), T);
     expect(within(tabs).getByRole('tab', { name: 'Overview' })).toHaveFocus();
