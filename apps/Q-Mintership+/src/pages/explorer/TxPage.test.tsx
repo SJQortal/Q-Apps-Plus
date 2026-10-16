@@ -142,7 +142,7 @@ describe('one transaction', () => {
       await within(answers).findByRole('link', { name: 'Open the MINTER decision' }, T)
     ).toHaveAttribute('href', `/decisions/${pending}`);
     // The region holds the sentence and its two links, nothing more.
-    const sentence = readText(answers.querySelector('p'));
+    const sentence = readText(answers.querySelector('div.MuiTypography-body1'));
     expect(sentence).toMatch(/invite .+ to MINTER/);
     expect(readText(answers)).toBe(
       `The transaction it answers${sentence}Open that transactionOpen the MINTER decision`

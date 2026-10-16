@@ -74,7 +74,7 @@ function Facts({ tx }: { tx: TxRow }) {
 function TargetSentence({ tx }: { tx: TxRow }) {
   const words = useTxWords(tx, null);
   return (
-    <Typography sx={{ overflowWrap: 'anywhere' }}>
+    <Typography component="div" sx={{ overflowWrap: 'anywhere' }}>
       <TxSentence parts={words.parts} />
     </Typography>
   );
@@ -139,7 +139,10 @@ export function TxView({ tx }: { tx: TxRow }) {
   const pending = tx.type === 'GROUP_APPROVAL' && typeof tx.pendingSignature === 'string';
   return (
     <>
-      <Typography sx={{ fontSize: { xs: 17, sm: 18 }, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
+      <Typography
+        component="div"
+        sx={{ fontSize: { xs: 17, sm: 18 }, lineHeight: 1.45, overflowWrap: 'anywhere' }}
+      >
         <TxSentence parts={words.parts} />
       </Typography>
       <Facts tx={tx} />
