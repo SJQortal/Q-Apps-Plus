@@ -211,7 +211,7 @@ describe('Connections: payments and first QORT', () => {
 
 describe('Connections: minting and names', () => {
   it('Kai Target got its minting level from Olga Old, who is level 0 now', async () => {
-    const { container } = await open(ADDR.kickTarget);
+    const { container, user } = await open(ADDR.kickTarget);
     const recorded = await region('Recorded between them');
     const level = await within(recorded).findByRole('list', { name: 'Minting level moved' }, T);
     await waitFor(
@@ -222,6 +222,14 @@ describe('Connections: minting and names', () => {
       T
     );
     expect(level).toHaveTextContent('block 2,000,000');
+    // The transaction behind it says the same, from Kai's side.
+    await user.click(within(level).getByRole('button', { name: /^Show the 1 transaction with/ }));
+    const open1 = await within(level).findByRole('link', { name: /^Open transaction/ }, T);
+    const evidence = open1.closest('li');
+    await waitFor(
+      () => expect(evidence).toHaveTextContent(/^Got its minting level from O?Olga Old/),
+      T
+    );
     // It sent nothing: the payments open on what it received.
     const got = await within(recorded).findByRole('list', { name: 'Received from' }, T);
     await waitFor(

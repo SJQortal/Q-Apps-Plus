@@ -48,7 +48,11 @@ function EvidenceLine({
   viewpoint: string;
   privsRecipient?: string | null;
 }) {
-  const words = describeTx(tx, { viewpoint, privsRecipient });
+  // Evidence comes from the account's own searches, so a minting-level move
+  // it didn't make was made to it (as useTxWords says it in its lists).
+  const recipient =
+    tx.type === 'TRANSFER_PRIVS' && tx.creatorAddress !== viewpoint ? viewpoint : privsRecipient;
+  const words = describeTx(tx, { viewpoint, privsRecipient: recipient });
   const height = tx.blockHeight;
   return (
     <Box component="li" sx={{ minWidth: 0 }}>
