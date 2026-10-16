@@ -139,13 +139,19 @@ const LEGACY_HREFS: Record<string, string> = {
   'INDEX.HTML': PATHS.home,
 };
 
-/** The React route for a legacy relative href such as `MINTERS`, or null. */
+/**
+ * The React route for a legacy relative href such as `MINTERS`, or null.
+ * The original app's hrefs were one segment at the app's root, so only a
+ * one-segment path counts (after Core's `/render/APP/<name>` prefix): a name
+ * such as "Tools" in `/people/Tools` or `/explorer/account/Tools` is a name,
+ * not an old nav button.
+ */
 export function legacyPathToPath(pathname: string): string | null {
-  const last = String(pathname ?? '')
+  let segments = String(pathname ?? '')
     .split('/')
-    .filter(Boolean)
-    .at(-1);
-  if (!last) return null;
-  const key = safeDecodeRouteSegment(last).toUpperCase();
+    .filter(Boolean);
+  if (segments[0] === 'render' && segments.length > 3) segments = segments.slice(3);
+  if (segments.length !== 1) return null;
+  const key = safeDecodeRouteSegment(segments[0]).toUpperCase();
   return LEGACY_HREFS[key] ?? null;
 }

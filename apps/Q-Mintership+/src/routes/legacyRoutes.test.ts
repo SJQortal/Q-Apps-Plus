@@ -99,4 +99,14 @@ describe('legacyPathToPath', () => {
     expect(legacyPathToPath('/settings')).toBeNull();
     expect(legacyPathToPath('/')).toBeNull();
   });
+
+  it('leaves names alone: only a one-segment path is an old nav href', () => {
+    // Tools, Minters and Mintership-Forum are registered names on mainnet.
+    expect(legacyPathToPath('/people/Tools')).toBeNull();
+    expect(legacyPathToPath('/people/Minters')).toBeNull();
+    expect(legacyPathToPath('/people/Mintership-Forum')).toBeNull();
+    expect(legacyPathToPath('/explorer/account/Tools')).toBeNull();
+    expect(legacyPathToPath('/explorer/account/stats/activity')).toBeNull();
+    expect(legacyPathToPath('/render/APP/Q-Mintership+/people/Tools')).toBeNull();
+  });
 });
