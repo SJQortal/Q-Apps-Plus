@@ -839,7 +839,8 @@ export default {
         await explorerSettle(page);
         await page
           .getByRole('list', { name: 'Linked accounts, the most transactions first' })
-          .waitFor({ timeout: 8000 });
+          // In the page (its avatars sit absolutely, so the list itself has no size).
+          .waitFor({ state: 'attached', timeout: 8000 });
       },
     },
     {
