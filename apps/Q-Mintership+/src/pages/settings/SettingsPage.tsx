@@ -32,12 +32,14 @@ import { NameAvatar } from '../../components/common/NameAvatar';
 import { Section, ToneChip } from '../../components/common/Section';
 import { useMyStatus } from '../../hooks/useData';
 import { signIn, useSession } from '../../state/session';
+import { clearRecent, useRecent } from '../../state/explorer';
 import {
   celebrateAtom,
   decisionsHideAnsweredAtom,
   motionAtom,
   timeDisplayAtom,
   decisionsOrderAtom,
+  explorerRememberAtom,
   type DecisionsOrder,
   type MotionSetting,
   type TimeDisplay,
@@ -51,6 +53,7 @@ import {
   UPSTREAM_REPO,
 } from '../../constants/plus';
 import { PATHS } from '../../routes/paths';
+import { plural } from '../../utils/format';
 import { copyText, openQortalLink } from '../../utils/links';
 import { readable } from '../../utils/readable';
 
@@ -69,6 +72,11 @@ const Row = styled('div')(({ theme }) => ({
   minHeight: 56,
   padding: theme.spacing(1.25, 2),
   '& + &': { borderTop: `1px solid ${theme.palette.divider}` },
+}));
+
+/** A row under a switch row (which draws no line below itself). */
+const RowAfterSwitch = styled(Row)(({ theme }) => ({
+  borderTop: `1px solid ${theme.palette.divider}`,
 }));
 
 const LinkRow = styled('button')(({ theme }) => ({
@@ -166,6 +174,8 @@ export default function SettingsPage() {
   const [decisionsOrder, setDecisionsOrder] = useAtom(decisionsOrderAtom);
   const [celebrate, setCelebrate] = useAtom(celebrateAtom);
   const [hideAnswered, setHideAnswered] = useAtom(decisionsHideAnsweredAtom);
+  const [rememberExplored, setRememberExplored] = useAtom(explorerRememberAtom);
+  const recent = useRecent();
   // On phones Settings is a gear on Home, not in the bar: Back.
   const inNav = useNavHas('settings');
 
@@ -331,6 +341,45 @@ export default function SettingsPage() {
           <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
             These settings stay in this browser.
           </Typography>
+        </Section>
+
+        <Section title="Explorer" id="settings-explorer">
+          <Card>
+            <SwitchRow>
+              <SettingText
+                id="explorer-remember-label"
+                title="Remember accounts I explore on this device"
+                hint="The Explorer lists them under Recent explorations. Only their addresses are kept, in this browser. Turning this off forgets them."
+              />
+              <Switch
+                checked={rememberExplored}
+                onChange={(_, v) => {
+                  setRememberExplored(v);
+                  if (!v) clearRecent();
+                }}
+                slotProps={{ input: { 'aria-labelledby': 'explorer-remember-label' } }}
+              />
+            </SwitchRow>
+            <RowAfterSwitch>
+              <SettingText
+                title="Recent explorations"
+                hint={
+                  recent.length
+                    ? `${plural(recent.length, 'account')} remembered on this device.`
+                    : 'None remembered on this device.'
+                }
+              />
+              <Button
+                variant="outlined"
+                onClick={clearRecent}
+                disabled={recent.length === 0}
+                aria-label="Clear recent explorations"
+                sx={{ minHeight: 44 }}
+              >
+                Clear
+              </Button>
+            </RowAfterSwitch>
+          </Card>
         </Section>
 
         <NotificationSettings />
