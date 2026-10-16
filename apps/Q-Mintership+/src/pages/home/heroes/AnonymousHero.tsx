@@ -35,8 +35,8 @@ export function AnonymousHero({ outside, needed }: { outside: boolean; needed: n
       }
     >
       <HeroText>
-        Minting QORT takes membership of the MINTER group. Members at level 5 or above nominate new
-        minters, and Minter Admins approve them
+        To mint QORT, an account needs to be a member of the MINTER group. Members at level 5 or
+        above nominate potential new minters, and Minter Admins then approve or reject each one
         {needed ? (
           <>
             : <Num>{needed}</Num> approvals are needed today
@@ -45,8 +45,8 @@ export function AnonymousHero({ outside, needed }: { outside: boolean; needed: n
         .
       </HeroText>
       <HeroText>
-        There are no votes or polls. A nomination goes through when enough Minter Admins approve it,
-        or it runs out and can be tried again.
+        A nomination goes through once enough Minter Admins approve it. If time runs out first, the
+        person can be nominated again.
       </HeroText>
       {outside ? (
         <HeroText muted>Open this in Qortal Hub or GO to sign in.</HeroText>

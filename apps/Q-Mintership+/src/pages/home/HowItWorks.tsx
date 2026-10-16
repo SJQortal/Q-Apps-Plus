@@ -48,7 +48,7 @@ export function HowItWorks({ needed }: { needed: number | null }) {
             ) : (
               'Enough Minter Admins approve.'
             )}{' '}
-            There are no votes or polls: admins approve, reject, or let it run out.
+            Each Minter Admin approves, rejects, or lets it run out.
           </Step>
           <Step n={5} title="You're in">
             With enough approvals you&rsquo;re in at once if you&rsquo;re ready (you accepted, or
@@ -57,8 +57,8 @@ export function HowItWorks({ needed }: { needed: number | null }) {
           </Step>
         </StepList>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          Before a Minter Admin approves, a nomination stays open for one approval window, then moves
-          to History.
+          Before a Minter Admin approves, a nomination stays open for one approval window, then
+          moves to History.
         </Typography>
       </Card>
     </Section>
