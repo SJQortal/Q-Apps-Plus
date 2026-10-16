@@ -31,11 +31,26 @@ import { TxIcon } from './TxIcon';
 import { TxSentence } from './TxSentence';
 import { useTxWords } from './useTxWords';
 
-/** When it happened: "12 Oct 2026, 14:33 · block 2,757,497", or that it waits for a block. */
-function txWhen(tx: TxRow, now = Date.now()): string {
+const NOWRAP = { whiteSpace: 'nowrap' } as const;
+
+/**
+ * When it happened: "12 Oct 2026, 14:33 · block 2,757,497", or that it
+ * waits for a block. Each half stays on one line.
+ */
+function When({ tx }: { tx: TxRow }) {
   if (typeof tx.blockHeight !== 'number')
-    return `Waiting to be confirmed · sent ${formatRelative(tx.timestamp, now)}`;
-  return `${formatDateTime(tx.timestamp)} · block ${formatCount(tx.blockHeight)}`;
+    return (
+      <>
+        <span style={NOWRAP}>Waiting to be confirmed</span> ·{' '}
+        <span style={NOWRAP}>sent {formatRelative(tx.timestamp)}</span>
+      </>
+    );
+  return (
+    <>
+      <span style={NOWRAP}>{formatDateTime(tx.timestamp)}</span> ·{' '}
+      <span style={NOWRAP}>block {formatCount(tx.blockHeight)}</span>
+    </>
+  );
 }
 
 export interface TxListRowProps {
@@ -96,7 +111,7 @@ export function TxListRow({ tx, viewpoint = null }: TxListRowProps) {
             color="text.secondary"
             sx={{ display: 'block', mt: 0.25 }}
           >
-            {txWhen(tx)}
+            <When tx={tx} />
           </Typography>
         </Box>
         <Box component="span" sx={{ pt: 0.25, display: 'flex', color: 'text.secondary' }}>

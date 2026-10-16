@@ -46,7 +46,11 @@ export function AccountTxList({ address, family }: { address: string; family: Tx
   const [said, setSaid] = useState('');
   const slow = useSlow(list.isLoading || loadingOlder);
   const listRef = useRef<HTMLDivElement>(null);
-  /** The row to focus once "Load older" has gone (nothing older left). */
+  const coverageRef = useRef<HTMLParagraphElement>(null);
+  /**
+   * Once "Load older" has gone (nothing older left), focus moves to the
+   * first new row, or to the line under the list when nothing came.
+   */
   const focusRow = useRef<number | null>(null);
 
   const data = list.data;
@@ -57,7 +61,7 @@ export function AccountTxList({ address, family }: { address: string; family: Tx
   useLayoutEffect(() => {
     if (focusRow.current === null || more) return;
     const buttons = listRef.current?.querySelectorAll<HTMLElement>('[data-tx-row]');
-    buttons?.[focusRow.current]?.focus();
+    (buttons?.[focusRow.current] ?? coverageRef.current)?.focus();
     focusRow.current = null;
   });
 
@@ -80,11 +84,9 @@ export function AccountTxList({ address, family }: { address: string; family: Tx
       }
     }
     const added = Math.max(0, Math.min(SHOW_STEP, held - shown));
-    if (added > 0) {
-      // Focus goes to the first new row only if the button is about to go.
-      if (done && held <= shown + SHOW_STEP) focusRow.current = shown;
-      setShown(shown + SHOW_STEP);
-    }
+    // The button goes when this shows the last of the list: focus moves on.
+    if (done && held <= shown + SHOW_STEP) focusRow.current = shown;
+    if (added > 0) setShown(shown + SHOW_STEP);
     // Emptied first, so the same words are said again for a second press.
     setSaid('');
     requestAnimationFrame(() => setSaid(olderLoadedLine(family, added)));
@@ -118,7 +120,13 @@ export function AccountTxList({ address, family }: { address: string; family: Tx
           <TxList rows={visible} viewpoint={address} label={title} />
         </div>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ flex: '1 1 220px', px: 0.5 }}>
+          <Typography
+            ref={coverageRef}
+            tabIndex={-1}
+            variant="body2"
+            color="text.secondary"
+            sx={{ flex: '1 1 220px', px: 0.5, '&:focus': { outline: 'none' } }}
+          >
             {coverageLine(family, visible.length, rows.length, data.done)}
           </Typography>
           {more ? (
