@@ -155,9 +155,9 @@ describe('an account in the Explorer', () => {
       'true'
     );
     expect(screen.getByRole('tabpanel', { name: 'Overview' })).toBeInTheDocument();
-    await waitFor(() => expect(fact('Names')).toBe('3'), T);
+    expect(await screen.findByRole('link', { name: 'owns 3 names' }, T)).toBeInTheDocument();
     expect(fact('Level')).toBe('6');
-    await waitFor(() => expect(fact('Groups')).toBe('3 groups'), T);
+    await waitFor(() => expect(fact('Groups')).toBe('In 3 groups'), T);
     await expectNoAxeViolations(container);
     noWrites(posts);
   });

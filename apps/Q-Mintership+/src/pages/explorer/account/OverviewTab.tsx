@@ -1,104 +1,88 @@
 /**
- * An account at a glance: its level, blocks minted, balance, and how many
- * names and groups it has. A first, small Overview; the full one (summary
- * sentence, direct links, minting, latest transactions, notes) replaces it.
- * Every read here is shared with the header or cached per account, and none
- * polls.
+ * An account at a glance, in this order: one summary sentence (its level,
+ * where it stands in MINTER, its names, when it was first seen and last
+ * sent a transaction), the direct links recorded with other accounts, its
+ * facts (level and progress, blocks minted, balance, first seen, groups),
+ * MINTER, minting, its latest transactions, and notes when there are any.
+ *
+ * Reads: the page's own (account, status, names, primary name, the online
+ * list) from the store, plus its balance, groups, where its first QORT came
+ * from, its newest own transaction (only with a public key; one cheap row)
+ * and, once the Minting section nears the screen, the last block it signed.
+ * When it is in MINTER, the person page's reads for its join date. None of
+ * them polls; Refresh on the page reloads them. Each section loads, fails
+ * and retries on its own.
  */
-import { Box, Typography } from '@mui/material';
 import { ErrorState, ListSkeleton } from '../../../components/common/states';
-import { formatQort, getBalance } from '../../../data/accounts';
-import { getGroupsOf, getNamesOf } from '../../../data/explorer/account';
-import { effectiveBlocksMinted } from '../../../rules/levels';
-import { useAccount } from '../../../hooks/useData';
+import { getFirstSeen, getNamesOf } from '../../../data/explorer/account';
+import { getLastSent, lastSentKey } from '../../../data/explorer/lastSent';
+import { loadMyStatus } from '../../../data/me';
+import { useAccount, usePrimaryName } from '../../../hooks/useData';
 import { useQuery } from '../../../hooks/useQuery';
-import { formatCount, plural } from '../../../utils/format';
+import { DirectLinksPreview } from './DirectLinksPreview';
+import { LatestTransactions } from './LatestTransactions';
+import { FactsSection } from './overview/FactsSection';
+import { MinterSection } from './overview/MinterSection';
+import { MintingSection } from './overview/MintingSection';
+import { NotesSection } from './overview/NotesSection';
+import { Summary } from './overview/Summary';
+import { useMemberSince } from './overview/useMemberSince';
 
 export interface OverviewTabProps {
   address: string;
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <Box sx={{ minWidth: 0 }}>
-      <Typography component="dt" variant="body2" color="text.secondary">
-        {label}
-      </Typography>
-      <Typography
-        component="dd"
-        sx={{ m: 0, fontWeight: 700, fontSize: 18, fontVariantNumeric: 'tabular-nums' }}
-      >
-        {value}
-      </Typography>
-    </Box>
-  );
+/** undefined while loading, null when it failed (or doesn't apply). */
+function partOf<T>(query: { data: T | undefined; isError: boolean }): T | null | undefined {
+  if (query.data !== undefined) return query.data;
+  return query.isError ? null : undefined;
 }
 
 export default function OverviewTab({ address }: OverviewTabProps) {
   const account = useAccount(address);
-  // The same keys as useBalance and the Names and Groups reads; no polling here.
-  const balance = useQuery(`balance:${address}`, (force) => getBalance(address, { force }));
+  // The same keys as the page header and the person page; no polling here.
+  const status = useQuery(`status:${address}`, (force) => loadMyStatus(address, { force }));
   const names = useQuery(`xnames:${address}`, (force) => getNamesOf(address, { force }));
-  const groups = useQuery(`xgroups:${address}`, (force) => getGroupsOf(address, { force }));
+  const primary = usePrimaryName(address);
+  const firstSeen = useQuery(`xfirst:${address}`, () => getFirstSeen(address));
+  const publicKey = account.data?.publicKey ?? null;
+  const lastSent = useQuery(publicKey ? lastSentKey(address) : null, (force) =>
+    getLastSent(address, publicKey as string, { force })
+  );
+  const memberSince = useMemberSince(address, Boolean(status.data?.isMember));
 
   if (account.isError && !account.data)
     return (
       <ErrorState
-        compact
         title="Couldn't load this account."
         error={account.error}
         onRetry={() => void account.refetch()}
       />
     );
-  if (!account.data) return <ListSkeleton count={2} label="Loading the account" />;
+  if (!account.data) return <ListSkeleton count={3} label="Loading the account" />;
   const a = account.data;
-  const adjusted = a.blocksMintedAdjustment !== 0 || a.blocksMintedPenalty !== 0;
   return (
-    <Box
-      component="dl"
-      aria-label="At a glance"
-      sx={{
-        m: 0,
-        display: 'grid',
-        gap: 2,
-        gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(3, minmax(0, 1fr))' },
-      }}
-    >
-      <Fact label="Level" value={String(a.level)} />
-      <Fact
-        label={adjusted ? 'Blocks minted (with adjustments)' : 'Blocks minted'}
-        value={formatCount(effectiveBlocksMinted(a))}
+    <>
+      <Summary
+        address={address}
+        level={a.level}
+        status={partOf(status)}
+        memberSince={memberSince}
+        names={partOf(names)}
+        firstSeen={partOf(firstSeen)}
+        lastSent={publicKey ? partOf(lastSent) : null}
       />
-      <Fact
-        label="Balance"
-        value={
-          balance.data !== undefined
-            ? formatQort(balance.data)
-            : balance.isError
-              ? "Couldn't load"
-              : 'Loading…'
-        }
+      <DirectLinksPreview address={address} />
+      <FactsSection address={address} account={a} firstSeen={firstSeen} />
+      <MinterSection address={address} status={status} memberSince={memberSince} />
+      <MintingSection address={address} hasPublicKey={Boolean(publicKey)} />
+      <LatestTransactions address={address} />
+      <NotesSection
+        address={address}
+        penalty={a.blocksMintedPenalty}
+        primary={primary.data ?? null}
+        names={names.data}
       />
-      <Fact
-        label="Names"
-        value={
-          names.data
-            ? `${formatCount(names.data.names.length)}${names.data.truncated ? '+' : ''}`
-            : names.isError
-              ? "Couldn't load"
-              : 'Loading…'
-        }
-      />
-      <Fact
-        label="Groups"
-        value={
-          groups.data
-            ? plural(groups.data.length, 'group')
-            : groups.isError
-              ? "Couldn't load"
-              : 'Loading…'
-        }
-      />
-    </Box>
+    </>
   );
 }

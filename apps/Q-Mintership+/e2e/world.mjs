@@ -25,6 +25,8 @@ export {
   AT_ADDRESS,
   SPONSEES,
   MESSAGE_CONTENT,
+  COLLECTOR,
+  COLLECTOR_NAMES,
 } from './world-explorer.mjs';
 
 export const NOW = 1_791_830_000_000; // 2026-10-12 ~14:33 UTC

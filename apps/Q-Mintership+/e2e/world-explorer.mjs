@@ -562,6 +562,8 @@ export function extendExplorer(world) {
       publishes: publishes.map((row) => row.signature),
     },
   };
+  // The Overview and Names tabs' name collector (its own section at the end of this file).
+  extendCollector(world);
 }
 
 // ---- answering Core --------------------------------------------------------------------
@@ -605,6 +607,9 @@ function namesOf(world, owner) {
 export function answerExplorer(world, p, sp) {
   const x = world.explorer;
   if (!x) return undefined;
+  // Reads about the name collector only (its own section at the end of this file).
+  const collector = answerCollector(world, p, sp);
+  if (collector) return collector;
   let m;
 
   // ---- names ---------------------------------------------------------------------------
@@ -820,6 +825,212 @@ export function answerExplorer(world, p, sp) {
         (seller === null || t.sellerAddress === seller) &&
         (buyer === null || t.buyerReceivingAddress === buyer)
     );
+    return json(page(rows, sp));
+  }
+  return undefined;
+}
+
+// =========================================================================================
+// ---- The Overview and Names tabs: a name collector ----------------------------------------
+// =========================================================================================
+/*
+ * Cora Collector owns 30 names: more than one screen of them, and more than
+ * the 10 the Names tab searches on QDN by itself. Its primary name is the
+ * third Core lists; "Cora Sale" is for sale at 5 QORT; three names are
+ * written in ways that get a note (like an address, like its own address,
+ * with a blank character). It published on QDN under five names: an app and
+ * JSON under its primary name, videos and encrypted mail under its newest
+ * names, 120 documents under one (past the 100-row cap) and an image under
+ * an old one. Core recorded a minting penalty and an adjustment on it; it
+ * isn't minting and isn't in MINTER.
+ *
+ * Kept apart from everything above: its names are not in world.names, its
+ * transactions are not in world.explorer.rows, and answerCollector() only
+ * answers reads about its own address, public key and names. So every other
+ * answer (name searches, global transaction searches, QDN searches by
+ * service) stays exactly as it was.
+ */
+export const COLLECTOR = { address: address('explorer-collector'), name: 'Cora Collector' };
+/** The Braille blank (U+2800): shows as nothing. */
+const BLANK = String.fromCharCode(0x2800);
+/** Its names in Core's order (when each was registered); the primary is the third. */
+export const COLLECTOR_NAMES = [
+  'Cora Shelf 01',
+  'Cora Shelf 02',
+  COLLECTOR.name,
+  'Cora Sale',
+  `${COLLECTOR.address.slice(0, 5)} Vault`,
+  'QCora...Maps',
+  `Cora${BLANK}Blank`,
+  ...Array.from({ length: 23 }, (_, i) => `Cora Shelf ${String(i + 3).padStart(2, '0')}`),
+];
+const COLLECTOR_BALANCE = 6480.54123456;
+
+function extendCollector(world) {
+  const who = COLLECTOR.address;
+  const publicKey = fakeKey(`pk:${who}`, 32);
+  world.accounts.set(who, {
+    address: who,
+    name: COLLECTOR.name,
+    level: 0,
+    blocks: 1_200_000,
+    publicKey,
+    reference: fakeKey(`sig:ref:${who}`, 64),
+    balance: COLLECTOR_BALANCE,
+  });
+  const rows = [];
+  const add = (type, h, extra) => {
+    const row = {
+      type,
+      timestamp: blockTime(h) - 20_000,
+      reference: sig(`collector:ref:${type}:${h}`),
+      fee: '0.01000000',
+      signature: sig(`collector:${type}:${h}:${JSON.stringify(extra)}`),
+      txGroupId: 0,
+      blockHeight: h,
+      approvalStatus: 'NOT_REQUIRED',
+      creatorAddress: who,
+      ...extra,
+    };
+    rows.push(row);
+    return row;
+  };
+  const names = new Map();
+  COLLECTOR_NAMES.forEach((name, i) => {
+    const h = 1_500_000 + i * 40_000;
+    names.set(name, { registered: blockTime(h), data: 'Registered Name on the Qortal Chain' });
+    add('REGISTER_NAME', h, { registrantPublicKey: publicKey, name, data: names.get(name).data });
+  });
+  add('UPDATE_NAME', 2_400_000, {
+    ownerPublicKey: publicKey,
+    name: 'Cora Shelf 02',
+    newName: '',
+    newData: '{"shelf":2}',
+  });
+  Object.assign(names.get('Cora Shelf 02'), { updated: blockTime(2_400_000), data: '{"shelf":2}' });
+  add('SELL_NAME', 2_450_000, {
+    ownerPublicKey: publicKey,
+    name: 'Cora Sale',
+    amount: '5.00000000',
+  });
+  Object.assign(names.get('Cora Sale'), { updated: blockTime(2_450_000), salePrice: '5.00000000' });
+
+  const qdn = [];
+  const publish = (name, service, serviceNumber, identifier, h, size, withTx = true) => {
+    qdn.push({ name, service, identifier, created: blockTime(h), size });
+    if (withTx)
+      add('ARBITRARY', h, {
+        version: 5,
+        senderPublicKey: publicKey,
+        service: serviceNumber,
+        nonce: 0,
+        size,
+        name,
+        identifier,
+        method: 'PUT',
+        compression: 'ZIP',
+        data: fakeKey(`hash:${name}:${identifier}`, 32),
+        dataType: 'DATA_HASH',
+        payments: [],
+      });
+  };
+  for (let k = 0; k < 120; k++) {
+    const identifier = `doc-${String(k).padStart(3, '0')}`;
+    publish('Cora Shelf 23', 'DOCUMENT', 800, identifier, 1_900_000 + k * 100, 1_200, false);
+  }
+  publish('Cora Shelf 05', 'IMAGE', 400, 'old-picture', 2_000_000, 80_000);
+  publish(COLLECTOR.name, 'APP', 1000, null, 2_600_000, 2_400_000);
+  publish(COLLECTOR.name, 'JSON', 1110, 'cora-settings', 2_650_000, 240);
+  publish(COLLECTOR.name, 'JSON', 1110, 'cora-prefs', 2_660_000, 310);
+  publish('Cora Shelf 25', 'VIDEO', 500, 'shelf-tour', 2_700_000, 52_000_000);
+  publish('Cora Shelf 25', 'VIDEO', 500, 'shelf-tour-2', 2_710_000, 48_000_000);
+  publish('Cora Shelf 24', 'MAIL_PRIVATE', 1901, 'qortal_qmail_cora_secret_1', 2_720_000, 4_000);
+  // Its newest transaction: about two and a half days before the tip.
+  publish('Cora Shelf 24', 'MAIL_PRIVATE', 1901, 'qortal_qmail_cora_secret_2', TIP - 3_000, 3_800);
+
+  rows.sort((a, b) => a.blockHeight - b.blockHeight);
+  world.explorer.collector = { address: who, publicKey, rows, names, qdn };
+}
+
+/** Core's answers about the collector (its address, its public key, its names), or undefined. */
+function answerCollector(world, p, sp) {
+  const c = world.explorer.collector;
+  if (!c) return undefined;
+  const nameOf = (asked) =>
+    c.names.has(asked)
+      ? asked
+      : [...c.names.keys()].find((n) => n.toLowerCase() === asked.toLowerCase());
+  let m;
+  if (p === `/addresses/${c.address}`) {
+    const a = world.accounts.get(c.address);
+    return json({
+      address: c.address,
+      reference: a.reference,
+      publicKey: c.publicKey,
+      defaultGroupId: 0,
+      flags: 0,
+      level: a.level,
+      blocksMinted: a.blocks,
+      blocksMintedAdjustment: 12_000,
+      blocksMintedPenalty: -5_000_000,
+    });
+  }
+  if (p === `/names/address/${c.address}`)
+    return json(
+      page(
+        COLLECTOR_NAMES.map((name) => ({ name, owner: c.address })),
+        sp
+      )
+    );
+  if ((m = p.match(/^\/names\/([^/]+)$/)) && m[1] !== 'search') {
+    const name = nameOf(decodeURIComponent(m[1]));
+    if (!name) return undefined;
+    const info = c.names.get(name);
+    return json({
+      name,
+      reducedName: name.toLowerCase(),
+      owner: c.address,
+      data: info.data,
+      registered: info.registered,
+      ...(info.updated ? { updated: info.updated } : {}),
+      isForSale: Boolean(info.salePrice),
+      ...(info.salePrice ? { salePrice: info.salePrice } : {}),
+    });
+  }
+  if (p === `/transactions/creator/${c.publicKey}`) return json(page(c.rows, sp));
+  if ((m = p.match(/^\/transactions\/signature\/(\w+)$/))) {
+    const row = c.rows.find((t) => t.signature === m[1]);
+    return row ? json(row) : undefined;
+  }
+  if (p === '/transactions/search' && sp.get('address') === c.address) {
+    const types = sp.getAll('txType');
+    const start = Number(sp.get('startBlock') || 0);
+    const blocks = Number(sp.get('blockLimit') || 0);
+    const rows = c.rows.filter(
+      (t) =>
+        (!types.length || types.includes(t.type)) &&
+        (!start || (t.blockHeight >= start && (!blocks || t.blockHeight < start + blocks)))
+    );
+    return json(page(rows, sp));
+  }
+  if (p === '/arbitrary/resources/searchsimple') {
+    const asked = sp.getAll('name');
+    if (!asked.length || !asked.every((n) => c.names.has(n))) return undefined;
+    const service = sp.get('service');
+    const ident = sp.get('identifier');
+    const rows = c.qdn
+      .filter((r) => asked.includes(r.name))
+      .filter((r) => !service || r.service === service)
+      .filter((r) => !ident || r.identifier === ident)
+      .sort((a, b) => a.created - b.created)
+      .map((r) => ({
+        name: r.name,
+        service: r.service,
+        ...(r.identifier ? { identifier: r.identifier } : {}),
+        latestSignature: fakeKey(`collector:qdn:${r.service}:${r.name}:${r.identifier}`, 64),
+        size: r.size,
+        created: r.created,
+      }));
     return json(page(rows, sp));
   }
   return undefined;
