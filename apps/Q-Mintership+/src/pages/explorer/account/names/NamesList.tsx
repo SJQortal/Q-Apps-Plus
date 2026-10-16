@@ -12,7 +12,7 @@
 import { useState, type ReactNode } from 'react';
 import { Box, Button, Skeleton, TextField, Typography } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
-import { Card, Section, ToneChip } from '../../../../components/common/Section';
+import { Card, Section } from '../../../../components/common/Section';
 import { EmptyState, ErrorState, ListSkeleton } from '../../../../components/common/states';
 import { getNameData, type NamesOf } from '../../../../data/explorer/account';
 import { useInView } from '../../../../hooks/useInView';
@@ -39,6 +39,7 @@ import {
 import { FOCUSABLE_ROW_SX, useShowMore } from './useShowMore';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 import { ViewToggle } from '../ViewToggle';
+import { StatusChip } from '../../../../components/explorer/StatusChip';
 
 /** Names shown at first, and added by each "Show more". */
 export const NAMES_PAGE = 20;
@@ -268,9 +269,7 @@ function NameHead({ name, primary = false }: { name: string; primary?: boolean }
       >
         <NameText name={name} quoted={false} avatar={false} />
       </Typography>
-      {primary ? (
-        <ToneChip size="small" variant="outlined" label="Primary" sx={{ fontSize: 14 }} />
-      ) : null}
+      {primary ? <StatusChip label="Primary" kind="primary" /> : null}
     </Box>
   );
 }

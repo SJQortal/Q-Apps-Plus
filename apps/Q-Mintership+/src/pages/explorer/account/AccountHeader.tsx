@@ -4,14 +4,13 @@
  * (where it stands in MINTER, minting now, a minting penalty), and a note
  * when it was opened by a name that isn't its primary one. On phones the
  * title is cut short beside the header's buttons, so the whole name is
- * under the avatar too, wrapping. Plain facts in neutral chips: no colour
- * says good or bad.
+ * under the avatar too, wrapping. The chips are in colour (StatusChip): the
+ * colour says what kind of fact it is, never good or bad.
  */
 import { Box, Typography } from '@mui/material';
 import { AddressText } from '../../../components/common/Person';
 import { NameAvatar } from '../../../components/common/NameAvatar';
 import { NameWithAvatar } from '../../../components/explorer/NameWithAvatar';
-import { LevelBadge, ToneChip } from '../../../components/common/Section';
 import type { NamesOf } from '../../../data/explorer/account';
 import type { AccountInfo } from '../../../data/types';
 import { visibleName } from '../../../rules/explorer/nameNotes';
@@ -19,6 +18,7 @@ import type { MyStatus } from '../../../rules/status';
 import type { NameMatch } from '../../../state/explorer';
 import { minterStatusWord, openedFrom } from './accountWords';
 import { MarkedName } from '../../../components/common/MarkedName';
+import { StatusChip } from '../../../components/explorer/StatusChip';
 
 export interface AccountHeaderProps {
   address: string;
@@ -73,11 +73,11 @@ export function AccountHeader({
             }}
           >
             <li>
-              <LevelBadge level={account.level} />
+              <StatusChip label={`Level ${account.level}`} />
             </li>
             {chips.map((chip) => (
               <li key={chip}>
-                <ToneChip size="small" variant="outlined" label={chip} sx={{ fontSize: 14 }} />
+                <StatusChip label={chip} />
               </li>
             ))}
           </Box>

@@ -11,7 +11,6 @@
 import { Box, IconButton, Skeleton, Tooltip, Typography } from '@mui/material';
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
 import { AddressText, PersonChip } from '../../../components/common/Person';
-import { LevelBadge, ToneChip } from '../../../components/common/Section';
 import { ErrorState } from '../../../components/common/states';
 import { ExplorerSearch } from '../../../components/explorer/ExplorerSearch';
 import { isInvalidAddressError } from '../../../data/explorer/account';
@@ -22,6 +21,7 @@ import { minterStatusWord } from '../account/accountWords';
 import { INVALID_ADDRESS, UNUSED_ADDRESS } from '../explorerWords';
 import { LetterBadge } from './letters';
 import type { CompareData } from './useCompareData';
+import { StatusChip } from '../../../components/explorer/StatusChip';
 
 const CHIP_LIST_SX = {
   listStyle: 'none',
@@ -73,11 +73,11 @@ function AccountCard({
     body = (
       <Box component="ul" aria-label={`About ${label}`} sx={CHIP_LIST_SX}>
         <li>
-          <LevelBadge level={account.level} />
+          <StatusChip label={`Level ${account.level}`} />
         </li>
         {chips.map((chip) => (
           <li key={chip}>
-            <ToneChip size="small" variant="outlined" label={chip} sx={{ fontSize: 14 }} />
+            <StatusChip label={chip} />
           </li>
         ))}
         {unread.length ? (

@@ -10,7 +10,6 @@
 import { useState } from 'react';
 import { Box, Checkbox, Typography } from '@mui/material';
 import { PersonChip } from '../../../components/common/Person';
-import { ToneChip } from '../../../components/common/Section';
 import { getAccount } from '../../../data/accounts';
 import type { SponseeRow } from '../../../data/explorer/sets';
 import { useDisplayName } from '../../../hooks/useDisplayName';
@@ -18,6 +17,7 @@ import { useInView } from '../../../hooks/useInView';
 import { useQuery } from '../../../hooks/useQuery';
 import { formatCount, formatDate, plural } from '../../../utils/format';
 import { FOCUSABLE_ROW_SX } from '../account/names/useShowMore';
+import { StatusChip } from '../../../components/explorer/StatusChip';
 
 export const SET_LIST_SX = {
   listStyle: 'none',
@@ -31,7 +31,7 @@ export const SET_LIST_SX = {
 function Fact({ label }: { label: string }) {
   return (
     <li>
-      <ToneChip size="small" variant="outlined" label={label} sx={{ fontSize: 14 }} />
+      <StatusChip label={label} />
     </li>
   );
 }

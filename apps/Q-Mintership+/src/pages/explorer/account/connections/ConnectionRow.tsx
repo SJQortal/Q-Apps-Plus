@@ -30,6 +30,8 @@ import { addPick, COMPARE_FULL, COMPARE_MAX, useComparePicks } from '../../../..
 import { formatCount, formatDate, shortAddress } from '../../../../utils/format';
 import { FOCUSABLE_ROW_SX, useFocusNewRows } from '../names/useShowMore';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
+import { StatusChip } from '../../../../components/explorer/StatusChip';
+import { statusKindOf } from '../../../../components/explorer/statusKinds';
 
 /** Evidence lines shown before "Show all". */
 const EVIDENCE_ROWS = 20;
@@ -250,7 +252,20 @@ export function ConnectionRow({
   const isAt = other.startsWith('A');
   const otherLabel = useDisplayName(other, isAt ? null : undefined).label;
   const shownTags = (tags ?? []).filter((tag): tag is string => Boolean(tag));
-  const secondary = shownTags.length ? shownTags.join(' · ') : undefined;
+  // MINTER marks as status chips (in colour); the other tags as words after them.
+  const marks = shownTags.filter((tag) => statusKindOf(tag) !== 'plain');
+  const words = shownTags.filter((tag) => statusKindOf(tag) === 'plain');
+  const secondary = shownTags.length ? (
+    <Box
+      component="span"
+      sx={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.75, mt: 0.25 }}
+    >
+      {marks.map((mark) => (
+        <StatusChip key={mark} label={mark} />
+      ))}
+      {words.length ? <span>{words.join(' · ')}</span> : null}
+    </Box>
+  ) : undefined;
   return (
     // Each connection on a panel of its own (fieldBlock.ts).
     <Box component="li" tabIndex={-1} sx={{ ...FIELD_BLOCK_SX, ...FOCUSABLE_ROW_SX }}>

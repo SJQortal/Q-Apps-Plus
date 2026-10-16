@@ -21,7 +21,7 @@
 import { useId, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import { alpha, styled } from '@mui/material/styles';
 import ExpandMoreOutlinedIcon from '@mui/icons-material/ExpandMoreOutlined';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import { Card } from '../common/Section';
@@ -35,6 +35,8 @@ import { formatCount, formatDateTime, formatRelative } from '../../utils/format'
 import { RawResponse } from './RawJson';
 import { TxFields, TxPeople } from './TxFields';
 import { TxIcon } from './TxIcon';
+import { TX_FAMILIES, txFamilyAccent } from './txFamilyAccent';
+import { familyOf } from '../../rules/explorer/txFamilies';
 import { TxSentence } from './TxSentence';
 import { useTxWords } from './useTxWords';
 
@@ -66,11 +68,29 @@ const RowButton = styled('button')(({ theme }) => ({
   '& [data-chevron]': { transition: CHEVRON_TURN },
   '&[aria-expanded="true"] [data-chevron]': { transform: 'rotate(180deg)' },
 }));
+// The family's icon in a soft circle of its colour (txFamilyAccent), one rule per family.
 const Slot = styled('span')(({ theme }) => ({
-  paddingTop: 2,
+  width: 34,
+  height: 34,
+  flexShrink: 0,
+  borderRadius: '50%',
   display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   color: theme.palette.text.secondary,
-  '& > svg': { fontSize: 22 },
+  '& > svg': { fontSize: 20 },
+  ...Object.fromEntries(
+    TX_FAMILIES.map((family) => {
+      const accent = txFamilyAccent(theme, family);
+      return [
+        `&[data-family="${family}"]`,
+        {
+          color: accent,
+          backgroundColor: alpha(accent, theme.palette.mode === 'dark' ? 0.16 : 0.12),
+        },
+      ];
+    })
+  ),
 }));
 const Lines = styled('span')({ flex: 1, minWidth: 0, display: 'block' });
 const SentenceLine = styled('span')({
@@ -134,7 +154,7 @@ export function TxListRow({ tx, viewpoint = null }: TxListRowProps) {
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
       >
-        <Slot>
+        <Slot data-family={familyOf(tx.type)}>
           <TxIcon type={tx.type} />
         </Slot>
         <Lines>

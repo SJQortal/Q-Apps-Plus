@@ -330,6 +330,7 @@ describe('content arriving', () => {
       'qmp-pop-in',
       'qmp-dialog-in',
       'qmp-sheet-in',
+      'qmp-live',
     ]);
     for (const k of keyframes) {
       for (const frame of [...k.cssRules] as CSSKeyframeRule[]) {

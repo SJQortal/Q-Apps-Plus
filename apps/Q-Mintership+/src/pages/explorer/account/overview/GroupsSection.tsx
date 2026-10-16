@@ -9,7 +9,7 @@
 import { useId, useState } from 'react';
 import { Box, Button, TextField, Typography } from '@mui/material';
 import { GroupAvatar } from '../../../../components/common/GroupAvatar';
-import { Card, Section, ToneChip } from '../../../../components/common/Section';
+import { Card, Section } from '../../../../components/common/Section';
 import { ErrorState, ListSkeleton } from '../../../../components/common/states';
 import { MINTER_GROUP_ID } from '../../../../data/constants';
 import { getGroupsOf, type GroupOf } from '../../../../data/explorer/account';
@@ -24,6 +24,7 @@ import { formatCount } from '../../../../utils/format';
 import { useListView, type ListView } from '../useListView';
 import { ViewToggle } from '../ViewToggle';
 import { membersWords } from './overviewWords';
+import { StatusChip } from '../../../../components/explorer/StatusChip';
 
 /** Groups shown before "Show all". */
 export const GROUPS_SHOWN = 9;
@@ -31,12 +32,8 @@ export const GROUPS_SHOWN = 9;
 function Roles({ group, address }: { group: GroupOf; address: string }) {
   return (
     <>
-      {group.owner === address ? (
-        <ToneChip size="small" variant="outlined" label="Owner" sx={{ fontSize: 14 }} />
-      ) : null}
-      {group.isAdmin ? (
-        <ToneChip size="small" variant="outlined" label="Admin" sx={{ fontSize: 14 }} />
-      ) : null}
+      {group.owner === address ? <StatusChip label="Owner" kind="owner" /> : null}
+      {group.isAdmin ? <StatusChip label="Admin" kind="groupAdmin" /> : null}
     </>
   );
 }
