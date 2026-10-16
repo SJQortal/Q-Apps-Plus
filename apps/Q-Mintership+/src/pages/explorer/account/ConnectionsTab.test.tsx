@@ -431,7 +431,7 @@ describe('Connections: minting and names', () => {
     const open1 = await within(level).findByRole('link', { name: /^Open transaction/ }, T);
     const evidence = open1.closest('li');
     await waitFor(
-      () => expect(evidence).toHaveTextContent(/^Got its minting level from O?Olga Old/),
+      () => expect(evidence).toHaveTextContent(/^Incoming: Got its minting level from O?Olga Old/),
       T
     );
     // It sent nothing: the payments open on what it received.

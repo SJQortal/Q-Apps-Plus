@@ -31,6 +31,8 @@ import { formatCount, formatDate, shortAddress } from '../../../../utils/format'
 import { FOCUSABLE_ROW_SX, useFocusNewRows } from '../names/useShowMore';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 import { StatusChip } from '../../../../components/explorer/StatusChip';
+import { DirectionMark } from '../../../../components/explorer/DirectionMark';
+import { directionRules, type Flow } from '../../../../components/explorer/directionTone';
 import { statusKindOf } from '../../../../components/explorer/statusKinds';
 
 /** Evidence lines shown before "Show all". */
@@ -60,10 +62,17 @@ function EvidenceLine({
     tx.type === 'TRANSFER_PRIVS' && tx.creatorAddress !== viewpoint ? viewpoint : privsRecipient;
   const words = describeTx(tx, { viewpoint, privsRecipient: recipient });
   const height = tx.blockHeight;
+  const flow = words.direction === 'in' || words.direction === 'out' ? words.direction : null;
   return (
-    <Box component="li" tabIndex={-1} sx={{ minWidth: 0, ...FOCUSABLE_ROW_SX }}>
+    <Box
+      component="li"
+      tabIndex={-1}
+      data-direction={flow ?? undefined}
+      sx={(theme) => ({ minWidth: 0, ...FOCUSABLE_ROW_SX, ...directionRules(theme) })}
+    >
       {/* A div: the people in the sentence are chips. */}
       <Typography component="div" variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+        {flow ? <DirectionMark flow={flow} /> : null}
         <TxSentence parts={words.parts} />
       </Typography>
       <Typography
@@ -234,6 +243,8 @@ export interface ConnectionRowProps {
   privs?: Readonly<Record<string, string | null>>;
   /** Something more under the sentence (a link). */
   extra?: ReactNode;
+  /** Payments one way: incoming (received from it) green, outgoing (sent to it) red. */
+  flow?: Flow;
 }
 
 export function ConnectionRow({
@@ -246,6 +257,7 @@ export function ConnectionRow({
   evidence,
   privs,
   extra,
+  flow,
 }: ConnectionRowProps) {
   const [open, setOpen] = useState(false);
   const id = useId();
@@ -276,7 +288,11 @@ export function ConnectionRow({
           ) : (
             <PersonChip address={other} size={32} secondary={secondary} />
           )}
-          <Typography sx={{ overflowWrap: 'anywhere' }}>
+          <Typography
+            data-direction={flow}
+            sx={(theme) => ({ overflowWrap: 'anywhere', ...directionRules(theme) })}
+          >
+            {flow ? <DirectionMark flow={flow} /> : null}
             <TxSentence parts={parts} plain />
           </Typography>
           <Typography variant="body2" color="text.secondary">

@@ -78,6 +78,7 @@ function FlowRow({
       when={blocksLine(flow.first.height, flow.last.height)}
       tags={tags}
       evidence={{ words: flowCountWords(flow), txs: flow.txs }}
+      flow={direction === 'received' ? 'in' : 'out'}
     />
   );
 }

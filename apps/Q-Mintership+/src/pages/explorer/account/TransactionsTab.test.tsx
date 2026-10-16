@@ -123,7 +123,9 @@ describe('an account’s transactions', () => {
       const all = await region('All transactions');
       const list = await within(all).findByRole('list', { name: 'All transactions' }, T);
       await waitFor(() => expect(items(list)).toHaveLength(50), T);
-      expect(rowButtons(list)[0]).toHaveAccessibleName(/^Sent 1 QORT to /);
+      // Outgoing: said in words before the sentence, beside the red arrow.
+      expect(rowButtons(list)[0]).toHaveAccessibleName(/^Outgoing: Sent 1 QORT to /);
+      expect(rowButtons(list)[0]).toHaveAttribute('data-direction', 'out');
       expect(
         within(all).getByText("The newest 50 of this account's transactions.")
       ).toBeInTheDocument();

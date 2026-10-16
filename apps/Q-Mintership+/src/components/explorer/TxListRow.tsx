@@ -35,6 +35,8 @@ import { formatCount, formatDateTime, formatRelative } from '../../utils/format'
 import { RawResponse } from './RawJson';
 import { TxFields, TxPeople } from './TxFields';
 import { TxIcon } from './TxIcon';
+import { DirectionMark } from './DirectionMark';
+import { directionRules } from './directionTone';
 import { TX_FAMILIES, txFamilyAccent } from './txFamilyAccent';
 import { familyOf } from '../../rules/explorer/txFamilies';
 import { TxSentence } from './TxSentence';
@@ -67,9 +69,12 @@ const RowButton = styled('button')(({ theme }) => ({
   // The chevron turns over as the row opens (ExpandChevron's turn).
   '& [data-chevron]': { transition: CHEVRON_TURN },
   '&[aria-expanded="true"] [data-chevron]': { transform: 'rotate(180deg)' },
+  // Incoming amounts green, outgoing red (the row's data-direction).
+  ...directionRules(theme),
 }));
 // The family's icon in a soft circle of its colour (txFamilyAccent), one rule per family.
 const Slot = styled('span')(({ theme }) => ({
+  position: 'relative',
   width: 34,
   height: 34,
   flexShrink: 0,
@@ -144,18 +149,22 @@ export function TxListRow({ tx, viewpoint = null }: TxListRowProps) {
   const [node, setNode] = useState<HTMLElement | null>(null);
   const near = useInView(node, '200px');
   const maker = words.participants[0] ?? null;
+  // Which way it went from the list's account: incoming green, outgoing red.
+  const flow = words.direction === 'in' || words.direction === 'out' ? words.direction : null;
 
   return (
     <Row ref={setNode}>
       <RowButton
         type="button"
         data-tx-row=""
+        data-direction={flow ?? undefined}
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
       >
         <Slot data-family={familyOf(tx.type)}>
           <TxIcon type={tx.type} />
+          {flow ? <DirectionMark flow={flow} badge /> : null}
         </Slot>
         <Lines>
           <SentenceLine>

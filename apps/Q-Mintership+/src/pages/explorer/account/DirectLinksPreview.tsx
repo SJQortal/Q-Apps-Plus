@@ -25,9 +25,16 @@ import { tabIdOf } from './tabIds';
 import { LINKS_CAPPED_NOTE, unreadWords, whenLine } from './connections/words';
 import { FIELD_BLOCK_SX } from '../../../components/explorer/fieldBlock';
 import { RewardShareNote } from '../../../components/explorer/RewardShareNote';
+import { DirectionMark } from '../../../components/explorer/DirectionMark';
+import { directionRules, type Flow } from '../../../components/explorer/directionTone';
 
 export interface DirectLinksPreviewProps {
   address: string;
+}
+
+/** Payments one way: received from it incoming, sent to it outgoing. */
+function flowOf(kind: string): Flow | undefined {
+  return kind === 'paidBy' ? 'in' : kind === 'paidTo' ? 'out' : undefined;
 }
 
 /** How many lines the preview shows. */
@@ -108,9 +115,17 @@ export function DirectLinksPreview({ address }: DirectLinksPreviewProps) {
           sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 1 }}
         >
           {recorded.slice(0, PREVIEW).map((finding) => (
-            <Box component="li" key={finding.key} sx={FIELD_BLOCK_SX}>
+            <Box
+              component="li"
+              key={finding.key}
+              data-direction={flowOf(finding.kind)}
+              sx={(theme) => ({ ...FIELD_BLOCK_SX, ...directionRules(theme) })}
+            >
               {/* A div: the people in the sentence are chips. */}
               <Typography component="div" sx={{ overflowWrap: 'anywhere' }}>
+                {flowOf(finding.kind) ? (
+                  <DirectionMark flow={flowOf(finding.kind) as Flow} />
+                ) : null}
                 <TxSentence parts={finding.parts} />
               </Typography>
               <Typography variant="body2" color="text.secondary">

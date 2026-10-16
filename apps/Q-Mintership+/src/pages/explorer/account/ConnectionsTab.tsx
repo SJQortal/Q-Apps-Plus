@@ -149,6 +149,7 @@ function FindingRow({
       tags={[marks.markOf(finding.other)]}
       evidence={{ words: finding.evidenceWords, txs: finding.evidence }}
       privs={privs}
+      flow={finding.kind === 'paidBy' ? 'in' : finding.kind === 'paidTo' ? 'out' : undefined}
     />
   );
 }
