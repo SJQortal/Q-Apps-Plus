@@ -13,6 +13,7 @@
 import {
   addCommunityVotes,
   addConsidering,
+  addDecisionVotes,
   addDecidedSignatures,
   addComments,
   addFormerReady,
@@ -46,6 +47,8 @@ addRejections(world);
 addConsidering(world);
 // The community's Yes and No (people who aren't Minter Admins) on Wren's and bob's nominations.
 addCommunityVotes(world);
+// And on Kai's removal, Ben's ban and Pia's request to become a Minter Admin.
+addDecisionVotes(world);
 // A moving target: screens whose path starts with `?world=shift` read this world.
 const shiftWorld = createWorld();
 addOtherPending(shiftWorld);

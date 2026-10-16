@@ -1,16 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { addCommunityVotes } from '../../e2e/world.mjs';
+import { addCommunityVotes, addDecisionVotes } from '../../e2e/world.mjs';
 import { ADDR, NOW, installWorld } from '../test/world';
 import { fetchCallsFor } from '../test/setup';
 import {
   VOTE_PREFIX,
+  buildDecisionVote,
   buildVote,
+  decisionVoteSearchPrefix,
+  newDecisionVoteIdentifier,
   newVoteIdentifier,
+  parseDecisionVoteIdentifier,
   parseVoteIdentifier,
   voteSearchPrefix,
 } from './voteRecords';
 import { IDENTIFIER_MAX } from './records';
-import { loadNomineeVotes, loadVoteIndex, voteIndexCovers } from './communityVotes';
+import {
+  loadNomineeVotes,
+  loadSubjectVotes,
+  loadVoteIndex,
+  voteIndexCovers,
+} from './communityVotes';
 import {
   communityVotesFor,
   myCommunityVote,
@@ -205,5 +214,80 @@ describe('Reading the votes (data/communityVotes)', () => {
       p.includes(encodeURIComponent(voteSearchPrefix(ADDR.nominatedWaiting)))
     );
     expect(search).toMatch(/after=\d+/);
+  });
+});
+
+describe('Votes on removals, bans and new Minter Admins (qmp-vote-<remove|ban|admin>-<address>-…)', () => {
+  it('puts the kind, the account and the vote in the identifier, within QDN’s 64 characters', () => {
+    const id = newDecisionVoteIdentifier('kick', NOMINEE, 'yes', 'abc123');
+    expect(id).toBe(`qmp-vote-remove-${NOMINEE}-yes-abc123`);
+    expect(id.length).toBeLessThanOrEqual(IDENTIFIER_MAX);
+    expect(newDecisionVoteIdentifier('ban', NOMINEE, 'no', 'abc123')).toBe(
+      `qmp-vote-ban-${NOMINEE}-no-abc123`
+    );
+    expect(newDecisionVoteIdentifier('addAdmin', NOMINEE, 'yes', 'abc123')).toBe(
+      `qmp-vote-admin-${NOMINEE}-yes-abc123`
+    );
+    expect(id.startsWith(decisionVoteSearchPrefix('kick', NOMINEE))).toBe(true);
+    expect(() => newDecisionVoteIdentifier('cancelBan' as 'ban', NOMINEE, 'yes')).toThrow();
+    expect(() => newDecisionVoteIdentifier('ban', 'Qshort', 'yes')).toThrow();
+    expect(buildDecisionVote('ban', NOMINEE, 'no')).toEqual({
+      v: 1,
+      kind: 'ban',
+      subjectAddress: NOMINEE,
+      vote: 'no',
+    });
+  });
+
+  it('never reads a nomination vote as a decision vote, nor the other way round', () => {
+    const decision = `qmp-vote-admin-${NOMINEE}-no-k3j9x2`;
+    expect(parseDecisionVoteIdentifier(decision)).toEqual({
+      kind: 'addAdmin',
+      subject: NOMINEE,
+      vote: 'no',
+    });
+    expect(parseVoteIdentifier(decision)).toBeNull();
+    expect(parseDecisionVoteIdentifier(`qmp-vote-${NOMINEE}-no-k3j9x2`)).toBeNull();
+    expect(parseDecisionVoteIdentifier(`qmp-vote-kick-${NOMINEE}-no-k3j9x2`)).toBeNull();
+    expect(parseDecisionVoteIdentifier(`qmp-vote-ban-${NOMINEE}-maybe-k3j9x2`)).toBeNull();
+  });
+
+  it('keeps each kind’s votes apart from the nomination’s and from each other', async () => {
+    const { world } = installWorld('learner');
+    addDecisionVotes(world);
+    const index = await loadVoteIndex();
+    const admins = new Set(index.admins);
+    const since = NOW - 25 * HOUR;
+    const kick = communityVotesFor(
+      index.rows,
+      { topic: 'kick', nominee: ADDR.kickTarget, since },
+      admins
+    );
+    expect(names(kick.yes)).toEqual(['Member 7', 'Zoë Newcomer']);
+    expect(names(kick.no)).toEqual(['Lou Left']);
+    // The nomination-style vote on Kai is another round.
+    const nomination = communityVotesFor(index.rows, { nominee: ADDR.kickTarget, since }, admins);
+    expect(names(nomination.yes)).toEqual(['Member 1']);
+    expect(
+      communityVotesFor(index.rows, { topic: 'ban', nominee: ADDR.kickTarget, since }, admins)
+    ).toEqual({ yes: [], no: [] });
+  });
+
+  it('a card can search its own proposal’s votes', async () => {
+    const { world } = installWorld('learner');
+    addDecisionVotes(world);
+    const own = await loadSubjectVotes('ban', ADDR.banTarget, NOW - 120 * HOUR);
+    expect(own.rows.map((r) => [r.topic, r.name])).toEqual(
+      expect.arrayContaining([
+        ['ban', 'Member 1'],
+        ['ban', 'Member 4'],
+      ])
+    );
+    expect(own.rows).toHaveLength(2);
+    expect(
+      fetchCallsFor('/arbitrary/resources/searchsimple').some((p) =>
+        p.includes(encodeURIComponent(decisionVoteSearchPrefix('ban', ADDR.banTarget)))
+      )
+    ).toBe(true);
   });
 });

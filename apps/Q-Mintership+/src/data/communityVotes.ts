@@ -1,27 +1,36 @@
 /**
- * Community votes, as everyone sees them (data/voteRecords.ts):
+ * Community votes, as everyone sees them (data/voteRecords.ts), on
+ * nominations and on proposals to remove, ban or make a Minter Admin:
  *
  * - **One shared search** lists every vote of the last two signing windows
  *   (`identifier=qmp-vote-&prefix=true&after=…`, 100 a page, at most 3
  *   pages), so a page full of cards costs one GET. A round lasts at most two
  *   windows (a nomination waits at most one for its first approval, then its
- *   invite collects approvals for at most one).
+ *   invite collects approvals for at most one; a proposal collects for one).
  * - **No bodies:** the vote is in the identifier.
  * - **When that list is full,** a card on screen searches its own nominee's
- *   votes since its round began instead (hooks/useCommunityVotes.ts).
+ *   (or proposal's) votes since its round began instead
+ *   (hooks/useCommunityVotes.ts).
  *
  * Each voter's name is looked up once to the account that owns it (cached
  * 30 minutes), and the Minter Admins are read with it, so the rules can
  * leave their votes out. Nothing here writes.
  */
-import type { VoteRow } from '../rules/communityVotes';
+import type { VoteRow, VoteTopic } from '../rules/communityVotes';
 import { getNameOwner } from './accounts';
 import { getChainNow } from './chain';
 import { getAdmins, getGroupInfo } from './group';
 import { mapLimit, searchQdn } from './qdn';
 import { fetchQuery } from './query';
 import type { QdnRow } from './types';
-import { VOTE_PREFIX, VOTE_SERVICE, parseVoteIdentifier, voteSearchPrefix } from './voteRecords';
+import {
+  VOTE_PREFIX,
+  VOTE_SERVICE,
+  decisionVoteSearchPrefix,
+  parseDecisionVoteIdentifier,
+  parseVoteIdentifier,
+  voteSearchPrefix,
+} from './voteRecords';
 
 /** Pages of 100 rows read at most, newest first (the shared list, and one nominee's). */
 export const VOTE_PAGES = 3;
@@ -37,18 +46,30 @@ export interface CommunityVoteData {
   admins: string[];
 }
 
+/** A search row as a vote: on a nomination, or on a proposal (null when it is neither). */
+function parseRow(
+  row: QdnRow
+): { row: QdnRow; topic: VoteTopic; nominee: string; vote: VoteRow['vote'] } | null {
+  const nomination = parseVoteIdentifier(row.identifier);
+  if (nomination) return { row, topic: 'nomination', ...nomination };
+  const decision = parseDecisionVoteIdentifier(row.identifier);
+  return decision
+    ? { row, topic: decision.kind, nominee: decision.subject, vote: decision.vote }
+    : null;
+}
+
 async function toVoteRows(rows: QdnRow[]): Promise<VoteRow[]> {
   const parsed = rows.flatMap((row) => {
-    const vote = parseVoteIdentifier(row.identifier);
-    return vote ? [{ row, ...vote }] : [];
+    const vote = parseRow(row);
+    return vote ? [vote] : [];
   });
   const owners = new Map<string, string | null>();
   await mapLimit([...new Set(parsed.map((p) => p.row.name))], 6, async (name) => {
     owners.set(name, await getNameOwner(name).catch(() => null));
   });
-  return parsed.flatMap(({ row, nominee, vote }) => {
+  return parsed.flatMap(({ row, topic, nominee, vote }) => {
     const voter = owners.get(row.name);
-    return voter ? [{ voter, name: row.name, nominee, vote, castAt: row.created }] : [];
+    return voter ? [{ voter, name: row.name, topic, nominee, vote, castAt: row.created }] : [];
   });
 }
 
@@ -88,8 +109,28 @@ export function loadNomineeVotes(
   since: number,
   options: { force?: boolean } = {}
 ): Promise<CommunityVoteData> {
+  return loadSubjectVotes('nomination', nominee, since, options);
+}
+
+/** The key of one round's own search. */
+export function subjectVotesKey(topic: VoteTopic, subject: string, since: number): string {
+  return topic === 'nomination'
+    ? `communityvotes:nominee:${subject}:${since}`
+    : `communityvotes:${topic}:${subject}:${since}`;
+}
+
+/**
+ * The votes on one nomination, or one kind of proposal about `subject`,
+ * since `since` (ms). Key `subjectVotesKey(…)`.
+ */
+export function loadSubjectVotes(
+  topic: VoteTopic,
+  subject: string,
+  since: number,
+  options: { force?: boolean } = {}
+): Promise<CommunityVoteData> {
   return fetchQuery(
-    `communityvotes:nominee:${nominee}:${since}`,
+    subjectVotesKey(topic, subject, since),
     async () => {
       const force = options.force;
       const after = Math.max(0, since - 1);
@@ -97,7 +138,10 @@ export function loadNomineeVotes(
         searchQdn(
           {
             service: VOTE_SERVICE,
-            identifier: voteSearchPrefix(nominee),
+            identifier:
+              topic === 'nomination'
+                ? voteSearchPrefix(subject)
+                : decisionVoteSearchPrefix(topic, subject),
             after,
             maxPages: VOTE_PAGES,
           },

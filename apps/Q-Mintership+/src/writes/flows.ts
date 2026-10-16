@@ -21,7 +21,14 @@ import {
   type NominationInput,
 } from '../data/records';
 import type { GroupTxType, TxRow } from '../data/types';
-import { buildVote, newVoteIdentifier, type CommunityVoteValue } from '../data/voteRecords';
+import {
+  buildDecisionVote,
+  buildVote,
+  newDecisionVoteIdentifier,
+  newVoteIdentifier,
+  type CommunityVoteValue,
+  type DecisionVoteKind,
+} from '../data/voteRecords';
 import { chainsOwnSignature } from '../rules/adminChange';
 import { decisionSubject } from '../rules/decision';
 import { groupApprovalUnsignedBase58, groupRejectionUnsignedBase58 } from '../qortal/approvalBytes';
@@ -32,6 +39,7 @@ import {
   guardCancelInvite,
   guardCommunityVote,
   guardConsidering,
+  guardDecisionVote,
   guardDecline,
   guardInvite,
   guardJoin,
@@ -706,6 +714,45 @@ export async function publishCommunityVote(
         request: publishRecordRequest(signer.name ?? '', identifier, record),
         signer,
         precheck: () => guardCommunityVote(signer, nominee),
+        match: (tx) => tx.type === 'ARBITRARY' && tx.identifier === identifier,
+        onStage,
+      });
+    },
+    COMMUNITY_VOTE_PREFIXES
+  );
+}
+
+/**
+ * A community vote, Yes (for it) or No, on a proposal to remove a member,
+ * ban an account or make a Minter Admin, from someone who isn't a Minter
+ * Admin: a new small QDN record under their name each time (the newest
+ * counts). Advisory: nothing on chain follows from it.
+ */
+export async function publishDecisionVote(
+  signer: Signer & { name: string | null },
+  kind: DecisionVoteKind,
+  subject: string,
+  vote: CommunityVoteValue,
+  onStage?: (s: WriteStage) => void
+): Promise<WriteOutcome> {
+  return tracked(
+    writeKeys.communityVote(subject, vote, kind),
+    async () => {
+      let record;
+      let identifier: string;
+      try {
+        record = buildDecisionVote(kind, subject, vote);
+        identifier = newDecisionVoteIdentifier(kind, subject, vote);
+      } catch (error) {
+        return {
+          status: 'blocked',
+          reason: error instanceof Error ? error.message : String(error),
+        };
+      }
+      return runWrite({
+        request: publishRecordRequest(signer.name ?? '', identifier, record),
+        signer,
+        precheck: () => guardDecisionVote(signer, kind, subject),
         match: (tx) => tx.type === 'ARBITRARY' && tx.identifier === identifier,
         onStage,
       });

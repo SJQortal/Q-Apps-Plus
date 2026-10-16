@@ -22,7 +22,7 @@ import {
 } from '../data/records';
 import type { GroupTxType } from '../data/types';
 import { COMMENT_SERVICE, type CommentRecord, type HideRecord } from '../data/commentRecords';
-import type { CommunityVoteRecord } from '../data/voteRecords';
+import type { CommunityVoteRecord, DecisionVoteRecord } from '../data/voteRecords';
 import {
   ADMIN_POLL_SERVICE,
   type PollCommentRecord,
@@ -95,7 +95,8 @@ export function signApprovalRequest(unsignedBytes: string): HubRequest {
 export function publishRecordRequest(
   name: string,
   identifier: string,
-  record: NominationRecord | SupportRecord | ConsideringRecord | CommunityVoteRecord
+  record:
+    NominationRecord | SupportRecord | ConsideringRecord | CommunityVoteRecord | DecisionVoteRecord
 ): HubRequest {
   return {
     action: 'PUBLISH_QDN_RESOURCE',

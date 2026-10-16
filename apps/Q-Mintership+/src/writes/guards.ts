@@ -28,6 +28,7 @@ import {
   withCancelInviteTargets,
 } from '../data/txs';
 import type { GroupTxType, TxRow } from '../data/types';
+import type { DecisionVoteKind } from '../data/voteRecords';
 import {
   decisionSubject,
   isMinterGroupChange,
@@ -35,7 +36,7 @@ import {
   toApprovalRow,
 } from '../rules/decision';
 import { adminChangeBlock, adminChangeBlockText, type AdminChangeKind } from '../rules/adminChange';
-import { takesVotes } from '../rules/communityVotes';
+import { VOTING_PHASES, decisionVoteKind, takesVotes } from '../rules/communityVotes';
 import { isRemovalDouble } from '../rules/double';
 import { NOMINEE_BLOCK_TEXT, isOpenState, nomineeBlock, nominatorBlock } from '../rules/nomination';
 import { latestPerSigner, type ApprovalRow } from '../rules/tally';
@@ -465,6 +466,29 @@ export async function guardCommunityVote(
   if (!nominations.some((n) => takesVotes(n.state, n.decision?.phase)))
     return 'This nomination isn’t open for votes any more.';
   return null;
+}
+
+/**
+ * Before a community vote on a proposal to remove a member, ban an account
+ * or make a Minter Admin: a registered name to publish under, not the
+ * account it is about, not a Minter Admin, and the proposal (read fresh)
+ * still waiting with approvals that can count.
+ */
+export async function guardDecisionVote(
+  signer: Signer & { name?: string | null },
+  kind: DecisionVoteKind,
+  subject: string
+): Promise<string | null> {
+  if (!signer.name)
+    return 'Your vote is published under your registered name, and your account has none yet.';
+  if (subject === signer.address) return 'You can’t vote on a proposal about yourself.';
+  if (await isMinterAdmin(signer.address))
+    return 'Minter Admins answer on chain: Approve or Reject.';
+  const data = await loadDecisions({ force: true });
+  const open = data.decisions.some(
+    (d) => d.subject === subject && decisionVoteKind(d) === kind && VOTING_PHASES.has(d.phase)
+  );
+  return open ? null : 'This proposal isn’t open for votes any more.';
 }
 
 /**

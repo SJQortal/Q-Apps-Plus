@@ -26,6 +26,11 @@ export function addConsidering(world: World): {
   waitingKey: string;
 };
 export function addCommunityVotes(world: World): { waiting: string; signing: string };
+export function addDecisionVotes(world: World): {
+  kick: string;
+  ban: string;
+  addAdmin: string;
+};
 export function answerCore(
   world: World,
   pathname: string,

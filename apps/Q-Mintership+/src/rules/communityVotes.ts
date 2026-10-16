@@ -1,16 +1,39 @@
 /**
- * The community's Yes and No on a nomination: advisory votes from anyone who
- * isn't a Minter Admin. Pure; data/communityVotes.ts reads the rows.
+ * The community's Yes and No on a nomination, or on a proposal to remove a
+ * member, ban an account or make a Minter Admin: advisory votes from anyone
+ * who isn't a Minter Admin. Pure; data/communityVotes.ts reads the rows.
  *
  * - Per account only its newest vote counts (by when it was published), so
  *   one account's names count once and changing a vote replaces it.
- * - A vote counts in the round it was cast in: from the nomination's start.
+ * - A vote counts in the round it was cast in: from the nomination's start,
+ *   or from when the proposal was made.
  * - Votes from current Minter Admins (their answer is on chain) and from the
- *   nominee are left out.
+ *   account it is about are left out.
  */
-import type { CommunityVoteValue } from '../data/voteRecords';
-import type { DecisionPhase } from './decision';
+import type { CommunityVoteValue, DecisionVoteKind } from '../data/voteRecords';
+import type { Decision, DecisionPhase } from './decision';
 import type { NominationState } from './nomination';
+
+/** What a vote is on: a nomination, or a proposal of one of these kinds. */
+export type VoteTopic = 'nomination' | DecisionVoteKind;
+
+/** The proposals everyone may vote on. */
+export const PUBLIC_VOTE_KINDS: ReadonlySet<Decision['kind']> = new Set([
+  'kick',
+  'ban',
+  'addAdmin',
+]);
+
+/**
+ * The vote topic of a proposal everyone may vote on (a removal that isn't a
+ * declined join request, a ban, a new Minter Admin), or null.
+ */
+export function decisionVoteKind(
+  d: Pick<Decision, 'kind' | 'subject' | 'decline'>
+): DecisionVoteKind | null {
+  if (!d.subject || d.decline || !PUBLIC_VOTE_KINDS.has(d.kind)) return null;
+  return d.kind as DecisionVoteKind;
+}
 
 /** A decision whose approvals can still count: until then votes are offered. */
 export const VOTING_PHASES: ReadonlySet<DecisionPhase> = new Set(['early', 'open', 'unconfirmed']);
@@ -32,6 +55,9 @@ export interface VoteRow {
   voter: string;
   /** That name. */
   name: string;
+  /** What it is on (a nomination when absent). */
+  topic?: VoteTopic;
+  /** The account it is about: the nominee, or the proposal's subject. */
   nominee: string;
   vote: CommunityVoteValue;
   /** When it was published (the QDN row's `created`, ms). */
@@ -52,6 +78,9 @@ export interface CommunityTally {
 }
 
 export interface VoteRound {
+  /** What it is on (a nomination when absent). */
+  topic?: VoteTopic;
+  /** The account it is about. */
   nominee: string;
   /** When the round began (ms): votes cast before it belong to an earlier one. */
   since: number;
@@ -59,15 +88,17 @@ export interface VoteRound {
 
 export const NO_VOTES: CommunityTally = { yes: [], no: [] };
 
-/** Each account's newest vote in `round`, less Minter Admins (`excluded`) and the nominee. */
+/** Each account's newest vote in `round`, less Minter Admins (`excluded`) and the account it is about. */
 export function communityVotesFor(
   rows: readonly VoteRow[],
   round: VoteRound,
   excluded: ReadonlySet<string>
 ): CommunityTally {
   const latest = new Map<string, VoteRow>();
+  const topic = round.topic ?? 'nomination';
   for (const row of rows) {
-    if (row.nominee !== round.nominee || row.castAt < round.since) continue;
+    if (row.nominee !== round.nominee || (row.topic ?? 'nomination') !== topic) continue;
+    if (row.castAt < round.since) continue;
     const current = latest.get(row.voter);
     if (!current || row.castAt > current.castAt) latest.set(row.voter, row);
   }

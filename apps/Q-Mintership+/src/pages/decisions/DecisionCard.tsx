@@ -8,8 +8,9 @@
  * Reject, or "You rejected" with Approve, each "(confirming…)" until it is
  * in a block, and their own Considering. An admin change says what it does
  * to the target; a decision a waiting admin change would tip over carries a
- * "Target may drop to …" chip. An invite shows the community's Yes and No
- * beside Copy link, and offers them to anyone who isn't a Minter Admin
+ * "Target may drop to …" chip. An invite, a removal, a ban and a new
+ * Minter Admin show the community's Yes and No beside Copy link, and offer
+ * them to anyone who isn't a Minter Admin (nor the account it is about)
  * where the admins' buttons are. Its public comments sit behind a
  * "Comments (n)" toggle, each marked with its writer's answer or vote.
  *
@@ -40,7 +41,7 @@ import {
 import { answerBadges, withCommunityBadges } from '../../components/comments/answerBadges';
 import { CommunitySummary, CommunityVoteControls } from '../../components/community/CommunityVotes';
 import { useCommunityVoter, useCommunityVotes } from '../../hooks/useCommunityVotes';
-import { VOTING_PHASES } from '../../rules/communityVotes';
+import { VOTING_PHASES, decisionVoteKind, type VoteTopic } from '../../rules/communityVotes';
 import { useConsideringFor } from '../../hooks/useConsidering';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { FramedText } from '../../components/common/FramedText';
@@ -197,18 +198,30 @@ export function DecisionCard(props: DecisionCardProps) {
     { enabled: COLLECTING_PHASES.has(d.phase), myAddress: canAct ? myAddress : null }
   );
   const collecting = COLLECTING_PHASES.has(d.phase);
-  // The community's votes on an invite's nominee: read while it collects answers, cast
-  // (by anyone who isn't a Minter Admin) while approvals can still count.
+  // The community's votes on an invite's nominee, or on a removal, ban or new Minter
+  // Admin (from when it was proposed): read while it collects answers, cast (by anyone
+  // who isn't a Minter Admin) while approvals can still count.
   const [node, setNode] = useState<HTMLElement | null>(null);
   const nearScreen = useInView(node);
-  const voteNominee = d.kind === 'invite' && d.subject && collecting ? d.subject : null;
+  const proposalVotes = decisionVoteKind(d);
+  const voteTopic: VoteTopic | null = d.kind === 'invite' ? 'nomination' : proposalVotes;
+  const voteNominee = voteTopic && d.subject && collecting ? d.subject : null;
   const voter = useCommunityVoter(
     voteNominee && !canAct && VOTING_PHASES.has(d.phase) ? voteNominee : null
   );
   const votes = useCommunityVotes(
-    voteNominee ? { nominee: voteNominee, since: nomination?.publishedAt ?? d.createdAt } : null,
+    voteNominee && voteTopic
+      ? {
+          topic: voteTopic,
+          nominee: voteNominee,
+          since:
+            voteTopic === 'nomination' ? (nomination?.publishedAt ?? d.createdAt) : d.createdAt,
+        }
+      : null,
     { nearScreen, myAddress: voter?.address }
   );
+  // A proposal's votes say what they are on: its title with the name.
+  const voteHeading = proposalVotes ? `${title}: ${subject.label}` : undefined;
   const voted = votes.tally.yes.length + votes.tally.no.length > 0;
   const { approved: approvedPeople, rejected: rejectedPeople } = tallyPeople(tally, (address) =>
     adminNames.has(address) ? adminNames.get(address) : undefined
@@ -467,8 +480,10 @@ export function DecisionCard(props: DecisionCardProps) {
           }}
         >
           <CommunityVoteControls
+            topic={voteTopic ?? undefined}
             nominee={voteNominee as string}
             label={subject.label}
+            heading={voteHeading}
             mine={votes.mine}
             signer={voter}
           />
@@ -486,7 +501,7 @@ export function DecisionCard(props: DecisionCardProps) {
               what={`the decision ${fullTitle}`}
             />
           ) : null}
-          <CommunitySummary tally={votes.tally} label={subject.label} />
+          <CommunitySummary tally={votes.tally} label={subject.label} heading={voteHeading} />
         </Box>
       ) : null}
 

@@ -1108,6 +1108,47 @@ export function addCommunityVotes(world) {
   return { waiting: ADDR.nominatedWaiting, signing: ADDR.nominatedSigning };
 }
 
+/**
+ * Community votes on proposals everyone may vote on (data/voteRecords.ts →
+ * decision votes): Kai Target's removal 2 Yes, 1 No (left out: Kai's own,
+ * a Minter Admin's, one from before it was proposed, and a vote on a
+ * nomination of Kai, which is another round); Ben Target's ban 1 Yes, 1 No;
+ * Pia Promote's request to become a Minter Admin 2 Yes, 1 No, Leo Learner's
+ * Yes among them.
+ */
+export function addDecisionVotes(world) {
+  const HOUR = 3_600_000;
+  const WORD = { kick: 'remove', ban: 'ban', addAdmin: 'admin' };
+  const vote = (name, kind, subjectKey, value, hoursAgo, id) =>
+    world.records.push({
+      name,
+      identifier: `qmp-vote-${WORD[kind]}-${ADDR[subjectKey]}-${value}-${id}`,
+      created: NOW - hoursAgo * HOUR,
+      body: { v: 1, kind, subjectAddress: ADDR[subjectKey], vote: value },
+    });
+  // Kai Target's removal was proposed about 24 hours ago.
+  vote('Member 7', 'kick', 'kickTarget', 'yes', 20, 'kai001');
+  vote('Zoë Newcomer', 'kick', 'kickTarget', 'yes', 10, 'kai002');
+  vote('Lou Left', 'kick', 'kickTarget', 'no', 5, 'kai003');
+  vote('Kai Target', 'kick', 'kickTarget', 'no', 3, 'kai004');
+  vote('Admin K', 'kick', 'kickTarget', 'yes', 2, 'kai005');
+  vote('Member 2', 'kick', 'kickTarget', 'yes', 30, 'kai006');
+  world.records.push({
+    name: 'Member 1',
+    identifier: `qmp-vote-${ADDR.kickTarget}-yes-kai007`,
+    created: NOW - 4 * HOUR,
+    body: { v: 1, nomineeAddress: ADDR.kickTarget, vote: 'yes' },
+  });
+  // Ben Target's ban, about 101 hours ago.
+  vote('Member 1', 'ban', 'banTarget', 'yes', 50, 'ben001');
+  vote('Member 4', 'ban', 'banTarget', 'no', 40, 'ben002');
+  // Pia Promote's addition, about 150 hours ago.
+  vote('Member 5', 'addAdmin', 'promote', 'no', 100, 'pia001');
+  vote('Member 6', 'addAdmin', 'promote', 'yes', 90, 'pia002');
+  vote('Leo Learner', 'addAdmin', 'promote', 'yes', 60, 'pia003');
+  return { kick: ADDR.kickTarget, ban: ADDR.banTarget, addAdmin: ADDR.promote };
+}
+
 // ---- shareable links (decision and nomination pages) ------------------------
 /**
  * Signatures on a decided decision, for its own page (/decisions/<sig>):

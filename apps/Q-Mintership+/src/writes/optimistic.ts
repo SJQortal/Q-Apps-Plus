@@ -165,8 +165,14 @@ export const writeKeys = {
   considering: (key: string) => `considering:${key}`,
   /** No longer considering. */
   notConsidering: (key: string) => `notconsidering:${key}`,
-  /** A community vote (Yes or No) on a nominee, from someone who isn't a Minter Admin. */
-  communityVote: (nominee: string, vote: 'yes' | 'no') => `communityvote:${vote}:${nominee}`,
+  /**
+   * A community vote (Yes or No) from someone who isn't a Minter Admin: on a
+   * nominee, or on a proposal of `topic` (a decision kind) about them.
+   */
+  communityVote: (nominee: string, vote: 'yes' | 'no', topic = 'nomination') =>
+    topic === 'nomination'
+      ? `communityvote:${vote}:${nominee}`
+      : `communityvote:${vote}:${topic}:${nominee}`,
 };
 
 /** Writes that only publish a QDN note, which the chain views never show. */

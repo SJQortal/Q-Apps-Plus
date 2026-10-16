@@ -1,6 +1,7 @@
 /**
- * The community's Yes and No on a nomination (advisory votes from people who
- * aren't Minter Admins), as the cards show them:
+ * The community's Yes and No on a nomination, or on a proposal to remove a
+ * member, ban an account or make a Minter Admin (advisory votes from people
+ * who aren't Minter Admins), as the cards show them:
  *
  * - CommunitySummary, beside Copy link: "Community", then Yes and No, each
  *   with its count and its first voters' avatars. It opens everyone who
@@ -16,7 +17,12 @@ import { visuallyHidden } from '@mui/utils';
 import ThumbDownOutlinedIcon from '@mui/icons-material/ThumbDownOutlined';
 import ThumbUpOutlinedIcon from '@mui/icons-material/ThumbUpOutlined';
 import type { CommunityVoteValue } from '../../data/voteRecords';
-import type { CommunityTally, CommunityVoter, MyCommunityVote } from '../../rules/communityVotes';
+import type {
+  CommunityTally,
+  CommunityVoter,
+  MyCommunityVote,
+  VoteTopic,
+} from '../../rules/communityVotes';
 import type { Signer } from '../../writes/runner';
 import { formatCount, plural } from '../../utils/format';
 import { readable } from '../../utils/readable';
@@ -24,7 +30,7 @@ import { NameAvatar } from '../common/NameAvatar';
 import { ResponsiveDialog } from '../common/ResponsiveDialog';
 import { PeopleColumns } from '../decision/AnswerColumns';
 import { LazyCommunityVoteDialog } from './LazyCommunityVoteDialog';
-import { MarkedName } from '../common/MarkedName';
+import { withMarkedName } from '../common/markedText';
 
 /** Avatars shown per side beside Copy link; the rest are "+n". */
 export const AVATARS_SHOWN = 3;
@@ -72,10 +78,13 @@ function Side({ vote, voters }: { vote: CommunityVoteValue; voters: CommunityVot
 export function CommunitySummary({
   tally,
   label,
+  heading = `Nomination of ${label}`,
 }: {
   tally: CommunityTally;
-  /** The nominee, as the card names them. */
+  /** The nominee (or the proposal's subject), as the card names them. */
   label: string;
+  /** What it is, as the card's title says it ("Nomination of Ada" when absent). */
+  heading?: string;
 }) {
   const [open, setOpen] = useState(false);
   if (!tally.yes.length && !tally.no.length) return null;
@@ -117,7 +126,7 @@ export function CommunitySummary({
       >
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
-            Nomination of <MarkedName name={label} />
+            {withMarkedName(heading, label)}
           </Typography>
           <PeopleColumns
             headingLevel="h3"
@@ -155,14 +164,21 @@ export function CommunitySummary({
 
 /** No and Yes for someone who isn't a Minter Admin, then their vote with "Change to …". */
 export function CommunityVoteControls({
+  topic = 'nomination',
   nominee,
   label,
+  heading,
   mine,
   signer,
 }: {
+  /** What it is on (a nomination when absent). */
+  topic?: VoteTopic;
+  /** The account it is about: the nominee, or the proposal's subject. */
   nominee: string;
-  /** The nominee, as the card names them. */
+  /** That account, as the card names them. */
   label: string;
+  /** What it is, as the card's title says it ("Nomination of Ada" when absent). */
+  heading?: string;
   mine: MyCommunityVote;
   signer: Signer & { name: string | null };
 }) {
@@ -174,6 +190,8 @@ export function CommunityVoteControls({
   } | null>(null);
   const ask = (vote: CommunityVoteValue, change: boolean) =>
     setDialog({ vote, change, open: true });
+  // What the buttons' names say it is on: the nominee, or the whole proposal.
+  const on = heading ?? label;
 
   let content;
   if (mine.sending) {
@@ -200,7 +218,7 @@ export function CommunityVoteControls({
           color="inherit"
           onClick={() => ask(other, true)}
           disabled={mine.busy}
-          aria-label={`Change to ${WORD[other]}: your vote on ${label}`}
+          aria-label={`Change to ${WORD[other]}: your vote on ${on}`}
           sx={{ minHeight: 44 }}
         >
           Change to {WORD[other]}
@@ -209,14 +227,14 @@ export function CommunityVoteControls({
     );
   } else {
     content = (
-      <Box role="group" aria-label={`Your vote on ${label}`} sx={{ display: 'flex', gap: 1 }}>
+      <Box role="group" aria-label={`Your vote on ${on}`} sx={{ display: 'flex', gap: 1 }}>
         <Button
           variant="outlined"
           color="inherit"
           startIcon={<ThumbDownOutlinedIcon />}
           onClick={() => ask('no', false)}
           disabled={mine.busy}
-          aria-label={`Vote No: ${label}`}
+          aria-label={`Vote No: ${on}`}
           sx={{ minHeight: 44, minWidth: 88 }}
         >
           No
@@ -226,7 +244,7 @@ export function CommunityVoteControls({
           startIcon={<ThumbUpOutlinedIcon />}
           onClick={() => ask('yes', false)}
           disabled={mine.busy}
-          aria-label={`Vote Yes: ${label}`}
+          aria-label={`Vote Yes: ${on}`}
           sx={{ minHeight: 44, minWidth: 88 }}
         >
           Yes
@@ -243,8 +261,10 @@ export function CommunityVoteControls({
           open={dialog.open}
           vote={dialog.vote}
           change={dialog.change}
+          topic={topic}
           nominee={nominee}
           label={label}
+          heading={heading}
           signer={signer}
           onClose={() => setDialog((d) => (d ? { ...d, open: false } : d))}
         />
