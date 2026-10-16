@@ -1084,6 +1084,51 @@ function fundingEventParts(funding: NonNullable<FirstSeen['funding']>): TxPart[]
   }
 }
 
+/**
+ * How the account got its primary name, from its own transactions: a name
+ * it bought (BUY_NAME in its links) at that purchase's block; otherwise,
+ * once its links were read in full and show no purchase, a name it
+ * registered, at the name's registration. The name's record keeps the first
+ * registration through every sale, so that date is never credited to an
+ * account that bought the name, nor used when it is older than the account
+ * (or when the links were capped and a purchase may not have been read).
+ */
+function primaryNameEvent(side: TimelineSide): Omit<TimelineEvent, 'address' | 'letter'> | null {
+  const primary = side.primary;
+  if (!primary || !side.links) return null;
+  const name = primary.name;
+  const bought = linksOf(side.links.rows, side.address, side.links.privs)
+    .nameDeals.filter((deal) => deal.kind === 'bought' && deal.name === name)
+    .sort((a, b) => b.ref.height - a.ref.height)[0];
+  if (bought)
+    return {
+      key: `${side.address}:primaryName`,
+      kind: 'primaryName',
+      height: bought.ref.height,
+      timestamp: bought.ref.timestamp,
+      parts: [
+        text('bought the name '),
+        { kind: 'name', name },
+        ...(bought.other ? [text(' from '), account(bought.other)] : []),
+        text(' for '),
+        qort(formatAmount(bought.amount)),
+        text(' (its primary name now)'),
+      ],
+      signature: bought.ref.signature,
+    };
+  const registered = primary.registered;
+  const firstSeen = side.first?.firstSeen?.timestamp;
+  if (side.links.truncated || !registered || (firstSeen !== undefined && registered < firstSeen))
+    return null;
+  return {
+    key: `${side.address}:primaryName`,
+    kind: 'primaryName',
+    height: null,
+    timestamp: registered,
+    parts: [text('registered the name '), { kind: 'name', name }, text(' (its primary name now)')],
+  };
+}
+
 /** Every first the accounts' reads show, oldest first. */
 export function timelineEvents(sides: readonly TimelineSide[]): TimelineEvent[] {
   const events: TimelineEvent[] = [];
@@ -1116,19 +1161,10 @@ export function timelineEvents(sides: readonly TimelineSide[]): TimelineEvent[] 
         signature: own.signature,
       });
     }
-    if (side.primary?.registered) {
-      events.push({
-        ...base,
-        key: `${side.address}:primaryName`,
-        kind: 'primaryName',
-        height: null,
-        timestamp: side.primary.registered,
-        parts: [
-          text('registered the name '),
-          { kind: 'name', name: side.primary.name },
-          text(' (its primary name now)'),
-        ],
-      });
+    const primary = primaryNameEvent(side);
+    if (primary) {
+      if (primary.signature) signatures.add(primary.signature);
+      events.push({ ...base, ...primary });
     }
     const self = firstSelfShare(side);
     if (self) {

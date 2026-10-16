@@ -616,6 +616,63 @@ describe('the timeline together', () => {
     expect(events.map((e) => plain(e.parts))).toEqual(['got its minting level from C']);
   });
 
+  it('a primary name it bought reads as bought, at the purchase, never as registered', () => {
+    const first: FirstSeen = {
+      firstOwn: null,
+      funding: {
+        kind: 'payment',
+        from: H,
+        amount: '42',
+        height: 2_539_801,
+        timestamp: T0 + 1_000 * DAY,
+        signature: sig(),
+      },
+      firstSeen: { height: 2_539_801, timestamp: T0 + 1_000 * DAY },
+    };
+    const buy = tx('BUY_NAME', 2_539_812, {
+      creatorAddress: A,
+      seller: S,
+      name: 'Q-Mail',
+      amount: '22.00000000',
+      timestamp: T0 + 1_000 * DAY + 3_600_000,
+    });
+    // The name's record keeps its first registration, years before this account.
+    const primary = { name: 'Q-Mail', registered: T0 };
+    const bought = timelineEvents([
+      { address: A, letter: 'A', first, links: links([buy]), primary },
+    ]);
+    expect(bought.map((e) => timelineLine(e))).toEqual([
+      'Block 2,539,801 · A: first QORT payment from Qhhhhh…hhhh (42 QORT)',
+      'Block 2,539,812 · A: bought the name “Q-Mail” from Qsssss…ssss for 22 QORT (its primary name now)',
+    ]);
+    expect(bought[1]).toMatchObject({ kind: 'primaryName', signature: buy.signature });
+    // No purchase read, but registered before the account was first seen: not its registration.
+    const older = timelineEvents([{ address: A, letter: 'A', first, links: links([]), primary }]);
+    expect(older.map((e) => e.kind)).toEqual(['funding']);
+    // Links capped: a purchase may not have been read, so nothing is claimed.
+    const capped = timelineEvents([
+      {
+        address: A,
+        letter: 'A',
+        first,
+        links: { ...links([]), truncated: true },
+        primary: { name: 'Q-Mail', registered: T0 + 1_100 * DAY },
+      },
+    ]);
+    expect(capped.map((e) => e.kind)).toEqual(['funding']);
+    // Read in full, no purchase, registered after it was first seen: it registered it.
+    const own = timelineEvents([
+      {
+        address: A,
+        letter: 'A',
+        first,
+        links: links([]),
+        primary: { name: 'Q-Mail', registered: T0 + 1_100 * DAY },
+      },
+    ]);
+    expect(plain(own[1].parts)).toBe('registered the name “Q-Mail” (its primary name now)');
+  });
+
   it('a self-share from capped links says it is only the earliest of those read', () => {
     const events = timelineEvents([
       {
