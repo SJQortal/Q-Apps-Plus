@@ -1,6 +1,9 @@
+import { StrictMode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
+import { heavyLoad, heavyQuery } from '../../../data/explorer/heavy';
 import { fetchQuery, invalidate, resetQueries } from '../../../data/query';
+import { useHeavyScope } from '../../../hooks/useHeavyScope';
 import { useQueries } from './useQueries';
 
 function Reads({
@@ -51,6 +54,45 @@ describe('useQueries', () => {
       expect(screen.getAllByRole('listitem')[1]).toHaveTextContent('value of xa:3')
     );
     expect(load).toHaveBeenCalledTimes(4);
+  });
+
+  it('asks again for a heavy read its view dropped while queued (React StrictMode remount)', async () => {
+    const load = vi.fn(async (key: string) => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return `value of ${key}`;
+    });
+    const keys = ['xh:1', 'xh:2', 'xh:3', 'xh:4'];
+    function HeavyReads() {
+      // As on the Compare page: the scope first, so its cleanup drops what is queued.
+      useHeavyScope('strict-test');
+      const results = useQueries(
+        keys.map((key) => ({
+          key,
+          load: (force: boolean) => heavyQuery('strict-test', key, () => load(key), { force }),
+        }))
+      );
+      return (
+        <ul>
+          {results.map((r, i) => (
+            <li key={i}>{r.data ?? (r.isLoading ? 'loading' : 'none')}</li>
+          ))}
+        </ul>
+      );
+    }
+    render(
+      <StrictMode>
+        <HeavyReads />
+      </StrictMode>
+    );
+    // Two start at once; StrictMode's simulated unmount drops the two queued behind them.
+    await waitFor(() =>
+      expect(screen.getAllByRole('listitem').map((li) => li.textContent)).toEqual(
+        keys.map((key) => `value of ${key}`)
+      )
+    );
+    expect(heavyLoad()).toEqual({ running: 0, queued: 0 });
+    // Each read reached Core once.
+    expect(load.mock.calls.map(([key]) => key).sort()).toEqual(keys);
   });
 
   it('a failed read stays failed until asked again (no loop)', async () => {

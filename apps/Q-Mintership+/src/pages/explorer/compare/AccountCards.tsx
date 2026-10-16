@@ -4,7 +4,8 @@
  * its avatar and name (to its account in the Explorer), short address with
  * copy, level, where it stands in MINTER (the app's own status words),
  * "Minting now", "Minting penalty", and Remove. An address Core doesn't
- * know says so on its card. Under the cards, "Add an account" (the
+ * know says so on its card, and so does a status it couldn't read (a chip
+ * left out is never a silent "no"). Under the cards, "Add an account" (the
  * Explorer's search field), up to 4.
  */
 import { Box, IconButton, Skeleton, Tooltip, Typography } from '@mui/material';
@@ -48,6 +49,8 @@ function AccountCard({
   const explored = data.explored[index];
   const account = data.accounts[index];
   const { label } = useDisplayName(address, account ? undefined : null);
+  // Each card's copy button says whose address it copies.
+  const addressLabel = `${label}’s address (${letter})`;
   const status = data.status[index].data;
   const minting = data.mintingNow[index];
   const chips = account
@@ -56,6 +59,13 @@ function AccountCard({
         minting ? 'Minting now' : null,
         account.blocksMintedPenalty !== 0 ? 'Minting penalty' : null,
       ].filter((chip): chip is string => chip !== null)
+    : [];
+  // A chip left out because its read failed is said, not taken for "no".
+  const unread = account
+    ? [
+        data.status[index].isError ? 'its MINTER status' : null,
+        data.online.isError ? 'whether it is minting now' : null,
+      ].filter((what): what is string => what !== null)
     : [];
 
   let body: React.ReactNode;
@@ -70,6 +80,11 @@ function AccountCard({
             <ToneChip size="small" variant="outlined" label={chip} sx={{ fontSize: 14 }} />
           </li>
         ))}
+        {unread.length ? (
+          <Typography component="li" variant="body2" color="text.secondary">
+            Couldn’t read {unread.join(' or ')}
+          </Typography>
+        ) : null}
       </Box>
     );
   } else if (explored.data?.kind === 'unused') {
@@ -87,8 +102,10 @@ function AccountCard({
     );
   } else {
     body = (
-      <Box role="status" aria-label={`Loading account ${letter}`}>
-        <Skeleton variant="text" width="60%" />
+      // Words a screen reader can find (a skeleton alone says nothing), not a live region.
+      <Box>
+        <Skeleton variant="text" width="60%" aria-hidden />
+        <span className="qmp-visually-hidden">Loading account {letter}…</span>
       </Box>
     );
   }
@@ -112,7 +129,11 @@ function AccountCard({
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
         <LetterBadge letter={letter} accent={accent} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          {account ? <PersonChip address={address} size={40} /> : <AddressText address={address} />}
+          {account ? (
+            <PersonChip address={address} size={40} />
+          ) : (
+            <AddressText address={address} label={addressLabel} />
+          )}
         </Box>
         <Tooltip title="Remove from this comparison">
           <IconButton
@@ -124,7 +145,7 @@ function AccountCard({
           </IconButton>
         </Tooltip>
       </Box>
-      {account ? <AddressText address={address} /> : null}
+      {account ? <AddressText address={address} label={addressLabel} /> : null}
       {body}
     </Box>
   );

@@ -92,7 +92,11 @@ describe('side by side', () => {
     expect(text('penalty')).toEqual(['None', '−5,000,000 blocks']);
     expect(text('balance')).toEqual(['12.5 QORT', '6,480.54 QORT']);
     expect(text('status')).toEqual(['Former member', 'MINTER member']);
-    expect(text('sponsor')).toEqual(['None found', 'Qsssss…ssss']);
+    // The second's links were capped: its sponsor is the first of those read.
+    expect(text('sponsor')).toEqual([
+      'None found',
+      'Qsssss…ssss (the first in its newest 500 read)',
+    ]);
     expect(text('sponsored')).toEqual(['None', '48 accounts+']);
     expect(text('mintingNow')).toEqual(['No', 'Yes']);
     expect(text('lastSent')).toEqual(['Never', '15 May 2023 · block 2,740,000']);
@@ -118,5 +122,91 @@ describe('side by side', () => {
     expect(sameForAll(row(keyless, 'lastSent').cells)).toBeNull();
     // Names in a cell stay names (shown isolated), with their names known.
     expect(cellText({ key: 'x', account: H }, () => 'Hal')).toBe('Hal');
+  });
+
+  it('a read that failed says so in its cell, and never reads “Same for all”', () => {
+    const broken = (address: string) =>
+      facts({
+        account: account({ address }),
+        balance: undefined,
+        names: undefined,
+        lastSent: undefined,
+        groups: undefined,
+        first: undefined,
+        status: undefined,
+        sponsor: undefined,
+        sponsees: undefined,
+        mintingNow: undefined,
+        qdn: undefined,
+        failed: {
+          balance: true,
+          names: true,
+          lastSent: true,
+          groups: true,
+          first: true,
+          status: true,
+          links: true,
+          online: true,
+          qdn: true,
+        },
+      });
+    const rows = sideRows([broken(addr('a')), broken(addr('b'))]);
+    for (const key of [
+      'names',
+      'firstSeen',
+      'firstQort',
+      'balance',
+      'status',
+      'sponsor',
+      'sponsored',
+      'mintingNow',
+      'lastSent',
+      'groups',
+      'qdn',
+    ]) {
+      const cells = row(rows, key).cells;
+      expect(
+        cells.map((c) => c?.text),
+        key
+      ).toEqual(['Couldn’t read', 'Couldn’t read']);
+      expect(cells.every((c) => c?.failed)).toBe(true);
+      expect(sameForAll(cells), key).toBeNull();
+    }
+    // Still reading (nothing failed): undefined, as before.
+    expect(row(sideRows([facts({ balance: undefined })]), 'balance').cells[0]).toBeUndefined();
+  });
+
+  it('a sponsor from capped links says only the newest 500 were read', () => {
+    const rows = sideRows([
+      facts({ sponsor: S, sponseesCapped: true }),
+      facts({ sponsor: null, sponseesCapped: true }),
+    ]);
+    const sponsor = row(rows, 'sponsor').cells.map((c) => (c ? cellText(c) : '…'));
+    expect(sponsor).toEqual([
+      'Qsssss…ssss (the first in its newest 500 read)',
+      'None found in its newest 500 reward shares, level moves and name sales',
+    ]);
+    // Never the same for all with one that was read in full.
+    const mixed = sideRows([facts({ sponsor: S, sponseesCapped: true }), facts({ sponsor: S })]);
+    expect(sameForAll(row(mixed, 'sponsor').cells)).toBeNull();
+  });
+
+  it('a primary name that couldn’t be read is never “No primary name”', () => {
+    const rows = sideRows([
+      facts({ primary: undefined, qdn: undefined, failed: { primary: true } }),
+      facts({ primary: undefined, qdn: undefined, names: { names: [], truncated: false } }),
+    ]);
+    const names = row(rows, 'names').cells;
+    expect(names[0]).toMatchObject({
+      text: 'Couldn’t read the primary name (3 names)',
+      failed: true,
+    });
+    // Owning no name says there is no primary name to read.
+    expect(names[1]).toMatchObject({ text: 'No registered name' });
+    const qdn = row(rows, 'qdn').cells;
+    expect(qdn[0]).toMatchObject({ text: 'Couldn’t read', failed: true });
+    // Still reading the second: no value yet.
+    expect(qdn[1]).toBeUndefined();
+    expect(rows.flatMap((r) => r.cells).map((c) => c?.text)).not.toContain('No primary name');
   });
 });

@@ -103,7 +103,7 @@ export function TimelineSection({
         />
       ) : null}
       {reading ? (
-        <Waiting>
+        <Waiting announce="Reading the timeline…">
           Reading first transactions, self-shares, names and MINTER history for the timeline…
         </Waiting>
       ) : null}

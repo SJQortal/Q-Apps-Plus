@@ -6,6 +6,7 @@ import type { MadeBy } from '../../data/explorer/madeBy';
 import type { PaymentPage } from '../../data/explorer/money';
 import { MINTER_GROUP_ID } from '../../data/constants';
 import {
+  bandAddressesOf,
   checkedNoneLine,
   compareText,
   counterpartyCounts,
@@ -237,6 +238,33 @@ describe('recorded between two accounts', () => {
     );
   });
 
+  it('a reward share removed and made again says so, with the newest share’s percent', () => {
+    const result = pairFindings({
+      x: side(A, 'A', {
+        links: links([
+          share(A, B, 1_000_100),
+          share(A, B, 1_007_334, '-1.00'),
+          share(A, B, 1_010_000, '5.00'),
+        ]),
+      }),
+      y: side(B, 'B', { links: links([]) }),
+      online: [{ minterAddress: A, recipientAddress: B }],
+    });
+    expect(plain(result.findings[0].parts)).toBe(
+      'A made a reward share to B at 0 %, removed after 7,234 blocks, shared again at 5 % (block 1,010,000); they are minting with it now'
+    );
+    // Removed and not made again: no "again", and not minting with it.
+    const removed = pairFindings({
+      x: side(A, 'A', {
+        links: links([share(A, B, 1_000_100), share(A, B, 1_007_334, '-1.00')]),
+      }),
+      y: side(B, 'B', { links: links([]) }),
+    });
+    expect(plain(removed.findings[0].parts)).toBe(
+      'A made a reward share to B at 0 %, removed after 7,234 blocks'
+    );
+  });
+
   it('finds Q-Mintership records either way, under the names they were published under', () => {
     const result = pairFindings({
       x: side(A, 'A', {
@@ -317,10 +345,15 @@ describe('recorded between two accounts', () => {
   });
 
   it('sums up a pair for the grid', () => {
-    expect(pairSummary(2, 1, true)).toBe('2 recorded, 1 in common');
-    expect(pairSummary(0, 0, true)).toBe('none found');
-    expect(pairSummary(0, 0, false)).toBe('checking…');
-    expect(pairSummary(1, 0, false)).toBe('1 recorded so far');
+    expect(pairSummary(2, 1, 'done')).toBe('2 recorded, 1 in common');
+    expect(pairSummary(0, 0, 'done')).toBe('none found');
+    expect(pairSummary(0, 0, 'checking')).toBe('checking…');
+    expect(pairSummary(1, 0, 'checking')).toBe('1 recorded so far');
+  });
+
+  it('a pair whose reads failed never reads as checking or none found', () => {
+    expect(pairSummary(0, 0, 'failed')).toBe('couldn’t read everything');
+    expect(pairSummary(1, 2, 'failed')).toBe('1 recorded, 2 in common; some reads failed');
   });
 });
 
@@ -409,6 +442,35 @@ describe('in common', () => {
     expect(sharedCounterparties([a, side(B, 'B')]).rows).toEqual([]);
   });
 
+  it('reads the band of every shared payer, so a busy one is left out wherever it ranks', () => {
+    const others = Array.from(
+      { length: 70 },
+      (_, k) => `Q${B58[k % 58]}${B58[Math.floor(k / 58)]}${'z'.repeat(31)}`
+    );
+    const paidAll = (from: string, height: number) =>
+      page(others.map((other, k) => pay(from, other, height + k)));
+    const sides = [
+      side(A, 'A', { sent: paidAll(A, 1_000_000), recv: page([]), assets: noAssets }),
+      side(B, 'B', { sent: paidAll(B, 1_100_000), recv: page([]), assets: noAssets }),
+    ];
+    const first = [
+      { from: H, accounts: [] },
+      { from: others[3], accounts: [] },
+    ];
+    const all = sharedCounterparties(sides);
+    expect(all.rows).toHaveLength(70);
+    const toRead = bandAddressesOf(first, all);
+    // Each once: the first payers, then every shared counterparty, not only the first 40.
+    expect(toRead).toHaveLength(71);
+    expect(toRead[0]).toBe(H);
+    expect(new Set(toRead)).toEqual(new Set([H, ...others]));
+    // The 56th listed is busy: left out and counted once its band is in.
+    const busy = all.rows[55].address;
+    const shared = sharedCounterparties(sides, { [busy]: 1000 });
+    expect(shared.rows).toHaveLength(69);
+    expect(shared.busyLeftOut).toBe(1);
+  });
+
   it('names the accounts when not all of them share a counterparty', () => {
     const sides = [
       side(A, 'A', { sent: page([pay(A, K, 1)]), recv: page([]) }),
@@ -479,6 +541,26 @@ describe('in common', () => {
       )
     ).toBe('First seen in the same block');
     expect(timingText('First seen', [{ letter: 'A', value: 10 }], 'blocks', 2)).toBeNull();
+  });
+
+  it('an account whose links were capped is left out of the self-share timing, and said so', () => {
+    const capped = { ...links([share(C, C, 1_371_500)]), truncated: true };
+    const sides = [
+      side(A, 'A', { links: links([share(A, A, 1_371_000)]) }),
+      side(B, 'B', { links: links([share(B, B, 1_371_014)]) }),
+      // Its first self-share may be older than the newest 500 read.
+      side(C, 'C', { links: capped }),
+    ];
+    expect(timingRows(sides)).toEqual([
+      {
+        key: 'selfShare',
+        text: 'Self-shares created 14 blocks apart, first to last: A, B (C left out: only its newest 500 reward shares, level moves and name sales were read)',
+      },
+    ]);
+    // Only capped ones: no row at all.
+    expect(timingRows([side(A, 'A', { links: capped }), side(C, 'C', { links: capped })])).toEqual(
+      []
+    );
   });
 });
 
@@ -560,6 +642,123 @@ describe('the timeline together', () => {
     ]);
     expect(events.map((e) => plain(e.parts))).toEqual(['got its minting level from C']);
   });
+
+  it('a transaction signed later but in an earlier block is never “-1 blocks later”', () => {
+    const event = (letter: Letter, height: number, timestamp: number) => ({
+      key: letter,
+      kind: 'funding' as const,
+      address: letter === 'A' ? A : B,
+      letter,
+      height,
+      timestamp,
+      parts: [],
+    });
+    // Signed 20 s apart, the later one confirmed a block before the other.
+    const [first, second] = [event('A', 2_760_531, T0), event('B', 2_760_530, T0 + 20_000)];
+    expect(gapWords(first, second)).toBe('Moments later');
+    expect(gapWords(first, event('B', 2_760_529, T0 + 2 * DAY))).toBe('2 days later');
+    expect(gapWords(second, event('A', 2_760_535, T0 + 30_000))).toBe('5 blocks later');
+  });
+
+  it('a first own transaction that is its self-share or a level move reads as that, once', () => {
+    const ownFirst = (row: TxRow): FirstSeen => ({
+      firstOwn: {
+        type: row.type,
+        height: row.blockHeight as number,
+        timestamp: row.timestamp,
+        signature: row.signature,
+      },
+      funding: null,
+      firstSeen: { height: row.blockHeight as number, timestamp: row.timestamp },
+    });
+    const self = share(A, A, 1_371_000);
+    const selfFirst = timelineEvents([
+      { address: A, letter: 'A', first: ownFirst(self), links: links([self]) },
+    ]);
+    expect(selfFirst.map((e) => plain(e.parts))).toEqual([
+      'created a self-share (minting with its own key)',
+    ]);
+    const move = tx('TRANSFER_PRIVS', 1_380_000, { creatorAddress: A });
+    const moveFirst = timelineEvents([
+      {
+        address: A,
+        letter: 'A',
+        first: ownFirst(move),
+        links: links([move], { [move.signature]: C }),
+      },
+    ]);
+    expect(moveFirst.map((e) => plain(e.parts))).toEqual(['moved its minting level to C']);
+  });
+
+  it('a primary name it bought reads as bought, at the purchase, never as registered', () => {
+    const first: FirstSeen = {
+      firstOwn: null,
+      funding: {
+        kind: 'payment',
+        from: H,
+        amount: '42',
+        height: 2_539_801,
+        timestamp: T0 + 1_000 * DAY,
+        signature: sig(),
+      },
+      firstSeen: { height: 2_539_801, timestamp: T0 + 1_000 * DAY },
+    };
+    const buy = tx('BUY_NAME', 2_539_812, {
+      creatorAddress: A,
+      seller: S,
+      name: 'Q-Mail',
+      amount: '22.00000000',
+      timestamp: T0 + 1_000 * DAY + 3_600_000,
+    });
+    // The name's record keeps its first registration, years before this account.
+    const primary = { name: 'Q-Mail', registered: T0 };
+    const bought = timelineEvents([
+      { address: A, letter: 'A', first, links: links([buy]), primary },
+    ]);
+    expect(bought.map((e) => timelineLine(e))).toEqual([
+      'Block 2,539,801 · A: first QORT payment from Qhhhhh…hhhh (42 QORT)',
+      'Block 2,539,812 · A: bought the name “Q-Mail” from Qsssss…ssss for 22 QORT (its primary name now)',
+    ]);
+    expect(bought[1]).toMatchObject({ kind: 'primaryName', signature: buy.signature });
+    // No purchase read, but registered before the account was first seen: not its registration.
+    const older = timelineEvents([{ address: A, letter: 'A', first, links: links([]), primary }]);
+    expect(older.map((e) => e.kind)).toEqual(['funding']);
+    // Links capped: a purchase may not have been read, so nothing is claimed.
+    const capped = timelineEvents([
+      {
+        address: A,
+        letter: 'A',
+        first,
+        links: { ...links([]), truncated: true },
+        primary: { name: 'Q-Mail', registered: T0 + 1_100 * DAY },
+      },
+    ]);
+    expect(capped.map((e) => e.kind)).toEqual(['funding']);
+    // Read in full, no purchase, registered after it was first seen: it registered it.
+    const own = timelineEvents([
+      {
+        address: A,
+        letter: 'A',
+        first,
+        links: links([]),
+        primary: { name: 'Q-Mail', registered: T0 + 1_100 * DAY },
+      },
+    ]);
+    expect(plain(own[1].parts)).toBe('registered the name “Q-Mail” (its primary name now)');
+  });
+
+  it('a self-share from capped links says it is only the earliest of those read', () => {
+    const events = timelineEvents([
+      {
+        address: A,
+        letter: 'A',
+        links: { ...links([share(A, A, 1_371_000)]), truncated: true },
+      },
+    ]);
+    expect(events.map((e) => plain(e.parts))).toEqual([
+      'created a self-share (minting with its own key; the earliest in its newest 500 reward shares, level moves and name sales read)',
+    ]);
+  });
 });
 
 describe('copy findings', () => {
@@ -633,5 +832,61 @@ describe('copy findings', () => {
     expect(
       whereWords({ parts: [], height: 5, firstHeight: 1, count: 3, signature: 'abcdefghij' })
     ).toBe(' (blocks 1–5, 3 transactions, newest abcdefgh…)');
+  });
+
+  it('partial data says how far it got: still reading, couldn’t read, checked and none found', () => {
+    const text = compareText({
+      accounts: [
+        { letter: 'A', address: A, name: null },
+        { letter: 'B', address: B, name: null },
+        { letter: 'C', address: C, name: null },
+      ],
+      checkedAt: null,
+      neutralLine: 'Nothing here shows who runs an account.',
+      coverage: [],
+      pairs: [
+        {
+          label: 'A–B',
+          lines: [{ parts: [{ kind: 'text', text: 'A paid B 1 QORT in 1 payment' }] }],
+          noneFound: null,
+          status: ['Still reading: reward shares.'],
+        },
+        {
+          label: 'A–C',
+          lines: [],
+          noneFound: 'Checked, none found: Q-Mintership records.',
+          status: ['Couldn’t read: payments both ways.'],
+        },
+      ],
+      emptyPairs: null,
+      common: [],
+      commonNotes: [],
+      commonStatus: [
+        'Checked, none found: a shared first payer.',
+        'Still checking for a shared sponsor.',
+      ],
+      timeline: [],
+      timelineStatus: 'Still reading for the timeline.',
+      link: 'qortal://APP/Q-Mintership+/explorer/compare/a/b/c',
+    });
+    expect(text).toContain(
+      [
+        'Recorded between them:',
+        'A–B:',
+        '- A paid B 1 QORT in 1 payment',
+        '  Still reading: reward shares.',
+        'A–C:',
+        '  Checked, none found: Q-Mintership records.',
+        '  Couldn’t read: payments both ways.',
+        '',
+        'In common:',
+        'Checked, none found: a shared first payer.',
+        'Still checking for a shared sponsor.',
+        '',
+        'Timeline together:',
+        'Still reading for the timeline.',
+        '',
+      ].join('\n')
+    );
   });
 });

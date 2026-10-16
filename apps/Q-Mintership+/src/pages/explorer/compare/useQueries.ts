@@ -6,7 +6,8 @@
  * screen, and never polls. A null entry reads nothing.
  *
  * A heavy read waits in the limiter's queue without touching the store, so
- * each key is asked for once (per invalidation) rather than every render.
+ * each key is asked for once (per invalidation, and per mount) rather than
+ * every render.
  */
 import { useEffect, useReducer, useRef } from 'react';
 import { getQueryState, staleVersion, subscribeQuery, type QueryState } from '../../../data/query';
@@ -36,6 +37,13 @@ export function useQueries<T>(
   });
   /** The stale version each key was last asked for at (0: a first load). */
   const asked = useRef(new Map<string, number>());
+  // Forgotten when the view disconnects: its scope drops the heavy reads still queued,
+  // which leaves them idle, so a remount (StrictMode's too) must ask for them again.
+  // Reads that started are loading or loaded by then, and stay skipped.
+  useEffect(() => {
+    const map = asked.current;
+    return () => map.clear();
+  }, []);
 
   const keys = entries.map((entry) => (entry ? entry.key : ''));
   const joined = keys.join('\n');

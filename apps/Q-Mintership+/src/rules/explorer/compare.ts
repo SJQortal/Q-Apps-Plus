@@ -35,7 +35,7 @@ import {
   plural,
   shortAddress,
 } from '../../utils/format';
-import { isRemoval, linksOf, monthRange, sponseesOf, whenWords } from './connections';
+import { isRemoval, linksOf, monthRange, percentOf, sponseesOf, whenWords } from './connections';
 import { partsText } from './findings';
 import { flowAmounts, flowsOf, formatAtomic, parseAtomic, type Flow } from './money';
 import { txTypeLabel } from './txFamilies';
@@ -319,9 +319,20 @@ function linkFindings(input: PairInput): {
     const share = sponseesOf(rows, sponsor).find((s) => s.address === other);
     if (!share) continue;
     const now = share.active && onlinePair(input.online, sponsor, other);
+    // Removed, then made again (and active now): say so, with the newest share's percent.
+    const again =
+      share.active && share.blocks !== null ? share.txs.find((row) => !isRemoval(row)) : undefined;
     const tail =
       share.blocks !== null
-        ? `, removed after ${plural(share.blocks, 'block')}`
+        ? `, removed after ${plural(share.blocks, 'block')}${
+            again
+              ? `, shared again at ${percentOf(again)} %${
+                  typeof again.blockHeight === 'number'
+                    ? ` (block ${formatCount(again.blockHeight)})`
+                    : ''
+                }`
+              : ''
+          }`
         : share.active
           ? ', not removed'
           : '';
@@ -557,14 +568,25 @@ export function checkedNoneLine(empty: readonly PairCheck[]): string | null {
   return `Checked, none found: ${empty.map((check) => PAIR_CHECK_WORDS[check]).join(', ')}.`;
 }
 
-/** The pair grid's words: "2 recorded, 1 in common", "none found", or "checking…". */
-export function pairSummary(recorded: number, inCommon: number, settled: boolean): string {
+/** Where a pair's reads are: still out, all in, or some failed (and none still out). */
+export type PairState = 'checking' | 'done' | 'failed';
+
+/**
+ * The pair grid's words: "2 recorded, 1 in common", "none found",
+ * "checking…", or after a failed read "couldn’t read everything".
+ */
+export function pairSummary(recorded: number, inCommon: number, state: PairState): string {
   const parts = [
     recorded ? `${formatCount(recorded)} recorded` : null,
     inCommon ? `${formatCount(inCommon)} in common` : null,
   ].filter((part): part is string => part !== null);
-  if (parts.length) return settled ? parts.join(', ') : `${parts.join(', ')} so far`;
-  return settled ? 'none found' : 'checking…';
+  if (parts.length) {
+    const found = parts.join(', ');
+    if (state === 'done') return found;
+    return state === 'failed' ? `${found}; some reads failed` : `${found} so far`;
+  }
+  if (state === 'done') return 'none found';
+  return state === 'failed' ? 'couldn’t read everything' : 'checking…';
 }
 
 // ---- in common -------------------------------------------------------------------------
@@ -656,8 +678,8 @@ export function sameFirstPayers(sides: readonly CompareSide[]): SameFirstPayer[]
     .map(([from, accounts]) => ({ from, accounts }));
 }
 
-/** "has sent 1,000+ payments", or null under 100. */
-function bandWords(band: PayerBand | undefined): string | null {
+/** "has sent 1,000+ payments", or null under 100 (or not read). */
+export function bandWords(band: PayerBand | undefined): string | null {
   return band ? `has sent ${formatCount(band)}+ payments` : null;
 }
 
@@ -792,6 +814,18 @@ export function sharedCounterparties(
     row.counts.reduce((sum, c) => sum + c.sent + c.received, 0);
   rows.sort((a, b) => b.rank - a.rank || total(b) - total(a) || a.address.localeCompare(b.address));
   return { rows, atLeftOut: ats.size, busyLeftOut };
+}
+
+/**
+ * The accounts whose payer band In common reads: every shared first payer
+ * and every shared counterparty, so a busy one is left out (and counted)
+ * wherever it ranks, never only among the first ones listed.
+ */
+export function bandAddressesOf(
+  firstPayers: readonly SameFirstPayer[],
+  shared: Pick<SharedCounterparties, 'rows'>
+): string[] {
+  return [...new Set([...firstPayers.map((p) => p.from), ...shared.rows.map((r) => r.address)])];
 }
 
 /** "A → K → B", "Both paid K", "K paid A and C". */
@@ -958,11 +992,22 @@ export function timingRows(
     .filter((v): v is TimingValue => typeof v.value === 'number');
   const seen = timingText('First seen', firstSeen, 'blocks', total);
   if (seen) rows.push({ key: 'firstSeen', text: seen });
+  // An account whose links were capped may have an older self-share than the ones read.
+  const capped = sides.filter((s) => s.links?.truncated).map((s) => s.letter);
   const shares = sides
+    .filter((s) => !s.links?.truncated)
     .map((s) => ({ letter: s.letter, value: firstSelfShare(s)?.blockHeight }))
     .filter((v): v is TimingValue => typeof v.value === 'number');
   const share = timingText('Self-shares created', shares, 'blocks', total);
-  if (share) rows.push({ key: 'selfShare', text: share });
+  if (share)
+    rows.push({
+      key: 'selfShare',
+      text: capped.length
+        ? `${share} (${listWords(capped)} left out: only ${
+            capped.length === 1 ? 'its' : 'their'
+          } newest 500 reward shares, level moves and name sales were read)`
+        : share,
+    });
   const joins = sides
     .map((s) => ({ letter: s.letter, value: joined[s.address] }))
     .filter((v): v is TimingValue => typeof v.value === 'number' && v.value > 0);
@@ -1050,6 +1095,51 @@ function fundingEventParts(funding: NonNullable<FirstSeen['funding']>): TxPart[]
   }
 }
 
+/**
+ * How the account got its primary name, from its own transactions: a name
+ * it bought (BUY_NAME in its links) at that purchase's block; otherwise,
+ * once its links were read in full and show no purchase, a name it
+ * registered, at the name's registration. The name's record keeps the first
+ * registration through every sale, so that date is never credited to an
+ * account that bought the name, nor used when it is older than the account
+ * (or when the links were capped and a purchase may not have been read).
+ */
+function primaryNameEvent(side: TimelineSide): Omit<TimelineEvent, 'address' | 'letter'> | null {
+  const primary = side.primary;
+  if (!primary || !side.links) return null;
+  const name = primary.name;
+  const bought = linksOf(side.links.rows, side.address, side.links.privs)
+    .nameDeals.filter((deal) => deal.kind === 'bought' && deal.name === name)
+    .sort((a, b) => b.ref.height - a.ref.height)[0];
+  if (bought)
+    return {
+      key: `${side.address}:primaryName`,
+      kind: 'primaryName',
+      height: bought.ref.height,
+      timestamp: bought.ref.timestamp,
+      parts: [
+        text('bought the name '),
+        { kind: 'name', name },
+        ...(bought.other ? [text(' from '), account(bought.other)] : []),
+        text(' for '),
+        qort(formatAmount(bought.amount)),
+        text(' (its primary name now)'),
+      ],
+      signature: bought.ref.signature,
+    };
+  const registered = primary.registered;
+  const firstSeen = side.first?.firstSeen?.timestamp;
+  if (side.links.truncated || !registered || (firstSeen !== undefined && registered < firstSeen))
+    return null;
+  return {
+    key: `${side.address}:primaryName`,
+    kind: 'primaryName',
+    height: null,
+    timestamp: registered,
+    parts: [text('registered the name '), { kind: 'name', name }, text(' (its primary name now)')],
+  };
+}
+
 /** Every first the accounts' reads show, oldest first. */
 export function timelineEvents(sides: readonly TimelineSide[]): TimelineEvent[] {
   const events: TimelineEvent[] = [];
@@ -1069,42 +1159,29 @@ export function timelineEvents(sides: readonly TimelineSide[]): TimelineEvent[] 
         signature: funding.signature,
       });
     }
-    const own = side.first?.firstOwn ?? null;
-    if (own && !signatures.has(own.signature)) {
-      signatures.add(own.signature);
-      events.push({
-        ...base,
-        key: `${side.address}:firstOwn`,
-        kind: 'firstOwn',
-        height: own.height,
-        timestamp: own.timestamp,
-        parts: [text(`first transaction it sent: ${txTypeLabel(own.type)}`)],
-        signature: own.signature,
-      });
-    }
-    if (side.primary?.registered) {
-      events.push({
-        ...base,
-        key: `${side.address}:primaryName`,
-        kind: 'primaryName',
-        height: null,
-        timestamp: side.primary.registered,
-        parts: [
-          text('registered the name '),
-          { kind: 'name', name: side.primary.name },
-          text(' (its primary name now)'),
-        ],
-      });
+    // The specific lines first (each transaction once), then its first own transaction
+    // only when no line above already is that transaction.
+    const primary = primaryNameEvent(side);
+    if (primary && !(primary.signature && signatures.has(primary.signature))) {
+      if (primary.signature) signatures.add(primary.signature);
+      events.push({ ...base, ...primary });
     }
     const self = firstSelfShare(side);
-    if (self) {
+    if (self && !signatures.has(self.signature)) {
+      signatures.add(self.signature);
       events.push({
         ...base,
         key: `${side.address}:selfShare`,
         kind: 'selfShare',
         height: self.blockHeight ?? null,
         timestamp: self.timestamp,
-        parts: [text('created a self-share (minting with its own key)')],
+        parts: [
+          text(
+            side.links?.truncated
+              ? 'created a self-share (minting with its own key; the earliest in its newest 500 reward shares, level moves and name sales read)'
+              : 'created a self-share (minting with its own key)'
+          ),
+        ],
         signature: self.signature,
       });
     }
@@ -1127,6 +1204,19 @@ export function timelineEvents(sides: readonly TimelineSide[]): TimelineEvent[] 
           signature: move.ref.signature,
         });
       }
+    }
+    const own = side.first?.firstOwn ?? null;
+    if (own && !signatures.has(own.signature)) {
+      signatures.add(own.signature);
+      events.push({
+        ...base,
+        key: `${side.address}:firstOwn`,
+        kind: 'firstOwn',
+        height: own.height,
+        timestamp: own.timestamp,
+        parts: [text(`first transaction it sent: ${txTypeLabel(own.type)}`)],
+        signature: own.signature,
+      });
     }
     if (side.askedAt)
       events.push({
@@ -1164,11 +1254,17 @@ export function timelineEvents(sides: readonly TimelineSide[]): TimelineEvent[] 
   );
 }
 
-/** "5 blocks later", "Same block", "2 days later", between two lines. */
+/**
+ * "5 blocks later", "Same block", "2 days later", between two lines. The
+ * list is in the order the transactions were signed, and one signed later
+ * can land in an earlier block: then the gap is in time, never a negative
+ * count of blocks.
+ */
 export function gapWords(previous: TimelineEvent, next: TimelineEvent): string {
   if (previous.height !== null && next.height !== null) {
     const blocks = next.height - previous.height;
-    return blocks === 0 ? 'Same block' : `${plural(blocks, 'block')} later`;
+    if (blocks === 0) return 'Same block';
+    if (blocks > 0) return `${plural(blocks, 'block')} later`;
   }
   const ms = next.timestamp - previous.timestamp;
   return ms < 60_000 ? 'Moments later' : `${formatRoughDuration(ms)} later`;
@@ -1206,14 +1302,27 @@ export interface CompareTextInput {
   neutralLine: string;
   /** How much was read. */
   coverage: readonly string[];
-  /** Pairs with findings, each with its own checked-and-empty line. */
-  pairs: ReadonlyArray<{ label: string; lines: readonly CompareLine[]; noneFound: string | null }>;
+  /**
+   * Pairs with findings or with checks not read yet, each with its own
+   * checked-and-empty line and what it is still reading or couldn't read.
+   */
+  pairs: ReadonlyArray<{
+    label: string;
+    lines: readonly CompareLine[];
+    noneFound: string | null;
+    /** "Still reading: …", "Couldn’t read: …". */
+    status?: readonly string[];
+  }>;
   /** "A–C, B–C: checked, none found: …", or null. */
   emptyPairs: string | null;
   common: readonly CompareLine[];
   /** Plain lines (shared counterparties' counts, timing rows, left out). */
   commonNotes: readonly string[];
+  /** In common's "Checked, none found: …", still checking and couldn't check, as on the page. */
+  commonStatus?: readonly string[];
   timeline: readonly string[];
+  /** What the timeline is still reading, when it is. */
+  timelineStatus?: string | null;
   /** Side by side, one line per fact. */
   side?: readonly string[];
   link: string;
@@ -1265,17 +1374,21 @@ export function compareText(input: CompareTextInput): string {
       out.push(`${pair.label}:`);
       for (const line of pair.lines) out.push(bullet(line, nameOf));
       if (pair.noneFound) out.push(`  ${pair.noneFound}`);
+      for (const status of pair.status ?? []) out.push(`  ${status}`);
     }
     if (input.emptyPairs) out.push(input.emptyPairs);
   }
-  if (input.common.length || input.commonNotes.length) {
+  const commonStatus = input.commonStatus ?? [];
+  if (input.common.length || input.commonNotes.length || commonStatus.length) {
     out.push('', 'In common:');
     for (const line of input.common) out.push(bullet(line, nameOf));
     for (const note of input.commonNotes) out.push(`- ${note}`);
+    for (const status of commonStatus) out.push(status);
   }
-  if (input.timeline.length) {
+  if (input.timeline.length || input.timelineStatus) {
     out.push('', 'Timeline together:');
     for (const line of input.timeline) out.push(`- ${line}`);
+    if (input.timelineStatus) out.push(input.timelineStatus);
   }
   if (input.side?.length) {
     out.push('', 'Side by side:');

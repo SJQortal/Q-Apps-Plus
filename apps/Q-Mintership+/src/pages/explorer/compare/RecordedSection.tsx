@@ -3,17 +3,17 @@
  * something was found get a block (an anchor the pair grid jumps to), each
  * finding a sentence with its blocks or dates and what stands behind it;
  * then what was checked and found nothing for that pair, and one line for
- * the pairs with nothing at all. While reads are out, it says which.
+ * the pairs with nothing at all. While reads are out, it says which; the
+ * reads that failed are one line with one Retry.
  */
 import { Box, Typography } from '@mui/material';
 import { Section } from '../../../components/common/Section';
-import { ErrorState } from '../../../components/common/states';
 import { useDisplayName } from '../../../hooks/useDisplayName';
 import { checkedNoneLine, PAIR_CHECK_WORDS, type PairCheck } from '../../../rules/explorer/compare';
 import { PAIR_ANCHOR_SX, pairAnchorId } from './compareView';
 import { FindingRow } from './FindingRow';
 import { LetterBadge } from './letters';
-import { LIST_SX, Note, SubHeading, Waiting } from './parts';
+import { FailedReads, LIST_SX, Note, SubHeading, Waiting } from './parts';
 import type { CompareData, PairData } from './useCompareData';
 
 /** What a pair's reads are still out for, in words. */
@@ -91,8 +91,10 @@ function PairBlock({
       sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0, ...PAIR_ANCHOR_SX }}
     >
       <SubHeading>
+        {/* The letters are said once, by the hidden "A–B:" after them. */}
         <Box
           component="span"
+          aria-hidden
           sx={{ display: 'inline-flex', gap: 0.5, verticalAlign: 'middle', mr: 1 }}
         >
           <LetterBadge letter={data.sides[i].letter} accent={accents[i]} size={24} />
@@ -129,7 +131,7 @@ export function RecordedSection({
   const reading = pairs.filter((p) => p.result.pending.length && inFlight(data, p));
   const waiting = reading.filter((p) => !p.result.findings.length);
   const failures = pairs.flatMap((p) => failedReads(data, p));
-  // One error line per failed read, even when two pairs share it.
+  // Each failed read once, even when two pairs share it; all of them in one line.
   const seen = new Set<string>();
   const errors = failures.filter((f) => (seen.has(f.what) ? false : (seen.add(f.what), true)));
   const allChecks = new Set(nothing.flatMap((p) => p.result.empty));
@@ -140,34 +142,35 @@ export function RecordedSection({
     : null;
   if (!pairs.length) return null;
   return (
-    <Section title="Recorded between them" id="compare-recorded">
-      <Note>
-        Payments between each pair are read both ways (up to the newest 100 each way). Asset
-        transfers, reward shares, level moves, name sales, Q-Mintership records and trade portal
-        sales come from each account’s own newest ones.
-      </Note>
-      {found.map((pair) => (
-        <PairBlock key={pair.pair.id} data={data} pair={pair} accents={accents} />
-      ))}
-      {waiting.length ? (
-        <Waiting>
-          Reading what was recorded between {waiting.map((p) => p.pair.label).join(', ')}:{' '}
-          {pendingWords([...new Set(waiting.flatMap((p) => p.result.pending))])}…
-        </Waiting>
-      ) : null}
-      {errors.map((error) => (
-        <ErrorState
-          key={error.what}
-          compact
-          title={`Couldn’t read ${error.what}.`}
-          onRetry={error.retry}
+    // The pair grid jumps here for a pair whose reads failed (the Retry is here).
+    <Box id="compare-recorded" tabIndex={-1} sx={PAIR_ANCHOR_SX}>
+      <Section title="Recorded between them" id="compare-recorded-section">
+        <Note>
+          Payments between each pair are read both ways (up to the newest 100 each way). Asset
+          transfers, reward shares, level moves, name sales, Q-Mintership records and trade portal
+          sales come from each account’s own newest ones.
+        </Note>
+        {found.map((pair) => (
+          <PairBlock key={pair.pair.id} data={data} pair={pair} accents={accents} />
+        ))}
+        {waiting.length ? (
+          <Waiting announce="Reading what was recorded between them…">
+            Reading what was recorded between {waiting.map((p) => p.pair.label).join(', ')}:{' '}
+            {pendingWords([...new Set(waiting.flatMap((p) => p.result.pending))])}…
+          </Waiting>
+        ) : null}
+        <FailedReads
+          what={errors.map((e) => e.what)}
+          onRetry={() => errors.forEach((e) => e.retry())}
+          retryLabel="Retry Recorded between them"
+          announce="Recorded between them: some reads failed."
         />
-      ))}
-      {emptyLine ? (
-        <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-          {emptyLine}
-        </Typography>
-      ) : null}
-    </Section>
+        {emptyLine ? (
+          <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+            {emptyLine}
+          </Typography>
+        ) : null}
+      </Section>
+    </Box>
   );
 }

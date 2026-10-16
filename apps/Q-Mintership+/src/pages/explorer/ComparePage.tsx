@@ -28,11 +28,13 @@ import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../components/common/personLinks';
 import { EmptyState } from '../../components/common/states';
 import { getTip } from '../../data/chain';
+import type { PaymentCaps } from '../../data/explorer/money';
 import { peekQuery } from '../../data/query';
 import { useHeavyScope } from '../../hooks/useHeavyScope';
 import { useInView } from '../../hooks/useInView';
 import { explorerAccountPath, explorerComparePath, PATHS } from '../../routes/paths';
 import {
+  bandWords,
   checkedNoneLine,
   compareText,
   COMPARE_LIMIT,
@@ -44,6 +46,8 @@ import {
   leftOutLine,
   letterOf,
   LETTERS,
+  listWords,
+  PAIR_CHECK_WORDS,
   parseComparePath,
   sameFirstPayerParts,
   sameSponsorParts,
@@ -57,7 +61,14 @@ import { visibleName } from '../../rules/explorer/nameNotes';
 import { COMPARE_FULL, comparePicksAtom } from '../../state/explorer';
 import { appLink } from '../../utils/links';
 import { AccountCards } from './compare/AccountCards';
-import { inCommonState, useLetterAccents } from './compare/compareView';
+import {
+  coverageLines,
+  inCommonState,
+  pairPending,
+  sideFailed,
+  sideFailures,
+  useLetterAccents,
+} from './compare/compareView';
 import { InCommonSection } from './compare/InCommonSection';
 import { PairGrid, type PairGridRow } from './compare/PairGrid';
 import { CopyFindingsButton } from './compare/parts';
@@ -68,15 +79,19 @@ import { TimelineSection } from './compare/TimelineSection';
 import { COMPARE_SCOPE, useCompareData, type CompareData } from './compare/useCompareData';
 import { EXPLORER_NEUTRAL_LINE } from './explorerWords';
 
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
 const nameOf = (address: string) => {
   const name = peekQuery<string | null>(`name:${address}`);
   return name ? visibleName(name) : name;
 };
 
-/** Each pair's counts for the grid: recorded, in common, and whether its reads are in. */
+/**
+ * Each pair's counts for the grid: recorded, in common, and whether its
+ * reads are all in, still out, or some failed (with nothing left out).
+ */
 function pairGridRows(data: CompareData): PairGridRow[] {
-  const done = (q: { data?: unknown; isError: boolean }) => q.data !== undefined || q.isError;
-  return data.pairData.map(({ pair, result }) => {
+  return data.pairData.map(({ pair, result, xy, yx }) => {
     const a = letterOf(pair.i);
     const b = letterOf(pair.j);
     const both = (letters: readonly Letter[]) => letters.includes(a) && letters.includes(b);
@@ -85,16 +100,26 @@ function pairGridRows(data: CompareData): PairGridRow[] {
       data.firstPayers.filter((p) => both(p.accounts.map((x) => x.letter))).length +
       data.counterparties.rows.filter((r) => both(r.counts.map((c) => c.letter))).length +
       data.groupsShared.filter((g) => both(g.letters)).length;
-    const commonIn = [pair.i, pair.j].every((k) =>
-      [
-        data.first[k],
-        data.groups[k],
-        data.sent[k],
-        data.recv[k],
-        data.assets[k],
-        data.links[k],
-      ].every(done)
-    );
+    const sides = [pair.i, pair.j];
+    const recordedReads = [
+      xy,
+      yx,
+      ...sides.flatMap((k) => [data.links[k], data.assets[k], data.made[k], data.trades[k]]),
+    ];
+    const commonReads = sides.flatMap((k) => [
+      data.first[k],
+      data.groups[k],
+      data.sent[k],
+      data.recv[k],
+      data.assets[k],
+      data.links[k],
+    ]);
+    // A failed read is not a read: the pair can't say "none found" on it.
+    const commonIn = commonReads.every((q) => q.data !== undefined);
+    const settled = !result.pending.length && commonIn;
+    const out = [...recordedReads, ...commonReads].some((q) => q.isLoading);
+    const recordedFailed = recordedReads.some((q) => q.isError);
+    const commonFailed = commonReads.some((q) => q.isError);
     return {
       label: pair.label,
       id: pair.id,
@@ -102,33 +127,45 @@ function pairGridRows(data: CompareData): PairGridRow[] {
       j: pair.j,
       recorded: result.findings.length,
       inCommon,
-      settled: !result.pending.length && commonIn,
+      state: settled ? 'done' : !out && (recordedFailed || commonFailed) ? 'failed' : 'checking',
+      retryAt: recordedFailed ? 'compare-recorded' : commonFailed ? 'compare-common' : undefined,
     };
   });
 }
 
-/** Everything on the page as plain text, with the block it was checked at. */
-async function buildText(data: CompareData, sideFacts: SideFacts[]): Promise<string> {
+/** "payments both ways, reward shares". */
+const checkWords = (checks: readonly PairCheck[]) =>
+  checks.map((check) => PAIR_CHECK_WORDS[check]).join(', ');
+
+/**
+ * Everything on the page as plain text, with the block it was checked at,
+ * as far as the reads got: what is still being read and what couldn't be
+ * read is said, as on the page, never left out as if nothing were there.
+ */
+async function buildText(
+  data: CompareData,
+  sideFacts: SideFacts[],
+  timelineReading: boolean
+): Promise<string> {
   const tip = await getTip().catch(() => null);
   const total = data.liveSides.length;
-  const linksCapped = data.links.some((q) => q.data?.truncated);
-  const coverage = [
-    'Payments between each pair: every QORT payment each way, up to the newest 100.',
-    'Asset transfers and multi-payments, trade portal sales: each account’s newest 100.',
-    linksCapped
-      ? 'Reward shares, level moves and name sales: each account’s newest 500 (every level move read).'
-      : 'Reward shares, level moves and name sales: all of each account’s.',
-    'Q-Mintership records: under every name each account owns.',
-    'The same accounts in their payments: in each account’s newest 100 QORT payments each way.',
-  ];
+  // How far each read went, from the reads themselves (and whether this node has payments/between).
+  const coverage = coverageLines(data, peekQuery<PaymentCaps>('xcaps'));
   const pairs = data.pairData
-    .filter((p) => p.result.findings.length)
-    .map((p) => ({
-      label: p.pair.label,
-      // A trade's sentence has its dates already.
-      lines: p.result.findings.map((f) => (f.kind === 'trade' ? { parts: f.parts } : f)),
-      noneFound: checkedNoneLine(p.result.empty),
-    }));
+    .filter((p) => p.result.findings.length || p.result.pending.length)
+    .map((p) => {
+      const { reading, failed } = pairPending(data, p);
+      return {
+        label: p.pair.label,
+        // A trade's sentence has its dates already.
+        lines: p.result.findings.map((f) => (f.kind === 'trade' ? { parts: f.parts } : f)),
+        noneFound: checkedNoneLine(p.result.empty),
+        status: [
+          ...(reading.length ? [`Still reading: ${checkWords(reading)}.`] : []),
+          ...(failed.length ? [`Couldn’t read: ${checkWords(failed)}.`] : []),
+        ],
+      };
+    });
   const nothing = data.pairData.filter(
     (p) => !p.result.findings.length && !p.result.pending.length
   );
@@ -139,12 +176,19 @@ async function buildText(data: CompareData, sideFacts: SideFacts[]): Promise<str
   const common: CompareLine[] = [
     ...data.sponsors.map((s) => ({ parts: sameSponsorParts(s, total) })),
     ...data.firstPayers.map((p) => ({ parts: sameFirstPayerParts(p, total, data.bands[p.from]) })),
-    ...data.counterparties.rows.map((r) => ({
-      parts: [
-        ...counterpartyParts(r, total),
-        { kind: 'text' as const, text: ` (${counterpartyCounts(r)})` },
-      ],
-    })),
+    ...data.counterparties.rows.map((r) => {
+      // The busy mark the page shows next to it, too.
+      const busy = bandWords(data.bands[r.address]);
+      return {
+        parts: [
+          ...counterpartyParts(r, total),
+          {
+            kind: 'text' as const,
+            text: ` (${counterpartyCounts(r)}${busy ? ` · it ${busy}` : ''})`,
+          },
+        ],
+      };
+    }),
   ];
   const left = leftOutLine(data.counterparties);
   const commonNotes = [
@@ -161,6 +205,15 @@ async function buildText(data: CompareData, sideFacts: SideFacts[]): Promise<str
       : []),
     ...data.timing.map((t) => t.text),
   ];
+  const state = inCommonState(data);
+  const commonStatus = [
+    ...(state.empty.length ? [`Checked, none found: ${state.empty.join(', ')}.`] : []),
+    ...(state.checking.length ? [`Still checking for ${listWords(state.checking)}.`] : []),
+    ...(state.failed.length ? [`Couldn’t finish checking for ${listWords(state.failed)}.`] : []),
+  ];
+  const timelineStatus = timelineReading
+    ? 'Still reading first transactions, self-shares, names and MINTER history for the timeline: it may be missing lines.'
+    : null;
   const timeline = data.timeline.map((event, i) =>
     i === 0
       ? timelineLine(event, nameOf)
@@ -172,7 +225,10 @@ async function buildText(data: CompareData, sideFacts: SideFacts[]): Promise<str
     const same = sameForAll(row.cells);
     if (same) return `${row.label}: same for all, ${cellText(same, nameOf)}`;
     return `${row.label}: ${row.cells
-      .map((cell, i) => `${columns[i]} ${cell ? cellText(cell, nameOf) : 'not read'}`)
+      .map(
+        (cell, i) =>
+          `${columns[i]} ${cell ? (cell.failed ? lowerFirst(cellText(cell)) : cellText(cell, nameOf)) : 'not read'}`
+      )
       .join('; ')}`;
   });
   return compareText({
@@ -188,7 +244,9 @@ async function buildText(data: CompareData, sideFacts: SideFacts[]): Promise<str
     emptyPairs,
     common,
     commonNotes,
+    commonStatus,
     timeline,
+    timelineStatus,
     side,
     link: appLink(explorerComparePath([...data.addresses])),
     nameOf,
@@ -243,7 +301,8 @@ export default function ComparePage() {
     return [
       {
         account,
-        primary: data.primary[i].isError ? null : data.primary[i].data,
+        // A failed read stays unread (`failed` says so), never "no primary name".
+        primary: data.primary[i].data,
         names: data.names[i].data,
         first: data.first[i].data,
         balance: data.balance[i].data,
@@ -255,9 +314,11 @@ export default function ComparePage() {
         lastSent: data.lastSent[i].data,
         groups: data.groups[i].data,
         qdn: data.qdn[i].data,
+        failed: sideFailed(data, i),
       },
     ];
   });
+  const sideFailedReads = sideFailures(data);
   const columns = data.addresses
     .map((address, i) => ({ address, letter: letterOf(i), accent: accents[i] }))
     .filter((_, i) => data.accounts[i]);
@@ -315,15 +376,21 @@ export default function ComparePage() {
             <RecordedSection data={data} accents={accents} />
             <Box ref={setBelowNode} sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
               <TimelineSection data={data} accents={accents} reading={timelineReading} />
-              {common.any || common.reading || common.empty.length ? (
+              {common.any || common.reading || common.empty.length || common.failed.length ? (
                 <InCommonSection data={data} />
               ) : null}
             </Box>
             <Box ref={setSideNode}>
-              <SideBySide columns={columns} rows={sideRows(sideFacts)} table={table} />
+              <SideBySide
+                columns={columns}
+                rows={sideRows(sideFacts)}
+                table={table}
+                failed={sideFailedReads.what}
+                onRetry={() => sideFailedReads.reads.forEach((q) => void q.refetch())}
+              />
             </Box>
             <Box>
-              <CopyFindingsButton build={() => buildText(data, sideFacts)} />
+              <CopyFindingsButton build={() => buildText(data, sideFacts, timelineReading)} />
             </Box>
           </>
         ) : null}

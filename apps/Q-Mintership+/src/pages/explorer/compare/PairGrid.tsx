@@ -1,12 +1,14 @@
 /**
  * For three or four accounts, every pair at a glance: "A–B: 2 recorded,
- * 1 in common", "A–C: none found". A pair with something recorded jumps to
- * its block in "Recorded between them" (focus goes there too); one with only
- * something in common jumps to In common; one with nothing is plain text.
+ * 1 in common", "A–C: none found", or after a failed read "A–D: couldn’t
+ * read everything". A pair with something recorded jumps to its block in
+ * "Recorded between them" (focus goes there too); one whose reads failed
+ * jumps to where its Retry is; one with only something in common jumps to
+ * In common; one with nothing is plain text.
  */
 import { Box, ButtonBase, Typography } from '@mui/material';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
-import { pairSummary, type Letter } from '../../../rules/explorer/compare';
+import { pairSummary, type Letter, type PairState } from '../../../rules/explorer/compare';
 import { LetterBadge } from './letters';
 import { pairAnchorId } from './compareView';
 
@@ -18,7 +20,9 @@ export interface PairGridRow {
   j: number;
   recorded: number;
   inCommon: number;
-  settled: boolean;
+  state: PairState;
+  /** Where the Retry for its failed reads is (an element id), when some failed. */
+  retryAt?: string;
 }
 
 const ROW_SX = {
@@ -75,12 +79,14 @@ export function PairGrid({
         }}
       >
         {rows.map((row) => {
-          const summary = pairSummary(row.recorded, row.inCommon, row.settled);
+          const summary = pairSummary(row.recorded, row.inCommon, row.state);
           const target = row.recorded
             ? pairAnchorId(row.id)
-            : row.inCommon
-              ? 'compare-common'
-              : null;
+            : row.state === 'failed' && row.retryAt
+              ? row.retryAt
+              : row.inCommon
+                ? 'compare-common'
+                : null;
           const content = (
             <>
               <Box component="span" sx={{ display: 'inline-flex', gap: 0.25 }} aria-hidden>

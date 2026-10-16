@@ -13,9 +13,10 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import { getDefaultStore } from 'jotai';
 import { renderPage } from '../../test/render';
 import { expectNoAxeViolations } from '../../test/axe';
-import { fetchCallsFor, qortalCalls } from '../../test/setup';
-import { ADDR } from '../../test/world';
+import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../test/setup';
+import { ADDR, type InstalledWorld } from '../../test/world';
 import {
+  answerCore,
   AT_ADDRESS,
   MESSAGE_CONTENT,
   SPONSEES,
@@ -42,7 +43,7 @@ function Probe() {
   return <output data-testid="at">{location.pathname}</output>;
 }
 
-async function open(path: string) {
+async function open(path: string, setup?: (world: InstalledWorld['world']) => void) {
   const result = await renderPage(
     <>
       <Routes>
@@ -51,9 +52,27 @@ async function open(path: string) {
       </Routes>
       <Probe />
     </>,
-    { persona: 'learner', path, route: '/*', strict: true }
+    { persona: 'learner', path, route: '/*', strict: true, setup }
   );
   return { ...result, user: userEvent.setup() };
+}
+
+/** Core answers 500 to the GETs `broken` matches while `on` is set; the world answers the rest. */
+function breakReads(world: InstalledWorld['world'], broken: (url: URL) => boolean) {
+  const state = { on: true };
+  mockFetchRoute(/^\//, (url: URL) => {
+    if (state.on && broken(url))
+      return new Response(JSON.stringify({ error: 500, message: 'Core is down' }), {
+        status: 500,
+      });
+    const answer = answerCore(world, url.pathname, url.searchParams);
+    if (!answer) throw new Error(`no mock for GET ${url.pathname}${url.search}`);
+    return new Response(answer.text !== undefined ? answer.text : JSON.stringify(answer.body), {
+      status: answer.status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+  return state;
 }
 
 const at = () => screen.getByTestId('at').textContent ?? '';
@@ -200,6 +219,14 @@ describe('Compare: two accounts', () => {
   it('opens what stands behind a finding: payments link to their transactions, a trade to its AT', async () => {
     const { user, world } = await open(explorerComparePath([ADDR.kicked, ADDR.left]));
     const recorded = await region('Recorded between them');
+    // The pair's heading says its letters once (the badges are decoration).
+    expect(
+      await within(recorded).findByRole(
+        'heading',
+        { level: 3, name: /^A–B: ?Kit Kicked and Lou Left$/ },
+        T
+      )
+    ).toBeInTheDocument();
     const toggle = await within(recorded).findByRole(
       'button',
       { name: 'Show the 4 payments from Kit Kicked to Lou Left' },
@@ -263,6 +290,13 @@ describe('Compare: two accounts', () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     const common = await region('In common');
     await waitFor(() => expect(common).toHaveTextContent('Self-shares created 14 blocks apart'), T);
+    await waitFor(
+      () =>
+        expect(common).toHaveTextContent(
+          'A received 1 payment · B received 1 payment · it has sent 500+ payments'
+        ),
+      T
+    );
     const recorded = await region('Recorded between them');
     await waitFor(() => expect(recorded).toHaveTextContent('on the trade portal'), T);
     await user.click(screen.getByRole('button', { name: 'Copy findings' }));
@@ -277,6 +311,10 @@ describe('Compare: two accounts', () => {
     );
     expect(text).toMatch(/sold 12 QORT to .* on the trade portal in 1 trade \(\d+ \w+ \d{4}\)\n/);
     expect(text).toContain('Checked, none found: reward shares, level moves');
+    // A busy counterparty keeps its mark in the copy, as on the page.
+    expect(text).toMatch(
+      /- Hal Helper \(Q\w{5}…\w{4}\) paid both \(A received 1 payment · B received 1 payment · it has sent 500\+ payments\)/
+    );
     expect(text).toContain('First seen 5 blocks apart');
     expect(text).toMatch(/- Block 1,364,165 · A: first QORT payment from Hal Helper/);
     expect(text).toMatch(/- 5 blocks later · Block 1,364,170 · B: first QORT payment/);
@@ -356,6 +394,18 @@ describe('Compare: four accounts', () => {
 });
 
 describe('Compare: the link', () => {
+  it('each card’s copy button says whose address it copies', async () => {
+    await open(explorerComparePath([ADDR.kicked, ADDR.left]));
+    const cards = screen.getByRole('list', { name: 'Accounts compared' });
+    expect(
+      await within(cards).findByRole('button', { name: 'Copy Kit Kicked’s address (A)' }, T)
+    ).toBeInTheDocument();
+    expect(
+      await within(cards).findByRole('button', { name: 'Copy Lou Left’s address (B)' }, T)
+    ).toBeInTheDocument();
+    expect(within(cards).queryByRole('button', { name: 'Copy address' })).toBeNull();
+  });
+
   it('leaves out what isn’t a valid address, an AT and a repeat, and says so', async () => {
     await open(
       `/explorer/compare/${ADDR.kicked}/nonsense/${ADDR.kicked}/${AT_ADDRESS}/${ADDR.left}`
@@ -414,5 +464,193 @@ describe('Compare: Remove and Add', () => {
       T
     );
     expect(store.get(comparePicksAtom)).toEqual([ADDR.kicked, ADDR.left, SPONSOR.address]);
+  });
+});
+
+describe('Compare: reads that fail', () => {
+  it('Recorded between them: every failed read in one line, with one Retry for all', async () => {
+    let broken = { on: false };
+    const { user } = await open(explorerComparePath([ADDR.kicked, ADDR.left]), (world) => {
+      broken = breakReads(
+        world,
+        (url) =>
+          url.pathname.startsWith('/crosschain/trades') ||
+          url.searchParams.getAll('txType').includes('TRANSFER_ASSET')
+      );
+    });
+    const recorded = await region('Recorded between them');
+    const line = await within(recorded).findByText(/^Couldn’t read /, {}, T);
+    expect(line).toHaveTextContent(
+      'Couldn’t read A’s asset transfers, A’s trade portal sales, B’s asset transfers and B’s trade portal sales.'
+    );
+    // The list grows as reads fail: only a fixed line beside it is live.
+    expect(line).not.toHaveAttribute('role');
+    expect(
+      within(recorded)
+        .getAllByRole('status')
+        .map((s) => s.textContent)
+    ).toContain('Recorded between them: some reads failed.');
+    expect(within(recorded).queryAllByRole('alert')).toEqual([]);
+    expect(within(recorded).getAllByRole('button', { name: /^Retry/ })).toHaveLength(1);
+
+    broken.on = false;
+    await user.click(within(recorded).getByRole('button', { name: 'Retry Recorded between them' }));
+    await waitFor(
+      () =>
+        expect(spoken(recorded)).toContain(
+          'Lou Left sold 12 QORT to Kit Kicked on the trade portal in 1 trade'
+        ),
+      T
+    );
+    await waitFor(() => expect(within(recorded).queryByText(/^Couldn’t read /)).toBeNull(), T);
+  });
+
+  it('In common: a check whose read failed is never “none found”, and says so with Retry', async () => {
+    let broken = { on: false };
+    const { user } = await open(explorerComparePath([ADDR.kicked, ADDR.left]), (world) => {
+      broken = breakReads(
+        world,
+        (url) =>
+          (url.pathname === '/transactions/search' &&
+            url.searchParams.get('address') === ADDR.kicked &&
+            url.searchParams.getAll('txType').includes('REWARD_SHARE')) ||
+          url.pathname === `/groups/member/${ADDR.kicked}`
+      );
+    });
+    const common = await region('In common');
+    const line = await within(common).findByText(/^Couldn’t finish checking for /, {}, T);
+    expect(line).toHaveTextContent(
+      'Couldn’t finish checking for a shared sponsor and shared groups (MINTER aside).'
+    );
+    await waitFor(
+      () => expect(spoken(common)).toContain('Both got their first QORT payment from Hal Helper'),
+      T
+    );
+    expect(common).toHaveTextContent('Hal Helper paid both');
+    expect(common).not.toHaveTextContent(/Checked, none found/);
+    expect(within(common).queryByRole('list', { name: 'Shared groups' })).toBeNull();
+    expect(within(common).queryAllByRole('alert')).toEqual([]);
+
+    broken.on = false;
+    await user.click(within(common).getByRole('button', { name: 'Retry In common' }));
+    await waitFor(
+      () => expect(common).toHaveTextContent('Checked, none found: a shared sponsor.'),
+      T
+    );
+    expect(within(common).getByRole('list', { name: 'Shared groups' })).toBeInTheDocument();
+    expect(within(common).queryByText(/^Couldn’t finish/)).toBeNull();
+  });
+
+  it('the pair grid says a pair couldn’t be read, not “checking…” for good', async () => {
+    let broken = { on: false };
+    const { user } = await open(
+      explorerComparePath([ADDR.kicked, ADDR.left, SPONSOR.address]),
+      (world) => {
+        broken = breakReads(
+          world,
+          (url) =>
+            url.pathname === '/transactions/payments/between' &&
+            url.searchParams.get('senderAddress') === ADDR.kicked &&
+            url.searchParams.get('recipientAddress') === SPONSOR.address
+        );
+      }
+    );
+    const grid = await screen.findByRole('navigation', { name: 'Pairs' }, T);
+    await waitFor(() => expect(grid).toHaveTextContent(/A–C: [^A-Z]*some reads failed/), T);
+    expect(grid).not.toHaveTextContent(/A–C: [^A-Z]*(checking|so far|none found)/);
+    // It jumps to where the Retry is.
+    await user.click(within(grid).getByRole('button', { name: /A–C/ }));
+    const recordedBox = document.getElementById('compare-recorded');
+    expect(document.activeElement).toBe(recordedBox);
+    const recorded = await region('Recorded between them');
+    expect(recorded).toHaveTextContent('Couldn’t read the payments between A and C.');
+
+    broken.on = false;
+    await user.click(within(recorded).getByRole('button', { name: 'Retry Recorded between them' }));
+    await waitFor(() => expect(grid).not.toHaveTextContent(/A–C: [^A-Z]*failed/), T);
+    expect(grid).not.toHaveTextContent(/A–C: [^A-Z]*(checking|so far)/);
+  });
+
+  it('Copy findings says what couldn’t be read, pair by pair and in common', async () => {
+    const { user } = await open(
+      explorerComparePath([ADDR.kicked, ADDR.left, SPONSOR.address]),
+      (world) => {
+        breakReads(
+          world,
+          (url) =>
+            (url.pathname === '/transactions/payments/between' &&
+              url.searchParams.get('senderAddress') === ADDR.kicked &&
+              url.searchParams.get('recipientAddress') === SPONSOR.address) ||
+            (url.pathname === '/transactions/search' &&
+              url.searchParams.get('address') === ADDR.kicked &&
+              url.searchParams.getAll('txType').includes('REWARD_SHARE'))
+        );
+      }
+    );
+    const writeText = vi.fn(async (text: string) => void text);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const grid = await screen.findByRole('navigation', { name: 'Pairs' }, T);
+    await waitFor(() => expect(grid).toHaveTextContent(/A–C: [^A-Z]*failed/), T);
+    const common = await region('In common');
+    await waitFor(
+      () => expect(common).toHaveTextContent('Couldn’t finish checking for a shared sponsor.'),
+      T
+    );
+    await user.click(screen.getByRole('button', { name: 'Copy findings' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled(), T);
+    const text = writeText.mock.calls[0][0] as string;
+    // A pair with nothing found yet is not left out: it says what it couldn't read.
+    expect(text).toMatch(
+      /\nA–C:\n( {2}Checked, none found: [^\n]*\n)? {2}Couldn’t read: payments both ways, reward shares, level moves, name sales\.\n/
+    );
+    // A pair with findings says it too, under them.
+    expect(text).toMatch(
+      /\nA–B:\n(- [^\n]*\n)+( {2}[^\n]*\n)* {2}Couldn’t read: reward shares, level moves, name sales\.\n/
+    );
+    expect(text).toContain('Couldn’t finish checking for a shared sponsor.');
+    expect(text).not.toMatch(/Checked, none found: [^\n]*a shared sponsor/);
+    // What was read says so too, instead of "all of each account’s".
+    expect(text).toContain(
+      '- Reward shares, level moves and name sales: all of B’s and C’s; couldn’t be read for A.'
+    );
+  });
+
+  it('Side by side: a failed read says “Couldn’t read”, not “Loading” for good, with Retry', async () => {
+    let broken = { on: false };
+    const { user } = await open(explorerComparePath([ADDR.kicked, ADDR.left]), (world) => {
+      broken = breakReads(world, (url) => url.pathname === `/addresses/balance/${ADDR.left}`);
+    });
+    const side = await region('Side by side');
+    await waitFor(() => expect(side).toHaveTextContent('BalanceA12.5 QORTBCouldn’t read'), T);
+    expect(await within(side).findByText(/^Couldn’t read B’s balance\./, {}, T)).toBeVisible();
+    expect(within(side).getByRole('status')).toHaveTextContent('Side by side: some reads failed.');
+    await waitFor(() => expect(side).toHaveTextContent('MINTER statusSame for all'), T);
+    expect(within(side).queryByText('Loading')).toBeNull();
+
+    broken.on = false;
+    await user.click(within(side).getByRole('button', { name: 'Retry Side by side' }));
+    await waitFor(() => expect(side).toHaveTextContent('BalanceSame for all: 12.5 QORT'), T);
+    expect(within(side).queryByText(/^Couldn’t read/)).toBeNull();
+  });
+
+  it('a primary name that couldn’t be read is said, never “No primary name”', async () => {
+    let broken = { on: false };
+    const { user } = await open(explorerComparePath([ADDR.kicked, ADDR.left]), (world) => {
+      broken = breakReads(world, (url) => url.pathname === `/names/primary/${ADDR.left}`);
+    });
+    const side = await region('Side by side');
+    await waitFor(
+      () =>
+        expect(side).toHaveTextContent(/NamesA.*BCouldn’t read the primary name \(\d+ names?\)/),
+      T
+    );
+    expect(side).toHaveTextContent(/QDN publishesA.*BCouldn’t read/);
+    expect(side).not.toHaveTextContent('No primary name');
+    expect(await within(side).findByText(/^Couldn’t read B’s primary name\./, {}, T)).toBeVisible();
+
+    broken.on = false;
+    await user.click(within(side).getByRole('button', { name: 'Retry Side by side' }));
+    await waitFor(() => expect(within(side).queryByText(/^Couldn’t read/)).toBeNull(), T);
+    expect(side).not.toHaveTextContent(/Couldn’t read the primary name/);
   });
 });

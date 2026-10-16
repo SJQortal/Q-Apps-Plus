@@ -55,6 +55,7 @@ import type { AccountInfo } from '../../../data/types';
 import { useQuery, type UseQueryResult } from '../../../hooks/useQuery';
 import { sponseesOf } from '../../../rules/explorer/connections';
 import {
+  bandAddressesOf,
   letterOf,
   pairFindings,
   pairsOf,
@@ -75,9 +76,6 @@ import { useQueries } from './useQueries';
 
 /** The heavy-read scope of the Compare page: leaving it drops what it queued. */
 export const COMPARE_SCOPE = 'compare';
-
-/** Shared payers whose band is read (each a few ms): the first ones listed. */
-const BANDS_READ = 40;
 
 export interface CompareFlags {
   /** The timeline or In common is near the screen. */
@@ -338,15 +336,11 @@ export function useCompareData(addresses: readonly string[], flags: CompareFlags
     sharedSponsors.map((sponsor, i) => [sponsor, sponsorLinks[i].data])
   );
 
-  // Busy payers are left out once their bands are read; first, which bands to read.
+  // Busy payers are left out once their bands are read; first, which bands to read (every
+  // shared payer, 4 at a time and cached, so the left-out count is never a partial one).
   const counterpartiesAll = sharedCounterparties(liveSides);
   const firstPayers = sameFirstPayers(liveSides);
-  const bandAddresses = flags.below
-    ? [
-        ...firstPayers.map((p) => p.from),
-        ...counterpartiesAll.rows.slice(0, BANDS_READ).map((r) => r.address),
-      ]
-    : [];
+  const bandAddresses = flags.below ? bandAddressesOf(firstPayers, counterpartiesAll) : [];
   const bands: Record<string, PayerBand | undefined> = usePayerBands(bandAddresses);
   const counterparties = sharedCounterparties(liveSides, bands);
 
