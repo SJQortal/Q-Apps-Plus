@@ -178,7 +178,13 @@ describe('the findings list', () => {
       'Got its minting level from Qccccc…cccc. Qccccc…cccc is now level 0.'
     );
     expect(findings[1]).toMatchObject({ other: B, evidenceWords: '2 transactions' });
-    expect(findings[3]).toMatchObject({ other: null, count: 2, firstHeight: 300, height: 400 });
+    expect(findings[3]).toMatchObject({ other: null, firstHeight: 300, height: 400 });
+    // Copy findings: the sentence counts accounts; no transaction count is added to it.
+    expect(findings[3].count).toBeUndefined();
+    const sponsees = findingsText({ ...input(), recorded: [findings[3]] })
+      .split('\n')
+      .find((line) => line.startsWith('- Sponsored'));
+    expect(sponsees).toMatch(/^- Sponsored 2 accounts \(.+\) \(blocks 300–400, newest f\w+…\)$/);
     expect(findings[5]).toMatchObject({
       other: E,
       evidenceWords: '2 payments',

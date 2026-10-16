@@ -211,6 +211,8 @@ export function recordedFindings(input: RecordedInput): Finding[] {
       evidenceWords: '1 transaction',
     });
   if (links?.sponsees.length) {
+    // The blocks of the first shares, one per account: no transaction count
+    // (the sentence counts the accounts).
     const first = links.sponsees[0];
     const last = links.sponsees[links.sponsees.length - 1];
     out.push({
@@ -223,7 +225,6 @@ export function recordedFindings(input: RecordedInput): Finding[] {
       timestamp: last.start.timestamp,
       firstTimestamp: first.start.timestamp,
       signature: last.start.signature,
-      count: links.sponsees.length,
       evidence: [],
       evidenceWords: '',
     });
