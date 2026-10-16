@@ -6,6 +6,7 @@
  * themselves, the rest on request with Stop; counts per service, encrypted
  * ones never listed). Reads counted; axe; no writes.
  */
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -19,6 +20,7 @@ import { explorerAccountPath } from '../../../routes/paths';
 import { resetExplorerState } from '../../../state/explorer';
 import { formatDate } from '../../../utils/format';
 import AccountPage from '../AccountPage';
+import { QdnPublished } from './names/QdnPublished';
 
 const T = { timeout: 4000 };
 const ROUTE = '/explorer/account/:who/:tab?';
@@ -353,5 +355,32 @@ describe('Names: published on QDN', () => {
     await user.click(within(qdn).getByRole('button', { name: 'Retry' }));
     expect(await within(qdn).findByText(/^Searched 10 of 30 names\./, {}, T)).toBeInTheDocument();
     expect(within(qdn).queryByText(/^Couldn't search/)).toBeNull();
+  });
+
+  it('counts only the names it is given when the section stays on screen for another account', async () => {
+    // Back from one account's Names tab to another's keeps this section mounted.
+    function Reused() {
+      const [other, setOther] = useState(false);
+      const name = other ? 'Nobody Here' : 'Cora Collector';
+      return (
+        <>
+          <button type="button" onClick={() => setOther(true)}>
+            Other account
+          </button>
+          <QdnPublished names={[name]} primary={name} truncated={false} />
+        </>
+      );
+    }
+    const { posts } = await renderPage(<Reused />, { persona: 'learner', strict: true });
+    const user = userEvent.setup();
+    const qdn = await region('Published on QDN');
+    expect(await within(qdn).findByText(/^\d+ resources$/, {}, T)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Other account' }));
+    expect(
+      await within(qdn).findByText('Nothing published under the name searched.', {}, T)
+    ).toBeInTheDocument();
+    expect(within(qdn).queryByText(/resources?$/)).toBeNull();
+    expect(within(qdn).queryByText(/Cora Collector/)).toBeNull();
+    noWrites(posts);
   });
 });

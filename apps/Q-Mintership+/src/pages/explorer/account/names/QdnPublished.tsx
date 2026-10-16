@@ -167,9 +167,16 @@ export function QdnPublished({
   const searched = names.filter((name) => results.get(name)?.ok);
   const failed = names.filter((name) => results.get(name)?.ok === false);
   const left = names.filter((name) => !results.has(name));
+  // Only this account's names: the map can still hold another account's.
   const summary = useMemo(
-    () => summarizeQdn([...results.values()].flatMap((result) => (result.ok ? [result.data] : []))),
-    [results]
+    () =>
+      summarizeQdn(
+        names.flatMap((name) => {
+          const result = results.get(name);
+          return result?.ok ? [result.data] : [];
+        })
+      ),
+    [results, names]
   );
   // Only the first names so far: say which they were.
   const onlyAuto =
