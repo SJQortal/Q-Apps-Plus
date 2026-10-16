@@ -336,6 +336,8 @@ describe('Names: published on QDN', () => {
     );
     const qdn = await region('Published on QDN');
     await user.click(await within(qdn).findByRole('button', { name: 'Search 20 more names' }, T));
+    // The same button turns into Stop, and keeps the focus.
+    expect(within(qdn).getByRole('button', { name: 'Stop' })).toHaveFocus();
     expect(within(qdn).getByRole('status')).toHaveTextContent(/^Searching: \d+ of 20 names$/);
     expect(
       within(qdn).getByRole('progressbar', { name: 'Searching its names on QDN' })
@@ -343,6 +345,8 @@ describe('Names: published on QDN', () => {
     expect(await within(qdn).findByText('Searched all 30 names.', {}, T)).toBeInTheDocument();
     expect(byName()).toHaveLength(30);
     expect(most).toBe(4);
+    // Nothing left to search: the button goes, and the line of what was searched takes the focus.
+    expect(within(qdn).getByText('Searched all 30 names.', { selector: 'p' })).toHaveFocus();
     // The old name's image is found now.
     const counts = within(qdn).getByRole('list', { name: 'Resources per service' });
     expect(within(counts).getByText('IMAGE 1')).toBeInTheDocument();

@@ -37,7 +37,7 @@ import {
   serviceCountWords,
   showMoreWords,
 } from './namesWords';
-import { FOCUSABLE_ROW_SX, useShowMore } from './useShowMore';
+import { FOCUSABLE_ROW_SX, useFocusFallback, useShowMore } from './useShowMore';
 
 /** Resources listed at first, and added by each "Show more". */
 export const QDN_PAGE = 20;
@@ -119,6 +119,8 @@ export function QdnPublished({
   } | null>(null);
   const runRef = useRef<{ stopped: boolean } | null>(null);
   const { shown, showMore, listRef } = useShowMore(QDN_PAGE);
+  // When the last names are searched the button goes: the line of what was searched takes the focus.
+  const { control, fallback } = useFocusFallback<HTMLParagraphElement>();
 
   useEffect(() => {
     resultsRef.current = results;
@@ -193,7 +195,13 @@ export function QdnPublished({
     <Section title="Published on QDN" id="names-qdn">
       <Card ref={setNode} sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
         {waiting ? null : (
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            ref={fallback}
+            tabIndex={-1}
+            variant="body2"
+            color="text.secondary"
+            sx={FOCUSABLE_ROW_SX}
+          >
             {searchedLine(searched.length, names.length, truncated)}
             {onlyAuto
               ? ` ${autoNamesWords(autoHasPrimary, auto.length - (autoHasPrimary ? 1 : 0))}`
@@ -201,26 +209,32 @@ export function QdnPublished({
           </Typography>
         )}
 
-        {running ? (
+        {running || (left.length && near) ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-              <Typography role="status" sx={{ flex: 1, minWidth: 0 }}>
-                Searching: {formatCount(running.done)} of {formatCount(running.total)} names
-              </Typography>
+              {running ? (
+                <Typography role="status" sx={{ flex: 1, minWidth: 0 }}>
+                  Searching: {formatCount(running.done)} of {formatCount(running.total)} names
+                </Typography>
+              ) : null}
+              {/* One button for both (search more, Stop): the focus stays on it. */}
               <Button
+                ref={control}
                 variant="outlined"
-                onClick={stop}
-                disabled={running.stopping}
-                sx={{ minHeight: 44 }}
+                onClick={running ? stop : () => run(left)}
+                aria-disabled={running?.stopping || undefined}
+                sx={{ minHeight: 44, ...(running?.stopping ? { color: 'text.disabled' } : {}) }}
               >
-                {running.stopping ? 'Stopping…' : 'Stop'}
+                {running ? (running.stopping ? 'Stopping…' : 'Stop') : searchMoreWords(left.length)}
               </Button>
             </Box>
-            <ProgressBar
-              value={running.total ? running.done / running.total : 0}
-              label="Searching its names on QDN"
-              valueText={`${formatCount(running.done)} of ${formatCount(running.total)} names`}
-            />
+            {running ? (
+              <ProgressBar
+                value={running.total ? running.done / running.total : 0}
+                label="Searching its names on QDN"
+                valueText={`${formatCount(running.done)} of ${formatCount(running.total)} names`}
+              />
+            ) : null}
           </Box>
         ) : null}
 
@@ -306,16 +320,6 @@ export function QdnPublished({
             ) : null}
           </>
         )}
-
-        {left.length && !running && near ? (
-          <Button
-            variant="outlined"
-            onClick={() => run(left)}
-            sx={{ alignSelf: 'flex-start', minHeight: 44 }}
-          >
-            {searchMoreWords(left.length)}
-          </Button>
-        ) : null}
       </Card>
     </Section>
   );

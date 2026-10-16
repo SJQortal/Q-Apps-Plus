@@ -571,6 +571,8 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
     expect(fetchCallsFor('/addresses/sponsorship/')).toEqual([]);
     await user.click(within(report).getByRole('button', { name: 'Load Core’s report' }));
     const lines = await within(report).findByRole('list', { name: 'Core’s report' }, T);
+    // The button went: what it loaded holds the focus.
+    expect(lines.parentElement).toHaveFocus();
     expect(lines).toHaveTextContent('Accounts it ever made a reward share to: 5');
     expect(lines).toHaveTextContent('Core counts names, not accounts');
     expect(fetchCallsFor('/addresses/sponsorship/')).toHaveLength(1);

@@ -86,6 +86,7 @@ function CheckCard({
   children: ReactNode;
 }) {
   const progress = run.state === 'idle' ? null : run.progress;
+  const running = run.state === 'running';
   return (
     <Card
       as="section"
@@ -98,32 +99,33 @@ function CheckCard({
       <Typography variant="body2" color="text.secondary">
         {about}
       </Typography>
-      {run.state === 'running' && progress ? (
-        <>
-          <LinearProgress
-            variant="determinate"
-            value={progress.total ? (progress.done / progress.total) * 100 : 0}
-            aria-label={`${title}: progress`}
-          />
-          <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-            <Typography role="status" variant="body2" sx={{ flex: 1, minWidth: 0 }}>
-              Checked {formatCount(progress.done)} of {plural(progress.total, 'account')}…
-            </Typography>
-            <Button onClick={onStop} sx={{ minHeight: 44 }}>
-              Stop
-            </Button>
-          </Box>
-        </>
-      ) : (
+      {running && progress ? (
+        <LinearProgress
+          variant="determinate"
+          value={progress.total ? (progress.done / progress.total) * 100 : 0}
+          aria-label={`${title}: progress`}
+        />
+      ) : null}
+      <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+        {running && progress ? (
+          <Typography role="status" variant="body2" sx={{ flex: 1, minWidth: 0 }}>
+            Checked {formatCount(progress.done)} of {plural(progress.total, 'account')}…
+          </Typography>
+        ) : null}
+        {/* One button that stays (start, Stop, Check again): the focus stays on it. */}
         <Button
-          variant="outlined"
-          onClick={onStart}
-          disabled={total === 0}
-          sx={{ alignSelf: 'flex-start', minHeight: 44 }}
+          variant={running ? 'text' : 'outlined'}
+          onClick={running ? onStop : onStart}
+          disabled={!running && total === 0}
+          sx={{ minHeight: 44 }}
         >
-          {run.state === 'done' ? 'Check again' : `Check ${plural(total, 'account')}`}
+          {running
+            ? 'Stop'
+            : run.state === 'done'
+              ? 'Check again'
+              : `Check ${plural(total, 'account')}`}
         </Button>
-      )}
+      </Box>
       {run.state === 'done' ? (
         <Typography role="status" variant="body2" color="text.secondary">
           {run.stopped

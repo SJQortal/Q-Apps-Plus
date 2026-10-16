@@ -218,6 +218,13 @@ describe('the Mintership tab', () => {
         T
       )
     ).toBeVisible();
+    // The button went: the answers panel holds the focus.
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toContainElement(
+      within(admin).getByText(
+        'All 53 answers they gave. 52 of them on MINTER decisions: 52 approved, 0 rejected.'
+      )
+    );
     expect(
       within(admin).getByText("Left out: 1 answer on transactions that aren't MINTER decisions.")
     ).toBeVisible();

@@ -6,8 +6,9 @@
  *
  * useFocusNewRows does the same for a list that grows its own way ("Show
  * all", a limit kept elsewhere): call `focusFrom(index)` as it grows.
+ * useFocusFallback is for a button that leaves while it has the focus.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export function useShowMore(page: number) {
   const [shown, setShown] = useState(page);
@@ -50,4 +51,32 @@ export function useFocusNewRows<T extends HTMLElement = HTMLUListElement>() {
     pending.current = index;
   };
   return { listRef, focusFrom };
+}
+
+/**
+ * A button that can leave the page while it has the focus (a start button
+ * replaced by what it started, a Stop button when the run ends): `control`
+ * goes on it as its ref (one or several, never at once), `fallback` on what
+ * takes the focus then (a control, or an element with `tabIndex={-1}`).
+ * Nothing moves when the focus is somewhere else by then, and the page
+ * doesn't scroll.
+ */
+export function useFocusFallback<F extends HTMLElement = HTMLElement>() {
+  const lost = useRef(false);
+  const fallback = useRef<F>(null);
+  const control = useCallback((node: HTMLElement | null) => {
+    if (!node) return;
+    // React runs this before the button leaves the page: it may still have the focus.
+    return () => {
+      if (node.ownerDocument.activeElement === node) lost.current = true;
+    };
+  }, []);
+  useEffect(() => {
+    if (!lost.current) return;
+    lost.current = false;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    fallback.current?.focus({ preventScroll: true });
+  });
+  return { control, fallback };
 }

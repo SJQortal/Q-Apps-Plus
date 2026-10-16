@@ -27,6 +27,7 @@ import { decisionTitle } from '../../../../rules/decision';
 import { decisionPath } from '../../../../routes/paths';
 import { formatCount, formatDate } from '../../../../utils/format';
 import { answersLeftOut, answersSummary } from './mintershipWords';
+import { FOCUSABLE_ROW_SX, useFocusFallback } from '../names/useShowMore';
 import { useDecisionSubject } from './useDecisionSubject';
 import { Note, SteppedList } from './parts';
 
@@ -76,11 +77,18 @@ export function AnswersPanel({ address }: { address: string }) {
   const progress = useProgress(address);
   const data = query.data;
   const running = query.fetching;
+  // "Show their answers", then Stop / Load more, can leave with the focus: the panel takes it.
+  const { control, fallback } = useFocusFallback<HTMLDivElement>();
 
   if (!asked)
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'flex-start' }}>
-        <Button variant="outlined" onClick={() => setAsked(true)} sx={{ minHeight: 44 }}>
+        <Button
+          ref={control}
+          variant="outlined"
+          onClick={() => setAsked(true)}
+          sx={{ minHeight: 44 }}
+        >
           Show their answers
         </Button>
         <Note>
@@ -100,7 +108,11 @@ export function AnswersPanel({ address }: { address: string }) {
       : '';
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+    <Box
+      ref={fallback}
+      tabIndex={-1}
+      sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0, ...FOCUSABLE_ROW_SX }}
+    >
       {data ? (
         <>
           <Note>{answersSummary(data)}</Note>
@@ -144,11 +156,16 @@ export function AnswersPanel({ address }: { address: string }) {
       </Typography>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
         {running ? (
-          <Button variant="outlined" onClick={() => stopAnswers(address)} sx={{ minHeight: 44 }}>
+          <Button
+            ref={control}
+            variant="outlined"
+            onClick={() => stopAnswers(address)}
+            sx={{ minHeight: 44 }}
+          >
             Stop
           </Button>
         ) : data && !data.done ? (
-          <Button variant="outlined" onClick={more} sx={{ minHeight: 44 }}>
+          <Button ref={control} variant="outlined" onClick={more} sx={{ minHeight: 44 }}>
             Load {formatCount(ANSWER_PAGE_SIZE * ANSWER_STEP_PAGES)} more
           </Button>
         ) : null}

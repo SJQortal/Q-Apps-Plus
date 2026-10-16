@@ -98,6 +98,8 @@ describe('the accounts a sponsor sponsored', () => {
     const card = screen.getByRole('region', { name: 'Who made their first QORT payment' });
     await user.click(within(card).getByRole('button', { name: 'Check 5 accounts' }));
     expect(await within(card).findByText('Checked all 5 accounts.', {}, T)).toBeInTheDocument();
+    // One button through the run (Check, Stop, Check again): it keeps the focus.
+    expect(within(card).getByRole('button', { name: 'Check again' })).toHaveFocus();
     const payers = within(card).getByRole('list', { name: 'First QORT payments by payer' });
     await waitFor(
       () =>
