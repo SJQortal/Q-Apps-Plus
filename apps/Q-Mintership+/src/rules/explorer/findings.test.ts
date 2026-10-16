@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { EXPLORER_NEUTRAL_LINE } from '../../pages/explorer/explorerWords';
-import { findingsText, partsText, type FindingsInput } from './findings';
-import { levelMoveParts, sponsorParts } from './connections';
+import {
+  findingsText,
+  linksCoverage,
+  partsText,
+  recordedFindings,
+  type FindingsInput,
+} from './findings';
+import { levelMoveParts, linksOf, mintingWithNow, sponsorParts } from './connections';
 import { flowParts, flowsOf } from './money';
 import type { TxRow } from '../../data/types';
 
@@ -118,5 +124,86 @@ describe('Copy findings', () => {
         { kind: 'amount', amount: '5', asset: 'QORT' },
       ])
     ).toBe('Bought the name “Spare Room” from Qccccc…cccc for 5 QORT');
+  });
+});
+
+describe('the findings list', () => {
+  const D = addr('d');
+  const E = addr('e');
+  let n = 0;
+  const tx = (type: string, height: number, extra: Partial<TxRow>): TxRow => ({
+    type,
+    timestamp: Date.UTC(2024, 0, 15) + height * 60_000,
+    signature: `f${(n += 1)}`.padEnd(88, 'x'),
+    txGroupId: 0,
+    blockHeight: height,
+    ...extra,
+  });
+  const share = (from: string, to: string, height: number, sharePercent = '0.00') =>
+    tx('REWARD_SHARE', height, { creatorAddress: from, recipient: to, sharePercent });
+  const rows = [
+    tx('TRANSFER_PRIVS', 50, { creatorAddress: C }),
+    share(B, ME, 100),
+    share(B, ME, 200, '-1.00'),
+    share(ME, D, 300),
+    share(ME, E, 400),
+    tx('BUY_NAME', 500, { creatorAddress: ME, seller: D, name: 'foo', amount: '1' }),
+  ];
+  const links = linksOf(rows, ME);
+  const pays = [
+    tx('PAYMENT', 600, { creatorAddress: ME, recipient: D, amount: '1' }),
+    tx('PAYMENT', 610, { creatorAddress: E, recipient: ME, amount: '2' }),
+    tx('PAYMENT', 620, { creatorAddress: E, recipient: ME, amount: '3' }),
+  ];
+
+  it('lists level moves, sponsors, minting with, sponsees, names, then payments by count', () => {
+    const minting = mintingWithNow(links, ME, [{ minterAddress: ME, recipientAddress: E }]);
+    const findings = recordedFindings({
+      links,
+      mintingWith: minting,
+      sent: flowsOf(pays, ME, 'sent'),
+      received: flowsOf(pays, ME, 'received'),
+      levels: { [C]: 0 },
+    });
+    expect(findings.map((f) => f.kind)).toEqual([
+      'levelMove',
+      'sponsor',
+      'mintingWith',
+      'sponsees',
+      'nameDeal',
+      'paidBy',
+      'paidTo',
+    ]);
+    expect(partsText(findings[0].parts)).toBe(
+      'Got its minting level from Qccccc…cccc. Qccccc…cccc is now level 0.'
+    );
+    expect(findings[1]).toMatchObject({ other: B, evidenceWords: '2 transactions' });
+    expect(findings[3]).toMatchObject({ other: null, count: 2, firstHeight: 300, height: 400 });
+    expect(findings[5]).toMatchObject({
+      other: E,
+      evidenceWords: '2 payments',
+      firstHeight: 610,
+      height: 620,
+    });
+    expect(findings.every((f) => !VERDICTS.test(partsText(f.parts)))).toBe(true);
+  });
+
+  it('works with only part of the data loaded', () => {
+    expect(recordedFindings({})).toEqual([]);
+    expect(recordedFindings({ links }).map((f) => f.kind)).toEqual([
+      'levelMove',
+      'sponsor',
+      'sponsees',
+      'nameDeal',
+    ]);
+  });
+
+  it('says how much of the links was read', () => {
+    expect(linksCoverage({ rows: [1, 2, 3], truncated: false })).toBe(
+      'Reward shares, level moves and name sales: all 3 transactions.'
+    );
+    expect(linksCoverage({ rows: Array(501), truncated: true })).toBe(
+      'Reward shares, level moves and name sales: its newest 501 (every level move read).'
+    );
   });
 });

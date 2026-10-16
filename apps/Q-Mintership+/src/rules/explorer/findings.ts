@@ -1,14 +1,32 @@
 /**
- * "Copy findings": what the Connections tab found, as plain text to paste
- * into a chat or a note. It says which account and at which block it was
- * checked, how much was read, every finding with its block and short
- * signature, what was checked and found nothing, the fixed neutral line,
- * and the link that opens the same tab. Facts only: the words are the
- * page's own sentences, so no verdict is added here.
+ * The Connections tab's findings, in the order the page lists them, and
+ * "Copy findings": the same as plain text to paste into a chat or a note.
+ *
+ * "Recorded between them": level moves, sponsors, minting with another
+ * account now, the accounts it sponsored, names bought or sold, then
+ * payments by the other account (most first, both ways). Overview's
+ * Direct links shows the first three.
+ *
+ * The text says which account and at which block it was checked, how much
+ * was read, every finding with its block and short signature, what was
+ * checked and found nothing, the fixed neutral line, and the link that
+ * opens the same tab. Facts only: the words are the page's own sentences,
+ * so no verdict is added here.
  *
  * Pure: names come from `nameOf` (the names already loaded).
  */
-import { shortAddress, formatCount } from '../../utils/format';
+import type { TxRow } from '../../data/types';
+import { formatCount, plural, shortAddress } from '../../utils/format';
+import {
+  levelMoveParts,
+  mintingWithParts,
+  nameDealParts,
+  sponseesSummary,
+  sponsorParts,
+  type ActiveShare,
+  type Links,
+} from './connections';
+import { flowParts, type Flow } from './money';
 import { visibleName } from './nameNotes';
 import { groupWords, type TxPart } from './txWords';
 
@@ -113,4 +131,145 @@ export function findingsText(input: FindingsInput): string {
   if (input.noneFound) out.push('', input.noneFound);
   out.push('', input.link);
   return out.join('\n');
+}
+
+// ---- the findings list ----------------------------------------------------------
+
+export type FindingKind =
+  'levelMove' | 'sponsor' | 'mintingWith' | 'sponsees' | 'nameDeal' | 'paidTo' | 'paidBy';
+
+export interface Finding extends FindingLine {
+  /** Stable across loads, for React keys. */
+  key: string;
+  kind: FindingKind;
+  /** The other account; null for the accounts it sponsored (a set). */
+  other: string | null;
+  height: number;
+  timestamp: number;
+  /** The oldest transaction's time, for several. */
+  firstTimestamp?: number;
+  signature: string;
+  /** The transactions behind it, newest first (none for the set of sponsees). */
+  evidence: TxRow[];
+  /** "4 payments", "2 transactions". */
+  evidenceWords: string;
+}
+
+export interface RecordedInput {
+  links?: Links | null;
+  /** Its active shares that mint now (null while the online list loads). */
+  mintingWith?: readonly ActiveShare[] | null;
+  /** Payments and transfers by the other account, each way. */
+  sent?: readonly Flow[] | null;
+  received?: readonly Flow[] | null;
+  /** Each account's level now, where loaded (for "P is now level 0."). */
+  levels?: Readonly<Record<string, number | undefined>>;
+}
+
+const one = (tx: TxRow) => ({
+  height: tx.blockHeight ?? 0,
+  timestamp: tx.timestamp,
+  signature: tx.signature,
+});
+
+/** What was recorded between this account and others, in the page's order. */
+export function recordedFindings(input: RecordedInput): Finding[] {
+  const out: Finding[] = [];
+  const links = input.links;
+  if (links) {
+    for (const move of links.levelMoves)
+      out.push({
+        key: `level:${move.ref.signature}`,
+        kind: 'levelMove',
+        other: move.other,
+        parts: levelMoveParts(move, move.other ? input.levels?.[move.other] : undefined),
+        ...one(move.tx),
+        evidence: [move.tx],
+        evidenceWords: '1 transaction',
+      });
+    for (const sponsorship of links.sponsors)
+      out.push({
+        key: `sponsor:${sponsorship.sponsor}`,
+        kind: 'sponsor',
+        other: sponsorship.sponsor,
+        parts: sponsorParts(sponsorship),
+        height: sponsorship.start.height,
+        timestamp: sponsorship.start.timestamp,
+        signature: sponsorship.start.signature,
+        evidence: sponsorship.txs,
+        evidenceWords: plural(sponsorship.txs.length, 'transaction'),
+      });
+  }
+  for (const share of input.mintingWith ?? [])
+    out.push({
+      key: `minting:${share.other}`,
+      kind: 'mintingWith',
+      other: share.other,
+      parts: mintingWithParts(share),
+      ...one(share.tx),
+      evidence: [share.tx],
+      evidenceWords: '1 transaction',
+    });
+  if (links?.sponsees.length) {
+    const first = links.sponsees[0];
+    const last = links.sponsees[links.sponsees.length - 1];
+    out.push({
+      key: 'sponsees',
+      kind: 'sponsees',
+      other: null,
+      parts: [{ kind: 'text', text: sponseesSummary(links.sponsees) }],
+      height: last.start.height,
+      firstHeight: first.start.height,
+      timestamp: last.start.timestamp,
+      firstTimestamp: first.start.timestamp,
+      signature: last.start.signature,
+      count: links.sponsees.length,
+      evidence: [],
+      evidenceWords: '',
+    });
+  }
+  for (const deal of links?.nameDeals ?? [])
+    out.push({
+      key: `name:${deal.ref.signature}`,
+      kind: 'nameDeal',
+      other: deal.other,
+      parts: nameDealParts(deal),
+      ...one(deal.tx),
+      evidence: [deal.tx],
+      evidenceWords: '1 transaction',
+    });
+  const flows = [
+    ...(input.sent ?? []).map((flow) => ({ flow, kind: 'paidTo' as const })),
+    ...(input.received ?? []).map((flow) => ({ flow, kind: 'paidBy' as const })),
+  ]
+    .filter(({ flow }) => !flow.isAt)
+    .sort(
+      (a, b) =>
+        b.flow.count - a.flow.count ||
+        b.flow.last.height - a.flow.last.height ||
+        a.flow.address.localeCompare(b.flow.address)
+    );
+  for (const { flow, kind } of flows)
+    out.push({
+      key: `${kind}:${flow.address}`,
+      kind,
+      other: flow.address,
+      parts: flowParts(flow, kind === 'paidTo' ? 'sent' : 'received'),
+      height: flow.last.height,
+      firstHeight: flow.first.height,
+      timestamp: flow.last.timestamp,
+      firstTimestamp: flow.first.timestamp,
+      signature: flow.last.signature,
+      count: flow.count,
+      evidence: flow.txs,
+      evidenceWords: plural(flow.count, 'payment'),
+    });
+  return out;
+}
+
+/** How much of its links was read, for Copy findings. */
+export function linksCoverage(links: { rows: readonly unknown[]; truncated: boolean }): string {
+  return links.truncated
+    ? `Reward shares, level moves and name sales: its newest ${formatCount(links.rows.length)} (every level move read).`
+    : `Reward shares, level moves and name sales: all ${plural(links.rows.length, 'transaction')}.`;
 }
