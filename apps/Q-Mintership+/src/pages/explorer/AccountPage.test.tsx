@@ -22,7 +22,7 @@ import {
   resetExplorerState,
   trailAtom,
 } from '../../state/explorer';
-import { SETTINGS_KEYS } from '../../state/settings';
+import { motionAtom, SETTINGS_KEYS } from '../../state/settings';
 import AccountPage from './AccountPage';
 
 const T = { timeout: 4000 };
@@ -443,6 +443,82 @@ describe('on a phone', () => {
     await user.click(more);
     expect(within(trail).queryByRole('button', { name: /more accounts in the trail/ })).toBeNull();
     expect(within(trail).getAllByRole('listitem')).toHaveLength(4);
+  });
+});
+
+describe('a tab switch deep in a long tab', () => {
+  /** Where each tab panel's top is, as if the page were scrolled; the rest at 0. */
+  let panelTop = 0;
+  const scrolled: Array<{ id: string; options: unknown }> = [];
+
+  beforeEach(() => {
+    panelTop = 0;
+    scrolled.length = 0;
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element
+    ) {
+      const top = this.getAttribute('role') === 'tabpanel' ? panelTop : 0;
+      return { top, bottom: top, left: 0, right: 0, width: 0, height: 0, x: 0, y: top } as DOMRect;
+    });
+    Element.prototype.scrollIntoView = function (this: Element, options?: unknown) {
+      scrolled.push({ id: this.id, options });
+    };
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
+  it('brings the new tab’s top into view on a phone, and stays put when it is on screen', async () => {
+    screenWidth(390);
+    const { user, posts } = await open(
+      explorerAccountPath(ADDR.nominator),
+      undefined,
+      'learner',
+      true
+    );
+    await screen.findByRole('heading', { level: 1, name: 'Nora Nominator' }, T);
+    const tabs = within(screen.getByRole('banner')).getByRole('tablist', {
+      name: 'Account sections',
+    });
+    // Far down Overview, the header back: the next tab's top is above the screen.
+    panelTop = -2400;
+    await user.click(within(tabs).getByRole('tab', { name: 'Names' }));
+    await screen.findByRole('tabpanel', { name: 'Names' }, T);
+    await waitFor(
+      () =>
+        expect(scrolled).toEqual([
+          { id: 'account-panel-names', options: { block: 'start', behavior: 'smooth' } },
+        ]),
+      T
+    );
+    expect(within(tabs).getByRole('tab', { name: 'Names' })).toHaveFocus();
+    // Near the top already: no jump.
+    panelTop = 300;
+    await user.click(within(tabs).getByRole('tab', { name: 'Overview' }));
+    await screen.findByRole('tabpanel', { name: 'Overview' }, T);
+    expect(scrolled).toHaveLength(1);
+    noWrites(posts);
+  });
+
+  it('jumps without the smooth scroll when motion is reduced', async () => {
+    store.set(motionAtom, 'reduce');
+    try {
+      const { user } = await open(explorerAccountPath(ADDR.nominator), undefined, 'learner', true);
+      const tabs = await screen.findByRole('tablist', { name: 'Account sections' }, T);
+      panelTop = -800;
+      await user.click(within(tabs).getByRole('tab', { name: 'Mintership' }));
+      await screen.findByRole('tabpanel', { name: 'Mintership' }, T);
+      await waitFor(
+        () =>
+          expect(scrolled).toEqual([
+            { id: 'account-panel-mintership', options: { block: 'start', behavior: 'auto' } },
+          ]),
+        T
+      );
+    } finally {
+      store.set(motionAtom, 'system');
+    }
   });
 });
 

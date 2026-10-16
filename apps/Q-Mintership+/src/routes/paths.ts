@@ -115,8 +115,9 @@ const EXPLORER_ACCOUNT_PAGE = /^(\/explorer\/account\/[^/]+)(?:\/.*)?$/;
 /**
  * What counts as one page for focus and scrolling: an account's tabs are one
  * page (`/explorer/account/<who>/<tab>` → `/explorer/account/<who>`), so a
- * tab switch neither moves focus to the title nor scrolls to the top. Every
- * other path is its own page.
+ * tab switch neither moves focus to the title nor scrolls to the page's top;
+ * the account page brings the new tab's top into view instead, when it is
+ * above the screen. Every other path is its own page.
  */
 export function pageKeyOf(pathname: string): string {
   const match = pathname.match(EXPLORER_ACCOUNT_PAGE);
