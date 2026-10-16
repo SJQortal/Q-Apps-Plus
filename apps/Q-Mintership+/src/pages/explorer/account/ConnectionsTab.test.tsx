@@ -20,6 +20,7 @@ import {
   SPONSEES,
   SPONSOR,
   answerCore,
+  type World,
 } from '../../../../e2e/world.mjs';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../../components/common/personLinks';
 import { explorerAccountPath } from '../../../routes/paths';
@@ -53,6 +54,29 @@ function noWrites(posts: string[]) {
 }
 
 const region = (name: string) => screen.findByRole('region', { name }, T);
+
+/**
+ * The links search for `who` fills all 5 pages (its own rows first, then
+ * account-flag rows that link nothing), so the read stops at its ceiling.
+ */
+function cappedLinks(world: World, who: string) {
+  mockFetchRoute('/transactions/search', (url: URL) => {
+    const sp = url.searchParams;
+    const own = answerCore(world, url.pathname, sp)?.body;
+    if (sp.get('address') !== who || !sp.getAll('txType').includes('REWARD_SHARE')) return own;
+    const offset = Number(sp.get('offset') ?? 0);
+    const real = offset === 0 && Array.isArray(own) ? own : [];
+    const filler = Array.from({ length: 100 - real.length }, (_, i) => ({
+      type: 'ACCOUNT_FLAGS',
+      timestamp: 1_600_000_000_000 + offset + i,
+      signature: `filler${offset + i}`,
+      blockHeight: 1_000 + offset + i,
+      creatorAddress: ADDR.admin,
+      target: who,
+    }));
+    return [...real, ...filler];
+  });
+}
 
 beforeEach(() => resetExplorerState());
 afterEach(() => vi.useRealTimers());
@@ -367,6 +391,54 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
     expect(writeText.mock.calls[0][0]).toContain(
       '- Couldn’t read its asset transfers and multi-payments.'
     );
+  });
+
+  it('links read to their ceiling: said on the tab, and only level moves claimed as none', async () => {
+    const { user } = await open(ADDR.newcomer, (world) => cappedLinks(world, ADDR.newcomer));
+    const writeText = vi.fn(async (text: string) => void text);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    expect(
+      await screen.findByText(
+        'Also checked, nothing found: level moves, minting with another account now, payments, where its first QORT came from.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'In its newest 500 reward shares, level moves and name sales, nothing found: a sponsor, accounts it sponsored, name sales.'
+      )
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Copy findings' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled(), T);
+    const text = writeText.mock.calls[0][0] as string;
+    expect(text).toContain('Reward shares, level moves and name sales: its newest 500');
+    expect(text).toContain(
+      'In its newest 500 reward shares, level moves and name sales, nothing found: a sponsor, accounts it sponsored, name sales.'
+    );
+  });
+
+  it('Sid Sponsor, links read to their ceiling: what was found, and a line that there may be older ones', async () => {
+    await open(SPONSOR.address, (world) => cappedLinks(world, SPONSOR.address));
+    const recorded = await region('Recorded between them');
+    expect(
+      await within(recorded).findByText(
+        'From its newest 500 reward shares, level moves and name sales: there may be older ones. Every level move was read.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(
+      await within(recorded).findByRole('link', { name: /^Sponsored 5 accounts/ }, T)
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'In its newest 500 reward shares, level moves and name sales, nothing found: a sponsor, name sales.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Also checked, nothing found:.*a sponsor/)).toBeNull();
   });
 
   it('Core’s own report only on request, with what its numbers count', async () => {

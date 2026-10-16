@@ -5,7 +5,7 @@ import { renderPage } from '../../../test/render';
 import { expectNoAxeViolations } from '../../../test/axe';
 import { mockFetchRoute, qortalCalls } from '../../../test/setup';
 import { ADDR } from '../../../test/world';
-import { answerCore, type World } from '../../../../e2e/world.mjs';
+import { answerCore, SPONSOR, type World } from '../../../../e2e/world.mjs';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../../components/common/personLinks';
 import { explorerAccountPath } from '../../../routes/paths';
 import { DirectLinksPreview } from './DirectLinksPreview';
@@ -110,6 +110,41 @@ describe('Overview: Direct links', () => {
     ).toBeInTheDocument();
     expect(within(section).queryByText(/^Couldn’t read/)).toBeNull();
     expect(posts).toEqual([]);
+  });
+
+  it('says when the links read stopped at its ceiling, and keeps the count open', async () => {
+    await open(SPONSOR.address, (world) =>
+      mockFetchRoute('/transactions/search', (url: URL) => {
+        const sp = url.searchParams;
+        const own = answerCore(world, url.pathname, sp)?.body;
+        if (sp.get('address') !== SPONSOR.address || !sp.getAll('txType').includes('REWARD_SHARE'))
+          return own;
+        const offset = Number(sp.get('offset') ?? 0);
+        const real = offset === 0 && Array.isArray(own) ? own : [];
+        return [
+          ...real,
+          ...Array.from({ length: 100 - real.length }, (_, i) => ({
+            type: 'ACCOUNT_FLAGS',
+            timestamp: 1_600_000_000_000 + offset + i,
+            signature: `filler${offset + i}`,
+            blockHeight: 1_000 + offset + i,
+            creatorAddress: ADDR.admin,
+            target: SPONSOR.address,
+          })),
+        ];
+      })
+    );
+    const section = await screen.findByRole('region', { name: 'Direct links' }, T);
+    expect(
+      await within(section).findByText(
+        'From its newest 500 reward shares, level moves and name sales: there may be older ones.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(section).getByRole('link', { name: /^All connections \(\d+\+\)$/ })
+    ).toBeInTheDocument();
   });
 
   it('with links found, a failed asset read keeps the count open and says what is missing', async () => {

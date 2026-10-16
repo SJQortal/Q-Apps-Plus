@@ -1,6 +1,7 @@
 /** Small words the Connections rows share. */
 import { monthRange } from '../../../../rules/explorer/connections';
 import { formatCount, formatDate } from '../../../../utils/format';
+import { LINK_PAGE, LINK_PAGES } from '../../../../data/explorer/links';
 import type { ConnectionsPart } from './useConnections';
 
 /** "12 Mar 2025 · block 1,371,641", or "Mar–May 2025 · blocks 1,364,500–2,100,000". */
@@ -55,4 +56,24 @@ export function unreadWords(failed: readonly ConnectionsPart[]): string {
       has('assets') ? 'its asset transfers and multi-payments' : null,
     ].filter((words): words is string => words !== null)
   );
+}
+
+/** How many links rows one read takes at most. */
+const LINKS_READ = formatCount(LINK_PAGE * LINK_PAGES);
+
+/** Under what was found, when the links read stopped at its ceiling. */
+export const LINKS_CAPPED_NOTE = `From its newest ${LINKS_READ} reward shares, level moves and name sales: there may be older ones.`;
+
+/**
+ * The nothing-found line for what was looked for only in the newest 500
+ * links rows: "In its newest 500 reward shares, level moves and name sales,
+ * nothing found: a sponsor, name sales." (null when there is none).
+ */
+export function cappedNothingLine(line: string | null): string | null {
+  return line
+    ? line.replace(
+        /^Also checked, nothing found: /,
+        `In its newest ${LINKS_READ} reward shares, level moves and name sales, nothing found: `
+      )
+    : null;
 }

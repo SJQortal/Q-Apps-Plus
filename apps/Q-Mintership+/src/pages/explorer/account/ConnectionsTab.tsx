@@ -12,6 +12,8 @@
  * - In Q-Mintership: nominations, supports and votes between it and others
  *   (MintershipLinks);
  * - "Also checked, nothing found: …", and Core's own report on request.
+ * When the links read stopped at its ceiling (its newest 500 rows), the
+ * tab says so, and what those rows didn't show isn't claimed as none.
  * A section shows only when it has something. "Copy findings" copies the
  * lot as text, with the block it was checked at.
  *
@@ -58,7 +60,14 @@ import { InCommonSection } from './connections/InCommon';
 import { PaymentsPanel } from './connections/PaymentsPanel';
 import { useConnections, useRecorded } from './connections/useConnections';
 import { useInCommon } from './connections/useInCommon';
-import { blocksLine, textOf, unreadWords, whenLine } from './connections/words';
+import {
+  blocksLine,
+  cappedNothingLine,
+  LINKS_CAPPED_NOTE,
+  textOf,
+  unreadWords,
+  whenLine,
+} from './connections/words';
 import { MintershipLinks } from './MintershipLinks';
 
 export interface ConnectionsTabProps {
@@ -219,8 +228,23 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
       funding?.from === other ? 'its first QORT came from them' : null,
     ].filter((tag): tag is string => tag !== null);
 
+  // Its newest 500 links rows only: level moves are read in full, the rest may be older.
+  const capped = data.links.data?.truncated === true;
+  const pairedOnline = data.online.data?.some(
+    (share) =>
+      share.minterAddress !== share.recipientAddress &&
+      (share.minterAddress === address || share.recipientAddress === address)
+  );
   const empty: EmptyCheck[] = [];
-  if (parsed) empty.push(...emptyLinkChecks(parsed, data.online.data ? data.mintingWith : null));
+  const cappedEmpty: EmptyCheck[] = [];
+  if (parsed)
+    for (const check of emptyLinkChecks(parsed, data.online.data ? data.mintingWith : null)) {
+      if (!capped || check === 'levelMoves') empty.push(check);
+      // Who mints with it now is in the online list itself.
+      else if (check === 'mintingWith') {
+        if (!pairedOnline) empty.push(check);
+      } else cappedEmpty.push(check);
+    }
   if (
     data.flowsSent &&
     data.flowsReceived &&
@@ -231,6 +255,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
     empty.push('payments');
   if (common.first.data && !funding) empty.push('firstQort');
   const noneLine = nothingFoundLine(empty);
+  const cappedLine = cappedNothingLine(nothingFoundLine(cappedEmpty));
 
   const build = async () => {
     const tip = await getTip().catch(() => null);
@@ -265,7 +290,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
       coverage,
       recorded,
       common: commonLines,
-      noneFound: noneLine,
+      noneFound: [noneLine, cappedLine].filter(Boolean).join('\n\n') || null,
       link: appLink(explorerAccountPath(address, 'connections')),
       nameOf: (other) => peekQuery<string | null>(`name:${other}`),
     });
@@ -302,6 +327,10 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
             />
           ) : !data.links.data ? (
             <ListSkeleton count={2} label="Loading its links" />
+          ) : capped ? (
+            <Typography variant="body2" color="text.secondary">
+              {LINKS_CAPPED_NOTE} Every level move was read.
+            </Typography>
           ) : null}
           {levelMoves.length ? (
             <Part title="Minting level">
@@ -367,6 +396,11 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
       {noneLine ? (
         <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
           {noneLine}
+        </Typography>
+      ) : null}
+      {cappedLine ? (
+        <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+          {cappedLine}
         </Typography>
       ) : null}
 

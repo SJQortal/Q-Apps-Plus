@@ -4,6 +4,7 @@
  * Recorded between them), one line each, and "All connections (n)" to that
  * tab. When the data checked has none, one line says so; a part that
  * couldn't be read is named, with Retry, and never counted as none found.
+ * When the links read stopped at its ceiling, a line says so.
  *
  * It reads the same keys as the Connections tab (links, payments each way,
  * asset transfers; the links and asset reads are heavy), once it nears the
@@ -20,7 +21,7 @@ import { useInView } from '../../../hooks/useInView';
 import { explorerAccountPath } from '../../../routes/paths';
 import { formatCount } from '../../../utils/format';
 import { useConnections, useRecorded } from './connections/useConnections';
-import { unreadWords, whenLine } from './connections/words';
+import { LINKS_CAPPED_NOTE, unreadWords, whenLine } from './connections/words';
 
 export interface DirectLinksPreviewProps {
   address: string;
@@ -37,8 +38,14 @@ export function DirectLinksPreview({ address }: DirectLinksPreviewProps) {
   const location = useLocation();
   const { failed } = data;
   const firstError = failed.length ? data[failed[0]].error : undefined;
-  // Partial: a part couldn't be read, or isn't in yet.
-  const partial = failed.length > 0 || !data.settled;
+  const capped = data.links.data?.truncated === true;
+  // Partial: a part couldn't be read, isn't in yet, or was read only in part.
+  const partial = failed.length > 0 || !data.settled || capped;
+  const cappedNote = capped ? (
+    <Typography variant="body2" color="text.secondary">
+      {LINKS_CAPPED_NOTE}
+    </Typography>
+  ) : null;
   const unread = failed.length ? (
     <ErrorState
       compact
@@ -80,7 +87,10 @@ export function DirectLinksPreview({ address }: DirectLinksPreviewProps) {
         {allLink}
       </>
     ) : (
-      <Typography color="text.secondary">No direct links found in the data checked.</Typography>
+      <>
+        <Typography color="text.secondary">No direct links found in the data checked.</Typography>
+        {cappedNote}
+      </>
     );
   else
     body = (
@@ -102,6 +112,7 @@ export function DirectLinksPreview({ address }: DirectLinksPreviewProps) {
             </Box>
           ))}
         </Box>
+        {cappedNote}
         {unread}
         {allLink}
       </>
