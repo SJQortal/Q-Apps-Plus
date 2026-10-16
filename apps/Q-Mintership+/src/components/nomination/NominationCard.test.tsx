@@ -77,7 +77,7 @@ describe('AvatarStack', () => {
     const list = screen.getByRole('list', { name: 'Approved by' });
     const items = within(list).getAllByRole('listitem');
     expect(items).toHaveLength(3);
-    expect(within(items[0]).getByRole('link', { name: 'Ada Admin' })).toBeInTheDocument();
+    expect(within(items[0]).getByRole('link', { name: 'Ada Admin: open their page' })).toBeInTheDocument();
     expect(items[2]).toHaveTextContent('+1');
     expect(
       within(list)
@@ -105,7 +105,7 @@ describe('AvatarStack', () => {
         (_, el) => el?.tagName === 'P' && el.textContent === 'Ada Admin, Nora Nominator and 1 more'
       )
     ).toBeVisible();
-    const link = screen.getByRole('link', { name: 'Ada Admin' });
+    const link = screen.getByRole('link', { name: 'Ada Admin: open their page' });
     expect(getComputedStyle(link).minWidth).toBe('44px');
     expect(getComputedStyle(link).minHeight).toBe('44px');
   });
