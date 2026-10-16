@@ -6,6 +6,7 @@ import { renderPage } from '../../test/render';
 import { MUTED_NAMES_KEY, mutedNamesAtom } from '../../state/comments';
 import SettingsPage from './SettingsPage';
 import { SETTINGS_KEYS, decisionsOrderAtom } from '../../state/settings';
+import { RECENT_KEY, recentAtom, recordRecent, resetExplorerState } from '../../state/explorer';
 
 afterEach(() => vi.useRealTimers());
 
@@ -138,5 +139,46 @@ describe('Settings → Muted names', () => {
     expect(within(section).getAllByRole('listitem')).toHaveLength(25);
     // The button is gone: focus moves to the first name it added.
     expect(within(section).getByRole('button', { name: 'Unmute Name 21' })).toHaveFocus();
+  });
+});
+
+describe('Settings → Explorer', () => {
+  const A = `Q${'a'.repeat(33)}`;
+  const B = `Q${'b'.repeat(33)}`;
+
+  it('remembers explored accounts by default; Clear forgets them', async () => {
+    const u = userEvent.setup();
+    resetExplorerState();
+    recordRecent(A);
+    recordRecent(B);
+    await renderPage(<SettingsPage />, { persona: 'learner', path: '/settings' });
+    const section = await screen.findByRole('region', { name: 'Explorer' });
+    const remember = within(section).getByRole('switch', {
+      name: 'Remember accounts I explore on this device',
+    });
+    expect(remember).toBeChecked();
+    expect(within(section).getByText('2 accounts remembered on this device.')).toBeVisible();
+    await u.click(within(section).getByRole('button', { name: 'Clear recent explorations' }));
+    expect(within(section).getByText('None remembered on this device.')).toBeVisible();
+    expect(
+      within(section).getByRole('button', { name: 'Clear recent explorations' })
+    ).toBeDisabled();
+    expect(window.localStorage.getItem(RECENT_KEY)).toBeNull();
+  });
+
+  it('turning it off forgets them and remembers no more', async () => {
+    const u = userEvent.setup();
+    resetExplorerState();
+    recordRecent(A);
+    await renderPage(<SettingsPage />, { persona: 'learner', path: '/settings' });
+    const section = await screen.findByRole('region', { name: 'Explorer' });
+    await u.click(
+      within(section).getByRole('switch', { name: 'Remember accounts I explore on this device' })
+    );
+    expect(window.localStorage.getItem(SETTINGS_KEYS.explorerRemember)).toBe('false');
+    expect(window.localStorage.getItem(RECENT_KEY)).toBeNull();
+    expect(within(section).getByText('None remembered on this device.')).toBeVisible();
+    recordRecent(B);
+    expect(getDefaultStore().get(recentAtom)).toEqual([]);
   });
 });

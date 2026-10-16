@@ -20,6 +20,7 @@ export const SETTINGS_KEYS = {
   // device's choice carries over now that it hides rejections too.
   decisionsHideAnswered: `${STORAGE_PREFIX}decisions-hide-signed`,
   decisionsOrder: `${STORAGE_PREFIX}decisions-order`,
+  explorerRemember: `${STORAGE_PREFIX}explorer-remember`,
 } as const;
 
 /** Animations: follow the system, always reduce, or always play. */
@@ -45,3 +46,9 @@ export const decisionsOrderAtom = atomWithStorage<DecisionsOrder>(
   SETTINGS_KEYS.decisionsOrder,
   'type'
 );
+
+/**
+ * Explorer: remember the accounts explored on this device (Recent
+ * explorations, addresses only; state/explorer.ts). On unless turned off.
+ */
+export const explorerRememberAtom = atomWithStorage<boolean>(SETTINGS_KEYS.explorerRemember, true);

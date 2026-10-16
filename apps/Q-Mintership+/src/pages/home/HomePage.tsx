@@ -5,8 +5,12 @@
  * sections that status needs, so a newcomer's Home costs a handful of reads
  * and an admin's loads the decisions and nominations it shows.
  */
+import { useNavigate } from 'react-router-dom';
+import { IconButton, Tooltip } from '@mui/material';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import { PageBody } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
+import { useNavHas } from '../../components/layout/useNavHas';
 import { NominationCard } from '../../components/nomination/NominationCard';
 import { RefreshButton } from '../../components/common/RefreshButton';
 import { Section } from '../../components/common/Section';
@@ -15,6 +19,7 @@ import { invalidate } from '../../data/query';
 import { useChainNow, useMyStatus } from '../../hooks/useData';
 import type { MyStatus } from '../../rules/status';
 import { useSession } from '../../state/session';
+import { PATHS } from '../../routes/paths';
 import { displayName } from '../../utils/format';
 import { AdminRoleAction } from '../decisions/AdminRoleAction';
 import { AdminSection } from './AdminSection';
@@ -151,8 +156,28 @@ function StatusView({
   );
 }
 
+/**
+ * Settings, where the nav on screen has no Settings (the phone bar, where
+ * Explorer took its place). Named exactly "Settings".
+ */
+function SettingsGear() {
+  const navigate = useNavigate();
+  return (
+    <Tooltip title="Settings">
+      <IconButton
+        aria-label="Settings"
+        onClick={() => navigate(PATHS.settings)}
+        sx={{ width: 44, height: 44 }}
+      >
+        <SettingsOutlinedIcon />
+      </IconButton>
+    </Tooltip>
+  );
+}
+
 export default function HomePage() {
   const session = useSession();
+  const settingsInNav = useNavHas('settings');
   const my = useMyStatus();
   const needed = useNeededSignatures();
   const status = my.status;
@@ -168,7 +193,12 @@ export default function HomePage() {
       <PageHeader
         title="Home"
         subtitle={subtitleFor(status, session.status)}
-        actions={<RefreshButton onClick={refresh} fetching={my.fetching} pressWhileFetching />}
+        actions={
+          <>
+            <RefreshButton onClick={refresh} fetching={my.fetching} pressWhileFetching />
+            {settingsInNav ? null : <SettingsGear />}
+          </>
+        }
       />
       <PageBody>
         {status && my.isError ? (

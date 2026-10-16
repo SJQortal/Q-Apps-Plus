@@ -1,7 +1,8 @@
 /**
  * People everywhere: an avatar and a name (or a short address), linking to
- * the person's page. Names come from what the caller already has, or from the
- * cached /names/primary lookup.
+ * the person's page, or inside the Explorer to their account there
+ * (personLinks.tsx). Names come from what the caller already has, or from
+ * the cached /names/primary lookup.
  */
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -9,10 +10,10 @@ import { Box, IconButton, Link, Tooltip, Typography } from '@mui/material';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import CheckOutlinedIcon from '@mui/icons-material/CheckOutlined';
 import { useDisplayName } from '../../hooks/useDisplayName';
-import { personPath } from '../../routes/paths';
 import { shortAddress } from '../../utils/format';
 import { copyText } from '../../utils/links';
 import { NameAvatar } from './NameAvatar';
+import { usePersonLinks } from './personLinks';
 
 export interface PersonChipProps {
   address: string;
@@ -53,6 +54,7 @@ export function PersonChip({
   compactOnPhone = false,
 }: PersonChipProps) {
   const shown = useDisplayName(address, name);
+  const links = usePersonLinks();
   const stretch = link && !inline;
   const label = (
     <Typography
@@ -86,12 +88,13 @@ export function PersonChip({
         {link ? (
           <Link
             component={RouterLink}
-            to={personPath(address)}
+            to={links.to(address)}
+            state={links.state}
             // In a sentence the underline is what marks the name as a link (its colour
             // is the sentence's); a chip's avatar and layout already do.
             underline={inline ? 'always' : 'hover'}
             color="inherit"
-            aria-label={`${shown.label}: open their page`}
+            aria-label={`${shown.label}: ${links.verb}`}
             sx={
               stretch
                 ? { '&::after': { content: '""', position: 'absolute', inset: 0 } }
@@ -147,7 +150,8 @@ export function PersonInline({ address, name }: { address: string; name?: string
 }
 
 /**
- * A row of small avatars (signers), each linking to the person, the rest
+ * A row of small avatars (signers), each linking to the person ("Ada: open
+ * their page"), the rest
  * counted. List semantics sit on the items, not on the links. Each avatar
  * is a 44 px tap target. `showNames` adds the names in a line below, for
  * phones, where a tooltip can't be read.
@@ -234,12 +238,14 @@ function StackedAvatar({
   size: number;
 }) {
   const shown = useDisplayName(address, name);
+  const links = usePersonLinks();
   return (
     <Tooltip title={shown.label}>
       <Link
         component={RouterLink}
-        to={personPath(address)}
-        aria-label={shown.label}
+        to={links.to(address)}
+        state={links.state}
+        aria-label={`${shown.label}: ${links.verb}`}
         sx={{
           display: 'inline-flex',
           alignItems: 'center',

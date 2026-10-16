@@ -9,6 +9,8 @@
  * After a route change it takes focus on its title, so a screen reader
  * announces the new page and Tab starts from its top, and it names the
  * document after the page. The app's first page keeps the browser's focus.
+ * An Explorer account's tabs are one page (routes/paths.ts pageKeyOf): a tab
+ * switch leaves focus on the tab.
  */
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -21,6 +23,7 @@ import { useHideOnScroll, usePublishHeaderOffset } from '../../hooks/useHideOnSc
 import { useSafeBack } from '../../hooks/useSafeBack';
 import { useLandscapeFrame } from '../../utils/hubFrame';
 import { APP_NAME } from '../../constants/plus';
+import { pageKeyOf } from '../../routes/paths';
 import { isFirstPage } from './pageFocus';
 
 const Header = styled('header', {
@@ -58,13 +61,13 @@ export interface PageHeaderProps {
 }
 
 export function PageHeader({ title, subtitle, actions, back, children }: PageHeaderProps) {
-  const { pathname } = useLocation();
+  const page = pageKeyOf(useLocation().pathname);
   const titleRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     if (isFirstPage()) return;
     titleRef.current?.focus({ preventScroll: true });
-  }, [pathname]);
+  }, [page]);
 
   useEffect(() => {
     document.title = `${title} · ${APP_NAME}`;
