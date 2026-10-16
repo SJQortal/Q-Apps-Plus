@@ -83,7 +83,7 @@ export function TxPeople({
 }: {
   addresses: string[];
   label?: string;
-  /** The account that made it, marked "Made it". */
+  /** The account that signed it, marked "Signed". */
   maker?: string | null;
 }) {
   const [all, setAll] = useState(false);
@@ -110,7 +110,7 @@ export function TxPeople({
       >
         {shown.map((address) => {
           const at = isAtAddress(address);
-          const note = [address === maker ? 'Made it' : null, at ? 'AT (automated contract)' : null]
+          const note = [address === maker ? 'Signed' : null, at ? 'AT (automated contract)' : null]
             .filter(Boolean)
             .join(' · ');
           return (
