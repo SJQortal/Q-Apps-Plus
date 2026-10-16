@@ -2,10 +2,11 @@
  * The accounts opened one from another (state/explorer.ts trail), as
  * crumbs under the account header: each one opens that account again (and
  * the trail goes back to it). On phones the middle collapses into one
- * 44 px button, by CSS (no screen-size listener per crumb). "Compare 2"
- * closes the row when two or more accounts are picked to compare.
+ * 44 px button, by CSS (no screen-size listener per crumb); pressing it
+ * moves focus to the first crumb it revealed, since the button goes.
+ * "Compare 2" closes the row when two or more accounts are picked to compare.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, ButtonBase } from '@mui/material';
 import { NameAvatar } from '../../../components/common/NameAvatar';
@@ -78,6 +79,14 @@ export function ExplorerTrail() {
   const trail = useTrail();
   const picks = useComparePicks();
   const [expanded, setExpanded] = useState(false);
+  const list = useRef<HTMLOListElement>(null);
+  // Set when "n more" is pressed: focus goes to the first crumb it revealed.
+  const revealed = useRef(false);
+  useEffect(() => {
+    if (!expanded || !revealed.current) return;
+    revealed.current = false;
+    list.current?.children[1]?.querySelector<HTMLElement>('a')?.focus();
+  }, [expanded]);
   const showTrail = trail.length >= 2;
   if (!showTrail && picks.length < 2) return null;
   const collapse = !expanded && trail.length >= COLLAPSE_FROM;
@@ -96,6 +105,7 @@ export function ExplorerTrail() {
         <Box component="nav" aria-label="Your trail" sx={{ flex: 1, minWidth: 0 }}>
           <Box
             component="ol"
+            ref={list}
             sx={{
               listStyle: 'none',
               m: 0,
@@ -124,7 +134,10 @@ export function ExplorerTrail() {
                     sx={{ ...ITEM_SX, display: { xs: 'flex', sm: 'none' } }}
                   >
                     <Button
-                      onClick={() => setExpanded(true)}
+                      onClick={() => {
+                        revealed.current = true;
+                        setExpanded(true);
+                      }}
                       aria-label={`Show ${hidden} more accounts in the trail`}
                       sx={{ minHeight: 44, minWidth: 44, px: 1 }}
                     >

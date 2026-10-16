@@ -442,7 +442,10 @@ describe('on a phone', () => {
     expect(more).toHaveTextContent('2 more');
     await user.click(more);
     expect(within(trail).queryByRole('button', { name: /more accounts in the trail/ })).toBeNull();
-    expect(within(trail).getAllByRole('listitem')).toHaveLength(4);
+    const crumbs = within(trail).getAllByRole('listitem');
+    expect(crumbs).toHaveLength(4);
+    // The button went: focus is on the first crumb it revealed, not lost.
+    await waitFor(() => expect(within(crumbs[1]).getByRole('link')).toHaveFocus());
   });
 });
 
