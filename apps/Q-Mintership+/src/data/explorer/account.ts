@@ -37,9 +37,7 @@ export function isUnknownAccount(error: unknown): boolean {
 
 /** Core's answer for a bad checksum (`400 {"error":102}`). */
 export function isInvalidAddressError(error: unknown): boolean {
-  return (
-    error instanceof CoreHttpError && /"error"\s*:\s*102|invalid address/i.test(error.body)
-  );
+  return error instanceof CoreHttpError && /"error"\s*:\s*102|invalid address/i.test(error.body);
 }
 
 export type ExploredAccount =
@@ -168,7 +166,10 @@ export interface GroupOf {
  * paging in Core). Primes `membership:<a>` (data/group.ts) with the same
  * answer, reduced to MINTER.
  */
-export function getGroupsOf(address: string, options: { force?: boolean } = {}): Promise<GroupOf[]> {
+export function getGroupsOf(
+  address: string,
+  options: { force?: boolean } = {}
+): Promise<GroupOf[]> {
   return fetchQuery(
     `xgroups:${address}`,
     async () => {
@@ -255,7 +256,9 @@ export function getLastSigned(address: string): Promise<LastSigned | null> {
       const best = (Array.isArray(rows) ? rows : [])
         .filter((row) => typeof row?.height === 'number')
         .sort((a, b) => (b.height ?? 0) - (a.height ?? 0))[0];
-      return best ? { height: best.height as number, timestamp: Number(best.timestamp ?? 0) } : null;
+      return best
+        ? { height: best.height as number, timestamp: Number(best.timestamp ?? 0) }
+        : null;
     },
     { ttlMs: 5 * 60_000 }
   );
@@ -312,7 +315,8 @@ export function decodePrivsRecipient(raw: string): string | null {
 export function getPrivsRecipient(signature: string): Promise<string | null> {
   return fetchQuery(
     `xprivs:${signature}`,
-    async () => decodePrivsRecipient(await getText(`/transactions/signature/${seg(signature)}/raw`)),
+    async () =>
+      decodePrivsRecipient(await getText(`/transactions/signature/${seg(signature)}/raw`)),
     { ttlMs: Number.POSITIVE_INFINITY }
   );
 }
@@ -320,13 +324,7 @@ export function getPrivsRecipient(signature: string): Promise<string | null> {
 // ---- Where the first QORT came from --------------------------------------------
 
 export type FundingKind =
-  | 'payment'
-  | 'multiPayment'
-  | 'transferAsset'
-  | 'at'
-  | 'rewardShare'
-  | 'transferPrivs'
-  | 'genesis';
+  'payment' | 'multiPayment' | 'transferAsset' | 'at' | 'rewardShare' | 'transferPrivs' | 'genesis';
 
 export interface Funding {
   kind: FundingKind;
@@ -367,7 +365,9 @@ export function fundingFrom(tx: TxRow, address: string): Funding | null {
         ? (tx.payments as Array<{ recipient?: string; amount?: string }>)
         : [];
       const mine = payments.find((payment) => payment?.recipient === address);
-      return mine ? { ...base, kind: 'multiPayment', from: creator, amount: String(mine.amount ?? '') } : null;
+      return mine
+        ? { ...base, kind: 'multiPayment', from: creator, amount: String(mine.amount ?? '') }
+        : null;
     }
     case 'AT':
       return tx.recipient === address
@@ -380,11 +380,18 @@ export function fundingFrom(tx: TxRow, address: string): Funding | null {
         : null;
     case 'REWARD_SHARE':
       return tx.recipient === address && creator !== address
-        ? { ...base, kind: 'rewardShare', from: creator, sharePercent: String(tx.sharePercent ?? '') }
+        ? {
+            ...base,
+            kind: 'rewardShare',
+            from: creator,
+            sharePercent: String(tx.sharePercent ?? ''),
+          }
         : null;
     case 'TRANSFER_PRIVS':
       // The recipient isn't in Core's JSON; the reference chain names it.
-      return creator && creator !== address ? { ...base, kind: 'transferPrivs', from: creator } : null;
+      return creator && creator !== address
+        ? { ...base, kind: 'transferPrivs', from: creator }
+        : null;
     case 'GENESIS':
       return tx.recipient === address
         ? { ...base, kind: 'genesis', from: null, amount: String(tx.amount ?? '') }
@@ -502,4 +509,27 @@ export function getPayerBand(address: string): Promise<PayerBand> {
 /** "has sent 1,000+ payments", or null under 100. */
 export function payerBandWords(band: PayerBand): string | null {
   return band ? `has sent ${band.toLocaleString('en-US')}+ payments` : null;
+}
+
+// ---- Group names ----------------------------------------------------------------
+
+/**
+ * A group's name (`GET /groups/{id}`), kept for the session; MINTER needs no
+ * read. Null when Core doesn't know the group.
+ */
+export function getGroupName(groupId: number): Promise<string | null> {
+  if (groupId === MINTER_GROUP_ID) return Promise.resolve('MINTER');
+  return fetchQuery(
+    `xgroup:${groupId}`,
+    async () => {
+      try {
+        const body = await getJson<{ groupName?: string }>(`/groups/${seg(groupId)}`);
+        return typeof body?.groupName === 'string' && body.groupName ? body.groupName : null;
+      } catch (error) {
+        if (error instanceof CoreHttpError && error.status === 404) return null;
+        throw error;
+      }
+    },
+    { ttlMs: 60 * 60_000 }
+  );
 }
