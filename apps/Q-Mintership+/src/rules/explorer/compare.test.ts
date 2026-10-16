@@ -616,6 +616,36 @@ describe('the timeline together', () => {
     expect(events.map((e) => plain(e.parts))).toEqual(['got its minting level from C']);
   });
 
+  it('a first own transaction that is its self-share or a level move reads as that, once', () => {
+    const ownFirst = (row: TxRow): FirstSeen => ({
+      firstOwn: {
+        type: row.type,
+        height: row.blockHeight as number,
+        timestamp: row.timestamp,
+        signature: row.signature,
+      },
+      funding: null,
+      firstSeen: { height: row.blockHeight as number, timestamp: row.timestamp },
+    });
+    const self = share(A, A, 1_371_000);
+    const selfFirst = timelineEvents([
+      { address: A, letter: 'A', first: ownFirst(self), links: links([self]) },
+    ]);
+    expect(selfFirst.map((e) => plain(e.parts))).toEqual([
+      'created a self-share (minting with its own key)',
+    ]);
+    const move = tx('TRANSFER_PRIVS', 1_380_000, { creatorAddress: A });
+    const moveFirst = timelineEvents([
+      {
+        address: A,
+        letter: 'A',
+        first: ownFirst(move),
+        links: links([move], { [move.signature]: C }),
+      },
+    ]);
+    expect(moveFirst.map((e) => plain(e.parts))).toEqual(['moved its minting level to C']);
+  });
+
   it('a primary name it bought reads as bought, at the purchase, never as registered', () => {
     const first: FirstSeen = {
       firstOwn: null,

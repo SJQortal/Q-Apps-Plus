@@ -1148,26 +1148,16 @@ export function timelineEvents(sides: readonly TimelineSide[]): TimelineEvent[] 
         signature: funding.signature,
       });
     }
-    const own = side.first?.firstOwn ?? null;
-    if (own && !signatures.has(own.signature)) {
-      signatures.add(own.signature);
-      events.push({
-        ...base,
-        key: `${side.address}:firstOwn`,
-        kind: 'firstOwn',
-        height: own.height,
-        timestamp: own.timestamp,
-        parts: [text(`first transaction it sent: ${txTypeLabel(own.type)}`)],
-        signature: own.signature,
-      });
-    }
+    // The specific lines first (each transaction once), then its first own transaction
+    // only when no line above already is that transaction.
     const primary = primaryNameEvent(side);
-    if (primary) {
+    if (primary && !(primary.signature && signatures.has(primary.signature))) {
       if (primary.signature) signatures.add(primary.signature);
       events.push({ ...base, ...primary });
     }
     const self = firstSelfShare(side);
-    if (self) {
+    if (self && !signatures.has(self.signature)) {
+      signatures.add(self.signature);
       events.push({
         ...base,
         key: `${side.address}:selfShare`,
@@ -1203,6 +1193,19 @@ export function timelineEvents(sides: readonly TimelineSide[]): TimelineEvent[] 
           signature: move.ref.signature,
         });
       }
+    }
+    const own = side.first?.firstOwn ?? null;
+    if (own && !signatures.has(own.signature)) {
+      signatures.add(own.signature);
+      events.push({
+        ...base,
+        key: `${side.address}:firstOwn`,
+        kind: 'firstOwn',
+        height: own.height,
+        timestamp: own.timestamp,
+        parts: [text(`first transaction it sent: ${txTypeLabel(own.type)}`)],
+        signature: own.signature,
+      });
     }
     if (side.askedAt)
       events.push({
