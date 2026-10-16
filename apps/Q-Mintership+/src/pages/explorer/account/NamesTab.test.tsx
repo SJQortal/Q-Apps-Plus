@@ -320,19 +320,31 @@ describe('Names: published on QDN', () => {
   });
 
   it('Stop lets the names being read finish and starts no more', async () => {
-    let slow = false;
+    // The reads by name wait at a gate that opens only after Stop, so
+    // exactly the first 4 are running when it is pressed, however slow the
+    // machine is.
+    let gated = false;
+    let held = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
     const { user } = await open(COLLECTOR.address, (world) =>
       mockFetchRoute(SEARCHSIMPLE, async (url: URL) => {
-        if (slow) await new Promise((r) => setTimeout(r, 150));
+        if (gated && url.searchParams.get('name')) {
+          held += 1;
+          await gate;
+        }
         return worldAnswer(world, url);
       })
     );
     const qdn = await region('Published on QDN');
     const more = await within(qdn).findByRole('button', { name: 'Search 20 more names' }, T);
-    slow = true;
+    gated = true;
     await user.click(more);
+    await waitFor(() => expect(held).toBe(4), T);
     await user.click(within(qdn).getByRole('button', { name: 'Stop' }));
+    release();
     expect(await within(qdn).findByText('Searched 14 of 30 names.', {}, T)).toBeInTheDocument();
+    expect(held).toBe(4);
     expect(byName()).toHaveLength(14);
     expect(within(qdn).getByRole('button', { name: 'Search 16 more names' })).toBeInTheDocument();
   });

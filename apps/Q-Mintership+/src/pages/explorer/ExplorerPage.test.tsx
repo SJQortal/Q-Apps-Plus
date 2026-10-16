@@ -32,7 +32,7 @@ async function show(persona = 'learner') {
       <ExplorerPage />
       <Probe />
     </>,
-    { persona, path: '/explorer', route: '/explorer/*' }
+    { persona, path: '/explorer', route: '/explorer/*', strict: true }
   );
   mockFetchRoute('/names/search', (url: URL) =>
     (url.searchParams.get('query') ?? '').toLowerCase().startsWith('le')

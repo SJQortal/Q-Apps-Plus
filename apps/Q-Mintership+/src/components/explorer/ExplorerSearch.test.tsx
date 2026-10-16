@@ -58,7 +58,7 @@ async function show(persona = 'learner') {
       <ExplorerSearch />
       <Probe />
     </>,
-    { persona, path: '/explorer', route: '/explorer/*' }
+    { persona, path: '/explorer', route: '/explorer/*', strict: true }
   );
   // After the world's catch-all: the newest route answers first.
   answerNameSearch();

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { getQueryState, resetQueries, setQueryData } from '../query';
+import { getQueryState, invalidate, resetQueries, setQueryData } from '../query';
 import { dropHeavy, heavy, HeavyCancelled, heavyLoad, heavyQuery } from './heavy';
 
 function deferred<T>() {
@@ -61,6 +61,48 @@ describe('heavyQuery', () => {
     await expect(heavyQuery('y', 'xtest:a', async () => 0)).resolves.toBe(42);
     gate.resolve();
     await Promise.all(busy);
+  });
+
+  it('shares a running load at once, but a reload after invalidate() waits for a slot', async () => {
+    const gates = [deferred<number>(), deferred<number>()];
+    let loads = 0;
+    const slow = (i: number) => async () => {
+      loads += 1;
+      return gates[i].promise;
+    };
+    const first = heavyQuery('acct', 'xtest:c', slow(0));
+    const second = heavyQuery('acct', 'xtest:d', slow(1));
+    await tick();
+    expect(heavyLoad()).toEqual({ running: 2, queued: 0 });
+    expect(loads).toBe(2);
+    // The same read again shares the running load: no slot, no load.
+    const shared = heavyQuery('acct', 'xtest:c', slow(0), { force: true });
+    await tick();
+    expect(heavyLoad()).toEqual({ running: 2, queued: 0 });
+    expect(loads).toBe(2);
+    // Refresh: the running loads may predate it, so new ones start, in turn.
+    invalidate('xtest:');
+    const again = [1, 2, 3].map(() =>
+      heavyQuery(
+        'acct',
+        'xtest:c',
+        async () => {
+          loads += 1;
+          return 3;
+        },
+        { force: true }
+      )
+    );
+    await tick();
+    expect(heavyLoad()).toEqual({ running: 2, queued: 3 });
+    expect(loads).toBe(2);
+    gates[0].resolve(1);
+    gates[1].resolve(2);
+    await expect(Promise.all([first, second, shared])).resolves.toEqual([1, 2, 1]);
+    await expect(Promise.all(again)).resolves.toEqual([3, 3, 3]);
+    // The three taps shared one new load.
+    expect(loads).toBe(3);
+    expect(heavyLoad()).toEqual({ running: 0, queued: 0 });
   });
 
   it('leaves the store untouched when its queued read is dropped', async () => {

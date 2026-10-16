@@ -158,6 +158,18 @@ export function fetchQuery<T>(
   return run;
 }
 
+/**
+ * True when fetchQuery(key, …) with these options would answer without
+ * starting a load: the value is fresh (and not forced), or a load that
+ * started after the key's last invalidate() is running and would be shared.
+ */
+export function canServeWithoutLoad(key: string, options: FetchOptions = {}): boolean {
+  const entry = entries.get(key);
+  if (!entry) return false;
+  if (!options.force && isFresh(entry, options.ttlMs ?? 60_000)) return true;
+  return entry.inflight !== null && entry.inflightVersion === entry.version;
+}
+
 /** The value in the store right now, if any (no load). */
 export function peekQuery<T>(key: string): T | undefined {
   return entries.get(key)?.state.data as T | undefined;

@@ -181,6 +181,29 @@ describe('fundingFrom', () => {
     ).toMatchObject({ kind: 'multiPayment', amount: '2' });
   });
 
+  it('counts a multi-payment as a QORT payment only when it paid the account QORT', () => {
+    const multi = (payments: Array<Record<string, unknown>>) =>
+      fundingFrom({ ...base, type: 'MULTI_PAYMENT', creatorAddress: B, payments }, A);
+    expect(multi([{ recipient: A, amount: '3', assetId: 90 }])).toMatchObject({
+      kind: 'transferAsset',
+      from: B,
+      amount: '3',
+      assetId: 90,
+    });
+    expect(
+      multi([
+        { recipient: A, amount: '3', assetId: 90 },
+        { recipient: A, amount: '2', assetId: 0 },
+      ])
+    ).toMatchObject({ kind: 'multiPayment', amount: '2', assetId: 0 });
+  });
+
+  it('keeps the asset the genesis block gave out', () => {
+    expect(
+      fundingFrom({ ...base, type: 'GENESIS', recipient: A, amount: '100000', assetId: 1 }, A)
+    ).toMatchObject({ kind: 'genesis', from: null, amount: '100000', assetId: 1 });
+  });
+
   it('ignores transactions that send nothing to the account', () => {
     expect(fundingFrom({ ...base, type: 'PAYMENT', recipient: B, creatorAddress: A }, A)).toBeNull();
     expect(fundingFrom({ ...base, type: 'REGISTER_NAME', creatorAddress: A }, A)).toBeNull();
@@ -247,6 +270,39 @@ describe('getFirstSeen', () => {
     const seen = await getFirstSeen(A);
     expect(seen.funding).toBeNull();
     expect(seen.firstSeen).toEqual({ height: 500, timestamp: 3000 });
+  });
+});
+
+describe('getFirstSeen when a read fails', () => {
+  it('rejects (and keeps nothing) when the reference read fails', async () => {
+    mockFetchRoute('/addresses/', account({ reference: 'ref1' }));
+    mockFetchRoute('/transactions/signature/', () => new Response('busy', { status: 502 }));
+    mockFetchRoute('/transactions/payments/between', []);
+    await expect(getFirstSeen(A)).rejects.toThrow();
+    expect(fetchCallsFor('/transactions/payments/between')).toHaveLength(0);
+    expect(peekQuery(`xfirst:${A}`)).toBeUndefined();
+  });
+
+  it('falls back to the first payment received when Core does not know the reference', async () => {
+    mockFetchRoute('/addresses/', account({ reference: 'ref1' }));
+    mockFetchRoute(
+      '/transactions/signature/',
+      () => new Response(JSON.stringify({ error: 311 }), { status: 404 })
+    );
+    mockFetchRoute('/transactions/payments/between', [
+      {
+        type: 'PAYMENT',
+        timestamp: 2000,
+        signature: 'pay1',
+        txGroupId: 0,
+        blockHeight: 900,
+        recipient: A,
+        creatorAddress: B,
+        amount: '1',
+      },
+    ]);
+    const seen = await getFirstSeen(A);
+    expect(seen.funding).toMatchObject({ kind: 'payment', from: B, height: 900 });
   });
 });
 

@@ -88,6 +88,7 @@ async function open(path: string, setup?: () => void, persona = 'learner') {
       persona,
       path,
       route: ROUTE,
+      strict: true,
       // Newer than the world's own routes: these answer first.
       setup: () => {
         answerExplorerReads();

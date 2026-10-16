@@ -10,7 +10,7 @@
  * Light reads (an account, its names, groups, one transaction, payments
  * between two accounts, a QDN search with a service) don't come through here.
  */
-import { fetchQuery, getQueryState, type FetchOptions } from '../query';
+import { canServeWithoutLoad, fetchQuery, type FetchOptions } from '../query';
 
 const LIMIT = 2;
 
@@ -74,11 +74,17 @@ export function dropHeavy(scope: string): void {
   }
 }
 
+/** Loads heavyQuery started, per key. */
+const loadsStarted = new Map<string, number>();
+
 /**
- * fetchQuery for a heavy read. A value that is fresh or already loading is
- * read from the store at once; otherwise the read waits for a slot first, so
- * a dropped read never touches the store (the view shows it loading again
- * when it comes back, instead of an error).
+ * fetchQuery for a heavy read. A value that is fresh, or a load fetchQuery
+ * would share, is read from the store at once; anything that would start a
+ * load waits for a slot first, a reload after invalidate() too (fetchQuery
+ * doesn't share a load that started before it), so a dropped read never
+ * touches the store (the view shows it loading again when it comes back,
+ * instead of an error). A load of the same key that started while a read
+ * waited answers that read as well, unless the key was invalidated since.
  */
 export async function heavyQuery<T>(
   scope: string,
@@ -86,11 +92,14 @@ export async function heavyQuery<T>(
   load: () => Promise<T>,
   options: FetchOptions = {}
 ): Promise<T> {
-  const state = getQueryState<T>(key);
-  const ttlMs = options.ttlMs ?? 60_000;
-  const fresh = state.status === 'success' && Date.now() - state.updatedAt < ttlMs;
-  if (state.fetching || (fresh && !options.force)) return fetchQuery(key, load, options);
-  return heavy(scope, () => fetchQuery(key, load, options));
+  if (canServeWithoutLoad(key, options)) return fetchQuery(key, load, options);
+  const asked = loadsStarted.get(key) ?? 0;
+  return heavy(scope, () => {
+    const started = loadsStarted.get(key) ?? 0;
+    const readOptions = started > asked ? { ...options, force: false } : options;
+    if (!canServeWithoutLoad(key, readOptions)) loadsStarted.set(key, started + 1);
+    return fetchQuery(key, load, readOptions);
+  });
 }
 
 /** For tests: how many heavy reads run and wait now. */

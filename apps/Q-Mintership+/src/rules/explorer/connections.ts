@@ -25,7 +25,7 @@ import type { TxRow } from '../../data/types';
 import type { Funding, PayerBand } from '../../data/explorer/account';
 import type { SponsorshipReport } from '../../data/explorer/sponsorship';
 import { formatCount, formatDate, plural } from '../../utils/format';
-import { formatAmount, type TxPart } from './txWords';
+import { assetLabel, formatAmount, type TxPart } from './txWords';
 
 export interface TxRef {
   height: number;
@@ -439,8 +439,17 @@ export function fundingParts(funding: Funding, band?: PayerBand): TxPart[] {
         : [text('Got its minting level from another account')];
     case 'at':
       return [text('First QORT came from an AT (automated contract)')];
-    case 'genesis':
-      return [text('Received QORT in the genesis block')];
+    case 'genesis': {
+      // Say QORT only when it was QORT: the genesis block gave out other assets too.
+      const amount: TxPart = {
+        kind: 'amount',
+        amount: formatAmount(funding.amount ?? '0'),
+        asset: assetLabel(funding.assetId, funding.assetName),
+      };
+      return (funding.assetId ?? 0) === 0
+        ? [text('Received '), amount, text(' in the genesis block')]
+        : [text('Its first incoming transaction: '), amount, text(' in the genesis block')];
+    }
   }
 }
 

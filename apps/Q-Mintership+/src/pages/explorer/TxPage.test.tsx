@@ -6,7 +6,7 @@
  * MINTER decision, a waiting one, and a signature the node doesn't know
  * told apart from a failed read. Read-only: no POST, no write request.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
@@ -25,6 +25,24 @@ import { explorerTxPath } from '../../routes/paths';
 import TxPage, { NO_SUCH_TX, NOT_A_SIGNATURE } from './TxPage';
 
 const T = { timeout: 4000 };
+
+/**
+ * The world's own answer to a read this test's route passes on, served the
+ * way the harness serves it (its status too). A read the world can't answer
+ * fails the test, as strict mode does, instead of coming back as 200 null.
+ */
+function worldAnswer(world: World, url: URL): Response {
+  const answer = answerCore(world, url.pathname, url.searchParams);
+  if (!answer) {
+    const path = `${url.pathname}${url.search}`;
+    onTestFinished(() => {
+      throw new Error(`The mock world has no answer for: ${path}`);
+    });
+    throw new Error(`no mock for GET ${path}`);
+  }
+  if (answer.text !== undefined) return new Response(answer.text, { status: answer.status });
+  return new Response(JSON.stringify(answer.body), { status: answer.status });
+}
 const ROUTE = '/explorer/tx/:signature';
 const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH|VOTE|POLL/;
 const sigs = createWorld().explorer.sigs;
@@ -122,8 +140,12 @@ describe('one transaction', () => {
     expect(
       await within(answers).findByRole('link', { name: 'Open the MINTER decision' }, T)
     ).toHaveAttribute('href', `/decisions/${pending}`);
-    // No note about the approver: it is an answer, nothing more.
-    expect(answers.textContent).not.toMatch(/is an admin|was an admin|not an admin/i);
+    // The region holds the sentence and its two links, nothing more.
+    const sentence = answers.querySelector('p')?.textContent ?? '';
+    expect(sentence).toMatch(/invite .+ to MINTER/);
+    expect(answers.textContent).toBe(
+      `The transaction it answers${sentence}Open that transactionOpen the MINTER decision`
+    );
     await expectNoAxeViolations(container);
     noWrites(posts);
   });
@@ -184,8 +206,7 @@ describe('one transaction', () => {
     const { user } = await open(sigs.kitLou[0], (world) =>
       mockFetchRoute('/transactions/signature/', (url: URL) => {
         if (fail) return new Response('node down', { status: 503 });
-        const answer = answerCore(world, url.pathname, url.searchParams);
-        return answer?.body;
+        return worldAnswer(world, url);
       })
     );
     expect(await screen.findByText("Couldn't load this transaction.", {}, T)).toBeVisible();

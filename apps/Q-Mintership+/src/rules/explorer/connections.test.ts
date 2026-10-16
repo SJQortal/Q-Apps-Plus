@@ -269,12 +269,22 @@ describe('where the first QORT came from', () => {
     expect(plain(fundingParts({ ...base, kind: 'at', from: AT, amount: '1' }))).toBe(
       'First QORT came from an AT (automated contract)'
     );
-    expect(plain(fundingParts({ ...base, kind: 'genesis', from: null, amount: '1' }))).toBe(
-      'Received QORT in the genesis block'
-    );
+    expect(
+      plain(fundingParts({ ...base, kind: 'genesis', from: null, amount: '1', assetId: 0 }))
+    ).toBe('Received 1 QORT in the genesis block');
     expect(
       plain(fundingParts({ ...base, kind: 'transferAsset', from: D, amount: '1' }, 1000))
     ).toBe('Its first incoming transaction: an asset transfer from D. D has sent 1,000+ payments.');
+  });
+
+  it('says QORT for the genesis block only when it gave out QORT', () => {
+    const genesis: Funding = { ...base, kind: 'genesis', from: null, amount: '100000', assetId: 1 };
+    expect(plain(fundingParts(genesis))).toBe(
+      'Its first incoming transaction: 100,000 asset #1 in the genesis block'
+    );
+    expect(plain(fundingParts({ ...genesis, assetName: 'Legacy-QORA' }))).toBe(
+      'Its first incoming transaction: 100,000 Legacy-QORA in the genesis block'
+    );
   });
 
   it('band words: none under 100', () => {
