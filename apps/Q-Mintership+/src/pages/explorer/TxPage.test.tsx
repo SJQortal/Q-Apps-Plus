@@ -23,6 +23,7 @@ import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../test/setup';
 import type { TxRow } from '../../data/types';
 import { explorerTxPath } from '../../routes/paths';
 import TxPage, { NO_SUCH_TX, NOT_A_SIGNATURE } from './TxPage';
+import { readText } from '../../test/readText';
 
 const T = { timeout: 4000 };
 
@@ -132,7 +133,7 @@ describe('one transaction', () => {
     const { container, posts } = await open(approval.signature);
     expect(await h1('Group approval')).toBeVisible();
     const answers = await screen.findByRole('region', { name: 'The transaction it answers' }, T);
-    await waitFor(() => expect(answers.textContent).toMatch(/invite .+ to MINTER/), T);
+    await waitFor(() => expect(readText(answers)).toMatch(/invite .+ to MINTER/), T);
     expect(within(answers).getByRole('link', { name: 'Open that transaction' })).toHaveAttribute(
       'href',
       `/explorer/tx/${pending}`
@@ -141,9 +142,9 @@ describe('one transaction', () => {
       await within(answers).findByRole('link', { name: 'Open the MINTER decision' }, T)
     ).toHaveAttribute('href', `/decisions/${pending}`);
     // The region holds the sentence and its two links, nothing more.
-    const sentence = answers.querySelector('p')?.textContent ?? '';
+    const sentence = readText(answers.querySelector('p'));
     expect(sentence).toMatch(/invite .+ to MINTER/);
-    expect(answers.textContent).toBe(
+    expect(readText(answers)).toBe(
       `The transaction it answers${sentence}Open that transactionOpen the MINTER decision`
     );
     await expectNoAxeViolations(container);

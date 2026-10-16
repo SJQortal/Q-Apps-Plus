@@ -553,20 +553,36 @@ export function payerBandWords(band: PayerBand): string | null {
 
 // ---- Group names ----------------------------------------------------------------
 
+/** A group's name, and its owner's primary name (whose THUMBNAIL is the group's avatar). */
+export interface GroupLabel {
+  name: string | null;
+  ownerName: string | null;
+}
+
 /**
- * A group's name (`GET /groups/{id}`), kept for the session; MINTER needs no
- * read. Null when Core doesn't know the group.
+ * A group's name and owner's name (`GET /groups/{id}`), kept for the
+ * session; MINTER needs no read (its owner, Core's null account, has no
+ * name). Both null when Core doesn't know the group.
  */
-export function getGroupName(groupId: number): Promise<string | null> {
-  if (groupId === MINTER_GROUP_ID) return Promise.resolve('MINTER');
+export function getGroupLabel(groupId: number): Promise<GroupLabel> {
+  if (groupId === MINTER_GROUP_ID) return Promise.resolve({ name: 'MINTER', ownerName: null });
   return fetchQuery(
     `xgroup:${groupId}`,
     async () => {
       try {
-        const body = await getJson<{ groupName?: string }>(`/groups/${seg(groupId)}`);
-        return typeof body?.groupName === 'string' && body.groupName ? body.groupName : null;
+        const body = await getJson<{ groupName?: string; ownerPrimaryName?: string }>(
+          `/groups/${seg(groupId)}`
+        );
+        return {
+          name: typeof body?.groupName === 'string' && body.groupName ? body.groupName : null,
+          ownerName:
+            typeof body?.ownerPrimaryName === 'string' && body.ownerPrimaryName
+              ? body.ownerPrimaryName
+              : null,
+        };
       } catch (error) {
-        if (error instanceof CoreHttpError && error.status === 404) return null;
+        if (error instanceof CoreHttpError && error.status === 404)
+          return { name: null, ownerName: null };
         throw error;
       }
     },

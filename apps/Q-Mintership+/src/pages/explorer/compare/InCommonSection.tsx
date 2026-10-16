@@ -29,6 +29,7 @@ import { formatCount, plural } from '../../../utils/format';
 import { inCommonState, PAIR_ANCHOR_SX } from './compareView';
 import { FailedReads, LIST_SX, Note, SteppedList, SubHeading, Waiting } from './parts';
 import type { CompareData } from './useCompareData';
+import { GroupAvatar } from '../../../components/common/GroupAvatar';
 
 const LINK_SX = {
   display: 'inline-flex',
@@ -121,6 +122,22 @@ export function InCommonSection({ data }: { data: CompareData }) {
               keyOf={(group) => String(group.groupId)}
               render={(group) => (
                 <Typography sx={{ overflowWrap: 'anywhere' }}>
+                  <Box
+                    component="span"
+                    sx={{
+                      display: 'inline-block',
+                      verticalAlign: 'middle',
+                      mr: 0.5,
+                      lineHeight: 0,
+                    }}
+                  >
+                    <GroupAvatar
+                      groupId={group.groupId}
+                      groupName={group.groupName}
+                      ownerName={group.ownerName}
+                      size={24}
+                    />
+                  </Box>
                   <bdi dir="auto">{group.groupName || 'A group without a name'}</bdi>
                   {group.memberCount !== undefined
                     ? ` (${plural(group.memberCount, 'member')})`

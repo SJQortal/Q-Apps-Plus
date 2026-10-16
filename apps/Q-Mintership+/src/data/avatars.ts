@@ -45,8 +45,39 @@ interface Entry {
 const entries = new Map<string, Entry>();
 const NO_IMAGE: AvatarView = { src: null, loaded: false };
 
+/** Every avatar is a THUMBNAIL; people, apps and websites use this identifier. */
+export const PERSON_AVATAR = 'qortal_avatar';
+
+/** The identifier a group's avatar is published under, by the group's owner (as Qortal Hub does). */
+export function groupAvatarIdentifier(groupId: number): string {
+  return `qortal_group_avatar_${groupId}`;
+}
+
+/**
+ * One avatar's key in this store: the name alone for a person's avatar (as
+ * before), or the identifier and the name for another one, such as a
+ * group's (`qortal_group_avatar_<id>`, published by its owner).
+ */
+export function avatarKey(name: string, identifier: string = PERSON_AVATAR): string {
+  return identifier === PERSON_AVATAR ? name : `${identifier}\u0000${name}`;
+}
+
+function refOf(key: string): { name: string; identifier: string } {
+  const cut = key.indexOf('\u0000');
+  return cut < 0
+    ? { name: key, identifier: PERSON_AVATAR }
+    : { identifier: key.slice(0, cut), name: key.slice(cut + 1) };
+}
+
+function urlFor(key: string): string {
+  const { name, identifier } = refOf(key);
+  return identifier === PERSON_AVATAR
+    ? avatarUrl(name)
+    : `/arbitrary/THUMBNAIL/${seg(name)}/${seg(identifier)}?async=true`;
+}
+
 function srcFor(name: string, retries: number): string {
-  return retries ? `${avatarUrl(name)}&retry=${retries}` : avatarUrl(name);
+  return retries ? `${urlFor(name)}&retry=${retries}` : urlFor(name);
 }
 
 function entryFor(name: string): Entry {
@@ -128,7 +159,10 @@ export function avatarFailed(name: string, src: string): void {
   }
   entry.statusRead = true;
   set(entry, 'waiting', name);
-  getJson<{ status?: string }>(`/arbitrary/resource/status/THUMBNAIL/${seg(name)}/qortal_avatar`)
+  const ref = refOf(name);
+  getJson<{ status?: string }>(
+    `/arbitrary/resource/status/THUMBNAIL/${seg(ref.name)}/${seg(ref.identifier)}`
+  )
     .then((body) => (typeof body?.status === 'string' ? body.status : null))
     .catch(() => null)
     .then((status) => {
@@ -147,15 +181,19 @@ function subscribe(name: string, listener: () => void): () => void {
   };
 }
 
-/** What a NameAvatar for `name` shows now; null name → no image. */
-export function useAvatar(name: string | null): AvatarView {
+/**
+ * What an avatar for `name` shows now; null name → no image. `identifier`
+ * picks another of the name's THUMBNAILs (a group's avatar).
+ */
+export function useAvatar(name: string | null, identifier: string = PERSON_AVATAR): AvatarView {
+  const key = name ? avatarKey(name, identifier) : null;
   const subscribeName = useCallback(
-    (listener: () => void) => (name ? subscribe(name, listener) : () => {}),
-    [name]
+    (listener: () => void) => (key ? subscribe(key, listener) : () => {}),
+    [key]
   );
   return useSyncExternalStore(
     subscribeName,
-    () => (name ? entryFor(name).view : NO_IMAGE),
+    () => (key ? entryFor(key).view : NO_IMAGE),
     () => NO_IMAGE
   );
 }

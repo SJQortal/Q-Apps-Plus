@@ -9,18 +9,36 @@
 import { useEffect, useState } from 'react';
 import { Box } from '@mui/material';
 import { primarySoft } from '../../hub-theme';
-import { avatarFailed, avatarLoaded, useAvatar } from '../../data/avatars';
+import {
+  avatarFailed,
+  avatarKey,
+  avatarLoaded,
+  PERSON_AVATAR,
+  useAvatar,
+} from '../../data/avatars';
 
 export interface NameAvatarProps {
+  /** The name the avatar is published under. */
   name: string | null;
   size?: number;
   /** A smaller size under 600 px (a CSS breakpoint, so it costs no screen-size listener). */
   phoneSize?: number;
+  /** Another of the name's THUMBNAILs, e.g. a group's `qortal_group_avatar_<id>`. */
+  identifier?: string;
+  /** What the letter is taken from, when it isn't the name (a group's own name). */
+  letterFrom?: string | null;
 }
 
-export function NameAvatar({ name, size = 40, phoneSize }: NameAvatarProps) {
+export function NameAvatar({
+  name,
+  size = 40,
+  phoneSize,
+  identifier = PERSON_AVATAR,
+  letterFrom,
+}: NameAvatarProps) {
   const [node, setNode] = useState<HTMLElement | null>(null);
-  const avatar = useAvatar(name);
+  const avatar = useAvatar(name, identifier);
+  const key = name ? avatarKey(name, identifier) : null;
   const [visible, setVisible] = useState(avatar.loaded);
 
   useEffect(() => {
@@ -42,7 +60,8 @@ export function NameAvatar({ name, size = 40, phoneSize }: NameAvatarProps) {
     return () => observer.disconnect();
   }, [node, visible, name, avatar.src]);
 
-  const letter = name ? ([...name.trim()][0]?.toUpperCase() ?? '?') : '';
+  const letterSource = letterFrom ?? name;
+  const letter = letterSource ? ([...letterSource.trim()][0]?.toUpperCase() ?? '?') : '';
   const sized = (px: (s: number) => number) =>
     phoneSize === undefined ? px(size) : { xs: px(phoneSize), sm: px(size) };
   const src = name && (visible || avatar.loaded) ? avatar.src : null;
@@ -79,8 +98,8 @@ export function NameAvatar({ name, size = 40, phoneSize }: NameAvatarProps) {
           src={src}
           alt=""
           decoding="async"
-          onLoad={() => avatarLoaded(name as string, src)}
-          onError={() => avatarFailed(name as string, src)}
+          onLoad={() => avatarLoaded(key as string, src)}
+          onError={() => avatarFailed(key as string, src)}
           sx={{
             position: 'absolute',
             inset: 0,

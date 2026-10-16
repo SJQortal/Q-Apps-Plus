@@ -27,6 +27,7 @@ import {
   levelNextWords,
   membersWords,
 } from './overviewWords';
+import { GroupAvatar } from '../../../../components/common/GroupAvatar';
 
 /** Groups shown before "Show all". */
 const GROUPS_SHOWN = 5;
@@ -212,6 +213,12 @@ function GroupRow({ group, address }: { group: GroupOf; address: string }) {
         minWidth: 0,
       }}
     >
+      <GroupAvatar
+        groupId={group.groupId}
+        groupName={group.groupName}
+        ownerName={group.ownerPrimaryName}
+        size={32}
+      />
       <Typography component="span" sx={{ fontWeight: 600, overflowWrap: 'anywhere', minWidth: 0 }}>
         <bdi dir="auto">{group.groupName || `Group #${group.groupId}`}</bdi>
       </Typography>

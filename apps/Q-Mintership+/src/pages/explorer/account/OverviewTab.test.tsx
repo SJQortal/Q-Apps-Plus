@@ -101,7 +101,13 @@ describe('Overview: a Minter Admin minting now', () => {
     const groups = within(facts).getByRole('list', { name: 'Its groups' });
     const rows = within(groups).getAllByRole('listitem');
     // MINTER first; the admin owns and runs the helpers' group.
-    expect(rows.map((row) => row.textContent)).toEqual([
+    // Each group with its avatar (its owner's group THUMBNAIL; the letter until it loads).
+    expect(rows.map((row) => row.querySelector('[aria-hidden="true"]')?.textContent)).toEqual([
+      'M',
+      'Q',
+      'Q',
+    ]);
+    expect(rows.map((row) => readText(row))).toEqual([
       expect.stringMatching(/^MINTER[\d,]+ membersAdmin$/),
       'Qortal General5,200 members',
       'Q-Mintership Helpers40 membersOwnerAdmin',

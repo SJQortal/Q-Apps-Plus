@@ -14,7 +14,8 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Box, Link } from '@mui/material';
 import { PersonInline } from '../common/Person';
 import { NameWithAvatar } from './NameWithAvatar';
-import { getGroupName } from '../../data/explorer/account';
+import { GroupAvatar } from '../common/GroupAvatar';
+import { getGroupLabel } from '../../data/explorer/account';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { useQuery } from '../../hooks/useQuery';
 import { explorerTxPath } from '../../routes/paths';
@@ -22,14 +23,26 @@ import { groupWords, type TxPart } from '../../rules/explorer/txWords';
 
 export function GroupName({ groupId }: { groupId: number }) {
   const known = groupWords(groupId);
-  const name = useQuery(known === 'MINTER' ? null : `xgroup:${groupId}`, () =>
-    getGroupName(groupId)
+  const label = useQuery(known === 'MINTER' ? null : `xgroup:${groupId}`, () =>
+    getGroupLabel(groupId)
   );
-  const label = known === 'MINTER' ? known : (name.data ?? known);
+  const name = known === 'MINTER' ? known : (label.data?.name ?? known);
   return (
-    <bdi dir="auto" style={{ fontWeight: 600 }}>
-      {label}
-    </bdi>
+    <span>
+      <span
+        style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4, lineHeight: 0 }}
+      >
+        <GroupAvatar
+          groupId={groupId}
+          groupName={name}
+          ownerName={label.data?.ownerName ?? null}
+          size={20}
+        />
+      </span>
+      <bdi dir="auto" style={{ fontWeight: 600 }}>
+        {name}
+      </bdi>
+    </span>
   );
 }
 

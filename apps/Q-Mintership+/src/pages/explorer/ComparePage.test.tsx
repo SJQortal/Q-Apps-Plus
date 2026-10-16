@@ -27,6 +27,7 @@ import { explorerAccountPath, explorerComparePath } from '../../routes/paths';
 import { comparePicksAtom, resetExplorerState } from '../../state/explorer';
 import ComparePage from './ComparePage';
 import { UNUSED_ADDRESS as UNUSED_WORDS } from './explorerWords';
+import { readText } from '../../test/readText';
 
 const T = { timeout: 8000 };
 const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH|VOTE|POLL/;
@@ -187,7 +188,7 @@ describe('Compare: two accounts', () => {
       expect(
         within(groups)
           .getAllByRole('listitem')
-          .map((li) => li.textContent)
+          .map((li) => readText(li))
       ).toEqual(['Book Club (12 members)', 'Qortal General (5,200 members)', 'Some other group']);
       expect(common).toHaveTextContent('First seen 5 blocks apart');
       expect(common).toHaveTextContent('Self-shares created 14 blocks apart');

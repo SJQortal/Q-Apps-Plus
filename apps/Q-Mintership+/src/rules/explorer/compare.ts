@@ -882,6 +882,8 @@ export function leftOutLine(
 export interface SharedGroup {
   groupId: number;
   groupName: string;
+  /** Its owner's primary name (whose THUMBNAIL is the group's avatar). */
+  ownerName?: string;
   memberCount?: number;
   isOpen?: boolean;
   letters: Letter[];
@@ -901,6 +903,8 @@ export function sharedGroups(sides: readonly CompareSide[]): SharedGroup[] {
       if (entry.memberCount === undefined && group.memberCount !== undefined)
         entry.memberCount = group.memberCount;
       if (entry.isOpen === undefined && group.isOpen !== undefined) entry.isOpen = group.isOpen;
+      if (entry.ownerName === undefined && group.ownerPrimaryName)
+        entry.ownerName = group.ownerPrimaryName;
       if (!entry.letters.includes(side.letter)) entry.letters.push(side.letter);
       byGroup.set(group.groupId, entry);
     }
