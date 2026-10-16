@@ -1,6 +1,6 @@
 /**
  * Transactions on Qortal: every confirmed transaction of some types in a
- * range of blocks, newest first, 20 a page. Core refuses a search without
+ * range of blocks, newest first (or oldest first), 20 a page. Core refuses a search without
  * an address and a type unless it asks for 20 rows or fewer, and refuses a
  * block range unless it asks for confirmed rows, so every search here is
  * confirmed, has a block range and asks for 20:
@@ -8,10 +8,12 @@
  *   /transactions/search?txType=…&startBlock=<s>&blockLimit=<n>
  *     &confirmationStatus=CONFIRMED&limit=20&offset=<o>&reverse=true
  *
- * A range is the latest 1,000 or 10,000 blocks up to the tip the page
- * pinned when it opened, or 10,000 blocks from a block (never past that
- * tip), so its rows don't move while it is paged. Each page is one key,
- * `xglobal:<types>:<start>:<limit>:<offset>`; once a newer tip's page has
+ * (`reverse=false` for oldest first.) A range is the latest 1,000 or
+ * 10,000 blocks up to the tip the page pinned when it opened, or 1, 10,
+ * 100, 1,000 or 10,000 blocks from a block (never past that tip), so its
+ * rows don't move while it is paged. Each page is one key,
+ * `xglobal:<types>:<start>:<limit>:<offset>` (`…:<limit>:oldest:<offset>`
+ * oldest first); once a newer tip's page has
  * loaded, the pages of the older tips' ranges are dropped from the store
  * (the slot pattern of data/txs.ts), so they don't pile up.
  *
@@ -25,11 +27,17 @@ import { typesKey } from './accountTx';
 
 /** Rows per page: Core's most for a search without an address. */
 export const GLOBAL_PAGE = 20;
-/** The blocks a "from a block" range covers. */
+/** The blocks a "from a block" range covers, unless fewer are picked. */
 export const FROM_SPAN = 10_000;
+/** How many blocks a "from a block" range can cover: just that block, up to 10,000. */
+export const FROM_SPANS = [1, 10, 100, 1000, 10_000] as const;
+export type FromSpan = (typeof FROM_SPANS)[number];
 
 export type BlocksChoice =
-  { kind: 'latest'; blocks: 1000 | 10000 } | { kind: 'from'; start: number };
+  { kind: 'latest'; blocks: 1000 | 10000 } | { kind: 'from'; start: number; span?: FromSpan };
+
+/** Newest first (Core's `reverse=true`, the default) or oldest first. */
+export type GlobalOrder = 'newest' | 'oldest';
 
 /** Blocks [start, start + limit). */
 export interface BlockRange {
@@ -45,7 +53,7 @@ export function rangeFor(choice: BlocksChoice, tip: number): BlockRange {
     return { start, limit: top - start + 1 };
   }
   const start = Math.min(Math.max(1, Math.floor(choice.start)), top);
-  return { start, limit: Math.max(1, Math.min(FROM_SPAN, top - start + 1)) };
+  return { start, limit: Math.max(1, Math.min(choice.span ?? FROM_SPAN, top - start + 1)) };
 }
 
 export interface GlobalTxPage {
@@ -55,9 +63,15 @@ export interface GlobalTxPage {
   done: boolean;
 }
 
-/** `xglobal:<types>:<start>:<limit>:<offset>`. */
-export function globalTxKey(types: readonly string[], range: BlockRange, offset: number): string {
-  return `xglobal:${typesKey(types)}:${range.start}:${range.limit}:${offset}`;
+/** `xglobal:<types>:<start>:<limit>:<offset>`, or `…:<limit>:oldest:<offset>` oldest first. */
+export function globalTxKey(
+  types: readonly string[],
+  range: BlockRange,
+  offset: number,
+  order: GlobalOrder = 'newest'
+): string {
+  const ordered = order === 'oldest' ? 'oldest:' : '';
+  return `xglobal:${typesKey(types)}:${range.start}:${range.limit}:${ordered}${offset}`;
 }
 
 /** Pages of ranges that end at a tip, by types and range size: the newest start last. */
@@ -83,17 +97,19 @@ function rememberTipKey(slot: string, start: number, key: string): void {
 
 /**
  * One page of confirmed transactions of `types` (none = every type) in
- * `range`. `endsAtTip`: the range is the latest blocks, so a later tip
- * makes a new range, and this one's pages can go once that has loaded.
+ * `range`, newest first unless `order` is oldest. `endsAtTip`: the range is
+ * the latest blocks, so a later tip makes a new range, and this one's pages
+ * can go once that has loaded.
  */
 export function getGlobalTx(
   types: readonly string[],
   range: BlockRange,
   offset: number,
-  options: { force?: boolean; endsAtTip?: boolean } = {}
+  options: { force?: boolean; endsAtTip?: boolean; order?: GlobalOrder } = {}
 ): Promise<GlobalTxPage> {
-  const key = globalTxKey(types, range, offset);
-  const slot = `${typesKey(types)}:${range.limit}`;
+  const order = options.order ?? 'newest';
+  const key = globalTxKey(types, range, offset, order);
+  const slot = `${typesKey(types)}:${range.limit}:${order}`;
   if (options.endsAtTip) rememberTipKey(slot, range.start, key);
   const result = fetchQuery(
     key,
@@ -106,7 +122,7 @@ export function getGlobalTx(
           confirmationStatus: 'CONFIRMED',
           limit: GLOBAL_PAGE,
           offset,
-          reverse: true,
+          reverse: order === 'newest',
         })}`
       );
       const rows = (Array.isArray(body) ? body : []).filter(

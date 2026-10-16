@@ -1,12 +1,20 @@
 /**
  * Transactions on Qortal's filters and words. The type is All, a family
  * (Payments, the default) or one exact type; the blocks are the latest
- * 1,000 (the default), the latest 10,000, or 10,000 from a block. Both live
- * in the URL (`?type=names`, `?type=REGISTER_NAME`, `?blocks=10000`,
- * `?blocks=from-2700000`), the defaults left out; anything else reads as
- * the default.
+ * 1,000 (the default), the latest 10,000, or 1 to 10,000 from a block; the
+ * order is newest first (the default) or oldest first. All live in the URL
+ * (`?type=names`, `?type=REGISTER_NAME`, `?blocks=10000`,
+ * `?blocks=from-2700000`, `&span=1` for just that block, `?order=oldest`),
+ * the defaults left out; anything else reads as the default.
  */
-import type { BlockRange, BlocksChoice } from '../../../data/explorer/globalTx';
+import {
+  FROM_SPAN,
+  FROM_SPANS,
+  type BlockRange,
+  type BlocksChoice,
+  type FromSpan,
+  type GlobalOrder,
+} from '../../../data/explorer/globalTx';
 import {
   ALL_TX_TYPES,
   isTxFamilyKey,
@@ -50,11 +58,19 @@ export function typesOfChoice(type: GlobalType): readonly string[] {
   return isTxFamilyKey(type) ? typesFor(type) : [type];
 }
 
-/** `?blocks=`: the latest 1,000 or 10,000 blocks, or from a block; else the latest 1,000. */
-export function parseBlocksParam(value: string | null): BlocksChoice {
+/**
+ * `?blocks=` (and `?span=`): the latest 1,000 or 10,000 blocks, or 1 to
+ * 10,000 blocks from a block; else the latest 1,000.
+ */
+export function parseBlocksParam(value: string | null, span: string | null = null): BlocksChoice {
   if (value === '10000') return { kind: 'latest', blocks: 10000 };
   const from = value?.match(/^from-(\d{1,9})$/);
-  if (from && Number(from[1]) >= 1) return { kind: 'from', start: Number(from[1]) };
+  if (from && Number(from[1]) >= 1) {
+    const spanned = FROM_SPANS.find((n) => String(n) === span);
+    return spanned && spanned !== FROM_SPAN
+      ? { kind: 'from', start: Number(from[1]), span: spanned }
+      : { kind: 'from', start: Number(from[1]) };
+  }
   return DEFAULT_BLOCKS;
 }
 
@@ -62,6 +78,28 @@ export function parseBlocksParam(value: string | null): BlocksChoice {
 export function blocksParam(choice: BlocksChoice): string | null {
   if (choice.kind === 'from') return `from-${choice.start}`;
   return choice.blocks === 1000 ? null : String(choice.blocks);
+}
+
+/** The value written to `?span=`: how many blocks from a block, or null for 10,000. */
+export function spanParam(choice: BlocksChoice): string | null {
+  return choice.kind === 'from' && choice.span && choice.span !== FROM_SPAN
+    ? String(choice.span)
+    : null;
+}
+
+/** "Just this block", "10 blocks", "10,000 blocks". */
+export function spanWords(span: FromSpan): string {
+  return span === 1 ? 'Just this block' : `${formatCount(span)} blocks`;
+}
+
+/** `?order=`: oldest first, else newest first. */
+export function parseOrderParam(value: string | null): GlobalOrder {
+  return value === 'oldest' ? 'oldest' : 'newest';
+}
+
+/** The value written to `?order=`, or null for newest first. */
+export function orderParam(order: GlobalOrder): string | null {
+  return order === 'oldest' ? 'oldest' : null;
 }
 
 interface Noun {
@@ -107,18 +145,20 @@ const ALL_EXCEPT_MESSAGES: Noun = {
 };
 
 /**
- * "The newest 40 payments in blocks …", "All 7 …", "The only payment in …";
- * for All, "All 37 transactions of every type except messages in …".
+ * "The newest 40 payments in blocks …" (the oldest, oldest first), "All 7
+ * …", "The only payment in …"; for All, "All 37 transactions of every type
+ * except messages in …".
  */
 export function globalCoverage(
   type: GlobalType,
   count: number,
   done: boolean,
-  range: BlockRange
+  range: BlockRange,
+  order: GlobalOrder = 'newest'
 ): string {
   const noun = type === 'all' ? ALL_EXCEPT_MESSAGES : typeNoun(type);
   const where = rangeWords(range);
-  if (!done) return `The newest ${formatCount(count)} ${noun.many} in ${where}.`;
+  if (!done) return `The ${order} ${formatCount(count)} ${noun.many} in ${where}.`;
   return count === 1
     ? `The only ${noun.one} in ${where}.`
     : `All ${formatCount(count)} ${noun.many} in ${where}.`;
@@ -130,10 +170,36 @@ export function globalEmpty(type: GlobalType, range: BlockRange): string {
   return `No ${what} in ${rangeWords(range)}.`;
 }
 
-/** "20 older payments loaded". */
-export function globalOlderLoaded(type: GlobalType, count: number): string {
+/** "20 older payments loaded" ("newer", oldest first). */
+export function globalOlderLoaded(
+  type: GlobalType,
+  count: number,
+  order: GlobalOrder = 'newest'
+): string {
   const noun = typeNoun(type);
+  const which = order === 'oldest' ? 'newer' : 'older';
   return count <= 0
-    ? `No older ${noun.many}`
-    : `${formatCount(count)} older ${count === 1 ? noun.one : noun.many} loaded`;
+    ? `No ${which} ${noun.many}`
+    : `${formatCount(count)} ${which} ${count === 1 ? noun.one : noun.many} loaded`;
+}
+
+/**
+ * The coverage line when the rows are narrowed: "Showing 3 that match, out
+ * of the newest 40 payments in …", "None match, out of all 7 …".
+ */
+export function filteredCoverage(shown: number, coverage: string): string {
+  const lead =
+    shown === 0
+      ? 'None match'
+      : `Showing ${formatCount(shown)} that ${shown === 1 ? 'matches' : 'match'}`;
+  return `${lead}, out of ${coverage.charAt(0).toLowerCase()}${coverage.slice(1)}`;
+}
+
+/** Said after looking further: "Read 60 older transactions: 2 match". */
+export function lookedFurtherWords(read: number, matched: number, order: GlobalOrder): string {
+  const which = order === 'oldest' ? 'newer' : 'older';
+  if (read <= 0) return `No ${which} transactions`;
+  const found =
+    matched === 0 ? 'none match' : matched === 1 ? '1 matches' : `${formatCount(matched)} match`;
+  return `Read ${formatCount(read)} ${which} ${read === 1 ? 'transaction' : 'transactions'}: ${found}`;
 }

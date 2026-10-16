@@ -1,11 +1,16 @@
 /**
  * Transactions on Qortal's lists: what waits for a block (the mempool, only
  * with the latest blocks), and the confirmed transactions of the picked
- * type in the picked blocks, 20 a page, newest first, with "Show older".
- * Each page is its own read (data/explorer/globalTx.ts); "Show older" reads
- * the next one, says what it brought in a polite live region and keeps
- * focus (when nothing older is left and it goes, focus moves to the first
- * new row, or to the line under the list).
+ * type in the picked blocks, 20 a page, newest first (or oldest first, with
+ * "Show newer"), with "Show older". Each page is its own read
+ * (data/explorer/globalTx.ts); "Show older" reads the next one, says what
+ * it brought in a polite live region and keeps focus (when nothing older is
+ * left and it goes, focus moves to the first new row, or to the line under
+ * the list).
+ *
+ * Narrowed (rules/explorer/rowFilter.ts), the list shows the rows read that
+ * match, the line under it says how many of how many, and "Look further"
+ * reads on until a page brings a match, at most 10 pages (200 rows) a press.
  */
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
@@ -19,15 +24,23 @@ import {
   globalTxKey,
   globalWaitingKey,
   type BlockRange,
+  type GlobalOrder,
 } from '../../../data/explorer/globalTx';
+import type { TxRow } from '../../../data/types';
 import { useQuery } from '../../../hooks/useQuery';
+import { filterOn, rowMatches, type RowFilter } from '../../../rules/explorer/rowFilter';
 import {
+  filteredCoverage,
   globalCoverage,
   globalEmpty,
   globalOlderLoaded,
+  lookedFurtherWords,
   typesOfChoice,
   type GlobalType,
 } from './globalFilters';
+
+/** Pages "Look further" reads at most, a press, while none of them matches. */
+export const LOOK_PAGES = 10;
 
 export const RESULTS_TITLE = 'Confirmed transactions';
 export const WAITING_TITLE = 'Waiting to be confirmed';
@@ -49,21 +62,10 @@ export function GlobalWaiting({ type }: { type: GlobalType }) {
   );
 }
 
-interface PageProps {
-  types: readonly string[];
-  range: BlockRange;
-  offset: number;
-  endsAtTip: boolean;
-}
-
-/** One page of rows, as list items (the first page is read by the list itself). */
-function OlderPage({ types, range, offset, endsAtTip }: PageProps) {
-  const page = useQuery(globalTxKey(types, range, offset), (force) =>
-    getGlobalTx(types, range, offset, { force, endsAtTip })
-  );
+function Rows({ rows }: { rows: readonly TxRow[] }) {
   return (
     <>
-      {(page.data?.rows ?? []).map((tx) => (
+      {rows.map((tx) => (
         <li key={tx.signature}>
           <TxListRow tx={tx} />
         </li>
@@ -76,20 +78,25 @@ export function GlobalResults({
   type,
   range,
   endsAtTip,
+  order = 'newest',
+  filter,
   onWider,
 }: {
   type: GlobalType;
   range: BlockRange;
   endsAtTip: boolean;
+  order?: GlobalOrder;
+  /** What narrows the rows read (none when absent). */
+  filter?: RowFilter;
   /** Look in more blocks (offered when nothing was found in the latest 1,000). */
   onWider?: () => void;
 }) {
   const types = typesOfChoice(type);
-  const first = useQuery(globalTxKey(types, range, 0), (force) =>
-    getGlobalTx(types, range, 0, { force, endsAtTip })
+  const first = useQuery(globalTxKey(types, range, 0, order), (force) =>
+    getGlobalTx(types, range, 0, { force, endsAtTip, order })
   );
   /** Pages shown after the first, each a full read before the next. */
-  const [older, setOlder] = useState<Array<{ offset: number; count: number; done: boolean }>>([]);
+  const [older, setOlder] = useState<Array<{ offset: number; rows: TxRow[]; done: boolean }>>([]);
   const [loading, setLoading] = useState(false);
   const [olderError, setOlderError] = useState<unknown>(null);
   const [said, setSaid] = useState('');
@@ -97,10 +104,19 @@ export function GlobalResults({
   const coverageRef = useRef<HTMLParagraphElement>(null);
   const focusRow = useRef<number | null>(null);
 
+  const narrowed = filter !== undefined && filterOn(filter);
+  const matches = (tx: TxRow) => !narrowed || rowMatches(tx, filter as RowFilter);
   const last = older.length ? older[older.length - 1] : null;
-  const count = (first.data?.rows.length ?? 0) + older.reduce((sum, page) => sum + page.count, 0);
+  const count =
+    (first.data?.rows.length ?? 0) + older.reduce((sum, page) => sum + page.rows.length, 0);
   const done = last ? last.done : Boolean(first.data?.done);
   const more = Boolean(first.data) && !done;
+  const firstShown = (first.data?.rows ?? []).filter(matches);
+  const olderShown = older.map((page) => ({
+    offset: page.offset,
+    rows: page.rows.filter(matches),
+  }));
+  const shown = firstShown.length + olderShown.reduce((sum, page) => sum + page.rows.length, 0);
 
   useLayoutEffect(() => {
     if (focusRow.current === null || more) return;
@@ -113,16 +129,35 @@ export function GlobalResults({
     if (loading || !more) return;
     setLoading(true);
     setOlderError(null);
-    const offset = count;
+    let offset = count;
+    let read = 0;
+    let matched = 0;
+    const pages: typeof older = [];
     try {
-      const page = await getGlobalTx(types, range, offset, { endsAtTip });
-      if (page.done) focusRow.current = offset;
-      setOlder((pages) => [...pages, { offset, count: page.rows.length, done: page.done }]);
-      setSaid('');
-      requestAnimationFrame(() => setSaid(globalOlderLoaded(type, page.rows.length)));
+      // One page; narrowed, on until a page brings a match (at most LOOK_PAGES).
+      for (let i = 0; i < LOOK_PAGES; i += 1) {
+        const page = await getGlobalTx(types, range, offset, { endsAtTip, order });
+        pages.push({ offset, rows: page.rows, done: page.done });
+        read += page.rows.length;
+        matched += page.rows.filter(matches).length;
+        offset += page.rows.length;
+        if (page.done || !narrowed || matched > 0) break;
+      }
     } catch (error) {
       setOlderError(error);
     } finally {
+      if (pages.length) {
+        if (pages[pages.length - 1].done) focusRow.current = shown;
+        setOlder((previous) => [...previous, ...pages]);
+        setSaid('');
+        requestAnimationFrame(() =>
+          setSaid(
+            narrowed
+              ? lookedFurtherWords(read, matched, order)
+              : globalOlderLoaded(type, read, order)
+          )
+        );
+      }
       setLoading(false);
     }
   };
@@ -147,36 +182,29 @@ export function GlobalResults({
       />
     );
   } else {
+    const coverage = globalCoverage(type, count, done, range, order);
     body = (
       <>
-        <Card sx={{ p: 0 }}>
-          <Box
-            component="ul"
-            ref={listRef}
-            aria-label={RESULTS_TITLE}
-            sx={{
-              listStyle: 'none',
-              m: 0,
-              p: 0.5,
-              '& > li + li': { borderTop: 1, borderColor: 'divider' },
-            }}
-          >
-            {first.data.rows.map((tx) => (
-              <li key={tx.signature}>
-                <TxListRow tx={tx} />
-              </li>
-            ))}
-            {older.map((page) => (
-              <OlderPage
-                key={page.offset}
-                types={types}
-                range={range}
-                offset={page.offset}
-                endsAtTip={endsAtTip}
-              />
-            ))}
-          </Box>
-        </Card>
+        {shown ? (
+          <Card sx={{ p: 0 }}>
+            <Box
+              component="ul"
+              ref={listRef}
+              aria-label={RESULTS_TITLE}
+              sx={{
+                listStyle: 'none',
+                m: 0,
+                p: 0.5,
+                '& > li + li': { borderTop: 1, borderColor: 'divider' },
+              }}
+            >
+              <Rows rows={firstShown} />
+              {olderShown.map((page) => (
+                <Rows key={page.offset} rows={page.rows} />
+              ))}
+            </Box>
+          </Card>
+        ) : null}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
           <Typography
             ref={coverageRef}
@@ -185,7 +213,7 @@ export function GlobalResults({
             color="text.secondary"
             sx={{ flex: '1 1 220px', px: 0.5, '&:focus': { outline: 'none' } }}
           >
-            {globalCoverage(type, count, done, range)}
+            {narrowed ? filteredCoverage(shown, coverage) : coverage}
           </Typography>
           {more ? (
             <Button
@@ -194,14 +222,20 @@ export function GlobalResults({
               aria-disabled={loading || undefined}
               sx={{ minHeight: 44 }}
             >
-              {loading ? 'Loading…' : 'Show older'}
+              {loading
+                ? 'Loading…'
+                : narrowed
+                  ? 'Look further'
+                  : order === 'oldest'
+                    ? 'Show newer'
+                    : 'Show older'}
             </Button>
           ) : null}
         </Box>
         {olderError ? (
           <ErrorState
             compact
-            title="Couldn't load older transactions."
+            title={`Couldn't load ${order === 'oldest' ? 'newer' : 'older'} transactions.`}
             error={olderError}
             onRetry={() => void showOlder()}
           />

@@ -2,8 +2,10 @@
  * Transactions on Qortal on the strict mock world: results at once
  * (Payments, the latest 1,000 blocks), every search confirmed with a block
  * range and 20 rows, what waits for a block apart, the type and blocks in
- * the URL (read with appParam, written in place), "from a block", and
- * "Show older" with its live-region words and focus. Read-only.
+ * the URL (read with appParam, written in place), "from a block" with how
+ * many blocks, oldest first, the rows narrowed by text (a name matching its
+ * owner) and by reward share kind, and "Show older" with its live-region
+ * words and focus. Read-only.
  */
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
@@ -267,6 +269,78 @@ describe('Transactions on Qortal', () => {
     expect(await screen.findByText('5 older payments loaded', {}, T)).toBeInTheDocument();
     expect(within(found).getByText(/^All 45 payments in blocks/)).toBeVisible();
     expect(searches().map((p) => p.get('offset'))).toEqual(['0', '20', '40']);
+    everySearchBounded();
+    noWrites(posts);
+  });
+
+  it('reads oldest first, and from a block for as many blocks as picked', async () => {
+    const { user } = await open('?blocks=from-2640000&order=oldest');
+    const found = await results();
+    expect(
+      await within(found).findByText('All 5 payments in blocks 2,640,000–2,649,999.', {}, T)
+    ).toBeVisible();
+    expect(searches()[0].get('reverse')).toBe('false');
+    expect(screen.getByRole('combobox', { name: 'Order' })).toHaveValue('oldest');
+    const list = within(found).getByRole('list', { name: 'Confirmed transactions' });
+    const heights = [...items(list)].map((li) => li.textContent?.match(/block ([\d,]+)/)?.[1]);
+    expect(heights).toEqual(['2,640,100', '2,642,100', '2,644,100', '2,646,100', '2,648,100']);
+
+    const field = screen.getByRole('textbox', { name: 'From block' });
+    expect(field).toHaveValue('2640000');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'How many blocks' }), '1000');
+    await user.click(screen.getByRole('button', { name: 'Show' }));
+    expect(screen.getByTestId('at')).toHaveTextContent(
+      '?blocks=from-2640000&order=oldest&span=1000|REPLACE'
+    );
+    expect(
+      await within(await results()).findByText(
+        'The only payment in blocks 2,640,000–2,640,999.',
+        {},
+        T
+      )
+    ).toBeVisible();
+
+    await user.clear(field);
+    await user.type(field, '2642100');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'How many blocks' }), '1');
+    await user.click(screen.getByRole('button', { name: 'Show' }));
+    expect(
+      await within(await results()).findByText('The only payment in block 2,642,100.', {}, T)
+    ).toBeVisible();
+    const one = searches().find((p) => p.get('startBlock') === '2642100');
+    expect(one?.get('blockLimit')).toBe('1');
+    everySearchBounded();
+  });
+
+  it('narrows the rows to a kind of reward share, and to those that mention a name', async () => {
+    const { user, posts } = await open('?type=REWARD_SHARE&blocks=from-1371000&order=oldest');
+    const found = await results();
+    const list = await within(found).findByRole('list', { name: 'Confirmed transactions' }, T);
+    expect(items(list)).toHaveLength(5);
+
+    const kind = screen.getByRole('combobox', { name: 'Reward share kind' });
+    await user.selectOptions(kind, 'self');
+    expect(screen.getByTestId('at')).toHaveTextContent('share=self');
+    await waitFor(() => expect(items(list)).toHaveLength(2));
+    expect(within(found).getByText(/^Showing 2 that match, out of all 5 /)).toBeVisible();
+    await user.selectOptions(kind, 'removal');
+    await waitFor(() => expect(items(list)).toHaveLength(1));
+    await user.selectOptions(kind, 'any');
+    await waitFor(() => expect(items(list)).toHaveLength(5));
+
+    // A name: the rows of the account that owns it, though no row holds the name.
+    await user.type(screen.getByRole('textbox', { name: 'Only rows with' }), 'Leo Learner');
+    await waitFor(() => expect(screen.getByTestId('at')).toHaveTextContent('find=Leo+Learner'), T);
+    // The list goes while nothing matches (before the name's owner is known): read it again.
+    const named = () => within(found).getByRole('list', { name: 'Confirmed transactions' });
+    await waitFor(() => expect(items(named())).toHaveLength(2), T);
+    for (const li of items(named())) expect(li.textContent).toMatch(/Leo Learner/);
+    // Text no row mentions: none, and the line says so.
+    await user.click(screen.getByRole('button', { name: 'Clear what the rows must mention' }));
+    await user.type(screen.getByRole('textbox', { name: 'Only rows with' }), 'nothing like it');
+    expect(await within(found).findByText(/^None match, out of all 5 /, {}, T)).toBeVisible();
+    expect(within(found).queryByRole('list', { name: 'Confirmed transactions' })).toBeNull();
+    expect(fetchCallsFor('/names/').some((call) => call.includes('Leo%20Learner'))).toBe(true);
     everySearchBounded();
     noWrites(posts);
   });

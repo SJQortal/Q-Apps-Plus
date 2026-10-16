@@ -41,6 +41,17 @@ describe('rangeFor', () => {
     expect(rangeFor({ kind: 'latest', blocks: 1000 }, 400)).toEqual({ start: 1, limit: 400 });
     expect(rangeFor({ kind: 'from', start: 0 }, 400).start).toBe(1);
   });
+
+  it('covers as many blocks from a block as picked, just that one at least', () => {
+    expect(rangeFor({ kind: 'from', start: 2_401_221, span: 1 }, 2_757_500)).toEqual({
+      start: 2_401_221,
+      limit: 1,
+    });
+    expect(rangeFor({ kind: 'from', start: 2_757_450, span: 100 }, 2_757_500)).toEqual({
+      start: 2_757_450,
+      limit: 51,
+    });
+  });
 });
 
 describe('getGlobalTx', () => {
@@ -86,6 +97,20 @@ describe('getGlobalTx', () => {
     expect(getQueryState(globalTxKey(['PAYMENT'], old, 20)).status).toBe('idle');
     expect(peekQuery(globalTxKey(['PAYMENT'], { start: 1003, limit: 1000 }, 0))).toBeDefined();
     expect(peekQuery(globalTxKey(['PAYMENT'], { start: 1001, limit: 10_000 }, 0))).toBeDefined();
+  });
+});
+
+describe('getGlobalTx oldest first', () => {
+  it('asks Core in the chain’s order, under a key of its own', async () => {
+    mockFetchRoute('/transactions/search', []);
+    const range = { start: 2, limit: 1 };
+    await getGlobalTx(['REWARD_SHARE'], range, 0, { order: 'oldest' });
+    expect(params(fetchCallsFor('/transactions/search')[0]).get('reverse')).toBe('false');
+    expect(globalTxKey(['REWARD_SHARE'], range, 0, 'oldest')).toBe(
+      'xglobal:REWARD_SHARE:2:1:oldest:0'
+    );
+    expect(peekQuery(globalTxKey(['REWARD_SHARE'], range, 0, 'oldest'))).toBeDefined();
+    expect(peekQuery(globalTxKey(['REWARD_SHARE'], range, 0))).toBeUndefined();
   });
 });
 
