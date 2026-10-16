@@ -805,6 +805,18 @@ export function sharedCounterparties(
   return { rows, atLeftOut: ats.size, busyLeftOut };
 }
 
+/**
+ * The accounts whose payer band In common reads: every shared first payer
+ * and every shared counterparty, so a busy one is left out (and counted)
+ * wherever it ranks, never only among the first ones listed.
+ */
+export function bandAddressesOf(
+  firstPayers: readonly SameFirstPayer[],
+  shared: Pick<SharedCounterparties, 'rows'>
+): string[] {
+  return [...new Set([...firstPayers.map((p) => p.from), ...shared.rows.map((r) => r.address)])];
+}
+
 /** "A → K → B", "Both paid K", "K paid A and C". */
 export function counterpartyParts(row: SharedCounterparty, total: number): TxPart[] {
   const { relation } = row;

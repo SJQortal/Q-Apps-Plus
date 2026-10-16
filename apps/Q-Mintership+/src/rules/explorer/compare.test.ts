@@ -6,6 +6,7 @@ import type { MadeBy } from '../../data/explorer/madeBy';
 import type { PaymentPage } from '../../data/explorer/money';
 import { MINTER_GROUP_ID } from '../../data/constants';
 import {
+  bandAddressesOf,
   checkedNoneLine,
   compareText,
   counterpartyCounts,
@@ -412,6 +413,35 @@ describe('in common', () => {
     expect(leftOutLine({ atLeftOut: 0, busyLeftOut: 0 })).toBeNull();
     // One account's pages alone share nothing.
     expect(sharedCounterparties([a, side(B, 'B')]).rows).toEqual([]);
+  });
+
+  it('reads the band of every shared payer, so a busy one is left out wherever it ranks', () => {
+    const others = Array.from(
+      { length: 70 },
+      (_, k) => `Q${B58[k % 58]}${B58[Math.floor(k / 58)]}${'z'.repeat(31)}`
+    );
+    const paidAll = (from: string, height: number) =>
+      page(others.map((other, k) => pay(from, other, height + k)));
+    const sides = [
+      side(A, 'A', { sent: paidAll(A, 1_000_000), recv: page([]), assets: noAssets }),
+      side(B, 'B', { sent: paidAll(B, 1_100_000), recv: page([]), assets: noAssets }),
+    ];
+    const first = [
+      { from: H, accounts: [] },
+      { from: others[3], accounts: [] },
+    ];
+    const all = sharedCounterparties(sides);
+    expect(all.rows).toHaveLength(70);
+    const toRead = bandAddressesOf(first, all);
+    // Each once: the first payers, then every shared counterparty, not only the first 40.
+    expect(toRead).toHaveLength(71);
+    expect(toRead[0]).toBe(H);
+    expect(new Set(toRead)).toEqual(new Set([H, ...others]));
+    // The 56th listed is busy: left out and counted once its band is in.
+    const busy = all.rows[55].address;
+    const shared = sharedCounterparties(sides, { [busy]: 1000 });
+    expect(shared.rows).toHaveLength(69);
+    expect(shared.busyLeftOut).toBe(1);
   });
 
   it('names the accounts when not all of them share a counterparty', () => {
