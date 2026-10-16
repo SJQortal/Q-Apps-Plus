@@ -7,6 +7,7 @@
  */
 import { useId, useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
+import { visuallyHidden } from '@mui/utils';
 import { ExpandChevron } from '../../../../components/common/ExpandChevron';
 import { SmoothReveal } from '../../../../components/common/SmoothReveal';
 import { TxSentence } from '../../../../components/explorer/TxSentence';
@@ -60,11 +61,15 @@ export function NameHistoryToggle({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-controls={id}
-        aria-label={`${open ? 'Hide' : 'Show'} the history of “${visibleName(name)}” (${count} ${count === 1 ? 'transaction' : 'transactions'})`}
         endIcon={<ExpandChevron open={open} />}
         sx={{ alignSelf: 'flex-start', minHeight: 44, fontSize: 14, px: 1, ml: -1 }}
       >
-        History · {count}
+        {/* Its spoken name starts with what it shows (WCAG's label in name);
+            aria-expanded says whether it is open. */}
+        History · {count}{' '}
+        <Box component="span" sx={visuallyHidden}>
+          {`of “${visibleName(name)}”`}
+        </Box>
       </Button>
       <Box id={id}>
         <SmoothReveal open={open}>

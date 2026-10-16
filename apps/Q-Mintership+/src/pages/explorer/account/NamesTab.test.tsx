@@ -217,14 +217,11 @@ describe('Names: each name opens to its history', () => {
     ).toHaveAttribute('href', explorerAccountPath(ADDR.nominator));
     expect(readText(row)).toContain('Now owned by Nora Nominator');
     // Closed at first; one press opens its three transactions.
-    const toggle = within(row).getByRole('button', {
-      name: 'Show the history of “Spare Room” (3 transactions)',
-    });
+    const toggle = within(row).getByRole('button', { name: 'History · 3 of “Spare Room”' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(toggle).toHaveTextContent('History · 3');
     await user.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(toggle).toHaveAccessibleName('Hide the history of “Spare Room” (3 transactions)');
     const history = within(row).getByRole('list', { name: 'The history of “Spare Room”' });
     const rows = within(history).getAllByRole('listitem');
     expect(rows).toHaveLength(3);
@@ -252,11 +249,7 @@ describe('Names: each name opens to its history', () => {
       .getAllByRole('listitem')
       .find((li) => li.querySelector('bdi')?.textContent === 'Spare Room') as HTMLElement;
     await user.click(
-      await within(row).findByRole(
-        'button',
-        { name: 'Show the history of “Spare Room” (1 transaction)' },
-        T
-      )
+      await within(row).findByRole('button', { name: 'History · 1 of “Spare Room”' }, T)
     );
     const history = within(row).getByRole('list', { name: 'The history of “Spare Room”' });
     expect(readText(within(history).getAllByRole('listitem')[0])).toMatch(
@@ -306,7 +299,7 @@ describe('Names: each name opens to its history', () => {
     const names = await region(/^Names \(\d+\)$/);
     const alert = await within(names).findByRole('alert', {}, T);
     expect(alert).toHaveTextContent(/^Couldn't load its name history\./);
-    expect(within(names).queryByRole('button', { name: /^Show the history/ })).toBeNull();
+    expect(within(names).queryByRole('button', { name: /^History ·/ })).toBeNull();
     fail = false;
     await user.click(within(alert).getByRole('button', { name: 'Retry' }));
     expect(await region('Names it had (1)')).toBeInTheDocument();
