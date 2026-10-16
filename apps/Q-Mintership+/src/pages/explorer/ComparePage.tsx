@@ -68,6 +68,8 @@ import { TimelineSection } from './compare/TimelineSection';
 import { COMPARE_SCOPE, useCompareData, type CompareData } from './compare/useCompareData';
 import { EXPLORER_NEUTRAL_LINE } from './explorerWords';
 
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
 const nameOf = (address: string) => {
   const name = peekQuery<string | null>(`name:${address}`);
   return name ? visibleName(name) : name;
@@ -187,7 +189,7 @@ async function buildText(data: CompareData, sideFacts: SideFacts[]): Promise<str
     return `${row.label}: ${row.cells
       .map(
         (cell, i) =>
-          `${columns[i]} ${cell ? (cell.failed ? 'couldn’t read' : cellText(cell, nameOf)) : 'not read'}`
+          `${columns[i]} ${cell ? (cell.failed ? lowerFirst(cellText(cell)) : cellText(cell, nameOf)) : 'not read'}`
       )
       .join('; ')}`;
   });
@@ -259,7 +261,8 @@ export default function ComparePage() {
     return [
       {
         account,
-        primary: data.primary[i].isError ? null : data.primary[i].data,
+        // A failed read stays unread (`failed` says so), never "no primary name".
+        primary: data.primary[i].data,
         names: data.names[i].data,
         first: data.first[i].data,
         balance: data.balance[i].data,

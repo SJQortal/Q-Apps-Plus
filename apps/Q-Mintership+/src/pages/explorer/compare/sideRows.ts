@@ -42,11 +42,20 @@ export interface SideRow {
 
 /** The reads Side by side needs, beyond the account itself. */
 export type SideRead =
-  'names' | 'first' | 'balance' | 'status' | 'links' | 'online' | 'lastSent' | 'groups' | 'qdn';
+  | 'primary'
+  | 'names'
+  | 'first'
+  | 'balance'
+  | 'status'
+  | 'links'
+  | 'online'
+  | 'lastSent'
+  | 'groups'
+  | 'qdn';
 
 export interface SideFacts {
   account: AccountInfo;
-  /** Primary name (null: none; undefined: reading). */
+  /** Primary name (null: none; undefined: reading, or its read failed). */
   primary: string | null | undefined;
   names?: NamesOf;
   first?: FirstSeen;
@@ -82,9 +91,15 @@ const unread = (f: SideFacts, read: SideRead): SideCell | undefined =>
 
 function namesCell(f: SideFacts): SideCell | undefined {
   if (!f.names) return unread(f, 'names');
-  if (f.primary === undefined) return undefined;
   const count = f.names.names.length;
   const more = f.names.truncated ? '+' : '';
+  // No names at all is a fact of its own: no primary name to read.
+  if (!count && !more) return plain('No registered name');
+  const counted = `${formatCount(count)}${more} ${count === 1 && !more ? 'name' : 'names'}`;
+  if (f.primary === undefined)
+    return f.failed?.primary
+      ? { ...failedCell(f), text: `Couldn’t read the primary name (${counted})` }
+      : undefined;
   if (f.primary) {
     const others = Math.max(0, count - 1);
     return {
@@ -93,11 +108,7 @@ function namesCell(f: SideFacts): SideCell | undefined {
       after: others || more ? ` and ${formatCount(others)}${more} more` : undefined,
     };
   }
-  return count
-    ? plain(
-        `No primary name (${formatCount(count)}${more} ${count === 1 && !more ? 'name' : 'names'})`
-      )
-    : plain('No registered name');
+  return plain(`No primary name (${counted})`);
 }
 
 function firstQortCell(f: SideFacts): SideCell | undefined {
@@ -201,7 +212,7 @@ export function sideRows(facts: readonly SideFacts[]): SideRow[] {
       f.groups ? plain(formatCount(f.groups.length)) : unread(f, 'groups')
     ),
     row('qdn', 'QDN publishes', (f) => {
-      if (f.primary === undefined) return undefined;
+      if (f.primary === undefined) return unread(f, 'primary');
       if (f.primary === null) return plain('No primary name');
       if (!f.qdn) return unread(f, 'qdn');
       const count = `${formatCount(f.qdn.resources.length)}${f.qdn.capped ? '+' : ''}`;

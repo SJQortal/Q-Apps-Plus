@@ -551,4 +551,26 @@ describe('Compare: reads that fail', () => {
     await waitFor(() => expect(side).toHaveTextContent('BalanceSame for all: 12.5 QORT'), T);
     expect(within(side).queryByText(/^Couldn’t read/)).toBeNull();
   });
+
+  it('a primary name that couldn’t be read is said, never “No primary name”', async () => {
+    let broken = { on: false };
+    const { user } = await open(explorerComparePath([ADDR.kicked, ADDR.left]), (world) => {
+      broken = breakReads(world, (url) => url.pathname === `/names/primary/${ADDR.left}`);
+    });
+    const side = await region('Side by side');
+    await waitFor(
+      () =>
+        expect(side).toHaveTextContent(/NamesA.*BCouldn’t read the primary name \(\d+ names?\)/),
+      T
+    );
+    expect(side).toHaveTextContent(/QDN publishesA.*BCouldn’t read/);
+    expect(side).not.toHaveTextContent('No primary name');
+    const line = await within(side).findByText(/^Couldn’t read B’s primary name\./, {}, T);
+    expect(line).toHaveAttribute('role', 'status');
+
+    broken.on = false;
+    await user.click(within(side).getByRole('button', { name: 'Retry Side by side' }));
+    await waitFor(() => expect(within(side).queryByText(/^Couldn’t read/)).toBeNull(), T);
+    expect(side).not.toHaveTextContent(/Couldn’t read the primary name/);
+  });
 });

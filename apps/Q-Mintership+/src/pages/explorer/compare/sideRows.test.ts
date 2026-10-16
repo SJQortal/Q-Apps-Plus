@@ -171,4 +171,23 @@ describe('side by side', () => {
     // Still reading (nothing failed): undefined, as before.
     expect(row(sideRows([facts({ balance: undefined })]), 'balance').cells[0]).toBeUndefined();
   });
+
+  it('a primary name that couldn’t be read is never “No primary name”', () => {
+    const rows = sideRows([
+      facts({ primary: undefined, qdn: undefined, failed: { primary: true } }),
+      facts({ primary: undefined, qdn: undefined, names: { names: [], truncated: false } }),
+    ]);
+    const names = row(rows, 'names').cells;
+    expect(names[0]).toMatchObject({
+      text: 'Couldn’t read the primary name (3 names)',
+      failed: true,
+    });
+    // Owning no name says there is no primary name to read.
+    expect(names[1]).toMatchObject({ text: 'No registered name' });
+    const qdn = row(rows, 'qdn').cells;
+    expect(qdn[0]).toMatchObject({ text: 'Couldn’t read', failed: true });
+    // Still reading the second: no value yet.
+    expect(qdn[1]).toBeUndefined();
+    expect(rows.flatMap((r) => r.cells).map((c) => c?.text)).not.toContain('No primary name');
+  });
 });

@@ -72,6 +72,7 @@ export interface CompareRead {
 
 /** What each of Side by side's reads is, in words after the account's letter. */
 const SIDE_READ_WORDS: ReadonlyArray<[SideRead, string]> = [
+  ['primary', 'primary name'],
   ['names', 'names'],
   ['first', 'first transactions'],
   ['balance', 'balance'],
@@ -85,6 +86,7 @@ const SIDE_READ_WORDS: ReadonlyArray<[SideRead, string]> = [
 /** Side by side's reads for the account at `i`. */
 function sideReads(data: CompareData, i: number): Record<SideRead, CompareRead> {
   return {
+    primary: data.primary[i],
     names: data.names[i],
     first: data.first[i],
     balance: data.balance[i],
