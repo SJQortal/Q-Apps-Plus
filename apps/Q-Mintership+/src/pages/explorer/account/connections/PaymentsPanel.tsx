@@ -319,6 +319,14 @@ export function PaymentsPanel({
           ) : null}
         </Box>
       ) : null}
+      {data.assets.isError && data.assets.data === undefined ? (
+        <ErrorState
+          compact
+          title="Couldn’t read its asset transfers and multi-payments."
+          error={data.assets.error}
+          onRetry={() => void data.assets.refetch()}
+        />
+      ) : null}
       {older === 'failed' ? (
         <ErrorState
           compact

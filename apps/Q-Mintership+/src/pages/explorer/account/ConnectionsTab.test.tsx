@@ -335,6 +335,40 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
     ).toBeInTheDocument();
   });
 
+  it('a part that couldn’t be read is named with Retry, and left out of what was checked', async () => {
+    const { user } = await open(ADDR.newcomer, (world) =>
+      mockFetchRoute('/transactions/search', (url: URL) =>
+        url.searchParams.getAll('txType').includes('TRANSFER_ASSET')
+          ? new Response('{"error":5,"message":"repository issue"}', { status: 500 })
+          : answerCore(world, url.pathname, url.searchParams)?.body
+      )
+    );
+    const writeText = vi.fn(async (text: string) => void text);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const recorded = await region('Recorded between them');
+    expect(
+      await within(recorded).findByText(
+        /^Couldn’t read its asset transfers and multi-payments\./,
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(within(recorded).getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    // Payments: not claimed as none found.
+    expect(
+      await screen.findByText(
+        'Also checked, nothing found: level moves, a sponsor, accounts it sponsored, minting with another account now, name sales, where its first QORT came from.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Copy findings' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled(), T);
+    expect(writeText.mock.calls[0][0]).toContain(
+      '- Couldn’t read its asset transfers and multi-payments.'
+    );
+  });
+
   it('Core’s own report only on request, with what its numbers count', async () => {
     const { user } = await open(SPONSOR.address);
     const report = await region('Core’s own report');

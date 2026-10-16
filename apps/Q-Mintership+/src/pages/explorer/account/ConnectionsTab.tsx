@@ -58,7 +58,7 @@ import { InCommonSection } from './connections/InCommon';
 import { PaymentsPanel } from './connections/PaymentsPanel';
 import { useConnections, useRecorded } from './connections/useConnections';
 import { useInCommon } from './connections/useInCommon';
-import { blocksLine, textOf, whenLine } from './connections/words';
+import { blocksLine, textOf, unreadWords, whenLine } from './connections/words';
 import { MintershipLinks } from './MintershipLinks';
 
 export interface ConnectionsTabProps {
@@ -202,13 +202,14 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const paymentsPending =
     data.sent.isLoading || data.recv.isLoading || data.sent.isError || data.recv.isError;
   const paymentsAny = Boolean(data.flowsSent?.length || data.flowsReceived?.length);
+  const assetsFailed = data.failed.includes('assets');
+  const showPayments = paymentsPending || paymentsAny || assetsFailed;
   const showRecorded =
     data.links.isLoading ||
     (data.links.isError && !data.links.data) ||
     linkFindings > 0 ||
     sponsees !== null ||
-    paymentsPending ||
-    paymentsAny;
+    showPayments;
 
   const funding = common.first.data?.funding ?? null;
   const sponsor = common.sponsor;
@@ -245,6 +246,8 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
             : undefined
         )
       );
+    // What isn't above was not read: never "none found".
+    if (data.failed.length) coverage.push(`Couldn’t read ${unreadWords(data.failed)}.`);
     const commonLines: FindingLine[] = [];
     if (funding)
       commonLines.push({
@@ -333,7 +336,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
               <Rows label="Names bought or sold" rows={names.map(row)} />
             </Part>
           ) : null}
-          {paymentsPending || paymentsAny ? (
+          {showPayments ? (
             <Box ref={setPaymentsNode}>
               <Part title="Payments">
                 <PaymentsPanel
