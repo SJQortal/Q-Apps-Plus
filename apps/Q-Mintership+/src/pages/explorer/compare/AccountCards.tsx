@@ -49,6 +49,8 @@ function AccountCard({
   const explored = data.explored[index];
   const account = data.accounts[index];
   const { label } = useDisplayName(address, account ? undefined : null);
+  // Each card's copy button says whose address it copies.
+  const addressLabel = `${label}’s address (${letter})`;
   const status = data.status[index].data;
   const minting = data.mintingNow[index];
   const chips = account
@@ -127,7 +129,11 @@ function AccountCard({
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
         <LetterBadge letter={letter} accent={accent} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          {account ? <PersonChip address={address} size={40} /> : <AddressText address={address} />}
+          {account ? (
+            <PersonChip address={address} size={40} />
+          ) : (
+            <AddressText address={address} label={addressLabel} />
+          )}
         </Box>
         <Tooltip title="Remove from this comparison">
           <IconButton
@@ -139,7 +145,7 @@ function AccountCard({
           </IconButton>
         </Tooltip>
       </Box>
-      {account ? <AddressText address={address} /> : null}
+      {account ? <AddressText address={address} label={addressLabel} /> : null}
       {body}
     </Box>
   );

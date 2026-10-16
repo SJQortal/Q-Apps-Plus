@@ -261,8 +261,19 @@ function StackedAvatar({
   );
 }
 
-/** A short address with a copy button. */
-export function AddressText({ address, full = false }: { address: string; full?: boolean }) {
+/**
+ * A short address with a copy button. `label` names whose address it is
+ * ("Alice's address (A)"), so several on one screen are told apart.
+ */
+export function AddressText({
+  address,
+  full = false,
+  label,
+}: {
+  address: string;
+  full?: boolean;
+  label?: string;
+}) {
   const [copied, setCopied] = useState(false);
   return (
     <Box
@@ -282,7 +293,15 @@ export function AddressText({ address, full = false }: { address: string; full?:
       <Tooltip title={copied ? 'Copied' : 'Copy address'}>
         <IconButton
           size="small"
-          aria-label={copied ? 'Address copied' : 'Copy address'}
+          aria-label={
+            label
+              ? copied
+                ? `${label} copied`
+                : `Copy ${label}`
+              : copied
+                ? 'Address copied'
+                : 'Copy address'
+          }
           onClick={async () => {
             if (await copyText(address)) {
               setCopied(true);

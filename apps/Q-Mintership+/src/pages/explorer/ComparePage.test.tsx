@@ -394,6 +394,18 @@ describe('Compare: four accounts', () => {
 });
 
 describe('Compare: the link', () => {
+  it('each card’s copy button says whose address it copies', async () => {
+    await open(explorerComparePath([ADDR.kicked, ADDR.left]));
+    const cards = screen.getByRole('list', { name: 'Accounts compared' });
+    expect(
+      await within(cards).findByRole('button', { name: 'Copy Kit Kicked’s address (A)' }, T)
+    ).toBeInTheDocument();
+    expect(
+      await within(cards).findByRole('button', { name: 'Copy Lou Left’s address (B)' }, T)
+    ).toBeInTheDocument();
+    expect(within(cards).queryByRole('button', { name: 'Copy address' })).toBeNull();
+  });
+
   it('leaves out what isn’t a valid address, an AT and a repeat, and says so', async () => {
     await open(
       `/explorer/compare/${ADDR.kicked}/nonsense/${ADDR.kicked}/${AT_ADDRESS}/${ADDR.left}`
