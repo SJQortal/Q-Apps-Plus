@@ -63,9 +63,9 @@ function markLater(section: HTMLElement) {
  * stays still when it is re-sorted or filtered (markShown).
  *
  * With an `accent` (a theme colour, e.g. Decisions' sectionAccents.ts) it is
- * a panel of its own: lightly tinted in that colour, edged in it on the
- * left, under a larger title with the icon in the colour and the count in a
- * pill. Its text stays the theme's text colour. On phones the panel reaches
+ * a panel of its own: lightly tinted in that colour, softly edged in it on
+ * the left, its cards outlined in it, under a larger title with the icon in
+ * the colour and the count in a pill. Its text stays the theme's text colour. On phones the panel reaches
  * a little into the page's margin, so the cards in it lose almost no width.
  */
 export function Section({
@@ -111,7 +111,12 @@ export function Section({
               borderRadius: `${theme.shape.borderRadius}px`,
               bgcolor: alpha(accent, theme.palette.mode === 'dark' ? 0.09 : 0.07),
               border: `1px solid ${alpha(accent, 0.32)}`,
-              borderLeft: `4px solid ${accent}`,
+              // A softer edge on the left (Simon, 2026-10-16), in the section's colour.
+              borderLeft: `3px solid ${alpha(accent, 0.6)}`,
+              // Its cards outlined in its colour, so cards of the same kind read apart.
+              '& > article, & > [data-card]': {
+                borderColor: alpha(accent, theme.palette.mode === 'dark' ? 0.5 : 0.45),
+              },
             })
           : null,
       ]}
