@@ -17,25 +17,9 @@ import { formatCount, formatDate } from '../../../../utils/format';
 import { statusSentence } from '../../../person/personWords';
 import type { MinterStory } from './useMinterStory';
 import { nominationLine, roundsLine } from './mintershipWords';
-import { Note } from './parts';
-import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
+import { Fact, Note } from './parts';
+import { QortSummaries } from './QortSummaries';
 import { NodeOnlineValue } from '../../../../components/explorer/NodeOnline';
-
-function Fact({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <Box sx={FIELD_BLOCK_SX}>
-      <Typography component="dt" variant="body2" color="text.secondary">
-        {label}
-      </Typography>
-      <Typography
-        component="dd"
-        sx={{ m: 0, fontWeight: 700, fontSize: 18, fontVariantNumeric: 'tabular-nums' }}
-      >
-        {value}
-      </Typography>
-    </Box>
-  );
-}
 
 export function StandingSection({
   address,
@@ -103,6 +87,8 @@ export function StandingSection({
             <Fact label="Join request" value="Sent" />
           ) : null}
         </Box>
+        {/* QORT minted, purchased / sold, received / sent (Simon, 2026-10-17). */}
+        <QortSummaries address={address} />
         {actions}
       </>
     );

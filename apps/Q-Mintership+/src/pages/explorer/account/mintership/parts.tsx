@@ -14,6 +14,24 @@ import { FOCUSABLE_ROW_SX, useShowMore } from '../names/useShowMore';
 import { alsoChecked, namesLead, NO_NAME_RECORDS } from './mintershipWords';
 import { NameWithAvatar } from '../../../../components/explorer/NameWithAvatar';
 import { MarkedName } from '../../../../components/common/MarkedName';
+import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
+
+/** One of a profile's facts: its label, and its value in bold. */
+export function Fact({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <Box sx={FIELD_BLOCK_SX}>
+      <Typography component="dt" variant="body2" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography
+        component="dd"
+        sx={{ m: 0, fontWeight: 700, fontSize: 18, fontVariantNumeric: 'tabular-nums' }}
+      >
+        {value}
+      </Typography>
+    </Box>
+  );
+}
 
 /** Rows a list shows before "Show more". */
 export const SHOWN_STEP = 20;

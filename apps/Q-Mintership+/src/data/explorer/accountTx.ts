@@ -94,13 +94,14 @@ function searchPath(
   address: string,
   types: readonly string[],
   offset: number,
-  view: AccountTxView
+  view: AccountTxView,
+  limit = ACCOUNT_TX_PAGE
 ): string {
   return `/transactions/search?${query({
     address,
     txType: types.length ? types : undefined,
     confirmationStatus: 'CONFIRMED',
-    limit: ACCOUNT_TX_PAGE,
+    limit,
     offset,
     reverse: view.order !== 'oldest',
   })}`;
@@ -110,9 +111,10 @@ async function readPage(
   address: string,
   types: readonly string[],
   offset: number,
-  view: AccountTxView
+  view: AccountTxView,
+  limit = ACCOUNT_TX_PAGE
 ): Promise<TxRow[]> {
-  const body = await getJson<unknown>(searchPath(address, types, offset, view));
+  const body = await getJson<unknown>(searchPath(address, types, offset, view, limit));
   return (Array.isArray(body) ? body : []).filter(
     (row): row is TxRow =>
       Boolean(row) && typeof row === 'object' && typeof (row as TxRow).signature === 'string'
@@ -160,12 +162,16 @@ export function mergeNewest(previous: AccountTxList, page: TxRow[]): AccountTxLi
   };
 }
 
-/** An older page appended to what is held. Exported for tests. */
-export function mergeOlder(previous: AccountTxList, page: TxRow[]): AccountTxList {
+/** An older page (of `limit` rows asked) appended to what is held. Exported for tests. */
+export function mergeOlder(
+  previous: AccountTxList,
+  page: TxRow[],
+  limit = ACCOUNT_TX_PAGE
+): AccountTxList {
   return {
     rows: unique([...previous.rows, ...page]),
     nextOffset: previous.nextOffset + page.length,
-    done: page.length < ACCOUNT_TX_PAGE,
+    done: page.length < limit,
     checkedAt: previous.checkedAt,
   };
 }
@@ -279,13 +285,15 @@ async function nextWindowPage(
  * One account's list for `types` (none = all), newest first. The first call
  * reads the newest 100; later calls once the list is stale (or `force`, a
  * Refresh) read the newest page again and merge it; `older` reads the next
- * older page and appends it. With a `view` (oldest first, a range of
- * blocks), `older` reads the next page on, and a reload starts over.
+ * older page and appends it (`pageSize` rows, 100 by default: reading a
+ * whole history asks for 1,000 at a time, as Core answers 1,000 nearly as
+ * fast as 100). With a `view` (oldest first, a range of blocks), `older`
+ * reads the next page on, and a reload starts over.
  */
 export function getAccountTx(
   address: string,
   types: readonly string[],
-  options: { force?: boolean; older?: boolean; view?: AccountTxView } = {}
+  options: { force?: boolean; older?: boolean; view?: AccountTxView; pageSize?: number } = {}
 ): Promise<AccountTxList> {
   const view = options.view ?? {};
   const key = accountTxKey(address, types, view);
@@ -304,7 +312,12 @@ export function getAccountTx(
       }
       if (options.older && previous) {
         if (previous.done) return previous;
-        return mergeOlder(previous, await readPage(address, types, previous.nextOffset, view));
+        const limit = Math.min(1000, Math.max(1, options.pageSize ?? ACCOUNT_TX_PAGE));
+        return mergeOlder(
+          previous,
+          await readPage(address, types, previous.nextOffset, view, limit),
+          limit
+        );
       }
       const page = await readPage(address, types, 0, view);
       return previous && isDefaultView(view) ? mergeNewest(previous, page) : fromFirstPage(page);
