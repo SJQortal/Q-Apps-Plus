@@ -19,20 +19,40 @@ import { decisionPath, nominatePath } from '../../routes/paths';
 import { formatCount, formatDate } from '../../utils/format';
 import { AdminRoleAction } from '../decisions/AdminRoleAction';
 import { statusSentence } from './personWords';
+import { ExplainTip } from '../../components/common/ExplainTip';
+import {
+  ADMIN_EXPLANATION,
+  APPROVED_INVITE_EXPLANATION,
+  BANNED_EXPLANATION,
+  FORMER_EXPLANATION,
+  JOIN_REQUEST_EXPLANATION,
+  MEMBER_EXPLANATION,
+  NOMINATED_EXPLANATION,
+  OUTSIDE_EXPLANATION,
+} from '../../constants/chipExplanations';
 
 const STATUS_CHIP: Record<
   Exclude<StatusKind, 'outsideHub' | 'signedOut'>,
-  { label: string; color: ChipProps['color']; filled?: boolean }
+  { label: string; color: ChipProps['color']; filled?: boolean; explain: string }
 > = {
-  admin: { label: 'Minter Admin', color: 'primary', filled: true },
-  memberNominator: { label: 'MINTER member', color: 'success', filled: true },
-  member: { label: 'MINTER member', color: 'success', filled: true },
-  formerBanned: { label: 'Banned from MINTER', color: 'error' },
-  approvedInvite: { label: 'Approved: can join now', color: 'success' },
-  nominated: { label: 'Nominated', color: 'primary' },
-  formerKicked: { label: 'Former member', color: 'default' },
-  formerLeft: { label: 'Former member', color: 'default' },
-  newcomer: { label: 'Not in MINTER', color: 'default' },
+  admin: { label: 'Minter Admin', color: 'primary', filled: true, explain: ADMIN_EXPLANATION },
+  memberNominator: {
+    label: 'MINTER member',
+    color: 'success',
+    filled: true,
+    explain: MEMBER_EXPLANATION,
+  },
+  member: { label: 'MINTER member', color: 'success', filled: true, explain: MEMBER_EXPLANATION },
+  formerBanned: { label: 'Banned from MINTER', color: 'error', explain: BANNED_EXPLANATION },
+  approvedInvite: {
+    label: 'Approved: can join now',
+    color: 'success',
+    explain: APPROVED_INVITE_EXPLANATION,
+  },
+  nominated: { label: 'Nominated', color: 'primary', explain: NOMINATED_EXPLANATION },
+  formerKicked: { label: 'Former member', color: 'default', explain: FORMER_EXPLANATION },
+  formerLeft: { label: 'Former member', color: 'default', explain: FORMER_EXPLANATION },
+  newcomer: { label: 'Not in MINTER', color: 'default', explain: OUTSIDE_EXPLANATION },
 };
 
 function Fact({ label, value }: { label: string; value: string }) {
@@ -162,15 +182,20 @@ export function PersonHero({
       <AddressText address={address} full />
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-        <LevelBadge level={person.level} />
-        <ToneChip
-          size="small"
-          label={chip.label}
-          color={chip.color}
-          variant={chip.filled ? 'filled' : 'outlined'}
-        />
+        {/* Each chip says what it means on hover, a tap or focus (ExplainTip). */}
+        <LevelBadge level={person.level} explained />
+        <ExplainTip text={chip.explain} focusable>
+          <ToneChip
+            size="small"
+            label={chip.label}
+            color={chip.color}
+            variant={chip.filled ? 'filled' : 'outlined'}
+          />
+        </ExplainTip>
         {person.hasJoinRequest && !person.isMember ? (
-          <ToneChip size="small" color="success" variant="outlined" label="Join request sent" />
+          <ExplainTip text={JOIN_REQUEST_EXPLANATION} focusable>
+            <ToneChip size="small" color="success" variant="outlined" label="Join request sent" />
+          </ExplainTip>
         ) : null}
         {self ? <Chip size="small" variant="outlined" label="You" /> : null}
       </Box>

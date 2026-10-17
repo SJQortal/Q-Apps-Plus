@@ -8,6 +8,7 @@ import type { NamesOf, OnlineShare } from '../../../../data/explorer/account';
 import { formatAmount } from '../../../../rules/explorer/txWords';
 import type { MyStatus } from '../../../../rules/status';
 import { formatCount, formatRelative, formatRoughDuration } from '../../../../utils/format';
+import { PENALTY_WHY } from '../../../../constants/chipExplanations';
 
 const MONTH_YEAR = new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric' });
 
@@ -157,11 +158,12 @@ export const NOT_MINTING = 'Not minting right now.';
 // ---- notes ------------------------------------------------------------------------
 
 /**
- * "Core recorded a minting penalty of −5,000,000 blocks on this account.
- * The chain doesn't record why."
+ * "Core recorded a minting penalty of −5,000,000 blocks on this account:
+ * its self-sponsorship check …" (constants/chipExplanations.ts says what
+ * that check looked for, after the figure).
  */
 export function penaltySentence(penalty: number): string {
-  return `Core recorded a minting penalty of ${signedCount(penalty)} blocks on this account. The chain doesn't record why.`;
+  return `Core recorded a minting penalty of ${signedCount(penalty)} blocks on this account, set by its self-sponsorship check, which holds it at level 0. ${PENALTY_WHY}`;
 }
 
 /** "2 of its 29 other names have notes", "Its other name has notes". */

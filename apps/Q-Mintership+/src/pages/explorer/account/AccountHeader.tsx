@@ -20,6 +20,7 @@ import { MarkedName } from '../../../components/common/MarkedName';
 import { StatusChip } from '../../../components/explorer/StatusChip';
 import { DEV_ADMIN, useDevAdmins } from '../../../components/explorer/useDevAdmins';
 import { NameLink } from '../../../components/explorer/TxSentence';
+import { penaltyExplanation } from '../../../constants/chipExplanations';
 
 export interface AccountHeaderProps {
   address: string;
@@ -75,12 +76,21 @@ export function AccountHeader({
               alignItems: 'center',
             }}
           >
+            {/* The header's chips take the focus, to say what they mean (StatusChip). */}
             <li>
-              <StatusChip label={`Level ${account.level}`} />
+              <StatusChip label={`Level ${account.level}`} focusable />
             </li>
             {chips.map((chip) => (
               <li key={chip}>
-                <StatusChip label={chip} />
+                <StatusChip
+                  label={chip}
+                  focusable
+                  explain={
+                    chip === 'Minting penalty'
+                      ? penaltyExplanation(account.blocksMintedPenalty)
+                      : undefined
+                  }
+                />
               </li>
             ))}
           </Box>

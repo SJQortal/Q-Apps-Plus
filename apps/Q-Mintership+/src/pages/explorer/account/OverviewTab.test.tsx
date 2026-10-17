@@ -198,7 +198,7 @@ describe('Overview: penalty, notes and a busy name list', () => {
     const notes = await region('Notes');
     expect(
       within(notes).getByText(
-        "Core recorded a minting penalty of −5,000,000 blocks on this account. The chain doesn't record why."
+        'Core recorded a minting penalty of −5,000,000 blocks on this account, set by its self-sponsorship check, which holds it at level 0. Core ran that check over the whole chain in December 2022 and February 2024, looking for patterns from the days when accounts were sponsored into minting: sponsored accounts passing their rewards on to the same few accounts, sponsorships given out in bulk, minting levels moved on to other accounts. The chain doesn’t record which pattern matched.'
       )
     ).toBeInTheDocument();
     const others = await within(notes).findByRole(

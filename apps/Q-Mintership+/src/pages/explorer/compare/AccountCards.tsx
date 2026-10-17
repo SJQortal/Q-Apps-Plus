@@ -23,6 +23,7 @@ import { LetterBadge } from './letters';
 import type { CompareData } from './useCompareData';
 import { StatusChip } from '../../../components/explorer/StatusChip';
 import { DEV_ADMIN, useDevAdmins } from '../../../components/explorer/useDevAdmins';
+import { penaltyExplanation } from '../../../constants/chipExplanations';
 
 const CHIP_LIST_SX = {
   listStyle: 'none',
@@ -76,11 +77,19 @@ function AccountCard({
     body = (
       <Box component="ul" aria-label={`About ${label}`} sx={CHIP_LIST_SX}>
         <li>
-          <StatusChip label={`Level ${account.level}`} />
+          <StatusChip label={`Level ${account.level}`} focusable />
         </li>
         {chips.map((chip) => (
           <li key={chip}>
-            <StatusChip label={chip} />
+            <StatusChip
+              label={chip}
+              focusable
+              explain={
+                chip === 'Minting penalty'
+                  ? penaltyExplanation(account.blocksMintedPenalty)
+                  : undefined
+              }
+            />
           </li>
         ))}
         {unread.length ? (

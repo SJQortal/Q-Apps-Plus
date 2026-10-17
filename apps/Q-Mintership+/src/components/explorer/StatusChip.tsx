@@ -10,7 +10,9 @@
  * Every accent comes from the theme (the theme's own colours, or its info
  * blue turned to a hue: sectionAccents.ts → withHue), on a soft wash of
  * itself with an edge; the words keep 4.5:1 (utils/readable.ts). The chip's
- * words say it all: the icon and dot are decorative.
+ * words say it all: the icon and dot are decorative. What each one means is
+ * said on hover or a tap, and on focus where it takes it (`focusable`:
+ * ExplainTip, constants/chipExplanations.ts).
  */
 import type { ReactElement } from 'react';
 import { Box, Chip } from '@mui/material';
@@ -24,6 +26,21 @@ import VerifiedOutlinedIcon from '@mui/icons-material/VerifiedOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import WorkspacePremiumOutlinedIcon from '@mui/icons-material/WorkspacePremiumOutlined';
 import { readableOn } from '../../utils/readable';
+import { ExplainTip } from '../common/ExplainTip';
+import {
+  ADMIN_EXPLANATION,
+  BANNED_EXPLANATION,
+  DEV_ADMIN_EXPLANATION,
+  FORMER_EXPLANATION,
+  GROUP_ADMIN_EXPLANATION,
+  GROUP_OWNER_EXPLANATION,
+  levelExplanation,
+  MEMBER_EXPLANATION,
+  MINTING_EXPLANATION,
+  OUTSIDE_EXPLANATION,
+  penaltyExplanation,
+  PRIMARY_NAME_EXPLANATION,
+} from '../../constants/chipExplanations';
 import { statusAccent, statusKindOf, type StatusKind } from './statusKinds';
 
 const ICON: Partial<Record<StatusKind, ReactElement>> = {
@@ -58,6 +75,38 @@ function LiveDot() {
   );
 }
 
+/** What a chip of `kind` means, on its own (a plain tag says it all). */
+function explanationOf(kind: StatusKind, label: string): string | null {
+  switch (kind) {
+    case 'admin':
+      return ADMIN_EXPLANATION;
+    case 'devAdmin':
+      return DEV_ADMIN_EXPLANATION;
+    case 'member':
+      return MEMBER_EXPLANATION;
+    case 'minting':
+      return MINTING_EXPLANATION;
+    case 'banned':
+      return BANNED_EXPLANATION;
+    case 'penalty':
+      return penaltyExplanation();
+    case 'former':
+      return FORMER_EXPLANATION;
+    case 'outside':
+      return OUTSIDE_EXPLANATION;
+    case 'level':
+      return levelExplanation(Number(label.replace(/\D/g, '')));
+    case 'owner':
+      return GROUP_OWNER_EXPLANATION;
+    case 'groupAdmin':
+      return GROUP_ADMIN_EXPLANATION;
+    case 'primary':
+      return PRIMARY_NAME_EXPLANATION;
+    default:
+      return null;
+  }
+}
+
 /** How strong a level's wash is: from soft at level 0 to full at level 10. */
 function levelWash(level: number, dark: boolean): number {
   const base = dark ? 0.1 : 0.08;
@@ -67,17 +116,33 @@ function levelWash(level: number, dark: boolean): number {
 export function StatusChip({
   label,
   kind = statusKindOf(label),
+  explain,
+  focusable = false,
 }: {
   label: string;
   /** What it says (from its words when left out). */
   kind?: StatusKind;
+  /** What it means, said on hover, a tap or focus (by its kind when left out; null: nothing). */
+  explain?: string | null;
+  /** Takes the keyboard focus to say what it means (a page's header; not a list's rows). */
+  focusable?: boolean;
 }) {
+  const text = explain === undefined ? explanationOf(kind, label) : explain;
+  return (
+    <ExplainTip text={text} focusable={focusable}>
+      <ChipOf label={label} kind={kind} />
+    </ExplainTip>
+  );
+}
+
+function ChipOf({ label, kind, ...rest }: { label: string; kind: StatusKind }) {
   const theme = useTheme();
   const accent = statusAccent(theme, kind);
   const dark = theme.palette.mode === 'dark';
   if (!accent)
     return (
       <Chip
+        {...rest}
         size="small"
         variant="outlined"
         label={label}
@@ -91,6 +156,7 @@ export function StatusChip({
   const text = readableOn(theme, accent, wash);
   return (
     <Chip
+      {...rest}
       size="small"
       label={label}
       icon={kind === 'minting' ? <LiveDot /> : ICON[kind]}

@@ -321,6 +321,20 @@ describe('Person page', () => {
     ).toHaveAttribute('href', `/explorer/account/${ADDR.nominator}`);
   });
 
+  it('says what each chip in the header means, on hover (and takes the focus for it)', async () => {
+    const user = userEvent.setup();
+    await visit(ADDR.nominator, 'learner');
+    const level = (await screen.findByText('Level 6')).closest('.MuiChip-root') as HTMLElement;
+    expect(level).toHaveAttribute('tabindex', '0');
+    await user.hover(level);
+    expect(await screen.findByRole('tooltip', {}, { timeout: 2000 })).toHaveTextContent(
+      /^Minting level 6 of 10/
+    );
+    expect(level).toHaveAccessibleDescription(/^Minting level 6 of 10/);
+    const status = screen.getByText('MINTER member').closest('.MuiChip-root') as HTMLElement;
+    expect(status).toHaveAttribute('tabindex', '0');
+  });
+
   it('says so for an address that never made a transaction', async () => {
     await visit(fakeAddress('never-used'), 'learner');
     expect(await screen.findByText('No activity on Qortal yet.')).toBeInTheDocument();

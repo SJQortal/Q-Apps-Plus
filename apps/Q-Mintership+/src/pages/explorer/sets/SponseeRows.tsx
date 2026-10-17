@@ -19,6 +19,7 @@ import { formatCount, formatDate, plural } from '../../../utils/format';
 import { FOCUSABLE_ROW_SX } from '../account/names/useShowMore';
 import { StatusChip } from '../../../components/explorer/StatusChip';
 import { DEV_ADMIN, useDevAdmins } from '../../../components/explorer/useDevAdmins';
+import { penaltyExplanation } from '../../../constants/chipExplanations';
 
 export const SET_LIST_SX = {
   listStyle: 'none',
@@ -29,10 +30,10 @@ export const SET_LIST_SX = {
   gap: 1.5,
 } as const;
 
-function Fact({ label }: { label: string }) {
+function Fact({ label, explain }: { label: string; explain?: string }) {
   return (
     <li>
-      <StatusChip label={label} />
+      <StatusChip label={label} explain={explain} />
     </li>
   );
 }
@@ -101,7 +102,15 @@ export function SponseeRowItem({ row, membersKnown, picked, full, onPick }: Spon
             sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexWrap: 'wrap', gap: 0.75 }}
           >
             {facts.map((fact) => (
-              <Fact key={fact} label={fact} />
+              <Fact
+                key={fact}
+                label={fact}
+                explain={
+                  fact === 'Minting penalty' && account.data
+                    ? penaltyExplanation(account.data.blocksMintedPenalty)
+                    : undefined
+                }
+              />
             ))}
           </Box>
         ) : null}

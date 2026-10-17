@@ -7,6 +7,12 @@ import type { NominationState } from '../../rules/nomination';
 import type { DecisionPhase } from '../../rules/decision';
 import { formatCount } from '../../utils/format';
 import { readable, type Tone } from '../../utils/readable';
+import { ExplainTip } from './ExplainTip';
+import {
+  DECISION_PHASE_EXPLANATION,
+  levelExplanation,
+  NOMINATION_STATE_EXPLANATION,
+} from '../../constants/chipExplanations';
 
 export const SectionTitle = styled(Typography)(({ theme }) => ({
   color: theme.palette.text.secondary,
@@ -248,8 +254,21 @@ export function ToneChip({ color = 'default', variant = 'filled', sx, ...rest }:
 }
 
 /** "Level 6". */
-export function LevelBadge({ level }: { level: number }) {
-  return <Chip size="small" label={`Level ${level}`} variant="outlined" sx={{ fontWeight: 600 }} />;
+/**
+ * A level as a chip. `explained`: what the level means, on hover, a tap or
+ * focus (a person's own header; lists leave it out).
+ */
+export function LevelBadge({ level, explained = false }: { level: number; explained?: boolean }) {
+  const chip = (
+    <Chip size="small" label={`Level ${level}`} variant="outlined" sx={{ fontWeight: 600 }} />
+  );
+  return explained ? (
+    <ExplainTip text={levelExplanation(level)} focusable>
+      {chip}
+    </ExplainTip>
+  ) : (
+    chip
+  );
 }
 
 const NOMINATION_CHIP: Record<NominationState, { label: string; color: ChipProps['color'] }> = {
@@ -263,15 +282,24 @@ const NOMINATION_CHIP: Record<NominationState, { label: string; color: ChipProps
   blocked: { label: 'Banned: ban must be lifted', color: 'warning' },
 };
 
-export function NominationStateChip({ state }: { state: NominationState }) {
+/** A nomination's state; what it means on hover or a tap (and focus, with `focusable`). */
+export function NominationStateChip({
+  state,
+  focusable = false,
+}: {
+  state: NominationState;
+  focusable?: boolean;
+}) {
   const chip = NOMINATION_CHIP[state];
   return (
-    <ToneChip
-      size="small"
-      label={chip.label}
-      color={chip.color}
-      variant={chip.color === 'default' ? 'outlined' : 'filled'}
-    />
+    <ExplainTip text={NOMINATION_STATE_EXPLANATION[state]} focusable={focusable}>
+      <ToneChip
+        size="small"
+        label={chip.label}
+        color={chip.color}
+        variant={chip.color === 'default' ? 'outlined' : 'filled'}
+      />
+    </ExplainTip>
   );
 }
 
@@ -285,14 +313,23 @@ const PHASE_CHIP: Record<DecisionPhase, { label: string; color: ChipProps['color
   expired: { label: 'Expired', color: 'default' },
 };
 
-export function DecisionPhaseChip({ phase }: { phase: DecisionPhase }) {
+/** A decision's phase; what it means on hover or a tap (and focus, with `focusable`). */
+export function DecisionPhaseChip({
+  phase,
+  focusable = false,
+}: {
+  phase: DecisionPhase;
+  focusable?: boolean;
+}) {
   const chip = PHASE_CHIP[phase];
   return (
-    <ToneChip
-      size="small"
-      label={chip.label}
-      color={chip.color}
-      variant={chip.color === 'default' ? 'outlined' : 'filled'}
-    />
+    <ExplainTip text={DECISION_PHASE_EXPLANATION[phase]} focusable={focusable}>
+      <ToneChip
+        size="small"
+        label={chip.label}
+        color={chip.color}
+        variant={chip.color === 'default' ? 'outlined' : 'filled'}
+      />
+    </ExplainTip>
   );
 }
