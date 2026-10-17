@@ -2,8 +2,9 @@
  * Open File and Save File on a QDN publish (Simon, 2026-10-17): the viewer
  * reads only after a press, waits while the node gets the file, asks before
  * a big one, says why one can't open, lists a resource's files, shows a
- * file by its kind, notes an earlier version, saves through Hub's prompt,
- * and never appears on an encrypted publish. Nothing is POSTed.
+ * file by its kind, notes an earlier version, saves through Hub's prompt
+ * (a resource of several files as one ZIP), and never appears on an
+ * encrypted publish. Nothing is POSTed.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
@@ -241,7 +242,20 @@ describe('Open File', () => {
         .getAllByRole('button')
         .map((b) => b.textContent)
     ).toEqual(['index.html', 'logo.png']);
-    expect(within(dialog).getByRole('button', { name: 'Save File' })).toBeDisabled();
+    expect(
+      within(dialog).getByText(/Open one to see it here; Save File keeps them all in one ZIP\./)
+    ).toBeInTheDocument();
+    // Packing stops at the file the node can't give, and says which.
+    mockQortalRequest('SAVE_FILE', true);
+    await user.click(within(dialog).getByRole('button', { name: 'Save File' }));
+    expect(
+      await within(dialog).findByText(
+        'Couldn’t save it: your node answered 400 for logo.png.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(qortalCallsFor('SAVE_FILE')).toEqual([]);
     await user.click(within(list).getByRole('button', { name: 'index.html' }));
     expect(
       await within(dialog).findByText('The page’s source, as written. It isn’t run here.', {}, T)
@@ -313,6 +327,37 @@ describe('Save File', () => {
       mimeType: 'application/json',
     });
     expect(await within(dialog).findByText('Hub is saving it.', {}, T)).toBeInTheDocument();
+  });
+
+  it('packs a website’s files into one ZIP, each read by its path', async () => {
+    const { user } = await show(
+      publish({ service: 200, name: 'AA Maps', identifier: 'default', size: 380_000 })
+    );
+    node({
+      meta: { title: 'AA Maps', files: ['index.html', 'assets/app.js'] },
+      files: {
+        'index.html': { bytes: new TextEncoder().encode('<!DOCTYPE html>'), type: 'text/html' },
+        'assets/app.js': { bytes: new TextEncoder().encode('void 0;'), type: 'text/javascript' },
+      },
+    });
+    mockQortalRequest('SAVE_FILE', true);
+    await user.click(screen.getByRole('button', { name: 'Save File' }));
+    const dialog = await screen.findByRole('dialog', {}, T);
+    await waitFor(() => expect(qortalCallsFor('SAVE_FILE')).toHaveLength(1), T);
+    const [call] = qortalCallsFor('SAVE_FILE');
+    expect(call).toMatchObject({ filename: 'AA Maps.zip', mimeType: 'application/zip' });
+    expect(call.blob).toMatchObject({ type: 'application/zip' });
+    expect(fetchCalls).toEqual(
+      expect.arrayContaining([
+        '/arbitrary/WEBSITE/AA%20Maps/default?filepath=index.html',
+        '/arbitrary/WEBSITE/AA%20Maps/default?filepath=assets%2Fapp.js',
+      ])
+    );
+    expect(await within(dialog).findByText('Hub is saving it.', {}, T)).toBeInTheDocument();
+    // The list stays, to open a file from.
+    expect(
+      within(dialog).getByRole('list', { name: 'Files in this resource' })
+    ).toBeInTheDocument();
   });
 });
 

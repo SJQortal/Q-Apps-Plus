@@ -16,8 +16,9 @@
  *   sound, a PDF's pages, JSON laid out in colour, a table, text, a ZIP's
  *   list of files, or what it is with its first bytes in hex.
  *
- * Save File keeps it through Hub's save prompt (saveQdnFile.ts); Open in
- * Qortal opens an app or a website in a new Hub tab. Pressed outside
+ * Save File keeps it through Hub's save prompt (saveQdnFile.ts); on the
+ * list of a resource's files it keeps them all, packed into one ZIP. Open
+ * in Qortal opens an app or a website in a new Hub tab. Pressed outside
  * (`saveWhenReady`), Save File opens this and saves once the file is
  * ready. Nothing here signs or publishes; HTML and SVG never run.
  */
@@ -60,7 +61,7 @@ import { openQortalLink } from '../../../utils/links';
 import { useShortFrame } from '../../../utils/hubFrame';
 import { useQdnReady } from './useQdnReady';
 import { useFileView, type FileView } from './useFileView';
-import { saveQdnFile } from './saveQdnFile';
+import { saveQdnFile, saveQdnFilesAsZip, zipNameOf, ZIP_ALL_MAX_BYTES } from './saveQdnFile';
 import { FileList } from './views/FileList';
 import { HexView } from './views/HexView';
 import { ImageView } from './views/ImageView';
@@ -83,7 +84,8 @@ export interface FileViewerDialogProps {
   saveWhenReady?: boolean;
 }
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'declined' | { error: unknown };
+type SaveState =
+  'idle' | 'saving' | 'saved' | 'declined' | { packing: number; of: number } | { error: unknown };
 
 /** What the file reads as, for a view of text. */
 function decode(file: FileView): string {
@@ -168,6 +170,8 @@ export default function FileViewerDialog({
   const [picked, setPicked] = useState<string | null>(null);
   const [save, setSave] = useState<SaveState>('idle');
   const savedOnce = useRef(false);
+  // Packing a ZIP stops when the viewer closes.
+  const packing = useRef<AbortController | null>(null);
 
   const metaSettled = meta.data !== undefined || meta.isError;
   const files = meta.data?.files ?? null;
@@ -189,8 +193,36 @@ export default function FileViewerDialog({
     (ref.identifier ? ref.identifier : `${ref.service} of ${ref.name}`);
   const link = qortalLinkFor(ref);
   const earlier = latest.data && latest.data.signature !== signature ? latest.data : null;
+  // The list of a resource's files: Save File keeps them all in one ZIP,
+  // unless its publish alone is past what can be packed in the page.
+  const zipAll =
+    several &&
+    picked === null &&
+    ready.phase === 'ready' &&
+    !(size !== null && size > ZIP_ALL_MAX_BYTES);
+
+  const runZip = async (list: readonly string[]) => {
+    packing.current?.abort();
+    const controller = new AbortController();
+    packing.current = controller;
+    setSave({ packing: 0, of: list.length });
+    try {
+      const result = await saveQdnFilesAsZip(ref, list, zipNameOf(ref), {
+        signal: controller.signal,
+        onProgress: (read) => {
+          if (!controller.signal.aborted) setSave({ packing: read, of: list.length });
+        },
+      });
+      if (!controller.signal.aborted) setSave(result);
+    } catch (error) {
+      if (!controller.signal.aborted) setSave({ error });
+    } finally {
+      if (packing.current === controller) packing.current = null;
+    }
+  };
 
   const runSave = async () => {
+    if (zipAll && files) return runZip(files);
     if (!file) return;
     setSave('saving');
     try {
@@ -213,15 +245,20 @@ export default function FileViewerDialog({
 
   // Save File pressed outside: once each time it opens, when the file is ready.
   useEffect(() => {
-    if (!open) savedOnce.current = false;
+    if (open) return;
+    savedOnce.current = false;
+    packing.current?.abort();
+    packing.current = null;
+    setSave('idle');
   }, [open]);
+  useEffect(() => () => packing.current?.abort(), []);
   useEffect(() => {
-    if (!open || !saveWhenReady || savedOnce.current || !file || several) return;
+    if (!open || !saveWhenReady || savedOnce.current || !(several ? zipAll : file)) return;
     savedOnce.current = true;
     void runSave();
     // runSave reads the current file.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, saveWhenReady, file, several]);
+  }, [open, saveWhenReady, file, several, zipAll]);
 
   let body: React.ReactNode;
   if (ready.phase === 'checking') body = <ListSkeleton count={2} label="Checking your node" />;
@@ -276,7 +313,9 @@ export default function FileViewerDialog({
     );
   else if (!metaSettled) body = <ListSkeleton count={2} label="Reading what it holds" />;
   else if (several && picked === null)
-    body = <FileList files={files as string[]} onOpen={(next) => setPicked(next)} />;
+    body = (
+      <FileList files={files as string[]} savesAll={zipAll} onOpen={(next) => setPicked(next)} />
+    );
   else if (view.phase === 'error') {
     const problem = view.error instanceof QdnFileError ? view.error.problem : null;
     body =
@@ -311,16 +350,19 @@ export default function FileViewerDialog({
       />
     );
 
+  const busy = save === 'saving' || (typeof save === 'object' && 'packing' in save);
   const saveWords =
-    save === 'saving'
-      ? 'Saving…'
-      : save === 'saved'
-        ? 'Hub is saving it.'
-        : save === 'declined'
-          ? 'Not saved.'
-          : typeof save === 'object'
-            ? `Couldn’t save it: ${errorMessage(save.error, 'something went wrong')}.`
-            : '';
+    typeof save === 'object' && 'packing' in save
+      ? `Packing ${save.packing} of ${save.of} files into one ZIP…`
+      : save === 'saving'
+        ? 'Saving…'
+        : save === 'saved'
+          ? 'Hub is saving it.'
+          : save === 'declined'
+            ? 'Not saved.'
+            : typeof save === 'object' && 'error' in save
+              ? `Couldn’t save it: ${errorMessage(save.error, 'something went wrong')}.`
+              : '';
 
   const facts = [
     ref.service,
@@ -350,10 +392,10 @@ export default function FileViewerDialog({
           <Button
             variant="contained"
             startIcon={<SaveAltOutlinedIcon />}
-            disabled={!file || save === 'saving'}
+            disabled={!(file || zipAll) || busy}
             onClick={() => void runSave()}
           >
-            {save === 'saving' ? 'Saving…' : 'Save File'}
+            {busy ? 'Saving…' : 'Save File'}
           </Button>
           <Button onClick={onClose}>Close</Button>
         </>
@@ -414,7 +456,7 @@ export default function FileViewerDialog({
       <Typography
         role="status"
         variant="body2"
-        color={typeof save === 'object' ? 'error' : 'text.secondary'}
+        color={typeof save === 'object' && 'error' in save ? 'error' : 'text.secondary'}
       >
         {saveWords}
       </Typography>

@@ -20,6 +20,7 @@
  */
 import { hasQortalRequest, qortal } from '../../../qortal/client';
 import { fileUrl, readFileBlob, type QdnResourceRef } from '../../../data/explorer/qdnFile';
+import { sizeWords } from '../../../rules/explorer/txWords';
 import { errorMessage, isHubDecline } from '../../../utils/hubErrors';
 
 export interface SavedFile {
@@ -97,4 +98,112 @@ export async function saveQdnFile(ref: QdnResourceRef, file: SavedFile): Promise
     if (isHubDecline(error)) return 'declined';
     throw error;
   }
+}
+
+/** Packing stops past this many bytes in all: the files are held in the page while packed. */
+export const ZIP_ALL_MAX_BYTES = 200 * 1024 * 1024;
+
+/** Files read from the node at once while packing. */
+const PACK_LANES = 4;
+
+export class TooBigToPackError extends Error {
+  constructor(maxBytes = ZIP_ALL_MAX_BYTES) {
+    super(`its files come to more than ${sizeWords(maxBytes)}, too much to pack into one ZIP here`);
+    this.name = 'TooBigToPackError';
+  }
+}
+
+/**
+ * Save File on a resource of several files (Simon, 2026-10-17: "assembled
+ * into a .zip and still be downloadable"): each file read from the node by
+ * its path (4 at a time, each in the list's place in the archive), packed
+ * into one ZIP (utils/zip.ts: stored, named as listed, folders kept) and
+ * handed to Hub's SAVE_FILE as a blob, on desktop and in GO alike (a
+ * `location` can't make a ZIP). `onProgress` hears how many are read;
+ * `signal` stops it (the viewer closing). A file the node can't give, or
+ * more than ZIP_ALL_MAX_BYTES in all, stops it with an error before Hub
+ * is asked, so an error naming a file is never taken for a "no".
+ */
+export async function saveQdnFilesAsZip(
+  ref: QdnResourceRef,
+  files: readonly string[],
+  zipName: string,
+  options: {
+    onProgress?: (read: number) => void;
+    signal?: AbortSignal;
+    /** Tests: a smaller limit than ZIP_ALL_MAX_BYTES. */
+    maxBytes?: number;
+  } = {}
+): Promise<SaveResult> {
+  const maxBytes = options.maxBytes ?? ZIP_ALL_MAX_BYTES;
+  const { buildZip } = await import('../../../utils/zip');
+  // One failure stops the other lanes too.
+  const stop = new AbortController();
+  const stopAll = () => stop.abort();
+  options.signal?.addEventListener('abort', stopAll, { once: true });
+  if (options.signal?.aborted) stop.abort();
+  const parts: Uint8Array[] = new Array(files.length);
+  let read = 0;
+  let total = 0;
+  let next = 0;
+  const lane = async () => {
+    while (next < files.length) {
+      if (stop.signal.aborted) throw new DOMException('Stopped', 'AbortError');
+      const index = next++;
+      const response = await fetch(fileUrl(ref, files[index]), { signal: stop.signal });
+      if (!response.ok)
+        throw new Error(`your node answered ${response.status} for ${files[index]}`);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      // Another lane failed meanwhile: no word of progress after it.
+      if (stop.signal.aborted) throw new DOMException('Stopped', 'AbortError');
+      total += bytes.length;
+      if (total > maxBytes) throw new TooBigToPackError(maxBytes);
+      parts[index] = bytes;
+      read += 1;
+      options.onProgress?.(read);
+    }
+  };
+  try {
+    await Promise.all(Array.from({ length: Math.min(PACK_LANES, files.length) }, lane));
+  } catch (error) {
+    stop.abort();
+    throw error;
+  } finally {
+    options.signal?.removeEventListener('abort', stopAll);
+  }
+  const zip = buildZip(files.map((name, i) => ({ name, data: parts[i] })));
+  const blob = new Blob([zip], { type: 'application/zip' });
+  if (!hasQortalRequest()) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = zipName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return 'saved';
+  }
+  try {
+    await qortal({ action: 'SAVE_FILE', blob, filename: zipName, mimeType: 'application/zip' });
+    return 'saved';
+  } catch (error) {
+    if (isHubDecline(error)) return 'declined';
+    throw error;
+  }
+}
+
+/** The ZIP's name: the resource's name, and its identifier when it has one ("AA Maps.zip", "AA Maps - beta.zip"). */
+export function zipNameOf(ref: QdnResourceRef): string {
+  const clean = (value: string) =>
+    value
+      .replace(/[\\/:*?"<>|]/g, '_')
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u001f\u007f]/g, '')
+      .trim();
+  const stem = [clean(ref.name), ref.identifier ? clean(ref.identifier) : '']
+    .filter(Boolean)
+    .join(' - ')
+    .slice(0, 100);
+  return `${stem || 'files'}.zip`;
 }

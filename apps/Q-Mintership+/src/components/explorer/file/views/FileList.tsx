@@ -1,7 +1,8 @@
 /**
  * The files of a resource that holds several (a website, an app, a set of
  * files), as its publisher's metadata lists them: each opens on its own in
- * the viewer. A long list has a filter and shows 100 at a time.
+ * the viewer, and Save File keeps them all in one ZIP (`savesAll`). A long
+ * list has a filter and shows 100 at a time.
  */
 import { useMemo, useState } from 'react';
 import { Box, Button, ButtonBase, TextField, Typography } from '@mui/material';
@@ -14,7 +15,16 @@ const STEP = 100;
 /** A filter field from this many files. */
 const FILTER_FROM = 12;
 
-export function FileList({ files, onOpen }: { files: string[]; onOpen: (file: string) => void }) {
+export function FileList({
+  files,
+  savesAll = false,
+  onOpen,
+}: {
+  files: string[];
+  /** Save File packs them all into one ZIP (not past what the page can hold). */
+  savesAll?: boolean;
+  onOpen: (file: string) => void;
+}) {
   const [filter, setFilter] = useState('');
   const [limit, setLimit] = useState(STEP);
   const matching = useMemo(() => {
@@ -25,7 +35,10 @@ export function FileList({ files, onOpen }: { files: string[]; onOpen: (file: st
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
       <Typography variant="body2" color="text.secondary">
-        It holds {formatCount(files.length)} files. Open one to see it here or to save it.
+        It holds {formatCount(files.length)} files.{' '}
+        {savesAll
+          ? 'Open one to see it here; Save File keeps them all in one ZIP.'
+          : 'Open one to see it here or to save it.'}
       </Typography>
       {files.length >= FILTER_FROM ? (
         <TextField
