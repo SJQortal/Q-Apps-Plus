@@ -928,6 +928,8 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
 87. **"Approved first" and "rejected first"** (Simon, 2026-10-17: "the text "had approved first" can be way smaller", "and had rejected", "and makes these texts, "approved first" and "rejected first""). Under a name in a decision's Approved and Rejected columns, an answer that replaced the admin's own other one says so in small type (12 px): "approved first" under a rejection (it was "had approved first"), and now "rejected first" under an approval that replaced the admin's rejection (`rules/tally.ts` marks it, as it marked a withdrawn signature). Checks: the decision screens, 20 captures, all clean.
 
+88. **No whole history for an unchanged name** (Simon, 2026-10-17: "if there is no changes to the names history, do not show Name history expandable button"). A name whose own transactions, read in full, are just its registration has no "Its whole history" button: any rename, sale or update since would be among them, as only the owner changes a name, so it is known without a read. Every other name keeps it, and so does one whose transactions were read only in part. Checked on Simon's node: Jonny's name shows its registration and no button. Tests 2,327 passed.
+
 ## Follow-ups
 
 ### Readiness
