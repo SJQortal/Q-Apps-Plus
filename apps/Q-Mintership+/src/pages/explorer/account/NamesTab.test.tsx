@@ -289,7 +289,7 @@ describe('Names: each name’s history, beside it', () => {
     expect(screen.queryByRole('region', { name: /^Names it had/ })).toBeNull();
   });
 
-  it('says when each name’s history comes from only the newest 100', async () => {
+  it('says once, over the names, when their history comes from only the newest 100, and reads the rest on request', async () => {
     const hundred = Array.from({ length: 100 }, (_, i) => ({
       type: 'REGISTER_NAME',
       signature: `sig${i}`,
@@ -299,22 +299,52 @@ describe('Names: each name’s history, beside it', () => {
       creatorAddress: COLLECTOR.address,
       name: `Name ${i}`,
     }));
-    await open(COLLECTOR.address, (world) =>
+    const older = [
+      {
+        type: 'REGISTER_NAME',
+        signature: 'sig-older',
+        timestamp: NOW - 200_000_000,
+        blockHeight: TIP - 2_000,
+        txGroupId: 0,
+        creatorAddress: COLLECTOR.address,
+        name: 'Older Name',
+      },
+    ];
+    const { user } = await open(COLLECTOR.address, (world) =>
       mockFetchRoute('/transactions/search', (url: URL) =>
         url.searchParams.get('address') === COLLECTOR.address &&
         url.searchParams.getAll('txType').includes('BUY_NAME')
-          ? hundred
+          ? Number(url.searchParams.get('offset') ?? 0) === 0
+            ? hundred
+            : older
           : worldAnswer(world, url)
       )
     );
     const names = await region('Names (30)');
     expect(
       await within(names).findByText(
-        "Each name's history comes from its newest 100 name transactions; older ones aren't read.",
+        /^Each name's history comes from its newest 100 name transactions\. \d+ of the names below have none in them\. Older ones aren't read yet\.$/,
         {},
         T
       )
     ).toBeInTheDocument();
+    // No "None found" on each card: the line over them says it once.
+    expect(within(names).queryByText('None found in its name transactions.')).toBeNull();
+    await user.click(within(names).getByRole('button', { name: 'Read its whole name history' }));
+    await waitFor(
+      () =>
+        expect(
+          within(names).queryByRole('button', { name: 'Read its whole name history' })
+        ).toBeNull(),
+      T
+    );
+    const offsets = fetchCallsFor('/transactions/search')
+      .map((call) => new URL(call, 'http://x').searchParams)
+      .filter(
+        (p) => p.get('address') === COLLECTOR.address && p.getAll('txType').includes('BUY_NAME')
+      )
+      .map((p) => p.get('offset'));
+    expect(offsets).toContain('100');
   });
 
   it('a history that couldn’t be read is said with Retry, and the names still show', async () => {

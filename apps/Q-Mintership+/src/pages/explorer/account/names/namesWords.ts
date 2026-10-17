@@ -47,10 +47,25 @@ export function nameDataParts(data: NameData): string[] {
   ].filter((part): part is string => part !== null);
 }
 
-/** Under the names: how much of their history was read. */
-export function historyCoverage(count: number, capped: boolean): string {
-  if (capped)
-    return `Each name's history comes from its newest ${formatCount(NAME_HISTORY_LIMIT)} name transactions; older ones aren't read.`;
+/**
+ * Over the names, when the read stopped short: how much of their history
+ * was read, and how many names show none for that reason ("Each name's
+ * history comes from its newest 100 name transactions: 19 of the names
+ * below have none in them. Older ones aren't read yet.").
+ */
+export function historyCoverage(
+  count: number,
+  capped: boolean,
+  limit = NAME_HISTORY_LIMIT,
+  without = 0
+): string {
+  if (capped) {
+    const missing =
+      without > 0
+        ? ` ${without === 1 ? '1 of the names below has' : `${formatCount(without)} of the names below have`} none in them.`
+        : '';
+    return `Each name's history comes from its newest ${formatCount(limit)} name transactions.${missing} Older ones aren't read yet.`;
+  }
   return count === 1 ? '1 name transaction.' : `${formatCount(count)} name transactions.`;
 }
 

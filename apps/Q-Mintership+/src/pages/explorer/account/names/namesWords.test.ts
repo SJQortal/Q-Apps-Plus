@@ -40,7 +40,13 @@ describe('the names list', () => {
 describe('the name history', () => {
   it('says how much of it was read', () => {
     expect(historyCoverage(100, true)).toBe(
-      "Each name's history comes from its newest 100 name transactions; older ones aren't read."
+      "Each name's history comes from its newest 100 name transactions. Older ones aren't read yet."
+    );
+    expect(historyCoverage(100, true, 100, 19)).toBe(
+      "Each name's history comes from its newest 100 name transactions. 19 of the names below have none in them. Older ones aren't read yet."
+    );
+    expect(historyCoverage(1000, true, 1000, 1)).toBe(
+      "Each name's history comes from its newest 1,000 name transactions. 1 of the names below has none in them. Older ones aren't read yet."
     );
     expect(historyCoverage(3, false)).toBe('3 name transactions.');
     expect(historyCoverage(1, false)).toBe('1 name transaction.');

@@ -5,7 +5,9 @@
  * date and block. The newest 4 show; "Show all 9" shows the rest. The rows
  * come from the account's one read of its name transactions (NamesTab);
  * nothing is read here. `txs` undefined: that read hasn't come back (the
- * tab says so once, under the names).
+ * tab says so once, under the names). None, when that read stopped short
+ * (`capped`): nothing here; the tab says once, over the names, how many
+ * show none and offers to read the rest.
  */
 import { useState } from 'react';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
@@ -49,10 +51,12 @@ export function NameHistoryList({
   name,
   txs,
   address,
+  capped = false,
 }: {
   name: string;
   txs: readonly TxRow[] | undefined;
   address: string;
+  capped?: boolean;
 }) {
   const [all, setAll] = useState(false);
   const label = (
@@ -68,6 +72,7 @@ export function NameHistoryList({
         <Skeleton variant="text" width="45%" aria-hidden />
       </Box>
     );
+  if (!txs.length && capped) return null;
   if (!txs.length)
     return (
       <Box sx={{ minWidth: 0 }}>

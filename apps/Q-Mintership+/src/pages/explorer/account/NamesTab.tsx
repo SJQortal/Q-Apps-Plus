@@ -7,12 +7,18 @@
  * Reads: its names (`xnames:`, shared with the page header) and primary
  * name (`name:`), then per visible name `/names/{name}` (`xnamedata:`); one
  * heavy search of its name transactions (`xnamehist:`), which every name's
- * history comes from. Nothing polls.
+ * history comes from, and on request the whole of it, up to 1,000
+ * (`xnamehist:<a>:10`), shown once it is in. Nothing polls.
  */
+import { useState } from 'react';
 import { getNamesOf } from '../../../data/explorer/account';
 import { usePrimaryName } from '../../../hooks/useData';
 import { useQuery } from '../../../hooks/useQuery';
-import { getNameHistory, nameHistoryKey } from '../../../data/explorer/nameHistory';
+import {
+  getNameHistory,
+  NAME_HISTORY_PAGES_ALL,
+  nameHistoryKey,
+} from '../../../data/explorer/nameHistory';
 import { NamesList } from './names/NamesList';
 
 export interface NamesTabProps {
@@ -25,7 +31,13 @@ export default function NamesTab({ address }: NamesTabProps) {
   // A primary name that can't be read: the list still shows (in Core's order) and says so.
   const primaryFailed = primaryQuery.isError && primaryQuery.data === undefined;
   const primary = primaryFailed ? null : primaryQuery.data;
-  const history = useQuery(nameHistoryKey(address), (force) => getNameHistory(address, { force }));
+  const first = useQuery(nameHistoryKey(address), (force) => getNameHistory(address, { force }));
+  const [whole, setWhole] = useState(false);
+  const all = useQuery(whole ? nameHistoryKey(address, NAME_HISTORY_PAGES_ALL) : null, (force) =>
+    getNameHistory(address, { force, pages: NAME_HISTORY_PAGES_ALL })
+  );
+  // The first read stays on screen until the whole history is in.
+  const history = all.data ? all : first;
   return (
     <>
       <NamesList
@@ -38,6 +50,11 @@ export default function NamesTab({ address }: NamesTabProps) {
             : undefined
         }
         history={history}
+        readWhole={
+          history.data?.capped && !all.data
+            ? { reading: whole && all.isLoading, failed: all.isError, read: () => setWhole(true) }
+            : undefined
+        }
       />
     </>
   );

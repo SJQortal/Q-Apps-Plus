@@ -10,6 +10,7 @@
  * stops at 500 here, and says so.
  */
 import { useState, type ReactNode } from 'react';
+import { alpha } from '@mui/material/styles';
 import { Box, Button, Skeleton, TextField, Typography } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
 import { Card, Section } from '../../../../components/common/Section';
@@ -279,6 +280,7 @@ function NameRow({
   address,
   primary,
   txs,
+  capped,
   view,
 }: {
   name: string;
@@ -286,6 +288,8 @@ function NameRow({
   primary: boolean;
   /** Its transactions about this name; undefined while they load or when they couldn't be read. */
   txs: readonly TxRow[] | undefined;
+  /** The read of its name transactions stopped short (said once, over the names). */
+  capped: boolean;
   view: NamesView;
 }) {
   const [node, setNode] = useState<HTMLLIElement | null>(null);
@@ -306,7 +310,7 @@ function NameRow({
           ))}
         </>
       }
-      history={<NameHistoryList name={name} txs={txs} address={address} />}
+      history={<NameHistoryList name={name} txs={txs} address={address} capped={capped} />}
     />
   );
 }
@@ -317,6 +321,7 @@ export function NamesList({
   primary,
   primaryError,
   history,
+  readWhole,
 }: {
   address: string;
   names: UseQueryResult<NamesOf>;
@@ -326,6 +331,8 @@ export function NamesList({
   primary: string | null | undefined;
   /** The primary name couldn't be read: said, with Retry, never as "No primary name". */
   primaryError?: { error: unknown; retry: () => void };
+  /** Read the whole name history (up to 1,000), offered while the read stopped short. */
+  readWhole?: { reading: boolean; failed: boolean; read: () => void };
 }) {
   const { shown, showMore, listRef } = useShowMore(NAMES_PAGE);
   const [sort, setSort] = useState<NameSort>('primary');
@@ -355,6 +362,13 @@ export function NamesList({
         {all.length > 1 ? (
           <NamesControls sort={sort} onSort={setSort} view={view} onView={setView} />
         ) : null}
+        {history.data?.capped && byName ? (
+          <CappedHistory
+            history={history.data}
+            without={all.filter((name) => !byName.get(name)?.length).length}
+            readWhole={readWhole}
+          />
+        ) : null}
         {primaryError ? (
           <ErrorState
             compact
@@ -376,6 +390,7 @@ export function NamesList({
                 address={address}
                 primary={hasPrimary && name === primary}
                 txs={byName ? (byName.get(name) ?? []) : undefined}
+                capped={Boolean(history.data?.capped)}
                 view={view}
               />
             ))}
@@ -391,7 +406,7 @@ export function NamesList({
             {truncatedLine(all.length)}
           </Typography>
         ) : null}
-        <HistoryState history={history} />
+        {history.data?.capped ? null : <HistoryState history={history} />}
       </Box>
     );
   }
@@ -426,6 +441,53 @@ export function NamesList({
         </Section>
       ) : null}
     </>
+  );
+}
+
+/**
+ * Over the names, when the read of their history stopped short: how far it
+ * went, how many of the names show no history for that reason, and "Read
+ * its whole name history" (up to 1,000 name transactions).
+ */
+function CappedHistory({
+  history,
+  without,
+  readWhole,
+}: {
+  history: NameHistory;
+  without: number;
+  readWhole?: { reading: boolean; failed: boolean; read: () => void };
+}) {
+  return (
+    <Box
+      sx={(theme) => ({
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 1,
+        p: 1.25,
+        borderRadius: 1,
+        bgcolor: alpha(theme.palette.info.main, 0.08),
+      })}
+    >
+      <Typography variant="body2" sx={{ flex: '1 1 260px' }}>
+        {historyCoverage(history.rows.length, true, history.limit, without)}
+      </Typography>
+      {readWhole ? (
+        <Button
+          variant="outlined"
+          onClick={readWhole.read}
+          aria-disabled={readWhole.reading || undefined}
+          sx={{ minHeight: 44 }}
+        >
+          {readWhole.reading
+            ? 'Reading…'
+            : readWhole.failed
+              ? 'Try again'
+              : 'Read its whole name history'}
+        </Button>
+      ) : null}
+    </Box>
   );
 }
 
