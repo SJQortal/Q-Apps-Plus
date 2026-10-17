@@ -10,7 +10,6 @@
  * history comes from, and on request the whole of it, up to 1,000
  * (`xnamehist:<a>:10`), shown once it is in. Nothing polls.
  */
-import { useState } from 'react';
 import { getNamesOf } from '../../../data/explorer/account';
 import { usePrimaryName } from '../../../hooks/useData';
 import { useQuery } from '../../../hooks/useQuery';
@@ -20,6 +19,7 @@ import {
   nameHistoryKey,
 } from '../../../data/explorer/nameHistory';
 import { NamesList } from './names/NamesList';
+import { useViewState } from '../../../hooks/useViewState';
 
 export interface NamesTabProps {
   address: string;
@@ -32,7 +32,7 @@ export default function NamesTab({ address }: NamesTabProps) {
   const primaryFailed = primaryQuery.isError && primaryQuery.data === undefined;
   const primary = primaryFailed ? null : primaryQuery.data;
   const first = useQuery(nameHistoryKey(address), (force) => getNameHistory(address, { force }));
-  const [whole, setWhole] = useState(false);
+  const [whole, setWhole] = useViewState('names:whole', false);
   const all = useQuery(whole ? nameHistoryKey(address, NAME_HISTORY_PAGES_ALL) : null, (force) =>
     getNameHistory(address, { force, pages: NAME_HISTORY_PAGES_ALL })
   );

@@ -50,11 +50,7 @@ import {
 } from '../../data/explorer/qdnIdentifier';
 import { rowTime } from '../../data/qdn';
 import type { QdnRow } from '../../data/types';
-import {
-  NAME_SEARCH_MIN,
-  searchNames,
-  type NameHit,
-} from '../../data/nameSearch';
+import { NAME_SEARCH_MIN, searchNames, type NameHit } from '../../data/nameSearch';
 import { usePrimaryName } from '../../hooks/useData';
 import { useQuery } from '../../hooks/useQuery';
 import { explorerAccountPath, explorerTxPath } from '../../routes/paths';

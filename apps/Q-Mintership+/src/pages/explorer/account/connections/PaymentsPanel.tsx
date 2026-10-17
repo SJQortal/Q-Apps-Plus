@@ -49,6 +49,7 @@ import { usePayerBands, type MinterMarks } from './hooks';
 import type { ConnectionsData } from './useConnections';
 import type { Found } from './searchEntries';
 import { SimilarHeading } from '../../../../components/explorer/search/SimilarHeading';
+import { useViewState } from '../../../../hooks/useViewState';
 
 /** People rows shown before "Show more" (each looks up a name). */
 const PAGE_ROWS = 20;
@@ -107,21 +108,22 @@ export function PaymentsPanel({
   relationOf,
   found = null,
 }: PaymentsPanelProps) {
-  const [chosen, setDirection] = useState<Direction | null>(null);
+  // Each choice here is kept for Back (useViewState).
+  const [chosen, setDirection] = useViewState<Direction | null>('direction', null);
   // Until one is picked: Sent to, unless it sent nothing and received something.
   const direction: Direction =
     chosen ??
     (data.flowsSent?.length === 0 && (data.flowsReceived?.length ?? 0) > 0 ? 'received' : 'sent');
-  const [sort, setSort] = useState<FlowSort>('count');
-  const [membersOnly, setMembersOnly] = useState(false);
-  const [limit, setLimit] = useState(PAGE_ROWS);
+  const [sort, setSort] = useViewState<FlowSort>('sort', 'count');
+  const [membersOnly, setMembersOnly] = useViewState('members-only', false);
+  const [limit, setLimit] = useViewState('limit', PAGE_ROWS);
   const peopleFocus = useFocusNewRows();
-  const [atLimit, setAtLimit] = useState(PAGE_ROWS);
+  const [atLimit, setAtLimit] = useViewState('at-limit', PAGE_ROWS);
   const atFocus = useFocusNewRows();
-  const [busyOpen, setBusyOpen] = useState(false);
+  const [busyOpen, setBusyOpen] = useViewState('busy-open', false);
   const [older, setOlder] = useState<'idle' | 'loading' | 'failed'>('idle');
   const [said, setSaid] = useState('');
-  const [similarLimit, setSimilarLimit] = useState(PAGE_ROWS);
+  const [similarLimit, setSimilarLimit] = useViewState('similar-limit', PAGE_ROWS);
 
   const page = direction === 'sent' ? data.sent : data.recv;
   const flowsHere = direction === 'sent' ? data.flowsSent : data.flowsReceived;

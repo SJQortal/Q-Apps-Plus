@@ -5,7 +5,7 @@
  * date and a link to it, or each trade with its date and its AT. Records
  * (nominations, supports, votes) have nothing to open: their date is said.
  */
-import { useId, useState } from 'react';
+import { useId } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { ExpandChevron } from '../../../components/common/ExpandChevron';
 import { SmoothReveal } from '../../../components/common/SmoothReveal';
@@ -19,6 +19,7 @@ import { AtLink, EvidenceList } from '../account/connections/ConnectionRow';
 import { blocksLine } from '../account/connections/words';
 import { findingWhen } from './compareView';
 import { LIST_SX } from './parts';
+import { useViewState } from '../../../hooks/useViewState';
 
 function TradeList({ trades }: { trades: readonly Trade[] }) {
   return (
@@ -65,7 +66,11 @@ export function FindingRow({
   viewpoint: string;
   privs?: Readonly<Record<string, string | null>>;
 }) {
-  const [open, setOpen] = useState(false);
+  // Kept for Back (useViewState), by the newest transaction behind it.
+  const [open, setOpen] = useViewState(
+    `finding:${finding.actor}:${finding.evidence[0]?.signature ?? ''}`,
+    false
+  );
   const id = useId();
   const actor = useDisplayName(finding.actor).label;
   const other = useDisplayName(finding.other).label;

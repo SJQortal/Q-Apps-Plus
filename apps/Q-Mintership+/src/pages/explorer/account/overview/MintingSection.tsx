@@ -17,12 +17,13 @@ import { useInView } from '../../../../hooks/useInView';
 import { useQuery } from '../../../../hooks/useQuery';
 import { formatBlock, formatCount, formatDate } from '../../../../utils/format';
 import { mintingNowOf, NOT_MINTING, type MintingNow } from './overviewWords';
+import { useViewState } from '../../../../hooks/useViewState';
 
 /** Accounts named in the minting line before "Show all". */
 const OTHERS_SHOWN = 5;
 
 function MintingLine({ minting }: { minting: MintingNow | null }) {
-  const [all, setAll] = useState(false);
+  const [all, setAll] = useViewState('minting:all', false);
   if (!minting) return <Typography>{NOT_MINTING}</Typography>;
   const { self, others } = minting;
   if (!others.length) return <Typography>Minting now.</Typography>;

@@ -9,7 +9,6 @@
  * (`capped`): nothing here; the tab says once, over the names, how many
  * show none and offers to read the rest.
  */
-import { useState } from 'react';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
 import { TxSentence } from '../../../../components/explorer/TxSentence';
@@ -17,6 +16,7 @@ import type { TxRow } from '../../../../data/types';
 import { describeTx } from '../../../../rules/explorer/txWords';
 import { visibleName } from '../../../../rules/explorer/nameNotes';
 import { formatBlock, formatCount, formatDate } from '../../../../utils/format';
+import { useViewState } from '../../../../hooks/useViewState';
 
 /** Entries shown before "Show all". */
 export const HISTORY_SHOWN = 4;
@@ -58,7 +58,7 @@ export function NameHistoryList({
   address: string;
   capped?: boolean;
 }) {
-  const [all, setAll] = useState(false);
+  const [all, setAll] = useViewState(`history:${name}`, false);
   const label = (
     <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: 0.2 }}>
       History{txs && txs.length ? ` · ${formatCount(txs.length)}` : ''}

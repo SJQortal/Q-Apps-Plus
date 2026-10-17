@@ -31,8 +31,10 @@ import {
 import { getTxWindow, txWindowKey } from '../../../../data/explorer/txWindow';
 import type { TxRow } from '../../../../data/types';
 import { useQuery } from '../../../../hooks/useQuery';
+import { useViewState } from '../../../../hooks/useViewState';
 import {
   byAmount,
+  filtersToParams,
   isAboutName,
   typesToAsk,
   type TxFilters,
@@ -106,7 +108,11 @@ export function AccountTxList({
   const list = useQuery(view && types ? accountTxKey(address, types, view) : null, (force) =>
     getAccountTx(address, types ?? [], { force, view: view ?? {} })
   );
-  const [shown, setShown] = useState(SHOW_STEP);
+  // Kept for Back (useViewState), per filters picked: other filters start at the first rows.
+  const [shown, setShown] = useViewState(
+    `tx-list:${JSON.stringify(filtersToParams(filters))}:shown`,
+    SHOW_STEP
+  );
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [olderError, setOlderError] = useState<unknown>(null);
   const [said, setSaid] = useState('');

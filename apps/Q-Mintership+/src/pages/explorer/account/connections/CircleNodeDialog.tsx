@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
 import { ResponsiveDialog } from '../../../../components/common/ResponsiveDialog';
+import { ViewScope } from '../../../../components/common/ViewScope';
 import { usePersonLinks } from '../../../../components/common/personLinks';
 import { TxList } from '../../../../components/explorer/TxListRow';
 import { TxSentence } from '../../../../components/explorer/TxSentence';
@@ -88,7 +89,10 @@ export function CircleNodeDialog({
         ))}
       </Box>
       {txs.length ? (
-        <TxList rows={txs} viewpoint={address} label={`${title}: its transactions`} />
+        // Its rows open apart from the same transactions in the list under it.
+        <ViewScope name={`circle:${current.key}`}>
+          <TxList rows={txs} viewpoint={address} label={`${title}: its transactions`} />
+        </ViewScope>
       ) : (
         <Typography color="text.secondary">No transactions are listed for this link.</Typography>
       )}

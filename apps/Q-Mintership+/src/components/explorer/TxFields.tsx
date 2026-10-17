@@ -11,7 +11,7 @@
  * never shows is left out before this: a message's content, an encrypted
  * resource's identifier, the fields only its raw data carries.
  */
-import { useId, useState } from 'react';
+import { useId } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { PersonChip } from '../common/Person';
 import { isAtAddress } from '../../data/explorer/account';
@@ -19,6 +19,7 @@ import type { TxField } from '../../rules/explorer/txWords';
 import { plural } from '../../utils/format';
 import { TxSentence } from './TxSentence';
 import { FIELD_BLOCK_SX } from './fieldBlock';
+import { useViewState } from '../../hooks/useViewState';
 
 /** Rows shown before "Show all". */
 export const TX_LIST_CAP = 20;
@@ -28,8 +29,17 @@ function FieldValue({ value }: { value: TxField['value'] }) {
   return <TxSentence parts={[value]} />;
 }
 
-export function TxFields({ fields, label = 'Details' }: { fields: TxField[]; label?: string }) {
-  const [all, setAll] = useState(false);
+export function TxFields({
+  fields,
+  label = 'Details',
+  viewId = null,
+}: {
+  fields: TxField[];
+  label?: string;
+  /** Its transaction's signature: "Show all" is kept for Back (useViewState). */
+  viewId?: string | null;
+}) {
+  const [all, setAll] = useViewState(viewId === null ? null : `fields:${viewId}`, false);
   if (!fields.length) return null;
   const shown = all ? fields : fields.slice(0, TX_LIST_CAP);
   return (
@@ -80,13 +90,16 @@ export function TxPeople({
   addresses,
   label = 'Accounts involved',
   maker,
+  viewId = null,
 }: {
   addresses: string[];
   label?: string;
   /** The account that created it (signed it and paid its fee), marked "Creator". */
   maker?: string | null;
+  /** Its transaction's signature: "Show all" is kept for Back (useViewState). */
+  viewId?: string | null;
 }) {
-  const [all, setAll] = useState(false);
+  const [all, setAll] = useViewState(viewId === null ? null : `people:${viewId}`, false);
   const labelId = useId();
   if (!addresses.length) return null;
   const shown = all ? addresses : addresses.slice(0, TX_LIST_CAP);

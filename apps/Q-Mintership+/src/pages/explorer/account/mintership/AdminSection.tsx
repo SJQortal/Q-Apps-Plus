@@ -5,7 +5,7 @@
  * starts that read: it is the whole group's), and their answers on request.
  */
 import { firstAlikeLines } from '../../../history/parts/alikeEvents';
-import { useState, useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button } from '@mui/material';
 import { Section } from '../../../../components/common/Section';
@@ -19,6 +19,7 @@ import { proposalsSummary } from '../../../person/personWords';
 import { AnswersPanel } from './AnswersPanel';
 import { activityLine, activitySource } from './mintershipWords';
 import { Note, SubHeading } from './parts';
+import { useViewState } from '../../../../hooks/useViewState';
 
 const FIRST = 5;
 /** Activity's windows, the one the screen prefers first. */
@@ -78,7 +79,7 @@ export function AdminSection({
   wasAdmin: boolean;
   nowMs: number;
 }) {
-  const [all, setAll] = useState(false);
+  const [all, setAll] = useViewState('admin:all', false);
   // The first lines, whole: proposals of one kind made the same day are one line.
   const shown = all ? proposals : firstAlikeLines(proposals, FIRST);
   const admin = isAdmin || wasAdmin;

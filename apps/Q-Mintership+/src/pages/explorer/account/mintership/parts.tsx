@@ -120,7 +120,7 @@ export function SteppedList<T>({
   /** Rows in one bordered card (default), or as separate cards. */
   card?: boolean;
 }) {
-  const { shown, showMore, listRef } = useShowMore(SHOWN_STEP);
+  const { shown, showMore, listRef } = useShowMore(SHOWN_STEP, `list:${label}`);
   const visible = items.slice(0, shown);
   const left = items.length - visible.length;
   const list = (

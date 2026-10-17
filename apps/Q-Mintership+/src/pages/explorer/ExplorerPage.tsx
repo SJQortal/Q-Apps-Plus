@@ -55,6 +55,7 @@ import { useSession } from '../../state/session';
 import { formatDate, shortAddress } from '../../utils/format';
 import { useLandscapeFrame } from '../../utils/hubFrame';
 import { EXPLORER_NEUTRAL_LINE, EXPLORER_PURPOSE } from './explorerWords';
+import { useViewState } from '../../hooks/useViewState';
 
 /** How many rows a quick start shows before "Show all". */
 const QUICK_ROWS = 6;
@@ -230,7 +231,7 @@ function QuickCard({
 
 /** The first rows of a list, then "Show all n" (nothing more is read). */
 function ShortList({ items, label }: { items: ReactNode[]; label: string }) {
-  const [all, setAll] = useState(false);
+  const [all, setAll] = useViewState(`short:${label}`, false);
   const shown = all ? items : items.slice(0, QUICK_ROWS);
   return (
     <>

@@ -38,6 +38,7 @@ import {
   typesOfChoice,
   type GlobalType,
 } from './globalFilters';
+import { useViewState } from '../../../hooks/useViewState';
 
 /** Pages "Look further" reads at most, a press, while none of them matches. */
 export const LOOK_PAGES = 10;
@@ -87,8 +88,11 @@ export function GlobalResults({
   const first = useQuery(globalTxKey(types, range, 0, order), (force) =>
     getGlobalTx(types, range, 0, { force, endsAtTip, order })
   );
-  /** Pages shown after the first, each a full read before the next. */
-  const [older, setOlder] = useState<Array<{ offset: number; rows: TxRow[]; done: boolean }>>([]);
+  /** Pages shown after the first, each a full read before the next: kept for Back (useViewState). */
+  const [older, setOlder] = useViewState<Array<{ offset: number; rows: TxRow[]; done: boolean }>>(
+    `global:${types === null ? 'none' : types.join(',')}:${range.start}:${range.limit}:${order}:older`,
+    []
+  );
   const [loading, setLoading] = useState(false);
   const [olderError, setOlderError] = useState<unknown>(null);
   const [said, setSaid] = useState('');

@@ -194,12 +194,12 @@ export function TxView({ tx }: { tx: TxRow }) {
         </Box>
       ) : null}
       <Facts tx={tx} />
-      <TxPeople addresses={words.participants} maker={makerOf(tx)} />
+      <TxPeople addresses={words.participants} maker={makerOf(tx)} viewId={tx.signature} />
       {pending ? <AnsweredTx signature={tx.pendingSignature as string} /> : null}
       {fields.length ? (
         <Section title="Details" id="explorer-tx-details">
           <Card>
-            <TxFields fields={fields} label={`${words.title} details`} />
+            <TxFields fields={fields} label={`${words.title} details`} viewId={tx.signature} />
           </Card>
         </Section>
       ) : null}

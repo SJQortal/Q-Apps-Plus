@@ -22,6 +22,7 @@ import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../components/commo
 import { RefreshButton } from '../../components/common/RefreshButton';
 import { Card } from '../../components/common/Section';
 import { EmptyState, ErrorState, HeroSkeleton, ListSkeleton } from '../../components/common/states';
+import { ViewScope } from '../../components/common/ViewScope';
 import { ExplorerSearch, NamesContaining } from '../../components/explorer/ExplorerSearch';
 import { isAddress } from '../../data/accounts';
 import {
@@ -89,7 +90,10 @@ function Quoted({ name }: { name: string }) {
   );
 }
 
-/** The selected tab's panel, labelled by its tab. */
+/**
+ * The selected tab's panel, labelled by its tab. What its views keep
+ * (useViewState: rows opened, Show more) is the tab's own.
+ */
 function TabPanel({ tab, address }: { tab: ExplorerTab; address: string }) {
   const Panel = TAB_PANELS[tab];
   return (
@@ -99,9 +103,11 @@ function TabPanel({ tab, address }: { tab: ExplorerTab; address: string }) {
       aria-labelledby={tabIdOf(tab)}
       sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}
     >
-      <Suspense fallback={<ListSkeleton count={3} label="Loading this tab" />}>
-        <Panel address={address} />
-      </Suspense>
+      <ViewScope name={tab}>
+        <Suspense fallback={<ListSkeleton count={3} label="Loading this tab" />}>
+          <Panel address={address} />
+        </Suspense>
+      </ViewScope>
     </Box>
   );
 }

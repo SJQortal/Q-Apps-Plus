@@ -12,7 +12,7 @@
  * app), who mints now (xonline), and each row's account once it nears the
  * screen. Nothing polls. Read-only.
  */
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Box, Button, TextField, Typography } from '@mui/material';
 import { PageHeader } from '../../components/layout/PageHeader';
@@ -44,6 +44,7 @@ import { SET_LIST_SX, SponseeRowItem } from './sets/SponseeRows';
 import { withMarkedName } from '../../components/common/markedText';
 import { ExplorerHeaderSearch } from '../../components/explorer/ExplorerHeaderSearch';
 import { RewardShareNote } from '../../components/explorer/RewardShareNote';
+import { useViewState } from '../../hooks/useViewState';
 
 /** Rows shown before "Show more" (each looks up a name and, near the screen, its account). */
 const ROWS = 20;
@@ -77,12 +78,12 @@ export default function SponseesPage() {
     [sponsees, members.data, online.data, bans.data]
   );
   const accounts = useStoreValues<AccountInfo>(rows.map((row) => `account:${row.address}`));
-  const [sort, setSort] = useState<SponseeSort>('first');
+  const [sort, setSort] = useViewState<SponseeSort>('sponsees:sort', 'first');
   const sorted = useMemo(() => sortSponsees(rows, sort), [rows, sort]);
 
-  const [limit, setLimit] = useState(ROWS);
+  const [limit, setLimit] = useViewState('sponsees:limit', ROWS);
   const { listRef, focusFrom } = useFocusNewRows();
-  const [picks, setPicks] = useState<string[]>([]);
+  const [picks, setPicks] = useViewState<string[]>('sponsees:picks', []);
   const pick = (who: string, on: boolean) =>
     setPicks((list) =>
       on

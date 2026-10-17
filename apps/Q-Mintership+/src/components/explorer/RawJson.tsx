@@ -33,6 +33,7 @@ import { ExpandChevron } from '../common/ExpandChevron';
 import { SmoothReveal } from '../common/SmoothReveal';
 import { copyText } from '../../utils/links';
 import { readableTone } from '../../utils/readable';
+import { useViewState } from '../../hooks/useViewState';
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 /** Every other line's tint (of the text colour over the box). */
@@ -178,7 +179,7 @@ export const RAW_LABEL = 'Raw API response';
  * row ("Open transaction").
  */
 export function RawResponse({ tx, before }: { tx: TxRow; before?: ReactNode }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useViewState(`raw:${tx.signature}`, false);
   const id = useId();
   const shown = useMemo(() => (open ? rawForDisplay(tx) : null), [open, tx]);
   return (

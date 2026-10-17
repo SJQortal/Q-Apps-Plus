@@ -32,6 +32,7 @@ import { formatCount, plural } from '../../../utils/format';
 import { usePayerBands } from '../account/connections/hooks';
 import { FOCUSABLE_ROW_SX, useFocusNewRows } from '../account/names/useShowMore';
 import { SET_LIST_SX } from './SponseeRows';
+import { useViewState } from '../../../hooks/useViewState';
 
 /** Result rows shown before "Show more". */
 const ROWS = 20;
@@ -153,7 +154,7 @@ function FirstPayers({
   results: Map<string, Checked<Funding | null>>;
   total: number;
 }) {
-  const [limit, setLimit] = useState(ROWS);
+  const [limit, setLimit] = useViewState('funded-by:limit', ROWS);
   const { listRef, focusFrom } = useFocusNewRows();
   const funding = new Map<string, Funding | null>();
   let failed = 0;
@@ -235,7 +236,7 @@ function FirstPayers({
 }
 
 function WentTo({ results, total }: { results: Map<string, Checked<PaymentPage>>; total: number }) {
-  const [limit, setLimit] = useState(ROWS);
+  const [limit, setLimit] = useViewState('went-to:limit', ROWS);
   const { listRef, focusFrom } = useFocusNewRows();
   const sent = new Map<string, TxRow[]>();
   let failed = 0;

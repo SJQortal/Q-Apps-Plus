@@ -112,7 +112,10 @@ export interface Found<T> {
 }
 
 /** Split `items` by `find` (null: not found, left out). */
-export function splitFound<T>(items: readonly T[], find: (item: T) => MatchStrength | null): Found<T> {
+export function splitFound<T>(
+  items: readonly T[],
+  find: (item: T) => MatchStrength | null
+): Found<T> {
   const match: T[] = [];
   const similar: T[] = [];
   for (const item of items) {

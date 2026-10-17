@@ -55,6 +55,7 @@ import { getAddressHistory } from '../../../../data/txs';
 import { ActivityChart } from './ActivityChart';
 import { FAMILY_LABEL, periodWords, type PlacedMark } from './activityWords';
 import { ACTIVITY_MAX, useActivityRows, type ActivityRows } from './useActivityRows';
+import { useViewState } from '../../../../hooks/useViewState';
 
 const DAY = 86_400_000;
 /** MINTER's approval window when its settings can't be read (as on the person page). */
@@ -179,7 +180,7 @@ function Legend({ state }: { state: ActivityState }) {
 /** The milestones as links, oldest first. */
 function Milestones({ marks }: { marks: readonly PlacedMark[] }) {
   const theme = useTheme();
-  const [all, setAll] = useState(false);
+  const [all, setAll] = useViewState('milestones:all', false);
   if (!marks.length) return null;
   const shown = all ? marks : marks.slice(0, MARKS_SHOWN);
   return (
@@ -245,7 +246,7 @@ function Milestones({ marks }: { marks: readonly PlacedMark[] }) {
 
 /** The picked period's transactions, newest first. */
 function PeriodList({ state }: { state: ActivityState }) {
-  const [all, setAll] = useState(false);
+  const [all, setAll] = useViewState('period:all', false);
   const picked = state.selected;
   const rows = useMemo(
     () =>
@@ -341,9 +342,16 @@ function ActivityBody({
         : null,
     [history.data, chain.data, group.data, address]
   );
-  const [hidden, setHidden] = useState<ReadonlySet<ActivityFamily>>(() => new Set());
-  const [selected, setSelected] = useState<{ start: number; end: number } | null>(null);
-  const [full, setFull] = useState(false);
+  // What is picked on the chart is kept for Back (useViewState).
+  const [hidden, setHidden] = useViewState<ReadonlySet<ActivityFamily>>(
+    'activity:hidden',
+    () => new Set()
+  );
+  const [selected, setSelected] = useViewState<{ start: number; end: number } | null>(
+    'activity:selected',
+    null
+  );
+  const [full, setFull] = useViewState('activity:full', false);
   // "Now", to the minute, so the chart doesn't redraw on every render.
   const to = Math.ceil(Date.now() / 60_000) * 60_000;
 

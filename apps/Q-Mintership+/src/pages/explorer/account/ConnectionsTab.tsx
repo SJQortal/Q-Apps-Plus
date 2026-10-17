@@ -106,6 +106,8 @@ import {
 } from './connections/searchEntries';
 import { ConnectionsCircle } from './connections/ConnectionsCircle';
 import { useConnectionsView, type ConnectionsView } from './connections/useConnectionsView';
+import { ViewScope } from '../../../components/common/ViewScope';
+import { useViewState } from '../../../hooks/useViewState';
 
 export interface ConnectionsTabProps {
   address: string;
@@ -116,20 +118,21 @@ const ROWS = 20;
 
 const SUBHEAD_SX = { fontSize: 16, fontWeight: 700, lineHeight: 1.3, mt: 1 } as const;
 
+/** A part of the list under its heading; what is opened in it is its own (ViewScope). */
 function Part({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
       <Typography component="h3" sx={SUBHEAD_SX}>
         {title}
       </Typography>
-      {children}
+      <ViewScope name={title}>{children}</ViewScope>
     </Box>
   );
 }
 
 /** A list of rows, the first 20 and then "Show all" (the focus goes to the first row added). */
 function Rows({ label, rows }: { label: string; rows: ReactNode[] }) {
-  const [all, setAll] = useState(false);
+  const [all, setAll] = useViewState(`rows:${label}`, false);
   const { listRef, focusFrom } = useFocusNewRows();
   return (
     <>
@@ -651,23 +654,27 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
       ) : null}
 
       <Box ref={setCommonNode} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <InCommonSection
-          address={address}
-          accountLabel={accountLabel}
-          data={common}
-          marks={marks}
-          sentAny={sentAny}
-          found={searching ? inCommonFound : null}
-          typed={typed}
-          tagOf={search.heldNameTag}
-        />
-        <MintershipLinks
-          address={address}
-          enabled={commonNear || typing}
-          find={searching ? findLink : null}
-          typed={typed}
-          tagOf={search.heldNameTag}
-        />
+        <ViewScope name="in-common">
+          <InCommonSection
+            address={address}
+            accountLabel={accountLabel}
+            data={common}
+            marks={marks}
+            sentAny={sentAny}
+            found={searching ? inCommonFound : null}
+            typed={typed}
+            tagOf={search.heldNameTag}
+          />
+        </ViewScope>
+        <ViewScope name="mintership">
+          <MintershipLinks
+            address={address}
+            enabled={commonNear || typing}
+            find={searching ? findLink : null}
+            typed={typed}
+            tagOf={search.heldNameTag}
+          />
+        </ViewScope>
       </Box>
 
       {noneLine && !searching ? (

@@ -31,6 +31,7 @@ import { SET_LIST_SX } from './sets/SponseeRows';
 import { fundedSummary } from './sets/words';
 import { withMarkedName } from '../../components/common/markedText';
 import { ExplorerHeaderSearch } from '../../components/explorer/ExplorerHeaderSearch';
+import { useViewState } from '../../hooks/useViewState';
 
 /** Rows shown before "Show more". */
 const ROWS = 20;
@@ -44,7 +45,7 @@ export default function FundedPage() {
     getFunded(address, { force })
   );
   const marks = useMinterMarks(valid);
-  const [limit, setLimit] = useState(ROWS);
+  const [limit, setLimit] = useViewState('funded:limit', ROWS);
   const { listRef, focusFrom } = useFocusNewRows();
   const [more, setMore] = useState<'idle' | 'loading' | 'failed'>('idle');
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);

@@ -51,6 +51,7 @@ import { alikeRuns } from '../../rules/explorer/alikeRuns';
 import { TxSentence } from './TxSentence';
 import { QdnFileButtons } from './file/QdnFileButtons';
 import { useTxWords } from './useTxWords';
+import { useViewState } from '../../hooks/useViewState';
 
 const NOWRAP = { whiteSpace: 'nowrap' } as const;
 
@@ -176,7 +177,8 @@ export interface TxListRowProps {
 }
 
 export function TxListRow({ tx, viewpoint = null, top = true, hint = null }: TxListRowProps) {
-  const [open, setOpen] = useState(false);
+  // Kept for Back (useViewState): a row inside a run apart from the same one on its own.
+  const [open, setOpen] = useViewState(`tx:${tx.signature}${top ? '' : ':run'}`, false);
   const words = useTxWords(tx, viewpoint);
   const links = usePersonLinks();
   const panelId = useId();
@@ -231,8 +233,8 @@ export function TxListRow({ tx, viewpoint = null, top = true, hint = null }: TxL
           <Typography variant="body2" color="text.secondary">
             {words.title}
           </Typography>
-          <TxFields fields={words.fields} label={`${words.title} details`} />
-          <TxPeople addresses={words.participants} maker={maker} />
+          <TxFields fields={words.fields} label={`${words.title} details`} viewId={tx.signature} />
+          <TxPeople addresses={words.participants} maker={maker} viewId={tx.signature} />
           <RawResponse
             tx={tx}
             before={
@@ -282,7 +284,7 @@ function TxRunRow({
   viewpoint: string | null;
   hint?: string | null;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useViewState(`run:${rows[0].signature}`, false);
   const tx = rows[0];
   const span = runSpan(rows);
   const words = useTxWords(tx, viewpoint);

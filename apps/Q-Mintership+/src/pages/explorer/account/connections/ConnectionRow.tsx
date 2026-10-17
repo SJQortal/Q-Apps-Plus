@@ -34,6 +34,7 @@ import { StatusChip } from '../../../../components/explorer/StatusChip';
 import { DirectionMark } from '../../../../components/explorer/DirectionMark';
 import { directionRules, type Flow } from '../../../../components/explorer/directionTone';
 import { statusKindOf } from '../../../../components/explorer/statusKinds';
+import { useViewState } from '../../../../hooks/useViewState';
 
 /** Evidence lines shown before "Show all". */
 const EVIDENCE_ROWS = 20;
@@ -107,7 +108,8 @@ export function EvidenceList({
   viewpoint: string;
   privs?: Readonly<Record<string, string | null>>;
 }) {
-  const [all, setAll] = useState(false);
+  // Kept for Back (useViewState), by the newest transaction listed.
+  const [all, setAll] = useViewState(`evidence:${txs[0]?.signature ?? ''}`, false);
   const { listRef, focusFrom } = useFocusNewRows();
   const shown = all ? txs : txs.slice(0, EVIDENCE_ROWS);
   return (
@@ -259,7 +261,11 @@ export function ConnectionRow({
   extra,
   flow,
 }: ConnectionRowProps) {
-  const [open, setOpen] = useState(false);
+  // Kept for Back (useViewState): one per account and what links them.
+  const [open, setOpen] = useViewState(
+    `connection:${other}:${flow ?? ''}:${evidence?.txs?.[0]?.signature ?? ''}`,
+    false
+  );
   const id = useId();
   const isAt = other.startsWith('A');
   const otherLabel = useDisplayName(other, isAt ? null : undefined).label;

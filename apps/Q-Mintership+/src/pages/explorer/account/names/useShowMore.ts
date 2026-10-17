@@ -1,5 +1,6 @@
 /**
- * A list shown `page` rows at a time. "Show more" moves the focus to the
+ * A list shown `page` rows at a time; with an `id`, how many are shown is
+ * kept for Back (useViewState). "Show more" moves the focus to the
  * first row it added (the button may leave with the last page, and the
  * reader goes on from where the new rows start). Rows take `tabIndex={-1}`
  * so a script can focus them; they stay out of the tab order.
@@ -8,10 +9,11 @@
  * all", a limit kept elsewhere): call `focusFrom(index)` as it grows.
  * useFocusFallback is for a button that leaves while it has the focus.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import { useViewState } from '../../../../hooks/useViewState';
 
-export function useShowMore(page: number) {
-  const [shown, setShown] = useState(page);
+export function useShowMore(page: number, id: string | null = null) {
+  const [shown, setShown] = useViewState(id, page);
   const firstNew = useRef<number | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
   useEffect(() => {

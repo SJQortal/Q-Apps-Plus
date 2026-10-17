@@ -37,6 +37,7 @@ import type { Finding } from '../../../../rules/explorer/findings';
 import { formatCount, plural } from '../../../../utils/format';
 import { CircleNodeDialog } from './CircleNodeDialog';
 import { sideWords } from './words';
+import { useViewState } from '../../../../hooks/useViewState';
 
 /** The line and ring colours: received, sent, and every other link. */
 function useSideColours() {
@@ -324,8 +325,14 @@ export function ConnectionsCircle({
   const phone = usePhoneLayout();
   const options = phone ? PHONE_LAYOUT : WIDE_LAYOUT;
   const [active, setActive] = useState<string | null>(null);
-  const [picked, setPicked] = useState<CircleNode | null>(null);
+  // The avatar whose transactions are open: kept for Back (useViewState), by its key.
+  const [pickedKey, setPickedKey] = useViewState<string | null>('circle:picked', null);
   const groups = circleNodes(recorded);
+  const picked = pickedKey
+    ? ([...groups.in, ...groups.out, ...groups.other].find((node) => node.key === pickedKey) ??
+      null)
+    : null;
+  const setPicked = (node: CircleNode | null) => setPickedKey(node ? node.key : null);
   const { placed, rest } = circleLayout(groups, options);
   const maxCount = Math.max(1, ...placed.map((node) => node.count));
   const left = placed.filter((node) => node.side === 'in');

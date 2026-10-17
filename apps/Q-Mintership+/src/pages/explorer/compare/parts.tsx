@@ -13,6 +13,7 @@ import { listWords } from '../../../rules/explorer/compare';
 import { friendlyError } from '../../../utils/friendlyError';
 import { copyText } from '../../../utils/links';
 import { formatCount } from '../../../utils/format';
+import { useViewState } from '../../../hooks/useViewState';
 
 /** Rows a list shows before "Show more" (each person in a row looks up a name). */
 export const ROWS_SHOWN = 20;
@@ -152,7 +153,7 @@ export function SteppedList<T>({
   render: (item: T, index: number) => ReactNode;
   ordered?: boolean;
 }) {
-  const [shown, setShown] = useState(ROWS_SHOWN);
+  const [shown, setShown] = useViewState(`compare:${label}`, ROWS_SHOWN);
   const left = items.length - shown;
   return (
     <>

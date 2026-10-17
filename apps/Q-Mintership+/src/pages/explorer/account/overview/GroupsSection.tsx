@@ -6,7 +6,7 @@
  * the grid, its own description. The first GROUPS_SHOWN, then the rest on
  * request. The same read as At a glance's count (`xgroups:<address>`).
  */
-import { useId, useState } from 'react';
+import { useId } from 'react';
 import { Box, Button, TextField, Typography } from '@mui/material';
 import { GroupAvatar } from '../../../../components/common/GroupAvatar';
 import { Card, Section } from '../../../../components/common/Section';
@@ -25,6 +25,7 @@ import { useListView, type ListView } from '../useListView';
 import { ViewToggle } from '../ViewToggle';
 import { membersWords } from './overviewWords';
 import { StatusChip } from '../../../../components/explorer/StatusChip';
+import { useViewState } from '../../../../hooks/useViewState';
 
 /** Groups shown before "Show all". */
 export const GROUPS_SHOWN = 9;
@@ -150,9 +151,9 @@ function listSx(view: ListView) {
 
 export function GroupsSection({ address }: { address: string }) {
   const groups = useQuery(`xgroups:${address}`, (force) => getGroupsOf(address, { force }));
-  const [sort, setSort] = useState<GroupSort>('minter');
+  const [sort, setSort] = useViewState<GroupSort>('groups:sort', 'minter');
   const [view, setView] = useListView('groups');
-  const [all, setAll] = useState(false);
+  const [all, setAll] = useViewState('groups:all', false);
   const listId = useId();
 
   let body: React.ReactNode;

@@ -41,6 +41,7 @@ import { FOCUSABLE_ROW_SX, useShowMore } from './useShowMore';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 import { ViewToggle } from '../ViewToggle';
 import { StatusChip } from '../../../../components/explorer/StatusChip';
+import { useViewState } from '../../../../hooks/useViewState';
 
 /** Names shown at first, and added by each "Show more". */
 export const NAMES_PAGE = 20;
@@ -334,8 +335,8 @@ export function NamesList({
   /** Read the whole name history (up to 1,000), offered while the read stopped short. */
   readWhole?: { reading: boolean; failed: boolean; read: () => void };
 }) {
-  const { shown, showMore, listRef } = useShowMore(NAMES_PAGE);
-  const [sort, setSort] = useState<NameSort>('primary');
+  const { shown, showMore, listRef } = useShowMore(NAMES_PAGE, 'names:shown');
+  const [sort, setSort] = useViewState<NameSort>('names:sort', 'primary');
   const [view, setView] = useNamesView();
   const byName = history.data ? historyByName(history.data.rows) : null;
 
