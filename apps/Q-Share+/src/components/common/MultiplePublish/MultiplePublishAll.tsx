@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSelector } from "react-redux";
 import {
   Alert,
   Box,
   Button,
   CircularProgress,
+  FormControlLabel,
   LinearProgress,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
+  Switch,
   Typography,
 } from "@mui/material";
 import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
@@ -16,9 +19,20 @@ import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import HelpOutlineOutlinedIcon from "@mui/icons-material/HelpOutlineOutlined";
 import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
+import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
+import type { RootState } from "../../../state/store";
 import { fileKind, fileKindIconElement } from "../../../utils/fileKind";
 import { formatBytes } from "../../../utils/formatBytes";
 import { errorMessage, isHubDecline, isHubTimeout } from "../../../utils/hubErrors";
+import {
+  FILES_PER_BATCH,
+  MAX_UNCONFIRMED_PER_ACCOUNT,
+  UNCHECKED_BATCH_MAX,
+  formatQort,
+  publishUnitFee,
+  splitPublishBatches,
+  waitForRoom,
+} from "../../../utils/publishBatches";
 import type { MultiplePublishRequest, PublishResource } from "../../../utils/publishPayload";
 import { mapWithConcurrency, searchQdn } from "../../../utils/qdnSearch";
 import { ResponsiveDialog } from "../mobile/ResponsiveDialog";
@@ -57,8 +71,16 @@ interface MultiplePublishProps {
   onError: (message?: string, published?: string[], stopped?: PublishStopped) => void;
 }
 
-type ResourceState = "waiting" | "checking" | "done" | "failed" | "missing" | "unknown";
-type Phase = "publishing" | "checking" | "settled";
+/** "queued": in a later batch, not sent to Hub yet. */
+type ResourceState = "queued" | "waiting" | "checking" | "done" | "failed" | "missing" | "unknown";
+/**
+ * "ready": a share in several batches waits for Start, so the user knows
+ * what it takes first. "room": between batches, until the network has
+ * confirmed enough of the last one (utils/publishBatches.ts).
+ */
+type Phase = "ready" | "room" | "publishing" | "checking" | "settled";
+/** After a batch: go on with the next one, or stop (the dialog has settled, closed or moved on). */
+type BatchOutcome = "next" | "stop";
 
 /**
  * Hub gives PUBLISH_MULTIPLE_QDN_RESOURCES 30 minutes per resource and keeps
@@ -73,6 +95,7 @@ export const STOP_WAITING_AFTER_S = 60;
 const CHECK_CONCURRENCY = 4;
 
 const STATE_TEXT: Record<ResourceState, string> = {
+  queued: "Queued",
   waiting: "Waiting",
   checking: "Checking",
   done: "Published",
@@ -175,6 +198,7 @@ function StateIcon({ state, busy }: { state: ResourceState; busy?: boolean }) {
   if (state === "failed") return <ErrorOutlineOutlinedIcon sx={{ color: "error.main" }} titleAccess={title} />;
   if (state === "missing") return <ReportProblemOutlinedIcon sx={{ color: "warning.main" }} titleAccess={title} />;
   if (state === "unknown") return <HelpOutlineOutlinedIcon sx={{ color: "text.secondary" }} titleAccess={title} />;
+  if (state === "queued") return <ScheduleOutlinedIcon sx={{ color: "text.secondary" }} titleAccess={title} />;
   return <CircularProgress size={20} aria-label={title} />;
 }
 
@@ -264,11 +288,26 @@ export async function findOnQdn(
 }
 
 /**
- * Sends the share's resources to Hub in one PUBLISH_MULTIPLE_QDN_RESOURCES
- * request and shows what landed. Hub confirms the whole batch once and
- * answers when it is finished; meanwhile its PUBLISH_STATUS messages give
- * each row its upload progress, and mark it published once signed. When
- * Hub names the resources that failed, only those can be retried; an error
+ * Set once Hub granted PUBLISH_MULTIPLE_QDN_RESOURCES for the session (Hub
+ * keeps the grant per tab until it closes), so a second big share doesn't ask
+ * for it again.
+ */
+let hubApprovesPublishes = false;
+
+/** For tests. */
+export function resetHubApproval(): void {
+  hubApprovesPublishes = false;
+}
+
+/**
+ * Sends the share's resources to Hub with PUBLISH_MULTIPLE_QDN_RESOURCES and
+ * shows what landed. Up to 20 files go in one request, which Hub confirms
+ * once and answers when it is finished; a bigger share goes in batches of
+ * 20 files (utils/publishBatches.ts), the share details with the last, and
+ * each batch waits until the network has confirmed enough of the one before.
+ * Meanwhile Hub's PUBLISH_STATUS messages give each row its upload progress,
+ * and mark it published once signed. When Hub names the resources that
+ * failed, the next batches still go, and only those can be retried; an error
  * without that list comes from Hub's checks before it publishes anything.
  * When Hub does not answer in time, or the user stops waiting, Hub may
  * still publish some or all of the batch, so the app asks QDN instead of
@@ -276,7 +315,10 @@ export async function findOnQdn(
  * to Hub: a late answer or status message still completes the batch.
  */
 export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError }: MultiplePublishProps) => {
-  const [phase, setPhase] = useState<Phase>("publishing");
+  const publicKey = useSelector((state: RootState) => state.auth.user?.publicKey);
+  const batches = useMemo(() => splitPublishBatches(publishes.resources), [publishes]);
+  const multi = batches.length > 1;
+  const [phase, setPhase] = useState<Phase>(multi ? "ready" : "publishing");
   const [rows, setRows] = useState<Record<string, ResourceState>>({});
   // The async steps below read the latest row states without waiting for a render.
   const rowsRef = useRef(rows);
@@ -301,22 +343,46 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
   // is at, so a row QDN does not have yet may just be queued behind it:
   // retrying it would pay for it twice. Retry waits for Hub's answer.
   const [awaiting, setAwaiting] = useState<Record<string, number>>({});
+  // Each run through the batches is numbered too: Continue, Pause and close end the one before.
+  const sequence = useRef(0);
+  const roomWait = useRef<AbortController | null>(null);
+  const [batch, setBatch] = useState({ index: 0, count: batches.length, size: batches[0]?.length ?? 0 });
+  const [unconfirmed, setUnconfirmed] = useState<number | null>(null);
+  const [approveAll, setApproveAll] = useState(false);
+  const [approved, setApproved] = useState(hubApprovesPublishes);
+  const [asking, setAsking] = useState(false);
+  const [approvalNote, setApprovalNote] = useState<string | null>(null);
+  const [unitFee, setUnitFee] = useState<number | null>(null);
   // Status messages stop between resources (and a small file sends only
   // one), so also show that time is passing.
   const [elapsed, setElapsed] = useState(0);
+  const ticking = phase === "publishing" || phase === "room";
   useEffect(() => {
-    if (phase !== "publishing") return;
+    if (!ticking) return;
     const started = Date.now();
     const timer = window.setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
     return () => window.clearInterval(timer);
-  }, [phase]);
+  }, [ticking, phase, batch.index]);
 
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
+      roomWait.current?.abort();
     };
   }, []);
+
+  // The start screen of a share in batches names the fees.
+  useEffect(() => {
+    if (!multi) return;
+    let active = true;
+    void publishUnitFee().then((fee) => {
+      if (active) setUnitFee(fee);
+    });
+    return () => {
+      active = false;
+    };
+  }, [multi]);
 
   const mark = useCallback((ids: string[], state: ResourceState) => {
     const next = { ...rowsRef.current };
@@ -423,8 +489,9 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
     [mark, allDone, finish, replaces]
   );
 
+  /** One request to Hub for one batch. */
   const run = useCallback(
-    async (request: MultiplePublishRequest) => {
+    async (request: MultiplePublishRequest): Promise<BatchOutcome> => {
       const ids = request.resources.map((r) => r.identifier);
       const current = ++attempt.current;
       waitingOn.current = current;
@@ -438,22 +505,35 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
       const answered = () => {
         if (alive.current) setAwaiting((prev) => answeredBy(prev, ids, current));
       };
+      // Another run, Stop waiting or Pause took over while Hub worked on this one.
+      const movedOn = () => attempt.current !== current || waitingOn.current !== current;
       try {
         await qortalRequestWithTimeout(request, request.resources.length * PUBLISH_MS_PER_RESOURCE);
       } catch (error: any) {
         answered();
-        if (!alive.current) return;
+        if (!alive.current) return "stop";
         // A retry replaced this request: take only what its answer confirms.
         const superseded = attempt.current !== current;
         // The user stopped waiting for it and QDN has been checked already.
         const detached = !superseded && waitingOn.current !== current;
         // A decline (in any of Hub's languages, or its 60 s auto-decline) and
         // Hub's Cancel, which stops the batch and removes what it had
-        // published, are the user's choice: close without an error.
+        // published, are the user's choice: close without an error. Once
+        // earlier batches are on QDN, pause instead, so they aren't lost
+        // from sight and Continue can send the rest.
         if (isHubDecline(error)) {
           settleUnsure(ids, current);
-          if (!superseded) onError(undefined, publishedIds(), stopped());
-          return;
+          if (superseded) return "stop";
+          if (multi && publishedIds().length > 0) {
+            mark(
+              ids.filter((id) => rowsRef.current[id] !== "done"),
+              "queued"
+            );
+            setPhase("settled");
+          } else {
+            onError(undefined, publishedIds(), stopped());
+          }
+          return "stop";
         }
         const unsuccessful: string[] = (error?.error?.unsuccessfulPublishes || [])
           .map((item: { identifier?: string }) => item?.identifier)
@@ -466,10 +546,9 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
           );
           if (!superseded) mark(unsuccessful, "failed");
           if (allDone()) finish();
-          else if (!superseded && !detached) setPhase("settled");
-          return;
+          return superseded || detached ? "stop" : "next";
         }
-        if (superseded) return;
+        if (superseded) return "stop";
         if (!isHubTimeout(error)) {
           // Hub answers without a list only from its checks before it
           // publishes anything (name, fee, balance, disk space): nothing of
@@ -481,33 +560,77 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
           );
           setErrorText(errorMessage(error, "Publishing failed"));
           if (!detached) setPhase("settled");
-          return;
+          return "stop";
         }
         // A timeout is not a failure: Hub keeps going on its own clock, so
         // ask QDN. A user who stopped waiting asked QDN back then, before
         // Hub had got through the batch, so ask again: Retry is only for
         // what is still not there now.
         await verify(request.resources.filter((r) => rowsRef.current[r.identifier] !== "done"));
-        return;
+        return "stop";
       }
       answered();
       mark(ids, "done");
       if (allDone()) finish();
+      return movedOn() ? "stop" : "next";
     },
-    [mark, settleUnsure, finish, allDone, onError, publishedIds, stopped, verify]
+    [mark, settleUnsure, finish, allDone, onError, publishedIds, stopped, verify, multi]
+  );
+
+  /**
+   * Sends `resources` batch by batch. Before each batch of a share in
+   * batches (and any batch bigger than the old 11-resource publish) the node
+   * is asked whether the account has room for it.
+   */
+  const runAll = useCallback(
+    async (resources: PublishResource[]) => {
+      const mine = ++sequence.current;
+      const parts = splitPublishBatches(resources);
+      const current = () => alive.current && sequence.current === mine;
+      mark(
+        resources.map((r) => r.identifier),
+        "queued"
+      );
+      setErrorText(null);
+      for (let i = 0; i < parts.length; i++) {
+        if (!current()) return;
+        const part = parts[i];
+        setBatch({ index: i, count: parts.length, size: part.length });
+        if (publicKey && (multi || part.length > UNCHECKED_BATCH_MAX)) {
+          setUnconfirmed(null);
+          setPhase("room");
+          const controller = new AbortController();
+          roomWait.current = controller;
+          await waitForRoom(publicKey, part.length, {
+            signal: controller.signal,
+            onWaiting: (count) => {
+              if (current()) setUnconfirmed(count);
+            },
+          });
+          if (roomWait.current === controller) roomWait.current = null;
+          if (controller.signal.aborted || !current()) return;
+        }
+        if ((await run({ ...publishes, resources: part })) === "stop") return;
+      }
+      if (!current()) return;
+      if (allDone()) finish();
+      else setPhase("settled");
+    },
+    [mark, publicKey, multi, run, publishes, allDone, finish]
   );
 
   useEffect(() => {
-    if (publishes && !hasStarted.current) {
+    if (publishes && !hasStarted.current && !multi) {
       hasStarted.current = true;
-      run(publishes);
+      void runAll(publishes.resources);
     }
-  }, [publishes, run]);
+  }, [publishes, runAll, multi]);
 
   const resources = publishes?.resources ?? [];
   const total = resources.length;
+  const fileTotal = resources.filter((r) => r.service === "FILE").length;
   const totalBytes = resources.reduce((sum, r) => sum + (r.service === "FILE" ? r.file.size : 0), 0);
-  const stateOf = (id: string): ResourceState => rows[id] ?? "waiting";
+  const stateOf = (id: string): ResourceState => rows[id] ?? "queued";
   const count = (state: ResourceState) => resources.filter((r) => stateOf(r.identifier) === state).length;
   // Not on QDN at the last check, but Hub has reported progress since.
   const isBusy = (id: string) => ["missing", "unknown"].includes(stateOf(id)) && Boolean(progress[id]);
@@ -516,12 +639,17 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
   const doneCount = count("done");
   const failedCount = count("failed");
   const missingCount = count("missing");
+  const queuedCount = count("queued");
   const heldCount = resources.filter((r) => isHeld(r.identifier)).length;
   const unknownCount = count("unknown");
   const settled = phase === "settled";
   const retryable = resources.filter((r) => {
     const state = stateOf(r.identifier);
-    return state === "failed" || (state === "missing" && !isBusy(r.identifier) && !isHeld(r.identifier));
+    return (
+      state === "failed" ||
+      state === "queued" ||
+      (state === "missing" && !isBusy(r.identifier) && !isHeld(r.identifier))
+    );
   });
   const uncertain = resources.filter((r) => ["missing", "unknown"].includes(stateOf(r.identifier)));
   const detailsDone = resources.some((r) => r.service === "DOCUMENT" && stateOf(r.identifier) === "done");
@@ -529,8 +657,12 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
   const canRetryFiles = retryable.some((r) => r.service === "FILE");
   const canStopWaiting = phase === "publishing" && elapsed >= STOP_WAITING_AFTER_S;
 
-  const close = () => onError(undefined, publishedIds(), stopped());
-  const retry = () => run({ ...publishes, resources: retryable });
+  const close = () => {
+    sequence.current += 1;
+    roomWait.current?.abort();
+    onError(undefined, publishedIds(), stopped());
+  };
+  const retry = () => void runAll(retryable);
   const checkAgain = () => {
     setErrorText(null);
     verify(uncertain);
@@ -538,19 +670,65 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
   // Hub carries on and is still listened to; only the app stops waiting.
   const stopWaiting = () => {
     waitingOn.current = 0;
-    verify(resources.filter((r) => stateOf(r.identifier) !== "done"));
+    sequence.current += 1;
+    verify(resources.filter((r) => !["done", "queued"].includes(stateOf(r.identifier))));
+  };
+  // Between batches nothing is out with Hub: stop before the next one.
+  const pause = () => {
+    sequence.current += 1;
+    roomWait.current?.abort();
+    setPhase("settled");
   };
 
+  const start = async () => {
+    if (approveAll && !approved) {
+      setAsking(true);
+      setApprovalNote(null);
+      try {
+        // Hub's own dialog explains the grant; give the user time to read it.
+        await qortalRequestWithTimeout(
+          { action: "SESSION_PERMISSIONS", permissions: ["PUBLISH_MULTIPLE_QDN_RESOURCES"] },
+          5 * 60 * 1000
+        );
+        hubApprovesPublishes = true;
+        setApproved(true);
+      } catch (error) {
+        if (!alive.current) return;
+        setAsking(false);
+        setApproveAll(false);
+        setApprovalNote(
+          isHubDecline(error)
+            ? "Hub didn't grant it, so it will ask you to confirm each batch."
+            : "This version of Hub can't approve every batch at once, so it will ask you to confirm each batch."
+        );
+        return;
+      }
+      if (!alive.current) return;
+      setAsking(false);
+    }
+    hasStarted.current = true;
+    void runAll(resources);
+  };
+
+  const hubAsks = approved ? "Hub publishes it without asking again" : "Hub asks you to confirm this batch";
   const title =
-    phase === "publishing"
-      ? "Publishing"
-      : phase === "checking"
-        ? "Checking QDN"
-        : unknownCount > 0
-          ? "Publish not confirmed"
-          : failedCount === total
-            ? "Publish failed"
-            : "Publish incomplete";
+    phase === "ready"
+      ? `Publish in ${batches.length} batches`
+      : phase === "room"
+        ? "Waiting for the network"
+        : phase === "publishing"
+          ? multi
+            ? `Publishing batch ${batch.index + 1} of ${batch.count}`
+            : "Publishing"
+          : phase === "checking"
+            ? "Checking QDN"
+            : unknownCount > 0
+              ? "Publish not confirmed"
+              : failedCount === total
+                ? "Publish failed"
+                : queuedCount > 0 && failedCount === 0 && missingCount === 0
+                  ? "Publish paused"
+                  : "Publish incomplete";
 
   return (
     <ResponsiveDialog
@@ -561,7 +739,20 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
       maxWidth="sm"
       dismissible={false}
       actions={
-        settled ? (
+        phase === "ready" ? (
+          <>
+            <Button color="inherit" onClick={close} disabled={asking}>
+              Cancel
+            </Button>
+            <Button variant="contained" onClick={() => void start()} disabled={asking}>
+              {asking ? "Waiting for Hub…" : "Start publishing"}
+            </Button>
+          </>
+        ) : phase === "room" ? (
+          <Button color="inherit" onClick={pause}>
+            Pause
+          </Button>
+        ) : settled ? (
           <>
             <Button color="inherit" onClick={close}>
               Close
@@ -573,7 +764,11 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
             )}
             {retryable.length > 0 && (
               <Button variant="contained" onClick={retry}>
-                {retryable.some((r) => stateOf(r.identifier) === "missing") ? "Retry missing" : "Retry failed"}
+                {queuedCount > 0
+                  ? "Continue"
+                  : retryable.some((r) => stateOf(r.identifier) === "missing")
+                    ? "Retry missing"
+                    : "Retry failed"}
               </Button>
             )}
           </>
@@ -585,14 +780,64 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
       }
     >
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {phase === "publishing" ? (
+        {phase === "ready" ? (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <Typography>
+              {fileTotal} files{total > fileTotal ? " and the share details" : ""}: {total} publishes in{" "}
+              {batches.length} batches of up to {FILES_PER_BATCH} files
+              {totalBytes > 0 ? ` (${formatBytes(totalBytes)})` : ""}
+              {unitFee ? `, ${formatQort(unitFee * total)} in fees` : ""}.
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Qortal takes at most {MAX_UNCONFIRMED_PER_ACCOUNT} unconfirmed publishes per account, so each batch waits
+              for the network to confirm the one before. A block comes about once a minute. Keep this tab open until it
+              finishes. If you stop, the files already on QDN stay in your draft and aren't sent again.
+            </Typography>
+            {approved ? (
+              <Alert severity="info">Hub approves Q-Share+'s publishes for this session, so it won't ask for each batch.</Alert>
+            ) : (
+              <Box>
+                <FormControlLabel
+                  control={<Switch checked={approveAll} onChange={(e) => setApproveAll(e.target.checked)} disabled={asking} />}
+                  label="Approve every batch at once"
+                  sx={{ minHeight: 44, mr: 0 }}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  Hub asks once, then publishes from Q-Share+ without asking again until you close this tab. Otherwise
+                  Hub asks you to confirm each of the {batches.length} batches.
+                </Typography>
+              </Box>
+            )}
+            {approvalNote && <Alert severity="info">{approvalNote}</Alert>}
+          </Box>
+        ) : phase === "room" ? (
+          <Box>
+            <LinearProgress aria-label="Waiting for the network" />
+            <Typography sx={{ mt: 1.5 }}>
+              {batch.index === 0
+                ? `Your account has transactions waiting for a block. Qortal takes at most ${MAX_UNCONFIRMED_PER_ACCOUNT} per account, so the first batch goes once they are confirmed.`
+                : `Batch ${batch.index} of ${batch.count} is published. Batch ${batch.index + 1} goes once the network has confirmed it: a block comes about once a minute.`}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} aria-live="off">
+              {unconfirmed !== null ? `${unconfirmed} still unconfirmed · ` : ""}
+              {clock(elapsed)} so far. {doneCount} of {total} published.
+            </Typography>
+          </Box>
+        ) : phase === "publishing" ? (
           <Box>
             <LinearProgress aria-label="Publishing" />
-            <Typography sx={{ mt: 1.5 }}>
-              Publishing {total} {total === 1 ? "resource" : "resources"}
-              {totalBytes > 0 ? ` (${formatBytes(totalBytes)})` : ""}… Hub asks you to confirm once, then keep this
-              tab open.
-            </Typography>
+            {multi ? (
+              <Typography sx={{ mt: 1.5 }}>
+                Publishing {batch.size} {batch.size === 1 ? "resource" : "resources"}… {hubAsks}, then keep this tab
+                open. {doneCount} of {total} published.
+              </Typography>
+            ) : (
+              <Typography sx={{ mt: 1.5 }}>
+                Publishing {total} {total === 1 ? "resource" : "resources"}
+                {totalBytes > 0 ? ` (${formatBytes(totalBytes)})` : ""}… Hub asks you to confirm once, then keep this
+                tab open.
+              </Typography>
+            )}
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} aria-live="off">
               {clock(elapsed)} so far. Large files take a while to reach the node; nothing is lost if you wait.
             </Typography>
@@ -622,6 +867,12 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
         )}
 
         {errorText && <Alert severity="error">{errorText}</Alert>}
+        {settled && queuedCount > 0 && (
+          <Alert severity="info">
+            {queuedCount === 1 ? "1 resource hasn't" : `${queuedCount} resources haven't`} been sent yet. Continue sends{" "}
+            {queuedCount === 1 ? "it" : "them"}, waiting for the network between batches.
+          </Alert>
+        )}
         {settled && failedCount > 0 && (
           <Alert severity="warning">
             Some resources were not published. Retry sends only the failed ones; if it keeps failing, wait a minute

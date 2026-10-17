@@ -46,6 +46,8 @@ interface QortalRequestOptions {
   notifications?: unknown[]
   /** NOTIFICATION_REMOVE / NOTIFICATION_MARK_SEEN. */
   notificationIds?: Array<string | { notificationId: string; identifier?: string }>
+  /** SESSION_PERMISSIONS: requests Hub grants for the rest of the tab's session. */
+  permissions?: string[]
 }
 
 declare function qortalRequest(options: QortalRequestOptions): Promise<any>
