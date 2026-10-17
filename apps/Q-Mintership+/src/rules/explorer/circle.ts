@@ -77,6 +77,8 @@ export interface LayoutOptions {
   /** Avatar sizes: the smallest, and the biggest when a side holds few. */
   minSize: number;
   maxSize: number;
+  /** Steps between the bottom avatars' centres: more where their names sit under them. */
+  bothSpacing: number;
 }
 
 /** A wide screen: a box 4 wide by 3 high, room beside each side for the names. */
@@ -87,23 +89,21 @@ export const WIDE_LAYOUT: LayoutOptions = {
   bothMax: 4,
   minSize: 28,
   maxSize: 56,
+  bothSpacing: 2.5,
 };
 /** A phone: a box 3 wide by 4 high, no names beside the avatars. */
 export const PHONE_LAYOUT: LayoutOptions = {
-  rx: 35,
+  rx: 40,
   ry: 41,
   sideMax: 8,
   bothMax: 3,
   minSize: 24,
   maxSize: 44,
+  bothSpacing: 1.5,
 };
 
-/** The gap left at the top and the bottom between the two sides, in degrees. */
-const GAP_DEGREES = 20;
-/** The bottom gap when accounts paid both ways sit in it. */
-const BOTH_GAP_DEGREES = 52;
-/** How far the bottom row reaches either way, as a share of the ellipse's width. */
-const BOTH_SPREAD = 0.8;
+/** The widest the bottom avatars spread, between centres, in degrees. */
+const BOTH_STEP_MAX = 36;
 
 const SIDE_OF: Readonly<Record<Finding['kind'], CircleSide>> = {
   paidBy: 'in',
@@ -192,8 +192,12 @@ export function nodeSize(count: number, maxCount: number, min: number, max: numb
 }
 
 /**
- * The nodes of both sides on their arcs: the right side from just under
- * the top to just above the bottom, the left one its mirror image.
+ * Every node on one ring, evenly spaced and mirrored (Simon, 2026-10-17:
+ * "make the circles around nicely symetrical"): the sides share one step,
+ * the right side from just under the top down, the left one its mirror
+ * image, the fewer of the two centred on its side; the accounts paid both
+ * ways centred at the bottom; two steps' gap at the top and between the
+ * groups.
  */
 export function circleLayout(
   groups: CircleGroups,
@@ -211,43 +215,42 @@ export function circleLayout(
     ...sides.both.map((n) => n.count)
   );
   const rad = (degrees: number) => (degrees * Math.PI) / 180;
-  const gap = rad(GAP_DEGREES);
-  // The sides leave the bottom to the accounts paid both ways, when there are any.
-  const bottomGap = sides.both.length ? rad(BOTH_GAP_DEGREES) : gap;
-  const span = Math.PI - gap - bottomGap;
+  const at = (angle: number) => ({
+    x: 50 + options.rx * Math.cos(angle),
+    y: 50 + options.ry * Math.sin(angle),
+  });
+  const most = Math.max(sides.in.length, sides.out.length);
+  const nBoth = sides.both.length;
+  const k = options.bothSpacing;
+  // One step for every gap: the sides' last slots two steps from the bottom group (or each other).
+  const step = nBoth ? Math.PI / (most + 2 + (k * (nBoth - 1)) / 2) : Math.PI / (most + 1);
+  // As big as half the ring holds.
+  const max = sideMaxSize(most + Math.ceil((k * nBoth) / 2), options);
   const place = (list: readonly CircleNode[], side: 'in' | 'out'): PlacedNode[] => {
-    const max = sideMaxSize(list.length, options);
+    // The fewer side centred on the slots the fuller one fills.
+    const offset = (most - list.length) / 2;
     return list.map((node, i) => {
-      // From the top down; one node sits level with the middle.
-      const t = (i + 0.5) / list.length;
-      const angle = -Math.PI / 2 + gap + t * span;
-      const across = options.rx * Math.cos(angle);
+      // From the top down; one node alone sits level with the middle.
+      const point = at(-Math.PI / 2 + step * (i + 1 + offset));
       return {
         ...node,
-        x: side === 'out' ? 50 + across : 50 - across,
-        y: 50 + options.ry * Math.sin(angle),
+        x: side === 'out' ? point.x : 100 - point.x,
+        y: point.y,
         size: nodeSize(node.count, maxCount, options.minSize, max),
       };
     });
   };
-  // Paid both ways: a flat row along the bottom, under the sides' lowest
-  // nodes, the most transactions in the middle. Flatter and wider than the
-  // ellipse, so the names under them have room side by side.
-  const bothMax = sideMaxSize(sides.both.length + 4, options);
+  // Paid both ways: centred at the bottom, the most transactions in the middle.
   const middleOut = [...sides.both].sort((a, b) => b.count - a.count);
   const order: CircleNode[] = [];
   middleOut.forEach((node, i) => (i % 2 ? order.unshift(node) : order.push(node)));
-  const spread =
-    options.rx * BOTH_SPREAD * Math.min(1, (order.length - 1) / Math.max(1, options.bothMax - 1));
-  const bottom = order.map((node, i) => {
-    const p = order.length === 1 ? 0 : (i / (order.length - 1)) * 2 - 1;
-    return {
-      ...node,
-      x: 50 + spread * p,
-      y: 50 + options.ry * (0.98 - 0.12 * p * p),
-      size: nodeSize(node.count, maxCount, options.minSize, bothMax),
-    };
-  });
+  const bothStep = Math.min(k * step, rad(BOTH_STEP_MAX));
+  const bottom = order.map((node, i) => ({
+    ...node,
+    // From the left (the larger angle) to the right.
+    ...at(Math.PI / 2 + bothStep * ((nBoth - 1) / 2 - i)),
+    size: nodeSize(node.count, maxCount, options.minSize, max),
+  }));
   return {
     placed: [...place(sides.in, 'in'), ...place(sides.out, 'out'), ...bottom],
     rest: {

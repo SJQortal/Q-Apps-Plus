@@ -190,15 +190,15 @@ describe('circleLayout, both ways', () => {
     expect(rest.both).toBe(6 - WIDE_LAYOUT.bothMax);
     expect(placed).toHaveLength(WIDE_LAYOUT.bothMax);
     for (const p of placed) {
-      expect(p.y).toBeGreaterThan(75);
+      expect(p.y).toBeGreaterThan(70);
       expect(p.y).toBeLessThan(100);
       expect(Math.abs(p.x - 50)).toBeLessThanOrEqual(WIDE_LAYOUT.rx);
     }
     const byX = [...placed].sort((a, b) => a.x - b.x).map((p) => p.address);
     expect(byX.slice(1, 3).sort()).toEqual(['B0', 'B1']);
-    // Far enough apart for a name under each (in the box's own units: about 130 px at 830).
+    // Evenly spaced, mirrored about the middle.
     const xs = placed.map((p) => p.x).sort((a, b) => a - b);
-    for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeGreaterThan(15);
+    for (let i = 0; i < xs.length; i++) expect(xs[i] - 50).toBeCloseTo(50 - xs[xs.length - 1 - i]);
     // One alone sits straight under the middle.
     expect(circleLayout(both(1)).placed[0].x).toBeCloseTo(50);
     expect(circleLayout(both(5), PHONE_LAYOUT).placed).toHaveLength(PHONE_LAYOUT.bothMax);
@@ -224,6 +224,47 @@ describe('circleLayout, both ways', () => {
       both: extra,
     });
     expect(lowest(sides(both(2).both))).toBeLessThan(lowest(sides([])));
+  });
+});
+
+describe('circleLayout, symmetrical', () => {
+  const nodes = (side: 'in' | 'out' | 'both', n: number): CircleNode[] =>
+    Array.from({ length: n }, (_, i) => ({
+      key: `${side}:${side}${i}`,
+      address: `${side}${i}`,
+      side,
+      count: 1,
+      findings: [],
+      qort: 0n,
+    }));
+  const ring = (inN: number, outN: number, bothN: number) =>
+    circleLayout({
+      in: nodes('in', inN),
+      out: nodes('out', outN),
+      both: nodes('both', bothN),
+      other: [],
+    }).placed;
+  const angle = (p: { x: number; y: number }, rx: number) =>
+    Math.atan2((p.y - 50) / WIDE_LAYOUT.ry, (p.x - 50) / rx);
+
+  it('mirrors the two sides, evenly spaced', () => {
+    const placed = ring(4, 4, 2);
+    const left = placed.filter((p) => p.side === 'in');
+    const right = placed.filter((p) => p.side === 'out');
+    left.forEach((p, i) => {
+      expect(p.x).toBeCloseTo(100 - right[i].x);
+      expect(p.y).toBeCloseTo(right[i].y);
+    });
+    const steps = right
+      .slice(1)
+      .map((p, i) => angle(p, WIDE_LAYOUT.rx) - angle(right[i], WIDE_LAYOUT.rx));
+    for (const s of steps) expect(s).toBeCloseTo(steps[0]);
+  });
+
+  it('centres the fewer side on the fuller one’s slots', () => {
+    const placed = ring(1, 5, 0);
+    const right = placed.filter((p) => p.side === 'out');
+    expect(placed.find((p) => p.side === 'in')?.y).toBeCloseTo(right[2].y);
   });
 });
 

@@ -10,8 +10,10 @@
  * and red circle around the avatar represent the proportion"), by QORT, or
  * by transactions when no QORT moved.
  *
- * Easy to read: one straight line from the middle to each avatar, every
- * avatar at its own angle, so no line crosses another or runs under an
+ * Easy to read: the avatars evenly spaced on one ring, the two sides
+ * mirrored (Simon, 2026-10-17: "make the circles around nicely
+ * symetrical"); one straight line from the middle to each, every avatar at
+ * its own angle, so no line crosses another or runs under an
  * avatar; green on the left, red on the right, lighter until one is
  * pointed at or focused. On wider screens each name sits on the outer side
  * of its avatar, away from the lines, and under it at the bottom. The links that aren't transfers
@@ -22,7 +24,7 @@
  * avatars are lists of buttons, each side its own, the most transactions
  * first, each named with what it opens; the lines are decoration.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Box, Button, ButtonBase, Tooltip, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { visuallyHidden } from '@mui/utils';
@@ -125,6 +127,41 @@ function countWords(node: CircleNode): string {
       : plural(node.count, 'transaction');
 }
 
+/** The widest a name under a bottom avatar is, and the height of one (two lines). */
+const BOTTOM_NAME_MAX = 124;
+const BOTTOM_NAME_HEIGHT = 36;
+
+/**
+ * How wide the name under a bottom avatar may be, in pixels, in a drawing
+ * `width` by `height`: clear of every neighbour's avatar and name at the
+ * height of this name (names hang down, so one higher up is clear of it);
+ * the widest when nothing is in the way.
+ */
+function bottomNameRoom(
+  node: PlacedNode,
+  bottom: readonly PlacedNode[],
+  width: number,
+  height: number
+): number {
+  const px = (p: PlacedNode) => ({ x: (p.x / 100) * width, y: (p.y / 100) * height });
+  const me = px(node);
+  const top = me.y + Math.max(22, node.size / 2 + 5);
+  const band = [top, top + BOTTOM_NAME_HEIGHT];
+  let room = BOTTOM_NAME_MAX;
+  for (const other of bottom) {
+    if (other === node) continue;
+    const at = px(other);
+    const reach = Math.max(22, other.size / 2 + 5);
+    const dx = Math.abs(at.x - me.x);
+    const meets = (y0: number, y1: number) => y0 < band[1] && y1 > band[0];
+    // Its name beside this one: they share the gap.
+    if (meets(at.y + reach, at.y + reach + BOTTOM_NAME_HEIGHT)) room = Math.min(room, dx - 6);
+    // Its avatar: this name reaches up to its edge.
+    if (meets(at.y - reach, at.y + reach)) room = Math.min(room, 2 * (dx - reach) - 6);
+  }
+  return Math.max(48, room);
+}
+
 /** "(500 QORT)"; both ways "(500 QORT in, 20 out)", "(500 QORT in)"; null without QORT. */
 function qortWords(node: CircleNode): string | null {
   if (node.side === 'both' && node.split) {
@@ -184,7 +221,7 @@ function Node({
   node,
   index,
   named,
-  room = 20,
+  room = BOTTOM_NAME_MAX,
   onActive,
   onPick,
 }: {
@@ -192,7 +229,7 @@ function Node({
   index: number;
   /** Its name beside it, on the outer side (wider screens). */
   named: boolean;
-  /** At the bottom: the room between it and the next, in % of the circle's width. */
+  /** At the bottom: how wide its name may be, in pixels. */
   room?: number;
   onActive: (key: string | null) => void;
   onPick: (node: CircleNode) => void;
@@ -300,10 +337,13 @@ function Node({
               lineHeight: 1.2,
               whiteSpace: 'nowrap',
               pointerEvents: 'none',
-              // At the bottom, no wider than the room to the next one (cqw: the circle's width).
-              ...(below
-                ? { width: 'max-content', maxWidth: `min(124px, calc(${room}cqw - 6px))` }
-                : {}),
+              // No wider than its room: at the bottom, what its neighbours leave
+              // (bottomNameRoom); on a side, to the edge of the figure (cqw: the
+              // circle's width; its padding and a little past it, less the margin).
+              width: 'max-content',
+              maxWidth: below
+                ? `${Math.round(room)}px`
+                : `calc(${node.side === 'in' ? node.x : 100 - node.x}cqw + 32px - ${Math.max(22, node.size / 2 + 5)}px)`,
             }}
           >
             {/* The amount after the name, always whole; the name cut short when long. */}
@@ -312,6 +352,7 @@ function Node({
                 component="span"
                 sx={{
                   order: node.side === 'in' ? 0 : 1,
+                  flexShrink: 0,
                   fontWeight: 500,
                   color: 'text.secondary',
                   fontSize: below ? 12 : undefined,
@@ -465,11 +506,23 @@ export function ConnectionsCircle({
   const left = placed.filter((node) => node.side === 'in');
   const right = placed.filter((node) => node.side === 'out');
   const bottom = placed.filter((node) => node.side === 'both');
-  // The room each name under the bottom row has: the gap to its nearest neighbour.
-  const bottomXs = bottom.map((node) => node.x).sort((a, b) => a - b);
-  const bottomRoom = Math.min(30, ...bottomXs.slice(1).map((x, i) => x - bottomXs[i]));
-  // As tall as the fuller side needs: a few accounts leave no empty space.
-  const fullest = Math.max(left.length, right.length);
+  // The drawing's size, measured, for the room under the bottom avatars.
+  const [box, setBox] = useState<HTMLElement | null>(null);
+  const [boxSize, setBoxSize] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    if (!box) return;
+    const update = () =>
+      setBoxSize(box.clientWidth ? { width: box.clientWidth, height: box.clientHeight } : null);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [box]);
+  const bottomRoom = (node: PlacedNode) =>
+    boxSize ? bottomNameRoom(node, bottom, boxSize.width, boxSize.height) : BOTTOM_NAME_MAX;
+  // As tall as the fuller half of the ring needs: a few accounts leave no empty space.
+  const fullest =
+    Math.max(left.length, right.length) + Math.ceil((options.bothSpacing * bottom.length) / 2);
   const aspect = phone
     ? fullest <= 3
       ? '1 / 1'
@@ -520,6 +573,7 @@ export function ConnectionsCircle({
             }}
           >
             <Box
+              ref={setBox}
               sx={{
                 position: 'relative',
                 width: '100%',
@@ -587,7 +641,7 @@ export function ConnectionsCircle({
                         node={node}
                         index={i}
                         named={!phone}
-                        room={bottomRoom}
+                        room={bottomRoom(node)}
                         onActive={setActive}
                         onPick={setPicked}
                       />
