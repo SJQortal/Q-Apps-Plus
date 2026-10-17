@@ -79,6 +79,7 @@ function Timeline({ story }: { story: MinterStory }) {
         <ListSkeleton count={2} label="Loading their MINTER history" />
       ) : about.length ? (
         <TimelineList
+          groupAlike
           events={about}
           nowMs={chain.data?.timestamp ?? Date.now()}
           label="Their MINTER events, newest first"

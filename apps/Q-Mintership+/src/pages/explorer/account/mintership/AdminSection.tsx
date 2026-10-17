@@ -4,6 +4,7 @@
  * the Activity page has already read a window this session (this never
  * starts that read: it is the whole group's), and their answers on request.
  */
+import { firstAlikeLines } from '../../../history/parts/alikeEvents';
 import { useState, useSyncExternalStore } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button } from '@mui/material';
@@ -78,7 +79,8 @@ export function AdminSection({
   nowMs: number;
 }) {
   const [all, setAll] = useState(false);
-  const shown = all ? proposals : proposals.slice(0, FIRST);
+  // The first lines, whole: proposals of one kind made the same day are one line.
+  const shown = all ? proposals : firstAlikeLines(proposals, FIRST);
   const admin = isAdmin || wasAdmin;
   return (
     <Section
@@ -90,13 +92,14 @@ export function AdminSection({
         <>
           <Note>{proposalsSummary(proposals)}</Note>
           <TimelineList
+            groupAlike
             events={shown}
             showSubject
             showProposer={false}
             nowMs={nowMs}
             label="Their proposals, newest first"
           />
-          {proposals.length > FIRST ? (
+          {proposals.length > shown.length || all ? (
             <Box>
               {/* One button that stays: the focus stays on it. */}
               <Button
