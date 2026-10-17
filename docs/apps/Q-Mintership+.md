@@ -902,6 +902,24 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
     - **Screenshot checks:** the 30 Explorer screens after items 66–73, every theme and size: 600 captures, 0 console errors, 0 sideways overflow, 0 unlabelled buttons; the one axe rule broken (the chips above) and one small target (a circle avatar) are fixed. The 25 screens items 74–78 touch (the MINTER profile, nomination, decision, Home and Activity screens, and the Explorer's account, connections, MINTER profile, names, Compare, sets, transaction and quiz screens), Hub 3.0 and White at every size: 250 captures, 0 axe violations, 0 console errors, 0 sideways overflow, 0 unlabelled buttons; the History-count screen's own wait was fixed and it passes. The circle screens again after the 44 px targets: 30 captures, 0 small targets.
     - Tests 2,314 passed (from 2,275 before items 66–78), 1 expected fail, 8 skipped; build, lint and the theme check pass; the zip is rebuilt after each change.
 
+79. **Scan all History** (Simon, 2026-10-17: "for the When sorting in History I want option Scan all History"). History's When ends with **Scan all History**: every 30-day window back to MINTER's creation (16 Sept 2024: 26 windows today, read like the longer periods, never more than 36), kept in the link as `period=all`. One type searched by type reads its whole history in one search, as before. The list says "N events since MINTER began." and offers no longer period after it.
+
+80. **What's new, marked in History** (Simon, 2026-10-17: "in History, if there is a new notification for MAs, when they click History I want that new in History to be highlighted"). A Minter Admin who opens History with a count on its tab finds what it counted marked **New**: the row tinted, with an edge in the theme's colour and a New chip, and "3 changes new since you last looked, marked New." above the list. The marks stay for that visit while the count clears, as before. One rule decides both the count and the marks (`data/historyNews.ts` → `isHistoryNews`).
+
+81. **Nominations in Decisions** (Simon, 2026-10-17: "merge the Nominations tab into Decisions (pay attention so different accounts have adequate options there)(propose nomination will be the first option at the top of + Propose)(Recently decided is in History anyway…"):
+    - Decisions has three tabs: **Decisions**, **Nominations** and **Ready to mint**, each with how many it lists. A Minter Admin opens on Decisions and everyone else on Nominations; `?show=` keeps the tab, `?state=` a nomination state. On a phone all three fit in a row (the narrowest, 360 px, too), and a swipe sideways opens the next or the previous one, as in the Explorer.
+    - **Each account's options:** a Minter Admin's **+ Propose** starts with Propose nomination, then the chain proposals, Clean up stale invites (it opens the Decisions tab there) and Ask the Minter Admins. A level 5+ member who isn't one gets Propose nomination alone. Everyone else gets the note on why not (the blocks to level 5, Sign in, open in Hub). On phones the page's main action is the floating button (Propose's sheet for a Minter Admin). The nominee's own nomination, with Accept or Join now, and a changed target sit above the tabs, on every tab.
+    - **Recently decided is gone:** History has how each one ended. A nomination's own page offers Propose nomination again where a round ran out, and says when a decided one ended ("Expired 4 days ago").
+    - **Decisions is in everyone's navigation** and Nominations leaves it: the phone bar is Home, Decisions, History, Explorer. A nomination's page and the nominate form keep Decisions lit. The 5-minute read that decided whether members saw Decisions is gone. Old `/nominations` links, with their view and state, open the same tab; the Minter Admins' Hub alert for a new nomination opens Decisions.
+
+82. **The Minter Profile, in one place** (Simon, 2026-10-17: "Minter Profile could be merged into on Minter Profile … in Explorer", then "I want it to be called : "Minter Profile""). The profile page is merged into the Explorer's account tab, named **Minter Profile** (its address stays `/explorer/account/<who>/mintership`):
+    - `/people/<address or name>` links, old shared ones too, open it, and so does every person link outside the Explorer ("open their page"). Links to it say **Open Minter Profile**; the "Open in Explorer" beside it went where both opened the same account (a decision's and a nomination's pages).
+    - The tab carries the profile's own actions under MINTER status (`pages/person/ProfileActions.tsx`): Propose nomination for them or Add your support, Open in Decisions for a Minter Admin while a decision about them is open, and on one's own profile Accept nomination or Join now and Become a Minter Admin or Step down; otherwise the reason why not. Their nomination shows in full (Nomination, or Latest nomination): comments, community votes, their own next step, when it ended; then its rounds in brief.
+    - The Explorer's own files still import nothing that signs or publishes: the tab takes its actions from the profile's module, and `eslint.config.js` (with its test) says so.
+
+83. **Checks:** the screenshot check of the screens items 79–81 touch (Decisions as a Minter Admin and a member, its Propose menu, every Nominations and Ready to mint screen, a nominee, the community's votes, Nominate, a nomination, Home's heroes, History with Scan all and New, and the History count), Hub 3.0 and White at every size: 300 captures, 0 console errors, 0 sideways overflow, 0 unlabelled buttons; one axe rule broke, on History's New rows (an outlined red chip on the tint), fixed (outlined chips keep the card's own background), and the 10 captures again: 0 violations. Item 82's screens (a nominee's own Minter Profile, a Minter Admin's and a member's own, its comments, the Minter Admin's view of it, a decision's and a nomination's pages, Propose's Remove a Minter Admin for oneself, the Explorer's home and account), Hub 3.0 and White at every size: 140 captures, 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations, 0 small targets. Checked on Simon's node through the dev server: the tabs and their counts (Decisions 1, Nominations 1, Ready to mint 91), at 375 and 360 px, a swipe each way, an old `/nominations?show=signing` link, and Jonny's Minter Profile from `/people/Jonny` (his card in full: 6 of 8 approvals, 7 rejections, comments and votes).
+    - Tests 2,322 passed, 1 expected fail, 8 skipped (the profile page's tests moved to the Minter Profile tab; the ones the Explorer's own tests already cover, such as a name lookup or an unused address, went); build, lint and the theme check pass; the zip is rebuilt after each change.
+
 ## Follow-ups
 
 ### Readiness
@@ -1111,9 +1129,18 @@ Each works as built; each is a choice.
 
 ### Open questions for Simon (items 74–78, 2026-10-17)
 
-1. **The phone bar without Decisions** now has four items (Home, Nominees, History, Explorer). Bring Settings back as a fifth there, or keep it as Home's gear for everyone?
+1. ~~**The phone bar without Decisions**~~ Answered by item 81: Decisions is in everyone's bar (Home, Decisions, History, Explorer). Settings stays Home's gear.
 2. **Chips in lists** (connections, sponsored accounts, decision cards) explain themselves on hover and a tap, but aren't in the Tab order (a stop per chip in a long list is a lot); the header chips are. Make the list chips focusable too?
-3. **The MINTER profile tab** stays read-only (the Explorer's rule); the profile page keeps Join now, admin roles and comments. Fine, or should the tab carry the profile's actions too?
+3. ~~**The MINTER profile tab** stays read-only~~ Answered by item 82: the profile is the tab, with its actions.
+
+### Open questions for Simon (items 79–82, 2026-10-17)
+
+Each works as built; each is a choice.
+
+1. **Scan all History** with All types reads every window back to MINTER's start (26 today, one more each month). Fine as it is, or say first how much it reads?
+2. **New marks** are for Minter Admins (the History count is theirs). Mark what's new for everyone, from their own last visit?
+3. **Decisions' count** on its tab counts what collects approvals plus the nominations waiting for a first approval. That number, or only what waits for your answer (as the navigation's badge)?
+4. **A person's name** outside the Explorer opens their Minter Profile tab. That, or their Overview?
 
 ### Core: what an explorer needs that Core doesn't give (proposals)
 
