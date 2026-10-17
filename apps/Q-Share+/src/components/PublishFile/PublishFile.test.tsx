@@ -198,4 +198,19 @@ describe("PublishFile", { timeout: 15_000 }, () => {
     expect(screen.getByText("301 publishes in 15 batches, 3.01 QORT in fees")).toBeInTheDocument();
     resetPublishUnitFee();
   });
+
+  it("sorts the files by name, numbers in order, which is the order a playlist plays", async () => {
+    signIn();
+    renderWithProviders(<PublishFile />);
+    await openDialog();
+    const names = ["10 Finale.mp3", "2 Song.mp3", "1 Intro.mp3"];
+    fireEvent.change(screen.getByTestId("share-file-input"), {
+      target: { files: names.map((n) => new File(["x"], n, { type: "audio/mpeg" })) },
+    });
+    const list = await screen.findByRole("list", { name: "Files to share" });
+    const shown = () => Array.from(list.querySelectorAll("li")).map((li) => li.textContent ?? "");
+    expect(shown()[0]).toContain("10 Finale.mp3");
+    fireEvent.click(screen.getByRole("button", { name: "Sort by name" }));
+    expect(shown().map((t) => t.replace(/^Audio/, "").split(".mp3")[0])).toEqual(["1 Intro", "2 Song", "10 Finale"]);
+  });
 });

@@ -9,6 +9,7 @@ import {
   describeRejections,
   draftFromRef,
   publishErrorMessage,
+  sortDraftFiles,
   toPublishInputs,
   totalDraftSize,
 } from "./shareDraft";
@@ -82,6 +83,14 @@ describe("files kept after a stopped publish", () => {
     expect(keptFilesText(3, 3)).toBe("All 3 files are on QDN and stay in the draft: publishing again sends only the share details.");
     expect(keptFilesText(1, 4)).toBe("1 of 4 files is on QDN and stays in the draft: publishing again sends only the rest.");
     expect(keptFilesText(20, 25)).toBe("20 of 25 files are on QDN and stay in the draft: publishing again sends only the rest.");
+  });
+});
+
+describe("sortDraftFiles", () => {
+  it("orders by name with numbers in order, ignoring case", () => {
+    const { files } = addDraftFiles([], [file("10 Finale.mp3"), file("2 Song.mp3", 11), file("b.txt", 12), file("A.txt", 13), file("1 Intro.mp3", 14)]);
+    expect(sortDraftFiles(files).map((f) => f.name)).toEqual(["1 Intro.mp3", "2 Song.mp3", "10 Finale.mp3", "A.txt", "b.txt"]);
+    expect(files[0].name).toBe("10 Finale.mp3");
   });
 });
 

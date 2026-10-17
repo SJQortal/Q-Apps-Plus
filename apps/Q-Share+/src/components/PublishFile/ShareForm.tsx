@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import {
   Alert,
   Box,
+  Button,
   IconButton,
   List,
   ListItem,
@@ -12,6 +13,7 @@ import {
 } from "@mui/material";
 import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
 import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
+import SortByAlphaOutlinedIcon from "@mui/icons-material/SortByAlphaOutlined";
 import { useDropzone } from "react-dropzone";
 import { useDispatch } from "react-redux";
 import { allCategoryData } from "../../constants/Categories/1stCategories";
@@ -172,16 +174,30 @@ export function ShareForm({ draft, categoryListRef, initialCategories }: ShareFo
               );
             })}
           </List>
-          <Box sx={{ px: 2, py: 1, color: "text.secondary" }}>
-            <Typography variant="body2">
-              {fileCount} {fileCount === 1 ? "file" : "files"} · {formatBytes(totalDraftSize(draft.files))}
-            </Typography>
-            <Typography variant="body2" data-testid="share-publish-cost">
-              {publishCount} {publishCount === 1 ? "publish" : "publishes"}
-              {newCount === 0 ? " (the share details)" : ""}
-              {batches > 1 ? ` in ${batches} batches` : ""}
-              {unitFee ? `, ${formatQort(unitFee * publishCount)} in fees` : ""}
-            </Typography>
+          <Box sx={{ px: 2, py: 1, color: "text.secondary", display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="body2">
+                {fileCount} {fileCount === 1 ? "file" : "files"} · {formatBytes(totalDraftSize(draft.files))}
+              </Typography>
+              <Typography variant="body2" data-testid="share-publish-cost">
+                {publishCount} {publishCount === 1 ? "publish" : "publishes"}
+                {newCount === 0 ? " (the share details)" : ""}
+                {batches > 1 ? ` in ${batches} batches` : ""}
+                {unitFee ? `, ${formatQort(unitFee * publishCount)} in fees` : ""}
+              </Typography>
+            </Box>
+            {fileCount > 1 && (
+              // The share's order is its playlist's: numbered tracks play as numbered.
+              <Button
+                size="small"
+                color="inherit"
+                startIcon={<SortByAlphaOutlinedIcon />}
+                onClick={draft.sortFiles}
+                sx={{ minHeight: 44 }}
+              >
+                Sort by name
+              </Button>
+            )}
           </Box>
         </Box>
       )}

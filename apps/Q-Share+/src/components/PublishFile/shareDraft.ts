@@ -103,6 +103,13 @@ export function keptFilesText(landed: number, total: number): string {
   return `${landed} of ${total} files ${landed === 1 ? "is on QDN and stays" : "are on QDN and stay"} in the draft: publishing again sends only the rest.`;
 }
 
+const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+/** The files by name, numbers in order ("2 Song" before "10 Song"), so a playlist plays as numbered. */
+export function sortDraftFiles(files: DraftFile[]): DraftFile[] {
+  return [...files].sort((a, b) => byName.compare(a.name, b.name));
+}
+
 export function totalDraftSize(files: DraftFile[]): number {
   return files.reduce((sum, f) => sum + (f.size || 0), 0);
 }

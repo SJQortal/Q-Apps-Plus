@@ -3,7 +3,14 @@ import type { FileRejection } from "react-dropzone";
 import { titleFormatter } from "../../constants/Misc";
 import { isQuillHtmlEmpty } from "../../utils/quillHtml";
 import type { FileRef } from "../../utils/publishPayload";
-import { addDraftFiles, describeAddResult, describeRejections, withPublishedFiles, type DraftFile } from "./shareDraft";
+import {
+  addDraftFiles,
+  describeAddResult,
+  describeRejections,
+  sortDraftFiles,
+  withPublishedFiles,
+  type DraftFile,
+} from "./shareDraft";
 
 export interface ShareDraftValues {
   files?: DraftFile[];
@@ -24,6 +31,7 @@ type DraftAction =
   | { type: "add-files"; accepted: File[]; rejectionWarnings: string[] }
   | { type: "remove-file"; key: string }
   | { type: "files-published"; refs: Record<string, FileRef> }
+  | { type: "sort-files" }
   | { type: "set-title"; title: string }
   | { type: "set-description"; html: string }
   | { type: "clear-warnings" }
@@ -61,6 +69,8 @@ function reducer(state: DraftState, action: DraftAction): DraftState {
       return { ...state, files: state.files.filter((f) => f.key !== action.key) };
     case "files-published":
       return { ...state, files: withPublishedFiles(state.files, action.refs) };
+    case "sort-files":
+      return { ...state, files: sortDraftFiles(state.files) };
     case "set-title":
       return { ...state, title: action.title.replace(titleFormatter, "") };
     case "set-description":
@@ -91,6 +101,8 @@ export interface ShareDraft {
   removeFile: (key: string) => void;
   /** Files (by draft key) that reached QDN in a publish that stopped: they become references. */
   keepPublished: (refs: Record<string, FileRef>) => void;
+  /** Puts the files in name order (the share's order, and its playlist's). */
+  sortFiles: () => void;
   setTitle: (title: string) => void;
   setDescription: (html: string) => void;
   clearWarnings: () => void;
@@ -118,6 +130,7 @@ export function useShareDraft(initial?: ShareDraftValues): ShareDraft {
     (refs: Record<string, FileRef>) => dispatch({ type: "files-published", refs }),
     []
   );
+  const sortFiles = useCallback(() => dispatch({ type: "sort-files" }), []);
   const setTitle = useCallback((title: string) => dispatch({ type: "set-title", title }), []);
   const setDescription = useCallback((html: string) => dispatch({ type: "set-description", html }), []);
   const clearWarnings = useCallback(() => dispatch({ type: "clear-warnings" }), []);
@@ -131,7 +144,7 @@ export function useShareDraft(initial?: ShareDraftValues): ShareDraft {
   );
 
   return useMemo(
-    () => ({ ...state, addFiles, removeFile, keepPublished, setTitle, setDescription, clearWarnings, reset, validate }),
-    [state, addFiles, removeFile, keepPublished, setTitle, setDescription, clearWarnings, reset, validate]
+    () => ({ ...state, addFiles, removeFile, keepPublished, sortFiles, setTitle, setDescription, clearWarnings, reset, validate }),
+    [state, addFiles, removeFile, keepPublished, sortFiles, setTitle, setDescription, clearWarnings, reset, validate]
   );
 }
