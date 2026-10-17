@@ -15,6 +15,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { IconButton, Typography } from '@mui/material';
+import { visuallyHidden } from '@mui/utils';
 import { styled } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { headerFill } from '../../hub-theme';
@@ -58,7 +59,10 @@ export interface PageHeaderProps {
   actions?: ReactNode;
   /** Show Back; the value is where Back goes when the app was opened on this page. */
   back?: string;
-  /** Before the title: what the page is about, such as an account's avatar. */
+  /**
+   * Before the title: what the page is about, such as an account's avatar.
+   * On a phone it stands in for the title, which screen readers still hear.
+   */
   leading?: ReactNode;
   /** Anything under the title row (tabs, filters). */
   children?: ReactNode;
@@ -118,6 +122,8 @@ export function PageHeader({
             lineHeight: 1.2,
             // Focused by the app on a route change, not by the user: no ring.
             '&:focus': { outline: 'none' },
+            // Simon, 2026-10-17: "mobile view can skip the name, leave just avatar".
+            ...(leading && phone ? visuallyHidden : {}),
           }}
           noWrap
         >
