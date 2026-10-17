@@ -159,7 +159,7 @@ describe("MultiplePublish in batches", () => {
     await waitFor(() => expect(onError).toHaveBeenCalledWith(undefined, [], { uncertain: false }));
   });
 
-  it("goes on past files Hub couldn't publish, and retries only those at the end", async () => {
+  it("goes on past files Hub couldn't publish, and holds the share details back until they land", async () => {
     let call = 0;
     mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", (params) => {
       call += 1;
@@ -168,16 +168,34 @@ describe("MultiplePublish in batches", () => {
     });
     mockFetch("/transactions/unconfirmed", []);
     const onSubmit = vi.fn();
-    renderWithProviders(<MultiplePublish isOpen publishes={share(30)} onSubmit={onSubmit} onError={vi.fn()} />);
+    const onError = vi.fn();
+    const { unmount } = renderWithProviders(
+      <MultiplePublish isOpen publishes={share(30)} onSubmit={onSubmit} onError={onError} />
+    );
     fireEvent.click(await screen.findByRole("button", { name: "Start publishing" }));
 
-    expect(await screen.findByText("30 of 31 published")).toBeInTheDocument();
-    expect(sentSizes()).toEqual([20, 11]);
-    fireEvent.click(screen.getByRole("button", { name: "Retry failed" }));
+    expect(await screen.findByText("29 of 31 published")).toBeInTheDocument();
+    // Batch 2 went without the details: the share doesn't exist yet.
+    expect(sentSizes()).toEqual([20, 10]);
+    expect((qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[])[1].resources.some((r: any) => r.service === "DOCUMENT")).toBe(false);
+    expect(screen.getByText("1 resource hasn't been sent yet. Continue sends it, waiting for the network between batches.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect((qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[])[2].resources.map((r: any) => r.identifier)).toEqual([
       "qshare_file_album_f3",
+      DOC_ID,
     ]);
+    unmount();
+
+    // Closed instead: the landed files go back to the caller, and no share was made.
+    call = 0;
+    renderWithProviders(<MultiplePublish isOpen publishes={share(30)} onSubmit={vi.fn()} onError={onError} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start publishing" }));
+    expect(await screen.findByText("29 of 31 published")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
+    const [, landed] = onError.mock.calls.at(-1)!;
+    expect(landed).toHaveLength(29);
+    expect(landed).not.toContain(DOC_ID);
   });
 
   it("asks Hub once for the session when the user chooses, and goes on per batch when Hub says no", async () => {

@@ -594,7 +594,19 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
       setErrorText(null);
       for (let i = 0; i < parts.length; i++) {
         if (!current()) return;
-        const part = parts[i];
+        let part = parts[i];
+        // A share in batches publishes its details only once every file is on
+        // QDN (or goes in the same request): a share listing files that never
+        // arrived could only be mended in Edit, with new uploads and fees.
+        // Held back, the details wait for Retry or Continue.
+        if (multi && part.some((r) => r.service === "DOCUMENT")) {
+          const here = new Set(part.map((r) => r.identifier));
+          const filesLeft = publishes.resources.some(
+            (r) => r.service === "FILE" && !here.has(r.identifier) && rowsRef.current[r.identifier] !== "done"
+          );
+          if (filesLeft) part = part.filter((r) => r.service !== "DOCUMENT");
+          if (part.length === 0) continue;
+        }
         setBatch({ index: i, count: parts.length, size: part.length });
         if (publicKey && (multi || part.length > UNCHECKED_BATCH_MAX)) {
           setUnconfirmed(null);
