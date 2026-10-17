@@ -101,12 +101,12 @@ describe('Overview: a Minter Admin minting now', () => {
     expect(fact('First seen').detail).toMatch(/^At block [\d,]+$/);
     await waitFor(() => expect(fact('Groups').value).toBe('In 3 groups'), T);
     // Its QDN transactions, counted in its own list (the one Latest transactions reads).
-    await waitFor(() => expect(fact('QDN Transactions').value).not.toBe('Loading'), T);
+    await waitFor(() => expect(fact('Transactions').value).not.toBe('Loading'), T);
     const list = peekQuery<AccountTxList>(accountTxKey(ADDR.admin, []));
     const qdn = (list?.rows ?? []).filter((tx) => tx.type === 'ARBITRARY').length;
     const more = list?.done ? '' : '+';
-    expect(fact('QDN Transactions').value).toBe(`${list?.rows.length}${more}`);
-    expect(fact('QDN Transactions').detail).toMatch(
+    expect(fact('Transactions').value).toBe(`${list?.rows.length}${more}`);
+    expect(fact('Transactions').detail).toMatch(
       new RegExp(`^${qdn}\\${more || '?'}? of them on QDN\\.`)
     );
     // At a glance counts them; the Groups section lists them.

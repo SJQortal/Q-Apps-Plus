@@ -125,7 +125,7 @@ export function groupsWords(count: number): string {
 
 /** "5,200 members". */
 /**
- * The QDN Transactions fact (Simon, 2026-10-17: "every transactions should
+ * The Transactions fact (Simon, 2026-10-17: "every transactions should
  * be the main number, and QDN should be the smaller number below"): the
  * `read` transactions of its list and the QDN data ones among them, exact
  * once `done` (the whole history is in), else floors ("1,000+").

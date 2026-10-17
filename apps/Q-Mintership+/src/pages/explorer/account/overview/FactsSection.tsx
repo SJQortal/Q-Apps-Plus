@@ -217,7 +217,8 @@ function GroupsFact({ address }: { address: string }) {
  */
 function QdnFact({ address }: { address: string }) {
   const list = useQuery(accountTxKey(address, []), (force) => getAccountTx(address, [], { force }));
-  const label = 'QDN Transactions';
+  // Simon, 2026-10-17: it "should just say "Transactions"".
+  const label = 'Transactions';
   if (list.isError && !list.data)
     return <FactError label={label} what="its transactions" query={list} />;
   if (!list.data) return <Fact label={label} value={<Loading />} />;
