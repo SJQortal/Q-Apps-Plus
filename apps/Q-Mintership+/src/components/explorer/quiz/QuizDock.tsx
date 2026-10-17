@@ -10,7 +10,8 @@
  * offers the page that shows it. The answer comes with how it is found, a
  * fact, and a link. Then the next question, at any level or one picked.
  * Folds to one line; × closes it (the score and the questions asked stay).
- * Loaded only while the quiz is on (AppShell).
+ * History opens every question asked so far, with how it went
+ * (QuizHistory). Loaded only while the quiz is on (AppShell).
  */
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -30,21 +31,15 @@ import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
 import ExpandLessOutlinedIcon from '@mui/icons-material/ExpandLessOutlined';
 import ExpandMoreOutlinedIcon from '@mui/icons-material/ExpandMoreOutlined';
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import QuizOutlinedIcon from '@mui/icons-material/QuizOutlined';
 import RadioButtonUncheckedOutlinedIcon from '@mui/icons-material/RadioButtonUncheckedOutlined';
-import { MarkedName } from '../../common/MarkedName';
 import { BOTTOM_NAV_HEIGHT } from '../../layout/BottomNav';
 import { useBottomNavShown } from '../../layout/useBottomNav';
 import { BOTTOM_BAR_VAR, usePublishOverlay } from '../../../hooks/useOverlayPadding';
-import { withHue } from '../../../pages/decisions/sectionAccents';
 import { answerWords } from '../../../rules/explorer/quiz/check';
-import {
-  QUIZ_LEVELS,
-  type QuizLevel,
-  type QuizPart,
-  type QuizQuestion,
-} from '../../../rules/explorer/quiz/types';
+import { QUIZ_LEVELS, type QuizQuestion } from '../../../rules/explorer/quiz/types';
 import {
   MISSED_CHOICE_LINES,
   RIGHT_LINES,
@@ -56,6 +51,8 @@ import {
 } from '../../../rules/explorer/quiz/words';
 import { useQuiz, useQuizBusy, useQuizFailed, type QuizState } from '../../../state/explorerQuiz';
 import { formatCount } from '../../../utils/format';
+import { LevelChip, QuestionText } from './quizParts';
+import { QuizHistory } from './QuizHistory';
 import { readableOn } from '../../../utils/readable';
 import {
   askNext,
@@ -67,96 +64,6 @@ import {
   submitAnswer,
   submitChoice,
 } from './quizActions';
-
-const LEVEL_HUE: Record<QuizLevel, number> = { easy: 150, medium: 210, tricky: 285, expert: 330 };
-
-const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
-
-/** The question's parts as text: names in bold, an address whole, blocks with their number. */
-export function QuestionText({ parts }: { parts: readonly QuizPart[] }) {
-  return (
-    <>
-      {parts.map((part, i) => {
-        switch (part.kind) {
-          case 'text':
-            return <span key={i}>{part.text}</span>;
-          case 'account':
-            return part.name ? (
-              <Box component="strong" key={i}>
-                <bdi dir="auto">
-                  <MarkedName name={part.name} />
-                </bdi>
-              </Box>
-            ) : (
-              <Box
-                component="code"
-                key={i}
-                sx={{ fontFamily: MONO, fontSize: '0.92em', wordBreak: 'break-all' }}
-              >
-                {part.address}
-              </Box>
-            );
-          case 'name':
-            return (
-              <Box component="strong" key={i}>
-                “
-                <bdi dir="auto">
-                  <MarkedName name={part.name} />
-                </bdi>
-                ”
-              </Box>
-            );
-          case 'group':
-            return (
-              <Box component="strong" key={i}>
-                {part.name ? (
-                  <>
-                    “<bdi dir="auto">{part.name}</bdi>” (#{part.id})
-                  </>
-                ) : (
-                  `#${part.id}`
-                )}
-              </Box>
-            );
-          case 'block':
-            return (
-              <Box component="strong" key={i} sx={{ whiteSpace: 'nowrap' }}>
-                block {formatCount(part.height)}
-              </Box>
-            );
-        }
-      })}
-    </>
-  );
-}
-
-function LevelChip({ level }: { level: QuizLevel }) {
-  const label = QUIZ_LEVELS.find((l) => l.value === level)?.label ?? level;
-  return (
-    <Box
-      component="span"
-      sx={(theme) => {
-        const colour = withHue(theme.palette.info.main, LEVEL_HUE[level]);
-        return {
-          display: 'inline-flex',
-          alignItems: 'center',
-          px: 1,
-          py: 0.25,
-          borderRadius: 999,
-          fontSize: 13,
-          fontWeight: 700,
-          color: readableOn(theme, colour, 0.14),
-          bgcolor: alpha(colour, 0.14),
-          border: 1,
-          borderColor: alpha(colour, 0.45),
-          whiteSpace: 'nowrap',
-        };
-      }}
-    >
-      {label}
-    </Box>
-  );
-}
 
 function scoreWords(score: { asked: number; right: number; streak: number }): string {
   const base = `${formatCount(score.right)} of ${formatCount(score.asked)} right`;
@@ -291,6 +198,16 @@ export default function QuizDock() {
   const [cheer, setCheer] = useState('');
   const fieldRef = useRef<HTMLInputElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyButton = quiz.history.length ? (
+    <Button
+      startIcon={<HistoryOutlinedIcon />}
+      onClick={() => setHistoryOpen(true)}
+      sx={{ minHeight: 44 }}
+    >
+      History
+    </Button>
+  ) : null;
   const { question, status, folded } = quiz;
   const key = question?.key ?? null;
   const choice = question?.answer.kind === 'choice';
@@ -455,6 +372,7 @@ export default function QuizDock() {
               <Button variant="contained" onClick={next} sx={{ minHeight: 44 }}>
                 {failed ? 'Try again' : 'Ask me one'}
               </Button>
+              {historyButton}
             </Box>
           ) : (
             <>
@@ -633,6 +551,7 @@ export default function QuizDock() {
                 >
                   {status === 'asking' ? 'Another question' : 'Next question'}
                 </Button>
+                {historyButton}
                 <TextField
                   select
                   label="Level"
@@ -670,6 +589,12 @@ export default function QuizDock() {
           )}
         </Box>
       )}
+      <QuizHistory
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        history={quiz.history}
+        score={quiz.score}
+      />
     </Box>
   );
 }

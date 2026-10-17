@@ -9,15 +9,17 @@
  */
 import { getNameData } from '../../../data/explorer/account';
 import { makeQuestion, recheckAnswer } from '../../../data/explorer/quiz/generators';
-import { checkAnswer, checkChoice } from '../../../rules/explorer/quiz/check';
+import { answerWords, checkAnswer, checkChoice } from '../../../rules/explorer/quiz/check';
 import { RECENT_SUBJECTS, RECENT_TEMPLATES, remember } from '../../../rules/explorer/quiz/pick';
 import type { QuizAnswer, QuizLevel } from '../../../rules/explorer/quiz/types';
 import {
   ASKED_MAX,
   getQuiz,
+  HISTORY_MAX,
   setQuiz,
   setQuizBusy,
   setQuizFailed,
+  type QuizOutcome,
   type QuizState,
 } from '../../../state/explorerQuiz';
 
@@ -25,6 +27,32 @@ let making: Promise<boolean> | null = null;
 
 /** Leaving a question unanswered ends the streak. */
 const skipped = (state: QuizState) => state.question !== null && state.status === 'asking';
+
+/** The open question into the history as it ended (once: a later end replaces it). */
+function remembered(state: QuizState, outcome: QuizOutcome, picked?: string): QuizState {
+  const q = state.question;
+  if (!q) return state;
+  const entry = {
+    key: q.key,
+    at: Date.now(),
+    level: q.level,
+    ...(q.kicker ? { kicker: q.kicker } : {}),
+    parts: q.parts,
+    answer: answerWords(q),
+    outcome,
+    ...(picked ? { picked } : {}),
+    misses: state.misses,
+    hints: state.hints,
+    how: q.how,
+    ...(q.fact ? { fact: q.fact } : {}),
+    link: q.link,
+    linkLabel: q.linkLabel,
+  };
+  return {
+    ...state,
+    history: [...state.history.filter((e) => e.key !== q.key), entry].slice(-HISTORY_MAX),
+  };
+}
 
 /** A new question in place of the open one; false when none could be made. */
 export function askNext(): Promise<boolean> {
@@ -51,27 +79,30 @@ export function askNext(): Promise<boolean> {
         setQuizFailed(true);
         return false;
       }
-      setQuiz((state) => ({
-        ...state,
-        on: true,
-        folded: false,
-        question,
-        status: 'asking',
-        misses: 0,
-        hints: 0,
-        picked: null,
-        lastOutcome: skipped(state) ? 'skipped' : state.lastOutcome,
-        score: {
-          ...state.score,
-          asked: state.score.asked + 1,
-          streak: skipped(state) ? 0 : state.score.streak,
-        },
-        asked: remember(state.asked, [question.key], ASKED_MAX),
-        recent: {
-          templates: [...state.recent.templates, question.template].slice(-RECENT_TEMPLATES),
-          subjects: remember(state.recent.subjects, question.subjects ?? [], RECENT_SUBJECTS),
-        },
-      }));
+      setQuiz((current) => {
+        const state = skipped(current) ? remembered(current, 'skipped') : current;
+        return {
+          ...state,
+          on: true,
+          folded: false,
+          question,
+          status: 'asking',
+          misses: 0,
+          hints: 0,
+          picked: null,
+          lastOutcome: skipped(current) ? 'skipped' : state.lastOutcome,
+          score: {
+            ...state.score,
+            asked: state.score.asked + 1,
+            streak: skipped(current) ? 0 : state.score.streak,
+          },
+          asked: remember(state.asked, [question.key], ASKED_MAX),
+          recent: {
+            templates: [...state.recent.templates, question.template].slice(-RECENT_TEMPLATES),
+            subjects: remember(state.recent.subjects, question.subjects ?? [], RECENT_SUBJECTS),
+          },
+        };
+      });
       return true;
     } catch {
       setQuizFailed(true);
@@ -99,8 +130,9 @@ const ownerOf = async (name: string) => {
   }
 };
 
-function scoreRight(state: QuizState): QuizState {
-  const streak = state.score.streak + 1;
+function scoreRight(before: QuizState): QuizState {
+  const streak = before.score.streak + 1;
+  const state = remembered(before, 'right');
   return {
     ...state,
     status: 'right',
@@ -146,14 +178,15 @@ export function submitChoice(index: number): boolean {
   setQuiz((state) => {
     if (state.question?.key !== question.key || state.status !== 'asking') return state;
     const picked = { ...state, picked: index };
-    return right
-      ? scoreRight(picked)
-      : {
-          ...picked,
-          status: 'shown',
-          lastOutcome: 'shown',
-          score: { ...picked.score, streak: 0 },
-        };
+    if (right) return scoreRight(picked);
+    const answer = question.answer.kind === 'choice' ? question.answer : null;
+    const missed = remembered(picked, 'shown', answer?.options[index]?.label);
+    return {
+      ...missed,
+      status: 'shown',
+      lastOutcome: 'shown',
+      score: { ...missed.score, streak: 0 },
+    };
   });
   return right;
 }
@@ -168,17 +201,19 @@ export async function revealAnswer(): Promise<void> {
   const { question, status } = getQuiz();
   if (!question || status !== 'asking') return;
   const fresh = question.live ? await recheckAnswer(question) : null;
-  setQuiz((state) =>
-    state.question?.key === question.key && state.status === 'asking'
-      ? {
-          ...state,
-          question: fresh ? { ...question, answer: fresh } : state.question,
-          status: 'shown',
-          lastOutcome: 'shown',
-          score: { ...state.score, streak: 0 },
-        }
-      : state
-  );
+  setQuiz((state) => {
+    if (state.question?.key !== question.key || state.status !== 'asking') return state;
+    const shown = remembered(
+      { ...state, question: fresh ? { ...question, answer: fresh } : state.question },
+      'shown'
+    );
+    return {
+      ...shown,
+      status: 'shown',
+      lastOutcome: 'shown',
+      score: { ...shown.score, streak: 0 },
+    };
+  });
 }
 
 export function setQuizLevel(level: QuizLevel | null): void {
@@ -187,6 +222,11 @@ export function setQuizLevel(level: QuizLevel | null): void {
 
 export function foldQuiz(folded: boolean): void {
   setQuiz((state) => ({ ...state, folded }));
+}
+
+/** The history goes; the score and the questions asked (so none comes twice) stay. */
+export function clearQuizHistory(): void {
+  setQuiz((state) => ({ ...state, history: [] }));
 }
 
 /** The bar goes; the score and the questions asked stay. */

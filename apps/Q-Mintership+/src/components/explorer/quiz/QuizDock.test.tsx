@@ -240,4 +240,59 @@ describe('the Explorer Quiz bar', () => {
       value: String(PEOPLE.learner.level),
     });
   });
+
+  it('keeps a history of the questions asked: right, skipped, shown, and clears it', async () => {
+    const { user } = await open();
+    const bar = screen.getByRole('region', { name: 'Explorer Quiz' });
+    // Nothing asked yet: no History.
+    expect(within(bar).queryByRole('button', { name: 'History' })).toBeNull();
+    await user.type(within(bar).getByRole('textbox', { name: 'Your answer' }), 'Lou Left');
+    await user.click(within(bar).getByRole('button', { name: 'Check' }));
+    await within(bar).findByText('Right!', {}, T);
+    expect(getQuiz().history).toMatchObject([
+      { key: QUESTION.key, outcome: 'right', answer: ADDR.left },
+    ]);
+
+    // A question left unanswered for another is kept as skipped.
+    setQuiz((state) => ({ ...state, question: { ...CHOICE }, status: 'asking', picked: null }));
+    await user.selectOptions(within(bar).getByRole('combobox', { name: 'Level' }), 'easy');
+    await user.click(await within(bar).findByRole('button', { name: 'Another question' }, T));
+    await waitFor(() => expect(getQuiz().question?.key).not.toBe(CHOICE.key), T);
+    expect(getQuiz().history.map((e) => [e.key, e.outcome])).toEqual([
+      [QUESTION.key, 'right'],
+      [CHOICE.key, 'skipped'],
+    ]);
+
+    await user.click(await within(bar).findByRole('button', { name: 'History' }, T));
+    const dialog = await screen.findByRole('dialog', { name: 'Your quiz history' }, T);
+    const list = within(dialog).getByRole('list', { name: 'Questions asked, newest first' });
+    const items = within(list).getAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent('Skipped');
+    expect(items[0]).toHaveTextContent('Answer: Higher');
+    expect(items[1]).toHaveTextContent('Right');
+    expect(items[1]).toHaveTextContent('Who sponsored Leo Learner?');
+    expect(within(items[1]).getByRole('link', { name: QUESTION.linkLabel })).toHaveAttribute(
+      'href',
+      QUESTION.link
+    );
+    // By how it went.
+    await user.click(within(dialog).getByRole('button', { name: 'Right · 1' }));
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1);
+    // Cleared on this device: the score stays.
+    await user.click(within(dialog).getByRole('button', { name: 'Clear the history' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Clear' }));
+    expect(within(dialog).getByText(/No questions here yet/)).toBeVisible();
+    expect(getQuiz().history).toEqual([]);
+    expect(getQuiz().score.right).toBe(1);
+  });
+
+  it('keeps a missed pick and an answer shown in the history', async () => {
+    const { user } = await open(CHOICE);
+    const bar = screen.getByRole('region', { name: 'Explorer Quiz' });
+    await user.click(within(bar).getByRole('button', { name: 'The same' }));
+    expect(getQuiz().history).toMatchObject([
+      { key: CHOICE.key, outcome: 'shown', picked: 'The same', answer: 'Higher' },
+    ]);
+  });
 });

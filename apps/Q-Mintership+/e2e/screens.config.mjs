@@ -111,6 +111,68 @@ const wait = (selector) => async (page) =>
   page.waitForSelector(selector, { timeout: 8000 }).catch(() => {});
 const settle = wait('main h1');
 /** An Explorer page: its title, then its reads (skeletons gone, network quiet). */
+/** Three questions asked before, as the quiz's history keeps them. */
+const QUIZ_HISTORY = [
+  {
+    key: 'screens:h1',
+    at: Date.UTC(2026, 9, 16, 21, 5),
+    level: 'easy',
+    kicker: 'Higher or lower',
+    parts: [
+      {
+        kind: 'text',
+        text: 'Leo Learner is level 2. Is Lou Left’s level higher, lower, or the same?',
+      },
+    ],
+    answer: 'Higher',
+    outcome: 'right',
+    misses: 0,
+    hints: 0,
+    how: 'Each account’s level is in its header and in Overview → At a glance.',
+    fact: 'Lou Left is level 5.',
+    link: `/explorer/account/${ADDR.left}`,
+    linkLabel: 'Open its Overview',
+  },
+  {
+    key: 'screens:h2',
+    at: Date.UTC(2026, 9, 16, 21, 12),
+    level: 'tricky',
+    kicker: 'Minting archaeology',
+    parts: [
+      { kind: 'text', text: 'Which account made the third self share in the 1,000 blocks from ' },
+      { kind: 'block', height: 1_371_000 },
+      { kind: 'text', text: '?' },
+    ],
+    answer: 'Kit Kicked (QTPsuqjhsBD1aLQTWGmCH3cAXwX4Z5XVPz)',
+    outcome: 'shown',
+    misses: 2,
+    hints: 2,
+    how: 'Transactions on Qortal → Reward share → From a block, Oldest first, Reward share kind “Self shares”: count down the list.',
+    link: '/explorer/transactions?type=REWARD_SHARE&blocks=from-1371000&span=1000&order=oldest&share=self',
+    linkLabel: 'Show those self shares',
+  },
+  {
+    key: 'screens:h3',
+    at: Date.UTC(2026, 9, 16, 21, 20),
+    level: 'expert',
+    kicker: 'Chain history',
+    parts: [
+      {
+        kind: 'text',
+        text: 'The very first poll on Qortal came in the 10,000 blocks from block 950,000. What was the poll called?',
+      },
+    ],
+    answer: 'Puppy Ears Vote',
+    outcome: 'skipped',
+    misses: 0,
+    hints: 0,
+    how: 'Transactions on Qortal → Poll created → From block 950,000, 10,000 blocks, Oldest first: the first row.',
+    fact: 'It asked: “Are puppy ears soft?” Its options: “Yes, very”, “Quite so”, “Very much so.”.',
+    link: '/explorer/transactions?type=CREATE_POLL&blocks=from-950000&order=oldest',
+    linkLabel: 'Show it, oldest first',
+  },
+];
+
 /** The Explorer Quiz with one question open (and, `status` right, answered), kept on the device. */
 const quizState = (status) => ({
   v: 1,
@@ -149,6 +211,7 @@ const quizState = (status) => ({
     best: 3,
   },
   asked: ['screens:sponsor'],
+  history: QUIZ_HISTORY,
 });
 /** A multiple-choice question, answered with a wrong pick: the right one green, the pick red. */
 const quizChoice = () => ({
@@ -941,6 +1004,17 @@ export default {
       key: 'explorer-quiz-answered',
       path: `/explorer/account/${ADDR.learner}/connections?as=admin`,
       after: withQuiz('right'),
+    },
+    // Its history: three questions asked before, newest first.
+    {
+      key: 'explorer-quiz-history',
+      path: '/explorer?as=admin',
+      after: async (page) => {
+        await withQuiz('right')(page);
+        await page.getByRole('button', { name: 'History' }).click();
+        await page.getByRole('dialog', { name: 'Your quiz history' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
     },
     // A multiple choice, one go, missed: the right option green, the pick red.
     {

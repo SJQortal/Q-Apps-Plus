@@ -70,4 +70,33 @@ describe('the quiz kept on this device', () => {
     expect(parseQuiz(JSON.stringify({ v: 2 }))).toEqual(EMPTY_QUIZ);
     expect(parseQuiz(JSON.stringify({ v: 1, level: 'impossible' })).level).toBeNull();
   });
+
+  it('keeps the history’s entries that make sense, the newest 100', () => {
+    const entry = (i: number) => ({
+      key: `k${i}`,
+      at: i,
+      level: 'easy',
+      parts: [{ kind: 'text', text: 'Q?' }],
+      answer: 'A',
+      outcome: i % 2 ? 'right' : 'skipped',
+      misses: 0,
+      hints: 0,
+      how: 'How.',
+      link: '/explorer',
+      linkLabel: 'Open',
+    });
+    const state = parseQuiz(
+      JSON.stringify({
+        v: 1,
+        history: [
+          ...Array.from({ length: 105 }, (_, i) => entry(i)),
+          { ...entry(200), outcome: 'maybe' },
+          { key: 'broken' },
+        ],
+      })
+    );
+    expect(state.history).toHaveLength(100);
+    expect(state.history[0].key).toBe('k5');
+    expect(state.history[99].key).toBe('k104');
+  });
 });

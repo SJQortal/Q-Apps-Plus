@@ -4,9 +4,10 @@
  * screen while its answer is looked for across Explorer pages, and after a
  * reload: whether the quiz is on and folded, the question and how it
  * stands, the level picked, the score, the questions already asked
- * (their keys only, the newest 300), so none comes twice, and what came up
+ * (their keys only, the newest 300), so none comes twice, what came up
  * lately (the kinds of question and their subjects), so the next one is
- * different.
+ * different, and the history of the questions asked (the newest 100: each
+ * question, its answer and how it went), shown on request.
  *
  * Every storage access is guarded: without storage the quiz still works,
  * for the session.
@@ -14,7 +15,12 @@
 import { atom, getDefaultStore, useAtomValue } from 'jotai';
 import { STORAGE_PREFIX } from '../constants/plus';
 import { RECENT_SUBJECTS, RECENT_TEMPLATES } from '../rules/explorer/quiz/pick';
-import { isQuizLevel, type QuizLevel, type QuizQuestion } from '../rules/explorer/quiz/types';
+import {
+  isQuizLevel,
+  type QuizLevel,
+  type QuizPart,
+  type QuizQuestion,
+} from '../rules/explorer/quiz/types';
 
 export const QUIZ_KEY = `${STORAGE_PREFIX}explorer-quiz`;
 export const ASKED_MAX = 300;
@@ -22,6 +28,29 @@ export const ASKED_MAX = 300;
 export type QuizStatus = 'asking' | 'right' | 'shown';
 
 export type QuizOutcome = 'right' | 'shown' | 'skipped';
+
+/** A question asked, as it ended: kept so the player can look back. */
+export interface QuizHistoryEntry {
+  key: string;
+  /** When it ended. */
+  at: number;
+  level: QuizLevel;
+  kicker?: string;
+  parts: QuizPart[];
+  /** The answer in words. */
+  answer: string;
+  outcome: QuizOutcome;
+  /** A multiple choice missed: the option picked. */
+  picked?: string;
+  misses: number;
+  hints: number;
+  how: string;
+  fact?: string;
+  link: string;
+  linkLabel: string;
+}
+
+export const HISTORY_MAX = 100;
 
 export interface QuizScore {
   /** Questions asked. */
@@ -54,6 +83,8 @@ export interface QuizState {
   recent: { templates: string[]; subjects: string[] };
   /** How the last question went. */
   lastOutcome: QuizOutcome | null;
+  /** The questions asked, oldest first (the newest 100). */
+  history: QuizHistoryEntry[];
 }
 
 export const EMPTY_QUIZ: QuizState = {
@@ -70,7 +101,26 @@ export const EMPTY_QUIZ: QuizState = {
   asked: [],
   recent: { templates: [], subjects: [] },
   lastOutcome: null,
+  history: [],
 };
+
+const OUTCOMES: ReadonlySet<unknown> = new Set(['right', 'shown', 'skipped']);
+
+function isHistoryEntry(value: unknown): value is QuizHistoryEntry {
+  const e = value as Partial<QuizHistoryEntry> | null;
+  return (
+    Boolean(e) &&
+    typeof e?.key === 'string' &&
+    typeof e.at === 'number' &&
+    isQuizLevel(e.level) &&
+    Array.isArray(e.parts) &&
+    typeof e.answer === 'string' &&
+    OUTCOMES.has(e.outcome) &&
+    typeof e.how === 'string' &&
+    typeof e.link === 'string' &&
+    typeof e.linkLabel === 'string'
+  );
+}
 
 const strings = (value: unknown, max: number): string[] =>
   Array.isArray(value)
@@ -133,6 +183,9 @@ export function parseQuiz(raw: string | null): QuizState {
         saved.lastOutcome === 'skipped'
           ? saved.lastOutcome
           : null,
+      history: Array.isArray(saved.history)
+        ? saved.history.filter(isHistoryEntry).slice(-HISTORY_MAX)
+        : [],
     };
   } catch {
     return EMPTY_QUIZ;
