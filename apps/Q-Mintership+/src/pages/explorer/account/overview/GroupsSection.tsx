@@ -5,11 +5,15 @@
  * shows its avatar, name, members, the account's part (Owner, Admin) and, in
  * the grid, its own description. The first GROUPS_SHOWN, then the rest on
  * request. The same read as At a glance's count (`xgroups:<address>`).
- * A group the signed-in account isn't in has a small Join icon
+ * Each says with a small icon whether it is open (public: anyone joins) or
+ * closed (private: its admins decide), from Core's own flag (Simon,
+ * 2026-10-17). A group the signed-in account isn't in has a small Join icon
  * (components/groups/JoinGroupButton.tsx; a join request for a closed one).
  */
 import { useId } from 'react';
-import { Box, Button, TextField, Typography } from '@mui/material';
+import { Box, Button, TextField, Tooltip, Typography } from '@mui/material';
+import PublicOutlinedIcon from '@mui/icons-material/PublicOutlined';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { GroupAvatar } from '../../../../components/common/GroupAvatar';
 import { JoinGroupButton } from '../../../../components/groups/JoinGroupButton';
 import { Card, Section } from '../../../../components/common/Section';
@@ -50,6 +54,27 @@ function GroupName({ group }: { group: GroupOf }) {
   );
 }
 
+/** Open (public) or closed (private), as a small icon with its words; nothing when Core didn't say. */
+function Access({ group }: { group: GroupOf }) {
+  if (typeof group.isOpen !== 'boolean') return null;
+  const words = group.isOpen
+    ? 'Public: an open group, anyone can join'
+    : 'Private: a closed group, its admins decide who joins';
+  const Icon = group.isOpen ? PublicOutlinedIcon : LockOutlinedIcon;
+  return (
+    <Tooltip title={words}>
+      <Box
+        component="span"
+        role="img"
+        aria-label={words}
+        sx={{ display: 'inline-flex', flexShrink: 0, color: 'text.secondary' }}
+      >
+        <Icon sx={{ fontSize: 18 }} />
+      </Box>
+    </Tooltip>
+  );
+}
+
 function Members({ group }: { group: GroupOf }) {
   return typeof group.memberCount === 'number' ? (
     <Typography component="span" variant="body2" color="text.secondary">
@@ -83,6 +108,7 @@ function GroupCard({ group, address }: { group: GroupOf; address: string }) {
           size={40}
         />
         <GroupName group={group} />
+        <Access group={group} />
         <Box sx={{ ml: 'auto', my: -1, mr: -1 }}>
           <JoinGroupButton group={group} />
         </Box>
@@ -136,6 +162,7 @@ function GroupRow({ group, address }: { group: GroupOf; address: string }) {
         size={32}
       />
       <GroupName group={group} />
+      <Access group={group} />
       <Members group={group} />
       <Roles group={group} address={address} />
       <Box sx={{ ml: 'auto', my: -1 }}>

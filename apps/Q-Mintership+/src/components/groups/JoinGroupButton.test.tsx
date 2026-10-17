@@ -59,6 +59,11 @@ describe('Join on a group card', () => {
     const user = userEvent.setup();
     const list = await groupsOf(ADDR.kicked, 'learner');
     const ask = await within(list).findByRole('button', { name: 'Ask to join Book Club' }, T);
+    // Each card says whether it is public or private.
+    expect(within(card(list, 'Book Club')).getByRole('img', { name: /^Private: / })).toBeVisible();
+    expect(
+      within(card(list, 'Qortal General')).getByRole('img', { name: /^Public: / })
+    ).toBeVisible();
     await user.click(ask);
     const dialog = await screen.findByRole('dialog', { name: 'Ask to join Book Club' });
     expect(within(dialog).getByText(/Book Club is a closed group/)).toBeVisible();
