@@ -27,7 +27,7 @@ import {
   type ActiveShare,
   type Links,
 } from './connections';
-import { flowParts, type Flow } from './money';
+import { flowParts, type AssetSum, type Flow } from './money';
 import { visibleName } from './nameNotes';
 import { groupWords, type TxPart } from './txWords';
 
@@ -156,6 +156,8 @@ export interface Finding extends FindingLine {
   evidenceWords: string;
   /** QORT moved, in atomic units: payments and transfers only. */
   qort?: bigint;
+  /** Other assets moved (Q-Assets), by name, in atomic units: payments and transfers only. */
+  assets?: AssetSum[];
 }
 
 export interface RecordedInput {
@@ -280,6 +282,7 @@ export function recordedFindings(input: RecordedInput): Finding[] {
       evidence: flow.txs,
       evidenceWords: plural(flow.count, 'payment'),
       qort: flow.qort,
+      assets: flow.assets,
     });
   return out;
 }

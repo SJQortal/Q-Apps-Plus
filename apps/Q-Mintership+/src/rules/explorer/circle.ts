@@ -13,12 +13,16 @@
  * - Each side is one arc of an ellipse, from the top down, the most
  *   transactions first, every node at its own angle: a line runs straight
  *   from the middle to each node, so no two lines cross and none passes
- *   under another node. At most 10 a side (8 on phones), the rest counted.
+ *   under another node. The nodes of a side are evenly spaced in height,
+ *   so a name beside one never runs under the next (Simon, 2026-10-17:
+ *   "make sure the names and QORT amounts are not covered"). At most 10 a
+ *   side (8 on phones), the rest counted.
  * - A node's size grows with the square root of its count (its area with
  *   the count), within limits that shrink as a side fills.
  */
 import type { TxRow } from '../../data/types';
 import type { Finding } from './findings';
+import type { AssetSum } from './money';
 
 export type CircleSide = 'in' | 'out' | 'both' | 'other';
 
@@ -27,6 +31,8 @@ export interface WayPart {
   count: number;
   /** QORT, atomic. */
   qort: bigint;
+  /** Other assets, by name, atomic. */
+  assets: AssetSum[];
 }
 
 export interface CircleNode {
@@ -40,6 +46,8 @@ export interface CircleNode {
   findings: Finding[];
   /** QORT moved that way, in atomic units (Simon, 2026-10-17: "The Cat (500 QORT)"). */
   qort: bigint;
+  /** Q-Assets moved that way, by name, atomic (Simon, 2026-10-17: "display Q-Assets ticker and ammounts"). */
+  assets: AssetSum[];
   /** Paid both ways: each way's part. */
   split?: { in: WayPart; out: WayPart };
 }
@@ -129,9 +137,11 @@ export function circleNodes(findings: readonly Finding[]): CircleGroups {
       count: 0,
       findings: [],
       qort: 0n,
+      assets: [],
     };
     node.count += Math.max(1, finding.evidence.length);
     node.qort += finding.qort ?? 0n;
+    node.assets = addAssets(node.assets, finding.assets ?? []);
     node.findings.push(finding);
     nodes.set(key, node);
   }
@@ -149,9 +159,10 @@ export function circleNodes(findings: readonly Finding[]): CircleGroups {
       count: received.count + sent.count,
       findings: [...received.findings, ...sent.findings],
       qort: received.qort + sent.qort,
+      assets: addAssets(received.assets, sent.assets),
       split: {
-        in: { count: received.count, qort: received.qort },
-        out: { count: sent.count, qort: sent.qort },
+        in: { count: received.count, qort: received.qort, assets: received.assets },
+        out: { count: sent.count, qort: sent.qort, assets: sent.assets },
       },
     });
   }
@@ -164,6 +175,17 @@ export function circleNodes(findings: readonly Finding[]): CircleGroups {
     both: sorted.filter((node) => node.side === 'both'),
     other: sorted.filter((node) => node.side === 'other'),
   };
+}
+
+/** `a` and `b` added up, by asset, in the order first seen. */
+export function addAssets(a: readonly AssetSum[], b: readonly AssetSum[]): AssetSum[] {
+  const out = a.map((sum) => ({ ...sum }));
+  for (const sum of b) {
+    const same = out.find((x) => x.asset === sum.asset);
+    if (same) same.atomic += sum.atomic;
+    else out.push({ ...sum });
+  }
+  return out;
 }
 
 /** The transactions behind a node, once each, the newest first. */
@@ -229,9 +251,15 @@ export function circleLayout(
   const place = (list: readonly CircleNode[], side: 'in' | 'out'): PlacedNode[] => {
     // The fewer side centred on the slots the fuller one fills.
     const offset = (most - list.length) / 2;
+    // The fuller side's first and last slots, by angle; the slots between
+    // them evenly spaced in height (sin of the angle), each on the ellipse.
+    const top = Math.sin(-Math.PI / 2 + step);
+    const last = Math.sin(-Math.PI / 2 + step * most);
     return list.map((node, i) => {
       // From the top down; one node alone sits level with the middle.
-      const point = at(-Math.PI / 2 + step * (i + 1 + offset));
+      const slot = i + offset;
+      const sin = most === 1 ? top : top + ((last - top) * slot) / (most - 1);
+      const point = at(Math.asin(Math.max(-1, Math.min(1, sin))));
       return {
         ...node,
         x: side === 'out' ? point.x : 100 - point.x,
@@ -262,9 +290,9 @@ export function circleLayout(
 }
 
 /**
- * A node's QORT, short, for beside its name: "500", "1,234", "76.5",
- * "0.25" (whole QORT from 100 up; two decimals below, four under 1). Null
- * for none (a link of other assets only).
+ * A node's QORT (or a Q-Asset's amount), short, for beside its name: "500",
+ * "1,234", "76.5", "0.25" (whole from 100 up; two decimals below, four
+ * under 1). Null for none.
  */
 export function circleQort(atomic: bigint): string | null {
   if (atomic <= 0n) return null;

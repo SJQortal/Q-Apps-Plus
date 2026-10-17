@@ -48,7 +48,11 @@ describe('circleNodes', () => {
     expect(groups.in).toEqual([]);
     expect(groups.out.map((n) => [n.key, n.count])).toEqual([['out:QD', 5]]);
     expect(groups.both.map((n) => [n.key, n.count, n.split])).toEqual([
-      ['both:QA', 5, { in: { count: 3, qort: 0n }, out: { count: 2, qort: 0n } }],
+      [
+        'both:QA',
+        5,
+        { in: { count: 3, qort: 0n, assets: [] }, out: { count: 2, qort: 0n, assets: [] } },
+      ],
     ]);
     expect(nodeTransactions(groups.both[0])).toHaveLength(5);
     expect(groups.other.map((n) => [n.key, n.count, n.findings.length])).toEqual([
@@ -72,7 +76,10 @@ describe('circleNodes', () => {
   it('says what share came in: by QORT, else by transactions', () => {
     const node = (inCount: number, inQort: bigint, outCount: number, outQort: bigint) => ({
       side: 'both' as const,
-      split: { in: { count: inCount, qort: inQort }, out: { count: outCount, qort: outQort } },
+      split: {
+        in: { count: inCount, qort: inQort, assets: [] },
+        out: { count: outCount, qort: outQort, assets: [] },
+      },
     });
     expect(receivedShare(node(1, 300n, 9, 100n))).toBeCloseTo(0.75);
     expect(receivedShare(node(3, 0n, 1, 0n))).toBeCloseTo(0.75);
@@ -114,6 +121,7 @@ describe('circleLayout', () => {
       count: n - i,
       findings: [],
       qort: 0n,
+      assets: [],
     }));
   const groups = (inCount: number, outCount: number, bothCount = 0): CircleGroups => ({
     in: side('in', inCount),
@@ -125,6 +133,7 @@ describe('circleLayout', () => {
       count: bothCount - i,
       findings: [],
       qort: 0n,
+      assets: [],
     })),
     other: [],
   });
@@ -181,6 +190,7 @@ describe('circleLayout, both ways', () => {
       count: n - i,
       findings: [],
       qort: 0n,
+      assets: [],
     })),
     other: [],
   });
@@ -220,6 +230,7 @@ describe('circleLayout, both ways', () => {
         count: 1,
         findings: [],
         qort: 0n,
+        assets: [],
       })),
       both: extra,
     });
@@ -236,6 +247,7 @@ describe('circleLayout, symmetrical', () => {
       count: 1,
       findings: [],
       qort: 0n,
+      assets: [],
     }));
   const ring = (inN: number, outN: number, bothN: number) =>
     circleLayout({
@@ -247,18 +259,21 @@ describe('circleLayout, symmetrical', () => {
   const angle = (p: { x: number; y: number }, rx: number) =>
     Math.atan2((p.y - 50) / WIDE_LAYOUT.ry, (p.x - 50) / rx);
 
-  it('mirrors the two sides, evenly spaced', () => {
-    const placed = ring(4, 4, 2);
+  it('mirrors the two sides, evenly spaced in height, so no name runs under the next', () => {
+    const placed = ring(10, 10, 2);
     const left = placed.filter((p) => p.side === 'in');
     const right = placed.filter((p) => p.side === 'out');
     left.forEach((p, i) => {
       expect(p.x).toBeCloseTo(100 - right[i].x);
       expect(p.y).toBeCloseTo(right[i].y);
     });
-    const steps = right
-      .slice(1)
-      .map((p, i) => angle(p, WIDE_LAYOUT.rx) - angle(right[i], WIDE_LAYOUT.rx));
+    const steps = right.slice(1).map((p, i) => p.y - right[i].y);
     for (const s of steps) expect(s).toBeCloseTo(steps[0]);
+    // Each on the ellipse, from the top down, each at its own angle.
+    for (const p of right)
+      expect(((p.x - 50) / WIDE_LAYOUT.rx) ** 2 + ((p.y - 50) / WIDE_LAYOUT.ry) ** 2).toBeCloseTo(1);
+    const angles = right.map((p) => angle(p, WIDE_LAYOUT.rx));
+    expect(angles).toEqual([...angles].sort((a, b) => a - b));
   });
 
   it('centres the fewer side on the fuller one’s slots', () => {

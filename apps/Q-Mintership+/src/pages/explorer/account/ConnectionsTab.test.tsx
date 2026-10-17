@@ -728,7 +728,7 @@ describe('Connections: as a circle', () => {
     expect(ring).toHaveAttribute('data-received', '0.95');
     // Each name with the QORT that went that way, in brackets (Simon, 2026-10-17).
     expect(within(received).getAllByText(/^\([\d,.]+ QORT\)$/).length).toBeGreaterThan(0);
-    expect(within(both).getByText('(120 QORT in, 6.3 out)')).toBeInTheDocument();
+    expect(within(both).getByText('120 QORT in, 6.3 out')).toBeInTheDocument();
     // Nothing links away: pressing an avatar lists its transactions.
     expect(within(circle).queryAllByRole('link')).toEqual([]);
     await expectNoAxeViolations(container);
@@ -764,6 +764,18 @@ describe('Connections: as a circle', () => {
     await region('Recorded between them');
     await user.click(screen.getByRole('button', { name: 'Circle' }));
     const circle = await region('Connections circle');
+    // A Q-Asset with its ticker and amount, as QORT is (Simon, 2026-10-17).
+    const received = await within(circle).findByRole(
+      'list',
+      { name: 'Received from, the most transactions first' },
+      T
+    );
+    expect(
+      within(received).getByRole('button', {
+        name: /, 1 transaction received, 50 Bean Token: show them$/,
+      })
+    ).toBeInTheDocument();
+    expect(within(received).getByText('(50 Bean Token)')).toBeInTheDocument();
     const others = await within(circle).findByRole('list', { name: 'Other links' }, T);
     // Named by what it shows first (the name, then the count), as axe asks.
     const sid = within(others).getByRole('button', {

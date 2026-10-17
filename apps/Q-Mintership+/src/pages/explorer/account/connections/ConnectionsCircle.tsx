@@ -34,6 +34,7 @@ import { useDisplayName } from '../../../../hooks/useDisplayName';
 import { usePhoneLayout } from '../../../../hooks/usePhoneLayout';
 import {
   circleLayout,
+  addAssets,
   circleQort,
   circleNodes,
   PHONE_LAYOUT,
@@ -41,7 +42,9 @@ import {
   WIDE_LAYOUT,
   type CircleNode,
   type PlacedNode,
+  type WayPart,
 } from '../../../../rules/explorer/circle';
+import type { AssetSum } from '../../../../rules/explorer/money';
 import type { Finding } from '../../../../rules/explorer/findings';
 import { formatCount, plural } from '../../../../utils/format';
 import { CircleNodeDialog } from './CircleNodeDialog';
@@ -106,19 +109,35 @@ function Lines({
   );
 }
 
+/** QORT and each Q-Asset that moved, short: ["500 QORT", "1 10Coin"]. */
+function amountList(qort: bigint, assets: readonly AssetSum[]): string[] {
+  const out: string[] = [];
+  const q = circleQort(qort);
+  if (q) out.push(`${q} QORT`);
+  for (const sum of assets) {
+    const amount = circleQort(sum.atomic);
+    if (amount) out.push(`${amount} ${sum.asset}`);
+  }
+  return out;
+}
+
 /**
- * "4 transactions received, 500 QORT", "2 transactions sent", "3 transactions";
- * both ways, "5 transactions: 3 received, 500 QORT; 2 sent, 20 QORT".
+ * "4 transactions received, 500 QORT", "2 transactions sent, 1 10Coin",
+ * "3 transactions"; both ways, "5 transactions: 3 received, 500 QORT; 2
+ * sent, 20 QORT".
  */
 function countWords(node: CircleNode): string {
-  const qort = circleQort(node.qort);
-  const amount = qort ? `, ${qort} QORT` : '';
+  const list = amountList(node.qort, node.assets);
+  const amount = list.length ? `, ${list.join(', ')}` : '';
   if (node.side === 'both' && node.split) {
-    const part = (q: bigint) => (circleQort(q) ? `, ${circleQort(q)} QORT` : '');
+    const part = (way: WayPart) => {
+      const moved = amountList(way.qort, way.assets);
+      return moved.length ? `, ${moved.join(', ')}` : '';
+    };
     // The total first: it is the number on the avatar.
     return `${plural(node.count, 'transaction')}: ${formatCount(node.split.in.count)} received${part(
-      node.split.in.qort
-    )}; ${formatCount(node.split.out.count)} sent${part(node.split.out.qort)}`;
+      node.split.in
+    )}; ${formatCount(node.split.out.count)} sent${part(node.split.out)}`;
   }
   return node.side === 'in'
     ? `${plural(node.count, 'transaction')} received${amount}`
@@ -127,9 +146,16 @@ function countWords(node: CircleNode): string {
       : plural(node.count, 'transaction');
 }
 
-/** The widest a name under a bottom avatar is, and the height of one (two lines). */
+/** The least room between the centres of two avatars of a side: wide, phone (px). */
+const SIDE_GAP = [38, 34] as const;
+
+/** The widest a name under a bottom avatar is. */
 const BOTTOM_NAME_MAX = 124;
-const BOTTOM_NAME_HEIGHT = 36;
+
+/** How tall the name under a bottom avatar is, with a line for each asset that moved (px). */
+function bottomNameHeight(node: CircleNode): number {
+  return 20 + 15 * Math.max(1, bothLines(node).length);
+}
 
 /**
  * How wide the name under a bottom avatar may be, in pixels, in a drawing
@@ -146,7 +172,7 @@ function bottomNameRoom(
   const px = (p: PlacedNode) => ({ x: (p.x / 100) * width, y: (p.y / 100) * height });
   const me = px(node);
   const top = me.y + Math.max(22, node.size / 2 + 5);
-  const band = [top, top + BOTTOM_NAME_HEIGHT];
+  const band = [top, top + bottomNameHeight(node)];
   let room = BOTTOM_NAME_MAX;
   for (const other of bottom) {
     if (other === node) continue;
@@ -155,25 +181,37 @@ function bottomNameRoom(
     const dx = Math.abs(at.x - me.x);
     const meets = (y0: number, y1: number) => y0 < band[1] && y1 > band[0];
     // Its name beside this one: they share the gap.
-    if (meets(at.y + reach, at.y + reach + BOTTOM_NAME_HEIGHT)) room = Math.min(room, dx - 6);
+    if (meets(at.y + reach, at.y + reach + bottomNameHeight(other))) room = Math.min(room, dx - 6);
     // Its avatar: this name reaches up to its edge.
     if (meets(at.y - reach, at.y + reach)) room = Math.min(room, 2 * (dx - reach) - 6);
   }
   return Math.max(48, room);
 }
 
-/** "(500 QORT)"; both ways "(500 QORT in, 20 out)", "(500 QORT in)"; null without QORT. */
+/**
+ * Under an avatar paid both ways, a line for QORT and for each Q-Asset that
+ * moved: "457 QORT in, 9.5 out", "983 BHC Coin in, 10,000 out", "1 10Coin out".
+ */
+function bothLines(node: CircleNode): string[] {
+  if (!node.split) return [];
+  const { in: received, out: sent } = node.split;
+  const names = ['QORT', ...addAssets(received.assets, sent.assets).map((sum) => sum.asset)];
+  const atomic = (way: WayPart, name: string) =>
+    name === 'QORT' ? way.qort : (way.assets.find((sum) => sum.asset === name)?.atomic ?? 0n);
+  return names.flatMap((name) => {
+    const r = circleQort(atomic(received, name));
+    const s = circleQort(atomic(sent, name));
+    if (r && s) return [`${r} ${name} in, ${s} out`];
+    if (r) return [`${r} ${name} in`];
+    if (s) return [`${s} ${name} out`];
+    return [];
+  });
+}
+
+/** Beside a side's avatar: "(500 QORT)", "(1 10Coin)", "(500 QORT, 1 10Coin)"; null when nothing moved. */
 function qortWords(node: CircleNode): string | null {
-  if (node.side === 'both' && node.split) {
-    const received = circleQort(node.split.in.qort);
-    const sent = circleQort(node.split.out.qort);
-    if (received && sent) return `(${received} QORT in, ${sent} out)`;
-    if (received) return `(${received} QORT in)`;
-    if (sent) return `(${sent} QORT out)`;
-    return null;
-  }
-  const qort = circleQort(node.qort);
-  return qort ? `(${qort} QORT)` : null;
+  const list = amountList(node.qort, node.assets);
+  return list.length ? `(${list.join(', ')})` : null;
 }
 
 /**
@@ -237,8 +275,9 @@ function Node({
   const shown = useDisplayName(node.address, node.address.startsWith('A') ? null : undefined);
   const colours = useSideColours();
   const words = countWords(node);
-  const qort = qortWords(node);
   const below = node.side === 'both';
+  const qort = below ? null : qortWords(node);
+  const lines = below ? bothLines(node) : [];
   // The name on the outer side of its avatar; under it at the bottom.
   const outer = below
     ? { top: '100%', left: '50%', translate: '-50% 0', mt: 0.5 }
@@ -347,6 +386,27 @@ function Node({
             }}
           >
             {/* The amount after the name, always whole; the name cut short when long. */}
+            {lines.length ? (
+              <Box
+                component="span"
+                sx={{
+                  order: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  fontWeight: 500,
+                  fontSize: 12,
+                  lineHeight: 1.25,
+                  color: 'text.secondary',
+                  textAlign: 'center',
+                  whiteSpace: 'normal',
+                }}
+              >
+                {lines.map((line) => (
+                  <span key={line}>{line}</span>
+                ))}
+              </Box>
+            ) : null}
             {qort ? (
               <Box
                 component="span"
@@ -355,9 +415,6 @@ function Node({
                   flexShrink: 0,
                   fontWeight: 500,
                   color: 'text.secondary',
-                  fontSize: below ? 12 : undefined,
-                  whiteSpace: below ? 'normal' : undefined,
-                  textAlign: below ? 'center' : undefined,
                 }}
               >
                 {qort}
@@ -520,6 +577,17 @@ export function ConnectionsCircle({
   }, [box]);
   const bottomRoom = (node: PlacedNode) =>
     boxSize ? bottomNameRoom(node, bottom, boxSize.width, boxSize.height) : BOTTOM_NAME_MAX;
+  // Tall enough that the avatars of a side keep apart and a name never runs
+  // under the next (Simon, 2026-10-17: "make sure the names and QORT
+  // amounts are not covered"): the closest two of a side, in % of the
+  // drawing's height, need SIDE_GAP px between their centres.
+  const sideGap = Math.min(
+    ...[left, right].flatMap((list) => list.slice(1).map((node, i) => node.y - list[i].y))
+  );
+  const minInner =
+    Number.isFinite(sideGap) && sideGap > 0 ? (SIDE_GAP[phone ? 1 : 0] * 100) / sideGap : 0;
+  // Under the bottom avatars, room for their names and a line for each asset.
+  const bottomPad = 16 + Math.max(36, ...bottom.map(bottomNameHeight));
   // As tall as the fuller half of the ring needs: a few accounts leave no empty space.
   const fullest =
     Math.max(left.length, right.length) + Math.ceil((options.bothSpacing * bottom.length) / 2);
@@ -568,7 +636,13 @@ export function ConnectionsCircle({
               aspectRatio: aspect,
               // Room for the avatars at the edges, and the names under the bottom ones.
               p: { xs: 2.5, sm: 3 },
-              pb: bottom.length ? { xs: 3.5, sm: 7 } : undefined,
+              pb: bottom.length ? { xs: '28px', sm: `${bottomPad}px` } : undefined,
+              minHeight: minInner
+                ? {
+                    xs: `${Math.ceil(minInner) + 20 + (bottom.length ? 28 : 20)}px`,
+                    sm: `${Math.ceil(minInner) + 24 + (bottom.length ? bottomPad : 24)}px`,
+                  }
+                : undefined,
               boxSizing: 'border-box',
             }}
           >
