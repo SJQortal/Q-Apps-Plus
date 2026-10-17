@@ -6,6 +6,7 @@ import type {
   ActivityBucket,
   ActivityFamily,
   ActivityMark,
+  MarkKind,
 } from '../../../../rules/explorer/activity';
 import { TX_FAMILIES } from '../../../../rules/explorer/txFamilies';
 import { formatCount, formatDate, formatDateTime, plural } from '../../../../utils/format';
@@ -41,3 +42,19 @@ export function bucketWords(bucket: ActivityBucket): string {
     parts.length ? `, ${parts.join(', ')}` : ''
   }`;
 }
+
+/** Each kind of milestone, as Activity's settings name it, in this order. */
+export const MARK_KIND_LABELS: ReadonlyArray<{ kind: MarkKind; label: string }> = [
+  { kind: 'joined', label: 'Joined MINTER, or invited' },
+  { kind: 'asked', label: 'Asked to join MINTER' },
+  { kind: 'nominated', label: 'Nominated' },
+  { kind: 'declined', label: 'Join request declined' },
+  { kind: 'removed', label: 'Removed from MINTER' },
+  { kind: 'banned', label: 'Banned from MINTER' },
+  { kind: 'unbanned', label: 'Ban lifted' },
+  { kind: 'left', label: 'Left MINTER' },
+  { kind: 'admin', label: 'Made a Minter Admin' },
+  { kind: 'notAdmin', label: 'No longer a Minter Admin' },
+  { kind: 'name', label: 'Names registered, bought, sold or renamed' },
+  { kind: 'minting', label: 'Minting: first reward share, levels moved' },
+];

@@ -19,7 +19,7 @@ import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import CheckOutlinedIcon from '@mui/icons-material/CheckOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { ThemePicker } from '../../hub-theme';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody } from '../../components/layout/PageBody';
@@ -40,6 +40,9 @@ import {
   timeDisplayAtom,
   decisionsOrderAtom,
   explorerRememberAtom,
+  activityFirstReadAtom,
+  activityHiddenMarksAtom,
+  clampActivityRead,
   type DecisionsOrder,
   type MotionSetting,
   type TimeDisplay,
@@ -53,7 +56,8 @@ import {
   UPSTREAM_REPO,
 } from '../../constants/plus';
 import { PATHS } from '../../routes/paths';
-import { plural } from '../../utils/format';
+import { formatCount, plural } from '../../utils/format';
+import { ActivitySettingsDialog } from '../explorer/account/activity/ActivitySettings';
 import { copyText, openQortalLink } from '../../utils/links';
 import { readable } from '../../utils/readable';
 
@@ -175,6 +179,9 @@ export default function SettingsPage() {
   const [celebrate, setCelebrate] = useAtom(celebrateAtom);
   const [hideAnswered, setHideAnswered] = useAtom(decisionsHideAnsweredAtom);
   const [rememberExplored, setRememberExplored] = useAtom(explorerRememberAtom);
+  const activityFirstRead = clampActivityRead(useAtomValue(activityFirstReadAtom));
+  const hiddenMarks = useAtomValue(activityHiddenMarksAtom);
+  const [activityOpen, setActivityOpen] = useState(false);
   const recent = useRecent();
   // On phones Settings is a gear on Home, not in the bar: Back.
   const inNav = useNavHas('settings');
@@ -379,7 +386,29 @@ export default function SettingsPage() {
                 Clear
               </Button>
             </RowAfterSwitch>
+            <RowAfterSwitch>
+              <SettingText
+                title="Activity"
+                hint={`Reads an account's newest ${formatCount(activityFirstRead)} transactions at first${
+                  hiddenMarks.length
+                    ? `; ${plural(hiddenMarks.length, 'kind')} of milestone hidden`
+                    : ''
+                }.`}
+              />
+              <Button
+                variant="outlined"
+                onClick={() => setActivityOpen(true)}
+                aria-haspopup="dialog"
+                aria-label="Change Activity settings"
+                sx={{ minHeight: 44 }}
+              >
+                Change
+              </Button>
+            </RowAfterSwitch>
           </Card>
+          {activityOpen ? (
+            <ActivitySettingsDialog open onClose={() => setActivityOpen(false)} />
+          ) : null}
         </Section>
 
         <NotificationSettings />

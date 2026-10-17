@@ -21,6 +21,8 @@ export const SETTINGS_KEYS = {
   decisionsHideAnswered: `${STORAGE_PREFIX}decisions-hide-signed`,
   decisionsOrder: `${STORAGE_PREFIX}decisions-order`,
   explorerRemember: `${STORAGE_PREFIX}explorer-remember`,
+  activityFirstRead: `${STORAGE_PREFIX}explorer-activity-first-read`,
+  activityHiddenMarks: `${STORAGE_PREFIX}explorer-activity-hidden-marks`,
 } as const;
 
 /** Animations: follow the system, always reduce, or always play. */
@@ -52,3 +54,35 @@ export const decisionsOrderAtom = atomWithStorage<DecisionsOrder>(
  * explorations, addresses only; state/explorer.ts). On unless turned off.
  */
 export const explorerRememberAtom = atomWithStorage<boolean>(SETTINGS_KEYS.explorerRemember, true);
+
+/** The Explorer's Activity: transactions read when it opens, and on each Read older. */
+export const ACTIVITY_FIRST_READ_DEFAULT = 1_000;
+/** Read in pages of 100 (Core's), never more than the whole chart reads (20,000). */
+export const ACTIVITY_FIRST_READ_MIN = 100;
+export const ACTIVITY_FIRST_READ_MAX = 20_000;
+/** The choices offered beside "another number" (Simon, 2026-10-17: "like: 100, 500, 2000"). */
+export const ACTIVITY_FIRST_READ_CHOICES = [100, 500, 1_000, 2_000] as const;
+
+/** A number of transactions to read, kept to whole pages of 100 within the limits. */
+export function clampActivityRead(value: unknown): number {
+  const n =
+    typeof value === 'number' && Number.isFinite(value) ? value : ACTIVITY_FIRST_READ_DEFAULT;
+  const pages = Math.ceil(n / ACTIVITY_FIRST_READ_MIN);
+  return Math.min(ACTIVITY_FIRST_READ_MAX, Math.max(1, pages) * ACTIVITY_FIRST_READ_MIN);
+}
+
+/**
+ * The Explorer's Activity (Simon, 2026-10-17: "the user can adjust the default auto fetch to
+ * lower that amount"): how many of an account's newest transactions it reads when it opens,
+ * and how many more each Read older reads. On this device.
+ */
+export const activityFirstReadAtom = atomWithStorage<number>(
+  SETTINGS_KEYS.activityFirstRead,
+  ACTIVITY_FIRST_READ_DEFAULT
+);
+
+/** The kinds of milestones Activity leaves off its chart and list (rules/explorer/activity.ts). */
+export const activityHiddenMarksAtom = atomWithStorage<string[]>(
+  SETTINGS_KEYS.activityHiddenMarks,
+  []
+);

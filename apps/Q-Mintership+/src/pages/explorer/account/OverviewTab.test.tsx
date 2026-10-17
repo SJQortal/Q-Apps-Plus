@@ -12,7 +12,7 @@ import { renderPage } from '../../../test/render';
 import { expectNoAxeViolations } from '../../../test/axe';
 import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../../test/setup';
 import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../../test/world';
-import { COLLECTOR, SPONSEES, SPONSOR } from '../../../../e2e/world.mjs';
+import { COLLECTOR, FUNDER, SPONSEES, SPONSOR } from '../../../../e2e/world.mjs';
 import { explorerAccountPath } from '../../../routes/paths';
 import { peekQuery } from '../../../data/query';
 import { accountTxKey, type AccountTxList } from '../../../data/explorer/accountTx';
@@ -401,5 +401,40 @@ describe('Overview: its activity over time', () => {
     );
     const dialog = await screen.findByRole('dialog', { name: /^Activity: / }, T);
     expect(within(dialog).getByRole('group', { name: /activity over time/ })).toBeInTheDocument();
+  });
+});
+
+describe('Overview: Activity’s settings', () => {
+  it('reads the number picked at first, and Read older reads as many more', async () => {
+    const { user } = await open(FUNDER.address, () =>
+      window.localStorage.setItem('qmintershipplus-explorer-activity-first-read', '100')
+    );
+    const activity = await region('Activity');
+    expect(
+      await within(activity).findByText(/^Its newest 100 transactions, back to /, {}, T)
+    ).toBeInTheDocument();
+    expect(within(activity).getByRole('button', { name: 'Read 100 older' })).toBeVisible();
+    // The gear, beside it: pick 500.
+    await user.click(within(activity).getByRole('button', { name: 'Activity settings' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Activity settings' });
+    await user.click(within(dialog).getByRole('radio', { name: '500' }));
+    expect(window.localStorage.getItem('qmintershipplus-explorer-activity-first-read')).toBe('500');
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+    expect(
+      await within(activity).findByRole('button', { name: 'Read 500 older' }, T)
+    ).toBeVisible();
+  });
+
+  it('leaves out the kinds of milestones hidden there', async () => {
+    const { user } = await open(ADDR.admin);
+    const activity = await region('Activity');
+    await within(activity).findByRole('list', { name: 'Milestones' }, T);
+    await user.click(within(activity).getByRole('button', { name: 'Activity settings' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Activity settings' });
+    for (const box of within(dialog).getAllByRole('checkbox')) await user.click(box);
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+    await waitFor(() =>
+      expect(within(activity).queryByRole('list', { name: 'Milestones' })).toBeNull()
+    );
   });
 });

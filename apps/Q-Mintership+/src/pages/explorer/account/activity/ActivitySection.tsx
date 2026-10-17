@@ -6,7 +6,8 @@
  * bought or sold, its first reward share, each nomination.
  *
  * - What it reads: its newest 1,000 transactions once the section nears the
- *   screen, then 1,000 more at a time on request, or all of it
+ *   screen (or the number picked in its settings, the gear), then as many
+ *   more at a time on request, or all of it
  *   (useActivityRows); the account's own list, shared with its
  *   Transactions tab. What wasn't read yet is hatched and said.
  * - Its MINTER milestones and nominations: its own MINTER history and its
@@ -23,6 +24,8 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Chip, IconButton, Link, Skeleton, Tooltip, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import OpenInFullOutlinedIcon from '@mui/icons-material/OpenInFullOutlined';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import { useAtomValue } from 'jotai';
 import { ResponsiveDialog } from '../../../../components/common/ResponsiveDialog';
 import { Section } from '../../../../components/common/Section';
 import { ErrorState } from '../../../../components/common/states';
@@ -56,6 +59,12 @@ import { ActivityChart } from './ActivityChart';
 import { FAMILY_LABEL, periodWords, type PlacedMark } from './activityWords';
 import { ACTIVITY_MAX, useActivityRows, type ActivityRows } from './useActivityRows';
 import { useViewState } from '../../../../hooks/useViewState';
+import {
+  activityFirstReadAtom,
+  activityHiddenMarksAtom,
+  clampActivityRead,
+} from '../../../../state/settings';
+import { ActivitySettingsDialog } from './ActivitySettings';
 
 const DAY = 86_400_000;
 /** MINTER's approval window when its settings can't be read (as on the Minter Profile). */
@@ -67,6 +76,8 @@ const MARKS_SHOWN = 8;
 
 interface ActivityState {
   rows: ActivityRows;
+  /** How many it reads at first and on each Read older (the person's setting). */
+  step: number;
   label: string;
   address: string;
   from: number;
@@ -101,21 +112,24 @@ function ReadLine({ state }: { state: ActivityState }) {
           ? `Reading… ${formatCount(list.length)} of up to ${formatCount(rows.target)} read.`
           : words}
       </Typography>
-      {canRead ? (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-          <Button
-            variant="outlined"
-            onClick={rows.readMore}
-            disabled={rows.reading}
-            sx={{ minHeight: 44 }}
-          >
-            Read 1,000 older
-          </Button>
-          <Button onClick={rows.readAll} disabled={rows.reading} sx={{ minHeight: 44 }}>
-            Read all of it
-          </Button>
-        </Box>
-      ) : null}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+        <SettingsButton />
+        {canRead ? (
+          <>
+            <Button
+              variant="outlined"
+              onClick={rows.readMore}
+              disabled={rows.reading}
+              sx={{ minHeight: 44 }}
+            >
+              Read {formatCount(state.step)} older
+            </Button>
+            <Button onClick={rows.readAll} disabled={rows.reading} sx={{ minHeight: 44 }}>
+              Read all of it
+            </Button>
+          </>
+        ) : null}
+      </Box>
       {rows.error ? (
         <ErrorState
           compact
@@ -125,6 +139,26 @@ function ReadLine({ state }: { state: ActivityState }) {
         />
       ) : null}
     </Box>
+  );
+}
+
+/** The gear: Activity's settings (how much it reads at first, which milestones it shows). */
+function SettingsButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Tooltip title="Activity settings">
+        <IconButton
+          aria-label="Activity settings"
+          aria-haspopup="dialog"
+          onClick={() => setOpen(true)}
+          sx={{ width: 44, height: 44 }}
+        >
+          <SettingsOutlinedIcon />
+        </IconButton>
+      </Tooltip>
+      {open ? <ActivitySettingsDialog open onClose={() => setOpen(false)} /> : null}
+    </>
   );
 }
 
@@ -324,7 +358,10 @@ function ActivityBody({
 }) {
   const phone = usePhoneLayout();
   const { label } = useDisplayName(address);
-  const rows = useActivityRows(address, true);
+  // How much it reads at first, and the milestones it leaves out: the person's settings.
+  const step = clampActivityRead(useAtomValue(activityFirstReadAtom));
+  const hiddenMarks = useAtomValue(activityHiddenMarksAtom);
+  const rows = useActivityRows(address, true, step);
   // Its own MINTER history (the Mintership tab's read, shared), for its MINTER milestones.
   const history = useQuery(`history:${address}`, (force) => getAddressHistory(address, { force }));
   const chain = useQuery('chain:now', (force) => getChainNow({ force }));
@@ -385,11 +422,14 @@ function ActivityBody({
           label: `Nominated by ${n.nomination.publisher.name}`,
           to: nominationPath(address),
         });
-    return placed.filter((m) => m.at >= from && m.at <= to).sort((a, b) => a.at - b.at);
-  }, [events, list, nominations, address, from, to]);
+    return placed
+      .filter((m) => m.at >= from && m.at <= to && !hiddenMarks.includes(m.kind))
+      .sort((a, b) => a.at - b.at);
+  }, [events, list, nominations, address, from, to, hiddenMarks]);
 
   const state: ActivityState = {
     rows,
+    step,
     label,
     address,
     from,
