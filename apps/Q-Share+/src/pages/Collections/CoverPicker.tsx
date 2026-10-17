@@ -11,6 +11,9 @@ export type CoverChoice = { kind: "keep" } | { kind: "remove" } | { kind: "new";
 
 export const KEEP_COVER: CoverChoice = { kind: "keep" };
 
+/** Hub published the collection but not its new cover. */
+export const COVER_FAILED = "Saved, but the cover image wasn't published. Choose it again in Edit.";
+
 /**
  * The cover to store and the image to publish with it, for a save by `name`:
  * `cover` is undefined to keep the current one and null to remove it.

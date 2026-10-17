@@ -17,6 +17,7 @@ import { QSHARE_COLLECTION_BASE } from "../constants/Identifiers";
 import { MAX_MARKERS, ownerAddress, stripRecipientMarkers, withRecipientMarkers } from "./recipientMarker";
 import { objectToBase64 } from "./toBase64";
 import { allCollectionItems } from "./collectionFolders";
+import { isHubDecline } from "./hubErrors";
 import { fetchQdnResource, needsEncodedFetch } from "./fetchVideos";
 import {
   QDN_PAGE,
@@ -515,6 +516,8 @@ export async function publishCollection(input: {
   previous?: CollectionBody | null;
   /** Images the body's new covers point at, published first. */
   covers?: NewCover[];
+  /** Called when the collection was published but a new cover wasn't. */
+  onCoversFailed?: () => void;
 }): Promise<Collection> {
   const before = input.previous ?? getCachedCollection(input.name, input.identifier);
   const previous = input.previous ? allCollectionItems(input.previous) : (input.previousItems ?? (before ? allCollectionItems(before) : []));
@@ -522,10 +525,22 @@ export async function publishCollection(input: {
   const payload = await buildCollectionPublish({ ...input, recipients });
   const covers = input.covers ?? [];
   if (covers.length > 0) {
-    await qortalRequest({
-      action: "PUBLISH_MULTIPLE_QDN_RESOURCES",
-      resources: [...covers.map((cover) => buildCoverPublish({ name: input.name, cover, title: input.body.title })), payload],
-    });
+    try {
+      await qortalRequest({
+        action: "PUBLISH_MULTIPLE_QDN_RESOURCES",
+        resources: [...covers.map((cover) => buildCoverPublish({ name: input.name, cover, title: input.body.title })), payload],
+      });
+    } catch (error) {
+      // Hub names what it couldn't publish. When only a cover failed, the
+      // collection is on QDN: report it saved, and let the caller say the
+      // cover needs choosing again (saving again would pay for both).
+      const failed: string[] = ((error as { error?: { unsuccessfulPublishes?: Array<{ identifier?: string }> } })?.error
+        ?.unsuccessfulPublishes ?? [])
+        .map((item) => item?.identifier ?? "")
+        .filter(Boolean);
+      if (failed.length === 0 || failed.includes(input.identifier) || isHubDecline(error)) throw error;
+      input.onCoversFailed?.();
+    }
   } else {
     await qortalRequest(payload);
   }

@@ -17,7 +17,7 @@ import {
   type CollectionItem,
 } from "../../utils/collections";
 import { isHubDecline } from "../../utils/hubErrors";
-import { CoverPicker, KEEP_COVER, coverChange, type CoverChoice } from "./CoverPicker";
+import { COVER_FAILED, CoverPicker, KEEP_COVER, coverChange, type CoverChoice } from "./CoverPicker";
 
 export interface CollectionDialogProps {
   open: boolean;
@@ -75,7 +75,16 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
       const body = collection
         ? editCollectionBody(collection, { title: trimmedTitle, description, cover })
         : buildCollectionBody({ title: trimmedTitle, description, items: initialItems ?? [], cover });
-      const saved = await publishCollection({ name, identifier, body, previous: collection ?? null, previousItems: [], covers });
+      let coverFailed = false;
+      const saved = await publishCollection({
+        name,
+        identifier,
+        body,
+        previous: collection ?? null,
+        previousItems: [],
+        covers,
+        onCoversFailed: () => (coverFailed = true),
+      });
       dispatch(upsertCollection(saved));
       if (name === myName) {
         dispatch(
@@ -89,7 +98,11 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
           })
         );
       }
-      dispatch(setNotification({ msg: isEdit ? "Collection saved" : "Collection created", alertType: "success" }));
+      dispatch(
+        coverFailed
+          ? setNotification({ msg: COVER_FAILED, alertType: "info" })
+          : setNotification({ msg: isEdit ? "Collection saved" : "Collection created", alertType: "success" })
+      );
       onSaved?.(saved);
       onClose();
     } catch (error) {

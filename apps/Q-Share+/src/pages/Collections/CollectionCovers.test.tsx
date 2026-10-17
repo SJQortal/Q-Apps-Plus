@@ -117,4 +117,32 @@ describe("covers", { timeout: 20_000 }, () => {
     // The collection's own cover stays.
     expect(body.cover).toEqual(oldCover);
   });
+
+  it("says the collection is saved when only its new cover failed, and not saved when the collection did", async () => {
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", (params: any) => {
+      throw { error: { unsuccessfulPublishes: [{ identifier: params.resources[0].identifier }] }, message: "x" };
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    let dialog = within(await screen.findByRole("dialog", { name: "Edit collection" }));
+    fireEvent.change(dialog.getByRole("textbox", { name: /title/i }), { target: { value: "Music 2" } });
+    fireEvent.change(dialog.getByTestId("cover-input"), { target: { files: [image()] } });
+    await waitFor(() => expect(dialog.getByRole("button", { name: "Change image for the cover" })).toBeInTheDocument());
+    fireEvent.click(dialog.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit collection" })).not.toBeInTheDocument());
+    expect(store.getState().notifications.alertTypes.alertInfo).toBe(
+      "Saved, but the cover image wasn't published. Choose it again in Edit."
+    );
+    expect(await screen.findByRole("heading", { level: 1, name: "Music 2" })).toBeInTheDocument();
+
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", (params: any) => {
+      throw { error: { unsuccessfulPublishes: [{ identifier: params.resources[1].identifier }] }, message: "x" };
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    dialog = within(await screen.findByRole("dialog", { name: "Edit collection" }));
+    fireEvent.change(dialog.getByTestId("cover-input"), { target: { files: [image()] } });
+    await waitFor(() => expect(dialog.getByRole("button", { name: "Change image for the cover" })).toBeInTheDocument());
+    fireEvent.click(dialog.getByRole("button", { name: "Save" }));
+    expect(await dialog.findByText("The collection was not saved.")).toBeInTheDocument();
+  });
 });

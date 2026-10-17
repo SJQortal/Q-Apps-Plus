@@ -14,7 +14,7 @@ import {
 } from "../../utils/collections";
 import { addFolder, editFolder, newFolderId } from "../../utils/collectionFolders";
 import { isHubDecline } from "../../utils/hubErrors";
-import { CoverPicker, KEEP_COVER, coverChange, type CoverChoice } from "./CoverPicker";
+import { COVER_FAILED, CoverPicker, KEEP_COVER, coverChange, type CoverChoice } from "./CoverPicker";
 
 export interface FolderDialogProps {
   open: boolean;
@@ -67,6 +67,7 @@ export function FolderDialog({ open, onClose, collection, folder, parentId = nul
     try {
       const id = folder?.id ?? newFolderId(collection);
       const { cover, covers } = coverChange(coverChoice, collection.name);
+      let coverFailed = false;
       const changed = folder
         ? editFolder(collection, folder.id, { title: trimmedTitle, description: description.trim(), cover })
         : addFolder(collection, parentId, {
@@ -83,9 +84,14 @@ export function FolderDialog({ open, onClose, collection, folder, parentId = nul
         body: editCollectionBody(changed),
         previous: collection,
         covers,
+        onCoversFailed: () => (coverFailed = true),
       });
       dispatch(upsertCollection(saved));
-      dispatch(setNotification({ msg: isEdit ? "Folder saved" : "Folder created", alertType: "success" }));
+      dispatch(
+        coverFailed
+          ? setNotification({ msg: COVER_FAILED, alertType: "info" })
+          : setNotification({ msg: isEdit ? "Folder saved" : "Folder created", alertType: "success" })
+      );
       onSaved?.(id, saved);
       onClose();
     } catch (error) {
