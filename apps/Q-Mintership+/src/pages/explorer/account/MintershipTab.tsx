@@ -150,7 +150,9 @@ export default function MintershipTab({ address }: MintershipTabProps) {
         viewer: viewer.status,
       }
     : null;
-  const actions = facts ? <ProfileActions facts={facts} /> : null;
+  // Once its nominations are known: "Add your support" or "Propose nomination" depends on them.
+  const nominationsKnown = story.nominations.data !== undefined || story.nominations.isError;
+  const actions = facts && nominationsKnown ? <ProfileActions facts={facts} /> : null;
   const latest = story.current;
   const now = story.chain.data;
   const card =
