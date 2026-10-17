@@ -12,6 +12,7 @@ import { MINTER_GROUP_ID } from '../constants';
 import { getJson, getText, query, seg } from '../core';
 import { fetchQuery, peekQuery, setQueryData } from '../query';
 import type { AccountInfo, TxRow } from '../types';
+import type { MintingStart } from '../../rules/explorer/onlineShare';
 
 const AT_ADDRESS_RE = /^A[1-9A-HJ-NP-Za-km-z]{33}$/;
 const SIGNATURE_RE = /^[1-9A-HJ-NP-Za-km-z]{86,90}$/;
@@ -241,6 +242,44 @@ export function getOnline(): Promise<OnlineShare[]> {
 export function onlineSharesOf(shares: OnlineShare[], address: string): OnlineShare[] {
   return shares.filter(
     (share) => share.minterAddress === address || share.recipientAddress === address
+  );
+}
+
+/**
+ * Where an account started minting (`xmintstart:<a>`): its oldest reward
+ * share, as the minter or the recipient, and its newest minting-level move,
+ * if any (rules/explorer/onlineShare.ts). Two searches of one row each.
+ */
+export function getMintingStart(address: string): Promise<MintingStart> {
+  const search = (txType: string, reverse: boolean) =>
+    getJson<TxRow[]>(
+      `/transactions/search?${query({
+        txType,
+        address,
+        confirmationStatus: 'CONFIRMED',
+        limit: 1,
+        reverse,
+      })}`
+    ).then((rows) => (Array.isArray(rows) ? rows : [])[0] ?? null);
+  return fetchQuery(
+    `xmintstart:${address}`,
+    async () => {
+      const [share, move] = await Promise.all([
+        search('REWARD_SHARE', false),
+        search('TRANSFER_PRIVS', true),
+      ]);
+      return {
+        firstShare:
+          share && typeof share.blockHeight === 'number'
+            ? { height: share.blockHeight, timestamp: share.timestamp }
+            : null,
+        moved:
+          move && typeof move.blockHeight === 'number'
+            ? { height: move.blockHeight, away: move.creatorAddress === address }
+            : null,
+      };
+    },
+    { ttlMs: 10 * 60_000 }
   );
 }
 

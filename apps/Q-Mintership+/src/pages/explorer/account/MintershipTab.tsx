@@ -216,7 +216,12 @@ export default function MintershipTab({ address }: MintershipTabProps) {
 
   return (
     <>
-      <StandingSection story={story} self={Boolean(facts?.self)} actions={actions} />
+      <StandingSection
+        address={address}
+        story={story}
+        self={Boolean(facts?.self)}
+        actions={actions}
+      />
       <NominationSummary address={address} story={story} card={card} />
       <Timeline story={story} self={Boolean(facts?.self)} />
       <MadeSection address={address} eager={quiet} />

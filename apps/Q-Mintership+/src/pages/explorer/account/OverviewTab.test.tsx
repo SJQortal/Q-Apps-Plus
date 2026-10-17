@@ -94,7 +94,16 @@ describe('Overview: a Minter Admin minting now', () => {
     expect(
       within(facts).getByRole('progressbar', { name: /^Progress to level 8: \d+%$/ })
     ).toBeInTheDocument();
-    expect(fact('Blocks minted')).toEqual({ value: '1,730,799', detail: '' });
+    expect(fact('Blocks minted').value).toBe('1,730,799');
+    // How much of the time its node was online, under it, with an ⓘ that says more.
+    await waitFor(
+      () =>
+        expect(fact('Blocks minted').detail).toMatch(
+          /^Node online: (\d+%|over 99%|under 1%|Not minting|Not yet|Can’t tell)$/
+        ),
+      T
+    );
+    expect(within(facts).getByRole('button', { name: /^About node online: / })).toBeInTheDocument();
     await waitFor(() => expect(fact('Balance').value).toBe('12.5 QORT'), T);
     expect(fact('Balance').detail).toBe('');
     await waitFor(() => expect(fact('First seen').value).not.toBe('Loading'), T);
@@ -188,10 +197,14 @@ describe('Overview: penalty, notes and a busy name list', () => {
       T
     );
 
-    expect(fact('Blocks minted')).toEqual({
-      value: '1,200,000',
-      detail: 'Adjustment +12,000 · Penalty −5,000,000',
-    });
+    expect(fact('Blocks minted').value).toBe('1,200,000');
+    await waitFor(
+      () =>
+        expect(fact('Blocks minted').detail).toMatch(
+          /^Node online: .+Adjustment \+12,000 · Penalty −5,000,000$/
+        ),
+      T
+    );
     await waitFor(() => expect(fact('Balance').value).toBe('6,480.54 QORT'), T);
     expect(fact('Balance').detail).toBe('Exactly 6,480.54123456 QORT');
     await waitFor(() => expect(fact('First seen').value).toBe(formatDate(blockTime(1_500_000))), T);

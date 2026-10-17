@@ -1,7 +1,8 @@
 /**
  * Where an account stands in MINTER, in the app's own words (statusSentence,
  * from the app's status logic: nothing is worked out here), with its facts
- * and what the viewer can do for it (the profile's actions); then its
+ * (how much of the time its node was online among them: NodeOnline) and what the
+ * viewer can do for it (the profile's actions); then its
  * nomination in full (the open one or the latest), its rounds in brief, and
  * a link to the nomination's own page.
  */
@@ -18,8 +19,9 @@ import type { MinterStory } from './useMinterStory';
 import { nominationLine, roundsLine } from './mintershipWords';
 import { Note } from './parts';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
+import { NodeOnlineValue } from '../../../../components/explorer/NodeOnline';
 
-function Fact({ label, value }: { label: string; value: string }) {
+function Fact({ label, value }: { label: string; value: ReactNode }) {
   return (
     <Box sx={FIELD_BLOCK_SX}>
       <Typography component="dt" variant="body2" color="text.secondary">
@@ -36,10 +38,13 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 export function StandingSection({
+  address,
   story,
   self = false,
   actions = null,
 }: {
+  /** The account whose profile this is. */
+  address: string;
   story: MinterStory;
   /** The signed-in account's own profile: said to "you". */
   self?: boolean;
@@ -77,6 +82,12 @@ export function StandingSection({
         >
           <Fact label="Level" value={String(person.level)} />
           <Fact label="Blocks minted" value={formatCount(person.blocksMinted)} />
+          <Fact
+            label="Node online"
+            value={
+              <NodeOnlineValue address={address} blocksMinted={person.blocksMinted} loading="…" />
+            }
+          />
           {next.nextLevelAt !== null && next.blocksToNextLevel !== null ? (
             <Fact
               label={`To level ${person.level + 1}`}

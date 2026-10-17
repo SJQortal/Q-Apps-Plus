@@ -10,12 +10,19 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../../constants/words';
 import { renderPage, type RenderPageOptions } from '../../../test/render';
-import { fetchCallsFor, qortalCalls, qortalCallsFor } from '../../../test/setup';
-import { DECLINED, addDecline, addTargetShift, fakeAddress } from '../../../../e2e/world.mjs';
-import { ADDR, MS_PER_BLOCK, NOW, PEOPLE } from '../../../test/world';
+import { fetchCallsFor, mockFetchRoute, qortalCalls, qortalCallsFor } from '../../../test/setup';
+import {
+  DECLINED,
+  addDecline,
+  addTargetShift,
+  answerCore,
+  fakeAddress,
+} from '../../../../e2e/world.mjs';
+import { ADDR, MS_PER_BLOCK, NOW, PEOPLE, TIP } from '../../../test/world';
 import { explorerAccountPath } from '../../../routes/paths';
 import { resetExplorerState } from '../../../state/explorer';
-import { formatDate } from '../../../utils/format';
+import { formatCount, formatDate } from '../../../utils/format';
+import { countableBlocks, percentWords } from '../../../rules/explorer/onlineShare';
 import AccountPage from '../AccountPage';
 
 const ROUTE = '/explorer/account/:who/:tab?';
@@ -48,6 +55,85 @@ async function status() {
 }
 
 describe('Minter Profile', () => {
+  /** Answer the profile's two one-row searches: its first reward share and level moves. */
+  function mintingStart(firstShare: number | null, moved: { height: number; by: string } | null) {
+    return (world: Parameters<NonNullable<RenderPageOptions['setup']>>[0]) =>
+      mockFetchRoute('/transactions/search', (url: URL) => {
+        const sp = url.searchParams;
+        if (sp.get('limit') === '1' && sp.get('txType') === 'REWARD_SHARE')
+          return firstShare === null
+            ? []
+            : [{ type: 'REWARD_SHARE', blockHeight: firstShare, timestamp: 1, signature: 'rs1' }];
+        if (sp.get('limit') === '1' && sp.get('txType') === 'TRANSFER_PRIVS')
+          return moved
+            ? [
+                {
+                  type: 'TRANSFER_PRIVS',
+                  blockHeight: moved.height,
+                  timestamp: 1,
+                  signature: 'tp1',
+                  creatorAddress: moved.by,
+                },
+              ]
+            : [];
+        const reply = answerCore(world, url.pathname, sp);
+        return new Response(JSON.stringify(reply?.body ?? null), { status: reply?.status ?? 404 });
+      });
+  }
+
+  /** The Node online fact's value, and what its ⓘ says. */
+  async function nodeOnline() {
+    const facts = (await status()).querySelector('dl[aria-label="MINTER facts"]') as HTMLElement;
+    return waitFor(() => {
+      const value = within(facts).getByText('Node online').nextElementSibling as HTMLElement;
+      expect(value.textContent).not.toMatch(/^…/);
+      const info = within(value).getByRole('button', { name: /^About node online: / });
+      return [value.textContent ?? '', info.getAttribute('aria-label') ?? ''];
+    }, T);
+  }
+
+  it('says how much of the time its node was online, from two one-row searches', async () => {
+    const first = 609_585;
+    const { world } = await visit(ADDR.admin, 'admin', mintingStart(first, null));
+    const minted = Number(world.accounts.get(ADDR.admin)?.blocks ?? 0);
+    const percent = (minted / countableBlocks(first, TIP)) * 100;
+    expect(percent).toBeGreaterThan(1);
+    expect(percent).toBeLessThan(99);
+    const expected = percentWords(percent);
+    const [value, info] = await nodeOnline();
+    expect(value).toBe(expected);
+    expect(info).toContain(
+      `of the rewards since its first reward share, in block ${formatCount(first)}.`
+    );
+    const searches = fetchCallsFor('/transactions/search')
+      .map((url) => new URL(url, 'http://x').searchParams)
+      .filter((p) => p.get('address') === ADDR.admin && p.get('limit') === '1');
+    expect(searches.map((p) => [p.get('txType'), p.get('reverse')]).sort()).toEqual([
+      ['REWARD_SHARE', 'false'],
+      ['TRANSFER_PRIVS', 'true'],
+    ]);
+  });
+
+  it('says when an account has never minted', async () => {
+    await visit(ADDR.learner, 'admin', mintingStart(null, null));
+    expect(await nodeOnline()).toEqual([
+      'Not minting',
+      'About node online: It has no reward share yet.',
+    ]);
+  });
+
+  it('says a moved minting level makes the count another account’s too', async () => {
+    await visit(
+      ADDR.admin,
+      'admin',
+      mintingStart(1_000, { height: 2_000_000, by: 'Qsomeoneelse' })
+    );
+    expect(await nodeOnline()).toEqual([
+      'Can’t tell',
+      'About node online: Its minting level moved from another account in block 2,000,000, and its blocks minted with it.',
+    ]);
+  });
+
   it('shows a nominee being signed for, as a Minter Admin sees them', async () => {
     const { posts } = await visit(ADDR.nominatedSigning, 'admin');
     const standing = await status();

@@ -1,8 +1,8 @@
 /**
  * The Overview's facts, each on a panel of its own (fieldBlock.ts), two to
  * a row (three on wide screens): its level and
- * how far it is to the next, blocks minted (with Core's adjustment and
- * penalty when it recorded any), its balance, when it was first seen, how
+ * how far it is to the next, blocks minted (with how much of the time its
+ * node was online, and Core's adjustment and penalty when it recorded any), its balance, when it was first seen, how
  * many groups it is in (GroupsSection lists them), and how many QDN
  * transactions it made. Each fact loads, fails and retries on its own; none
  * polls.
@@ -30,6 +30,7 @@ import {
   qdnTxWords,
 } from './overviewWords';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
+import { NodeOnlineValue } from '../../../../components/explorer/NodeOnline';
 
 const VALUE_SX = {
   m: 0,
@@ -148,11 +149,29 @@ function LevelFact({ account }: { account: AccountInfo }) {
 }
 
 function BlocksFact({ account }: { account: AccountInfo }) {
+  const adjusted = blocksDetail(account.blocksMintedAdjustment, account.blocksMintedPenalty);
   return (
     <Fact
       label="Blocks minted"
       value={formatCount(account.blocksMinted)}
-      detail={blocksDetail(account.blocksMintedAdjustment, account.blocksMintedPenalty)}
+      detail={
+        <>
+          {/* How much of the time its node was online (Simon, 2026-10-17). */}
+          <Box component="span" sx={{ display: 'block' }}>
+            Node online:{' '}
+            <NodeOnlineValue
+              address={account.address}
+              blocksMinted={account.blocksMinted}
+              loading="…"
+            />
+          </Box>
+          {adjusted ? (
+            <Box component="span" sx={{ display: 'block' }}>
+              {adjusted}
+            </Box>
+          ) : null}
+        </>
+      }
     />
   );
 }
