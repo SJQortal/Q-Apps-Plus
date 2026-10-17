@@ -753,8 +753,9 @@ describe('Connections: as a circle', () => {
     await user.click(screen.getByRole('button', { name: 'Circle' }));
     const circle = await region('Connections circle');
     const others = await within(circle).findByRole('list', { name: 'Other links' }, T);
+    // Named by what it shows first (the name, then the count), as axe asks.
     const sid = within(others).getByRole('button', {
-      name: /^Sid Sponsor, \d+ transactions?: show them$/,
+      name: /^Sid Sponsor \d+ transactions?: show them$/,
     });
     await user.click(sid);
     const dialog = await screen.findByRole('dialog', { name: 'Sid Sponsor: other links' }, T);

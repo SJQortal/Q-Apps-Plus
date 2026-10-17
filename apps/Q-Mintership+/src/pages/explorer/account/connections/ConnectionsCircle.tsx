@@ -21,6 +21,7 @@
 import { useState } from 'react';
 import { Box, Button, ButtonBase, Tooltip, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
+import { visuallyHidden } from '@mui/utils';
 import { NameAvatar } from '../../../../components/common/NameAvatar';
 import { MarkedName } from '../../../../components/common/MarkedName';
 import { useDisplayName } from '../../../../hooks/useDisplayName';
@@ -235,9 +236,9 @@ function OtherChip({ node, onPick }: { node: CircleNode; onPick: (node: CircleNo
   const shown = useDisplayName(node.address, node.address.startsWith('A') ? null : undefined);
   return (
     <Box component="li" sx={{ listStyle: 'none' }}>
+      {/* Named by what it shows, then the rest for screen readers: "Sid Sponsor 2 transactions: show them". */}
       <ButtonBase
         onClick={() => onPick(node)}
-        aria-label={`${shown.label}, ${plural(node.count, 'transaction')}: show them`}
         sx={(theme) => ({
           display: 'inline-flex',
           alignItems: 'center',
@@ -263,9 +264,12 @@ function OtherChip({ node, onPick }: { node: CircleNode; onPick: (node: CircleNo
           }}
         >
           <MarkedName name={shown.name}>{shown.label}</MarkedName>
-        </Box>
+        </Box>{' '}
         <Box component="span" sx={{ color: 'text.secondary', fontSize: 14 }}>
-          {formatCount(node.count)}
+          {formatCount(node.count)}{' '}
+          <Box component="span" sx={visuallyHidden}>
+            {`${node.count === 1 ? 'transaction' : 'transactions'}: show them`}
+          </Box>
         </Box>
       </ButtonBase>
     </Box>

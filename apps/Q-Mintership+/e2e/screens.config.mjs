@@ -391,7 +391,11 @@ export default {
     // One browser profile serves every screen of a theme and size: the Quiz a quiz screen
     // opened (withQuiz sets it again, after this) mustn't cover the screens after it.
     `(() => {
-      try { localStorage.removeItem('qmintershipplus-explorer-quiz'); } catch (e) {}
+      try {
+        localStorage.removeItem('qmintershipplus-explorer-quiz');
+        // The circle a circle screen picked is saved too: the screens after it start as a list.
+        localStorage.removeItem('qmintershipplus-connections-view');
+      } catch (e) {}
     })();`,
   ],
 
