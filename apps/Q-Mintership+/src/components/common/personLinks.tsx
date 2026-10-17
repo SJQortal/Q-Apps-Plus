@@ -1,6 +1,7 @@
 /**
  * Where a person's name and avatar link to. Everywhere in the app it is
- * their page (`/people/<address>`, "open their page"); inside the Explorer
+ * their page, their Minter Profile in the Explorer ("open their page");
+ * inside the Explorer
  * it is their account in the Explorer ("explore this account"), with router
  * state that tells the account page the link came from the Explorer (so the
  * trail grows instead of starting again). PersonChip, PersonInline and

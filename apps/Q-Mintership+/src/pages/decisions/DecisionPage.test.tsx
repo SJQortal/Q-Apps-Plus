@@ -162,7 +162,7 @@ describe('A decision’s own page: still waiting', () => {
     );
   });
 
-  it('opens the person in the Explorer, and an invite’s nominee beside their nominator', async () => {
+  it('opens the person’s Minter Profile, and an invite’s nominee beside their nominator', async () => {
     await open(
       'learner',
       (world) =>
@@ -172,9 +172,9 @@ describe('A decision’s own page: still waiting', () => {
         ).signature
     );
     await screen.findByRole('article', { name: /^Add to MINTER, bob\+builder/ }, T);
-    expect(screen.getByRole('link', { name: 'Open in Explorer: bob+builder' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open Minter Profile: bob+builder' })).toHaveAttribute(
       'href',
-      `/explorer/account/${ADDR.nominatedSigning}`
+      `/explorer/account/${ADDR.nominatedSigning}/mintership`
     );
     expect(
       await screen.findByRole('link', { name: 'Compare nominee and nominator' }, T)
@@ -241,10 +241,10 @@ describe('A decision’s own page: decided', () => {
     const card = await screen.findByRole('article', { name: /^Remove from MINTER, Kit Kicked/ }, T);
     expect(within(card).getByText('Kicked by Minter Admins')).toBeVisible();
     expect(within(card).getByText('Approved', { selector: '.MuiChip-label' })).toBeVisible();
-    // The person concerned, in the Explorer; no nominator to compare on a removal.
-    expect(screen.getByRole('link', { name: 'Open in Explorer: Kit Kicked' })).toHaveAttribute(
+    // The person concerned, their Minter Profile; no nominator to compare on a removal.
+    expect(screen.getByRole('link', { name: 'Open Minter Profile: Kit Kicked' })).toHaveAttribute(
       'href',
-      `/explorer/account/${ADDR.kicked}`
+      `/explorer/account/${ADDR.kicked}/mintership`
     );
     expect(screen.queryByRole('link', { name: 'Compare nominee and nominator' })).toBeNull();
   });

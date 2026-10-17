@@ -220,7 +220,7 @@ describe('the Explorer’s landing page', () => {
     expect(
       within(dialog).getByText(/never sends a transaction or publishes anything/)
     ).toBeVisible();
-    for (const tab of ['Overview', 'Connections', 'Transactions', 'MINTER profile', 'Names'])
+    for (const tab of ['Overview', 'Connections', 'Transactions', 'Minter Profile', 'Names'])
       expect(within(dialog).getByText(tab)).toBeInTheDocument();
     await expectNoAxeViolations(dialog);
   });

@@ -160,7 +160,7 @@ describe('an account in the Explorer', () => {
       within(tabs)
         .getAllByRole('tab')
         .map((t) => t.textContent)
-    ).toEqual(['Overview', 'Connections', 'Transactions', 'MINTER profile', 'Names']);
+    ).toEqual(['Overview', 'Connections', 'Transactions', 'Minter Profile', 'Names']);
     expect(within(tabs).getByRole('tab', { name: 'Overview' })).toHaveAttribute(
       'aria-selected',
       'true'
@@ -578,8 +578,8 @@ describe('a tab switch deep in a long tab', () => {
       const { user } = await open(explorerAccountPath(ADDR.nominator), undefined, 'learner', true);
       const tabs = await screen.findByRole('tablist', { name: 'Account sections' }, T);
       panelTop = -800;
-      await user.click(within(tabs).getByRole('tab', { name: 'MINTER profile' }));
-      await screen.findByRole('tabpanel', { name: 'MINTER profile' }, T);
+      await user.click(within(tabs).getByRole('tab', { name: 'Minter Profile' }));
+      await screen.findByRole('tabpanel', { name: 'Minter Profile' }, T);
       await waitFor(
         () =>
           expect(scrolled).toEqual([

@@ -24,9 +24,6 @@ export function nothingChecked(scanned: number, total: number): string {
   return `Checked their MINTER history, nominations, Q-Mintership+ records and original-app posts under any of their names, and ${cards} for ones about them.`;
 }
 
-/** Under the MINTER profile link: what that page is for. */
-export const PROFILE_HINT = 'Nominate, support or decide there.';
-
 /** "Also checked, nothing found: supports, Considering marks." (empty for nothing). */
 export function alsoChecked(items: readonly string[]): string {
   return items.length ? `Also checked, nothing found: ${items.join(', ')}.` : '';

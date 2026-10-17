@@ -47,7 +47,7 @@ export type ExploredAccount =
 
 /**
  * `GET /addresses/{a}`, telling "never used" apart from a failure. Primes
- * `account:<a>`, so the person page and the hooks share the read.
+ * `account:<a>`, so the Minter Profile and the hooks share the read.
  */
 export function exploreAccount(
   address: string,

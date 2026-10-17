@@ -5,6 +5,7 @@ import {
   Navigate,
   RouterProvider,
   useLocation,
+  useParams,
   useRouteError,
 } from 'react-router-dom';
 import { Box } from '@mui/material';
@@ -12,7 +13,7 @@ import { AppShell } from './components/layout/AppShell';
 import { ErrorState } from './components/common/states';
 import { routerBaseForPage } from './routes/hubLocation';
 import { explorerRoutes } from './routes/explorerRoutes';
-import { decisionsViewPath, PATHS } from './routes/paths';
+import { decisionsViewPath, PATHS, personPath } from './routes/paths';
 import { nominationsRedirect } from './pages/decisions/decisionsViews';
 
 // Home is the first screen almost everyone sees; the rest load on demand.
@@ -22,11 +23,16 @@ const NominatePage = lazy(() => import('./pages/nominations/NominatePage'));
 const DecisionsPage = lazy(() => import('./pages/decisions/DecisionsPage'));
 const DecisionPage = lazy(() => import('./pages/decisions/DecisionPage'));
 const AdminPollPage = lazy(() => import('./pages/decisions/AdminPollPage'));
-const PersonPage = lazy(() => import('./pages/person/PersonPage'));
 const HistoryPage = lazy(() => import('./pages/history/HistoryPage'));
 const LegacyCardPage = lazy(() => import('./pages/history/LegacyCardPage'));
 const ActivityPage = lazy(() => import('./pages/activity/ActivityPage'));
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'));
+
+/** `/people/<address or name>`: the person's Minter Profile, in the Explorer now. */
+function PeopleRedirect() {
+  const { address = '' } = useParams();
+  return <Navigate to={personPath(address.trim())} replace />;
+}
 
 /** `/nominations` lives in Decisions now: its tab (and nomination state), from the old link. */
 function NominationsRedirect() {
@@ -67,7 +73,7 @@ const router = createBrowserRouter(
         // One Minter Admin poll (Minter Admins only); without an id, all of Decisions.
         { path: 'decisions/polls/:id', element: <AdminPollPage /> },
         { path: 'decisions/polls', element: <Navigate to="/decisions" replace /> },
-        { path: 'people/:address', element: <PersonPage /> },
+        { path: 'people/:address', element: <PeopleRedirect /> },
         { path: 'history', element: <HistoryPage /> },
         { path: 'history/card/:card', element: <LegacyCardPage /> },
         { path: 'history/card/:card/:section', element: <LegacyCardPage /> },

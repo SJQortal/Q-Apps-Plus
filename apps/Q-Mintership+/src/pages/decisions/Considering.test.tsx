@@ -7,7 +7,8 @@ import { addConsidering, addDoubles } from '../../../e2e/world.mjs';
 import { base58Encode } from '../../qortal/base58';
 import { fetchCallsFor, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import HomePage from '../home/HomePage';
-import PersonPage from '../person/PersonPage';
+import AccountPage from '../explorer/AccountPage';
+import { explorerAccountPath } from '../../routes/paths';
 import DecisionsPage from './DecisionsPage';
 
 afterEach(() => vi.useRealTimers());
@@ -298,7 +299,7 @@ describe('Considering again after a rejection', () => {
   });
 });
 
-describe('Considering for the nominee and on person pages', () => {
+describe('Considering for the nominee and on Minter Profiles', () => {
   it("the nominee's Home says how many Minter Admins are considering", async () => {
     await renderPage(<HomePage />, {
       persona: 'nominatedSigning',
@@ -310,10 +311,10 @@ describe('Considering for the nominee and on person pages', () => {
   });
 
   it("a person's page shows who is considering their nomination", async () => {
-    await renderPage(<PersonPage />, {
+    await renderPage(<AccountPage />, {
       persona: 'learner',
-      path: `/people/${ADDR.nominatedWaiting}`,
-      route: '/people/:address',
+      path: explorerAccountPath(ADDR.nominatedWaiting, 'mintership'),
+      route: '/explorer/account/:who/:tab?',
       setup: (world) => addConsidering(world),
     });
     expect(

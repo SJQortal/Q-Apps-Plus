@@ -12,7 +12,8 @@ import { commentTarget } from '../data/commentThread';
 import DecisionsPage from '../pages/decisions/DecisionsPage';
 import HomePage from '../pages/home/HomePage';
 import NominatePage from '../pages/nominations/NominatePage';
-import PersonPage from '../pages/person/PersonPage';
+import AccountPage from '../pages/explorer/AccountPage';
+import { explorerAccountPath } from '../routes/paths';
 import { resetOptimisticComments } from '../state/comments';
 import {
   checkDialogByKeyboard,
@@ -221,9 +222,11 @@ describe('Write dialogs by keyboard: Propose', () => {
     await u.selectOptions(within(form).getByRole('combobox', { name: 'Minter Admin' }), address);
     const live = within(form).getByRole('status');
     expect(
-      within(live).getByText(/To step down, use Step down as Minter Admin on your own page\./)
+      within(live).getByText(
+        /To step down, use Step down as Minter Admin on your own Minter Profile\./
+      )
     ).toBeVisible();
-    expect(within(live).getByRole('link', { name: 'Open your page' })).toBeVisible();
+    expect(within(live).getByRole('link', { name: 'Open your Minter Profile' })).toBeVisible();
     expect(live.querySelector('[role="status"], [role="alert"], [aria-live]')).toBeNull();
     await expectNamedControls(form);
   });
@@ -300,10 +303,10 @@ describe('Write dialogs by keyboard: Propose', () => {
 describe('Write dialogs by keyboard: one’s own page', () => {
   it('Step down as Minter Admin', async () => {
     const u = user();
-    await renderPage(<PersonPage />, {
+    await renderPage(<AccountPage />, {
       persona: 'admin',
-      path: `/people/${ADDR.admin}`,
-      route: '/people/:address',
+      path: explorerAccountPath(ADDR.admin, 'mintership'),
+      route: '/explorer/account/:who/:tab?',
     });
     const opener = await screen.findByRole('button', { name: 'Step down as Minter Admin' }, T);
     await waitFor(() => expect(opener).toBeEnabled(), T);

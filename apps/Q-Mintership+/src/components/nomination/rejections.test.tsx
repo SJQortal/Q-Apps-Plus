@@ -12,7 +12,8 @@ import { fakeAddress } from '../../../e2e/world.mjs';
 import { base58Encode } from '../../qortal/base58';
 import { useChainNow, useNominations } from '../../hooks/useData';
 import HomePage from '../../pages/home/HomePage';
-import PersonPage from '../../pages/person/PersonPage';
+import AccountPage from '../../pages/explorer/AccountPage';
+import { explorerAccountPath } from '../../routes/paths';
 import { READY_DONE, READY_DONE_NEXT } from '../../constants/words';
 import { NominationCard } from './NominationCard';
 
@@ -145,11 +146,11 @@ describe('rejections on a nomination', () => {
   });
 
   it("the nominee's own page says it gently; others' view of it doesn't change", async () => {
-    const path = `/people/${ADDR.nominatedSigning}`;
-    const own = await renderPage(<PersonPage />, {
+    const path = explorerAccountPath(ADDR.nominatedSigning, 'mintership');
+    const own = await renderPage(<AccountPage />, {
       persona: 'nominatedSigning',
       path,
-      route: '/people/:address',
+      route: '/explorer/account/:who/:tab?',
       setup: (world) => rejectInvite(world, ADDR.nominatedSigning, 2),
     });
     const section = await screen.findByRole('region', { name: 'Nomination' }, { timeout: 4000 });
@@ -161,10 +162,10 @@ describe('rejections on a nomination', () => {
       )
     ).toBeVisible();
     own.unmount();
-    await renderPage(<PersonPage />, {
+    await renderPage(<AccountPage />, {
       persona: 'admin',
       path,
-      route: '/people/:address',
+      route: '/explorer/account/:who/:tab?',
       setup: (world) => rejectInvite(world, ADDR.nominatedSigning, 2),
     });
     const theirs = await screen.findByRole('region', { name: 'Nomination' }, { timeout: 4000 });

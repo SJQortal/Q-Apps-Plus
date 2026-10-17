@@ -716,7 +716,7 @@ function BlockNotice({
       ) : null}
       {block === 'stored' && info ? (
         <Box sx={{ mt: 1 }}>
-          {/* Their page: it offers Join now, with or without a nomination. */}
+          {/* Their Minter Profile: it offers Join now, with or without a nomination. */}
           <ShareLink
             path={personPath(info.address)}
             label="Send them this link so they can join:"
@@ -737,7 +737,7 @@ function BlockNotice({
             color="inherit"
             sx={{ minHeight: 44 }}
           >
-            Open MINTER profile
+            Open Minter Profile
           </Button>
         ) : null}
       </Box>

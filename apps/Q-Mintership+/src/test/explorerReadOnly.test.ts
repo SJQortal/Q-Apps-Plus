@@ -67,6 +67,24 @@ describe('the Explorer is read-only', () => {
     ).toHaveLength(1);
   });
 
+  it('lets the Minter Profile tab show the profile’s own actions, from the profile’s module', async () => {
+    expect(
+      await restricted(
+        'src/pages/explorer/account/MintershipTab.tsx',
+        "import { ProfileActions } from '../../person/ProfileActions';\n" +
+          'export const used = ProfileActions;\n'
+      )
+    ).toEqual([]);
+    // Still not the dialogs themselves.
+    expect(
+      await restricted(
+        'src/pages/explorer/account/MintershipTab.tsx',
+        "import { NomineeAction } from '../../../components/nomination/NomineeAction';\n" +
+          'export const used = NomineeAction;\n'
+      )
+    ).toHaveLength(1);
+  });
+
   it('lets the Explorer read, and leaves the rest of the app alone', async () => {
     expect(
       await restricted(

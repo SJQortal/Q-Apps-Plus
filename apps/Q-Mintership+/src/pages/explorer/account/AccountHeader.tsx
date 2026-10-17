@@ -28,7 +28,7 @@ export interface AccountHeaderProps {
   /** Its primary name: undefined while loading, null for none. */
   primary: string | null | undefined;
   names: NamesOf | undefined;
-  /** Its MINTER status (the person page's read), once loaded. */
+  /** Its MINTER status (the Minter Profile's read), once loaded. */
   status: MyStatus | undefined;
   /** In a reward share that is online now (undefined while loading). */
   mintingNow: boolean | undefined;

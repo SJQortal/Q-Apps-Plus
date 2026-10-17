@@ -44,7 +44,6 @@ import {
   PATHS,
   decisionPath,
   decisionsViewPath,
-  explorerAccountPath,
   explorerComparePath,
   nominatePath,
   nominationPath,
@@ -225,18 +224,14 @@ function NominationView({ address }: { address: string }) {
       </Section>
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-        <Button component={RouterLink} to={personPath(address)} sx={{ minHeight: 44 }}>
-          Open MINTER profile
-        </Button>
         <Button
           component={RouterLink}
-          to={explorerAccountPath(address)}
-          state={{ via: 'explorer' }}
-          aria-label={`Open in Explorer: ${who.label}`}
+          to={personPath(address)}
+          aria-label={`Open Minter Profile: ${who.label}`}
           startIcon={<TravelExploreOutlinedIcon />}
           sx={{ minHeight: 44 }}
         >
-          Open in Explorer
+          Open Minter Profile
         </Button>
         {nominator && nominator !== address ? (
           <Button

@@ -5,9 +5,8 @@ import type { NameMatch } from '../../../state/explorer';
 import { formatCount } from '../../../utils/format';
 
 /**
- * Where an account stands in MINTER, in the words of its person page
- * (pages/person/PersonHero.tsx), from the app's own status
- * (rules/status.ts): nothing here works out bans or invites itself.
+ * Where an account stands in MINTER, in the app's own words, from its own
+ * status (rules/status.ts): nothing here works out bans or invites itself.
  */
 export function minterStatusWord(status: Pick<MyStatus, 'kind' | 'wasMember'>): string {
   switch (status.kind) {

@@ -9,6 +9,11 @@ import tseslint from 'typescript-eslint';
  * code that signs or publishes. Patterns match the import as written, so
  * they name the folder just above the module (`../decisions/SignDialog`
  * from a page, `../../pages/decisions/SignDialog` from a loader).
+ *
+ * One part acts, by design: an account's Minter Profile tab is its MINTER
+ * profile (Simon, 2026-10-17), so it shows the profile's own actions and
+ * nomination card, from the profile's module (pages/person/ProfileActions.tsx).
+ * The Explorer's own files still import none of the code that signs.
  */
 export const EXPLORER_FILES = [
   'src/pages/explorer/**',

@@ -34,7 +34,6 @@ import { useQuery } from '../../hooks/useQuery';
 import {
   PATHS,
   decisionPath,
-  explorerAccountPath,
   explorerComparePath,
   nominationPath,
   personPath,
@@ -363,9 +362,9 @@ function UnusualView({ tx }: { tx: TxRow }) {
 
 /**
  * Where to go from here, named as everywhere in the app: the nomination
- * behind an invite, the person's MINTER profile, the person in the
- * Explorer (and, for an invite whose nominator is known, both side by
- * side), and the whole queue.
+ * behind an invite, the person's Minter Profile (in the Explorer; for an
+ * invite whose nominator is known, both side by side in Compare), and the
+ * whole queue.
  */
 function MoreLinks({ tx, nominator = null }: { tx: TxRow; nominator?: string | null }) {
   const subject = decisionSubject(tx);
@@ -382,22 +381,11 @@ function MoreLinks({ tx, nominator = null }: { tx: TxRow; nominator?: string | n
         <Button
           component={RouterLink}
           to={personPath(subject)}
-          aria-label={`Open MINTER profile: ${who.label}`}
-          sx={{ minHeight: 44 }}
-        >
-          Open MINTER profile
-        </Button>
-      ) : null}
-      {subject ? (
-        <Button
-          component={RouterLink}
-          to={explorerAccountPath(subject)}
-          state={{ via: 'explorer' }}
-          aria-label={`Open in Explorer: ${who.label}`}
+          aria-label={`Open Minter Profile: ${who.label}`}
           startIcon={<TravelExploreOutlinedIcon />}
           sx={{ minHeight: 44 }}
         >
-          Open in Explorer
+          Open Minter Profile
         </Button>
       ) : null}
       {invite && subject && nominator && nominator !== subject ? (

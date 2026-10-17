@@ -112,7 +112,7 @@ export type SubjectCheck =
   | { status: 'admin' };
 
 /** Propose doesn't step anyone down: that is on the admin's own page. */
-export const STEP_DOWN_ELSEWHERE = `To step down, use ${ADMIN_CHANGE_TITLE.stepDown} on your own page.`;
+export const STEP_DOWN_ELSEWHERE = `To step down, use ${ADMIN_CHANGE_TITLE.stepDown} on your own Minter Profile.`;
 
 /** The same guard the write runs, shown before Hub opens. */
 export async function checkSubject(

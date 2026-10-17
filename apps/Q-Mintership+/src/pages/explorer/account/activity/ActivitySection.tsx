@@ -58,7 +58,7 @@ import { ACTIVITY_MAX, useActivityRows, type ActivityRows } from './useActivityR
 import { useViewState } from '../../../../hooks/useViewState';
 
 const DAY = 86_400_000;
-/** MINTER's approval window when its settings can't be read (as on the person page). */
+/** MINTER's approval window when its settings can't be read (as on the Minter Profile). */
 const DEFAULT_MAX_BLOCK_DELAY = 10_080;
 /** A period's transactions listed before "Show all". */
 const PERIOD_ROWS = 20;

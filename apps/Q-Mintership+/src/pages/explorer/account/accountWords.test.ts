@@ -7,7 +7,7 @@ import { ACCOUNT_KEY_PREFIXES, NAME_KEY_PREFIXES, refreshAccount } from './refre
 const A = `Q${'a'.repeat(33)}`;
 const B = `Q${'b'.repeat(33)}`;
 
-describe('where an account stands in MINTER (the person page’s words)', () => {
+describe('where an account stands in MINTER (the app’s own words)', () => {
   const word = (kind: StatusKind, wasMember = false) => minterStatusWord({ kind, wasMember });
   it('names each status plainly', () => {
     expect(word('admin')).toBe('Minter Admin');

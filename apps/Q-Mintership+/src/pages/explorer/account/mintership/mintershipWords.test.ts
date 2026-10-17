@@ -131,7 +131,6 @@ describe('Mintership words', () => {
   it('never words a verdict', () => {
     const texts = [
       words.NOTHING_IN_MINTER,
-      words.PROFILE_HINT,
       words.NO_NAME_RECORDS,
       ...Object.values(words.NOMINATION_STATE_WORDS),
       words.nothingChecked(1, 2),

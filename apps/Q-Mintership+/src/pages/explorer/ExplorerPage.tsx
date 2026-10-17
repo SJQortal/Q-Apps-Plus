@@ -462,8 +462,8 @@ const TAB_GUIDE: Array<[string, string]> = [
   ],
   ['Transactions', 'Everything it sent or took part in, newest first, in plain words.'],
   [
-    'MINTER profile',
-    'Where it stands in MINTER, its nominations and MINTER timeline, and its records in Q-Mintership and the original app.',
+    'Minter Profile',
+    'Where it stands in MINTER and what you can do for it (nominate, support, decide), its nominations and MINTER timeline, and its records in Q-Mintership and the original app.',
   ],
   ['Names', 'Every name it owns, their history, and what they published on QDN.'],
 ];

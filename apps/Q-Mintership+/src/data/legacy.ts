@@ -32,7 +32,7 @@ export const ADMIN_CARD_PREFIX = 'card-MAC-';
 
 /** Cards History shows per "Load more". */
 export const LEGACY_PAGE_SIZE = 20;
-/** Cards a person page looks through on open (newest first), then per "Search older cards". */
+/** Cards a Minter Profile looks through on open (newest first), then per "Search older cards". */
 export const LEGACY_SCAN_FIRST = 40;
 export const LEGACY_SCAN_STEP = 100;
 

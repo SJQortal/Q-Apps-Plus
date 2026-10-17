@@ -187,7 +187,7 @@ interface AssembleInput {
     activeBan: boolean;
   };
   nameOf: (nominee: string) => string | null;
-  /** Only these nominees (a person page); all when omitted. */
+  /** Only these nominees (a Minter Profile); all when omitted. */
   only?: string;
 }
 
@@ -390,7 +390,7 @@ export function loadNominations(options: { force?: boolean } = {}): Promise<Nomi
 /**
  * One person's nominations, without reading the whole group: the records
  * whose identifier names them, their pending invite, their own history.
- * Used by the status engine and person pages.
+ * Used by the status engine and Minter Profiles.
  */
 export function loadNominationsFor(
   address: string,

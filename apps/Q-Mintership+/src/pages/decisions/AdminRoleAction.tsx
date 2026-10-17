@@ -1,9 +1,9 @@
 /**
  * The signed-in account's own admin-role action: "Become a Minter Admin"
- * for a MINTER member who isn't one, on their Home and their own person
- * page (suggested from level 5: below it, a note says so beside the
+ * for a MINTER member who isn't one, on their Home and their own Minter
+ * Profile (suggested from level 5: below it, a note says so beside the
  * button); "Step down as Minter Admin" for an admin, only on their own
- * person page. When such a proposal is already waiting (from this app or
+ * Minter Profile. When such a proposal is already waiting (from this app or
  * any other), it says so and links to the decision instead.
  *
  * Reads: MINTER's pending list (one GET, shared with the Decisions queue),
@@ -88,7 +88,7 @@ export interface AdminRoleActionProps {
   status: MyStatus;
   /**
    * 'section': a titled card on a member's Home, Become only; 'inline': the
-   * button or the waiting note on their own person page, Become or Step down.
+   * button or the waiting note on their own Minter Profile, Become or Step down.
    */
   layout?: 'section' | 'inline';
 }
@@ -98,7 +98,7 @@ export function AdminRoleAction({ status, layout = 'inline' }: AdminRoleActionPr
   // Only ever about the signed-in account's own role.
   const signer = session.status === 'ready' && session.address === status.address ? session : null;
   const own = ownAdminRole(status);
-  // Step down is only on the admin's own person page.
+  // Step down is only on the admin's own Minter Profile.
   const mode = layout === 'section' && own === 'stepDown' ? null : own;
   const waiting = usePendingAdminChange(status.address, mode);
   const kind = mode === 'become' ? 'addAdmin' : 'removeAdmin';

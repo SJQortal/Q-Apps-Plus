@@ -469,7 +469,7 @@ function CheckResult({
   );
 }
 
-/** Yourself under Remove a Minter Admin: Step down is on your own page, with what it would change. */
+/** Yourself under Remove a Minter Admin: Step down is on your own Minter Profile, with what it would change. */
 function StepDownElsewhere({ address }: { address: string }) {
   return (
     <Alert severity="info" role="note">
@@ -480,7 +480,7 @@ function StepDownElsewhere({ address }: { address: string }) {
         variant="outlined"
         sx={{ mt: 1, minHeight: 44 }}
       >
-        Open your page
+        Open your Minter Profile
       </Button>
     </Alert>
   );

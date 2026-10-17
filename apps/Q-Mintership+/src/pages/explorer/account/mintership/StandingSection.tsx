@@ -1,9 +1,11 @@
 /**
- * Where an account stands in MINTER, in the person page's own words
- * (statusSentence, from the app's status logic: nothing is worked out
- * here), with its facts; then its nomination in brief: the rounds, the
- * latest one's outcome, and a link to the nomination's own page.
+ * Where an account stands in MINTER, in the app's own words (statusSentence,
+ * from the app's status logic: nothing is worked out here), with its facts
+ * and what the viewer can do for it (the profile's actions); then its
+ * nomination in full (the open one or the latest), its rounds in brief, and
+ * a link to the nomination's own page.
  */
+import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
 import { Section } from '../../../../components/common/Section';
@@ -33,7 +35,17 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function StandingSection({ story }: { story: MinterStory }) {
+export function StandingSection({
+  story,
+  self = false,
+  actions = null,
+}: {
+  story: MinterStory;
+  /** The signed-in account's own profile: said to "you". */
+  self?: boolean;
+  /** What the viewer can do for it (the profile's actions), under its facts. */
+  actions?: ReactNode;
+}) {
   const { status, since } = story;
   const person = status.data;
   let body;
@@ -52,7 +64,7 @@ export function StandingSection({ story }: { story: MinterStory }) {
     const next = person.progress;
     body = (
       <>
-        <Typography sx={{ px: 0.5 }}>{statusSentence(person, since, false)}</Typography>
+        <Typography sx={{ px: 0.5 }}>{statusSentence(person, since, self)}</Typography>
         <Box
           component="dl"
           aria-label="MINTER facts"
@@ -80,6 +92,7 @@ export function StandingSection({ story }: { story: MinterStory }) {
             <Fact label="Join request" value="Sent" />
           ) : null}
         </Box>
+        {actions}
       </>
     );
   }
@@ -99,15 +112,31 @@ export function StandingSection({ story }: { story: MinterStory }) {
   );
 }
 
-/** Their nomination in brief, when they have rounds or nomination records. */
-export function NominationSummary({ address, story }: { address: string; story: MinterStory }) {
+/**
+ * Their nomination, when they have rounds or nomination records: the open
+ * one or the latest in full (`card`, the profile's), its rounds in brief.
+ */
+export function NominationSummary({
+  address,
+  story,
+  card = null,
+}: {
+  address: string;
+  story: MinterStory;
+  card?: ReactNode;
+}) {
   const { rounds, current, nominations } = story;
   const has = Boolean(current) || Boolean(rounds?.length);
   if (!has) return null;
   const line = rounds ? roundsLine(rounds) : null;
+  const open = Boolean(current && isOpenState(current.state));
   return (
-    <Section title="Nomination" id="explorer-mintership-nomination">
-      {current ? <Note>{nominationLine(current.state, isOpenState(current.state))}</Note> : null}
+    <Section
+      title={current && !open ? 'Latest nomination' : 'Nomination'}
+      id="explorer-mintership-nomination"
+    >
+      {card ??
+        (current ? <Note>{nominationLine(current.state, isOpenState(current.state))}</Note> : null)}
       {line ? <Note>{line}</Note> : null}
       {nominations.isError && !nominations.data ? (
         <ErrorState

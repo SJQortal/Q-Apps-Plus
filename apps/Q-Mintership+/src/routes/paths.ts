@@ -15,9 +15,13 @@ export const PATHS = {
   explorer: '/explorer',
 } as const;
 
-/** `/people/<address>`: a person's page (profile, nominations, History). */
+/**
+ * A person's Minter Profile: their Explorer account's Minter Profile tab, its
+ * one place (Simon, 2026-10-17: the profile page merged into the Explorer).
+ * Older `/people/<address>` links open it too.
+ */
 export function personPath(address: string): string {
-  return `${PATHS.people}/${encodeURIComponent(address)}`;
+  return explorerAccountPath(address, 'mintership');
 }
 
 /** `/history/card/<identifier>`: one card from the original app, read-only. */

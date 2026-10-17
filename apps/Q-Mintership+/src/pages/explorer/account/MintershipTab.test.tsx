@@ -45,8 +45,7 @@ async function open(
     strict: true,
     setup,
   });
-  const panel = await screen.findByRole('tabpanel', { name: 'MINTER profile' }, T);
-  await within(panel).findByRole('link', { name: 'Open MINTER profile' }, T);
+  const panel = await screen.findByRole('tabpanel', { name: 'Minter Profile' }, T);
   return { ...result, panel, user: userEvent.setup() };
 }
 
@@ -95,7 +94,7 @@ describe('the Mintership tab', () => {
     noWrites(posts);
   });
 
-  it('takes a Minter Admin straight to an open decision about the account, beside its profile', async () => {
+  it('takes a Minter Admin straight to an open decision about the account, from where it stands', async () => {
     const { panel } = await open(ADDR.nominatedSigning, undefined, 'admin');
     const decisions = await within(panel).findByRole('link', { name: 'Open in Decisions' }, T);
     expect(decisions.getAttribute('href')).toMatch(/^\/decisions\//);
@@ -107,12 +106,7 @@ describe('the Mintership tab', () => {
   });
 
   it('shows a member nominator: where they stand, their round, timeline and records', async () => {
-    const { container, posts, panel } = await open(ADDR.nominator);
-    expect(within(panel).getByRole('link', { name: 'Open MINTER profile' })).toHaveAttribute(
-      'href',
-      `/people/${ADDR.nominator}`
-    );
-    expect(within(panel).getByText('Nominate, support or decide there.')).toBeVisible();
+    const { container, posts } = await open(ADDR.nominator);
 
     const status = await region('MINTER status');
     expect(
@@ -124,6 +118,7 @@ describe('the Mintership tab', () => {
     ).toBeVisible();
     expect(within(status).getByText('980,000')).toBeVisible();
 
+    // Invited without a nomination record: its round in brief.
     const nomination = await region('Nomination');
     expect(
       within(nomination).getByText(

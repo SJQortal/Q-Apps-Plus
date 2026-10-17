@@ -1,5 +1,5 @@
 /**
- * An account's status (the signed-in one, or anyone's for their page):
+ * An account's status (the signed-in one, or anyone's for their Minter Profile):
  * account (level), primary name and MINTER membership first. Members and
  * admins stop there: nothing else changes their status. Everyone else also
  * gets their join request, stored invite, bans, MINTER history, open

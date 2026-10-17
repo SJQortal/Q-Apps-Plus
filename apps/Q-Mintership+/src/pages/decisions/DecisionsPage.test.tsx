@@ -655,7 +655,7 @@ describe('Decisions: stale invites', () => {
 });
 
 describe('Decisions: proposing your own step-down', () => {
-  it('points to Step down on your own page instead of proposing it here', async () => {
+  it('points to Step down on your own Minter Profile instead of proposing it here', async () => {
     const u = user();
     const { address } = await openPage('admin');
     await u.click(screen.getByRole('button', { name: 'Propose' }));
@@ -664,12 +664,12 @@ describe('Decisions: proposing your own step-down', () => {
     await u.selectOptions(within(form).getByRole('combobox', { name: 'Minter Admin' }), address);
     expect(
       within(form).getByText(
-        'That’s you. To step down, use Step down as Minter Admin on your own page.'
+        'That’s you. To step down, use Step down as Minter Admin on your own Minter Profile.'
       )
     ).toBeVisible();
-    expect(within(form).getByRole('link', { name: 'Open your page' })).toHaveAttribute(
+    expect(within(form).getByRole('link', { name: 'Open your Minter Profile' })).toHaveAttribute(
       'href',
-      `/people/${address}`
+      `/explorer/account/${address}/mintership`
     );
     // Nothing to review or send from here.
     expect(within(form).queryByText('Nothing stops this proposal.')).toBeNull();

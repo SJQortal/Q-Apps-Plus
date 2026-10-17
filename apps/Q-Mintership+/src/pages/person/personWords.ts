@@ -1,6 +1,5 @@
-/** Plain sentences for a person page: where someone stands, and what they proposed. */
+/** Plain sentences for a Minter Profile: where someone stands, and what they proposed. */
 import type { TimelineEvent } from '../../data/timeline';
-import { CoreHttpError } from '../../qortal/client';
 import { banEnd, type FormerMember, type MyStatus } from '../../rules/status';
 import { formatDate, plural } from '../../utils/format';
 
@@ -101,14 +100,4 @@ export function proposalsSummary(proposals: TimelineEvent[]): string {
     count('rejected') ? `${count('rejected')} rejected` : '',
   ].filter(Boolean);
   return `Proposed ${plural(proposals.length, 'change')} for others: ${parts.join(', ')}.`;
-}
-
-/** Core's answer for an address that fails its checksum (`{"error":102,"message":"invalid address"}`). */
-export function isInvalidAddress(error: unknown): boolean {
-  return (
-    error instanceof CoreHttpError &&
-    error.status >= 400 &&
-    error.status < 500 &&
-    /"error"\s*:\s*102|invalid address/i.test(error.body)
-  );
 }

@@ -1,16 +1,13 @@
 /**
- * The Overview's MINTER section: where the account stands, in the person
- * page's own sentence (pages/person/personWords.ts statusSentence, from the
- * app's status), then its MINTER profile tab, and the MINTER profile page,
- * where nominating, supporting and deciding happen (the Explorer only reads).
+ * The Overview's MINTER section: where the account stands, in the app's own
+ * sentence (pages/person/personWords.ts statusSentence, from the app's
+ * status), then its Minter Profile tab, where nominating, supporting and
+ * deciding happen too.
  */
-import { Link as RouterLink } from 'react-router-dom';
-import { Box, Button, Typography } from '@mui/material';
-import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
+import { Box, Typography } from '@mui/material';
 import { Card, Section } from '../../../../components/common/Section';
 import { ErrorState, ListSkeleton } from '../../../../components/common/states';
 import type { UseQueryResult } from '../../../../hooks/useQuery';
-import { personPath } from '../../../../routes/paths';
 import type { MyStatus } from '../../../../rules/status';
 import { statusSentence } from '../../../person/personWords';
 import { TabButton } from './TabLink';
@@ -40,21 +37,13 @@ export function MinterSection({
           <Typography>{statusSentence(status.data, memberSince, false)}</Typography>
         )}
         <Typography variant="body2" color="text.secondary">
-          Its whole MINTER story is on its MINTER profile tab; nominating, supporting and deciding
-          happen on its MINTER profile page.
+          Its whole MINTER story is on its Minter Profile, where you can also nominate, support or
+          decide.
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mx: -1 }}>
           <TabButton address={address} tab="mintership">
-            MINTER profile
+            Minter Profile
           </TabButton>
-          <Button
-            component={RouterLink}
-            to={personPath(address)}
-            endIcon={<ChevronRightOutlinedIcon />}
-            sx={{ minHeight: 44 }}
-          >
-            Nominate, support or decide
-          </Button>
         </Box>
       </Card>
     </Section>

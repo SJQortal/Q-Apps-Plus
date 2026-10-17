@@ -9,7 +9,7 @@
  * list) from the store, plus its balance, groups, where its first QORT came
  * from, its newest own transaction (only with a public key; one cheap row)
  * and, once the Minting section nears the screen, the last block it signed.
- * When it is in MINTER, the person page's reads for its join date. None of
+ * When it is in MINTER, the Minter Profile's reads for its join date. None of
  * them polls; Refresh on the page reloads them. Each section loads, fails
  * and retries on its own.
  */
@@ -42,7 +42,7 @@ function partOf<T>(query: { data: T | undefined; isError: boolean }): T | null |
 
 export default function OverviewTab({ address }: OverviewTabProps) {
   const account = useAccount(address);
-  // The same keys as the page header and the person page; no polling here.
+  // The same keys as the page header and the Minter Profile; no polling here.
   const status = useQuery(`status:${address}`, (force) => loadMyStatus(address, { force }));
   const names = useQuery(`xnames:${address}`, (force) => getNamesOf(address, { force }));
   const primary = usePrimaryName(address);

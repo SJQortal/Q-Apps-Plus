@@ -33,7 +33,7 @@ describe('Original card page', () => {
     expect(within(card).getByText('Nominee')).toBeInTheDocument();
     expect(
       within(card).getByRole('link', { name: `${PEOPLE.nominatedSigning.name}: open their page` })
-    ).toHaveAttribute('href', `/people/${ADDR.nominatedSigning}`);
+    ).toHaveAttribute('href', `/explorer/account/${ADDR.nominatedSigning}/mintership`);
     expect(await within(card).findByText(PEOPLE.nominator.name as string)).toBeInTheDocument();
     expect(
       within(card).getByText(

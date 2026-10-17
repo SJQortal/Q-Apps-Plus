@@ -5,8 +5,9 @@ export const TAB_LABEL: Record<ExplorerTab, string> = {
   overview: 'Overview',
   connections: 'Connections',
   transactions: 'Transactions',
-  // The MINTER profile, read-only, in the Explorer (Simon, 2026-10-17); its URL stays `mintership`.
-  mintership: 'MINTER profile',
+  // An account's Minter Profile, its one place (Simon, 2026-10-17: "I want it to be called :
+  // "Minter Profile""); its URL stays `mintership`.
+  mintership: 'Minter Profile',
   names: 'Names',
 };
 

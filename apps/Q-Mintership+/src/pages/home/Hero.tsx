@@ -152,7 +152,7 @@ export function Num({ children }: { children: ReactNode }) {
   );
 }
 
-/** A person's name (or short address) in running text, linking to their page. */
+/** A person's name (or short address) in running text, linking to their Minter Profile. */
 export function PersonLink({ address, name }: { address: string; name?: string | null }) {
   const shown = useDisplayName(address, name);
   return (

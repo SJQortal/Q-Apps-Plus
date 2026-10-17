@@ -1,13 +1,17 @@
 /**
- * The MINTER profile tab (Simon, 2026-10-17: "add the Minter Profile into
- * the Explorer tabs as well so it has a place where it exists"): an
- * account's MINTER story and what it did in Q-Mintership+ and in the
- * original app, read-only. Actions (nominate, support, decide) live on its
- * MINTER profile page, opened at the top, with Open in Decisions beside it
- * for a Minter Admin while a decision about it is open.
+ * The Minter Profile tab (Simon, 2026-10-17: "add the Minter Profile into
+ * the Explorer tabs as well so it has a place where it exists", then the
+ * profile page "merged into … Minter Profile in Explorer"): an account's
+ * MINTER profile, its one place, and what it did in Q-Mintership+ and in
+ * the original app. `/people/<address>` links open it.
  *
- * - "MINTER status": where it stands, in the person page's own words, and its
- *   facts; "Nomination": its rounds and the latest one's outcome.
+ * - "MINTER status": where it stands and its facts, then what the viewer
+ *   can do for it: the profile's actions (pages/person/ProfileActions.tsx,
+ *   the Explorer's one part that acts): Propose nomination or Add your
+ *   support, Open in Decisions for a Minter Admin, and on one's own profile
+ *   Join now and the Minter Admin role.
+ * - "Nomination" (or "Latest nomination"): the card in full, with comments,
+ *   votes and the nominee's own next step, then its rounds in brief.
  * - "MINTER timeline": what happened to it, people linking into the Explorer.
  * - "In Q-Mintership+, under any of their names": the records it published
  *   (data/explorer/madeBy.ts), read as the section nears the screen.
@@ -17,12 +21,11 @@
  *   under any of their names" (what it posted, poll votes on request).
  *
  * An account with nothing in any of these gets one line instead. Every read
- * shares its key with the person page or is the Explorer's own (`x…`); none
+ * shares its key with the app's own (an account's status, history and
+ * nominations, as Home reads them) or is the Explorer's own (`x…`); none
  * polls.
  */
-import { Link as RouterLink } from 'react-router-dom';
-import { Box, Button, Typography } from '@mui/material';
-import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
+import { Typography } from '@mui/material';
 import { Section } from '../../../components/common/Section';
 import {
   EmptyState,
@@ -34,14 +37,20 @@ import { loadLegacyBy } from '../../../data/explorer/legacyBy';
 import { loadMadeBy } from '../../../data/explorer/madeBy';
 import { LEGACY_SCAN_FIRST, loadLegacyFor } from '../../../data/legacy';
 import { useQuery } from '../../../hooks/useQuery';
-import { decisionPath, personPath } from '../../../routes/paths';
 import { useMyStatus } from '../../../hooks/useData';
 import { isOpenState } from '../../../rules/nomination';
+import { useSession } from '../../../state/session';
 import { TimelineList } from '../../history/parts/TimelineList';
+import { endedAt } from '../../nominations/filters';
 import { PersonLegacy } from '../../person/PersonLegacy';
+import {
+  ProfileActions,
+  ProfileNominationCard,
+  type ProfileFacts,
+} from '../../person/ProfileActions';
 import { AdminSection } from './mintership/AdminSection';
 import { MadeSection } from './mintership/MadeSection';
-import { NOTHING_IN_MINTER, PROFILE_HINT, nothingChecked } from './mintership/mintershipWords';
+import { NOTHING_IN_MINTER, nothingChecked } from './mintership/mintershipWords';
 import { OriginalPosted, PollVotesPanel } from './mintership/OriginalPosted';
 import { NominationSummary, StandingSection } from './mintership/StandingSection';
 import { useMinterStory, type MinterStory } from './mintership/useMinterStory';
@@ -50,42 +59,7 @@ export interface MintershipTabProps {
   address: string;
 }
 
-function ProfileLink({ address, story }: { address: string; story: MinterStory }) {
-  // A decision about it, open now: a Minter Admin can go straight to it (the tab's
-  // own read of its nominations, which doesn't poll).
-  const viewer = useMyStatus();
-  const decision = viewer.status?.isAdmin
-    ? (story.nominations.data?.find((n) => isOpenState(n.state) && n.decision)?.decision ?? null)
-    : null;
-  return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
-      <Button
-        component={RouterLink}
-        to={personPath(address)}
-        variant="outlined"
-        endIcon={<ChevronRightOutlinedIcon />}
-        sx={{ minHeight: 44 }}
-      >
-        Open MINTER profile
-      </Button>
-      {decision ? (
-        <Button
-          component={RouterLink}
-          to={decisionPath(decision.signature)}
-          variant="outlined"
-          sx={{ minHeight: 44 }}
-        >
-          Open in Decisions
-        </Button>
-      ) : null}
-      <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
-        {PROFILE_HINT}
-      </Typography>
-    </Box>
-  );
-}
-
-function Timeline({ story }: { story: MinterStory }) {
+function Timeline({ story, self }: { story: MinterStory; self: boolean }) {
   const { history, about, chain } = story;
   return (
     <Section title="MINTER timeline" id="explorer-mintership-timeline">
@@ -107,7 +81,7 @@ function Timeline({ story }: { story: MinterStory }) {
         />
       ) : (
         <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
-          No MINTER transactions about them on chain yet.
+          No MINTER transactions about {self ? 'you' : 'them'} on chain yet.
         </Typography>
       )}
       {history.data?.truncated ? <TruncatedNote what="their history" /> : null}
@@ -163,6 +137,31 @@ function useNothingAnywhere(address: string, quiet: boolean, name: string | null
 export default function MintershipTab({ address }: MintershipTabProps) {
   const story = useMinterStory(address);
   const person = story.status.data;
+  const session = useSession();
+  const viewer = useMyStatus();
+  // The profile's facts: what the viewer can do for it, and its nomination in full.
+  const open = story.nominations.data?.find((n) => isOpenState(n.state)) ?? null;
+  const facts: ProfileFacts | null = person
+    ? {
+        address,
+        person,
+        self: session.status === 'ready' && session.address === address,
+        open,
+        viewer: viewer.status,
+      }
+    : null;
+  const actions = facts ? <ProfileActions facts={facts} /> : null;
+  const latest = story.current;
+  const now = story.chain.data;
+  const card =
+    facts && latest && now ? (
+      <ProfileNominationCard
+        facts={facts}
+        nomination={latest}
+        now={now}
+        endedAt={story.group.data ? endedAt(latest, now, story.group.data) : null}
+      />
+    ) : null;
   const about = story.about;
   const proposals = story.proposals;
   const ready = Boolean(person && about && proposals && story.nominations.data && story.rounds);
@@ -181,7 +180,6 @@ export default function MintershipTab({ address }: MintershipTabProps) {
   if (story.status.isError && !person)
     return (
       <>
-        <ProfileLink address={address} story={story} />
         <ErrorState
           compact
           title="Couldn't load where they stand in MINTER."
@@ -194,7 +192,7 @@ export default function MintershipTab({ address }: MintershipTabProps) {
   if (quiet && (nothing.checking || nothing.nothing))
     return (
       <>
-        <ProfileLink address={address} story={story} />
+        {actions}
         {nothing.checking ? (
           <ListSkeleton count={1} label="Checking their records" />
         ) : (
@@ -216,10 +214,9 @@ export default function MintershipTab({ address }: MintershipTabProps) {
 
   return (
     <>
-      <ProfileLink address={address} story={story} />
-      <StandingSection story={story} />
-      <NominationSummary address={address} story={story} />
-      <Timeline story={story} />
+      <StandingSection story={story} self={Boolean(facts?.self)} actions={actions} />
+      <NominationSummary address={address} story={story} card={card} />
+      <Timeline story={story} self={Boolean(facts?.self)} />
       <MadeSection address={address} eager={quiet} />
       {person && proposals && (person.isAdmin || wasAdmin || proposals.length) ? (
         <AdminSection

@@ -48,7 +48,7 @@ function show(ui: React.ReactNode, links?: PersonLinks) {
 }
 
 describe('person links outside the Explorer', () => {
-  it('open the person’s page, as before', async () => {
+  it('open the person’s page: their Minter Profile, in the Explorer', async () => {
     show(
       <>
         <PersonChip address={ADA} name="Ada" />
@@ -57,14 +57,16 @@ describe('person links outside the Explorer', () => {
     );
     expect(screen.getByRole('link', { name: 'Ada: open their page' })).toHaveAttribute(
       'href',
-      `/people/${ADA}`
+      `/explorer/account/${ADA}/mintership`
     );
     await userEvent.click(screen.getByRole('link', { name: 'Bob: open their page' }));
-    expect(screen.getByTestId('landed')).toHaveTextContent(`/people/${BOB} null`);
+    expect(screen.getByTestId('landed')).toHaveTextContent(
+      `/explorer/account/${BOB}/mintership null`
+    );
   });
 
-  it('the default is the person page', () => {
-    expect(DEFAULT_PERSON_LINKS.to(ADA)).toBe(`/people/${ADA}`);
+  it('the default is the person’s Minter Profile', () => {
+    expect(DEFAULT_PERSON_LINKS.to(ADA)).toBe(`/explorer/account/${ADA}/mintership`);
     expect(DEFAULT_PERSON_LINKS.verb).toBe('open their page');
   });
 
@@ -80,7 +82,7 @@ describe('person links outside the Explorer', () => {
     );
     expect(screen.getByRole('link', { name: 'Ada: open their page' })).toHaveAttribute(
       'href',
-      `/people/${ADA}`
+      `/explorer/account/${ADA}/mintership`
     );
     expect(screen.getByRole('link', { name: 'Bob: open their page' })).toBeInTheDocument();
   });

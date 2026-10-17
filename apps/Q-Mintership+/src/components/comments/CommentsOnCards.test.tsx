@@ -7,7 +7,8 @@ import { fetchCallsFor } from '../../test/setup';
 import { ADDR } from '../../test/world';
 import { resetOptimisticComments } from '../../state/comments';
 import DecisionsPage from '../../pages/decisions/DecisionsPage';
-import PersonPage from '../../pages/person/PersonPage';
+import AccountPage from '../../pages/explorer/AccountPage';
+import { explorerAccountPath } from '../../routes/paths';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -88,10 +89,10 @@ describe('comments on the cards', () => {
 
   it('the person page: their nomination’s comments', async () => {
     const user = userEvent.setup();
-    await renderPage(<PersonPage />, {
+    await renderPage(<AccountPage />, {
       persona: 'learner',
-      path: `/people/${ADDR.nominatedWaiting}`,
-      route: '/people/:address',
+      path: explorerAccountPath(ADDR.nominatedWaiting, 'mintership'),
+      route: '/explorer/account/:who/:tab?',
       setup,
     });
     const toggle = await screen.findByRole(

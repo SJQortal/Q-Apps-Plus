@@ -420,14 +420,14 @@ describe('History page: the original app', () => {
 });
 
 describe('History page: find a person', () => {
-  it('opens a person page by address', async () => {
+  it('opens a Minter Profile by address', async () => {
     await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
     await userEvent.type(screen.getByLabelText('Find a person'), ADDR.kicked);
     await userEvent.click(screen.getByRole('button', { name: 'Open' }));
     expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
   });
 
-  it('opens a person page by name, and says when no one has the name', async () => {
+  it('opens a Minter Profile by name, and says when no one has the name', async () => {
     await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
     const field = screen.getByLabelText('Find a person');
     await userEvent.type(field, 'Nobody By This Name');

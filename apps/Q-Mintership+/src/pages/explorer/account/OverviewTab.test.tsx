@@ -13,7 +13,7 @@ import { expectNoAxeViolations } from '../../../test/axe';
 import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../../test/setup';
 import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../../test/world';
 import { COLLECTOR, SPONSEES, SPONSOR } from '../../../../e2e/world.mjs';
-import { explorerAccountPath, personPath } from '../../../routes/paths';
+import { explorerAccountPath } from '../../../routes/paths';
 import { resetExplorerState } from '../../../state/explorer';
 import { formatDate } from '../../../utils/format';
 import AccountPage from '../AccountPage';
@@ -118,16 +118,14 @@ describe('Overview: a Minter Admin minting now', () => {
     ]);
     expect(within(groupsSection).queryByRole('button', { name: /^Show all/ })).toBeNull();
 
-    // 4. MINTER: the person page's sentence and the two ways on.
+    // 4. MINTER: the app's own sentence and the way on, to its Minter Profile.
     const minterSection = await region('MINTER');
     expect(await within(minterSection).findByText(/^Minter Admin/, {}, T)).toBeInTheDocument();
-    expect(within(minterSection).getByRole('link', { name: 'MINTER profile' })).toHaveAttribute(
+    expect(within(minterSection).getByRole('link', { name: 'Minter Profile' })).toHaveAttribute(
       'href',
       explorerAccountPath(ADDR.admin, 'mintership')
     );
-    expect(
-      within(minterSection).getByRole('link', { name: 'Nominate, support or decide' })
-    ).toHaveAttribute('href', personPath(ADDR.admin));
+    expect(within(minterSection).getAllByRole('link')).toHaveLength(1);
 
     // 5. Minting.
     const minting = await region('Minting');

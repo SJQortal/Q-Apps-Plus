@@ -80,11 +80,11 @@ describe('proposals: person and check', () => {
     });
   });
 
-  it('points an admin who picks themselves to remove to Step down on their own page', async () => {
+  it('points an admin who picks themselves to remove to Step down on their own Minter Profile', async () => {
     const { address, publicKey } = installWorld('admin');
     await expect(checkSubject('removeAdmin', { address, publicKey }, address)).resolves.toEqual({
       status: 'blocked',
-      reason: 'To step down, use Step down as Minter Admin on your own page.',
+      reason: 'To step down, use Step down as Minter Admin on your own Minter Profile.',
     });
     // Another admin is still theirs to propose.
     await expect(
