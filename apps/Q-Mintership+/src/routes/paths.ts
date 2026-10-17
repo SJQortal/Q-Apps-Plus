@@ -90,6 +90,16 @@ export function explorerComparePath(addresses: string[]): string {
   return `${PATHS.explorer}/compare/${addresses.map((a) => encodeURIComponent(a)).join('/')}`;
 }
 
+/**
+ * A registered name, opened (Simon, 2026-10-17: "whenever there is a name
+ * … click that name to go into it"): its owner's Names tab, which the
+ * account page reaches by the name and shows with that name's card, its
+ * whole history open (names/NamesList.tsx).
+ */
+export function explorerNamePath(name: string): string {
+  return explorerAccountPath(name, 'names');
+}
+
 /** `/explorer/tx/<signature>`: one transaction. */
 export function explorerTxPath(signature: string): string {
   return `${PATHS.explorer}/tx/${encodeURIComponent(signature)}`;

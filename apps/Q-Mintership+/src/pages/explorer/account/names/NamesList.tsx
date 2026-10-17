@@ -10,7 +10,8 @@
  * with who has it now and its history, laid out the same way. Core's list
  * stops at 500 here, and says so.
  */
-import { useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
 import { Box, Button, Skeleton, TextField, Typography } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
@@ -44,6 +45,7 @@ import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 import { ViewToggle } from '../ViewToggle';
 import { StatusChip } from '../../../../components/explorer/StatusChip';
 import { useViewState } from '../../../../hooks/useViewState';
+import { nameMatchOf } from '../../../../state/explorer';
 
 /** Names shown at first, and added by each "Show more". */
 export const NAMES_PAGE = 20;
@@ -285,6 +287,8 @@ function NameRow({
   txs,
   capped,
   view,
+  arrived = false,
+  onArrived,
 }: {
   name: string;
   address: string;
@@ -294,10 +298,19 @@ function NameRow({
   /** The read of its name transactions stopped short (said once, over the names). */
   capped: boolean;
   view: NamesView;
+  /** The page was opened for this name (a link to it): brought into view, its whole history open. */
+  arrived?: boolean;
+  onArrived?: () => void;
 }) {
   const [node, setNode] = useState<HTMLLIElement | null>(null);
   const near = useInView(node);
   const notes = nameNotes(name, address);
+  useEffect(() => {
+    if (!arrived || !node) return;
+    node.scrollIntoView?.({ block: 'center' });
+    node.focus({ preventScroll: true });
+    onArrived?.();
+  }, [arrived, node, onArrived]);
   return (
     <NameItem
       view={view}
@@ -316,7 +329,7 @@ function NameRow({
       history={
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>
           <NameHistoryList name={name} txs={txs} address={address} capped={capped} />
-          <NameLifeToggle name={name} />
+          <NameLifeToggle name={name} initialOpen={arrived} />
         </Box>
       }
     />
@@ -342,10 +355,24 @@ export function NamesList({
   /** Read the whole name history (up to 1,000), offered while the read stopped short. */
   readWhole?: { reading: boolean; failed: boolean; read: () => void };
 }) {
-  const { shown, showMore, listRef } = useShowMore(NAMES_PAGE, 'names:shown');
+  const { shown, showMore, showAtLeast, listRef } = useShowMore(NAMES_PAGE, 'names:shown');
   const [sort, setSort] = useViewState<NameSort>('names:sort', 'primary');
   const [view, setView] = useNamesView();
   const byName = history.data ? historyByName(history.data.rows) : null;
+  // Opened from a link to one of its names (explorerNamePath): that name, once, on a new
+  // visit (Back brings the page back as it was left instead).
+  const opened = nameMatchOf(useLocation().state)?.matched ?? null;
+  const [arrivalDone, setArrivalDone] = useViewState('names:arrived', false);
+  const arriving = !arrivalDone && opened !== null && Boolean(names.data?.names.includes(opened));
+  const doneArriving = useCallback(() => setArrivalDone(true), [setArrivalDone]);
+  // Where it is in the order shown: the names shown reach it, and stay so.
+  const arrivedAt =
+    arriving && opened && names.data && primary !== undefined
+      ? sortNames(names.data.names, sort, primary, byName).indexOf(opened)
+      : -1;
+  useEffect(() => {
+    if (arrivedAt >= shown) showAtLeast(arrivedAt + 1);
+  }, [arrivedAt, shown, showAtLeast]);
 
   let body: React.ReactNode;
   if (names.isError && !names.data)
@@ -363,7 +390,7 @@ export function NamesList({
     const all = names.data.names;
     const hasPrimary = primary !== null && all.includes(primary);
     const ordered = sortNames(all, sort, primary, byName);
-    const visible = ordered.slice(0, shown);
+    const visible = ordered.slice(0, Math.max(shown, arrivedAt + 1));
     const left = ordered.length - visible.length;
     body = (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0 }}>
@@ -400,6 +427,8 @@ export function NamesList({
                 txs={byName ? (byName.get(name) ?? []) : undefined}
                 capped={Boolean(history.data?.capped)}
                 view={view}
+                arrived={arriving && name === opened}
+                onArrived={doneArriving}
               />
             ))}
           </Box>

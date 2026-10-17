@@ -26,7 +26,12 @@ export function useShowMore(page: number, id: string | null = null) {
     firstNew.current = shown;
     setShown((n) => n + page);
   };
-  return { shown, showMore, listRef };
+  /** Show at least `count` rows (whole steps of `page`), with no focus move. */
+  const showAtLeast = useCallback(
+    (count: number) => setShown((n) => Math.max(n, Math.ceil(count / page) * page)),
+    [page, setShown]
+  );
+  return { shown, showMore, showAtLeast, listRef };
 }
 
 /** The look of a row that can take the focus from "Show more". */

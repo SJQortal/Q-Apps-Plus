@@ -1,23 +1,50 @@
 /**
  * The Explorer Quiz's shared pieces: a question's parts as text (names in
- * bold, an address whole, blocks with their number) and a level's chip in
- * its colour (Easy green, Medium blue, Tricky violet, Expert magenta, the
- * info blue turned to each hue).
+ * bold, an address whole, blocks with their number; with `links`, each
+ * account and name opens in the Explorer) and a level's chip in its colour
+ * (Easy green, Medium blue, Tricky violet, Expert magenta, the info blue
+ * turned to each hue).
  */
-import { Box } from '@mui/material';
+import type { ReactNode } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
+import { Box, Link } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { MarkedName } from '../../common/MarkedName';
 import { withHue } from '../../../pages/decisions/sectionAccents';
 import { QUIZ_LEVELS, type QuizLevel, type QuizPart } from '../../../rules/explorer/quiz/types';
 import { formatCount } from '../../../utils/format';
 import { readableOn } from '../../../utils/readable';
+import { explorerAccountPath, explorerNamePath } from '../../../routes/paths';
 
 const LEVEL_HUE: Record<QuizLevel, number> = { easy: 150, medium: 210, tricky: 285, expert: 330 };
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
-/** The question's parts as text: names in bold, an address whole, blocks with their number. */
-export function QuestionText({ parts }: { parts: readonly QuizPart[] }) {
+/** Where the quiz's accounts and names open: the Explorer, a step of its trail. */
+const QUIZ_LINK_STATE = { via: 'explorer' };
+
+/** An account or a name in a question, opening it when `to` is given. */
+function Opens({ to, children }: { to: string | null; children: ReactNode }) {
+  if (!to) return <>{children}</>;
+  return (
+    <Link component={RouterLink} to={to} state={QUIZ_LINK_STATE} color="inherit" underline="hover">
+      {children}
+    </Link>
+  );
+}
+
+/**
+ * The question's parts as text: names in bold, an address whole, blocks
+ * with their number. `links`: each account and name opens in the Explorer
+ * (Simon, 2026-10-17); never inside a button (an option to pick).
+ */
+export function QuestionText({
+  parts,
+  links = false,
+}: {
+  parts: readonly QuizPart[];
+  links?: boolean;
+}) {
   return (
     <>
       {parts.map((part, i) => {
@@ -25,30 +52,35 @@ export function QuestionText({ parts }: { parts: readonly QuizPart[] }) {
           case 'text':
             return <span key={i}>{part.text}</span>;
           case 'account':
-            return part.name ? (
-              <Box component="strong" key={i}>
-                <bdi dir="auto">
-                  <MarkedName name={part.name} />
-                </bdi>
-              </Box>
-            ) : (
-              <Box
-                component="code"
-                key={i}
-                sx={{ fontFamily: MONO, fontSize: '0.92em', wordBreak: 'break-all' }}
-              >
-                {part.address}
-              </Box>
+            return (
+              <Opens key={i} to={links ? explorerAccountPath(part.address) : null}>
+                {part.name ? (
+                  <Box component="strong">
+                    <bdi dir="auto">
+                      <MarkedName name={part.name} />
+                    </bdi>
+                  </Box>
+                ) : (
+                  <Box
+                    component="code"
+                    sx={{ fontFamily: MONO, fontSize: '0.92em', wordBreak: 'break-all' }}
+                  >
+                    {part.address}
+                  </Box>
+                )}
+              </Opens>
             );
           case 'name':
             return (
-              <Box component="strong" key={i}>
-                “
-                <bdi dir="auto">
-                  <MarkedName name={part.name} />
-                </bdi>
-                ”
-              </Box>
+              <Opens key={i} to={links ? explorerNamePath(part.name) : null}>
+                <Box component="strong">
+                  “
+                  <bdi dir="auto">
+                    <MarkedName name={part.name} />
+                  </bdi>
+                  ”
+                </Box>
+              </Opens>
             );
           case 'group':
             return (

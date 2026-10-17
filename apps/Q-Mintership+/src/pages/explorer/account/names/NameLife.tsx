@@ -142,8 +142,15 @@ function LifeBody({ name }: { name: string }) {
   );
 }
 
-export function NameLifeToggle({ name }: { name: string }) {
-  const [open, setOpen] = useViewState(`life:${name}`, false);
+export function NameLifeToggle({
+  name,
+  initialOpen = false,
+}: {
+  name: string;
+  /** Open from the start (the name was opened from a link to it). */
+  initialOpen?: boolean;
+}) {
+  const [open, setOpen] = useViewState(`life:${name}`, initialOpen);
   const id = useId();
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>

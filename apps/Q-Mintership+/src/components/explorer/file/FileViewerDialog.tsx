@@ -30,7 +30,6 @@ import LaunchOutlinedIcon from '@mui/icons-material/LaunchOutlined';
 import SaveAltOutlinedIcon from '@mui/icons-material/SaveAltOutlined';
 import { ResponsiveDialog } from '../../common/ResponsiveDialog';
 import { EmptyState, ErrorState, ListSkeleton } from '../../common/states';
-import { NameWithAvatar } from '../NameWithAvatar';
 import {
   getQdnLatest,
   getQdnMeta,
@@ -71,6 +70,7 @@ import { PdfView } from './views/PdfView';
 import { TableView } from './views/TableView';
 import { TextView } from './views/TextView';
 import { ZipView } from './views/ZipView';
+import { NameLink } from '../TxSentence';
 
 export interface FileViewerDialogProps {
   open: boolean;
@@ -428,7 +428,7 @@ export default function FileViewerDialog({
           color="text.secondary"
           sx={{ overflowWrap: 'anywhere' }}
         >
-          Published by <NameWithAvatar name={ref.name} size={18} />
+          Published by <NameLink name={ref.name} quoted={false} size={18} onClick={onClose} />
           {facts.length ? ` · ${facts.join(' · ')}` : ''}
         </Typography>
         {earlier ? (

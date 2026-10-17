@@ -15,9 +15,9 @@ import type { Letter } from '../../../rules/explorer/compare';
 import { LetterBadge } from './letters';
 import { FailedReads } from './parts';
 import { sameForAll, type SideCell, type SideRow } from './sideRows';
-import { NameWithAvatar } from '../../../components/explorer/NameWithAvatar';
 import { MarkedName } from '../../../components/common/MarkedName';
 import { FIELD_BLOCK_SX, fieldBlockFill } from '../../../components/explorer/fieldBlock';
+import { NameLink } from '../../../components/explorer/TxSentence';
 
 export interface SideColumn {
   address: string;
@@ -45,7 +45,7 @@ function Cell({ cell }: { cell: SideCell | undefined }) {
       {cell.account ? (
         <PersonInline address={cell.account} />
       ) : cell.name !== undefined ? (
-        <NameWithAvatar name={cell.name} />
+        <NameLink name={cell.name} quoted={false} />
       ) : (
         cell.text
       )}

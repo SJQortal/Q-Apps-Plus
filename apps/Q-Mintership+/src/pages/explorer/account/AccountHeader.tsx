@@ -10,7 +10,6 @@
 import { Box, Typography } from '@mui/material';
 import { AddressText } from '../../../components/common/Person';
 import { NameAvatar } from '../../../components/common/NameAvatar';
-import { NameWithAvatar } from '../../../components/explorer/NameWithAvatar';
 import type { NamesOf } from '../../../data/explorer/account';
 import type { AccountInfo } from '../../../data/types';
 import { visibleName } from '../../../rules/explorer/nameNotes';
@@ -20,6 +19,7 @@ import { minterStatusWord, openedFrom } from './accountWords';
 import { MarkedName } from '../../../components/common/MarkedName';
 import { StatusChip } from '../../../components/explorer/StatusChip';
 import { DEV_ADMIN, useDevAdmins } from '../../../components/explorer/useDevAdmins';
+import { NameLink } from '../../../components/explorer/TxSentence';
 
 export interface AccountHeaderProps {
   address: string;
@@ -35,9 +35,9 @@ export interface AccountHeaderProps {
   openedBy: NameMatch | null;
 }
 
-/** A name in the note, with its own avatar. */
+/** A name in the note, with its own avatar, opening the name. */
 function Name({ name }: { name: string }) {
-  return <NameWithAvatar name={name} quoted strong={false} />;
+  return <NameLink name={name} strong={false} />;
 }
 
 export function AccountHeader({

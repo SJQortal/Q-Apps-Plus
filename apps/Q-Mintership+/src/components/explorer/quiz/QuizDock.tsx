@@ -20,6 +20,7 @@ import {
   Button,
   CircularProgress,
   IconButton,
+  Link,
   TextField,
   Tooltip,
   Typography,
@@ -36,6 +37,7 @@ import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import QuizOutlinedIcon from '@mui/icons-material/QuizOutlined';
 import RadioButtonUncheckedOutlinedIcon from '@mui/icons-material/RadioButtonUncheckedOutlined';
 import { BOTTOM_NAV_HEIGHT } from '../../layout/BottomNav';
+import { explorerAccountPath } from '../../../routes/paths';
 import { useBottomNavShown } from '../../layout/useBottomNav';
 import { BOTTOM_BAR_VAR, usePublishOverlay } from '../../../hooks/useOverlayPadding';
 import { answerWords } from '../../../rules/explorer/quiz/check';
@@ -355,7 +357,7 @@ export default function QuizDock() {
             variant="body2"
             sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
           >
-            <QuestionText parts={question.parts} />
+            <QuestionText parts={question.parts} links />
           </Typography>
         ) : null
       ) : (
@@ -393,7 +395,7 @@ export default function QuizDock() {
                 <Typography
                   sx={{ fontSize: { xs: 16, sm: 17 }, lineHeight: 1.5, overflowWrap: 'anywhere' }}
                 >
-                  <QuestionText parts={question.parts} />
+                  <QuestionText parts={question.parts} links />
                 </Typography>
               </Box>
 
@@ -503,7 +505,20 @@ export default function QuizDock() {
                   {/* The options already show a multiple-choice answer. */}
                   {choice ? null : (
                     <Typography sx={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-                      {answerWords(question)}
+                      {question.answer.kind === 'account' ? (
+                        // An account answer opens it, a step of the trail.
+                        <Link
+                          component={RouterLink}
+                          to={explorerAccountPath(question.answer.address)}
+                          state={{ via: 'explorer' }}
+                          color="inherit"
+                          underline="always"
+                        >
+                          {answerWords(question)}
+                        </Link>
+                      ) : (
+                        answerWords(question)
+                      )}
                     </Typography>
                   )}
                   {question.fact ? (

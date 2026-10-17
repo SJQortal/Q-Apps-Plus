@@ -319,6 +319,21 @@ describe('Names: each name’s history, beside it', () => {
     noWrites(posts);
   });
 
+  it('opened from a link to one of its names: its owner’s tab, that name’s whole history open', async () => {
+    // explorerNamePath: the name in the URL, which the page swaps for its owner's address.
+    const { panel } = await open('Spare Room');
+    const toggle = await within(panel).findByRole(
+      'button',
+      { name: 'Its whole history of “Spare Room”' },
+      T
+    );
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      await within(panel).findByRole('list', { name: 'Every change to “Spare Room”' }, T)
+    ).toBeInTheDocument();
+    expect(toggle.closest('li')).toHaveFocus();
+  });
+
   it('says once, over the names, when their history comes from only the newest 100, and reads the rest on request', async () => {
     const hundred = Array.from({ length: 100 }, (_, i) => ({
       type: 'REGISTER_NAME',
