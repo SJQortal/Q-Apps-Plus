@@ -298,4 +298,30 @@ describe("MultiplePublish in batches", () => {
     expect(screen.getAllByText("Failed", { selector: "p" })).toHaveLength(20);
     expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
   });
+
+  it("stops waiting by checking only the batch Hub hasn't answered, so earlier failures stay certain", async () => {
+    let call = 0;
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => {
+      call += 1;
+      if (call === 1) throw { error: { unsuccessfulPublishes: [{ identifier: "qshare_file_album_f3" }] }, message: "x" };
+      return new Promise(() => {});
+    });
+    mockFetch("/transactions/unconfirmed", []);
+    mockFetch("/arbitrary/resources/search", []);
+    const onError = vi.fn();
+    renderWithProviders(<MultiplePublish isOpen publishes={share(30)} onSubmit={vi.fn()} onError={onError} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start publishing" }));
+    expect(await screen.findByText("Publishing batch 2 of 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByText("19 of 31 published")).toBeInTheDocument();
+
+    // Only batch 2's files were looked up on QDN, not batch 1's failure.
+    const looked = fetchCallsMatching("/arbitrary/resources/search").map((u) => new URL(u, "http://x").searchParams.get("identifier"));
+    expect(looked).toHaveLength(10);
+    expect(looked).not.toContain("qshare_file_album_f3");
+    expect(screen.getByText("Failed", { selector: "p" })).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
+    // Batch 2 is still out with Hub: uncertain because of it, as before.
+    expect(onError.mock.calls.at(-1)![2]).toEqual({ uncertain: true });
+  });
 });

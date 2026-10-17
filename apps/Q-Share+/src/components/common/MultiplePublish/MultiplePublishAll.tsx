@@ -697,7 +697,11 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
   const stopWaiting = () => {
     waitingOn.current = 0;
     sequence.current += 1;
-    verify(resources.filter((r) => !["done", "queued"].includes(stateOf(r.identifier))));
+    // Only what Hub may still be publishing: rows it has answered for
+    // (published, or named as failed) are settled already.
+    verify(
+      resources.filter((r) => r.identifier in awaiting && !["done", "queued", "failed"].includes(stateOf(r.identifier)))
+    );
   };
   // Between batches nothing is out with Hub: stop before the next one.
   const pause = () => {
