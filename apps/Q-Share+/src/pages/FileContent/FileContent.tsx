@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import { Avatar, Box, Button, IconButton, LinearProgress, Skeleton, Typography } from "@mui/material";
@@ -15,7 +15,6 @@ import { FollowButton } from "../../components/common/FollowButton.tsx";
 import { EmptyState } from "../../components/common/EmptyState.tsx";
 import { CommentSection } from "../../components/common/Comments/CommentSection";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
-import { MyContext, isFailedStatus } from "../../wrappers/DownloadWrapper";
 import { RootState } from "../../state/store";
 import { addToHashMap, heldShare, setEditFile, type Video } from "../../state/features/fileSlice.ts";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
@@ -31,6 +30,7 @@ import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
 import { getCategoriesFromObject, type Category } from "../../components/common/CategoryList/CategoryList.tsx";
 import { getIconsFromObject } from "../../constants/Categories/CategoryFunctions.ts";
 import { FileRow, type ShareFile } from "./FileRow";
+import { FETCH_ALL_AT_ONCE, useFetchAll } from "./useFetchAll";
 import {
   ActionRow,
   AuthorLink,
@@ -48,6 +48,8 @@ import {
 } from "./FileContent-styles.tsx";
 
 const DESCRIPTION_COLLAPSE_PX = 300;
+/** File rows shown at first, and added by each "Show more". */
+export const FILE_PAGE = 50;
 
 /**
  * - "fetching": the JSON is on the network but not on this node yet.
@@ -174,8 +176,6 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
   const phone = usePhoneLayout();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { downloadVideo } = useContext(MyContext);
-  const downloads = useSelector((state: RootState) => state.global.downloads);
   const username = useSelector((state: RootState) => state.auth.user?.name);
   // A body another name published under this identifier is not this share.
   const cached = useSelector((state: RootState) => heldShare(state.file, name, id));
@@ -281,23 +281,9 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
   const files: ShareFile[] = useMemo(() => (Array.isArray(fileData?.files) ? fileData.files : []), [fileData]);
   const author: string = fileData?.user || name;
 
-  const pendingFiles = useMemo(
-    () => files.filter((f) => f?.identifier && (!downloads?.[f.identifier] || isFailedStatus(downloads[f.identifier]?.status?.status))),
-    [downloads, files]
-  );
-  const allReady = files.length > 0 && files.every((f) => downloads?.[f.identifier]?.status?.status === "READY");
-
-  const fetchAll = () => {
-    for (const file of pendingFiles) {
-      const service = file.service || "FILE";
-      downloadVideo({
-        name: file.name,
-        service,
-        identifier: file.identifier,
-        properties: { ...file, service, mimeType: file.mimetype, jsonId: id },
-      });
-    }
-  };
+  const { fetchAll, pending: pendingFiles, readyCount, allReady, waiting } = useFetchAll(files, id);
+  // A share holds up to 300 files: show them a page at a time.
+  const [shownFiles, setShownFiles] = useState(FILE_PAGE);
 
   // window.history is shared by every Hub tab, so Back follows the app's own stack.
   const goBack = useSafeBack("/");
@@ -309,8 +295,19 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
     files.length > 1 || extraActions ? (
       <>
         {files.length > 1 && (
-          <Button variant="contained" startIcon={<CloudDownloadOutlinedIcon />} onClick={fetchAll} disabled={pendingFiles.length === 0}>
-            {allReady ? "All files ready" : pendingFiles.length === 0 ? "Fetching…" : "Fetch all files"}
+          <Button
+            variant="contained"
+            startIcon={<CloudDownloadOutlinedIcon />}
+            onClick={fetchAll}
+            disabled={pendingFiles.length === 0 || waiting > 0}
+          >
+            {allReady
+              ? "All files ready"
+              : pendingFiles.length === 0 || waiting > 0
+                ? files.length > FETCH_ALL_AT_ONCE
+                  ? `Fetching… ${readyCount} of ${files.length} ready`
+                  : "Fetching…"
+                : "Fetch all files"}
           </Button>
         )}
         <SaveAllZipButton files={files} title={title} allReady={allReady} />
@@ -522,11 +519,22 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
             {files.length === 0 ? (
               <EmptyState title="No files in this share" description="The publisher did not attach any files." />
             ) : (
-              <FileList>
-                {files.map((file, index) => (
-                  <FileRow key={`${file.identifier || file.filename}-${index}`} file={file} jsonId={id} />
-                ))}
-              </FileList>
+              <>
+                <FileList>
+                  {files.slice(0, shownFiles).map((file, index) => (
+                    <FileRow key={`${file.identifier || file.filename}-${index}`} file={file} jsonId={id} />
+                  ))}
+                </FileList>
+                {files.length > shownFiles && (
+                  <Button
+                    variant="outlined"
+                    onClick={() => setShownFiles((n) => n + FILE_PAGE)}
+                    sx={{ alignSelf: "center", minHeight: 44 }}
+                  >
+                    Show {Math.min(FILE_PAGE, files.length - shownFiles)} more of {files.length - shownFiles}
+                  </Button>
+                )}
+              </>
             )}
           </Box>
 
