@@ -388,6 +388,11 @@ export default {
       }
       window.Date = WorldDate;
     })();`,
+    // One browser profile serves every screen of a theme and size: the Quiz a quiz screen
+    // opened (withQuiz sets it again, after this) mustn't cover the screens after it.
+    `(() => {
+      try { localStorage.removeItem('qmintershipplus-explorer-quiz'); } catch (e) {}
+    })();`,
   ],
 
   qortal,
