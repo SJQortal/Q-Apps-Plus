@@ -113,8 +113,8 @@ function percentWords(value: unknown): string {
   return `${formatAmount(String(value ?? '0'))} %`;
 }
 
-/** "240 bytes", "1.2 KB", "3.4 MB". */
-function sizeWords(bytes: number): string {
+/** A size in words: "240 bytes", "1.2 KB", "3.4 MB". */
+export function sizeWords(bytes: number): string {
   if (bytes < 1024) return `${bytes} ${bytes === 1 ? 'byte' : 'bytes'}`;
   const units = ['KB', 'MB', 'GB'];
   let value = bytes / 1024;

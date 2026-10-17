@@ -21,6 +21,7 @@
     "@mui/icons-material": "^9.4.0",
     "@mui/material": "^9.4.0",
     "jotai": "^2.12.3",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router-dom": "^7.3.0"

@@ -1118,6 +1118,27 @@ export default {
         await page.waitForTimeout(400);
       },
     },
+    // Open File (Simon, 2026-10-17): a JSON file laid out, and a website's files.
+    {
+      key: 'explorer-file',
+      path: `/explorer/tx/${world.explorer.sigs.publishes[2]}?as=learner`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByRole('button', { name: 'Open File' }).click({ timeout: 8000 });
+        await page.getByText('The file’s JSON').waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
+    {
+      key: 'explorer-file-list',
+      path: `/explorer/tx/${world.explorer.sigs.publishes[1]}?as=learner`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByRole('button', { name: 'Open File' }).click({ timeout: 8000 });
+        await page.getByRole('list', { name: 'Files in this resource' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
     { key: 'explorer-txs', path: '/explorer/transactions?as=learner', after: explorerSettle },
     {
       key: 'explorer-unused',

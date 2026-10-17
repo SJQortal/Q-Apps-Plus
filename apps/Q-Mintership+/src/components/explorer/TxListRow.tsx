@@ -12,7 +12,8 @@
  *
  * The details end with "Raw API response", which opens to the
  * transaction's JSON as Core sent it (components/explorer/RawJson.tsx),
- * right there in the list.
+ * right there in the list; a public QDN publish also has Open File and
+ * Save File (file/QdnFileButtons.tsx).
  *
  * A message never shows its content, an encrypted QDN resource never its
  * identifier (rules/explorer/txWords.ts and rawTx.ts leave both out), and
@@ -46,6 +47,7 @@ import { TX_FAMILIES, txFamilyAccent } from './txFamilyAccent';
 import { familyOf } from '../../rules/explorer/txFamilies';
 import { alikeRuns } from '../../rules/explorer/alikeRuns';
 import { TxSentence } from './TxSentence';
+import { QdnFileButtons } from './file/QdnFileButtons';
 import { useTxWords } from './useTxWords';
 
 const NOWRAP = { whiteSpace: 'nowrap' } as const;
@@ -220,16 +222,20 @@ export function TxListRow({ tx, viewpoint = null, top = true }: TxListRowProps) 
           <RawResponse
             tx={tx}
             before={
-              <Button
-                component={RouterLink}
-                to={explorerTxPath(tx.signature)}
-                state={links.state}
-                variant="outlined"
-                endIcon={<OpenInNewOutlinedIcon />}
-                sx={{ minHeight: 44 }}
-              >
-                Open transaction
-              </Button>
+              <>
+                <Button
+                  component={RouterLink}
+                  to={explorerTxPath(tx.signature)}
+                  state={links.state}
+                  variant="outlined"
+                  endIcon={<OpenInNewOutlinedIcon />}
+                  sx={{ minHeight: 44 }}
+                >
+                  Open transaction
+                </Button>
+                {/* A public QDN publish: its file, shown here or saved (Simon, 2026-10-17). */}
+                <QdnFileButtons tx={tx} />
+              </>
             }
           />
         </Box>

@@ -90,6 +90,20 @@ describe('TxListRow', () => {
     await user.click(button);
     expect(screen.getByText('MAIL_PRIVATE')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/qortal_qmail_explorer_test|Identifier/);
+    // Never opened or saved (Open File, Simon 2026-10-17).
+    expect(screen.queryByRole('button', { name: 'Open File' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save File' })).toBeNull();
+  });
+
+  it('offers Open File and Save File beside Open transaction on a public QDN publish', async () => {
+    const { user } = await show([row(sigs.publishes[2])], ADDR.admin);
+    await user.click(await screen.findByRole('button', { name: /Published JSON data as/ }, T));
+    const open = screen.getByRole('link', { name: 'Open transaction' });
+    const buttons = within(open.parentElement as HTMLElement);
+    expect(buttons.getByRole('button', { name: 'Open File' })).toBeInTheDocument();
+    expect(buttons.getByRole('button', { name: 'Save File' })).toBeInTheDocument();
+    // Nothing about the file is read before a press.
+    expect(fetchCallsFor('/arbitrary/')).toEqual([]);
   });
 
   it('names who got a minting level: from the raw bytes when the account moved it', async () => {

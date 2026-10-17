@@ -61,7 +61,19 @@ function lineTone(theme: Theme, tone: 'primary' | 'success' | 'warning' | 'error
   return theme.palette.text.primary;
 }
 
-export function RawJson({ value, label }: { value: unknown; label: string }) {
+export function RawJson({
+  value,
+  label,
+  caption = 'Your node’s answer, as JSON',
+  fill = false,
+}: {
+  value: unknown;
+  label: string;
+  /** The line above it, beside Copy. */
+  caption?: string;
+  /** As tall as its container (a file in Open File's viewer), instead of up to 480 px. */
+  fill?: boolean;
+}) {
   const lines = useMemo(() => jsonLines(value), [value]);
   const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -80,10 +92,18 @@ export function RawJson({ value, label }: { value: unknown; label: string }) {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0.5,
+        minWidth: 0,
+        ...(fill ? { flex: 1, minHeight: 0 } : {}),
+      }}
+    >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
         <Typography variant="body2" color="text.secondary" sx={{ flex: 1, minWidth: 0 }}>
-          Your node’s answer, as JSON
+          {caption}
         </Typography>
         <Button
           size="small"
@@ -105,7 +125,7 @@ export function RawJson({ value, label }: { value: unknown; label: string }) {
         sx={(theme) => ({
           m: 0,
           py: 1,
-          maxHeight: 'min(480px, 60vh)',
+          ...(fill ? { flex: 1, minHeight: 120 } : { maxHeight: 'min(480px, 60vh)' }),
           overflow: 'auto',
           borderRadius: 1,
           border: 1,

@@ -1,6 +1,7 @@
 /**
- * One transaction on its own page: the sentence first (with links), then
- * the facts (block and time, or that it waits for a block, with a link to
+ * One transaction on its own page: the sentence first (with links), Open
+ * File and Save File under it for a public QDN publish
+ * (components/explorer/file), then the facts (block and time, or that it waits for a block, with a link to
  * every transaction in that block; the fee; where group approval stands,
  * only when it needs one; its signature, with Copy), the accounts involved,
  * for a group approval the transaction it answers, the type's fields in
@@ -27,6 +28,8 @@ import { formatAmount } from '../../../rules/explorer/txWords';
 import { formatCount, formatDateTime, formatRelative } from '../../../utils/format';
 import { approvalWords, makerOf } from './txPageWords';
 import { FIELD_BLOCK_SX } from '../../../components/explorer/fieldBlock';
+import { QdnFileButtons } from '../../../components/explorer/file/QdnFileButtons';
+import { openableResource } from '../../../rules/explorer/qdnFiles';
 
 function Fact({
   label,
@@ -185,6 +188,11 @@ export function TxView({ tx }: { tx: TxRow }) {
       >
         <TxSentence parts={words.parts} />
       </Typography>
+      {openableResource(tx) ? (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          <QdnFileButtons tx={tx} />
+        </Box>
+      ) : null}
       <Facts tx={tx} />
       <TxPeople addresses={words.participants} maker={makerOf(tx)} />
       {pending ? <AnsweredTx signature={tx.pendingSignature as string} /> : null}

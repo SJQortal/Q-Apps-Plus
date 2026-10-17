@@ -10,7 +10,8 @@ export default defineConfig({
   base: '',
   build: {
     target: 'es2020',
-    chunkSizeWarningLimit: 900,
+    // pdf.js (about 1.7 MB) is the one chunk above 900 KB: its own, loaded with the first PDF opened.
+    chunkSizeWarningLimit: 1800,
     rollupOptions: {
       output: {
         // Vite 8 (Rolldown): keep the framework in its own long-lived chunks.

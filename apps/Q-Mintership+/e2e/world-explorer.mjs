@@ -360,8 +360,9 @@ export function extendExplorer(world) {
   // ---- QDN publishes --------------------------------------------------------------------
   const qdn = [];
   const publish = (name, service, serviceNumber, identifier, h, size) => {
-    qdn.push({ name, service, identifier, created: blockTime(h), size });
-    return add('ARBITRARY', h, ADDR.admin, {
+    const entry = { name, service, identifier, created: blockTime(h), size };
+    qdn.push(entry);
+    const row = add('ARBITRARY', h, ADDR.admin, {
       version: 5,
       senderPublicKey: pk(world, ADDR.admin),
       service: serviceNumber,
@@ -376,6 +377,9 @@ export function extendExplorer(world) {
       dataType: 'DATA_HASH',
       payments: [],
     });
+    // Its latest version is this transaction, as searchsimple says.
+    entry.signature = row.signature;
+    return row;
   };
   const publishes = [
     publish('AA Maps', 'APP', 1000, 'default', 2_165_000, 2_400_000),
@@ -604,6 +608,38 @@ function namesOf(world, owner) {
 }
 
 /** Answer a Core GET for the Explorer, or undefined. Same shape as answerCore in world.mjs. */
+/**
+ * Open File's files: Avery Admin's settings (JSON) and AA Maps' website
+ * (three files), their metadata and bodies. The rest answer as before.
+ */
+export const EXPLORER_FILES = {
+  'JSON/Avery Admin/avery-settings': {
+    meta: {
+      title: 'Avery’s settings',
+      description: 'Kept for the next visit.',
+      files: ['settings.json'],
+      mimeType: 'application/json',
+    },
+    files: {
+      '': JSON.stringify({
+        theme: 'dark',
+        motion: true,
+        muted: ['Spam Bot'],
+        notes: { decisions: 'by type', since: 2_600_000 },
+      }),
+    },
+  },
+  'WEBSITE/AA Maps/default': {
+    meta: { title: 'AA Maps', files: ['index.html', 'logo.svg', 'assets/app.js'] },
+    files: {
+      'index.html':
+        '<!DOCTYPE html>\n<html>\n  <head><title>AA Maps</title></head>\n  <body><div id="map"></div><script src="assets/app.js"></script></body>\n</html>\n',
+      'logo.svg': '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"></svg>',
+      'assets/app.js': 'console.log("AA Maps");\n',
+    },
+  },
+};
+
 export function answerExplorer(world, p, sp) {
   const x = world.explorer;
   if (!x) return undefined;
@@ -782,6 +818,28 @@ export function answerExplorer(world, p, sp) {
   }
 
   // ---- QDN and trades --------------------------------------------------------------------
+  // ---- Open File: two publishes on the node as files (READY) --------------------------
+  const file = (m = p.match(
+    /^\/arbitrary\/(?:(resource\/status|metadata)\/)?([A-Z_]+)\/([^/]+)\/([^/]+)$/
+  ))
+    ? EXPLORER_FILES[`${m[2]}/${decodeURIComponent(m[3])}/${decodeURIComponent(m[4])}`]
+    : undefined;
+  if (file && m[1] === 'resource/status')
+    return json({ status: 'READY', localChunkCount: 1, totalChunkCount: 1, percentLoaded: 100 });
+  if (file && m[1] === 'metadata') return json(file.meta);
+  if (file) {
+    const body = file.files[sp.get('filepath') ?? ''];
+    return body === undefined
+      ? json(
+          {
+            error: 102,
+            message: 'filepath is required for resources containing more than one file',
+          },
+          400
+        )
+      : { status: 200, text: body };
+  }
+
   if (p === '/arbitrary/resources/searchsimple') {
     const service = sp.get('service');
     if (service === 'JSON') return undefined; // world.mjs's own answer
@@ -819,7 +877,8 @@ export function answerExplorer(world, p, sp) {
         name: r.name,
         service: r.service,
         identifier: r.identifier,
-        latestSignature: fakeKey(`explorer:qdn:${r.service}:${r.name}:${r.identifier}`, 64),
+        latestSignature:
+          r.signature ?? fakeKey(`explorer:qdn:${r.service}:${r.name}:${r.identifier}`, 64),
         size: r.size,
         created: r.created,
         ...(r.updated ? { updated: r.updated } : {}),
