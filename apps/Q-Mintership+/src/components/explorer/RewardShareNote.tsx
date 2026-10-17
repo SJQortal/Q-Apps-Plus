@@ -1,7 +1,8 @@
 /**
  * Under any reward share the Explorer shows: how minting worked before
  * Oct 2024, and Q-Minter's history page, which explains reward shares for
- * anyone new to them (Simon, 2026-10-16).
+ * anyone new to them (Simon, 2026-10-16). The words on the left, the button
+ * to their right (Simon, 2026-10-17); stacked on phones.
  */
 import { Box, Typography } from '@mui/material';
 import { Q_MINTER_HISTORY_LINK } from '../../constants/qMinter';
@@ -13,11 +14,20 @@ export const SPONSOR_ERA_NOTE =
 
 export function RewardShareNote() {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.75 }}>
-      <Typography variant="body2" color="text.secondary">
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: { xs: 'column', sm: 'row' },
+        alignItems: { xs: 'flex-start', sm: 'center' },
+        gap: { xs: 0.75, sm: 2 },
+      }}
+    >
+      <Typography variant="body2" color="text.secondary" sx={{ flex: 1, minWidth: 0 }}>
         {SPONSOR_ERA_NOTE}
       </Typography>
-      <QortalLinkButton link={Q_MINTER_HISTORY_LINK} label="How reward shares worked: Q-Minter" />
+      <Box sx={{ flexShrink: 0 }}>
+        <QortalLinkButton link={Q_MINTER_HISTORY_LINK} label="How reward shares worked: Q-Minter" />
+      </Box>
     </Box>
   );
 }
