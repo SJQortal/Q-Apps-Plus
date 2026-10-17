@@ -924,6 +924,8 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
 85. **An account's name and avatar** (Simon, 2026-10-17: "next to the avatar I would like to see their name also (and at the top where the user name already is, I would like an avatar of the user as well, and I want to be able to click on avatar to see it bigger as well)"). The account's name sits beside its avatar on every screen size (it was under it on phones only), the avatar is in the top bar too, before the name, and either avatar opens bigger when pressed: the whole image (not cut to a circle), as large as the screen allows up to 400 px, in a dialog named after the account (`components/explorer/AvatarZoom.tsx`; a 44 px target however small it is drawn; the image it already loaded, nothing more read). An account without an avatar image keeps its letter, not a button. Checks: the account screens again (Overview, its avatar bigger, Minter Profile, Connections, Transactions, Names, an AT, an unused address, a nominee's own profile), Hub 3.0 and White at every size: 90 captures, 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations; on Simon's node, Bob Arctor's box counted 85+ from the first page and 172 of 205 once Activity had read it all, as its QDN data chip says. Tests 2,325 passed.
 
+86. **Simon's answers to items 84–85** (2026-10-17: "mobile view can skip the name, leave just avatar, and QDN transactions every transactions should be the main number, and QDN should be the smaller number below"). On a phone the account's top bar shows its avatar alone (the name stays in the heading for screen readers, and in full beside the card's avatar). QDN Transactions leads with every transaction ("79", or "1,000+" until all is read) and the QDN ones below ("4 of them on QDN."). Checks: 40 captures of the account screens, all clean; tests 2,324 passed (one timing test failed under the full run's load and passes alone).
+
 ## Follow-ups
 
 ### Readiness
@@ -1148,8 +1150,10 @@ Each works as built; each is a choice.
 
 ### Open questions for Simon (items 84–85, 2026-10-17)
 
-1. **The top bar on a phone** has the avatar, the name and five buttons (search, copy link, compare, compare with, refresh), so at 390 px the name shows as "Av…" (it was cut short before too; the whole name is beside the avatar just below). Fine, or should some of the buttons go into a menu there?
-2. **QDN Transactions** counts what the account published (QDN data). Should it count every transaction instead (its "in all" figure is under it already)?
+Both answered by item 86.
+
+1. ~~**The top bar on a phone**~~ has the avatar, the name and five buttons (search, copy link, compare, compare with, refresh), so at 390 px the name shows as "Av…" (it was cut short before too; the whole name is beside the avatar just below). Fine, or should some of the buttons go into a menu there?
+2. ~~**QDN Transactions**~~ counts what the account published (QDN data). Should it count every transaction instead (its "in all" figure is under it already)?
 
 ### Core: what an explorer needs that Core doesn't give (proposals)
 
