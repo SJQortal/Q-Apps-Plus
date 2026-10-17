@@ -25,8 +25,8 @@
  * - CREATE_ASSET_ORDER with QORT on one side: settled by the order's own
  *   state and trades (orderQort), as Core moves those without a
  *   transaction of the account's.
- * QORT sold is what its own contracts paid to buyers: their AT
- * transactions, read apart (soldQort).
+ * QORT sold is what its completed trades as the seller came to, read
+ * apart (data/explorer/qortBook.ts, getSoldQort).
  */
 import type { TxRow } from '../../data/types';
 import { parseAtomic } from './money';
@@ -197,16 +197,4 @@ export function qortMinted(balance: bigint, book: QortBook, orders: bigint): big
     orders -
     book.fees;
   return balance - moved;
-}
-
-/** QORT sold: what its own contracts paid to others (their AT transactions). */
-export function soldQort(atRows: readonly TxRow[], address: string): bigint {
-  const seen = new Set<string>();
-  let sold = 0n;
-  for (const tx of atRows) {
-    if (tx.type !== 'AT' || seen.has(tx.signature)) continue;
-    seen.add(tx.signature);
-    if (tx.recipient !== address && isQort(tx.assetId)) sold += atomic(tx.amount);
-  }
-  return sold;
 }

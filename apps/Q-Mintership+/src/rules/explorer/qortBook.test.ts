@@ -2,14 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { TxRow } from '../../data/types';
 import fixture from './__fixtures__/qortBook.json';
 import { parseAtomic } from './money';
-import {
-  orderQort,
-  qortBook,
-  qortMinted,
-  soldQort,
-  type OrderState,
-  type OrderTrade,
-} from './qortBook';
+import { orderQort, qortBook, qortMinted, type OrderState, type OrderTrade } from './qortBook';
 
 const Q = (n: string) => parseAtomic(n) ?? 0n;
 const ME = 'QaAccountAAAAAAAAAAAAAAAAAAAAAAAAA';
@@ -125,17 +118,5 @@ describe('qortBook', () => {
         { initiatingOrderId: 'x', targetOrderId: 'o2', targetAmount: '1', initiatorAmount: '400' },
       ])
     ).toBe(Q('400'));
-  });
-
-  it('counts as sold what its own contracts paid others', () => {
-    expect(
-      soldQort(
-        [
-          row({ type: 'AT', recipient: YOU, amount: '30', assetId: 0 }),
-          row({ type: 'AT', recipient: ME, amount: '5', assetId: 0 }),
-        ],
-        ME
-      )
-    ).toBe(Q('30'));
   });
 });

@@ -611,7 +611,13 @@ describe('QORT summaries', () => {
     const dl = await summaries();
     await waitFor(() => expect(value(dl, 'QORT minted')).toBe('1,234 QORT'), SLOW);
     expect(value(dl, 'QORT received / sent')).toMatch(/^[\d,.]+ \/ [\d,.]+$/);
-    expect(value(dl, 'QORT purchased / sold')).toBe('0 / 0');
+    // Sold: its completed trades as the seller, read by its public key.
+    await waitFor(() => expect(value(dl, 'QORT purchased / sold')).toBe('0 / 0'), SLOW);
+    expect(
+      fetchCallsFor('/crosschain/trades').some((url) =>
+        new URL(url, 'http://x').searchParams.has('sellerPublicKey')
+      )
+    ).toBe(true);
     // The ⓘ says how it was worked out.
     expect(
       within(dl).getByRole('button', { name: /^About QORT minted: 1,234 QORT\. Its balance now, / })
@@ -648,7 +654,7 @@ describe('QORT summaries', () => {
     const region = await standing();
     const rest = await within(region).findByRole('button', { name: 'Read the rest' }, SLOW);
     expect(region).toHaveTextContent(
-      /These add up its whole history: [\d,]+\+ transactions read so far\./
+      /To show these amounts, read the rest of its transactions: they add up its whole history, and [\d,]+\+ have been read so far\./
     );
     const dl = await summaries();
     expect(value(dl, 'QORT minted')).toBe('…');

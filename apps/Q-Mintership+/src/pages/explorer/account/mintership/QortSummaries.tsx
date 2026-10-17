@@ -8,27 +8,28 @@
  * They need the account's whole history: the list Activity and the
  * Transactions tab share (`xtx:<a>:all`). It reads on by itself up to the
  * amount Activity reads first (Settings, 1,000 by default); a longer
- * history waits for "Read the rest", which reads 1,000 at a time. Then:
- * its exact balance, its asset orders with QORT on one side, and its own
- * trade contracts' payouts (data/explorer/qortBook.ts).
+ * history waits for "Read the rest", which reads 1,000 at a time, and a
+ * notice says so. In green what came in, in red what went out. Then:
+ * its exact balance, its asset orders with QORT on one side, and its
+ * completed trades on the Trade Portal (data/explorer/qortBook.ts).
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Box, Button, Typography } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useAtomValue } from 'jotai';
 import { InfoTip } from '../../../../components/common/InfoTip';
 import { ErrorState } from '../../../../components/common/states';
 import { accountTxKey, getAccountTx } from '../../../../data/explorer/accountTx';
 import { HeavyCancelled } from '../../../../data/explorer/heavy';
-import { getBalanceAtomic, getOrdersQort, getSoldQort } from '../../../../data/explorer/qortBook';
+import { getBalanceAtomic, getOrdersQort, getTradesQort } from '../../../../data/explorer/qortBook';
 import { useQuery } from '../../../../hooks/useQuery';
 import { formatAtomic } from '../../../../rules/explorer/money';
 import { qortBook, qortMinted, type QortBook } from '../../../../rules/explorer/qortBook';
 import { activityFirstReadAtom, clampActivityRead } from '../../../../state/settings';
 import { formatCount } from '../../../../utils/format';
+import { readable } from '../../../../utils/readable';
 import { Fact } from './parts';
 
-/** Its own contracts read for "sold" at most; past that it isn't added up. */
-const SOLD_MAX_ATS = 500;
 /** Rows a "Read the rest" read asks for at a time. */
 const REST_PAGE = 1000;
 
@@ -44,7 +45,7 @@ function movedWords(book: QortBook, orders: bigint): string {
   const parts: Array<[string, bigint]> = [
     ['received', book.received],
     ['sent', book.sent],
-    ['bought through trade contracts', book.purchased],
+    ['paid by other people’s contracts', book.purchased],
     ['paid back by its own contracts', book.returned],
     ['put into its own contracts', book.deployed],
     ['names (sold less bought)', book.names],
@@ -59,6 +60,21 @@ function movedWords(book: QortBook, orders: bigint): string {
         `${what} ${value < 0n ? '−' : ''}${formatAtomic(value < 0n ? -value : value)}`
     )
     .join(', ');
+}
+
+/** "27,217 / 0": what came in, in green, and what went out, in red. */
+function InOut({ into, out }: { into: string; out: string }) {
+  return (
+    <span>
+      <Box component="span" sx={{ color: readable('success') }}>
+        {into}
+      </Box>
+      {' / '}
+      <Box component="span" sx={{ color: readable('error') }}>
+        {out}
+      </Box>
+    </span>
+  );
 }
 
 function Value({ children, info, label }: { children: ReactNode; info?: string; label: string }) {
@@ -108,15 +124,11 @@ export function QortSummaries({ address }: { address: string }) {
     book && orderIds.length ? `xordersq:${address}:${orderIds.length}` : null,
     () => getOrdersQort(address, orderIds)
   );
-  const ats = book?.ownAts ?? [];
-  const soldRead = useQuery(
-    book && ats.length && ats.length <= SOLD_MAX_ATS ? `xsold:${address}:${ats.length}` : null,
-    () => getSoldQort(address, ats)
-  );
+  const trades = useQuery(book ? `xtrades:${address}` : null, () => getTradesQort(address));
 
   const error = failed ?? (list.isError && !data ? list.error : null);
   const ordersNet = orderIds.length ? orders.data : 0n;
-  const sold = !ats.length ? 0n : ats.length > SOLD_MAX_ATS ? null : soldRead.data;
+  const traded = trades.data;
   const waiting = '…';
 
   let minted: ReactNode = waiting;
@@ -133,12 +145,10 @@ export function QortSummaries({ address }: { address: string }) {
     }
   }
   const tradesInfo = book
-    ? `Through trade contracts (the Trade Portal's): purchased is the QORT other people's contracts paid it, ${formatAtomic(book.purchased)}; sold is the QORT its own contracts paid to buyers${
-        sold === null
-          ? `, not added up: it has ${formatCount(ats.length)} contracts of its own`
-          : sold !== undefined
-            ? `, ${formatAtomic(sold)}`
-            : ''
+    ? `Its completed trades on the Trade Portal (every chain)${
+        traded
+          ? `: bought ${formatAtomic(traded.bought)} QORT, sold ${formatAtomic(traded.sold)} QORT`
+          : ''
       }.`
     : undefined;
   const flowsInfo = book
@@ -169,9 +179,15 @@ export function QortSummaries({ address }: { address: string }) {
           label="QORT purchased / sold"
           value={
             <Value label="QORT purchased / sold" info={tradesInfo}>
-              {book
-                ? `${short(book.purchased)} / ${sold === null ? '?' : sold === undefined ? waiting : short(sold)}`
-                : waiting}
+              {book ? (
+                traded ? (
+                  <InOut into={short(traded.bought)} out={short(traded.sold)} />
+                ) : (
+                  waiting
+                )
+              ) : (
+                waiting
+              )}
             </Value>
           }
         />
@@ -179,7 +195,7 @@ export function QortSummaries({ address }: { address: string }) {
           label="QORT received / sent"
           value={
             <Value label="QORT received / sent" info={flowsInfo}>
-              {book ? `${short(book.received)} / ${short(book.sent)}` : waiting}
+              {book ? <InOut into={short(book.received)} out={short(book.sent)} /> : waiting}
             </Value>
           }
         />
@@ -194,25 +210,41 @@ export function QortSummaries({ address }: { address: string }) {
             if (list.isError) void list.refetch();
           }}
         />
-      ) : balance.isError || orders.isError || soldRead.isError ? (
+      ) : balance.isError || orders.isError || trades.isError ? (
         <ErrorState
           compact
           title="Couldn't read its balance, asset orders or contracts to add these up."
-          error={balance.error ?? orders.error ?? soldRead.error}
+          error={balance.error ?? orders.error ?? trades.error}
           onRetry={() => {
             if (balance.isError) void balance.refetch();
             if (orders.isError) void orders.refetch();
-            if (soldRead.isError) void soldRead.refetch();
+            if (trades.isError) void trades.refetch();
           }}
         />
       ) : !done && data && !wantAll && held >= firstRead ? (
+        // Says plainly what the amounts wait for (Simon, 2026-10-17).
         <Box
-          sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 1, px: 0.5 }}
+          role="note"
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 1,
+            p: 1.5,
+            borderRadius: 2,
+            border: 1,
+            borderColor: 'divider',
+            borderLeft: 4,
+            borderLeftColor: 'info.main',
+            bgcolor: 'background.paper',
+          }}
         >
-          <Typography variant="body2" color="text.secondary">
-            These add up its whole history: {formatCount(held)}+ transactions read so far.
+          <InfoOutlinedIcon aria-hidden sx={{ color: readable('info') }} />
+          <Typography sx={{ flex: '1 1 260px', minWidth: 0 }}>
+            To show these amounts, read the rest of its transactions: they add up its whole history,
+            and {formatCount(held)}+ have been read so far.
           </Typography>
-          <Button size="small" onClick={() => setWantAll(true)} sx={{ minHeight: 44 }}>
+          <Button variant="contained" onClick={() => setWantAll(true)} sx={{ minHeight: 44 }}>
             Read the rest
           </Button>
         </Box>
