@@ -79,8 +79,8 @@ describe('legacyHashToPath', () => {
     expect(legacyHashToPath('#/mam/QM-AR-card-1')).toBe('/history/card/QM-AR-card-1');
     expect(legacyHashToPath('#/minter')).toBe('/nominations');
     expect(legacyHashToPath('#/admin')).toBe('/decisions');
-    expect(legacyHashToPath('#/stats')).toBe('/activity');
-    expect(legacyHashToPath('#?board=stats&section=nominator')).toBe('/activity');
+    expect(legacyHashToPath('#/stats')).toBe('/explorer/activity');
+    expect(legacyHashToPath('#?board=stats&section=nominator')).toBe('/explorer/activity');
   });
 
   it('ignores a hash that names no board', () => {
@@ -95,7 +95,7 @@ describe('legacyPathToPath', () => {
     expect(legacyPathToPath('/render/APP/Q-Mintership+/MINTERSHIP-FORUM')).toBe('/');
     expect(legacyPathToPath('/ADDREMOVEADMIN')).toBe('/decisions');
     expect(legacyPathToPath('/tools')).toBe('/decisions');
-    expect(legacyPathToPath('/STATS')).toBe('/activity');
+    expect(legacyPathToPath('/STATS')).toBe('/explorer/activity');
     expect(legacyPathToPath('/settings')).toBeNull();
     expect(legacyPathToPath('/')).toBeNull();
   });

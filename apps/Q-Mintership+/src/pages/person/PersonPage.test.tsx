@@ -299,9 +299,9 @@ describe('Person page', () => {
       )
     ).toBeInTheDocument();
     expect(within(proposals).getByText(PEOPLE.early.name as string)).toBeInTheDocument();
-    expect(within(proposals).getByRole('link', { name: 'Approvals and activity' })).toHaveAttribute(
+    expect(within(proposals).getByRole('link', { name: 'Minter Admin Activity' })).toHaveAttribute(
       'href',
-      '/activity'
+      '/explorer/activity'
     );
   });
 

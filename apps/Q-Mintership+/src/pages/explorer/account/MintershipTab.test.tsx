@@ -254,9 +254,9 @@ describe('the Mintership tab', () => {
         "From Activity's last 30 days. Participation 80%: 12 of 15 decisions answered (11 approved, 1 rejected), 3 missed."
       )
     ).toBeVisible();
-    expect(within(admin).getByRole('link', { name: 'Open Activity' })).toHaveAttribute(
+    expect(within(admin).getByRole('link', { name: 'Minter Admin Activity' })).toHaveAttribute(
       'href',
-      '/activity'
+      '/explorer/activity'
     );
 
     // Nothing is read about their answers until asked.

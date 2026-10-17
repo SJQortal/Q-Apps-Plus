@@ -43,7 +43,7 @@ export function AdminProposals({
           </Button>
         ) : null}
         <Button component={RouterLink} to={PATHS.activity} sx={{ minHeight: 44 }}>
-          Approvals and activity
+          Minter Admin Activity
         </Button>
       </Box>
     </Section>

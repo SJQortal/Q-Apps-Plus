@@ -56,13 +56,12 @@ describe('the nav items', () => {
     expect(explorer?.short).toBeUndefined();
   });
 
-  it('the rail: Home, Decisions (when shown), Nominations, History, Activity, Explorer, Settings', () => {
+  it('the rail: Home, Decisions (when shown), Nominations, History, Explorer, Settings', () => {
     expect(keys(railItems(true))).toEqual([
       'home',
       'decisions',
       'nominations',
       'history',
-      'activity',
       'explorer',
       'settings',
     ]);
@@ -70,27 +69,20 @@ describe('the nav items', () => {
       'home',
       'nominations',
       'history',
-      'activity',
       'explorer',
       'settings',
     ]);
   });
 
-  it('the phone bar: five items, Explorer last in Settings’ place', () => {
+  it('the phone bar: History in it for everyone, Explorer last, Activity in the Explorer', () => {
     expect(keys(phoneItems(true))).toEqual([
       'home',
       'decisions',
       'nominations',
-      'activity',
-      'explorer',
-    ]);
-    expect(keys(phoneItems(false))).toEqual([
-      'home',
-      'nominations',
       'history',
-      'activity',
       'explorer',
     ]);
+    expect(keys(phoneItems(false))).toEqual(['home', 'nominations', 'history', 'explorer']);
   });
 
   it('keeps Explorer lit on every Explorer page', () => {
@@ -109,7 +101,7 @@ describe('the bars on screen', () => {
       'Home',
       'Decisions',
       'Nominees',
-      'Activity',
+      'History',
       'Explorer',
     ]);
     expect(within(bar).getByRole('button', { name: 'Explorer' })).toHaveAttribute(

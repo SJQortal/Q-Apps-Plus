@@ -56,6 +56,7 @@ import { formatDate, shortAddress } from '../../utils/format';
 import { useLandscapeFrame } from '../../utils/hubFrame';
 import { EXPLORER_NEUTRAL_LINE, EXPLORER_PURPOSE } from './explorerWords';
 import { useViewState } from '../../hooks/useViewState';
+import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 
 /** How many rows a quick start shows before "Show all". */
 const QUICK_ROWS = 6;
@@ -324,6 +325,16 @@ function MinterAdmins() {
           people={signers.map((row) => ({ address: row.member, name: row.primaryName ?? null }))}
         />
       )}
+      {/* Their approvals, rejections and misses (Simon, 2026-10-17: Activity lives here now). */}
+      <Button
+        component={RouterLink}
+        to={PATHS.activity}
+        variant="outlined"
+        startIcon={<InsightsOutlinedIcon />}
+        sx={{ alignSelf: 'flex-start', minHeight: 44 }}
+      >
+        Minter Admin Activity
+      </Button>
     </QuickCard>
   );
 }

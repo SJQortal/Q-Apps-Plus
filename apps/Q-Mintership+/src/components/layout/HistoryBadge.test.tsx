@@ -3,13 +3,12 @@
  * they last had History open on this device.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { renderPage } from '../../test/render';
 import { fetchCallsFor } from '../../test/setup';
 import { ADDR, TIP, installWorld } from '../../test/world';
 import { historySeenKey, readHistorySeen, resetHistorySeen } from '../../data/historySeen';
 import { loadHistoryNews } from '../../data/historyNews';
-import ActivityPage from '../../pages/activity/ActivityPage';
 import HistoryPage from '../../pages/history/HistoryPage';
 import { AppShell } from './AppShell';
 
@@ -102,25 +101,14 @@ describe('the History tab', () => {
     await waitFor(() => expect(readHistorySeen(ADDR.admin)).toBe(TIP), T);
   });
 
-  it('on a Minter Admin’s phone, where the bar has no History, Activity’s History button counts', async () => {
+  it('on a Minter Admin’s phone the bar has History too, with its count (Activity moved to the Explorer)', async () => {
     screenWidth(390);
-    await renderPage(<ActivityPage />, {
-      persona: 'admin',
-      path: '/activity',
-      setup: seenAt(ADDR.admin, TIP - 6_000),
-    });
-    expect(
-      await screen.findByRole('link', { name: 'History, 3 new' }, { timeout: 6000 })
-    ).toBeVisible();
-  });
-
-  it('on a wider screen the rail has History, so Activity’s button doesn’t repeat the count', async () => {
-    screenWidth(1280);
-    await renderPage(<ActivityPage />, {
-      persona: 'admin',
-      path: '/activity',
-      setup: seenAt(ADDR.admin, TIP - 6_000),
-    });
-    expect(await screen.findByRole('link', { name: 'History' }, T)).toBeVisible();
+    await renderPage(<AppShell />, { persona: 'admin', setup: seenAt(ADDR.admin, TIP - 6_000) });
+    const bar = await screen.findByRole('navigation', {}, T);
+    await waitFor(
+      () => expect(within(bar).getByRole('button', { name: /^History, 3 new$/ })).toBeVisible(),
+      T
+    );
+    expect(within(bar).queryByRole('button', { name: /^Activity/ })).toBeNull();
   });
 });

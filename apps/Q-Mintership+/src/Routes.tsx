@@ -11,6 +11,7 @@ import { AppShell } from './components/layout/AppShell';
 import { ErrorState } from './components/common/states';
 import { routerBaseForPage } from './routes/hubLocation';
 import { explorerRoutes } from './routes/explorerRoutes';
+import { PATHS } from './routes/paths';
 
 // Home is the first screen almost everyone sees; the rest load on demand.
 import HomePage from './pages/home/HomePage';
@@ -63,14 +64,15 @@ const router = createBrowserRouter(
         { path: 'history', element: <HistoryPage /> },
         { path: 'history/card/:card', element: <LegacyCardPage /> },
         { path: 'history/card/:card/:section', element: <LegacyCardPage /> },
-        { path: 'activity', element: <ActivityPage /> },
+        { path: 'explorer/activity', element: <ActivityPage /> },
+        { path: 'activity', element: <Navigate to={PATHS.activity} replace /> },
         { path: 'settings', element: <SettingsPage /> },
         // The Explorer: any account or transaction, read-only.
         ...explorerRoutes,
         // Old routes of the scaffold and the original app's boards.
         { path: 'minters/*', element: <Navigate to="/nominations" replace /> },
         { path: 'forum/*', element: <Navigate to="/" replace /> },
-        { path: 'stats/*', element: <Navigate to="/activity" replace /> },
+        { path: 'stats/*', element: <Navigate to={PATHS.activity} replace /> },
         { path: '*', element: <Navigate to="/" replace /> },
       ],
     },

@@ -76,7 +76,9 @@ describe('Activity', () => {
     await renderPage(<ActivityPage />, { persona: 'learner', path: '/activity' });
     expect(await admins()).toHaveLength(19);
     expect(screen.queryByText('You')).toBeNull();
-    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute('href', '/history');
+    // It lives in the Explorer now: History is in the navigation instead of its header.
+    expect(screen.queryByRole('link', { name: 'History' })).toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: 'Minter Admin activity' })).toBeVisible();
   });
 
   it('works signed out too', async () => {

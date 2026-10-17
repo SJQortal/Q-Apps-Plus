@@ -59,7 +59,7 @@ function ActivityFigures({ address }: { address: string }) {
       )}
       <Box>
         <Button component={RouterLink} to={PATHS.activity} sx={{ minHeight: 44, ml: -1 }}>
-          Open Activity
+          Minter Admin Activity
         </Button>
       </Box>
     </Box>

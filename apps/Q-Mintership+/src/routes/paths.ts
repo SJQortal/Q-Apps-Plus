@@ -7,7 +7,8 @@ export const PATHS = {
   nominate: '/nominate',
   decisions: '/decisions',
   history: '/history',
-  activity: '/activity',
+  // Minter Admin activity lives in the Explorer (Simon, 2026-10-17); `/activity` redirects here.
+  activity: '/explorer/activity',
   settings: '/settings',
   people: '/people',
   legacyCard: '/history/card',
