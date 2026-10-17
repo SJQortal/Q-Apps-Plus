@@ -70,6 +70,16 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('the Explorer’s landing page', () => {
+  it('puts the whole chain right under the search field', async () => {
+    await show();
+    const field = screen.getByRole('combobox', { name: 'Find an account or transaction' });
+    const chain = screen.getByRole('region', { name: 'The whole chain' });
+    const quick = screen.getByRole('region', { name: 'Quick starts' });
+    expect(field.compareDocumentPosition(chain) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(chain.compareDocumentPosition(quick) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(chain).getByRole('link', { name: /Transactions on Qortal/ })).toBeInTheDocument();
+  });
+
   it('has the title, the field and no Back, and passes axe', async () => {
     const { container, posts } = await show();
     expect(screen.getByRole('heading', { level: 1, name: 'Explorer' })).toBeInTheDocument();

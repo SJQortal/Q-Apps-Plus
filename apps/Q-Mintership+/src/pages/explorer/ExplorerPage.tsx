@@ -523,12 +523,13 @@ export default function ExplorerPage() {
       <PageBody>
         {/* No focus on phones or touch screens: the keyboard would cover the page. */}
         <ExplorerSearch autoFocus={!phone && !landscape && !touch} />
-        <RecentSection />
-        <CompareSection />
-        <QuickStarts />
+        {/* Right under the search (Simon, 2026-10-17). */}
         <Section title="The whole chain" id="explorer-chain">
           <TransactionsCard />
         </Section>
+        <RecentSection />
+        <CompareSection />
+        <QuickStarts />
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
           <Button
             variant="outlined"

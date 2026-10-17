@@ -120,7 +120,7 @@ A tab to look up any Qortal account, name or transaction and follow how accounts
 
 | Path | Page |
 |---|---|
-| `/explorer` | the search field, recent explorations, Compare picks, quick starts (your account, nominated now, Minter Admins, recently joined MINTER), Transactions on Qortal, "How to read the Explorer" |
+| `/explorer` | the search field, the whole chain (Transactions on Qortal) right under it, recent explorations, Compare picks, quick starts (your account, nominated now, Minter Admins, recently joined MINTER), "How to read the Explorer" |
 | `/explorer/account/<address>` (`/connections`, `/transactions`, `/mintership`, `/names`) | one account; a name in the path is looked up and replaced by its owner's address (names change hands, so links carry addresses) |
 | `/explorer/sponsees/<address>`, `/explorer/funded/<address>` | the accounts a sponsor sponsored; the accounts whose first QORT payment came from this one |
 | `/explorer/compare/<a>/<b>[/<c>/<d>]` | 2 to 4 accounts |
