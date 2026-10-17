@@ -983,6 +983,15 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
     Tests 2,365 passed; the profile captures are clean.
 
+100. **QORT summaries: the notice, colours, and sold for big sellers** (Simon, 2026-10-17: "please display the notification that in order to fetch the ammounts you need to Read the rest of the transactions. also for the ammounts of QORT make the purchased received green and sold sent red", and "why on this account the QORT sold is "?"" for yopilax).
+    - **The notice.** When the history is longer than the first read, a framed notice says "To show these amounts, read the rest of its transactions: they add up its whole history, and 1,000+ have been read so far." with a Read the rest button.
+    - **Colours.** Purchased and received are green, sold and sent red (readable tones; axe clean in both themes).
+    - **The "?".** It came from a cap: "sold" was the sum of the account's own contracts' payouts, one read each, up to 500, and yopilax has 1,154 contracts. Purchased / sold now come from Core's completed trades as the buyer and as the seller (`/crosschain/trades?buyerPublicKey=` / `sellerPublicKey=`, every chain). For MeadMan, sold matches the per-contract sum exactly (7,326). For yopilax it is 1,995 / 139,192, in half a second.
+    - **A deliberate exception to the "always a limit" rule.** Each of those two reads has no limit. Core pages this list badly: its limit is at most 100 and applies to each contract version, and its pages repeat and skip rows (for yopilax, pages of 100 gave 431 trades, 100 of them twice, out of 678). Scoped to one account it is about 250 bytes a trade.
+    - **Minted is unchanged.** QORT minted still counts every contract payout as income that isn't minting. A payout from another kind of contract (25 QORT for yopilax) is in "paid by other people's contracts" there, not in purchased.
+
+    Tests 2,364 passed; the profile captures are clean.
+
 ## Follow-ups
 
 ### Readiness
