@@ -960,6 +960,29 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
     Checks: the Overview and Minter Profile captures in two themes, all clean; tests 2,352 passed.
 
+97. **Nothing covered on the circle; Q-Assets on it** (Simon, 2026-10-17: "just make sure the names and QORT ammounts are not covered / and also make sure to display Q-Assets ticker and ammounts").
+    - **Spacing.** The avatars of a side are now evenly spaced in height, still on the oval and mirrored. Near the top they were bunched up, so a name ran under the next avatar ("Serious Pepper" under DevFund in Simon's screenshot).
+    - **Height.** The drawing grows tall enough to keep 38 px between a side's avatars (34 on phones).
+    - **Q-Assets.** Q-Assets show with their ticker and amount beside QORT, in the labels and the avatars' names: "greenflame089 (1 10Coin)", "(457 QORT, 983 BHC Coin)".
+    - **Both-ways labels.** Under an account paid both ways, QORT and each asset get a line of their own ("457 QORT in, 9.5 out" / "983 BHC Coin in, 10,000 out"). Each name's room is measured in pixels against the avatars and names beside it.
+
+    Checked on Simon's own circle (real data) and in the circle captures; tests 2,352 passed.
+
+98. **Exchanges** (Simon, 2026-10-17: "add the notification if users were sending QORT to exchanges": TradeOgre `QcZPChiGmwLu3Lrp2mfLSjZ3yHKmtrogRe`, nonkyc.io `QVbi8fvVDeF8jRxBWZvbGJPEtwnnNJFWQh`, in `rules/explorer/exchanges.ts`). Connections opens with a notice when an account paid one, e.g. "Sent 30,297.81457207 QORT to TradeOgre, an exchange, in 10 payments (Jul 2025)." QORT got back from one is a second line. "Show them" lists the payments.
+    - **Reads.** `/transactions/payments/between` with both the sender and the recipient: four reads of a few ms each, exact however busy the account is (up to 1,000 a way). On a node without that read, the notice uses the payments the lists read.
+    - **Names.** On an exchange's own account the notice says whose it is. Everywhere else those accounts show as "TradeOgre" and "nonkyc.io" instead of an address (`useDisplayName`).
+
+    Checked with a real account that paid TradeOgre; tests 2,356 passed.
+
+99. **QORT minted, purchased / sold, received / sent** (Simon, 2026-10-17: "add: QORT Minted, and QORT Purchased/QORT Sold (in one), QORT Received/ Sent (in one) summaries. Make sure the QORT Minted is calculated correctly"; then "all fees for transactions go back to the minters, also there are more rewards for Minter Admins and Dev Admins and also there is QORA part"). A row under the Minter Profile's facts, each value with an ⓘ that says how it was worked out.
+    - **How QORT minted is worked out.** Core keeps no record of what an account earned by minting, so it is bookkeeping (`rules/explorer/qortBook.ts`): the balance now, less everything the account's transactions moved. That covers payments, transfers, multi-payments and messages in QORT, trade contracts (AT payouts and DEPLOY_AT), name sales, genesis, fees, and asset orders with QORT on one side (settled from the order's state and trades, as Core moves those without a transaction of the account's). What is left reached it without a transaction of its own: minting rewards. Those include everything Simon listed, as Core's Block.distributeBlockReward shows: the transaction fees paid to minters, the extra share for online Minter Admins and Dev Admins, and the legacy QORA holders' share.
+    - **Proof.** On Simon's node, 23 accounts that never minted came to exactly 0.00000000. Four are a test fixture of real rows (`__fixtures__/qortBook.json`), covering payments, trades, name sales, asset orders and fees. The node also showed a Core quirk: `/assets/orders/{address}?includeClosed=true` means only closed orders, so each order is read by its id.
+    - **Real values.** Simon: 19,306.33 QORT minted. MeadMan: 7,922.41, purchased 499, sold 7,326 (his 101 contracts took 15,427.47 and gave back 8,101.47). Magic Ink: 21,868.60.
+    - **Purchased and sold.** Purchased is QORT paid to it by other people's trade contracts; sold is QORT its own contracts paid to buyers (one small read per contract, up to 500). Received / sent is payments, transfers and multi-payments.
+    - **Reads.** The sums need the whole history: the list Activity and the Transactions tab share. It reads on by itself up to Activity's first read (1,000 by default). A longer history waits for "Read the rest", which reads 1,000 at a time (an option added to `getAccountTx`): Simon's 15,076 transactions take 8 s. Then the exact balance, the asset orders and the account's own contracts.
+
+    Tests 2,365 passed; the profile captures are clean.
+
 ## Follow-ups
 
 ### Readiness
