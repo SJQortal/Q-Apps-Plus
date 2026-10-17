@@ -5,6 +5,7 @@ import {
   blocksDetail,
   firstSeenPart,
   groupsWords,
+  qdnTxWords,
   lastSentPart,
   levelNextWords,
   minterPart,
@@ -79,6 +80,18 @@ describe('facts', () => {
     expect(groupsWords(0)).toBe('In no groups');
     expect(groupsWords(1)).toBe('In 1 group');
     expect(groupsWords(45)).toBe('In 45 groups');
+  });
+
+  it('counts QDN transactions exactly once the whole list is read, and a floor until then', () => {
+    expect(qdnTxWords(172, 205, true)).toEqual({
+      value: '172',
+      detail: 'Of 205 transactions in all.',
+    });
+    expect(qdnTxWords(0, 1, true)).toEqual({ value: '0', detail: 'Of 1 transaction in all.' });
+    expect(qdnTxWords(860, 1000, false)).toEqual({
+      value: '860+',
+      detail: 'Counted in its newest 1,000 transactions; Activity below reads further back.',
+    });
   });
 });
 

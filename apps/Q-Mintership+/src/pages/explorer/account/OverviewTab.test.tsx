@@ -14,6 +14,8 @@ import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../../test/setup'
 import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../../test/world';
 import { COLLECTOR, SPONSEES, SPONSOR } from '../../../../e2e/world.mjs';
 import { explorerAccountPath } from '../../../routes/paths';
+import { peekQuery } from '../../../data/query';
+import { accountTxKey, type AccountTxList } from '../../../data/explorer/accountTx';
 import { resetExplorerState } from '../../../state/explorer';
 import { formatDate } from '../../../utils/format';
 import AccountPage from '../AccountPage';
@@ -98,6 +100,11 @@ describe('Overview: a Minter Admin minting now', () => {
     await waitFor(() => expect(fact('First seen').value).not.toBe('Loading'), T);
     expect(fact('First seen').detail).toMatch(/^At block [\d,]+$/);
     await waitFor(() => expect(fact('Groups').value).toBe('In 3 groups'), T);
+    // Its QDN transactions, counted in its own list (the one Latest transactions reads).
+    await waitFor(() => expect(fact('QDN Transactions').value).not.toBe('Loading'), T);
+    const list = peekQuery<AccountTxList>(accountTxKey(ADDR.admin, []));
+    const qdn = (list?.rows ?? []).filter((tx) => tx.type === 'ARBITRARY').length;
+    expect(fact('QDN Transactions').value).toBe(`${qdn}${list?.done ? '' : '+'}`);
     // At a glance counts them; the Groups section lists them.
     expect(within(facts).queryByRole('list', { name: 'Its groups' })).toBeNull();
     const groupsSection = await region('Groups (3)');

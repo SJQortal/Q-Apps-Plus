@@ -2,9 +2,10 @@
  * The Overview's facts, each on a panel of its own (fieldBlock.ts), two to
  * a row (three on wide screens): its level and
  * how far it is to the next, blocks minted (with Core's adjustment and
- * penalty when it recorded any), its balance, when it was first seen, and
- * how many groups it is in (GroupsSection lists them). Each fact
- * loads, fails and retries on its own; none polls.
+ * penalty when it recorded any), its balance, when it was first seen, how
+ * many groups it is in (GroupsSection lists them), and how many QDN
+ * transactions it made. Each fact loads, fails and retries on its own; none
+ * polls.
  */
 import type { ReactNode } from 'react';
 import { Box, Skeleton, Typography } from '@mui/material';
@@ -14,12 +15,20 @@ import { Card, Section } from '../../../../components/common/Section';
 import { ErrorState } from '../../../../components/common/states';
 import { getBalance } from '../../../../data/accounts';
 import { getGroupsOf, type FirstSeen } from '../../../../data/explorer/account';
+import { accountTxKey, getAccountTx } from '../../../../data/explorer/accountTx';
+import { familyOf } from '../../../../rules/explorer/txFamilies';
 import type { AccountInfo } from '../../../../data/types';
 import { useQuery, type UseQueryResult } from '../../../../hooks/useQuery';
 import { effectiveBlocksMinted, levelProgress } from '../../../../rules/levels';
 import { formatBlock, formatCount, formatDate } from '../../../../utils/format';
 import { levelFraction } from '../../../home/homeData';
-import { balanceWords, blocksDetail, groupsWords, levelNextWords } from './overviewWords';
+import {
+  balanceWords,
+  blocksDetail,
+  groupsWords,
+  levelNextWords,
+  qdnTxWords,
+} from './overviewWords';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 
 const VALUE_SX = {
@@ -195,6 +204,29 @@ function GroupsFact({ address }: { address: string }) {
   return <Fact label="Groups" value={groupsWords(groups.data.length)} />;
 }
 
+/**
+ * How many QDN transactions it made (Simon, 2026-10-17: "QDN Transactions
+ * which will show the total nr of Tx the user made"): the QDN data rows
+ * (what it published on QDN, as Activity's QDN data counts them) in its
+ * own transaction list, the list Latest transactions and Activity read
+ * anyway (`xtx:<address>:all`; its first page is read here when nothing
+ * has yet). Exact once that list reaches its first transaction; until then
+ * a floor, "860+", counted in what was read. Nothing more is read for it
+ * (Simon: "keep it light … show like over 1000 tx"): Activity's own Read
+ * further back makes it exact.
+ */
+function QdnFact({ address }: { address: string }) {
+  const list = useQuery(accountTxKey(address, []), (force) => getAccountTx(address, [], { force }));
+  const label = 'QDN Transactions';
+  if (list.isError && !list.data)
+    return <FactError label={label} what="its transactions" query={list} />;
+  if (!list.data) return <Fact label={label} value={<Loading />} />;
+  const { rows, done } = list.data;
+  const qdn = rows.filter((tx) => familyOf(tx.type) === 'qdn').length;
+  const { value, detail } = qdnTxWords(qdn, rows.length, done);
+  return <Fact label={label} value={value} detail={detail} />;
+}
+
 export function FactsSection({
   address,
   account,
@@ -224,6 +256,7 @@ export function FactsSection({
           <BalanceFact address={address} />
           <FirstSeenFact query={firstSeen} />
           <GroupsFact address={address} />
+          <QdnFact address={address} />
         </Box>
       </Card>
     </Section>

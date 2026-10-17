@@ -124,6 +124,27 @@ export function groupsWords(count: number): string {
 }
 
 /** "5,200 members". */
+/**
+ * The QDN Transactions fact: how many QDN data transactions are among the
+ * `read` transactions of its list, exact once `done` (the whole history is
+ * in), else a floor ("860+"), with what it was counted in.
+ */
+export function qdnTxWords(
+  qdn: number,
+  read: number,
+  done: boolean
+): { value: string; detail: string } {
+  if (done)
+    return {
+      value: formatCount(qdn),
+      detail: `Of ${formatCount(read)} ${read === 1 ? 'transaction' : 'transactions'} in all.`,
+    };
+  return {
+    value: `${formatCount(qdn)}+`,
+    detail: `Counted in its newest ${formatCount(read)} transactions; Activity below reads further back.`,
+  };
+}
+
 export function membersWords(count: number): string {
   return `${formatCount(count)} ${count === 1 ? 'member' : 'members'}`;
 }
