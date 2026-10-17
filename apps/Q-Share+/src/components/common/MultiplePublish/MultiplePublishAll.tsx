@@ -124,7 +124,9 @@ function clock(seconds: number): string {
 }
 
 function resourceLabel(resource: PublishResource): string {
-  return resource.service === "DOCUMENT" ? "Share details" : resource.filename;
+  if (resource.service === "DOCUMENT") return "Share details";
+  if (resource.service === "THUMBNAIL") return "Thumbnail";
+  return resource.filename;
 }
 
 function ResourceIcon({ resource }: { resource: PublishResource }) {
