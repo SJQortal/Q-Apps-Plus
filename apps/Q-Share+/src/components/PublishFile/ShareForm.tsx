@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { memo, useEffect, useRef, useState, type RefObject } from "react";
 import {
   Alert,
   Box,
@@ -26,8 +26,44 @@ import { TITLE_MAX_LENGTH } from "../../utils/publishPayload";
 import { batchCount, formatQort, publishUnitFee } from "../../utils/publishBatches";
 import { CategoryList, type CategoryListRef } from "../common/CategoryList/CategoryList";
 import { TextEditor } from "../common/TextEditor/TextEditor";
-import { MAX_FILES, MAX_FILE_SIZE_LABEL, totalDraftSize } from "./shareDraft";
+import { MAX_FILES, MAX_FILE_SIZE_LABEL, totalDraftSize, type DraftFile } from "./shareDraft";
 import type { ShareDraft } from "./useShareDraft";
+
+/**
+ * One file of the draft. Memoized: with 300 files, typing in the title or
+ * description re-renders the form, not every row.
+ */
+const DraftFileRow = memo(function DraftFileRow({ item, onRemove }: { item: DraftFile; onRemove: (key: string) => void }) {
+  const kind = fileKind(item.mimetype, item.name);
+  return (
+    <ListItem
+      divider
+      sx={{ minHeight: 56, pr: 8 }}
+      secondaryAction={
+        <IconButton
+          edge="end"
+          aria-label={`Remove ${item.name}`}
+          onClick={() => onRemove(item.key)}
+          sx={{ minWidth: 44, minHeight: 44 }}
+        >
+          <CloseOutlinedIcon />
+        </IconButton>
+      }
+    >
+      <ListItemIcon sx={{ minWidth: 40, color: "text.secondary" }}>
+        {fileKindIconElement(kind, { titleAccess: fileKindLabel(kind) })}
+      </ListItemIcon>
+      <ListItemText
+        primary={item.name}
+        secondary={item.existing ? `${formatBytes(item.size)} · already on QDN` : formatBytes(item.size)}
+        slotProps={{
+          primary: { noWrap: true, title: item.name, sx: { fontSize: 15 } },
+          secondary: { sx: { fontSize: 13 } },
+        }}
+      />
+    </ListItem>
+  );
+});
 
 interface ShareFormProps {
   draft: ShareDraft;
@@ -141,38 +177,9 @@ export function ShareForm({ draft, categoryListRef, initialCategories }: ShareFo
       {fileCount > 0 && (
         <Box sx={{ border: 1, borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
           <List disablePadding aria-label="Files to share">
-            {draft.files.map((item) => {
-              const kind = fileKind(item.mimetype, item.name);
-              return (
-                <ListItem
-                  key={item.key}
-                  divider
-                  sx={{ minHeight: 56, pr: 8 }}
-                  secondaryAction={
-                    <IconButton
-                      edge="end"
-                      aria-label={`Remove ${item.name}`}
-                      onClick={() => draft.removeFile(item.key)}
-                      sx={{ minWidth: 44, minHeight: 44 }}
-                    >
-                      <CloseOutlinedIcon />
-                    </IconButton>
-                  }
-                >
-                  <ListItemIcon sx={{ minWidth: 40, color: "text.secondary" }}>
-                    {fileKindIconElement(kind, { titleAccess: fileKindLabel(kind) })}
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={item.name}
-                    secondary={item.existing ? `${formatBytes(item.size)} · already on QDN` : formatBytes(item.size)}
-                    slotProps={{
-                      primary: { noWrap: true, title: item.name, sx: { fontSize: 15 } },
-                      secondary: { sx: { fontSize: 13 } },
-                    }}
-                  />
-                </ListItem>
-              );
-            })}
+            {draft.files.map((item) => (
+              <DraftFileRow key={item.key} item={item} onRemove={draft.removeFile} />
+            ))}
           </List>
           <Box sx={{ px: 2, py: 1, color: "text.secondary", display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
             <Box sx={{ flex: 1, minWidth: 0 }}>

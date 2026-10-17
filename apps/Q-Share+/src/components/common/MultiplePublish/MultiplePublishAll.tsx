@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import {
   Alert,
@@ -106,6 +106,17 @@ const STATE_TEXT: Record<ResourceState, string> = {
 };
 const STILL_UPLOADING = "Hub is still uploading";
 
+/** The time since it mounted, m:ss, ticking once a second without re-rendering its parent. */
+function Elapsed() {
+  const [started] = useState(() => Date.now());
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [started]);
+  return <>{clock(seconds)}</>;
+}
+
 function clock(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -202,6 +213,55 @@ function StateIcon({ state, busy }: { state: ResourceState; busy?: boolean }) {
   if (state === "queued") return <ScheduleOutlinedIcon sx={{ color: "text.secondary" }} titleAccess={title} />;
   return <CircularProgress size={20} aria-label={title} />;
 }
+
+/**
+ * One row of the dialog. Memoized: with 300 files, a status message for one
+ * row or a change of phase re-renders only what changed.
+ */
+const ResourceRow = memo(function ResourceRow({
+  resource,
+  state,
+  busy,
+  working,
+}: {
+  resource: PublishResource;
+  state: ResourceState;
+  busy: boolean;
+  working: PublishProgress | undefined;
+}) {
+  const label = resourceLabel(resource);
+  const percent = progressPercent(working);
+  const line = busy
+    ? [STILL_UPLOADING, progressText(working)].filter(Boolean).join(" · ")
+    : (progressText(working) ?? STATE_TEXT[state]);
+  return (
+    <ListItem divider sx={{ minHeight: 48, px: 0 }}>
+      <ListItemIcon sx={{ minWidth: 36, color: "text.secondary" }}>
+        <ResourceIcon resource={resource} />
+      </ListItemIcon>
+      <ListItemText
+        primary={label}
+        secondary={
+          <>
+            {line}
+            {percent !== null && (
+              <LinearProgress
+                variant="determinate"
+                value={percent}
+                aria-label={`${label} upload`}
+                sx={{ mt: 0.75, height: 4, borderRadius: 1 }}
+              />
+            )}
+          </>
+        }
+        slotProps={{ primary: { noWrap: true, title: label } }}
+      />
+      <Box sx={{ ml: 1, display: "flex", alignItems: "center" }}>
+        <StateIcon state={state} busy={busy} />
+      </Box>
+    </ListItem>
+  );
+});
 
 function without<T>(record: Record<string, T>, ids: string[]): Record<string, T> {
   if (!ids.some((id) => id in record)) return record;
@@ -355,15 +415,20 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
   const [approvalNote, setApprovalNote] = useState<string | null>(null);
   const [unitFee, setUnitFee] = useState<number | null>(null);
   // Status messages stop between resources (and a small file sends only
-  // one), so also show that time is passing.
-  const [elapsed, setElapsed] = useState(0);
+  // one), so also show that time is passing: the clock (<Elapsed>) ticks on
+  // its own, so the rows don't re-render every second. Here only "a minute
+  // has passed" counts, for Stop waiting.
+  const [since, setSince] = useState(() => Date.now());
+  const [minutePassed, setMinutePassed] = useState(false);
   const ticking = phase === "publishing" || phase === "room";
   useEffect(() => {
     if (!ticking) return;
     const started = Date.now();
-    const timer = window.setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    const timer = window.setInterval(() => {
+      if (Date.now() - started >= STOP_WAITING_AFTER_S * 1000) setMinutePassed(true);
+    }, 1000);
     return () => window.clearInterval(timer);
-  }, [ticking, phase, batch.index]);
+  }, [ticking, phase, batch.index, since]);
 
   useEffect(() => {
     alive.current = true;
@@ -502,7 +567,8 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
       setAwaiting((prev) => ({ ...prev, ...Object.fromEntries(ids.map((id) => [id, current])) }));
       setPhase("publishing");
       setErrorText(null);
-      setElapsed(0);
+      setSince(Date.now());
+      setMinutePassed(false);
       const answered = () => {
         if (alive.current) setAwaiting((prev) => answeredBy(prev, ids, current));
       };
@@ -681,7 +747,7 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
   const detailsDone = resources.some((r) => r.service === "DOCUMENT" && stateOf(r.identifier) === "done");
   const filesLeft = resources.filter((r) => r.service === "FILE" && stateOf(r.identifier) !== "done").length;
   const canRetryFiles = retryable.some((r) => r.service === "FILE");
-  const canStopWaiting = phase === "publishing" && elapsed >= STOP_WAITING_AFTER_S;
+  const canStopWaiting = phase === "publishing" && minutePassed;
 
   const close = () => {
     sequence.current += 1;
@@ -850,7 +916,7 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} aria-live="off">
               {unconfirmed !== null ? `${unconfirmed} still unconfirmed · ` : ""}
-              {clock(elapsed)} so far. {doneCount} of {total} published.
+              <Elapsed key={`room-${batch.index}`} /> so far. {doneCount} of {total} published.
             </Typography>
           </Box>
         ) : phase === "publishing" ? (
@@ -869,7 +935,7 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
               </Typography>
             )}
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} aria-live="off">
-              {clock(elapsed)} so far. Large files take a while to reach the node; nothing is lost if you wait.
+              <Elapsed key={since} /> so far. Large files take a while to reach the node; nothing is lost if you wait.
             </Typography>
             {canStopWaiting && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -935,42 +1001,11 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
         <List dense disablePadding aria-label="Resources">
           {resources.map((resource) => {
             const state = stateOf(resource.identifier);
-            const label = resourceLabel(resource);
             const busy = isBusy(resource.identifier);
             // Hub's progress matters while the row waits on Hub, or when Hub
             // is still at work on a row the last check did not find.
             const working = state === "waiting" || busy ? progress[resource.identifier] : undefined;
-            const percent = progressPercent(working);
-            const line = busy
-              ? [STILL_UPLOADING, progressText(working)].filter(Boolean).join(" · ")
-              : (progressText(working) ?? STATE_TEXT[state]);
-            return (
-              <ListItem key={resource.identifier} divider sx={{ minHeight: 48, px: 0 }}>
-                <ListItemIcon sx={{ minWidth: 36, color: "text.secondary" }}>
-                  <ResourceIcon resource={resource} />
-                </ListItemIcon>
-                <ListItemText
-                  primary={label}
-                  secondary={
-                    <>
-                      {line}
-                      {percent !== null && (
-                        <LinearProgress
-                          variant="determinate"
-                          value={percent}
-                          aria-label={`${label} upload`}
-                          sx={{ mt: 0.75, height: 4, borderRadius: 1 }}
-                        />
-                      )}
-                    </>
-                  }
-                  slotProps={{ primary: { noWrap: true, title: label } }}
-                />
-                <Box sx={{ ml: 1, display: "flex", alignItems: "center" }}>
-                  <StateIcon state={state} busy={busy} />
-                </Box>
-              </ListItem>
-            );
+            return <ResourceRow key={resource.identifier} resource={resource} state={state} busy={busy} working={working} />;
           })}
         </List>
       </Box>
