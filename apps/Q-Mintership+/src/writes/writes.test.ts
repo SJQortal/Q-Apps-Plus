@@ -379,6 +379,8 @@ describe('guards re-read the chain before a write', () => {
     expect(await guardNominate(nora, ADDR.nominatedWaiting)).toMatch(/add your support/);
     expect(await guardNominate(nora, ADDR.nominator)).toMatch(/yourself/);
     expect(await guardNominate(nora, ADDR.newcomerName)).toBeNull();
+    // An account without a registered name can't be nominated.
+    expect(await guardNominate(nora, ADDR.newcomer)).toMatch(/^No registered name/);
     expect(await guardSupport(nora, ADDR.nominatedWaiting)).toMatch(/already/);
     expect(await guardSupport(signerFor('adminL4'), ADDR.newcomerName)).toMatch(
       /no open nomination/

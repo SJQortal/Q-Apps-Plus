@@ -20,7 +20,7 @@ import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutli
 import { PersonChip } from '../../components/common/Person';
 import { Section } from '../../components/common/Section';
 import { EmptyState, ErrorState, ListSkeleton } from '../../components/common/states';
-import { effectiveBlocksMinted, isAddress } from '../../data/accounts';
+import { effectiveBlocksMinted, hasRegisteredName, isAddress } from '../../data/accounts';
 import type { Nomination } from '../../data/nominations';
 import { getQueryState, peekQuery } from '../../data/query';
 import {
@@ -422,6 +422,14 @@ function ReadyRow({
   const declinePending = usePendingWrite(onDecline ? writeKeys.propose('kick', address) : null);
   // Never undefined: PersonChip would look the name up itself, outside the six-at-a-time reads.
   const shownName = name.data ?? null;
+  // Only an account with a registered name can be nominated: without a primary name, one
+  // light read says whether it has any (only for such rows, once they are near).
+  const named = useQuery(
+    canNominate && nomination === null && near && name.data === null ? `hasname:${address}` : null,
+    (force) => hasRegisteredName(address, { force })
+  );
+  const hasName =
+    typeof name.data === 'string' ? true : name.data === null ? named.data : undefined;
   const label = displayName(shownName, address);
 
   const level = account.data ? (
@@ -475,7 +483,9 @@ function ReadyRow({
       live: true,
       mine: true,
     };
-  } else if (nomination === null && canNominate) {
+  } else if (nomination === null && canNominate && hasName === false) {
+    done = { label: 'No registered name', live: false, mine: false };
+  } else if (nomination === null && canNominate && hasName) {
     action = (
       <Button
         variant="outlined"

@@ -120,10 +120,10 @@ describe('Nominate page: picking the candidate', () => {
     await who();
     const input = screen.getByRole('combobox', { name: 'Name or Qortal address' });
     await user.click(input);
-    await user.paste(ADDR.newcomer);
+    await user.paste(ADDR.newcomerName);
     const region = await who();
     // The field is gone: focus is on the card that replaced it, never on the page.
-    const card = within(region).getByText(ADDR.newcomer).closest('[tabindex="-1"]');
+    const card = within(region).getByText(ADDR.newcomerName).closest('[tabindex="-1"]');
     expect(card).toHaveFocus();
     // The check's answer lands in a live region that was there while it ran.
     const live = within(card as HTMLElement).getByRole('status');

@@ -28,7 +28,7 @@ import { PageHeader } from '../../components/layout/PageHeader';
 import { NominationCard } from '../../components/nomination/NominationCard';
 import { NomineeAction } from '../../components/nomination/NomineeAction';
 import { nomineeStep } from '../../components/nomination/nomineeStep';
-import { getNameOwner, isAddress } from '../../data/accounts';
+import { getNameOwner, hasRegisteredName, isAddress } from '../../data/accounts';
 import type { Nomination } from '../../data/nominations';
 import {
   useAddressHistory,
@@ -126,6 +126,11 @@ function NominationView({ address }: { address: string }) {
   const viewer = useMyStatus();
   const who = useDisplayName(address);
   const navigate = useNavigate();
+  // A nominee needs a registered name: Propose nomination only for an account that has one.
+  const named = useQuery(viewer.status?.canNominate ? `hasname:${address}` : null, (force) =>
+    hasRegisteredName(address, { force })
+  );
+  const nominable = Boolean(viewer.status?.canNominate && named.data);
 
   const list = nominations.data ?? [];
   const current = list.find((n) => isOpenState(n.state)) ?? list[0] ?? null;
@@ -169,7 +174,7 @@ function NominationView({ address }: { address: string }) {
         <EmptyState
           title="No nomination for this person"
           description="Nobody has nominated them yet, and no Minter Admin has invited them."
-          actionLabel={viewer.status?.canNominate ? PROPOSE_NOMINATION : undefined}
+          actionLabel={nominable ? PROPOSE_NOMINATION : undefined}
           onAction={() => navigate(nominatePath(address))}
         />
       ) : null}
@@ -192,7 +197,9 @@ function NominationView({ address }: { address: string }) {
             copyLink={false}
             comments="open"
             forNominee={viewer.status?.address === current.nominee}
-            actions={<CurrentActions nomination={current} viewer={viewer.status} />}
+            actions={
+              <CurrentActions nomination={current} viewer={viewer.status} nominable={nominable} />
+            }
           />
         </Section>
       ) : null}
@@ -251,9 +258,12 @@ function NominationView({ address }: { address: string }) {
 function CurrentActions({
   nomination: n,
   viewer,
+  nominable,
 }: {
   nomination: Nomination;
   viewer: MyStatus | undefined;
+  /** The viewer can nominate, and the nominee has a registered name. */
+  nominable: boolean;
 }) {
   const session = useSession();
   const self = Boolean(viewer && viewer.address === n.nominee);
@@ -312,7 +322,7 @@ function CurrentActions({
         </Button>
       ) : null}
       {/* A round that ran out without a decision can simply be made again. */}
-      {viewer?.canNominate && canNominateAgain(n) ? (
+      {nominable && canNominateAgain(n) ? (
         <Button
           component={RouterLink}
           to={nominatePath(n.nominee)}

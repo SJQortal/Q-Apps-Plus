@@ -52,9 +52,11 @@ export interface NomineeFacts {
   pendingInvite: boolean;
   /** An approved invite is stored and unused: they only need to join. */
   storedInvite: boolean;
+  /** They have registered a name (a nominee needs one); unknown counts as yes. */
+  hasName?: boolean;
 }
 
-export type NomineeBlock = 'self' | 'member' | 'banned' | 'open' | 'pending' | 'stored';
+export type NomineeBlock = 'self' | 'member' | 'banned' | 'open' | 'pending' | 'stored' | 'noName';
 
 /** Why this person can't be nominated now, or null. `open` means: offer "Add your support". */
 export function nomineeBlock(facts: NomineeFacts): NomineeBlock | null {
@@ -64,6 +66,7 @@ export function nomineeBlock(facts: NomineeFacts): NomineeBlock | null {
   if (facts.pendingInvite) return 'pending';
   if (facts.storedInvite) return 'stored';
   if (facts.openNomination) return 'open';
+  if (facts.hasName === false) return 'noName';
   return null;
 }
 
@@ -74,6 +77,7 @@ export const NOMINEE_BLOCK_TEXT: Record<NomineeBlock, string> = {
   pending: 'A nomination for this person is already collecting approvals.',
   stored: 'Already approved: they only need to press Join now.',
   open: 'Already nominated. You can add your support to that nomination instead.',
+  noName: 'No registered name: an account needs a name on Qortal before it can be nominated.',
 };
 
 export type NominationState =

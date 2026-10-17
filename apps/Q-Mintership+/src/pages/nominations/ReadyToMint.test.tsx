@@ -452,7 +452,11 @@ describe('Ready to mint', () => {
 
   it('offers Propose nomination to a level 5+ member, and says where they already nominated', async () => {
     const user = userEvent.setup();
-    await open('nominator');
+    // jr-1 owns a name (not a primary one: one light read finds it); jr-2 and jr-3 own none,
+    // so they can't be nominated.
+    await open('nominator', (world) => {
+      world.names.set('Jay Ready', fakeAddress('jr-1'));
+    });
     const jr1 = await row(shortAddress(fakeAddress('jr-1')));
     expect(
       await within(await row('bob+builder')).findByText('You nominated them', {}, { timeout: 4000 })
@@ -466,7 +470,15 @@ describe('Ready to mint', () => {
       within(await readyList()).getAllByRole('button', {
         name: new RegExp(`^${PROPOSE_NOMINATION} for `),
       })
-    ).toHaveLength(3);
+    ).toHaveLength(1);
+    for (const who of ['jr-2', 'jr-3'])
+      expect(
+        await within(await row(shortAddress(fakeAddress(who)))).findByText(
+          'No registered name',
+          {},
+          { timeout: 4000 }
+        )
+      ).toBeInTheDocument();
 
     await user.click(
       within(jr1).getByRole('button', {
@@ -553,7 +565,8 @@ describe('Ready to mint', () => {
 describe('Ready to mint: search', () => {
   const searchBox = () =>
     screen.getByRole('searchbox', { name: 'Search the people ready to mint by name or address' });
-  const nameLookups = () => fetchCallsFor(/^\/names\/(?!primary\/)/);
+  // Name searches and lookups (not a row's own primary name, or whether it has any name).
+  const nameLookups = () => fetchCallsFor(/^\/names\/(?!primary\/|address\/)/);
 
   it('finds a typed address directly, without looking up any name', async () => {
     const user = userEvent.setup();

@@ -23,6 +23,8 @@ import { NominationCard } from '../../components/nomination/NominationCard';
 import { NomineeAction } from '../../components/nomination/NomineeAction';
 import { nomineeStep, type NomineeStep } from '../../components/nomination/nomineeStep';
 import { proposeNominationFor } from '../../constants/words';
+import { hasRegisteredName } from '../../data/accounts';
+import { useQuery } from '../../hooks/useQuery';
 import { decisionPath, nominatePath } from '../../routes/paths';
 import { ownAdminRole } from '../../rules/adminChange';
 import { isOpenState, NOMINEE_BLOCK_TEXT, nomineeBlock } from '../../rules/nomination';
@@ -73,6 +75,13 @@ function OwnNextStep({ facts }: { facts: ProfileFacts }) {
 /** What the viewer can do for the account, or why not; null when there is nothing to say. */
 export function ProfileActions({ facts }: { facts: ProfileFacts }) {
   const { address, person, self, open, viewer } = facts;
+  const canNominate = Boolean(viewer?.canNominate);
+  // A nominee needs a registered name: its primary one, else one light read (only when it matters).
+  const named = useQuery(
+    canNominate && !person.name && !open ? `hasname:${address}` : null,
+    (force) => hasRegisteredName(address, { force })
+  );
+  const hasName = person.name ? true : named.data;
   const block = nomineeBlock({
     self,
     isMember: person.isMember,
@@ -80,8 +89,8 @@ export function ProfileActions({ facts }: { facts: ProfileFacts }) {
     openNomination: Boolean(open),
     pendingInvite: Boolean(open?.decision),
     storedInvite: Boolean(person.storedInvite),
+    hasName,
   });
-  const canNominate = Boolean(viewer?.canNominate);
   const signedIn = viewer && viewer.kind !== 'outsideHub' && viewer.kind !== 'signedOut';
   // The viewer's own part in an open nomination, if they have one.
   const mine = viewer?.address
@@ -104,7 +113,9 @@ export function ProfileActions({ facts }: { facts: ProfileFacts }) {
   if (self && viewer?.address === address && ownAdminRole(viewer)) {
     actions.push(<AdminRoleAction key="role" status={viewer} />);
   }
-  if (canNominate && (block === null || (block === 'open' && !mine))) {
+  // Until it's known whether they have a name, no Propose nomination.
+  const nameKnown = hasName !== undefined || Boolean(open);
+  if (canNominate && nameKnown && (block === null || (block === 'open' && !mine))) {
     actions.push(
       <Button
         key="nominate"

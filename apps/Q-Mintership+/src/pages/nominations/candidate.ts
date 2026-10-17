@@ -4,7 +4,12 @@
  * they can be nominated now (rules/nomination.ts → nomineeBlock). Cached GETs
  * only; publishNomination checks again, fresh, right before Hub opens.
  */
-import { effectiveBlocksMinted, getAccount, getPrimaryName } from '../../data/accounts';
+import {
+  effectiveBlocksMinted,
+  getAccount,
+  getPrimaryName,
+  hasRegisteredName,
+} from '../../data/accounts';
 import { findOpenDecision, loadDecisions } from '../../data/decisions';
 import {
   activeBanFor,
@@ -35,6 +40,8 @@ export interface Candidate {
   pendingInvite: Decision | null;
   /** Their open nomination (support it instead), if any. */
   openNomination: Nomination | null;
+  /** They have registered a name: a nominee needs one. */
+  hasName: boolean;
 }
 
 /** Key prefix of this screen's own reads. */
@@ -48,7 +55,7 @@ export function loadCandidate(
     `${CANDIDATE_KEY}${address}`,
     async () => {
       const force = options.force;
-      const [account, name, membership, bans, stored, joinRequest, nominations, decisions] =
+      const [account, name, membership, bans, stored, joinRequest, nominations, decisions, named] =
         await Promise.all([
           getAccount(address, { force }),
           getPrimaryName(address).catch(() => null),
@@ -58,6 +65,7 @@ export function loadCandidate(
           getJoinRequestFor(address, { force }),
           loadNominationsFor(address, { force }),
           loadDecisions({ force }),
+          hasRegisteredName(address, { force }),
         ]);
       return {
         address,
@@ -71,6 +79,7 @@ export function loadCandidate(
         storedInvite: Boolean(stored),
         pendingInvite: findOpenDecision(decisions, address, 'invite'),
         openNomination: nominations.find((n) => isOpenState(n.state)) ?? null,
+        hasName: named,
       };
     },
     { ttlMs: 60_000, force: options.force }
@@ -86,5 +95,6 @@ export function candidateBlock(candidate: Candidate, me: string): NomineeBlock |
     openNomination: Boolean(candidate.openNomination),
     pendingInvite: Boolean(candidate.pendingInvite),
     storedInvite: candidate.storedInvite,
+    hasName: candidate.hasName,
   });
 }

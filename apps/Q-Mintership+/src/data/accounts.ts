@@ -51,6 +51,28 @@ export function getPrimaryName(address: string): Promise<string | null> {
   );
 }
 
+/**
+ * Whether the account has registered a name (Simon, 2026-10-17: an account
+ * without one can't be nominated): its primary name, else one row of its
+ * names (`/names/address/{a}?limit=1`). Key `hasname:<address>`.
+ */
+export function hasRegisteredName(
+  address: string,
+  options: { force?: boolean } = {}
+): Promise<boolean> {
+  return fetchQuery(
+    `hasname:${address}`,
+    async () => {
+      if (await getPrimaryName(address).catch(() => null)) return true;
+      const rows = await getJson<unknown[]>(
+        `/names/address/${seg(address)}?${query({ limit: 1, offset: 0 })}`
+      );
+      return Array.isArray(rows) && rows.length > 0;
+    },
+    { ttlMs: 10 * 60_000, force: options.force }
+  );
+}
+
 /** Seed the name cache from a list that already carries names (e.g. `/groups/members`). */
 export function primeNames(rows: Array<{ address: string; name?: string | null }>): void {
   for (const row of rows) {

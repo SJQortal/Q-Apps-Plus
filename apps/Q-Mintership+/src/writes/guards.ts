@@ -3,7 +3,7 @@
  * words, if it would fail or duplicate something. Every read here is forced
  * fresh. Each guard returns a reason, or null to go ahead.
  */
-import { getAccount, getPrimaryName } from '../data/accounts';
+import { getAccount, getPrimaryName, hasRegisteredName } from '../data/accounts';
 import { getChainNow } from '../data/chain';
 import { BAN_MAX_SECONDS, MINTER_GROUP_ID, NULL_OWNER } from '../data/constants';
 import {
@@ -416,12 +416,13 @@ async function nominatorProblem(signer: Signer): Promise<string | null> {
 export async function guardNominate(signer: Signer, nominee: string): Promise<string | null> {
   const who = await nominatorProblem(signer);
   if (who) return who;
-  const [membership, bans, stored, waiting, nominations] = await Promise.all([
+  const [membership, bans, stored, waiting, nominations, hasName] = await Promise.all([
     getMembership(nominee, { force: true }),
     getBans({ force: true }),
     getStoredInviteFor(nominee, { force: true }),
     findWaiting('GROUP_INVITE', nominee),
     loadNominationsFor(nominee, { force: true }),
+    hasRegisteredName(nominee, { force: true }),
   ]);
   const block = nomineeBlock({
     self: nominee === signer.address,
@@ -430,6 +431,7 @@ export async function guardNominate(signer: Signer, nominee: string): Promise<st
     pendingInvite: Boolean(waiting),
     storedInvite: Boolean(stored),
     openNomination: nominations.some((n) => isOpenState(n.state)),
+    hasName,
   });
   return block ? NOMINEE_BLOCK_TEXT[block] : null;
 }

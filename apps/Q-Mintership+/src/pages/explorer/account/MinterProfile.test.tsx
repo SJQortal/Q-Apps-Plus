@@ -255,6 +255,18 @@ describe('Minter Profile', () => {
     expect(screen.queryByText(/Removed from MINTER on/)).toBeNull();
   });
 
+  it('offers no nomination for an account without a registered name, and says why', async () => {
+    await visit(ADDR.newcomer, 'nominator');
+    expect(
+      await screen.findByText(
+        'No registered name: an account needs a name on Qortal before it can be nominated.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: new RegExp(`^${PROPOSE_NOMINATION}`) })).toBeNull();
+  });
+
   it('lets an eligible viewer support an open nomination', async () => {
     await visit(ADDR.nominatedWaiting, 'admin');
     const nomination = await section('Nomination');
