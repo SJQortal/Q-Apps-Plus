@@ -1037,6 +1037,31 @@ export default {
       path: `/explorer/account/${ADDR.admin}?as=admin`,
       after: explorerSettle,
     },
+    // Another account's groups as someone in none of them: Join, and Ask to join a closed one.
+    {
+      key: 'explorer-groups-join',
+      path: `/explorer/account/${ADDR.kicked}?as=learner`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page
+          .getByRole('button', { name: 'Ask to join Book Club' })
+          .waitFor({ timeout: 8000 });
+      },
+    },
+    // Activity's settings: how much it reads at first, and the milestones it shows.
+    {
+      key: 'explorer-activity-settings',
+      path: `/explorer/account/${ADDR.admin}?as=learner`,
+      overlay: true,
+      after: async (page) => {
+        await explorerSettle(page);
+        // Its reads (and the gear) start once the section nears the screen.
+        await page.locator('#overview-activity-title').scrollIntoViewIfNeeded({ timeout: 8000 });
+        await page.getByRole('button', { name: 'Activity settings' }).click({ timeout: 8000 });
+        await page.getByRole('dialog', { name: 'Activity settings' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
     // Its avatar, bigger: the top bar's avatar pressed (the card's opens the same).
     {
       key: 'explorer-avatar',

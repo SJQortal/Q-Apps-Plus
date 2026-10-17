@@ -727,7 +727,8 @@ export function answerCore(world, pathname, sp) {
       blocksMintedPenalty: 0,
     });
   }
-  if ((m = p.match(/^\/names\/primary\/(Q\w+)$/))) {
+  // An AT's address too (it starts with A): Core answers it, with no name.
+  if ((m = p.match(/^\/names\/primary\/([QA]\w+)$/))) {
     const a = world.accounts.get(m[1]);
     return json(a?.name ? { name: a.name, owner: a.address } : { owner: m[1] });
   }
