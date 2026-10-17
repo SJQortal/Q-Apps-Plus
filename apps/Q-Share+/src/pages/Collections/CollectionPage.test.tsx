@@ -63,7 +63,7 @@ describe('CollectionPage', () => {
     expect(await screen.findByRole('heading', { name: 'Docs' })).toBeInTheDocument();
     expect(await screen.findByText('First share')).toBeInTheDocument();
     expect(await screen.findByText('Second share')).toBeInTheDocument();
-    expect(screen.getByText('· 2 items')).toBeInTheDocument();
+    expect(screen.getByText('· 2 shares')).toBeInTheDocument();
     const fetches = qortalCallsFor('FETCH_QDN_RESOURCE');
     expect(fetches.length).toBe(3);
     expect(fetches.filter((c) => c.identifier === COLLECTION_ID).length).toBe(1);
@@ -88,7 +88,7 @@ describe('CollectionPage', () => {
     expect(body.items).toEqual([items[1]]);
     expect(body.created).toBe(1);
     await waitFor(() => expect(screen.queryByText('First share')).not.toBeInTheDocument());
-    expect(screen.getByText('· 1 item')).toBeInTheDocument();
+    expect(screen.getByText('· 1 share')).toBeInTheDocument();
   });
 
   it("fetches and names each name's share when two names publish under one identifier", async () => {
@@ -135,7 +135,7 @@ describe('CollectionPage', () => {
     await waitFor(() => expect(qortalCallsFor('PUBLISH_QDN_RESOURCE').length).toBe(1));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Remove' })).toBeEnabled());
     expect(store.getState().notifications.alertTypes.alertError).toBe('');
-    expect(screen.getByText('· 2 items')).toBeInTheDocument();
+    expect(screen.getByText('· 2 shares')).toBeInTheDocument();
   });
 
   it('keeps the edit form open with no error when the owner declines the publish in Hub', async () => {

@@ -42,6 +42,7 @@ function App() {
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/collections" element={<CollectionsPage />} />
                 <Route path="/collection/:name/:id" element={<CollectionPage />} />
+                <Route path="/collection/:name/:id/folder/:folderId" element={<CollectionPage />} />
                 <Route path="/comment/:name/:identifier" element={<CommentLink />} />
               </Routes>
             </Suspense>

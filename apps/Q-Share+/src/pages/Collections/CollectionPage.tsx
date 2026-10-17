@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
-import { Avatar, Box, Button, CircularProgress, IconButton, Skeleton, Tooltip, Typography } from "@mui/material";
+import { Avatar, Box, Breadcrumbs, Button, CircularProgress, IconButton, Link, Skeleton, Tooltip, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import CreateNewFolderOutlinedIcon from "@mui/icons-material/CreateNewFolderOutlined";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import DriveFileMoveOutlinedIcon from "@mui/icons-material/DriveFileMoveOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import RemoveCircleOutlinedIcon from "@mui/icons-material/RemoveCircleOutlined";
 import CollectionsBookmarkOutlinedIcon from "@mui/icons-material/CollectionsBookmarkOutlined";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
@@ -20,11 +23,13 @@ import { heldShare, shareKey, type Video } from "../../state/features/fileSlice"
 import type { RootState } from "../../state/store";
 import {
   COLLECTION_SERVICE,
+  MAX_FOLDERS,
+  MAX_FOLDER_DEPTH,
   collectionKey,
+  collectionPath,
   editCollectionBody,
   fetchCollection,
   publishCollection,
-  toggleItem,
   type Collection,
 } from "../../utils/collections";
 import { avatarUrl, decodeParam, profilePath } from "../../utils/qortalLinks";
@@ -32,14 +37,27 @@ import { isHubDecline } from "../../utils/hubErrors";
 import { resourceStatus } from "../../utils/qdnResource";
 import { isNameHidden, useAppSettings } from "../../utils/settings";
 import { formatDate } from "../../utils/time";
-import { allCollectionItems } from "../../utils/collectionFolders";
+import {
+  contentsCount,
+  findFolder,
+  folderCount,
+  moveItem,
+  removeFolder,
+  toggleItemIn,
+  type Container,
+} from "../../utils/collectionFolders";
+import { CollectionCover } from "./CollectionCover";
 import { CollectionDialog } from "./CollectionDialog";
+import { FolderDialog } from "./FolderDialog";
+import { FolderGrid } from "./FolderGrid";
+import { MoveDialog } from "./MoveDialog";
 import { CardList, InfoCard, ItemRow, ItemRows, Page, PhoneHeader, PublisherLink } from "./Collections-styles";
 
 /** "fetching": the node knows the collection but hasn't got its data yet; "unavailable": still not after the retries. */
 type Status = "loading" | "ready" | "error" | "missing" | "fetching" | "unavailable";
 
-const countLabel = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
+const countLabel = (n: number) => `${n} ${n === 1 ? "share" : "shares"}`;
+const foldersLabel = (n: number) => `${n} ${n === 1 ? "folder" : "folders"}`;
 
 /**
  * Core's statuses for a resource the node knows about but can't serve yet.
@@ -65,15 +83,26 @@ async function collectionStatus(name: string, identifier: string): Promise<strin
   }
 }
 
-/** /collection/:name/:id, keyed by the pair so every collection starts with fresh page state. */
+function folderSummary(folder: Container): string {
+  const { shares } = contentsCount(folder);
+  const inside = folderCount(folder);
+  return [countLabel(shares), ...(inside > 0 ? [foldersLabel(inside)] : [])].join(", ");
+}
+
+/**
+ * /collection/:name/:id and /collection/:name/:id/folder/:folderId, keyed by
+ * the pair so every collection starts with fresh page state (its folders
+ * share the collection's).
+ */
 export function CollectionPage() {
   const params = useParams();
   const name = decodeParam(params.name);
   const id = decodeParam(params.id);
-  return <CollectionView key={`${name}/${id}`} name={name} id={id} />;
+  const folderId = params.folderId ? decodeParam(params.folderId) : null;
+  return <CollectionView key={`${name}/${id}`} name={name} id={id} folderId={folderId || null} />;
 }
 
-function CollectionView({ name, id }: { name: string; id: string }) {
+function CollectionView({ name, id, folderId }: { name: string; id: string; folderId: string | null }) {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const phone = usePhoneLayout();
@@ -85,6 +114,9 @@ function CollectionView({ name, id }: { name: string; id: string }) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<Video | null>(null);
+  const [moveTarget, setMoveTarget] = useState<Video | null>(null);
+  // The folder dialog: a new folder in this page's container, or an edit of this folder.
+  const [folderDialog, setFolderDialog] = useState<"new" | "edit" | null>(null);
   const [busy, setBusy] = useState(false);
   // Which of PEER_RETRY_DELAYS_MS the next status check waits for.
   const [peerRetry, setPeerRetry] = useState(0);
@@ -176,9 +208,15 @@ function CollectionView({ name, id }: { name: string; id: string }) {
   // Hidden names (Settings → Content) apply here as on Home and in comments.
   const settings = useAppSettings();
   const grid = useListView() === "grid";
+  // This page's part of the collection: the collection itself, or one of its folders.
+  const { found, container } = useMemo(() => {
+    const inFolder = collection && folderId ? findFolder(collection, folderId) : null;
+    const place: Container | null = collection ? (folderId ? (inFolder?.folder ?? null) : collection) : null;
+    return { found: inFolder, container: place };
+  }, [collection, folderId]);
   const items: Video[] = useMemo(
     () =>
-      (collection?.items ?? [])
+      (container?.items ?? [])
         .filter((item) => !isNameHidden(item.name, settings))
         .map((item) => ({
         id: item.identifier,
@@ -188,7 +226,7 @@ function CollectionView({ name, id }: { name: string; id: string }) {
         created: undefined,
         service: "DOCUMENT",
       })),
-    [collection?.items, settings]
+    [container, settings]
   );
 
   // One FETCH per share body through the shared queue, never one another list
@@ -202,7 +240,9 @@ function CollectionView({ name, id }: { name: string; id: string }) {
   const isOwner = Boolean(
     user && name && (user.name === name || (user.names ?? []).some((record) => record.name === name))
   );
-  const goBack = useSafeBack("/collections");
+  const parentId = found && found.path.length > 1 ? found.path[found.path.length - 2].id : null;
+  const parentPath = folderId ? collectionPath(name, id, parentId) : "/collections";
+  const goBack = useSafeBack(parentPath);
 
   const republish = async (next: Collection, successMessage: string): Promise<boolean> => {
     setBusy(true);
@@ -225,14 +265,31 @@ function CollectionView({ name, id }: { name: string; id: string }) {
     }
   };
 
+  const here = found?.folder ?? null;
+  const placeTitle = here ? here.title || "Untitled folder" : collection?.title || "Untitled collection";
+
   const confirmRemove = async () => {
     if (!collection || !removeTarget) return;
-    const next = toggleItem(collection, { name: removeTarget.user, identifier: removeTarget.id });
-    if (await republish(next, `Removed from ${collection.title}`)) setRemoveTarget(null);
+    const next = toggleItemIn(collection, folderId, { name: removeTarget.user, identifier: removeTarget.id });
+    if (await republish(next, `Removed from ${placeTitle}`)) setRemoveTarget(null);
+  };
+
+  const confirmMove = async (to: string | null) => {
+    if (!collection || !moveTarget) return;
+    const next = moveItem(collection, { name: moveTarget.user, identifier: moveTarget.id }, folderId, to);
+    const target = to ? findFolder(collection, to)?.folder.title || "Untitled folder" : collection.title;
+    if (await republish(next, `Moved to ${target}`)) setMoveTarget(null);
   };
 
   const confirmDelete = async () => {
     if (!collection) return;
+    if (here) {
+      if (await republish(removeFolder(collection, here.id), "Folder deleted")) {
+        setDeleteOpen(false);
+        navigate(parentPath, { replace: true });
+      }
+      return;
+    }
     if (await republish({ ...collection, items: [], folders: [] }, "Collection deleted")) {
       setDeleteOpen(false);
       navigate("/collections");
@@ -298,17 +355,57 @@ function CollectionView({ name, id }: { name: string; id: string }) {
         onAction={retry}
       />
     );
+  } else if (folderId && !here) {
+    body = (
+      <EmptyState
+        icon={<FolderOutlinedIcon />}
+        title="Folder not found"
+        description="It may have been deleted, or moved out of this collection."
+        actionLabel="Open the collection"
+        onAction={() => navigate(collectionPath(name, id), { replace: true })}
+      />
+    );
   } else {
+    const counts = contentsCount(container ?? { items: [] });
+    const subfolders = container?.folders ?? [];
+    const canAddFolder = folderCount(collection) < MAX_FOLDERS && (found?.path.length ?? 0) < MAX_FOLDER_DEPTH;
     body = (
       <>
-        <InfoCard aria-label="About this collection">
-          <Box sx={{ flex: 1, minWidth: 0 }}>
+        <InfoCard aria-label={here ? "About this folder" : "About this collection"}>
+          <CollectionCover
+            cover={here ? here.cover : collection.cover}
+            kind={here ? "folder" : "collection"}
+            size={phone ? 88 : 120}
+          />
+          <Box sx={{ flex: "1 1 200px", minWidth: 0 }}>
+            {found ? (
+              <Breadcrumbs aria-label="Where this folder is" sx={{ mb: 0.5, fontSize: 14, "& .MuiBreadcrumbs-ol": { flexWrap: "wrap" } }}>
+                {[{ id: null as string | null, title: collection.title || "Untitled collection" }, ...found.path.slice(0, -1).map((f) => ({ id: f.id as string | null, title: f.title || "Untitled folder" }))].map(
+                  (crumb) => (
+                    <Link
+                      key={crumb.id ?? "root"}
+                      component="button"
+                      type="button"
+                      underline="hover"
+                      color="text.secondary"
+                      onClick={() => navigate(collectionPath(name, id, crumb.id))}
+                      sx={{ font: "inherit", minHeight: phone ? 44 : 28, textAlign: "left", wordBreak: "break-word" }}
+                    >
+                      {crumb.title}
+                    </Link>
+                  )
+                )}
+                <Typography component="span" sx={{ fontSize: 14, color: "text.primary" }}>
+                  {placeTitle}
+                </Typography>
+              </Breadcrumbs>
+            ) : null}
             <Typography component="h1" variant="h5" sx={{ fontWeight: 700, wordBreak: "break-word" }}>
-              {collection.title || "Untitled collection"}
+              {placeTitle}
             </Typography>
-            {collection.description ? (
+            {(here ? here.description : collection.description) ? (
               <Typography sx={{ mt: 0.5, color: "text.secondary", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                {collection.description}
+                {here ? here.description : collection.description}
               </Typography>
             ) : null}
             <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mt: 1, color: "text.secondary", fontSize: 13 }}>
@@ -316,21 +413,48 @@ function CollectionView({ name, id }: { name: string; id: string }) {
                 <Avatar sx={{ width: 22, height: 22 }} src={avatarUrl(name)} alt="" slotProps={{ img: { loading: "lazy" } }} />
                 <span>{name}</span>
               </PublisherLink>
-              <span>· {countLabel(allCollectionItems(collection).length)}</span>
+              <span>· {countLabel(counts.shares)}</span>
+              {counts.folders > 0 ? <span>· {foldersLabel(counts.folders)}</span> : null}
               {collection.updated ? <span>· updated {formatDate(collection.updated)}</span> : null}
             </Box>
           </Box>
           {isOwner ? (
-            <Box sx={{ display: "flex", gap: 1, width: { xs: "100%", sm: "auto" }, "& .MuiButton-root": { minHeight: 44 } }}>
-              <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => setEditOpen(true)}>
+            <Box
+              sx={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 1,
+                width: { xs: "100%", sm: "auto" },
+                "& .MuiButton-root": { minHeight: 44 },
+              }}
+            >
+              <Button
+                variant="outlined"
+                startIcon={<EditOutlinedIcon />}
+                onClick={() => (here ? setFolderDialog("edit") : setEditOpen(true))}
+              >
                 Edit
               </Button>
+              {canAddFolder ? (
+                <Button variant="outlined" startIcon={<CreateNewFolderOutlinedIcon />} onClick={() => setFolderDialog("new")}>
+                  New folder
+                </Button>
+              ) : null}
               <Button variant="contained" color="error" startIcon={<DeleteOutlinedIcon />} onClick={() => setDeleteOpen(true)}>
                 Delete
               </Button>
             </Box>
           ) : null}
         </InfoCard>
+
+        {subfolders.length > 0 ? (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <Typography component="h2" sx={{ fontWeight: 700, fontSize: 16 }}>
+              Folders
+            </Typography>
+            <FolderGrid name={name} identifier={id} folders={subfolders} />
+          </Box>
+        ) : null}
 
         {items.length > 0 ? (
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: -1 }}>
@@ -342,19 +466,36 @@ function CollectionView({ name, id }: { name: string; id: string }) {
         ) : null}
 
         {items.length === 0 ? (
-          <EmptyState
-            icon={<CollectionsBookmarkOutlinedIcon />}
-            title="This collection is empty"
-            description={isOwner ? "Save shares to it with the bookmark button on any share." : undefined}
-          />
+          subfolders.length > 0 ? null : (
+            <EmptyState
+              icon={here ? <FolderOutlinedIcon /> : <CollectionsBookmarkOutlinedIcon />}
+              title={here ? "This folder is empty" : "This collection is empty"}
+              description={
+                isOwner
+                  ? `Add shares with the bookmark button on any share and pick ${here ? "this folder" : "this collection"}.`
+                  : undefined
+              }
+            />
+          )
         ) : isOwner && grid ? (
-          // Each card carries its own Remove button; the rows keep theirs beside them.
-          <FileList files={items} onRemove={setRemoveTarget} />
+          // Each card carries its own Move and Remove buttons; the rows keep theirs beside them.
+          <FileList files={items} onRemove={setRemoveTarget} onMove={folderCount(collection) > 0 ? setMoveTarget : undefined} />
         ) : isOwner ? (
           <ItemRows>
             {items.map((video) => (
               <ItemRow key={shareKey(video.user, video.id)}>
                 <FileList files={[video]} />
+                {folderCount(collection) > 0 ? (
+                  <Tooltip title="Move to a folder">
+                    <IconButton
+                      aria-label={`Move ${shareTitle(video)}`}
+                      onClick={() => setMoveTarget(video)}
+                      sx={{ minWidth: 44, minHeight: 44 }}
+                    >
+                      <DriveFileMoveOutlinedIcon />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
                 <Tooltip title="Remove from collection">
                   <IconButton
                     aria-label={`Remove ${shareTitle(video)} from collection`}
@@ -382,13 +523,17 @@ function CollectionView({ name, id }: { name: string; id: string }) {
             <ArrowBackIcon />
           </IconButton>
           <Typography noWrap sx={{ flex: 1, fontSize: 18, fontWeight: 700 }}>
-            {collection?.title || "Collection"}
+            {here ? placeTitle : collection?.title || "Collection"}
           </Typography>
         </PhoneHeader>
       ) : (
         <Box>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/collections")} sx={{ minHeight: 44 }}>
-            Collections
+          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(parentPath)} sx={{ minHeight: 44 }}>
+            {!folderId
+              ? "Collections"
+              : parentId
+                ? findFolder(collection ?? { items: [] }, parentId)?.folder.title || "Back"
+                : collection?.title || "Collection"}
           </Button>
         </Box>
       )}
@@ -397,6 +542,31 @@ function CollectionView({ name, id }: { name: string; id: string }) {
 
       {collection ? (
         <CollectionDialog open={editOpen} onClose={() => setEditOpen(false)} collection={collection} />
+      ) : null}
+
+      {collection && folderDialog ? (
+        <FolderDialog
+          open
+          onClose={() => setFolderDialog(null)}
+          collection={collection}
+          folder={folderDialog === "edit" ? here : null}
+          parentId={folderId}
+          onSaved={(savedId) => {
+            if (folderDialog === "new") navigate(collectionPath(name, id, savedId));
+          }}
+        />
+      ) : null}
+
+      {collection && moveTarget ? (
+        <MoveDialog
+          open
+          onClose={() => setMoveTarget(null)}
+          collection={collection}
+          shareTitle={shareTitle(moveTarget)}
+          from={folderId}
+          busy={busy}
+          onMove={confirmMove}
+        />
       ) : null}
 
       <ResponsiveDialog
@@ -419,7 +589,7 @@ function CollectionView({ name, id }: { name: string; id: string }) {
         }
       >
         <Typography>
-          “{shareTitle(removeTarget)}” will be removed from “{collection?.title}”.
+          “{shareTitle(removeTarget)}” will be removed from “{placeTitle}”.
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
           This republishes the collection: Hub asks you to confirm, and the usual small QDN fee applies.
@@ -432,7 +602,7 @@ function CollectionView({ name, id }: { name: string; id: string }) {
           if (!busy) setDeleteOpen(false);
         }}
         dismissible={!busy}
-        title="Delete collection?"
+        title={here ? "Delete folder?" : "Delete collection?"}
         maxWidth="xs"
         actions={
           <>
@@ -445,10 +615,18 @@ function CollectionView({ name, id }: { name: string; id: string }) {
           </>
         }
       >
-        <Typography>
-          QDN keeps every publish, so a collection can't be erased. Deleting “{collection?.title}” removes all its items
-          and keeps the title: it disappears from All, and stays under Mine as empty until you fill it again.
-        </Typography>
+        {here ? (
+          <Typography>
+            “{placeTitle}” and everything in it ({folderSummary(here)}) will be removed from “{collection?.title}”. The
+            shares themselves stay on QDN.
+          </Typography>
+        ) : (
+          <Typography>
+            QDN keeps every publish, so a collection can't be erased. Deleting “{collection?.title}” removes all its
+            shares and folders and keeps the title: it disappears from All, and stays under Mine as empty until you fill
+            it again.
+          </Typography>
+        )}
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
           This republishes the collection: Hub asks you to confirm, and the usual small QDN fee applies.
         </Typography>
