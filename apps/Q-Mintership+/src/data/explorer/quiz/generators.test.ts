@@ -109,6 +109,41 @@ describe('the Explorer Quiz’s questions', () => {
     }
   });
 
+  it('asks who registered a name only when it changed hands, not when it was registered again', async () => {
+    const registration = (name: string, by: string, timestamp: number) => ({
+      type: 'REGISTER_NAME',
+      signature: `reg-${name}`,
+      timestamp,
+      txGroupId: 0,
+      blockHeight: 1_180_913,
+      creatorAddress: by,
+      name,
+    });
+    mockFetchRoute('/transactions/search', (url: URL) =>
+      url.searchParams.get('txType') === 'REGISTER_NAME'
+        ? [
+            // Renamed away by Leo, then registered anew by Ada: not a sale.
+            registration('Cat Sign', ADDR.learner, 1_677_103_411_881),
+            // Registered by Leo, sold to Ada since.
+            registration('Maple', ADDR.learner, 1_677_200_000_000),
+          ]
+        : []
+    );
+    mockFetchRoute('/names/', (url: URL) => {
+      const name = decodeURIComponent(url.pathname.slice('/names/'.length));
+      return name === 'Cat Sign'
+        ? { name, owner: ADDR.admin, registered: 1_687_130_078_055 }
+        : { name, owner: ADDR.admin, registered: 1_677_200_000_000 };
+    });
+    const q = await makeQuestion({
+      templates: [template('registeredBy')],
+      level: 'expert',
+      rng: fixed(0.2),
+    });
+    expect(words(q?.parts ?? [])).toContain('Maple');
+    expect(q?.answer).toMatchObject({ kind: 'account', address: ADDR.learner });
+  });
+
   it('picks the level asked for, skips what was asked, and gives up when nothing fits', async () => {
     const made: string[] = [];
     const fake = (id: string, level: QuizTemplate['level'], ok = true): QuizTemplate => ({

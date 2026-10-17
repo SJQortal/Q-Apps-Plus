@@ -321,8 +321,11 @@ const registeredBy: QuizTemplate = {
       const name = str(tx.name);
       if (!name || !isAddress(tx.creatorAddress) || !ctx.fresh(nameSubject(name))) continue;
       const data = await getNameData(name);
-      // Still the same name, and it changed hands since.
+      // Still the same name, and it changed hands since. The same registration, too: a
+      // name renamed away can be registered again by anyone (Core keeps the first
+      // registration's time through sales and renames, so a later one shows here).
       if (!data || data.name !== name || data.owner === tx.creatorAddress) continue;
+      if (data.registered !== tx.timestamp) continue;
       const key = `registeredBy:${name.toLowerCase()}`;
       if (ctx.seen(key)) continue;
       const owner = await person(data.owner);
