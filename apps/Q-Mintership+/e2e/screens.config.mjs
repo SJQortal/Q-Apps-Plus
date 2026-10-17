@@ -590,7 +590,17 @@ export default {
         await page.waitForTimeout(400);
       },
     },
-    { key: 'person', path: `/people/${ADDR.nominatedSigning}?as=admin`, after: settle },
+    // A nominee's own Minter Profile: Accept nomination on their card (the profile lives in the
+    // Explorer now; the Minter Admin's view of it is explorer-mintership).
+    {
+      key: 'profile-own-nominee',
+      path: `/explorer/account/${ADDR.nominatedWaiting}/mintership?as=nominatedWaiting`,
+      after: async (page) => {
+        await settle(page);
+        await page.getByRole('button', { name: 'Accept nomination' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
     { key: 'history', path: '/history?as=learner', after: settle },
     // On chain, one type searched by type over 120 days: Bans, with the ban from 61 days ago.
     { key: 'history-filter', path: '/history?as=learner&type=ban&period=120', after: settle },
@@ -729,13 +739,13 @@ export default {
     // Public comments: a thread with replies, a deleted one and a hidden one (folded).
     {
       key: 'comments-thread',
-      path: `/people/${ADDR.nominatedWaiting}?as=nominator`,
+      path: `/explorer/account/${ADDR.nominatedWaiting}/mintership?as=nominator`,
       after: comments(WREN_COMMENTS, 'Wren helped me set up my node'),
     },
     // A Minter Admin's view of the hidden comment, unfolded with Show anyway.
     {
       key: 'comments-hidden',
-      path: `/people/${ADDR.nominatedWaiting}?as=admin`,
+      path: `/explorer/account/${ADDR.nominatedWaiting}/mintership?as=admin`,
       after: async (page) => {
         await comments(WREN_COMMENTS, 'Wren helped me set up my node')(page);
         await page.getByRole('button', { name: 'Show anyway: hidden comment' }).click();
@@ -745,7 +755,7 @@ export default {
     // Posting: what is published, under which name, and the fee, before Hub opens.
     {
       key: 'comments-post',
-      path: `/people/${ADDR.nominatedWaiting}?as=nominator`,
+      path: `/explorer/account/${ADDR.nominatedWaiting}/mintership?as=nominator`,
       overlay: true,
       after: async (page) => {
         await comments(WREN_COMMENTS, 'Wren helped me set up my node')(page);
@@ -825,10 +835,10 @@ export default {
         await page.getByRole('link', { name: 'See what changed' }).waitFor({ timeout: 8000 });
       },
     },
-    // Step down as Minter Admin lives on the admin's own page.
+    // Step down as Minter Admin lives on the admin's own Minter Profile.
     {
       key: 'person-own-admin',
-      path: `/people/${ADDR.adminL4}?as=adminL4`,
+      path: `/explorer/account/${ADDR.adminL4}/mintership?as=adminL4`,
       after: async (page) => {
         await settle(page);
         await page
@@ -839,13 +849,13 @@ export default {
     // A member below level 5: Become a Minter Admin, with the level 5+ note beside it.
     {
       key: 'person-own-member',
-      path: `/people/${ADDR.learner}?as=learner`,
+      path: `/explorer/account/${ADDR.learner}/mintership?as=learner`,
       after: async (page) => {
         await settle(page);
         await page.getByText(/is suggested for Minter Admins/).waitFor({ timeout: 8000 });
       },
     },
-    // Picking yourself under Remove a Minter Admin points to your own page.
+    // Picking yourself under Remove a Minter Admin points to your own Minter Profile.
     {
       key: 'decisions-remove-self',
       path: '/decisions?as=admin',
@@ -856,7 +866,9 @@ export default {
           .getByRole('dialog', { name: 'Remove a Minter Admin' })
           .getByRole('combobox', { name: 'Minter Admin' })
           .selectOption(ADDR.admin, { timeout: 8000 });
-        await page.getByRole('link', { name: 'Open your page' }).waitFor({ timeout: 8000 });
+        await page
+          .getByRole('link', { name: 'Open your Minter Profile' })
+          .waitFor({ timeout: 8000 });
         await page.waitForTimeout(300);
       },
     },
