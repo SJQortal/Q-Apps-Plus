@@ -7,7 +7,7 @@ import PlaylistPlayOutlinedIcon from "@mui/icons-material/PlaylistPlayOutlined";
 import ShuffleRoundedIcon from "@mui/icons-material/ShuffleRounded";
 import { previewKind } from "../../components/common/FilePreview";
 import { unlockAudio } from "../../components/player/audioElement";
-import { trackTitle } from "../../components/player/AudioPlayer";
+import { trackTitle } from "../../components/player/trackText";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import {
   currentTrack,

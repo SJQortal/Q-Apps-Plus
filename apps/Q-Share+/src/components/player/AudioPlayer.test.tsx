@@ -5,7 +5,7 @@ import { mockQortalAction, qortalCallsFor } from "../../test/setup";
 import { store } from "../../state/store";
 import { closePlayer, playQueue } from "../../state/features/playerSlice";
 import { removeDownload } from "../../state/features/globalSlice";
-import { AudioPlayer, SKIP_AFTER_MS, formatTime, trackTitle } from "./AudioPlayer";
+import { AudioPlayer, SKIP_AFTER_MS, STUCK_SKIP_MS, formatTime, trackTitle } from "./AudioPlayer";
 import { playerAudio, resetPlayerAudio, unlockAudio } from "./audioElement";
 import DownloadWrapper from "../../wrappers/DownloadWrapper";
 
@@ -130,6 +130,29 @@ describe("AudioPlayer", () => {
     });
   });
 
+  it("skips a track whose fetch hasn't moved for a minute, saying so", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    // Track one never gets past 10%; track two is on the node.
+    mockNode([tracks[1].identifier]);
+    renderWithProviders(<AudioPlayer />);
+    act(() => {
+      store.dispatch(playQueue({ tracks, share, start: 0 }));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(src() ?? "").not.toContain("qshare_file_album_one");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STUCK_SKIP_MS - 1000);
+    });
+    expect(store.getState().player.position).toBe(0);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(store.getState().player.position).toBe(1);
+    expect(store.getState().notifications.alertTypes.alertInfo).toMatch(/^Skipped “one”/);
+  });
+
   it("makes way when another player on the page starts", async () => {
     mockNode(tracks.map((t) => t.identifier));
     renderWithProviders(
@@ -148,6 +171,21 @@ describe("AudioPlayer", () => {
     });
     expect(playerAudio().paused).toBe(true);
     expect(store.getState().player.playing).toBe(false);
+  });
+
+  it("stops and lets go of the file when the playlist closes", async () => {
+    mockNode(tracks.map((t) => t.identifier));
+    renderWithProviders(<AudioPlayer />);
+    act(() => {
+      store.dispatch(playQueue({ tracks, share, start: 0 }));
+    });
+    await waitFor(() => expect(src()).toBe("/arbitrary/FILE/dj%20b/qshare_file_album_one"));
+    act(() => {
+      store.dispatch(closePlayer());
+    });
+    expect(src()).toBeNull();
+    expect(playerAudio().paused).toBe(true);
+    expect(screen.queryByRole("region", { name: "Player" })).not.toBeInTheDocument();
   });
 
   it("unlocks the element once, during a tap", () => {

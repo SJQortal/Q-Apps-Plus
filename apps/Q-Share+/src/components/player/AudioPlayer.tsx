@@ -44,6 +44,7 @@ import {
   upcomingTrack,
   type Track,
 } from "../../state/features/playerSlice";
+import { setNotification } from "../../state/features/notificationsSlice";
 import type { RootState } from "../../state/store";
 import { sharePath } from "../../utils/qortalLinks";
 import { previewUrl } from "../common/FilePreview";
@@ -51,30 +52,23 @@ import { BottomSheet } from "../common/mobile/BottomSheet";
 import { BOTTOM_NAV_HEIGHT, COMPACT_BOTTOM_NAV_HEIGHT } from "../layout/BottomNav/BottomNav";
 import { isUnlockClip, playerAudio } from "./audioElement";
 import { COMPACT_PLAYER_BAR_HEIGHT, PHONE_PLAYER_BAR_HEIGHT, PLAYER_BAR_HEIGHT } from "./playerLayout";
+import { formatTime, trackTitle } from "./trackText";
+
+export { formatTime, trackTitle };
 
 /** A track the node can't provide, or the browser can't play, is skipped after this long. */
 export const SKIP_AFTER_MS = 2500;
+/**
+ * A track whose fetch hasn't moved for this long is skipped too, when there
+ * is a next one: peers that lack some of its chunks would hold the whole
+ * playlist (seen in Hub on a 16-track album, one track stuck at 83%).
+ * Previous goes back to it.
+ */
+export const STUCK_SKIP_MS = 60_000;
 /** Previous restarts the track when it has played longer than this. */
 const RESTART_AFTER_S = 3;
 
 const EMPTY_TRACK: Track = { name: "", service: "FILE", identifier: "", filename: "" };
-
-/** The filename without its extension. */
-export function trackTitle(track: Pick<Track, "filename">): string {
-  const name = track.filename || "Untitled";
-  const dot = name.lastIndexOf(".");
-  return dot > 0 ? name.slice(0, dot) : name;
-}
-
-/** 3:07, or 1:02:03 for an hour and more; "–:––" while unknown. */
-export function formatTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return "–:––";
-  const whole = Math.floor(seconds);
-  const h = Math.floor(whole / 3600);
-  const m = Math.floor((whole % 3600) / 60);
-  const s = String(whole % 60).padStart(2, "0");
-  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
-}
 
 const Bar = styled("section", { shouldForwardProp: (prop) => prop !== "bottom" && prop !== "height" })<{
   bottom: string;
@@ -157,17 +151,24 @@ function usePlaylist() {
     }
   }, [track, key, ready, player.playing, dispatch, store]);
 
-  // Nothing to play: stop and let go of the file.
+  // Nothing to play (or the bar closes): stop and let go of the file.
   useEffect(() => {
-    if (track) return;
-    const audio = playerAudio();
-    loaded.current = null;
-    audio.pause();
-    if (audio.getAttribute("src") && !isUnlockClip(audio)) {
-      audio.removeAttribute("src");
-      audio.load();
-    }
-  }, [track]);
+    const release = () => {
+      const audio = playerAudio();
+      loaded.current = null;
+      audio.pause();
+      if (audio.getAttribute("src") && !isUnlockClip(audio)) {
+        audio.removeAttribute("src");
+        audio.load();
+      }
+    };
+    if (!track) release();
+    return () => {
+      if (!track) return;
+      // Unmounting with a track loaded: the playlist was closed.
+      if (!store.getState().player.tracks.length) release();
+    };
+  }, [track, store]);
 
   // While a track plays, the next one comes to the node, so it starts without a wait.
   useEffect(() => {
@@ -227,6 +228,24 @@ function usePlaylist() {
     const timer = window.setTimeout(() => dispatch(nextTrack({})), SKIP_AFTER_MS);
     return () => window.clearTimeout(timer);
   }, [failure, player.playing, upcoming, key, dispatch]);
+
+  // So is one still fetching with no progress for a minute: the timer starts
+  // over whenever the percentage moves.
+  const fetching = Boolean(track) && !ready && !failure;
+  const { percent } = node;
+  useEffect(() => {
+    if (!fetching || !player.playing || !upcoming || !track) return;
+    const timer = window.setTimeout(() => {
+      dispatch(
+        setNotification({
+          msg: `Skipped “${trackTitle(track)}”: your node couldn't get it from peers yet. Previous goes back to it.`,
+          alertType: "info",
+        })
+      );
+      dispatch(nextTrack({}));
+    }, STUCK_SKIP_MS);
+    return () => window.clearTimeout(timer);
+  }, [fetching, percent, player.playing, upcoming, track, key, dispatch]);
 
   const toggle = useCallback(() => dispatch(setPlaying(!player.playing)), [dispatch, player.playing]);
   const previous = useCallback(() => {
