@@ -180,7 +180,7 @@ describe('sorting, ATs and busy accounts', () => {
 describe('coverage', () => {
   it('says how far it read', () => {
     expect(paymentsCoverage({ count: 100, done: false }, { count: 100, done: false })).toBe(
-      'In its latest 100 QORT payments each way.'
+      'Read: its latest 100 QORT payments each way.'
     );
     expect(
       paymentsCoverage(
@@ -189,7 +189,7 @@ describe('coverage', () => {
         { count: 100, truncated: true }
       )
     ).toBe(
-      'In all 6 QORT payments it sent and its latest 200 QORT payments received, and its latest 100 asset transfers and multi-payments.'
+      'Read: every QORT payment it sent (6), its latest 200 QORT payments received and its latest 100 asset transfers and multi-payments.'
     );
     expect(
       paymentsCoverage(
@@ -198,7 +198,7 @@ describe('coverage', () => {
         { count: 0, truncated: false }
       )
     ).toBe(
-      'In no QORT payments sent and the only QORT payment it received, and its asset transfers and multi-payments (none).'
+      'Read: every QORT payment it sent (none), every QORT payment it received (1) and every asset transfer and multi-payment (none).'
     );
     expect(
       paymentsCoverage(
@@ -207,7 +207,7 @@ describe('coverage', () => {
         { count: 3, truncated: false }
       )
     ).toBe(
-      'In all 2 QORT payments it sent and all 2 QORT payments it received, and all 3 of its asset transfers and multi-payments.'
+      'Read: every QORT payment it sent (2), every QORT payment it received (2) and every asset transfer and multi-payment (3).'
     );
   });
 });

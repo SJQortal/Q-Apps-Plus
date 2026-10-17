@@ -246,36 +246,41 @@ export interface PageCoverage {
   done: boolean;
 }
 
+/** "every QORT payment it sent (12)", "every QORT payment it received (none)", "its latest 100 …". */
 function one(page: PageCoverage, verb: 'sent' | 'received'): string {
   if (!page.done) return `its latest ${formatCount(page.count)} QORT payments ${verb}`;
-  if (page.count === 0) return `no QORT payments ${verb}`;
-  if (page.count === 1) return `the only QORT payment it ${verb}`;
-  return `all ${formatCount(page.count)} QORT payments it ${verb}`;
+  return `every QORT payment it ${verb} (${page.count ? formatCount(page.count) : 'none'})`;
+}
+
+/** "a", "a and b", "a, b and c". */
+function listWords(items: readonly string[]): string {
+  return items.length <= 1
+    ? (items[0] ?? '')
+    : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
 /**
- * How much of its payments was read: "In its latest 100 QORT payments each
- * way, and its latest 100 asset transfers and multi-payments."
+ * What was read of its payments, with how many: "Read: its latest 100 QORT
+ * payments each way and its latest 100 asset transfers and multi-payments."
+ * / "Read: every QORT payment it sent (1), every QORT payment it received
+ * (none) and every asset transfer and multi-payment (none)."
  */
 export function paymentsCoverage(
   sent: PageCoverage,
   received: PageCoverage,
   assets?: { count: number; truncated: boolean }
 ): string {
-  const payments =
+  const parts =
     !sent.done && !received.done && sent.count === received.count
-      ? `its latest ${formatCount(sent.count)} QORT payments each way`
-      : `${one(sent, 'sent')} and ${one(received, 'received')}`;
-  const rest = !assets
-    ? ''
-    : assets.truncated
-      ? `, and its latest ${formatCount(assets.count)} asset transfers and multi-payments`
-      : assets.count > 1
-        ? `, and all ${formatCount(assets.count)} of its asset transfers and multi-payments`
-        : assets.count === 1
-          ? ', and its only asset transfer or multi-payment'
-          : ', and its asset transfers and multi-payments (none)';
-  return `In ${payments}${rest}.`;
+      ? [`its latest ${formatCount(sent.count)} QORT payments each way`]
+      : [one(sent, 'sent'), one(received, 'received')];
+  if (assets)
+    parts.push(
+      assets.truncated
+        ? `its latest ${formatCount(assets.count)} asset transfers and multi-payments`
+        : `every asset transfer and multi-payment (${assets.count ? formatCount(assets.count) : 'none'})`
+    );
+  return `Read: ${listWords(parts)}.`;
 }
 
 // ---- across a set of accounts ------------------------------------------------------------

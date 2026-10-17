@@ -138,7 +138,7 @@ describe('Connections: payments and first QORT', () => {
     await waitFor(() => expect(got).toHaveTextContent('has sent 500+ payments'), T);
     expect(got).toHaveTextContent('its first QORT came from them');
     expect(recorded).toHaveTextContent(
-      'In all 2 QORT payments it sent and all 5 QORT payments it received, and its asset transfers and multi-payments (none).'
+      'Read: every QORT payment it sent (2), every QORT payment it received (5) and every asset transfer and multi-payment (none).'
     );
 
     const common = await region('In common');
@@ -410,7 +410,7 @@ describe('Connections: payments and first QORT', () => {
       within(recorded).getByRole('button', { name: 'Show more (80 more)' })
     ).toBeInTheDocument();
     expect(recorded).toHaveTextContent(
-      'In its latest 100 QORT payments sent and no QORT payments received'
+      'Read: its latest 100 QORT payments sent, every QORT payment it received (none)'
     );
     await user.click(within(recorded).getByRole('button', { name: 'Check older payments sent' }));
     expect(await screen.findByText('100 older payments checked.', {}, T)).toBeInTheDocument();
