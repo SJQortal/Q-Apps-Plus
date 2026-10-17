@@ -604,12 +604,12 @@ export default {
       path: '/history/card/card-MAC-NC-1780000000000-a1B2c3?as=admin',
       after: wait('main h2'),
     },
-    { key: 'activity', path: '/activity?as=admin', after: settle },
+    { key: 'activity', path: '/explorer/activity?as=admin', after: settle },
     // A Minter Admin who last had History open at TIP − 6,000: three changes decided since
-    // count on the rail's History, and on Activity's History button where the phone bar has none.
+    // count on History in the navigation (the rail, or the phone bar: History is in both).
     {
       key: 'activity-history-news',
-      path: '/activity?as=admin',
+      path: '/explorer/activity?as=admin',
       after: async (page) => {
         await page.addInitScript(
           ([key, value]) => {
@@ -627,13 +627,13 @@ export default {
         await page.reload({ waitUntil: 'load' });
         await settle(page);
         await page
-          .getByRole('link', { name: 'History', exact: false })
+          .getByRole('button', { name: /^History, \d+ new$/ })
           .first()
           .waitFor({ timeout: 8000 });
         await page.waitForTimeout(1500);
       },
     },
-    { key: 'activity-member', path: '/activity?as=learner', after: settle },
+    { key: 'activity-member', path: '/explorer/activity?as=learner', after: settle },
     { key: 'settings', path: '/settings?as=admin', after: settle },
     // A moving target (e2e/world.mjs addTargetShift): the "target changed" note
     // (this device last saw 23 admin seats), the chips, and an admin change's impact.
