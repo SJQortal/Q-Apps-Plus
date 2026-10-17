@@ -11,12 +11,14 @@ import { createMemoryRouter, Link, Outlet, RouterProvider } from 'react-router-d
 import { ViewScope } from '../components/common/ViewScope';
 import { useSafeBack, useTrackInAppHistory } from './useSafeBack';
 import { useScrollTopOnNewPage } from './useScrollTopOnNewPage';
+import { useHubMessages } from './useHubMessages';
 import { useViewState } from './useViewState';
 import { currentVisit } from './pageVisits';
 
 function Shell() {
   useTrackInAppHistory();
   useScrollTopOnNewPage();
+  useHubMessages();
   return <Outlet />;
 }
 
@@ -59,7 +61,7 @@ function OtherPage() {
 
 let scrollY = 0;
 
-function setup() {
+function setup(start = '/list') {
   const router = createMemoryRouter(
     [
       {
@@ -72,7 +74,7 @@ function setup() {
         ],
       },
     ],
-    { initialEntries: ['/list'] }
+    { initialEntries: [start] }
   );
   render(<RouterProvider router={router} />);
   return { router, user: userEvent.setup() };
@@ -129,6 +131,19 @@ describe('useViewState', () => {
     expect([...(currentVisit()?.views.keys() ?? [])]).toEqual(['row:1']);
     await user.click(screen.getByRole('button', { name: 'Row 1' }));
     expect(currentVisit()?.views.size).toBe(0);
+  });
+
+  it('does the same on Hub’s Back, which sends the path without its query', async () => {
+    const { router, user } = setup('/list?q=maple');
+    await user.click(screen.getByRole('button', { name: 'Row 1' }));
+    await user.click(screen.getByRole('link', { name: 'Open the item' }));
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', { data: { action: 'NAVIGATE_TO_PATH', path: '/list' } })
+      );
+    });
+    expect(router.state.location.pathname + router.state.location.search).toBe('/list?q=maple');
+    expect(pressed('Row 1')).toBe('true');
   });
 
   it('starts fresh on the same page opened anew', async () => {
