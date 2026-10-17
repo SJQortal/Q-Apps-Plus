@@ -690,7 +690,7 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
 });
 
 describe('Connections: as a circle', () => {
-  it('draws what came in on the left and what went out on the right; an avatar lists its transactions', async () => {
+  it('draws what came in on the left, what went out on the right, both ways at the bottom; an avatar lists its transactions', async () => {
     const { container, user, world } = await open(ADDR.left);
     await region('Recorded between them');
     await user.click(screen.getByRole('button', { name: 'Circle' }));
@@ -698,46 +698,54 @@ describe('Connections: as a circle', () => {
     expect(window.localStorage.getItem('qmintershipplus-connections-view')).toBe('circle');
     const circle = await region('Connections circle');
     expect(screen.queryByRole('region', { name: 'Recorded between them' })).toBeNull();
-    // Each side its own list and heading: Kit paid each way, so on both sides.
+    // Each side its own list and heading; Kit, paid each way, is one avatar at the bottom.
     const received = await within(circle).findByRole(
       'list',
       { name: 'Received from, the most transactions first' },
       T
     );
-    const sent = within(circle).getByRole('list', { name: 'Sent to, the most transactions first' });
+    const both = within(circle).getByRole('list', {
+      name: 'Sent and received, the most transactions first',
+    });
     expect(within(circle).getByRole('heading', { name: 'Received from' })).toBeInTheDocument();
     expect(within(circle).getByRole('heading', { name: 'Sent to' })).toBeInTheDocument();
+    expect(within(circle).getByRole('heading', { name: 'Sent and received' })).toBeInTheDocument();
+    // Nothing went out only.
     expect(
-      within(received).getByRole('button', {
-        name: /^Kit Kicked, 4 transactions received, [\d,.]+ QORT: show them$/,
-      })
-    ).toBeInTheDocument();
+      within(circle).queryByRole('list', { name: 'Sent to, the most transactions first' })
+    ).toBeNull();
     expect(
       within(received).getByRole('button', {
         name: /^Hal Helper, 1 transaction received, [\d,.]+ QORT: show them$/,
       })
     ).toBeInTheDocument();
-    expect(
-      within(sent).getByRole('button', {
-        name: /^Kit Kicked, 2 transactions sent, [\d,.]+ QORT: show them$/,
-      })
-    ).toBeInTheDocument();
+    expect(within(received).queryByRole('button', { name: /^Kit Kicked/ })).toBeNull();
+    const kit = within(both).getByRole('button', {
+      name: 'Kit Kicked, 6 transactions: 4 received, 120 QORT; 2 sent, 6.3 QORT: show them',
+    });
+    // Its ring green and red in proportion: 120 of 126.3 QORT came in.
+    const ring = kit.querySelector('[data-ring]') as HTMLElement;
+    expect(ring).toHaveAttribute('data-received', '0.95');
     // Each name with the QORT that went that way, in brackets (Simon, 2026-10-17).
     expect(within(received).getAllByText(/^\([\d,.]+ QORT\)$/).length).toBeGreaterThan(0);
+    expect(within(both).getByText('(120 QORT in, 6.3 out)')).toBeInTheDocument();
     // Nothing links away: pressing an avatar lists its transactions.
     expect(within(circle).queryAllByRole('link')).toEqual([]);
     await expectNoAxeViolations(container);
 
-    await user.click(
-      within(received).getByRole('button', { name: /^Kit Kicked, 4 transactions received/ })
+    await user.click(kit);
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: 'Sent to and received from Kit Kicked' },
+      T
     );
-    const dialog = await screen.findByRole('dialog', { name: 'Received from Kit Kicked' }, T);
-    // What was recorded, as the list says it (the avatar's letter is hidden from reading).
+    // What was recorded each way, as the list says it (the avatar's letter is hidden from reading).
     expect(readText(dialog)).toContain('Received 120 QORT from Kit Kicked in 4 payments');
+    expect(readText(dialog)).toContain('Paid Kit Kicked 6.3 QORT in 2 payments');
     const rows = within(dialog).getByRole('list', {
-      name: 'Received from Kit Kicked: its transactions',
+      name: 'Sent to and received from Kit Kicked: its transactions',
     });
-    expect(rows.querySelectorAll('[data-tx-row]')).toHaveLength(4);
+    expect(rows.querySelectorAll('[data-tx-row]')).toHaveLength(6);
     expect(within(dialog).getByRole('link', { name: 'Explore Kit Kicked' })).toHaveAttribute(
       'href',
       explorerAccountPath(ADDR.kicked)

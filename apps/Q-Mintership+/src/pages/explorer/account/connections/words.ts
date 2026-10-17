@@ -4,6 +4,7 @@ import { formatCount, formatDate } from '../../../../utils/format';
 import type { Funding } from '../../../../data/explorer/account';
 import { LINK_PAGE, LINK_PAGES } from '../../../../data/explorer/links';
 import type { ConnectionsPart } from './useConnections';
+import type { CircleSide } from '../../../../rules/explorer/circle';
 
 /** "12 Mar 2025 · block 1,371,641", or "Mar–May 2025 · blocks 1,364,500–2,100,000". */
 export function whenLine(when: {
@@ -119,11 +120,19 @@ export function connectionsSearchLine(
 }
 
 /** A side of the Connections circle, as its heading says it. */
-export function sideWords(side: 'in' | 'out' | 'other'): string {
-  return side === 'in' ? 'Received from' : side === 'out' ? 'Sent to' : 'Other links';
+export function sideWords(side: CircleSide): string {
+  return side === 'in'
+    ? 'Received from'
+    : side === 'out'
+      ? 'Sent to'
+      : side === 'both'
+        ? 'Sent and received'
+        : 'Other links';
 }
 
 /** The title of what an avatar of the circle stands for: "Received from Kit Kicked". */
-export function circleNodeTitle(side: 'in' | 'out' | 'other', label: string): string {
-  return side === 'other' ? `${label}: other links` : `${sideWords(side)} ${label}`;
+export function circleNodeTitle(side: CircleSide, label: string): string {
+  if (side === 'other') return `${label}: other links`;
+  if (side === 'both') return `Sent to and received from ${label}`;
+  return `${sideWords(side)} ${label}`;
 }

@@ -5,8 +5,9 @@
  *
  * - The account in the middle; the accounts that sent it payments and
  *   transfers on the left, those it sent them to on the right. An account
- *   paid both ways is on both sides, each node counting that way's
- *   transactions only.
+ *   paid both ways is one node at the bottom, between the two sides
+ *   (Simon, 2026-10-17: "fill the empty middle bottom part"), its ring
+ *   green and red in proportion to what came in and went out.
  * - Its other links (reward shares, minting level, names) aren't
  *   transfers: they are a row of their own under the circle (`other`).
  * - Each side is one arc of an ellipse, from the top down, the most
@@ -19,7 +20,14 @@
 import type { TxRow } from '../../data/types';
 import type { Finding } from './findings';
 
-export type CircleSide = 'in' | 'out' | 'other';
+export type CircleSide = 'in' | 'out' | 'both' | 'other';
+
+/** One way's part of a node paid both ways. */
+export interface WayPart {
+  count: number;
+  /** QORT, atomic. */
+  qort: bigint;
+}
 
 export interface CircleNode {
   /** `in:Q…`, `out:Q…`, `other:Q…`: one per account and side. */
@@ -32,11 +40,15 @@ export interface CircleNode {
   findings: Finding[];
   /** QORT moved that way, in atomic units (Simon, 2026-10-17: "The Cat (500 QORT)"). */
   qort: bigint;
+  /** Paid both ways: each way's part. */
+  split?: { in: WayPart; out: WayPart };
 }
 
 export interface CircleGroups {
   in: CircleNode[];
   out: CircleNode[];
+  /** Accounts paid both ways: one node each, at the bottom. */
+  both: CircleNode[];
   other: CircleNode[];
 }
 
@@ -51,7 +63,7 @@ export interface PlacedNode extends CircleNode {
 export interface CircleLayout {
   placed: PlacedNode[];
   /** How many more there are on each side than are drawn. */
-  rest: { in: number; out: number };
+  rest: { in: number; out: number; both: number };
 }
 
 export interface LayoutOptions {
@@ -60,18 +72,38 @@ export interface LayoutOptions {
   ry: number;
   /** Nodes on a side at most. */
   sideMax: number;
+  /** Nodes paid both ways at the bottom at most. */
+  bothMax: number;
   /** Avatar sizes: the smallest, and the biggest when a side holds few. */
   minSize: number;
   maxSize: number;
 }
 
 /** A wide screen: a box 4 wide by 3 high, room beside each side for the names. */
-export const WIDE_LAYOUT: LayoutOptions = { rx: 30, ry: 41, sideMax: 10, minSize: 28, maxSize: 56 };
+export const WIDE_LAYOUT: LayoutOptions = {
+  rx: 30,
+  ry: 41,
+  sideMax: 10,
+  bothMax: 4,
+  minSize: 28,
+  maxSize: 56,
+};
 /** A phone: a box 3 wide by 4 high, no names beside the avatars. */
-export const PHONE_LAYOUT: LayoutOptions = { rx: 35, ry: 41, sideMax: 8, minSize: 24, maxSize: 44 };
+export const PHONE_LAYOUT: LayoutOptions = {
+  rx: 35,
+  ry: 41,
+  sideMax: 8,
+  bothMax: 3,
+  minSize: 24,
+  maxSize: 44,
+};
 
 /** The gap left at the top and the bottom between the two sides, in degrees. */
 const GAP_DEGREES = 20;
+/** The bottom gap when accounts paid both ways sit in it. */
+const BOTH_GAP_DEGREES = 52;
+/** How far the bottom row reaches either way, as a share of the ellipse's width. */
+const BOTH_SPREAD = 0.8;
 
 const SIDE_OF: Readonly<Record<Finding['kind'], CircleSide>> = {
   paidBy: 'in',
@@ -103,12 +135,33 @@ export function circleNodes(findings: readonly Finding[]): CircleGroups {
     node.findings.push(finding);
     nodes.set(key, node);
   }
+  // Paid both ways: one node, with each way's part.
+  for (const [key, received] of nodes) {
+    if (received.side !== 'in') continue;
+    const sent = nodes.get(`out:${received.address}`);
+    if (!sent) continue;
+    nodes.delete(key);
+    nodes.delete(sent.key);
+    nodes.set(`both:${received.address}`, {
+      key: `both:${received.address}`,
+      address: received.address,
+      side: 'both',
+      count: received.count + sent.count,
+      findings: [...received.findings, ...sent.findings],
+      qort: received.qort + sent.qort,
+      split: {
+        in: { count: received.count, qort: received.qort },
+        out: { count: sent.count, qort: sent.qort },
+      },
+    });
+  }
   const sorted = [...nodes.values()].sort(
     (a, b) => b.count - a.count || a.address.localeCompare(b.address)
   );
   return {
     in: sorted.filter((node) => node.side === 'in'),
     out: sorted.filter((node) => node.side === 'out'),
+    both: sorted.filter((node) => node.side === 'both'),
     other: sorted.filter((node) => node.side === 'other'),
   };
 }
@@ -149,10 +202,19 @@ export function circleLayout(
   const sides = {
     in: groups.in.slice(0, options.sideMax),
     out: groups.out.slice(0, options.sideMax),
+    both: (groups.both ?? []).slice(0, options.bothMax),
   };
-  const maxCount = Math.max(1, ...sides.in.map((n) => n.count), ...sides.out.map((n) => n.count));
-  const gap = (GAP_DEGREES * Math.PI) / 180;
-  const span = Math.PI - 2 * gap;
+  const maxCount = Math.max(
+    1,
+    ...sides.in.map((n) => n.count),
+    ...sides.out.map((n) => n.count),
+    ...sides.both.map((n) => n.count)
+  );
+  const rad = (degrees: number) => (degrees * Math.PI) / 180;
+  const gap = rad(GAP_DEGREES);
+  // The sides leave the bottom to the accounts paid both ways, when there are any.
+  const bottomGap = sides.both.length ? rad(BOTH_GAP_DEGREES) : gap;
+  const span = Math.PI - gap - bottomGap;
   const place = (list: readonly CircleNode[], side: 'in' | 'out'): PlacedNode[] => {
     const max = sideMaxSize(list.length, options);
     return list.map((node, i) => {
@@ -168,11 +230,30 @@ export function circleLayout(
       };
     });
   };
+  // Paid both ways: a flat row along the bottom, under the sides' lowest
+  // nodes, the most transactions in the middle. Flatter and wider than the
+  // ellipse, so the names under them have room side by side.
+  const bothMax = sideMaxSize(sides.both.length + 4, options);
+  const middleOut = [...sides.both].sort((a, b) => b.count - a.count);
+  const order: CircleNode[] = [];
+  middleOut.forEach((node, i) => (i % 2 ? order.unshift(node) : order.push(node)));
+  const spread =
+    options.rx * BOTH_SPREAD * Math.min(1, (order.length - 1) / Math.max(1, options.bothMax - 1));
+  const bottom = order.map((node, i) => {
+    const p = order.length === 1 ? 0 : (i / (order.length - 1)) * 2 - 1;
+    return {
+      ...node,
+      x: 50 + spread * p,
+      y: 50 + options.ry * (0.98 - 0.12 * p * p),
+      size: nodeSize(node.count, maxCount, options.minSize, bothMax),
+    };
+  });
   return {
-    placed: [...place(sides.in, 'in'), ...place(sides.out, 'out')],
+    placed: [...place(sides.in, 'in'), ...place(sides.out, 'out'), ...bottom],
     rest: {
       in: Math.max(0, groups.in.length - sides.in.length),
       out: Math.max(0, groups.out.length - sides.out.length),
+      both: Math.max(0, (groups.both ?? []).length - sides.both.length),
     },
   };
 }
@@ -187,4 +268,18 @@ export function circleQort(atomic: bigint): string | null {
   const qort = Number(atomic) / 1e8;
   const digits = qort >= 100 ? 0 : qort >= 1 ? 2 : 4;
   return qort.toLocaleString('en-US', { maximumFractionDigits: digits });
+}
+
+/**
+ * What share of a node paid both ways came in (0 to 1): by QORT when QORT
+ * went either way, else by transactions. 1 for received only, 0 for sent.
+ */
+export function receivedShare(node: Pick<CircleNode, 'side' | 'split'>): number {
+  if (node.side === 'in') return 1;
+  if (node.side !== 'both' || !node.split) return 0;
+  const { in: received, out: sent } = node.split;
+  const qort = received.qort + sent.qort;
+  if (qort > 0n) return Number((received.qort * 10_000n) / qort) / 10_000;
+  const count = received.count + sent.count;
+  return count ? received.count / count : 0.5;
 }

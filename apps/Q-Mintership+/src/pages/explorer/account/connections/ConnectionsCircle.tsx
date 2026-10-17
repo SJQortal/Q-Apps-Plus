@@ -4,13 +4,17 @@
  * payments and transfers from on the left, those it sent them to on the
  * right (rules/explorer/circle.ts), each avatar sized by how many
  * transactions went that way and marked with their number. An account paid
- * both ways is on both sides.
+ * both ways is one avatar at the bottom, between the sides (Simon,
+ * 2026-10-17: "fill the empty middle bottom part"); its ring and its line are
+ * green and red in proportion to what came in and went out ("make the green
+ * and red circle around the avatar represent the proportion"), by QORT, or
+ * by transactions when no QORT moved.
  *
  * Easy to read: one straight line from the middle to each avatar, every
  * avatar at its own angle, so no line crosses another or runs under an
  * avatar; green on the left, red on the right, lighter until one is
  * pointed at or focused. On wider screens each name sits on the outer side
- * of its avatar, away from the lines. The links that aren't transfers
+ * of its avatar, away from the lines, and under it at the bottom. The links that aren't transfers
  * (reward shares, minting level, names) are a row under the circle.
  *
  * Pressing an avatar lists the transactions behind it, in a dialog
@@ -31,6 +35,7 @@ import {
   circleQort,
   circleNodes,
   PHONE_LAYOUT,
+  receivedShare,
   WIDE_LAYOUT,
   type CircleNode,
   type PlacedNode,
@@ -70,31 +75,49 @@ function Lines({
       className="qmp-fade"
       sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible' }}
     >
-      {placed.map((node) => (
-        <line
-          key={node.key}
-          x1={50}
-          y1={50}
-          x2={node.x}
-          y2={node.y}
-          stroke={node.side === 'in' ? colours.in : colours.out}
-          strokeWidth={1 + 2.5 * Math.sqrt(node.count / maxCount)}
-          strokeLinecap="round"
-          vectorEffect="non-scaling-stroke"
-          style={{
-            opacity: active === null ? 0.45 : active === node.key ? 1 : 0.12,
-            transition: 'opacity 150ms ease',
-          }}
-        />
-      ))}
+      {placed.map((node) => {
+        const style = {
+          opacity: active === null ? 0.45 : active === node.key ? 1 : 0.12,
+          transition: 'opacity 150ms ease',
+        };
+        const common = {
+          strokeWidth: 1 + 2.5 * Math.sqrt(node.count / maxCount),
+          strokeLinecap: 'butt' as const,
+          vectorEffect: 'non-scaling-stroke' as const,
+        };
+        // Paid both ways: green from the middle for the share received, red for the rest.
+        const share = receivedShare(node);
+        const mx = 50 + (node.x - 50) * share;
+        const my = 50 + (node.y - 50) * share;
+        return (
+          <g key={node.key} style={style}>
+            {share > 0 ? (
+              <line x1={50} y1={50} x2={mx} y2={my} stroke={colours.in} {...common} />
+            ) : null}
+            {share < 1 ? (
+              <line x1={mx} y1={my} x2={node.x} y2={node.y} stroke={colours.out} {...common} />
+            ) : null}
+          </g>
+        );
+      })}
     </Box>
   );
 }
 
-/** "4 transactions received, 500 QORT", "2 transactions sent", "3 transactions". */
+/**
+ * "4 transactions received, 500 QORT", "2 transactions sent", "3 transactions";
+ * both ways, "5 transactions: 3 received, 500 QORT; 2 sent, 20 QORT".
+ */
 function countWords(node: CircleNode): string {
   const qort = circleQort(node.qort);
   const amount = qort ? `, ${qort} QORT` : '';
+  if (node.side === 'both' && node.split) {
+    const part = (q: bigint) => (circleQort(q) ? `, ${circleQort(q)} QORT` : '');
+    // The total first: it is the number on the avatar.
+    return `${plural(node.count, 'transaction')}: ${formatCount(node.split.in.count)} received${part(
+      node.split.in.qort
+    )}; ${formatCount(node.split.out.count)} sent${part(node.split.out.qort)}`;
+  }
   return node.side === 'in'
     ? `${plural(node.count, 'transaction')} received${amount}`
     : node.side === 'out'
@@ -102,11 +125,30 @@ function countWords(node: CircleNode): string {
       : plural(node.count, 'transaction');
 }
 
-/** How many transactions an avatar stands for, on its corner. */
+/** "(500 QORT)"; both ways "(500 QORT in, 20 out)", "(500 QORT in)"; null without QORT. */
+function qortWords(node: CircleNode): string | null {
+  if (node.side === 'both' && node.split) {
+    const received = circleQort(node.split.in.qort);
+    const sent = circleQort(node.split.out.qort);
+    if (received && sent) return `(${received} QORT in, ${sent} out)`;
+    if (received) return `(${received} QORT in)`;
+    if (sent) return `(${sent} QORT out)`;
+    return null;
+  }
+  const qort = circleQort(node.qort);
+  return qort ? `(${qort} QORT)` : null;
+}
+
+/**
+ * How many transactions an avatar stands for, on its corner. Drawn by CSS:
+ * the button's name already says it, and as text it would run into the
+ * avatar's letter ("K6") for checks that read the button's visible words.
+ */
 function CountBadge({ count, side }: { count: number; side: CircleNode['side'] }) {
   return (
     <Box
       aria-hidden
+      data-count={count > 999 ? '999+' : String(count)}
       sx={(theme) => ({
         position: 'absolute',
         right: -4,
@@ -128,12 +170,13 @@ function CountBadge({ count, side }: { count: number; side: CircleNode['side'] }
             ? theme.palette.success.main
             : side === 'out'
               ? theme.palette.error.main
-              : theme.palette.primary.main
+              : side === 'both'
+                ? theme.palette.text.secondary
+                : theme.palette.primary.main
         }`,
+        '&::after': { content: 'attr(data-count)' },
       })}
-    >
-      {count > 999 ? '999+' : count}
-    </Box>
+    />
   );
 }
 
@@ -141,6 +184,7 @@ function Node({
   node,
   index,
   named,
+  room = 20,
   onActive,
   onPick,
 }: {
@@ -148,14 +192,32 @@ function Node({
   index: number;
   /** Its name beside it, on the outer side (wider screens). */
   named: boolean;
+  /** At the bottom: the room between it and the next, in % of the circle's width. */
+  room?: number;
   onActive: (key: string | null) => void;
   onPick: (node: CircleNode) => void;
 }) {
   const shown = useDisplayName(node.address, node.address.startsWith('A') ? null : undefined);
   const colours = useSideColours();
   const words = countWords(node);
-  const qort = circleQort(node.qort);
-  const outer = node.side === 'in' ? { right: '100%', mr: 1 } : { left: '100%', ml: 1 };
+  const qort = qortWords(node);
+  const below = node.side === 'both';
+  // The name on the outer side of its avatar; under it at the bottom.
+  const outer = below
+    ? { top: '100%', left: '50%', translate: '-50% 0', mt: 0.5 }
+    : {
+        top: '50%',
+        translate: '0 -50%',
+        ...(node.side === 'in' ? { right: '100%', mr: 1 } : { left: '100%', ml: 1 }),
+      };
+  // The ring's green share, from the top clockwise: what came in.
+  const share = receivedShare(node);
+  const ring =
+    share >= 1
+      ? colours.in
+      : share <= 0
+        ? colours.out
+        : `conic-gradient(${colours.in} 0 ${share * 360}deg, ${colours.out} ${share * 360}deg 360deg)`;
   return (
     <Box
       component="li"
@@ -205,12 +267,13 @@ function Node({
           >
             <Box
               data-ring=""
+              data-received={share.toFixed(2)}
               sx={{
                 position: 'relative',
                 display: 'flex',
                 borderRadius: '50%',
                 p: '3px',
-                bgcolor: node.side === 'in' ? colours.in : colours.out,
+                background: ring,
               }}
             >
               <Box
@@ -227,32 +290,49 @@ function Node({
             aria-hidden
             sx={{
               position: 'absolute',
-              top: '50%',
-              translate: '0 -50%',
               ...outer,
               display: 'flex',
-              alignItems: 'baseline',
-              gap: 0.5,
-              flexDirection: node.side === 'in' ? 'row-reverse' : 'row',
+              alignItems: below ? 'center' : 'baseline',
+              gap: below ? 0 : 0.5,
+              flexDirection: below ? 'column' : node.side === 'in' ? 'row-reverse' : 'row',
               fontSize: 14,
               fontWeight: 600,
               lineHeight: 1.2,
               whiteSpace: 'nowrap',
               pointerEvents: 'none',
+              // At the bottom, no wider than the room to the next one (cqw: the circle's width).
+              ...(below
+                ? { width: 'max-content', maxWidth: `min(124px, calc(${room}cqw - 6px))` }
+                : {}),
             }}
           >
             {/* The amount after the name, always whole; the name cut short when long. */}
             {qort ? (
               <Box
                 component="span"
-                sx={{ order: node.side === 'in' ? 0 : 1, fontWeight: 500, color: 'text.secondary' }}
+                sx={{
+                  order: node.side === 'in' ? 0 : 1,
+                  fontWeight: 500,
+                  color: 'text.secondary',
+                  fontSize: below ? 12 : undefined,
+                  whiteSpace: below ? 'normal' : undefined,
+                  textAlign: below ? 'center' : undefined,
+                }}
               >
-                ({qort} QORT)
+                {qort}
               </Box>
             ) : null}
             <Box
               component="span"
-              sx={{ maxWidth: 112, overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
+              sx={{
+                maxWidth: below ? '100%' : 112,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                minWidth: 0,
+                bgcolor: below ? 'background.paper' : undefined,
+                px: below ? 0.5 : undefined,
+                borderRadius: below ? 1 : undefined,
+              }}
             >
               <MarkedName name={shown.name}>{shown.label}</MarkedName>
             </Box>
@@ -313,13 +393,14 @@ function SideHeading({
   accounts,
   more,
 }: {
-  side: 'in' | 'out';
+  side: 'in' | 'out' | 'both';
   accounts: number;
   more: number;
 }) {
   const colours = useSideColours();
+  const align = side === 'in' ? 'left' : side === 'out' ? 'right' : 'center';
   return (
-    <Box sx={{ textAlign: side === 'in' ? 'left' : 'right', minWidth: 0 }}>
+    <Box sx={{ textAlign: align, minWidth: 0 }}>
       <Typography
         component="h3"
         sx={{
@@ -328,13 +409,22 @@ function SideHeading({
           display: 'flex',
           gap: 0.75,
           alignItems: 'center',
-          justifyContent: side === 'in' ? 'flex-start' : 'flex-end',
+          justifyContent: side === 'in' ? 'flex-start' : side === 'out' ? 'flex-end' : 'center',
         }}
       >
         <Box
           aria-hidden
           component="span"
-          sx={{ width: 18, height: 4, borderRadius: 2, bgcolor: colours[side], flexShrink: 0 }}
+          sx={{
+            width: 18,
+            height: 4,
+            borderRadius: 2,
+            background:
+              side === 'both'
+                ? `linear-gradient(90deg, ${colours.in} 50%, ${colours.out} 50%)`
+                : colours[side],
+            flexShrink: 0,
+          }}
         />
         {sideWords(side)}
       </Typography>
@@ -365,14 +455,19 @@ export function ConnectionsCircle({
   const [pickedKey, setPickedKey] = useViewState<string | null>('circle:picked', null);
   const groups = circleNodes(recorded);
   const picked = pickedKey
-    ? ([...groups.in, ...groups.out, ...groups.other].find((node) => node.key === pickedKey) ??
-      null)
+    ? ([...groups.in, ...groups.out, ...groups.both, ...groups.other].find(
+        (node) => node.key === pickedKey
+      ) ?? null)
     : null;
   const setPicked = (node: CircleNode | null) => setPickedKey(node ? node.key : null);
   const { placed, rest } = circleLayout(groups, options);
   const maxCount = Math.max(1, ...placed.map((node) => node.count));
   const left = placed.filter((node) => node.side === 'in');
   const right = placed.filter((node) => node.side === 'out');
+  const bottom = placed.filter((node) => node.side === 'both');
+  // The room each name under the bottom row has: the gap to its nearest neighbour.
+  const bottomXs = bottom.map((node) => node.x).sort((a, b) => a - b);
+  const bottomRoom = Math.min(30, ...bottomXs.slice(1).map((x, i) => x - bottomXs[i]));
   // As tall as the fuller side needs: a few accounts leave no empty space.
   const fullest = Math.max(left.length, right.length);
   const aspect = phone
@@ -387,7 +482,7 @@ export function ConnectionsCircle({
         ? '16 / 10'
         : '4 / 3';
   const accounts = new Set(
-    [...groups.in, ...groups.out, ...groups.other].map((node) => node.address)
+    [...groups.in, ...groups.out, ...groups.both, ...groups.other].map((node) => node.address)
   ).size;
   if (!placed.length && !groups.other.length)
     return (
@@ -418,12 +513,20 @@ export function ConnectionsCircle({
               m: 0,
               width: '100%',
               aspectRatio: aspect,
-              // Room for the avatars at the edges.
+              // Room for the avatars at the edges, and the names under the bottom ones.
               p: { xs: 2.5, sm: 3 },
+              pb: bottom.length ? { xs: 3.5, sm: 7 } : undefined,
               boxSizing: 'border-box',
             }}
           >
-            <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+            <Box
+              sx={{
+                position: 'relative',
+                width: '100%',
+                height: '100%',
+                containerType: 'inline-size',
+              }}
+            >
               <Lines placed={placed} maxCount={maxCount} active={active} />
               {/* The account itself, in the middle. */}
               <Box
@@ -469,6 +572,7 @@ export function ConnectionsCircle({
               {[
                 { side: 'in' as const, list: left },
                 { side: 'out' as const, list: right },
+                { side: 'both' as const, list: bottom },
               ].map(({ side, list }) =>
                 list.length ? (
                   <Box
@@ -483,6 +587,7 @@ export function ConnectionsCircle({
                         node={node}
                         index={i}
                         named={!phone}
+                        room={bottomRoom}
                         onActive={setActive}
                         onPick={setPicked}
                       />
@@ -493,6 +598,9 @@ export function ConnectionsCircle({
             </Box>
           </Box>
         </Box>
+      ) : null}
+      {groups.both.length ? (
+        <SideHeading side="both" accounts={groups.both.length} more={rest.both} />
       ) : null}
       {groups.other.length ? (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -511,13 +619,16 @@ export function ConnectionsCircle({
         </Box>
       ) : null}
       <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-        The bigger the avatar and its line, the more transactions went that way. Press one for its
-        transactions.
+        The bigger the avatar and its line, the more transactions went that way.
+        {groups.both.length
+          ? ' At the bottom, accounts paid both ways: green for what came in, red for what went out.'
+          : ''}{' '}
+        Press one for its transactions.
       </Typography>
-      {rest.in || rest.out ? (
+      {rest.in || rest.out || rest.both ? (
         <Box sx={{ display: 'flex', justifyContent: 'center' }}>
           <Button onClick={onShowList} sx={{ minHeight: 44 }}>
-            {`${plural(rest.in + rest.out, 'more account')} with fewer transactions: see the list`}
+            {`${plural(rest.in + rest.out + rest.both, 'more account')} with fewer transactions: see the list`}
           </Button>
         </Box>
       ) : null}
