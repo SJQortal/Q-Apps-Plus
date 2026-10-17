@@ -182,6 +182,8 @@ function TimelineItem({
                 theme.palette.mode === 'dark' ? 0.14 : 0.08
               ),
               boxShadow: `inset 4px 0 0 ${theme.palette.primary.main}`,
+              // Outlined chips keep the card's own background, so their words keep their contrast.
+              '& .MuiChip-outlined': { bgcolor: 'background.paper' },
             }
           : {}),
       })}
