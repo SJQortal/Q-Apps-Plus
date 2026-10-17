@@ -2,27 +2,38 @@
  * A new page opens at its top. The window keeps its scroll across route
  * changes, so without this a tab or a link opened the next page as far
  * down as the last one was (seen in GO, where pages are long on phones).
- * Back and Forward (POP) leave the position alone, and a change of the
- * query only (a filter on the same page) doesn't jump. A tab of one
- * Explorer account is the same page (routes/paths.ts pageKeyOf): the
- * account page brings that tab's top into view when it is above the
- * screen, rather than going to the page's top (useTopInViewOnSwitch).
+ * A change of the query only (a filter on the same page) doesn't jump. A
+ * tab of one Explorer account is the same page (routes/paths.ts
+ * pageKeyOf): the account page brings that tab's top into view when it is
+ * above the screen, rather than going to the page's top
+ * (useTopInViewOnSwitch).
+ *
+ * Back to a page visited before (the app's Back, Hub's, the browser's, a
+ * trail crumb: pageVisits.ts) scrolls to where it was left, holding there
+ * while the page comes in; Forward leaves the position alone.
  */
 import { useLayoutEffect, useRef } from 'react';
 import { useLocation, useNavigationType } from 'react-router-dom';
 import { pageKeyOf } from '../routes/paths';
+import { restoreScroll, stopScrollRestore, takeReturned } from './pageVisits';
 import { HEADER_HEIGHT_VAR } from './useOverlayPadding';
 import { useReducedMotion } from './useReducedMotion';
 
 export function useScrollTopOnNewPage(): void {
-  const page = pageKeyOf(useLocation().pathname);
+  const location = useLocation();
+  const page = pageKeyOf(location.pathname);
   const type = useNavigationType();
   const last = useRef(page);
+  // After useTrackInAppHistory has recorded the navigation (the shell calls it first).
   useLayoutEffect(() => {
-    if (last.current === page) return;
+    // A scroll back still under way belongs to the page before.
+    stopScrollRestore();
+    const returned = takeReturned();
+    const newPage = last.current !== page;
     last.current = page;
-    if (type !== 'POP') window.scrollTo(0, 0);
-  }, [page, type]);
+    if (returned) restoreScroll(returned);
+    else if (newPage && type !== 'POP') window.scrollTo(0, 0);
+  }, [location.key, page, type]);
 }
 
 /**

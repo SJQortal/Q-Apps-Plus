@@ -1,17 +1,21 @@
 /**
  * The accounts opened one from another (state/explorer.ts trail), as
  * crumbs under the account header: each one opens that account again (and
- * the trail goes back to it). On phones the middle collapses into one
+ * the trail goes back to it), as it was left when it was opened in this
+ * session (the same tab, scrolled to the same place, the same rows open:
+ * useGoBackTo). On phones the middle collapses into one
  * 44 px button, by CSS (no screen-size listener per crumb); pressing it
  * moves focus to the first crumb it revealed, since the button goes.
  * "Compare 2" closes the row when two or more accounts are picked to compare.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, ButtonBase } from '@mui/material';
 import { NameAvatar } from '../../../components/common/NameAvatar';
 import { usePrimaryName } from '../../../hooks/useData';
-import { explorerAccountPath, explorerComparePath } from '../../../routes/paths';
+import { useGoBackTo } from '../../../hooks/useSafeBack';
+import { useViewState } from '../../../hooks/useViewState';
+import { explorerAccountPath, explorerComparePath, pageKeyOf } from '../../../routes/paths';
 import { visibleName } from '../../../rules/explorer/nameNotes';
 import { useComparePicks, useTrail } from '../../../state/explorer';
 import { shortAddress } from '../../../utils/format';
@@ -42,6 +46,7 @@ const LABEL_SX = {
 
 function Crumb({ address, current }: { address: string; current: boolean }) {
   const name = usePrimaryName(address.startsWith('Q') ? address : null).data ?? null;
+  const goBackTo = useGoBackTo();
   const label = name ? visibleName(name) : shortAddress(address);
   const content = (
     <>
@@ -62,6 +67,12 @@ function Crumb({ address, current }: { address: string; current: boolean }) {
       component={RouterLink}
       to={explorerAccountPath(address)}
       state={{ via: 'explorer' }}
+      onClick={(event: React.MouseEvent) => {
+        // A plain press goes back to it as it was left; a new tab or window opens it anew.
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+          return;
+        if (goBackTo(pageKeyOf(explorerAccountPath(address)))) event.preventDefault();
+      }}
       sx={{
         ...CRUMB_SX,
         color: 'primary.main',
@@ -79,7 +90,7 @@ const ITEM_SX = { display: 'flex', alignItems: 'center', minWidth: 0 } as const;
 export function ExplorerTrail() {
   const trail = useTrail();
   const picks = useComparePicks();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useViewState('trail:expanded', false);
   const list = useRef<HTMLOListElement>(null);
   // Set when "n more" is pressed: focus goes to the first crumb it revealed.
   const revealed = useRef(false);

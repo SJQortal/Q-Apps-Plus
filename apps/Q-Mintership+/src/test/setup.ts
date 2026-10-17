@@ -9,6 +9,7 @@
  */
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, vi } from 'vitest';
+import { resetPageVisits } from '../hooks/pageVisits';
 import { cleanup } from '@testing-library/react';
 
 type QortalHandler = (request: Record<string, unknown>) => unknown;
@@ -187,10 +188,15 @@ if (typeof window.IntersectionObserver === 'undefined') {
     configurable: true,
     value: () => `blob:test/${++nextBlob}`,
   });
-  Object.defineProperty(URL, 'revokeObjectURL', { writable: true, configurable: true, value: () => {} });
+  Object.defineProperty(URL, 'revokeObjectURL', {
+    writable: true,
+    configurable: true,
+    value: () => {},
+  });
 }
 
 beforeEach(() => {
+  resetPageVisits();
   qortalHandlers.clear();
   qortalCalls.length = 0;
   fetchRoutes.length = 0;
