@@ -1,10 +1,14 @@
 /**
- * One transaction in a list: a single button (its family's icon, the
- * sentence, when and in which block) that opens to its details in plain
+ * One transaction in a list: its family's icon, the sentence, when and in
+ * which block, over a single button that opens it to its details in plain
  * words (TxFields), the accounts involved (Explorer links where the page
- * links people there) and "Open transaction". The sentence inside the
- * button is plain text (TxSentence plain: no link inside a button); the
- * links are in the panel it opens.
+ * links people there) and "Open transaction". A press anywhere on the row
+ * opens it, except on an account, a name or a transaction in the sentence
+ * (Simon, 2026-10-17: "whenever there is a name … click that name to go
+ * into it"): those are links (TxSentence quiet), left out of the Tab
+ * order, since the panel the row opens has the same links for the
+ * keyboard. The button is named by the row's words, which screen readers
+ * read once, as the button.
  *
  * Names in the sentence are looked up once the row nears the screen, so a
  * long list doesn't read every counterparty's name at once; until then the
@@ -57,31 +61,40 @@ const NOWRAP = { whiteSpace: 'nowrap' } as const;
 
 // The closed row's parts, styled once: a list shows 50 rows, so each row is
 // a plain button and spans (no per-row sx, ripple or focus tracking).
-const RowButton = styled('button')(({ theme }) => ({
-  width: '100%',
+// The row's head: its words over the button that opens it. The words let
+// presses through to the button, except on their links (TxSentence quiet).
+const Head = styled('div')(({ theme }) => ({
+  position: 'relative',
   minHeight: 56,
-  margin: 0,
-  border: 0,
   padding: theme.spacing(1, 1.25),
   [theme.breakpoints.up('sm')]: { padding: theme.spacing(1, 1.5) },
   display: 'flex',
   alignItems: 'flex-start',
-  justifyContent: 'flex-start',
   gap: theme.spacing(1.5),
-  textAlign: 'left',
+  borderRadius: theme.shape.borderRadius,
+  color: theme.palette.text.primary,
+  '& > :not(button)': { position: 'relative', pointerEvents: 'none' },
+  '&:hover': { backgroundColor: theme.palette.action.hover },
+  // The chevron turns over as the row opens (ExpandChevron's turn).
+  '& [data-chevron]': { transition: CHEVRON_TURN },
+  '&[data-open] [data-chevron]': { transform: 'rotate(180deg)' },
+  // Incoming amounts green, outgoing red (the row's data-direction).
+  ...directionRules(theme),
+}));
+// The button under the head's words: the whole head opens the row.
+const RowButton = styled('button')(({ theme }) => ({
+  position: 'absolute',
+  inset: 0,
+  width: '100%',
+  margin: 0,
+  border: 0,
+  padding: 0,
   borderRadius: theme.shape.borderRadius,
   background: 'none',
   cursor: 'pointer',
   font: 'inherit',
-  color: theme.palette.text.primary,
   WebkitTapHighlightColor: 'transparent',
-  '&:hover': { backgroundColor: theme.palette.action.hover },
   '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
-  // The chevron turns over as the row opens (ExpandChevron's turn).
-  '& [data-chevron]': { transition: CHEVRON_TURN },
-  '&[aria-expanded="true"] [data-chevron]': { transform: 'rotate(180deg)' },
-  // Incoming amounts green, outgoing red (the row's data-direction).
-  ...directionRules(theme),
 }));
 // The family's icon in a soft circle of its colour (txFamilyAccent), one rule per family.
 const Slot = styled('span')(({ theme }) => ({
@@ -182,6 +195,7 @@ export function TxListRow({ tx, viewpoint = null, top = true, hint = null }: TxL
   const words = useTxWords(tx, viewpoint);
   const links = usePersonLinks();
   const panelId = useId();
+  const labelId = useId();
   const [node, setNode] = useState<HTMLElement | null>(null);
   const near = useInView(node, '200px');
   const maker = words.participants[0] ?? null;
@@ -190,32 +204,34 @@ export function TxListRow({ tx, viewpoint = null, top = true, hint = null }: TxL
 
   return (
     <Row ref={setNode}>
-      <RowButton
-        type="button"
-        data-tx-row=""
-        data-tx-top={top ? '' : undefined}
-        data-direction={flow ?? undefined}
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
-      >
-        <Slot data-family={familyOf(tx.type)}>
+      <Head data-direction={flow ?? undefined} data-open={open ? '' : undefined}>
+        <RowButton
+          type="button"
+          data-tx-row=""
+          data-tx-top={top ? '' : undefined}
+          data-direction={flow ?? undefined}
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          aria-controls={open ? panelId : undefined}
+          aria-labelledby={`${labelId}-mark ${labelId}-words`}
+        />
+        <Slot id={`${labelId}-mark`} aria-hidden data-family={familyOf(tx.type)}>
           <TxIcon type={tx.type} />
           {flow ? <DirectionMark flow={flow} badge /> : null}
         </Slot>
-        <Lines>
+        <Lines id={`${labelId}-words`} aria-hidden>
           <SentenceLine>
-            {near ? <TxSentence parts={words.parts} plain /> : words.plain}
+            {near ? <TxSentence parts={words.parts} quiet /> : words.plain}
           </SentenceLine>
           <WhenLine>
             <When tx={tx} />
           </WhenLine>
           {hint ? <HintLine>{hint}</HintLine> : null}
         </Lines>
-        <Slot>
-          <ExpandMoreOutlinedIcon aria-hidden data-chevron="" />
+        <Slot aria-hidden>
+          <ExpandMoreOutlinedIcon data-chevron="" />
         </Slot>
-      </RowButton>
+      </Head>
       <SmoothReveal open={open}>
         <Box
           id={panelId}
@@ -289,27 +305,30 @@ function TxRunRow({
   const span = runSpan(rows);
   const words = useTxWords(tx, viewpoint);
   const panelId = useId();
+  const labelId = useId();
   const [node, setNode] = useState<HTMLElement | null>(null);
   const near = useInView(node, '200px');
   const flow = words.direction === 'in' || words.direction === 'out' ? words.direction : null;
   return (
     <Row ref={setNode}>
-      <RowButton
-        type="button"
-        data-tx-row=""
-        data-tx-top=""
-        data-direction={flow ?? undefined}
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
-      >
-        <Slot data-family={familyOf(tx.type)}>
+      <Head data-direction={flow ?? undefined} data-open={open ? '' : undefined}>
+        <RowButton
+          type="button"
+          data-tx-row=""
+          data-tx-top=""
+          data-direction={flow ?? undefined}
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          aria-controls={open ? panelId : undefined}
+          aria-labelledby={`${labelId}-mark ${labelId}-words`}
+        />
+        <Slot id={`${labelId}-mark`} aria-hidden data-family={familyOf(tx.type)}>
           <TxIcon type={tx.type} />
           {flow ? <DirectionMark flow={flow} badge /> : null}
         </Slot>
-        <Lines>
+        <Lines id={`${labelId}-words`} aria-hidden>
           <SentenceLine>
-            {near ? <TxSentence parts={words.parts} plain /> : words.plain}
+            {near ? <TxSentence parts={words.parts} quiet /> : words.plain}
           </SentenceLine>
           <WhenLine>
             <span style={NOWRAP}>{formatCount(rows.length)} times</span> ·{' '}
@@ -327,10 +346,10 @@ function TxRunRow({
           {hint ? <HintLine>{hint}</HintLine> : null}
         </Lines>
         <Count aria-hidden>×{formatCount(rows.length)}</Count>
-        <Slot>
-          <ExpandMoreOutlinedIcon aria-hidden data-chevron="" />
+        <Slot aria-hidden>
+          <ExpandMoreOutlinedIcon data-chevron="" />
         </Slot>
-      </RowButton>
+      </Head>
       <SmoothReveal open={open}>
         <Box
           id={panelId}

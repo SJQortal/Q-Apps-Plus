@@ -42,9 +42,17 @@ describe('TxListRow', () => {
     const { user, container, posts } = await show([row(sigs.kitLou[0])], ADDR.kicked);
     const button = await screen.findByRole('button', { name: /Sent 10 QORT to Lou Left/ }, T);
     expect(button).toHaveAttribute('aria-expanded', 'false');
-    expect(button).toHaveTextContent('block 1,364,500');
-    // Nothing inside the button is a link.
-    expect(within(button).queryAllByRole('link')).toEqual([]);
+    expect(button).toHaveAccessibleName(/block 1,364,500/);
+    // Nothing inside the button; its words are over it, beside it.
+    expect(button).toBeEmptyDOMElement();
+    const head = button.parentElement as HTMLElement;
+    expect(head).toHaveTextContent('block 1,364,500');
+    // An account in the sentence is a link a press opens, out of the Tab order (the
+    // details below have it for the keyboard), and read once, as the button.
+    const lou = within(head).getByRole('link', { name: 'Lou Left', hidden: true });
+    expect(lou).toHaveAttribute('href', `/explorer/account/${ADDR.left}`);
+    expect(lou).toHaveAttribute('tabindex', '-1');
+    expect(within(head).queryAllByRole('link')).toEqual([]);
     await user.click(button);
     expect(button).toHaveAttribute('aria-expanded', 'true');
     expect(button).toHaveFocus();
@@ -63,6 +71,26 @@ describe('TxListRow', () => {
     expect(button).toHaveAttribute('aria-expanded', 'false');
     expect(button).toHaveFocus();
     expect(posts).toEqual([]);
+  });
+
+  it('opens a name in its sentence: its owner’s Names tab; the row opens on a press anywhere else', async () => {
+    const { user } = await show([row(sigs.buy)], ADDR.nominator);
+    const button = await screen.findByRole(
+      'button',
+      { name: /Bought the name “Spare Room” from Leo Learner for 5 QORT/ },
+      T
+    );
+    const head = button.parentElement as HTMLElement;
+    const name = within(head).getByRole('link', { name: '“Spare Room”', hidden: true });
+    expect(name).toHaveAttribute('href', '/explorer/account/Spare%20Room/names');
+    expect(name).toHaveAttribute('tabindex', '-1');
+    await user.click(button);
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    // In the details, the name is a link for the keyboard too.
+    expect(screen.getByRole('link', { name: '“Spare Room”: explore this name' })).toHaveAttribute(
+      'href',
+      '/explorer/account/Spare%20Room/names'
+    );
   });
 
   it('tells the other side from its own viewpoint, and needs none', async () => {
@@ -191,8 +219,8 @@ describe('TxListRow', () => {
     const list = screen.getByRole('list', { name: 'Transactions' });
     expect(list.querySelectorAll(':scope > li')).toHaveLength(1);
     const run = await within(list).findByRole('button', { name: /Sent 10 QORT to Lou Left/ }, T);
-    expect(run).toHaveTextContent('3 times');
-    expect(run).toHaveTextContent(/blocks 1,364,498–1,364,500/);
+    expect(run).toHaveAccessibleName(/3 times/);
+    expect(run.parentElement).toHaveTextContent(/blocks 1,364,498–1,364,500/);
     await user.click(run);
     const each = screen.getByRole('list', { name: '3 transactions like this' });
     expect(within(each).getAllByRole('button', { name: /Sent 10 QORT to Lou Left/ })).toHaveLength(

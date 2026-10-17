@@ -299,7 +299,8 @@ export function ConnectionRow({
             sx={(theme) => ({ overflowWrap: 'anywhere', ...directionRules(theme) })}
           >
             {flow ? <DirectionMark flow={flow} /> : null}
-            <TxSentence parts={parts} plain />
+            {/* Its account and names open on a press (the chip above has the account for the keyboard). */}
+            <TxSentence parts={parts} quiet />
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {when}

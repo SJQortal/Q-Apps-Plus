@@ -63,7 +63,7 @@ function FirstQort({
     return (
       <Box component="li" sx={FIELD_BLOCK_SX}>
         <Typography>
-          <TxSentence parts={parts} plain />
+          <TxSentence parts={parts} quiet />
         </Typography>
         <Typography variant="body2" color="text.secondary">
           {when}

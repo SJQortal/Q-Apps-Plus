@@ -35,6 +35,8 @@ import TransactionsTab from './TransactionsTab';
 /** A list's rows, counted without a role query (cheap on 150 rows). */
 const items = (list: HTMLElement) => list.querySelectorAll(':scope > li');
 const rowButtons = (list: HTMLElement) => list.querySelectorAll<HTMLElement>('[data-tx-row]');
+/** A row's words: they sit over its button, beside it (TxListRow). */
+const rowText = (button: HTMLElement) => button.parentElement?.textContent ?? '';
 
 const T = { timeout: 5000 };
 
@@ -372,7 +374,7 @@ describe('an account’s transactions, filtered', () => {
       const { user, posts } = await openFiltered(FUNDER.address);
       const all = await region('All transactions');
       const list = await within(all).findByRole('list', { name: 'All transactions' }, T);
-      const newest = rowButtons(list)[0].textContent;
+      const newest = rowText(rowButtons(list)[0]);
 
       await user.selectOptions(select('Order'), 'oldest');
       expect(where().get('order')).toBe('oldest');
@@ -390,7 +392,7 @@ describe('an account’s transactions, filtered', () => {
         T
       );
       expect(
-        rowButtons(within(section()).getByRole('list', { name: 'All transactions' }))[0].textContent
+        rowText(rowButtons(within(section()).getByRole('list', { name: 'All transactions' }))[0])
       ).not.toBe(newest);
       expect(within(section()).getByText('Load newer', { selector: 'button' })).toBeInTheDocument();
       expect(screen.getByText(/^Showing: All transactions · oldest first$/)).toBeInTheDocument();
@@ -537,7 +539,7 @@ describe('an account’s transactions, searched', () => {
         { name: 'All transactions matching “lou”' },
         T
       );
-      const found = [...rowButtons(list)].map((button) => button.textContent ?? '');
+      const found = [...rowButtons(list)].map(rowText);
       expect(found.length).toBeGreaterThan(1);
       for (const text of found) expect(text).toMatch(/Lou Left/);
       expect(
@@ -584,7 +586,7 @@ describe('an account’s transactions, searched', () => {
       { name: 'All transactions matching “60 qort”' },
       T
     );
-    expect([...rowButtons(list)].map((b) => b.textContent)).toEqual([
+    expect([...rowButtons(list)].map(rowText)).toEqual([
       expect.stringMatching(/Sent 60 QORT to Lou Left/),
     ]);
   });
