@@ -20,7 +20,7 @@ import {
   type GlobalOrder,
 } from '../../../data/explorer/globalTx';
 import { SHARE_KINDS, isShareKind, type ShareKind } from '../../../rules/explorer/rowFilter';
-import { formatCount } from '../../../utils/format';
+import { blockNumber, formatCount } from '../../../utils/format';
 import { spanWords, TYPE_GROUPS, type GlobalType } from './globalFilters';
 
 const FIELD_SX = {
@@ -78,12 +78,13 @@ export function GlobalFilterBar({
 
   const apply = (event: FormEvent) => {
     event.preventDefault();
-    const n = Number(start.trim());
+    // "1,519,621" too, as the app shows block numbers.
+    const n = blockNumber(start);
     let why: string | null = null;
-    if (!/^\d+$/.test(start.trim()) || n < 1) why = 'Enter a block number, like 2700000.';
+    if (n === null) why = 'Enter a block number, like 2700000 or 2,700,000.';
     else if (tip !== null && n > tip) why = `The chain is at block ${formatCount(tip)}.`;
     setProblem(why);
-    if (why) return;
+    if (why || n === null) return;
     setEditing(false);
     onBlocks(span === FROM_SPAN ? { kind: 'from', start: n } : { kind: 'from', start: n, span });
   };
@@ -153,7 +154,7 @@ export function GlobalFilterBar({
             value={start}
             onChange={(e) => setStart(e.target.value)}
             slotProps={{
-              htmlInput: { inputMode: 'numeric', pattern: '[0-9]*', autoComplete: 'off' },
+              htmlInput: { inputMode: 'numeric', autoComplete: 'off' },
             }}
             sx={FIELD_SX}
           />

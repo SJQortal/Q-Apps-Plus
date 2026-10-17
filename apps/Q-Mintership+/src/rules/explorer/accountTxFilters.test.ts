@@ -166,7 +166,12 @@ describe('ranges typed', () => {
     );
     expect(rangeProblem('dates', '2026-09-01', '', today, null)).toBeNull();
     expect(rangeProblem('blocks', '27x', '', today, 100)).toBe(
-      'Enter block numbers, like 2700000.'
+      'Enter block numbers, like 2700000 or 2,700,000.'
+    );
+    // As the app shows them, with separators.
+    expect(rangeProblem('blocks', '1,519,621', '1 600 000', today, 2_000_000)).toBeNull();
+    expect(rangeProblem('blocks', '1,600,000', '1,519,621', today, 2_000_000)).toBe(
+      'The first block is after the last block.'
     );
     expect(rangeProblem('blocks', '200', '', today, 100)).toBe('The chain is at block 100.');
     expect(rangeProblem('blocks', '50', '10', today, 100)).toBe(

@@ -21,6 +21,29 @@ export function formatCount(value: number): string {
   return NUMBER.format(Math.round(value));
 }
 
+/** Digits grouped by thousands, as people type them: comma, dot, apostrophe, underscore, spaces. */
+const GROUPED_RE = /^\d{1,3}(?:[,.'’_\s]\d{3})+$/;
+
+/**
+ * A block number as typed or pasted, or null: "1519621", "1,519,621" (as the
+ * app shows it), "1 519 621", "1.519.621", "block 1,519,621", "#1519621".
+ * Separators must group by thousands, so "1.5" isn't read as 15.
+ */
+export function blockNumber(text: string): number | null {
+  const value = text
+    .trim()
+    .replace(/^(?:blocks?\s*|#)/i, '')
+    .trim();
+  const digits = /^\d{1,9}$/.test(value)
+    ? value
+    : GROUPED_RE.test(value)
+      ? value.replace(/\D/g, '')
+      : null;
+  if (digits === null || digits.length > 9) return null;
+  const n = Number(digits);
+  return n >= 1 ? n : null;
+}
+
 /** "1", "2 days", "3 hours", "5 minutes", "under a minute". `ms` may be negative (treated as 0). */
 export function formatDuration(ms: number, options: { precise?: boolean } = {}): string {
   const total = Math.max(0, Math.round(ms / 1000));

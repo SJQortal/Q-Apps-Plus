@@ -18,7 +18,7 @@
  * "Biggest amount first" sorts the rows read so far, and says so. Pure.
  */
 import type { TxRow } from '../../data/types';
-import { formatCount, formatDate } from '../../utils/format';
+import { blockNumber, formatCount, formatDate } from '../../utils/format';
 import { visibleName } from './nameNotes';
 import { isTxFamilyKey, txTypeLabel, typesFor, type TxFamilyKey } from './txFamilies';
 import { toAtomic } from './txWords';
@@ -227,12 +227,14 @@ export function rangeProblem(
     if (from && to && from > to) return 'The first day is after the last day.';
     return null;
   }
-  for (const value of [from, to])
-    if (value && (!BLOCK_RE.test(value) || Number(value) < 1))
-      return 'Enter block numbers, like 2700000.';
-  if (from && tip !== null && Number(from) > tip)
+  // As typed: "1,519,621" too (blockNumber).
+  const [first, last] = [from, to].map((value) => (value ? blockNumber(value) : null));
+  if ((from && first === null) || (to && last === null))
+    return 'Enter block numbers, like 2700000 or 2,700,000.';
+  if (first !== null && tip !== null && first > tip)
     return `The chain is at block ${formatCount(tip)}.`;
-  if (from && to && Number(from) > Number(to)) return 'The first block is after the last block.';
+  if (first !== null && last !== null && first > last)
+    return 'The first block is after the last block.';
   return null;
 }
 

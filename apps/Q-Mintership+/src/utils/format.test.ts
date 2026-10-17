@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatRoughDuration, formatTimeSpan } from './format';
+import { blockNumber, formatRoughDuration, formatTimeSpan } from './format';
 
 const DAY = 86_400_000;
 
@@ -20,5 +20,40 @@ describe('formatTimeSpan', () => {
     expect(formatTimeSpan(at(16, 21, 36), at(16, 21, 55))).toBe('16 Oct 2026, 21:36–21:55');
     expect(formatTimeSpan(at(16, 21, 36), at(16, 21, 36))).toBe('16 Oct 2026, 21:36');
     expect(formatTimeSpan(at(7, 9, 0), at(2, 9, 0))).toBe('2 Oct 2026 – 7 Oct 2026');
+  });
+});
+
+describe('blockNumber', () => {
+  it('reads a block number with the separators people type, as the app shows it', () => {
+    for (const text of [
+      '1519621',
+      '1,519,621',
+      ' 1 519 621 ',
+      '1.519.621',
+      "1'519'621",
+      '1\u00a0519\u00a0621',
+      '1\u202f519\u202f621',
+      'block 1,519,621',
+      'Block 1519621',
+      '#1,519,621',
+    ])
+      expect(blockNumber(text), text).toBe(1_519_621);
+    expect(blockNumber('621')).toBe(621);
+  });
+
+  it('turns down what isn’t one', () => {
+    for (const text of [
+      '',
+      '0',
+      '0,000',
+      '1.5',
+      '1,51,9621',
+      '15,19621',
+      'abc',
+      '-5',
+      '1e6',
+      '1,234,567,890',
+    ])
+      expect(blockNumber(text), text).toBeNull();
   });
 });

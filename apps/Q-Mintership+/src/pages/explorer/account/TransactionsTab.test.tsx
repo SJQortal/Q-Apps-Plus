@@ -455,6 +455,21 @@ describe('an account’s transactions, filtered', () => {
     HEAVY
   );
 
+  it('takes block numbers as the app shows them, with commas or spaces', async () => {
+    const { user, posts } = await openFiltered(FUNDER.address);
+    await region('All transactions');
+    await user.selectOptions(select('When'), 'blocks');
+    const form = screen.getByRole('form', { name: 'Between blocks' });
+    await user.type(within(form).getByLabelText('First block'), '1,364,165');
+    await user.type(within(form).getByLabelText('Last block'), '1 370 050');
+    await user.click(within(form).getByRole('button', { name: 'Show' }));
+    expect(within(form).queryByRole('alert')).toBeNull();
+    expect(where().get('from')).toBe('1364165');
+    expect(where().get('to')).toBe('1370050');
+    expect(screen.getAllByText(/blocks 1,364,165–1,370,050/).length).toBeGreaterThan(0);
+    noWrites(posts);
+  });
+
   it('picks one of its names, the primary first, and says when a kind is never about a name', async () => {
     const { user } = await openFiltered(ADDR.learner, '?name=Spare%20Room');
     const section = await region('All transactions');

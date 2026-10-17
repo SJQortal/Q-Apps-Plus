@@ -223,7 +223,8 @@ describe('Transactions on Qortal', () => {
     await user.click(screen.getByRole('button', { name: 'Show' }));
     expect(screen.getByRole('alert')).toHaveTextContent('The chain is at block 2,757,500.');
     await user.clear(field);
-    await user.type(field, '2640000');
+    // As the app shows block numbers, with commas (Simon, 2026-10-17).
+    await user.type(field, '2,640,000');
     await user.click(screen.getByRole('button', { name: 'Show' }));
     expect(screen.getByTestId('at')).toHaveTextContent('?blocks=from-2640000|REPLACE');
     const found = await results();

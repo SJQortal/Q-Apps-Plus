@@ -29,7 +29,7 @@ import {
 } from '../../../../rules/explorer/accountTxFilters';
 import { visibleName } from '../../../../rules/explorer/nameNotes';
 import { TX_FAMILIES, txTypeLabel, typesFor } from '../../../../rules/explorer/txFamilies';
-import { formatCount } from '../../../../utils/format';
+import { blockNumber, formatCount } from '../../../../utils/format';
 import { markedNameNote } from '../../../../rules/markedName';
 
 const FIELD_SX = {
@@ -58,7 +58,10 @@ function RangeForm({
     const why = rangeProblem(filters.when, from.trim(), to.trim(), today, tip.data?.height ?? null);
     setProblem(why);
     if (why) return;
-    onChange({ ...filters, from: from.trim() || null, to: to.trim() || null });
+    // Blocks as digits, however they were typed ("1,519,621").
+    const clean = (value: string) =>
+      !value.trim() ? null : dates ? value.trim() : String(blockNumber(value));
+    onChange({ ...filters, from: clean(from), to: clean(to) });
   };
 
   const fieldSx = {
@@ -68,7 +71,7 @@ function RangeForm({
   };
   const inputProps = dates
     ? { max: today }
-    : { inputMode: 'numeric' as const, pattern: '[0-9]*', autoComplete: 'off' };
+    : { inputMode: 'numeric' as const, autoComplete: 'off' };
   return (
     <Box
       component="form"
