@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { addUser } from "../state/features/authSlice";
 import NavBar from "../components/layout/Navbar/Navbar";
 import { BottomNav, BottomNavSpacer } from "../components/layout/BottomNav/BottomNav";
+import { AudioPlayer } from "../components/player/AudioPlayer";
 import PageLoader from "../components/common/PageLoader";
 import { ErrorBoundary } from "../components/common/ErrorBoundary";
 import { RootState } from "../state/store";
@@ -24,9 +25,9 @@ interface Props {
 export { queue };
 
 /**
- * The app shell: account lookup, the header, the phone bottom bar, the Edit
- * dialog and the one-time consent dialog, with an error boundary around the
- * page content.
+ * The app shell: account lookup, the header, the phone bottom bar, the
+ * playlist player (it keeps playing from page to page), the Edit dialog and
+ * the one-time consent dialog, with an error boundary around the page content.
  */
 const GlobalWrapper: React.FC<Props> = ({ children }) => {
   useIframe();
@@ -104,6 +105,7 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
       </main>
 
       <BottomNavSpacer />
+      <AudioPlayer />
       <BottomNav />
     </>
   );

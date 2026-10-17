@@ -31,6 +31,7 @@ import { getCategoriesFromObject, type Category } from "../../components/common/
 import { getIconsFromObject } from "../../constants/Categories/CategoryFunctions.ts";
 import { FileRow, type ShareFile } from "./FileRow";
 import { FETCH_ALL_AT_ONCE, useFetchAll } from "./useFetchAll";
+import { PLAYLIST_MIN_TRACKS, PlaylistCard, shareTracks } from "./PlaylistCard";
 import {
   ActionRow,
   AuthorLink,
@@ -284,6 +285,16 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
   const { fetchAll, pending: pendingFiles, readyCount, allReady, waiting } = useFetchAll(files, id);
   // A share holds up to 300 files: show them a page at a time.
   const [shownFiles, setShownFiles] = useState(FILE_PAGE);
+  // Two or more audio files play as a playlist through the app's player.
+  const tracks = useMemo(() => shareTracks(files), [files]);
+  const playlistTitle: string = fileData?.title || "";
+  const playlist = useMemo(
+    () =>
+      tracks.length >= PLAYLIST_MIN_TRACKS
+        ? { share: { name: author, identifier: id, title: playlistTitle }, tracks }
+        : undefined,
+    [tracks, author, id, playlistTitle]
+  );
 
   // window.history is shared by every Hub tab, so Back follows the app's own stack.
   const goBack = useSafeBack("/");
@@ -512,6 +523,8 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
             </Card>
           )}
 
+          {playlist ? <PlaylistCard share={playlist.share} tracks={playlist.tracks} /> : null}
+
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
             <SectionTitle component="h2">
               {files.length === 1 ? "1 file" : `${files.length} files`}
@@ -522,7 +535,12 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
               <>
                 <FileList>
                   {files.slice(0, shownFiles).map((file, index) => (
-                    <FileRow key={`${file.identifier || file.filename}-${index}`} file={file} jsonId={id} />
+                    <FileRow
+                      key={`${file.identifier || file.filename}-${index}`}
+                      file={file}
+                      jsonId={id}
+                      playlist={playlist}
+                    />
                   ))}
                 </FileList>
                 {files.length > shownFiles && (
