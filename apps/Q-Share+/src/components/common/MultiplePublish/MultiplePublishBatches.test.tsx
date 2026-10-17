@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { configure, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, configure, fireEvent, screen, waitFor } from "@testing-library/react";
 import { renderWithProviders } from "../../../test/renderWithProviders";
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from "../../../test/setup";
 import { store } from "../../../state/store";
@@ -236,5 +236,32 @@ describe("MultiplePublish in batches", () => {
     renderWithProviders(<MultiplePublish isOpen publishes={share(10)} onSubmit={small} onError={vi.fn()} />);
     await waitFor(() => expect(small).toHaveBeenCalledTimes(1));
     expect(fetchCallsMatching("/transactions/unconfirmed").length).toBe(1);
+  });
+
+  it("offers no Continue while Hub is still at a batch the app stopped waiting for", async () => {
+    let answer: (value: unknown) => void = () => {};
+    let call = 0;
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => {
+      call += 1;
+      return call === 1 ? new Promise((resolve) => (answer = resolve)) : true;
+    });
+    mockFetch("/transactions/unconfirmed", []);
+    mockFetch("/arbitrary/resources/search", []);
+    const onSubmit = vi.fn();
+    renderWithProviders(<MultiplePublish isOpen publishes={share(45)} onSubmit={onSubmit} onError={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start publishing" }));
+    expect(await screen.findByText("Publishing batch 1 of 3")).toBeInTheDocument();
+
+    // The title bar's X stops waiting; Hub is still at batch 1.
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByText(/Continue comes back once Hub answers/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+    expect(sentSizes()).toEqual([20]);
+
+    // Hub answers: now Continue sends the rest.
+    await act(async () => answer(true));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(sentSizes()).toEqual([20, 20, 6]);
   });
 });

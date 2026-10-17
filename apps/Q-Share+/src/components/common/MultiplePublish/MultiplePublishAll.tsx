@@ -643,11 +643,16 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
   const heldCount = resources.filter((r) => isHeld(r.identifier)).length;
   const unknownCount = count("unknown");
   const settled = phase === "settled";
+  // Hub is still at a batch the app stopped waiting for: the next batches
+  // wait for its answer, or they would pile up past the account's limit
+  // (Hub hasn't sent that batch's transactions yet, so the room check can't
+  // see them) and the share details could land before those files.
+  const hubBusy = Object.keys(awaiting).length > 0;
   const retryable = resources.filter((r) => {
     const state = stateOf(r.identifier);
     return (
       state === "failed" ||
-      state === "queued" ||
+      (state === "queued" && !hubBusy) ||
       (state === "missing" && !isBusy(r.identifier) && !isHeld(r.identifier))
     );
   });
@@ -764,7 +769,7 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
             )}
             {retryable.length > 0 && (
               <Button variant="contained" onClick={retry}>
-                {queuedCount > 0
+                {retryable.some((r) => stateOf(r.identifier) === "queued")
                   ? "Continue"
                   : retryable.some((r) => stateOf(r.identifier) === "missing")
                     ? "Retry missing"
@@ -869,8 +874,10 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
         {errorText && <Alert severity="error">{errorText}</Alert>}
         {settled && queuedCount > 0 && (
           <Alert severity="info">
-            {queuedCount === 1 ? "1 resource hasn't" : `${queuedCount} resources haven't`} been sent yet. Continue sends{" "}
-            {queuedCount === 1 ? "it" : "them"}, waiting for the network between batches.
+            {queuedCount === 1 ? "1 resource hasn't" : `${queuedCount} resources haven't`} been sent yet.{" "}
+            {hubBusy
+              ? "Continue comes back once Hub answers for the batch it is on."
+              : `Continue sends ${queuedCount === 1 ? "it" : "them"}, waiting for the network between batches.`}
           </Alert>
         )}
         {settled && failedCount > 0 && (
