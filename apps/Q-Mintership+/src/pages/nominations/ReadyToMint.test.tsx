@@ -8,15 +8,15 @@ import { renderPage } from '../../test/render';
 import { fetchCallsFor, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { base58Decode, base58Encode } from '../../qortal/base58';
 import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../test/world';
-import NominationsPage from './NominationsPage';
+import DecisionsPage from '../decisions/DecisionsPage';
 
 afterEach(() => vi.useRealTimers());
 
 const open = (persona: string, setup?: (world: World) => void, sort?: string) =>
-  renderPage(<NominationsPage />, {
+  renderPage(<DecisionsPage />, {
     persona,
-    path: `/nominations?show=ready${sort ? `&sort=${sort}` : ''}`,
-    route: '/nominations',
+    path: `/decisions?show=ready${sort ? `&sort=${sort}` : ''}`,
+    route: '/decisions',
     setup,
   });
 
@@ -86,8 +86,8 @@ describe('Ready to mint', () => {
     expect(screen.getByText(/They need a nomination from a level 5\+ minter/)).toBeInTheDocument();
     expect(screen.getByLabelText('Sort')).toHaveValue('node');
     expect(screen.getByText('8 of 8 shown')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Ready to mint\s*8/ })).toHaveAttribute(
-      'aria-pressed',
+    expect(screen.getByRole('tab', { name: /^Ready to mint\s*8/ })).toHaveAttribute(
+      'aria-selected',
       'true'
     );
     // The search box searches this list; the nominations' lists step aside; nobody
@@ -381,7 +381,7 @@ describe('Ready to mint', () => {
     // Two minutes later the node answers again.
     down = false;
     vi.setSystemTime(Date.now() + 2 * 60_000);
-    await user.click(screen.getByRole('button', { name: 'Refresh nominations' }));
+    await user.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(
       await within(await row('Kit Kicked')).findByText(
         'Level 3 · 210,000 blocks minted',
@@ -441,7 +441,7 @@ describe('Ready to mint', () => {
 
       // A refresh of the list reads it again, once.
       vi.setSystemTime(Date.now() + 2 * 60_000);
-      await user.click(screen.getByRole('button', { name: 'Refresh nominations' }));
+      await user.click(screen.getByRole('button', { name: 'Refresh' }));
       await waitFor(() => expect(reads()).toBe(before + 1));
       await comeNear(await row(shortAddress(later[0])));
       expect(reads()).toBe(before + 1);
@@ -513,7 +513,7 @@ describe('Ready to mint', () => {
     expect(
       await screen.findByText('No one has asked to join right now', {}, { timeout: 4000 })
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Ready to mint\s*0/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Ready to mint\s*0/ })).toBeInTheDocument();
   });
 
   it('shows an error with Retry, and loads on Retry', async () => {
@@ -537,13 +537,15 @@ describe('Ready to mint', () => {
     const user = userEvent.setup();
     await open('nominator');
     await readyList();
-    await user.click(await screen.findByRole('button', { name: /^All\s*\d/ }, { timeout: 4000 }));
+    await user.click(
+      await screen.findByRole('tab', { name: /^Nominations\s*\d/ }, { timeout: 4000 })
+    );
     expect(
       await screen.findByRole('list', { name: 'Open nominations' }, { timeout: 4000 })
     ).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Ready to mint' })).toBeNull();
     expect(screen.getByRole('searchbox')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /^Ready to mint\s*6/ }));
+    await user.click(screen.getByRole('tab', { name: /^Ready to mint\s*6/ }));
     expect(await readyList()).toBeInTheDocument();
   });
 });

@@ -18,7 +18,7 @@ const T = { timeout: 4000 };
 async function openShifted(options: { seen?: 'before' | 'unknown height' | null } = {}) {
   const rendered = await renderPage(<DecisionsPage />, {
     persona: 'admin',
-    path: '/decisions',
+    path: '/decisions?show=decisions',
     route: '/decisions',
     setup: (world) => {
       const shift = addTargetShift(world);

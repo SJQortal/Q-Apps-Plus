@@ -7,13 +7,15 @@ import { renderPage } from '../../test/render';
 import { mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { ADDR, TIP } from '../../test/world';
 import { base58Encode } from '../../qortal/base58';
-import NominationsPage from './NominationsPage';
+import DecisionsPage from '../decisions/DecisionsPage';
 import { renderWithWorld } from './testRender';
 
 afterEach(() => vi.useRealTimers());
 
-const open = (persona: string, path = '/nominations') =>
-  renderPage(<NominationsPage />, { persona, path, route: '/nominations' });
+/** Decisions → Nominations (the tab everyone but a Minter Admin opens on). */
+const NOMINATIONS = '/decisions?show=nominations';
+const open = (persona: string, path = NOMINATIONS) =>
+  renderPage(<DecisionsPage />, { persona, path, route: '/decisions' });
 
 const card = (name: RegExp | string) =>
   screen.findByRole(
@@ -33,7 +35,7 @@ function decode(data64: unknown): unknown {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-describe('Nominations page', () => {
+describe('Decisions → Nominations', () => {
   it('lists open nominations newest first, and offers Propose nomination to a level 5+ member', async () => {
     await open('nominator');
     await card('Wren Waiting');
@@ -233,10 +235,10 @@ describe('Nominations page', () => {
   });
 
   it('says rejections on the nominee’s own nomination gently', async () => {
-    await renderWithWorld(<NominationsPage />, {
+    await renderWithWorld(<DecisionsPage />, {
       persona: 'nominatedSigning',
-      path: '/nominations',
-      route: '/nominations',
+      path: NOMINATIONS,
+      route: '/decisions',
       before: (world) => {
         const invite = world.pending.find(
           (t: { invitee?: string }) => t.invitee === ADDR.nominatedSigning
@@ -282,32 +284,22 @@ describe('Nominations page', () => {
     expect(qortalCallsFor('JOIN_GROUP')).toHaveLength(1);
   });
 
-  it('keeps recently decided ones collapsed, with Propose nomination again for expired and lapsed', async () => {
-    const user = userEvent.setup();
+  it('leaves how nominations ended to History and their own pages', async () => {
     await open('nominator');
     await card('Wren Waiting');
-    const toggle = screen.getByRole('button', { name: /Show 2/ });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByRole('list', { name: 'Recently decided nominations' })).toBeNull();
-    await user.click(toggle);
-    const decided = screen.getByRole('list', { name: 'Recently decided nominations' });
-    expect(cardNames(decided)).toEqual([
-      'Lapsed Person With A Very Long Name That Wraps On Phones',
-      'Ünïcode Ñame',
-    ]);
-    expect(within(decided).getByText(/Expired 4 days ago/)).toBeInTheDocument();
-    const again = within(decided).getAllByRole('button', { name: `${PROPOSE_NOMINATION} again` });
-    expect(again).toHaveLength(2);
-    await user.click(again[1]);
-    expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Recently decided' })).toBeNull();
+    expect(
+      screen.queryByText('Lapsed Person With A Very Long Name That Wraps On Phones')
+    ).toBeNull();
+    expect(screen.queryByRole('button', { name: `${PROPOSE_NOMINATION} again` })).toBeNull();
   });
 
   it('says so when nothing is open, and offers Propose nomination to those who can', async () => {
     const user = userEvent.setup();
-    await renderWithWorld(<NominationsPage />, {
+    await renderWithWorld(<DecisionsPage />, {
       persona: 'nominator',
-      path: '/nominations',
-      route: '/nominations',
+      path: NOMINATIONS,
+      route: '/decisions',
       before: (world) => {
         world.records.length = 0;
         world.pending.length = 0;
@@ -322,10 +314,10 @@ describe('Nominations page', () => {
   });
 
   it('shows an error with Retry when the nominations can’t be read', async () => {
-    await renderWithWorld(<NominationsPage />, {
+    await renderWithWorld(<DecisionsPage />, {
       persona: 'learner',
-      path: '/nominations',
-      route: '/nominations',
+      path: NOMINATIONS,
+      route: '/decisions',
       before: () =>
         mockFetchRoute(
           '/arbitrary/resources/searchsimple',
@@ -339,10 +331,10 @@ describe('Nominations page', () => {
   });
 
   it('notes when a read stopped before the end of a very long list', async () => {
-    await renderWithWorld(<NominationsPage />, {
+    await renderWithWorld(<DecisionsPage />, {
       persona: 'nominator',
-      path: '/nominations',
-      route: '/nominations',
+      path: NOMINATIONS,
+      route: '/decisions',
       before: (world) => {
         for (let i = 0; i < 3_000; i++) world.members.push(fakeAddress(`many-${i}`));
       },
@@ -353,7 +345,7 @@ describe('Nominations page', () => {
   });
 
   it('keeps the filter in the address so Back returns to the same view', async () => {
-    await open('nominator', '/nominations?show=waiting');
+    await open('nominator', `${NOMINATIONS}&state=waiting`);
     await card('Wren Waiting');
     expect(cardNames(screen.getByRole('list', { name: 'Open nominations' }))).toEqual([
       'Wren Waiting',
@@ -365,7 +357,7 @@ describe('Nominations page', () => {
   });
 });
 
-describe('Nominations page: Propose nomination at every width', () => {
+describe('Decisions: Propose nomination at every width', () => {
   const originalMatchMedia = window.matchMedia;
   afterEach(() => {
     window.matchMedia = originalMatchMedia;

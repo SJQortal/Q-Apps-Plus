@@ -12,7 +12,6 @@ import { commentTarget } from '../data/commentThread';
 import DecisionsPage from '../pages/decisions/DecisionsPage';
 import HomePage from '../pages/home/HomePage';
 import NominatePage from '../pages/nominations/NominatePage';
-import NominationsPage from '../pages/nominations/NominationsPage';
 import PersonPage from '../pages/person/PersonPage';
 import { resetOptimisticComments } from '../state/comments';
 import {
@@ -38,7 +37,7 @@ vi.setConfig({ testTimeout: 45_000 });
 async function decisions(setup?: RenderPageOptions['setup']) {
   const rendered = await renderPage(<DecisionsPage />, {
     persona: 'admin',
-    path: '/decisions',
+    path: '/decisions?show=decisions',
     route: '/decisions',
     setup,
   });
@@ -362,10 +361,10 @@ describe('Write dialogs by keyboard: Home', () => {
 describe('Write dialogs by keyboard: nominations', () => {
   it('Add your support', async () => {
     const u = user();
-    await renderPage(<NominationsPage />, {
+    await renderPage(<DecisionsPage />, {
       persona: 'nominator',
-      path: '/nominations',
-      route: '/nominations',
+      path: '/decisions?show=nominations',
+      route: '/decisions',
     });
     const eli = await screen.findByRole('article', { name: /Nomination of Eli Early/ }, T);
     await checkDialogByKeyboard(
@@ -377,10 +376,10 @@ describe('Write dialogs by keyboard: nominations', () => {
 
   it('A community vote, and the voters beside Copy link', async () => {
     const u = user();
-    await renderPage(<NominationsPage />, {
+    await renderPage(<DecisionsPage />, {
       persona: 'learner',
-      path: '/nominations',
-      route: '/nominations',
+      path: '/decisions?show=nominations',
+      route: '/decisions',
       setup: (world) => addCommunityVotes(world),
     });
     const bob = await screen.findByRole('article', { name: /Nomination of bob\+builder/ }, T);

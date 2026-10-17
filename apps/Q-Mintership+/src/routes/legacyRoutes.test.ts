@@ -77,7 +77,7 @@ describe('legacyHashToPath', () => {
     );
     expect(legacyHashToPath('#/admin/card-MAC-1')).toBe('/history/card/card-MAC-1');
     expect(legacyHashToPath('#/mam/QM-AR-card-1')).toBe('/history/card/QM-AR-card-1');
-    expect(legacyHashToPath('#/minter')).toBe('/nominations');
+    expect(legacyHashToPath('#/minter')).toBe('/decisions?show=nominations');
     expect(legacyHashToPath('#/admin')).toBe('/decisions');
     expect(legacyHashToPath('#/stats')).toBe('/explorer/activity');
     expect(legacyHashToPath('#?board=stats&section=nominator')).toBe('/explorer/activity');
@@ -91,7 +91,7 @@ describe('legacyHashToPath', () => {
 
 describe('legacyPathToPath', () => {
   it('maps the old nav hrefs', () => {
-    expect(legacyPathToPath('/MINTERS')).toBe('/nominations');
+    expect(legacyPathToPath('/MINTERS')).toBe('/decisions?show=nominations');
     expect(legacyPathToPath('/render/APP/Q-Mintership+/MINTERSHIP-FORUM')).toBe('/');
     expect(legacyPathToPath('/ADDREMOVEADMIN')).toBe('/decisions');
     expect(legacyPathToPath('/tools')).toBe('/decisions');

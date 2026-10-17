@@ -8,7 +8,6 @@ import { mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/se
 import { base58Decode, base58Encode } from '../../qortal/base58';
 import DecisionsPage from './DecisionsPage';
 import { SETTINGS_KEYS } from '../../state/settings';
-import { peekQuery } from '../../data/query';
 
 // The heaviest page tests: each flow renders the whole Decisions page several times
 // over. Alone they take 2–7 s; with the full suite on every core some pass 15 s.
@@ -20,9 +19,10 @@ const user = () => userEvent.setup();
 /** For the long dialog flows, which run slower when the whole suite runs at once. */
 const T = { timeout: 4000 };
 
+/** The Decisions tab (a Minter Admin's own; everyone else opens on Nominations). */
 async function openPage(
   persona = 'admin',
-  path = '/decisions',
+  path = '/decisions?show=decisions',
   setup?: RenderPageOptions['setup']
 ) {
   const rendered = await renderPage(<DecisionsPage />, {
@@ -255,24 +255,19 @@ describe('Decisions: phases and actions', () => {
     expect(screen.queryByText('Hide already voted on')).toBeNull();
     // The waiting nomination is still listed.
     expect(await screen.findByText('Wren Waiting')).toBeInTheDocument();
-    // A removal, a ban and a new Minter Admin are open: Decisions is in their navigation.
-    await waitFor(() => expect(peekQuery<number>('decisions:public')).toBe(3));
-    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
   });
 
-  it('offers Back to people who are not Minter Admins when nothing they may vote on is open', async () => {
-    await openPage('nominator', '/decisions', (world) => {
-      world.pending = world.pending.filter(
-        (t: { type: string }) => !['GROUP_KICK', 'GROUP_BAN', 'ADD_GROUP_ADMIN'].includes(t.type)
-      );
-    });
-    // Decisions isn't in their navigation, so the page offers Back.
-    expect(await screen.findByRole('button', { name: 'Back' })).toBeInTheDocument();
-  });
-
-  it('has no Back for Minter Admins, whose navigation has Decisions', async () => {
-    await openPage('admin');
-    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+  it('has no Back for anyone: Decisions is in everyone’s navigation', async () => {
+    for (const persona of ['admin', 'nominator']) {
+      const { unmount } = await openPage(persona, '/decisions?show=decisions', (world) => {
+        // Nothing everyone may vote on is open: it is still there, with the nominations.
+        world.pending = world.pending.filter(
+          (t: { type: string }) => !['GROUP_KICK', 'GROUP_BAN', 'ADD_GROUP_ADMIN'].includes(t.type)
+        );
+      });
+      expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+      unmount();
+    }
   });
 });
 
@@ -330,7 +325,7 @@ describe('Decisions: other transactions waiting for Minter Admins', () => {
   });
 
   it('is not shown to members', async () => {
-    await openPage('nominator', '/decisions', addOtherPending);
+    await openPage('nominator', '/decisions?show=decisions', addOtherPending);
     expect(
       screen.queryByRole('list', { name: 'Other transactions waiting for Minter Admins' })
     ).toBeNull();

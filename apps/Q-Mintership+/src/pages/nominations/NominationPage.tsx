@@ -43,6 +43,7 @@ import { PROPOSE_NOMINATION } from '../../constants/words';
 import {
   PATHS,
   decisionPath,
+  decisionsViewPath,
   explorerAccountPath,
   explorerComparePath,
   nominatePath,
@@ -80,7 +81,7 @@ function Shell({
       <PageHeader
         title="Nomination"
         subtitle={subtitle}
-        back={PATHS.nominations}
+        back={decisionsViewPath('nominations')}
         actions={
           address ? <CopyLinkButton path={nominationPath(address)} what="this nomination" /> : null
         }

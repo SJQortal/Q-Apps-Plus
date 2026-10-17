@@ -38,7 +38,7 @@ async function openQueue(persona = 'admin') {
   let doubles = {} as Doubles;
   const rendered = await renderPage(<DecisionsPage />, {
     persona,
-    path: '/decisions',
+    path: '/decisions?show=decisions',
     route: '/decisions',
     setup: (world: World) => {
       doubles = addDoubles(world);
@@ -99,7 +99,7 @@ describe('Doubles on the Decisions page', () => {
     let doubles = {} as Doubles;
     await renderPage(<DecisionsPage />, {
       persona: 'admin',
-      path: '/decisions',
+      path: '/decisions?show=decisions',
       route: '/decisions',
       setup: (world: World) => {
         doubles = addDoubles(world);

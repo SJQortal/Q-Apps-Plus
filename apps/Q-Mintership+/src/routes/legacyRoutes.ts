@@ -7,7 +7,7 @@
  * new routes: a card opens read-only in History, a board opens the screen
  * that replaced it.
  */
-import { legacyCardPath, PATHS, type BoardKey } from './paths';
+import { decisionsViewPath, legacyCardPath, PATHS, type BoardKey } from './paths';
 
 export interface LegacyBoardRoute {
   board: BoardKey | '';
@@ -112,7 +112,7 @@ export function parseBoardRouteHash(rawHash: string): LegacyBoardRoute | null {
 
 /** Where each old board lives now, when a link names no card. */
 const BOARD_HOME: Record<BoardKey, string> = {
-  minter: PATHS.nominations,
+  minter: decisionsViewPath('nominations'),
   admin: PATHS.decisions,
   ar: PATHS.decisions,
   stats: PATHS.activity,
@@ -130,8 +130,8 @@ export function legacyHashToPath(rawHash: string): string | null {
 /** The original nav buttons pointed at these relative hrefs. The forum is not part of this app. */
 const LEGACY_HREFS: Record<string, string> = {
   'MINTERSHIP-FORUM': PATHS.home,
-  MINTERS: PATHS.nominations,
-  'MINTER-BOARD': PATHS.nominations,
+  MINTERS: decisionsViewPath('nominations'),
+  'MINTER-BOARD': decisionsViewPath('nominations'),
   ADMINBOARD: PATHS.decisions,
   TOOLS: PATHS.decisions,
   STATS: PATHS.activity,

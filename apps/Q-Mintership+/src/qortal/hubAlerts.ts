@@ -32,7 +32,7 @@ import { NOMINATOR_MIN_LEVEL } from '../data/constants';
 import type { Nomination } from '../data/nominations';
 import { NOMINATION_PREFIX, RECORD_SERVICE, SUPPORT_PREFIX } from '../data/records';
 import { fetchQuery, peekQuery, setQueryData } from '../data/query';
-import { nominationPath } from '../routes/paths';
+import { nominationPath, PATHS } from '../routes/paths';
 import { nominationsMade } from '../rules/sinceLastVisit';
 import type { MyStatus } from '../rules/status';
 import { appLink } from '../utils/links';
@@ -155,7 +155,7 @@ function roleRules(role: AlertRole, address: string): HubAlertRule[] {
       rule(
         ALERT_IDS.newNomination,
         NOMINATION_PREFIX,
-        '/nominations',
+        PATHS.decisions,
         'A new nomination was published. Open it to check it and approve first.'
       ),
     ];

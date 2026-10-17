@@ -50,7 +50,7 @@ function averyRejects(world: World) {
 async function openQueue() {
   const rendered = await renderPage(<DecisionsPage />, {
     persona: 'admin',
-    path: '/decisions',
+    path: '/decisions?show=decisions',
     route: '/decisions',
     setup: averyRejects,
   });

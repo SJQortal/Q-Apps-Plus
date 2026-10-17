@@ -32,7 +32,7 @@ const layer = (rules: string) => rules.match(/::before\{[^}]*\}/)?.[0] ?? '';
 
 describe('the selected item’s highlight', () => {
   it('in the rail: shown on the current page, faded and shrunk on the others', () => {
-    show(<NavRail withDecisions />, '/decisions');
+    show(<NavRail />, '/decisions');
     const current = screen.getByRole('button', { name: /^Decisions/ });
     const other = screen.getByRole('button', { name: /^Home/ });
     expect(current).toHaveAttribute('aria-current', 'page');
@@ -45,7 +45,7 @@ describe('the selected item’s highlight', () => {
   });
 
   it('in the bottom bar: the pill grows from the middle, the size it was', () => {
-    show(<BottomNav withDecisions />, '/decisions');
+    show(<BottomNav />, '/decisions');
     const pillOf = (name: RegExp) =>
       screen.getByRole('button', { name }).querySelector('.MuiBadge-root > span') as Element;
     const current = rulesFor(pillOf(/^Decisions/));

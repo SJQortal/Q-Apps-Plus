@@ -22,7 +22,6 @@ import { ErrorBoundary } from '../common/ErrorBoundary';
 import { ListSkeleton } from '../common/states';
 import { BottomNav, BOTTOM_NAV_HEIGHT } from './BottomNav';
 import { NavRail } from './NavRail';
-import { useDecisionsInNav } from './useDecisionsInNav';
 import { isBottomBarLayout, isBottomNavShown, useFrameFacts } from './useBottomNav';
 
 /** The Explorer Quiz's bar, loaded only while the quiz is on. */
@@ -74,8 +73,6 @@ export function AppShell() {
   const { status } = useMyStatus();
   const isAdmin = Boolean(status?.isAdmin);
   const badge = useDecisionsBadge(isAdmin, session.publicKey);
-  // Admins always; everyone else while a proposal they may vote on is open.
-  const withDecisions = useDecisionsInNav() ?? isAdmin;
   const historyBadge = useHistoryNews(isAdmin, session.status === 'ready' ? session.address : null);
   const quizOn = useQuiz().on;
   const onExplorer = pathname === PATHS.explorer || pathname.startsWith(`${PATHS.explorer}/`);
@@ -103,9 +100,7 @@ export function AppShell() {
   );
   return (
     <Frame>
-      {bottomBar ? null : (
-        <NavRail withDecisions={withDecisions} decisionsBadge={badge} historyBadge={historyBadge} />
-      )}
+      {bottomBar ? null : <NavRail decisionsBadge={badge} historyBadge={historyBadge} />}
       <Main $phone={navShown}>
         <ErrorBoundary resetKey={pathname}>
           <Suspense fallback={<PageFallback />}>
@@ -121,13 +116,7 @@ export function AppShell() {
           </ErrorBoundary>
         ) : null}
       </Main>
-      {navShown ? (
-        <BottomNav
-          withDecisions={withDecisions}
-          decisionsBadge={badge}
-          historyBadge={historyBadge}
-        />
-      ) : null}
+      {navShown ? <BottomNav decisionsBadge={badge} historyBadge={historyBadge} /> : null}
     </Frame>
   );
 }

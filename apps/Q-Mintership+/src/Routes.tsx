@@ -4,6 +4,7 @@ import {
   isRouteErrorResponse,
   Navigate,
   RouterProvider,
+  useLocation,
   useRouteError,
 } from 'react-router-dom';
 import { Box } from '@mui/material';
@@ -11,11 +12,11 @@ import { AppShell } from './components/layout/AppShell';
 import { ErrorState } from './components/common/states';
 import { routerBaseForPage } from './routes/hubLocation';
 import { explorerRoutes } from './routes/explorerRoutes';
-import { PATHS } from './routes/paths';
+import { decisionsViewPath, PATHS } from './routes/paths';
+import { nominationsRedirect } from './pages/decisions/decisionsViews';
 
 // Home is the first screen almost everyone sees; the rest load on demand.
 import HomePage from './pages/home/HomePage';
-const NominationsPage = lazy(() => import('./pages/nominations/NominationsPage'));
 const NominationPage = lazy(() => import('./pages/nominations/NominationPage'));
 const NominatePage = lazy(() => import('./pages/nominations/NominatePage'));
 const DecisionsPage = lazy(() => import('./pages/decisions/DecisionsPage'));
@@ -26,6 +27,12 @@ const HistoryPage = lazy(() => import('./pages/history/HistoryPage'));
 const LegacyCardPage = lazy(() => import('./pages/history/LegacyCardPage'));
 const ActivityPage = lazy(() => import('./pages/activity/ActivityPage'));
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'));
+
+/** `/nominations` lives in Decisions now: its tab (and nomination state), from the old link. */
+function NominationsRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={nominationsRedirect(search)} replace />;
+}
 
 /** A path the router can't place opens Home; anything else gets Reload. */
 function RouteError() {
@@ -50,7 +57,7 @@ const router = createBrowserRouter(
       errorElement: <RouteError />,
       children: [
         { index: true, element: <HomePage /> },
-        { path: 'nominations', element: <NominationsPage /> },
+        { path: 'nominations', element: <NominationsRedirect /> },
         // Shareable links: one nomination, one decision (also once it is decided).
         { path: 'nominations/:address', element: <NominationPage /> },
         { path: 'nominate', element: <NominatePage /> },
@@ -70,7 +77,7 @@ const router = createBrowserRouter(
         // The Explorer: any account or transaction, read-only.
         ...explorerRoutes,
         // Old routes of the scaffold and the original app's boards.
-        { path: 'minters/*', element: <Navigate to="/nominations" replace /> },
+        { path: 'minters/*', element: <Navigate to={decisionsViewPath('nominations')} replace /> },
         { path: 'forum/*', element: <Navigate to="/" replace /> },
         { path: 'stats/*', element: <Navigate to={PATHS.activity} replace /> },
         { path: '*', element: <Navigate to="/" replace /> },

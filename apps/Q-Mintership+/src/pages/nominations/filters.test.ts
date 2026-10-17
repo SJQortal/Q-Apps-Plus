@@ -4,7 +4,6 @@ import type { TxRow } from '../../data/types';
 import type { Decision } from '../../rules/decision';
 import { ADDR, MS_PER_BLOCK, NOW } from '../../test/world';
 import {
-  RECENT_MS,
   canNominateAgain,
   countByFilter,
   endedAt,
@@ -13,8 +12,6 @@ import {
   matchesSearch,
   myPart,
   parseFilter,
-  parseView,
-  recentlyDecided,
 } from './filters';
 
 const DAY = 86_400_000;
@@ -46,10 +43,7 @@ describe('Nominations filters', () => {
     expect(parseFilter('rejected')).toBe('all');
   });
 
-  it('reads the Ready to mint view from the address too, and only there', () => {
-    expect(parseView('ready')).toBe('ready');
-    expect(parseView('waiting')).toBe('waiting');
-    expect(parseView('nonsense')).toBe('all');
+  it('leaves Ready to mint to its own tab', () => {
     expect(parseFilter('ready')).toBe('all');
   });
 
@@ -111,22 +105,14 @@ describe('Nominations filters', () => {
     expect(endedAt(joined, now, group)).toBe(NOW - DAY);
   });
 
-  it('keeps decided rounds of the last 30 days, newest first, and offers Nominate again on runouts', () => {
-    const list = [
-      nom({ nominee: ADDR.nominatedWaiting, state: 'waiting' }),
-      nom({ nominee: ADDR.recentlyJoined, state: 'joined', publishedAt: NOW - 2 * DAY }),
-      nom({ nominee: ADDR.lapsed, state: 'lapsed', publishedAt: NOW - 10 * DAY }),
-      nom({ nominee: ADDR.kicked, state: 'joined', publishedAt: NOW - RECENT_MS - DAY }),
-      nom({ nominee: ADDR.banTarget, state: 'rejected', publishedAt: NOW - 3 * DAY }),
-    ];
-    const decided = recentlyDecided(list, now, group);
-    expect(decided.map((d) => d.nomination.nominee)).toEqual([
-      ADDR.lapsed,
-      ADDR.recentlyJoined,
-      ADDR.banTarget,
-    ]);
-    expect(decided.map((d) => canNominateAgain(d.nomination))).toEqual([true, false, false]);
-    expect(canNominateAgain(nom({ nominee: ADDR.expired, state: 'expired' }))).toBe(true);
+  it('offers Propose nomination again on rounds that ran out', () => {
+    const again = (state: Nomination['state']) =>
+      canNominateAgain(nom({ nominee: ADDR.lapsed, state }));
+    expect(again('lapsed')).toBe(true);
+    expect(again('expired')).toBe(true);
+    expect(again('joined')).toBe(false);
+    expect(again('rejected')).toBe(false);
+    expect(again('waiting')).toBe(false);
   });
 
   it('offers support only while it can still matter', () => {

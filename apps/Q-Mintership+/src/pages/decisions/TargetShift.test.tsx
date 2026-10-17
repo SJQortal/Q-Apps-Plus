@@ -29,7 +29,7 @@ async function openShifted(
   };
   const rendered = await renderPage(<DecisionsPage />, {
     persona: options.persona ?? 'admin',
-    path: '/decisions',
+    path: '/decisions?show=decisions',
     route: '/decisions',
     setup,
   });
@@ -312,7 +312,7 @@ describe('Decisions: how signing works', () => {
 async function openPage() {
   await renderPage(<DecisionsPage />, {
     persona: 'admin',
-    path: '/decisions',
+    path: '/decisions?show=decisions',
     route: '/decisions',
   });
   await screen.findByRole('article', { name: /Add to MINTER, bob\+builder/ });

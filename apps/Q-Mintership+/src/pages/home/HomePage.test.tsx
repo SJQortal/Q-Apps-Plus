@@ -202,7 +202,7 @@ describe('Home: members', () => {
     const mine = screen.getByRole('region', { name: 'Your nominations' });
     expect(within(mine).getAllByRole('article')).toHaveLength(3);
     expect(
-      within(mine).getByRole('link', { name: 'See all 5 on Nominations' })
+      within(mine).getByRole('link', { name: 'Open nominations in Decisions' })
     ).toBeInTheDocument();
     // Each opens: its own page (Details), and its decision (or Decisions, while it waits).
     const card = (who: RegExp) => within(mine).getByRole('article', { name: who });
@@ -466,7 +466,7 @@ describe('Home: not in MINTER yet', () => {
     expect(within(hero).getByRole('button', { name: 'Copy your address' })).toBeInTheDocument();
     expect(within(hero).getByRole('link', { name: 'See open nominations' })).toHaveAttribute(
       'href',
-      '/nominations'
+      '/decisions?show=nominations'
     );
     // "Show you're ready to mint" replaced "Find a nominator": nothing offers it any more.
     expect(screen.queryByText(/find a nominator/i)).toBeNull();

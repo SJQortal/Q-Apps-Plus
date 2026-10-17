@@ -55,7 +55,7 @@ describe('Original card page', () => {
     expect(screen.getByText(/This board is read-only now/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Nominations' })).toHaveAttribute(
       'href',
-      '/nominations'
+      '/decisions?show=nominations'
     );
     expect(posts).toEqual([]);
     expect(qortalCalls.map((c) => c.action)).toEqual(['GET_USER_ACCOUNT']);

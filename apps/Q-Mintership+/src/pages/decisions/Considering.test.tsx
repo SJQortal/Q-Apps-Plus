@@ -18,7 +18,7 @@ const T = { timeout: 4000 };
 async function openDecisions(persona = 'admin', setup?: RenderPageOptions['setup']) {
   const rendered = await renderPage(<DecisionsPage />, {
     persona,
-    path: '/decisions',
+    path: '/decisions?show=decisions',
     route: '/decisions',
     setup,
   });

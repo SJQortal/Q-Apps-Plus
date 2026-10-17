@@ -84,7 +84,7 @@ describe('the History tab', () => {
       persona: 'nominator',
       setup: seenAt(ADDR.nominator, TIP - 6_000),
     });
-    await screen.findAllByRole('button', { name: /^Nominations$/ }, T);
+    await screen.findAllByRole('button', { name: /^Decisions$/ }, T);
     expect(screen.queryAllByRole('button', { name: /^History, / })).toEqual([]);
     expect(decisionSearches().some((p) => p.includes(`startBlock=${TIP - 6_000 - 10_081}`))).toBe(
       false

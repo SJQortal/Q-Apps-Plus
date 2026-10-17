@@ -7,7 +7,7 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { addConsidering, addRejections } from '../../../e2e/world.mjs';
 import { renderPage } from '../../test/render';
-import NominationsPage from '../../pages/nominations/NominationsPage';
+import DecisionsPage from '../../pages/decisions/DecisionsPage';
 
 const originalMatchMedia = window.matchMedia;
 
@@ -35,10 +35,10 @@ const card = (name: string) => screen.findByRole('article', { name: `Nomination 
 
 describe('the Minter Admins’ answers on nomination cards', () => {
   it('shows someone outside MINTER who approved, rejected and is considering, side by side', async () => {
-    await renderPage(<NominationsPage />, {
+    await renderPage(<DecisionsPage />, {
       persona: 'newcomerName',
-      path: '/nominations',
-      route: '/nominations',
+      path: '/decisions?show=nominations',
+      route: '/decisions',
       setup: (world) => {
         addRejections(world);
         addConsidering(world);
@@ -69,10 +69,10 @@ describe('the Minter Admins’ answers on nomination cards', () => {
   });
 
   it('a nomination waiting for its first approval shows who is considering it', async () => {
-    await renderPage(<NominationsPage />, {
+    await renderPage(<DecisionsPage />, {
       persona: 'learner',
-      path: '/nominations',
-      route: '/nominations',
+      path: '/decisions?show=nominations',
+      route: '/decisions',
       setup: (world) => addConsidering(world),
     });
     const wren = await card('Wren Waiting');
@@ -88,10 +88,10 @@ describe('the Minter Admins’ answers on nomination cards', () => {
   it('on a phone, each column shows three people, then Show all for everyone', async () => {
     const user = userEvent.setup();
     screenWidth(360);
-    await renderPage(<NominationsPage />, {
+    await renderPage(<DecisionsPage />, {
       persona: 'learner',
-      path: '/nominations',
-      route: '/nominations',
+      path: '/decisions?show=nominations',
+      route: '/decisions',
     });
     const mia = await card('Mia Met');
     const approved = await within(mia).findByRole(
@@ -118,10 +118,10 @@ describe('the Minter Admins’ answers on nomination cards', () => {
 
   it('on a wider screen, everyone shows at once', async () => {
     screenWidth(1280);
-    await renderPage(<NominationsPage />, {
+    await renderPage(<DecisionsPage />, {
       persona: 'learner',
-      path: '/nominations',
-      route: '/nominations',
+      path: '/decisions?show=nominations',
+      route: '/decisions',
     });
     const mia = await card('Mia Met');
     const approved = await within(mia).findByRole(
@@ -134,10 +134,10 @@ describe('the Minter Admins’ answers on nomination cards', () => {
   });
 
   it('shows nothing extra while nobody has answered or is considering', async () => {
-    await renderPage(<NominationsPage />, {
+    await renderPage(<DecisionsPage />, {
       persona: 'learner',
-      path: '/nominations',
-      route: '/nominations',
+      path: '/decisions?show=nominations',
+      route: '/decisions',
     });
     const wren = await card('Wren Waiting');
     // Give the shared Considering read time to arrive: still nothing.

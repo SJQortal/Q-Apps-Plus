@@ -1,13 +1,12 @@
 import type { SvgIconComponent } from '@mui/icons-material';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
-import HowToRegOutlinedIcon from '@mui/icons-material/HowToRegOutlined';
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined';
 import { PATHS } from '../../routes/paths';
 
-export type NavKey = 'home' | 'decisions' | 'nominations' | 'history' | 'explorer' | 'settings';
+export type NavKey = 'home' | 'decisions' | 'history' | 'explorer' | 'settings';
 
 export interface NavItem {
   key: NavKey;
@@ -15,6 +14,8 @@ export interface NavItem {
   /** Shorter label for the phone bar. */
   short?: string;
   path: string;
+  /** Other paths it is the place of (a nomination's page, the nominate form). */
+  also?: readonly string[];
   Icon: SvgIconComponent;
 }
 
@@ -24,14 +25,9 @@ export const NAV_ITEMS: NavItem[] = [
     key: 'decisions',
     label: 'Decisions',
     path: PATHS.decisions,
+    // Nominations is one of its tabs (Simon, 2026-10-17): a nomination and the form are its.
+    also: [PATHS.nominations, PATHS.nominate],
     Icon: FactCheckOutlinedIcon,
-  },
-  {
-    key: 'nominations',
-    label: 'Nominations',
-    short: 'Nominees',
-    path: PATHS.nominations,
-    Icon: HowToRegOutlinedIcon,
   },
   { key: 'history', label: 'History', path: PATHS.history, Icon: HistoryOutlinedIcon },
   { key: 'explorer', label: 'Explorer', path: PATHS.explorer, Icon: TravelExploreOutlinedIcon },
@@ -39,30 +35,28 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 /**
- * Every item the rail shows. Decisions is there for Minter Admins, and for
- * everyone else while a proposal they may vote on is open (a removal, a ban,
- * a new Minter Admin: useDecisionsInNav).
+ * Every item the rail shows, the same for everyone: Decisions holds the
+ * nominations too, so it is in everyone's navigation.
  */
-export function railItems(withDecisions: boolean): NavItem[] {
-  return NAV_ITEMS.filter((item) => item.key !== 'decisions' || withDecisions);
+export function railItems(): NavItem[] {
+  return NAV_ITEMS;
 }
 
 /**
  * The phone bar: five items at most (docs/DESIGN.md → Mobile): Home,
- * Decisions when it is there, Nominations, History and Explorer. Minter
- * Admin activity lives in the Explorer (its page, under Browse: Minter
- * Admins). Settings is a gear in Home's header (HomePage), and shows Back.
+ * Decisions, History and Explorer. Minter Admin activity lives in the
+ * Explorer (its page, under Browse: Minter Admins). Settings is a gear in
+ * Home's header (HomePage), and shows Back.
  */
-export function phoneItems(withDecisions: boolean): NavItem[] {
-  const keys: NavKey[] = withDecisions
-    ? ['home', 'decisions', 'nominations', 'history', 'explorer']
-    : ['home', 'nominations', 'history', 'explorer'];
+export function phoneItems(): NavItem[] {
+  const keys: NavKey[] = ['home', 'decisions', 'history', 'explorer'];
   return keys.map((key) => NAV_ITEMS.find((item) => item.key === key) as NavItem);
 }
 
-export function isNavActive(pathname: string, path: string): boolean {
+/** Whether `pathname` is the item's place: its path or one under it (or one of its `also`). */
+export function isNavActive(pathname: string, path: string, also: readonly string[] = []): boolean {
   if (path === '/') return pathname === '/' || pathname === '';
-  return pathname === path || pathname.startsWith(`${path}/`);
+  return [path, ...also].some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 /** What a nav item's count says to screen readers: "3 waiting for you", "2 new". */

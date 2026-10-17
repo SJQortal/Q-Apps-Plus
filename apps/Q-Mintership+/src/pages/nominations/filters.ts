@@ -1,12 +1,12 @@
 /**
- * The Nominations page's list logic, pure so it is tested on its own: the
- * state filters and the Ready to mint view, the name/address search, which
- * decided nominations count as "recently decided" (and when each one ended),
- * and what the signed-in member already did for a nomination.
+ * Decisions → Nominations' list logic, pure so it is tested on its own: the
+ * state filters, the name/address search, when a decided nomination ended,
+ * whether it can be made again, and what the signed-in member already did
+ * for a nomination.
  */
 import type { ChainNow } from '../../data/chain';
 import type { Nomination } from '../../data/nominations';
-import { decidedAt, isOpenState, waitingEndsAt } from '../../rules/nomination';
+import { decidedAt, waitingEndsAt } from '../../rules/nomination';
 import { waitingWindowBlocks, type GroupDelays } from '../../rules/timing';
 import type { PendingWrite } from '../../writes/optimistic';
 
@@ -21,18 +21,6 @@ export const FILTERS: Array<{ key: NominationFilter; label: string }> = [
 
 export function parseFilter(value: string | null): NominationFilter {
   return FILTERS.some((f) => f.key === value) ? (value as NominationFilter) : 'all';
-}
-
-/** What the page shows: open nominations by state, or the people ready to mint (`?show=ready`). */
-export type NominationsView = NominationFilter | 'ready';
-
-export const VIEWS: Array<{ key: NominationsView; label: string }> = [
-  ...FILTERS,
-  { key: 'ready', label: 'Ready to mint' },
-];
-
-export function parseView(value: string | null): NominationsView {
-  return value === 'ready' ? 'ready' : parseFilter(value);
 }
 
 export function matchesFilter(n: Nomination, filter: NominationFilter): boolean {
@@ -70,9 +58,6 @@ export function matchesSearch(
   return haystack.some((value) => typeof value === 'string' && value.toLowerCase().includes(q));
 }
 
-/** "Recently" on this page: decided within the last 30 days. */
-export const RECENT_MS = 30 * 86_400_000;
-
 /** When a decided nomination ended (ms): its invite's decision block, or the end of its wait. */
 export function endedAt(
   n: Nomination,
@@ -83,24 +68,6 @@ export function endedAt(
   if (n.state === 'lapsed')
     return waitingEndsAt(n.publishedAt, now.msPerBlock, waitingWindowBlocks(group));
   return n.publishedAt;
-}
-
-export interface DecidedNomination {
-  nomination: Nomination;
-  endedAt: number;
-}
-
-/** Decided nominations (joined, expired, rejected, lapsed) that ended recently, newest first. */
-export function recentlyDecided(
-  all: Nomination[],
-  now: Pick<ChainNow, 'msPerBlock' | 'timestamp'>,
-  group: GroupDelays
-): DecidedNomination[] {
-  return all
-    .filter((n) => !isOpenState(n.state))
-    .map((n) => ({ nomination: n, endedAt: endedAt(n, now, group) }))
-    .filter((d) => now.timestamp - d.endedAt <= RECENT_MS)
-    .sort((a, b) => b.endedAt - a.endedAt);
 }
 
 /** "Propose nomination again" makes sense once a round ran out without a decision. */

@@ -1,7 +1,18 @@
 /**
- * Decisions: every transaction waiting for MINTER's approval (invites,
- * kicks, bans, admin changes, cancelled invites and bans), by type (a
- * section per kind of change, with chips that jump to each: the default)
+ * Decisions: MINTER's nominations and everything waiting for the Minter
+ * Admins, in one place (Simon, 2026-10-17: "merge the Nominations tab into
+ * Decisions"), in three tabs (decisionsViews.ts): Decisions, Nominations
+ * (NominationsPanel.tsx) and Ready to mint. A Minter Admin opens on
+ * Decisions, everyone else on Nominations; a swipe sideways on a touch
+ * screen opens the next or the previous one. The nominee's own nomination
+ * sits above the tabs, with Accept or Join now. Propose, in the header (the
+ * floating button on phones), starts with Propose nomination; level 5+
+ * members who aren't Minter Admins get Propose nomination alone. How
+ * nominations ended is in History.
+ *
+ * The Decisions tab: every transaction waiting for MINTER's approval
+ * (invites, kicks, bans, admin changes, cancelled invites and bans), by type
+ * (a section per kind of change, with chips that jump to each: the default)
  * or most urgent first (the choice stays on this device), plus the
  * nominations no Minter Admin has approved yet.
  *
@@ -12,29 +23,49 @@
  * cancelled invites (each with their own signature), and clean up stale
  * invites. Doing nothing lets a decision expire. Everyone else follows
  * along, comments, and votes Yes or No (advisory, a QDN record) on
- * nominations, removals, bans and new Minter Admins, as on Nominations;
- * while one of those is open, Decisions is in everyone's navigation.
+ * nominations, removals, bans and new Minter Admins, as on Nominations.
  *
  * The target moves with the admin count (rules/targetShift.ts): an admin
  * change says what it would do to every waiting decision, a decision it
  * would tip over carries a chip, Sign / Propose / Sign several need "I've
  * checked these" before Hub opens when anything would change, and a banner
- * says when the target changed since this device last looked.
+ * above the tabs says when the target changed since this device last looked.
  *
  * Minter Admins also ask each other advisory questions here (Propose → Ask
  * the Minter Admins) and vote on them under "Minter Admin polls": encrypted
  * to the Minter Admins, and loaded only for them.
  */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { PATHS, legacyDecisionPath } from '../../routes/paths';
-import { Alert, Box, Button, Chip, FormControlLabel, Switch, Typography } from '@mui/material';
+import { appParam } from '../../routes/hubLocation';
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  FormControlLabel,
+  Switch,
+  Typography,
+  useMediaQuery,
+} from '@mui/material';
+import PersonAddAlt1OutlinedIcon from '@mui/icons-material/PersonAddAlt1Outlined';
 import { useTheme } from '@mui/material/styles';
 import { visuallyHidden } from '@mui/utils';
 import { useAtom, useAtomValue } from 'jotai';
 import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { BOTTOM_NAV_HEIGHT } from '../../components/layout/BottomNav';
+import { FabClearance, PageFab } from '../../components/layout/PageFab';
 import { useBottomNavShown } from '../../components/layout/useBottomNav';
 import { BOTTOM_BAR_VAR, usePublishOverlay } from '../../hooks/useOverlayPadding';
 import { DoneChip } from '../../components/decision/DecisionParts';
@@ -58,9 +89,17 @@ import {
 import { retryPollDecrypts } from '../../data/adminPollKeys';
 import type { Nomination } from '../../data/nominations';
 import { invalidate, peekQuery } from '../../data/query';
-import { useNavHas } from '../../components/layout/useNavHas';
-import { useDecisions, useMembers, useNominations } from '../../hooks/useData';
+import { PROPOSE_NOMINATION } from '../../constants/words';
+import { useDecisions, useMembers, useMyStatus, useNominations } from '../../hooks/useData';
+import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useTopInViewOnSwitch } from '../../hooks/useScrollTopOnNewPage';
+import { useSwipeTabs } from '../../hooks/useSwipeTabs';
+import { useKeyboardOpen, useLandscapeFrame, useShortFrame } from '../../utils/hubFrame';
+import { NominationsPanel } from '../nominations/NominationsPanel';
+import { OwnNomination } from '../nominations/OwnNomination';
+import { ownNominationOf } from '../nominations/ownNominationFacts';
+import { useReadyToMint } from '../nominations/useReadyToMint';
 import { decisionTitle, type Decision } from '../../rules/decision';
 import { hasImpact, isAdminChangeKind, projectShift } from '../../rules/targetShift';
 import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
@@ -90,6 +129,16 @@ import {
 import type { Signer } from '../../writes/runner';
 import { BulkDialog } from './BulkDialog';
 import { DecisionCard, type NominationsState, type SubjectFacts } from './DecisionCard';
+import { DecisionsTabs } from './DecisionsTabs';
+import {
+  DECISIONS_PANEL_ID,
+  DECISIONS_VIEWS,
+  decisionsTabId,
+  decisionsViewPath,
+  defaultDecisionsView,
+  parseDecisionsView,
+  type DecisionsView,
+} from './decisionsViews';
 import { answerView, canReject, canSign, decisionCardId, isWaitingForMe } from './decisionUi';
 import { doubleLeftOutText, doublesAsideText } from './doubleUi';
 import { FirstSignatureDialog } from './FirstSignatureDialog';
@@ -139,9 +188,22 @@ export default function DecisionsPage() {
 
 function DecisionsQueue() {
   const session = useSession();
+  const { status, isError: statusFailed } = useMyStatus();
   const decisionsQ = useDecisions();
   const nominationsQ = useNominations();
   const membersQ = useMembers();
+  // Ready to mint follows the nominations' reads, with no GETs of its own (useReadyToMint).
+  const readyQ = useReadyToMint(nominationsQ.data?.loadedAt);
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  // The tab: `?show=`, else the account's own (Nominations when its status can't be read).
+  const view: DecisionsView | null =
+    parseDecisionsView(appParam(params, 'show')) ??
+    (status ? defaultDecisionsView(status.isAdmin) : statusFailed ? 'nominations' : null);
+  const phone = usePhoneLayout();
+  const landscape = useLandscapeFrame();
+  const shortFrame = useShortFrame();
+  const keyboardOpen = useKeyboardOpen();
   const [hideAnswered, setHideAnswered] = useAtom(decisionsHideAnsweredAtom);
   const [order, setOrder] = useAtom(decisionsOrderAtom);
   const writes = useAtomValue(pendingWritesAtom);
@@ -183,13 +245,21 @@ function DecisionsQueue() {
     if (mode === 'sign') setSignTarget(decision);
     else setRejectTarget({ decision, mode });
   };
-  // Propose → Clean up stale invites: the section takes focus, after the menu
-  // (or the phone's sheet) has put it back on Propose as it closed.
+  // Propose → Clean up stale invites: the section comes into view and takes focus (on the
+  // Decisions tab, opened first when another one is on screen), after the menu (or the
+  // phone's sheet) has put it back on Propose as it closed.
   const [staleFocus, setStaleFocus] = useState(0);
+  const staleFocused = useRef(0);
   useEffect(() => {
-    const section = staleFocus ? sectionOf('stale') : null;
-    if (section) focusElement(section, { preventScroll: true });
-  }, [staleFocus]);
+    if (staleFocus === staleFocused.current || view !== 'decisions') return;
+    const section = sectionOf('stale');
+    if (!section) return;
+    staleFocused.current = staleFocus;
+    document
+      .getElementById(STALE_SECTION_ID)
+      ?.scrollIntoView?.({ block: 'start', behavior: reduced ? 'auto' : 'smooth' });
+    focusElement(section, { preventScroll: true });
+  }, [staleFocus, view, reduced]);
 
   const data = decisionsQ.data;
   const ready = session.status === 'ready';
@@ -207,7 +277,17 @@ function DecisionsQueue() {
     [signer, session.name]
   );
   const myKey = signer?.publicKey ?? null;
-  const inNav = useNavHas('decisions');
+  const me = signer?.address ?? '';
+  // Propose's menu for Minter Admins (from their status until the queue says so too).
+  const adminRole = isAdmin || Boolean(me && status?.isAdmin);
+  const canNominate = Boolean(me && status?.canNominate);
+  // A support record is published under the account's name.
+  const publishName = status?.name ?? session.name ?? null;
+  const publishSigner = useMemo(
+    () => (signer && publishName ? { ...signer, name: publishName } : null),
+    [signer, publishName]
+  );
+  const own = ownNominationOf(nominationsQ.data, me, status);
 
   const needed = data ? approvalsNeeded(data.group.approvalThreshold, data.admins.adminCount) : 0;
   const totalAdmins = data?.admins.adminCount ?? 0;
@@ -353,6 +433,12 @@ function DecisionsQueue() {
     setSelecting(false);
     setSelected(new Set());
   };
+  // Approve several belongs to the Decisions tab: another tab ends it.
+  const [viewShown, setViewShown] = useState(view);
+  if (viewShown !== view) {
+    setViewShown(view);
+    if (view !== 'decisions' && selecting) stopSelecting();
+  }
   const selectedList = signable.filter((d) => selected.has(d.signature));
 
   const nameFor = (d: Decision) => {
@@ -418,6 +504,8 @@ function DecisionsQueue() {
   const refresh = () => {
     void decisionsQ.refetch();
     void nominationsQ.refetch();
+    // Ready to mint follows the nominations' reads; after a failure it reads again itself.
+    if (readyQ.isError) void readyQ.refetch();
     invalidate('staleinvites:');
     // Comment counts and open threads.
     invalidate('comments:');
@@ -428,17 +516,19 @@ function DecisionsQueue() {
   };
 
   const chooseProposal = (choice: ProposeChoice) => {
+    if (choice === 'nominate') {
+      navigate(PATHS.nominate);
+      return;
+    }
     if (choice === 'poll') {
       askFrom.current = null;
       setAsking(true);
       return;
     }
     if (choice === 'stale') {
+      if (view !== 'decisions') navigate(decisionsViewPath('decisions'), { replace: true });
       setStaleExpanded(true);
       setStaleFocus((n) => n + 1);
-      document
-        .getElementById(STALE_SECTION_ID)
-        ?.scrollIntoView?.({ block: 'start', behavior: reduced ? 'auto' : 'smooth' });
       return;
     }
     setPropose({ kind: choice, preset: null });
@@ -446,19 +536,52 @@ function DecisionsQueue() {
 
   const fetching = decisionsQ.fetching || nominationsQ.fetching;
 
+  // The page's main action: Propose (Propose nomination first) for a Minter Admin, Propose
+  // nomination for a level 5+ member; on a phone the floating button, out of the way of the
+  // keyboard, a short frame and Approve several's bar (not while it opened a proposal: focus
+  // comes back to it).
+  const proposeNomination = () => navigate(PATHS.nominate);
+  const fab = phone && !landscape && (adminRole || canNominate);
+  const proposing = Boolean(propose) || asking;
+  const fabShown = fab && !selecting && (proposing || (!shortFrame && !keyboardOpen));
+  const headerAction = fab ? null : adminRole ? (
+    <ProposeMenu onChoose={chooseProposal} buttonRef={proposeButton} nominate={canNominate} />
+  ) : canNominate ? (
+    <Button
+      variant="contained"
+      startIcon={<PersonAddAlt1OutlinedIcon />}
+      onClick={proposeNomination}
+      sx={{ minHeight: 44 }}
+    >
+      {PROPOSE_NOMINATION}
+    </Button>
+  ) : null;
+
+  const counts: Partial<Record<DecisionsView, number>> = {
+    decisions: data ? collecting.length + waiting.length : undefined,
+    nominations: nominationsQ.data
+      ? nominationsQ.data.open.filter((n) => n.nominee !== me).length
+      : undefined,
+    ready: readyQ.data?.people.length,
+  };
+  const subtitle =
+    view === 'nominations'
+      ? 'Who is up for MINTER right now'
+      : view === 'ready'
+        ? 'Who asked to join MINTER'
+        : data
+          ? `Each needs ${needed} approvals`
+          : 'Everything waiting for the Minter Admins';
+
   return (
     <>
       <PageHeader
         title="Decisions"
-        subtitle={
-          data ? `Each needs ${needed} approvals` : 'Everything waiting for the Minter Admins'
-        }
-        // Only Minter Admins have Decisions in their navigation; others arrive from a link.
-        back={inNav ? undefined : PATHS.nominations}
+        subtitle={subtitle}
         actions={
           <>
             <RefreshButton onClick={refresh} fetching={fetching} />
-            {isAdmin ? <ProposeMenu onChoose={chooseProposal} buttonRef={proposeButton} /> : null}
+            {headerAction}
           </>
         }
       />
@@ -467,311 +590,355 @@ function DecisionsQueue() {
         <span role="status" className="qmp-visually-hidden">
           {targetChange ? targetChangedTitle(targetChange.from.needed, targetChange.to.needed) : ''}
         </span>
-        {decisionsQ.isLoading && !data ? (
-          <ListSkeleton count={4} ring label="Loading decisions" />
-        ) : decisionsQ.isError && !data ? (
-          <ErrorState
-            title="Couldn’t load the decisions."
-            error={decisionsQ.error}
-            onRetry={() => void decisionsQ.refetch()}
+        {/* Above the tabs: the target counts for nominations as much as for decisions. */}
+        {data && targetChange ? (
+          <TargetChangedBanner
+            change={targetChange}
+            decisions={data.decisions}
+            threshold={data.group.approvalThreshold}
+            now={data.now}
+            maximumBlockDelay={data.group.maximumBlockDelay}
+            labelOf={labelOf}
+            isAdmin={isAdmin}
+            onDismiss={dismissTargetChange}
           />
-        ) : data ? (
-          <>
-            {targetChange ? (
-              <TargetChangedBanner
-                change={targetChange}
-                decisions={data.decisions}
-                threshold={data.group.approvalThreshold}
-                now={data.now}
-                maximumBlockDelay={data.group.maximumBlockDelay}
-                labelOf={labelOf}
-                isAdmin={isAdmin}
-                onDismiss={dismissTargetChange}
-              />
-            ) : null}
+        ) : null}
 
-            {isAdmin ? (
-              <Card sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                <Typography component="h2" sx={{ fontWeight: 700, fontSize: 18 }}>
-                  {signable.length
-                    ? `${plural(signable.length, 'decision')} waiting for your answer`
-                    : 'Nothing waiting for your answer'}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Each needs {plural(needed, 'approval')}:{' '}
-                  {describeThreshold(data.group.approvalThreshold)}, counting all {totalAdmins}{' '}
-                  admin seats. Approve the ones you agree with. Reject the ones you don’t, or let
-                  them expire: {plural(needed, 'rejection')} end one as rejected.
-                </Typography>
-                {doubles.length ? (
-                  <Typography variant="body2" color="text.secondary">
-                    {doublesAsideText(doubles.length)}
+        {own.shown && nominationsQ.data ? (
+          <OwnNomination facts={own} data={nominationsQ.data} signer={signer} />
+        ) : null}
+
+        <DecisionsTabs view={view} counts={counts} />
+        <ViewPanel view={view}>
+          {view === null ? (
+            <ListSkeleton count={3} ring label="Loading" />
+          ) : view !== 'decisions' ? (
+            <NominationsPanel
+              view={view}
+              nominations={nominationsQ}
+              ready={readyQ}
+              me={me}
+              isAdmin={isAdmin}
+              canNominate={canNominate}
+              publishSigner={publishSigner}
+              ownShown={own.shown}
+              session={session}
+              status={status}
+            />
+          ) : decisionsQ.isLoading && !data ? (
+            <ListSkeleton count={4} ring label="Loading decisions" />
+          ) : decisionsQ.isError && !data ? (
+            <ErrorState
+              title="Couldn’t load the decisions."
+              error={decisionsQ.error}
+              onRetry={() => void decisionsQ.refetch()}
+            />
+          ) : data ? (
+            <>
+              {isAdmin ? (
+                <Card sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                  <Typography component="h2" sx={{ fontWeight: 700, fontSize: 18 }}>
+                    {signable.length
+                      ? `${plural(signable.length, 'decision')} waiting for your answer`
+                      : 'Nothing waiting for your answer'}
                   </Typography>
-                ) : null}
-              </Card>
-            ) : (
-              <Alert severity="info" role="note">
-                Only Minter Admins approve or reject decisions. Here you can follow each one: who
-                proposed it, who has approved or rejected it, and how long is left. Each needs{' '}
-                {needed} Minter Admin approvals. On a nomination, a removal, a ban or a new Minter
-                Admin you can vote Yes or No and comment, so the Minter Admins see how the community
-                feels.
-              </Alert>
-            )}
+                  <Typography variant="body2" color="text.secondary">
+                    Each needs {plural(needed, 'approval')}:{' '}
+                    {describeThreshold(data.group.approvalThreshold)}, counting all {totalAdmins}{' '}
+                    admin seats. Approve the ones you agree with. Reject the ones you don’t, or let
+                    them expire: {plural(needed, 'rejection')} end one as rejected.
+                  </Typography>
+                  {doubles.length ? (
+                    <Typography variant="body2" color="text.secondary">
+                      {doublesAsideText(doubles.length)}
+                    </Typography>
+                  ) : null}
+                </Card>
+              ) : (
+                <Alert severity="info" role="note">
+                  Only Minter Admins approve or reject decisions. Here you can follow each one: who
+                  proposed it, who has approved or rejected it, and how long is left. Each needs{' '}
+                  {needed} Minter Admin approvals. On a nomination, a removal, a ban or a new Minter
+                  Admin you can vote Yes or No and comment, so the Minter Admins see how the
+                  community feels.
+                </Alert>
+              )}
 
-            {isAdmin && collecting.length ? (
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={hideAnswered}
-                      onChange={(e) => setHideAnswered(e.target.checked)}
-                      slotProps={{ input: { ref: hideAnsweredSwitch } }}
-                    />
-                  }
-                  label="Hide already voted on"
-                  sx={{ minHeight: 44, mr: 'auto' }}
+              {isAdmin && collecting.length ? (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={hideAnswered}
+                        onChange={(e) => setHideAnswered(e.target.checked)}
+                        slotProps={{ input: { ref: hideAnsweredSwitch } }}
+                      />
+                    }
+                    label="Hide already voted on"
+                    sx={{ minHeight: 44, mr: 'auto' }}
+                  />
+                  {selecting || signable.length > 1 ? (
+                    <Button
+                      variant={selecting ? 'text' : 'outlined'}
+                      onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+                      sx={{ minHeight: 44 }}
+                    >
+                      {selecting ? 'Cancel selection' : 'Approve several'}
+                    </Button>
+                  ) : null}
+                </Box>
+              ) : null}
+
+              {collecting.length || waiting.length || closed.length ? null : (
+                <EmptyState
+                  title="Nothing collecting approvals"
+                  description="New nominations and proposals show up here as soon as they are on chain."
                 />
-                {selecting || signable.length > 1 ? (
-                  <Button
-                    variant={selecting ? 'text' : 'outlined'}
-                    onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
-                    sx={{ minHeight: 44 }}
+              )}
+
+              {shift ? (
+                <TargetShiftSection
+                  scenarios={shift.scenarios}
+                  decisions={decisions}
+                  now={data.now}
+                  labelOf={labelOf}
+                  advice={isAdmin}
+                />
+              ) : null}
+
+              {collecting.length > 1 ? <OrderChoice order={order} onChange={setOrder} /> : null}
+
+              {collecting.length && order === 'type' ? (
+                <>
+                  <Section
+                    title="Collecting approvals"
+                    count={collecting.length}
+                    accent={accentOf('neutral')}
+                    id="collecting"
                   >
-                    {selecting ? 'Cancel selection' : 'Approve several'}
-                  </Button>
-                ) : null}
-              </Box>
-            ) : null}
-
-            {collecting.length || waiting.length || closed.length ? null : (
-              <EmptyState
-                title="Nothing collecting approvals"
-                description="New nominations and proposals show up here as soon as they are on chain."
-              />
-            )}
-
-            {shift ? (
-              <TargetShiftSection
-                scenarios={shift.scenarios}
-                decisions={decisions}
-                now={data.now}
-                labelOf={labelOf}
-                advice={isAdmin}
-              />
-            ) : null}
-
-            {collecting.length > 1 ? <OrderChoice order={order} onChange={setOrder} /> : null}
-
-            {collecting.length && order === 'type' ? (
-              <>
+                    {groups.length ? <GroupJumps groups={groups} reduced={reduced} /> : null}
+                    {hiddenNote}
+                  </Section>
+                  {groups.map((g) => {
+                    const Icon = SECTION_ICON[g.key];
+                    return (
+                      <Box
+                        key={g.key}
+                        id={decisionGroupId(g.key)}
+                        sx={{ scrollMarginTop: 'calc(var(--qmp-header-offset, 0px) + 16px)' }}
+                      >
+                        <Section
+                          title={g.label}
+                          count={g.decisions.length}
+                          accent={accentOf(g.key)}
+                          icon={<Icon />}
+                          id={`${decisionGroupId(g.key)}-section`}
+                        >
+                          {g.decisions.map(collectingCard(data.now))}
+                        </Section>
+                      </Box>
+                    );
+                  })}
+                </>
+              ) : collecting.length ? (
                 <Section
                   title="Collecting approvals"
                   count={collecting.length}
                   accent={accentOf('neutral')}
                   id="collecting"
                 >
-                  {groups.length ? <GroupJumps groups={groups} reduced={reduced} /> : null}
+                  {shown.map(collectingCard(data.now, true))}
                   {hiddenNote}
                 </Section>
-                {groups.map((g) => {
-                  const Icon = SECTION_ICON[g.key];
-                  return (
-                    <Box
-                      key={g.key}
-                      id={decisionGroupId(g.key)}
-                      sx={{ scrollMarginTop: 'calc(var(--qmp-header-offset, 0px) + 16px)' }}
-                    >
-                      <Section
-                        title={g.label}
-                        count={g.decisions.length}
-                        accent={accentOf(g.key)}
-                        icon={<Icon />}
-                        id={`${decisionGroupId(g.key)}-section`}
-                      >
-                        {g.decisions.map(collectingCard(data.now))}
-                      </Section>
-                    </Box>
-                  );
-                })}
-              </>
-            ) : collecting.length ? (
-              <Section
-                title="Collecting approvals"
-                count={collecting.length}
-                accent={accentOf('neutral')}
-                id="collecting"
-              >
-                {shown.map(collectingCard(data.now, true))}
-                {hiddenNote}
-              </Section>
-            ) : null}
+              ) : null}
 
-            {selecting ? (
-              <SelectionBar
-                selected={selectedList.length}
-                total={signable.length}
-                aboveNav={bottomBar}
-                onToggleAll={() =>
-                  setSelected(
-                    selectedList.length === signable.length
-                      ? new Set()
-                      : new Set(signable.map((d) => d.signature))
-                  )
-                }
-                onSign={() => setBulkList(selectedList)}
-              />
-            ) : null}
-
-            {waiting.length || nominationsQ.isLoading || nominationsQ.isError ? (
-              <Section
-                title="Waiting for a Minter Admin"
-                count={waiting.length || undefined}
-                accent={accentOf('waiting')}
-                icon={<SECTION_ICON.waiting />}
-                id="waiting"
-              >
-                {nominationsQ.isLoading && !nominationsQ.data ? <CardSkeleton lines={3} /> : null}
-                {nominationsQ.isError && !nominationsQ.data ? (
-                  <ErrorState
-                    compact
-                    title="Couldn’t load the nominations."
-                    error={nominationsQ.error}
-                    onRetry={() => void nominationsQ.refetch()}
-                  />
-                ) : null}
-                {waiting.length ? (
-                  <Typography variant="body2" color="text.secondary">
-                    Nominated, but no Minter Admin has approved yet. The first approval puts the
-                    nomination on chain and starts the clock.
-                  </Typography>
-                ) : null}
-                {waiting.map((n) => (
-                  <NominationCard
-                    key={n.nominee}
-                    nomination={n}
-                    now={data.now}
-                    compact
-                    comments
-                    actions={
-                      isAdmin ? (
-                        <>
-                          <WaitingConsidering
-                            nomination={n}
-                            myAddress={signer?.address ?? null}
-                            onConsider={setConsiderRequest}
-                          />
-                          <FirstSignatureAction nomination={n} onStart={() => setFirstTarget(n)} />
-                        </>
-                      ) : null
-                    }
-                  />
-                ))}
-              </Section>
-            ) : null}
-
-            {isAdmin && pollAuthor ? (
-              <Suspense fallback={<CardSkeleton lines={2} />}>
-                <AdminPollsSection
-                  author={pollAuthor}
-                  onAsk={(from) => {
-                    askFrom.current = from;
-                    setAsking(true);
-                  }}
-                  hideVoted={hideAnswered}
-                  onShowVoted={() => {
-                    // The note's button goes: focus to the switch it turned off, when shown.
-                    hideAnsweredSwitch.current?.focus();
-                    setHideAnswered(false);
-                  }}
+              {selecting ? (
+                <SelectionBar
+                  selected={selectedList.length}
+                  total={signable.length}
+                  aboveNav={bottomBar}
+                  onToggleAll={() =>
+                    setSelected(
+                      selectedList.length === signable.length
+                        ? new Set()
+                        : new Set(signable.map((d) => d.signature))
+                    )
+                  }
+                  onSign={() => setBulkList(selectedList)}
                 />
-              </Suspense>
-            ) : null}
+              ) : null}
 
-            {closed.length ? (
-              <Section
-                title="Too late to approve"
-                count={closed.length}
-                accent={accentOf('neutral')}
-                id="closed"
-              >
-                {closed.map((d) => (
-                  <DecisionCard
-                    key={d.signature}
-                    accent={accentOf(decisionGroup(d))}
-                    decision={d}
-                    now={data.now}
-                    myPublicKey={myKey}
-                    canAct={isAdmin}
-                    nomination={nominationFor(d)}
-                    nominationsState={nominationsState}
-                    onRetryNominations={retryNominations}
-                    adminNames={adminNames}
-                    subjectFacts={factsFor(d.subject)}
-                    impact={impactOf(d)}
-                    risk={riskOf(d)}
-                    labelOf={labelOf}
-                  />
-                ))}
-              </Section>
-            ) : null}
-
-            {isAdmin && data.unusual.length ? (
-              <Section title="Unusual approval route" accent={accentOf('neutral')} id="unusual">
-                <UnusualList decisions={data.unusual} now={data.now} />
-              </Section>
-            ) : null}
-
-            {isAdmin && data.others.length ? (
-              <Section
-                title="Other transactions waiting for Minter Admins"
-                accent={accentOf('neutral')}
-                id="others"
-              >
-                <OtherPendingList items={data.others} now={data.now} />
-              </Section>
-            ) : null}
-
-            {isAdmin && signer ? (
-              <Box
-                id={STALE_SECTION_ID}
-                sx={{ scrollMarginTop: 'calc(var(--qmp-header-offset, 0px) + 16px)' }}
-              >
+              {waiting.length || nominationsQ.isLoading || nominationsQ.isError ? (
                 <Section
-                  title="Clean up stale invites"
-                  accent={accentOf('cancelInvite')}
-                  icon={<SECTION_ICON.cancelInvite />}
-                  id="stale"
+                  title="Waiting for a Minter Admin"
+                  count={waiting.length || undefined}
+                  accent={accentOf('waiting')}
+                  icon={<SECTION_ICON.waiting />}
+                  id="waiting"
                 >
-                  <StaleInvites
-                    signer={signer}
-                    facts={{
-                      needed,
-                      maximumBlockDelay: data.group.maximumBlockDelay,
-                      msPerBlock: data.now.msPerBlock,
-                    }}
-                    decisions={decisions}
-                    now={data.now}
-                    adminNames={adminNames}
-                    expanded={staleExpanded}
-                    onExpandedChange={setStaleExpanded}
-                  />
+                  {nominationsQ.isLoading && !nominationsQ.data ? <CardSkeleton lines={3} /> : null}
+                  {nominationsQ.isError && !nominationsQ.data ? (
+                    <ErrorState
+                      compact
+                      title="Couldn’t load the nominations."
+                      error={nominationsQ.error}
+                      onRetry={() => void nominationsQ.refetch()}
+                    />
+                  ) : null}
+                  {waiting.length ? (
+                    <Typography variant="body2" color="text.secondary">
+                      Nominated, but no Minter Admin has approved yet. The first approval puts the
+                      nomination on chain and starts the clock.
+                    </Typography>
+                  ) : null}
+                  {waiting.map((n) => (
+                    <NominationCard
+                      key={n.nominee}
+                      nomination={n}
+                      now={data.now}
+                      compact
+                      comments
+                      actions={
+                        isAdmin ? (
+                          <>
+                            <WaitingConsidering
+                              nomination={n}
+                              myAddress={signer?.address ?? null}
+                              onConsider={setConsiderRequest}
+                            />
+                            <FirstSignatureAction
+                              nomination={n}
+                              onStart={() => setFirstTarget(n)}
+                            />
+                          </>
+                        ) : null
+                      }
+                    />
+                  ))}
                 </Section>
-              </Box>
-            ) : null}
+              ) : null}
 
-            <HowSigningWorks
-              group={data.group}
-              now={data.now}
-              needed={needed}
-              totalAdmins={totalAdmins}
-              signers={data.admins.signers.length}
-            />
+              {isAdmin && pollAuthor ? (
+                <Suspense fallback={<CardSkeleton lines={2} />}>
+                  <AdminPollsSection
+                    author={pollAuthor}
+                    onAsk={(from) => {
+                      askFrom.current = from;
+                      setAsking(true);
+                    }}
+                    hideVoted={hideAnswered}
+                    onShowVoted={() => {
+                      // The note's button goes: focus to the switch it turned off, when shown.
+                      hideAnsweredSwitch.current?.focus();
+                      setHideAnswered(false);
+                    }}
+                  />
+                </Suspense>
+              ) : null}
 
-            {data.truncated ? <TruncatedNote what="the decisions" /> : null}
-          </>
-        ) : null}
+              {closed.length ? (
+                <Section
+                  title="Too late to approve"
+                  count={closed.length}
+                  accent={accentOf('neutral')}
+                  id="closed"
+                >
+                  {closed.map((d) => (
+                    <DecisionCard
+                      key={d.signature}
+                      accent={accentOf(decisionGroup(d))}
+                      decision={d}
+                      now={data.now}
+                      myPublicKey={myKey}
+                      canAct={isAdmin}
+                      nomination={nominationFor(d)}
+                      nominationsState={nominationsState}
+                      onRetryNominations={retryNominations}
+                      adminNames={adminNames}
+                      subjectFacts={factsFor(d.subject)}
+                      impact={impactOf(d)}
+                      risk={riskOf(d)}
+                      labelOf={labelOf}
+                    />
+                  ))}
+                </Section>
+              ) : null}
+
+              {isAdmin && data.unusual.length ? (
+                <Section title="Unusual approval route" accent={accentOf('neutral')} id="unusual">
+                  <UnusualList decisions={data.unusual} now={data.now} />
+                </Section>
+              ) : null}
+
+              {isAdmin && data.others.length ? (
+                <Section
+                  title="Other transactions waiting for Minter Admins"
+                  accent={accentOf('neutral')}
+                  id="others"
+                >
+                  <OtherPendingList items={data.others} now={data.now} />
+                </Section>
+              ) : null}
+
+              {isAdmin && signer ? (
+                <Box
+                  id={STALE_SECTION_ID}
+                  sx={{ scrollMarginTop: 'calc(var(--qmp-header-offset, 0px) + 16px)' }}
+                >
+                  <Section
+                    title="Clean up stale invites"
+                    accent={accentOf('cancelInvite')}
+                    icon={<SECTION_ICON.cancelInvite />}
+                    id="stale"
+                  >
+                    <StaleInvites
+                      signer={signer}
+                      facts={{
+                        needed,
+                        maximumBlockDelay: data.group.maximumBlockDelay,
+                        msPerBlock: data.now.msPerBlock,
+                      }}
+                      decisions={decisions}
+                      now={data.now}
+                      adminNames={adminNames}
+                      expanded={staleExpanded}
+                      onExpandedChange={setStaleExpanded}
+                    />
+                  </Section>
+                </Box>
+              ) : null}
+
+              <HowSigningWorks
+                group={data.group}
+                now={data.now}
+                needed={needed}
+                totalAdmins={totalAdmins}
+                signers={data.admins.signers.length}
+              />
+
+              {data.truncated ? <TruncatedNote what="the decisions" /> : null}
+            </>
+          ) : null}
+        </ViewPanel>
+        {fabShown ? <FabClearance /> : null}
       </PageBody>
+
+      {fabShown ? (
+        adminRole ? (
+          <ProposeMenu
+            fab
+            onChoose={chooseProposal}
+            buttonRef={proposeButton}
+            nominate={canNominate}
+          />
+        ) : (
+          <PageFab
+            label={PROPOSE_NOMINATION}
+            icon={<PersonAddAlt1OutlinedIcon aria-hidden />}
+            onClick={proposeNomination}
+          />
+        )
+      ) : null}
 
       <SignDialog
         decision={signTarget}
@@ -900,6 +1067,36 @@ function DecisionsQueue() {
         returnFocus={() => sectionOf('collecting')}
       />
     </>
+  );
+}
+
+/**
+ * The tab's panel, labelled by its tab. On a touch screen a swipe to the
+ * left opens the next tab, to the right the previous one (useSwipeTabs),
+ * swapping the URL in place as the tabs do; a tab picked from far down the
+ * page brings its top into view (useTopInViewOnSwitch).
+ */
+function ViewPanel({ view, children }: { view: DecisionsView | null; children: ReactNode }) {
+  const [node, setNode] = useState<HTMLElement | null>(null);
+  const navigate = useNavigate();
+  const touch = useMediaQuery('(pointer: coarse)');
+  const index = view ? DECISIONS_VIEWS.findIndex((v) => v.key === view) : -1;
+  useSwipeTabs(node, {
+    enabled: touch && index >= 0,
+    canGo: (step) => index + step >= 0 && index + step < DECISIONS_VIEWS.length,
+    go: (step) => navigate(decisionsViewPath(DECISIONS_VIEWS[index + step].key), { replace: true }),
+  });
+  useTopInViewOnSwitch(PATHS.decisions, view ?? '', DECISIONS_PANEL_ID);
+  return (
+    <Box
+      ref={setNode}
+      role="tabpanel"
+      id={DECISIONS_PANEL_ID}
+      aria-labelledby={view ? decisionsTabId(view) : undefined}
+      sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 2.5 } }}
+    >
+      {children}
+    </Box>
   );
 }
 

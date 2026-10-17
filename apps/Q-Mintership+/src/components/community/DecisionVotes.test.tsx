@@ -12,7 +12,6 @@ import { renderPage } from '../../test/render';
 import { fetchCallsFor, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { ADDR, installWorld } from '../../test/world';
 import { resetOptimisticComments } from '../../state/comments';
-import { loadPublicProposalCount } from '../../data/decisions';
 import { peekQuery } from '../../data/query';
 import { guardDecisionVote } from '../../writes/guards';
 import DecisionsPage from '../../pages/decisions/DecisionsPage';
@@ -28,7 +27,7 @@ const T = { timeout: 4000 };
 function openDecisions(persona: string, setup?: (world: never) => void) {
   return renderPage(<DecisionsPage />, {
     persona,
-    path: '/decisions',
+    path: '/decisions?show=decisions',
     route: '/decisions',
     setup: (world) => {
       addDecisionVotes(world);
@@ -202,40 +201,22 @@ describe('votes on removals, bans and new Minter Admins', () => {
 });
 
 describe('Decisions in the navigation', () => {
-  it('counts the open removals, bans and new Minter Admins, lightly', async () => {
-    installWorld('learner');
-    expect(await loadPublicProposalCount()).toBe(3);
-    // No approval search: only the pending list, the group and the tip.
-    expect(fetchCallsFor('/transactions/search')).toEqual([]);
-  });
-
-  it('a declined join request doesn’t count', async () => {
-    const { world } = installWorld('learner');
-    addDecline(world);
-    expect(await loadPublicProposalCount()).toBe(3);
-  });
-
-  it('is there for someone who isn’t a Minter Admin while one is open', async () => {
-    await renderPage(<AppShell />, { persona: 'learner' });
-    await waitFor(
-      () =>
-        expect(screen.getAllByRole('button', { name: /^Decisions$/ }).length).toBeGreaterThan(0),
-      T
-    );
-  });
-
-  it('and not when none is open', async () => {
+  it('is there for everyone, with nothing read to decide it', async () => {
     await renderPage(<AppShell />, {
       persona: 'learner',
+      // No proposal everyone may vote on is open: Decisions still holds the nominations.
       setup: (world) => {
         world.pending = world.pending.filter(
           (t: { type: string }) => !['GROUP_KICK', 'GROUP_BAN', 'ADD_GROUP_ADMIN'].includes(t.type)
         );
       },
     });
-    await screen.findAllByRole('button', { name: /^Nominations$/ }, T);
-    // The light read has answered: none open.
-    await waitFor(() => expect(peekQuery<number>('decisions:public')).toBe(0), T);
-    expect(screen.queryAllByRole('button', { name: /^Decisions/ })).toEqual([]);
+    await waitFor(
+      () =>
+        expect(screen.getAllByRole('button', { name: /^Decisions$/ }).length).toBeGreaterThan(0),
+      T
+    );
+    expect(screen.queryAllByRole('button', { name: /^Nominations$/ })).toEqual([]);
+    expect(peekQuery('decisions:public')).toBeUndefined();
   });
 });

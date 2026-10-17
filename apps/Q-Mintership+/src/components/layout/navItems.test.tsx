@@ -56,33 +56,22 @@ describe('the nav items', () => {
     expect(explorer?.short).toBeUndefined();
   });
 
-  it('the rail: Home, Decisions (when shown), Nominations, History, Explorer, Settings', () => {
-    expect(keys(railItems(true))).toEqual([
-      'home',
-      'decisions',
-      'nominations',
-      'history',
-      'explorer',
-      'settings',
-    ]);
-    expect(keys(railItems(false))).toEqual([
-      'home',
-      'nominations',
-      'history',
-      'explorer',
-      'settings',
-    ]);
+  it('the rail, the same for everyone: Home, Decisions, History, Explorer, Settings', () => {
+    expect(keys(railItems())).toEqual(['home', 'decisions', 'history', 'explorer', 'settings']);
   });
 
-  it('the phone bar: History in it for everyone, Explorer last, Activity in the Explorer', () => {
-    expect(keys(phoneItems(true))).toEqual([
-      'home',
-      'decisions',
-      'nominations',
-      'history',
-      'explorer',
-    ]);
-    expect(keys(phoneItems(false))).toEqual(['home', 'nominations', 'history', 'explorer']);
+  it('the phone bar: Decisions (with the nominations) and History for everyone, Explorer last', () => {
+    expect(keys(phoneItems())).toEqual(['home', 'decisions', 'history', 'explorer']);
+  });
+
+  it('keeps Decisions lit on a nomination’s page and the nominate form', () => {
+    const decisions = NAV_ITEMS.find((item) => item.key === 'decisions');
+    const lit = (path: string) => isNavActive(path, '/decisions', decisions?.also);
+    expect(lit('/decisions')).toBe(true);
+    expect(lit('/decisions/abc')).toBe(true);
+    expect(lit('/nominations/QAbc')).toBe(true);
+    expect(lit('/nominate')).toBe(true);
+    expect(lit('/history')).toBe(false);
   });
 
   it('keeps Explorer lit on every Explorer page', () => {
@@ -94,16 +83,10 @@ describe('the nav items', () => {
 
 describe('the bars on screen', () => {
   it('the phone bar shows Explorer and no Settings', () => {
-    show(<BottomNav withDecisions />, '/explorer/account/QA');
+    show(<BottomNav />, '/explorer/account/QA');
     const bar = screen.getByRole('navigation');
     const buttons = within(bar).getAllByRole('button');
-    expect(buttons.map((b) => b.textContent)).toEqual([
-      'Home',
-      'Decisions',
-      'Nominees',
-      'History',
-      'Explorer',
-    ]);
+    expect(buttons.map((b) => b.textContent)).toEqual(['Home', 'Decisions', 'History', 'Explorer']);
     expect(within(bar).getByRole('button', { name: 'Explorer' })).toHaveAttribute(
       'aria-current',
       'page'
@@ -111,7 +94,7 @@ describe('the bars on screen', () => {
   });
 
   it('the rail shows Explorer before Settings', () => {
-    show(<NavRail withDecisions={false} />, '/');
+    show(<NavRail />, '/');
     const names = within(screen.getByRole('navigation', { name: 'Main' }))
       .getAllByRole('button')
       .map((b) => b.getAttribute('aria-label') ?? b.textContent ?? '');

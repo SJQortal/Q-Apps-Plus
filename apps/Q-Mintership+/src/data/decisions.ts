@@ -25,11 +25,8 @@
  * (rules/decline.ts), from the join requests the nominations read already
  * (cached, and read only while a kick waits).
  */
-import { PUBLIC_VOTE_KINDS } from '../rules/communityVotes';
 import {
   buildDecision,
-  decisionKind,
-  decisionSubject,
   isMinterGroupChange,
   isUnusualApprovalRoute,
   sortDecisions,
@@ -41,7 +38,6 @@ import {
 import { markDeclines } from '../rules/decline';
 import { approvedAddFor, markDoubles } from '../rules/double';
 import type { ApprovalRow } from '../rules/tally';
-import { decisionWindow, windowPhase } from '../rules/timing';
 import { getChainNow, type ChainNow } from './chain';
 import { getAdmins, getGroupInfo, getJoinRequests, type AdminList } from './group';
 import type { PagedResult } from './core';
@@ -184,42 +180,5 @@ export function findOpenDecision(
   return (
     data.decisions.find((d) => d.subject === subject && d.kind === kind && d.phase !== 'expired') ??
     null
-  );
-}
-
-/**
- * How many proposals everyone may vote on (a removal that isn't a declined
- * join request, a ban, a new Minter Admin: rules/communityVotes.ts) are
- * waiting with approvals that can still count. It is what shows Decisions
- * to anyone who isn't a Minter Admin. Lighter than the queue: the pending
- * list, the group and the tip (the queue's own cached reads), plus the join
- * requests and the admins only while a kick waits. Key `decisions:public`.
- */
-export function loadPublicProposalCount(options: { force?: boolean } = {}): Promise<number> {
-  return fetchQuery(
-    'decisions:public',
-    async () => {
-      const force = options.force;
-      const [group, now, pending] = await Promise.all([
-        getGroupInfo(),
-        getChainNow({ force }),
-        getPending({ force }),
-      ]);
-      const waiting = pending.rows.filter(isMinterGroupChange).flatMap((tx) => {
-        const kind = decisionKind(tx);
-        const subject = decisionSubject(tx);
-        if (!subject || !PUBLIC_VOTE_KINDS.has(kind)) return [];
-        if (typeof tx.blockHeight === 'number') {
-          const phase = windowPhase(decisionWindow(tx.blockHeight, group), now.height);
-          if (phase === 'tooLate' || phase === 'expired') return [];
-        }
-        return [{ kind, subject }];
-      });
-      if (!waiting.some((d) => d.kind === 'kick')) return waiting.length;
-      const [asking, admins] = await Promise.all([askingToJoin(waiting), getAdmins()]);
-      const adminSet = new Set(admins.admins.map((a) => a.member));
-      return markDeclines(waiting, asking, adminSet).filter((d) => !d.decline).length;
-    },
-    { ttlMs: 60_000, force: options.force }
   );
 }

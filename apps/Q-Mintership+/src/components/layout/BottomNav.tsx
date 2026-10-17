@@ -83,12 +83,9 @@ const Label = styled('span')({
 });
 
 export function BottomNav({
-  withDecisions,
   decisionsBadge = 0,
   historyBadge = 0,
 }: {
-  /** Decisions is in the navigation (useDecisionsInNav). */
-  withDecisions: boolean;
   decisionsBadge?: number;
   /** Changes decided since this Minter Admin last had History open. */
   historyBadge?: number;
@@ -97,8 +94,8 @@ export function BottomNav({
   const { pathname } = useLocation();
   return (
     <Bar aria-label="Main">
-      {phoneItems(withDecisions).map(({ key, label, short, path, Icon }) => {
-        const active = isNavActive(pathname, path);
+      {phoneItems().map(({ key, label, short, path, also, Icon }) => {
+        const active = isNavActive(pathname, path, also);
         const badge = key === 'decisions' ? decisionsBadge : key === 'history' ? historyBadge : 0;
         return (
           <Item

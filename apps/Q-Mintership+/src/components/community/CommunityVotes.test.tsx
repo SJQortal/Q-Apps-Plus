@@ -8,7 +8,6 @@ import { ADDR } from '../../test/world';
 import { resetOptimisticComments } from '../../state/comments';
 import DecisionPage from '../../pages/decisions/DecisionPage';
 import DecisionsPage from '../../pages/decisions/DecisionsPage';
-import NominationsPage from '../../pages/nominations/NominationsPage';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -18,10 +17,10 @@ afterEach(() => {
 const T = { timeout: 4000 };
 
 function openNominations(persona: string) {
-  return renderPage(<NominationsPage />, {
+  return renderPage(<DecisionsPage />, {
     persona,
-    path: '/nominations',
-    route: '/nominations',
+    path: '/decisions?show=nominations',
+    route: '/decisions',
     setup: (world) => addCommunityVotes(world),
   });
 }
@@ -143,7 +142,7 @@ describe('community votes on the cards', () => {
   it('Minter Admins see the votes but answer on chain; the nominee doesn’t vote on themselves', async () => {
     await renderPage(<DecisionsPage />, {
       persona: 'admin',
-      path: '/decisions',
+      path: '/decisions?show=decisions',
       route: '/decisions',
       setup: (world) => addCommunityVotes(world),
     });
@@ -195,10 +194,10 @@ describe('community votes on the cards', () => {
   it('a voter’s comment says how they voted', async () => {
     const user = userEvent.setup();
     let ids: Record<string, string> = {};
-    await renderPage(<NominationsPage />, {
+    await renderPage(<DecisionsPage />, {
       persona: 'nominator',
-      path: '/nominations',
-      route: '/nominations',
+      path: '/decisions?show=nominations',
+      route: '/decisions',
       setup: (world) => {
         addCommunityVotes(world);
         ids = addComments(world).ids;

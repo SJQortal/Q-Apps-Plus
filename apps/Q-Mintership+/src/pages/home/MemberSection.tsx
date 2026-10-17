@@ -19,7 +19,13 @@ import {
 import { NOMINATOR_MIN_LEVEL } from '../../data/constants';
 import { useChainNow, useNominations } from '../../hooks/useData';
 import { PROPOSE_NOMINATION } from '../../constants/words';
-import { PATHS, decisionPath, nominatePath, nominationPath } from '../../routes/paths';
+import {
+  PATHS,
+  decisionPath,
+  decisionsViewPath,
+  nominatePath,
+  nominationPath,
+} from '../../routes/paths';
 import type { Nomination } from '../../data/nominations';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import type { MyStatus } from '../../rules/status';
@@ -122,10 +128,10 @@ export function MemberSection({ status }: { status: MyStatus }) {
               {mine.length > MINE_MAX ? (
                 <Button
                   component={RouterLink}
-                  to={PATHS.nominations}
+                  to={decisionsViewPath('nominations')}
                   sx={{ alignSelf: 'flex-start', minHeight: 44 }}
                 >
-                  See all {mine.length} on Nominations
+                  Open nominations in Decisions
                 </Button>
               ) : null}
             </Box>
@@ -179,7 +185,7 @@ export function MemberSection({ status }: { status: MyStatus }) {
               })}
               <Button
                 component={RouterLink}
-                to={PATHS.nominations}
+                to={decisionsViewPath('nominations')}
                 sx={{ alignSelf: 'flex-start', minHeight: 44 }}
               >
                 See all open nominations

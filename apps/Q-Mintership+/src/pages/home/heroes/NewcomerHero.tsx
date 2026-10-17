@@ -14,7 +14,7 @@ import { formatQort } from '../../../data/accounts';
 import { NOMINATOR_MIN_LEVEL } from '../../../data/constants';
 import { useBalance } from '../../../hooks/useData';
 import { useFee } from '../../../hooks/useFee';
-import { PATHS } from '../../../routes/paths';
+import { decisionsViewPath } from '../../../routes/paths';
 import type { MyStatus } from '../../../rules/status';
 import { openQortalLink } from '../../../utils/links';
 import { Hero, HeroText, Num } from '../Hero';
@@ -49,7 +49,7 @@ export function NewcomerHero({ status, needed }: { status: MyStatus; needed: num
           <>
             {isReady ? null : <ReadyButton ready={ready} />}
             <ShareButton status={status} />
-            <Button component={RouterLink} to={PATHS.nominations}>
+            <Button component={RouterLink} to={decisionsViewPath('nominations')}>
               See open nominations
             </Button>
             {name ? null : (

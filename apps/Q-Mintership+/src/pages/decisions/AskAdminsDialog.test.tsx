@@ -20,7 +20,7 @@ const T = { timeout: 6000 };
 async function openDecisions(setup: RenderPageOptions['setup'] = withAdminPolls('admin')) {
   const rendered = await renderPage(<DecisionsPage />, {
     persona: 'admin',
-    path: '/decisions',
+    path: '/decisions?show=decisions',
     route: '/decisions',
     setup,
   });

@@ -40,6 +40,19 @@ export function decisionPath(signature?: string): string {
   return signature ? `${PATHS.decisions}/${encodeURIComponent(signature)}` : PATHS.decisions;
 }
 
+/** Decisions' tabs (pages/decisions/decisionsViews.ts). */
+export type DecisionsView = 'decisions' | 'nominations' | 'ready';
+
+/**
+ * `/decisions?show=<view>`: one of Decisions' tabs, and on Nominations a
+ * nomination state other than All (`&state=waiting`).
+ */
+export function decisionsViewPath(view: DecisionsView, state = 'all'): string {
+  const params = new URLSearchParams({ show: view });
+  if (view === 'nominations' && state !== 'all') params.set('state', state);
+  return `${PATHS.decisions}?${params.toString()}`;
+}
+
 /** `/decisions/polls/<id>`: one Minter Admin poll (its shareable link; Minter Admins only). */
 export function adminPollPath(id: string): string {
   return `${PATHS.decisions}/polls/${encodeURIComponent(id)}`;

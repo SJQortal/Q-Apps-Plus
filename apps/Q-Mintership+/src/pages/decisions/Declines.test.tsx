@@ -38,7 +38,7 @@ describe('Declines in Decisions', () => {
     const user = userEvent.setup();
     await renderPage(<DecisionsPage />, {
       persona: 'admin',
-      path: '/decisions',
+      path: '/decisions?show=decisions',
       route: '/decisions',
       setup: (world) => void addDecline(world),
     });
@@ -84,7 +84,7 @@ describe('Decisions → Propose → Decline a join request', () => {
     const user = userEvent.setup();
     const { world, address, publicKey } = await renderPage(<DecisionsPage />, {
       persona: 'admin',
-      path: '/decisions',
+      path: '/decisions?show=decisions',
       route: '/decisions',
       setup: (w) => void addDecline(w),
     });

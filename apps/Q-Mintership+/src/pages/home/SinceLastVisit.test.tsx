@@ -503,10 +503,11 @@ describe('Since your last visit: nominators', () => {
     const more = (
       await within(region).findByText('And 1 more of your nominations ended', {}, T)
     ).closest('li') as HTMLElement;
+    // How each ended is in History, under Invites.
     expect(
-      within(more).getByRole('link', { name: 'See your other nominations on Nominations' })
-    ).toHaveAttribute('href', '/nominations');
-    expect(within(more).getByRole('link')).toHaveTextContent('Nominations');
+      within(more).getByRole('link', { name: 'See how your other nominations ended, in History' })
+    ).toHaveAttribute('href', '/history?type=invite');
+    expect(within(more).getByRole('link')).toHaveTextContent('History');
     expect(within(region).getAllByRole('listitem')).toHaveLength(4);
   });
 

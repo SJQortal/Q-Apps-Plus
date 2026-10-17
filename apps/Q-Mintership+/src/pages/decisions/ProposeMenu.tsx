@@ -1,7 +1,10 @@
 /**
  * The Minter Admins' "Propose" button: a menu on wider layouts and a bottom
- * sheet on phones (docs/DESIGN.md → Mobile: menus open as sheets). The
- * sheet is a plain Drawer, mounted only while open (docs/QORTAL.md pitfall 4).
+ * sheet on phones (docs/DESIGN.md → Mobile: menus open as sheets), where it
+ * is the page's floating button (`fab`). Propose nomination comes first
+ * (Simon, 2026-10-17: "propose nomination will be the first option at the
+ * top of + Propose"). The sheet is a plain Drawer, mounted only while open
+ * (docs/QORTAL.md pitfall 4).
  */
 import { useState, type ReactNode, type Ref } from 'react';
 import {
@@ -18,6 +21,7 @@ import {
   Typography,
 } from '@mui/material';
 import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
+import PersonAddAlt1OutlinedIcon from '@mui/icons-material/PersonAddAlt1Outlined';
 import PersonRemoveOutlinedIcon from '@mui/icons-material/PersonRemoveOutlined';
 import PersonOffOutlinedIcon from '@mui/icons-material/PersonOffOutlined';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
@@ -28,6 +32,8 @@ import PersonAddDisabledOutlinedIcon from '@mui/icons-material/PersonAddDisabled
 import CleaningServicesOutlinedIcon from '@mui/icons-material/CleaningServicesOutlined';
 import HowToVoteOutlinedIcon from '@mui/icons-material/HowToVoteOutlined';
 import CloseIcon from '@mui/icons-material/Close';
+import { PageFab } from '../../components/layout/PageFab';
+import { PROPOSE_NOMINATION } from '../../constants/words';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { PROPOSE_KINDS, PROPOSE_ORDER, type ProposeKind } from './proposeKinds';
 
@@ -41,10 +47,19 @@ const ICONS: Record<ProposeKind, ReactNode> = {
   cancelInvite: <PersonAddDisabledOutlinedIcon />,
 };
 
-/** A chain proposal, Clean up stale invites, or a Minter Admin poll. */
-export type ProposeChoice = ProposeKind | 'stale' | 'poll';
+/** A nomination, a chain proposal, Clean up stale invites, or a Minter Admin poll. */
+export type ProposeChoice = 'nominate' | ProposeKind | 'stale' | 'poll';
 
-const ITEMS: Array<{ key: ProposeChoice; label: string; description: string; icon: ReactNode }> = [
+type Item = { key: ProposeChoice; label: string; description: string; icon: ReactNode };
+
+const NOMINATE_ITEM: Item = {
+  key: 'nominate',
+  label: PROPOSE_NOMINATION,
+  description: 'Someone who runs a node and should mint. The Minter Admins then decide.',
+  icon: <PersonAddAlt1OutlinedIcon />,
+};
+
+const ITEMS: Item[] = [
   ...PROPOSE_ORDER.map((kind) => ({
     key: kind as ProposeChoice,
     label: PROPOSE_KINDS[kind].label,
@@ -68,14 +83,21 @@ const ITEMS: Array<{ key: ProposeChoice; label: string; description: string; ico
 export function ProposeMenu({
   onChoose,
   buttonRef,
+  nominate = false,
+  fab = false,
 }: {
   onChoose: (choice: ProposeChoice) => void;
   /** The Propose button, where focus comes back after a proposal's dialogs. */
   buttonRef?: Ref<HTMLButtonElement>;
+  /** Offer Propose nomination, first (whoever can nominate: every Minter Admin can). */
+  nominate?: boolean;
+  /** The page's floating button on a phone: icon only, opening the sheet. */
+  fab?: boolean;
 }) {
-  const phone = usePhoneLayout();
+  const phone = usePhoneLayout() || fab;
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [sheet, setSheet] = useState(false);
+  const items = nominate ? [NOMINATE_ITEM, ...ITEMS] : ITEMS;
   const pick = (choice: ProposeChoice) => {
     setAnchor(null);
     setSheet(false);
@@ -83,17 +105,28 @@ export function ProposeMenu({
   };
   return (
     <>
-      <Button
-        ref={buttonRef}
-        variant="contained"
-        startIcon={<AddOutlinedIcon />}
-        aria-haspopup={phone ? 'dialog' : 'menu'}
-        aria-expanded={Boolean(anchor) || sheet}
-        onClick={(e) => (phone ? setSheet(true) : setAnchor(e.currentTarget))}
-        sx={{ minHeight: 44 }}
-      >
-        Propose
-      </Button>
+      {fab ? (
+        <PageFab
+          ref={buttonRef}
+          label="Propose"
+          icon={<AddOutlinedIcon aria-hidden />}
+          aria-haspopup="dialog"
+          aria-expanded={sheet}
+          onClick={() => setSheet(true)}
+        />
+      ) : (
+        <Button
+          ref={buttonRef}
+          variant="contained"
+          startIcon={<AddOutlinedIcon />}
+          aria-haspopup={phone ? 'dialog' : 'menu'}
+          aria-expanded={Boolean(anchor) || sheet}
+          onClick={(e) => (phone ? setSheet(true) : setAnchor(e.currentTarget))}
+          sx={{ minHeight: 44 }}
+        >
+          Propose
+        </Button>
+      )}
       {!phone ? (
         <Menu
           // Inside <main>, so the menu's text sits in a landmark like the page's.
@@ -104,7 +137,7 @@ export function ProposeMenu({
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
           transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         >
-          {ITEMS.map((item) => (
+          {items.map((item) => (
             <MenuItem
               key={item.key}
               onClick={() => pick(item.key)}
@@ -146,7 +179,7 @@ export function ProposeMenu({
             </IconButton>
           </Box>
           <List component="div">
-            {ITEMS.map((item) => (
+            {items.map((item) => (
               <ListItemButton
                 key={item.key}
                 onClick={() => pick(item.key)}

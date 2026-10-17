@@ -27,7 +27,7 @@ afterEach(() => {
 
 describe('Decisions: loading and errors', () => {
   it('shows skeletons first, then the error with Retry, then the queue', async () => {
-    await renderPage(<DecisionsPage />, { persona: 'admin', path: '/decisions' });
+    await renderPage(<DecisionsPage />, { persona: 'admin', path: '/decisions?show=decisions' });
     expect(screen.getByRole('status', { name: 'Loading decisions' })).toBeInTheDocument();
     expect(await screen.findByText('Couldn’t load the decisions.')).toBeVisible();
     state.failing = false;

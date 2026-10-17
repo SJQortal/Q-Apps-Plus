@@ -59,7 +59,7 @@ import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useQuery } from '../../hooks/useQuery';
 import { appParam } from '../../routes/hubLocation';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
-import { PATHS, nominationPath, personPath } from '../../routes/paths';
+import { decisionsViewPath, nominationPath, personPath } from '../../routes/paths';
 import { NOMINEE_BLOCK_TEXT, type NomineeBlock } from '../../rules/nomination';
 import type { MyStatus } from '../../rules/status';
 import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
@@ -116,7 +116,7 @@ export default function NominatePage() {
       <PageHeader
         title={PROPOSE_NOMINATION}
         subtitle="Pick the person, say why, add links."
-        back={PATHS.nominations}
+        back={decisionsViewPath('nominations')}
       />
       <PageBody $maxWidth={680}>{body}</PageBody>
     </>
@@ -139,13 +139,13 @@ function NotEligible({ status }: { status: MyStatus }) {
       ) : null}
       {status.kind === 'nominated' ? (
         <Typography variant="body2" color="text.secondary">
-          You have a nomination of your own: see it on the Nominations page.
+          You have a nomination of your own: see it in Decisions.
         </Typography>
       ) : null}
       <Box>
         <Button
           component={RouterLink}
-          to={PATHS.nominations}
+          to={decisionsViewPath('nominations')}
           variant="outlined"
           sx={{ minHeight: 44 }}
         >
@@ -899,7 +899,7 @@ function Done({
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
         <Button
           component={RouterLink}
-          to={PATHS.nominations}
+          to={decisionsViewPath('nominations')}
           variant="contained"
           sx={{ minHeight: 44 }}
         >

@@ -7,7 +7,6 @@ import { fetchCallsFor } from '../../test/setup';
 import { ADDR } from '../../test/world';
 import { resetOptimisticComments } from '../../state/comments';
 import DecisionsPage from '../../pages/decisions/DecisionsPage';
-import NominationsPage from '../../pages/nominations/NominationsPage';
 import PersonPage from '../../pages/person/PersonPage';
 
 afterEach(() => {
@@ -31,7 +30,7 @@ describe('comments on the cards', () => {
     const user = userEvent.setup();
     await renderPage(<DecisionsPage />, {
       persona: 'admin',
-      path: '/decisions',
+      path: '/decisions?show=decisions',
       route: '/decisions',
       setup,
     });
@@ -67,10 +66,10 @@ describe('comments on the cards', () => {
   });
 
   it('Nominations: the open cards show their comments', async () => {
-    await renderPage(<NominationsPage />, {
+    await renderPage(<DecisionsPage />, {
       persona: 'nominator',
-      path: '/nominations',
-      route: '/nominations',
+      path: '/decisions?show=nominations',
+      route: '/decisions',
       setup,
     });
     const wren = await screen.findByRole('article', { name: 'Nomination of Wren Waiting' }, T);

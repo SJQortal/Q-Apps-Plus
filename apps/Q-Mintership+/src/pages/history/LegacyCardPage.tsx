@@ -36,7 +36,7 @@ import {
   ListSkeleton,
   TruncatedNote,
 } from '../../components/common/states';
-import { PATHS, legacyCardPath } from '../../routes/paths';
+import { PATHS, decisionsViewPath, legacyCardPath } from '../../routes/paths';
 import { formatCount, formatDate, formatDateTime, plural } from '../../utils/format';
 import { ORIGINAL_APP_LINK, openQortalLink } from '../../utils/links';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
@@ -175,7 +175,7 @@ function CardView({ row, section }: { row: LegacyCardRow; section: string }) {
           card.board === 'minter' ? (
             <Button
               component={RouterLink}
-              to={PATHS.nominations}
+              to={decisionsViewPath('nominations')}
               color="inherit"
               sx={{ minHeight: 44, whiteSpace: 'nowrap' }}
             >
