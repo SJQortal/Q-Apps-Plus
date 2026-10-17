@@ -8,7 +8,9 @@
  * tells the Connections tab which, for its "Also checked" line, from the
  * same shared reads (none polled). It reads once `enabled` (the Connections
  * tab passes whether its In common part nears the screen). A read that
- * failed is said, with Retry, above whatever did load.
+ * failed is said, with Retry, above whatever did load. With the tab's
+ * search (`find`), each group shows only the rows found, matches first,
+ * then those only similar; a group with none goes, and so does the part.
  */
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, IconButton, Tooltip } from '@mui/material';
@@ -22,12 +24,19 @@ import { explorerComparePath } from '../../../routes/paths';
 import { formatDate } from '../../../utils/format';
 import { LINK_GROUPS, type MintershipLink } from './mintership/links';
 import { SteppedList, SubHeading } from './mintership/parts';
+import { SimilarHeading } from '../../../components/explorer/search/SimilarHeading';
+import type { MatchStrength } from '../../../utils/fuzzySearch';
 import { useMintershipLinks } from './mintership/useMintershipLinks';
 
 export interface MintershipLinksProps {
   address: string;
   /** Read now (default); false until the section nears the screen. */
   enabled?: boolean;
+  /** The tab's search, when one is typed: how it finds a row. */
+  find?: ((link: MintershipLink) => MatchStrength | null) | null;
+  typed?: string;
+  /** "holds the name “…”" for an account the search found by a name it holds. */
+  tagOf?: (address: string) => string | null;
 }
 
 function secondary(link: MintershipLink): string {
@@ -42,13 +51,26 @@ function secondary(link: MintershipLink): string {
   return parts.join(' · ');
 }
 
-function LinkRow({ address, link }: { address: string; link: MintershipLink }) {
+function LinkRow({
+  address,
+  link,
+  tag = null,
+}: {
+  address: string;
+  link: MintershipLink;
+  /** One more plain tag (the search's "holds the name …"). */
+  tag?: string | null;
+}) {
   const { label } = useDisplayName(link.other);
   const links = usePersonLinks();
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <PersonChip address={link.other} size={32} secondary={secondary(link)} />
+        <PersonChip
+          address={link.other}
+          size={32}
+          secondary={tag ? `${secondary(link)} · ${tag}` : secondary(link)}
+        />
       </Box>
       <Tooltip title="Compare">
         <IconButton
@@ -65,9 +87,17 @@ function LinkRow({ address, link }: { address: string; link: MintershipLink }) {
   );
 }
 
-export function MintershipLinks({ address, enabled = true }: MintershipLinksProps) {
+export function MintershipLinks({
+  address,
+  enabled = true,
+  find = null,
+  typed = '',
+  tagOf,
+}: MintershipLinksProps) {
   const { links, failed, error, retry } = useMintershipLinks(address, enabled);
-  if (!failed && !links?.length) return null;
+  const strength = (link: MintershipLink) => (find ? find(link) : 'match');
+  const found = (links ?? []).filter((link) => strength(link) !== null);
+  if (!failed && !found.length) return null;
   return (
     <Section title="In Q-Mintership" id="explorer-links-mintership">
       {failed ? (
@@ -79,17 +109,44 @@ export function MintershipLinks({ address, enabled = true }: MintershipLinksProp
         />
       ) : null}
       {LINK_GROUPS.map(({ kind, heading }) => {
-        const group = (links ?? []).filter((l) => l.kind === kind);
+        const group = found.filter((l) => l.kind === kind);
         if (!group.length) return null;
+        const matches = group.filter((l) => strength(l) === 'match');
+        const similar = group.filter((l) => strength(l) === 'similar');
         return (
           <Box key={kind} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <SubHeading>{heading}</SubHeading>
-            <SteppedList
-              items={group}
-              label={heading}
-              keyOf={(l) => l.other}
-              render={(link) => <LinkRow address={address} link={link} />}
-            />
+            {matches.length ? (
+              <SteppedList
+                items={matches}
+                label={heading}
+                keyOf={(l) => l.other}
+                render={(link) => (
+                  <LinkRow
+                    address={address}
+                    link={link}
+                    tag={find ? (tagOf?.(link.other) ?? null) : null}
+                  />
+                )}
+              />
+            ) : null}
+            {similar.length ? (
+              <>
+                <SimilarHeading typed={typed} />
+                <SteppedList
+                  items={similar}
+                  label={`${heading}, similar to “${typed}”`}
+                  keyOf={(l) => l.other}
+                  render={(link) => (
+                    <LinkRow
+                      address={address}
+                      link={link}
+                      tag={find ? (tagOf?.(link.other) ?? null) : null}
+                    />
+                  )}
+                />
+              </>
+            ) : null}
           </Box>
         );
       })}

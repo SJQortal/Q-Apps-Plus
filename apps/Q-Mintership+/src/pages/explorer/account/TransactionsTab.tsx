@@ -11,6 +11,12 @@
  * Back, a copied link and a reload keep it. Every read is the Explorer's
  * own and none polls; an AT (automated contract) has no public key, so it
  * has no waiting list.
+ *
+ * Above it all, a small search (Simon, 2026-10-17; `?q=` in the URL) over
+ * the transactions read: a name, an address, an amount, a type, a block,
+ * a date, typed in part, similar words found too
+ * (components/explorer/search). It narrows what was read and never reads
+ * more by itself; Load older searches on.
  */
 import { useSearchParams } from 'react-router-dom';
 import { Box } from '@mui/material';
@@ -24,6 +30,7 @@ import {
   parseFilters,
   type TxFilters,
 } from '../../../rules/explorer/accountTxFilters';
+import { RowSearchField } from '../../../components/explorer/search/RowSearchField';
 import { AccountTxList } from './transactions/AccountTxList';
 import { FamilyFilter } from './transactions/FamilyFilter';
 import { TxFilterBar } from './transactions/TxFilterBar';
@@ -49,6 +56,17 @@ export default function TransactionsTab({ address }: TransactionsTabProps) {
       },
       { replace: true }
     );
+  const search = appParam(params, 'q') ?? '';
+  const setSearch = (next: string) =>
+    setParams(
+      (prev) => {
+        const out = new URLSearchParams(prev);
+        if (next.trim()) out.set('q', next.trim());
+        else out.delete('q');
+        return out;
+      },
+      { replace: true }
+    );
   const at = isAtAddress(address);
   // The account read the page made already (no poll); an AT has no account to read.
   const account = useAccount(at ? null : address);
@@ -63,6 +81,12 @@ export default function TransactionsTab({ address }: TransactionsTabProps) {
     (filters.when === 'dates' || filters.when === 'blocks') && filters.to !== null;
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+      <RowSearchField
+        value={search}
+        onChange={setSearch}
+        placeholder="Search these transactions"
+        label="Search this account’s transactions: a name, an address, an amount, a type…"
+      />
       <FamilyFilter
         family={filters.kind}
         onFamily={(kind) => setFilters({ ...filters, kind, type: null })}
@@ -75,12 +99,13 @@ export default function TransactionsTab({ address }: TransactionsTabProps) {
         primary={primary.data}
       />
       {publicKey && !endsBeforeNow ? (
-        <WaitingSection address={address} publicKey={publicKey} filters={filters} />
+        <WaitingSection address={address} publicKey={publicKey} filters={filters} search={search} />
       ) : null}
       <AccountTxList
         key={JSON.stringify(filtersToParams(filters))}
         address={address}
         filters={filters}
+        search={search}
       />
     </Box>
   );

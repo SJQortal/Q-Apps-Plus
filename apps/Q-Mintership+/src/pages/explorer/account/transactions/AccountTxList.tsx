@@ -9,12 +9,20 @@
  * nothing more is left and it goes, focus moves to the first new row). A
  * busy account whose search takes longer than 3 s says it is still
  * checking. Under the list, how much of the account's list is on screen.
+ *
+ * A search typed over the tab (Simon, 2026-10-17) narrows the rows read to
+ * those that show what was typed (components/explorer/search: names,
+ * addresses, amounts, types, blocks, dates; similar words too): those that
+ * match first, then, under "Similar to …", those only close. The line
+ * under them says how many of how many read, and Load older searches on.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { Section } from '../../../../components/common/Section';
 import { EmptyState, ErrorState, ListSkeleton } from '../../../../components/common/states';
 import { TxList } from '../../../../components/explorer/TxListRow';
+import { SimilarHeading } from '../../../../components/explorer/search/SimilarHeading';
+import { useTxSearch } from '../../../../components/explorer/search/useTxSearch';
 import {
   accountTxKey,
   getAccountTx,
@@ -38,6 +46,7 @@ import {
   noNameLine,
   olderLoadedLine,
   readingOnLine,
+  searchLine,
   STILL_CHECKING,
 } from './txTabWords';
 import { useSlow } from './useSlow';
@@ -69,7 +78,16 @@ function useWindow(filters: TxFilters) {
   return useQuery(timed ? txWindowKey(filters) : null, (force) => getTxWindow(filters, { force }));
 }
 
-export function AccountTxList({ address, filters }: { address: string; filters: TxFilters }) {
+export function AccountTxList({
+  address,
+  filters,
+  search = '',
+}: {
+  address: string;
+  filters: TxFilters;
+  /** What was typed in the tab's search (empty: no search). */
+  search?: string;
+}) {
   const windowRead = useWindow(filters);
   const timed = filters.when !== 'any';
   const range = timed ? windowRead.data : null;
@@ -104,8 +122,18 @@ export function AccountTxList({ address, filters }: { address: string; filters: 
   const data = list.data;
   const read = data?.rows ?? [];
   const rows = shownRows(read, filters);
-  const visible = rows.slice(0, shown);
-  const more = data ? rows.length > shown || !data.done : false;
+  // The search: what matches first, then what is similar.
+  const txSearch = useTxSearch(rows, address, search);
+  const tiers = txSearch.tiers;
+  const found = tiers ? [...tiers.match, ...tiers.similar] : rows;
+  const visible = found.slice(0, shown);
+  const more = data ? found.length > shown || !data.done : false;
+  // A new search starts again at the first rows.
+  const [searchShown, setSearchShown] = useState(search);
+  if (searchShown !== search) {
+    setSearchShown(search);
+    setShown(SHOW_STEP);
+  }
 
   // A name is matched on the rows read: while fewer than 10 match, read on
   // by itself, up to 4 more pages, so a sparse name doesn't need many presses.
@@ -134,7 +162,7 @@ export function AccountTxList({ address, filters }: { address: string; filters: 
   const showOlder = async () => {
     if (!data || loadingOlder) return;
     setOlderError(null);
-    let held = rows.length;
+    let held = found.length;
     let done = data.done;
     if (held <= shown && !done) {
       setLoadingOlder(true);
@@ -143,7 +171,9 @@ export function AccountTxList({ address, filters }: { address: string; filters: 
           older: true,
           view: view ?? {},
         });
-        held = shownRows(next.rows, filters).length;
+        const nextRows = shownRows(next.rows, filters);
+        const nextTiers = tiers ? txSearch.tiersOf(nextRows) : null;
+        held = nextTiers ? nextTiers.match.length + nextTiers.similar.length : nextRows.length;
         done = next.done;
       } catch (error) {
         setOlderError(error);
@@ -203,6 +233,61 @@ export function AccountTxList({ address, filters }: { address: string; filters: 
       <>
         <ListSkeleton count={4} label="Loading this account's transactions" />
         {slow ? <StillChecking /> : null}
+      </>
+    );
+  } else if (tiers && txSearch.query) {
+    const typed = txSearch.query.text;
+    const shownMatch = tiers.match.slice(0, shown);
+    const shownSimilar = tiers.similar.slice(0, Math.max(0, shown - tiers.match.length));
+    body = (
+      <>
+        <div ref={listRef}>
+          {shownMatch.length ? (
+            <TxList
+              rows={shownMatch}
+              viewpoint={address}
+              label={`${title} matching “${typed}”`}
+              hintOf={txSearch.hintOf}
+            />
+          ) : null}
+          {shownSimilar.length ? (
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1,
+                mt: shownMatch.length ? 2 : 0,
+              }}
+            >
+              <SimilarHeading typed={typed} />
+              <TxList
+                rows={shownSimilar}
+                viewpoint={address}
+                label={`${title} similar to “${typed}”`}
+                hintOf={txSearch.hintOf}
+              />
+            </Box>
+          ) : null}
+        </div>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
+          <Typography
+            ref={coverageRef}
+            tabIndex={-1}
+            role="status"
+            variant="body2"
+            color="text.secondary"
+            sx={{ flex: '1 1 220px', px: 0.5, '&:focus': { outline: 'none' } }}
+          >
+            {searchLine(filters, typed, {
+              match: tiers.match.length,
+              similar: tiers.similar.length,
+              searched: rows.length,
+              done: data.done,
+            })}
+            {txSearch.reading ? ' Reading the names of the accounts in them…' : ''}
+          </Typography>
+          {more ? loadMore : null}
+        </Box>
       </>
     );
   } else if (!rows.length) {

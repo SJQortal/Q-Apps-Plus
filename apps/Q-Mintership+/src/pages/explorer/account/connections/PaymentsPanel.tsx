@@ -7,7 +7,10 @@
  * ("Show more"). "MINTER members only" filters by the
  * app's cached member list (read once this part is near the screen). The
  * line under the list says how far back it read; "Check older" reads the
- * next 100 that way.
+ * next 100 that way. With the tab's search (`found`), each way lists only
+ * the accounts found, sorted as picked: the matches, then those only
+ * similar under "Similar to …"; the counts on Sent to and Received from
+ * are what was found.
  */
 import { useState } from 'react';
 import {
@@ -44,6 +47,8 @@ import { ConnectionRow, ROW_LIST_SX } from './ConnectionRow';
 import { blocksLine } from './words';
 import { usePayerBands, type MinterMarks } from './hooks';
 import type { ConnectionsData } from './useConnections';
+import type { Found } from './searchEntries';
+import { SimilarHeading } from '../../../../components/explorer/search/SimilarHeading';
 
 /** People rows shown before "Show more" (each looks up a name). */
 const PAGE_ROWS = 20;
@@ -57,6 +62,14 @@ export interface PaymentsPanelProps {
   marks: MinterMarks;
   /** Plain tags for a known relation: "its sponsor", "its first QORT came from them". */
   relationOf: (address: string) => string[];
+  /** The tab's search, when one is typed: the accounts it found each way. */
+  found?: {
+    sent: Found<Flow>;
+    received: Found<Flow>;
+    typed: string;
+    /** "holds the name “…”" for an account found by a name it holds. */
+    tagOf: (address: string) => string | null;
+  } | null;
 }
 
 function FlowRow({
@@ -92,6 +105,7 @@ export function PaymentsPanel({
   data,
   marks,
   relationOf,
+  found = null,
 }: PaymentsPanelProps) {
   const [chosen, setDirection] = useState<Direction | null>(null);
   // Until one is picked: Sent to, unless it sent nothing and received something.
@@ -107,9 +121,16 @@ export function PaymentsPanel({
   const [busyOpen, setBusyOpen] = useState(false);
   const [older, setOlder] = useState<'idle' | 'loading' | 'failed'>('idle');
   const [said, setSaid] = useState('');
+  const [similarLimit, setSimilarLimit] = useState(PAGE_ROWS);
 
   const page = direction === 'sent' ? data.sent : data.recv;
-  const all = direction === 'sent' ? data.flowsSent : data.flowsReceived;
+  const flowsHere = direction === 'sent' ? data.flowsSent : data.flowsReceived;
+  // With a search, the matches here (those only similar follow under their heading).
+  const foundHere = found ? found[direction] : null;
+  const all = flowsHere && foundHere ? foundHere.match : flowsHere;
+  const similar = sortFlows(foundHere?.similar ?? [], sort).filter(
+    (flow) => !membersOnly || !marks.ready || marks.markOf(flow.address)
+  );
   const sorted = sortFlows(all ?? [], sort);
   const { people: everyone, ats } = splitAt(sorted);
   const people =
@@ -124,10 +145,11 @@ export function PaymentsPanel({
     marks.devOf(other),
     ...relationOf(other),
     bandWords(bands[other]),
+    found?.tagOf(other) ?? null,
   ];
 
-  const sentCount = data.flowsSent?.length;
-  const receivedCount = data.flowsReceived?.length;
+  const sentCount = found ? found.sent.all.length : data.flowsSent?.length;
+  const receivedCount = found ? found.received.all.length : data.flowsReceived?.length;
   const apiDirection: PayDirection = direction === 'sent' ? 'sent' : 'recv';
 
   const checkOlder = async () => {
@@ -171,6 +193,7 @@ export function PaymentsPanel({
             setDirection(value);
             setLimit(PAGE_ROWS);
             setAtLimit(PAGE_ROWS);
+            setSimilarLimit(PAGE_ROWS);
             setBusyOpen(false);
             setSaid('');
           }}
@@ -228,7 +251,17 @@ export function PaymentsPanel({
         />
       ) : !all ? (
         <ListSkeleton count={2} label="Loading the payments" />
-      ) : people.length === 0 && ats.length === 0 ? (
+      ) : found && people.length === 0 && ats.length === 0 && similar.length === 0 ? (
+        <Typography color="text.secondary" role="status">
+          {`Nothing in ${direction === 'sent' ? 'Sent to' : 'Received from'} matches “${found.typed}”${
+            (direction === 'sent' ? receivedCount : sentCount)
+              ? `; ${direction === 'sent' ? 'Received from' : 'Sent to'} has ${formatCount(
+                  (direction === 'sent' ? receivedCount : sentCount) as number
+                )}`
+              : ''
+          }.`}
+        </Typography>
+      ) : !found && people.length === 0 && ats.length === 0 ? (
         <Typography color="text.secondary" role="status">
           {membersOnly
             ? 'None with MINTER members in the data checked.'
@@ -328,6 +361,35 @@ export function PaymentsPanel({
             >
               Show more AT addresses ({formatCount(ats.length - atLimit)} more)
             </Button>
+          ) : null}
+          {found && similar.length ? (
+            <>
+              <SimilarHeading typed={found.typed} />
+              <Box
+                component="ul"
+                aria-label={`${direction === 'sent' ? 'Sent to' : 'Received from'}, similar to “${found.typed}”`}
+                sx={ROW_LIST_SX}
+              >
+                {similar.slice(0, similarLimit).map((flow) => (
+                  <FlowRow
+                    key={flow.address}
+                    flow={flow}
+                    direction={direction}
+                    address={address}
+                    accountLabel={accountLabel}
+                    tags={flow.isAt ? [] : tagsOf(flow.address)}
+                  />
+                ))}
+              </Box>
+              {similar.length > similarLimit ? (
+                <Button
+                  onClick={() => setSimilarLimit((value) => value + PAGE_ROWS)}
+                  sx={{ alignSelf: 'flex-start', minHeight: 44 }}
+                >
+                  Show more ({formatCount(similar.length - similarLimit)} more)
+                </Button>
+              ) : null}
+            </>
           ) : null}
         </>
       )}

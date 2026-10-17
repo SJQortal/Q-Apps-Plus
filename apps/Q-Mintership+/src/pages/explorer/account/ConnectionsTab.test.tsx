@@ -718,3 +718,90 @@ describe('Connections: as a circle', () => {
     expect(window.localStorage.getItem('qmintershipplus-connections-view')).toBe('list');
   });
 });
+
+describe('Connections: searched', () => {
+  const field = () =>
+    screen.findByRole('searchbox', { name: /^Search this account’s connections/ }, T);
+  const said = () => screen.getByText(/rows? match|Nothing (matches|in this account)/);
+
+  it('narrows every list to the rows that show what was typed; the rest step aside', async () => {
+    const { user, posts, container } = await open(ADDR.left);
+    const recorded = await region('Recorded between them');
+    await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+    await region('In common');
+    await user.type(await field(), 'kit');
+    await waitFor(() => expect(said()).toHaveTextContent('2 rows match “kit”.'), T);
+    // Payments: Kit each way, and the counts are what was found.
+    expect(within(recorded).getByRole('button', { name: /^Sent to · 1/ })).toBeInTheDocument();
+    expect(
+      within(recorded).getByRole('button', { name: /^Received from · 1/ })
+    ).toBeInTheDocument();
+    expect(within(recorded).getByRole('list', { name: 'Sent to' })).toHaveTextContent(
+      'Paid Kit Kicked 6.3 QORT in 2 payments'
+    );
+    // In common (Hal Helper's first QORT) has nothing about Kit: gone.
+    expect(screen.queryByRole('region', { name: 'In common' })).toBeNull();
+    // Nor the line of what was checked: it isn't about the search.
+    expect(screen.queryByText(/^Also checked, nothing found/)).toBeNull();
+
+    // Received from, searched too.
+    await user.click(within(recorded).getByRole('button', { name: /^Received from/ }));
+    const got = await within(recorded).findByRole('list', { name: 'Received from' }, T);
+    expect(got).toHaveTextContent('Received 120 QORT from Kit Kicked in 4 payments');
+    expect(got).not.toHaveTextContent('Hal Helper');
+    await expectNoAxeViolations(container);
+    noWrites(posts);
+  });
+
+  it('finds a slip as similar, under its own heading', async () => {
+    const { user } = await open(ADDR.left);
+    const recorded = await region('Recorded between them');
+    await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+    await user.type(await field(), 'kitt kickd');
+    await waitFor(
+      () =>
+        expect(said()).toHaveTextContent(
+          'Nothing matches “kitt kickd” exactly; 2 rows are similar.'
+        ),
+      T
+    );
+    expect(
+      within(recorded).getByRole('heading', { name: /^Similar to “kitt kickd”/ })
+    ).toBeInTheDocument();
+    expect(
+      within(recorded).getByRole('list', { name: 'Sent to, similar to “kitt kickd”' })
+    ).toHaveTextContent('Kit Kicked');
+  });
+
+  it('finds an account by a name it holds besides the one shown, and says so', async () => {
+    const { user } = await open(ADDR.nominator);
+    const recorded = await region('Recorded between them');
+    await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+    await user.type(await field(), 'AA Ma');
+    // Its row shows Avery Admin; Core's name search finds "AA Maps", which Avery holds. Until
+    // that search answers nothing matches, so the section is drawn anew: read it again.
+    const sent = () =>
+      within(screen.getByRole('region', { name: 'Recorded between them' })).getByRole('list', {
+        name: 'Sent to',
+      });
+    // Sent to and Received from: Avery each way, nobody else.
+    await waitFor(() => expect(said()).toHaveTextContent('2 rows match “AA Ma”.'), T);
+    expect(sent()).toHaveTextContent('Avery Admin');
+    expect(sent()).toHaveTextContent('holds the name “AA Maps”');
+    expect(sent()).not.toHaveTextContent('Leo Learner');
+  });
+
+  it('says when nothing matches, and Clear brings every list back', async () => {
+    const { user } = await open(ADDR.left);
+    await region('Recorded between them');
+    await user.type(await field(), 'zzzz');
+    await waitFor(
+      () =>
+        expect(said()).toHaveTextContent('Nothing in this account’s connections matches “zzzz”.'),
+      T
+    );
+    expect(screen.queryByRole('region', { name: 'Recorded between them' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Clear the search' }));
+    expect(await region('Recorded between them')).toBeInTheDocument();
+  });
+});

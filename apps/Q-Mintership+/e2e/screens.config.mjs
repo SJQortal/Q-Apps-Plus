@@ -981,6 +981,12 @@ export default {
       path: `/explorer/account/${ADDR.kicked}/connections?as=admin`,
       after: explorerSettle,
     },
+    // Searched (Simon, 2026-10-17): a slip finds Lou Left as similar.
+    {
+      key: 'explorer-connections-search',
+      path: `/explorer/account/${ADDR.kicked}/connections?q=lou%20lfet&as=admin`,
+      after: explorerSettle,
+    },
     // The same connections as a circle (List / Circle, kept on this device).
     {
       key: 'explorer-connections-circle',
@@ -1028,6 +1034,11 @@ export default {
     {
       key: 'explorer-transactions',
       path: `/explorer/account/${ADDR.admin}/transactions?as=admin`,
+      after: explorerSettle,
+    },
+    {
+      key: 'explorer-transactions-search',
+      path: `/explorer/account/${ADDR.kicked}/transactions?q=lou&as=admin`,
       after: explorerSettle,
     },
     {

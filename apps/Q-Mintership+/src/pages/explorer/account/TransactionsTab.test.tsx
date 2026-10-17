@@ -498,3 +498,107 @@ describe('an account’s transactions, filtered', () => {
     expect(document.querySelector('label[data-shrink="false"]')).toBeNull();
   });
 });
+
+describe('an account’s transactions, searched', () => {
+  function Where() {
+    const location = useLocation();
+    return <output data-testid="where">{location.search}</output>;
+  }
+  const where = () => new URLSearchParams(screen.getByTestId('where').textContent ?? '');
+  async function openSearch(address: string, query = '') {
+    const result = await renderPage(
+      <>
+        <AccountPage />
+        <Where />
+      </>,
+      {
+        persona: 'learner',
+        path: `${explorerAccountPath(address, 'transactions')}${query}`,
+        route: ROUTE,
+        strict: true,
+      }
+    );
+    return { ...result, user: userEvent.setup() };
+  }
+  const field = () =>
+    screen.getByRole('searchbox', { name: /^Search this account’s transactions/ });
+
+  it(
+    'narrows the rows read to those that show what was typed, kept in the URL; similar ones after',
+    async () => {
+      const { user, posts } = await openSearch(ADDR.kicked);
+      const all = await region('All transactions');
+      await within(all).findByRole('list', { name: 'All transactions' }, T);
+      const before = fetchCallsFor('/transactions/search').length;
+      await user.type(field(), 'lou');
+      await waitFor(() => expect(where().get('q')).toBe('lou'), T);
+      const list = await within(all).findByRole(
+        'list',
+        { name: 'All transactions matching “lou”' },
+        T
+      );
+      const found = [...rowButtons(list)].map((button) => button.textContent ?? '');
+      expect(found.length).toBeGreaterThan(1);
+      for (const text of found) expect(text).toMatch(/Lou Left/);
+      expect(
+        within(all).getByText(/^\d+ of this account's \d+ transactions match “lou”\.$/)
+      ).toBeInTheDocument();
+      // It searches what was read: nothing more.
+      expect(fetchCallsFor('/transactions/search')).toHaveLength(before);
+
+      // A slip: found as similar, under its heading.
+      await user.clear(field());
+      await user.type(field(), 'lou lfet');
+      expect(
+        await within(all).findByRole('heading', { name: /^Similar to “lou lfet”/ }, T)
+      ).toBeInTheDocument();
+      const similar = within(all).getByRole('list', {
+        name: 'All transactions similar to “lou lfet”',
+      });
+      expect(rowButtons(similar).length).toBe(found.length);
+      expect(
+        within(all).getByText(
+          /None of this account's \d+ transactions matches “lou lfet”; \d+ are similar\./
+        )
+      ).toBeInTheDocument();
+
+      // Clear: every row again, and the URL without it.
+      await user.click(screen.getByRole('button', { name: 'Clear the search' }));
+      await waitFor(() => expect(where().has('q')).toBe(false), T);
+      expect(
+        await within(all).findByRole('list', { name: 'All transactions' }, T)
+      ).toBeInTheDocument();
+      noWrites(posts);
+    },
+    HEAVY
+  );
+
+  it('opens with the search in its link, by an amount and a block', async () => {
+    await openSearch(ADDR.kicked, '?q=60%20qort');
+    expect(
+      await screen.findByRole('searchbox', { name: /^Search this account’s transactions/ }, T)
+    ).toHaveValue('60 qort');
+    const all = await region('All transactions');
+    const list = await within(all).findByRole(
+      'list',
+      { name: 'All transactions matching “60 qort”' },
+      T
+    );
+    expect([...rowButtons(list)].map((b) => b.textContent)).toEqual([
+      expect.stringMatching(/Sent 60 QORT to Lou Left/),
+    ]);
+  });
+
+  it('never finds what a row hides: a message’s content', async () => {
+    await openSearch(ADDR.kicked, `?q=${encodeURIComponent(MESSAGE_CONTENT)}`);
+    const all = await region('All transactions');
+    expect(
+      await within(all).findByText(
+        new RegExp(`^None of this account's \\d+ transactions matches “${MESSAGE_CONTENT}”\\.$`),
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(within(all).queryByRole('list')).toBeNull();
+  });
+});

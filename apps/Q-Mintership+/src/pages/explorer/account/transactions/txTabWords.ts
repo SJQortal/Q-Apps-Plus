@@ -154,3 +154,34 @@ export function olderLoadedLine(filters: TxFilters, count: number, done: boolean
 
 /** Shown while a busy account's search runs longer than a few seconds. */
 export const STILL_CHECKING = 'Still checking (busy account)…';
+
+/**
+ * With a search: how many of the rows searched match, how many are only
+ * similar, and how far it searched ("12 of the 300 transactions read match
+ * “crow”, and 3 more are similar. Load older searches older ones too.").
+ */
+export function searchLine(
+  filters: TxFilters,
+  typed: string,
+  counts: { match: number; similar: number; searched: number; done: boolean }
+): string {
+  const noun = listNoun(filters);
+  const scope = scopePhrase(filters);
+  const { match, similar, searched, done } = counts;
+  const what = done
+    ? searched === 1
+      ? `this account's only ${noun.one}${scope}`
+      : `this account's ${formatCount(searched)} ${noun.many}${scope}`
+    : `the ${formatCount(searched)} ${searched === 1 ? noun.one : noun.many}${scope} read`;
+  const are = (n: number) => (n === 1 ? 'is' : 'are');
+  let line: string;
+  if (match > 0) {
+    line = `${formatCount(match)} of ${what} ${match === 1 ? 'matches' : 'match'} “${typed}”`;
+    if (similar > 0) line += `, and ${formatCount(similar)} more ${are(similar)} similar`;
+  } else if (similar > 0)
+    line = `None of ${what} matches “${typed}”; ${formatCount(similar)} ${are(similar)} similar`;
+  else line = `None of ${what} matches “${typed}”`;
+  return done
+    ? `${line}.`
+    : `${line}. ${loadMoreLabel(filters)} searches ${filters.order === 'oldest' ? 'newer' : 'older'} ones too.`;
+}

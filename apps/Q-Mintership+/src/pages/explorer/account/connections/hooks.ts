@@ -12,27 +12,17 @@
  *
  * None of them polls.
  */
-import { useEffect, useReducer } from 'react';
+import { useEffect } from 'react';
 import { getAccount } from '../../../../data/accounts';
 import { getAdmins, getMembers, type AdminList, type MemberList } from '../../../../data/group';
 import { getPayerBand, type PayerBand } from '../../../../data/explorer/account';
 import { runPool } from '../../../../data/explorer/sets';
-import { peekQuery, subscribeQuery } from '../../../../data/query';
+import { peekQuery } from '../../../../data/query';
+import { useStoreValues } from '../../../../hooks/useStoreValues';
 import type { AccountInfo } from '../../../../data/types';
 import { DEV_ADMIN, useDevAdmins } from '../../../../components/explorer/useDevAdmins';
 
-/** The values of `keys` in the store now (undefined where nothing is loaded), re-read on change. */
-export function useStoreValues<T>(keys: readonly string[]): Array<T | undefined> {
-  const [, bump] = useReducer((n: number) => n + 1, 0);
-  const joined = keys.join('\n');
-  useEffect(() => {
-    const offs = joined ? joined.split('\n').map((key) => subscribeQuery(key, bump)) : [];
-    // A value that arrived between render and subscribing.
-    bump();
-    return () => offs.forEach((off) => off());
-  }, [joined]);
-  return keys.map((key) => peekQuery<T>(key));
-}
+export { useStoreValues };
 
 export type MinterMark = 'Minter Admin' | 'MINTER member';
 

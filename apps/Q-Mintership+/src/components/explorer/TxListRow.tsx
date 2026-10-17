@@ -22,7 +22,9 @@
  * Consecutive alike transactions (rules/explorer/alikeRuns.ts: rows that
  * would say the very same thing) are one row, "×6", that opens to each of
  * them as a row of its own (TxRows). A list's top rows carry `data-tx-top`, for
- * the focus to land on the first new one after "Show older".
+ * the focus to land on the first new one after "Show older". A search's
+ * row can carry a hint under its time (why it was found: "YT-LinQ holds
+ * the name “Simon Dixon”").
  */
 import { useId, useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -119,6 +121,15 @@ const WhenLine = styled('span')(({ theme }) => ({
   color: theme.palette.text.secondary,
 }));
 const Row = styled('div')({ minWidth: 0 });
+// Why a search found the row, under its time.
+const HintLine = styled('span')(({ theme }) => ({
+  ...theme.typography.body2,
+  display: 'block',
+  marginTop: 2,
+  color: theme.palette.text.secondary,
+  fontStyle: 'italic',
+  overflowWrap: 'anywhere',
+}));
 // How many alike transactions a row stands for: "×6".
 const Count = styled('span')(({ theme }) => ({
   ...theme.typography.body2,
@@ -160,9 +171,11 @@ export interface TxListRowProps {
   viewpoint?: string | null;
   /** A row of the list itself (true), not one inside a run of alike ones. */
   top?: boolean;
+  /** Why a search found it, under its time. */
+  hint?: string | null;
 }
 
-export function TxListRow({ tx, viewpoint = null, top = true }: TxListRowProps) {
+export function TxListRow({ tx, viewpoint = null, top = true, hint = null }: TxListRowProps) {
   const [open, setOpen] = useState(false);
   const words = useTxWords(tx, viewpoint);
   const links = usePersonLinks();
@@ -195,6 +208,7 @@ export function TxListRow({ tx, viewpoint = null, top = true }: TxListRowProps) 
           <WhenLine>
             <When tx={tx} />
           </WhenLine>
+          {hint ? <HintLine>{hint}</HintLine> : null}
         </Lines>
         <Slot>
           <ExpandMoreOutlinedIcon aria-hidden data-chevron="" />
@@ -259,7 +273,15 @@ function runSpan(rows: readonly TxRow[]) {
 }
 
 /** Alike transactions as one row: the sentence once, "×6", opening to each of them. */
-function TxRunRow({ rows, viewpoint }: { rows: TxRow[]; viewpoint: string | null }) {
+function TxRunRow({
+  rows,
+  viewpoint,
+  hint = null,
+}: {
+  rows: TxRow[];
+  viewpoint: string | null;
+  hint?: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const tx = rows[0];
   const span = runSpan(rows);
@@ -300,6 +322,7 @@ function TxRunRow({ rows, viewpoint }: { rows: TxRow[]; viewpoint: string | null
               </>
             )}
           </WhenLine>
+          {hint ? <HintLine>{hint}</HintLine> : null}
         </Lines>
         <Count aria-hidden>×{formatCount(rows.length)}</Count>
         <Slot>
@@ -351,16 +374,25 @@ function TxRunRow({ rows, viewpoint }: { rows: TxRow[]; viewpoint: string | null
 }
 
 /** Rows as list items: one each, or one for a run of alike transactions. */
-export function TxRows({ rows, viewpoint = null }: { rows: TxRow[]; viewpoint?: string | null }) {
+export function TxRows({
+  rows,
+  viewpoint = null,
+  hintOf,
+}: {
+  rows: TxRow[];
+  viewpoint?: string | null;
+  /** Why a search found a row (shown under its time), if it says. */
+  hintOf?: (tx: TxRow) => string | null;
+}) {
   const runs = useMemo(() => alikeRuns(rows, viewpoint), [rows, viewpoint]);
   return (
     <>
       {runs.map((run) => (
         <li key={run[0].signature}>
           {run.length > 1 ? (
-            <TxRunRow rows={run} viewpoint={viewpoint} />
+            <TxRunRow rows={run} viewpoint={viewpoint} hint={hintOf?.(run[0]) ?? null} />
           ) : (
-            <TxListRow tx={run[0]} viewpoint={viewpoint} />
+            <TxListRow tx={run[0]} viewpoint={viewpoint} hint={hintOf?.(run[0]) ?? null} />
           )}
         </li>
       ))}
@@ -373,10 +405,13 @@ export function TxList({
   rows,
   viewpoint = null,
   label,
+  hintOf,
 }: {
   rows: TxRow[];
   viewpoint?: string | null;
   label: string;
+  /** Why a search found a row (shown under its time), if it says. */
+  hintOf?: (tx: TxRow) => string | null;
 }) {
   return (
     <Card sx={{ p: 0 }}>
@@ -390,7 +425,7 @@ export function TxList({
           '& > li + li': { borderTop: 1, borderColor: 'divider' },
         }}
       >
-        <TxRows rows={rows} viewpoint={viewpoint} />
+        <TxRows rows={rows} viewpoint={viewpoint} hintOf={hintOf} />
       </Box>
     </Card>
   );

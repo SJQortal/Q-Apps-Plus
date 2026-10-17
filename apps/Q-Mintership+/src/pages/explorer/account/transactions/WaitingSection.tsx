@@ -10,6 +10,7 @@
 import { Typography } from '@mui/material';
 import { Section } from '../../../../components/common/Section';
 import { TxList } from '../../../../components/explorer/TxListRow';
+import { useTxSearch } from '../../../../components/explorer/search/useTxSearch';
 import { getUnconfirmedOf, unconfirmedKey } from '../../../../data/explorer/accountTx';
 import { useQuery } from '../../../../hooks/useQuery';
 import {
@@ -24,21 +25,26 @@ export function WaitingSection({
   address,
   publicKey,
   filters,
+  search = '',
 }: {
   address: string;
   publicKey: string;
   filters: TxFilters;
+  /** The tab's search: only the waiting ones it finds (matching or similar). */
+  search?: string;
 }) {
   const waiting = useQuery(unconfirmedKey(publicKey), (force) =>
     getUnconfirmedOf(publicKey, { force })
   );
   const types = typesToAsk(filters);
-  const rows = (waiting.data ?? []).filter(
+  const kept = (waiting.data ?? []).filter(
     (tx) =>
       types !== null &&
       (!types.length || types.includes(tx.type)) &&
       (!filters.name || isAboutName(tx, filters.name))
   );
+  const { tiers } = useTxSearch(kept, address, search);
+  const rows = tiers ? [...tiers.match, ...tiers.similar] : kept;
   if (!rows.length) return null;
   return (
     <Section title={WAITING_TITLE} id="explorer-account-waiting" count={rows.length}>

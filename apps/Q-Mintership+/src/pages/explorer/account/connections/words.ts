@@ -98,3 +98,15 @@ export function fundingTag(funding: Pick<Funding, 'kind'>): string | null {
       return null;
   }
 }
+
+/** "9 rows match “crow”, and 2 more are similar." */
+export function connectionsSearchLine(typed: string, match: number, similar: number): string {
+  const are = (n: number) => (n === 1 ? 'is' : 'are');
+  if (match > 0)
+    return `${formatCount(match)} ${match === 1 ? 'row matches' : 'rows match'} “${typed}”${
+      similar > 0 ? `, and ${formatCount(similar)} more ${are(similar)} similar` : ''
+    }.`;
+  if (similar > 0)
+    return `Nothing matches “${typed}” exactly; ${formatCount(similar)} ${similar === 1 ? 'row' : 'rows'} ${are(similar)} similar.`;
+  return `Nothing in this account’s connections matches “${typed}”.`;
+}
