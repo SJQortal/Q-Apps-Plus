@@ -1,7 +1,8 @@
 /**
  * Open File's viewer (Simon, 2026-10-17): the public QDN resource a
  * transaction published, shown in the app, whatever kind of file it is.
- * Full screen on phones, tall on wider screens; loaded on demand.
+ * Full screen on phones and in any frame under 500 px tall (a phone held
+ * sideways), tall on wider screens; loaded on demand.
  *
  * At the top, what it is: its publisher's title and description, the
  * service, who published it, its size and kind, and, when the transaction
@@ -56,6 +57,7 @@ import {
 import { sizeWords } from '../../../rules/explorer/txWords';
 import { errorMessage } from '../../../utils/hubErrors';
 import { openQortalLink } from '../../../utils/links';
+import { useShortFrame } from '../../../utils/hubFrame';
 import { useQdnReady } from './useQdnReady';
 import { useFileView, type FileView } from './useFileView';
 import { saveQdnFile } from './saveQdnFile';
@@ -158,6 +160,8 @@ export default function FileViewerDialog({
   // One object per resource, so views keyed on it don't read again on every render.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const ref = useMemo(() => fileRef, [key]);
+  // A short frame (a phone held sideways) gives the file the whole frame.
+  const short = useShortFrame();
   const meta = useQuery(open ? qdnMetaKey(ref) : null, (force) => getQdnMeta(ref, { force }));
   const latest = useQuery(open ? qdnLatestKey(ref) : null, (force) => getQdnLatest(ref, { force }));
   const ready = useQdnReady(ref, { size, enabled: open });
@@ -331,6 +335,7 @@ export default function FileViewerDialog({
       title={<bdi dir="auto">{title}</bdi>}
       maxWidth="lg"
       tall
+      fullScreen={short}
       actions={
         <>
           {link ? (
@@ -355,12 +360,13 @@ export default function FileViewerDialog({
       }
     >
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, minWidth: 0 }}>
-        {meta.data?.title && meta.data.title !== title ? (
+        {/* In a short frame the file gets the room: who, what and how big only. */}
+        {meta.data?.title && meta.data.title !== title && !short ? (
           <Typography sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>
             <bdi dir="auto">{meta.data.title}</bdi>
           </Typography>
         ) : null}
-        {meta.data?.description ? (
+        {meta.data?.description && !short ? (
           <Typography
             color="text.secondary"
             sx={{
