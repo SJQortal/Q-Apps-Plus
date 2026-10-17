@@ -30,7 +30,7 @@ import {
   publishCollection,
   type CollectionSummary,
 } from "../../../utils/collections";
-import { allCollectionItems, containerOptions, findFolder, hasItemIn, toggleItemIn } from "../../../utils/collectionFolders";
+import { containerOptions, containsItem, findFolder, hasItemIn, toggleItemIn } from "../../../utils/collectionFolders";
 import { isHubDecline } from "../../../utils/hubErrors";
 import { useMyCollections } from "./useMyCollections";
 
@@ -71,7 +71,7 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
     () =>
       (mine ?? []).filter((row) => {
         const collection = byKey[collectionKey(row.name, row.identifier)];
-        return collection ? allCollectionItems(collection).some((i) => i.name === item.name && i.identifier === item.identifier) : false;
+        return collection ? containsItem(collection, item) : false;
       }),
     [mine, byKey, item]
   );

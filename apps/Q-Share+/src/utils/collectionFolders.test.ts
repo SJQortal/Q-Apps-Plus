@@ -5,6 +5,7 @@ import {
   allCollectionItems,
   containerOf,
   containerOptions,
+  containsItem,
   contentsCount,
   editFolder,
   findFolder,
@@ -53,6 +54,12 @@ describe("collection folders", () => {
 
   it("lists every share once, the collection's own first", () => {
     expect(allCollectionItems(body)).toEqual([a, b, c]);
+    // The same body gives the same list without walking it again.
+    expect(allCollectionItems(body)).toBe(allCollectionItems(body));
+    expect(containsItem(body, c)).toBe(true);
+    expect(containsItem(body, { name: "carol", identifier: "other" })).toBe(false);
+    const many = { items: Array.from({ length: 5000 }, (_, i) => ({ name: "n", identifier: `id${i % 2500}` })) };
+    expect(allCollectionItems(many)).toHaveLength(2500);
     expect(contentsCount(body)).toEqual({ shares: 3, folders: 2 });
     expect(contentsCount(findFolder(body, "live")!.folder)).toEqual({ shares: 3, folders: 1 });
   });

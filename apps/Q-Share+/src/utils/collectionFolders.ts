@@ -15,15 +15,35 @@ export interface Container {
 
 const sameItem = (a: CollectionItem, b: CollectionItem) => a.name === b.name && a.identifier === b.identifier;
 
+const itemKey = (item: CollectionItem) => `${item.name}\u0000${item.identifier}`;
+// Bodies are immutable (each edit makes a new one), so the list is kept per body.
+const itemsOf = new WeakMap<Container, CollectionItem[]>();
+
 /** Every share in the collection and its folders, each once, the collection's own first. */
 export function allCollectionItems(body: Container): CollectionItem[] {
+  const cached = itemsOf.get(body);
+  if (cached) return cached;
   const out: CollectionItem[] = [];
+  const seen = new Set<string>();
   const visit = (container: Container) => {
-    for (const item of container.items) if (!out.some((seen) => sameItem(seen, item))) out.push(item);
+    for (const item of container.items) {
+      const key = itemKey(item);
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(item);
+      }
+    }
     for (const folder of container.folders ?? []) visit(folder);
   };
   visit(body);
+  itemsOf.set(body, out);
   return out;
+}
+
+/** Whether the share is anywhere in the collection; stops at the first match. */
+export function containsItem(body: Container, item: CollectionItem): boolean {
+  if (body.items.some((existing) => sameItem(existing, item))) return true;
+  return (body.folders ?? []).some((folder) => containsItem(folder, item));
 }
 
 /** The folder with `id` and the folders above it, outermost first (the folder itself last). */
