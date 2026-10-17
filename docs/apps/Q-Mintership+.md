@@ -942,6 +942,14 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
 92. **QORT on the circle** (Simon, 2026-10-17: "on the circular view I would also like to see the sum ammount of QORT for each next to the name in (), for example The Cat (500 QORT)"). Each account on the Connections circle says the QORT that went that way beside its name ("The Cat (500 QORT)": whole QORT from 100 up, two decimals below, four under 1), and in its avatar's name and tooltip ("4 transactions received, 500 QORT"). The name is cut short when long; the amount always shows. From the payments already read (no read of its own); none for a link of other assets only. Checks: 20 captures of the circle, all clean; tests 2,336 passed.
 
+93. **Both ways on the circle** (Simon, 2026-10-17: "if there were transactions sent and received between the accounts, I want them to fill the empty middle bottom part, and also make the green and red circle around the avatar represent the proportion"). An account paid both ways is now one avatar at the bottom of the Connections circle, between the two sides, instead of one on each side. Its ring is green and red in proportion to what came in and what went out: by QORT, or by transactions when no QORT moved. Its line from the middle is split the same way. Its name sits under it with "(120 QORT in, 6.3 out)", and the button names the total first ("Kit Kicked, 6 transactions: 4 received, 120 QORT; 2 sent, 6.3 QORT"). Pressing it lists both ways' transactions, titled "Sent to and received from Kit Kicked". A "Sent and received" heading and the line under the circle explain it. At most 4 sit at the bottom (3 on phones); the rest count toward "more accounts… see the list". The count badge on each avatar is now drawn by CSS: as text, it ran into the avatar's letter ("K6") for checks that read a button's visible words. Checks: the circle captures in two themes, all clean; tests 2,339 passed.
+
+94. **A symmetrical circle** (Simon, 2026-10-17: "but you can also make the circles around nicely symetrical"). Every avatar on the Connections circle now sits evenly spaced on one ring. The two sides share one step and mirror each other, and the fewer side is centred on the fuller one's slots. The both-ways avatars are centred at the bottom on the same ring, the busiest in the middle. There is a two-step gap at the top and between the groups. Names keep to their room:
+    - On a side, a name reaches no further than the edge of the drawing; a long one is cut short, and the amount always shows.
+    - Under a bottom avatar, the name is kept clear of the avatars and names beside it, measured in pixels; at 1280 px they show whole, and at 700 px they shorten.
+
+    The side names near the top at 700 px with 10 on a side still run under the next avatar, as before (Next-pass ideas). Checks: the circle captures in two themes (with extra both-ways payments added to the mock for the check only), all clean; tests 2,341 passed.
+
 ## Follow-ups
 
 ### Readiness
@@ -1204,3 +1212,4 @@ Found while building the Explorer; none blocks it. Each would be a read-only end
 - Open File: Markdown rendered (not only as text), a font's sample, a file inside a ZIP opened, Office documents previewed (would need a library such as mammoth or SheetJS, lazily loaded).
 - Open File: Core's `GET /arbitrary/…` takes a byte range's end as given, past the file's end too, and promises bytes it hasn't got; a Core fix would let the first read take the file's head and size at once (now one byte, then the head).
 - The search on the global Transactions on Qortal page could match "similar" too (its "Only rows with" is exact).
+- Explorer, Connections circle: between 600 and 900 px wide with 10 accounts on a side, the names near the top of a side run under the next avatar. Fewer on a side at that width, or names that alternate sides, would clear them.
