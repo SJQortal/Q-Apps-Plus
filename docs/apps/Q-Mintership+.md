@@ -940,6 +940,8 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
 91. **Public or private, on every group** (Simon, 2026-10-17: "on the groups I would also like to see which one is public and which one is private with small icons"). Beside each group's name on the Overview's cards and rows: a globe for an open group ("Public: an open group, anyone can join"), a padlock for a closed one ("Private: a closed group, its admins decide who joins"), said on hover and to screen readers, from Core's own flag (no read). Checks: 20 captures, all clean.
 
+92. **QORT on the circle** (Simon, 2026-10-17: "on the circular view I would also like to see the sum ammount of QORT for each next to the name in (), for example The Cat (500 QORT)"). Each account on the Connections circle says the QORT that went that way beside its name ("The Cat (500 QORT)": whole QORT from 100 up, two decimals below, four under 1), and in its avatar's name and tooltip ("4 transactions received, 500 QORT"). The name is cut short when long; the amount always shows. From the payments already read (no read of its own); none for a link of other assets only. Checks: 20 captures of the circle, all clean; tests 2,336 passed.
+
 ## Follow-ups
 
 ### Readiness
