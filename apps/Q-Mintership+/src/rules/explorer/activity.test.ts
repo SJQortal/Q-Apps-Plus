@@ -85,6 +85,18 @@ describe('chainMarks', () => {
     expect(marks.every((m) => m.signature)).toBe(true);
   });
 
+  it('level moves in one block as one milestone, with how many', () => {
+    const marks = chainMarks(
+      [1, 2, 3].map((i) =>
+        tx('TRANSFER_PRIVS', 100 + i, { creatorAddress: 'Qother', blockHeight: 1_585_006 })
+      ),
+      ME
+    );
+    expect(marks.map((m) => [m.at, m.label])).toEqual([
+      [101, 'Got a minting level (3 transactions)'],
+    ]);
+  });
+
   it('names registered the same day as one milestone', () => {
     const DAY = 86_400_000;
     const marks = chainMarks(

@@ -138,6 +138,8 @@ const str = (value: unknown): string | null =>
 export function chainMarks(rows: readonly TxRow[], address: string): ActivityMark[] {
   const marks: ActivityMark[] = [];
   let firstShare: TxRow | null = null;
+  // Level moves the same way in one block: one milestone ("in 6 transactions").
+  const moves = new Map<string, { mark: ActivityMark; count: number; base: string }>();
   for (const tx of rows) {
     const mine = tx.creatorAddress === address;
     const name = str(tx.name);
@@ -166,9 +168,24 @@ export function chainMarks(rows: readonly TxRow[], address: string): ActivityMar
       case 'REWARD_SHARE':
         if (mine && (!firstShare || tx.timestamp < firstShare.timestamp)) firstShare = tx;
         break;
-      case 'TRANSFER_PRIVS':
-        push('minting', mine ? 'Moved its minting level away' : 'Got a minting level');
+      case 'TRANSFER_PRIVS': {
+        const base = mine ? 'Moved its minting level away' : 'Got a minting level';
+        const key = `${mine}:${tx.blockHeight ?? tx.signature}`;
+        const same = moves.get(key);
+        if (same) {
+          same.count += 1;
+          same.mark.label = `${same.base} (${same.count} transactions)`;
+          // The milestone stands at the earliest of them.
+          if (tx.timestamp < same.mark.at) {
+            same.mark.at = tx.timestamp;
+            same.mark.signature = tx.signature;
+          }
+          break;
+        }
+        push('minting', base);
+        moves.set(key, { mark: marks[marks.length - 1], count: 1, base });
         break;
+      }
     }
   }
   if (firstShare)

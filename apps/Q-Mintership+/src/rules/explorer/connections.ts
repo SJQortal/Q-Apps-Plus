@@ -315,18 +315,40 @@ export function whenWords(first: number, last: number): string {
 const text = (value: string): TxPart => ({ kind: 'text', text: value });
 const account = (address: string): TxPart => ({ kind: 'account', address });
 
-/** "Moved its minting level to C" / "Got its minting level from P. P is now level 0." */
-export function levelMoveParts(move: LevelMove, otherLevel?: number): TxPart[] {
+/**
+ * Level moves between the same two accounts the same way, together (one
+ * account can send another several in one block: Jacob got 6 from one
+ * account in block 1,585,006), in the order of their first move.
+ */
+export function groupLevelMoves(moves: readonly LevelMove[]): LevelMove[][] {
+  const groups = new Map<string, LevelMove[]>();
+  for (const move of moves) {
+    const key = `${move.direction}:${move.other ?? move.tx.signature}`;
+    groups.set(key, [...(groups.get(key) ?? []), move]);
+  }
+  return [...groups.values()];
+}
+
+/**
+ * "Moved its minting level to C" / "Got its minting level from P. P is now
+ * level 0."; ", in 6 transactions" after the account when it took several.
+ */
+export function levelMoveParts(move: LevelMove, otherLevel?: number, count = 1): TxPart[] {
+  const times = count > 1 ? [text(`, in ${plural(count, 'transaction')}`)] : [];
   if (move.direction === 'to')
     return move.other
-      ? [text('Moved its minting level to '), account(move.other)]
-      : [text('Moved its minting level to another account (its recipient couldn’t be read)')];
+      ? [text('Moved its minting level to '), account(move.other), ...times]
+      : [
+          text('Moved its minting level to another account (its recipient couldn’t be read)'),
+          ...times,
+        ];
   const from = move.other as string;
   return otherLevel === undefined
-    ? [text('Got its minting level from '), account(from)]
+    ? [text('Got its minting level from '), account(from), ...times]
     : [
         text('Got its minting level from '),
         account(from),
+        ...times,
         text('. '),
         account(from),
         text(` is now level ${otherLevel}.`),

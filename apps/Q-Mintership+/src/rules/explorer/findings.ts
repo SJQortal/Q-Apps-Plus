@@ -18,6 +18,7 @@
 import type { TxRow } from '../../data/types';
 import { formatCount, plural, shortAddress } from '../../utils/format';
 import {
+  groupLevelMoves,
   levelMoveParts,
   mintingWithParts,
   nameDealParts,
@@ -177,16 +178,28 @@ export function recordedFindings(input: RecordedInput): Finding[] {
   const out: Finding[] = [];
   const links = input.links;
   if (links) {
-    for (const move of links.levelMoves)
+    // Several moves between the same two accounts the same way: one finding.
+    for (const group of groupLevelMoves(links.levelMoves)) {
+      const first = group[0];
+      const last = group[group.length - 1];
       out.push({
-        key: `level:${move.ref.signature}`,
+        key: `level:${first.ref.signature}`,
         kind: 'levelMove',
-        other: move.other,
-        parts: levelMoveParts(move, move.other ? input.levels?.[move.other] : undefined),
-        ...one(move.tx),
-        evidence: [move.tx],
-        evidenceWords: '1 transaction',
+        other: first.other,
+        parts: levelMoveParts(
+          first,
+          first.other ? input.levels?.[first.other] : undefined,
+          group.length
+        ),
+        ...one(last.tx),
+        // Several over more than one block: from the first to the last.
+        ...(first.ref.height !== last.ref.height
+          ? { firstHeight: first.ref.height, firstTimestamp: first.ref.timestamp }
+          : {}),
+        evidence: group.map((move) => move.tx).reverse(),
+        evidenceWords: plural(group.length, 'transaction'),
       });
+    }
     for (const sponsorship of links.sponsors)
       out.push({
         key: `sponsor:${sponsorship.sponsor}`,

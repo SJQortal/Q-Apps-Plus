@@ -41,7 +41,7 @@ function input(extra: Partial<FindingsInput> = {}): FindingsInput {
     name: 'Nora Nominator',
     checkedAt: 2_757_500,
     neutralLine: EXPLORER_NEUTRAL_LINE,
-    coverage: ['In its latest 100 QORT payments each way.'],
+    coverage: ['Read: its latest 100 QORT payments each way.'],
     recorded: [
       {
         parts: levelMoveParts({
@@ -89,7 +89,7 @@ describe('Copy findings', () => {
       `Explorer findings for Nora Nominator (${ME}), checked at block 2,757,500`
     );
     expect(lines[1]).toBe(EXPLORER_NEUTRAL_LINE);
-    expect(text).toContain('What was read:\n- In its latest 100 QORT payments each way.');
+    expect(text).toContain('What was read:\n- Read: its latest 100 QORT payments each way.');
     expect(text).toContain('- Moved its minting level to Qccccc…cccc (block 2,000,000, 4Kw5V2Zm…)');
     expect(text).toContain(
       `- Sponsored by Bob (Qbbbbb…bbbb) at 0 % for 7,234 blocks (block 1,371,641, 4Kw5V2Zm…)`
@@ -192,6 +192,21 @@ describe('the findings list', () => {
       height: 620,
     });
     expect(findings.every((f) => !VERDICTS.test(partsText(f.parts)))).toBe(true);
+  });
+
+  it('merges several level moves the same way between two accounts into one', () => {
+    const moves = Array.from({ length: 6 }, () =>
+      tx('TRANSFER_PRIVS', 1_585_006, { creatorAddress: C })
+    );
+    const merged = recordedFindings({ links: linksOf(moves, ME), levels: { [C]: 0 } });
+    expect(merged).toHaveLength(1);
+    expect(partsText(merged[0].parts)).toBe(
+      'Got its minting level from Qccccc…cccc, in 6 transactions. Qccccc…cccc is now level 0.'
+    );
+    expect(merged[0]).toMatchObject({ evidenceWords: '6 transactions', height: 1_585_006 });
+    expect(merged[0].evidence).toHaveLength(6);
+    // One block: no range.
+    expect(merged[0].firstHeight).toBeUndefined();
   });
 
   it('works with only part of the data loaded', () => {

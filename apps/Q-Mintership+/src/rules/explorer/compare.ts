@@ -35,7 +35,15 @@ import {
   plural,
   shortAddress,
 } from '../../utils/format';
-import { isRemoval, linksOf, monthRange, percentOf, sponseesOf, whenWords } from './connections';
+import {
+  groupLevelMoves,
+  isRemoval,
+  linksOf,
+  monthRange,
+  percentOf,
+  sponseesOf,
+  whenWords,
+} from './connections';
 import { partsText } from './findings';
 import { flowAmounts, flowsOf, formatAtomic, parseAtomic, type Flow } from './money';
 import { txTypeLabel } from './txFamilies';
@@ -363,20 +371,35 @@ function linkFindings(input: PairInput): {
   ] as const) {
     if (!side.links) continue;
     const parsed = linksOf(side.links.rows, side.address, side.links.privs);
-    for (const move of parsed.levelMoves) {
-      if (move.other !== other || levels.has(move.tx.signature)) continue;
-      const [from, to] = move.direction === 'to' ? [side.address, other] : [other, side.address];
-      levels.set(move.tx.signature, {
-        key: `level:${move.tx.signature}`,
+    // Several moves the same way between them: one finding (each side reads them too).
+    for (const group of groupLevelMoves(parsed.levelMoves)) {
+      const first = group[0];
+      const last = group[group.length - 1];
+      if (first.other !== other) continue;
+      const [from, to] = first.direction === 'to' ? [side.address, other] : [other, side.address];
+      const key = `level:${from}>${to}`;
+      if (levels.has(key)) continue;
+      levels.set(key, {
+        key,
         kind: 'levelMove',
         actor: from,
         other: to,
-        parts: [account(from), text(' moved its minting level to '), account(to)],
-        height: move.ref.height,
-        timestamp: move.ref.timestamp,
-        signature: move.ref.signature,
-        evidence: [move.tx],
-        evidenceWords: '1 transaction',
+        parts: [
+          account(from),
+          text(' moved its minting level to '),
+          account(to),
+          ...(group.length > 1 ? [text(`, in ${plural(group.length, 'transaction')}`)] : []),
+        ],
+        height: last.ref.height,
+        // Several over more than one block: from the first to the last.
+        ...(first.ref.height !== last.ref.height
+          ? { firstHeight: first.ref.height, firstTimestamp: first.ref.timestamp }
+          : {}),
+        timestamp: last.ref.timestamp,
+        signature: last.ref.signature,
+        count: group.length > 1 ? group.length : undefined,
+        evidence: group.map((move) => move.tx).reverse(),
+        evidenceWords: plural(group.length, 'transaction'),
       });
     }
     for (const deal of parsed.nameDeals) {
