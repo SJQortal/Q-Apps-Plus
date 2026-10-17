@@ -167,7 +167,7 @@ describe('Decisions: rejections on the cards', () => {
     expect(within(kick).getByRole('img', { name: '1 of 8 approvals' })).toBeInTheDocument();
     const rejected = within(kick).getByRole('list', { name: 'Rejected by 2 Minter Admins' });
     expect(within(rejected).getAllByRole('listitem')).toHaveLength(2);
-    expect(within(rejected).getByText('had approved first')).toBeInTheDocument();
+    expect(within(rejected).getByText('approved first')).toBeInTheDocument();
     expect(
       within(kick).getByText(
         'Rejections: 2 of the 8 that would end it. If approvals and rejections both reach 8, it passes: Core counts approvals first.'

@@ -120,6 +120,13 @@ describe('rejections and withdrawn signatures', () => {
     expect(withdrewSignature(tally, 'a')).toBe(true);
   });
 
+  it('marks an approval that replaced the same admin’s rejection', () => {
+    const rows = [row('a', false, 1, 10), row('a', true, 5, 12), row('b', true, 2, 10)];
+    const tally = tallyApprovals({ ...base, rows });
+    expect(tally.approvals.find((d) => d.adminPublicKey === 'a')?.hadRejected).toBe(true);
+    expect(tally.approvals.find((d) => d.adminPublicKey === 'b')?.hadRejected).toBe(false);
+  });
+
   it('a rejection from someone who never signed is not a withdrawal', () => {
     const tally = tallyApprovals({ ...base, rows: [row('c', false, 3, 10)] });
     expect(tally.rejections[0].withdrew).toBe(false);

@@ -41,6 +41,8 @@ export interface SignerDecision {
    * transaction: a withdrawn signature. Always false for a signature.
    */
   withdrew: boolean;
+  /** A signature sent after a confirmed rejection of the same admin on this transaction. */
+  hadRejected?: boolean;
 }
 
 export interface Tally {
@@ -78,6 +80,14 @@ function toDecision(row: ApprovalRow, confirmed: ApprovalRow[] = []): SignerDeci
         (earlier) =>
           earlier.adminPublicKey === row.adminPublicKey &&
           earlier.approval === true &&
+          isNewerDecision(row, earlier)
+      ),
+    hadRejected:
+      approval &&
+      confirmed.some(
+        (earlier) =>
+          earlier.adminPublicKey === row.adminPublicKey &&
+          earlier.approval === false &&
           isNewerDecision(row, earlier)
       ),
   };

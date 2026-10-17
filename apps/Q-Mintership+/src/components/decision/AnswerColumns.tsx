@@ -30,6 +30,8 @@ export interface AnswerPerson {
   confirming?: boolean;
   /** A rejection sent after this admin's own approval. */
   hadApproved?: boolean;
+  /** An approval after their own rejection. */
+  hadRejected?: boolean;
   /** A Considering note. */
   note?: string | null;
 }
@@ -283,11 +285,17 @@ function Column({
 function personNote(p: AnswerPerson): ReactNode {
   const parts: string[] = [];
   if (p.confirming) parts.push('confirming…');
-  if (p.hadApproved) parts.push('had approved first');
+  if (p.hadApproved) parts.push('approved first');
+  if (p.hadRejected) parts.push('rejected first');
   if (!parts.length && !p.note) return undefined;
   return (
     <>
-      {parts.join(' · ')}
+      {/* A side note under the name, smaller than the name (Simon, 2026-10-17). */}
+      {parts.length ? (
+        <Box component="span" sx={{ display: 'block', fontSize: 12, lineHeight: 1.4 }}>
+          {parts.join(' · ')}
+        </Box>
+      ) : null}
       {p.note ? (
         <Box
           component="span"

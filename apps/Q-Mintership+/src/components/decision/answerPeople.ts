@@ -1,7 +1,8 @@
 /**
  * A decision's answers as its columns show them (AnswerColumns): each Minter
  * Admin's latest confirmed answer, then the ones still on their way
- * ("confirming…"), with a rejection after the admin's own approval marked.
+ * ("confirming…"), with an answer that replaced the admin's own other one
+ * marked (had approved first, had rejected first).
  * Shared by the decision and nomination cards, so both say the same.
  */
 import type { SignerDecision, Tally } from '../../rules/tally';
@@ -25,10 +26,14 @@ export function tallyPeople(
   const person = (address: string): AnswerPerson => ({ address, name: nameOf(address) });
   return {
     approved: [
-      ...known(tally.approvals).map((x) => person(x.address)),
+      ...known(tally.approvals).map((x) => ({
+        ...person(x.address),
+        hadRejected: Boolean(x.hadRejected),
+      })),
       ...known(tally.inFlight.filter((x) => x.approval)).map((x) => ({
         ...person(x.address),
         confirming: true,
+        hadRejected: tally.rejections.some((r) => r.address === x.address),
       })),
     ],
     rejected: [
