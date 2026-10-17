@@ -926,6 +926,8 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
 86. **Simon's answers to items 84–85** (2026-10-17: "mobile view can skip the name, leave just avatar, and QDN transactions every transactions should be the main number, and QDN should be the smaller number below"). On a phone the account's top bar shows its avatar alone (the name stays in the heading for screen readers, and in full beside the card's avatar). QDN Transactions leads with every transaction ("79", or "1,000+" until all is read) and the QDN ones below ("4 of them on QDN."). Checks: 40 captures of the account screens, all clean; tests 2,324 passed (one timing test failed under the full run's load and passes alone).
 
+87. **"Approved first" and "rejected first"** (Simon, 2026-10-17: "the text "had approved first" can be way smaller", "and had rejected", "and makes these texts, "approved first" and "rejected first""). Under a name in a decision's Approved and Rejected columns, an answer that replaced the admin's own other one says so in small type (12 px): "approved first" under a rejection (it was "had approved first"), and now "rejected first" under an approval that replaced the admin's rejection (`rules/tally.ts` marks it, as it marked a withdrawn signature). Checks: the decision screens, 20 captures, all clean.
+
 ## Follow-ups
 
 ### Readiness
