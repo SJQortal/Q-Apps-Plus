@@ -123,7 +123,7 @@ describe("a share with many files", { timeout: 20_000 }, () => {
         store.dispatch(updateDownloads({ name: NAME, service: "FILE", identifier: f.identifier, status: { status: "READY" } }));
       }
     });
-    await waitFor(() => expect(started().filter((id) => id.endsWith("_few"))).toHaveLength(8));
+    await waitFor(() => expect(started().filter((id) => String(id).endsWith("_few"))).toHaveLength(8));
     act(() => {
       for (const f of few.slice(6)) {
         store.dispatch(updateDownloads({ name: NAME, service: "FILE", identifier: f.identifier, status: { status: "READY" } }));
