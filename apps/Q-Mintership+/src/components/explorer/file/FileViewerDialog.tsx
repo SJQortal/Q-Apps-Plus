@@ -169,7 +169,8 @@ export default function FileViewerDialog({
   const files = meta.data?.files ?? null;
   const several = (files?.length ?? 0) > 1;
   const ownName = several ? picked : (files?.[0] ?? null);
-  const filepath = several ? picked : null;
+  // One file in a folder of its own: Core picks a resource's only file only at its top.
+  const filepath = several ? picked : ownName?.includes('/') ? ownName : null;
   const view = useFileView(ref, {
     filepath,
     filename: ownName,

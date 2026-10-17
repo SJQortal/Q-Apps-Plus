@@ -97,7 +97,10 @@ function node(options: {
         );
       const range = new Headers(init?.headers).get('Range');
       if (!range)
-        return new Response(file.bytes.slice(), { status: 200, headers: { 'Content-Type': file.type } });
+        return new Response(file.bytes.slice(), {
+          status: 200,
+          headers: { 'Content-Type': file.type },
+        });
       const [from, to] = range.replace('bytes=', '').split('-').map(Number);
       return new Response(file.bytes.slice(from, to + 1), {
         status: 206,
@@ -258,6 +261,20 @@ describe('Open File', () => {
     expect(
       await within(dialog).findByRole('list', { name: 'Files in this resource' }, T)
     ).toBeInTheDocument();
+  });
+
+  it('reads a resource’s only file by its path when it sits in a folder', async () => {
+    const { user } = await show(publish({ service: 140, identifier: 'guide' }));
+    node({
+      meta: { files: ['docs/guide.txt'] },
+      files: {
+        'docs/guide.txt': { bytes: new TextEncoder().encode('Read me first.'), type: 'text/plain' },
+      },
+    });
+    await user.click(screen.getByRole('button', { name: 'Open File' }));
+    const dialog = await screen.findByRole('dialog', {}, T);
+    expect(await within(dialog).findByText('Read me first.', {}, T)).toBeInTheDocument();
+    expect(fetchCalls).toContain('/arbitrary/FILE/Avery%20Admin/guide?filepath=docs%2Fguide.txt');
   });
 
   it('says when this transaction published an earlier version, and links the latest', async () => {
