@@ -158,6 +158,8 @@ export const writeKeys = {
   withdraw: (pendingSignature: string) => `withdraw:${pendingSignature}`,
   invite: (nominee: string) => `invite:${nominee}`,
   join: (address: string) => `join:${address}`,
+  /** Joining (or asking to join) another group, from the Explorer's group cards. */
+  joinGroup: (address: string, groupId: number) => `joingroup:${address}:${groupId}`,
   nominate: (nominee: string) => `nominate:${nominee}`,
   support: (nominee: string) => `support:${nominee}`,
   propose: (kind: string, subject: string) => `propose:${kind}:${subject}`,

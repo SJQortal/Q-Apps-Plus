@@ -36,6 +36,10 @@ export const HUB_DIALOGS: Record<string, HubDialogText> = {
     hubAsks: 'Hub asks you to confirm joining the group MINTER.',
     check: ['The group is MINTER.', 'The fee.'],
   },
+  JOIN_ANY_GROUP: {
+    hubAsks: 'Hub asks you to confirm joining the group.',
+    check: ['The group’s name.', 'The fee.'],
+  },
   KICK_FROM_GROUP: {
     hubAsks: 'Hub asks you to allow removing this member from MINTER.',
     check: ['The member.', 'The group is MINTER.', 'The fee.'],

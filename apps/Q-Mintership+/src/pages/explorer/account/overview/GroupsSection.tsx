@@ -5,10 +5,13 @@
  * shows its avatar, name, members, the account's part (Owner, Admin) and, in
  * the grid, its own description. The first GROUPS_SHOWN, then the rest on
  * request. The same read as At a glance's count (`xgroups:<address>`).
+ * A group the signed-in account isn't in has a small Join icon
+ * (components/groups/JoinGroupButton.tsx; a join request for a closed one).
  */
 import { useId } from 'react';
 import { Box, Button, TextField, Typography } from '@mui/material';
 import { GroupAvatar } from '../../../../components/common/GroupAvatar';
+import { JoinGroupButton } from '../../../../components/groups/JoinGroupButton';
 import { Card, Section } from '../../../../components/common/Section';
 import { ErrorState, ListSkeleton } from '../../../../components/common/states';
 import { MINTER_GROUP_ID } from '../../../../data/constants';
@@ -80,6 +83,9 @@ function GroupCard({ group, address }: { group: GroupOf; address: string }) {
           size={40}
         />
         <GroupName group={group} />
+        <Box sx={{ ml: 'auto', my: -1, mr: -1 }}>
+          <JoinGroupButton group={group} />
+        </Box>
       </Box>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
         <Members group={group} />
@@ -132,6 +138,9 @@ function GroupRow({ group, address }: { group: GroupOf; address: string }) {
       <GroupName group={group} />
       <Members group={group} />
       <Roles group={group} address={address} />
+      <Box sx={{ ml: 'auto', my: -1 }}>
+        <JoinGroupButton group={group} />
+      </Box>
     </Box>
   );
 }

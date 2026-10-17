@@ -43,6 +43,7 @@ import {
   guardDecline,
   guardInvite,
   guardJoin,
+  guardJoinGroup,
   guardKick,
   guardNominate,
   guardReject,
@@ -58,6 +59,7 @@ import {
   cancelBanRequest,
   cancelInviteRequest,
   inviteRequest,
+  joinGroupRequest,
   joinRequest,
   kickRequest,
   publishRecordRequest,
@@ -581,6 +583,30 @@ export function joinMinter(
       match: (tx) =>
         tx.type === 'JOIN_GROUP' &&
         tx.groupId === MINTER_GROUP_ID &&
+        tx.creatorAddress === signer.address,
+      onStage,
+    })
+  );
+}
+
+/**
+ * Join a group other than MINTER (the Explorer's group cards, Simon,
+ * 2026-10-17): an open group at once, a closed one as a join request its
+ * admins decide on. The same JOIN_GROUP either way.
+ */
+export function joinGroup(
+  signer: Signer,
+  group: { groupId: number; isOpen?: boolean },
+  onStage?: (s: WriteStage) => void
+): Promise<WriteOutcome> {
+  return tracked(writeKeys.joinGroup(signer.address, group.groupId), () =>
+    runWrite({
+      request: joinGroupRequest(group.groupId),
+      signer,
+      precheck: () => guardJoinGroup(signer, group),
+      match: (tx) =>
+        tx.type === 'JOIN_GROUP' &&
+        Number(tx.groupId) === group.groupId &&
         tx.creatorAddress === signer.address,
       onStage,
     })

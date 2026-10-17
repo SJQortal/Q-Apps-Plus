@@ -87,6 +87,11 @@ export function joinRequest(): HubRequest {
   return { action: 'JOIN_GROUP', groupId: G };
 }
 
+/** Joining any other group: an open one at once, a closed one as a join request (Core decides). */
+export function joinGroupRequest(groupId: number): HubRequest {
+  return { action: 'JOIN_GROUP', groupId };
+}
+
 /** A GROUP_APPROVAL the app built (approvalBytes.ts), signed and submitted by Hub. */
 export function signApprovalRequest(unsignedBytes: string): HubRequest {
   return { action: 'SIGN_TRANSACTION', unsignedBytes, process: true };

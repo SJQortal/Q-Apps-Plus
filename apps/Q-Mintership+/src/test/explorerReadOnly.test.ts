@@ -67,12 +67,20 @@ describe('the Explorer is read-only', () => {
     ).toHaveLength(1);
   });
 
-  it('lets the Minter Profile tab show the profile’s own actions, from the profile’s module', async () => {
+  it('lets the Minter Profile tab and a group card act, from modules of their own', async () => {
     expect(
       await restricted(
         'src/pages/explorer/account/MintershipTab.tsx',
         "import { ProfileActions } from '../../person/ProfileActions';\n" +
           'export const used = ProfileActions;\n'
+      )
+    ).toEqual([]);
+    // And a group card's Join, from its own module.
+    expect(
+      await restricted(
+        'src/pages/explorer/account/overview/GroupsSection.tsx',
+        "import { JoinGroupButton } from '../../../../components/groups/JoinGroupButton';\n" +
+          'export const used = JoinGroupButton;\n'
       )
     ).toEqual([]);
     // Still not the dialogs themselves.

@@ -745,6 +745,14 @@ export function answerExplorer(world, p, sp) {
     const g = x.groups.get(Number(m[1]));
     return g ? json(g) : undefined;
   }
+  // The other groups' bans and join requests (Join on a group card checks them): Book Club
+  // has Leo Learner's join request; the rest have none.
+  if ((m = p.match(/^\/groups\/(bans|joinrequests)\/(\d+)$/)) && Number(m[2]) !== GROUP) {
+    if (!x.groups.has(Number(m[2]))) return undefined;
+    if (m[1] === 'joinrequests' && Number(m[2]) === 1203)
+      return json([{ groupId: 1203, joiner: ADDR.learner }]);
+    return json([]);
+  }
 
   // ---- transactions --------------------------------------------------------------------
   if ((m = p.match(/^\/transactions\/signature\/(\w+)\/raw$/))) {

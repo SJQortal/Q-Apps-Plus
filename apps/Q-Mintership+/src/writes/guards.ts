@@ -16,6 +16,8 @@ import {
   getStoredInviteFor,
 } from '../data/group';
 import { loadDecisions } from '../data/decisions';
+import { getJson } from '../data/core';
+import { getGroupsOf } from '../data/explorer/account';
 import { loadNominationsFor } from '../data/nominations';
 import type { ConsideringTarget } from '../data/records';
 import {
@@ -27,7 +29,7 @@ import {
   getUnconfirmedOfTypes,
   withCancelInviteTargets,
 } from '../data/txs';
-import type { GroupTxType, TxRow } from '../data/types';
+import type { BanRow, GroupTxType, JoinRequestRow, TxRow } from '../data/types';
 import type { DecisionVoteKind } from '../data/voteRecords';
 import {
   decisionSubject,
@@ -394,6 +396,35 @@ export async function guardJoin(signer: Signer): Promise<string | null> {
   if (joinRequest) return "Your join request is already in: you're ready. Nothing more to send.";
   if (unconfirmed.some((tx) => tx.type === 'JOIN_GROUP' && Number(tx.groupId) === MINTER_GROUP_ID))
     return 'Your join request is already on its way into a block. Check again in a minute or two.';
+  return null;
+}
+
+/**
+ * Before joining (or asking to join) a group other than MINTER, from the
+ * Explorer's group cards: not already in it, not banned from it, no join
+ * request of theirs already in or on its way (Core would refuse those too).
+ */
+export async function guardJoinGroup(
+  signer: Signer,
+  group: { groupId: number; isOpen?: boolean }
+): Promise<string | null> {
+  if (group.groupId === MINTER_GROUP_ID)
+    return 'MINTER has its own way in: Show you’re ready to mint, on Home.';
+  const [groups, bans, requests, unconfirmed] = await Promise.all([
+    getGroupsOf(signer.address, { force: true }),
+    getJson<BanRow[]>(`/groups/bans/${group.groupId}`),
+    group.isOpen
+      ? Promise.resolve([] as JoinRequestRow[])
+      : getJson<JoinRequestRow[]>(`/groups/joinrequests/${group.groupId}`),
+    getUnconfirmedBy(signer.publicKey, 'JOIN_GROUP'),
+  ]);
+  if (groups.some((g) => g.groupId === group.groupId)) return 'You’re already in this group.';
+  if (activeBanFor(bans ?? [], signer.address))
+    return 'Your account is banned from this group, so it can’t join while the ban lasts.';
+  if ((requests ?? []).some((r) => r.joiner === signer.address))
+    return 'Your join request is already in: the group’s admins decide.';
+  if (unconfirmed.some((tx) => tx.type === 'JOIN_GROUP' && Number(tx.groupId) === group.groupId))
+    return 'Your request to join is already on its way into a block. Check again in a minute or two.';
   return null;
 }
 
