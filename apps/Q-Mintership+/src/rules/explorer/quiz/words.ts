@@ -125,6 +125,11 @@ export function weekdayForms(timestamp: number): { shown: string; accepted: stri
   return { shown: day, accepted: [day, day.slice(0, 3), day.slice(0, 2)] };
 }
 
+/** `text` ending a sentence: a full stop, unless it already ends with one (inside quotes too). */
+export function endSentence(text: string): string {
+  return /[.!?…][”"’']?$/.test(text.trim()) ? text : `${text}.`;
+}
+
 /** A word on an amount of QORT, for the fact said with the answer; null for an ordinary one. */
 export function amountRemark(amount: number): string | null {
   if (amount > 0 && amount < 0.001) return 'Tiny, but every QORT counts.';

@@ -6,7 +6,7 @@
  */
 import { getPoll } from '../legacyBy';
 import type { TxRow } from '../../types';
-import { say } from '../../../rules/explorer/quiz/words';
+import { endSentence, say } from '../../../rules/explorer/quiz/words';
 import {
   ACCOUNT_PLACEHOLDER,
   accountP,
@@ -147,7 +147,9 @@ const pollVote: QuizTemplate = {
       placeholder: 'Like Option 2',
       hint: 'Poll votes are a type of their own in Transactions on Qortal; open the vote for its details.',
       how: 'Transactions on Qortal → Poll vote at that block; the vote’s details say which option, counted from 1.',
-      fact: info?.options.length ? `The options: ${optionsWords(info.options)}.` : undefined,
+      fact: info?.options.length
+        ? endSentence(`The options: ${optionsWords(info.options)}`)
+        : undefined,
       link: globalLink('VOTE_ON_POLL', tx.blockHeight, 1),
       linkLabel: 'Show that block’s votes',
       subjects: subjects(tx.creatorAddress, pollSubject(poll)),
@@ -188,7 +190,9 @@ const pollOptions: QuizTemplate = {
       placeholder: 'A number',
       hint: 'Find the poll in that block; its details list the options.',
       how: 'Transactions on Qortal → Poll created at that block; the details list its options.',
-      fact: `${asked ? `It asked: “${asked.slice(0, 120)}” ` : ''}The options: ${optionsWords(options)}.`,
+      fact: endSentence(
+        `${asked ? `It asked: “${asked.slice(0, 120)}” ` : ''}The options: ${optionsWords(options)}`
+      ),
       link: globalLink('CREATE_POLL', tx.blockHeight as number, 1),
       linkLabel: 'Show that block’s polls',
       subjects: [pollSubject(poll)],

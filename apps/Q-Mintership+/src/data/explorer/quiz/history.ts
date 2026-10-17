@@ -10,6 +10,7 @@
 import { getPoll } from '../legacyBy';
 import type { TxRow } from '../../types';
 import { txTypeLabel } from '../../../rules/explorer/txFamilies';
+import { endSentence } from '../../../rules/explorer/quiz/words';
 import type { QuizAnswer } from '../../../rules/explorer/quiz/types';
 import {
   answerAccount,
@@ -60,7 +61,7 @@ async function pollWords(tx: TxRow): Promise<string | null> {
   if (!info) return null;
   const asked = str(info.description);
   const options = info.options.map((o) => `“${o}”`).join(', ');
-  return `${asked ? `It asked: “${asked}” ` : ''}Its options: ${options}.`;
+  return endSentence(`${asked ? `It asked: “${asked}” ` : ''}Its options: ${options}`);
 }
 
 const FIRSTS: readonly First[] = [

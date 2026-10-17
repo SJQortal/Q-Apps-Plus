@@ -167,7 +167,7 @@ const QUIZ_HISTORY = [
     misses: 0,
     hints: 0,
     how: 'Transactions on Qortal → Poll created → From block 950,000, 10,000 blocks, Oldest first: the first row.',
-    fact: 'It asked: “Are puppy ears soft?” Its options: “Yes, very”, “Quite so”, “Very much so.”.',
+    fact: 'It asked: “Are puppy ears soft?” Its options: “Yes, very”, “Quite so”, “Very much so.”',
     link: '/explorer/transactions?type=CREATE_POLL&blocks=from-950000&order=oldest',
     linkLabel: 'Show it, oldest first',
   },
