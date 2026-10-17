@@ -187,23 +187,37 @@ function Node({
             onFocus={() => onActive(node.key)}
             onBlur={() => onActive(null)}
             sx={{
+              // A 44 px target whatever the avatar's size, the ring drawn inside it.
               display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: 44,
+              minHeight: 44,
               borderRadius: '50%',
-              p: '3px',
-              bgcolor: node.side === 'in' ? colours.in : colours.out,
-              transition: 'scale 150ms ease',
-              '&:hover, &.Mui-focusVisible': { scale: '1.12' },
+              '& [data-ring]': { transition: 'scale 150ms ease' },
+              '&:hover [data-ring], &.Mui-focusVisible [data-ring]': { scale: '1.12' },
               '&.Mui-focusVisible': { outline: 2, outlineColor: 'primary.main', outlineOffset: 2 },
             }}
           >
             <Box
-              sx={{ display: 'flex', borderRadius: '50%', bgcolor: 'background.paper', p: '2px' }}
+              data-ring=""
+              sx={{
+                position: 'relative',
+                display: 'flex',
+                borderRadius: '50%',
+                p: '3px',
+                bgcolor: node.side === 'in' ? colours.in : colours.out,
+              }}
             >
-              <NameAvatar name={shown.name} size={node.size} />
+              <Box
+                sx={{ display: 'flex', borderRadius: '50%', bgcolor: 'background.paper', p: '2px' }}
+              >
+                <NameAvatar name={shown.name} size={node.size} />
+              </Box>
+              {node.count > 1 ? <CountBadge count={node.count} side={node.side} /> : null}
             </Box>
           </ButtonBase>
         </Tooltip>
-        {node.count > 1 ? <CountBadge count={node.count} side={node.side} /> : null}
         {named ? (
           <Typography
             aria-hidden
