@@ -163,11 +163,13 @@ export const STILL_CHECKING = 'Still checking (busy account)…';
 export function searchLine(
   filters: TxFilters,
   typed: string,
-  counts: { match: number; similar: number; searched: number; done: boolean }
+  counts: { match: number; similar: number; searched: number; done: boolean; looking?: boolean }
 ): string {
   const noun = listNoun(filters);
   const scope = scopePhrase(filters);
   const { match, similar, searched, done } = counts;
+  // Names still on their way: not "none" yet.
+  if (counts.looking && match + similar === 0) return `Looking for “${typed}”…`;
   const what = done
     ? searched === 1
       ? `this account's only ${noun.one}${scope}`

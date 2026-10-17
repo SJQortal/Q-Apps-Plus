@@ -100,8 +100,15 @@ export function fundingTag(funding: Pick<Funding, 'kind'>): string | null {
 }
 
 /** "9 rows match “crow”, and 2 more are similar." */
-export function connectionsSearchLine(typed: string, match: number, similar: number): string {
+export function connectionsSearchLine(
+  typed: string,
+  match: number,
+  similar: number,
+  looking = false
+): string {
   const are = (n: number) => (n === 1 ? 'is' : 'are');
+  // Names still on their way: not "nothing" yet.
+  if (looking && match + similar === 0) return `Looking for “${typed}”…`;
   if (match > 0)
     return `${formatCount(match)} ${match === 1 ? 'row matches' : 'rows match'} “${typed}”${
       similar > 0 ? `, and ${formatCount(similar)} more ${are(similar)} similar` : ''

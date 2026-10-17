@@ -120,8 +120,14 @@ export function AccountTxList({
   const focusRow = useRef<number | null>(null);
 
   const data = list.data;
-  const read = data?.rows ?? [];
-  const rows = shownRows(read, filters);
+  const read = useMemo(() => data?.rows ?? [], [data]);
+  // Kept while the rows read, the name and the order stay (the filters arrive anew each
+  // render): the search then describes each row once, not on every render.
+  const rows = useMemo(
+    () => shownRows(read, filters),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [read, filters.name, filters.order]
+  );
   // The search: what matches first, then what is similar.
   const txSearch = useTxSearch(rows, address, search);
   const tiers = txSearch.tiers;
@@ -283,8 +289,11 @@ export function AccountTxList({
               similar: tiers.similar.length,
               searched: rows.length,
               done: data.done,
+              looking: txSearch.reading,
             })}
-            {txSearch.reading ? ' Reading the names of the accounts in them…' : ''}
+            {txSearch.reading && tiers.match.length + tiers.similar.length > 0
+              ? ' Reading the names of the accounts in them…'
+              : ''}
           </Typography>
           {more ? loadMore : null}
         </Box>

@@ -62,7 +62,7 @@ export interface RowSearch {
     accounts?: readonly (string | null | undefined)[];
     folded?: boolean;
   }) => MatchStrength | null;
-  /** Names are still being read for this search. */
+  /** Names are still being read for this search (the accounts' names, or names starting so). */
   reading: boolean;
   /**
    * For an account found by a name it holds that starts with what was
@@ -178,7 +178,7 @@ export function useRowSearch(text: string, accounts: readonly string[]): RowSear
     names,
     namesVersion: `${known.size}:${owners.data?.length ?? 0}`,
     test,
-    reading,
+    reading: reading || (ownersKey !== null && owners.data === undefined && !owners.isError),
     heldNameTag,
   };
 }

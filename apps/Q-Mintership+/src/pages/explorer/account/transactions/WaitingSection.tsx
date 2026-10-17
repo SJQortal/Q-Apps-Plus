@@ -7,6 +7,7 @@
  * until it is in a block (Core records who a transaction involves only at
  * confirmation), and the section says so.
  */
+import { useMemo } from 'react';
 import { Typography } from '@mui/material';
 import { Section } from '../../../../components/common/Section';
 import { TxList } from '../../../../components/explorer/TxListRow';
@@ -37,11 +38,18 @@ export function WaitingSection({
     getUnconfirmedOf(publicKey, { force })
   );
   const types = typesToAsk(filters);
-  const kept = (waiting.data ?? []).filter(
-    (tx) =>
-      types !== null &&
-      (!types.length || types.includes(tx.type)) &&
-      (!filters.name || isAboutName(tx, filters.name))
+  const typesWord = JSON.stringify(types);
+  const kept = useMemo(
+    () =>
+      (waiting.data ?? []).filter(
+        (tx) =>
+          types !== null &&
+          (!types.length || types.includes(tx.type)) &&
+          (!filters.name || isAboutName(tx, filters.name))
+      ),
+    // The types and filters arrive anew each render: kept per value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [waiting.data, typesWord, filters.name]
   );
   const { tiers } = useTxSearch(kept, address, search);
   const rows = tiers ? [...tiers.match, ...tiers.similar] : kept;

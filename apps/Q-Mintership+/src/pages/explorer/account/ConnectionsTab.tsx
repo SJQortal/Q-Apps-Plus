@@ -338,14 +338,22 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const typed = search.query?.text ?? '';
   const tagsFor = (other: string | null) =>
     other ? [marks.markOf(other), marks.devOf(other), ...relationOf(other)] : [];
-  const findFinding = (finding: Finding) =>
-    search.test(findingEntry(finding, search.names, tagsFor(finding.other)));
-  const findFlow = (flow: Flow, direction: 'sent' | 'received') =>
-    search.test(flowEntry(flow, direction, search.names, tagsFor(flow.address)));
-  const findLink = (link: MintershipLink) =>
-    search.test(
-      mintershipEntry(link, LINK_GROUPS.find((group) => group.kind === link.kind)?.heading ?? '')
-    );
+  // Each row's text is built only while searching; with no search every row is found.
+  const findFinding = (finding: Finding): MatchStrength | null =>
+    searching ? search.test(findingEntry(finding, search.names, tagsFor(finding.other))) : 'match';
+  const findFlow = (flow: Flow, direction: 'sent' | 'received'): MatchStrength | null =>
+    searching
+      ? search.test(flowEntry(flow, direction, search.names, tagsFor(flow.address)))
+      : 'match';
+  const findLink = (link: MintershipLink): MatchStrength | null =>
+    searching
+      ? search.test(
+          mintershipEntry(
+            link,
+            LINK_GROUPS.find((group) => group.kind === link.kind)?.heading ?? ''
+          )
+        )
+      : 'match';
   const levelFound = splitFound(levelMoves, findFinding);
   const sharesFound = splitFound([...sponsors, ...mintingWith], findFinding);
   const sponseesFound: MatchStrength | null = sponsees ? findFinding(sponsees) : null;
@@ -354,11 +362,12 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const receivedFound = splitFound(data.flowsReceived ?? [], (flow) => findFlow(flow, 'received'));
   const sentAny = (data.sent.data?.rows.length ?? 0) > 0;
   const inCommonFound: InCommonFound = {
-    funding: funding
-      ? search.test(fundingEntry(funding, common.band, search.names, tagsFor(funding.from)))
-      : null,
+    funding:
+      funding && searching
+        ? search.test(fundingEntry(funding, common.band, search.names, tagsFor(funding.from)))
+        : null,
     siblings:
-      sponsor && common.siblings
+      sponsor && common.siblings && searching
         ? search.test(
             siblingsEntry(
               sponsor,
@@ -369,12 +378,13 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
             )
           )
         : null,
-    funded: sentAny
-      ? search.test({
-          text: 'Who got their first QORT payment from this account',
-          accounts: [],
-        })
-      : null,
+    funded:
+      sentAny && searching
+        ? search.test({
+            text: 'Who got their first QORT payment from this account',
+            accounts: [],
+          })
+        : null,
   };
   const mintershipFound = splitFound(mintership.links ?? [], findLink);
   const tiers = [
@@ -531,8 +541,10 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
         sx={{ overflowWrap: 'anywhere', mt: searching ? 0 : -2 }}
       >
         {searching
-          ? `${connectionsSearchLine(typed, matchCount, similarCount)}${
-              search.reading ? ' Reading the names of the accounts in them…' : ''
+          ? `${connectionsSearchLine(typed, matchCount, similarCount, search.reading)}${
+              search.reading && matchCount + similarCount > 0
+                ? ' Reading the names of the accounts in them…'
+                : ''
             }`
           : ''}
       </Typography>
