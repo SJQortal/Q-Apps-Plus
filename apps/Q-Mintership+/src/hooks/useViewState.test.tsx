@@ -12,6 +12,7 @@ import { ViewScope } from '../components/common/ViewScope';
 import { useSafeBack, useTrackInAppHistory } from './useSafeBack';
 import { useScrollTopOnNewPage } from './useScrollTopOnNewPage';
 import { useViewState } from './useViewState';
+import { currentVisit } from './pageVisits';
 
 function Shell() {
   useTrackInAppHistory();
@@ -93,8 +94,7 @@ beforeEach(() => {
 
 afterEach(() => vi.restoreAllMocks());
 
-const pressed = (name: string) =>
-  screen.getByRole('button', { name }).getAttribute('aria-pressed');
+const pressed = (name: string) => screen.getByRole('button', { name }).getAttribute('aria-pressed');
 
 describe('useViewState', () => {
   it('opens a page as it was left on the app’s Back, scrolled to where it was', async () => {
@@ -120,6 +120,15 @@ describe('useViewState', () => {
     await act(() => router.navigate(-1));
     expect(pressed('Row 1 in the dialog')).toBe('true');
     expect(pressed('Row 1')).toBe('false');
+  });
+
+  it('keeps only what differs from where a view starts', async () => {
+    const { user } = setup();
+    expect(currentVisit()?.views.size).toBe(0);
+    await user.click(screen.getByRole('button', { name: 'Row 1' }));
+    expect([...(currentVisit()?.views.keys() ?? [])]).toEqual(['row:1']);
+    await user.click(screen.getByRole('button', { name: 'Row 1' }));
+    expect(currentVisit()?.views.size).toBe(0);
   });
 
   it('starts fresh on the same page opened anew', async () => {
