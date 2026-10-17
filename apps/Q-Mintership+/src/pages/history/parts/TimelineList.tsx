@@ -151,11 +151,14 @@ function TimelineItem({
   showSubject,
   showProposer,
   nowMs,
+  fresh = false,
 }: {
   event: TimelineEvent;
   showSubject: boolean;
   showProposer: boolean;
   nowMs: number;
+  /** New since the reader last looked: tinted, with an edge and a "New" chip. */
+  fresh?: boolean;
 }) {
   const proposer =
     showProposer && event.creator && event.kind !== 'join' && event.kind !== 'leave'
@@ -165,18 +168,29 @@ function TimelineItem({
   return (
     <Box
       component="li"
-      sx={{
+      data-new={fresh ? '' : undefined}
+      sx={(theme) => ({
         display: 'flex',
         gap: 1.5,
         py: 1.5,
         px: { xs: 1.5, sm: 2 },
         '& + &': { borderTop: 1, borderColor: 'divider' },
-      }}
+        ...(fresh
+          ? {
+              bgcolor: alpha(
+                theme.palette.primary.main,
+                theme.palette.mode === 'dark' ? 0.14 : 0.08
+              ),
+              boxShadow: `inset 4px 0 0 ${theme.palette.primary.main}`,
+            }
+          : {}),
+      })}
     >
       <EventIcon event={event} />
       <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
           <Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{event.title}</Typography>
+          {fresh ? <ToneChip size="small" label="New" color="primary" variant="filled" /> : null}
           {chip ? (
             <ToneChip
               size="small"
@@ -355,6 +369,8 @@ export interface TimelineListProps {
   label: string;
   /** Events of one kind that ended the same way the same day as one line (the Explorer). */
   groupAlike?: boolean;
+  /** New since this person last looked (a Minter Admin's History): marked so. */
+  isNew?: (event: TimelineEvent) => boolean;
 }
 
 /** Events newest first, under a small month heading each. */
@@ -365,6 +381,7 @@ export function TimelineList({
   nowMs,
   label,
   groupAlike = false,
+  isNew,
 }: TimelineListProps) {
   const months: Array<{ month: string; events: TimelineEvent[] }> = [];
   for (const event of events) {
@@ -410,6 +427,7 @@ export function TimelineList({
                     showSubject={showSubject}
                     showProposer={showProposer}
                     nowMs={nowMs}
+                    fresh={Boolean(isNew?.(run[0]))}
                   />
                 )
               )}

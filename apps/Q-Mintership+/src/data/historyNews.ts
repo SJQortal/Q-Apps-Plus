@@ -8,12 +8,32 @@
  * 30 days, plus one window, back. Joins, join requests and leaves don't
  * count here: finding them means searching every group's joins.
  */
-import { buildTimeline, HISTORY_WINDOW_DAYS } from './timeline';
+import { buildTimeline, HISTORY_WINDOW_DAYS, type TimelineEvent } from './timeline';
 import { getChainNow } from './chain';
 import { getGroupInfo } from './group';
 import { fetchQuery } from './query';
 import { getDecisionsInRange } from './txs';
 import { APPROVAL_GATED_TYPES } from './types';
+
+/**
+ * Whether History counts `e` as new for someone who last saw it up to
+ * `seenHeight`: a MINTER change by approval, decided (approved, rejected or
+ * expired) after that height, and by the tip when one is given. The History
+ * tab's count and History's highlight (ChainHistory) both use it.
+ */
+export function isHistoryNews(
+  e: Pick<TimelineEvent, 'outcome' | 'atHeight' | 'tx'>,
+  seenHeight: number,
+  tipHeight?: number
+): boolean {
+  return (
+    e.outcome !== 'pending' &&
+    e.atHeight !== null &&
+    e.atHeight > seenHeight &&
+    (tipHeight === undefined || e.atHeight <= tipHeight) &&
+    (APPROVAL_GATED_TYPES as readonly string[]).includes(e.tx.type)
+  );
+}
 
 /** Changes decided after `seenHeight`, up to the tip. Key `historynews:<seenHeight>`. */
 export function loadHistoryNews(
@@ -34,11 +54,7 @@ export function loadHistoryNews(
         slot: 'historynews',
       });
       return buildTimeline(rows.rows, { msPerBlock: now.msPerBlock, maximumBlockDelay }).filter(
-        (e) =>
-          e.outcome !== 'pending' &&
-          e.atHeight !== null &&
-          e.atHeight > seenHeight &&
-          e.atHeight <= now.height
+        (e) => isHistoryNews(e, seenHeight, now.height)
       ).length;
     },
     { ttlMs: 5 * 60_000, force: options.force }

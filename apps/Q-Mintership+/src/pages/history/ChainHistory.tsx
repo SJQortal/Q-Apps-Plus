@@ -17,7 +17,9 @@
  * is in the windows read. Each decided change links to its decision's own
  * page (parts/TimelineList.tsx), which reads its signatures only when opened.
  * Once the list is in, what it reaches is no longer new for this account
- * (data/historySeen.ts): a Minter Admin's History tab stops counting it.
+ * (data/historySeen.ts): a Minter Admin's History tab stops counting it. What
+ * that count was counting stays marked New on this visit (Simon, 2026-10-17:
+ * "when they click History I want that new in History to be highlighted").
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -30,10 +32,12 @@ import {
   type HistoryAnchor,
   type HistoryWindow,
   type TimelineContext,
+  type TimelineEvent,
 } from '../../data/timeline';
-import { useAdmins, useChainNow, useGroupInfo } from '../../hooks/useData';
+import { useAdmins, useChainNow, useGroupInfo, useMyStatus } from '../../hooks/useData';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
-import { markHistorySeen } from '../../data/historySeen';
+import { markHistorySeen, readHistorySeen } from '../../data/historySeen';
+import { isHistoryNews } from '../../data/historyNews';
 import { useSession } from '../../state/session';
 import { adminLeaves, approvedAdminChanges, targetSteps } from '../../rules/targetShift';
 import { useQuery } from '../../hooks/useQuery';
@@ -135,6 +139,20 @@ export function ChainHistory() {
   // What the list reaches isn't new any more: the History tab's count drops it.
   const session = useSession();
   const me = session.status === 'ready' ? session.address : null;
+  // What a Minter Admin had seen before this visit (read before it is marked seen below):
+  // what came after is what the count counted, and is marked New.
+  const { status } = useMyStatus();
+  const [seenBefore, setSeenBefore] = useState(() => ({
+    me,
+    height: me ? readHistorySeen(me) : null,
+  }));
+  if (seenBefore.me !== me) setSeenBefore({ me, height: me ? readHistorySeen(me) : null });
+  const newSince = status?.isAdmin ? seenBefore.height : null;
+  const isNew = useMemo(
+    () =>
+      newSince === null ? undefined : (event: TimelineEvent) => isHistoryNews(event, newSince),
+    [newSince]
+  );
   const shownTo = query.data && anchor ? anchor.height : null;
   useEffect(() => {
     if (me && shownTo) markHistorySeen(me, shownTo);
@@ -179,6 +197,7 @@ export function ChainHistory() {
     [events, filter, startMs]
   );
 
+  const newCount = isNew ? filtered.filter(isNew).length : 0;
   const loadingOlder = Boolean(windows && query.fetching && !query.data);
   const shown = filtered.slice(0, limit);
   const hidden = filtered.length - shown.length;
@@ -198,6 +217,7 @@ export function ChainHistory() {
         ctx={ctx}
         known={events}
         nowMs={nowMs}
+        isNew={isNew}
         longer={longer ? longerPeriodLabel(longer) : null}
         earliest={created}
         onLonger={showLonger}
@@ -216,11 +236,17 @@ export function ChainHistory() {
   } else {
     body = (
       <>
+        {newCount ? (
+          <Typography role="status" variant="body2" sx={{ fontWeight: 600, px: 0.5 }}>
+            {plural(newCount, 'change')} new since you last looked, marked New.
+          </Typography>
+        ) : null}
         {filtered.length ? (
           <TimelineList
             events={shown}
             showSubject
             nowMs={nowMs}
+            isNew={isNew}
             label={
               filter === 'all'
                 ? 'MINTER events, newest first'

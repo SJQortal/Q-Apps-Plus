@@ -3,7 +3,8 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage } from '../../test/render';
 import { fetchCallsFor, mockQortalRequest, qortalCalls, qortalCallsFor } from '../../test/setup';
-import { ADDR, NOW, PEOPLE } from '../../test/world';
+import { ADDR, NOW, PEOPLE, TIP } from '../../test/world';
+import { historySeenKey, readHistorySeen } from '../../data/historySeen';
 import { DECLINED, addDecline } from '../../../e2e/world.mjs';
 import HistoryPage from './HistoryPage';
 
@@ -445,5 +446,49 @@ describe('History page: find a person', () => {
     await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
     await userEvent.click(screen.getByRole('button', { name: 'Open' }));
     expect(screen.getByText('Type a name or a Q… address.')).toBeInTheDocument();
+  });
+});
+
+describe('History page: what is new for a Minter Admin', () => {
+  it('marks what its tab counted as new, and says how many', async () => {
+    await renderPage(<HistoryPage />, {
+      persona: 'admin',
+      path: '/history',
+      // This device last saw History 6,000 blocks ago: three changes were decided since.
+      setup: () =>
+        window.localStorage.setItem(
+          historySeenKey(ADDR.admin),
+          JSON.stringify({ v: 1, height: TIP - 6_000 })
+        ),
+    });
+    expect(
+      await screen.findByText(
+        '3 changes new since you last looked, marked New.',
+        {},
+        { timeout: 4000 }
+      )
+    ).toBeInTheDocument();
+    const list = await eventsList();
+    const fresh = list.querySelectorAll('li[data-new]');
+    expect(fresh).toHaveLength(3);
+    for (const item of fresh)
+      expect(within(item as HTMLElement).getByText('New')).toBeInTheDocument();
+    // Seen now: its tab stops counting them.
+    expect(readHistorySeen(ADDR.admin)).toBe(TIP);
+  });
+
+  it('marks nothing for someone who isn’t a Minter Admin', async () => {
+    await renderPage(<HistoryPage />, {
+      persona: 'learner',
+      path: '/history',
+      setup: () =>
+        window.localStorage.setItem(
+          historySeenKey(ADDR.learner),
+          JSON.stringify({ v: 1, height: TIP - 6_000 })
+        ),
+    });
+    const list = await eventsList();
+    expect(list.querySelectorAll('li[data-new]')).toHaveLength(0);
+    expect(screen.queryByText(/new since you last looked/)).toBeNull();
   });
 });
