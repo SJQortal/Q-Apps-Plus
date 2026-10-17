@@ -117,3 +117,13 @@ export function connectionsSearchLine(
     return `Nothing matches “${typed}” exactly; ${formatCount(similar)} ${similar === 1 ? 'row' : 'rows'} ${are(similar)} similar.`;
   return `Nothing in this account’s connections matches “${typed}”.`;
 }
+
+/** A side of the Connections circle, as its heading says it. */
+export function sideWords(side: 'in' | 'out' | 'other'): string {
+  return side === 'in' ? 'Received from' : side === 'out' ? 'Sent to' : 'Other links';
+}
+
+/** The title of what an avatar of the circle stands for: "Received from Kit Kicked". */
+export function circleNodeTitle(side: 'in' | 'out' | 'other', label: string): string {
+  return side === 'other' ? `${label}: other links` : `${sideWords(side)} ${label}`;
+}

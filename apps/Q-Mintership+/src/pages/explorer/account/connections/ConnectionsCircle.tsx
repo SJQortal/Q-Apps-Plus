@@ -1,56 +1,51 @@
 /**
- * Connections as a circle (Simon, 2026-10-16): the account in the middle,
- * the accounts linked to it around it on one or two rings
- * (rules/explorer/circle.ts), each avatar sized by how many transactions
- * link them. A line to each: green for payments it received from them,
- * red for payments it sent to them, both side by side when it went each
- * way, the theme's blue for its other links (reward shares, minting level,
- * names). Each avatar opens that account (in the Explorer, the trail
- * growing); pointing at one, or tabbing to it, brings its line forward.
+ * Connections as a circle (Simon, 2026-10-16; split by direction on
+ * 2026-10-17): the account in the middle, the accounts it received
+ * payments and transfers from on the left, those it sent them to on the
+ * right (rules/explorer/circle.ts), each avatar sized by how many
+ * transactions went that way and marked with their number. An account paid
+ * both ways is on both sides.
  *
- * Read the same way as the list: the avatars are a list of links in order
- * (the most linked first), each named with its counts; the lines are
- * decoration. The avatars pop in one after another (still with reduced
- * motion).
+ * Easy to read: one straight line from the middle to each avatar, every
+ * avatar at its own angle, so no line crosses another or runs under an
+ * avatar; green on the left, red on the right, lighter until one is
+ * pointed at or focused. On wider screens each name sits on the outer side
+ * of its avatar, away from the lines. The links that aren't transfers
+ * (reward shares, minting level, names) are a row under the circle.
+ *
+ * Pressing an avatar lists the transactions behind it, in a dialog
+ * (CircleNodeDialog), which also opens that account in the Explorer. The
+ * avatars are lists of buttons, each side its own, the most transactions
+ * first, each named with what it opens; the lines are decoration.
  */
 import { useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, ButtonBase, Tooltip, Typography } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import { NameAvatar } from '../../../../components/common/NameAvatar';
-import { usePersonLinks } from '../../../../components/common/personLinks';
 import { MarkedName } from '../../../../components/common/MarkedName';
 import { useDisplayName } from '../../../../hooks/useDisplayName';
-import { circleLayout, circleNodes, type PlacedNode } from '../../../../rules/explorer/circle';
+import { usePhoneLayout } from '../../../../hooks/usePhoneLayout';
+import {
+  circleLayout,
+  circleNodes,
+  PHONE_LAYOUT,
+  WIDE_LAYOUT,
+  type CircleNode,
+  type PlacedNode,
+} from '../../../../rules/explorer/circle';
 import type { Finding } from '../../../../rules/explorer/findings';
 import { formatCount, plural } from '../../../../utils/format';
+import { CircleNodeDialog } from './CircleNodeDialog';
+import { sideWords } from './words';
 
-/** The line colours: payments each way, and every other link. */
-function useLineColours() {
+/** The line and ring colours: received, sent, and every other link. */
+function useSideColours() {
   const theme = useTheme();
   return {
     in: theme.palette.success.main,
     out: theme.palette.error.main,
     other: theme.palette.primary.main,
   };
-}
-
-/** "12 transactions: 5 received, 7 sent". */
-function nodeWords(node: PlacedNode): string {
-  const parts = [
-    node.in ? `${formatCount(node.in)} received` : null,
-    node.out ? `${formatCount(node.out)} sent` : null,
-    node.other ? `${formatCount(node.other)} other` : null,
-  ].filter(Boolean);
-  return `${plural(node.count, 'transaction')}: ${parts.join(', ')}`;
-}
-
-/** The ring around an avatar: its line's colour, or green and red when both ways. */
-function ringOf(node: PlacedNode, colours: ReturnType<typeof useLineColours>): string {
-  if (node.in && node.out) return `linear-gradient(135deg, ${colours.in} 50%, ${colours.out} 50%)`;
-  if (node.in) return colours.in;
-  if (node.out) return colours.out;
-  return colours.other;
 }
 
 function Lines({
@@ -60,9 +55,9 @@ function Lines({
 }: {
   placed: PlacedNode[];
   maxCount: number;
-  active: number | null;
+  active: string | null;
 }) {
-  const colours = useLineColours();
+  const colours = useSideColours();
   return (
     <Box
       component="svg"
@@ -72,35 +67,67 @@ function Lines({
       className="qmp-fade"
       sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible' }}
     >
-      {placed.map((node, i) => {
-        const width = 1.25 + 3 * Math.sqrt(node.count / maxCount);
-        const opacity = active === null ? 0.55 : active === i ? 1 : 0.15;
-        // Two lines side by side when it went each way: offset across the line.
-        const dx = node.x - 50;
-        const dy = node.y - 50;
-        const length = Math.hypot(dx, dy) || 1;
-        const off = { x: (-dy / length) * 0.7, y: (dx / length) * 0.7 };
-        const line = (colour: string, shift: number, key: string) => (
-          <line
-            key={key}
-            x1={50 + off.x * shift}
-            y1={50 + off.y * shift}
-            x2={node.x + off.x * shift}
-            y2={node.y + off.y * shift}
-            stroke={colour}
-            strokeWidth={width}
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-            style={{ opacity, transition: 'opacity 150ms ease' }}
-          />
-        );
-        if (node.in && node.out)
-          return [
-            line(colours.in, 1, `${node.address}:in`),
-            line(colours.out, -1, `${node.address}:out`),
-          ];
-        return line(node.in ? colours.in : node.out ? colours.out : colours.other, 0, node.address);
+      {placed.map((node) => (
+        <line
+          key={node.key}
+          x1={50}
+          y1={50}
+          x2={node.x}
+          y2={node.y}
+          stroke={node.side === 'in' ? colours.in : colours.out}
+          strokeWidth={1 + 2.5 * Math.sqrt(node.count / maxCount)}
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+          style={{
+            opacity: active === null ? 0.45 : active === node.key ? 1 : 0.12,
+            transition: 'opacity 150ms ease',
+          }}
+        />
+      ))}
+    </Box>
+  );
+}
+
+/** "4 received", "2 sent", "3 other links". */
+function countWords(node: CircleNode): string {
+  return node.side === 'in'
+    ? `${plural(node.count, 'transaction')} received`
+    : node.side === 'out'
+      ? `${plural(node.count, 'transaction')} sent`
+      : plural(node.count, 'transaction');
+}
+
+/** How many transactions an avatar stands for, on its corner. */
+function CountBadge({ count, side }: { count: number; side: CircleNode['side'] }) {
+  return (
+    <Box
+      aria-hidden
+      sx={(theme) => ({
+        position: 'absolute',
+        right: -4,
+        bottom: -4,
+        minWidth: 20,
+        height: 20,
+        px: 0.5,
+        borderRadius: 10,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 12,
+        fontWeight: 700,
+        lineHeight: 1,
+        color: theme.palette.text.primary,
+        bgcolor: theme.palette.background.paper,
+        border: `1.5px solid ${
+          side === 'in'
+            ? theme.palette.success.main
+            : side === 'out'
+              ? theme.palette.error.main
+              : theme.palette.primary.main
+        }`,
       })}
+    >
+      {count > 999 ? '999+' : count}
     </Box>
   );
 }
@@ -108,16 +135,21 @@ function Lines({
 function Node({
   node,
   index,
+  named,
   onActive,
+  onPick,
 }: {
   node: PlacedNode;
   index: number;
-  onActive: (index: number | null) => void;
+  /** Its name beside it, on the outer side (wider screens). */
+  named: boolean;
+  onActive: (key: string | null) => void;
+  onPick: (node: CircleNode) => void;
 }) {
   const shown = useDisplayName(node.address, node.address.startsWith('A') ? null : undefined);
-  const links = usePersonLinks();
-  const colours = useLineColours();
-  const words = nodeWords(node);
+  const colours = useSideColours();
+  const words = countWords(node);
+  const outer = node.side === 'in' ? { right: '100%', mr: 1 } : { left: '100%', ml: 1 };
   return (
     <Box
       component="li"
@@ -131,7 +163,11 @@ function Node({
       }}
     >
       {/* Pops in, one after another. */}
-      <Box className="qmp-pop" style={{ animationDelay: `${Math.min(index, 24) * 35}ms` }}>
+      <Box
+        className="qmp-pop"
+        sx={{ position: 'relative' }}
+        style={{ animationDelay: `${Math.min(index, 24) * 30}ms` }}
+      >
         <Tooltip
           title={
             <>
@@ -142,19 +178,17 @@ function Node({
           }
         >
           <ButtonBase
-            component={RouterLink}
-            to={links.to(node.address)}
-            state={links.state}
-            aria-label={`${shown.label}, ${words}: ${links.verb}`}
-            onMouseEnter={() => onActive(index)}
+            onClick={() => onPick(node)}
+            aria-label={`${shown.label}, ${words}: show them`}
+            onMouseEnter={() => onActive(node.key)}
             onMouseLeave={() => onActive(null)}
-            onFocus={() => onActive(index)}
+            onFocus={() => onActive(node.key)}
             onBlur={() => onActive(null)}
             sx={{
               display: 'flex',
               borderRadius: '50%',
               p: '3px',
-              background: ringOf(node, colours),
+              bgcolor: node.side === 'in' ? colours.in : colours.out,
               transition: 'scale 150ms ease',
               '&:hover, &.Mui-focusVisible': { scale: '1.12' },
               '&.Mui-focusVisible': { outline: 2, outlineColor: 'primary.main', outlineOffset: 2 },
@@ -167,45 +201,110 @@ function Node({
             </Box>
           </ButtonBase>
         </Tooltip>
+        {node.count > 1 ? <CountBadge count={node.count} side={node.side} /> : null}
+        {named ? (
+          <Typography
+            aria-hidden
+            sx={{
+              position: 'absolute',
+              top: '50%',
+              translate: '0 -50%',
+              ...outer,
+              maxWidth: 112,
+              fontSize: 14,
+              fontWeight: 600,
+              lineHeight: 1.2,
+              textAlign: node.side === 'in' ? 'right' : 'left',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              pointerEvents: 'none',
+            }}
+          >
+            <MarkedName name={shown.name}>{shown.label}</MarkedName>
+          </Typography>
+        ) : null}
       </Box>
-      {/* Its name under it on wider screens (the tooltip and the link say it everywhere). */}
-      <Typography
-        aria-hidden
-        sx={{
-          display: { xs: 'none', sm: 'block' },
-          position: 'absolute',
-          top: '100%',
-          left: '50%',
-          translate: '-50% 2px',
-          maxWidth: 104,
-          fontSize: 14,
-          fontWeight: 600,
-          lineHeight: 1.2,
-          // Over the lines that pass under it: the page's own colour behind the words.
-          bgcolor: 'background.default',
-          px: 0.5,
-          borderRadius: 1,
-          textAlign: 'center',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          pointerEvents: 'none',
-        }}
-      >
-        <MarkedName name={shown.name}>{shown.label}</MarkedName>
-      </Typography>
     </Box>
   );
 }
 
-function Swatch({ colour, label }: { colour: string; label: string }) {
+/** A link that isn't a transfer, in the row under the circle. */
+function OtherChip({ node, onPick }: { node: CircleNode; onPick: (node: CircleNode) => void }) {
+  const shown = useDisplayName(node.address, node.address.startsWith('A') ? null : undefined);
   return (
-    <Box component="li" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
-      <Box
-        aria-hidden
-        sx={{ width: 22, height: 4, borderRadius: 2, bgcolor: colour, flexShrink: 0 }}
-      />
-      <Typography variant="body2">{label}</Typography>
+    <Box component="li" sx={{ listStyle: 'none' }}>
+      <ButtonBase
+        onClick={() => onPick(node)}
+        aria-label={`${shown.label}, ${plural(node.count, 'transaction')}: show them`}
+        sx={(theme) => ({
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 1,
+          minHeight: 44,
+          pl: 0.5,
+          pr: 1.5,
+          borderRadius: 22,
+          border: `1.5px solid ${alpha(theme.palette.primary.main, 0.6)}`,
+          '&:hover': { bgcolor: 'action.hover' },
+          '&.Mui-focusVisible': { outline: 2, outlineColor: 'primary.main', outlineOffset: 2 },
+        })}
+      >
+        <NameAvatar name={shown.name} size={32} />
+        <Box
+          component="span"
+          sx={{
+            fontWeight: 600,
+            maxWidth: 160,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          <MarkedName name={shown.name}>{shown.label}</MarkedName>
+        </Box>
+        <Box component="span" sx={{ color: 'text.secondary', fontSize: 14 }}>
+          {formatCount(node.count)}
+        </Box>
+      </ButtonBase>
+    </Box>
+  );
+}
+
+function SideHeading({
+  side,
+  accounts,
+  more,
+}: {
+  side: 'in' | 'out';
+  accounts: number;
+  more: number;
+}) {
+  const colours = useSideColours();
+  return (
+    <Box sx={{ textAlign: side === 'in' ? 'left' : 'right', minWidth: 0 }}>
+      <Typography
+        component="h3"
+        sx={{
+          fontWeight: 700,
+          fontSize: 15,
+          display: 'flex',
+          gap: 0.75,
+          alignItems: 'center',
+          justifyContent: side === 'in' ? 'flex-start' : 'flex-end',
+        }}
+      >
+        <Box
+          aria-hidden
+          component="span"
+          sx={{ width: 18, height: 4, borderRadius: 2, bgcolor: colours[side], flexShrink: 0 }}
+        />
+        {sideWords(side)}
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        {accounts ? plural(accounts, 'account') : 'None'}
+        {more ? `, ${formatCount(more)} more in the list` : ''}
+      </Typography>
     </Box>
   );
 }
@@ -222,12 +321,32 @@ export function ConnectionsCircle({
   onShowList: () => void;
 }) {
   const me = useDisplayName(address);
-  const colours = useLineColours();
-  const [active, setActive] = useState<number | null>(null);
-  const nodes = circleNodes(recorded);
-  const { placed, rest } = circleLayout(nodes);
-  const maxCount = placed[0]?.count ?? 1;
-  if (!placed.length)
+  const phone = usePhoneLayout();
+  const options = phone ? PHONE_LAYOUT : WIDE_LAYOUT;
+  const [active, setActive] = useState<string | null>(null);
+  const [picked, setPicked] = useState<CircleNode | null>(null);
+  const groups = circleNodes(recorded);
+  const { placed, rest } = circleLayout(groups, options);
+  const maxCount = Math.max(1, ...placed.map((node) => node.count));
+  const left = placed.filter((node) => node.side === 'in');
+  const right = placed.filter((node) => node.side === 'out');
+  // As tall as the fuller side needs: a few accounts leave no empty space.
+  const fullest = Math.max(left.length, right.length);
+  const aspect = phone
+    ? fullest <= 3
+      ? '1 / 1'
+      : fullest <= 5
+        ? '5 / 6'
+        : '3 / 4'
+    : fullest <= 3
+      ? '2 / 1'
+      : fullest <= 6
+        ? '16 / 10'
+        : '4 / 3';
+  const accounts = new Set(
+    [...groups.in, ...groups.out, ...groups.other].map((node) => node.address)
+  ).size;
+  if (!placed.length && !groups.other.length)
     return (
       <Typography color="text.secondary">
         No accounts linked to it in what was checked, so there is nothing to draw.
@@ -235,103 +354,131 @@ export function ConnectionsCircle({
     );
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-      <Box
-        component="figure"
-        aria-label={`${me.label} and ${plural(nodes.length, 'linked account')}`}
-        sx={{
-          position: 'relative',
-          m: 0,
-          mx: 'auto',
-          width: '100%',
-          maxWidth: 640,
-          aspectRatio: '1 / 1',
-          // Room for the outer ring's biggest avatars at the edge.
-          p: { xs: 3, sm: 4 },
-          boxSizing: 'border-box',
-        }}
-      >
-        <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
-          <Lines placed={placed} maxCount={maxCount} active={active} />
-          {/* The account itself, in the middle. */}
+      {placed.length ? (
+        <Box sx={{ width: '100%', maxWidth: 880, mx: 'auto' }}>
           <Box
             sx={{
-              position: 'absolute',
-              left: '50%',
-              top: '50%',
-              translate: '-50% -50%',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 0.5,
-              zIndex: 2,
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 2,
+              px: { xs: 0.5, sm: 2 },
             }}
           >
-            <Box
-              sx={(theme) => ({
-                display: 'flex',
-                borderRadius: '50%',
-                p: '4px',
-                bgcolor: 'background.paper',
-                boxShadow: `0 0 0 3px ${theme.palette.primary.main}, 0 6px 24px ${theme.palette.action.hover}`,
-              })}
-            >
-              <NameAvatar name={me.name} size={72} />
-            </Box>
-            <Typography
-              sx={{
-                fontWeight: 700,
-                maxWidth: 140,
-                textAlign: 'center',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                bgcolor: 'background.paper',
-                px: 0.75,
-                borderRadius: 1,
-              }}
-            >
-              <MarkedName name={me.name}>{me.label}</MarkedName>
-            </Typography>
+            <SideHeading side="in" accounts={groups.in.length} more={rest.in} />
+            <SideHeading side="out" accounts={groups.out.length} more={rest.out} />
           </Box>
           <Box
-            component="ul"
-            aria-label="Linked accounts, the most transactions first"
-            sx={{ m: 0, p: 0 }}
+            component="figure"
+            aria-label={`${me.label} and ${plural(accounts, 'linked account')}`}
+            sx={{
+              position: 'relative',
+              m: 0,
+              width: '100%',
+              aspectRatio: aspect,
+              // Room for the avatars at the edges.
+              p: { xs: 2.5, sm: 3 },
+              boxSizing: 'border-box',
+            }}
           >
-            {placed.map((node, i) => (
-              <Node key={node.address} node={node} index={i} onActive={setActive} />
+            <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+              <Lines placed={placed} maxCount={maxCount} active={active} />
+              {/* The account itself, in the middle. */}
+              <Box
+                sx={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  translate: '-50% -50%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  zIndex: 2,
+                }}
+              >
+                <Box
+                  sx={(theme) => ({
+                    display: 'flex',
+                    borderRadius: '50%',
+                    p: '4px',
+                    bgcolor: 'background.paper',
+                    boxShadow: `0 0 0 3px ${theme.palette.primary.main}, 0 6px 24px ${theme.palette.action.hover}`,
+                  })}
+                >
+                  <NameAvatar name={me.name} size={phone ? 52 : 68} />
+                </Box>
+                <Typography
+                  sx={{
+                    fontWeight: 700,
+                    maxWidth: { xs: 110, sm: 150 },
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    bgcolor: 'background.paper',
+                    px: 0.75,
+                    borderRadius: 1,
+                  }}
+                >
+                  <MarkedName name={me.name}>{me.label}</MarkedName>
+                </Typography>
+              </Box>
+              {[
+                { side: 'in' as const, list: left },
+                { side: 'out' as const, list: right },
+              ].map(({ side, list }) =>
+                list.length ? (
+                  <Box
+                    key={side}
+                    component="ul"
+                    aria-label={`${sideWords(side)}, the most transactions first`}
+                    sx={{ m: 0, p: 0 }}
+                  >
+                    {list.map((node, i) => (
+                      <Node
+                        key={node.key}
+                        node={node}
+                        index={i}
+                        named={!phone}
+                        onActive={setActive}
+                        onPick={setPicked}
+                      />
+                    ))}
+                  </Box>
+                ) : null
+              )}
+            </Box>
+          </Box>
+        </Box>
+      ) : null}
+      {groups.other.length ? (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Typography component="h3" sx={{ fontWeight: 700, fontSize: 15 }}>
+            Other links: reward shares, minting level, names
+          </Typography>
+          <Box
+            component="ul"
+            aria-label="Other links"
+            sx={{ m: 0, p: 0, display: 'flex', flexWrap: 'wrap', gap: 1 }}
+          >
+            {groups.other.map((node) => (
+              <OtherChip key={node.key} node={node} onPick={setPicked} />
             ))}
           </Box>
         </Box>
-      </Box>
-      <Box
-        component="ul"
-        aria-label="What the lines mean"
-        sx={{
-          listStyle: 'none',
-          m: 0,
-          p: 0,
-          display: 'flex',
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-          columnGap: 2.5,
-          rowGap: 1,
-        }}
-      >
-        <Swatch colour={colours.in} label="Received from it" />
-        <Swatch colour={colours.out} label="Sent to it" />
-        <Swatch colour={colours.other} label="Reward shares, minting level, names" />
-      </Box>
+      ) : null}
       <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-        The bigger the avatar and its line, the more transactions link them.
+        The bigger the avatar and its line, the more transactions went that way. Press one for its
+        transactions.
       </Typography>
-      {rest ? (
+      {rest.in || rest.out ? (
         <Box sx={{ display: 'flex', justifyContent: 'center' }}>
           <Button onClick={onShowList} sx={{ minHeight: 44 }}>
-            {`${plural(rest, 'more account')} with fewer transactions: see the list`}
+            {`${plural(rest.in + rest.out, 'more account')} with fewer transactions: see the list`}
           </Button>
         </Box>
       ) : null}
+      <CircleNodeDialog node={picked} address={address} onClose={() => setPicked(null)} />
     </Box>
   );
 }

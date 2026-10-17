@@ -999,8 +999,24 @@ export default {
         await page.reload({ waitUntil: 'load' });
         await explorerSettle(page);
         await page
-          .getByRole('list', { name: 'Linked accounts, the most transactions first' })
+          .getByRole('list', { name: 'Received from, the most transactions first' })
           // In the page (its avatars sit absolutely, so the list itself has no size).
+          .waitFor({ state: 'attached', timeout: 8000 });
+      },
+    },
+    // A busy payer's circle: a full side, the rest counted (Hal Helper paid 640 accounts).
+    {
+      key: 'explorer-connections-circle-busy',
+      path: `/explorer/account/${FUNDER.address}/connections?as=admin`,
+      after: async (page) => {
+        await page.addInitScript(
+          ([key, value]) => window.localStorage.setItem(key, value),
+          ['qmintershipplus-connections-view', 'circle']
+        );
+        await page.reload({ waitUntil: 'load' });
+        await explorerSettle(page);
+        await page
+          .getByRole('list', { name: 'Sent to, the most transactions first' })
           .waitFor({ state: 'attached', timeout: 8000 });
       },
     },

@@ -690,32 +690,75 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
 });
 
 describe('Connections: as a circle', () => {
-  it('draws the linked accounts around it, sized by transactions, each opening its account', async () => {
-    const { container, user } = await open(ADDR.left);
+  it('draws what came in on the left and what went out on the right; an avatar lists its transactions', async () => {
+    const { container, user, world } = await open(ADDR.left);
     await region('Recorded between them');
     await user.click(screen.getByRole('button', { name: 'Circle' }));
     expect(screen.getByRole('button', { name: 'Circle' })).toHaveAttribute('aria-pressed', 'true');
     expect(window.localStorage.getItem('qmintershipplus-connections-view')).toBe('circle');
     const circle = await region('Connections circle');
     expect(screen.queryByRole('region', { name: 'Recorded between them' })).toBeNull();
-    const linked = await within(circle).findByRole(
+    // Each side its own list and heading: Kit paid each way, so on both sides.
+    const received = await within(circle).findByRole(
       'list',
-      { name: 'Linked accounts, the most transactions first' },
+      { name: 'Received from, the most transactions first' },
       T
     );
-    // Kit: paid each way, so one link with both counts, opening Kit's account in the Explorer.
-    const kit = within(linked).getByRole('link', {
-      name: /^Kit Kicked, \d+ transactions: \d+ received, \d+ sent: explore this account$/,
-    });
-    expect(kit).toHaveAttribute('href', explorerAccountPath(ADDR.kicked));
-    // What the lines mean, in words.
-    const legend = within(circle).getByRole('list', { name: 'What the lines mean' });
-    expect(readText(legend)).toBe('Received from itSent to itReward shares, minting level, names');
+    const sent = within(circle).getByRole('list', { name: 'Sent to, the most transactions first' });
+    expect(within(circle).getByRole('heading', { name: 'Received from' })).toBeInTheDocument();
+    expect(within(circle).getByRole('heading', { name: 'Sent to' })).toBeInTheDocument();
+    expect(
+      within(received).getByRole('button', {
+        name: 'Kit Kicked, 4 transactions received: show them',
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(received).getByRole('button', {
+        name: 'Hal Helper, 1 transaction received: show them',
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(sent).getByRole('button', { name: 'Kit Kicked, 2 transactions sent: show them' })
+    ).toBeInTheDocument();
+    // Nothing links away: pressing an avatar lists its transactions.
+    expect(within(circle).queryAllByRole('link')).toEqual([]);
     await expectNoAxeViolations(container);
+
+    await user.click(
+      within(received).getByRole('button', { name: /^Kit Kicked, 4 transactions received/ })
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Received from Kit Kicked' }, T);
+    // What was recorded, as the list says it (the avatar's letter is hidden from reading).
+    expect(readText(dialog)).toContain('Received 120 QORT from Kit Kicked in 4 payments');
+    const rows = within(dialog).getByRole('list', {
+      name: 'Received from Kit Kicked: its transactions',
+    });
+    expect(rows.querySelectorAll('[data-tx-row]')).toHaveLength(4);
+    expect(within(dialog).getByRole('link', { name: 'Explore Kit Kicked' })).toHaveAttribute(
+      'href',
+      explorerAccountPath(ADDR.kicked)
+    );
+    expect(world).toBeTruthy();
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), T);
 
     await user.click(screen.getByRole('button', { name: 'List' }));
     expect(await region('Recorded between them')).toBeInTheDocument();
     expect(window.localStorage.getItem('qmintershipplus-connections-view')).toBe('list');
+  });
+
+  it('puts the links that aren’t transfers in a row under the circle', async () => {
+    const { user } = await open(ADDR.learner);
+    await region('Recorded between them');
+    await user.click(screen.getByRole('button', { name: 'Circle' }));
+    const circle = await region('Connections circle');
+    const others = await within(circle).findByRole('list', { name: 'Other links' }, T);
+    const sid = within(others).getByRole('button', {
+      name: /^Sid Sponsor, \d+ transactions?: show them$/,
+    });
+    await user.click(sid);
+    const dialog = await screen.findByRole('dialog', { name: 'Sid Sponsor: other links' }, T);
+    expect(dialog).toHaveTextContent('Sid Sponsor');
   });
 });
 
