@@ -30,6 +30,8 @@ export interface CircleNode {
   count: number;
   /** The findings behind it: their sentences, for the list it opens. */
   findings: Finding[];
+  /** QORT moved that way, in atomic units (Simon, 2026-10-17: "The Cat (500 QORT)"). */
+  qort: bigint;
 }
 
 export interface CircleGroups {
@@ -94,8 +96,10 @@ export function circleNodes(findings: readonly Finding[]): CircleGroups {
       side,
       count: 0,
       findings: [],
+      qort: 0n,
     };
     node.count += Math.max(1, finding.evidence.length);
+    node.qort += finding.qort ?? 0n;
     node.findings.push(finding);
     nodes.set(key, node);
   }
@@ -171,4 +175,16 @@ export function circleLayout(
       out: Math.max(0, groups.out.length - sides.out.length),
     },
   };
+}
+
+/**
+ * A node's QORT, short, for beside its name: "500", "1,234", "76.5",
+ * "0.25" (whole QORT from 100 up; two decimals below, four under 1). Null
+ * for none (a link of other assets only).
+ */
+export function circleQort(atomic: bigint): string | null {
+  if (atomic <= 0n) return null;
+  const qort = Number(atomic) / 1e8;
+  const digits = qort >= 100 ? 0 : qort >= 1 ? 2 : 4;
+  return qort.toLocaleString('en-US', { maximumFractionDigits: digits });
 }

@@ -28,6 +28,7 @@ import { useDisplayName } from '../../../../hooks/useDisplayName';
 import { usePhoneLayout } from '../../../../hooks/usePhoneLayout';
 import {
   circleLayout,
+  circleQort,
   circleNodes,
   PHONE_LAYOUT,
   WIDE_LAYOUT,
@@ -90,12 +91,14 @@ function Lines({
   );
 }
 
-/** "4 received", "2 sent", "3 other links". */
+/** "4 transactions received, 500 QORT", "2 transactions sent", "3 transactions". */
 function countWords(node: CircleNode): string {
+  const qort = circleQort(node.qort);
+  const amount = qort ? `, ${qort} QORT` : '';
   return node.side === 'in'
-    ? `${plural(node.count, 'transaction')} received`
+    ? `${plural(node.count, 'transaction')} received${amount}`
     : node.side === 'out'
-      ? `${plural(node.count, 'transaction')} sent`
+      ? `${plural(node.count, 'transaction')} sent${amount}`
       : plural(node.count, 'transaction');
 }
 
@@ -151,6 +154,7 @@ function Node({
   const shown = useDisplayName(node.address, node.address.startsWith('A') ? null : undefined);
   const colours = useSideColours();
   const words = countWords(node);
+  const qort = circleQort(node.qort);
   const outer = node.side === 'in' ? { right: '100%', mr: 1 } : { left: '100%', ml: 1 };
   return (
     <Box
@@ -226,18 +230,32 @@ function Node({
               top: '50%',
               translate: '0 -50%',
               ...outer,
-              maxWidth: 112,
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 0.5,
+              flexDirection: node.side === 'in' ? 'row-reverse' : 'row',
               fontSize: 14,
               fontWeight: 600,
               lineHeight: 1.2,
-              textAlign: node.side === 'in' ? 'right' : 'left',
               whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
               pointerEvents: 'none',
             }}
           >
-            <MarkedName name={shown.name}>{shown.label}</MarkedName>
+            {/* The amount after the name, always whole; the name cut short when long. */}
+            {qort ? (
+              <Box
+                component="span"
+                sx={{ order: node.side === 'in' ? 0 : 1, fontWeight: 500, color: 'text.secondary' }}
+              >
+                ({qort} QORT)
+              </Box>
+            ) : null}
+            <Box
+              component="span"
+              sx={{ maxWidth: 112, overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
+            >
+              <MarkedName name={shown.name}>{shown.label}</MarkedName>
+            </Box>
           </Typography>
         ) : null}
       </Box>

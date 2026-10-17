@@ -709,17 +709,21 @@ describe('Connections: as a circle', () => {
     expect(within(circle).getByRole('heading', { name: 'Sent to' })).toBeInTheDocument();
     expect(
       within(received).getByRole('button', {
-        name: 'Kit Kicked, 4 transactions received: show them',
+        name: /^Kit Kicked, 4 transactions received, [\d,.]+ QORT: show them$/,
       })
     ).toBeInTheDocument();
     expect(
       within(received).getByRole('button', {
-        name: 'Hal Helper, 1 transaction received: show them',
+        name: /^Hal Helper, 1 transaction received, [\d,.]+ QORT: show them$/,
       })
     ).toBeInTheDocument();
     expect(
-      within(sent).getByRole('button', { name: 'Kit Kicked, 2 transactions sent: show them' })
+      within(sent).getByRole('button', {
+        name: /^Kit Kicked, 2 transactions sent, [\d,.]+ QORT: show them$/,
+      })
     ).toBeInTheDocument();
+    // Each name with the QORT that went that way, in brackets (Simon, 2026-10-17).
+    expect(within(received).getAllByText(/^\([\d,.]+ QORT\)$/).length).toBeGreaterThan(0);
     // Nothing links away: pressing an avatar lists its transactions.
     expect(within(circle).queryAllByRole('link')).toEqual([]);
     await expectNoAxeViolations(container);

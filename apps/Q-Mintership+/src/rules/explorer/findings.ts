@@ -154,6 +154,8 @@ export interface Finding extends FindingLine {
   evidence: TxRow[];
   /** "4 payments", "2 transactions". */
   evidenceWords: string;
+  /** QORT moved, in atomic units: payments and transfers only. */
+  qort?: bigint;
 }
 
 export interface RecordedInput {
@@ -277,6 +279,7 @@ export function recordedFindings(input: RecordedInput): Finding[] {
       count: flow.count,
       evidence: flow.txs,
       evidenceWords: plural(flow.count, 'payment'),
+      qort: flow.qort,
     });
   return out;
 }

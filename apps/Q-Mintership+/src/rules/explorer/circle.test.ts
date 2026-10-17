@@ -10,6 +10,7 @@ import {
   nodeTransactions,
   sideMaxSize,
   type CircleGroups,
+  circleQort,
 } from './circle';
 
 const tx = (n: number, from = 0) =>
@@ -53,6 +54,17 @@ describe('circleNodes', () => {
     ]);
   });
 
+  it('adds up the QORT that went each way', () => {
+    const groups = circleNodes([
+      { ...finding('paidBy', 'QA', tx(3)), qort: 300_000_000n },
+      { ...finding('paidTo', 'QA', tx(2, 10)), qort: 50_000_000_000n },
+      finding('levelMove', 'QA', tx(1, 30)),
+    ]);
+    expect(groups.in[0].qort).toBe(300_000_000n);
+    expect(circleQort(groups.out[0].qort)).toBe('500');
+    expect(groups.other[0].qort).toBe(0n);
+  });
+
   it('lists a node’s transactions once each, the newest first', () => {
     const shared = tx(2, 5);
     const node = {
@@ -85,6 +97,7 @@ describe('circleLayout', () => {
       side: prefix,
       count: n - i,
       findings: [],
+      qort: 0n,
     }));
   const groups = (inCount: number, outCount: number): CircleGroups => ({
     in: side('in', inCount),
@@ -130,5 +143,15 @@ describe('circleLayout', () => {
       expect(p.y).toBeGreaterThan(0);
       expect(p.y).toBeLessThan(100);
     }
+  });
+});
+
+describe('circleQort', () => {
+  it('says the QORT beside a name short: whole from 100 up, two decimals below, four under 1', () => {
+    expect(circleQort(500n * 100_000_000n)).toBe('500');
+    expect(circleQort(123_456_789_000n)).toBe('1,235');
+    expect(circleQort(7_650_000_000n)).toBe('76.5');
+    expect(circleQort(25_000_000n)).toBe('0.25');
+    expect(circleQort(0n)).toBeNull();
   });
 });
