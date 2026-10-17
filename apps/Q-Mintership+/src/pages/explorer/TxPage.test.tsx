@@ -197,7 +197,12 @@ describe('one transaction', () => {
     await open((waiting as TxRow).signature);
     expect(await h1('Group admin removed')).toBeVisible();
     expect(fact('Block')).toBe('Waiting to be confirmed');
-    expect(fact('Group approval')).toBe('Waiting for group approval');
+    expect(fact('Group approval')).toMatch(/^Waiting for group approval/);
+    // A MINTER group change is one of MINTER's decisions: its page is a press away.
+    expect(screen.getByRole('link', { name: 'Open the MINTER decision' })).toHaveAttribute(
+      'href',
+      `/decisions/${(waiting as TxRow).signature}`
+    );
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
   });
 

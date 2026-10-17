@@ -314,11 +314,16 @@ describe('Person page', () => {
     expect(screen.queryByText('In MINTER since')).toBeNull();
   });
 
-  it('links to the account in the Explorer, for its links and transactions', async () => {
+  it('opens the account in the Explorer from the header, beside its other actions', async () => {
     await visit(ADDR.nominator, 'learner');
+    const explorer = await screen.findByRole('link', { name: 'Open in Explorer' });
+    expect(explorer).toHaveAttribute('href', `/explorer/account/${ADDR.nominator}`);
+    // In the header's row of actions, above the timeline, not at the foot of the page.
+    const timeline = await section('MINTER timeline');
     expect(
-      await screen.findByRole('link', { name: 'Explore links and transactions' })
-    ).toHaveAttribute('href', `/explorer/account/${ADDR.nominator}`);
+      explorer.compareDocumentPosition(timeline) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Explore links and transactions' })).toBeNull();
   });
 
   it('says what each chip in the header means, on hover (and takes the focus for it)', async () => {

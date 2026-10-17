@@ -37,6 +37,7 @@ import {
   explorerAccountPath,
   explorerComparePath,
   nominationPath,
+  personPath,
 } from '../../routes/paths';
 import {
   decisionKind,
@@ -361,7 +362,8 @@ function UnusualView({ tx }: { tx: TxRow }) {
 }
 
 /**
- * Where to go from here: the nomination behind an invite, the person in the
+ * Where to go from here, named as everywhere in the app: the nomination
+ * behind an invite, the person's MINTER profile, the person in the
  * Explorer (and, for an invite whose nominator is known, both side by
  * side), and the whole queue.
  */
@@ -373,18 +375,29 @@ function MoreLinks({ tx, nominator = null }: { tx: TxRow; nominator?: string | n
     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
       {invite && subject ? (
         <Button component={RouterLink} to={nominationPath(subject)} sx={{ minHeight: 44 }}>
-          The nomination
+          Open the nomination
+        </Button>
+      ) : null}
+      {subject ? (
+        <Button
+          component={RouterLink}
+          to={personPath(subject)}
+          aria-label={`Open MINTER profile: ${who.label}`}
+          sx={{ minHeight: 44 }}
+        >
+          Open MINTER profile
         </Button>
       ) : null}
       {subject ? (
         <Button
           component={RouterLink}
           to={explorerAccountPath(subject)}
-          aria-label={`Explore ${who.label}`}
+          state={{ via: 'explorer' }}
+          aria-label={`Open in Explorer: ${who.label}`}
           startIcon={<TravelExploreOutlinedIcon />}
           sx={{ minHeight: 44 }}
         >
-          Explore
+          Open in Explorer
         </Button>
       ) : null}
       {invite && subject && nominator && nominator !== subject ? (

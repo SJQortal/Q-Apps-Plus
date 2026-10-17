@@ -30,6 +30,7 @@ import { approvalWords, makerOf } from './txPageWords';
 import { FIELD_BLOCK_SX } from '../../../components/explorer/fieldBlock';
 import { QdnFileButtons } from '../../../components/explorer/file/QdnFileButtons';
 import { openableResource } from '../../../rules/explorer/qdnFiles';
+import { isMinterGroupChange } from '../../../rules/decision';
 
 function Fact({
   label,
@@ -89,7 +90,19 @@ function Facts({ tx }: { tx: TxRow }) {
           </Box>
         </Fact>
         {tx.fee !== undefined ? <Fact label="Fee">{formatAmount(tx.fee)} QORT</Fact> : null}
-        {approval ? <Fact label="Group approval">{approval}</Fact> : null}
+        {approval || isMinterGroupChange(tx) ? (
+          <Fact label="Group approval">
+            {approval ?? 'Needs the Minter Admins’ approval'}
+            {/* A MINTER group change is one of MINTER's decisions, with a page of its own. */}
+            {isMinterGroupChange(tx) ? (
+              <Box component="span" sx={{ display: 'block', fontWeight: 400 }}>
+                <Link component={RouterLink} to={decisionPath(tx.signature)}>
+                  Open the MINTER decision
+                </Link>
+              </Box>
+            ) : null}
+          </Fact>
+        ) : null}
         <Fact label="Signature" wide>
           <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box

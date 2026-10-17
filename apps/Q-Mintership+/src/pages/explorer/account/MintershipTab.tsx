@@ -1,7 +1,10 @@
 /**
- * An account's MINTER story and what it did in Q-Mintership+ and in the
+ * The MINTER profile tab (Simon, 2026-10-17: "add the Minter Profile into
+ * the Explorer tabs as well so it has a place where it exists"): an
+ * account's MINTER story and what it did in Q-Mintership+ and in the
  * original app, read-only. Actions (nominate, support, decide) live on its
- * MINTER profile, linked at the top.
+ * MINTER profile page, opened at the top, with Open in Decisions beside it
+ * for a Minter Admin while a decision about it is open.
  *
  * - "MINTER status": where it stands, in the person page's own words, and its
  *   facts; "Nomination": its rounds and the latest one's outcome.
@@ -31,7 +34,9 @@ import { loadLegacyBy } from '../../../data/explorer/legacyBy';
 import { loadMadeBy } from '../../../data/explorer/madeBy';
 import { LEGACY_SCAN_FIRST, loadLegacyFor } from '../../../data/legacy';
 import { useQuery } from '../../../hooks/useQuery';
-import { personPath } from '../../../routes/paths';
+import { decisionPath, personPath } from '../../../routes/paths';
+import { useMyStatus } from '../../../hooks/useData';
+import { isOpenState } from '../../../rules/nomination';
 import { TimelineList } from '../../history/parts/TimelineList';
 import { PersonLegacy } from '../../person/PersonLegacy';
 import { AdminSection } from './mintership/AdminSection';
@@ -45,9 +50,15 @@ export interface MintershipTabProps {
   address: string;
 }
 
-function ProfileLink({ address }: { address: string }) {
+function ProfileLink({ address, story }: { address: string; story: MinterStory }) {
+  // A decision about it, open now: a Minter Admin can go straight to it (the tab's
+  // own read of its nominations, which doesn't poll).
+  const viewer = useMyStatus();
+  const decision = viewer.status?.isAdmin
+    ? (story.nominations.data?.find((n) => isOpenState(n.state) && n.decision)?.decision ?? null)
+    : null;
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 1.5 }}>
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
       <Button
         component={RouterLink}
         to={personPath(address)}
@@ -55,8 +66,18 @@ function ProfileLink({ address }: { address: string }) {
         endIcon={<ChevronRightOutlinedIcon />}
         sx={{ minHeight: 44 }}
       >
-        MINTER profile
+        Open MINTER profile
       </Button>
+      {decision ? (
+        <Button
+          component={RouterLink}
+          to={decisionPath(decision.signature)}
+          variant="outlined"
+          sx={{ minHeight: 44 }}
+        >
+          Open in Decisions
+        </Button>
+      ) : null}
       <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
         {PROFILE_HINT}
       </Typography>
@@ -160,7 +181,7 @@ export default function MintershipTab({ address }: MintershipTabProps) {
   if (story.status.isError && !person)
     return (
       <>
-        <ProfileLink address={address} />
+        <ProfileLink address={address} story={story} />
         <ErrorState
           compact
           title="Couldn't load where they stand in MINTER."
@@ -173,7 +194,7 @@ export default function MintershipTab({ address }: MintershipTabProps) {
   if (quiet && (nothing.checking || nothing.nothing))
     return (
       <>
-        <ProfileLink address={address} />
+        <ProfileLink address={address} story={story} />
         {nothing.checking ? (
           <ListSkeleton count={1} label="Checking their records" />
         ) : (
@@ -195,7 +216,7 @@ export default function MintershipTab({ address }: MintershipTabProps) {
 
   return (
     <>
-      <ProfileLink address={address} />
+      <ProfileLink address={address} story={story} />
       <StandingSection story={story} />
       <NominationSummary address={address} story={story} />
       <Timeline story={story} />

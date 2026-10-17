@@ -156,7 +156,7 @@ describe('A decision’s own page: still waiting', () => {
     const card = await screen.findByRole('article', { name: /^Add to MINTER, bob\+builder/ }, T);
     expect(within(card).queryByRole('button', { name: /^Approve/ })).toBeNull();
     expect(await within(card).findByText(/Nominated by/, {}, T)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'The nomination' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open the nomination' })).toHaveAttribute(
       'href',
       `/nominations/${ADDR.nominatedSigning}`
     );
@@ -172,7 +172,7 @@ describe('A decision’s own page: still waiting', () => {
         ).signature
     );
     await screen.findByRole('article', { name: /^Add to MINTER, bob\+builder/ }, T);
-    expect(screen.getByRole('link', { name: 'Explore bob+builder' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open in Explorer: bob+builder' })).toHaveAttribute(
       'href',
       `/explorer/account/${ADDR.nominatedSigning}`
     );
@@ -207,7 +207,7 @@ describe('A decision’s own page: decided', () => {
     // Nobody rejected it; a decided card has no Considering column.
     expect(within(card).getByRole('heading', { name: /^Rejected/ })).toHaveTextContent('Rejected0');
     expect(within(card).queryByRole('heading', { name: /^Considering/ })).toBeNull();
-    expect(screen.getByRole('link', { name: 'The nomination' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open the nomination' })).toHaveAttribute(
       'href',
       `/nominations/${ADDR.nominator}`
     );
@@ -242,7 +242,7 @@ describe('A decision’s own page: decided', () => {
     expect(within(card).getByText('Kicked by Minter Admins')).toBeVisible();
     expect(within(card).getByText('Approved', { selector: '.MuiChip-label' })).toBeVisible();
     // The person concerned, in the Explorer; no nominator to compare on a removal.
-    expect(screen.getByRole('link', { name: 'Explore Kit Kicked' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open in Explorer: Kit Kicked' })).toHaveAttribute(
       'href',
       `/explorer/account/${ADDR.kicked}`
     );

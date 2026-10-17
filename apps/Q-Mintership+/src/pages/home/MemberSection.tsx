@@ -19,7 +19,7 @@ import {
 import { NOMINATOR_MIN_LEVEL } from '../../data/constants';
 import { useChainNow, useNominations } from '../../hooks/useData';
 import { PROPOSE_NOMINATION } from '../../constants/words';
-import { PATHS, decisionPath, nominatePath, nominationPath, personPath } from '../../routes/paths';
+import { PATHS, decisionPath, nominatePath, nominationPath } from '../../routes/paths';
 import type { Nomination } from '../../data/nominations';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import type { MyStatus } from '../../rules/status';
@@ -164,14 +164,15 @@ export function MemberSection({ status }: { status: MyStatus }) {
                       />
                     </Box>
                     <NominationStateChip state={n.state} />
+                    {/* The nomination itself, as its words say (their name opens their profile). */}
                     <Button
                       component={RouterLink}
-                      to={personPath(n.nominee)}
+                      to={nominationPath(n.nominee)}
                       variant="outlined"
-                      aria-label={`View the nomination of ${n.nomineeName ?? n.nominee}`}
+                      aria-label={`Details about ${n.nomineeName ?? n.nominee}`}
                       sx={{ minHeight: 44 }}
                     >
-                      View
+                      Details
                     </Button>
                   </Box>
                 );

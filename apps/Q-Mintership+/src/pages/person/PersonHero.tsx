@@ -1,7 +1,9 @@
 /**
  * The top of a person page: who they are (avatar, name, address), where they
  * stand in MINTER in one plain sentence, their level and blocks minted, and
- * what the viewer can do for them (nominate, support, or open the decision).
+ * what the viewer can do for them (nominate, support, or open the decision),
+ * with Open in Explorer beside it (Simon, 2026-10-17: their links and
+ * transactions, and their MINTER profile tab there).
  */
 import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -15,7 +17,12 @@ import { NameAvatar } from '../../components/common/NameAvatar';
 import { Card, LevelBadge, ToneChip } from '../../components/common/Section';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { proposeNominationFor } from '../../constants/words';
-import { decisionPath, nominatePath } from '../../routes/paths';
+import {
+  decisionPath,
+  explorerAccountPath,
+  nominatePath,
+  nominationPath,
+} from '../../routes/paths';
 import { formatCount, formatDate } from '../../utils/format';
 import { AdminRoleAction } from '../decisions/AdminRoleAction';
 import { statusSentence } from './personWords';
@@ -30,6 +37,7 @@ import {
   NOMINATED_EXPLANATION,
   OUTSIDE_EXPLANATION,
 } from '../../constants/chipExplanations';
+import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined';
 
 const STATUS_CHIP: Record<
   Exclude<StatusKind, 'outsideHub' | 'signedOut'>,
@@ -135,6 +143,20 @@ export function PersonHero({
       </Button>
     );
   }
+  // Their open nomination's own page: its rounds, supporters and comments.
+  if (open) {
+    actions.push(
+      <Button
+        key="nomination"
+        component={RouterLink}
+        to={nominationPath(address)}
+        variant="outlined"
+        sx={{ minHeight: 44 }}
+      >
+        Open the nomination
+      </Button>
+    );
+  }
   if (viewer?.isAdmin && open?.decision) {
     actions.push(
       <Button
@@ -148,6 +170,19 @@ export function PersonHero({
       </Button>
     );
   }
+  actions.push(
+    <Button
+      key="explorer"
+      component={RouterLink}
+      to={explorerAccountPath(address)}
+      state={{ via: 'explorer' }}
+      variant="outlined"
+      startIcon={<TravelExploreOutlinedIcon />}
+      sx={{ minHeight: 44 }}
+    >
+      Open in Explorer
+    </Button>
+  );
   // Why they can't be nominated now (being a member, or being you, needs no note).
   const blockNote =
     block && block !== 'self' && block !== 'member' && block !== 'open'

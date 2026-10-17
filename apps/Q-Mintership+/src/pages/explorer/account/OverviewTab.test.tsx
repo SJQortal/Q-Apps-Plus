@@ -121,14 +121,13 @@ describe('Overview: a Minter Admin minting now', () => {
     // 4. MINTER: the person page's sentence and the two ways on.
     const minterSection = await region('MINTER');
     expect(await within(minterSection).findByText(/^Minter Admin/, {}, T)).toBeInTheDocument();
-    expect(within(minterSection).getByRole('link', { name: 'Mintership' })).toHaveAttribute(
+    expect(within(minterSection).getByRole('link', { name: 'MINTER profile' })).toHaveAttribute(
       'href',
       explorerAccountPath(ADDR.admin, 'mintership')
     );
-    expect(within(minterSection).getByRole('link', { name: 'MINTER profile' })).toHaveAttribute(
-      'href',
-      personPath(ADDR.admin)
-    );
+    expect(
+      within(minterSection).getByRole('link', { name: 'Nominate, support or decide' })
+    ).toHaveAttribute('href', personPath(ADDR.admin));
 
     // 5. Minting.
     const minting = await region('Minting');

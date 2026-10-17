@@ -450,7 +450,10 @@ const TAB_GUIDE: Array<[string, string]> = [
     'How it is linked to other accounts: payments, sponsorships, minting levels and names moved between them, and what they have in common.',
   ],
   ['Transactions', 'Everything it sent or took part in, newest first, in plain words.'],
-  ['Mintership', 'Its MINTER story, and its records in Q-Mintership and the original app.'],
+  [
+    'MINTER profile',
+    'Where it stands in MINTER, its nominations and MINTER timeline, and its records in Q-Mintership and the original app.',
+  ],
   ['Names', 'Every name it owns, their history, and what they published on QDN.'],
 ];
 

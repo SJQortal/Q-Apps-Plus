@@ -25,7 +25,7 @@ export function nothingChecked(scanned: number, total: number): string {
 }
 
 /** Under the MINTER profile link: what that page is for. */
-export const PROFILE_HINT = 'Nominate, support or decide on the MINTER profile';
+export const PROFILE_HINT = 'Nominate, support or decide there.';
 
 /** "Also checked, nothing found: supports, Considering marks." (empty for nothing). */
 export function alsoChecked(items: readonly string[]): string {

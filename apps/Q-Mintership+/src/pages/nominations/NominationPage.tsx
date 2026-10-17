@@ -218,16 +218,17 @@ function NominationView({ address }: { address: string }) {
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
         <Button component={RouterLink} to={personPath(address)} sx={{ minHeight: 44 }}>
-          Their MINTER profile and history
+          Open MINTER profile
         </Button>
         <Button
           component={RouterLink}
           to={explorerAccountPath(address)}
-          aria-label={`Explore ${who.label}`}
+          state={{ via: 'explorer' }}
+          aria-label={`Open in Explorer: ${who.label}`}
           startIcon={<TravelExploreOutlinedIcon />}
           sx={{ minHeight: 44 }}
         >
-          Explore
+          Open in Explorer
         </Button>
         {nominator && nominator !== address ? (
           <Button

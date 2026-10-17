@@ -1,8 +1,8 @@
 /**
  * The Overview's MINTER section: where the account stands, in the person
  * page's own sentence (pages/person/personWords.ts statusSentence, from the
- * app's status), then the Mintership tab and the MINTER profile, where
- * nominating, supporting and deciding happen (the Explorer only reads).
+ * app's status), then its MINTER profile tab, and the MINTER profile page,
+ * where nominating, supporting and deciding happen (the Explorer only reads).
  */
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
@@ -40,11 +40,12 @@ export function MinterSection({
           <Typography>{statusSentence(status.data, memberSince, false)}</Typography>
         )}
         <Typography variant="body2" color="text.secondary">
-          Nominating, supporting and deciding happen on its MINTER profile.
+          Its whole MINTER story is on its MINTER profile tab; nominating, supporting and deciding
+          happen on its MINTER profile page.
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mx: -1 }}>
           <TabButton address={address} tab="mintership">
-            Mintership
+            MINTER profile
           </TabButton>
           <Button
             component={RouterLink}
@@ -52,7 +53,7 @@ export function MinterSection({
             endIcon={<ChevronRightOutlinedIcon />}
             sx={{ minHeight: 44 }}
           >
-            MINTER profile
+            Nominate, support or decide
           </Button>
         </Box>
       </Card>

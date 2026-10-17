@@ -737,7 +737,7 @@ function BlockNotice({
             color="inherit"
             sx={{ minHeight: 44 }}
           >
-            See their page
+            Open MINTER profile
           </Button>
         ) : null}
       </Box>

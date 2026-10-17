@@ -79,12 +79,12 @@ describe('A nomination’s own page', () => {
     expect(
       within(items[0]).getByRole('link', { name: 'Open the decision of round 1' })
     ).toHaveAttribute('href', `/decisions/${invite.signature}`);
-    expect(screen.getByRole('link', { name: 'Their MINTER profile and history' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open MINTER profile' })).toHaveAttribute(
       'href',
       `/people/${ADDR.nominatedSigning}`
     );
     // In the Explorer: the nominee, and the nominee beside the nominator.
-    expect(screen.getByRole('link', { name: 'Explore bob+builder' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open in Explorer: bob+builder' })).toHaveAttribute(
       'href',
       `/explorer/account/${ADDR.nominatedSigning}`
     );
@@ -169,7 +169,7 @@ describe('A nomination’s own page', () => {
     expect(await screen.findByText('No nomination for this person', {}, T)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Propose nomination' })).toBeVisible();
     // Still explorable; no nominator to compare with.
-    expect(screen.getByRole('link', { name: 'Explore Zoë Newcomer' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open in Explorer: Zoë Newcomer' })).toHaveAttribute(
       'href',
       `/explorer/account/${ADDR.newcomerName}`
     );

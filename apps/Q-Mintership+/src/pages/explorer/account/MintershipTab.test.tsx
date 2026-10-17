@@ -8,7 +8,7 @@
  * account with nothing at all. Read-only throughout.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage, type RenderPageOptions } from '../../../test/render';
 import { expectNoAxeViolations } from '../../../test/axe';
@@ -33,16 +33,20 @@ afterEach(() => {
   resetExplorerState();
 });
 
-async function open(address: string, setup?: RenderPageOptions['setup']) {
+async function open(
+  address: string,
+  setup?: RenderPageOptions['setup'],
+  persona: RenderPageOptions['persona'] = 'learner'
+) {
   const result = await renderPage(<AccountPage />, {
-    persona: 'learner',
+    persona,
     path: explorerAccountPath(address, 'mintership'),
     route: ROUTE,
     strict: true,
     setup,
   });
-  const panel = await screen.findByRole('tabpanel', { name: 'Mintership' }, T);
-  await within(panel).findByRole('link', { name: 'MINTER profile' }, T);
+  const panel = await screen.findByRole('tabpanel', { name: 'MINTER profile' }, T);
+  await within(panel).findByRole('link', { name: 'Open MINTER profile' }, T);
   return { ...result, panel, user: userEvent.setup() };
 }
 
@@ -91,15 +95,24 @@ describe('the Mintership tab', () => {
     noWrites(posts);
   });
 
+  it('takes a Minter Admin straight to an open decision about the account, beside its profile', async () => {
+    const { panel } = await open(ADDR.nominatedSigning, undefined, 'admin');
+    const decisions = await within(panel).findByRole('link', { name: 'Open in Decisions' }, T);
+    expect(decisions.getAttribute('href')).toMatch(/^\/decisions\//);
+    // Not for anyone else: they see the profile, where the nomination is.
+    cleanup();
+    resetExplorerState();
+    const others = await open(ADDR.nominatedSigning);
+    expect(within(others.panel).queryByRole('link', { name: 'Open in Decisions' })).toBeNull();
+  });
+
   it('shows a member nominator: where they stand, their round, timeline and records', async () => {
     const { container, posts, panel } = await open(ADDR.nominator);
-    expect(within(panel).getByRole('link', { name: 'MINTER profile' })).toHaveAttribute(
+    expect(within(panel).getByRole('link', { name: 'Open MINTER profile' })).toHaveAttribute(
       'href',
       `/people/${ADDR.nominator}`
     );
-    expect(
-      within(panel).getByText('Nominate, support or decide on the MINTER profile')
-    ).toBeVisible();
+    expect(within(panel).getByText('Nominate, support or decide there.')).toBeVisible();
 
     const status = await region('MINTER status');
     expect(
