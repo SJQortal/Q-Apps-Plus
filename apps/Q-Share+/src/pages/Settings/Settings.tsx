@@ -178,6 +178,7 @@ export const Settings = () => {
         hiddenNames: snap.hiddenNames,
         followingFeed: snap.followingFeed,
         listView: snap.listView,
+        collectionView: snap.collectionView,
       });
       if (snap.uiTheme) setUiTheme(snap.uiTheme);
       setSyncNote(snap.updatedAt ? `Restored the settings saved ${formatDate(snap.updatedAt)}.` : "Settings restored.");
@@ -293,7 +294,7 @@ export const Settings = () => {
               Layout
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Shares on Home, profiles and collections as rows or as a grid of cards.
+              Shares on Home and profiles as rows or as a grid of cards.
             </Typography>
           </Box>
           {/* The same setting as the toggle above each list, with its words spelled out. */}
@@ -303,6 +304,43 @@ export const Settings = () => {
             value={settings.listView}
             onChange={(_e, next: ListView | null) => next && writeSettings({ listView: next })}
             aria-labelledby="layout-title"
+            sx={{
+              "& .MuiToggleButton-root": {
+                gap: 0.75,
+                minHeight: 40,
+                px: 1.5,
+                fontSize: 14,
+                textTransform: "none",
+                [`@media ${PHONE_MEDIA}`]: { minHeight: 44 },
+              },
+            }}
+          >
+            <ToggleButton value="list">
+              <ViewAgendaOutlinedIcon fontSize="small" />
+              List
+            </ToggleButton>
+            <ToggleButton value="grid">
+              <GridViewOutlinedIcon fontSize="small" />
+              Grid
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Row>
+        <Row sx={{ mt: 1.5 }}>
+          <Box>
+            <Typography id="collection-layout-title" sx={{ fontWeight: 700 }}>
+              Collections layout
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Shares in collections and folders: a grid with their thumbnails, or rows.
+            </Typography>
+          </Box>
+          {/* The same setting as the toggle above each list, with its words spelled out. */}
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={settings.collectionView}
+            onChange={(_e, next: ListView | null) => next && writeSettings({ collectionView: next })}
+            aria-labelledby="collection-layout-title"
             sx={{
               "& .MuiToggleButton-root": {
                 gap: 0.75,

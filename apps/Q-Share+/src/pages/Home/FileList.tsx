@@ -44,7 +44,7 @@ import { shareTitleFromIdentifier } from "../../hooks/useFetchFiles.tsx";
 import { copyText } from "../../utils/clipboard.ts";
 import { ManualCopyDialog } from "../../components/common/CopyLinkButton.tsx";
 import { isHubDecline } from "../../utils/hubErrors.ts";
-import { useListView } from "../../components/common/ListViewToggle.tsx";
+import { useListView, type LayoutSetting } from "../../components/common/ListViewToggle.tsx";
 
 interface FileListProps {
   files: Video[];
@@ -58,6 +58,8 @@ interface FileListProps {
   onRemove?: (file: Video) => void;
   /** Grid only: a Move button beside Remove, for a collection with folders. Stable, like `onRemove`. */
   onMove?: (file: Video) => void;
+  /** Which layout setting to follow: collections have their own (a grid by default). */
+  layout?: LayoutSetting;
 }
 
 /**
@@ -86,10 +88,10 @@ export function FileGridSkeleton({ count, label }: { count: number; label?: stri
  * layout setting (useListView) turns the rows into a grid of cards with the
  * same states and actions.
  */
-export const FileList = ({ files, showPublisher = true, onRemove, onMove }: FileListProps) => {
+export const FileList = ({ files, showPublisher = true, onRemove, onMove, layout = "listView" }: FileListProps) => {
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const phone = usePhoneLayout();
-  const grid = useListView() === "grid";
+  const grid = useListView(layout) === "grid";
   const items = files.map((file) => (
     // Two names can publish under one identifier: each is its own row.
     <FileListRow

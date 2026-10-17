@@ -195,8 +195,10 @@ describe('CollectionPage', () => {
       renderPage();
       await screen.findByText('First share');
       expect(screen.getByRole('heading', { name: 'Shares' })).toBeInTheDocument();
+      // Collections start as a grid, whatever Home's layout is.
+      expect(cards()).toHaveLength(2);
+      fireEvent.click(screen.getByRole('button', { name: 'List' }));
       expect(cards()).toHaveLength(0);
-
       fireEvent.click(screen.getByRole('button', { name: 'Grid' }));
       expect(cards()).toHaveLength(2);
       const first = cards().find((card) => within(card).queryByText('First share'))!;

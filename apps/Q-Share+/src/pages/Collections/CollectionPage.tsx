@@ -207,7 +207,7 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
 
   // Hidden names (Settings → Content) apply here as on Home and in comments.
   const settings = useAppSettings();
-  const grid = useListView() === "grid";
+  const grid = useListView("collectionView") === "grid";
   // This page's part of the collection: the collection itself, or one of its folders.
   const { found, container } = useMemo(() => {
     const inFolder = collection && folderId ? findFolder(collection, folderId) : null;
@@ -458,7 +458,7 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
             <Typography component="h2" sx={{ fontWeight: 700, fontSize: 16 }}>
               Shares
             </Typography>
-            <ListViewToggle />
+            <ListViewToggle setting="collectionView" />
           </Box>
         ) : null}
 
@@ -476,12 +476,17 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
           )
         ) : isOwner && grid ? (
           // Each card carries its own Move and Remove buttons; the rows keep theirs beside them.
-          <FileList files={items} onRemove={setRemoveTarget} onMove={folderCount(collection) > 0 ? setMoveTarget : undefined} />
+          <FileList
+            files={items}
+            layout="collectionView"
+            onRemove={setRemoveTarget}
+            onMove={folderCount(collection) > 0 ? setMoveTarget : undefined}
+          />
         ) : isOwner ? (
           <ItemRows>
             {items.map((video) => (
               <ItemRow key={shareKey(video.user, video.id)}>
-                <FileList files={[video]} />
+                <FileList files={[video]} layout="collectionView" />
                 {folderCount(collection) > 0 ? (
                   <Tooltip title="Move to a folder">
                     <IconButton
@@ -506,7 +511,7 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
             ))}
           </ItemRows>
         ) : (
-          <FileList files={items} />
+          <FileList files={items} layout="collectionView" />
         )}
       </>
     );
