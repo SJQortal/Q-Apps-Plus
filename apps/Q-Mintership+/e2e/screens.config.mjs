@@ -440,14 +440,14 @@ export default {
       overlay: true,
       after: open("Show you're ready to mint", "Show you're ready to mint"),
     },
-    { key: 'nominations', path: '/nominations?as=nominator', after: settle },
+    { key: 'nominations', path: '/decisions?show=nominations&as=nominator', after: settle },
     // Who is ready to mint: join requests without a nomination.
-    { key: 'nominations-ready', path: '/nominations?show=ready&as=nominator', after: settle },
-    { key: 'nominations-ready-admin', path: '/nominations?show=ready&as=admin', after: settle },
+    { key: 'nominations-ready', path: '/decisions?show=ready&as=nominator', after: settle },
+    { key: 'nominations-ready-admin', path: '/decisions?show=ready&as=admin', after: settle },
     // Ready to mint searched by a name, resolved to its owner on the node.
     {
       key: 'nominations-ready-search',
-      path: '/nominations?show=ready&as=nominator',
+      path: '/decisions?show=ready&as=nominator',
       after: async (page) => {
         await settle(page);
         await page
@@ -460,11 +460,15 @@ export default {
       },
     },
     // The nominee's own card comes first, with Accept nomination.
-    { key: 'nominations-nominee', path: '/nominations?as=nominatedWaiting', after: settle },
+    {
+      key: 'nominations-nominee',
+      path: '/decisions?show=nominations&as=nominatedWaiting',
+      after: settle,
+    },
     // Someone who isn't a Minter Admin: No and Yes on the cards, their own vote on Wren's.
     {
       key: 'nominations-community',
-      path: '/nominations?as=learner',
+      path: '/decisions?show=nominations&as=learner',
       after: async (page) => {
         await settle(page);
         await page
@@ -474,7 +478,7 @@ export default {
     },
     {
       key: 'nominations-community-voters',
-      path: '/nominations?as=learner',
+      path: '/decisions?show=nominations&as=learner',
       overlay: true,
       after: async (page) => {
         await settle(page);
@@ -488,7 +492,7 @@ export default {
     },
     {
       key: 'nominations-community-vote',
-      path: '/nominations?as=learner',
+      path: '/decisions?show=nominations&as=learner',
       overlay: true,
       after: async (page) => {
         await settle(page);
@@ -506,7 +510,7 @@ export default {
       after: wait('main textarea'),
     },
     { key: 'decisions', path: '/decisions?as=admin', after: settle },
-    { key: 'decisions-member', path: '/decisions?as=learner', after: settle },
+    { key: 'decisions-member', path: '/decisions?show=decisions&as=learner', after: settle },
     // By type: a section per kind of change, with the chips that jump to each.
     {
       key: 'decisions-by-type',
@@ -918,7 +922,7 @@ export default {
     // the rows without a nomination and one row whose decline is waiting.
     {
       key: 'nominations-ready-decline',
-      path: '/nominations?show=ready&as=admin',
+      path: '/decisions?show=ready&as=admin',
       after: withDecline(async (page) => {
         await settle(page);
         const waiting = page.getByRole('link', { name: /^A decline is waiting for Minter Admins/ });
