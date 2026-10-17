@@ -930,6 +930,8 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
 88. **No whole history for an unchanged name** (Simon, 2026-10-17: "if there is no changes to the names history, do not show Name history expandable button"). A name whose own transactions, read in full, are just its registration has no "Its whole history" button: any rename, sale or update since would be among them, as only the owner changes a name, so it is known without a read. Every other name keeps it, and so does one whose transactions were read only in part. Checked on Simon's node: Jonny's name shows its registration and no button. Tests 2,327 passed.
 
+89. **No nomination without a registered name; the box says Transactions** (Simon, 2026-10-17: "make sure users without registered name cant be nominated", "this QDN Transactions should just say "Transactions""). An account that has registered no name can't be nominated: its Minter Profile, its Ready to mint row (where it says "No registered name") and its nomination page offer no Propose nomination; the form's check and the write's own guard say "No registered name: an account needs a name on Qortal before it can be nominated." (rules/nomination.ts → `noName`). An open nomination of such an account can still be supported. Whether it has a name: its primary name, else one light read of one row of its names (`/names/address/{a}?limit=1`, key `hasname:<a>`, 10 minutes; Ready to mint reads it only for rows near the screen without a primary name). At a glance's sixth box is titled Transactions. Checks: 60 captures (Ready to mint, Nominate, the account, its Minter Profile, a nomination), all clean; tests 2,328 passed.
+
 ## Follow-ups
 
 ### Readiness
